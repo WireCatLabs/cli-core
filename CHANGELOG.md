@@ -9,6 +9,16 @@ shape of this file.
 
 ### Added
 
+- **A server's refused SEARCH fails that folder, not the run, and proves nothing.** A mail source throws
+  `mail.search-refused` (`SEARCH_REFUSED`, `searchRefused`) when the server answers SEARCH with NO or BAD. `syncMail`
+  reads the other folders, answers `state: "partial"` with `refusedFolders`, and for the refused folder marks no mail
+  deleted, changes no membership, moves no resume point and leaves `mail_coverage` as it was. Before, a mail source that
+  read the refusal as "nothing found" made the folder look empty.
+- **Server search reads big mail text-first, and the next sync completes it.** A candidate is read up to
+  `SERVER_BOUNDS.textBytes` (256 KiB, `fetchRaw(items, { bytes })`); one cut short is stored with its text and no
+  attachments, marked `metadata.partial`, and `meta.issues` says `search.server-partial`. `syncMail` then reads up to
+  100 partial emails whole and clears the mark (`partial: { completed, left }`; `completePartial: false` skips it).
+  `MailStore.partialEmails` lists them. No store migration: the mark is a JSON key older builds ignore.
 - **`readClientFile` (from `@wirecat/cli-core/oauth`) reads a user's own Google Desktop OAuth client file** (the
   `{ "installed": { client_id, client_secret } }` JSON from Google's console). It refuses a file other users can read
   (`sign-in.client-file-open`) and a file of the wrong shape (`sign-in.client-file-invalid`), and never puts the file's
@@ -56,6 +66,25 @@ shape of this file.
   place. `--since`, `--since-time`, `--until`, `--until-time`, `--after-time` and `--before-time` on `messages list`
   fail with the query form to type instead. The store's `messages()` window takes `after` (a message or a moment)
   and `until`.
+- **One proposal inbox behind one check: `proposalRegistry(store, policy)`, `ProposalKind`, `parseProposalIds`
+  (`@wirecat/cli-core/services`) and `mayDecide` (`@wirecat/cli-core/store`).** The registry lists every pending
+  proposal newest first across kinds (`relationship`, `key_document`, `fact`, `memory`, `findings` for evidence
+  findings, and `action` for every other stored proposal), and decides many ids at once, each on its own: the answer
+  lists `decided` and `refused`, and one refusal never undoes the others. A new kind registers itself with its id
+  `prefix` or the `stored` proposal kinds it owns; nothing else changes. `parseProposalIds` reads
+  `17070-17079,fact:500-502,17080/f2` and refuses a range across prefixes. Unconfirmed agent and rule links show as
+  `link:<id>` (relationships) and `key:<id>` (key documents) until the store moves them.
+- **`knowledge.proposeRelation(scope, input, by)`**: an agent's or a rule's relationship is a stored `relationship`
+  proposal for the owner, not a link; the same pending pair returns the proposal already held. Removing a link to a
+  project, or rejecting any suggested link, leaves a rejected `relationship` proposal, so a later scan can skip it.
+- **`proposedActions.list({ kinds, except, project, proposedBy })`**, `proposedBy` on `facts.list` and
+  `memories.list`, `order: "created"` on `facts.list`, and the bot's `kind` (`agent` or `rule`) on the author of a
+  proposed action, a fact, a memory and an evidence findings batch; bots may have the kind `rule`, and an `Author` may
+  name it.
+- **`knowledge.decideLinkProposal(id, decision)`** decides a stored `relationship` or `key_document` proposal, and
+  **`knowledge.decideSuggestedLink(id, decision)`** an older unconfirmed link, each in one transaction: the link and
+  the decision land together or not at all. A decision's `reason` is kept: on a rejected proposal as its result, on a
+  fact in `metadata.decision`, on an evidence findings receipt.
 - **`store.refs.summaries(refs, { excerpt? })` says what any ref names**, a page at a time: kind, title, what holds
   it, when, provider, account, the CLI that opens it and whether it is `available`, `deleted` or `unavailable`. One
   statement per kind present, offline. A malformed ref comes back `unknown`, never thrown, so one bad row cannot fail
@@ -69,6 +98,8 @@ shape of this file.
 
 ### Changed — may break callers
 
+- **`SERVER_BOUNDS.maxMessageBytes`, `ServerSearched.tooLarge` and `search.server-too-large` are gone**: a big
+  candidate is no longer left on the server; see `textBytes`, `ServerSearched.partial` and `search.server-partial`.
 - **An option after `--` is read as the option.** `messages sync -- -100 --json` now syncs `-100` and answers in JSON;
   it failed with "too many arguments". After `--`, a word that is exactly one of the command's options, its own or a
   global one (`--json`, `--limit 5`, `--json=id`), moves in front of `--`; every other word stays a positional. A
@@ -90,6 +121,22 @@ shape of this file.
   no longer found by that title; give its id or a part of the title.
 - The provider seeds of `telegram`, `max` and `whatsapp` name their CLI (`command: tg`, `max`, `wa`), which a
   provider clash message now shows (`telegram (messages, from tg)`).
+- **Every decide method takes who decides, a `Decider`** (`"owner"` or `{ bot, model?, reason }`):
+  `facts.accept(ref, by)`, `facts.reject(ref, by)`, `memories.confirm(ref, by)`, `knowledge.confirmRelation(scope, id,
+  by)`, `knowledge.removeRelation(scope, id, by)`, `proposedActions.approve(id, by, result?)`,
+  `proposedActions.reject(id, by)`, `approveAsTask(store, id, by)`, and `by` is now required in
+  `evidenceFindings.review` and `meetingFindings.review`. `DocumentKnowledge.fact` and `.memory` take `by` for a
+  `confirm`, and `memories.markStale(ref, by)` and `.memory(…, "stale", by)` take it too: marking an agent's memory
+  stale is how it is turned down. `knowledge.relate` needs `by`: the owner's relationship is a link, an agent's is a
+  `relationship` proposal it returns instead. `notes.addLink` refuses any confirmed link without `by: "owner"`, so an
+  agent writes `confirmed: false` (the task service now does). `notes.removeLink(id, by)`, `facts.reverse(ref, by)`,
+  `facts.remove(ref, by)` and `memories.remove(ref, by)` take who removes; the document port's `addMemory` needs
+  `author`, `addFact` and `addLink` need `by`, with no owner default. `proposalRegistry(store)` takes no policy: the
+  host sets it once with `openStore({ decisions })`, and `store.decisionPolicy` is what the registry and every store
+  check read. A host passes the owner only when the owner runs the command, and
+  the agent's bot and reason otherwise.
+  An agent's confirmation of a relationship is recorded in the link's provenance, and of a fact or proposal as its
+  decider.
 - **Evidence sources read through `store.refs`.** `memories.sources`, `facts.sources` and `evidenceFindings.sources`
   keep their shape; a contact now says `kind: "contact"` (was `identity`), a mail ref the store lacks says `email`
   (was `message`), and kinds that had no title before (person, project, task, chat…) now have one.
@@ -106,6 +153,22 @@ shape of this file.
   `starred:`.
 - **An inclusive start keeps a message sent exactly at it.** `messages list 'date>=2026-10-01'` skipped a message
   sent at the first millisecond of the day, and `date<="…"` one sent at that moment.
+
+### Security
+
+- **An agent can no longer decide its own proposal.** Before, `facts.accept`/`reject`,
+  `memories.confirm`, `knowledge.confirmRelation`, `proposedActions.approve`/`reject`, `approveAsTask` and both
+  findings reviews never asked who decided, so over MCP an agent could confirm what it had proposed itself. Every one
+  of them, and the registry, now runs `mayDecide`: the owner always may; an agent needs a reason
+  (`proposal.reason-required`), is refused its own bot's proposal (`proposal.own`), a rule scorer's proposal and one
+  that names no author (`proposal.owner-only`), and every decision when the host turns agent decisions off
+  (`proposals.agent-decisions-off`). An agent can no longer add a memory already `confirmed`, mark its own memory
+  stale, write a confirmed project link itself, or remove a link. A link records only free-text provenance, which
+  anyone can write, so only the owner decides an unconfirmed link or removes a link; the rejected record a removal
+  leaves names who removed it. Findings an agent accepted for the owner record that agent, not the owner. Only the
+  owner removes or reverses an accepted fact or another bot's memory; an agent withdraws only its own row while it is
+  proposed. Turning agent decisions off now holds for every store method, not only the registry, and a bot is the
+  same bot whatever its letter case (`Claude-Code` is `claude-code`).
 
 ## 0.546.0 — 02.11.2026
 
@@ -150,25 +213,6 @@ shape of this file.
   read back. The kinds are one table, `REF_KINDS`; `looksLikeReference(text)` tells a reference from a title such as
   `Note: plan`. Reference errors carry a reason: `ref.malformed`, `ref.unknown-kind` (with the kind meant:
   `"doc:413" … did you mean document:413?`), `ref.wrong-kind`, `ref.wrong-provider`, `ref.wrong-account`.
-- **One proposal inbox behind one check: `proposalRegistry(store, policy)`, `ProposalKind`, `parseProposalIds`
-  (`@wirecat/cli-core/services`) and `mayDecide` (`@wirecat/cli-core/store`).** The registry lists every pending
-  proposal newest first across kinds (`relationship`, `key_document`, `fact`, `memory`, `findings` for evidence
-  findings, and `action` for every other stored proposal), and decides many ids at once, each on its own: the answer
-  lists `decided` and `refused`, and one refusal never undoes the others. A new kind registers itself with its id
-  `prefix` or the `stored` proposal kinds it owns; nothing else changes. `parseProposalIds` reads
-  `17070-17079,fact:500-502,17080/f2` and refuses a range across prefixes. Unconfirmed agent and rule links show as
-  `link:<id>` (relationships) and `key:<id>` (key documents) until the store moves them.
-- **`knowledge.proposeRelation(scope, input, by)`**: an agent's or a rule's relationship is a stored `relationship`
-  proposal for the owner, not a link; the same pending pair returns the proposal already held. Removing a link to a
-  project, or rejecting any suggested link, leaves a rejected `relationship` proposal, so a later scan can skip it.
-- **`proposedActions.list({ kinds, except, project, proposedBy })`**, `proposedBy` on `facts.list` and
-  `memories.list`, `order: "created"` on `facts.list`, and the bot's `kind` (`agent` or `rule`) on the author of a
-  proposed action, a fact, a memory and an evidence findings batch; bots may have the kind `rule`, and an `Author` may
-  name it.
-- **`knowledge.decideLinkProposal(id, decision)`** decides a stored `relationship` or `key_document` proposal, and
-  **`knowledge.decideSuggestedLink(id, decision)`** an older unconfirmed link, each in one transaction: the link and
-  the decision land together or not at all. A decision's `reason` is kept: on a rejected proposal as its result, on a
-  fact in `metadata.decision`, on an evidence findings receipt.
 
 ### Changed — may break callers
 
@@ -193,22 +237,6 @@ shape of this file.
   no longer found by that title; give its id or a part of the title.
 - The provider seeds of `telegram`, `max` and `whatsapp` name their CLI (`command: tg`, `max`, `wa`), which a
   provider clash message now shows (`telegram (messages, from tg)`).
-- **Every decide method takes who decides, a `Decider`** (`"owner"` or `{ bot, model?, reason }`):
-  `facts.accept(ref, by)`, `facts.reject(ref, by)`, `memories.confirm(ref, by)`, `knowledge.confirmRelation(scope, id,
-  by)`, `knowledge.removeRelation(scope, id, by)`, `proposedActions.approve(id, by, result?)`,
-  `proposedActions.reject(id, by)`, `approveAsTask(store, id, by)`, and `by` is now required in
-  `evidenceFindings.review` and `meetingFindings.review`. `DocumentKnowledge.fact` and `.memory` take `by` for a
-  `confirm`, and `memories.markStale(ref, by)` and `.memory(…, "stale", by)` take it too: marking an agent's memory
-  stale is how it is turned down. `knowledge.relate` needs `by`: the owner's relationship is a link, an agent's is a
-  `relationship` proposal it returns instead. `notes.addLink` refuses any confirmed link without `by: "owner"`, so an
-  agent writes `confirmed: false` (the task service now does). `notes.removeLink(id, by)`, `facts.reverse(ref, by)`,
-  `facts.remove(ref, by)` and `memories.remove(ref, by)` take who removes; the document port's `addMemory` needs
-  `author`, `addFact` and `addLink` need `by`, with no owner default. `proposalRegistry(store)` takes no policy: the
-  host sets it once with `openStore({ decisions })`, and `store.decisionPolicy` is what the registry and every store
-  check read. A host passes the owner only when the owner runs the command, and
-  the agent's bot and reason otherwise.
-  An agent's confirmation of a relationship is recorded in the link's provenance, and of a fact or proposal as its
-  decider.
 
 ### Fixed
 
@@ -217,22 +245,6 @@ shape of this file.
   `1.200 €`, `$1,200`) are one number now, a decimal part after them is kept (`5 000.50 ₽`), and amounts keep two
   decimals instead of a whole number (`15.5 eur` was 16). This is the amount the duplicate check compares between
   two tasks, so a reminder worded with a grouped sum is no longer compared on the wrong figure.
-
-### Security
-
-- **An agent can no longer decide its own proposal.** Before, `facts.accept`/`reject`,
-  `memories.confirm`, `knowledge.confirmRelation`, `proposedActions.approve`/`reject`, `approveAsTask` and both
-  findings reviews never asked who decided, so over MCP an agent could confirm what it had proposed itself. Every one
-  of them, and the registry, now runs `mayDecide`: the owner always may; an agent needs a reason
-  (`proposal.reason-required`), is refused its own bot's proposal (`proposal.own`), a rule scorer's proposal and one
-  that names no author (`proposal.owner-only`), and every decision when the host turns agent decisions off
-  (`proposals.agent-decisions-off`). An agent can no longer add a memory already `confirmed`, mark its own memory
-  stale, write a confirmed project link itself, or remove a link. A link records only free-text provenance, which
-  anyone can write, so only the owner decides an unconfirmed link or removes a link; the rejected record a removal
-  leaves names who removed it. Findings an agent accepted for the owner record that agent, not the owner. Only the
-  owner removes or reverses an accepted fact or another bot's memory; an agent withdraws only its own row while it is
-  proposed. Turning agent decisions off now holds for every store method, not only the registry, and a bot is the
-  same bot whatever its letter case (`Claude-Code` is `claude-code`).
 
 ## 0.545.0 — 02.11.2026
 

@@ -3,7 +3,7 @@ import { GMAIL_ALL_MAIL } from "../folders.js"
 import { headersOf } from "../headers.js"
 import type { FileStamp } from "../resume.js"
 import type { MailCriteria } from "../server-query.js"
-import type { Listed, MailSource, Quick, Searched } from "../source.js"
+import { type Listed, type MailSource, type Quick, SEARCH_REFUSED, type Searched } from "../source.js"
 
 export type FakePerson = [name: string | null, address: string]
 
@@ -41,6 +41,8 @@ export interface FakeMailbox {
   validity?: number
   /** Each answer of `search` and `list` ends in this failure. */
   searchFails?: string
+  /** Folders whose SEARCH the server refuses: `search` and `query` throw `SEARCH_REFUSED`. */
+  refusesSearch?: string[]
   /** A refused header fetch fails the whole listing. */
   headersFail?: boolean
   moveFails?: boolean
@@ -151,8 +153,13 @@ export const fakeMailSource = (mailbox: FakeMailbox): MailSource => {
       (m) => (folder === trash() ? m.folder === "trash" : m.folder !== "trash") && !m.absentFrom?.includes(folder),
     )
   }
+  const refuse = (folder: string) => {
+    if (mailbox.refusesSearch?.includes(folder))
+      throw new CliError("provider_error", `the mail server refused to search ${folder}`, { reason: SEARCH_REFUSED })
+  }
   const search = async (since: Date, folder: string): Promise<Searched> => {
     if (mailbox.searchFails) throw failure(mailbox.searchFails)
+    refuse(folder)
     const from = Date.UTC(since.getUTCFullYear(), since.getUTCMonth(), since.getUTCDate())
     return {
       validity: String(mailbox.validity ?? 12),
@@ -213,6 +220,7 @@ export const fakeMailSource = (mailbox: FakeMailbox): MailSource => {
     query: async (criteria, folder) => {
       count("search")
       if (mailbox.searchFails) throw failure(mailbox.searchFails)
+      refuse(folder)
       mailbox.queried?.push({ criteria, folder })
       return {
         validity: String(mailbox.validity ?? 12),
@@ -255,14 +263,15 @@ export const fakeMailSource = (mailbox: FakeMailbox): MailSource => {
         if (messageIds.includes(m.messageId)) m.labels = [...new Set([...(m.labels ?? []), ...labels])]
     },
 
-    fetchRaw: async (items) => {
+    fetchRaw: async (items, options) => {
       count("fetchRaw")
       mailbox.read?.push(...items.map(({ uid }) => uid))
       return items.map((item) => {
         const m = mailbox.messages.find((each) => each.uid === item.uid)
         if (m === undefined || mailbox.unreadable?.includes(item.uid) || failsNow(item.uid))
           return failure(`email ${item.uid} was not read`)
-        return rawOf(m)
+        const raw = rawOf(m)
+        return options?.bytes === undefined ? raw : raw.subarray(0, options.bytes)
       })
     },
   }

@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from "vitest"
 import { runBudget } from "../background/budget.js"
 import { formatLocator } from "../domain/locator.js"
 import { type MessageStore, openStore } from "../store/index.js"
+import { GMAIL_ALL_MAIL } from "./folders.js"
 import { type ResumePoint, resumeKey } from "./resume.js"
 import type { MailRule } from "./rules.js"
 import type { MailSource } from "./source.js"
@@ -311,6 +312,34 @@ describe("syncMail", () => {
 
     await expect(importInto(env)).rejects.toThrow("did not complete")
     expect(await emails(env)).toHaveLength(2)
+  })
+
+  it("reads a folder whose server refused SEARCH as failed: nothing deleted, no coverage, a partial run", async () => {
+    const all = [1, 2, 3, 4, 5, 6].map((n) => mail(n))
+    const { env, write } = setup(all)
+    await importInto(env)
+    const coverage = async () => (await (await store(env)).sync.syncState(KEY, "mail_coverage"))?.value
+    const before = await coverage()
+    write(all.slice(0, 5), { refusesSearch: [GMAIL_ALL_MAIL] })
+
+    const result = await importInto(env)
+
+    expect(result).toMatchObject({ deleted: 0, complete: false, refusedFolders: [GMAIL_ALL_MAIL] })
+    expect(result.deletionsSkipped).toContain("refused to search")
+    expect(await emails(env)).toHaveLength(6)
+    expect(await coverage()).toBe(before)
+  })
+
+  it("reads the other folders when one refuses SEARCH, and answers partial", async () => {
+    const { env } = setup([mail(1), mail(2)], { refusesSearch: ["INBOX"] })
+    const budgeted = await syncMail(sourceOf(env), await store(env), {
+      account: { address: ME, folders: [GMAIL_ALL_MAIL, "INBOX"] },
+      since: SINCE,
+      now: () => NOW,
+      budget: runBudget({}),
+    })
+
+    expect(budgeted).toMatchObject({ saved: 2, complete: false, state: "partial", refusedFolders: ["INBOX"] })
   })
 
   it("reads at most max new mails, newest first, and continues on the next run", async () => {
