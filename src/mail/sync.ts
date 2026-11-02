@@ -1,9 +1,7 @@
 import { setTimeout } from "node:timers/promises"
 import { CliError } from "@wirecat/cli-base"
 import { importEngine } from "../attachments/extract.js"
-import type { BudgetStop, RunBudget } from "../background/budget.js"
-import type { LoadEngine } from "../readers/types.js"
-import type { AccountKey, EmailLocationInput, FolderEmail, MessageStore, ThreadSave } from "../store/index.js"
+import type { EmailLocationInput, FolderEmail, MessageStore, ThreadSave } from "../store/index.js"
 import { isBusy } from "../store/sqlite/transaction.js"
 import { mailAccountKey } from "./account-key.js"
 import { FETCH_CHUNK, MAX_ATTACHMENT_CHARS, readAttachments } from "./attachments.js"
@@ -15,6 +13,7 @@ import { dropMissing, tooManyGone } from "./gone.js"
 import { mailHeadersOf } from "./headers.js"
 import { flagsToRefresh, proveByLocation } from "./locations.js"
 import { MAX_BODY_CHARS, type ParsedMail, parseMail } from "./parse.js"
+import { completePartial } from "./partial.js"
 import { FETCH_SLICE, keyOf, type QuickPlan, readQuick } from "./quick.js"
 import {
   FULL_PASS_MS,
@@ -30,64 +29,13 @@ import {
   within,
 } from "./resume.js"
 import { retryUnread } from "./retry.js"
-import { ruleTagger, settleRuleTags, type TagOutcome } from "./rule-tags.js"
+import { ruleTagger, settleRuleTags } from "./rule-tags.js"
 import { decide, ENVELOPE, envelopeBox, envelopeBoxOf, type MailRule, tagsOf } from "./rules.js"
-import type { DomainAge } from "./score.js"
-import type { Listed, MailSource, Searched } from "./source.js"
+import { type Listed, type MailSource, type Searched, searchRefused } from "./source.js"
 
-export interface MailAccount {
-  /** The mailbox address: the store's account id. */
-  address: string
-  mode?: "gmail" | "imap" | "mbox"
-  folders?: string[]
-  rules?: MailRule[]
-}
+import type { MailSyncOptions, MailSyncResult } from "./sync-types.js"
 
-/** What an index step reports, as memo's embedding does; the sync only passes it on. */
-export interface MailIndexed {
-  chats: number
-  chunks: number
-  left: boolean
-  notEmbedded?: unknown
-}
-
-export interface MailSyncResult {
-  account: string
-  since: string
-  listed: number
-  saved: number
-  alreadyStored: number
-  /** New emails a skip rule kept out: never read, never stored. */
-  skipped: number
-  /** New emails an envelope rule recorded: sender, date, size and labels, never their text. */
-  envelopes: number
-  deleted: number
-  /** False when `max` stopped the run before every new message was read; the next run continues. */
-  complete: boolean
-  /** `partial`: a budgeted run stopped before the whole window was read; the next run goes on. */
-  state?: "partial" | "complete"
-  /** Why a budgeted run stopped early: its request budget, its deadline, or a cancel. */
-  stopped?: BudgetStop
-  /** Messages of the window this run did not get to read: left by a budget, or by `max`. */
-  remaining?: number
-  /** Requests a budgeted run spent. */
-  requests?: number
-  /** Emails that could not be read or parsed; they are tried again next run. */
-  unreadable?: { message: string; reason: string }[]
-  /** Why stored messages missing at the source were left alone, when they were. */
-  deletionsSkipped?: string
-  /** "resumed": only mail not done before was listed; "full": every message in the window was. */
-  pass?: "full" | "resumed"
-  indexed?: MailIndexed
-  coverage?: { folders: string[]; since: string; until: string; state: "window" | "partial"; identity: string }
-  attachments?: { message: string; part: number; status: string }[]
-  /** Rule tags put on mail as an existing label the store pointed to. */
-  tagsReused?: TagOutcome["reused"]
-  /** Rule tags the store refused with nothing to reuse; that mail is stored untagged. */
-  tagsSkipped?: TagOutcome["skipped"]
-  /** `--retry-attachments`: emails read again for attachments a missing reader left unread. */
-  retried?: { emails: number; extracted: number; stillFailed: number; missing: number }
-}
+export type { MailAccount, MailIndexed, MailSyncOptions, MailSyncResult } from "./sync-types.js"
 
 const DAY = 86_400_000
 /** IMAP's SINCE counts whole days in the server's zone, so the window's first days are not trusted. */
@@ -102,37 +50,6 @@ const RESUME_FROM = 5_000
 export { MAX_ATTACHMENT_CHARS } from "./attachments.js"
 export { RETRYABLE_ATTACHMENTS } from "./retry.js"
 
-export interface MailSyncOptions {
-  account: MailAccount
-  since: Date
-  max?: number
-  maxBodyChars?: number
-  maxAttachmentChars?: number
-  now?: () => number
-  /** Domain registration dates already known, for the sender score a rule asks for. */
-  ages?: ReadonlyMap<string, DomainAge>
-  loadEngine?: LoadEngine
-  retryAttachments?: boolean
-  /** List every message in the window, not only those an earlier run left: proves deletions, refreshes labels. */
-  rescan?: boolean
-  /** `false` for a spot read, like the copy of a sent message: the run leaves the saved coverage as the last full run set it. */
-  saveCoverage?: boolean
-  /** A window smaller than this is listed whole every run: it costs seconds and keeps flags and deletions current. */
-  resumeFrom?: number
-  /** Runs after the mail is saved, so chats and mail still waiting for vectors are indexed; its answer is `indexed`. */
-  index?: (store: MessageStore, key: AccountKey) => Promise<MailIndexed>
-  /** Stops between batches of emails, after saving the resume point. */
-  signal?: AbortSignal
-  /**
-   * Makes the run budgeted: it reads the window in rounds, one request of the budget per call to the source, saves
-   * after each, stops when the budget says so and answers `state: "partial"`. A message the source could not give
-   * is tried once more at the end of the run and, if it still fails, left for the next one. `max` defaults to no limit.
-   */
-  budget?: RunBudget
-  /** Pauses before a round is read again after the store was locked; tests pass one that does not wait. */
-  wait?: (ms: number) => Promise<void>
-}
-
 /** What a budgeted run carries from one round to the next. */
 interface Plan extends QuickPlan {
   searches: Map<string, Searched>
@@ -141,6 +58,8 @@ interface Plan extends QuickPlan {
   unreadable: Map<string, string>
   /** Folders read with `quick`, fixed in the first round like `modes`. */
   quickFolders: Set<string>
+  /** Folders whose server refused SEARCH in an earlier round: not asked again this run. */
+  refused: Set<string>
 }
 
 const LIST_SLICE = 200
@@ -148,6 +67,32 @@ const STORE_BUSY_TRIES = 5
 const STORE_BUSY_WAIT_MS = 2_000
 
 export const syncMail = async (
+  source: MailSource,
+  store: MessageStore,
+  options: MailSyncOptions,
+): Promise<MailSyncResult> => {
+  const result = await syncRounds(source, store, options)
+  if (options.completePartial === false || options.retryAttachments || options.account.mode === "mbox") return result
+  if (result.stopped !== undefined || options.signal?.aborted) return result
+  const partial = await completePartial({
+    store,
+    source,
+    accountId: await store.accounts.saveAccount(mailAccountKey(options.account.address), {
+      name: options.account.address,
+    }),
+    address: options.account.address,
+    folders: () => mailFolders(options.account, source),
+    maxBodyChars: options.maxBodyChars ?? MAX_BODY_CHARS,
+    maxAttachmentChars: options.maxAttachmentChars ?? MAX_ATTACHMENT_CHARS,
+    loadEngine: options.loadEngine ?? importEngine,
+    now: (options.now ?? Date.now)(),
+    ...(options.budget ? { take: () => options.budget?.take() ?? null } : {}),
+    ...(options.signal ? { signal: options.signal } : {}),
+  })
+  return partial.completed || partial.left ? { ...result, partial } : result
+}
+
+const syncRounds = async (
   source: MailSource,
   store: MessageStore,
   options: MailSyncOptions,
@@ -165,6 +110,7 @@ export const syncMail = async (
     unlisted: new Set(),
     quick: new Map(),
     quickFolders: new Set(),
+    refused: new Set(),
     stopped: null,
     remaining: 0,
     asked: 0,
@@ -338,10 +284,16 @@ const syncRound = async (
   /** A quick folder's stored mail as it was before this run changed anything, with the UID of each. */
   const folderMail = new Map<string, FolderEmail[]>()
   const refreshed = new Map<string, { read?: boolean; flagged?: boolean }>()
+  /** Folders whose server refused SEARCH: nothing of them is known, so nothing of them is proved or moved. */
+  const refused = new Set<string>()
   const holdsMail = async (folder: string) =>
     (await store.mail.emails({ accountId, mailbox: folder, limit: 1 })).length > 0
   for (const folder of folders) {
     if (mboxPoint !== undefined) break
+    if (plan?.refused.has(folder)) {
+      refused.add(folder)
+      continue
+    }
     let searched: Searched | undefined
     if (source.search !== undefined && !snapshot) {
       searched = plan?.searches.get(folder)
@@ -352,7 +304,14 @@ const syncRound = async (
           capped = true
           continue
         }
-        searched = await source.search(since, folder)
+        try {
+          searched = await source.search(since, folder)
+        } catch (error) {
+          if (!searchRefused(error)) throw error
+          refused.add(folder)
+          plan?.refused.add(folder)
+          continue
+        }
         plan?.searches.set(folder, searched)
       }
     }
@@ -531,6 +490,8 @@ const syncRound = async (
   let deleted = 0
   let skipped: string | undefined
   if (snapshot) skipped = "an mbox file is a snapshot; mail missing from it is not proven deleted"
+  else if (refused.size > 0)
+    skipped = `the server refused to search ${[...refused].join(", ")}; no deletion is checked until it answers`
   else if (plan !== undefined && (capped || plan.tried.size > plan.asked || plan.only !== undefined))
     skipped = "this run read the window in parts; a run that lists all of it at once checks deletions"
   else if (quickRan.size > 0) {
@@ -592,7 +553,7 @@ const syncRound = async (
   if (!snapshot)
     await store.mail.setMailboxes(
       accountId,
-      folders.map(mailbox),
+      folders.filter((folder) => !refused.has(folder)).map(mailbox),
       new Map([...foundFolders].map(([id, found]) => [id, [...found]])),
       startedAt,
     )
@@ -942,7 +903,8 @@ const syncRound = async (
       startedAt,
     )
 
-  const incomplete = capped || (plan !== undefined && (plan.stopped !== null || plan.failed.size > 0))
+  const incomplete =
+    capped || refused.size > 0 || (plan !== undefined && (plan.stopped !== null || plan.failed.size > 0))
   const complete = !full && !incomplete && unreadable.length === 0 && (plan?.unreadable.size ?? 0) === 0
   const bulk = new Map(
     listed.filter((item) => item.headers?.bulk).map((item) => [item.messageId, [bulkBox.externalId]]),
@@ -958,7 +920,9 @@ const syncRound = async (
     state: complete ? ("window" as const) : ("partial" as const),
     identity: account.mode === "imap" ? "message-id-or-uidvalidity-folder-uid" : "gmail-message-id",
   }
-  if (!snapshot && saveCoverage) await store.sync.setSyncState(key, "mail_coverage", JSON.stringify(coverage))
+  // A refused folder says nothing of its mail, so the coverage an earlier run proved stays as it was.
+  if (!snapshot && saveCoverage && refused.size === 0)
+    await store.sync.setSyncState(key, "mail_coverage", JSON.stringify(coverage))
   const tagging = tagger.outcome()
   await settleRuleTags(store, accountId, rules, tagging)
   return {
@@ -977,6 +941,7 @@ const syncRound = async (
     ...(attachments.length ? { attachments } : {}),
     ...(unreadable.length ? { unreadable } : {}),
     ...(skipped === undefined ? {} : { deletionsSkipped: skipped }),
+    ...(refused.size ? { refusedFolders: [...refused] } : {}),
     ...(searches.size > 0 ? { pass: resumed.size > 0 ? ("resumed" as const) : ("full" as const) } : {}),
     ...(tagging.reused.length ? { tagsReused: tagging.reused } : {}),
     ...(tagging.skipped.length ? { tagsSkipped: tagging.skipped } : {}),
