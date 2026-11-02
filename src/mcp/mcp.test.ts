@@ -758,6 +758,7 @@ describe("the MCP server", () => {
       "chats rules show",
       "chats send-as",
       "chats show",
+      "chats status",
       "chats tracking list",
       "chats tracking show",
       "commands",

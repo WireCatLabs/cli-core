@@ -144,6 +144,7 @@ import {
   storeRestore,
 } from "./store-maintenance.js"
 import {
+  chatCoverage,
   storeChatStatus,
   storeClear,
   storeExport,
@@ -211,6 +212,7 @@ export {
   chat,
   chatAdminChange,
   chatArchive,
+  chatCoverage,
   chatEvent,
   chatFolderChange,
   chatFolderOrder,
@@ -579,6 +581,7 @@ export const ENTITIES = {
   job,
   store_chat_status: storeChatStatus,
   store_clear: storeClear,
+  chat_coverage: chatCoverage,
   store_export: storeExport,
   store_gap_plan: storeGapPlan,
   store_gap_repair: storeGapRepair,

@@ -1120,6 +1120,7 @@ const samples: Record<EntityName, unknown> = {
     held: [],
   },
   store_clear: { cleared: false, dry_run: true, chats: 0, messages: 0, left: [] },
+  chat_coverage: { chats: 3, fetched: 1, partial: 1, never: 1, oldest_message_at: "2026-01-01T00:00:00.000Z" },
   store_export: { path: "./synthetic.jsonl", format: "jsonl", count: 0 },
   store_gap_plan: {
     version: 1,

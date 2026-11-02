@@ -21,6 +21,7 @@ read  chats requests list
 read  chats rules show
 read  chats send-as
 read  chats show
+read  chats status
 read  chats tracking list
 read  chats tracking show
 read  commands
