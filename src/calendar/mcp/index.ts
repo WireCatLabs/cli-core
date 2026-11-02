@@ -326,7 +326,7 @@ export const callCalendarTool = async (
         break
       }
       default:
-        answer = await reviewsAnswer(store)
+        answer = await reviewsAnswer(store, accounts)
     }
     const result = { accounts, ...answer, untrusted: CALENDAR_UNTRUSTED_FIELDS }
     return agentResult({

@@ -115,6 +115,7 @@ const OTHERS: Entry[] = [
   ["meetings.index-pending", "not_found", "some stored meetings are not indexed by person yet"],
   ["profile.locked", "permission_error", "a profile lock pins this process to its own account"],
   ["busy.offline", "permission_error", "calendars busy asks the provider; --offline was given"],
+  ["busy.unanswered", "provider_error", "the provider gave no busy times for a calendar or person that was asked"],
   validation("busy.no-calendars", "no calendar syncs and no person was named, so there is nobody to ask"),
   ["search.offline", "permission_error", "search --backend server asks the provider; --offline was given"],
   validation("search.no-calendars", "no calendar of this profile syncs yet, so the provider has nothing to search"),

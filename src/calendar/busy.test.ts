@@ -1,4 +1,6 @@
+import { metaSchema } from "@wirecat/cli-base/standards"
 import { Command } from "commander"
+import * as v from "valibot"
 import { describe, expect, it } from "vitest"
 import { freeSlots, workingHoursOf } from "./busy.js"
 import { addCalendarCommands } from "./cli/index.js"
@@ -73,6 +75,12 @@ describe("calendars busy", () => {
           busy: [{ start: "2026-11-02T11:00:00.000Z", end: "2026-11-02T12:00:00.000Z" }],
         },
       ],
+      meta: {
+        complete: true,
+        now: "2026-11-02T07:00:00.000Z",
+        now_local: "2026-11-02T07:00:00.000+00:00",
+        timezone: "UTC",
+      },
     })
   })
 
@@ -94,6 +102,19 @@ describe("calendars busy", () => {
       busy: [],
       error: "notFound",
     })
+  })
+
+  it("is incomplete when the provider did not answer for someone, with or without free stretches", async () => {
+    const { cli } = await setup()
+    for (const slots of [[], ["--duration-minutes", "30"]]) {
+      const answer = await cli("calendars", "busy", "person:bo@example.com", ...slots)
+      expect(answer.meta).toMatchObject({
+        complete: false,
+        issues: [{ code: "provider_error", reason: "busy.unanswered", source: "person:bo@example.com" }],
+        timezone: "UTC",
+      })
+      expect(v.is(v.partial(metaSchema), answer.meta)).toBe(true)
+    }
   })
 
   it("refuses --offline before asking the provider", async () => {

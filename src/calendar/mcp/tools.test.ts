@@ -131,10 +131,10 @@ describe("calendar MCP tools", () => {
     expect((await list({ limit: 1000, page: 2 })).error).toMatchObject({ code: "validation_error" })
   })
 
-  it("lists open link choices across the store and says so", async () => {
+  it("lists the open link choices of the accounts served, and names them", async () => {
     const { store } = await setup()
     const review = body(await callCalendarTool(store, "event_links_review", {}, { accountIds: [1] }))
-    expect(review).toMatchObject({ accounts: "all", items: [] })
+    expect(review).toMatchObject({ accounts: [1], items: [] })
   })
 
   describe("writes", () => {

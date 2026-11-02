@@ -18,6 +18,38 @@ shape of this file.
 - **`KEEP_SUCCESSFUL_RUNS_FOR_DAYS` and `RUNS_SIZE_LIMIT_MB` are exported** beside `KEEP_RUNS_FOR_DAYS`. A host can
   then name the run-record defaults it writes into its config file.
 
+## 0.561.0 — 03.11.2026
+
+### Changed — may break callers
+
+- **`links review` under a profile lock lists only the profile's own link choices.** With `deps.locked`, or without
+  `deps.messages`, only choices about the account's own copies are listed, and a candidate event the account holds no
+  copy of shows its ref alone, so no other account's titles. Unlocked it still lists every account's and names them
+  in `meta.accounts` (WC-ACCT-9); the top-level `accounts: "all"` is gone. Over MCP, `event_links_review` lists only
+  the served accounts' choices. `reviewsAnswer(store, accountIds?)` takes the scope; `calendarAccountNames` names the
+  store's calendar accounts.
+
+### Added
+
+- **`keyedGuard` in `@wirecat/cli-core/sends`:** the guard over a write's main key and its extra keys that the
+  calendar writes use — a key that refuses refuses before anything is asked, one question names every key at `ask`,
+  and `refuse(request)` checks without asking. A CLI's own API writes can now share it instead of a copy.
+- **Calendar times at a terminal are in the zone in use, and the zone is named (WC-TIME-4).** Every shared calendar
+  command hands its host a `view` that prints each time on the zone's wall clock (an all-day event by its dates) and
+  ends with `times in <zone>`. JSON, JSONL and `--compact` are unchanged. `CalendarCommandDeps.write`'s `view` now
+  takes the host's body, which `renderAnswer` passes.
+
+### Fixed
+
+- **`calendars busy` says when the provider did not answer for a calendar or person.** `meta.complete` is false
+  with a `busy.unanswered` issue each (`calendar:<id>` or `person:<email>`), with or without `--duration-minutes`,
+  so free stretches are no longer shown as whole. The command is `partial`, so it still exits 0. `meta` also has
+  `now`, `now_local` and `timezone` (WC-TIME-7).
+- **`events list`'s first help example runs.** It named `starts_at` twice, which the query refuses; it is now
+  `'starts_at:[2026-11-02 TO 2026-11-07}'`, quoted, as are `events export`'s, so zsh does not read the brackets. A
+  test runs every calendar help example with a query.
+||||||| parent of aca3c0fb5 (feat(config): declared settings with defaults for the config file and config show)
+
 ## 0.560.0 — 02.11.2026
 
 ### Changed — may break callers
