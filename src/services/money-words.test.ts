@@ -9,7 +9,7 @@ describe("moneyClassesOf", () => {
     ["envía la factura", [MONEY_REQUEST]],
     ["он перевёл вчера", [MONEY_DONE]],
     ["we paid on Monday", [MONEY_DONE]],
-    ["ya pagué", [MONEY_DONE]],
+    ["lo he recibido", [MONEY_DONE]],
     ["оплачу в пятницу", [PROMISE]],
     ["I promise it is coming", [PROMISE]],
     ["привет, как дела", []],

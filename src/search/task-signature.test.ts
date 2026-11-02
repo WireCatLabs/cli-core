@@ -46,6 +46,20 @@ describe("amountsOf", () => {
   })
 
   it.each([
+    ["5 000.50 ₽", { value: 5000.5, currency: "RUB" }],
+    ["1 000 000.5 р", { value: 1000000.5, currency: "RUB" }],
+    ["5\u2009000 ₽", { value: 5000, currency: "RUB" }],
+    ["5\u202f000 ₽", { value: 5000, currency: "RUB" }],
+    ["5\u00a0000 ₽", { value: 5000, currency: "RUB" }],
+    ["$1,200", { value: 1200, currency: "USD" }],
+    ["$1,200.50", { value: 1200.5, currency: "USD" }],
+    ["1.200,50 EUR", { value: 1200.5, currency: "EUR" }],
+    ["1,5 eur", { value: 1.5, currency: "EUR" }],
+  ])("reads raw text %j", (text, amount) => {
+    expect(amountsOf(text)).toEqual([amount])
+  })
+
+  it.each([
     ["+34 612 345 678"],
     ["позвони +7 916 123 45 67"],
     ["встреча 02.11.2026 в 15:30"],

@@ -24,9 +24,9 @@ export const MONEY_WORDS: readonly TaskCategory[] = [
     name: MONEY_DONE,
     meaning: "says a payment was made or received",
     triggers: {
-      en: ["paid", "sent", "transferred", "received", "refunded", "settled"],
+      en: ["paid", "sent", "received", "settled"],
       ru: ["перевёл", "перевела", "выслал", "вернул", "скинул", "получил", "получила"],
-      es: ["pagué", "pagado", "recibido"],
+      es: ["recibido"],
     },
   },
   {
