@@ -36,16 +36,15 @@ export const deleteCommand = (messenger: Messenger): Command =>
             `deletes for everyone — the owner can run \`${lineOf(this, "messages delete --for-everyone")}\``,
           { permission: "messages.delete", sent: false },
         )
+      const ids = messages
+        .flatMap((one) => one.split(","))
+        .map((one) => one.trim())
+        .filter(Boolean)
+      if (ids.length === 0)
+        throw new CliError("validation_error", "no message id given — name the messages to delete", { sent: false })
       const context = messengerContext(this, messenger)
       const deleted = await context.withServices((services) =>
-        services.messages.delete({
-          chat,
-          messages: messages
-            .flatMap((one) => one.split(","))
-            .map((one) => one.trim())
-            .filter(Boolean),
-          forEveryone: everyone,
-        }),
+        services.messages.delete({ chat, messages: ids, forEveryone: everyone }),
       )
       renderAnswer(this, context, itemOf(snakeKeys(deleted)))
     })

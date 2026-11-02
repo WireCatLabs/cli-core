@@ -1610,6 +1610,27 @@ describe("the shared read commands", () => {
     expect(traced.stderr.join("\n")).toContain('"operation":"wire.frame","opcode":178')
   })
 
+  it("refuses a delete with no message id before it connects", async () => {
+    const root = mkdtempSync(join(tmpdir(), "messenger-"))
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state") }
+    const deletions: unknown[] = []
+    const deleting: MessengerAdapter = {
+      ...fake,
+      delete: async (chatId, ids) => {
+        deletions.push([chatId, ids])
+      },
+    }
+
+    const empty = await call(
+      ["messages", "delete", "Book", "", " , ", "--allow-dangerous", "--json"],
+      async () => deleting,
+      env,
+    )
+
+    expect(JSON.parse(empty.stderr.join("")).error).toMatchObject({ code: "validation_error" })
+    expect(deletions).toEqual([])
+  })
+
   it("refuses a delete under the read-only lock before it would ask, with exit 5", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
     const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), CHAT_READ_ONLY: "1" }
