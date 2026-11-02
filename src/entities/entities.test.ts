@@ -940,6 +940,15 @@ const samples: Record<EntityName, unknown> = {
     weeks: [{ week_start: "2026-10-19", meetings: 1, talk_ms: 5000 }],
     top_speakers: [],
   },
+  meeting_counts: {
+    by: "week",
+    meetings: 2,
+    minutes: 90,
+    mean_minutes: 45,
+    transcripts: 1,
+    rows: [{ key: "2026-10-19", name: null, meetings: 2, minutes: 90, mean_minutes: 45, transcripts: 1 }],
+    has_more: false,
+  },
   meeting_participants: {
     schema_version: 1,
     kind: "meeting_participants",

@@ -2,10 +2,13 @@ import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, expect, it } from "vitest"
-import { aggregateMeetingStats } from "../meetings/index.js"
+import { aggregateMeetingStats, NO_SERIES } from "../meetings/index.js"
 import { sampleMeeting } from "../meetings/testing/index.js"
+import { openCache } from "../store/open.js"
+import { meetingSelectionSql } from "../store/sqlite/meeting-selection.js"
+import { meetingCountsSql } from "../store/sqlite/meeting-stats.js"
 import { type MessageStore, openStore } from "../store/store.js"
-import { readMeetingStats } from "./meeting-stats.js"
+import { readMeetingCounts, readMeetingStats } from "./meeting-stats.js"
 
 const stores: MessageStore[] = []
 afterEach(async () => {
@@ -102,4 +105,93 @@ it("starts weeks on Monday in the chosen zone and refuses an unknown zone", () =
   expect(aggregateMeetingStats([{ ...row, startedAt: sunday }], "Europe/Madrid").weeks[0]?.weekStart).toBe("2026-10-26")
   expect(aggregateMeetingStats([{ ...row, startedAt: null }]).speakers[0]?.key).toBe("unknown")
   expect(() => aggregateMeetingStats([], "Mars/Base")).toThrow(/IANA/)
+})
+
+const countsFixture = async () => {
+  const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "zm-test-counts-")), "store.db") })
+  stores.push(store)
+  const accountId = await store.accounts.saveAccount({ provider: "example", account: "alice-example" }, { name: "A" })
+  const MINUTE = 60_000
+  const meetings = [
+    { name: "sync-1", startedAt: MONDAY, durationMs: 30 * MINUTE, endedAt: null, series: true, transcript: true },
+    { name: "sync-2", startedAt: MONDAY + 8 * DAY, durationMs: null, endedAt: 60 * MINUTE, series: true },
+    { name: "ad-hoc", startedAt: MONDAY + DAY, durationMs: null, endedAt: null, series: false },
+  ]
+  for (const meeting of meetings) {
+    const input = sampleMeeting()
+    input.meeting.accountId = accountId
+    input.meeting.externalId = `example-${meeting.name}`
+    input.meeting.startedAt = meeting.startedAt
+    input.meeting.durationMs = meeting.durationMs
+    input.meeting.endedAt = meeting.endedAt === null ? null : meeting.startedAt + meeting.endedAt
+    if (meeting.series && input.meeting.series) input.meeting.series.title = "Weekly sync"
+    else delete input.meeting.series
+    if (meeting.transcript) input.transcripts[0].contentHash = `invented-${meeting.name}`
+    else input.transcripts = [] as unknown as typeof input.transcripts
+    await store.meetings.saveMeeting(input)
+  }
+  return { store, accountId }
+}
+
+it("counts meetings, minutes and transcripts per day, week and series; no end means no minutes", async () => {
+  const { store, accountId } = await countsFixture()
+  const counted = async (by: "day" | "week" | "series", limit?: number) => {
+    const { selection: _, ...counts } = await readMeetingCounts(store, {
+      accountId,
+      by,
+      timeZone: "UTC",
+      ...(limit ? { limit } : {}),
+    })
+    return counts
+  }
+  const row = (
+    key: string,
+    name: string | null,
+    meetings: number,
+    minutes: number,
+    mean: number | null,
+    t: number,
+  ) => ({
+    key,
+    name,
+    meetings,
+    minutes,
+    meanMinutes: mean,
+    transcripts: t,
+  })
+  expect(await counted("week")).toEqual({
+    by: "week",
+    timeZone: "UTC",
+    meetings: 3,
+    minutes: 90,
+    meanMinutes: 45,
+    transcripts: 1,
+    rows: [row("2026-10-19", null, 2, 30, 30, 1), row("2026-10-26", null, 1, 60, 60, 0)],
+    hasMore: false,
+  })
+  expect((await counted("day", 1)).rows).toEqual([row("2026-10-27", null, 1, 60, 60, 0)])
+  expect((await counted("day", 1)).hasMore).toBe(true)
+  expect((await counted("series")).rows).toEqual([
+    row("series:example-series", "Weekly sync", 2, 90, 45, 1),
+    row(NO_SERIES, null, 1, 0, null, 0),
+  ])
+})
+
+it("reads meetings through meetings_by_time, never a scan or a sort", async () => {
+  const path = join(mkdtempSync(join(tmpdir(), "zm-test-plan-")), "store.db")
+  await (await openStore({ path })).close()
+  const database = await openCache(path)
+  try {
+    for (const selection of [{ accountId: 1 }, { accountId: 1, since: MONDAY, until: MONDAY + DAY }]) {
+      const { clauses, params } = meetingSelectionSql(selection)
+      const plan = database
+        .prepare(`EXPLAIN QUERY PLAN ${meetingCountsSql(clauses.join(" AND "))}`)
+        .all(...params)
+        .map((row) => String(row.detail))
+      expect(plan.join("\n")).toContain("meetings_by_time")
+      expect(plan.filter((detail) => detail.startsWith("SCAN") || detail.includes("TEMP B-TREE"))).toEqual([])
+    }
+  } finally {
+    database.close()
+  }
 })

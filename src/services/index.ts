@@ -208,7 +208,12 @@ export {
   meetingSearchesService,
   type SavedMeetingSearch,
 } from "./meeting-searches.js"
-export { type MeetingStatsRequest, readMeetingStats } from "./meeting-stats.js"
+export {
+  type MeetingCountsRequest,
+  type MeetingStatsRequest,
+  readMeetingCounts,
+  readMeetingStats,
+} from "./meeting-stats.js"
 export { chatIdIn, storedChatId } from "./message-resolution.js"
 export type {
   AroundWindow,

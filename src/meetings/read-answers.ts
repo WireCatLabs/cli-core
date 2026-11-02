@@ -4,7 +4,7 @@ import type { MeetingLink } from "./links.js"
 import type { Event } from "./model.js"
 import { formatMeetingReference } from "./reference.js"
 import type { MeetingReviewItem } from "./review.js"
-import type { MeetingSpeakerStats, MeetingStats } from "./stats.js"
+import type { MeetingCounts, MeetingCountsRow, MeetingSpeakerStats, MeetingStats } from "./stats.js"
 
 const text = v.string()
 const count = v.pipe(v.number(), v.integer(), v.minValue(0))
@@ -128,6 +128,48 @@ export const meetingStatsItem = (found: MeetingStats, top = 10): v.InferOutput<t
   talk_ms: found.talkMs,
   weeks: found.weeks.map((week) => ({ week_start: week.weekStart, meetings: week.meetings, talk_ms: week.talkMs })),
   top_speakers: found.speakers.slice(0, top).map(meetingSpeakerItem),
+})
+
+const meetingCountsRow = v.strictObject({
+  key: text,
+  name: v.nullable(text),
+  meetings: count,
+  minutes: count,
+  mean_minutes: v.nullable(v.number()),
+  transcripts: count,
+})
+
+/**
+ * `stats meetings history`: meetings, minutes and meetings with a transcript, in total and per day, week (its Monday)
+ * or series. `has_more` says `--limit` left rows out.
+ */
+export const meetingCounts = v.strictObject({
+  by: v.picklist(["day", "week", "series"]),
+  meetings: count,
+  minutes: count,
+  mean_minutes: v.nullable(v.number()),
+  transcripts: count,
+  rows: v.array(meetingCountsRow),
+  has_more: v.boolean(),
+})
+
+const countsRowItem = (row: MeetingCountsRow): v.InferOutput<typeof meetingCountsRow> => ({
+  key: row.key,
+  name: row.name,
+  meetings: row.meetings,
+  minutes: row.minutes,
+  mean_minutes: row.meanMinutes,
+  transcripts: row.transcripts,
+})
+
+export const meetingCountsItem = (found: MeetingCounts): v.InferOutput<typeof meetingCounts> => ({
+  by: found.by,
+  meetings: found.meetings,
+  minutes: found.minutes,
+  mean_minutes: found.meanMinutes,
+  transcripts: found.transcripts,
+  rows: found.rows.map(countsRowItem),
+  has_more: found.hasMore,
 })
 
 const truncated = <T extends string>(...why: T[]) => v.nullable(v.picklist(why))

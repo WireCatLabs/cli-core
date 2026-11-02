@@ -227,6 +227,8 @@ export { type PullOptions, pull, type RunReport } from "./pull.js"
 export {
   event,
   eventItem,
+  meetingCounts,
+  meetingCountsItem,
   meetingLink,
   meetingLinkItem,
   meetingParticipants,
@@ -353,7 +355,14 @@ export type {
 export { validateMeetingSeriesInventoryCursor } from "./series-inventory-validation.js"
 export type { MeetingSource, SourceParticipant } from "./source.js"
 export {
+  aggregateMeetingCounts,
   aggregateMeetingStats,
+  MEETING_COUNTS_GROUPINGS,
+  type MeetingCounts,
+  type MeetingCountsGrouping,
+  type MeetingCountsInput,
+  type MeetingCountsMeeting,
+  type MeetingCountsRow,
   type MeetingSpeakerStats,
   type MeetingStats,
   type MeetingStatsInput,
@@ -361,6 +370,7 @@ export {
   type MeetingStatsSelection,
   type MeetingStatsStore,
   type MeetingWeekStats,
+  NO_SERIES,
 } from "./stats.js"
 export type {
   ChatInput,

@@ -84,6 +84,7 @@ import { mediaArchive, mediaArchiveCheck, mediaArchiveMove, mediaArchiveTimer } 
 import {
   event,
   meeting,
+  meetingCounts,
   meetingDetails,
   meetingHit,
   meetingLink,
@@ -544,6 +545,7 @@ export const ENTITIES = {
   meeting_review: meetingReview,
   meeting_link: meetingLink,
   meeting_stats: meetingStats,
+  meeting_counts: meetingCounts,
   meeting_speaker: meetingSpeaker,
   meeting_participants: meetingParticipants,
   meeting_passage: meetingPassage,

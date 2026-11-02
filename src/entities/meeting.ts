@@ -1,6 +1,7 @@
 export {
   event,
   meeting,
+  meetingCounts,
   meetingDetails,
   meetingHit,
   meetingLink,
