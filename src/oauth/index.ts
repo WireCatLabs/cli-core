@@ -1,4 +1,5 @@
 export { type Authorization, type AuthorizeOptions, authorize } from "./authorize.js"
+export { type ClientFileOptions, readClientFile } from "./client-file.js"
 export {
   type SignInOptions,
   type TokenKeeper,

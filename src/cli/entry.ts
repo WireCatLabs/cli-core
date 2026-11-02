@@ -139,7 +139,7 @@ export const startCli = async (entry: CliEntry): Promise<void> => {
       })
       return /^(y|yes)$/i.test(answer.trim())
     },
-    openBrowser: (url, browser) => openBrowser(io, url, browser),
+    openBrowser: (url, browser) => openBrowser(url, browser, io),
     outputClosed: () => closed,
   }
   let code: number | undefined
@@ -181,7 +181,12 @@ const commanderExit = (error: unknown): number | undefined => {
   return code === "commander.help" ? 2 : undefined
 }
 
-const openBrowser = (io: EntryIo, url: string, browser?: string): Promise<void> => {
+/** Opens `url` in the system browser, or in `browser` when given; resolves once the browser has started. */
+export const openBrowser = (
+  url: string,
+  browser?: string,
+  io: Pick<EntryIo, "platform" | "spawn"> = { platform: process.platform, spawn },
+): Promise<void> => {
   const [command, prefix] =
     browser !== undefined
       ? [browser, []]

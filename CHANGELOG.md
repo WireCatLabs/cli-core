@@ -7,35 +7,34 @@ shape of this file.
 
 ## Unreleased
 
-### Changed — may break callers
-
-- **An option after `--` is read as the option.** `messages sync -- -100 --json` now syncs `-100` and answers in JSON;
-  it failed with "too many arguments". After `--`, a word that is exactly one of the command's options, its own or a
-  global one (`--json`, `--limit 5`, `--json=id`), moves in front of `--`; every other word stays a positional. A
-  negative id needs no `--` at all. Commands that take free text keep every word after `--` literal: `messages send` and
-  `edit` (also the bot's), `polls create`, `topics create`, `chats create`, `chats folders create`, `contacts rename`,
-  `contacts aliases set`, `messages press`, `bot commands set`, `schedule command`, `events remind`, `complete`, and the
-  notes templates. Mark such a command with `annotate(command, { literal_after_dashes: true })`; MCP calls are never
-  lifted. A script that passed the literal word `--json` as a positional of another command now gets the option instead.
-- **Every decide method takes who decides, a `Decider`** (`"owner"` or `{ bot, model?, reason }`):
-  `facts.accept(ref, by)`, `facts.reject(ref, by)`, `memories.confirm(ref, by)`, `knowledge.confirmRelation(scope, id,
-  by)`, `knowledge.removeRelation(scope, id, by)`, `proposedActions.approve(id, by, result?)`,
-  `proposedActions.reject(id, by)`, `approveAsTask(store, id, by)`, and `by` is now required in
-  `evidenceFindings.review` and `meetingFindings.review`. `DocumentKnowledge.fact` and `.memory` take `by` for a
-  `confirm`, and `memories.markStale(ref, by)` and `.memory(…, "stale", by)` take it too: marking an agent's memory
-  stale is how it is turned down. `knowledge.relate` needs `by`: the owner's relationship is a link, an agent's is a
-  `relationship` proposal it returns instead. `notes.addLink` refuses any confirmed link without `by: "owner"`, so an
-  agent writes `confirmed: false` (the task service now does). `notes.removeLink(id, by)`, `facts.reverse(ref, by)`,
-  `facts.remove(ref, by)` and `memories.remove(ref, by)` take who removes; the document port's `addMemory` needs
-  `author`, `addFact` and `addLink` need `by`, with no owner default. `proposalRegistry(store)` takes no policy: the
-  host sets it once with `openStore({ decisions })`, and `store.decisionPolicy` is what the registry and every store
-  check read. A host passes the owner only when the owner runs the command, and
-  the agent's bot and reason otherwise.
-  An agent's confirmation of a relationship is recorded in the link's provenance, and of a fact or proposal as its
-  decider.
-
 ### Added
 
+- **`readClientFile` (from `@wirecat/cli-core/oauth`) reads a user's own Google Desktop OAuth client file** (the
+  `{ "installed": { client_id, client_secret } }` JSON from Google's console). It refuses a file other users can read
+  (`sign-in.client-file-open`) and a file of the wrong shape (`sign-in.client-file-invalid`), and never puts the file's
+  contents in an error. gcal, drive and mail each kept a copy of this reader.
+- **`openBrowser(url, browser?)` is exported from `@wirecat/cli-core/cli`**, so a CLI that does not start through
+  `startCli` opens the sign-in page the same way: `open`, `rundll32` or `xdg-open`, or the named browser.
+- **iCalendar feeds as read-only calendars.** With `deps.feeds` (`icsFeeds`), `calendars add <url> [--title]` follows a
+  public holiday calendar, a sports schedule or a published `.ics` address, and `calendars remove <calendar>` stops.
+  `sync` reads each feed after the provider (`syncWithFeeds`), so its events show in `events list`,
+  `search events`, `overlapping:` and `events remind`. Repeating events are expanded here (`expandSeries`: RRULE in
+  the event's own zone, RDATE, EXDATE and overrides). The address is a secret input, kept by the CLI and never
+  printed; a fetch follows redirects only to https and stops at 10 MB and 30 s. `readIcs` takes
+  `{ overrides: true }` and returns the calendar's `name`. See `docs/dev/CALENDARS.md`, "Feeds".
+- **History limits for pushed history, per profile.** A messenger whose history is pushed (`history: "store"`,
+  WhatsApp) saves one-to-one chats back `history_dialog_days` (1095 by default), groups of more than two people back
+  `history_group_days` (365) and nothing of a group above `history_group_members_max` people (50); at most 1095 days.
+  The chat row stays, so the chat is still listed. Live messages, `messages sync` and what the store already holds are
+  never dropped. `messages sync <chat> --full-history` fetches a chat and keeps its pushed history in full from then on
+  (`history_included` in the answer). `ChatsStore` gains `historySkips`, `historyShapes`, `recordHistorySkips` and
+  `setHistoryIncluded`; `Saving` takes `historyLimits`.
+- **Helpers for reading money and questions in a chat, for the project status work.** `amountsOf(text)` returns
+  every amount in a text, in order (`amountOf` is its first). `MONEY_REQUEST`, `MONEY_DONE` and `PROMISE` word lists
+  (ru, en, es) with `moneyClassesOf(text)` say which a text uses. `questions(messages, { asker: "owner" })` lists the
+  owner's own questions and whether anyone but the owner answered them, by a reply or by speaking next; the default,
+  `"others"`, is what it did before. `linkedChatsOf` is exported, now with each link's `role`, and so is
+  `AGENDA_DEFAULTS`, the silence `tasks agenda` waits before it lists a chat.
 - **One proposal inbox behind one check: `proposalRegistry(store, policy)`, `ProposalKind`, `parseProposalIds`
   (`@wirecat/cli-core/services`) and `mayDecide` (`@wirecat/cli-core/store`).** The registry lists every pending
   proposal newest first across kinds (`relationship`, `key_document`, `fact`, `memory`, `findings` for evidence
@@ -56,6 +55,47 @@ shape of this file.
   the decision land together or not at all. A decision's `reason` is kept: on a rejected proposal as its result, on a
   fact in `metadata.decision`, on an evidence findings receipt.
 
+
+
+### Changed — may break callers
+
+- **An option after `--` is read as the option.** `messages sync -- -100 --json` now syncs `-100` and answers in JSON;
+  it failed with "too many arguments". After `--`, a word that is exactly one of the command's options, its own or a
+  global one (`--json`, `--limit 5`, `--json=id`), moves in front of `--`; every other word stays a positional. A
+  negative id needs no `--` at all. Commands that take free text keep every word after `--` literal: `messages send` and
+  `edit` (also the bot's), `polls create`, `topics create`, `chats create`, `chats folders create`, `contacts rename`,
+  `contacts aliases set`, `messages press`, `bot commands set`, `schedule command`, `events remind`, `complete`, and the
+  notes templates. Mark such a command with `annotate(command, { literal_after_dashes: true })`; MCP calls are never
+  lifted. A script that passed the literal word `--json` as a positional of another command now gets the option instead.
+- **A write to a calendar the account may only read refuses before anything is asked or journaled**
+  (`calendar.read-only`): create, quick add, import, update, delete, respond and move, for a feed and for a provider's
+  `reader` or `free-busy` calendar alike. Before, only the target of a move was checked; the provider refused the rest.
+  `calendars busy` and `search --backend server` leave feed calendars out.
+- **Every decide method takes who decides, a `Decider`** (`"owner"` or `{ bot, model?, reason }`):
+  `facts.accept(ref, by)`, `facts.reject(ref, by)`, `memories.confirm(ref, by)`, `knowledge.confirmRelation(scope, id,
+  by)`, `knowledge.removeRelation(scope, id, by)`, `proposedActions.approve(id, by, result?)`,
+  `proposedActions.reject(id, by)`, `approveAsTask(store, id, by)`, and `by` is now required in
+  `evidenceFindings.review` and `meetingFindings.review`. `DocumentKnowledge.fact` and `.memory` take `by` for a
+  `confirm`, and `memories.markStale(ref, by)` and `.memory(…, "stale", by)` take it too: marking an agent's memory
+  stale is how it is turned down. `knowledge.relate` needs `by`: the owner's relationship is a link, an agent's is a
+  `relationship` proposal it returns instead. `notes.addLink` refuses any confirmed link without `by: "owner"`, so an
+  agent writes `confirmed: false` (the task service now does). `notes.removeLink(id, by)`, `facts.reverse(ref, by)`,
+  `facts.remove(ref, by)` and `memories.remove(ref, by)` take who removes; the document port's `addMemory` needs
+  `author`, `addFact` and `addLink` need `by`, with no owner default. `proposalRegistry(store)` takes no policy: the
+  host sets it once with `openStore({ decisions })`, and `store.decisionPolicy` is what the registry and every store
+  check read. A host passes the owner only when the owner runs the command, and
+  the agent's bot and reason otherwise.
+  An agent's confirmation of a relationship is recorded in the link's provenance, and of a fact or proposal as its
+  decider.
+
+### Fixed
+
+- **A sum written in groups of three read as the wrong amount: `50 000 ₽` was `0` and `4 300 ₽` was `300`**, because
+  only the last group was read. Groups after a space, a no-break or thin space, a dot or a comma (`50 000`,
+  `1.200 €`, `$1,200`) are one number now, a decimal part after them is kept (`5 000.50 ₽`), and amounts keep two
+  decimals instead of a whole number (`15.5 eur` was 16). This is the amount the duplicate check compares between
+  two tasks, so a reminder worded with a grouped sum is no longer compared on the wrong figure.
+
 ### Security
 
 - **An agent can no longer decide its own proposal.** Before, `facts.accept`/`reject`,
@@ -71,30 +111,6 @@ shape of this file.
   owner removes or reverses an accepted fact or another bot's memory; an agent withdraws only its own row while it is
   proposed. Turning agent decisions off now holds for every store method, not only the registry, and a bot is the
   same bot whatever its letter case (`Claude-Code` is `claude-code`).
-
-### Added
-
-- **History limits for pushed history, per profile.** A messenger whose history is pushed (`history: "store"`,
-  WhatsApp) saves one-to-one chats back `history_dialog_days` (1095 by default), groups of more than two people back
-  `history_group_days` (365) and nothing of a group above `history_group_members_max` people (50); at most 1095 days.
-  The chat row stays, so the chat is still listed. Live messages, `messages sync` and what the store already holds are
-  never dropped. `messages sync <chat> --full-history` fetches a chat and keeps its pushed history in full from then on
-  (`history_included` in the answer). `ChatsStore` gains `historySkips`, `historyShapes`, `recordHistorySkips` and
-  `setHistoryIncluded`; `Saving` takes `historyLimits`.
-- **Helpers for reading money and questions in a chat, for the project status work.** `amountsOf(text)` returns
-  every amount in a text, in order (`amountOf` is its first). `MONEY_REQUEST`, `MONEY_DONE` and `PROMISE` word lists
-  (ru, en, es) with `moneyClassesOf(text)` say which a text uses. `questions(messages, { asker: "owner" })` lists the
-  owner's own questions and whether anyone but the owner answered them, by a reply or by speaking next; the default,
-  `"others"`, is what it did before. `linkedChatsOf` is exported, now with each link's `role`, and so is
-  `AGENDA_DEFAULTS`, the silence `tasks agenda` waits before it lists a chat.
-
-### Fixed
-
-- **A sum written in groups of three read as the wrong amount: `50 000 ₽` was `0` and `4 300 ₽` was `300`**, because
-  only the last group was read. Groups after a space, a no-break or thin space, a dot or a comma (`50 000`,
-  `1.200 €`, `$1,200`) are one number now, a decimal part after them is kept (`5 000.50 ₽`), and amounts keep two
-  decimals instead of a whole number (`15.5 eur` was 16). This is the amount the duplicate check compares between
-  two tasks, so a reminder worded with a grouped sum is no longer compared on the wrong figure.
 
 ## 0.545.0 — 02.11.2026
 
