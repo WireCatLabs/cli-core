@@ -44,10 +44,11 @@ export interface OAuthProvider {
   revokeUrl?: string
   client: OAuthClient
   /**
-   * `loopback` sends the browser to `http://127.0.0.1:<port>/callback`. `relay` sends it to a fixed page that
+   * `loopback` sends the browser to `http://127.0.0.1:<port>/callback`, or to `http://localhost:<port>/callback` with
+   * `host: "localhost"` (the listener then takes `127.0.0.1` and `::1`). `relay` sends it to a fixed page that
    * forwards to the loopback port, which it reads from `state` (`<port>.<random>`).
    */
-  redirect: { kind: "loopback" } | { kind: "relay"; url: string }
+  redirect: { kind: "loopback"; host?: "localhost" } | { kind: "relay"; url: string }
   authorizeParams?: Record<string, string>
   exchange?: (params: Record<string, string>, context: ExchangeContext) => Promise<TokenSet>
   revoke?: (tokens: TokenSet, context: RequestContext) => Promise<void>

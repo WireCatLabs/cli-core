@@ -7,6 +7,13 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`redirect: { kind: "loopback", host: "localhost" }` signs in through `http://localhost:<port>/callback`.** Microsoft
+  Entra ignores the port only for `localhost` redirect URIs, so a public-client app registered as
+  `http://localhost/callback` needs it. The listener then takes `127.0.0.1` and, when the host has IPv6, `::1`, because
+  the browser may resolve `localhost` to either. Without `host` nothing changes: Google and the rest keep `127.0.0.1`.
+
 ## 0.541.0 — 02.11.2026
 
 ### Added

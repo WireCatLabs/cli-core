@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto"
-import { createServer } from "node:http"
+import { createServer, type RequestListener } from "node:http"
 import { CliError, isCliError } from "@wirecat/cli-base"
 import type { OAuthProvider } from "./provider.js"
 
@@ -67,7 +67,7 @@ export const authorize = async (options: AuthorizeOptions): Promise<Authorizatio
     else
       fail(new CliError("authentication_error", `${provider.name} sign-in was declined`, { reason: "oauth.declined" }))
   }
-  const server = createServer((request, response) => {
+  const handler: RequestListener = (request, response) => {
     let url: URL
     try {
       url = new URL(request.url ?? "/", "http://127.0.0.1")
@@ -89,7 +89,11 @@ export const authorize = async (options: AuthorizeOptions): Promise<Authorizatio
     }
     response.end("Sign-in received; you can close this tab")
     settle(url.searchParams)
-  })
+  }
+  const server = createServer(handler)
+  const localhost = provider.redirect.kind === "loopback" && provider.redirect.host === "localhost"
+  // `localhost` may resolve to ::1 in the browser; the IPv6 listener is best effort, as some hosts have no IPv6.
+  const server6 = localhost ? createServer(handler) : undefined
   const onAbort = () => fail(cancelled())
   options.signal?.addEventListener("abort", onAbort, { once: true })
   const timer = setTimeout(
@@ -104,11 +108,20 @@ export const authorize = async (options: AuthorizeOptions): Promise<Authorizatio
     const address = server.address()
     if (!address || typeof address === "string")
       throw new CliError("configuration_error", "could not start the local sign-in listener")
+    if (server6) {
+      server6.on("error", () => {})
+      await new Promise<void>((resolve) => {
+        server6.once("error", () => resolve())
+        server6.listen(address.port, "::1", () => resolve())
+      })
+    }
     const random = randomBytes(32).toString("base64url")
     const relay = provider.redirect.kind === "relay"
     state = relay ? `${address.port}.${random}` : random
     const redirectUri =
-      provider.redirect.kind === "relay" ? provider.redirect.url : `http://127.0.0.1:${address.port}/callback`
+      provider.redirect.kind === "relay"
+        ? provider.redirect.url
+        : `http://${localhost ? "localhost" : "127.0.0.1"}:${address.port}/callback`
     const url = new URL(provider.authorizeUrl)
     for (const [key, value] of Object.entries({
       ...provider.authorizeParams,
@@ -147,7 +160,9 @@ export const authorize = async (options: AuthorizeOptions): Promise<Authorizatio
     clearTimeout(timer)
     options.signal?.removeEventListener("abort", onAbort)
     paste.abort()
-    server.closeAllConnections()
-    await new Promise<void>((resolve) => server.close(() => resolve()))
+    for (const each of server6 ? [server, server6] : [server]) {
+      each.closeAllConnections()
+      if (each.listening) await new Promise<void>((resolve) => each.close(() => resolve()))
+    }
   }
 }

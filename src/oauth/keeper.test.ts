@@ -307,6 +307,27 @@ describe("signIn", () => {
     expect(stored(keyring)).toMatchObject({ account: "example-account", refreshToken: "r", scopes: ["one", "two"] })
   })
 
+  it("redirects to localhost and listens on 127.0.0.1 and ::1 when the provider asks for it", async () => {
+    const { keeper, calls } = setup({
+      respond: () => Response.json({ access_token: "a", refresh_token: "r", expires_in: 60 }),
+    })
+    let redirect = ""
+    await keeper({ provider: provider({ redirect: { kind: "loopback", host: "localhost" } }) }).signIn({
+      scopes: [],
+      openBrowser: async (url) => {
+        const authorize = new URL(url)
+        redirect = authorize.searchParams.get("redirect_uri") ?? ""
+        const port = new URL(redirect).port
+        const query = `state=${authorize.searchParams.get("state")}&code=synthetic-code`
+        const v6 = await fetch(`http://[::1]:${port}/callback?state=forged&code=x`).catch(() => undefined)
+        if (v6) expect(v6.status).toBe(400)
+        expect((await fetch(`http://127.0.0.1:${port}/callback?${query}`)).status).toBe(200)
+      },
+    })
+    expect(redirect).toMatch(/^http:\/\/localhost:\d+\/callback$/)
+    expect(calls[0]?.body.get("redirect_uri")).toBe(redirect)
+  })
+
   it("saves a new sign-in in a run with moved folders", async () => {
     const { keeper, keyring } = setup({
       isolated: true,
