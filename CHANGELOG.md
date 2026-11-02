@@ -17,6 +17,7 @@ shape of this file.
   `contacts aliases set`, `messages press`, `bot commands set`, `schedule command`, `events remind`, `complete`, and the
   notes templates. Mark such a command with `annotate(command, { literal_after_dashes: true })`; MCP calls are never
   lifted. A script that passed the literal word `--json` as a positional of another command now gets the option instead.
+
 - **cli-core now needs `@wirecat/cli-base` 0.74.0**, which holds the `--compact` switch's name. A CLI that pins
   cli-base bumps it to 0.74.0 together with cli-core.
 
