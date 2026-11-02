@@ -6,11 +6,13 @@ import { join } from "node:path"
 import { metaOf } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { afterEach, describe, expect, it } from "vitest"
+import { isStoreChange } from "../cli/effects.js"
 import { maskArgv } from "../runs/run-context.js"
 import type { GuardSettings } from "../sends/guard.js"
 import { type MessageStore, openStore } from "../store/store.js"
 import { addCalendarCommands } from "./cli/index.js"
 import { type FeedRecord, fetchFeed, icsFeeds } from "./feeds.js"
+import { checkCalendarAnswer } from "./testing/answers.js"
 import { fakeCalendarSource, fakeCalendarWriter } from "./testing/index.js"
 
 const NOW = Date.UTC(2026, 9, 27, 9)
@@ -160,7 +162,10 @@ const setup = async () => {
     return root
   }
   const cli = async (...args: string[]) => {
-    await program().parseAsync(args, { from: "user" })
+    const root = program()
+    const before = written.length
+    await root.parseAsync(args, { from: "user" })
+    if (written.length > before) checkCalendarAnswer(root, args, written.at(-1))
     return written.at(-1) as Record<string, unknown> & { items: Record<string, unknown>[] }
   }
   return {
@@ -264,5 +269,6 @@ describe("feed calendars", () => {
     expect(argv.join(" ")).not.toContain(TOKEN)
     const add = root.commands.find((one) => one.name() === "calendars")?.commands.find((one) => one.name() === "add")
     expect(metaOf(add as Command)).toMatchObject({ mcp: false })
+    expect(isStoreChange(add as Command)).toBe(true)
   })
 })

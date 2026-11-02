@@ -5,7 +5,7 @@ import { clockMeta, type Effects } from "@wirecat/cli-base/standards"
 import { Argument, type Command, InvalidArgumentError, Option } from "commander"
 import { environmentOf, runBudgetOf } from "../../cli/context.js"
 import { honoursDryRun } from "../../cli/dry-run-guard.js"
-import { ownerOnlyOption, writesFileOnlyWith } from "../../cli/effects.js"
+import { changesStore, ownerOnlyOption, writesFileOnlyWith } from "../../cli/effects.js"
 import { queryTerms, withQuery } from "../../cli/list-query.js"
 import { terminalAsker } from "../../cli/messenger/ask.js"
 import { lineOf } from "../../cli/steps.js"
@@ -220,7 +220,8 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
   if (deps.feeds) {
     const feeds = () => deps.feeds as CalendarFeeds
     example(
-      annotate(calendars.command("add"), { effects: FETCH, offline: false, mcp: false })
+      // A fetch, but also a new secret and a new address every later sync reads: the read-only lock refuses it.
+      changesStore(annotate(calendars.command("add"), { effects: FETCH, offline: false, mcp: false }))
         .description(
           "follow an iCalendar feed, such as a holiday calendar or a published .ics address, as a read-only calendar " +
             "of this profile; sync reads it again each time. The address is kept as a secret and never printed",

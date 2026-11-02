@@ -23,6 +23,12 @@ export const calendar = v.strictObject({
   seen_at: nullableTime,
 })
 
+/** `calendars add`: the feed's calendar, how many events the feed holds now, and the sync to run next. */
+export const calendarFeed = v.strictObject({ ...calendar.entries, events: count, hint: text })
+
+/** `calendars remove`: the feed's calendar, no longer synced, and how many stored entries were marked deleted. */
+export const calendarFeedRemoval = v.strictObject({ ...calendar.entries, removed: count })
+
 const busyRow = v.strictObject({
   /** One of the account's calendars, by its id; or `person`, by the address asked. */
   calendar: v.optional(id),
@@ -75,6 +81,8 @@ export const calendarSync = v.strictObject({
   hint: v.optional(text),
   /** What `sync --embed` embedded: `embedEvents`' answer. */
   embeddings: v.optional(v.strictObject({ model: text, embedded: count, left: v.boolean() })),
+  /** Each feed's events as read, and how many it could not take (`syncWithFeeds`). */
+  feeds: v.optional(v.array(v.strictObject({ calendar_id: v.number(), events: count, skipped: count }))),
 })
 
 export const calendarSyncProgress = v.strictObject({
@@ -273,6 +281,8 @@ const ANSWERS: Record<string, { name: string; schema?: v.GenericSchema }> = {
   "calendars list": { name: "calendar", schema: calendar },
   "calendars sync": { name: "calendar", schema: calendar },
   "calendars unsync": { name: "calendar", schema: calendar },
+  "calendars add": { name: "calendar_feed", schema: calendarFeed },
+  "calendars remove": { name: "calendar_feed_removal", schema: calendarFeedRemoval },
   "calendars busy": { name: "calendar_busy", schema: calendarBusy },
   sync: { name: "calendar_sync", schema: calendarSync },
   "store status": { name: "calendar_sync_progress", schema: calendarSyncProgress },
