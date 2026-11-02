@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.542.0 — 02.11.2026
+
 ### Added
 
 - **`redirect: { kind: "loopback", host: "localhost" }` signs in through `http://localhost:<port>/callback`.** Microsoft
