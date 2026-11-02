@@ -69,7 +69,6 @@ shape of this file.
 - **`events list`'s first help example runs.** It named `starts_at` twice, which the query refuses; it is now
   `'starts_at:[2026-11-02 TO 2026-11-07}'`, quoted, as are `events export`'s, so zsh does not read the brackets. A
   test runs every calendar help example with a query.
-||||||| parent of 63964d9c0 (feat(stats): add stats messages responses and stats messages waiting)
 
 ## 0.560.0 — 02.11.2026
 
