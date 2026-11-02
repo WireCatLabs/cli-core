@@ -123,6 +123,36 @@ confirmed payments already cover the invoice. A rejected payment's allocations g
 invoice the owner voids. `openTotals` sums what confirmed open invoices
 still owe, per direction and currency.
 
+A payment is never a fact (store version 46): `facts.add` refuses type `payment` (`fact.payment-retired`) and a
+trigger refuses one from an older build. An agent's evidence finding of kind `payment` writes money when the owner
+accepts it: a paid one is a `payment:` row, paid on `paid_at`, else the due date, else the day it is accepted; an
+expected one is an `invoice:` of one line, which needs a `person:` or `organization:` counterparty; a paid one that
+`supersedes` an invoice is allocated to it as far as it is open, and a cancelled one voids it. The agent proposes the
+row and the owner's acceptance confirms it in the same write. The first writable open after version 46 moved the
+payment facts the same way; a fact that could not be a row stays a `statement` with its fields under
+`metadata.retired_payment`. `projects status` lists payments and open invoices from `store.finance`, and its open
+total counts confirmed invoices only.
+
+## Source records and imports
+
+`ingest(store, envelope, { account, dryRun })` (`./services`) takes what a source sends: the v1 envelope
+(`RECORDS_ENVELOPE_SCHEMA`, written out as `schemas/records-envelope.v1.schema.json`, JSON Schema 2020-12), or a JSONL
+file through `envelopeOfJsonl` (a header line with `schema_version` and `source`, then one record per line). Each
+record lands in `records` (store version 47), unique per account, type and external id, with its fields as untrusted
+JSON and a fingerprint of fields and relations: the same import twice writes nothing. A revision below the stored one,
+or the same revision with other content, is refused (`record.stale-revision`); a delete is soft. A field named like a
+secret or holding a known credential shape is refused (`record.secret-field`). Every refusal carries a JSON pointer
+and a stable code; the receipt counts created, updated, unchanged, deleted and refused records. A dry run writes in a
+transaction it rolls back.
+
+An `invoice` or `payment` record becomes an `invoice:` or `payment:` proposal by the bot `import`, never a confirmed
+row. Its `counterparty`, `issuer`, `payer`, `payee` and `project` come from a store ref in its fields or from a
+relation to another record of the account; a payment's `settles` relations allocate it to those invoices as far as
+both allow. A relation whose target is not imported, or has no entity, keeps the record waiting (`waiting` in the
+receipt); it gets its entity when the target does. A `person`, `organization` or `project` record gets its entity
+only from the owner (`store.records.map`), never by name. A record changed or deleted at the source after its entity
+was made leaves the entity alone and is `flagged`.
+
 ## Link proposals from scorers
 
 `scanProjectLinks(store, { project, sources, since, write })` (`./services`) proposes a project's likely chats, mail

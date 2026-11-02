@@ -27,6 +27,39 @@ shape of this file.
   only when mail is stored past the holder's mark, and may check every 5 minutes; a run with nothing new costs no
   model call and records nothing. Mail that is only skipped moves the holder's mark without the agent.
 
+## 0.559.0 — 02.11.2026
+
+### Added
+
+- **Imports through one envelope (store version 47).** `ingest(store, envelope, { account, dryRun })` in
+  `./services` takes the v1 records envelope (`schema_version`, `source { provider, account, batch_id }`, `records[]`
+  with `key`, `type`, `external_id`, `operation` `upsert` or `delete`, `fields`, `revision`, `relations[]`), or a JSONL
+  file through `envelopeOfJsonl`. Its JSON Schema (Draft 2020-12) is `RECORDS_ENVELOPE_SCHEMA` and
+  `@wirecat/cli-core/schemas/records-envelope.v1.schema.json`. Each record is kept in the new `records` table, unique
+  per account, type and external id: the same import twice writes nothing, a lower revision is refused, a delete is
+  soft, and a field that looks like a secret is refused. The receipt counts created, updated, unchanged, deleted and
+  refused records, and each error carries a JSON pointer and a stable code.
+- **An import never writes confirmed money.** An `invoice` or `payment` record becomes a proposal by the bot `import`,
+  decided in the proposal inbox. A reference to a record not yet imported waits for it, and a person or organization
+  record is linked only by the owner (`store.records.map`), never by name. `store.records` lists and reads records,
+  waiting and flagged ones too.
+
+## 0.558.0 — 02.11.2026
+
+### Changed — may break callers
+
+- **A payment is no longer a fact (store version 46).** Money lives only in `store.finance`. `facts.add` refuses type
+  `payment` with reason `fact.payment-retired`, naming `store.finance.addPayment`, and a trigger refuses one from an
+  older build. `FACT_TYPES`, the `fact` entity and `Fact` lose `payment`; `PaymentFilter`, `facts.list({ payment })`,
+  `PAYMENT_QUERY_FIELDS` and `paymentFilterOf` are gone. The first writable open moves stored payment facts into rows.
+- **An accepted payment finding writes a finance row, not a fact.** A paid one is a `payment:` row, an expected one
+  an `invoice:` of one line, proposed by the agent and confirmed by the owner's acceptance. `supersedes` now names
+  the `invoice:` a paid one settles or a cancelled one voids, not a `fact:`. An expected one needs a `person:` or
+  `organization:` counterparty, and the amount must fit the currency's decimals. New optional field `paid_at`.
+- **`projects status` reads money from `store.finance`.** The `payments` signal (version 3) lists payments and open
+  invoices by their `payment:` and `invoice:` refs, `status` being `proposed` or `confirmed`; the open total counts
+  confirmed invoices only. Finance rows gain `evidence`, and `addInvoice` and `addPayment` take it.
+
 ## 0.557.0 — 02.11.2026
 
 ### Added

@@ -5,7 +5,7 @@ Every table of the shared store (tg, max, memo, zm) as its migrations create it.
 `drizzle/` must agree with it. `pnpm schema:check` fails when they do not, and `src/store/sqlite/schema.test.ts`
 checks every table and column of a new store against this page.
 
-112 tables, 25 full-text indexes.
+114 tables, 25 full-text indexes.
 
 ## Conventions
 
@@ -1781,12 +1781,12 @@ Replaced by `facts` (a decision is a fact of type `decision`) in store version 2
 
 ### `facts`
 
-What happened, as its evidence shows: a fact, a statement, a question, a decision, a promise or a payment. Its evidence is `links` of kind `evidence`; a question's answer is a `links` row of kind `answered-by`. A payment's amount, currency, direction, due date and state are in `metadata.payment`. Replaces `decisions`, which stays empty.
+What happened, as its evidence shows: a fact, a statement, a question, a decision or a promise; money is `payments` and `invoices`, and triggers refuse a `payment` fact. Its evidence is `links` of kind `evidence`; a question's answer is a `links` row of kind `answered-by`. A payment's amount, currency, direction, due date and state are in `metadata.payment`. Replaces `decisions`, which stays empty.
 
 | Column | Type | Constraints | References | Meaning |
 |---|---|---|---|---|
 | `id` | integer | PK |  |  |
-| `type` | text | not null |  | fact, statement, question, decision, promise, payment |
+| `type` | text | not null |  | fact, statement, question, decision, promise |
 | `statement` | text | not null |  | what happened, in one sentence |
 | `status` | text | not null |  | proposed, accepted; a decision also superseded or reversed |
 | `project_id` | integer |  | → `projects.id` | the `project` it belongs to |
@@ -1910,6 +1910,49 @@ How much of a payment settles an invoice. A payment's allocations never exceed i
 | `updated_at` | integer | not null |  | when this row last changed here |
 
 *Keys and indexes:* `UNIQUE (payment_id, invoice_id)`, `INDEX (invoice_id)`, `INDEX (author_type, author_id)`
+
+## Source records
+
+What each import said, keyed by the source's own identity, under the entities made from it. An import never confirms money: an invoice or a payment it brings is a proposal.
+
+### `records`
+
+What a source said about one of its records (a payment row of a sheet, a deal of a CRM), kept as it said it. An import upserts it by the source's identity; a typed entity made from it is a proposal the owner confirms.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | PK |  |  |
+| `account_id` | integer | not null | → `accounts.id` | the integration account it came through |
+| `type` | text | not null |  | invoice, payment, person, organization, project, or custom:<name> for a type without a table |
+| `external_id` | text | not null |  | the record's id at the source |
+| `fields` | text | not null |  | JSON: what the source sends, untrusted data; never a secret |
+| `revision` | integer |  |  | the source's revision; a lower one is refused as stale |
+| `fingerprint` | text | not null |  | SHA-256 of the fields and relations: the same import twice changes nothing |
+| `entity_type` | text |  |  | the entity made from it or mapped to it by the owner; never matched by name |
+| `entity_id` | integer |  |  | the row in the `entity_type` table |
+| `projected_fingerprint` | text |  |  | the fingerprint the entity was made from: when it differs, the source changed after and the entity is flagged |
+| `batch_id` | text | not null |  | the import that wrote it last |
+| `created_at` | integer | not null |  | when this row was saved here |
+| `updated_at` | integer | not null |  | when this row last changed here |
+| `deleted_at` | integer |  |  | gone at the source; sync never hard-deletes |
+
+*Keys and indexes:* `UNIQUE (account_id, type, external_id)`, `INDEX (entity_type, entity_id)`
+
+### `record_relations`
+
+A record's reference to another record of the same account. A target not yet imported stays unresolved until it arrives.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | PK |  |  |
+| `record_id` | integer | not null | → `records.id` | the `record` it belongs to |
+| `role` | text | not null |  | what the target is to the record: counterparty, payer, settles, … |
+| `target_type` | text | not null |  | the kind of thing `target_id` points at: a singular table name |
+| `target_external_id` | text | not null |  |  |
+| `target_id` | integer |  | → `records.id` | null until the target is imported |
+| `created_at` | integer | not null |  | when this row was saved here |
+
+*Keys and indexes:* `UNIQUE (record_id, role, target_type, target_external_id)`, `INDEX (target_type, target_external_id)`, `INDEX (target_id)`
 
 ## Agents and actions
 

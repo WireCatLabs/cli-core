@@ -3,6 +3,7 @@ import { calendarTables } from "./calendar.mjs"
 import { actor, c, del, fk, fts, id, meta, poly, queue, ts } from "./columns.mjs"
 import { annotationTransferTable, documentRevisionsTable } from "./document-transfers.mjs"
 import { financeTables } from "./finance.mjs"
+import { recordTables } from "./records.mjs"
 import { tagConsolidationTables, taggingTable } from "./tag-consolidations.mjs"
 
 const scratch = process.env.SCRATCH ?? new URL(".", import.meta.url).pathname
@@ -1494,10 +1495,10 @@ const NEW = {
     },
     {
       name: "facts",
-      doc: "What happened, as its evidence shows: a fact, a statement, a question, a decision, a promise or a payment. Its evidence is `links` of kind `evidence`; a question's answer is a `links` row of kind `answered-by`. A payment's amount, currency, direction, due date and state are in `metadata.payment`. Replaces `decisions`, which stays empty.",
+      doc: "What happened, as its evidence shows: a fact, a statement, a question, a decision or a promise; money is `payments` and `invoices`, and triggers refuse a `payment` fact. Its evidence is `links` of kind `evidence`; a question's answer is a `links` row of kind `answered-by`. A payment's amount, currency, direction, due date and state are in `metadata.payment`. Replaces `decisions`, which stays empty.",
       cols: [
         id(),
-        c("type", "text", { notnull: true, note: "fact, statement, question, decision, promise, payment" }),
+        c("type", "text", { notnull: true, note: "fact, statement, question, decision, promise" }),
         c("statement", "text", { notnull: true, note: "what happened, in one sentence" }),
         c("status", "text", {
           notnull: true,
@@ -1686,6 +1687,13 @@ const GROUPS = [
     "Invoices, payments and what settles what, in exact minor units per currency. Totals are per currency: the store converts nothing.",
     [],
     financeTables,
+  ],
+  [
+    "records",
+    "Source records",
+    "What each import said, keyed by the source's own identity, under the entities made from it. An import never confirms money: an invoice or a payment it brings is a proposal.",
+    [],
+    recordTables,
   ],
   [
     "actions",

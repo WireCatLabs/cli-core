@@ -463,7 +463,6 @@ export { type Saving, stored } from "./messenger/stored.js"
 export { dateOrNone } from "./messenger/tasks-command.js"
 export { MODEL_CATALOGUE_QUERY, type ModelCatalogueOptions } from "./model-catalogue-command.js"
 export { positiveCount, window, withPaging } from "./paging.js"
-export { PAYMENT_QUERY_FIELDS, paymentFilterOf } from "./payment-query.js"
 export {
   type CommandPermissions,
   commandPathKey,

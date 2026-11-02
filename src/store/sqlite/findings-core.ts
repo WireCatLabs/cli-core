@@ -6,13 +6,13 @@ import {
   type FindingsInput,
   findingFingerprint,
   findingHash,
-  paymentTitle,
 } from "../../meetings/index.js"
 import type { Decider } from "../decisions.js"
 import { factOperationsOver } from "./facts.js"
 import { linkEvidence } from "./memories.js"
 import { requiredThing } from "./notes.js"
 import type { StoreContext } from "./open.js"
+import { paymentEntriesOver } from "./payment-entries.js"
 import { taskRowOf } from "./things.js"
 import { workTaskOperationsOver } from "./work-tasks.js"
 
@@ -47,6 +47,7 @@ export const findingsCoreOver = (context: StoreContext, kind: string) => {
   const { database } = context
   const facts = factOperationsOver(context)
   const tasks = workTaskOperationsOver(context)
+  const recordPayment = paymentEntriesOver(context)
 
   const cited = (
     input: FindingsInput,
@@ -108,19 +109,8 @@ export const findingsCoreOver = (context: StoreContext, kind: string) => {
       })
       return facts.acceptChecked(fact.ref, decidedBy).ref
     }
-    if (finding.kind === "payment") {
-      const fact = facts.add({
-        type: "payment",
-        statement: finding.statement ?? paymentTitle(finding),
-        payment: finding.payment,
-        ...(finding.project === undefined ? {} : { project: finding.project }),
-        ...(finding.subject === undefined ? {} : { subject: finding.subject }),
-        ...(finding.supersedes === undefined ? {} : { supersedes: finding.supersedes }),
-        evidence,
-        by: agent,
-      })
-      return facts.acceptChecked(fact.ref, decidedBy).ref
-    }
+    if (finding.kind === "payment")
+      return recordPayment({ ...finding, evidence }, agent, { confirm: true, by: decidedBy })
     if (finding.project === undefined) return invalid("a task finding names the project the task goes in")
     const task = tasks.create(
       {

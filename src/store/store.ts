@@ -52,6 +52,7 @@ import type { StoreContext } from "./sqlite/open.js"
 import { openStoreContext, type StoreOptions } from "./sqlite/open-store.js"
 import { projectAnnotationStoreOver } from "./sqlite/project-transfer/store.js"
 import { type ProposedActionsStore, proposedActionsStoreOver } from "./sqlite/proposed-actions.js"
+import { type RecordStore, recordStoreOver } from "./sqlite/records.js"
 import { refSummariesOf } from "./sqlite/ref-summaries.js"
 import * as stems from "./sqlite/stems.js"
 import { type StoreTaskStore, taskStoreOver } from "./sqlite/tasks.js"
@@ -120,6 +121,8 @@ export interface MessageStore {
   readonly facts: FactsStore
   /** Invoices, payments and their allocations, in exact minor units; an agent's or an import's wait for the owner. */
   readonly finance: FinanceStore
+  /** What each import said, by the source's identity; `ingest` (services) is the way in. */
+  readonly records: RecordStore
   /** What agents concluded: summaries, digests, facts, preferences, each with evidence and a scope. */
   readonly memories: MemoriesStore
   /** What an agent wants done outside the store, waiting for the owner's approval. */
@@ -138,7 +141,6 @@ export interface MessageStore {
   close(): Promise<void>
 }
 
-export type { PaymentFilter } from "./sqlite/facts.js"
 export type { ChatHistoryShape, StoredHistorySkip } from "./sqlite/history-skips.js"
 export { BACKFILL_ON_OPEN, type StoreOptions } from "./sqlite/open-store.js"
 export { fileFacts, readStoreTables, type TableKind } from "./sqlite/store-tables.js"
@@ -235,6 +237,7 @@ const storeOver = (context: StoreContext): MessageStore => {
   }
   const facts = once(() => factsStoreOver(context))
   const finance = once(() => financeStoreOver(context))
+  const records = once(() => recordStoreOver(context))
   const memories = once(() => memoriesStoreOver(context))
   const proposedActions = once(() => proposedActionsStoreOver(context))
   const agentActions = once(() => agentActionsStoreOver(context, pruneLogsWhenDue))
@@ -341,6 +344,9 @@ const storeOver = (context: StoreContext): MessageStore => {
     },
     get finance() {
       return finance()
+    },
+    get records() {
+      return records()
     },
     get memories() {
       return memories()

@@ -1,6 +1,6 @@
 {
   "name": "@wirecat/cli-core",
-  "version": "0.557.0",
+  "version": "0.559.0",
   "description": "The messenger-neutral half of a messaging CLI: domain model, message locators, rendering, name resolution, the SQLite seam, the command skeleton and shared read commands, the send guard, run records and the message store",
   "license": "Apache-2.0",
   "author": "Viacheslav Ptsarev",
@@ -25,9 +25,11 @@
     "CHANGELOG.md",
     "LICENSE",
     "THIRD_PARTY_NOTICES",
-    "docs/search/recipes.json"
+    "docs/search/recipes.json",
+    "schemas"
   ],
   "exports": {
+    "./schemas/records-envelope.v1.schema.json": "./schemas/records-envelope.v1.schema.json",
     "./documents": {
       "types": "./dist/documents.d.ts",
       "default": "./dist/documents.js"
