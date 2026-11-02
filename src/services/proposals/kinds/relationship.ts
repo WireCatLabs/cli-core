@@ -1,9 +1,8 @@
 import { CliError } from "@wirecat/cli-base"
-import { type Decider, proposerOfProvenance } from "../../../store/decisions.js"
 import type { Link, MessageStore, ProposedAction } from "../../../store/index.js"
 import { proposerOfAction } from "../../../store/index.js"
 import type { Decided, ProposalKind, ProposalRow } from "../types.js"
-import { actionStatus, kept, projectOf, proposedLink, reading, storedStatus } from "./shared.js"
+import { actionStatus, kept, projectOf, proposedLink, pushed, storedStatus } from "./shared.js"
 
 type RelationshipStore = Pick<MessageStore, "knowledge" | "notes" | "proposedActions">
 
@@ -25,7 +24,7 @@ const linkRow = (link: Link): ProposalRow => ({
   subject: link.from,
   object: link.to,
   summary: link.role,
-  proposedBy: proposerOfProvenance(link.provenance),
+  proposedBy: { type: "unknown" },
   reason: link.evidence,
   evidence: [],
   score: null,
@@ -53,9 +52,6 @@ const storedRow = (action: ProposedAction): ProposalRow => {
     createdAt: action.createdAt,
   }
 }
-
-const agentProvenance = (by: Decider) =>
-  by === "owner" ? {} : { provenance: `agent:${by.bot} for the owner: ${by.reason}` }
 
 /**
  * A person, organization, chat or mail thread proposed as related to another thing. New proposals are stored
@@ -86,38 +82,20 @@ export const relationshipKind = (store: RelationshipStore): ProposalKind => {
       const stored = await store.proposedActions.list({
         kinds: ["relationship"],
         ...(status === undefined ? {} : { status }),
-        limit: reading(filter),
+        ...pushed(filter),
       })
       const links = (filter.status ?? "proposed") === "rejected" ? [] : await legacy()
       return kept([...stored.map(storedRow), ...links.map(linkRow)], filter)
     },
     get: async (id) =>
       id.startsWith("link:") ? linkRow(await legacyLink(id)) : storedRow(await store.proposedActions.get(id)),
-    decide: async (id, { confirm, by }): Promise<Decided> => {
+    decide: async (id, { confirm, by, reason }): Promise<Decided> => {
       const status = confirm ? "confirmed" : "rejected"
-      if (id.startsWith("link:")) {
-        const link = id.slice("link:".length)
-        if (!confirm) {
-          await store.knowledge.removeRelation(null, link, by)
-          return { id, kind: "relationship", status, made: [] }
-        }
-        await store.knowledge.confirmRelation(null, link, by)
-        return { id, kind: "relationship", status, made: [`relationship:${link}`] }
-      }
-      if (!confirm) {
-        await store.proposedActions.reject(id, by)
-        return { id, kind: "relationship", status, made: [] }
-      }
-      const payload = (await store.proposedActions.get(id)).payload as Payload
-      const relation = await store.knowledge.relate(null, {
-        from: payload.from,
-        to: payload.to,
-        kind: payload.kind,
-        ...(payload.role === undefined ? {} : { role: payload.role }),
-        ...agentProvenance(by),
-      })
-      await store.proposedActions.approve(id, by, { link: relation.id })
-      return { id, kind: "relationship", status, made: [`relationship:${relation.id}`] }
+      const decision = { confirm, by, ...(reason === undefined ? {} : { reason }) }
+      const link = id.startsWith("link:")
+        ? await store.knowledge.decideSuggestedLink(id.slice("link:".length), decision)
+        : (await store.knowledge.decideLinkProposal(id, decision)).link
+      return { id, kind: "relationship", status, made: link ? [`relationship:${link.id}`] : [] }
     },
   }
 }

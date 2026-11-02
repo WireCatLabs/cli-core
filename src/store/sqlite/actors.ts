@@ -65,3 +65,20 @@ export const proposerOf = (database: CacheDatabase, type: unknown, id: unknown):
   const name = String(bot.name)
   return { type: "bot", id: String(id), name, kind: bot.kind === "rule" || name === "rule" ? "rule" : "agent" }
 }
+
+/** Who proposed something, as a list filter: any agent, any rule, or one bot by its handle. */
+export type ProposedByFilter = "agent" | "rule" | { bot: string }
+
+/** The SQL that keeps rows whose actor pair matches `by`; the seeded bot `rule` counts as a rule. */
+export const proposedBySql = (
+  type: string,
+  id: string,
+  by: ProposedByFilter | undefined,
+): { sql: string; params: string[] } => {
+  if (by === undefined) return { sql: "1", params: [] }
+  const bot = (condition: string) =>
+    `${type} = 'bot' AND EXISTS (SELECT 1 FROM bots pb WHERE pb.id = ${id} AND ${condition})`
+  if (by === "rule") return { sql: bot("(pb.kind = 'rule' OR pb.name = 'rule')"), params: [] }
+  if (by === "agent") return { sql: bot("pb.kind <> 'rule' AND pb.name <> 'rule'"), params: [] }
+  return { sql: bot("pb.name = ?"), params: [by.bot] }
+}

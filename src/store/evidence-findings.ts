@@ -27,7 +27,7 @@ export const validateEvidenceFindings = (input: FindingsInput): FindingsInput =>
 export type EvidenceFindingsDecider = Decider
 
 export interface EvidenceFindingsReceipt extends FindingsReceipt {
-  decision: { by: "owner" } | { by: "agent"; bot: string; model: string | null; reason: string }
+  decision: { by: "owner"; reason?: string } | { by: "agent"; bot: string; model: string | null; reason: string }
 }
 export interface EvidenceFindingsBatch {
   id: string
@@ -38,7 +38,7 @@ export interface EvidenceFindingsBatch {
   input: FindingsInput
   fingerprint: string
   status: "proposed" | "reviewed"
-  author: { type: "person" | "bot"; id: string; name: string | null }
+  author: { type: "person" | "bot"; id: string; name: string | null; kind: "agent" | "rule" | null }
   decidedBy: { type: "person" | "bot"; id: string } | null
   decidedAt: string | null
   previous: FindingOutcome[]
@@ -59,7 +59,7 @@ export interface EvidenceFindingsStore {
   }): Promise<{ items: EvidenceFindingsBatch[]; hasMore: boolean }>
   review(
     id: string,
-    input: { fingerprint: string; accept: string[]; by: EvidenceFindingsDecider },
+    input: { fingerprint: string; accept: string[]; by: EvidenceFindingsDecider; reason?: string },
   ): Promise<EvidenceFindingsBatch>
   /** Each reference the batch cites, read back once; one gone from the store since is `missing`. */
   sources(id: string): Promise<EvidenceSource[]>

@@ -19,7 +19,7 @@ import { insertLink, type Link, linkOf } from "./notes.js"
 import type { StoreContext } from "./open.js"
 import type { ProposedAction } from "./proposed-actions.js"
 import { queryFilter } from "./query-filter.js"
-import { relationProposalsOver } from "./relation-proposals.js"
+import { type LinkDecision, relationProposalsOver } from "./relation-proposals.js"
 import type { TagCreationOptions } from "./tag-creation.js"
 import {
   addTags as addThingTags,
@@ -173,18 +173,10 @@ export interface KnowledgeStore extends VocabularyStore, MeetingProjectsStore {
     description?: string
   }): Promise<Project>
   projects(query?: QueryAst): Promise<Project[]>
-  relate(
-    key: KnowledgeScope,
-    input: {
-      from: string
-      to: string
-      kind: KnowledgeRelation["kind"]
-      role?: string
-      evidence?: string
-      confirmed?: boolean
-      provenance?: string
-    },
-  ): Promise<KnowledgeRelation>
+  /** The owner's relationship is a link; `confirmed: false` keeps it a weak suggestion only the owner decides. */
+  relate(key: KnowledgeScope, input: RelateInput & { by: "owner" }): Promise<KnowledgeRelation>
+  /** An agent's relationship is a `relationship` proposal for the owner, never a link. */
+  relate(key: KnowledgeScope, input: RelateInput & { by: Exclude<Author, "owner"> }): Promise<ProposedAction>
   /**
    * An agent's or a rule's relationship, written as a `relationship` proposal for the owner instead of a link. The
    * same pending pair returns the proposal already held.
@@ -201,6 +193,10 @@ export interface KnowledgeStore extends VocabularyStore, MeetingProjectsStore {
     },
     by: Exclude<Author, "owner">,
   ): Promise<ProposedAction>
+  /** Decides a stored `relationship` or `key_document` proposal; the link and the decision land together. */
+  decideLinkProposal(id: string, decision: LinkDecision): Promise<{ proposal: ProposedAction; link: Link | null }>
+  /** Decides an unconfirmed link written before proposals were stored. Its author is unknown, so only the owner may. */
+  decideSuggestedLink(id: string, decision: LinkDecision): Promise<Link | null>
   relations(key: KnowledgeScope, reference?: string): Promise<KnowledgeRelation[]>
   /**
    * Removing an unconfirmed relationship rejects it, so `by` must be allowed to decide it. Removing a link to a
@@ -214,6 +210,22 @@ export interface KnowledgeStore extends VocabularyStore, MeetingProjectsStore {
   snoozeReminder(key: AccountKey, id: string, dueAt: string, revision: number): Promise<Reminder>
   claimReminders(key: AccountKey, options?: { limit?: number; leaseMs?: number }): Promise<Reminder[]>
   acknowledgeReminder(key: AccountKey, id: string, receipt: string): Promise<Reminder>
+}
+
+/**
+ * A link records no actor, only free-text provenance anyone could write, so whoever proposed one is unverified and
+ * only the owner decides it.
+ */
+const UNVERIFIED = { type: "unknown" } as const
+
+export interface RelateInput {
+  from: string
+  to: string
+  kind: KnowledgeRelation["kind"]
+  role?: string
+  evidence?: string
+  confirmed?: boolean
+  provenance?: string
 }
 
 type Row = Record<string, unknown>
@@ -783,8 +795,23 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
         .all(...(where?.params ?? []))
         .map(projectOf)
     },
-    relate: async (key, input) => {
-      const { existing } = pair(key, input)
+    relate: (async (key: KnowledgeScope, input: RelateInput & { by: Author }) => {
+      if (input.by === undefined)
+        throw new CliError("validation_error", "a relationship names who writes it: the owner or an agent", {
+          reason: "proposal.decider-required",
+        })
+      const { from, existing } = pair(key, input)
+      if (input.by !== "owner") {
+        if (existing)
+          throw new CliError("validation_error", `relationship ${String(existing.id)} already links them`, {
+            reason: "relationship.exists",
+          })
+        return proposals.propose(
+          from,
+          { ...input, ...(input.evidence === undefined ? {} : { reason: input.evidence }), evidence: [] },
+          input.by,
+        )
+      }
       if (existing) return relationOf(linkOf(database, existing))
       const confirmed = input.confirmed !== false
       return relationOf(
@@ -801,7 +828,7 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
           }),
         ),
       )
-    },
+    }) as KnowledgeStore["relate"],
     proposeRelation: async (key, input, by) => {
       const { from, existing } = pair(key, input)
       if (existing)
@@ -810,6 +837,8 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
         })
       return proposals.propose(from, input, by)
     },
+    decideLinkProposal: async (id, decision) => proposals.decideProposal(id, decision),
+    decideSuggestedLink: async (id, decision) => proposals.decideLink(id, decision),
     relations: async (key, reference) => {
       checked(key)
       const thing = reference === undefined ? undefined : thingOf(database, reference)
@@ -825,11 +854,9 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
       checked(key)
       const row = relation(id)
       const link = linkOf(database, row)
-      const proposer = proposals.proposerOfLink(link)
-      if (!link.confirmed) assertMayDecide({ id: `link:${id}`, proposedBy: proposer }, by)
+      assertMayDecide({ id: `link:${id}`, proposedBy: UNVERIFIED }, by)
       write(database, () => {
-        if (!link.confirmed || String(row.to_type) === "project")
-          proposals.rejected(link, proposer, by, link.confirmed ? "removed by the owner" : "rejected")
+        if (!link.confirmed || String(row.to_type) === "project") proposals.rejected(link, by)
         database.prepare("DELETE FROM links WHERE id = ?").run(Number(id))
       })
       return { id, removed: true }
@@ -838,26 +865,12 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
       checked(key)
       const row = relation(id)
       const link = linkOf(database, row)
-      if (!link.confirmed) assertMayDecide({ id: `link:${id}`, proposedBy: proposals.proposerOfLink(link) }, by)
+      assertMayDecide({ id: `link:${id}`, proposedBy: UNVERIFIED }, by)
       related(key, link.from, true)
       related(key, String(link.to))
-      if (by === "owner")
-        database
-          .prepare("UPDATE links SET confirmed=1, source='owner', author='owner', updated_at=? WHERE id=?")
-          .run(now(), Number(id))
-      else
-        database
-          .prepare(
-            "UPDATE links SET confirmed=1, author='agent', metadata=json_object('provenance', ?), updated_at=? WHERE id=?",
-          )
-          .run(
-            `${link.provenance ?? "suggested"}; confirmed by agent:${by.bot} for the owner: ${by.reason.trim()}`.slice(
-              0,
-              2000,
-            ),
-            now(),
-            Number(id),
-          )
+      database
+        .prepare("UPDATE links SET confirmed=1, source='owner', author='owner', updated_at=? WHERE id=?")
+        .run(now(), Number(id))
       return relationOf(linkOf(database, database.prepare("SELECT * FROM links WHERE id = ?").get(Number(id)) as Row))
     },
     schedule: async (key, task, dueAt, timezone) => {

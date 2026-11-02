@@ -66,6 +66,7 @@ export const emptyProposalRegistry = (
     get: async (id) => (await kindOf(id)).get(id),
     decide: async (ids, decision) => {
       const parts = new Map<string, string[]>()
+      const whole = new Set<string>()
       const order: string[] = []
       for (const id of ids) {
         const [batch, part] = id.split("/")
@@ -74,13 +75,25 @@ export const emptyProposalRegistry = (
           parts.set(batch, [])
           order.push(batch)
         }
-        if (part !== undefined) parts.get(batch)?.push(part)
+        if (part === undefined) whole.add(batch)
+        else parts.get(batch)?.push(part)
       }
       const decided: Decided[] = []
       const refused: Refusal[] = []
+      const refuseIds = (id: string, message: string) =>
+        refused.push({ id, code: "validation_error", reason: "proposal.ids", message })
       for (const id of order) {
+        const chosen = parts.get(id) ?? []
+        if (chosen.length && whole.has(id)) {
+          refuseIds(id, `name ${id} or some of its parts (${id}/${chosen[0]}), not both`)
+          continue
+        }
         try {
           const kind = await kindOf(id)
+          if (chosen.length && !kind.parts) {
+            refuseIds(id, `a ${kind.kind} proposal has no parts; name ${id} alone`)
+            continue
+          }
           const row: ProposalRow = await kind.get(id)
           if (row.status !== "proposed") {
             refused.push({
@@ -96,7 +109,6 @@ export const emptyProposalRegistry = (
             refused.push(refusal)
             continue
           }
-          const chosen = parts.get(id) ?? []
           decided.push(await kind.decide(id, chosen.length ? { ...decision, parts: chosen } : decision))
         } catch (error) {
           refused.push(refusalOf(id, error))

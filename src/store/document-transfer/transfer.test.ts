@@ -54,8 +54,8 @@ const seed = async (name = collection) => {
     evidence: [doc.ref],
     subject: doc.ref,
     author: { bot: "synthetic-reader", model: "synthetic-model" },
-    status: "confirmed",
   })
+  await store.memories.confirm(memory.ref, "owner")
   const nextMemory = await store.memories.add({
     kind: "summary",
     body: "Later summary",
@@ -63,10 +63,10 @@ const seed = async (name = collection) => {
     evidence: [doc.ref, note.ref],
     subject: doc.ref,
     author: { bot: "synthetic-reader", model: "synthetic-model" },
-    status: "confirmed",
     supersedes: memory.ref,
   })
-  await store.memories.markStale(nextMemory.ref)
+  await store.memories.confirm(nextMemory.ref, "owner")
+  await store.memories.markStale(nextMemory.ref, "owner")
   const fact = await store.facts.add({
     type: "decision",
     statement: "Earlier budget",

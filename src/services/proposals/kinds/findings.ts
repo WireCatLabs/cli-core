@@ -1,6 +1,6 @@
 import { EVIDENCE_FINDINGS_KIND, type EvidenceFindingsBatch, type MessageStore } from "../../../store/index.js"
 import type { Decided, ProposalKind, ProposalRow } from "../types.js"
-import { kept, proposerOfAuthor, reading } from "./shared.js"
+import { kept, proposerOfAuthor } from "./shared.js"
 
 const statusOf = (batch: EvidenceFindingsBatch): ProposalRow["status"] =>
   batch.status === "proposed" ? "proposed" : batch.receipt?.accepted.length ? "confirmed" : "rejected"
@@ -42,10 +42,12 @@ export const findingsKind = (store: Pick<MessageStore, "evidenceFindings" | "pro
   return {
     kind: "findings",
     stored: [EVIDENCE_FINDINGS_KIND],
+    parts: true,
     list: async (filter) => {
       const status = filter.status ?? "proposed"
-      const batches: EvidenceFindingsBatch[] = []
-      for (let offset = 0; batches.length < reading(filter); offset += 50) {
+      const rows: ProposalRow[] = []
+      // The findings list filters by project and status only; a proposer filter is applied page by page until full.
+      for (let offset = 0; rows.length < filter.limit; offset += 50) {
         const page = await store.evidenceFindings.list({
           ...(filter.project === undefined ? {} : { project: filter.project }),
           ...(status === "proposed" ? { status: "proposed" as const } : {}),
@@ -53,19 +55,24 @@ export const findingsKind = (store: Pick<MessageStore, "evidenceFindings" | "pro
           limit: 50,
           offset,
         })
-        batches.push(...page.items)
+        rows.push(...kept(await Promise.all(page.items.map(created)), { ...filter, limit: 50 }))
         if (!page.hasMore) break
       }
-      return kept(await Promise.all(batches.map(created)), filter)
+      return kept(rows, filter)
     },
     get: async (id) => created(await store.evidenceFindings.get(id)),
-    decide: async (id, { confirm, by, parts }): Promise<Decided> => {
+    decide: async (id, { confirm, by, parts, reason }): Promise<Decided> => {
       const batch = await store.evidenceFindings.get(id)
       const turnedDown = new Set(batch.previous.filter((one) => one.status === "rejected").map((one) => one.id))
       const accept = !confirm
         ? []
         : (parts ?? batch.input.findings.map((finding) => finding.id).filter((one) => !turnedDown.has(one)))
-      const reviewed = await store.evidenceFindings.review(id, { fingerprint: batch.fingerprint, accept, by })
+      const reviewed = await store.evidenceFindings.review(id, {
+        fingerprint: batch.fingerprint,
+        accept,
+        by,
+        ...(reason === undefined ? {} : { reason }),
+      })
       const made = (reviewed.receipt?.items ?? []).flatMap((item) =>
         item.status === "accepted" && item.reference ? [item.reference] : [],
       )

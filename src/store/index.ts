@@ -210,6 +210,7 @@ export {
   type ProposedActionsStore,
   proposerOfAction,
 } from "./sqlite/proposed-actions.js"
+export type { LinkDecision } from "./sqlite/relation-proposals.js"
 export {
   fillSearchIndex,
   resetSearchIndex,

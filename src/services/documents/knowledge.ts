@@ -49,9 +49,9 @@ export interface DocumentKnowledge {
     ref: string,
     options?: { scope?: Memory["scope"]; kind?: Memory["kind"]; status?: Memory["status"]; limit?: number },
   ): Promise<Memory[]>
-  memory(principal: string, ref: string, memoryRef: string, action?: "show" | "stale"): Promise<Memory>
+  memory(principal: string, ref: string, memoryRef: string, action?: "show"): Promise<Memory>
   /** `by` decides: the owner, or an agent for the owner that did not propose it. */
-  memory(principal: string, ref: string, memoryRef: string, action: "confirm", by: Decider): Promise<Memory>
+  memory(principal: string, ref: string, memoryRef: string, action: "confirm" | "stale", by: Decider): Promise<Memory>
   searchMemories(
     principal: string,
     ref: string,
@@ -185,7 +185,7 @@ export const documentKnowledge = (
     memory: async (principal: string, ref: string, memoryRef: string, action = "show", by?: Decider) => {
       const memory = await memoryFor(principal, ref, memoryRef)
       if (action === "confirm") return store.memories.confirm(memory.ref, decider(by))
-      if (action === "stale") return store.memories.markStale(memory.ref)
+      if (action === "stale") return store.memories.markStale(memory.ref, decider(by))
       return memory
     },
     searchMemories: async (principal, ref, query, scope) => {

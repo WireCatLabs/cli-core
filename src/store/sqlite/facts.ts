@@ -2,7 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import { type FACT_STATUSES, FACT_TYPES, MEMORY_SCOPES } from "../../domain/knowledge.js"
 import { calendarMoment } from "../../domain/moment.js"
 import { assertMayDecide, type Decider, deciderAuthor } from "../decisions.js"
-import { type Actor, proposerOf } from "./actors.js"
+import { type Actor, type ProposedByFilter, proposedBySql, proposerOf } from "./actors.js"
 import { type EvidenceSource, evidenceSourcesOf } from "./evidence-sources.js"
 import { linkKind } from "./link-kinds.js"
 import {
@@ -37,8 +37,8 @@ export interface Fact {
   subjectIsOwner: boolean
   occurredAt: string | null
   supersedes: string | null
-  /** `name` is a bot's handle; `null` for a person. */
-  author: { type: Actor["type"]; id: string; name: string | null }
+  /** `name` is a bot's handle and `kind` whether it is an agent or a rule; both `null` for a person. */
+  author: { type: Actor["type"]; id: string; name: string | null; kind: "agent" | "rule" | null }
   model: string | null
   confirmedBy: { type: Actor["type"]; id: string } | null
   scope: (typeof MEMORY_SCOPES)[number] | null
@@ -73,14 +73,17 @@ export interface FactsStore {
     project?: string
     subject?: string
     status?: Fact["status"]
+    proposedBy?: ProposedByFilter
+    /** `created` lists the newest written first; by default the newest by when it happened. */
+    order?: "occurred" | "created"
     limit?: number
   }): Promise<Fact[]>
   /** The owner, or an agent for the owner, accepts a proposed fact; the fact it supersedes stops holding. */
-  accept(reference: string, by: Decider): Promise<Fact>
+  accept(reference: string, by: Decider, reason?: string): Promise<Fact>
   /** An accepted decision no longer holds and nothing replaced it. */
   reverse(reference: string): Promise<Fact>
   /** The owner, or an agent for the owner, turns down a proposed fact; it stays, marked `rejected`. */
-  reject(reference: string, by: Decider): Promise<Fact>
+  reject(reference: string, by: Decider, reason?: string): Promise<Fact>
   /**
    * Erases the fact: its row, its links, its tags, and the memory it was migrated from, which still held its text.
    * A decision that replaced it no longer names it. A backup made before keeps it.
@@ -92,7 +95,7 @@ export interface FactsStore {
 
 type Row = Record<string, unknown>
 const NAMED =
-  "SELECT f.*, b.name AS author_name FROM facts f LEFT JOIN bots b ON f.author_type = 'bot' AND b.id = f.author_id"
+  "SELECT f.*, b.name AS author_name, b.kind AS author_kind FROM facts f LEFT JOIN bots b ON f.author_type = 'bot' AND b.id = f.author_id"
 const iso = (value: unknown) => new Date(Number(value)).toISOString()
 
 const oneOf = <T extends string>(value: unknown, allowed: readonly T[], what: string): T => {
@@ -105,7 +108,7 @@ type FactOperations = {
   [K in keyof FactsStore]: FactsStore[K] extends (...args: infer A) => Promise<infer R> ? (...args: A) => R : never
 } & {
   /** Accepts as part of a decision already checked, such as a reviewed findings batch. */
-  acceptChecked(reference: string): Fact
+  acceptChecked(reference: string, by: Decider): Fact
 }
 
 export const factOperationsOver = (context: StoreContext): FactOperations => {
@@ -139,7 +142,16 @@ export const factOperationsOver = (context: StoreContext): FactOperations => {
   }
   const decided = (row: Row, by: Decider) =>
     assertMayDecide({ id: `fact:${row.id}`, proposedBy: proposerOf(database, row.author_type, row.author_id) }, by)
-  const accept = (id: number, by: Decider = "owner") => {
+  /** Keeps who decided for the owner and why in `metadata.decision`; the decider's actor is in `confirmed_by`. */
+  const keepDecision = (id: number, by: Decider, reason?: string) => {
+    const why = [by === "owner" ? undefined : by.reason.trim(), reason?.trim() || undefined].filter(Boolean).join(": ")
+    if (by === "owner" && !why) return
+    const decision = by === "owner" ? { by: "owner", reason: why } : { by: "agent", bot: by.bot, reason: why }
+    database
+      .prepare("UPDATE facts SET metadata = json_set(coalesce(metadata, '{}'), '$.decision', json(?)) WHERE id = ?")
+      .run(JSON.stringify(decision), id)
+  }
+  const accept = (id: number, by: Decider = "owner", reason?: string) => {
     const row = database.prepare("SELECT * FROM facts WHERE id = ?").get(id) as Row
     if (row.status !== "proposed" && row.status !== "accepted")
       throw new CliError("validation_error", `a ${String(row.status)} fact cannot be accepted`)
@@ -150,6 +162,7 @@ export const factOperationsOver = (context: StoreContext): FactOperations => {
         "UPDATE facts SET status = 'accepted', confirmed_by_type = ?, confirmed_by_id = ?, updated_at = ? WHERE id = ?",
       )
       .run(actor.type, actor.id, at, id)
+    keepDecision(id, by, reason)
     if (row.supersedes_id != null)
       database
         .prepare(
@@ -227,11 +240,13 @@ export const factOperationsOver = (context: StoreContext): FactOperations => {
       const project =
         options.project === undefined ? undefined : requiredThing(database, options.project, "the project")
       const subject = options.subject === undefined ? undefined : requiredThing(database, options.subject)
+      const by = proposedBySql("f.author_type", "f.author_id", options.proposedBy)
+      const order = options.order === "created" ? "f.created_at" : "coalesce(f.occurred_at, f.created_at)"
       return database
         .prepare(
           `${NAMED} WHERE f.deleted_at IS NULL AND (? IS NULL OR f.type = ?) AND (? IS NULL OR f.project_id = ?) ` +
             "AND (? IS NULL OR (f.subject_type = ? AND f.subject_id = ?)) AND (? IS NULL OR f.status = ?) " +
-            "ORDER BY coalesce(f.occurred_at, f.created_at) DESC, f.id DESC LIMIT ?",
+            `AND ${by.sql} ORDER BY ${order} DESC, f.id DESC LIMIT ?`,
         )
         .all(
           options.type ?? null,
@@ -243,19 +258,20 @@ export const factOperationsOver = (context: StoreContext): FactOperations => {
           subject?.id ?? null,
           options.status ?? null,
           options.status ?? null,
+          ...by.params,
           Math.min(Math.max(options.limit ?? 100, 1), 500),
         )
         .map(factOf)
     },
-    accept: (reference, by) => {
+    accept: (reference, by, reason) => {
       const row = rowOf(reference)
       decided(row, by)
-      write(database, () => accept(Number(row.id), by))
+      write(database, () => accept(Number(row.id), by, reason))
       return factOf(rowOf(reference))
     },
-    acceptChecked: (reference) => {
+    acceptChecked: (reference, by) => {
       const id = Number(rowOf(reference).id)
-      write(database, () => accept(id))
+      write(database, () => accept(id, by))
       return factOf(rowOf(reference))
     },
     reverse: (reference) => {
@@ -265,7 +281,7 @@ export const factOperationsOver = (context: StoreContext): FactOperations => {
       database.prepare("UPDATE facts SET status = 'reversed', updated_at = ? WHERE id = ?").run(now(), Number(row.id))
       return factOf(rowOf(reference))
     },
-    reject: (reference, by) => {
+    reject: (reference, by, reason) => {
       const row = rowOf(reference)
       decided(row, by)
       if (row.status !== "proposed")
@@ -273,7 +289,10 @@ export const factOperationsOver = (context: StoreContext): FactOperations => {
           "validation_error",
           `only a proposed fact can be rejected; this one is ${String(row.status)}`,
         )
-      database.prepare("UPDATE facts SET status = 'rejected', updated_at = ? WHERE id = ?").run(now(), Number(row.id))
+      write(database, () => {
+        database.prepare("UPDATE facts SET status = 'rejected', updated_at = ? WHERE id = ?").run(now(), Number(row.id))
+        keepDecision(Number(row.id), by, reason)
+      })
       return factOf(rowOf(reference))
     },
     remove: (reference) => {
@@ -313,9 +332,9 @@ export const factsStoreOver = (context: StoreContext): FactsStore => {
     add: async (input) => operations.add(input),
     get: async (reference) => operations.get(reference),
     list: async (options) => operations.list(options),
-    accept: async (reference, by) => operations.accept(reference, by),
+    accept: async (reference, by, reason) => operations.accept(reference, by, reason),
     reverse: async (reference) => operations.reverse(reference),
-    reject: async (reference, by) => operations.reject(reference, by),
+    reject: async (reference, by, reason) => operations.reject(reference, by, reason),
     remove: async (reference) => operations.remove(reference),
     sources: async (reference) => operations.sources(reference),
   }

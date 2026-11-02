@@ -2,7 +2,7 @@ import { MEETING_FINDINGS_KIND } from "../../../meetings/index.js"
 import { type MessageStore, type ProposedAction, proposerOfAction } from "../../../store/index.js"
 import { approveAsTask } from "../../proposal-tasks.js"
 import type { Decided, ProposalKind, ProposalRow } from "../types.js"
-import { actionStatus, kept, projectOf, reading, storedStatus } from "./shared.js"
+import { actionStatus, kept, projectOf, pushed, storedStatus } from "./shared.js"
 
 const rowOf = (action: ProposedAction): ProposalRow => ({
   id: action.id,
@@ -35,14 +35,14 @@ export const actionKind = (
     const actions = await store.proposedActions.list({
       except: [...claimed(), MEETING_FINDINGS_KIND],
       ...(status === undefined ? {} : { status }),
-      limit: reading(filter),
+      ...pushed(filter),
     })
     return kept(actions.map(rowOf), filter)
   },
   get: async (id) => rowOf(await store.proposedActions.get(id)),
-  decide: async (id, { confirm, by }): Promise<Decided> => {
+  decide: async (id, { confirm, by, reason }): Promise<Decided> => {
     if (!confirm) {
-      await store.proposedActions.reject(id, by)
+      await store.proposedActions.reject(id, by, reason)
       return { id, kind: "action", status: "rejected", made: [] }
     }
     const { task } = await approveAsTask(store, id, by)

@@ -1,6 +1,6 @@
 import type { Memory, MessageStore } from "../../../store/index.js"
 import type { ProposalKind, ProposalRow } from "../types.js"
-import { kept, proposerOfAuthor, reading } from "./shared.js"
+import { kept, proposerOfAuthor, pushed } from "./shared.js"
 
 /** A stale memory is the one a person turned down; a superseded one held until another replaced it. */
 const STATUS: Record<Memory["status"], ProposalRow["status"]> = {
@@ -34,15 +34,14 @@ export const memoryKind = (store: Pick<MessageStore, "memories">): ProposalKind 
   list: async (filter) => {
     const status = filter.status ?? "proposed"
     const memories = await store.memories.list({
-      ...(filter.project === undefined ? {} : { project: filter.project }),
-      ...(status === "proposed" || status === "confirmed" ? { status } : {}),
-      limit: reading(filter),
+      ...pushed(filter),
+      ...(status === "all" ? {} : { status: status === "rejected" ? ("stale" as const) : status }),
     })
     return kept(memories.map(rowOf), filter)
   },
   get: async (id) => rowOf(await store.memories.get(id)),
   decide: async (id, { confirm, by }) => {
-    const memory = confirm ? await store.memories.confirm(id, by) : await store.memories.markStale(id)
+    const memory = confirm ? await store.memories.confirm(id, by) : await store.memories.markStale(id, by)
     return { id, kind: "memory", status: confirm ? "confirmed" : "rejected", made: confirm ? [memory.ref] : [] }
   },
 })

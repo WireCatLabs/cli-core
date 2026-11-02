@@ -34,6 +34,7 @@ export interface ProposalFilter {
 export interface Decision {
   confirm: boolean
   by: Decider
+  /** Why, kept with the decision; a memory has nowhere to keep it. */
   reason?: string
   /** The findings of a batch to accept; the rest are rejected. */
   parts?: string[]
@@ -55,6 +56,8 @@ export interface ProposalKind {
   readonly kind: string
   readonly prefix?: string
   readonly stored?: readonly string[]
+  /** Whether its proposals have parts decided on their own, as a findings batch has findings. */
+  readonly parts?: boolean
   /** Bounded: at most `offset + limit` rows, newest first. */
   list(filter: ProposalFilter): Promise<ProposalRow[]>
   get(id: string): Promise<ProposalRow>

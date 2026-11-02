@@ -7,6 +7,7 @@ import {
   findingFingerprint,
   findingHash,
 } from "../../meetings/index.js"
+import type { Decider } from "../decisions.js"
 import { factOperationsOver } from "./facts.js"
 import { linkEvidence } from "./memories.js"
 import { requiredThing } from "./notes.js"
@@ -93,7 +94,7 @@ export const findingsCoreOver = (context: StoreContext, kind: string) => {
     return row ? (JSON.parse(String(row.item)) as FindingOutcome) : undefined
   }
 
-  const create = (finding: Finding, agent: FindingsAgent): string => {
+  const create = (finding: Finding, agent: FindingsAgent, decidedBy: Decider): string => {
     const evidence = finding.evidence.map((item) => item.reference)
     if (finding.kind === "fact") {
       const fact = facts.add({
@@ -104,7 +105,7 @@ export const findingsCoreOver = (context: StoreContext, kind: string) => {
         evidence,
         by: agent,
       })
-      return facts.acceptChecked(fact.ref).ref
+      return facts.acceptChecked(fact.ref, decidedBy).ref
     }
     if (finding.project === undefined) return invalid("a task finding names the project the task goes in")
     const task = tasks.create(
@@ -125,7 +126,13 @@ export const findingsCoreOver = (context: StoreContext, kind: string) => {
   }
 
   /** Reuses an earlier decision on an unchanged candidate; refuses to accept one that was rejected. */
-  const outcomes = (account: number | null, input: FindingsInput, accepted: string[], agent: FindingsAgent) =>
+  const outcomes = (
+    account: number | null,
+    input: FindingsInput,
+    accepted: string[],
+    agent: FindingsAgent,
+    decidedBy: Decider,
+  ) =>
     input.findings.map((finding): FindingOutcome => {
       const fingerprint = findingFingerprint(finding)
       const prior = previous(account, fingerprint)
@@ -139,7 +146,7 @@ export const findingsCoreOver = (context: StoreContext, kind: string) => {
         id: finding.id,
         fingerprint,
         status,
-        reference: status === "accepted" ? create(finding, agent) : null,
+        reference: status === "accepted" ? create(finding, agent, decidedBy) : null,
         reused: false,
       }
     })

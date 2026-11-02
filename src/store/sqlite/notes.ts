@@ -11,6 +11,7 @@ import {
 import { parseReference } from "../../domain/references.js"
 import { normalizeTag } from "../../domain/tags.js"
 import type { Section } from "../../readers/types.js"
+import type { Decider } from "../decisions.js"
 import type { CacheDatabase, CacheStatement } from "../driver.js"
 import { fold } from "../normalize.js"
 import { ulid } from "../ulid.js"
@@ -103,6 +104,8 @@ export interface LinkInput {
   evidence?: string
   provenance?: string
   confirmed?: boolean
+  /** Who stands behind a confirmed project link (`member-of`, or `related-to` a project); only the owner may. */
+  by?: Decider
 }
 
 export interface FileNoteInput {
@@ -316,6 +319,24 @@ export const resolvePersonLinks = (database: CacheDatabase, names: (string | nul
     unresolvedChecks.set(database, check)
   }
   for (const key of keys) if (check.get(key)) resolveKey(database, key)
+}
+
+/**
+ * A confirmed project link is a decision: an agent proposes it (`knowledge.proposeRelation`) and the owner decides,
+ * so writing one directly names the owner.
+ */
+const ownerLink = (input: LinkInput): LinkInput => {
+  const decision = input.kind === "member-of" || (input.kind === "related-to" && input.to?.startsWith("project:"))
+  if (!decision || input.confirmed === false) return input
+  if (input.by === undefined)
+    throw new CliError("validation_error", "a confirmed project link names who decides: the owner", {
+      reason: "proposal.decider-required",
+    })
+  if (input.by !== "owner")
+    throw new CliError("permission_error", "an agent proposes a project link; only the owner confirms it", {
+      reason: "proposal.owner-only",
+    })
+  return input
 }
 
 /** Writes one link; an identical resolved link is answered instead of doubled. */
@@ -850,7 +871,7 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
         database.prepare("DELETE FROM notes WHERE id = ?").run(Number(bare))
         return { id, removed: true as const }
       }),
-    addLink: async (input) => write(database, () => insertLink(context, input)),
+    addLink: async (input) => write(database, () => insertLink(context, ownerLink(input))),
     links: async (options = {}) => {
       const pair = (reference: string | undefined) => {
         if (reference === undefined) return { known: true, type: null, id: null }

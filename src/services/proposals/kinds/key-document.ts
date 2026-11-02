@@ -1,11 +1,10 @@
 import { CliError } from "@wirecat/cli-base"
-import { type Decider, proposerOfProvenance } from "../../../store/decisions.js"
-import type { Link, LinkInput, MessageStore, ProposedAction } from "../../../store/index.js"
+import type { Link, MessageStore, ProposedAction } from "../../../store/index.js"
 import { proposerOfAction } from "../../../store/index.js"
 import type { Decided, ProposalKind, ProposalRow } from "../types.js"
-import { actionStatus, kept, proposedLink, reading, storedStatus } from "./shared.js"
+import { actionStatus, kept, proposedLink, pushed, storedStatus } from "./shared.js"
 
-type KeyDocumentStore = Pick<MessageStore, "notes" | "proposedActions">
+type KeyDocumentStore = Pick<MessageStore, "knowledge" | "notes" | "proposedActions">
 
 interface Payload {
   ref: string
@@ -21,7 +20,7 @@ const linkRow = (link: Link): ProposalRow => ({
   subject: link.from,
   object: link.to,
   summary: null,
-  proposedBy: proposerOfProvenance(link.provenance),
+  proposedBy: { type: "unknown" },
   reason: link.evidence,
   evidence: [link.from],
   score: null,
@@ -50,22 +49,6 @@ const storedRow = (action: ProposedAction): ProposalRow => {
   }
 }
 
-/** The confirmed key link, recording an agent that decided for the owner. */
-const keyLink = (ref: string, project: string, reason: string | null, by: Decider): LinkInput => ({
-  from: ref,
-  to: project,
-  kind: "related-to",
-  role: "key",
-  ...(reason === null ? {} : { evidence: reason }),
-  ...(by === "owner"
-    ? { origin: "owner" as const }
-    : {
-        origin: "suggested" as const,
-        confirmed: true,
-        provenance: `agent:${by.bot} for the owner: ${by.reason}`,
-      }),
-})
-
 /**
  * A note, document or message proposed as one of a project's key documents. Stored `key_document` rows are the new
  * home; older suggestions are unconfirmed `key` links, shown as `key:<id>`.
@@ -89,32 +72,20 @@ export const keyDocumentKind = (store: KeyDocumentStore): ProposalKind => {
       const stored = await store.proposedActions.list({
         kinds: ["key_document"],
         ...(status === undefined ? {} : { status }),
-        limit: reading(filter),
+        ...pushed(filter),
       })
       const links = (filter.status ?? "proposed") === "rejected" ? [] : await legacy()
       return kept([...stored.map(storedRow), ...links.map(linkRow)], filter)
     },
     get: async (id) =>
       id.startsWith("key:") ? linkRow(await legacyLink(id)) : storedRow(await store.proposedActions.get(id)),
-    decide: async (id, { confirm, by }): Promise<Decided> => {
+    decide: async (id, { confirm, by, reason }): Promise<Decided> => {
       const status = confirm ? "confirmed" : "rejected"
-      if (id.startsWith("key:")) {
-        const link = await legacyLink(id)
-        // A link has no confirm of its own: the suggestion is replaced by a confirmed link naming the decider.
-        await store.notes.removeLink(link.id)
-        if (!confirm) return { id, kind: "key_document", status, made: [] }
-        const made = await store.notes.addLink(keyLink(link.from, String(link.to), link.evidence, by))
-        return { id, kind: "key_document", status, made: [`link:${made.id}`] }
-      }
-      if (!confirm) {
-        await store.proposedActions.reject(id, by)
-        return { id, kind: "key_document", status, made: [] }
-      }
-      const action = await store.proposedActions.get(id)
-      const payload = action.payload as Payload
-      const made = await store.notes.addLink(keyLink(payload.ref, payload.project, action.reason, by))
-      await store.proposedActions.approve(id, by, { link: made.id })
-      return { id, kind: "key_document", status, made: [`link:${made.id}`] }
+      const decision = { confirm, by, ...(reason === undefined ? {} : { reason }) }
+      const link = id.startsWith("key:")
+        ? await store.knowledge.decideSuggestedLink(id.slice("key:".length), decision)
+        : (await store.knowledge.decideLinkProposal(id, decision)).link
+      return { id, kind: "key_document", status, made: link ? [`link:${link.id}`] : [] }
     },
   }
 }

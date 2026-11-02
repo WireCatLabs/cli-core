@@ -189,7 +189,14 @@ export const evidenceFindingsStoreOver = (context: StoreContext): EvidenceFindin
         )
           return invalid("accept only unique IDs shown in this batch")
         const accepted = [...decision.accept].sort()
-        const { author, decision: decidedBy } = decider(decision.by)
+        const { author, decision: checked } = decider(decision.by)
+        const reason = typeof decision.reason === "string" ? decision.reason.trim().slice(0, 2000) : ""
+        const decidedBy =
+          reason && checked.by === "owner"
+            ? { ...checked, reason }
+            : reason && checked.by === "agent"
+              ? { ...checked, reason: `${checked.reason}: ${reason}` }
+              : checked
         assertMayDecide({ id, proposedBy: proposals.proposer(id) }, decision.by)
         if (batch.receipt) {
           if (JSON.stringify(batch.receipt.accepted) !== JSON.stringify(accepted))
@@ -218,7 +225,7 @@ export const evidenceFindingsStoreOver = (context: StoreContext): EvidenceFindin
           bot: proposal.proposedBy.name,
           ...(input.agentModel === null ? {} : { model: input.agentModel }),
         }
-        const items = core.outcomes(null, batch.input, accepted, agent)
+        const items = core.outcomes(null, batch.input, accepted, agent, decision.by)
         return view(
           proposals.approve(
             id,

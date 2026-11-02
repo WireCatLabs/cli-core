@@ -92,31 +92,35 @@ describe("an agent cannot decide its own proposal", () => {
     expect(await store.memories.confirm(memory.ref, "owner")).toMatchObject({ status: "confirmed" })
   })
 
-  it("on a relationship, confirmed or removed while unconfirmed", async () => {
+  it("on a relationship, stored as a proposal or left as an old suggested link", async () => {
     const store = await opened()
     const project = await store.knowledge.addProject({ name: "Harbour" })
     const studio = await store.knowledge.addOrganization({ kind: "company", name: "Synthetic Studio" })
     const clinic = await store.knowledge.addOrganization({ kind: "company", name: "Synthetic Clinic" })
+    const proposal = await store.knowledge.proposeRelation(
+      null,
+      { from: studio.ref, to: project.ref, kind: "member-of" },
+      agent,
+    )
+    for (const confirm of [true, false])
+      await expect(store.knowledge.decideLinkProposal(proposal.id, { confirm, by: self })).rejects.toMatchObject(own)
     const link = await store.knowledge.relate(null, {
-      from: studio.ref,
+      by: "owner",
+      from: clinic.ref,
       to: project.ref,
       kind: "member-of",
       confirmed: false,
       provenance: "agent:claude-code",
     })
-    await expect(store.knowledge.confirmRelation(null, link.id, self)).rejects.toMatchObject(own)
-    await expect(store.knowledge.removeRelation(null, link.id, self)).rejects.toMatchObject(own)
-    const rule = await store.knowledge.relate(null, {
-      from: clinic.ref,
-      to: project.ref,
-      kind: "member-of",
-      confirmed: false,
-      provenance: "rule:email-domain-v1;confidence:weak",
-    })
-    await expect(store.knowledge.confirmRelation(null, rule.id, self)).rejects.toMatchObject({
-      details: { reason: "proposal.owner-only" },
-    })
+    const owner = { details: { reason: "proposal.owner-only" } }
+    await expect(store.knowledge.confirmRelation(null, link.id, self)).rejects.toMatchObject(owner)
+    await expect(store.knowledge.removeRelation(null, link.id, self)).rejects.toMatchObject(owner)
+    await expect(store.knowledge.decideSuggestedLink(link.id, { confirm: true, by: self })).rejects.toMatchObject(owner)
     expect(await store.knowledge.confirmRelation(null, link.id, "owner")).toMatchObject({ confirmed: true })
+    expect(await store.knowledge.decideLinkProposal(proposal.id, { confirm: true, by: "owner" })).toMatchObject({
+      proposal: { status: "approved" },
+      link: { from: studio.ref, confirmed: true },
+    })
   })
 
   it("on an action, approved, rejected or made a task", async () => {

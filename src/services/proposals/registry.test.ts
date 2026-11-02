@@ -3,12 +3,13 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
 import { DEFAULT_DECISION_POLICY } from "../../store/decisions.js"
-import { type MessageStore, openStore } from "../../store/store.js"
+import { openCache } from "../../store/open.js"
+import { openStore } from "../../store/store.js"
 import { parseProposalIds } from "./ids.js"
 import { emptyProposalRegistry, proposalRegistry } from "./registry.js"
 import type { ProposalKind, ProposalRow } from "./types.js"
 
-const handles: MessageStore[] = []
+const handles: { close(): unknown }[] = []
 afterEach(async () => {
   for (const handle of handles.splice(0)) await handle.close()
 })
@@ -18,10 +19,8 @@ const codex = { bot: "codex", reason: "the evidence names the project" }
 
 const fixture = async () => {
   let clock = 1_000
-  const store = await openStore({
-    path: join(mkdtempSync(join(tmpdir(), "proposals-")), "store.db"),
-    now: () => clock++,
-  })
+  const path = join(mkdtempSync(join(tmpdir(), "proposals-")), "store.db")
+  const store = await openStore({ path, now: () => clock++ })
   handles.push(store)
   const project = await store.knowledge.addProject({ name: "Harbour Clinic", key: "HRB" })
   const studio = await store.knowledge.addOrganization({ kind: "company", name: "Synthetic Studio" })
@@ -49,6 +48,7 @@ const fixture = async () => {
     claude,
   )
   const legacy = await store.knowledge.relate(null, {
+    by: "owner",
     from: clinic.ref,
     to: project.ref,
     kind: "member-of",
@@ -56,6 +56,7 @@ const fixture = async () => {
     provenance: "agent:codex",
   })
   return {
+    path,
     store,
     project,
     studio,
@@ -118,23 +119,29 @@ describe("the proposal registry", () => {
     expect(second.hasMore).toBe(false)
     expect([...first.items, ...second.items]).toEqual(all.items)
     expect((await f.registry.list({ limit: 50, offset: 0, kinds: ["fact"] })).items).toHaveLength(1)
-    expect((await f.registry.list({ limit: 50, offset: 0, by: { bot: "codex" } })).items.map((row) => row.id)).toEqual([
-      `link:${f.legacy.id}`,
-    ])
+    expect((await f.registry.list({ limit: 50, offset: 0, by: { bot: "claude-code" } })).items).toHaveLength(3)
+    expect(all.items[0]?.proposedBy).toEqual({ type: "unknown" })
   })
 
   it("decides each id on its own: an agent's own proposal is refused, the rest are decided", async () => {
     const f = await fixture()
-    const ids = [f.fact.ref, f.memory.ref, f.relation.id, `link:${f.legacy.id}`, "fact:999"]
+    const other = await f.store.facts.add({
+      type: "fact",
+      statement: "Kickoff is at ten",
+      by: { bot: "codex" },
+      evidence: [f.note.ref],
+    })
+    const ids = [f.fact.ref, f.memory.ref, f.relation.id, `link:${f.legacy.id}`, other.ref, "fact:999"]
     const { decided, refused } = await f.registry.decide(ids, {
       confirm: true,
       by: { bot: "claude-code", reason: "the note says so" },
     })
-    expect(decided.map((one) => one.id)).toEqual([`link:${f.legacy.id}`])
+    expect(decided.map((one) => one.id)).toEqual([other.ref])
     expect(refused.map((one) => [one.id, one.reason])).toEqual([
       [f.fact.ref, "proposal.own"],
       [f.memory.ref, "proposal.own"],
       [f.relation.id, "proposal.own"],
+      [`link:${f.legacy.id}`, "proposal.owner-only"],
       ["fact:999", "not_found"],
     ])
     const owner = await f.registry.decide([f.fact.ref, f.relation.id], { confirm: true, by: "owner" })
@@ -168,6 +175,7 @@ describe("the proposal registry", () => {
     expect(same.id).toBe(f.relation.id)
     await f.registry.decide([f.relation.id, `link:${f.legacy.id}`], { confirm: false, by: "owner" })
     const confirmed = await f.store.knowledge.relate(null, {
+      by: "owner",
       from: f.vendor.ref,
       to: f.project.ref,
       kind: "member-of",
@@ -209,5 +217,80 @@ describe("the proposal registry", () => {
       (await registry.decide(["person_merge:1"], { confirm: true, by: { ...claude, reason: "x" } })).refused,
     ).toMatchObject([{ reason: "proposal.own" }])
     expect(() => registry.register(kind)).toThrow("twice")
+  })
+})
+
+describe("the review fixes", () => {
+  it("BUG-1: reads a rule from the bot's kind, not only from the name rule", async () => {
+    const f = await fixture()
+    const scan = await f.store.knowledge.proposeRelation(
+      null,
+      { from: f.vendor.ref, to: f.project.ref, kind: "member-of" },
+      { bot: "memo-scan", kind: "rule" },
+    )
+    expect((await f.registry.get(scan.id)).proposedBy).toMatchObject({ name: "memo-scan", kind: "rule" })
+    expect((await f.registry.list({ limit: 50, offset: 0, by: "rule" })).items.map((row) => row.id)).toEqual([scan.id])
+    const { refused } = await f.registry.decide([scan.id], { confirm: true, by: codex })
+    expect(refused).toMatchObject([{ reason: "proposal.owner-only" }])
+  })
+
+  it("BUG-2: fills a page of one project when newer proposals of another come first", async () => {
+    const f = await fixture()
+    const other = await f.store.knowledge.addProject({ name: "Other Example", key: "OTH" })
+    for (let n = 0; n < 30; n++)
+      await f.store.facts.add({
+        type: "fact",
+        statement: `Other ${n}`,
+        by: { bot: "codex" },
+        project: other.ref,
+        evidence: [f.note.ref],
+      })
+    const page = await f.registry.list({ limit: 5, offset: 0, project: f.project.ref, kinds: ["fact"] })
+    expect(page).toMatchObject({ items: [{ id: f.fact.ref }], hasMore: false })
+    const mine = await f.registry.list({ limit: 2, offset: 0, by: { bot: "claude-code" } })
+    expect(mine.items).toHaveLength(2)
+    expect(mine.hasMore).toBe(true)
+  })
+
+  it("BUG-3: refuses a part on a kind without parts, and a whole id with its part", async () => {
+    const f = await fixture()
+    const { refused } = await f.registry.decide([`${f.relation.id}/f9`], { confirm: true, by: "owner" })
+    expect(refused).toMatchObject([{ reason: "proposal.ids" }])
+    const both = await f.registry.decide([f.relation.id, `${f.relation.id}/f1`], { confirm: true, by: "owner" })
+    expect(both).toMatchObject({ decided: [], refused: [{ reason: "proposal.ids" }] })
+    expect((await f.registry.get(f.relation.id)).status).toBe("proposed")
+  })
+
+  it("RISK-1: writes no link when recording the decision fails", async () => {
+    const f = await fixture()
+    const db = await openCache(f.path)
+    handles.push(db)
+    db.exec("CREATE TRIGGER no_decisions BEFORE UPDATE ON proposed_actions BEGIN SELECT RAISE(ABORT, 'synthetic'); END")
+    await expect(f.registry.decide([f.relation.id], { confirm: true, by: "owner" })).rejects.toThrow("synthetic")
+    expect(await f.store.knowledge.relations(null, f.studio.ref)).toEqual([])
+  })
+
+  it("DEBT-1: records the agent that reviewed and the reason it gave", async () => {
+    const f = await fixture()
+    const other = await f.store.facts.add({
+      type: "fact",
+      statement: "Kickoff at ten",
+      by: { bot: "codex" },
+      evidence: [f.note.ref],
+    })
+    await f.registry.decide([other.ref], {
+      confirm: true,
+      by: { bot: "claude-code", reason: "the note says ten" },
+      reason: "checked twice",
+    })
+    expect(await f.store.facts.get(other.ref)).toMatchObject({ status: "accepted", confirmedBy: { type: "bot" } })
+    const db = await openCache(f.path)
+    handles.push(db)
+    const metadata = db.prepare("SELECT metadata FROM facts WHERE id = ?").get(Number(other.id))?.metadata
+    expect(JSON.parse(String(metadata))).toMatchObject({
+      decision: { by: "agent", bot: "claude-code", reason: "the note says ten: checked twice" },
+    })
+    await f.registry.decide([f.relation.id], { confirm: false, by: "owner", reason: "not a client" })
+    expect((await f.store.proposedActions.get(f.relation.id)).result).toEqual({ reason: "not a client" })
   })
 })

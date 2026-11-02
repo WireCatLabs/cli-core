@@ -1,6 +1,6 @@
 import type { Fact, MessageStore } from "../../../store/index.js"
 import type { ProposalKind, ProposalRow } from "../types.js"
-import { kept, proposerOfAuthor, reading } from "./shared.js"
+import { kept, proposerOfAuthor, pushed } from "./shared.js"
 
 const STATUS: Record<Fact["status"], ProposalRow["status"]> = {
   proposed: "proposed",
@@ -34,15 +34,15 @@ export const factKind = (store: Pick<MessageStore, "facts">): ProposalKind => ({
   list: async (filter) => {
     const status = filter.status ?? "proposed"
     const facts = await store.facts.list({
-      ...(filter.project === undefined ? {} : { project: filter.project }),
-      ...(status === "proposed" || status === "rejected" ? { status } : {}),
-      limit: reading(filter),
+      ...pushed(filter),
+      ...(status === "all" ? {} : { status: status === "confirmed" ? ("accepted" as const) : status }),
+      order: "created",
     })
     return kept(facts.map(rowOf), filter)
   },
   get: async (id) => rowOf(await store.facts.get(id)),
-  decide: async (id, { confirm, by }) => {
-    const fact = confirm ? await store.facts.accept(id, by) : await store.facts.reject(id, by)
+  decide: async (id, { confirm, by, reason }) => {
+    const fact = confirm ? await store.facts.accept(id, by, reason) : await store.facts.reject(id, by, reason)
     return { id, kind: "fact", status: confirm ? "confirmed" : "rejected", made: confirm ? [fact.ref] : [] }
   },
 })

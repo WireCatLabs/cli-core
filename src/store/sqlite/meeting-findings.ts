@@ -227,7 +227,7 @@ export const meetingFindingsStoreOver = (context: StoreContext): MeetingFindings
           bot: proposal.proposedBy.name,
           ...(input.agentModel === null ? {} : { model: input.agentModel }),
         }
-        const items = core.outcomes(account, batch.input, accepted, agent)
+        const items = core.outcomes(account, batch.input, accepted, agent, decision.by)
         return view(
           proposals.approve(
             id,

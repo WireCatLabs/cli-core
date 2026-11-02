@@ -90,7 +90,10 @@ one that names no author, and nothing when the host's `agent_decisions` is off. 
 (`./services`) is the one inbox over every kind (`relationship`, `key_document`, `fact`, `memory`, `findings`,
 `action`); a new kind is a `ProposalKind` that registers its id `prefix` or the stored proposal kinds it owns.
 Ids are bare numbers for stored proposals and `fact:`, `memory:`, `link:`, `key:` for the rest;
-`parseProposalIds` reads ranges and lists of them.
+`parseProposalIds` reads ranges and lists of them; only a findings batch takes part ids (`17080/f2`). A link
+keeps no actor, only provenance text, so an unconfirmed link is the owner's alone to decide, and only the owner
+removes a link or writes a confirmed project link (`notes.addLink`, `relate` with `by: "owner"`). An agent's
+`relate` returns a `relationship` proposal.
 
 ## Document extraction
 

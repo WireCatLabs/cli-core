@@ -20,8 +20,14 @@ shape of this file.
 - **`knowledge.proposeRelation(scope, input, by)`**: an agent's or a rule's relationship is a stored `relationship`
   proposal for the owner, not a link; the same pending pair returns the proposal already held. Removing a link to a
   project, or rejecting any suggested link, leaves a rejected `relationship` proposal, so a later scan can skip it.
-- **`proposedActions.list({ kinds, except })`** and **`proposedBy.kind`** (`agent` or `rule`) on a proposed action;
-  bots may have the kind `rule`, and an `Author` may name it.
+- **`proposedActions.list({ kinds, except, project, proposedBy })`**, `proposedBy` on `facts.list` and
+  `memories.list`, `order: "created"` on `facts.list`, and the bot's `kind` (`agent` or `rule`) on the author of a
+  proposed action, a fact, a memory and an evidence findings batch; bots may have the kind `rule`, and an `Author` may
+  name it.
+- **`knowledge.decideLinkProposal(id, decision)`** decides a stored `relationship` or `key_document` proposal, and
+  **`knowledge.decideSuggestedLink(id, decision)`** an older unconfirmed link, each in one transaction: the link and
+  the decision land together or not at all. A decision's `reason` is kept: on a rejected proposal as its result, on a
+  fact in `metadata.decision`, on an evidence findings receipt.
 
 - **The first run of a new version refreshes the agent instructions an older version installed**: each `SKILL.md`
   copy whose `skill status` is `stale` (Claude Code's, `~/.agents/skills`, and Hermes's own copy) is rewritten once,
@@ -37,7 +43,11 @@ shape of this file.
   by)`, `knowledge.removeRelation(scope, id, by)`, `proposedActions.approve(id, by, result?)`,
   `proposedActions.reject(id, by)`, `approveAsTask(store, id, by)`, and `by` is now required in
   `evidenceFindings.review` and `meetingFindings.review`. `DocumentKnowledge.fact` and `.memory` take `by` for a
-  `confirm`. A host passes the owner only when the owner runs the command, and the agent's bot and reason otherwise.
+  `confirm`, and `memories.markStale(ref, by)` and `.memory(…, "stale", by)` take it too: marking an agent's memory
+  stale is how it is turned down. `knowledge.relate` needs `by`: the owner's relationship is a link, an agent's is a
+  `relationship` proposal it returns instead. `notes.addLink` refuses a confirmed project link (`member-of`, or
+  `related-to` a project) without `by: "owner"`. A host passes the owner only when the owner runs the command, and
+  the agent's bot and reason otherwise.
   An agent's confirmation of a relationship is recorded in the link's provenance, and of a fact or proposal as its
   decider.
 - **An agent's own shell may tighten a permission but never loosen it.** `config set|unset permissions…` run where
@@ -57,7 +67,10 @@ shape of this file.
   of them, and the registry, now runs `mayDecide`: the owner always may; an agent needs a reason
   (`proposal.reason-required`), is refused its own bot's proposal (`proposal.own`), a rule scorer's proposal and one
   that names no author (`proposal.owner-only`), and every decision when the host turns agent decisions off
-  (`proposals.agent-decisions-off`). Removing an unconfirmed relationship counts as rejecting it.
+  (`proposals.agent-decisions-off`). An agent can no longer add a memory already `confirmed`, mark its own memory
+  stale, write a confirmed project link itself, or remove a link. A link records only free-text provenance, which
+  anyone can write, so only the owner decides an unconfirmed link or removes a link; the rejected record a removal
+  leaves names who removed it. Findings an agent accepted for the owner record that agent, not the owner.
 
 ## 0.543.0 — 02.11.2026
 

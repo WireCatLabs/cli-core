@@ -109,7 +109,7 @@ describe("shared document knowledge", () => {
       expect(await f.k.searchMemories(f.principal, f.ref, "budget", "personal")).toMatchObject({
         items: [{ ref: memory.ref }],
       })
-      await f.k.memory(f.principal, f.ref, memory.ref, "stale")
+      await f.k.memory(f.principal, f.ref, memory.ref, "stale", "owner")
       const replacement = await f.k.addMemory(f.principal, f.ref, {
         body: "Corrected budget",
         kind: "summary",

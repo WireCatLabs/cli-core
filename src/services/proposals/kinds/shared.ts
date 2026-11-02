@@ -1,11 +1,16 @@
 import type { Proposer } from "../../../store/decisions.js"
 import type { ProposalFilter, ProposalRow } from "../types.js"
 
-/** A fact's or memory's author as a proposer; the store's own check reads the bot's kind from its row. */
-export const proposerOfAuthor = (author: { type: "person" | "bot"; id: string; name: string | null }): Proposer => {
+/** A stored author as a proposer, with the kind read from its bot row. */
+export const proposerOfAuthor = (author: {
+  type: "person" | "bot"
+  id: string
+  name: string | null
+  kind: "agent" | "rule" | null
+}): Proposer => {
   if (author.type === "person") return { type: "person", id: author.id }
   if (author.name === null) return { type: "unknown" }
-  return { type: "bot", id: author.id, name: author.name, kind: author.name === "rule" ? "rule" : "agent" }
+  return { type: "bot", id: author.id, name: author.name, kind: author.kind ?? "agent" }
 }
 
 const byMatches = (row: ProposalRow, by: ProposalFilter["by"]): boolean => {
@@ -26,8 +31,12 @@ export const kept = (rows: ProposalRow[], filter: ProposalFilter): ProposalRow[]
     .slice(0, filter.limit)
 }
 
-/** How many rows a kind reads to fill a page after filtering in memory. */
-export const reading = (filter: ProposalFilter): number => Math.min(500, filter.limit * (filter.by ? 4 : 1))
+/** The filters every store list takes, so a page is filled by the query and not cut after it. */
+export const pushed = (filter: ProposalFilter) => ({
+  ...(filter.project === undefined ? {} : { project: filter.project }),
+  ...(filter.by === undefined ? {} : { proposedBy: filter.by }),
+  limit: Math.min(filter.limit, 500),
+})
 
 /** A suggestion an agent or a rule wrote; Drive's editor links and other records stay out of the inbox. */
 export const proposedLink = (provenance: string | null): boolean => /^(agent|rule):/.test(provenance ?? "")
