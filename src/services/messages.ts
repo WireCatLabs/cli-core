@@ -23,7 +23,7 @@ import type {
   SearchCommand,
   StoredHit,
 } from "../store/store.js"
-import { crossAccount, fromStore, PUSHED, type ServiceDeps } from "./deps.js"
+import { crossAccount, fromStore, type ServiceDeps } from "./deps.js"
 import { readChatId, storedChatId } from "./message-resolution.js"
 import { accountOf, keyOf, searchStore, statsStore, topUp } from "./messages-archive-search.js"
 import type { MeaningSkipped, RerankSkipped } from "./messages-discovery.js"
@@ -58,6 +58,8 @@ export interface ListWindow {
   beforeTime?: number
   /** Read forward from this message or moment, parsed by the caller in its own words (`afterOf`). */
   after?: After
+  /** The window's last moment, epoch milliseconds, inclusive: a forward read stops here. */
+  until?: number
   /** Only the messages the owner starred (true) or did not (false); the store answers it, never the messenger. */
   starred?: boolean
   /** Only this forum topic. */
@@ -367,9 +369,9 @@ export const messagesService = (deps: ServiceDeps): MessagesService => {
   const topicPage = async (
     chat: string,
     threadId: string,
-    { limit, before, beforeTime, after }: ListWindow,
+    { limit, before, beforeTime, after, until }: ListWindow,
   ): Promise<Page<Message>> => {
-    if (beforeTime !== undefined || after !== undefined)
+    if (beforeTime !== undefined || after !== undefined || until !== undefined)
       throw new CliError("validation_error", "a topic is read back from its newest message, or from --before-id")
     if (threadId === "1")
       throw new CliError(
@@ -387,12 +389,12 @@ export const messagesService = (deps: ServiceDeps): MessagesService => {
 
   const listPage = async (
     chat: string,
-    { limit, before, beforeTime, after, threadId: typedThread, starred }: ListWindow,
+    { limit, before, beforeTime, after, until, threadId: typedThread, starred }: ListWindow,
   ): Promise<Page<Message>> => {
     if (starred !== undefined) {
       if (!fromStore(deps))
         throw new CliError("validation_error", "starred: reads the local store; not while reading from the messenger")
-      if (typedThread !== undefined || beforeTime !== undefined || after !== undefined)
+      if (typedThread !== undefined || beforeTime !== undefined || after !== undefined || until !== undefined)
         throw new CliError("validation_error", "starred: pages back through the whole chat; give only id< with it")
       return inStore(async (store, account) =>
         store.messages.messages(account, await readChatId(deps, chat, store, account), {
@@ -403,28 +405,31 @@ export const messagesService = (deps: ServiceDeps): MessagesService => {
       )
     }
     const threadId = threadIdOf(typedThread)
-    if (threadId !== undefined) return topicPage(chat, threadId, { limit, before, beforeTime, after })
-    if (beforeTime !== undefined) {
-      if (deps.offline)
-        throw new CliError("validation_error", "reading back from a time asks the messenger; not with --offline")
-      if (fromStore(deps)) throw new CliError("validation_error", `${PUSHED}, which pages back from a message only`)
-      const connection = await deps.connection()
-      return capability(connection, "historyBefore", "read back from a time")(chat, { limit, time: beforeTime })
-    }
-    if (after !== undefined) {
-      if (deps.offline)
-        throw new CliError("validation_error", "reading forward asks the messenger; the store pages only backwards")
-      if (fromStore(deps)) throw new CliError("validation_error", `${PUSHED}, which pages only backwards`)
-      const connection = await deps.connection()
-      return capability(connection, "historyAfter", "read forward from a message")(chat, { limit, after })
-    }
-    const window = { limit, ...(before === undefined ? {} : { before }) }
+    if (threadId !== undefined) return topicPage(chat, threadId, { limit, before, beforeTime, after, until })
     if (fromStore(deps)) {
+      const window = after
+        ? { limit, after, ...(until === undefined ? {} : { until }) }
+        : {
+            limit,
+            ...(before === undefined ? {} : { before }),
+            // historyBefore reads strictly before its moment; the store's end is inclusive.
+            ...(beforeTime === undefined ? {} : { until: beforeTime - 1 }),
+          }
       return inStore(async (store, account) =>
         store.messages.messages(account, await readChatId(deps, chat, store, account), window),
       )
     }
-    return capability(await deps.connection(), "history", "read a chat's history")(chat, window)
+    const connection = await deps.connection()
+    if (beforeTime !== undefined)
+      return capability(connection, "historyBefore", "read back from a time")(chat, { limit, time: beforeTime })
+    if (after !== undefined) {
+      const page = await capability(connection, "historyAfter", "read forward from a message")(chat, { limit, after })
+      if (until === undefined) return page
+      const items = page.items.filter((one) => Date.parse(one.timestamp) <= until)
+      return { items, hasMore: page.hasMore && items.length === page.items.length }
+    }
+    const window = { limit, ...(before === undefined ? {} : { before }) }
+    return capability(connection, "history", "read a chat's history")(chat, window)
   }
 
   return {

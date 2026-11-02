@@ -5445,7 +5445,7 @@ describe("the guard, account and mcp config commands", () => {
     expect(asked.slice(0, 4)).toEqual([
       { id: "41" },
       { time: Date.parse("2026-09-27T10:00:00Z") },
-      { time: Date.parse("2026-09-27") },
+      { time: Date.parse("2026-09-27") - 1 },
       { id: "urn:li:msg:4F2" },
     ])
     expect(asked[4]).toEqual({ time: expect.any(Number) })
@@ -5473,7 +5473,7 @@ describe("the guard, account and mcp config commands", () => {
     expect(both.code).toBe(2)
   })
 
-  it("refuses --before with --after, --after offline, and a messenger that cannot read forward", async () => {
+  it("refuses --before with --after, and a messenger that cannot read forward", async () => {
     const env = sandbox()
     const online = async () => fake
 
@@ -5481,7 +5481,6 @@ describe("the guard, account and mcp config commands", () => {
     expect((await call(["messages", "list", "7", "id<5", "--cursor", "after:2"], online, env)).code).toBe(2)
     expect((await call(["messages", "list", "7", "id:5 OR topic:2"], online, env)).code).toBe(2)
     expect((await call(["messages", "list", "7", "book"], online, env)).code).toBe(2)
-    expect((await call(["messages", "list", "7", "id>2", "--offline"], online, env)).code).toBe(2)
     const unable = await call(["messages", "list", "7", "id>2"], online, env)
     expect([unable.code, unable.stderr.join("\n")]).toEqual([2, expect.stringContaining("read forward")])
     for (const [bad, why] of [
@@ -6053,8 +6052,9 @@ describe("messages comments", () => {
     expect(answer.page).toEqual({ mode: "cursor", limit: 5, has_more: true, next_cursor: "before:901" })
     expect(answer.next[0]).toMatchObject({
       step: "page.next",
-      args: { chat: "7", post: "42", query: "id<950", cursor: "before:901" },
+      args: { chat: "7", post: "42", cursor: "before:901" },
     })
+    expect(answer.next[0].args).not.toHaveProperty("query")
     expect(comments).toHaveBeenCalledWith("7", "42", { limit: 5, before: "950" })
 
     const jsonl = await call(["messages", "comments", "7", "42", "--jsonl"], connect, env)

@@ -455,13 +455,68 @@ describe("a messenger whose history is read from the store", () => {
     for (const argv of [
       ["messages", "sync", "Book"],
       ["messages", "sync", "Book", "--dry-run"],
-      ["messages", "list", "Book", "id>1"],
-      ["messages", "list", "Book", "date<2h"],
     ]) {
       const { code, stderr } = await call(argv, env, connect, "store")
       expect(code, argv.join(" ")).toBe(2)
       expect(stderr).toContain("this messenger")
     }
+    expect(connects).toEqual([])
+  })
+
+  it("**reads [X, Y) offline oldest first across pages**, the cursor keeping the end", async () => {
+    const env = await filled()
+    const { connects, connect } = pushing()
+    const list = async (...argv: string[]) => {
+      const { code, stdout, stderr } = await call(
+        ["messages", "list", "Book", ...argv, "--offline", "--json"],
+        env,
+        connect,
+      )
+      expect(code, stderr).toBe(0)
+      return JSON.parse(stdout) as {
+        items: { id: string }[]
+        page: { has_more: boolean; next_cursor?: string }
+        next?: { step: string; args: Record<string, unknown> }[]
+      }
+    }
+
+    const first = await list('date>="2026-09-27T10:00:00Z" date<"2026-09-27T10:02:00Z"', "--limit", "1")
+    const cursor = first.page.next_cursor as string
+    const second = await list("--cursor", cursor, "--limit", "1")
+    const ranged = await list('date:["2026-09-27T10:01:00Z" TO "2026-09-27T10:02:00Z"]')
+
+    expect(first.items.map(({ id }) => id)).toEqual(["1"])
+    expect(cursor).toBe(`after:1~${Date.parse("2026-09-27T10:02:00Z") - 1}`)
+    expect(first.next?.[0]).toMatchObject({ step: "page.next", args: { chat: "Book", cursor } })
+    expect(first.next?.[0]?.args).not.toHaveProperty("query")
+    expect([second.items.map(({ id }) => id), second.page.has_more]).toEqual([["2"], false])
+    expect(ranged.items.map(({ id }) => id)).toEqual(["2", "3"])
+    expect(connects).toEqual([])
+  })
+
+  it("**points a time flag on messages list at the query**", async () => {
+    const env = await filled()
+    const { connect } = pushing()
+
+    for (const flag of ["--since-time", "--until=2026-10-01"]) {
+      const { code, stderr } = await call(["messages", "list", "Book", flag, "30d", "--offline"], env, connect)
+      expect([code, stderr]).toEqual([2, expect.stringContaining("'date>=2026-10-01 date<2026-10-20'")])
+    }
+    const typo = await call(["messages", "list", "Book", "--limt", "3", "--offline"], env, connect)
+    expect([typo.code, typo.stderr]).toEqual([2, expect.stringContaining("--limit")])
+  })
+
+  it("**reads a window of the stored chat both ways** without connecting", async () => {
+    const env = await filled()
+    const { connects, connect } = pushing()
+    const ids = async (...query: string[]) =>
+      JSON.parse(
+        (await call(["messages", "list", "Book", ...query, "--json"], env, connect, "store")).stdout,
+      ).items.map((one: { id: string }) => one.id)
+
+    expect(await ids("id>1")).toEqual(["2", "3"])
+    expect(await ids('date<"2026-09-27T10:02:00Z"')).toEqual(["1", "2"])
+    expect(await ids('date>="2026-09-27T10:01:00Z"', 'date<"2026-09-27T10:02:00Z"')).toEqual(["2"])
     expect(connects).toEqual([])
   })
 

@@ -116,4 +116,30 @@ describe("messages by time", () => {
     expect(await store.messages.countMessages(OTHER, "-1")).toBe(0)
     await store.close()
   })
+
+  it("**reads a window forward**, from a moment or a message, ending inclusive, ties in the order they were stored", async () => {
+    const store = await seeded()
+    await store.messages.saveMessages(OWNER, "-1", [message("6", 40), message("7", 40)], { via: "history" })
+    const time = (minute: number) => Date.parse(at(minute))
+    const read = (window: { limit: number; after: { id: string } | { time: number }; until?: number }) =>
+      store.messages.messages(OWNER, "-1", window)
+
+    const first = await read({ limit: 2, after: { time: time(10) }, until: time(40) })
+    expect([ids(first.items), first.hasMore]).toEqual([["2", "4"], true])
+    const next = await read({ limit: 2, after: { id: "4" }, until: time(40) })
+    expect([ids(next.items), next.hasMore]).toEqual([["6", "7"], false])
+    const tie = await read({ limit: 1, after: { id: "6" }, until: time(40) })
+    expect([ids(tie.items), tie.hasMore]).toEqual([["7"], false])
+    expect(ids((await read({ limit: 10, after: { time: time(10) - 1 } })).items)).toEqual([
+      "1",
+      "2",
+      "4",
+      "6",
+      "7",
+      "5",
+    ])
+    expect(ids((await store.messages.messages(OWNER, "-1", { limit: 2, until: time(20) })).items)).toEqual(["1", "2"])
+    await expect(read({ limit: 1, after: { id: "99" } })).rejects.toMatchObject({ code: "not_found" })
+    await store.close()
+  })
 })

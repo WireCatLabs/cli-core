@@ -16,6 +16,22 @@ shape of this file.
   never dropped. `messages sync <chat> --full-history` fetches a chat and keeps its pushed history in full from then on
   (`history_included` in the answer). `ChatsStore` gains `historySkips`, `historyShapes`, `recordHistorySkips` and
   `setHistoryIncluded`; `Saving` takes `historyLimits`.
+- **`messages list` reads a window bounded on both sides, offline too.** The query takes a start and an end,
+  `'date>=2026-10-01 date<2026-10-20'` or `'date:[2026-10-01 TO 2026-10-19]'`, and `id>` with `date<`. A start reads
+  forward, oldest first, and stops at the end; an end alone reads back from it, newest page first, as before.
+  `--offline` and a messenger whose history is read from the store (WhatsApp) now answer both ways from the store
+  instead of refusing. A forward cursor carries the end, `after:<id>~<epoch ms>`, so the next page stops at the same
+  place. `--since`, `--since-time`, `--until`, `--until-time`, `--after-time` and `--before-time` on `messages list`
+  fail with the query form to type instead. The store's `messages()` window takes `after` (a message or a moment)
+  and `until`.
+
+### Fixed
+
+- **`page.next` of `messages list` and `messages comments` runs as written.** It repeated the query's `id`/`date`
+  bound beside `--cursor`, which the command refuses as two starting points; it now keeps only `topic:` and
+  `starred:`.
+- **An inclusive start keeps a message sent exactly at it.** `messages list 'date>=2026-10-01'` skipped a message
+  sent at the first millisecond of the day, and `date<="…"` one sent at that moment.
 
 ## 0.544.0 — 02.11.2026
 

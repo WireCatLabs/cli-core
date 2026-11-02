@@ -13,6 +13,7 @@ import type { AccountKey } from "../../store/store.js"
 import { REMOTE_READ } from "../effects.js"
 import { itemOf, listOf, renderAnswer } from "../envelope.js"
 import { queryHelp } from "../list-query.js"
+import { withOptionHints } from "../option-hints.js"
 import { positiveCount } from "../paging.js"
 import { syncCommand } from "./backfill-command.js"
 import { type Messenger, type MessengerContext, messengerContext } from "./context.js"
@@ -27,7 +28,7 @@ import {
   TRANSCRIBE_OPTION,
 } from "./hearing-command.js"
 import { historyLimitGaps } from "./history-gaps.js"
-import { cursorOf, historyQuery, historyWindow } from "./history-query.js"
+import { cursorOf, historyQuery, historyWindow, resumeQuery } from "./history-query.js"
 import { hideNever } from "./lacks.js"
 import { threadAnswer } from "./message-answers.js"
 import { messageItem, messageItems, type ReadMessage, viewOf } from "./message-items.js"
@@ -44,6 +45,9 @@ import { sendCommand } from "./messages-send-command.js"
 import { coverageGaps } from "./search-answers.js"
 import { threadOptions, threadRequest } from "./thread-options.js"
 import { transcribeSubcommand } from "./transcribe-command.js"
+
+const WINDOW_EXAMPLE = "date>=2026-10-01 date<2026-10-20"
+const TIME_FLAGS = ["--since", "--since-time", "--until", "--until-time", "--after-time", "--before-time"]
 
 /** `messages`: reading, and sending through the guard. A CLI may add its own subcommands. */
 export const messagesCommand = (messenger: Messenger): Command => {
@@ -64,8 +68,8 @@ export const messagesCommand = (messenger: Messenger): Command => {
       "[query...]",
       `${
         messenger.topics === false
-          ? "where to start: id<42, date>2026-10-01"
-          : "where to start and which topic: id<42, date>2026-10-01, topic:12"
+          ? `where to start or which window: id<42, ${WINDOW_EXAMPLE}`
+          : `where to start or which window, and which topic: id<42, ${WINDOW_EXAMPLE}, topic:12`
       }${messenger.messageStars === true ? "; starred:true keeps the ones you starred" : ""}`,
     )
     .option("--limit <n>", "how many", positiveCount("--limit"))
@@ -92,6 +96,8 @@ export const messagesCommand = (messenger: Messenger): Command => {
       const next = page.hasMore
         ? cursorOf(window, { first: page.items[0]?.id, last: page.items.at(-1)?.id })
         : undefined
+      const typed = next === undefined ? query.join(" ") : resumeQuery(query, "messages list", history)
+      const queryArg = typed ? { query: typed } : {}
       // Offline, the store is the whole answer: say how much of the chat it holds. Online the messenger is read.
       const gaps = context.settings.offline
         ? await context.withStore(async (store, account) => {
@@ -112,7 +118,7 @@ export const messagesCommand = (messenger: Messenger): Command => {
           has_more: page.hasMore,
           paging: "cursor",
           ...(next === undefined ? {} : { cursor: next }),
-          args: { chat, ...(query.length > 0 ? { query: query.join(" ") } : {}) },
+          args: { chat, ...queryArg },
           next: gaps.next,
           missing: [...hearingMissing(hearing, transcribe === true), ...gaps.missing],
           ...(gaps.missing.length > 0 ? { meta: { complete: false } } : {}),
@@ -121,6 +127,12 @@ export const messagesCommand = (messenger: Messenger): Command => {
       )
     })
   annotate(list, { output: { entity: "message" }, query: history })
+  withOptionHints(
+    list,
+    Object.fromEntries(
+      TIME_FLAGS.map((flag) => [flag, `messages list reads a window by its query: '${WINDOW_EXAMPLE}'`]),
+    ),
+  )
 
   const readWindow = async (command: Command, chat: string, message: string | undefined, window: Window) => {
     const context = messengerContext(command, messenger)
