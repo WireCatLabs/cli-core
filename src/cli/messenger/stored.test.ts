@@ -4,7 +4,7 @@ import { join } from "node:path"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import type { Message, MessageEvent } from "../../domain/models.js"
 import { countedPoll } from "../../domain/polls.js"
-import type { HistoryBatch, MessengerAdapter } from "../../ports/messenger.js"
+import type { HistoryBatch, HistoryBatchHandler, MessengerAdapter } from "../../ports/messenger.js"
 import type { DiagnosticEvent } from "../../runs/events.js"
 import { RecipientList } from "../../sends/recipients.js"
 import { type DeletionScope, type MessageStore, openStore } from "../../store/store.js"
@@ -1312,6 +1312,42 @@ describe("the stored chats a pushing messenger is told as feed starts", () => {
       { historyLimits: { dialogDays: 1095, groupDays: 365, groupMembersMax: 50 } },
     )
     expect(await found("lifted")).toEqual(["74"])
+  })
+
+  it("hands the command's own handler whether each batch reached the store", async () => {
+    const { store } = await setUp()
+    const told: boolean[] = []
+    const batch = {
+      chats: [
+        { id: "12", title: "Told", kind: "dialog" as const, unreadCount: 0, lastMessageAt: null, participantsCount: 2 },
+      ],
+    }
+    const listen = async (broken: boolean) => {
+      const wrapped = stored(
+        {
+          self: () => "500",
+          storedChats: async () => {},
+          feed: async (onBatch: HistoryBatchHandler) => void (await onBatch(batch)),
+        } as unknown as MessengerAdapter,
+        {
+          account,
+          store: async () => {
+            if (broken) throw new Error("database disk image is malformed")
+            return store
+          },
+          warn: () => {},
+          events: () => {},
+        },
+      )
+      const pending: Promise<boolean>[] = []
+      await wrapped.feed?.((_, saved) => void (saved && pending.push(saved)), new AbortController().signal)
+      told.push(...(await Promise.all(pending)))
+    }
+
+    await listen(false)
+    await listen(true)
+
+    expect(told).toEqual([true, false])
   })
 
   it("tells the messenger whether each pushed batch reached the store", async () => {
