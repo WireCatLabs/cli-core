@@ -364,7 +364,11 @@ const requestsCommand = (messenger: Messenger): Command => {
 
 /** `chats create`, `join`, `leave`, `update` and `link`: the help text is max-cli's, the one both tools say (standard, help rule 2). */
 export const groupCommands = (messenger: Messenger): Command[] => [
-  annotate(new Command("create"), { output: { entity: "chat_group_change" }, effects: REMOTE_WRITE })
+  annotate(new Command("create"), {
+    output: { entity: "chat_group_change" },
+    effects: REMOTE_WRITE,
+    literal_after_dashes: true,
+  })
     .description("create a group or a channel; the people added are told")
     .argument("<title>", "the group's name")
     .argument("[person...]", "people to add: an id, or part of a name")

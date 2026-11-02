@@ -156,6 +156,7 @@ export const pollsCommand = (messenger: Messenger): Command => {
       })
 
   const create = annotate(polls.command("create"), {
+    literal_after_dashes: true,
     output: { entity: "message_write" },
     effects: REMOTE_WRITE,
     examples: [`${messenger.app.command} personal polls create "Book club" "Which day?" Monday Tuesday`],

@@ -32,7 +32,7 @@ export const addRemind = (
   { deps, now, zone, print, example }: RemindHelpers,
 ) => {
   const remind = example(
-    destroysNothing(annotate(events.command("remind"), { effects: FETCH, mcp: false }))
+    destroysNothing(annotate(events.command("remind"), { effects: FETCH, mcp: false, literal_after_dashes: true }))
       .description(
         "tell once about each event that starts within --due-within: print it, or run your program for it with the " +
           "event as JSON on its standard input; for cron or a timer every few minutes, syncing first unless --offline",

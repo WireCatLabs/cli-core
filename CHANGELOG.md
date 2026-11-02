@@ -7,6 +7,33 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **An option after `--` is read as the option.** `messages sync -- -100 --json` now syncs `-100` and answers in JSON;
+  it failed with "too many arguments". After `--`, a word that is exactly one of the command's options, its own or a
+  global one (`--json`, `--limit 5`, `--json=id`), moves in front of `--`; every other word stays a positional. A
+  negative id needs no `--` at all. Commands that take free text keep every word after `--` literal: `messages send` and
+  `edit` (also the bot's), `polls create`, `topics create`, `chats create`, `chats folders create`, `contacts rename`,
+  `contacts aliases set`, `messages press`, `bot commands set`, `schedule command`, `events remind`, `complete`, and the
+  notes templates. Mark such a command with `annotate(command, { literal_after_dashes: true })`; MCP calls are never
+  lifted. A script that passed the literal word `--json` as a positional of another command now gets the option instead.
+- **Every decide method takes who decides, a `Decider`** (`"owner"` or `{ bot, model?, reason }`):
+  `facts.accept(ref, by)`, `facts.reject(ref, by)`, `memories.confirm(ref, by)`, `knowledge.confirmRelation(scope, id,
+  by)`, `knowledge.removeRelation(scope, id, by)`, `proposedActions.approve(id, by, result?)`,
+  `proposedActions.reject(id, by)`, `approveAsTask(store, id, by)`, and `by` is now required in
+  `evidenceFindings.review` and `meetingFindings.review`. `DocumentKnowledge.fact` and `.memory` take `by` for a
+  `confirm`, and `memories.markStale(ref, by)` and `.memory(…, "stale", by)` take it too: marking an agent's memory
+  stale is how it is turned down. `knowledge.relate` needs `by`: the owner's relationship is a link, an agent's is a
+  `relationship` proposal it returns instead. `notes.addLink` refuses any confirmed link without `by: "owner"`, so an
+  agent writes `confirmed: false` (the task service now does). `notes.removeLink(id, by)`, `facts.reverse(ref, by)`,
+  `facts.remove(ref, by)` and `memories.remove(ref, by)` take who removes; the document port's `addMemory` needs
+  `author`, `addFact` and `addLink` need `by`, with no owner default. `proposalRegistry(store)` takes no policy: the
+  host sets it once with `openStore({ decisions })`, and `store.decisionPolicy` is what the registry and every store
+  check read. A host passes the owner only when the owner runs the command, and
+  the agent's bot and reason otherwise.
+  An agent's confirmation of a relationship is recorded in the link's provenance, and of a fact or proposal as its
+  decider.
+
 ### Added
 
 - **One proposal inbox behind one check: `proposalRegistry(store, policy)`, `ProposalKind`, `parseProposalIds`
@@ -28,25 +55,6 @@ shape of this file.
   **`knowledge.decideSuggestedLink(id, decision)`** an older unconfirmed link, each in one transaction: the link and
   the decision land together or not at all. A decision's `reason` is kept: on a rejected proposal as its result, on a
   fact in `metadata.decision`, on an evidence findings receipt.
-
-### Changed — may break callers
-
-- **Every decide method takes who decides, a `Decider`** (`"owner"` or `{ bot, model?, reason }`):
-  `facts.accept(ref, by)`, `facts.reject(ref, by)`, `memories.confirm(ref, by)`, `knowledge.confirmRelation(scope, id,
-  by)`, `knowledge.removeRelation(scope, id, by)`, `proposedActions.approve(id, by, result?)`,
-  `proposedActions.reject(id, by)`, `approveAsTask(store, id, by)`, and `by` is now required in
-  `evidenceFindings.review` and `meetingFindings.review`. `DocumentKnowledge.fact` and `.memory` take `by` for a
-  `confirm`, and `memories.markStale(ref, by)` and `.memory(…, "stale", by)` take it too: marking an agent's memory
-  stale is how it is turned down. `knowledge.relate` needs `by`: the owner's relationship is a link, an agent's is a
-  `relationship` proposal it returns instead. `notes.addLink` refuses any confirmed link without `by: "owner"`, so an
-  agent writes `confirmed: false` (the task service now does). `notes.removeLink(id, by)`, `facts.reverse(ref, by)`,
-  `facts.remove(ref, by)` and `memories.remove(ref, by)` take who removes; the document port's `addMemory` needs
-  `author`, `addFact` and `addLink` need `by`, with no owner default. `proposalRegistry(store)` takes no policy: the
-  host sets it once with `openStore({ decisions })`, and `store.decisionPolicy` is what the registry and every store
-  check read. A host passes the owner only when the owner runs the command, and
-  the agent's bot and reason otherwise.
-  An agent's confirmation of a relationship is recorded in the link's provenance, and of a fact or proposal as its
-  decider.
 
 ### Security
 
