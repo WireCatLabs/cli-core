@@ -7,6 +7,7 @@ import { type ProgramDefinition, run } from "../../cli/program.js"
 import { settingsFor } from "../../cli/settings.js"
 import type { EmailInput, MailboxInput } from "../../store/index.js"
 import { type AccountKey, openStore } from "../../store/store.js"
+import { marksOf } from "../marks.js"
 import { mailReadCommands } from "./index.js"
 
 const app = {
@@ -97,7 +98,12 @@ const mailbox = async () => {
     const streams = captureStreams()
     return run(["ya", "review", ...argv, "--json"], definition, { streams, tty: false, env })
   }
-  return { env, accountId, withStore, synced, thread, json, refused }
+  const cli = async (argv: string[], extra: Record<string, string> = {}) => {
+    const streams = captureStreams()
+    const code = await run(["ya", ...argv, "--json"], definition, { streams, tty: false, env: { ...env, ...extra } })
+    return { code, out: streams.stdout.join(""), err: streams.stderr.join("") }
+  }
+  return { env, accountId, withStore, synced, thread, json, refused, cli }
 }
 
 const texts = (answer: { items: { text: string }[] }) => answer.items.map((one) => one.text.split("\n").at(-1))
@@ -250,5 +256,94 @@ describe("mail review", () => {
     expect(empty.items).toEqual([])
     expect(empty.meta?.complete).toBe(false)
     expect(existsSync(join(box.env.MAIL_STATE_DIR, "review"))).toBe(false)
+  })
+})
+
+describe("a holder's processing mark", () => {
+  const PARTIAL = { partial: { bytes: 100 } }
+  const setUp = async () => {
+    const box = await mailbox()
+    const read = async (holder = "triage") => {
+      const answer = await box.json(["--holder", holder])
+      const next = (answer.next ?? []) as { step?: string; args?: { cursor?: string } }[]
+      return { answer, cursor: next.find((one) => one.step === "mail-messages.acknowledge")?.args?.cursor as string }
+    }
+    const ack = async (cursor: string, holder = "triage") => {
+      const done = await box.cli(["messages", "acknowledge", "--holder", holder, "--cursor", cursor])
+      expect(done.code, done.err).toBe(0)
+      return JSON.parse(done.out).item
+    }
+    return { ...box, read, ack }
+  }
+
+  it("starts from now, then reads by store order: mail stored late with an old date is still read", async () => {
+    const box = await setUp()
+    await box.thread("t-old", email("before", 5))
+    await box.synced()
+    const first = await box.read()
+    expect(first.answer.items).toEqual([])
+    expect(await box.ack(first.cursor)).toMatchObject({ holder: "triage", read: 0, held: 0 })
+
+    await box.thread("t-late", email("late-old", 24 * 20))
+    await box.thread("t-new", email("new", 1))
+    await box.thread("t-bulk", email("bulk", 1, { mailboxes: [BULK] }))
+    await box.synced()
+    const second = await box.read()
+    expect(texts(second.answer).sort()).toEqual(["text of late-old", "text of new"])
+    expect(second.answer.missing).toContainEqual(expect.objectContaining({ why: expect.stringContaining("1 bulk") }))
+
+    const again = await box.read()
+    expect(texts(again.answer).sort()).toEqual(["text of late-old", "text of new"])
+    const mark = await box.ack(again.cursor)
+    expect(mark).toMatchObject({ read: 2, skipped: { bulk: 1, envelope: 0, partial: 0, draft: 0 } })
+    expect((await box.read()).answer.items).toEqual([])
+    expect(await box.ack(again.cursor)).toMatchObject({ read: 2 })
+  })
+
+  it("never moves back, and two holders keep their own marks", async () => {
+    const box = await setUp()
+    await box.synced()
+    const start = await box.read()
+    await box.ack(start.cursor)
+    await box.ack((await box.read("digest")).cursor, "digest")
+    await box.thread("t-1", email("one", 1))
+    await box.synced()
+    const one = await box.read()
+    await box.ack(one.cursor)
+
+    const back = await box.cli(["messages", "acknowledge", "--holder", "triage", "--cursor", start.cursor])
+    expect(back.code).toBe(2)
+    expect(texts((await box.read("digest")).answer)).toEqual(["text of one"])
+    expect((await box.read()).answer.items).toEqual([])
+  })
+
+  it("holds a partial email until it is whole, then gives it once", async () => {
+    const box = await setUp()
+    await box.synced()
+    await box.ack((await box.read()).cursor)
+    await box.thread("t-big", email("big", 1, { metadata: PARTIAL }))
+    await box.synced()
+    const held = await box.read()
+    expect(held.answer.items).toEqual([])
+    expect(await box.ack(held.cursor)).toMatchObject({ held: 1, read: 0 })
+
+    await box.thread("t-big", email("big", 1, { metadata: { partial: null } }))
+    await box.synced()
+    const whole = await box.read()
+    expect(texts(whole.answer)).toEqual(["text of big"])
+    expect(await box.ack(whole.cursor)).toMatchObject({ held: 0, read: 1 })
+    expect((await box.read()).answer.items).toEqual([])
+  })
+
+  it("lists every holder's mark for status, and refuses a bad holder or cursor", async () => {
+    const box = await setUp()
+    await box.synced()
+    await box.ack((await box.read()).cursor)
+    await box.ack((await box.read("digest")).cursor, "digest")
+    const marks = await box.withStore((store) => marksOf(store, MINE))
+    expect(marks.map((one) => one.holder)).toEqual(["digest", "triage"])
+    expect((await box.cli(["messages", "acknowledge", "--holder", "Bad Name", "--cursor", "1.1"])).code).toBe(2)
+    expect((await box.cli(["messages", "acknowledge", "--holder", "triage", "--cursor", "soon"])).code).toBe(2)
+    expect(await box.refused(["--holder", "triage", "--unanswered"])).toBe(2)
   })
 })

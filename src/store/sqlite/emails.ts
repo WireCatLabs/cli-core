@@ -355,6 +355,8 @@ export interface MailStore extends PartialMailStore, MailActivityStore {
   chunksToEmbed(model: string, options: { after?: string; limit: number }): Promise<{ hash: string; text: string }[]>
   /** Live emails of one account by Message-ID, each placed in its thread; an unknown one is left out. */
   inThreads(accountId: number, externalIds: string[]): Promise<EmailInThread[]>
+  /** Emails by store id, as search hits in the order given; one the store does not hold is left out. */
+  emailHits(ids: readonly number[]): Promise<StoredHit[]>
   /** A thread's live emails, oldest first, as search hits; `window` keeps those received in (after, until], in ms. */
   threadHits(accountId: number, thread: string, window?: { after?: number; until?: number }): Promise<StoredHit[]>
   /** The emails of one account nearest in meaning to `query`, each by its best chunk, best first. */
@@ -1045,6 +1047,7 @@ export const mailStoreOver = (
       return place ? [{ ...place, score }] : []
     })
   },
+  emailHits: async (ids) => emailHitsByPk(database, [...ids]),
   async threadHits(accountId, thread, window) {
     return emailHitsByPk(database, threadEmailIds(database, accountId, thread, window))
   },
