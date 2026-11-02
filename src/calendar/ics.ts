@@ -1,11 +1,12 @@
 import { CliError } from "@wirecat/cli-base"
 import { zonedMoment } from "@wirecat/cli-base/query"
 import type { EntryStatus, EntryTransparency, ParticipantResponse } from "../meetings/index.js"
+import { WINDOWS_ZONES } from "./windows-zones.generated.js"
 
 /**
  * The part of iCalendar (RFC 5545, https://www.rfc-editor.org/rfc/rfc5545) the calendar commands read and write: one
  * VCALENDAR of VEVENTs, with no VTIMEZONE. Times are written in UTC; a time read with a TZID keeps that zone's name,
- * which the provider takes as it is.
+ * which the provider takes as it is. A Windows zone name, as Outlook and Exchange write it, is read as its IANA zone.
  */
 export interface IcsEvent {
   uid: string
@@ -173,6 +174,9 @@ const DATE_TIME = /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})(Z?)$/u
 
 type Moment = { date: string } | { at: number; zone: string | null }
 
+/** `W. Europe Standard Time` → `Europe/Berlin`, CLDR's zone for the name worldwide; any other TZID as written. */
+const ianaZone = (tzid: string) => (Object.hasOwn(WINDOWS_ZONES, tzid) ? (WINDOWS_ZONES[tzid] as string) : tzid)
+
 /** A DATE or DATE-TIME: UTC with `Z`, in its TZID, or floating, read in `zone`. */
 const momentOf = (line: ContentLine, zone: string): Moment => {
   const value = line.value.trim()
@@ -187,7 +191,7 @@ const momentOf = (line: ContentLine, zone: string): Moment => {
   const local = `${year}-${month}-${day}T${hour}:${minute}:${second}`
   if (utc) return { at: Date.parse(`${local}Z`), zone: "UTC" }
   const named = line.params.TZID
-  const where = named ?? zone
+  const where = named === undefined ? zone : ianaZone(named)
   try {
     return { at: zonedMoment(local, where, { start: 0, end: local.length }), zone: where }
   } catch {
@@ -281,7 +285,9 @@ const eventOf = (lines: ContentLine[], zone: string, overrides = false): IcsEven
   const recurrence = lines
     .filter(({ name }) => ["RRULE", "RDATE", "EXDATE"].includes(name))
     .map(({ name, params, value }) => {
-      const kept = Object.entries(params).map(([key, param]) => `;${key}=${paramValue(param)}`)
+      const kept = Object.entries(params).map(
+        ([key, param]) => `;${key}=${paramValue(key === "TZID" ? ianaZone(param) : param)}`,
+      )
       return `${name}${kept.join("")}:${value.trim()}`
     })
   if (recurrence.length) event.recurrence = recurrence

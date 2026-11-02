@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { foldLine, type IcsEvent, readIcs, writeIcs } from "./ics.js"
+import { WINDOWS_ZONES } from "./windows-zones.generated.js"
 
 const NOW = Date.UTC(2026, 10, 1, 9)
 const at = (text: string) => Date.parse(text)
@@ -112,6 +113,61 @@ describe("readIcs", () => {
     expect(events[1]).toMatchObject({ startsAt: at("2026-11-02T17:00:00Z"), timezone: "America/New_York" })
   })
 
+  it("reads an Outlook feed's Windows zone names as their IANA zones, in times and in EXDATE", () => {
+    const text = [
+      "BEGIN:VCALENDAR",
+      "PRODID:Microsoft Exchange Server 2010",
+      "VERSION:2.0",
+      "BEGIN:VTIMEZONE",
+      "TZID:W. Europe Standard Time",
+      "BEGIN:STANDARD",
+      "DTSTART:16010101T030000",
+      "TZOFFSETFROM:+0200",
+      "TZOFFSETTO:+0100",
+      "RRULE:FREQ=YEARLY;INTERVAL=1;BYDAY=-1SU;BYMONTH=10",
+      "END:STANDARD",
+      "BEGIN:DAYLIGHT",
+      "DTSTART:16010101T020000",
+      "TZOFFSETFROM:+0100",
+      "TZOFFSETTO:+0200",
+      "RRULE:FREQ=YEARLY;INTERVAL=1;BYDAY=-1SU;BYMONTH=3",
+      "END:DAYLIGHT",
+      "END:VTIMEZONE",
+      "BEGIN:VEVENT",
+      "UID:040000008200E00074C5B7101A82E008",
+      "SUMMARY:Weekly sync",
+      "RRULE:FREQ=WEEKLY;UNTIL=20261231T090000Z;INTERVAL=1;BYDAY=WE;WKST=MO",
+      'EXDATE;TZID="W. Europe Standard Time":20261111T100000',
+      "DTSTART;TZID=W. Europe Standard Time:20261104T100000",
+      "DTEND;TZID=W. Europe Standard Time:20261104T103000",
+      "END:VEVENT",
+      "END:VCALENDAR",
+    ].join("\r\n")
+    const { events, skipped } = readIcs(text, "UTC")
+    expect(skipped).toEqual([])
+    expect(events[0]).toMatchObject({
+      startsAt: at("2026-11-04T09:00:00Z"),
+      endsAt: at("2026-11-04T09:30:00Z"),
+      timezone: "Europe/Berlin",
+      recurrence: [
+        "RRULE:FREQ=WEEKLY;UNTIL=20261231T090000Z;INTERVAL=1;BYDAY=WE;WKST=MO",
+        "EXDATE;TZID=Europe/Berlin:20261111T100000",
+      ],
+    })
+  })
+
+  it("maps every Windows zone name to a zone this Node knows", () => {
+    const unknown = Object.values(WINDOWS_ZONES).filter((zone) => {
+      try {
+        new Intl.DateTimeFormat("en", { timeZone: zone })
+        return false
+      } catch {
+        return true
+      }
+    })
+    expect(unknown).toEqual([])
+  })
+
   it("an all-day event with no end lasts one day", () => {
     const text =
       "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:a\r\nDTSTART;VALUE=DATE:20261231\r\nEND:VEVENT\r\nEND:VCALENDAR"
@@ -131,7 +187,7 @@ describe("readIcs", () => {
       "END:VEVENT",
       "BEGIN:VEVENT",
       "UID:zone@example.com",
-      "DTSTART;TZID=W. Europe Standard Time:20261104T100000",
+      'DTSTART;TZID="(UTC+01:00) Amsterdam, Berlin, Bern":20261104T100000',
       "END:VEVENT",
       "END:VCALENDAR",
     ].join("\r\n")
