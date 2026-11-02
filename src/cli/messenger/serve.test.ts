@@ -284,3 +284,64 @@ describe("serve with reply rules", () => {
     expect(answer.replies.skipped).toMatchObject({ [NOT_ALLOWED]: 1 })
   })
 })
+
+describe("serve's catch-up on start", () => {
+  const minutesAgo = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString()
+
+  it("**reads back what a chat received while nothing listened, even after a live message there**", async () => {
+    const { env } = setup()
+    const held = { ...hit, id: "1", timestamp: minutesAgo(60) }
+    const live = { ...hit, id: "4", timestamp: new Date(Date.now() + 1000).toISOString() }
+    const history = [live, ...[3, 2, 1].map((id) => ({ ...hit, id: String(id), timestamp: minutesAgo(80 - id * 20) }))]
+    const asked: { limit: number; before?: string }[] = []
+    const adapter = {
+      self: () => "500",
+      close: async () => {},
+      chats: async () => ({
+        items: [
+          {
+            id: "7",
+            title: "Book club",
+            kind: "group",
+            unreadCount: 0,
+            lastMessageAt: history[0]?.timestamp,
+            participantsCount: 3,
+          },
+        ],
+        hasMore: false,
+      }),
+      history: async (_chat: string, window: { limit: number; before?: string }) => {
+        asked.push(window)
+        return { items: window.before === undefined ? history : [], hasMore: false }
+      },
+      watch: async (onEvent: (event: MessageEvent) => void, stop: AbortSignal, onReady?: () => void) => {
+        onReady?.()
+        onEvent({ event: "message", message: held })
+        onEvent({ event: "message", message: live })
+        await new Promise((resolve) => stop.addEventListener("abort", resolve, { once: true }))
+      },
+    } as unknown as MessengerAdapter
+    const messenger: Messenger = {
+      app,
+      provider: "chat",
+      resolveSettings: settingsFor(app).resolveSettings,
+      connect: async () => adapter,
+      chatArgument: "a chat",
+    }
+    const stop = new AbortController()
+    setTimeout(() => stop.abort(), 400)
+    const streams = captureStreams()
+
+    await run(
+      ["serve", "--json"],
+      { app, commands: () => [serveCommand(messenger)] },
+      { streams, tty: false, env, signal: stop.signal, startSyncDelayMs: 100 },
+    )
+
+    const answer = JSON.parse(streams.stdout[0] ?? "{}").item
+    v.parse(ENTITIES.serve_summary, answer)
+    expect(asked[0]).toMatchObject({ limit: expect.any(Number) })
+    expect(answer.caught_up).toMatchObject({ chats: 1, failed: 0, stopped: false })
+    expect(answer.caught_up.fetched).toBeGreaterThanOrEqual(2)
+  })
+})
