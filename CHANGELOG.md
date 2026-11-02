@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.544.0 — 02.11.2026
+
 ### Added
 
 - **The first run of a new version refreshes the agent instructions an older version installed**: each `SKILL.md`
@@ -28,6 +30,17 @@ shape of this file.
   only the last group was read. Groups after a space, a no-break space or a dot (`50 000`, `50\u00a0000`, `1.200 €`)
   are one number now. This is the amount the duplicate check compares between two tasks, so a reminder worded with
   a grouped sum is no longer compared on the wrong figure.
+
+### Changed — may break callers
+
+- **An agent's own shell may tighten a permission but never loosen it.** `config set|unset permissions…` run where
+  `AI_AGENT`, `CLAUDECODE`, `OPENCLAW_SHELL=exec` or another agent marker is set is now treated like an MCP agent's
+  call: `mcp.authority` and `bot.api` stay owner-only, and a level may only go down (`readonly` → `deny`, never
+  `readonly` → `allow`). Unsetting a permission, replacing `permissions` whole, or `--defaults`/`--personal`/`--bot`
+  accept only `deny`. Before, Hermes or OpenClaw could undo the read-only the desktop app set, from any chat message
+  that talked it into running `config set`. The owner changes them in a terminal outside the agent; the desktop app
+  already runs the tools without these variables. Not a sandbox: an agent with a general shell can still edit the
+  file itself, so keep its own command approvals on.
 
 ## 0.543.0 — 02.11.2026
 
