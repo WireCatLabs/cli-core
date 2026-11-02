@@ -76,11 +76,24 @@ export const SHARED_ROWS: Readonly<Record<string, RowShape>> = {
 
 /** Any record: what names it, what it is called, what state it is in, then what it says. */
 export const GENERIC_ROW: RowShape = {
-  columns: [{ field: ["key", "ref", "id"] }, { field: ["title", "name", "path"] }, { field: ["state", "status"] }],
+  columns: [
+    { field: ["key", "ref", "id"] },
+    { field: ["title", "name", "path"] },
+    { field: ["state", "status", "due_at"] },
+  ],
   text: ["text", "excerpt"],
 }
 
 export type RowsResolver = (command: Command | undefined) => RowShape | undefined
+
+/** An app's own rows by entity name (or `name.view`). */
+export type RowTable = Readonly<Record<string, RowShape>>
+
+/** The row an entity named in a section is drawn with: the app's, the shared one, else the generic one. */
+export const rowsOfEntity =
+  (table: RowTable = {}) =>
+  (entity: string): RowShape =>
+    (Object.hasOwn(table, entity) ? table[entity] : undefined) ?? SHARED_ROWS[entity] ?? GENERIC_ROW
 
 const declaredNames = (command: Command | undefined): string[] => {
   const output = command ? metaOf(command).output : undefined
@@ -89,7 +102,7 @@ const declaredNames = (command: Command | undefined): string[] => {
 }
 
 /** An app's own rows by entity name, as `entityFields` takes its fields; a shared name is refused. */
-export const entityRows = (table: Readonly<Record<string, RowShape>>): RowsResolver => {
+export const entityRows = (table: RowTable): RowsResolver => {
   const shared = Object.keys(table).filter((name) => name in ENTITIES || name in SHARED_ROWS)
   if (shared.length > 0) throw new Error(`entityRows: ${shared.join(", ")} is cli-core's entity; name yours apart`)
   return (command) => {
@@ -117,13 +130,19 @@ const at = (item: Fields, path: string): unknown =>
 
 const fieldsOfColumn = (field: RowColumn["field"]): readonly string[] => (typeof field === "string" ? [field] : field)
 
-const firstSet = (item: Fields, field: RowColumn["field"]): unknown =>
+// A record or a list is not one value; a file list is the only column that reads one, by its own path.
+const printable = (value: unknown, column?: RowColumn) =>
+  present(value) &&
+  (column?.as === "files" || column?.as === "forward" || column?.as === "reply" || !isListOrRecord(value))
+const isListOrRecord = (value: unknown) => typeof value === "object" && value !== null
+
+const firstSet = (item: Fields, field: RowColumn["field"], column?: RowColumn): unknown =>
   fieldsOfColumn(field)
     .map((path) => at(item, path))
-    .find(present)
+    .find((value) => printable(value, column))
 
-const sourceOf = (item: Fields, field: RowColumn["field"]): string | undefined =>
-  fieldsOfColumn(field).find((path) => present(at(item, path)))
+const sourceOf = (item: Fields, column: RowColumn): string | undefined =>
+  fieldsOfColumn(column.field).find((path) => printable(at(item, path), column))
 
 // Whitespace runs become one space and control or direction characters show, so a text cannot start a row of its own.
 const clean = (text: string): string => visibleControls(text.replace(/\s+/g, " ").trim())
@@ -180,7 +199,7 @@ interface Cell {
 }
 
 const cellOf = (item: Fields, column: RowColumn, clock: Clock): Cell | undefined => {
-  const value = firstSet(item, column.field)
+  const value = firstSet(item, column.field, column)
   if (!present(value)) return undefined
   switch (column.as) {
     case "time":
@@ -270,7 +289,7 @@ const rowsOfItems = (items: readonly unknown[], shape: RowShape, clock: Clock, c
     const column = shape.columns[index]
     const item = rows[0]?.item
     if (!hoist || !column || !item) return []
-    return [`${sourceOf(item, column.field) ?? fieldsOfColumn(column.field)[0]}: ${rows[0]?.cells[index]?.text}`]
+    return [`${sourceOf(item, column) ?? fieldsOfColumn(column.field)[0]}: ${rows[0]?.cells[index]?.text}`]
   })
   const lines = rows.map(({ cells, text, item }) => {
     const parts = cells.map((cell, index) => (hoisted[index] ? undefined : cell?.text))
@@ -310,24 +329,24 @@ const footerOf = (body: Body): string[] => {
     const line = more?.kind === "command" ? more.line : undefined
     const page = body.page
     lines.push(
-      `# more: ${
+      `# more: ${clean(
         line ??
-        (page.mode === "cursor" && page.next_cursor
-          ? `--cursor ${page.next_cursor}`
-          : page.mode === "page" && page.next_page
-            ? `--page ${page.next_page}`
-            : "raise --limit")
-      }`,
+          (page.mode === "cursor" && page.next_cursor
+            ? `--cursor ${page.next_cursor}`
+            : page.mode === "page" && page.next_page
+              ? `--page ${page.next_page}`
+              : "raise --limit"),
+      )}`,
     )
   }
   for (const missing of body.missing ?? []) lines.push(`# missing: ${clean(missing.field)}: ${clean(missing.why)}`)
   for (const step of steps) {
     if (step.step === "page.next" && "items" in body) continue
     const line = lineOf(step)
-    lines.push(`# next: ${clean(step.why)}${line ? `: ${line}` : ""}`)
+    lines.push(`# next: ${clean(step.why)}${line ? `: ${clean(line)}` : ""}`)
   }
   if (body.meta?.complete === false) {
-    const issues = (body.meta.issues ?? []).map((issue) => `${clean(issue.source)}: ${issue.code}`)
+    const issues = (body.meta.issues ?? []).map((issue) => `${clean(issue.source)}: ${clean(String(issue.code))}`)
     lines.push(`# complete: false${issues.length ? ` (${issues.join(", ")})` : ""}`)
   }
   if (body.meta?.truncated) lines.push("# truncated: true")
@@ -349,7 +368,7 @@ export const compactText = <T>(
   body: Body<T>,
   shape: RowShape,
   options: CompactOptions,
-  rowsOf: (entity: string) => RowShape = (entity) => SHARED_ROWS[entity] ?? GENERIC_ROW,
+  rowsOf: (entity: string) => RowShape = rowsOfEntity(),
 ): string => {
   const clock = clockFor(usableZone(body.meta?.timezone) ?? usableZone(options.timezone) ?? "UTC")
   const chars = options.textChars ?? TEXT_CHARS

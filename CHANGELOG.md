@@ -19,9 +19,10 @@ shape of this file.
   bytes; the texts alone are 40 %. `--compact` with `--json`, `--json=…`, `--jsonl` or `--brief` fails with
   `validation_error` (`output.conflict`); it never prompts, and exits with the code JSON would. MCP keeps JSON.
   - **Every command that answers through `renderAnswer` gets it.** A command draws with its own row
-    (`answerEntity(cmd, name, schema, { row })`), its app's (`entityRows({ name: shape })`, passed to `rowShapeOf`),
-    the shared one in `SHARED_ROWS` (`message`, `message.summary`, `message.hit`, `chat`), or the generic row: key, ref
-    or id · title, name or path · state or status · text. `RowShape` is data, and `compactText(body, shape,
+    (`answerEntity(cmd, name, schema, { row })`), its app's (`rows: { name: shape }` in the program definition,
+    which also draws an app entity listed inside one thing), the shared one in `SHARED_ROWS` (`message`,
+    `message.summary`, `message.hit`, `chat`), or the generic row: key, ref or id · title, name or path · state,
+    status or due date · text. A record or a list is never printed as a column's value. `RowShape` is data, and `compactText(body, shape,
     options)` is pure, for an app that prints its own answers.
   - What a command prints without `renderAnswer` stays JSON under `--compact`.
 

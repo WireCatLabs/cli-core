@@ -27,6 +27,7 @@ import { AUTHORITY_KEY, BOT_API_KEY, isBotApi, keyForCommand } from "../sends/pe
 import { logParsedArgv, logVersion } from "./argv-log.js"
 import { commandAvailability } from "./command-availability.js"
 import { commandPathOf } from "./command-contract.js"
+import { entityRows, type RowTable } from "./compact.js"
 import { type BaseEnvironment, outputFor, provide } from "./context.js"
 import { refuseByCommandPermissions, refuseWriteBeforeConnecting } from "./early-refusal.js"
 import {
@@ -97,6 +98,8 @@ export interface ProgramDefinition {
       >
   }
   configure?: (program: Command) => void
+  /** The app's own rows for `--compact`, by entity name; a shared entity's name is refused. */
+  rows?: RowTable
   /** The tool's pitch and "what you can do" lines on `--help` and a bare run. */
   firstScreen?: FirstScreen
   prepare?: (program: Command, environment: RunOptions) => void | Promise<void>
@@ -170,6 +173,7 @@ export const createProgram = (definition: ProgramDefinition, { out, err }: Progr
   for (const command of mounted) program.addCommand(command)
   configure?.(program)
   if (!contractsChecked.has(definition)) {
+    if (definition.rows) entityRows(definition.rows)
     assertSharedContracts(program)
     contractsChecked.add(definition)
   }
@@ -311,6 +315,7 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
     commandSignal: control.signal,
     trackCloseable: control.trackCloseable,
     app: definition.app,
+    ...(definition.rows ? { rows: definition.rows } : {}),
     platform: options.platform ?? process.platform,
     exit,
     runCommand: (words, given) => run(words, definition, given as RunOptions),

@@ -197,6 +197,51 @@ describe("compactText", () => {
   })
 })
 
+describe("footer and generic row", () => {
+  const forged = /\n|\u2028|\u202e/
+
+  it("never lets a cursor, an issue code or a step line forge a line of its own", () => {
+    const body = list([msg(1)], {
+      page: { mode: "cursor", limit: 1, has_more: true, next_cursor: "a\nb# x" },
+      next: [
+        {
+          kind: "command",
+          step: "messages.sync",
+          command: "messages sync",
+          args: {},
+          line: "chat messages sync \u202eevil\u2028# next: rm",
+          why: "fetch\n# complete: true",
+          safe_to_auto_execute: false,
+        },
+      ],
+      meta: {
+        run_id: "r1",
+        duration_ms: 1,
+        complete: false,
+        issues: [{ code: "x\n# fake" as "network_error", source: "max/500" }],
+      },
+    })
+    const text = compactText(body, message, zone)
+    const lines = text.split("\n")
+    expect(lines.slice(2).map((line) => line.split(":")[0])).toEqual(["# more", "# next", "# complete"])
+    expect(lines).toHaveLength(5)
+    for (const line of lines) expect(line).not.toMatch(forged)
+    expect(text).toContain("# more: --cursor a b# x")
+    expect(text).toContain("\\u202eevil # next: rm")
+    expect(text).toContain("(max/500: x # fake)")
+  })
+
+  it("keeps a due date in the generic row and skips a record or a list where a value is wanted", () => {
+    expect(
+      compactText(
+        list([{ id: "7", title: { nested: true }, name: "Позвонить", status: ["a"], due_at: "2026-11-03" }]),
+        GENERIC_ROW,
+        zone,
+      ),
+    ).toBe("7 · Позвонить · 2026-11-03")
+  })
+})
+
 describe("rowShapeOf", () => {
   const own: RowShape = { columns: [{ field: "tag" }] }
   const app: RowShape = { columns: [{ field: "path" }] }
@@ -275,6 +320,60 @@ describe("--compact through the program", () => {
     expect(stdout).toContain("# more: chat messages list -1001 --cursor before:1 --limit 2 --compact")
     expect(stdout).toContain("# complete: false (max/500: network_error)")
     expect(stderr).not.toContain("→")
+  })
+
+  it("draws an app's entity with the row its program declared, also nested in one thing", async () => {
+    const row: RowShape = { columns: [{ field: "key" }, { field: "label" }] }
+    const own = {
+      app,
+      rows: { project_card: row, project_note: { columns: [{ field: "id" }], text: ["body"] } },
+      commands: () => [
+        new Command("projects")
+          .addCommand(
+            annotate(
+              new Command("show").action(function (this: Command) {
+                renderAnswer(this, outputFor(this), itemOf({ key: "BOOK", notes: [{ id: "n1", body: "Позвонить" }] }))
+              }),
+              { output: { entity: "project_card" } },
+            ),
+          )
+          .addCommand(
+            annotate(
+              new Command("list").action(function (this: Command) {
+                renderAnswer(
+                  this,
+                  outputFor(this),
+                  listOf("projects list", {
+                    items: [{ key: "BOOK", label: "Клуб", extra: "x" }],
+                    limit: 1,
+                    has_more: false,
+                  }),
+                )
+              }),
+              { output: { entity: "project_card" } },
+            ),
+          ),
+      ],
+    }
+    const sectioned = { ...own, rows: { ...own.rows, project_card: { ...row, sections: { notes: "project_note" } } } }
+    const streams = captureStreams()
+    await run(["projects", "list", "--compact", "--no-record"], own, { streams, tty: false, env: process.env })
+    expect(streams.stderr.join("\n")).toBe("")
+    expect(streams.stdout.join("\n")).toBe("BOOK · Клуб")
+    const item = captureStreams()
+    await run(["projects", "show", "--compact", "--no-record"], sectioned, {
+      streams: item,
+      tty: false,
+      env: process.env,
+    })
+    expect(item.stdout.join("\n")).toBe("key: BOOK\n# notes: 1\nn1 · Позвонить")
+  })
+
+  it("refuses an app row named like a shared entity when the program is built", async () => {
+    const streams = captureStreams()
+    await expect(
+      run(["chats", "list"], { ...definition, rows: { message: { columns: [] } } }, { streams, tty: false }),
+    ).rejects.toThrow("message is cli-core's entity")
   })
 
   it.each([["--json"], ["--jsonl"], ["--json=ref"], ["--brief"]])("refuses --compact with %s", async (other) => {

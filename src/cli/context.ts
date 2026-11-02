@@ -19,6 +19,8 @@ import { type GlobalFlags, namedProfile, type ResolveOptions, type Settings } fr
 
 /** What every CLI's commands write to, when it is not the real terminal. A CLI adds its own fields. */
 export interface BaseEnvironment {
+  /** The app's own compact rows (`ProgramDefinition.rows`), for `renderAnswer`. */
+  rows?: import("./compact.js").RowTable
   discoveryAvailability?: (
     command: import("./command-availability.js").AvailabilityCommand,
   ) => import("./command-availability.js").CommandAvailability | undefined

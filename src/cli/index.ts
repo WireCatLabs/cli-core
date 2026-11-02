@@ -231,8 +231,10 @@ export {
   type RowColumn,
   type RowShape,
   type RowsResolver,
+  type RowTable,
   type RowValue,
   rowShapeOf,
+  rowsOfEntity,
   SHARED_ROWS,
 } from "./compact.js"
 export { refuseUnknownKey } from "./config-command.js"
