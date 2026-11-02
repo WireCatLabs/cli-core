@@ -4,8 +4,9 @@ import { zonedMoment } from "@wirecat/cli-base/query"
 import type { EntryInput, EventStore, StoredCalendar, StoredEntry, StoredParticipant } from "../meetings/index.js"
 import type { AppIdentity } from "../ports/app.js"
 import type { Warn } from "../runs/events.js"
-import { type Asker, type GuardRequest, type GuardSettings, guardFor, type SendGuard } from "../sends/guard.js"
+import { type Asker, type GuardSettings, guardFor, type SendGuard } from "../sends/guard.js"
 import { guardedWrite } from "../sends/guarded.js"
+import { keyedGuard } from "../sends/keyed-guard.js"
 import { DEFAULT_PERMISSIONS, levelFor, type PermissionKey } from "../sends/permissions.js"
 import { newOperationId } from "../sends/send-id.js"
 import { isFeedCalendar } from "./feeds.js"
@@ -140,55 +141,23 @@ export const draftOf = (
   return patch
 }
 
-/**
- * Over the profile's guard, the write's other keys are checked too. A key that refuses is refused before anything is
- * asked, so nobody answers yes to a write that a stricter key then stops, and one answer covers every key of a write.
- */
+/** The profile's guard over the write's main key and its other keys (`keyedGuard`). */
 const writeGuard = (context: WriteContext, extra: readonly PermissionKey[]): SendGuard => {
   const settings = context.writes.settings()
   const defaults = { ...DEFAULT_PERMISSIONS, ...CALENDAR_WRITE_DEFAULTS, ...settings.permissionDefaults }
-  let question: string | undefined
-  let answered = false
-  const guard = guardFor(
-    context.writes.app,
-    { ...settings, permissionDefaults: defaults },
-    context.writes.warn ?? (() => {}),
-    context.writes.env,
-    async (key, request) => {
-      if (answered) return
-      await context.ask(question ?? key, request)
-      answered = true
-    },
+  return keyedGuard(
+    (ask) =>
+      guardFor(
+        context.writes.app,
+        { ...settings, permissionDefaults: defaults },
+        context.writes.warn ?? (() => {}),
+        context.writes.env,
+        ask,
+      ),
+    context.ask,
+    (key) => levelFor(settings.permissions, key, defaults).level,
+    extra,
   )
-  const probes = new WeakMap<GuardRequest, GuardRequest[]>()
-  // A probe is checked and never journaled or counted: the write itself holds the one journal line.
-  const all = (request: GuardRequest) => {
-    let found = probes.get(request)
-    if (!found) {
-      found = extra.map((key) => ({ chatId: null, kind: "read" as const, key }))
-      probes.set(request, found)
-    }
-    return [request, ...found]
-  }
-  return {
-    ask: async (request) => {
-      const levelOf = ({ key }: GuardRequest) => levelFor(settings.permissions, key as PermissionKey, defaults).level
-      const refused = all(request).find((one) => ["deny", "readonly"].includes(levelOf(one)))
-      if (refused) guard.check(refused, { reserve: false })
-      // The one question names every key that asks, so a yes to the write is never a silent yes to mailing people.
-      question = all(request)
-        .filter((one) => levelOf(one) === "ask")
-        .map(({ key }) => key)
-        .join(" and ")
-      for (const one of all(request)) await guard.ask?.(one)
-    },
-    check: (request, options) => {
-      for (const one of all(request).slice(1)) guard.check(one, { reserve: false })
-      guard.check(request, options)
-    },
-    ...(guard.reserve ? { reserve: guard.reserve } : {}),
-    record: (entry) => guard.record(entry),
-  }
 }
 
 const notifyOf = (context: WriteContext, choice: boolean | undefined, others: boolean): boolean => {

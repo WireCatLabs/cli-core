@@ -441,31 +441,50 @@ export const peopleAnswer = async (
 }
 
 /** Open link choices, with each candidate event's title and time so the owner can pick. */
-export const reviewsAnswer = async (store: EventStore) => {
-  const open = (await store.reviews({ status: "open" })).filter(({ linkableType }) => linkableType === "calendar_entry")
-  return {
-    ...listed(
-      await Promise.all(
-        open.map(async (review: LinkReview) => ({
-          id: String(review.id),
-          entry_id: String(review.linkableId),
-          reason: review.reason,
-          candidates: await Promise.all(
-            review.candidates.map(async (id) => {
-              const event = review.entityType === "event" ? (await store.event(id))?.event : undefined
-              return {
-                ref: `event:${id}`,
-                title: event?.title ?? null,
-                starts_at: iso(event?.startsAt ?? null),
-              }
-            }),
-          ),
-        })),
-      ),
-    ),
-    // Link choices are kept per store, not per account, so every calendar account's are listed.
-    accounts: "all",
+/**
+ * Open link choices on calendar copies. Link choices are kept per store, so without `accountIds` every account's are
+ * listed; with them, only choices about those accounts' copies, and a candidate event none of them holds a copy of is
+ * shown by its ref alone.
+ */
+export const reviewsAnswer = async (store: EventStore, accountIds?: readonly number[]) => {
+  const scope =
+    accountIds &&
+    new Set((await Promise.all(accountIds.map((id) => calendarIds(store, id)))).flatMap((ids) => [...ids]))
+  const open = (await store.reviews({ status: "open" })).filter(
+    ({ linkableType, calendarId }) =>
+      linkableType === "calendar_entry" && (!scope || (calendarId !== null && scope.has(calendarId))),
+  )
+  const shown = async (review: LinkReview, id: number) => {
+    const details = review.entityType === "event" ? await store.event(id) : undefined
+    if (!details || (scope && !details.entries.some(({ calendarId }) => scope.has(calendarId)))) return undefined
+    return details.event
   }
+  return listed(
+    await Promise.all(
+      open.map(async (review: LinkReview) => ({
+        id: String(review.id),
+        entry_id: String(review.linkableId),
+        reason: review.reason,
+        candidates: await Promise.all(
+          review.candidates.map(async (id) => {
+            const event = await shown(review, id)
+            return { ref: `event:${id}`, title: event?.title ?? null, starts_at: iso(event?.startsAt ?? null) }
+          }),
+        ),
+      })),
+    ),
+  )
+}
+
+/**
+ * The calendar accounts the store holds, by `provider:account`: the stored accounts with a calendar, and the running
+ * one. What `links review` names when it reads every account (WC-ACCT-9).
+ */
+export const calendarAccountNames = async (store: EventStore, messages: MessageStore, running: AccountKey) => {
+  const names = new Set([nameOf(running)])
+  for (const one of await messages.accounts.storedAccounts())
+    if ((await store.calendars(one.id)).length) names.add(nameOf(one))
+  return [...names]
 }
 
 export const resolveAnswer = async (

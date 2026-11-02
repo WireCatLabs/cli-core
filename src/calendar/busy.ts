@@ -7,6 +7,7 @@ import {
   queryFieldsOf,
   zonedMoment,
 } from "@wirecat/cli-base/query"
+import { clockMeta, type Issue } from "@wirecat/cli-base/standards"
 import { LIST_QUERY_GUIDE, listQuery, nativeTermLists, type QueryWords, typedQuery } from "../cli/list-query.js"
 import type { EventStore, StoredCalendar } from "../meetings/index.js"
 import { calendarBusy } from "./cli/answers.js"
@@ -205,7 +206,13 @@ export const busyAnswer = async (
     ...query.calendars.map((calendar) => ({ calendar: String(calendar.id), ...missing(calendar.externalId) })),
     ...query.people.map((person) => ({ person, ...missing(person) })),
   ]
-  const unknown = rows.filter(({ error }) => error !== undefined).map(({ id }) => id)
+  const failed = rows.filter(({ error }) => error !== undefined)
+  const unknown = failed.map(({ id }) => id)
+  const issues: Issue[] = failed.map((row) => ({
+    code: "provider_error",
+    reason: "busy.unanswered",
+    source: "person" in row ? `person:${row.person}` : `calendar:${row.calendar}`,
+  }))
   return {
     ...times(query.window),
     timezone: options.zone,
@@ -225,5 +232,11 @@ export const busyAnswer = async (
           ...(unknown.length ? { unknown } : {}),
         }
       : {}),
+    // Busy times missing for one calendar or person make every free stretch a guess, slots or not.
+    meta: {
+      complete: issues.length === 0,
+      ...(issues.length ? { issues } : {}),
+      ...clockMeta(options.now, options.zone),
+    },
   }
 }

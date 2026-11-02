@@ -22,6 +22,7 @@ import { eventPreparation, nextMeeting, PREPARE_MESSAGES } from "../prepare.js"
 import {
   accountsMeta,
   CALENDAR_UNTRUSTED_FIELDS,
+  calendarAccountNames,
   calendarIn,
   calendarItem,
   EVENTS_QUERY,
@@ -61,6 +62,7 @@ import {
   type WriteContext,
 } from "../writes.js"
 import { CALENDARS_QUERY, declareCalendarAnswers, PEOPLE_QUERY } from "./answers.js"
+import { localTimesView } from "./local-times.js"
 import { addRemind } from "./remind.js"
 import { addSearchAll } from "./search-all.js"
 
@@ -95,8 +97,11 @@ export interface CalendarCommandDeps {
   feeds?: CalendarFeeds
   /** After `sync --embed`: embeds new events for search by meaning (`embedEvents`), as drive's `sync --embed`. */
   embed?: (max: number) => Promise<{ model: string; embedded: number; left: boolean }>
-  /** `view` is the text a person reads in place of the default rendering, where a command has one. */
-  write: (value: unknown, format: "json" | "jsonl" | "text", view?: () => string) => void
+  /**
+   * `view` is the text a person reads in place of the default rendering: the times on the zone's wall clock, and the
+   * zone named. It takes the host's own body (`renderAnswer` passes it) or, without one, renders `value`.
+   */
+  write: (value: unknown, format: "json" | "jsonl" | "text", view?: (body?: unknown) => string) => void
   /** A line for the person beside the answer, never in it: which accounts `search all` read and which it skipped. */
   note?: (text: string) => void
   /**
@@ -113,7 +118,10 @@ export interface CalendarCommandDeps {
   writeFile?: (path: string, content: string) => Promise<void>
   /** Reads `events import`'s file; without it, and the writer's `import`, there is no `events import`. */
   readFile?: (path: string) => Promise<string>
-  /** A profile lock pins the process (WC-ACCT-5): `events list --source` may then read only the profile's account. */
+  /**
+   * A profile lock pins the process (WC-ACCT-5): `events list --source` may then read only the profile's account, and
+   * `links review` lists only its choices.
+   */
   locked?: boolean
 }
 
@@ -166,7 +174,9 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
   const zone = () => timezoneOf(deps.timezone)
   const print = (value: unknown, command: Command) => {
     const opts = command.optsWithGlobals()
-    deps.write(value, opts.json ? "json" : opts.jsonl ? "jsonl" : "text")
+    deps.write(value, opts.json ? "json" : opts.jsonl ? "jsonl" : "text", (body) =>
+      localTimesView(body ?? value, zone(), outputFor(command).color),
+    )
   }
   const messages = (what: string) => {
     if (!deps.messages) throw new CliError("configuration_error", `${what} needs the shared store`)
@@ -284,7 +294,7 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
   if (deps.freeBusy)
     example(
       withQuery(
-        annotate(calendars.command("busy"), { effects: REMOTE_READ, offline: false }).description(
+        annotate(calendars.command("busy"), { effects: REMOTE_READ, offline: false, partial: true }).description(
           "when calendars and people are taken, asked of the provider and not stored; with --duration-minutes, " +
             "the free stretches they share",
         ),
@@ -436,7 +446,7 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
       ),
       EVENTS_QUERY,
     ).addHelpText("after", EVENTS_QUERY_NOTE),
-    "events list starts_at>=2026-11-02 starts_at<2026-11-07 --json",
+    "events list 'starts_at:[2026-11-02 TO 2026-11-07}' --json",
     "events list ends_at>=today person:ana@example.com",
     "events list overlapping:true --source all",
   )
@@ -489,9 +499,9 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
     ...(deps.writeFile
       ? [
           "events export id:42 --output planning.ics",
-          "events export starts_at:[2026-11-02 TO 2026-11-09} NOT event_type:birthday --output week.ics",
+          "events export 'starts_at:[2026-11-02 TO 2026-11-09}' NOT event_type:birthday --output week.ics",
         ]
-      : ["events export id:42", "events export starts_at:[2026-11-02 TO 2026-11-09} NOT event_type:birthday"]),
+      : ["events export id:42", "events export 'starts_at:[2026-11-02 TO 2026-11-09}' NOT event_type:birthday"]),
   )
   // Not over MCP: an agent would choose where on the owner's disk to write. It gets the text in the answer.
   if (deps.writeFile)
@@ -715,7 +725,13 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
     ),
     "links review --json",
   ).action(async (_opts: unknown, command: Command) => {
-    print(eachMarked(await reviewsAnswer(deps.store), REVIEW_UNTRUSTED), command)
+    // Locked to a profile (WC-ACCT-5), or with no shared store to name the others by, only the profile's own account.
+    const own = deps.locked || !deps.messages
+    const answer = await reviewsAnswer(deps.store, own ? [deps.accountId] : undefined)
+    const accounts = own
+      ? [`${deps.account.provider}:${deps.account.account}`]
+      : await calendarAccountNames(deps.store, messages("links review"), deps.account)
+    print({ ...eachMarked(answer, REVIEW_UNTRUSTED), meta: { accounts, complete: true } }, command)
   })
   example(
     annotate(links.command("resolve"), { effects: LOCAL_WRITE })
