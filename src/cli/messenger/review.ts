@@ -73,7 +73,7 @@ export const reviewCommand = (messenger: Messenger): Command =>
       }
       const saved = options.new
         ? checkPoints(messenger.app, {
-            command: pointsOf(this, "review"),
+            command: pointsOf(this, "review", messenger.app),
             profile: settings.profile,
             env,
             firstLookMs: REVIEW_DAYS * 86_400_000,

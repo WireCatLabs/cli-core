@@ -7,6 +7,22 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`review` for mail CLIs** (`mailReadCommands`): every stored email, both sides, in threads that changed since a
+  point, in messenger `review`'s item shape; `--new` keeps a point per mailbox, `--unanswered [duration]` keeps
+  threads owed an answer, `--waiting [duration]` threads where the owner wrote last, `--all` adds mail sent to many,
+  lists, envelopes and suspect senders. It reads the store only, cuts at the last finished sync and opens no task.
+  `reviewMail`, `mailTurn`, `isPersonal`, `MAIL_REVIEW_STEPS` and `store.mail.threadActivity` are exported;
+  `store.mail.threadHits` takes a received-time window.
+- **`tasks agenda` over an email account fills `owed`, `waiting` and `stale`** from its threads, with the same rule
+  of whose turn a thread is as mail `review`; before, they were empty and `stale` true.
+
+### Fixed
+
+- **A scheduled run's `inbox --new` and `review --new` keep their own point** (`schedule-<name>-review`), so a
+  schedule no longer moves the owner's. An agent over MCP keeps its own, as before.
+
 ## 0.553.0 — 02.11.2026
 
 ### Added

@@ -7,6 +7,7 @@ import type { Stemmer, Stemmers } from "../../search/stem.js"
 import type { CacheDatabase, SqlValue } from "../driver.js"
 import { fold, normalize } from "../normalize.js"
 import type { ConversationSummary, StoredHit } from "../types.js"
+import { type MailActivityStore, mailActivity, threadEmailIds } from "./email-activity.js"
 import {
   chunkAttachments,
   drainEmailIndex,
@@ -285,7 +286,7 @@ export interface SenderScore {
 }
 
 /** Mail in tables of its own: threads, emails, recipients and mailboxes, keyed by account and Message-ID. */
-export interface MailStore extends PartialMailStore {
+export interface MailStore extends PartialMailStore, MailActivityStore {
   saveThread(input: ThreadSave): Promise<ThreadDetails>
   /** Several threads and sync state in one transaction: a slice of mail commits with its resume point, or not at all. */
   saveThreads(inputs: ThreadSave[], states?: SyncStateSave[]): Promise<ThreadDetails[]>
@@ -351,8 +352,8 @@ export interface MailStore extends PartialMailStore {
   chunksToEmbed(model: string, options: { after?: string; limit: number }): Promise<{ hash: string; text: string }[]>
   /** Live emails of one account by Message-ID, each placed in its thread; an unknown one is left out. */
   inThreads(accountId: number, externalIds: string[]): Promise<EmailInThread[]>
-  /** A thread's live emails, oldest first, as search hits: whole text, people, labels and locator. */
-  threadHits(accountId: number, threadExternalId: string): Promise<StoredHit[]>
+  /** A thread's live emails, oldest first, as search hits; `window` keeps those received in (after, until], in ms. */
+  threadHits(accountId: number, thread: string, window?: { after?: number; until?: number }): Promise<StoredHit[]>
   /** The emails of one account nearest in meaning to `query`, each by its best chunk, best first. */
   nearest(
     model: string,
@@ -860,6 +861,7 @@ export const mailStoreOver = (
       }))
   },
   ...partialMail(database),
+  ...mailActivity(database),
   async emailFacts(filter = {}) {
     const [where, params] = emailWhere(filter)
     return database
@@ -1043,16 +1045,8 @@ export const mailStoreOver = (
       return place ? [{ ...place, score }] : []
     })
   },
-  async threadHits(accountId, threadExternalId) {
-    const ids = database
-      .prepare(
-        `SELECT e.id FROM emails e JOIN email_threads t ON t.id = e.email_thread_id
-          WHERE t.account_id = ? AND t.external_id = ? AND e.deleted_at IS NULL
-          ORDER BY coalesce(e.sent_at, e.received_at), e.id`,
-      )
-      .all(accountId, threadExternalId)
-      .map(({ id }) => Number(id))
-    return emailHitsByPk(database, ids)
+  async threadHits(accountId, thread, window) {
+    return emailHitsByPk(database, threadEmailIds(database, accountId, thread, window))
   },
   async inThreads(accountId, externalIds) {
     const id = database.prepare("SELECT id FROM emails WHERE account_id = ? AND external_id = ? AND deleted_at IS NULL")

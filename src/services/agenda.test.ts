@@ -282,3 +282,42 @@ it("finds tagged tasks and agenda items by every inherited name after consolidat
     await store.close()
   }
 })
+
+it("fills owed and waiting for an email account from its threads, by the mail rule of whose turn it is", async () => {
+  const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "agenda-mail-")), "m.db") })
+  const mailbox = { provider: "email", account: "me@example.com" }
+  try {
+    const accountId = await store.accounts.saveAccount(mailbox, { name: null })
+    const ann = { address: "ann@example.com", name: "Ann" }
+    const me = { address: mailbox.account, name: null }
+    const email = (id: string, days: number, fields: Record<string, unknown> = {}) => ({
+      externalId: `<${id}@example.com>`,
+      subject: id,
+      from: ann,
+      to: [me],
+      sentAt: now - days * DAY,
+      receivedAt: now - days * DAY,
+      bodyText: id,
+      ...fields,
+    })
+    const thread = (id: string, ...emails: ReturnType<typeof email>[]) =>
+      store.mail.saveThread({ accountId, externalId: id, now, emails })
+    await thread("owed", email("ask", 3))
+    await thread("cc-only", email("fyi", 3, { to: [{ address: "bob@example.com", name: null }], cc: [me] }))
+    await thread("bulk", email("sale", 3, { mailboxes: [{ externalId: "memo:bulk", name: "bulk", kind: "bulk" }] }))
+    await thread("waiting", email("q", 10), email("mine", 8, { from: me, to: [ann], outgoing: true }))
+    await thread("too-new", email("hi", 0.1))
+    await store.sync.setSyncState(mailbox, "mail_coverage", JSON.stringify({ until: daysAgo(0), state: "window" }))
+
+    const shown = await agendaService(storeOnlyDeps(store, mailbox, { app }), () => now).show({ query: kinds("") })
+
+    expect(shown.owed.map(({ chatId }) => chatId)).toEqual(["owed"])
+    expect(shown.waiting.map(({ chatId }) => chatId)).toEqual(["waiting"])
+    expect(shown.unsynced).toEqual([])
+    expect(shown.stale).toBe(false)
+    expect(shown.owed[0]).toMatchObject({ title: "ask", kind: "dialog", lastMessage: expect.stringContaining("ask") })
+    expect(v.safeParse(agendaEntity, agendaItem(shown)).success).toBe(true)
+  } finally {
+    await store.close()
+  }
+})

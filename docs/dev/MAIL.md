@@ -97,10 +97,25 @@ each attachment, cut at `ATTACHMENT_CHARS` unless `full`. memo's `search mail` a
 commands call these two, so the answers match.
 
 `@wirecat/cli-core/mail/cli` mounts the commands on a mail CLI: `mailReadCommands({ app, read })` gives `search
-messages`, `messages show` and `conversations list|show`. `read(command, work)` opens the shared store for one run and
+messages`, `review`, `messages show` and `conversations list|show`. `read(command, work)` opens the shared store for one run and
 names the profile's mailbox; every command reads that mailbox alone and refuses another one's reference. A thread is a
 conversation, `chat:email/<address>/<thread>`; `conversations list` filters on `subject`, `emails_count` and
 `last_email_at` in SQL (`THREAD_COLUMNS`). The store keeps text, not the RFC 5322 source, so there is no `--raw`.
+
+## Review
+
+`review` is the messengers' `review` over the stored mail (`reviewMail`, `src/mail/review.ts`): a thread is a chat, an
+email a message, and the answer has the same items, `meta.complete` and `--new` points (`checkPoints`, one file per
+mailbox and reader: the owner, `mcp-review`, `schedule-<name>-review` under `<PREFIX>_SCHEDULED`). It reads the store
+only and opens no task. Threads are picked by `store.mail.threadActivity` over `email_threads.last_email_at`, so no
+email index is needed; it cuts at `mail_coverage.until`, the start of the last finished sync, so mail a running sync
+has not stored yet is not passed. A complete `--new` run moves the mailbox's start to its end and drops the thread
+points behind it.
+
+Whose turn a thread is, owed or waiting, is `mailTurn` (`src/mail/owed.ts`), the one rule `review --unanswered`,
+`--waiting` and `tasks agenda` over an email account share: owed when the newest email that is not a draft came in,
+names the owner in To and is personal mail (`isPersonal`: not bulk, no List-Id, not an envelope, sender not demoted);
+waiting when the owner wrote it.
 
 ## Sync state
 

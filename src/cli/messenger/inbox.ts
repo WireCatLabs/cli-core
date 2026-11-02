@@ -71,7 +71,7 @@ export const inboxCommand = (messenger: Messenger): Command =>
       const saved =
         fresh && since === undefined
           ? checkPoints(app, {
-              command: pointsOf(this, "inbox"),
+              command: pointsOf(this, "inbox", app),
               profile: settings.profile,
               env,
               firstLookMs: FIRST_LOOK_MS,
