@@ -223,6 +223,18 @@ export {
   type SavedRunSettings,
 } from "./command-runs.js"
 export { CONTRACT } from "./commands-command.js"
+export {
+  type CompactOptions,
+  compactText,
+  entityRows,
+  GENERIC_ROW,
+  type RowColumn,
+  type RowShape,
+  type RowsResolver,
+  type RowValue,
+  rowShapeOf,
+  SHARED_ROWS,
+} from "./compact.js"
 export { refuseUnknownKey } from "./config-command.js"
 export {
   type ConfigIssue,

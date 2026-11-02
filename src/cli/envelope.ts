@@ -1,6 +1,7 @@
 import { exitCodeOfAnswer, type Renderer, type RenderFormat, type Streams } from "@wirecat/cli-base"
 import { metaOf } from "@wirecat/cli-base/commands"
 import {
+  COMPACT_FLAG,
   type ItemEnvelope,
   itemEnvelopeSchema,
   jsonlOf,
@@ -16,6 +17,7 @@ import {
 import type { Command } from "commander"
 import * as v from "valibot"
 import { currentRun } from "../runs/scope.js"
+import { compactText, rowShapeOf, TEXT_CHARS } from "./compact.js"
 import { environmentOf, setExitCode } from "./context.js"
 import { withoutProviderRefs } from "./provider-refs.js"
 import { nextStep, rootOf, runnable, stepLine, withLines, withSafety } from "./steps.js"
@@ -181,7 +183,17 @@ export interface AnswerOutput {
   renderer: Renderer
   format: RenderFormat
   streams: Streams
+  /** One line per item from the same answer (WC-OUT-24); an agent's run keeps JSON. */
+  compact?: boolean
+  /** With `compact`: each text whole, not cut. */
+  full?: boolean
 }
+
+/** The steps a compact answer prints, each rerunning in the compact form the caller chose. */
+const compactSteps = (root: Command, steps: readonly NextStep[]): NextStep[] =>
+  steps.map((step) =>
+    step.kind === "command" ? { ...step, line: `${step.line ?? stepLine(root, step)} ${COMPACT_FLAG}` } : step,
+  )
 
 /** An answer as JSON lines: one line per item, then the end line. One thing is a list of one that has no more. */
 const linesOf = <T>(body: ListEnvelope<T> | ItemEnvelope<T>): string =>
@@ -202,7 +214,7 @@ export const jsonlRecords = <T>(body: Body<T>): object[] =>
  */
 export const renderAnswer = <T>(
   command: Command,
-  { renderer, format, streams }: AnswerOutput,
+  { renderer, format, streams, compact, full }: AnswerOutput,
   body: Body<T>,
   view?: (body: Body<T>) => string,
 ): void => {
@@ -213,13 +225,18 @@ export const renderAnswer = <T>(
   const kept = withoutProviderRefs({ ...body, ...(next.length > 0 ? { next } : {}) }) as Body<T>
   if (next.length === 0) delete (kept as { next?: unknown }).next
   const whole = sealed(kept) as ListEnvelope<T> | ItemEnvelope<T>
-  if (format === "json") renderer.result(whole)
+  const drawn = compact && !environmentOf(command).agent
+  if (drawn) {
+    const lined = whole.next ? { ...whole, next: compactSteps(root, whole.next) } : whole
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
+    streams.data(compactText(lined, rowShapeOf(command), { timezone, textChars: full ? 0 : TEXT_CHARS }))
+  } else if (format === "json") renderer.result(whole)
   else if (format === "jsonl") for (const line of linesOf(whole).split("\n")) streams.data(line)
   else if (view) streams.data(view(kept))
   else renderer.result("items" in kept ? kept.items : kept.item)
   const code = exitCodeOfAnswer(whole.meta, metaOf(command).partial === true)
   if (code !== 0) setExitCode(command, code)
-  if (format === "json") return
+  if (drawn || format === "json") return
   for (const step of next)
     renderer.note(step.kind === "command" ? `→ ${step.why}: ${stepLine(root, step)}` : `→ ${step.why}`)
 }

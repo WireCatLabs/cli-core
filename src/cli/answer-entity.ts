@@ -2,15 +2,19 @@ import { annotate, metaOf } from "@wirecat/cli-base/commands"
 import type { Command } from "commander"
 import type * as v from "valibot"
 import { ENTITIES, type EntityName } from "../entities/index.js"
+import type { RowShape } from "./compact.js"
 
-const schemas = new WeakMap<Command, { name: string; schema: v.GenericSchema; project?: v.GenericSchema }>()
+const schemas = new WeakMap<
+  Command,
+  { name: string; schema: v.GenericSchema; project?: v.GenericSchema; row?: RowShape }
+>()
 
 /** Provider-specific wire fields must not redefine an entity shared by every CLI. */
 export const answerEntity = (
   command: Command,
   name: string,
   schema: v.GenericSchema,
-  options: { project?: v.GenericSchema } = {},
+  options: { project?: v.GenericSchema; row?: RowShape } = {},
 ): Command => {
   if (Object.hasOwn(ENTITIES, name)) throw new Error(`${name} is a shared entity; use its existing schema`)
   if (!/^[a-z][a-z0-9_]*$/.test(name)) throw new Error("an answer entity needs a lowercase name")
@@ -35,4 +39,10 @@ export const answerEntitySchema = (command: Command | undefined): v.GenericSchem
 export const answerProjectionSchema = (command: Command | undefined): v.GenericSchema | undefined => {
   const own = command && schemas.get(command)
   return own && metaOf(command as Command).output?.entity === own.name ? own.project : undefined
+}
+
+/** The row a command declared with `answerEntity(…, { row })`, while it still answers that entity. */
+export const answerRow = (command: Command | undefined): RowShape | undefined => {
+  const own = command && schemas.get(command)
+  return own && metaOf(command as Command).output?.entity === own.name ? own.row : undefined
 }

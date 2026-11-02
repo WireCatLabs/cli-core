@@ -1,7 +1,7 @@
 import { CliError, type KeyringStore, type Renderer, type RenderFormat, type Streams } from "@wirecat/cli-base"
 import { metaOf } from "@wirecat/cli-base/commands"
-import type { ErrorObject } from "@wirecat/cli-base/standards"
-import type { Command } from "commander"
+import { COMPACT_FLAG, type ErrorObject } from "@wirecat/cli-base/standards"
+import { type Command, Option } from "commander"
 import { type Deadline, type RunBudget, runBudget } from "../background/budget.js"
 import type { MessageEvent } from "../domain/models.js"
 import { resolveOutput } from "../output.js"
@@ -151,11 +151,23 @@ export const secretInputOf = (command: Command): Pick<SecretInput, "input" | "ou
   return { ...(stdin ? { input: stdin } : {}), ...(stderr ? { output: stderr } : {}) }
 }
 
+const detailOf = ({ brief, full }: { brief?: boolean; full?: boolean }): { hitDetail?: "brief" | "full" } => {
+  if (brief && full) throw new CliError("validation_error", "--brief and --full ask for opposite things — pick one")
+  return brief ? { hitDetail: "brief" } : full ? { hitDetail: "full" } : {}
+}
+
+const COMPACT_KEY = new Option(COMPACT_FLAG).attributeName()
+
+/** Whether the run asked for one line per item (WC-OUT-24). */
+export const compactOf = (command: Command): boolean => command.optsWithGlobals()[COMPACT_KEY] === true
+
 /** For the commands that print but never need settings or a connection. */
 export const outputFor = (command: Command) => {
   const { streams, tty, env, agent } = environmentOf(command)
   return resolveOutput({
     ...command.optsWithGlobals(),
+    ...detailOf(command.optsWithGlobals<{ brief?: boolean; full?: boolean }>()),
+    compact: compactOf(command),
     ...(agent ? { capture: agent.result } : {}),
     ...(streams ? { streams } : {}),
     ...(env ? { env } : {}),
@@ -170,6 +182,9 @@ export interface BaseContext {
   /** Whether the human view may use colour — for views that print their own text. */
   color: boolean
   streams: Streams
+  /** One line per item; `renderAnswer` draws it, `full` keeps each text whole. */
+  compact?: boolean
+  full?: boolean
   env: NodeJS.ProcessEnv
   keyring?: KeyringStore
   /**
@@ -187,11 +202,6 @@ export interface BaseContext {
 
 type Resolve = (flags: GlobalFlags, options?: ResolveOptions) => Settings
 
-const detailOf = ({ brief, full }: { brief?: boolean; full?: boolean }): { hitDetail?: "brief" | "full" } => {
-  if (brief && full) throw new CliError("validation_error", "--brief and --full ask for opposite things — pick one")
-  return brief ? { hitDetail: "brief" } : full ? { hitDetail: "full" } : {}
-}
-
 /** Everything a command needs that no messenger decides, resolved once. */
 export const baseContext = (command: Command, resolveSettings: Resolve): BaseContext => {
   const environment = environmentOf(command)
@@ -202,9 +212,10 @@ export const baseContext = (command: Command, resolveSettings: Resolve): BaseCon
     overrides.length > 0 ? { ...flags, permission: [...overrides, ...(flags.permission ?? [])] } : flags,
     { env },
   )
-  const { renderer, format, color, streams } = resolveOutput({
+  const { renderer, format, color, streams, compact, full } = resolveOutput({
     ...settings,
     env,
+    compact: compactOf(command),
     ...detailOf(command.optsWithGlobals<{ brief?: boolean; full?: boolean }>()),
     ...(command.optsWithGlobals<{ fields?: string }>().fields
       ? { fields: command.optsWithGlobals<{ fields?: string }>().fields }
@@ -222,6 +233,7 @@ export const baseContext = (command: Command, resolveSettings: Resolve): BaseCon
     format,
     color,
     streams,
+    ...(compact ? { compact, full: full === true } : {}),
     env,
     ...(environment.keyring ? { keyring: environment.keyring } : {}),
     // The deadline inside the record, so a timeout finishes the run as failed rather than leaving it running.

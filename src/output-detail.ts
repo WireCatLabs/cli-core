@@ -11,20 +11,25 @@ export const DETAILS = ["brief", "full"] as const
 const RARELY_SET = ["editedAt", "replyTo", "forwardedFrom", "reactions"]
 
 const BRIEF = ["locator", "chatTitle", "timestamp", "senderName", "excerpt", "score"]
+/** A messenger answer's hit (`message.hit`): already cut to an excerpt, so only `brief` changes it. */
+const SNAKE_BRIEF = ["ref", "chat_title", "timestamp", "sender_name", "excerpt", "score"]
 
 type Item = Record<string, unknown>
 
+const isRecord = (value: unknown): value is Item => typeof value === "object" && value !== null
+
+const isSnakeHit = (value: unknown): boolean =>
+  isRecord(value) && typeof value.ref === "string" && typeof value.excerpt === "string"
+
 const isHit = (value: unknown): value is Item =>
-  typeof value === "object" &&
-  value !== null &&
-  typeof (value as Item).locator === "string" &&
-  typeof (value as Item).text === "string"
+  isSnakeHit(value) || (isRecord(value) && typeof value.locator === "string" && typeof value.text === "string")
+
+const picked = (hit: Item, keys: readonly string[]): Item =>
+  Object.fromEntries(keys.flatMap((key) => (hit[key] === undefined || hit[key] === null ? [] : [[key, hit[key]]])))
 
 const shaped = (hit: Item, detail: Detail): Item => {
-  if (detail === "brief")
-    return Object.fromEntries(
-      BRIEF.flatMap((key) => (hit[key] === undefined || hit[key] === null ? [] : [[key, hit[key]]])),
-    )
+  if (isSnakeHit(hit)) return detail === "brief" ? picked(hit, SNAKE_BRIEF) : hit
+  if (detail === "brief") return picked(hit, BRIEF)
   const { text, providerMetadata, ...rest } = hit
   for (const key of RARELY_SET) if (rest[key] === null) delete rest[key]
   // An email's people are in `email`; the provider block repeated its cc and bcc.

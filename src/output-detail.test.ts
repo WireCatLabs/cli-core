@@ -31,6 +31,33 @@ describe("atDetail", () => {
     })
   })
 
+  it("cuts a messenger search hit, written in snake_case with a ref, to its brief fields", () => {
+    const found = {
+      ref: "msg:telegram/1/7/1",
+      chat_title: "Book club",
+      timestamp: "2026-01-01T10:00:00.000Z",
+      sender_name: "Alice Example",
+      sender_is_me: false,
+      excerpt: "Which chapter next?",
+      matched_in: "text",
+      score: 2.5,
+      found_in: "archive",
+    }
+    expect(atDetail({ items: [found] }, "brief")).toEqual({
+      items: [
+        {
+          ref: found.ref,
+          chat_title: "Book club",
+          timestamp: found.timestamp,
+          sender_name: "Alice Example",
+          excerpt: "Which chapter next?",
+          score: 2.5,
+        },
+      ],
+    })
+    expect(atDetail({ items: [found] })).toEqual({ items: [found] })
+  })
+
   it("leaves a result with no found messages, and full, unchanged", () => {
     const chats = { items: [{ id: "7", title: "Book club" }] }
     expect(atDetail(chats, "brief")).toEqual(chats)

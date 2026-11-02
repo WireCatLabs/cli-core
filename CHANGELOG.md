@@ -9,12 +9,35 @@ shape of this file.
 
 ### Added
 
+- **`--compact`: one line per item for an agent, from the same answer `--json` prints.** `messages list <chat>
+  --compact` prints `#<id> · 10-01 09:12 · Анна · <text>` under one header line that names the shared ref prefix
+  (`ref: msg:max/500/-1001/<id>`), what every row has in common (the chat's title), the date span and the zone. Rows
+  from several chats keep their whole refs. Text stays on one line with control and direction characters made
+  visible, and is cut at 400 characters with `…(+N)`; `--full` keeps it whole. The paging, `missing`, the next steps
+  and an incomplete answer follow as `# more:`, `# missing:`, `# next:` and `# complete: false` lines on stdout, and
+  each command line in them carries `--compact` again. On 1 000 messages of one chat it is about 48 % of the JSON
+  bytes; the texts alone are 40 %. `--compact` with `--json`, `--json=…`, `--jsonl` or `--brief` fails with
+  `validation_error` (`output.conflict`); it never prompts, and exits with the code JSON would. MCP keeps JSON.
+  - **Every command that answers through `renderAnswer` gets it.** A command draws with its own row
+    (`answerEntity(cmd, name, schema, { row })`), its app's (`entityRows({ name: shape })`, passed to `rowShapeOf`),
+    the shared one in `SHARED_ROWS` (`message`, `message.summary`, `message.hit`, `chat`), or the generic row: key, ref
+    or id · title, name or path · state or status · text. `RowShape` is data, and `compactText(body, shape,
+    options)` is pure, for an app that prints its own answers.
+  - What a command prints without `renderAnswer` stays JSON under `--compact`.
+
 - **The first run of a new version refreshes the agent instructions an older version installed**: each `SKILL.md`
   copy whose `skill status` is `stale` (Claude Code's, `~/.agents/skills`, and Hermes's own copy) is rewritten once,
   with one line on stderr — `Updated the tg instructions for Claude Code and other agents to 0.112.0`. A missing copy
   stays missing, an `unversioned` one (no released `skill install` wrote it) and a symlink are left as they are, and a
   failure is one note, never a failed command. The version tried is kept in `<state>/skill-refresh.json`. Off in a
   moved run, under vitest, during `skill`, and with `<PREFIX>_NO_SKILL_REFRESH=1`; `--quiet` keeps the line out.
+
+### Fixed
+
+- **`--brief` now cuts a messenger search hit.** It only knew mail's camelCase hits, so `search messages --brief` in
+  tg, max and wa printed every field; it now keeps `ref`, `chat_title`, `timestamp`, `sender_name`, `excerpt` and
+  `score`. The default and `--full` answers are unchanged. Commands that print through `outputFor` now honour
+  `--brief` and `--full` too, and refuse them together as the others do.
 
 ## 0.543.0 — 02.11.2026
 

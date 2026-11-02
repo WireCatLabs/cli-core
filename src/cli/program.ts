@@ -12,6 +12,7 @@ import {
 } from "@wirecat/cli-base"
 import { metaOf, refuseJoinedPath } from "@wirecat/cli-base/commands"
 import { skillHint } from "@wirecat/cli-base/skill"
+import { COMPACT_FLAG } from "@wirecat/cli-base/standards"
 import { Command, Help } from "commander"
 import { relayCommand } from "../background/relay.js"
 import { failingNotice, scheduledRuns } from "../background/schedules.js"
@@ -153,6 +154,10 @@ export const createProgram = (definition: ProgramDefinition, { out, err }: Progr
     .option("--max-output-bytes <bytes>", "maximum machine output bytes (default: 4194304; 0 disables)")
     .option("--brief", `${found} as reference, title, time, ${messenger ? "sender" : "author"} and excerpt only`)
     .option("--full", `${found} with their whole text and every provider field`)
+    .option(
+      COMPACT_FLAG,
+      "one line per item for an agent: reference first, text last, paging and next steps as # lines",
+    )
     .option("--dry-run", "preview parsed arguments and permissions before running the action")
     .option("--yes", "go ahead without the question an ask level puts before a write")
     .option(
@@ -234,7 +239,9 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
   if (!options.streams) quietBrokenPipes()
   const delimiter = argv.indexOf("--")
   const flags = argv.slice(0, delimiter < 0 ? undefined : delimiter)
-  const machine = flags.some((word) => word === "--json" || word.startsWith("--json=") || word === "--jsonl")
+  const machine = flags.some(
+    (word) => word === "--json" || word.startsWith("--json=") || word === "--jsonl" || word === COMPACT_FLAG,
+  )
   const debug = flags.includes("--debug")
   const reporting = machine ? { ...options, tty: false } : options
   const control = execution(streams, { maxOutputBytes: 0 })
