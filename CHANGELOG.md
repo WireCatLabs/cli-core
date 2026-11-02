@@ -11,6 +11,13 @@ shape of this file.
 
 ### Added
 
+- **History limits for pushed history, per profile.** A messenger whose history is pushed (`history: "store"`,
+  WhatsApp) saves one-to-one chats back `history_dialog_days` (1095 by default), groups of more than two people back
+  `history_group_days` (365) and nothing of a group above `history_group_members_max` people (50); at most 1095 days.
+  The chat row stays, so the chat is still listed. Live messages, `messages sync` and what the store already holds are
+  never dropped. `messages sync <chat> --full-history` fetches a chat and keeps its pushed history in full from then on
+  (`history_included` in the answer). `ChatsStore` gains `historySkips`, `historyShapes`, `recordHistorySkips` and
+  `setHistoryIncluded`; `Saving` takes `historyLimits`.
 - **`readClientFile` (from `@wirecat/cli-core/oauth`) reads a user's own Google Desktop OAuth client file** (the
   `{ "installed": { client_id, client_secret } }` JSON from Google's console). It refuses a file other users can read
   (`sign-in.client-file-open`) and a file of the wrong shape (`sign-in.client-file-invalid`), and never puts the file's
@@ -22,13 +29,6 @@ shape of this file.
 
 ### Added
 
-- **History limits for pushed history, per profile.** A messenger whose history is pushed (`history: "store"`,
-  WhatsApp) saves one-to-one chats back `history_dialog_days` (1095 by default), groups of more than two people back
-  `history_group_days` (365) and nothing of a group above `history_group_members_max` people (50); at most 1095 days.
-  The chat row stays, so the chat is still listed. Live messages, `messages sync` and what the store already holds are
-  never dropped. `messages sync <chat> --full-history` fetches a chat and keeps its pushed history in full from then on
-  (`history_included` in the answer). `ChatsStore` gains `historySkips`, `historyShapes`, `recordHistorySkips` and
-  `setHistoryIncluded`; `Saving` takes `historyLimits`.
 - **The first run of a new version refreshes the agent instructions an older version installed**: each `SKILL.md`
   copy whose `skill status` is `stale` (Claude Code's, `~/.agents/skills`, and Hermes's own copy) is rewritten once,
   with one line on stderr — `Updated the tg instructions for Claude Code and other agents to 0.112.0`. A missing copy
