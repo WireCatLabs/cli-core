@@ -48,6 +48,14 @@ shape of this file.
   read back. The kinds are one table, `REF_KINDS`; `looksLikeReference(text)` tells a reference from a title such as
   `Note: plan`. Reference errors carry a reason: `ref.malformed`, `ref.unknown-kind` (with the kind meant:
   `"doc:413" … did you mean document:413?`), `ref.wrong-kind`, `ref.wrong-provider`, `ref.wrong-account`.
+- **`messages list` reads a window bounded on both sides, offline too.** The query takes a start and an end,
+  `'date>=2026-10-01 date<2026-10-20'` or `'date:[2026-10-01 TO 2026-10-19]'`, and `id>` with `date<`. A start reads
+  forward, oldest first, and stops at the end; an end alone reads back from it, newest page first, as before.
+  `--offline` and a messenger whose history is read from the store (WhatsApp) now answer both ways from the store
+  instead of refusing. A forward cursor carries the end, `after:<id>~<epoch ms>`, so the next page stops at the same
+  place. `--since`, `--since-time`, `--until`, `--until-time`, `--after-time` and `--before-time` on `messages list`
+  fail with the query form to type instead. The store's `messages()` window takes `after` (a message or a moment)
+  and `until`.
 - **`store.refs.summaries(refs, { excerpt? })` says what any ref names**, a page at a time: kind, title, what holds
   it, when, provider, account, the CLI that opens it and whether it is `available`, `deleted` or `unavailable`. One
   statement per kind present, offline. A malformed ref comes back `unknown`, never thrown, so one bad row cannot fail
@@ -93,6 +101,11 @@ shape of this file.
   `1.200 €`, `$1,200`) are one number now, a decimal part after them is kept (`5 000.50 ₽`), and amounts keep two
   decimals instead of a whole number (`15.5 eur` was 16). This is the amount the duplicate check compares between
   two tasks, so a reminder worded with a grouped sum is no longer compared on the wrong figure.
+- **`page.next` of `messages list` and `messages comments` runs as written.** It repeated the query's `id`/`date`
+  bound beside `--cursor`, which the command refuses as two starting points; it now keeps only `topic:` and
+  `starred:`.
+- **An inclusive start keeps a message sent exactly at it.** `messages list 'date>=2026-10-01'` skipped a message
+  sent at the first millisecond of the day, and `date<="…"` one sent at that moment.
 
 ## 0.546.0 — 02.11.2026
 
