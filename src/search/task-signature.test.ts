@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest"
 import { normalize } from "../store/normalize.js"
-import { amountOf, dayOf, dueDayOf } from "./task-signature.js"
+import { amountOf, amountsOf, dayOf, dueDayOf } from "./task-signature.js"
 
 const day = (date: string) => Math.floor(Date.parse(`${date}T00:00:00Z`) / 86_400_000)
 const wednesday = Date.parse("2026-10-14T10:00:00Z")
@@ -20,12 +20,39 @@ describe("amountOf", () => {
     ["can you pay 85 eur?", { value: 85, currency: "EUR" }],
     ["$120 for the domain", { value: 120, currency: "USD" }],
     ["1,5k for the flights", { value: 1500, currency: null }],
+    ["50 000 ₽", { value: 50000, currency: "RUB" }],
+    ["50\u00a0000 ₽", { value: 50000, currency: "RUB" }],
+    ["50 000р", { value: 50000, currency: "RUB" }],
+    ["50к", { value: 50000, currency: null }],
+    ["1.200 €", { value: 1200, currency: "EUR" }],
+    ["$300", { value: 300, currency: "USD" }],
+    ["1 200 eur", { value: 1200, currency: "EUR" }],
   ])("reads %j", (text, amount) => {
     expect(amountOf(normalize(text))).toEqual(amount)
   })
 
   it("ignores a number with no currency or multiplier", () => {
     expect(amountOf("верни 3000 за бензин")).toBeNull()
+  })
+})
+
+describe("amountsOf", () => {
+  it("reads every amount in order", () => {
+    expect(amountsOf("аванс 50 000 ₽, остаток $300 и 1.200 €")).toEqual([
+      { value: 50000, currency: "RUB" },
+      { value: 300, currency: "USD" },
+      { value: 1200, currency: "EUR" },
+    ])
+  })
+
+  it.each([
+    ["+34 612 345 678"],
+    ["позвони +7 916 123 45 67"],
+    ["встреча 02.11.2026 в 15:30"],
+    ["до 20.10"],
+    ["room 4 on floor 12"],
+  ])("finds no amount in %j", (text) => {
+    expect(amountsOf(text)).toEqual([])
   })
 })
 

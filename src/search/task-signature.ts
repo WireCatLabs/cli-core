@@ -16,19 +16,31 @@ const CURRENCY: [RegExp, string][] = [
 const currencyOf = (word: string | undefined): string | null =>
   word ? (CURRENCY.find(([pattern]) => pattern.test(word))?.[1] ?? null) : null
 
-const AMOUNT =
-  /(?<![\p{L}\p{N}])([$€₽])?\s?(\d+(?:[.,]\d+)?)(?:([кk])(?![\p{L}])|\s?(тыс\.?|тысяч\p{L}*))?(?![\p{N}])\s?(₽|руб\p{L}*\.?|р\.|р(?![\p{L}])|rub|eur|евро|€|\$|usd|долл\p{L}*|dollars?|euros?)?(?![\p{L}])/gu
+/** Groups of three after a space, a no-break space or a dot (`50 000`, `1.200`) are one number, as Russian texts write sums. */
+const NUMBER = String.raw`\d{1,3}(?:[ \u00a0\u202f.]\d{3})+(?:,\d+)?|\d+(?:[.,]\d+)?`
+const AMOUNT = new RegExp(
+  String.raw`(?<![\p{L}\p{N}])([$€₽])?\s?(${NUMBER})(?:([кk])(?![\p{L}])|\s?(тыс\.?|тысяч\p{L}*))?(?![\p{N}])\s?(₽|руб\p{L}*\.?|р\.|р(?![\p{L}])|rub|eur|евро|€|\$|usd|долл\p{L}*|dollars?|euros?)?(?![\p{L}])`,
+  "gu",
+)
+const GROUPED = /^\d{1,3}(?:[ \u00a0\u202f.]\d{3})+(?:,\d+)?$/u
+
+const amountValue = (number: string, thousands: boolean): number => {
+  const plain = GROUPED.test(number) ? number.replace(/[ \u00a0\u202f.]/gu, "") : number
+  return Math.round(Number(plain.replace(",", ".")) * (thousands ? 1000 : 1))
+}
 
 /** A bare number is not an amount: `верни 3000 за бензин` has none, so a reminder about it compares as missing. */
-export const amountOf = (text: string): TaskAmount | null => {
+export const amountsOf = (text: string): TaskAmount[] => {
+  const found: TaskAmount[] = []
   for (const [, before, number = "", short, long, after] of text.matchAll(AMOUNT)) {
-    const multiplier = short ?? long
-    if (!before && !after && !multiplier) continue
-    const value = Math.round(Number(number.replace(",", ".")) * (multiplier ? 1000 : 1))
-    return { value, currency: currencyOf(before ?? after?.replace(/\.$/u, "")) }
+    const thousands = (short ?? long) !== undefined
+    if (!before && !after && !thousands) continue
+    found.push({ value: amountValue(number, thousands), currency: currencyOf(before ?? after?.replace(/\.$/u, "")) })
   }
-  return null
+  return found
 }
+
+export const amountOf = (text: string): TaskAmount | null => amountsOf(text)[0] ?? null
 
 const RU_WEEKDAYS = ["воскресен", "понедельник", "вторник", "сред", "четверг", "пятниц", "суббот"]
 const EN_WEEKDAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"]
