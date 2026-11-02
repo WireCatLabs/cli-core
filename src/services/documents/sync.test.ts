@@ -171,7 +171,12 @@ describe("provider-neutral document sync", () => {
     const ref = must(f.state().documents.a).reference
     await f.knowledge.tags("alpha", ref, "add", ["review"])
     const memo = await f.knowledge.addNote("alpha", ref, "Owner memo")
-    const memory = await f.knowledge.addMemory("alpha", ref, { body: "Budget summary", kind: "summary", scope: "work" })
+    const memory = await f.knowledge.addMemory("alpha", ref, {
+      author: "owner",
+      body: "Budget summary",
+      kind: "summary",
+      scope: "work",
+    })
     f.files.set("a", { ...must(f.files.get("a")), version: "2" })
     f.changes([{ id: "a", removed: false, file: f.files.get("a") }])
     await syncDocuments(f.options)

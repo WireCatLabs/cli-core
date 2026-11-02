@@ -143,17 +143,19 @@ describe("cross-source knowledge metadata", () => {
     const person = await f.store.people.personOf({ provider: key.provider, id: "101" })
     const organization = await f.store.knowledge.addOrganization({ kind: "company", name: "Synthetic Studio" })
     const relation = await f.store.knowledge.relate(key, {
+      by: "owner",
       from: `person:${person?.uid}`,
       to: organization.ref,
       kind: "member-of",
       role: "author",
     })
-    expect(await f.store.knowledge.relate(key, { from: relation.from, to: relation.to, kind: "member-of" })).toEqual(
-      relation,
-    )
+    expect(
+      await f.store.knowledge.relate(key, { by: "owner", from: relation.from, to: relation.to, kind: "member-of" }),
+    ).toEqual(relation)
     expect(await f.store.knowledge.relations(other)).toEqual([relation])
     expect(await f.store.knowledge.relations(key, relation.from)).toEqual([relation])
     const proposal = await f.store.knowledge.relate(key, {
+      by: "owner",
       from: relation.to,
       to: relation.from,
       kind: "related-to",
@@ -161,12 +163,12 @@ describe("cross-source knowledge metadata", () => {
       provenance: "synthetic weak rule",
     })
     expect(proposal).toMatchObject({ confirmed: false, confidenceCategory: "weak" })
-    expect(await f.store.knowledge.confirmRelation(key, proposal.id)).toMatchObject({
+    expect(await f.store.knowledge.confirmRelation(key, proposal.id, "owner")).toMatchObject({
       confirmed: true,
       confidenceCategory: "owner-confirmed",
     })
-    await f.store.knowledge.removeRelation(key, proposal.id)
-    await f.store.knowledge.removeRelation(key, relation.id)
+    await f.store.knowledge.removeRelation(key, proposal.id, "owner")
+    await f.store.knowledge.removeRelation(key, relation.id, "owner")
     expect(await f.store.knowledge.relations(key)).toEqual([])
   })
 
@@ -175,13 +177,14 @@ describe("cross-source knowledge metadata", () => {
     const project = await f.store.knowledge.addProject({ name: "Harbour" })
     const chat = "chat:telegram/500/7"
     const link = await f.store.knowledge.relate(null, {
+      by: "owner",
       from: chat,
       to: project.ref,
       kind: "member-of",
       confirmed: false,
     })
     expect(link).toMatchObject({ from: chat, to: project.ref, kind: "member-of", confirmed: false })
-    expect(await f.store.knowledge.confirmRelation(null, link.id)).toMatchObject({ confirmed: true })
+    expect(await f.store.knowledge.confirmRelation(null, link.id, "owner")).toMatchObject({ confirmed: true })
     expect(await f.store.knowledge.relations(null, project.ref)).toEqual([expect.objectContaining({ from: chat })])
     expect(await f.store.notes.links({ to: project.ref })).toEqual([
       expect.objectContaining({ from: chat, kind: "member-of", confirmed: true }),
@@ -194,7 +197,7 @@ describe("cross-source knowledge metadata", () => {
       [other, { from: chat, to: project.ref, kind: "member-of" }, "validation_error"],
       [null, { from: "chat:telegram/500/404", to: project.ref, kind: "member-of" }, "not_found"],
     ] as const)
-      await expect(f.store.knowledge.relate(key, input)).rejects.toMatchObject({ code })
+      await expect(f.store.knowledge.relate(key, { ...input, by: "owner" })).rejects.toMatchObject({ code })
   })
 
   it("leases due reminders, rejects stale receipts, survives restart and cancels closed tasks", async () => {

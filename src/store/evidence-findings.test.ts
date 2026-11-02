@@ -94,11 +94,14 @@ it("refuses evidence whose text changed or was never stored", async () => {
     .prepare("UPDATE messages SET text='Harbour launch moved' WHERE account_id=? AND external_id='3'")
     .run(f.accountId)
   await expect(
-    f.store.evidenceFindings.review(batch.id, { fingerprint: batch.fingerprint, accept: ["launch"] }),
+    f.store.evidenceFindings.review(batch.id, { fingerprint: batch.fingerprint, accept: ["launch"], by: "owner" }),
   ).rejects.toMatchObject({ details: { reason: "evidence-findings.stale" } })
-  expect(await f.store.evidenceFindings.review(batch.id, { fingerprint: batch.fingerprint, accept: [] })).toMatchObject(
-    { status: "reviewed", receipt: { accepted: [], items: [{ status: "rejected" }, { status: "rejected" }] } },
-  )
+  expect(
+    await f.store.evidenceFindings.review(batch.id, { fingerprint: batch.fingerprint, accept: [], by: "owner" }),
+  ).toMatchObject({
+    status: "reviewed",
+    receipt: { accepted: [], items: [{ status: "rejected" }, { status: "rejected" }] },
+  })
 })
 
 it("accepts the findings whose own evidence is unchanged when another finding's text or the project changed", async () => {
@@ -106,11 +109,12 @@ it("accepts the findings whose own evidence is unchanged when another finding's 
   const batch = await f.store.evidenceFindings.stage(await f.input(), agent)
   f.db.prepare("UPDATE documents SET body='Launch list moved' WHERE id=?").run(Number(f.doc.id))
   await expect(
-    f.store.evidenceFindings.review(batch.id, { fingerprint: batch.fingerprint, accept: ["checklist"] }),
+    f.store.evidenceFindings.review(batch.id, { fingerprint: batch.fingerprint, accept: ["checklist"], by: "owner" }),
   ).rejects.toMatchObject({ details: { reason: "evidence-findings.stale" } })
   const reviewed = await f.store.evidenceFindings.review(batch.id, {
     fingerprint: batch.fingerprint,
     accept: ["launch"],
+    by: "owner",
   })
   expect(reviewed.receipt?.items.map((item) => [item.id, item.status])).toEqual([
     ["launch", "accepted"],
@@ -119,7 +123,11 @@ it("accepts the findings whose own evidence is unchanged when another finding's 
   const renamed = await f.store.evidenceFindings.stage(await f.input("run-2"), agent)
   f.db.prepare("UPDATE projects SET name='Renamed Example' WHERE id=?").run(Number(f.project.ref.slice(8)))
   expect(
-    await f.store.evidenceFindings.review(renamed.id, { fingerprint: renamed.fingerprint, accept: ["launch"] }),
+    await f.store.evidenceFindings.review(renamed.id, {
+      fingerprint: renamed.fingerprint,
+      accept: ["launch"],
+      by: "owner",
+    }),
   ).toMatchObject({ status: "reviewed" })
 })
 
@@ -130,20 +138,20 @@ it("lets the owner, or an agent with a reason, decide; later batches reuse the d
     f.store.evidenceFindings.review(batch.id, {
       fingerprint: batch.fingerprint,
       accept: ["launch"],
-      by: { bot: "evidence-test", reason: " " },
+      by: { bot: "evidence-reviewer", reason: " " },
     }),
   ).rejects.toThrow("reason")
   const reviewed = await f.store.evidenceFindings.review(batch.id, {
     fingerprint: batch.fingerprint,
     accept: ["launch"],
-    by: { bot: "evidence-test", model: "m", reason: "the message states it plainly" },
+    by: { bot: "evidence-reviewer", model: "m", reason: "the message states it plainly" },
   })
   expect(reviewed).toMatchObject({
     status: "reviewed",
     decidedBy: { type: "bot" },
     receipt: {
       accepted: ["launch"],
-      decision: { by: "agent", bot: "evidence-test", model: "m", reason: "the message states it plainly" },
+      decision: { by: "agent", bot: "evidence-reviewer", model: "m", reason: "the message states it plainly" },
       items: [
         { id: "launch", status: "accepted", reused: false },
         { id: "checklist", status: "rejected", reference: null },
@@ -153,10 +161,14 @@ it("lets the owner, or an agent with a reason, decide; later batches reuse the d
   const fact = reviewed.receipt?.items[0]?.reference
   expect(fact).toMatch(/^fact:/)
   expect(
-    await f.store.evidenceFindings.review(batch.id, { fingerprint: batch.fingerprint, accept: ["launch"] }),
+    await f.store.evidenceFindings.review(batch.id, {
+      fingerprint: batch.fingerprint,
+      accept: ["launch"],
+      by: "owner",
+    }),
   ).toMatchObject({ id: batch.id })
   await expect(
-    f.store.evidenceFindings.review(batch.id, { fingerprint: batch.fingerprint, accept: [] }),
+    f.store.evidenceFindings.review(batch.id, { fingerprint: batch.fingerprint, accept: [], by: "owner" }),
   ).rejects.toThrow("different decision")
 
   const again = await f.store.evidenceFindings.stage(await f.input("run-2"), agent)
@@ -165,9 +177,13 @@ it("lets the owner, or an agent with a reason, decide; later batches reuse the d
     ["checklist", "rejected", true],
   ])
   await expect(
-    f.store.evidenceFindings.review(again.id, { fingerprint: again.fingerprint, accept: ["checklist"] }),
+    f.store.evidenceFindings.review(again.id, { fingerprint: again.fingerprint, accept: ["checklist"], by: "owner" }),
   ).rejects.toThrow("already rejected")
-  const owner = await f.store.evidenceFindings.review(again.id, { fingerprint: again.fingerprint, accept: [] })
+  const owner = await f.store.evidenceFindings.review(again.id, {
+    fingerprint: again.fingerprint,
+    accept: [],
+    by: "owner",
+  })
   expect(owner).toMatchObject({ decidedBy: { type: "person" }, receipt: { decision: { by: "owner" } } })
   expect(owner.receipt?.items[0]).toMatchObject({ reference: fact, reused: true })
 })
@@ -175,23 +191,23 @@ it("lets the owner, or an agent with a reason, decide; later batches reuse the d
 it("is reviewed only through its own store, never as a generic proposal", async () => {
   const f = await fixture()
   const batch = await f.store.evidenceFindings.stage(await f.input(), agent)
-  await expect(f.store.proposedActions.approve(batch.id)).rejects.toMatchObject({
+  await expect(f.store.proposedActions.approve(batch.id, "owner")).rejects.toMatchObject({
     details: { reason: "evidence-findings.dedicated-review" },
   })
-  await expect(f.store.proposedActions.reject(batch.id)).rejects.toThrow("dedicated")
+  await expect(f.store.proposedActions.reject(batch.id, "owner")).rejects.toThrow("dedicated")
   await expect(f.store.proposedActions.propose({ kind: "evidence_findings", by: agent })).rejects.toThrow("dedicated")
 })
 
 it("reads a batch closed with nothing accepted as rejected, and one with a finding accepted as approved", async () => {
   const f = await fixture()
   const none = await f.store.evidenceFindings.stage(await f.input(), agent)
-  await f.store.evidenceFindings.review(none.id, { fingerprint: none.fingerprint, accept: [] })
+  await f.store.evidenceFindings.review(none.id, { fingerprint: none.fingerprint, accept: [], by: "owner" })
   const other = await f.input("run-2")
   for (const finding of other.findings)
     if (finding.kind === "fact") finding.statement = "The harbour launch is the fourth one"
     else finding.title = "Print the launch checklist"
   const some = await f.store.evidenceFindings.stage(other, agent)
-  await f.store.evidenceFindings.review(some.id, { fingerprint: some.fingerprint, accept: ["launch"] })
+  await f.store.evidenceFindings.review(some.id, { fingerprint: some.fingerprint, accept: ["launch"], by: "owner" })
 
   expect(await f.store.proposedActions.get(none.id)).toMatchObject({ status: "rejected", result: { accepted: [] } })
   expect(await f.store.proposedActions.get(some.id)).toMatchObject({ status: "approved" })
@@ -243,7 +259,11 @@ it("stages findings about a person or about nobody, citing a note, and the owner
   expect(batch).toMatchObject({ project: null, subject: `person:${lena.uid}`, status: "proposed" })
   expect(await f.store.evidenceFindings.sources(batch.id)).toMatchObject([{ ref: note.ref, kind: "note" }])
 
-  const reviewed = await f.store.evidenceFindings.review(batch.id, { fingerprint: batch.fingerprint, accept: ["move"] })
+  const reviewed = await f.store.evidenceFindings.review(batch.id, {
+    fingerprint: batch.fingerprint,
+    accept: ["move"],
+    by: "owner",
+  })
   const fact = reviewed.receipt?.items[0]?.reference as string
   expect(await f.store.facts.get(fact)).toMatchObject({
     status: "accepted",
@@ -283,7 +303,11 @@ it("keeps a batch approvable after a sibling batch of the same project is decide
     if (finding.kind === "fact") finding.statement = "The harbour launch is the fourth one"
     else finding.title = "Print the launch checklist"
   const second = await f.store.evidenceFindings.stage(other, agent)
-  await f.store.evidenceFindings.review(first.id, { fingerprint: first.fingerprint, accept: ["launch", "checklist"] })
+  await f.store.evidenceFindings.review(first.id, {
+    fingerprint: first.fingerprint,
+    accept: ["launch", "checklist"],
+    by: "owner",
+  })
   // The fixture's clock stands still; a real decision moves the project's updated_at with the task it creates.
   f.db.prepare("UPDATE projects SET updated_at = updated_at + 1000").run()
 
@@ -297,6 +321,7 @@ it("keeps a batch approvable after a sibling batch of the same project is decide
     await f.store.evidenceFindings.review(second.id, {
       fingerprint: second.fingerprint,
       accept: ["launch", "checklist"],
+      by: "owner",
     }),
   ).toMatchObject({ status: "reviewed", receipt: { accepted: ["checklist", "launch"] } })
 
@@ -304,7 +329,7 @@ it("keeps a batch approvable after a sibling batch of the same project is decide
     .prepare("UPDATE messages SET text='Harbour launch moved' WHERE account_id=? AND external_id='3'")
     .run(f.accountId)
   await expect(
-    f.store.evidenceFindings.review(stale.id, { fingerprint: stale.fingerprint, accept: ["launch"] }),
+    f.store.evidenceFindings.review(stale.id, { fingerprint: stale.fingerprint, accept: ["launch"], by: "owner" }),
   ).rejects.toMatchObject({ details: { reason: "evidence-findings.stale" } })
 })
 

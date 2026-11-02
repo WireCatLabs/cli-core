@@ -48,7 +48,7 @@ export const documentIngestion = <M extends SourceFile>(
     for (const status of ["proposed", "confirmed"] as const) {
       for (let batch = 0; ; batch++) {
         const memories = await store.memories.list({ subject: ref, status, limit: 500 })
-        for (const memory of memories) await store.memories.markStale(memory.ref)
+        for (const memory of memories) await store.memories.markStale(memory.ref, "owner")
         if (memories.length < 500) break
         if (batch >= 20) throw new CliError("provider_error", "memory invalidation exceeded its batch bound")
       }
