@@ -59,8 +59,6 @@ shape of this file.
   writes it with `registerProvider`; tg, max and wa open `chat`, `message` and `contact` from the built-ins. A kind
   this build does not know is dropped, so an older build still reads a newer entry.
 
-
-
 ### Changed — may break callers
 
 - **An option after `--` is read as the option.** `messages sync -- -100 --json` now syncs `-100` and answers in JSON;
