@@ -36,7 +36,7 @@ export interface ProjectStatusInput {
   days?: number
   after?: number
   asOf?: number
-  topics?: string[]
+  contextQueries?: string[]
   /** The chat purposes read; `all` reads every one. Default `DEFAULT_PURPOSES`. */
   purposes?: readonly string[]
   /** Default `STATUS_SIGNALS`; tests pass their own. */
@@ -200,7 +200,7 @@ export const projectStatus = async (store: MessageStore, input: ProjectStatusInp
     chats,
     project: { ...root, children, cut },
     store,
-    topics: input.topics ?? [],
+    contextQueries: input.contextQueries ?? [],
   }
   const items: StatusItem[] = []
   const failed: ProjectStatus["failed"] = []

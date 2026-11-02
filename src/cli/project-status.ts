@@ -233,8 +233,8 @@ const chatLine = (found: ProjectStatus, chat: StatusChatSummary): string[] => {
   if (theirs) open.push(`${theirs} question${theirs === 1 ? "" : "s"} to you unanswered`)
   if (yours) open.push(`${yours} question${yours === 1 ? "" : "s"} of yours unanswered`)
   for (const topic of of("topics")) {
-    const data = topic.data as { topic: string; silentSince: string | null }
-    if (data.silentSince) open.push(`"${data.topic}" quiet on their side since ${day(data.silentSince)}`)
+    const data = topic.data as { query: string; silentSince: string | null }
+    if (data.silentSince) open.push(`"${data.query}" quiet on their side since ${day(data.silentSince)}`)
   }
   const promised = of("promises").length
   if (promised) open.push(`${promised} promise${promised === 1 ? "" : "s"}`)

@@ -141,14 +141,22 @@ it("is guarded by the messages permission: it prints what people wrote", () => {
 describe("projects status", () => {
   it("answers from the store alone, for this profile's account, and syncs the chat it holds in part first", async () => {
     const { call, asked } = await setUp()
-    const { code, stdout } = await call("projects", "status", "Harbour", ...WINDOW, "--topic", "crew", "--json")
+    const { code, stdout } = await call(
+      "projects",
+      "status",
+      "Harbour",
+      ...WINDOW,
+      "--context-query",
+      "crew note",
+      "--json",
+    )
     expect(code).toBe(0)
     expect(asked).toEqual([])
     const body = JSON.parse(stdout)
     expect(body.item).toMatchObject({ project: expect.stringMatching(/^project:\d+$/), name: "Harbour" })
     expect(body.item.chats).toEqual([expect.objectContaining({ chat: "chat:chat/500/7", coverage: "unknown" })])
     expect(body.item.reply_next[0].data.next).toBe("nobody")
-    expect(body.item.topics[0].data).toMatchObject({ topic: "crew", theirs_last: "2026-01-01T00:10:00.000Z" })
+    expect(body.item.topics[0].data).toMatchObject({ query: "crew note", theirs_last: "2026-01-01T00:10:00.000Z" })
     expect(body.meta).toMatchObject({ complete: false, accounts: ["chat/500"] })
     expect(body.next[0]).toMatchObject({
       command: "messages sync",

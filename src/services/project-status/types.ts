@@ -44,7 +44,8 @@ export interface StatusContext {
   }
   /** Read only: facts, tasks, chats. */
   store: MessageStore
-  topics: string[]
+  /** `--context-query` texts: every word of one must appear in one message. */
+  contextQueries: string[]
 }
 
 export interface StatusWho {

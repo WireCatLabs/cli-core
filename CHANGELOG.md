@@ -27,8 +27,8 @@ shape of this file.
   confirmed as the project's or a child project's, in this profile's account: the last message, who replies next
   (you, them, a member a message names, or nobody), open questions both ways, promises (stored tasks, promise facts,
   and first person future words such as "пришлю" or "I'll send"), amounts with their direction and whether a later
-  message says paid, payment facts, how long each `--topic` word has been quiet on their side, and how much of the
-  chat the store holds. Open amounts are summed per direction and currency. Word matches are marked `basis: pattern`;
+  message says paid, payment facts, how long each `--context-query` (words that all appear in one text) has been
+  quiet on their side, and how much of the chat the store holds. Open amounts are summed per direction and currency. Word matches are marked `basis: pattern`;
   a message saying "paid" is `paid-mentioned`, never paid. At most two steps: sync the chat held in part, then read
   the chat that needs you most. The other accounts' linked chats are named in `out_of_scope`. tg and max get it with
   the `projects` group; `--compact` draws each signal with its own row.

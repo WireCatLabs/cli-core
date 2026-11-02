@@ -3722,8 +3722,8 @@
       },
       "options": {
         "--before-time": "all",
-        "--since-time": "all",
-        "--topic": "all"
+        "--context-query": "all",
+        "--since-time": "all"
       }
     },
     "reactions": {

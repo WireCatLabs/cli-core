@@ -27,7 +27,7 @@ const hints = {
 const statusOf = async (chats: FixtureChat[] = HARBOUR) => {
   const { store } = await harbourStore(chats)
   opened.push(store)
-  return projectStatus(store, { project: "HRB", asOf: NOW, topics: ["1C"] })
+  return projectStatus(store, { project: "HRB", asOf: NOW, contextQueries: ["1C"] })
 }
 
 const compactOf = (found: Awaited<ReturnType<typeof statusOf>>) => {

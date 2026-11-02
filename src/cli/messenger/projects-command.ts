@@ -192,7 +192,7 @@ export const projectsCommand = (messenger: Messenger): Command => {
 const statusCommand = (messenger: Messenger): Command =>
   answerEntity(
     annotate(new Command("status"), {
-      examples: [`${messenger.app.command} personal projects status HRB --topic 1C`],
+      examples: [`${messenger.app.command} personal projects status HRB --context-query 1C`],
       effects: LOCAL_READ,
       partial: true,
     })
@@ -200,16 +200,21 @@ const statusCommand = (messenger: Messenger): Command =>
       .description(
         "per chat confirmed as the project's (and its child projects'), from what the store holds: the last message, " +
           "who replies next, open questions both ways, promises, amounts with their direction, payments recorded, " +
-          "how long a --topic word has been quiet on their side, and how much of the chat is held. Amounts, " +
+          "how long each --context-query has been quiet on their side, and how much of the chat is held. Amounts, " +
           "directions and promises found by words are marked pattern: read the cited message before trusting one. " +
           "Only this profile's account is read; the other linked chats are named, and memo projects status reads them",
       )
       .argument("<project>", "an existing project's id, key, exact name or alias")
       .option("--since-time <time>", "how far back: days (60d, at most 730d) or a start date (2026-09-01)", "60d")
       .option("--before-time <time>", "fixed exclusive end: ISO 8601 timestamp with UTC offset")
-      .option("--topic <word>", "a word whose last mention per side to report; repeat for more", collect, [])
+      .option(
+        "--context-query <words>",
+        "words that all appear in one text; reports their last mention per side. Repeat for another",
+        collect,
+        [],
+      )
       .action(async function (this: Command, project: string) {
-        const options = this.opts<{ sinceTime: string; beforeTime?: string; topic: string[] }>()
+        const options = this.opts<{ sinceTime: string; beforeTime?: string; contextQuery: string[] }>()
         const context = messengerContext(this, messenger)
         const found = await context.withStore((store, account) =>
           projectStatus(store, {
@@ -217,7 +222,7 @@ const statusCommand = (messenger: Messenger): Command =>
             accounts: [account],
             ...projectWindowOf(options.sinceTime),
             ...(options.beforeTime === undefined ? {} : { asOf: projectCutoffTime(options.beforeTime) }),
-            topics: options.topic,
+            contextQueries: options.contextQuery,
           }),
         )
         const root = rootOf(this)

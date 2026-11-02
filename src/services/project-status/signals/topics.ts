@@ -3,7 +3,7 @@ import { evidenceOf, fromOwner } from "../items.js"
 import type { StatusItem, StatusSignal } from "../types.js"
 
 export interface TopicsData {
-  topic: string
+  query: string
   yoursLast: string | null
   theirsLast: string | null
   /** Their newest mention, when the owner spoke of it later: the other side went quiet on it. */
@@ -12,19 +12,27 @@ export interface TopicsData {
 
 const escaped = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
 
-const wholeWord = (topic: string) =>
-  new RegExp(`(?<![\\p{L}\\p{N}])${escaped(normalize(topic))}(?![\\p{L}\\p{N}])`, "u")
+const wholeWord = (word: string) => new RegExp(`(?<![\\p{L}\\p{N}])${escaped(word)}(?![\\p{L}\\p{N}])`, "u")
 
-/** Per `--topic` word, the newest message of each side that names it (folded, whole word, in the window). */
+/** Every word of the query, folded, as a whole word somewhere in the text: `projects evidence`'s reading. */
+const matcherOf = (query: string) => {
+  const words = normalize(query).split(" ").filter(Boolean).map(wholeWord)
+  return (text: string) => {
+    const folded = normalize(text)
+    return words.length > 0 && words.every((word) => word.test(folded))
+  }
+}
+
+/** Per `--context-query`, the newest message of each side that holds every one of its words, in the window. */
 export const topics: StatusSignal<TopicsData> = {
   id: "topics",
   version: 1,
   scope: "chat",
   read: async (context, chat) => {
     if (!chat) return []
-    return context.topics.flatMap((topic): StatusItem<TopicsData>[] => {
-      const pattern = wholeWord(topic)
-      const naming = chat.messages.filter((message) => pattern.test(normalize(message.text)))
+    return context.contextQueries.flatMap((query): StatusItem<TopicsData>[] => {
+      const matches = matcherOf(query)
+      const naming = chat.messages.filter((message) => matches(message.text))
       const yours = naming.findLast(fromOwner)
       const theirs = naming.findLast((message) => !fromOwner(message))
       if (!yours && !theirs) return []
@@ -41,7 +49,7 @@ export const topics: StatusSignal<TopicsData> = {
           evidence: evidenceOf(chat, ...newest),
           basis: "store",
           data: {
-            topic,
+            query,
             yoursLast: yours?.timestamp ?? null,
             theirsLast: theirs?.timestamp ?? null,
             silentSince: silent ? theirs.timestamp : null,

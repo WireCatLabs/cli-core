@@ -55,7 +55,7 @@ const contextOf = (chats: StatusChat[] = []): StatusContext => ({
   chats,
   project: { ref: "project:1", key: "HRB", name: "Harbour site", children: [], cut: [] },
   store: {} as MessageStore,
-  topics: [],
+  contextQueries: [],
 })
 
 const hour = (n: number) => new Date(Date.UTC(2026, 9, 30, n)).toISOString()
@@ -63,7 +63,7 @@ const hour = (n: number) => new Date(Date.UTC(2026, 9, 30, n)).toISOString()
 describe("projectStatus on the harbour fixture", () => {
   it("answers who owes what, whose move it is and what went quiet, with refs", async () => {
     const { store } = await seeded()
-    const found = await projectStatus(store, { project: "HRB", asOf: NOW, topics: ["1C"] })
+    const found = await projectStatus(store, { project: "HRB", asOf: NOW, contextQueries: ["1C"] })
 
     expect(found.money.open).toContainEqual({ direction: "to_us", currency: "EUR", amount: "1200.00", rows: 1 })
     const owed = found.items.find((one) => one.signal === "amounts" && one.chat === "chat:max/11/-900")
@@ -77,7 +77,7 @@ describe("projectStatus on the harbour fixture", () => {
     expect(lev?.data).toMatchObject({ next: "owner", waitingSince: "2026-10-21T09:00:00.000Z", overdue: true })
 
     const quiet = found.items.find((one) => one.signal === "topics" && one.chat === "chat:max/11/-900")
-    expect(quiet?.data).toMatchObject({ topic: "1C", silentSince: "2026-10-12T09:00:00.000Z" })
+    expect(quiet?.data).toMatchObject({ query: "1C", silentSince: "2026-10-12T09:00:00.000Z" })
 
     const held = found.items.find((one) => one.signal === "coverage" && one.chat === "chat:telegram/22/555")
     expect(held?.data).toMatchObject({ state: "partial", beforeHeld: true })

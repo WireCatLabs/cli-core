@@ -52,7 +52,7 @@ export const STATUS_SIGNAL_ROWS: Readonly<Record<string, RowShape>> = {
   "status.topics": {
     columns: [
       ...where,
-      { field: "data.topic" },
+      { field: "data.query" },
       { field: "data.theirs_last", as: "day" },
       { field: "data.yours_last", as: "day" },
       { field: "data.silent_since", as: "day" },
