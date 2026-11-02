@@ -124,6 +124,20 @@ describe("shared document knowledge", () => {
       await f.index.close()
     }
   })
+  it("SEC-8: names who writes a memory or a fact, never the owner by default", async () => {
+    const f = await setup()
+    try {
+      const input = { body: "Source summary", kind: "summary", scope: "work" } as never
+      await expect(f.k.addMemory(f.principal, f.ref, input)).rejects.toMatchObject({
+        details: { reason: "proposal.decider-required" },
+      })
+      await expect(
+        f.k.addFact(f.principal, f.ref, { statement: "The budget was approved", type: "decision" } as never),
+      ).rejects.toMatchObject({ details: { reason: "proposal.decider-required" } })
+    } finally {
+      await f.index.close()
+    }
+  })
   it("stales source-backed memories on scope removal and refuses removed documents", async () => {
     const f = await setup()
     const store = f.store

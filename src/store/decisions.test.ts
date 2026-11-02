@@ -283,3 +283,61 @@ describe("an agent cannot get round the check", () => {
     expect(await store.knowledge.relations(null, studio.ref)).toHaveLength(1)
   })
 })
+
+describe("the second review", () => {
+  const ownerOnly = { details: { reason: "proposal.owner-only" } }
+  const setup = async () => {
+    const store = await opened()
+    const project = await store.knowledge.addProject({ name: "Harbour" })
+    const studio = await store.knowledge.addOrganization({ kind: "company", name: "Synthetic Studio" })
+    const clinic = await store.knowledge.addOrganization({ kind: "company", name: "Synthetic Clinic" })
+    const note = await store.notes.addNote({ text: "Kickoff moved" })
+    return { store, project, studio, clinic, note }
+  }
+
+  it("SEC-5: an agent cannot remove a link the owner confirmed", async () => {
+    const f = await setup()
+    const link = await f.store.notes.addLink({ from: f.studio.ref, to: f.project.ref, kind: "member-of", by: "owner" })
+    await expect(f.store.notes.removeLink(link.id, self)).rejects.toMatchObject(ownerOnly)
+    expect(await f.store.notes.links({ from: f.studio.ref })).toHaveLength(1)
+  })
+
+  it("SEC-6: an agent cannot write a confirmed link of any kind", async () => {
+    const f = await setup()
+    await expect(
+      f.store.notes.addLink({ from: f.studio.ref, to: f.clinic.ref, kind: "related-to" }),
+    ).rejects.toMatchObject({ details: { reason: "proposal.decider-required" } })
+    await expect(
+      f.store.notes.addLink({ from: f.note.ref, to: f.clinic.ref, kind: "about", by: self }),
+    ).rejects.toMatchObject(ownerOnly)
+  })
+
+  it("SEC-7: an agent cannot remove or reverse an accepted fact, nor remove another's memory", async () => {
+    const f = await setup()
+    const fact = await f.store.facts.add({ type: "decision", statement: "Ship", by: "owner", evidence: [f.note.ref] })
+    await expect(f.store.facts.reverse(fact.ref, self)).rejects.toMatchObject(ownerOnly)
+    await expect(f.store.facts.remove(fact.ref, self)).rejects.toMatchObject(ownerOnly)
+    const input = { kind: "summary" as const, body: "Summary", scope: "work" as const, evidence: [f.note.ref] }
+    const memory = await f.store.memories.add({ ...input, author: { bot: "codex" } })
+    await expect(f.store.memories.remove(memory.ref, self)).rejects.toMatchObject(ownerOnly)
+    const mine = await f.store.facts.add({ type: "fact", statement: "Mine", by: agent, evidence: [f.note.ref] })
+    expect(await f.store.facts.remove(mine.ref, self)).toMatchObject({ removed: true })
+  })
+
+  it("SEC-9: the store keeps agent decisions off when the host turns them off", async () => {
+    const path = join(mkdtempSync(join(tmpdir(), "decisions-")), "store.db")
+    const store = await openStore({ path, decisions: { agentDecisions: false, ruleProposalsOwnerOnly: true } })
+    handles.push(store)
+    const note = await store.notes.addNote({ text: "Kickoff moved" })
+    const fact = await store.facts.add({ type: "fact", statement: "Kickoff", by: agent, evidence: [note.ref] })
+    await expect(store.facts.accept(fact.ref, { bot: "codex", reason: "the note" })).rejects.toMatchObject({
+      details: { reason: "proposals.agent-decisions-off" },
+    })
+  })
+
+  it("SEC-10: a bot is the same bot whatever its letter case", async () => {
+    const f = await setup()
+    const fact = await f.store.facts.add({ type: "fact", statement: "Kickoff", by: agent, evidence: [f.note.ref] })
+    await expect(f.store.facts.accept(fact.ref, { bot: "Claude-Code", reason: "the note" })).rejects.toMatchObject(own)
+  })
+})
