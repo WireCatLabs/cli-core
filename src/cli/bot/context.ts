@@ -1,5 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import type { Command } from "commander"
+import { chatReferenceOf, wrongAccount } from "../../domain/ref-arguments.js"
 import { pickChat } from "../../resolve.js"
 import { sendGuard } from "../../sends/guard.js"
 import { SendJournal } from "../../sends/journal.js"
@@ -92,9 +93,15 @@ export const botContext = (command: Command, bot: BotMessenger) => {
         recipients: recipients(),
         warn: base.renderer.warn,
       }),
-    /** A chat id, `user:<id>`, or the title of a chat this bot has seen — never a guess. */
+    /** A chat id, `user:<id>`, a `chat:` or `msg:` reference, or the title of a chat this bot has seen — never a guess. */
     chatRef: (typed: string): BotChatRef => {
       const trimmed = typed.trim()
+      const named = chatReferenceOf(trimmed, bot.provider)
+      if (named) {
+        const own = registry.botId()
+        if (own === undefined || own !== named.account) throw wrongAccount(named, { account: own, profile })
+        return named.chat
+      }
       if (/^-?\d+$/.test(trimmed) || /^user:\d+$/.test(trimmed)) return trimmed
       const known = registry.list()
       // A bot that never had a token has seen no chat, and its missing token is what needs fixing.

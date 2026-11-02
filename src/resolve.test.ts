@@ -80,4 +80,13 @@ describe("a person named by name or @username", () => {
   it("asks which one when a fragment matches two", () => {
     expect(() => pickPerson("Иван", lookup)).toThrow(/matches 2 people/)
   })
+
+  it("takes this messenger's contact reference as the id, and refuses another messenger's", () => {
+    const telegram = { ...lookup, provider: "telegram" }
+    expect(pickPerson("contact:telegram/-5", telegram).name).toBe("Иван Петров")
+    expect(() => pickPerson("contact:telegram/404", telegram)).toThrow(/no person 404/)
+    expect(() => pickPerson("contact:max/-5", telegram)).toThrow(
+      /is a MAX contact; open it with max <profile> contacts show/,
+    )
+  })
 })
