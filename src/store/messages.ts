@@ -56,13 +56,10 @@ export interface AccountMessages {
   /** Oldest to newest, like a provider's history page. */
   /**
    * `threadId` keeps one forum topic's; `outgoing` only the owner's (true) or only the others' (false); `starred`
-   * only the ones the owner starred (true) or did not (false).
+   * only the ones the owner starred (true) or did not (false). `after` reads forward instead of back, and `until`
+   * ends the window; `reads.MessagePageWindow` says how.
    */
-  messages(
-    key: AccountKey,
-    chatId: Id,
-    window: { limit: number; before?: Id; since?: string; threadId?: Id; outgoing?: boolean; starred?: boolean },
-  ): Promise<Page<Message>>
+  messages(key: AccountKey, chatId: Id, window: reads.MessagePageWindow): Promise<Page<Message>>
   /** How many stored messages the chat has, sent at `since` or later when it is given. */
   countMessages(key: AccountKey, chatId: Id, options?: { since?: string }): Promise<number>
   /** Saved or edited after `at` (ISO, this machine's clock), oldest first, and the ids deleted after it. */
