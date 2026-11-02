@@ -1,4 +1,5 @@
 import {
+  CliError,
   createRenderer,
   processStreams,
   type Renderer,
@@ -6,6 +7,7 @@ import {
   type Streams,
   singleLine,
 } from "@wirecat/cli-base"
+import { COMPACT_FLAG } from "@wirecat/cli-base/standards"
 import { fieldsOf, projectFields } from "./cli/result-fields.js"
 import { atDetail, type Detail } from "./output-detail.js"
 
@@ -23,6 +25,25 @@ export interface OutputOptions {
   hitDetail?: Detail
   /** Takes the answer as an object in place of printing it — an agent's run (`BaseEnvironment.agent`). */
   capture?: (value: unknown) => void
+  /** One line per item (WC-OUT-24); anything printed past `renderAnswer` stays JSON. */
+  compact?: boolean
+}
+
+const refuseCompact = ({ json, jsonl, fields, hitDetail }: OutputOptions): void => {
+  const other = jsonl
+    ? "--jsonl"
+    : fields !== undefined
+      ? "--json=…"
+      : json
+        ? "--json"
+        : hitDetail === "brief"
+          ? "--brief"
+          : ""
+  if (other)
+    throw new CliError("validation_error", `${COMPACT_FLAG} and ${other} ask for different output — pick one`, {
+      reason: "output.conflict",
+      param: COMPACT_FLAG,
+    })
 }
 
 /**
@@ -44,9 +65,11 @@ export const resolveOutput = ({
   hitDetail,
   env = process.env,
   capture,
+  compact,
 }: OutputOptions = {}) => {
+  if (compact) refuseCompact({ json, jsonl, fields, hitDetail })
   const interactive = tty ?? process.stdout.isTTY === true
-  const format: RenderFormat = jsonl ? "jsonl" : json || !interactive ? "json" : "pretty"
+  const format: RenderFormat = jsonl ? "jsonl" : json || compact || !interactive ? "json" : "pretty"
   const painted = format === "pretty" && (color ?? (env.NO_COLOR === undefined && env.TERM !== "dumb" && !env.CI))
   const printing = createRenderer({ format, color: painted, streams })
   const rendered = capture
@@ -75,7 +98,13 @@ export const resolveOutput = ({
           }
         : created
 
-  return { format, color: painted, streams, renderer: quiet ? silence(renderer) : renderer }
+  return {
+    format,
+    color: painted,
+    streams,
+    renderer: quiet ? silence(renderer) : renderer,
+    ...(compact ? { compact: true, full: hitDetail === "full" } : {}),
+  }
 }
 
 /** Fields a person writes in paragraphs; every other string is a name, a title, an id or a path. */

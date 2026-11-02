@@ -135,6 +135,7 @@ const OTHERS: Entry[] = [
   ],
   validation("name.invalid", "the name is not valid"),
   validation("output.choose-fields", "at a terminal, --json names the fields it prints"),
+  validation("output.conflict", "two output switches ask for different output"),
   validation("output.one-object", "a report is one JSON object; --jsonl streams lists only"),
   validation("output.unknown-field", "the answer has no field by that name"),
   validation("name.taken", "the name is already used"),
