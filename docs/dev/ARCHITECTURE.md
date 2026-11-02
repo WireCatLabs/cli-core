@@ -430,12 +430,20 @@ SQLite file next to the shared store, with the CLI's own migrations (NEED-1737);
 needs one.
 
 **The provider registry.** cli-core no longer needs a release per provider. A CLI calls `registerProvider`
-(`src/store/providers.ts`, exported from `./store`) on every run; it writes `{ name, kind, aliases, command }` into
+(`src/store/providers.ts`, exported from `./store`) on every run; it writes `{ name, kind, aliases, command, opens }` into
 `store_settings` under the key `providers` (`src/store/sqlite/providers.ts`). Every store handle loads the stored
 entries when it opens (`src/store/sqlite/open-store.ts:78`) on top of the built-ins (`PROVIDERS`,
 `src/domain/providers.ts:17`), so `kindOf` and `providerNamed` keep their signatures. Two entries with different
 kinds fail with both names. Searches skip the accounts of a provider nobody registered and list them under `skipped`
-(`UNKNOWN_PROVIDER`, `src/search/account-list.ts:258`).
+(`UNKNOWN_PROVIDER`, `src/search/account-list.ts:258`). `opens` names the read command, after `<command> <profile>`,
+that opens each kind of reference (`{ document: "documents show" }`); the tg, max and wa seeds open chats, messages
+and contacts. `openOf` builds a ref's open command from it, so a new CLI's refs open in memo with no change here.
+
+**Ref summaries.** `store.refs.summaries(refs)` (`src/store/sqlite/ref-summaries.ts`) names a page of refs in one
+statement per kind present: a `VALUES` list of the wanted refs joined to the kind's table. It never throws: a bad ref
+is `unknown`, one the store lacks `unavailable`. Titles never hold a message body; `{ excerpt: true }` adds at most 280
+characters of it. Evidence sources (`evidence-sources.ts`) read through it. `refLabel` and `openOf`
+(`src/domain/ref-summaries.ts`) are the one label and the one open command every caller prints.
 
 **Documents and files — not built yet.** A new `files` table holds one row per item in one place: a local file, a
 Drive file or folder, later a Notion page. A folder is a `files` row; children point at it with `parent_id`, and

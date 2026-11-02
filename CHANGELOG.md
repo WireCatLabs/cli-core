@@ -85,6 +85,16 @@ shape of this file.
   **`knowledge.decideSuggestedLink(id, decision)`** an older unconfirmed link, each in one transaction: the link and
   the decision land together or not at all. A decision's `reason` is kept: on a rejected proposal as its result, on a
   fact in `metadata.decision`, on an evidence findings receipt.
+- **`store.refs.summaries(refs, { excerpt? })` says what any ref names**, a page at a time: kind, title, what holds
+  it, when, provider, account, the CLI that opens it and whether it is `available`, `deleted` or `unavailable`. One
+  statement per kind present, offline. A malformed ref comes back `unknown`, never thrown, so one bad row cannot fail
+  a page. Titles hold no message text; `{ excerpt: true }` adds at most 280 characters. Read once per page.
+- **`refLabel(summary)` and `openOf(summary, { profilesFor, local? })`** (`./cli`): the one label
+  (`Chat «Title» (MAX)`) and the command that opens a ref. `openOf` never picks a profile: with none or several,
+  `argv` keeps `<profile>` and `profiles` lists the choices. Kinds no CLI owns open with the caller's `local` words.
+- **`ProviderEntry.opens`**: the read command that opens each kind of ref (`{ document: "documents show" }`). A CLI
+  writes it with `registerProvider`; tg, max and wa open `chat`, `message` and `contact` from the built-ins. A kind
+  this build does not know is dropped, so an older build still reads a newer entry.
 - **A relationship's purpose (store version 44).** `links.purpose`, read as `purpose` on a relationship, a link and
   the `relationship` entity, says what a chat is for in a project; `null` means `work`. The store keeps no list of
   purposes: the caller checks one against its config. `relate` and `proposeRelation` take `purpose`.
@@ -133,6 +143,9 @@ shape of this file.
   the agent's bot and reason otherwise.
   An agent's confirmation of a relationship is recorded in the link's provenance, and of a fact or proposal as its
   decider.
+- **Evidence sources read through `store.refs`.** `memories.sources`, `facts.sources` and `evidenceFindings.sources`
+  keep their shape; a contact now says `kind: "contact"` (was `identity`), a mail ref the store lacks says `email`
+  (was `message`), and kinds that had no title before (person, project, task, chat…) now have one.
 - **Unconfirmed agent and rule links move into proposals (store version 44).** The first writable open after the
   upgrade turns each into a `relationship` or `key_document` proposal with its bot, reason and time, and deletes the
   link; Drive's editor links stay. Only the owner decides a moved one, since its bot came from free text. An older
