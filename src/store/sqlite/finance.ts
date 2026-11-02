@@ -189,7 +189,7 @@ export interface FinanceStore {
   ): Promise<Invoice[]>
   /** The owner sends a draft: its status then follows its allocations. */
   issueInvoice(reference: string, by: Author): Promise<InvoiceDetail>
-  /** The owner cancels an invoice that nothing is allocated to. */
+  /** The owner cancels an invoice no confirmed payment is allocated to; proposed allocations to it go. */
   voidInvoice(reference: string, by: Author): Promise<InvoiceDetail>
   addPayment(input: PaymentInput): Promise<PaymentDetail>
   payment(reference: string): Promise<PaymentDetail>
@@ -199,7 +199,10 @@ export interface FinanceStore {
    * payment; a bot only one it proposed that is still proposed.
    */
   allocate(input: { payment: string; invoice: string; amount: string; by: Author }): Promise<Allocation>
-  /** The owner confirms a proposed `invoice:` or `payment:`; only the owner decides money. */
+  /**
+   * The owner confirms a proposed `invoice:` or `payment:`; only the owner decides money. A payment whose allocations
+   * would settle more than an invoice's total, given the confirmed payments by then, is refused and stays proposed.
+   */
   confirm(reference: string, by: Decider, reason?: string): Promise<InvoiceDetail | PaymentDetail>
   /** The owner turns a proposal down; it stays, `rejected`, and its allocations go. */
   reject(reference: string, by: Decider, reason?: string): Promise<InvoiceDetail | PaymentDetail>
@@ -442,8 +445,11 @@ export const financeOperationsOver = (context: StoreContext): FinanceOperations 
       )
     const toInvoice = Number(
       database
-        .prepare("SELECT coalesce(sum(amount), 0) AS n FROM payment_allocations WHERE invoice_id = ?")
-        .get(Number(invoice.id))?.n,
+        .prepare(
+          "SELECT coalesce(sum(a.amount), 0) AS n FROM payment_allocations a JOIN payments p ON p.id = a.payment_id " +
+            "WHERE a.invoice_id = ? AND ((p.review = 'confirmed' AND p.deleted_at IS NULL) OR a.payment_id = ?)",
+        )
+        .get(Number(invoice.id), Number(payment.id))?.n,
     )
     if (toInvoice + units > Number(invoice.total))
       refuse(
@@ -493,6 +499,26 @@ export const financeOperationsOver = (context: StoreContext): FinanceOperations 
       .run(JSON.stringify(decision), id)
   }
 
+  /** A proposed payment's allocations count once confirmed; by then other confirmed payments may cover the invoice. */
+  const coveredElsewhere = (paymentId: number) => {
+    const over = database
+      .prepare(
+        "SELECT a.invoice_id, a.amount, i.total, i.currency, (SELECT coalesce(sum(o.amount), 0) FROM payment_allocations o " +
+          "JOIN payments p ON p.id = o.payment_id WHERE o.invoice_id = a.invoice_id AND o.payment_id <> a.payment_id " +
+          "AND p.review = 'confirmed' AND p.deleted_at IS NULL) AS others FROM payment_allocations a " +
+          "JOIN invoices i ON i.id = a.invoice_id WHERE a.payment_id = ? AND a.amount + others > i.total LIMIT 1",
+      )
+      .get(paymentId)
+    if (!over) return
+    const currency = String(over.currency)
+    refuse(
+      `invoice:${over.invoice_id} is already covered by other payments: ${moneyLabel(Number(over.others), currency)} ` +
+        `of ${moneyLabel(Number(over.total), currency)}; payment:${paymentId} would add ` +
+        `${moneyLabel(Number(over.amount), currency)}, so it stays proposed`,
+      "finance.over-invoice",
+    )
+  }
+
   const decide = (reference: string, by: Decider, reason: string | undefined, confirm: boolean) => {
     const thing = requiredThing(database, reference, "the proposal")
     if (thing.type !== "invoice" && thing.type !== "payment")
@@ -510,6 +536,7 @@ export const financeOperationsOver = (context: StoreContext): FinanceOperations 
     const id = Number(row.id)
     write(database, () => {
       const at = now()
+      if (confirm && type === "payment") coveredElsewhere(id)
       if (confirm) {
         const { actor } = authorActor(context, deciderAuthor(by))
         database
@@ -679,11 +706,22 @@ export const financeOperationsOver = (context: StoreContext): FinanceOperations 
       const row = rowOf(reference, "invoice")
       if (row.status === "void") refuse(`invoice:${row.id} is already void`, "finance.status")
       const allocated = database
-        .prepare("SELECT 1 FROM payment_allocations WHERE invoice_id = ? LIMIT 1")
+        .prepare(
+          "SELECT 1 FROM payment_allocations a JOIN payments p ON p.id = a.payment_id " +
+            "WHERE a.invoice_id = ? AND p.review = 'confirmed' AND p.deleted_at IS NULL LIMIT 1",
+        )
         .get(Number(row.id))
       if (allocated)
         refuse(`payments are allocated to invoice:${row.id}; a paid invoice is not voided`, "finance.status")
-      database.prepare("UPDATE invoices SET status = 'void', updated_at = ? WHERE id = ?").run(now(), Number(row.id))
+      write(database, () => {
+        database
+          .prepare(
+            "DELETE FROM payment_allocations WHERE invoice_id = ? " +
+              "AND payment_id IN (SELECT id FROM payments WHERE review = 'proposed')",
+          )
+          .run(Number(row.id))
+        database.prepare("UPDATE invoices SET status = 'void', updated_at = ? WHERE id = ?").run(now(), Number(row.id))
+      })
       return invoiceDetail(`invoice:${row.id}`)
     },
     addPayment: (input) => {

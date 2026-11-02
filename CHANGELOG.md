@@ -16,8 +16,9 @@ shape of this file.
   allocation never exceeds the payment or the invoice or crosses currencies; triggers back the code. The status
   follows confirmed allocations; only the owner issues a draft or voids an invoice.
 - **An agent's or an import's invoice or payment is a proposal.** The owner's entry is confirmed at once; a bot's
-  waits as `invoice` or `payment` in `proposalRegistry`, and only the owner decides it. Confirming counts its
-  allocations in the same write; rejecting drops them.
+  waits as `invoice` or `payment` in `proposalRegistry`, and only the owner decides it. A pending payment's
+  allocations never count against an invoice, so they never block the owner's own. Confirming one counts them in the
+  same write, or is refused while other confirmed payments already cover the invoice; rejecting drops them.
 - **`invoice:<id>` and `payment:<id>` references,** with `refs.summaries` titles such as
   `42 · 50 000.00 RUB to ООО Ромашка, due 15.11 (partly paid)`.
 

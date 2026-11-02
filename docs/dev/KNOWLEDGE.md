@@ -117,7 +117,10 @@ reason and triggers refuse a write that slips past. The status (`draft`, `issued
 follows the allocations of confirmed payments; only the owner issues a draft or voids an invoice nothing is
 allocated to. The owner's entry is confirmed at once; an agent's or an import's is `review: proposed`, an `invoice`
 or `payment` proposal named by its own ref, which only the owner decides. A bot allocates only from a payment it
-proposed that is still proposed; a rejected payment's allocations go. `openTotals` sums what confirmed open invoices
+proposed that is still proposed. An invoice's limit counts confirmed payments only, so a pending proposal never blocks
+the owner; confirming a payment checks the limit again and is refused, the payment staying proposed, when other
+confirmed payments already cover the invoice. A rejected payment's allocations go, and so do pending ones to an
+invoice the owner voids. `openTotals` sums what confirmed open invoices
 still owe, per direction and currency.
 
 ## Link proposals from scorers

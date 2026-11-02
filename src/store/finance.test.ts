@@ -289,3 +289,39 @@ it("keeps a draft unpaid until the owner issues it, and proposes an agent's invo
   await f.registry.decide([agents.ref], { confirm: true, by: "owner" })
   expect((await f.store.finance.openTotals()).payable).toEqual([{ amount: "7000.00", currency: "RUB", invoices: 1 }])
 })
+
+it("never lets an agent's pending payment block the owner, and refuses to confirm it once the invoice is covered", async () => {
+  const f = await fixture()
+  const invoice = await f.invoice()
+  const pending = await f.store.finance.addPayment({
+    by: claude,
+    direction: "in",
+    payer: f.romashka.ref,
+    amount: "50000.00",
+    currency: "RUB",
+    date: "2026-11-14",
+    allocations: [{ invoice: invoice.ref, amount: "50000.00" }],
+  })
+  await expect(
+    f.store.finance.allocate({ payment: pending.ref, invoice: invoice.ref, amount: "0.01", by: claude }),
+  ).rejects.toMatchObject({ details: { reason: "finance.over-payment" } })
+
+  const owners = await f.payment("50000.00", { allocations: [{ invoice: invoice.ref, amount: "50000.00" }] })
+  expect(owners).toMatchObject({ review: "confirmed", allocated: "50000.00" })
+  expect(await f.store.finance.invoice(invoice.ref)).toMatchObject({ status: "paid", paid: "50000.00" })
+
+  const decided = await f.registry.decide([pending.ref], { confirm: true, by: "owner" })
+  expect(decided.refused).toMatchObject([{ id: pending.ref, reason: "finance.over-invoice" }])
+  expect(decided.refused[0]?.message).toContain(`${invoice.ref} is already covered by other payments`)
+  await expect(f.store.finance.confirm(pending.ref, "owner")).rejects.toMatchObject({
+    details: { reason: "finance.over-invoice" },
+  })
+  expect(await f.store.finance.payment(pending.ref)).toMatchObject({ review: "proposed", allocated: "50000.00" })
+  expect(await f.store.finance.invoice(invoice.ref)).toMatchObject({ status: "paid", paid: "50000.00" })
+
+  const database = await openCache(f.path)
+  expect(() =>
+    database.prepare("UPDATE payments SET review = 'confirmed' WHERE id = ?").run(Number(pending.id)),
+  ).toThrow(/payments/)
+  database.close()
+})
