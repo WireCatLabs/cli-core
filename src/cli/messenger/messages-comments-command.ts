@@ -7,7 +7,7 @@ import { listOf, renderAnswer } from "../envelope.js"
 import { queryHelp } from "../list-query.js"
 import { positiveCount } from "../paging.js"
 import { type Messenger, messengerContext } from "./context.js"
-import { COMMENTS_QUERY, cursorOf, historyWindow } from "./history-query.js"
+import { COMMENTS_QUERY, cursorOf, historyWindow, resumeQuery } from "./history-query.js"
 import { messageItems, viewOf } from "./message-items.js"
 
 export const commentsCommand = (messenger: Messenger): Command => {
@@ -45,6 +45,8 @@ export const commentsCommand = (messenger: Messenger): Command => {
         reader: await services.messages.reader(),
       }))
       const next = found.hasMore ? cursorOf(window, { first: found.items[0]?.id }) : undefined
+      const typed = next === undefined ? query.join(" ") : resumeQuery(query, "messages comments", COMMENTS_QUERY)
+      const queryArg = typed ? { query: typed } : {}
       renderAnswer(
         this,
         context,
@@ -54,7 +56,7 @@ export const commentsCommand = (messenger: Messenger): Command => {
           has_more: found.hasMore,
           paging: "cursor",
           ...(next === undefined ? {} : { cursor: next }),
-          args: { chat, post, ...(query.length > 0 ? { query: query.join(" ") } : {}) },
+          args: { chat, post, ...queryArg },
         }),
         () => renderMessages(found.items, viewOf(context, messenger)),
       )

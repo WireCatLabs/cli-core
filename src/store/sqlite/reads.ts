@@ -64,6 +64,8 @@ export const selectMessages = ({ orm }: StoreContext) =>
 
 export const newestFirst = [desc(messages.sentAt), desc(messages.id)]
 
+const oldestFirst = [asc(messages.sentAt), asc(messages.id)]
+
 export const before = (sentAt: number, pk: number) => sql`(${messages.sentAt}, ${messages.id}) < (${sentAt}, ${pk})`
 
 const after = (sentAt: number, pk: number) => sql`(${messages.sentAt}, ${messages.id}) > (${sentAt}, ${pk})`
@@ -150,18 +152,28 @@ export const messagesWindow = (
   return toMessages(context, [...older.reverse(), ...newer])
 }
 
+/**
+ * `before` pages back from a message, newest page first. `after` reads forward from a message or strictly after a
+ * moment (epoch ms), oldest first. `until` (epoch ms, inclusive) ends either read.
+ */
+export interface MessagePageWindow {
+  limit: number
+  before?: Id
+  after?: { id: Id } | { time: number }
+  since?: string
+  until?: number
+  threadId?: Id
+  outgoing?: boolean
+  starred?: boolean
+}
+
 export const messagePage = (
   context: StoreContext,
   chatKey: number,
-  {
-    limit,
-    before: anchorId,
-    since,
-    threadId,
-    outgoing,
-    starred,
-  }: { limit: number; before?: Id; since?: string; threadId?: Id; outgoing?: boolean; starred?: boolean },
+  { limit, before: beforeId, after: start, since, until, threadId, outgoing, starred }: MessagePageWindow,
 ): Page<Message> => {
+  const forward = start !== undefined
+  const anchorId = forward ? ("id" in start ? start.id : undefined) : beforeId
   const anchor =
     anchorId === undefined
       ? undefined
@@ -177,8 +189,10 @@ export const messagePage = (
     .where(
       live(
         chatKey,
-        anchor ? before(anchor.sentAt, anchor.pk) : undefined,
+        anchor ? (forward ? after : before)(anchor.sentAt, anchor.pk) : undefined,
+        start !== undefined && "time" in start ? gt(messages.sentAt, start.time) : undefined,
         since === undefined ? undefined : gte(messages.sentAt, toMs(since) as number),
+        until === undefined ? undefined : lte(messages.sentAt, until),
         threadId === undefined ? undefined : eq(messages.threadExternalId, threadId),
         outgoing === undefined
           ? undefined
@@ -192,10 +206,11 @@ export const messagePage = (
             : or(eq(messages.starred, 0), isNull(messages.starred)),
       ),
     )
-    .orderBy(...newestFirst)
+    .orderBy(...(forward ? oldestFirst : newestFirst))
     .limit(limit + 1)
     .all()
-  return { items: toMessages(context, rows.slice(0, limit)).reverse(), hasMore: rows.length > limit }
+  const page = toMessages(context, rows.slice(0, limit))
+  return { items: forward ? page : page.reverse(), hasMore: rows.length > limit }
 }
 
 export const around = (
