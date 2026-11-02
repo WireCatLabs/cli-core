@@ -483,6 +483,8 @@ const kind: FieldCompiler = messengerOnly(({ value }) => always(bound(`${PEER_KI
 
 const has: FieldCompiler = ({ value }, { corpus, mail }) => {
   const wanted = value.toLowerCase()
+  if (wanted === "transcript")
+    return always(bound(mail ? "0" : "EXISTS (SELECT 1 FROM message_transcripts t WHERE t.message_id = m.id)"))
   return always(
     wanted === "text"
       ? bound("length(trim(coalesce(m.text,''))) > 0")

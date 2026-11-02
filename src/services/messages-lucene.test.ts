@@ -220,6 +220,22 @@ describe.each(["max", "telegram"])("strict store profile (%s)", (provider) => {
     expect(ids(await run(store, account, "has:link"))).toEqual([1, 2, 3])
     expect(ids(await run(store, account, "look AND NOT has:link"))).toEqual([4])
   })
+  it("**has:transcript** finds a voice message that has a transcription", async () => {
+    const store = await open()
+    await store.chats.saveChats(account, [chat("1")])
+    const voice = { attachments: [{ kind: "voice" as const }] }
+    await store.messages.saveMessages(
+      account,
+      "1",
+      [message("1", "1", "", voice), message("2", "1", "", voice), message("3", "1", "hi")],
+      { via: "history" },
+    )
+    await store.messages.keepTranscript(account, "1", "2", "spoken words", "synthetic")
+    expect(ids(await run(store, account, "has:transcript"))).toEqual([2])
+    expect(ids(await run(store, account, "has:voice AND NOT has:transcript"))).toEqual([1])
+    const byDay = await statsStore(store, account, { text: "has:transcript", limit: 10, by: "day", timezone: "UTC" })
+    expect(byDay.items.map(({ key, count }) => ({ key, count }))).toEqual([{ key: "2026-01-01", count: 1 }])
+  })
   it("reads relative dates against the current time", async () => {
     const store = await open()
     await store.chats.saveChats(account, [chat("1")])
