@@ -65,6 +65,8 @@ export interface BaseEnvironment {
    * message was handled, and nothing was sent" instead of on the next event or a sleep.
    */
   handled?: (event: MessageEvent) => void
+  /** A test's hook into `serve`: how long it waits after connecting before its catch-up pass. */
+  startSyncDelayMs?: number
   /** Set by an MCP server on a command it runs for an agent (`runCommandForAgent`). */
   agent?: AgentRun
   /** Set by `run()`: the words it was given, which a run keeps as `record_input` says (`maskArgv`). */

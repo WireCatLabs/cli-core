@@ -7,6 +7,17 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`serve` reads back on start what arrived while nothing listened.** A provider's own catch-up drops a gap it
+  finds too long (Telegram's `differenceTooLong`, and `channelDifferenceTooLong` past 100 updates in a channel), so
+  30 seconds after connecting `serve` lists the chats once and reads each chat whose newest message is newer than the
+  newest one held from before it started back to that one; a chat never held, back to the newest message held
+  anywhere. At most 7 days back, 500 messages a chat and 5 minutes; an empty store is left to `messages sync --all`,
+  and a messenger that pushes its history (`history: "store"`) is skipped. The summary gains
+  `caught_up: { chats, fetched, failed, stopped }`; the log gains `start_sync`, `start_sync_chat_failed` and
+  `start_sync_failed`.
+
 ## 0.551.0 — 02.11.2026
 
 ### Added

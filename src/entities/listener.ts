@@ -45,5 +45,6 @@ export const serveSummary = v.strictObject({
   replies: v.optional(v.strictObject({ sent: totals, skipped: totals, tasks: v.optional(totals) })),
   members: v.optional(v.strictObject({ fetched: count, failed: count })),
   stems: v.optional(v.strictObject({ stemmed: count })),
+  caught_up: v.optional(v.strictObject({ chats: count, fetched: count, failed: count, stopped: v.boolean() })),
   tasks: v.optional(v.strictObject({ added: count, closed: count, review: count })),
 })
