@@ -22,12 +22,12 @@ import {
   folderEmails,
   forgetLocations,
   locate,
-  type PartialEmail,
-  partialEmails,
+  type PartialMailStore,
+  partialMail,
   setLocations,
+  storedWhole,
 } from "./email-locations.js"
 import { markEmailsDeleted, markEmailsRestored, recountEmailThread as recount, setEmailFlags } from "./email-state.js"
-
 import { bool, flag, fromJson, int, page, str, toJson } from "./events.js"
 import { folded } from "./folded.js"
 import { ensurePerson } from "./identities.js"
@@ -40,7 +40,7 @@ import { type ThreadFilter, threadRows } from "./thread-columns.js"
 import { write } from "./transaction.js"
 import { dropUnusedVectors } from "./vector-index.js"
 
-export type { EmailLocationInput, FolderEmail, PartialEmail }
+export type { EmailLocationInput, FolderEmail, PartialEmail } from "./email-locations.js"
 
 import { dot } from "./vectors.js"
 
@@ -285,7 +285,7 @@ export interface SenderScore {
 }
 
 /** Mail in tables of its own: threads, emails, recipients and mailboxes, keyed by account and Message-ID. */
-export interface MailStore {
+export interface MailStore extends PartialMailStore {
   saveThread(input: ThreadSave): Promise<ThreadDetails>
   /** Several threads and sync state in one transaction: a slice of mail commits with its resume point, or not at all. */
   saveThreads(inputs: ThreadSave[], states?: SyncStateSave[]): Promise<ThreadDetails[]>
@@ -297,7 +297,6 @@ export interface MailStore {
   emails(filter?: EmailFilter): Promise<Email[]>
   /** Each matching email's Message-ID and mailboxes, without text or people: cheap over a whole mailbox. */
   emailRefs(filter?: Omit<EmailFilter, "limit" | "offset">): Promise<EmailRef[]>
-  partialEmails(accountId: number, limit: number): Promise<{ emails: PartialEmail[]; total: number }>
   /** Each matching email's sender, recipients, list, size, flag and mailboxes, oldest first; no text. */
   emailFacts(filter?: Omit<EmailFilter, "limit" | "offset">): Promise<EmailFacts[]>
   /**
@@ -550,6 +549,7 @@ const saveEmail = (
   const found = database
     .prepare("SELECT id, email_thread_id FROM emails WHERE account_id = ? AND external_id = ?")
     .get(accountId, mail.externalId)
+  if (found && mail.metadata?.partial !== undefined && storedWhole(database, Number(found.id))) return null
   let emailId: number
   if (found) {
     emailId = Number(found.id)
@@ -859,7 +859,7 @@ export const mailStoreOver = (
         mailboxes: JSON.parse(String(row.boxes)) as EmailRef["mailboxes"],
       }))
   },
-  partialEmails: async (accountId, limit) => partialEmails(database, accountId, limit),
+  ...partialMail(database),
   async emailFacts(filter = {}) {
     const [where, params] = emailWhere(filter)
     return database
