@@ -377,6 +377,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--debug` |  | switch | on failure, show the full error record: cause and stack |  |
 | `--agent-json` |  | switch | JSON with control and direction characters made visible in strings and keys |  |
 | `--brief` |  | switch | each item as its reference, title, time and excerpt only |  |
+| `--compact` |  | switch | one line per item, built from the same answer as --json, with its paging and next steps as # lines |  |
 | `--chart-kind` | `<messages\|active\|membership>` | choice | what a chart draws |  |
 | `--checkpoints` | `<durations>` | list | the ages to report on, comma-separated: 1d,7d,30d |  |
 | `--fields` | `<paths>` | list | only these comma-separated fields of each item; list metadata stays |  |
@@ -934,6 +935,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--close-time` | `<delay>` | it closes by itself this long after sending, like 90s or 5m |  | `polls create` (tg-only) |
 | `--closed` | `<on\|off>` | on closes a forum topic to new messages, off reopens it |  | `topics edit` (tg-only) |
 | `--comment-to` | `<post>` | comment on this channel post; the comment goes to the post's discussion group |  | `messages send` (tg-only) |
+| `--compact` |  | one line per item, built from the same answer as --json, with its paging and next steps as # lines |  | every command |
 | `--component` | `<name>` | the ranking component whose contributing messages or answer pairs to read |  | `stats contacts evidence`, `stats messages evidence` |
 | `--concurrency` | `<n>` | remote: requests at once (default: 4) |  | `attachments extract`, `conversations embed` |
 | `--consent-provider` | `<identity>` | exact provider identity from consents list; defaults to every provider |  | `conversations consents remove` |

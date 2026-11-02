@@ -15,7 +15,10 @@ export interface CalendarSourceTraits {
   expands: "on-request" | "in-changes" | "local"
   /** The cursor encodes the window (Graph delta): a new window means a new full round. */
   cursorHoldsWindow: boolean
-  /** No incremental cursor: every run is a full list (an ICS feed). */
+  /**
+   * No incremental cursor: every run is a full list (an ICS feed). The token the last list gave still reaches
+   * `changes()`, so the source can ask whether anything changed since.
+   */
   fullListOnly: boolean
 }
 
@@ -30,6 +33,11 @@ export interface ChangePage {
   nextPage?: string
   /** On the last page: the cursor for the next run; `null` when the source has none. */
   cursor?: string | null
+  /**
+   * A full-list source's list is the one its token was given with (an ICS feed's 304): nothing was read, so nothing
+   * is saved and nothing stored is marked unseen. Only on a single page with no entries.
+   */
+  unchanged?: true
 }
 
 /** `reset`: the cursor is dead (Google 410, Graph `syncStateNotFound`, CalDAV `valid-sync-token`). */
@@ -67,7 +75,7 @@ export interface CalendarSource {
   readonly provider: string
   readonly traits: CalendarSourceTraits
   calendars(): Promise<CalendarInput[]>
-  /** `cursor: null` asks for a full list of the window. */
+  /** `cursor: null` asks for a full list of the window; a `fullListOnly` source lists in full whatever it is given. */
   changes(
     calendar: StoredCalendar,
     request: { cursor: string | null; page?: string; window: SyncWindow },

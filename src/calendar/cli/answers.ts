@@ -26,8 +26,8 @@ export const calendar = v.strictObject({
 /** `calendars add`: the feed's calendar, how many events the feed holds now, and the sync to run next. */
 export const calendarFeed = v.strictObject({ ...calendar.entries, events: count, hint: text })
 
-/** `calendars remove`: the feed's calendar, no longer synced, and how many stored entries were marked deleted. */
-export const calendarFeedRemoval = v.strictObject({ ...calendar.entries, removed: count })
+/** `calendars remove`: the feed's calendar, gone, how many stored entries were deleted, and how many events with them. */
+export const calendarFeedRemoval = v.strictObject({ ...calendar.entries, removed: count, events: count })
 
 const busyRow = v.strictObject({
   /** One of the account's calendars, by its id; or `person`, by the address asked. */
@@ -81,8 +81,20 @@ export const calendarSync = v.strictObject({
   hint: v.optional(text),
   /** What `sync --embed` embedded: `embedEvents`' answer. */
   embeddings: v.optional(v.strictObject({ model: text, embedded: count, left: v.boolean() })),
-  /** Each feed's events as read, and how many it could not take (`syncWithFeeds`). */
-  feeds: v.optional(v.array(v.strictObject({ calendar_id: v.number(), events: count, skipped: count }))),
+  /**
+   * Each feed's events as read, and how many it could not take (`syncWithFeeds`); `unchanged` when the feed answered
+   * 304 and the counts are those of the read before.
+   */
+  feeds: v.optional(
+    v.array(
+      v.strictObject({
+        calendar_id: v.number(),
+        events: count,
+        skipped: count,
+        unchanged: v.optional(v.literal(true)),
+      }),
+    ),
+  ),
 })
 
 export const calendarSyncProgress = v.strictObject({
