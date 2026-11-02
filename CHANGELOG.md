@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.560.0 — 02.11.2026
+
 ### Changed — may break callers
 
 - **Agents no longer decide for the owner by default; the owner turns it on.**
