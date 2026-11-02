@@ -224,6 +224,20 @@ export {
   type SavedRunSettings,
 } from "./command-runs.js"
 export { CONTRACT } from "./commands-command.js"
+export {
+  type CompactOptions,
+  compactText,
+  entityRows,
+  GENERIC_ROW,
+  type RowColumn,
+  type RowShape,
+  type RowsResolver,
+  type RowTable,
+  type RowValue,
+  rowShapeOf,
+  rowsOfEntity,
+  SHARED_ROWS,
+} from "./compact.js"
 export { refuseUnknownKey } from "./config-command.js"
 export {
   type ConfigIssue,
@@ -465,6 +479,15 @@ export {
   projectWindowOf,
   withSyncCommands,
 } from "./project-evidence.js"
+export {
+  type ProjectStatusHints,
+  type ProjectStatusItem,
+  projectStatusAnswer,
+  projectStatusRow,
+  projectStatusSchema,
+  projectStatusText,
+} from "./project-status.js"
+export { STATUS_ROWS, STATUS_SIGNAL_ROWS } from "./project-status-rows.js"
 export { fieldsOf, projectFields } from "./result-fields.js"
 export type { ScheduleHost } from "./schedule/schedule-command.js"
 export {

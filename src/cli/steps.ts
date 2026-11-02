@@ -58,7 +58,10 @@ export const STEPS = defineSteps([
   {
     id: "messages.list",
     command: "messages list",
-    args: [{ name: "chat", required: true }],
+    args: [
+      { name: "chat", required: true },
+      { name: "query", required: false },
+    ],
     why: "only the newest were read here; this reads the chat itself",
   },
   {

@@ -242,6 +242,9 @@
       "value": "<post>",
       "meaning": "comment on this channel post; the comment goes to the post's discussion group"
     },
+    "--compact": {
+      "meaning": "one line per item, built from the same answer as --json, with its paging and next steps as # lines"
+    },
     "--component": {
       "value": "<name>",
       "meaning": "the ranking component whose contributing messages or answer pairs to read"
@@ -1131,6 +1134,7 @@
   },
   "globalOptions": {
     "--brief": "all",
+    "--compact": "all",
     "--debug": "all",
     "--dry-run": "all",
     "--full": "all",
@@ -3709,6 +3713,17 @@
         "--since-time": "all",
         "--sync-first": "all",
         "--sync-time": "all"
+      }
+    },
+    "projects status": {
+      "in": ["max", "tg"],
+      "planned": {
+        "wa": "wa backlog: mount projectsCommand once wa is on cli-core 0.504.0"
+      },
+      "options": {
+        "--before-time": "all",
+        "--context-query": "all",
+        "--since-time": "all"
       }
     },
     "reactions": {

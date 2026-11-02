@@ -67,6 +67,36 @@ shape of this file.
   **`knowledge.decideSuggestedLink(id, decision)`** an older unconfirmed link, each in one transaction: the link and
   the decision land together or not at all. A decision's `reason` is kept: on a rejected proposal as its result, on a
   fact in `metadata.decision`, on an evidence findings receipt.
+- **`projects status <project>`: where a project stands, from the store alone, with no model call.** For each chat
+  confirmed as the project's or a child project's, in this profile's account: the last message, who replies next
+  (you, them, a member a message names, or nobody), open questions both ways, promises (stored tasks, promise facts,
+  and first person future words such as "пришлю" or "I'll send"), amounts with their direction and whether a later
+  message says paid, payment facts, how long each `--context-query` (words that all appear in one text) has been
+  quiet on their side, and how much of the chat the store holds. Open amounts are summed per direction and currency. Word matches are marked `basis: pattern`;
+  a message saying "paid" is `paid-mentioned`, never paid. At most two steps: sync the chat held in part, then read
+  the chat that needs you most. The other accounts' linked chats are named in `out_of_scope`. tg and max get it with
+  the `projects` group; `--compact` draws each signal with its own row.
+  - **For an app: `projectStatus(store, input)`, a list of signals in `STATUS_SIGNALS`.** A signal is one file with an
+    id, a version and `read`; one that throws is named in `failed` and the others still answer. Each built in signal
+    has its compact row in `STATUS_SIGNAL_ROWS`, also in `SHARED_ROWS`. `projectStatusAnswer` and `projectStatusText`
+    build the answer and the human form. `input.purposes` picks which chat purposes are read (`["work"]` until links
+    carry one). The `messages.list` step takes a `query`.
+- **`--compact`: one line per item for an agent, from the same answer `--json` prints.** `messages list <chat>
+  --compact` prints `#<id> · 10-01 09:12 · Анна · <text>` under one header line that names the shared ref prefix
+  (`ref: msg:max/500/-1001/<id>`), what every row has in common (the chat's title), the date span and the zone. Rows
+  from several chats keep their whole refs. Text stays on one line with control and direction characters made
+  visible, and is cut at 400 characters with `…(+N)`; `--full` keeps it whole. The paging, `missing`, the next steps
+  and an incomplete answer follow as `# more:`, `# missing:`, `# next:` and `# complete: false` lines on stdout, and
+  each command line in them carries `--compact` again. On 1 000 messages of one chat it is about 48 % of the JSON
+  bytes; the texts alone are 40 %. `--compact` with `--json`, `--json=…`, `--jsonl` or `--brief` fails with
+  `validation_error` (`output.conflict`); it never prompts, and exits with the code JSON would. MCP keeps JSON.
+  - **Every command that answers through `renderAnswer` gets it.** A command draws with its own row
+    (`answerEntity(cmd, name, schema, { row })`), its app's (`rows: { name: shape }` in the program definition,
+    which also draws an app entity listed inside one thing), the shared one in `SHARED_ROWS` (`message`,
+    `message.summary`, `message.hit`, `chat`), or the generic row: key, ref or id · title, name or path · state,
+    status or due date · text. A record or a list is never printed as a column's value. `RowShape` is data, and `compactText(body, shape,
+    options)` is pure, for an app that prints its own answers.
+  - What a command prints without `renderAnswer` stays JSON under `--compact`.
 
 ### Changed — may break callers
 
@@ -107,6 +137,8 @@ shape of this file.
   the agent's bot and reason otherwise.
   An agent's confirmation of a relationship is recorded in the link's provenance, and of a fact or proposal as its
   decider.
+- **cli-core now needs `@wirecat/cli-base` 0.74.0**, which holds the `--compact` switch's name. A CLI that pins
+  cli-base bumps it to 0.74.0 together with cli-core.
 
 ### Fixed
 
@@ -115,6 +147,10 @@ shape of this file.
   `1.200 €`, `$1,200`) are one number now, a decimal part after them is kept (`5 000.50 ₽`), and amounts keep two
   decimals instead of a whole number (`15.5 eur` was 16). This is the amount the duplicate check compares between
   two tasks, so a reminder worded with a grouped sum is no longer compared on the wrong figure.
+- **`--brief` now cuts a messenger search hit.** It only knew mail's camelCase hits, so `search messages --brief` in
+  tg, max and wa printed every field; it now keeps `ref`, `chat_title`, `timestamp`, `sender_name`, `excerpt` and
+  `score`. The default and `--full` answers are unchanged. Commands that print through `outputFor` now honour
+  `--brief` and `--full` too, and refuse them together as the others do.
 
 ### Security
 
