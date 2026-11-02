@@ -27,6 +27,12 @@ shape of this file.
   never dropped. `messages sync <chat> --full-history` fetches a chat and keeps its pushed history in full from then on
   (`history_included` in the answer). `ChatsStore` gains `historySkips`, `historyShapes`, `recordHistorySkips` and
   `setHistoryIncluded`; `Saving` takes `historyLimits`.
+- **Helpers for reading money and questions in a chat, for the project status work.** `amountsOf(text)` returns
+  every amount in a text, in order (`amountOf` is its first). `MONEY_REQUEST`, `MONEY_DONE` and `PROMISE` word lists
+  (ru, en, es) with `moneyClassesOf(text)` say which a text uses. `questions(messages, { asker: "owner" })` lists the
+  owner's own questions and whether anyone but the owner answered them, by a reply or by speaking next; the default,
+  `"others"`, is what it did before. `linkedChatsOf` is exported, now with each link's `role`, and so is
+  `AGENDA_DEFAULTS`, the silence `tasks agenda` waits before it lists a chat.
 - **`messages list` reads a window bounded on both sides, offline too.** The query takes a start and an end,
   `'date>=2026-10-01 date<2026-10-20'` or `'date:[2026-10-01 TO 2026-10-19]'`, and `id>` with `date<`. A start reads
   forward, oldest first, and stops at the end; an end alone reads back from it, newest page first, as before.
@@ -38,6 +44,11 @@ shape of this file.
 
 ### Fixed
 
+- **A sum written in groups of three read as the wrong amount: `50 000 ₽` was `0` and `4 300 ₽` was `300`**, because
+  only the last group was read. Groups after a space, a no-break or thin space, a dot or a comma (`50 000`,
+  `1.200 €`, `$1,200`) are one number now, a decimal part after them is kept (`5 000.50 ₽`), and amounts keep two
+  decimals instead of a whole number (`15.5 eur` was 16). This is the amount the duplicate check compares between
+  two tasks, so a reminder worded with a grouped sum is no longer compared on the wrong figure.
 - **`page.next` of `messages list` and `messages comments` runs as written.** It repeated the query's `id`/`date`
   bound beside `--cursor`, which the command refuses as two starting points; it now keeps only `topic:` and
   `starred:`.
