@@ -4,9 +4,10 @@ import * as chatQueries from "./sqlite/chats.js"
 import type { StoreContext } from "./sqlite/open.js"
 import * as ranges from "./sqlite/ranges.js"
 import * as sync from "./sqlite/sync.js"
+import { setTaskAnalysisMark, taskAnalysisMark, taskAnalysisMarks } from "./sqlite/task-analysis-marks.js"
 import { setTaskRulesStop, taskRulesStop } from "./sqlite/task-rule-stops.js"
 import { write } from "./sqlite/transaction.js"
-import type { AccountKey, Delta, Range } from "./types.js"
+import type { AccountKey, Delta, Range, TaskAnalysisMark, TaskAnalysisMarkWrite } from "./types.js"
 
 export interface SyncStore {
   /** What a sync remembered under `name` for this account, and when; a caller encodes a number itself. */
@@ -35,6 +36,10 @@ export interface SyncStore {
   /** Where the account's last task-rule pass stopped: the newest store time it read. */
   taskRulesStop(key: AccountKey): Promise<string | null>
   setTaskRulesStop(key: AccountKey, until: string): Promise<void>
+  /** Every chat of the account read for tasks, the latest moved first. */
+  taskAnalysisMarks(key: AccountKey): Promise<TaskAnalysisMark[]>
+  taskAnalysisMark(key: AccountKey, chatId: Id): Promise<TaskAnalysisMark | undefined>
+  setTaskAnalysisMark(key: AccountKey, mark: TaskAnalysisMarkWrite): Promise<void>
 }
 
 export const syncStoreOver = (context: StoreContext): SyncStore => {
@@ -92,5 +97,8 @@ export const syncStoreOver = (context: StoreContext): SyncStore => {
 
     taskRulesStop: async (key) => taskRulesStop(database, key),
     setTaskRulesStop: async (key, until) => setTaskRulesStop(database, key, until, context.now()),
+    taskAnalysisMarks: async (key) => taskAnalysisMarks(database, key),
+    taskAnalysisMark: async (key, chatId) => taskAnalysisMark(database, key, chatId),
+    setTaskAnalysisMark: async (key, mark) => setTaskAnalysisMark(database, key, mark, context.now()),
   }
 }

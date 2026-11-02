@@ -853,7 +853,9 @@ describe("the MCP server", () => {
       "tasks duplicates list",
       "tasks list",
       "tasks related",
+      "tasks review",
       "tasks show",
+      "tasks status",
       "topics icons list",
       "topics list",
     ])

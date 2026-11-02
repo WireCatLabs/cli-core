@@ -2,7 +2,7 @@ import * as v from "valibot"
 import { TASK_TYPES } from "../domain/knowledge.js"
 import { LINK_KINDS, LINK_SOURCES } from "../store/sqlite/link-kinds.js"
 import { PRIORITY_LABELS, TASK_KINDS, TASK_ORIGINS, TASK_STATES, TASK_VERDICTS } from "../tasks/index.js"
-import { count, id, reference, text, time } from "./fields.js"
+import { count, id, reference, text, time, untrusted } from "./fields.js"
 import { closeSuggestion } from "./task.js"
 import { taskPair } from "./task-pair.js"
 
@@ -141,4 +141,48 @@ export const taskScan = v.strictObject({
   held: v.optional(count),
   held_chats: v.optional(count),
   tasks: v.array(v.strictObject({ source: text, kind: v.picklist(TASK_KINDS), category: v.nullable(text) })),
+})
+
+export const taskAnalysisMark = v.strictObject({
+  chat: text,
+  from: time,
+  through: time,
+  through_id: text,
+  by: text,
+  checked_at: time,
+  checked_through: time,
+  at: time,
+})
+export const taskAnalysisMarkMoved = v.strictObject({ ...taskAnalysisMark.entries, moved: v.boolean() })
+export const taskAnalysis = v.strictObject({
+  chat: text,
+  title: v.nullable(text),
+  kind: text,
+  newest_at: nullableTime,
+  mark: v.nullable(taskAnalysisMark),
+  waiting: count,
+  late: count,
+  untrusted,
+})
+export const taskReview = v.strictObject({
+  chat: text,
+  from: time,
+  mark: v.nullable(taskAnalysisMark),
+  late: count,
+  has_more: v.boolean(),
+  through: v.nullable(reference),
+  messages: v.array(
+    v.strictObject({
+      ref: reference,
+      at: time,
+      sender: v.nullable(text),
+      outgoing: v.boolean(),
+      reply_to: v.nullable(text),
+      text,
+    }),
+  ),
+  open_tasks: v.array(
+    v.strictObject({ key: v.nullable(text), kind: text, title: v.nullable(text), source: v.nullable(text) }),
+  ),
+  untrusted,
 })

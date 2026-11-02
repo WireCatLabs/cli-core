@@ -65,6 +65,15 @@ shape of this file.
 
 ### Added
 
+- **Each chat keeps its own point of reading for tasks.** `review --new`, `inbox --new`, the messenger's read state
+  and other agents move their own points, so a message one of them showed could be skipped by the next task pass.
+  `tasks status` lists every chat that can hold tasks (not channels or Saved Messages) with how far it was read for
+  tasks, how many stored messages wait after that, and how many arrived late inside the stretch already read
+  (history fetched afterwards). `tasks review <chat>` gives the waiting messages, oldest first, with the chat's open
+  tasks, and moves nothing; `tasks acknowledge <chat> <message>` moves the point once the tasks are written, never
+  back. A chat never read starts 14 days back; `--since-time` reads a stretch again. The points live in
+  `store_settings`, so no migration; `SyncStore.taskAnalysisMarks`, `taskAnalysisMark` and `setTaskAnalysisMark`
+  read and write them. The follow-ups skill uses them. New permission key `tasks.acknowledge`.
 - **`serve` reads back on start what arrived while nothing listened.** A provider's own catch-up drops a gap it
   finds too long (Telegram's `differenceTooLong`, and `channelDifferenceTooLong` past 100 updates in a channel), so
   30 seconds after connecting `serve` lists the chats once and reads each chat whose newest message is newer than the

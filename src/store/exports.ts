@@ -133,5 +133,7 @@ export type {
   StoredHit,
   StoredLink,
   StoredReadiness,
+  TaskAnalysisMark,
+  TaskAnalysisMarkWrite,
 } from "./types.js"
 export type { AccountVectors, VectorsStore } from "./vectors.js"

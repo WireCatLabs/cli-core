@@ -31,6 +31,7 @@ import { positiveCount } from "../paging.js"
 import { type Messenger, messengerContext, refuseLocalWrite } from "./context.js"
 import { coverageGaps } from "./search-answers.js"
 import { refuseJsonl, taskStatsAnswer } from "./stats-answers.js"
+import { analysisCommands } from "./tasks-analysis-command.js"
 
 const line = ({ id, key, state, kind, group, createdAt, message, note }: TaskView) =>
   [
@@ -694,6 +695,8 @@ export const tasksCommand = (messenger: Messenger): Command => {
         () => `${passes.map((pass) => applyText(pass, yes, tool)).join("\n")}\n`,
       )
     })
+
+  analysisCommands(tasks, messenger)
 
   destroysNothing(
     annotate(tasks.command("claim"), {

@@ -136,6 +136,7 @@ describe("command effects", () => {
         "store jobs clear",
         "store jobs retry",
         "store rebuild",
+        "tasks acknowledge",
         "tasks add",
         "tasks claim",
         "tasks close",

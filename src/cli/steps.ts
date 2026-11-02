@@ -220,6 +220,16 @@ export const STEPS = defineSteps([
     why: "serve still runs an older version; a restart runs the one installed now",
   },
   {
+    id: "tasks.acknowledge",
+    command: "tasks acknowledge",
+    args: [
+      { name: "chat", required: true },
+      { name: "message", required: true },
+      { name: "since_time", required: false },
+    ],
+    why: "once the tasks these {shown} messages hold are opened, updated or closed, so the next review starts after them",
+  },
+  {
     id: "search.meetings",
     command: "*",
     args: [{ name: "max_meetings", required: true }],

@@ -4816,6 +4816,12 @@
     "tasks": {
       "in": "all"
     },
+    "tasks acknowledge": {
+      "in": "all",
+      "options": {
+        "--since-time": "all"
+      }
+    },
     "tasks add": {
       "in": "all",
       "options": {
@@ -4931,6 +4937,13 @@
         "--holder": "all"
       }
     },
+    "tasks review": {
+      "in": "all",
+      "options": {
+        "--limit": "all",
+        "--since-time": "all"
+      }
+    },
     "tasks scan": {
       "in": "all",
       "options": {
@@ -4939,6 +4952,12 @@
     },
     "tasks show": {
       "in": "all"
+    },
+    "tasks status": {
+      "in": "all",
+      "options": {
+        "--limit": "all"
+      }
     },
     "tasks unmerge": {
       "in": "all"

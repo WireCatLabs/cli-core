@@ -106,6 +106,9 @@ const setup = async (config?: object) => {
           "tasks unmerge": "task_unmerge",
           "tasks categories": "task_categories",
           "tasks scan": "task_scan",
+          "tasks status": "task_analysis",
+          "tasks review": "task_review",
+          "tasks acknowledge": "task_analysis_mark",
           "tasks claim": "task_card",
           "tasks release": "task_card",
           "tasks close": "task_closed",
@@ -178,6 +181,30 @@ describe("tasks", () => {
     const opened = json(await call("tasks", "scan", "7", "--yes", "--json"))
     expect(opened.items).toEqual([expect.objectContaining({ added: 1, tasks: [] })])
     expect(json(await call("tasks", "list", "--json")).items).toHaveLength(1)
+  })
+
+  it("**reads a chat for tasks from its own point**, which only tasks acknowledge moves", async () => {
+    const call = await setup()
+    const since = ["--since-time", "2026-10-01T00:00:00Z"]
+    await call("tasks", "add", PROMISE, "--type", "promise", "--category", "money", "--json")
+
+    const first = item(await call("tasks", "review", "7", ...since, "--json"))
+    expect(first.messages.map((one: { ref: string }) => one.ref)).toEqual([PROMISE, "msg:chat/500/7/2"])
+    expect(first.open_tasks).toEqual([expect.objectContaining({ kind: "promise", source: PROMISE })])
+    expect(json(await call("tasks", "review", "7", ...since, "--json")).next).toEqual([
+      expect.objectContaining({
+        step: "tasks.acknowledge",
+        line: "chat tasks acknowledge 7 2 --since-time 2026-10-01T00:00:00.000Z",
+      }),
+    ])
+
+    const marked = item(await call("tasks", "acknowledge", "7", "2", ...since, "--json"))
+    expect(marked).toMatchObject({ chat: "7", through_id: "2", moved: true })
+    expect(item(await call("tasks", "acknowledge", "7", "1", "--json")).moved).toBe(false)
+    expect(item(await call("tasks", "review", "7", "--json")).messages).toEqual([])
+    expect(json(await call("tasks", "status", "--json")).items).toEqual([
+      expect.objectContaining({ chat: "7", waiting: 0, late: 0, mark: expect.objectContaining({ through_id: "2" }) }),
+    ])
   })
 
   it("**lists what someone owes the owner with assignee:**, after tasks add --assignee sender", async () => {
