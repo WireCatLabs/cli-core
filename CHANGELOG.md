@@ -171,6 +171,9 @@ shape of this file.
   RDATE and EXDATE, which are stored with the IANA name. The 142 names are a table generated from CLDR release-49
   (`scripts/windows-zones.ts` regenerates it); no new dependency. A TZID that is neither, such as Outlook's
   `(UTC+01:00) Amsterdam, Berlin, Bern`, is still skipped.
+- **A list whose provider filters it no longer says in `--help` that its query takes `OR`.** With
+  `@wirecat/cli-base` 0.74.0 → 0.75.0, its `Syntax:` line names only what it takes: `field:value` terms joined by AND,
+  and the phrase, `word*` and range forms where a field takes them. Every CLI picks this up at its next cli-core bump.
 - **`store jobs list` says in its help and its MCP description that its query takes `OR`.** The list reads every job
   file and takes the whole query language, but its registry said the source filters it (`native`).
 
