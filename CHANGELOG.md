@@ -18,25 +18,6 @@ shape of this file.
   a pending one is updated in place; people are matched by identity only, never by name. `write: false` writes nothing.
 - **`knowledge.relationState(scope, { from, to, kind })`** says whether a link joins a pair, whether a proposal for it
   was rejected, and which one is pending; `proposeRelation` takes `score` and `signals`.
-- **One proposal inbox behind one check: `proposalRegistry(store, policy)`, `ProposalKind`, `parseProposalIds`
-  (`@wirecat/cli-core/services`) and `mayDecide` (`@wirecat/cli-core/store`).** The registry lists every pending
-  proposal newest first across kinds (`relationship`, `key_document`, `fact`, `memory`, `findings` for evidence
-  findings, and `action` for every other stored proposal), and decides many ids at once, each on its own: the answer
-  lists `decided` and `refused`, and one refusal never undoes the others. A new kind registers itself with its id
-  `prefix` or the `stored` proposal kinds it owns; nothing else changes. `parseProposalIds` reads
-  `17070-17079,fact:500-502,17080/f2` and refuses a range across prefixes. Unconfirmed agent and rule links show as
-  `link:<id>` (relationships) and `key:<id>` (key documents) until the store moves them.
-- **`knowledge.proposeRelation(scope, input, by)`**: an agent's or a rule's relationship is a stored `relationship`
-  proposal for the owner, not a link; the same pending pair returns the proposal already held. Removing a link to a
-  project, or rejecting any suggested link, leaves a rejected `relationship` proposal, so a later scan can skip it.
-- **`proposedActions.list({ kinds, except, project, proposedBy })`**, `proposedBy` on `facts.list` and
-  `memories.list`, `order: "created"` on `facts.list`, and the bot's `kind` (`agent` or `rule`) on the author of a
-  proposed action, a fact, a memory and an evidence findings batch; bots may have the kind `rule`, and an `Author` may
-  name it.
-- **`knowledge.decideLinkProposal(id, decision)`** decides a stored `relationship` or `key_document` proposal, and
-  **`knowledge.decideSuggestedLink(id, decision)`** an older unconfirmed link, each in one transaction: the link and
-  the decision land together or not at all. A decision's `reason` is kept: on a rejected proposal as its result, on a
-  fact in `metadata.decision`, on an evidence findings receipt.
 - **A relationship's purpose (store version 44).** `links.purpose`, read as `purpose` on a relationship, a link and
   the `relationship` entity, says what a chat is for in a project; `null` means `work`. The store keeps no list of
   purposes: the caller checks one against its config. `relate` and `proposeRelation` take `purpose`.
@@ -46,52 +27,12 @@ shape of this file.
 
 ### Changed — may break callers
 
-- **An option after `--` is read as the option.** `messages sync -- -100 --json` now syncs `-100` and answers in JSON;
-  it failed with "too many arguments". After `--`, a word that is exactly one of the command's options, its own or a
-  global one (`--json`, `--limit 5`, `--json=id`), moves in front of `--`; every other word stays a positional. A
-  negative id needs no `--` at all. Commands that take free text keep every word after `--` literal: `messages send` and
-  `edit` (also the bot's), `polls create`, `topics create`, `chats create`, `chats folders create`, `contacts rename`,
-  `contacts aliases set`, `messages press`, `bot commands set`, `schedule command`, `events remind`, `complete`, and the
-  notes templates. Mark such a command with `annotate(command, { literal_after_dashes: true })`; MCP calls are never
-  lifted. A script that passed the literal word `--json` as a positional of another command now gets the option instead.
-- **Every decide method takes who decides, a `Decider`** (`"owner"` or `{ bot, model?, reason }`):
-  `facts.accept(ref, by)`, `facts.reject(ref, by)`, `memories.confirm(ref, by)`, `knowledge.confirmRelation(scope, id,
-  by)`, `knowledge.removeRelation(scope, id, by)`, `proposedActions.approve(id, by, result?)`,
-  `proposedActions.reject(id, by)`, `approveAsTask(store, id, by)`, and `by` is now required in
-  `evidenceFindings.review` and `meetingFindings.review`. `DocumentKnowledge.fact` and `.memory` take `by` for a
-  `confirm`, and `memories.markStale(ref, by)` and `.memory(…, "stale", by)` take it too: marking an agent's memory
-  stale is how it is turned down. `knowledge.relate` needs `by`: the owner's relationship is a link, an agent's is a
-  `relationship` proposal it returns instead. `notes.addLink` refuses any confirmed link without `by: "owner"`, so an
-  agent writes `confirmed: false` (the task service now does). `notes.removeLink(id, by)`, `facts.reverse(ref, by)`,
-  `facts.remove(ref, by)` and `memories.remove(ref, by)` take who removes; the document port's `addMemory` needs
-  `author`, `addFact` and `addLink` need `by`, with no owner default. `proposalRegistry(store)` takes no policy: the
-  host sets it once with `openStore({ decisions })`, and `store.decisionPolicy` is what the registry and every store
-  check read. A host passes the owner only when the owner runs the command, and
-  the agent's bot and reason otherwise.
-  An agent's confirmation of a relationship is recorded in the link's provenance, and of a fact or proposal as its
-  decider.
 - **Unconfirmed agent and rule links move into proposals (store version 44).** The first writable open after the
   upgrade turns each into a `relationship` or `key_document` proposal with its bot, reason and time, and deletes the
   link; Drive's editor links stay. Only the owner decides a moved one, since its bot came from free text. An older
   build no longer lists or confirms these as relationships, and a project transfer no longer carries them. Decide them
   through the proposal registry by their new ids; `link:<id>` and `key:<id>` remain only for suggestions an older
   build writes later.
-
-### Security
-
-- **An agent can no longer decide its own proposal.** Before, `facts.accept`/`reject`,
-  `memories.confirm`, `knowledge.confirmRelation`, `proposedActions.approve`/`reject`, `approveAsTask` and both
-  findings reviews never asked who decided, so over MCP an agent could confirm what it had proposed itself. Every one
-  of them, and the registry, now runs `mayDecide`: the owner always may; an agent needs a reason
-  (`proposal.reason-required`), is refused its own bot's proposal (`proposal.own`), a rule scorer's proposal and one
-  that names no author (`proposal.owner-only`), and every decision when the host turns agent decisions off
-  (`proposals.agent-decisions-off`). An agent can no longer add a memory already `confirmed`, mark its own memory
-  stale, write a confirmed project link itself, or remove a link. A link records only free-text provenance, which
-  anyone can write, so only the owner decides an unconfirmed link or removes a link; the rejected record a removal
-  leaves names who removed it. Findings an agent accepted for the owner record that agent, not the owner. Only the
-  owner removes or reverses an accepted fact or another bot's memory; an agent withdraws only its own row while it is
-  proposed. Turning agent decisions off now holds for every store method, not only the registry, and a bot is the
-  same bot whatever its letter case (`Claude-Code` is `claude-code`).
 
 ## 0.546.0 — 02.11.2026
 
