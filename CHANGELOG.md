@@ -65,8 +65,6 @@ shape of this file.
     options)` is pure, for an app that prints its own answers.
   - What a command prints without `renderAnswer` stays JSON under `--compact`.
 
-
-
 ### Changed — may break callers
 
 - **An option after `--` is read as the option.** `messages sync -- -100 --json` now syncs `-100` and answers in JSON;
@@ -104,8 +102,6 @@ shape of this file.
   tg, max and wa printed every field; it now keeps `ref`, `chat_title`, `timestamp`, `sender_name`, `excerpt` and
   `score`. The default and `--full` answers are unchanged. Commands that print through `outputFor` now honour
   `--brief` and `--full` too, and refuse them together as the others do.
-
-
 
 ## 0.545.0 — 02.11.2026
 
