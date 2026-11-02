@@ -3,6 +3,7 @@ import { formatLocator, parseLocator } from "../domain/locator.js"
 import { type FindingOutcome, type FindingsInput, type FindingsReceipt, validateFindings } from "../meetings/index.js"
 import type { Decider } from "./decisions.js"
 import type { EvidenceSource } from "./sqlite/evidence-sources.js"
+import { entryAmount } from "./sqlite/payment-entries.js"
 
 export const EVIDENCE_FINDINGS_KIND = "evidence_findings"
 
@@ -14,8 +15,8 @@ const reference = (raw: string) => {
     throw new CliError("validation_error", "finding evidence is a msg:, document: or note: reference")
   }
 }
-export const validateEvidenceFindings = (input: FindingsInput): FindingsInput =>
-  validateFindings(input, {
+export const validateEvidenceFindings = (input: FindingsInput): FindingsInput => {
+  const valid = validateFindings(input, {
     plural: "evidence findings",
     singular: "evidence finding",
     cited: "reference",
@@ -23,6 +24,10 @@ export const validateEvidenceFindings = (input: FindingsInput): FindingsInput =>
     anySubject: true,
     payments: true,
   })
+  // Refused at staging rather than when the owner accepts, which would fail the whole batch.
+  for (const finding of valid.findings) if (finding.kind === "payment") entryAmount(finding.payment)
+  return valid
+}
 
 /** Who decided: the owner, or an agent the host let decide for the owner, with its reason. */
 export type EvidenceFindingsDecider = Decider

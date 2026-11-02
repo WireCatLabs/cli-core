@@ -77,7 +77,7 @@ export interface ProjectStatus {
   chats: StatusChatSummary[]
   /** Every signal's items, in signal order, then chat order. */
   items: StatusItem[]
-  /** Open amounts and expected payment facts, summed per direction and currency. */
+  /** Open amounts and what confirmed open invoices still owe, summed per direction and currency. */
   money: { open: MoneyTotal[] }
   outOfScope: OutOfScope[]
   /** The purposes read: `all`, or the list. */
@@ -137,14 +137,17 @@ const inAccounts = (accounts: AccountKey[] | undefined, provider: string, accoun
 
 const failure = (error: unknown) => (error instanceof Error ? error.message : String(error))
 
-/** An open ask, or an expected payment fact; an ask that a payment fact cites is counted once, as the fact. */
+/**
+ * An open ask, or a confirmed open invoice; an ask that a confirmed row cites is counted once, as the row. A proposed
+ * row promises nothing yet, so the ask it cites still counts.
+ */
 const counted = (items: StatusItem[]) => {
-  const recorded = new Set(
-    items.filter((item) => item.signal === "payments").flatMap((item) => item.evidence.slice(1).map((one) => one.ref)),
-  )
+  const confirmed = (item: StatusItem) =>
+    item.signal === "payments" && (item.data as { status?: string }).status === "confirmed"
+  const recorded = new Set(items.filter(confirmed).flatMap((item) => item.evidence.slice(1).map((one) => one.ref)))
   return (item: StatusItem, state: string | undefined) =>
     item.signal === "payments"
-      ? state === "expected"
+      ? state === "expected" && confirmed(item)
       : item.signal === "amounts" && state === "open" && !item.evidence.some((one) => recorded.has(one.ref))
 }
 

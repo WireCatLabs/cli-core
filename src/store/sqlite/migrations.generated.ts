@@ -924,5 +924,13 @@ export const GENERATED: { name: string; statements: string[] }[] = [
       "CREATE TRIGGER payment_allocations_valid_bi BEFORE INSERT ON payment_allocations\n  WHEN new.amount <= 0\n    OR (SELECT currency FROM payments WHERE id = new.payment_id)\n      IS NOT (SELECT currency FROM invoices WHERE id = new.invoice_id)\n    OR (SELECT coalesce(sum(amount), 0) FROM payment_allocations WHERE payment_id = new.payment_id) + new.amount\n      > (SELECT amount FROM payments WHERE id = new.payment_id)\n    OR (SELECT coalesce(sum(a.amount), 0) FROM payment_allocations a JOIN payments p ON p.id = a.payment_id\n      WHERE a.invoice_id = new.invoice_id\n        AND ((p.review = 'confirmed' AND p.deleted_at IS NULL) OR a.payment_id = new.payment_id)) + new.amount\n      > (SELECT total FROM invoices WHERE id = new.invoice_id) BEGIN\n  SELECT RAISE(ABORT, 'payment_allocations: above 0, one currency, within the payment and within the invoice');\nEND;",
       "CREATE TRIGGER payment_allocations_valid_bu BEFORE UPDATE ON payment_allocations\n  WHEN new.amount <= 0 OR new.payment_id IS NOT old.payment_id OR new.invoice_id IS NOT old.invoice_id\n    OR (SELECT coalesce(sum(amount), 0) FROM payment_allocations WHERE payment_id = new.payment_id AND id <> old.id)\n      + new.amount > (SELECT amount FROM payments WHERE id = new.payment_id)\n    OR (SELECT coalesce(sum(a.amount), 0) FROM payment_allocations a JOIN payments p ON p.id = a.payment_id\n      WHERE a.invoice_id = new.invoice_id AND a.id <> old.id\n        AND ((p.review = 'confirmed' AND p.deleted_at IS NULL) OR a.payment_id = new.payment_id)) + new.amount\n      > (SELECT total FROM invoices WHERE id = new.invoice_id) BEGIN\n  SELECT RAISE(ABORT, 'payment_allocations: above 0, within the payment and within the invoice, sides unchanged');\nEND;"
     ]
+  },
+  {
+    "name": "20261102185954_version-46-payment-facts",
+    "statements": [
+      "-- Money lives in `payments` and `invoices`, not facts. An older build still takes a payment fact, so the triggers\n-- refuse one; the facts already stored need the finance code's minor units and rules, so the next writable open moves\n-- them and deletes this key (movePaymentFacts).\nCREATE TRIGGER facts_no_payment_bi BEFORE INSERT ON facts WHEN new.type = 'payment' BEGIN\n  SELECT RAISE(ABORT, 'facts: a payment is a payments row in store.finance, not a fact; upgrade the CLI');\nEND;",
+      "CREATE TRIGGER facts_no_payment_bu BEFORE UPDATE OF type ON facts WHEN new.type = 'payment' BEGIN\n  SELECT RAISE(ABORT, 'facts: a payment is a payments row in store.finance, not a fact; upgrade the CLI');\nEND;",
+      "INSERT OR REPLACE INTO store_settings (key, value, at) VALUES ('payment_facts_to_move', '1', unixepoch() * 1000);"
+    ]
   }
 ]

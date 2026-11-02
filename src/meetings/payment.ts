@@ -1,12 +1,15 @@
 import { CliError } from "@wirecat/cli-base"
 
-/** Every fact type the store takes; findings and meeting changes check against the same list. */
-export const FACT_TYPES = ["fact", "statement", "question", "decision", "promise", "payment"] as const
+/** Every fact type the store takes; findings and meeting changes check against the same list. Money is not a fact. */
+export const FACT_TYPES = ["fact", "statement", "question", "decision", "promise"] as const
 
 export const PAYMENT_DIRECTIONS = ["to_us", "from_us"] as const
 export const PAYMENT_STATES = ["expected", "paid", "cancelled"] as const
 
-/** A payment fact's fields, kept in `facts.metadata.payment`. */
+/**
+ * A payment finding's fields, as an agent reads them from evidence. Confirmed by the owner, a paid one becomes a
+ * `payments` row, an expected one an invoice, a cancelled one voids the invoice it supersedes.
+ */
 export interface Payment {
   /** A decimal as text with two places, "50000.00": money is never a float. */
   amount: string
@@ -18,10 +21,11 @@ export interface Payment {
   counterparty_name: string | null
   /** An ISO date. */
   due_at: string | null
-  /** A change of state is a new fact that supersedes this one, so the history and its evidence stay. */
   state: (typeof PAYMENT_STATES)[number]
-  /** What it is for, short: "support, September". The fact's statement is the full sentence. */
+  /** What it is for, short: "support, September". The finding's statement is the full sentence. */
   item: string | null
+  /** When a paid one was paid, an ISO date; without it the due date, else the day the owner confirms it. */
+  paid_at?: string
 }
 
 const invalid = (message: string): never => {
@@ -43,7 +47,7 @@ const amountOf = (value: unknown): string => {
 const dateOf = (value: unknown): string => {
   const date = typeof value === "string" ? value.trim() : ""
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || new Date(`${date}T00:00:00Z`).toISOString().slice(0, 10) !== date)
-    return invalid("a payment's due date is an ISO date, such as 2026-10-31")
+    return invalid("a payment's dates are ISO dates, such as 2026-10-31")
   return date
 }
 
@@ -60,7 +64,17 @@ const oneOf = <T extends string>(value: unknown, allowed: readonly T[], what: st
   return value as T
 }
 
-const FIELDS = ["amount", "currency", "direction", "counterparty", "counterparty_name", "due_at", "state", "item"]
+const FIELDS = [
+  "amount",
+  "currency",
+  "direction",
+  "counterparty",
+  "counterparty_name",
+  "due_at",
+  "state",
+  "item",
+  "paid_at",
+]
 
 /** A payment as stored: the amount with two decimals, the currency upper case; refuses what is not one. */
 export const validatePayment = (input: unknown): Payment => {
@@ -75,6 +89,8 @@ export const validatePayment = (input: unknown): Payment => {
   const counterparty = optionalText(raw.counterparty, "counterparty", 80)
   if (counterparty !== null && !COUNTERPARTY.test(counterparty))
     return invalid("a payment's counterparty is a person:, organization: or project: reference")
+  const state = oneOf(raw.state, PAYMENT_STATES, "state")
+  if (raw.paid_at != null && state !== "paid") return invalid("only a paid payment has paid_at")
   return {
     amount: amountOf(raw.amount),
     currency,
@@ -82,8 +98,10 @@ export const validatePayment = (input: unknown): Payment => {
     counterparty,
     counterparty_name: optionalText(raw.counterparty_name, "counterparty name", 200),
     due_at: raw.due_at === undefined || raw.due_at === null ? null : dateOf(raw.due_at),
-    state: oneOf(raw.state, PAYMENT_STATES, "state"),
+    state,
     item: optionalText(raw.item, "item", 200),
+    // Left out when absent, so a finding staged before the field keeps its fingerprint.
+    ...(raw.paid_at == null ? {} : { paid_at: dateOf(raw.paid_at) }),
   }
 }
 
@@ -93,7 +111,7 @@ const grouped = (amount: string): string => {
   return cents === "00" ? digits : `${digits}.${cents}`
 }
 
-/** One line for a payment, as a list or an inbox shows it: "1 200 EUR to us from Ana, due 31.10 (expected)". */
+/** One line for a payment finding, as a list or an inbox shows it: "1 200 EUR to us from Ana, due 31.10 (expected)". */
 export const paymentTitle = (fact: { payment: Payment | null }): string => {
   const payment = fact.payment
   if (!payment) return ""

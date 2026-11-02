@@ -1781,12 +1781,12 @@ Replaced by `facts` (a decision is a fact of type `decision`) in store version 2
 
 ### `facts`
 
-What happened, as its evidence shows: a fact, a statement, a question, a decision, a promise or a payment. Its evidence is `links` of kind `evidence`; a question's answer is a `links` row of kind `answered-by`. A payment's amount, currency, direction, due date and state are in `metadata.payment`. Replaces `decisions`, which stays empty.
+What happened, as its evidence shows: a fact, a statement, a question, a decision or a promise; money is `payments` and `invoices`, and triggers refuse a `payment` fact. Its evidence is `links` of kind `evidence`; a question's answer is a `links` row of kind `answered-by`. A payment's amount, currency, direction, due date and state are in `metadata.payment`. Replaces `decisions`, which stays empty.
 
 | Column | Type | Constraints | References | Meaning |
 |---|---|---|---|---|
 | `id` | integer | PK |  |  |
-| `type` | text | not null |  | fact, statement, question, decision, promise, payment |
+| `type` | text | not null |  | fact, statement, question, decision, promise |
 | `statement` | text | not null |  | what happened, in one sentence |
 | `status` | text | not null |  | proposed, accepted; a decision also superseded or reversed |
 | `project_id` | integer |  | → `projects.id` | the `project` it belongs to |

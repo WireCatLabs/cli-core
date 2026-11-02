@@ -123,6 +123,16 @@ confirmed payments already cover the invoice. A rejected payment's allocations g
 invoice the owner voids. `openTotals` sums what confirmed open invoices
 still owe, per direction and currency.
 
+A payment is never a fact (store version 46): `facts.add` refuses type `payment` (`fact.payment-retired`) and a
+trigger refuses one from an older build. An agent's evidence finding of kind `payment` writes money when the owner
+accepts it: a paid one is a `payment:` row, paid on `paid_at`, else the due date, else the day it is accepted; an
+expected one is an `invoice:` of one line, which needs a `person:` or `organization:` counterparty; a paid one that
+`supersedes` an invoice is allocated to it as far as it is open, and a cancelled one voids it. The agent proposes the
+row and the owner's acceptance confirms it in the same write. The first writable open after version 46 moved the
+payment facts the same way; a fact that could not be a row stays a `statement` with its fields under
+`metadata.retired_payment`. `projects status` lists payments and open invoices from `store.finance`, and its open
+total counts confirmed invoices only.
+
 ## Link proposals from scorers
 
 `scanProjectLinks(store, { project, sources, since, write })` (`./services`) proposes a project's likely chats, mail

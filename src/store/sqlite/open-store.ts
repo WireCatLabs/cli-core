@@ -12,6 +12,7 @@ import { fillFolded } from "./folded.js"
 import { fillJoinKeys } from "./join-keys.js"
 import { logPruner } from "./log-pruning.js"
 import { openSqlite, type StoreContext } from "./open.js"
+import { movePaymentFacts } from "./payment-facts.js"
 import { loadProviders } from "./providers.js"
 import { assertReadCompatible } from "./read-compatibility.js"
 import { stemsState } from "./stems.js"
@@ -82,6 +83,7 @@ export const openStoreContext = async ({
       fillFolded(database)
       fillJoinKeys(database)
       moveSuggestedLinks(database, now)
+      movePaymentFacts({ ...opened, now, decisions })
       const pending = pendingNormalization(database)
       if (pending > 0 && pending <= BACKFILL_ON_OPEN) backfillNormalized(database)
       followDefaultStemmers(database, now)
