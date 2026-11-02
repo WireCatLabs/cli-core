@@ -85,9 +85,9 @@ const nearest = (commands: Record<string, McpCommand>, asked: string): string[] 
 
 /** A `next` step names a command this server offers, or it is dropped: the profile may not offer every command. */
 const runnableOnly = (result: CallToolResult, offered: (command: string) => boolean): CallToolResult => {
-  const body = result.structuredContent as { next?: { command: string }[] } | undefined
+  const body = result.structuredContent as { next?: { command?: string }[] } | undefined
   if (result.isError || !Array.isArray(body?.next)) return result
-  const next = body.next.filter((step) => offered(step.command))
+  const next = body.next.filter((step) => step.command === undefined || offered(step.command))
   const { next: _, ...rest } = body
   const kept = next.length > 0 ? { ...rest, next } : rest
   return {
