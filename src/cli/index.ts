@@ -118,8 +118,10 @@ export {
 export {
   findRun,
   KEEP_RUNS_FOR_DAYS,
+  KEEP_SUCCESSFUL_RUNS_FOR_DAYS,
   listRuns,
   pruneRuns,
+  RUNS_SIZE_LIMIT_MB,
   type RunContext,
   type RunMetadata,
   readEvents,
@@ -505,6 +507,7 @@ export {
 export { STATUS_ROWS, STATUS_SIGNAL_ROWS } from "./project-status-rows.js"
 export { fieldsOf, projectFields } from "./result-fields.js"
 export type { ScheduleHost } from "./schedule/schedule-command.js"
+export { type DeclaredSetting, type SettingRow, settingRows, withSettingDefaults } from "./setting-defaults.js"
 export {
   type Config,
   type Configuration,
