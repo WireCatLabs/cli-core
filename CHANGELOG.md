@@ -7,6 +7,7 @@ shape of this file.
 
 ## Unreleased
 
+<<<<<<< HEAD
 ### Added
 
 - **A server's refused SEARCH fails that folder, not the run, and proves nothing.** A mail source throws
@@ -27,6 +28,11 @@ shape of this file.
 
 ## 0.544.0 — 02.11.2026
 
+||||||| 324b03ef
+## 0.544.0 — 02.11.2026
+
+=======
+>>>>>>> origin/main
 ### Added
 
 - **History limits for pushed history, per profile.** A messenger whose history is pushed (`history: "store"`,
@@ -36,6 +42,11 @@ shape of this file.
   never dropped. `messages sync <chat> --full-history` fetches a chat and keeps its pushed history in full from then on
   (`history_included` in the answer). `ChatsStore` gains `historySkips`, `historyShapes`, `recordHistorySkips` and
   `setHistoryIncluded`; `Saving` takes `historyLimits`.
+
+## 0.544.0 — 02.11.2026
+
+### Added
+
 - **The first run of a new version refreshes the agent instructions an older version installed**: each `SKILL.md`
   copy whose `skill status` is `stale` (Claude Code's, `~/.agents/skills`, and Hermes's own copy) is rewritten once,
   with one line on stderr — `Updated the tg instructions for Claude Code and other agents to 0.112.0`. A missing copy

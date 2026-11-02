@@ -330,7 +330,7 @@ describe("syncMail", () => {
     expect(await coverage()).toBe(before)
   })
 
-  it("reads the other folders when one refuses SEARCH, and keeps the refused one's mail where it was", async () => {
+  it("reads the other folders when one refuses SEARCH, and answers partial", async () => {
     const { env } = setup([mail(1), mail(2)], { refusesSearch: ["INBOX"] })
     const budgeted = await syncMail(sourceOf(env), await store(env), {
       account: { address: ME, folders: [GMAIL_ALL_MAIL, "INBOX"] },
