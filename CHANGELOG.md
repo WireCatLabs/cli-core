@@ -7,6 +7,20 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **An option after `--` is read as the option.** `messages sync -- -100 --json` now syncs `-100` and answers in JSON;
+  it failed with "too many arguments". After `--`, a word that is exactly one of the command's options, its own or a
+  global one (`--json`, `--limit 5`, `--json=id`), moves in front of `--`; every other word stays a positional. A
+  negative id needs no `--` at all. Commands that take free text keep every word after `--` literal: `messages send` and
+  `edit` (also the bot's), `polls create`, `topics create`, `chats create`, `chats folders create`, `contacts rename`,
+  `contacts aliases set`, `messages press`, `bot commands set`, `schedule command`, `events remind`, `complete`, and the
+  notes templates. Mark such a command with `annotate(command, { literal_after_dashes: true })`; MCP calls are never
+  lifted. A script that passed the literal word `--json` as a positional of another command now gets the option instead.
+- **Evidence sources read through `store.refs`.** `memories.sources`, `facts.sources` and `evidenceFindings.sources`
+  keep their shape; a contact now says `kind: "contact"` (was `identity`), a mail ref the store lacks says `email`
+  (was `message`), and kinds that had no title before (person, project, task, chat…) now have one.
+
 ### Added
 
 - **`store.refs.summaries(refs, { excerpt? })` says what any ref names**, a page at a time: kind, title, what holds
@@ -19,12 +33,6 @@ shape of this file.
 - **`ProviderEntry.opens`**: the read command that opens each kind of ref (`{ document: "documents show" }`). A CLI
   writes it with `registerProvider`; tg, max and wa open `chat`, `message` and `contact` from the built-ins. A kind
   this build does not know is dropped, so an older build still reads a newer entry.
-
-### Changed — may break callers
-
-- **Evidence sources read through `store.refs`.** `memories.sources`, `facts.sources` and `evidenceFindings.sources`
-  keep their shape; a contact now says `kind: "contact"` (was `identity`), a mail ref the store lacks says `email`
-  (was `message`), and kinds that had no title before (person, project, task, chat…) now have one.
 
 ## 0.545.0 — 02.11.2026
 

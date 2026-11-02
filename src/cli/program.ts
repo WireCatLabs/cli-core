@@ -23,6 +23,7 @@ import { recorded, wasSettled } from "../runs/recording.js"
 import { runContextOf } from "../runs/run-context.js"
 import { processRun, useAsProcessRun } from "../runs/scope.js"
 import { AUTHORITY_KEY, BOT_API_KEY, isBotApi, keyForCommand } from "../sends/permissions.js"
+import { liftOptionsAfterDashes } from "./after-dashes.js"
 import { logParsedArgv, logVersion } from "./argv-log.js"
 import { commandAvailability } from "./command-availability.js"
 import { commandPathOf } from "./command-contract.js"
@@ -229,14 +230,17 @@ export const run = async (argv: string[], definition: ProgramDefinition, options
   }
 }
 
+const isMachine = (words: readonly string[]): boolean =>
+  words.some((word) => word === "--json" || word.startsWith("--json=") || word === "--jsonl")
+
 const runOnce = async (argv: string[], definition: ProgramDefinition, options: RunOptions): Promise<number> => {
   const streams = options.streams ?? processStreams
   if (!options.streams) quietBrokenPipes()
   const delimiter = argv.indexOf("--")
   const flags = argv.slice(0, delimiter < 0 ? undefined : delimiter)
-  const machine = flags.some((word) => word === "--json" || word.startsWith("--json=") || word === "--jsonl")
-  const debug = flags.includes("--debug")
-  const reporting = machine ? { ...options, tty: false } : options
+  let machine = isMachine(flags)
+  let debug = flags.includes("--debug")
+  let reporting = machine ? { ...options, tty: false } : options
   const control = execution(streams, { maxOutputBytes: 0 })
   let restoreInput: (() => void) | undefined
   let signalExit: number | undefined
@@ -582,12 +586,21 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
 
   // Before commander, not inside it: commander has no hook that runs before it decides which
   // subcommand it is looking at.
-  const { profile, rest: lifted } = liftProfile(argv, commandWords(program), valuedOptions(program))
+  const profiled = liftProfile(argv, commandWords(program), valuedOptions(program))
+  const { profile } = profiled
+  // An agent's call builds its own argv, with its values after `--` on purpose: none of them may become an option.
+  const lifted = options.agent
+    ? profiled.rest
+    : liftOptionsAfterDashes(profiled.rest, (words) => commandAt(program, commandPath(program, words)))
+  const liftedEnd = lifted.indexOf("--")
+  const liftedFlags = lifted.slice(0, liftedEnd < 0 ? undefined : liftedEnd)
+  machine ||= isMachine(liftedFlags)
+  debug ||= liftedFlags.includes("--debug")
+  reporting = machine ? { ...options, tty: false } : options
   // `wa 'chats list' --help` reads "chats list" as a profile and prints the root help with exit 0.
   try {
     // Only before `--`: what follows is a positional, an agent's text among them, never a command word.
-    const end = lifted.indexOf("--")
-    for (const words of [flags, end < 0 ? lifted : lifted.slice(0, end)])
+    for (const words of [flags, liftedFlags])
       refuseJoinedPath(
         program,
         words.filter((word) => !word.startsWith("-")),

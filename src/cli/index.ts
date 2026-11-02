@@ -155,6 +155,7 @@ export {
   type SignInStepsOptions,
   signInSteps,
 } from "../terminal/sign-in-steps.js"
+export { liftOptionsAfterDashes } from "./after-dashes.js"
 export {
   type AgentPolicy,
   type AgentTask,
