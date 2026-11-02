@@ -909,7 +909,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--base-url` | `<url>` | a server with OpenAI's /v1/embeddings: Gemini, Jina, or Ollama and LM Studio on this machine |  | `conversations embed`, `conversations embeddings clear`, `conversations embeddings status`, `conversations links rebuild`, `conversations related`, `conversations status`, `search conversations` |
 | `--batch` | `<id>` | the batch id `conversations batches show` printed |  | `conversations links add` |
 | `--before-n` | `<n>` | how many messages before it |  | `messages context`, `projects evidence` |
-| `--before-time` | `<time>` | read what came before this time |  | `attachments move`, `projects evidence` |
+| `--before-time` | `<time>` | read what came before this time |  | `attachments move`, `projects evidence`, `projects status` |
 | `--block` | `<value>` | Set to `true` if user should be blocked in chat. |  | `bot chats members remove` (planned) |
 | `--bot` |  | the bot section of the profile's settings, rather than the personal account's |  | `config set`, `config show`, `config unset` |
 | `--bots` | `<profiles>` | also read these bots' copies, comma separated — each allowed by read_other_bots |  | `bot contacts show` (planned), `bot messages between` (planned), `bot search messages` (planned) |
@@ -942,7 +942,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--contact` | `<person>` | the person to tag or untag: their id, @username or name, as the local store knows them |  | `projects evidence`, `tags add`, `tags remove` |
 | `--contacts-only` |  | match only contacts |  | `replies edit` |
 | `--context` | `<n>` | messages before and after each hit |  | `search messages`, `searches create` |
-| `--context-query` | `<words>` | more words that all appear in one text; repeat for another |  | `projects evidence` |
+| `--context-query` | `<words>` | more words that all appear in one text; repeat for another |  | `projects evidence`, `projects status` |
 | `--correct` | `<n>` | with --quiz: the right answer's position, from 1 |  | `polls create` (tg-only) |
 | `--counters` | `<names>` | the counter fields: views,reactions,comments |  | `stats messages counters show`, `stats messages counters sync` |
 | `--credential-storage` | `<storage>` | where the sign-in secret is kept: keyring, which falls back to a private file by itself when no keyring works, or file, not recommended | `keyring` | `session start` (max-only) |
@@ -1115,7 +1115,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--set` | `<id>` | the stickers in this set |  | `stickers list` (planned) |
 | `--silent` |  | deliver without a notification |  | `bot messages send` (planned), `messages forward` (max, tg only), `messages send` (max, tg only), `polls create` (max, tg only) |
 | `--since` | `<id-or-time>` | from this message id, an ISO 8601 time, or 2h / 1d ago; each command says its default. **becomes `--since-time` everywhere — NEED-485** |  | `inbox` (planned), `review` (planned) |
-| `--since-time` | `<time>` | from this ISO 8601 time, or 2h / 1d ago; each command says its default |  | `attachments download`, `attachments jobs install`, `bot chats moderate` (planned), `bot messages sync` (max, tg only), `chats moderate`, `contacts context`, `contacts prepare`, `messages sync`, `projects evidence`, `replies test`, `search conversations`, `stats charts`, `stats chats newcomers`, `stats chats retention`, `stats chats show`, `store export` |
+| `--since-time` | `<time>` | from this ISO 8601 time, or 2h / 1d ago; each command says its default |  | `attachments download`, `attachments jobs install`, `bot chats moderate` (planned), `bot messages sync` (max, tg only), `chats moderate`, `contacts context`, `contacts prepare`, `messages sync`, `projects evidence`, `projects status`, `replies test`, `search conversations`, `stats charts`, `stats chats newcomers`, `stats chats retention`, `stats chats show`, `store export` |
 | `--size` | `<n>` | messages to answer per batch, 10–200; 50 by default |  | `conversations batches show`, `conversations batches status`, `conversations links rebuild` |
 | `--skip` | `<which>` | a folder leaves out chats that are muted, read or archived |  | `chats folders create` (planned), `chats folders update` (planned) |
 | `--sms` |  | phone login: ask Telegram to send the code by SMS, not to the app; Telegram may still refuse |  | `session start` (tg-only) |
