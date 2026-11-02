@@ -26,6 +26,7 @@ import {
   spokenItems,
   TRANSCRIBE_OPTION,
 } from "./hearing-command.js"
+import { historyLimitGaps } from "./history-gaps.js"
 import { cursorOf, historyQuery, historyWindow } from "./history-query.js"
 import { hideNever } from "./lacks.js"
 import { threadAnswer } from "./message-answers.js"
@@ -93,13 +94,14 @@ export const messagesCommand = (messenger: Messenger): Command => {
         : undefined
       // Offline, the store is the whole answer: say how much of the chat it holds. Online the messenger is read.
       const gaps = context.settings.offline
-        ? coverageGaps(
-            await context.withStore(async (store, account) =>
-              chatCoverage(store, account, [
-                await storedChatId(messenger, chat, store, account, { includeLeft: true }),
-              ]),
-            ),
-          )
+        ? await context.withStore(async (store, account) => {
+            const chatId = await storedChatId(messenger, chat, store, account, { includeLeft: true })
+            const held = coverageGaps(await chatCoverage(store, account, [chatId]))
+            const limited = historyLimitGaps(
+              (await store.chats.historySkips(account)).filter((skip) => skip.chatId === chatId),
+            )
+            return { next: [...limited.next, ...held.next], missing: [...limited.missing, ...held.missing] }
+          })
         : { next: [], missing: [] }
       renderAnswer(
         this,

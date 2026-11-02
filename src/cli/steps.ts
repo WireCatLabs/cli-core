@@ -26,6 +26,7 @@ export const STEPS = defineSteps([
       { name: "all", required: false },
       { name: "since_time", required: false },
       { name: "background", required: false },
+      { name: "full_history", required: false },
     ],
     why: "the local copy is missing messages; syncing brings them in",
   },

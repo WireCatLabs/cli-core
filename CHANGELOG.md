@@ -9,12 +9,6 @@ shape of this file.
 
 ### Added
 
-- **The first run of a new version refreshes the agent instructions an older version installed**: each `SKILL.md`
-  copy whose `skill status` is `stale` (Claude Code's, `~/.agents/skills`, and Hermes's own copy) is rewritten once,
-  with one line on stderr — `Updated the tg instructions for Claude Code and other agents to 0.112.0`. A missing copy
-  stays missing, an `unversioned` one (no released `skill install` wrote it) and a symlink are left as they are, and a
-  failure is one note, never a failed command. The version tried is kept in `<state>/skill-refresh.json`. Off in a
-  moved run, under vitest, during `skill`, and with `<PREFIX>_NO_SKILL_REFRESH=1`; `--quiet` keeps the line out.
 - **Every messenger command that takes a chat or a message also takes the reference other WireCat CLIs print**:
   `chat:<provider>/<account>/<chat>` wherever a chat is named (`messages list chat:max/34871122/63488582`, bot
   commands too), and `msg:<provider>/<account>/<chat>/<message>` wherever a chat or a message is, online and offline. A person lookup takes `contact:<provider>/<id>`. A reference of another
@@ -38,6 +32,27 @@ shape of this file.
   no longer found by that title; give its id or a part of the title.
 - The provider seeds of `telegram`, `max` and `whatsapp` name their CLI (`command: tg`, `max`, `wa`), which a
   provider clash message now shows (`telegram (messages, from tg)`).
+
+## 0.544.0 — 02.11.2026
+
+### Added
+
+- **History limits for pushed history, per profile.** A messenger whose history is pushed (`history: "store"`,
+  WhatsApp) saves one-to-one chats back `history_dialog_days` (1095 by default), groups of more than two people back
+  `history_group_days` (365) and nothing of a group above `history_group_members_max` people (50); at most 1095 days.
+  The chat row stays, so the chat is still listed. Live messages, `messages sync` and what the store already holds are
+  never dropped. `messages sync <chat> --full-history` fetches a chat and keeps its pushed history in full from then on
+  (`history_included` in the answer). `ChatsStore` gains `historySkips`, `historyShapes`, `recordHistorySkips` and
+  `setHistoryIncluded`; `Saving` takes `historyLimits`.
+- **The first run of a new version refreshes the agent instructions an older version installed**: each `SKILL.md`
+  copy whose `skill status` is `stale` (Claude Code's, `~/.agents/skills`, and Hermes's own copy) is rewritten once,
+  with one line on stderr — `Updated the tg instructions for Claude Code and other agents to 0.112.0`. A missing copy
+  stays missing, an `unversioned` one (no released `skill install` wrote it) and a symlink are left as they are, and a
+  failure is one note, never a failed command. The version tried is kept in `<state>/skill-refresh.json`. Off in a
+  moved run, under vitest, during `skill`, and with `<PREFIX>_NO_SKILL_REFRESH=1`; `--quiet` keeps the line out.
+
+### Changed — may break callers
+
 - **An agent's own shell may tighten a permission but never loosen it.** `config set|unset permissions…` run where
   `AI_AGENT`, `CLAUDECODE`, `OPENCLAW_SHELL=exec` or another agent marker is set is now treated like an MCP agent's
   call: `mcp.authority` and `bot.api` stay owner-only, and a level may only go down (`readonly` → `deny`, never

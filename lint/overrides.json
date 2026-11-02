@@ -1,0 +1,9 @@
+[
+  {
+    "rule": "option-role",
+    "target": "messages sync --full-history",
+    "reason": "a switch that lifts the history limits for one chat; the word goes into cli-base's vocabulary in its next release",
+    "owner": "@leemour",
+    "review_after": "2026-12-01"
+  }
+]
