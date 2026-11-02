@@ -81,6 +81,23 @@ const call = async (argv: string[], env: NodeJS.ProcessEnv, system: ServerSystem
   return { code, out: streams.stdout.join(""), err: streams.stderr.join("") }
 }
 
+describe("the schedule agent prompt example", () => {
+  const exampleFor = (identity: typeof app & { messenger?: boolean }) => {
+    const command = scheduleCommandFor({ app: identity, context: () => ({}) as never })
+    return command.commands.find((sub) => sub.name() === "agent")?.registeredArguments[2]?.description
+  }
+
+  it("points a messenger at the follow-ups skill", () => {
+    expect(exampleFor(app)).toContain("chat skill show follow-ups")
+  })
+
+  it("gives a CLI without that skill a read-only search it can run", () => {
+    const example = exampleFor({ ...app, command: "mail", messenger: false })
+    expect(example).not.toContain("follow-ups")
+    expect(example).toContain("mail personal search messages 'date>1d' --newest")
+  })
+})
+
 describe("a CLI that is not a messenger", () => {
   it("adds and lists a schedule through the host's own context", async () => {
     const { env } = setup()

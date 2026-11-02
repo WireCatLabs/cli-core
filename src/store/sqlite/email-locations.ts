@@ -192,3 +192,13 @@ export const forgetLocations = (
   )
   for (const emailId of new Set(emails)) leave.run(emailId, Number(box.id), emailId, Number(box.id))
 }
+
+export const backfillSentAt = (database: CacheDatabase, accountId: number, limit: number): number =>
+  Number(
+    database
+      .prepare(
+        `UPDATE emails SET sent_at = received_at WHERE id IN (
+           SELECT id FROM emails WHERE account_id = ? AND sent_at IS NULL AND received_at IS NOT NULL LIMIT ?)`,
+      )
+      .run(accountId, limit).changes,
+  )
