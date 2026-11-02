@@ -5,5 +5,19 @@
     "reason": "the owner chose this flag on 2026-11-03 (a read again opens tasks only with a flag); the word goes into cli-base's vocabulary in its next release",
     "owner": "@leemour",
     "review_after": "2026-12-01"
+  },
+  {
+    "rule": "unknown-verb",
+    "target": "stats messages waiting",
+    "reason": "WireCat Desktop's Analytics page asks for this name (spec A4, 2026-11-02): chats whose newest message waits on the owner; the word goes into cli-base's vocabulary as a view noun, or the command is renamed before the next release",
+    "owner": "@leemour",
+    "review_after": "2026-12-01"
+  },
+  {
+    "rule": "option-role",
+    "target": "stats messages responses --who",
+    "reason": "WireCat Desktop's Analytics page asks for it (spec A3, 2026-11-02): whose replies are timed, the owner's or the other side's; a measure, not a filter, so not a query field; it goes into cli-base's vocabulary with role target",
+    "owner": "@leemour",
+    "review_after": "2026-12-01"
   }
 ]

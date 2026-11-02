@@ -25,6 +25,14 @@ shape of this file.
   (`permissions`, `models`) are left out.
 - **`KEEP_SUCCESSFUL_RUNS_FOR_DAYS` and `RUNS_SIZE_LIMIT_MB` are exported** beside `KEEP_RUNS_FOR_DAYS`. A host can
   then name the run-record defaults it writes into its config file.
+- **`stats messages responses`**: how fast replies come in one-to-one chats, the owner's (`--who me`) or the other
+  side's (`--who others`): count, median, p90, mean and four time buckets, in total or `--by day` in `--timezone`.
+  Several messages in a row followed by one answer are one reply, timed from the first. Reads by index, so all time
+  works on a large store; the query after `--` takes `date:`, `chat:` and `kind:` only.
+- **`stats messages waiting`**: how many chats wait on the owner — a one-to-one chat whose newest message is a
+  question, or a group whose newest message mentions or replies to the owner — with the messages since the owner
+  last wrote, the oldest of them, and the split by kind. Muted or archived one-to-one chats are left out, as in
+  `inbox`.
 
 ### Fixed
 
@@ -61,6 +69,7 @@ shape of this file.
 - **`events list`'s first help example runs.** It named `starts_at` twice, which the query refuses; it is now
   `'starts_at:[2026-11-02 TO 2026-11-07}'`, quoted, as are `events export`'s, so zsh does not read the brackets. A
   test runs every calendar help example with a query.
+||||||| parent of 63964d9c0 (feat(stats): add stats messages responses and stats messages waiting)
 
 ## 0.560.0 — 02.11.2026
 

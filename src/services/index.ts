@@ -150,6 +150,7 @@ import { type PeopleService, peopleService } from "./people.js"
 import { type PicturesService, picturesService, withPictures } from "./pictures.js"
 import { privatePeopleService } from "./private-people.js"
 import { type RankingsService, rankingsService } from "./rankings.js"
+import { type ReplyStatsService, replyStatsService } from "./reply-stats.js"
 import { type RetentionService, retentionService } from "./retention.js"
 import { type SearchesService, searchesService } from "./searches.js"
 import { type TagsService, tagsService } from "./tags.js"
@@ -268,6 +269,7 @@ export interface Services {
   counters: CountersService
   retention: RetentionService
   rankings: RankingsService
+  replyStats: ReplyStatsService
   topics: TopicsService
   messages: MessagesService
   chats: ChatsService
@@ -308,6 +310,7 @@ export const servicesFor = (deps: ServiceDeps): Services => {
     counters: countersService(deps),
     retention: retentionService(deps),
     rankings: rankingsService(deps),
+    replyStats: replyStatsService(deps),
     topics: topicsService(deps),
     messages: withPictures(messagesService(deps), pictures),
     chats: chatsService(deps),

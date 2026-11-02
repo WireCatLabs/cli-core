@@ -11,6 +11,7 @@ import type { AdminEvidenceFound, AdminFound } from "../../services/admin-statis
 import type { ChatStats } from "../../services/chat-stats.js"
 import type { MessageStats } from "../../services/messages-search.js"
 import type { RankingFound } from "../../services/rankings.js"
+import type { ReplyTimes, Waiting } from "../../services/reply-stats.js"
 import type { RetentionService } from "../../services/retention.js"
 import type { AccountKey, RankedEvidence, StoredHit } from "../../store/store.js"
 import type { GroupStats } from "../../tasks/index.js"
@@ -554,3 +555,26 @@ export const taskStatsAnswer = (rows: GroupStats[], account: AccountKey): ItemBo
       median_close_ms: row.medianCloseMs ?? null,
     })),
   })
+
+const replyFigures = (one: Pick<ReplyTimes, "replies" | "medianMs" | "p90Ms" | "meanMs">) => ({
+  replies: one.replies,
+  median_ms: one.medianMs,
+  p90_ms: one.p90Ms,
+  mean_ms: one.meanMs,
+})
+
+export const responsesAnswer = (found: ReplyTimes): ItemBody<Of<"response_times">> =>
+  itemOf({
+    who: found.who,
+    ...replyFigures(found),
+    buckets: {
+      under_5m: found.buckets.under5m,
+      under_1h: found.buckets.under1h,
+      under_1d: found.buckets.under1d,
+      over_1d: found.buckets.over1d,
+    },
+    rows: found.rows.map((row) => ({ key: row.key, ...replyFigures(row) })),
+  })
+
+export const waitingAnswer = (found: Waiting): ItemBody<Of<"waiting_chats">> =>
+  itemOf({ chats: found.chats, messages: found.messages, oldest_at: found.oldestAt, by_kind: found.byKind })

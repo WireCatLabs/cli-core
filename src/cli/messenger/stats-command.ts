@@ -20,6 +20,7 @@ import { countersCommand } from "./counters-command.js"
 import { messagesStatsCommand } from "./messages-stats-command.js"
 import { officialStatsCommand } from "./official-stats-command.js"
 import { rankingEvidenceCommand, rankingsTopCommand } from "./rankings-command.js"
+import { replyResponsesCommand, replyWaitingCommand } from "./reply-stats-command.js"
 import { retentionCommand } from "./retention-command.js"
 import { chartAnswer, refuseJsonl } from "./stats-answers.js"
 import { tasksStatsCommand } from "./tasks-command.js"
@@ -33,6 +34,8 @@ export const statsCommand = (messenger: Messenger, loadRenderer = chartRenderer)
       .addCommand(countersCommand(messenger))
       .addCommand(adminStatisticsCommand(messenger, "unanswered"))
       .addCommand(adminStatisticsCommand(messenger, "discussion"))
+      .addCommand(replyResponsesCommand(messenger))
+      .addCommand(replyWaitingCommand(messenger))
       .addCommand(rankingsTopCommand(messenger, "messages"))
       .addCommand(rankingEvidenceCommand(messenger, "messages")),
   )
@@ -121,10 +124,12 @@ export const statsCommand = (messenger: Messenger, loadRenderer = chartRenderer)
 
     "messages counters show": '--chat "Book club" --limit 10',
     "messages discussion": 'chat:"Book club"',
+    "messages responses": "--who me --by day --timezone Europe/Madrid -- date>=30d",
     "messages evidence": '"$message" --selection "$selection" --component reactions',
     "messages show": '--chat "Book club" --by day',
     "messages top": 'chat:"Book club" --limit 10',
     "messages unanswered": 'chat:"Project room"',
+    "messages waiting": "kind:private",
     "tasks show": '--chat "Project room"',
   }
   for (const [path, args] of Object.entries(examples)) {

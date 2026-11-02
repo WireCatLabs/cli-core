@@ -9,6 +9,14 @@ import * as lucene from "./sqlite/lucene.js"
 import type { StoreContext } from "./sqlite/open.js"
 import { type RankedEvidence, type RankingEvidenceRequest, rankingEvidence } from "./sqlite/ranking-evidence.js"
 import { type RankedStoreFound, type RankingRequest, rankQuery } from "./sqlite/rankings.js"
+import {
+  type ChatScope,
+  type NewestMessage,
+  type ReplyDelay,
+  replyDelays,
+  type WaitingChat,
+  waitingChats,
+} from "./sqlite/reply-times.js"
 import type { ScoredHit } from "./sqlite/words.js"
 
 /** A resolved Lucene query run over the store: hits, counts, rankings and the statistics behind them. */
@@ -24,6 +32,9 @@ export interface QueriesStore {
   rankQuery(execution: QueryExecution, request: RankingRequest): Promise<RankedStoreFound>
   rankingEvidence(execution: QueryExecution, request: RankingEvidenceRequest): Promise<RankedEvidence>
   adminStatisticsQuery(execution: QueryExecution, request: AdminStoreRequest): Promise<AdminStoreResult>
+  /** Every reply in one-to-one chats whose reply falls in the scope's period, with how long it took. */
+  replyDelays(scope: ChatScope, who: "me" | "others"): Promise<ReplyDelay[]>
+  waitingChats(scope: ChatScope, waits: (newest: NewestMessage) => boolean, cap: number): Promise<WaitingChat[]>
 }
 
 export const queriesStoreOver = (context: StoreContext, stemmerFor: (stemmers: Stemmers) => Stemmer): QueriesStore => {
@@ -40,5 +51,7 @@ export const queriesStoreOver = (context: StoreContext, stemmerFor: (stemmers: S
     rankQuery: async (execution, request) => rankQuery(context, execution, request),
     rankingEvidence: async (execution, request) => rankingEvidence(context, execution, request),
     adminStatisticsQuery: async (execution, request) => adminStatisticsQuery(context, execution, request),
+    replyDelays: async (scope, who) => replyDelays(context, scope, who),
+    waitingChats: async (scope, waits, cap) => waitingChats(context, scope, waits, cap),
   }
 }
