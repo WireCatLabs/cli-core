@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs"
 import * as v from "valibot"
+import { repairConfigText } from "./config-repair.js"
 
 export type ConfigIssueKind =
   | "invalid_json"
@@ -353,6 +354,9 @@ export const withoutSetting = (raw: unknown, setting: string) => withoutPath(raw
 /** The public shape: where in the file is the loader's own business. */
 export const publicIssue = ({ at: _, ...issue }: LocatedIssue): ConfigIssue => issue
 
+/** What an issue's `fix` does to it: `config repair` mends the file, `config unset` removes the setting. */
+export const fixVerb = (issue: ConfigIssue): string => (issue.kind === "invalid_json" ? "repair" : "remove")
+
 /**
  * One line for a command that refuses to run on the file: the first problem, how to fix it, and how many more.
  * `doctor` is the command that lists them all, as the reader types it.
@@ -363,7 +367,7 @@ export const issueMessage = (issues: readonly ConfigIssue[], doctor = "doctor"):
   const more = issues.length - 1
   return (
     `${first.file}: ${first.what}` +
-    (first.fix ? ` — remove it with \`${first.fix}\`` : "") +
+    (first.fix ? ` — ${fixVerb(first)} it with \`${first.fix}\`` : "") +
     (more === 0 ? "" : ` (and ${more} more problem${more === 1 ? "" : "s"} — \`${doctor}\` lists them all)`)
   )
 }
@@ -384,7 +388,12 @@ export const checkConfigText = <T extends v.GenericSchema>(
   }: { file: string; tool: string; schema: T; knownPermissions?: ReadonlySet<string> },
 ): { issues: ConfigIssue[]; config: v.InferOutput<T> | undefined } => {
   const parsed = parseConfigText(text, file)
-  if ("issue" in parsed) return { issues: [publicIssue(parsed.issue)], config: undefined }
+  if ("issue" in parsed) {
+    const issue = publicIssue(parsed.issue)
+    // Offered only where it would work, so the desktop never shows a Repair button that fails.
+    if (repairConfigText(text).state === "repaired") issue.fix = `${tool} config repair`
+    return { issues: [issue], config: undefined }
+  }
   // valibot reads a list as an object, so `[]` would pass for `{}`.
   if (!isNode(parsed.raw)) return { issues: [wholeFile(file, "the file must hold a JSON object")], config: undefined }
   const context = { file, tool }

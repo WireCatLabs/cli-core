@@ -1,9 +1,12 @@
-import { CliError, pathsAreOverridden } from "@wirecat/cli-base"
+import { existsSync, readFileSync, statSync } from "node:fs"
+import { CliError, pathsAreOverridden, writeSecurely } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command, Option } from "commander"
 import { type AppIdentity, envName } from "../ports/app.js"
 import { agentOf } from "../runs/run-context.js"
 import { AUTHORITY_KEY, BOT_API_KEY, LEVELS, type Level, levelFor, type PermissionKey } from "../sends/permissions.js"
+import { fixVerb } from "./config-issues.js"
+import { REPAIR_WORDS, repairConfigText } from "./config-repair.js"
 import { baseContext, environmentOf } from "./context.js"
 import { grantsAuthority, LOCAL_READ, LOCAL_WRITE } from "./effects.js"
 import { itemOf, renderAnswer } from "./envelope.js"
@@ -13,6 +16,7 @@ import {
   type PermissionKeySource,
   unknownPermissionIssues,
 } from "./permission-keys.js"
+import { profileFree } from "./profile.js"
 import { type Configuration, fromFile, NONE_NAMED, type Settings } from "./settings.js"
 import { nextStep } from "./steps.js"
 import {
@@ -96,7 +100,7 @@ export const configCommand = (
       ...(settings.configIssues ?? []),
       ...unknownPermissionIssues(this, settings, app.command, permissionKey),
     ])
-      renderer.warn(`${issue.what}, so it is left out${issue.fix ? ` — \`${issue.fix}\` removes it` : ""}`)
+      renderer.warn(`${issue.what}, so it is left out${issue.fix ? ` — \`${issue.fix}\` ${fixVerb(issue)}s it` : ""}`)
     if (overridden) {
       renderer.note(
         `${envName(app, "CONFIG_DIR")}, ${envName(app, "STATE_DIR")} or ${envName(app, "CACHE_DIR")} is set — ` +
@@ -218,7 +222,87 @@ export const configCommand = (
     })
   }
 
+  command.addCommand(repairCommand(app, config))
   return command
+}
+
+/**
+ * Mends JSON syntax with one reading and keeps every value (NEED-2178): no network, no AI, since the file may hold
+ * keys. Anything else is refused with nothing changed.
+ */
+const repairCommand = (app: AppIdentity, config: Configuration): Command =>
+  profileFree(
+    grantsAuthority(
+      annotate(new Command("repair"), {
+        effects: LOCAL_WRITE,
+        examples: [`${app.command} config repair`, `${app.command} config repair --dry-run`],
+      }),
+      { unless: "dryRun" },
+    ),
+  )
+    .summary("fix the settings file's JSON syntax, keeping every value")
+    .description(
+      "fix broken JSON syntax in the settings file — comments, a missing or extra comma, unquoted keys, single " +
+        "quotes, missing closing brackets at the end — keeping every value, with a backup beside it; refuses " +
+        "anything with more than one reading and changes nothing then",
+    )
+    .option("--dry-run", "say what it would fix, and change nothing")
+    .action(function (this: Command) {
+      const dryRun = this.opts<{ dryRun?: boolean }>().dryRun === true
+      const context = baseContext(this, (flags, options) =>
+        config.resolveSettings(flags, { ...options, readOnly: true, needsProfile: false, withIssues: true }),
+      )
+      const { settings, renderer, env } = context
+      const file = settings.configPath
+      // The desktop reads these names (wirecat-desktop#83).
+      const answer = (fields: { repaired: boolean; reason?: string; changes?: unknown[]; backup?: string | null }) =>
+        renderAnswer(
+          this,
+          context,
+          itemOf({ file, found: existsSync(file), dry_run: dryRun, changes: [], backup: null, ...fields }),
+        )
+      if (!existsSync(file)) {
+        answer({ repaired: false, reason: "no settings file" })
+        return
+      }
+      const bytes = readFileSync(file)
+      const result = repairConfigText(bytes.toString("utf8"))
+      if (result.state === "valid") {
+        answer({ repaired: false, reason: "nothing to repair" })
+        return
+      }
+      if (result.state === "refused")
+        throw new CliError(
+          "configuration_error",
+          `${file}: cannot repair it safely — ${result.why}, at line ${result.line}, column ${result.column}; ` +
+            "nothing was changed, so fix that part by hand",
+          { reason: "config.unrepairable", file, line: result.line, column: result.column },
+        )
+      const cut = result.fixes.some((one) => one.kind === "missing_closer")
+      // What came after the cut may have been a deny; only the owner decides the shorter file is what they meant.
+      if (cut && !dryRun && (environmentOf(this).agent || agentOf(env)))
+        throw new CliError(
+          "permission_error",
+          `${file} stops before its end, and a setting after the cut may be lost — the owner repairs it in a terminal`,
+        )
+      let backup: string | null = null
+      if (!dryRun) {
+        backup = backupPathFor(file)
+        writeSecurely(backup, bytes, statSync(file).mode & 0o777)
+        writeSecurely(file, result.text, 0o600)
+      }
+      answer({ repaired: !dryRun, changes: result.fixes, backup })
+      for (const one of result.fixes)
+        renderer.note(`line ${one.line}: ${dryRun ? "would fix" : "fixed"} ${REPAIR_WORDS[one.kind]}`)
+      if (backup) renderer.note(`the old file is kept as ${backup}`)
+    })
+
+/** Beside the file, so the owner finds it; a second repair in the same millisecond never replaces the first. */
+const backupPathFor = (file: string): string => {
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-")
+  let path = `${file}.bak-${stamp}`
+  for (let n = 2; existsSync(path); n++) path = `${file}.bak-${stamp}-${n}`
+  return path
 }
 
 /**

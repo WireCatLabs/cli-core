@@ -76,6 +76,7 @@ describe("command effects", () => {
         "bot recipients remove",
         "chats rules set",
         "chats rules unset",
+        "config repair",
         "config set",
         "config unset",
         "flood clear",
