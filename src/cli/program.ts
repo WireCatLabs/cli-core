@@ -65,6 +65,8 @@ import {
   settingsFor,
 } from "./settings.js"
 import { assertSharedContracts } from "./shared-contracts.js"
+import { skillSourceOf } from "./skill-command.js"
+import { refreshSkills, skipsSkillRefresh } from "./skill-refresh.js"
 import { commandAt, failureSteps, lineOf, withLines } from "./steps.js"
 
 export interface ProgramDefinition {
@@ -618,6 +620,8 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
   try {
     await control.race(() => program.parseAsync(rest, { from: "user" }))
     const code = exit.code ?? (process.exitCode === undefined ? 0 : Number(process.exitCode))
+    const refreshed = code === 0 ? refreshFor(definition, program, rest, options) : undefined
+    if (refreshed && !rest.includes("--quiet")) streams.diagnostic(refreshed)
     const hint =
       code === 0 && rest[0] !== "commands" && rest[0] !== "help" && !rest.includes("--quiet")
         ? hintFor(definition, rest, options)
@@ -693,6 +697,22 @@ const failingNoticeFor = (app: AppIdentity, env: NodeJS.ProcessEnv, program: Com
   try {
     const state = resolvePaths({ appName: app.appName, prefix: app.envPrefix, env }).state
     return failingNotice(app.command, scheduledRuns(state), lineOf(program, "schedule list"))
+  } catch {
+    return undefined
+  }
+}
+
+const NO_REFRESH_COMMANDS = ["skill", "complete", "commands", "help"]
+
+/** Not while `skill` runs: right after an update, `skill status` must report the copies as they are. */
+const refreshFor = ({ app }: ProgramDefinition, program: Command, argv: string[], options: RunOptions) => {
+  const env = options.env ?? process.env
+  try {
+    if (NO_REFRESH_COMMANDS.includes(argv[0] ?? "") || skipsSkillRefresh(app, env)) return undefined
+    const skill = skillSourceOf(program, app.appName)
+    if (!skill) return undefined
+    const state = resolvePaths({ appName: app.appName, prefix: app.envPrefix, env }).state
+    return refreshSkills({ app, skill, env, markerPath: join(state, "skill-refresh.json") })
   } catch {
     return undefined
   }

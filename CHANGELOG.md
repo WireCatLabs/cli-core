@@ -5,6 +5,17 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Added
+
+- **The first run of a new version refreshes the agent instructions an older version installed**: each `SKILL.md`
+  copy whose `skill status` is `stale` (Claude Code's, `~/.agents/skills`, and Hermes's own copy) is rewritten once,
+  with one line on stderr — `Updated the tg instructions for Claude Code and other agents to 0.112.0`. A missing copy
+  stays missing, an `unversioned` one (no released `skill install` wrote it) and a symlink are left as they are, and a
+  failure is one note, never a failed command. The version tried is kept in `<state>/skill-refresh.json`. Off in a
+  moved run, under vitest, during `skill`, and with `<PREFIX>_NO_SKILL_REFRESH=1`; `--quiet` keeps the line out.
+
 ## 0.543.0 — 02.11.2026
 
 ### Added
