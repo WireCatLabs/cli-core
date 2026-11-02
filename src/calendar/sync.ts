@@ -37,6 +37,8 @@ export interface PendingRound {
   series: string[]
   /** A full round asks every series it lists; otherwise only those that changed. Absent reads as true. */
   everySeries?: boolean
+  /** The source said its list is unchanged since `from`: the round marks nothing unseen. */
+  unchanged?: true
 }
 
 /** What the engine keeps in `EventStore.cursor`. Version 1 had no `round`, `updatedAt` or `done`. */
@@ -80,7 +82,8 @@ const roundOf = (value: unknown): PendingRound | null | undefined => {
     (round.everySeries !== undefined && typeof round.everySeries !== "boolean")
   )
     return undefined
-  const { full, from, window, startedAt, reset, page, listed, next, series, everySeries } = round as PendingRound
+  const { full, from, window, startedAt, reset, page, listed, next, series, everySeries, unchanged } =
+    round as PendingRound
   return {
     full,
     from,
@@ -92,6 +95,7 @@ const roundOf = (value: unknown): PendingRound | null | undefined => {
     next,
     series,
     ...(everySeries === false ? { everySeries } : {}),
+    ...(unchanged === true ? { unchanged } : {}),
   }
 }
 
@@ -227,9 +231,10 @@ const freshRound = (
   now: number,
   reset = false,
   everySeries = true,
+  keepToken = false,
 ): PendingRound => ({
   full,
-  from: full ? null : from,
+  from: full && !keepToken ? null : from,
   window,
   startedAt: now,
   reset,
@@ -257,7 +262,7 @@ const roundFor = (
   // The daily full round asks only the series that changed, and every series once the window's end moved on far
   // enough that their new slots matter (foundation §6.2 step 7).
   const everySeries = !full || stored?.slotsTo === undefined || window.to - stored.slotsTo >= SLOTS_EVERY
-  return freshRound(full, stored?.token ?? null, window, now, false, everySeries)
+  return freshRound(full, stored?.token ?? null, window, now, false, everySeries, source.traits.fullListOnly)
 }
 
 const deadList = (provider: string) =>
@@ -362,7 +367,9 @@ const syncOne = async (
       }
     }
     if (page.removed.length) result.removed += await store.removeEntries(calendar.id, page.removed, now)
-    if (page.nextPage === undefined) round = { ...round, page: null, listed: true, next: page.cursor ?? null }
+    if (page.unchanged && source.traits.fullListOnly && page.entries.length === 0 && page.nextPage === undefined)
+      round = { ...round, page: null, listed: true, next: page.cursor ?? null, unchanged: true }
+    else if (page.nextPage === undefined) round = { ...round, page: null, listed: true, next: page.cursor ?? null }
     else {
       if (seen.has(page.nextPage))
         throw new CliError("invalid_response", `${source.provider} returned the same page twice`)
@@ -398,7 +405,8 @@ const syncOne = async (
     await flush()
   }
   if (signal?.aborted) return "cancelled"
-  result.unseen = round.full ? await store.markUnseen(calendar.id, round.startedAt, round.window, now) : 0
+  result.unseen =
+    round.full && !round.unchanged ? await store.markUnseen(calendar.id, round.startedAt, round.window, now) : 0
   await save({
     token: round.next,
     window: round.window,

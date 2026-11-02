@@ -7,6 +7,25 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **A feed is asked whether it changed.** `sync` sends a feed the last answer's `ETag` / `Last-Modified` back as
+  `If-None-Match` / `If-Modified-Since`, and a `304` keeps every stored event without reading the feed again
+  (`feeds[].unchanged` in the answer). The validators are the feed calendar's sync token in the store, valid for one
+  window: the first sync of a new day, and `sync --rescan`, read the feed in full. `fetchFeedIfChanged` is exported;
+  a `fullListOnly` source now gets its last token in `changes()`, and a page may say `unchanged: true`.
+- **`calendars add` warns once on stderr for an `http://` feed**: the feed and any token in its address travel
+  unencrypted. It is still allowed; `webcal://` and `https://` do not warn.
+
+### Changed — may break callers
+
+- **`calendars remove` deletes a feed's events instead of cancelling them**, with the calendar row, its cursor, the
+  events and series only it held, their links, tags, search words and vectors, and people only it had seen. An event
+  another calendar also holds stays with that copy. The answer's `events` counts the events deleted. A new
+  `EventStore.forgetCalendar(calendarId, now)` does it: an `EventStore` written outside cli-core must add it
+  (`memoryEventStore` and the SQLite store have it, and `eventStoreContract` checks it). `calendars unsync` is
+  unchanged.
+
 ## 0.547.0 — 02.11.2026
 
 ### Added

@@ -198,7 +198,7 @@ const referencesTo = (database: CacheDatabase, table: "identities" | "persons", 
   return [...keys, ...pointers].join(" UNION ")
 }
 
-const unreferenced = (database: CacheDatabase, table: "identities"): Set<number> =>
+export const unreferenced = (database: CacheDatabase, table: "identities"): Set<number> =>
   new Set(
     database
       .prepare(
@@ -213,7 +213,7 @@ const unreferenced = (database: CacheDatabase, table: "identities"): Set<number>
  * (another account, a tag, a note, a link), or while its person is kept: the owner, a person something
  * points at, or one linked to an identity that stays.
  */
-const dropOrphanPeople = (database: CacheDatabase, unseenBefore: Set<number>) => {
+export const dropOrphanPeople = (database: CacheDatabase, unseenBefore: Set<number>) => {
   const orphans = [...unreferenced(database, "identities")].filter((id) => !unseenBefore.has(id))
   if (orphans.length === 0) return
   const ids = JSON.stringify(orphans)
