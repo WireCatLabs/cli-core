@@ -38,9 +38,6 @@ shape of this file.
   no longer found by that title; give its id or a part of the title.
 - The provider seeds of `telegram`, `max` and `whatsapp` name their CLI (`command: tg`, `max`, `wa`), which a
   provider clash message now shows (`telegram (messages, from tg)`).
-
-### Changed — may break callers
-
 - **An agent's own shell may tighten a permission but never loosen it.** `config set|unset permissions…` run where
   `AI_AGENT`, `CLAUDECODE`, `OPENCLAW_SHELL=exec` or another agent marker is set is now treated like an MCP agent's
   call: `mcp.authority` and `bot.api` stay owner-only, and a level may only go down (`readonly` → `deny`, never
