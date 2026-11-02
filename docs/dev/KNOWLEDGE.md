@@ -97,6 +97,15 @@ link is written unconfirmed. Only the owner removes or reverses an accepted fact
 proposed fact or memory. The policy is set once at `openStore({ decisions })` and read by every check. An agent's
 `relate` returns a `relationship` proposal.
 
+A relationship's `role` says who the other side is ("client"); its `purpose` says what a chat is for in the project.
+The store keeps no list of purposes: memo's config holds them and checks one before it is written, and `null` means
+`work`. `knowledge.updateRelation` sets either or both (`null` clears one): the owner's change applies, an agent's is a
+`relationship_update` proposal the owner decides like any other. Store version 44 moved the unconfirmed agent and
+rule links into `relationship` and `key_document` proposals on the first writable open after it, with their bot,
+reason and time. The bot comes from the link's provenance text, which anyone could write, so the moved row keeps that
+text under `suggestedLink` and only the owner decides it. Drive's editor links stay links. A suggestion an older build
+writes after that stays a link and is still listed as `link:<id>` or `key:<id>`.
+
 ## Document extraction
 
 `./documents` exposes `extractText`, `importEngine`, limits and extraction types. Markdown/TXT/CSV/TSV

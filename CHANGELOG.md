@@ -28,6 +28,12 @@ shape of this file.
   **`knowledge.decideSuggestedLink(id, decision)`** an older unconfirmed link, each in one transaction: the link and
   the decision land together or not at all. A decision's `reason` is kept: on a rejected proposal as its result, on a
   fact in `metadata.decision`, on an evidence findings receipt.
+- **A relationship's purpose (store version 44).** `links.purpose`, read as `purpose` on a relationship, a link and
+  the `relationship` entity, says what a chat is for in a project; `null` means `work`. The store keeps no list of
+  purposes: the caller checks one against its config. `relate` and `proposeRelation` take `purpose`.
+- **`knowledge.updateRelation(scope, id, { role?, purpose?, by })`** sets a relationship's role and purpose; `null`
+  clears one. The owner's change applies; an agent's is a `relationship_update` proposal, listed and decided through
+  the proposal registry, and `knowledge.decideRelationUpdate(id, decision)` decides it in one transaction.
 
 ### Changed — may break callers
 
@@ -47,6 +53,12 @@ shape of this file.
   the agent's bot and reason otherwise.
   An agent's confirmation of a relationship is recorded in the link's provenance, and of a fact or proposal as its
   decider.
+- **Unconfirmed agent and rule links move into proposals (store version 44).** The first writable open after the
+  upgrade turns each into a `relationship` or `key_document` proposal with its bot, reason and time, and deletes the
+  link; Drive's editor links stay. Only the owner decides a moved one, since its bot came from free text. An older
+  build no longer lists or confirms these as relationships, and a project transfer no longer carries them. Decide them
+  through the proposal registry by their new ids; `link:<id>` and `key:<id>` remain only for suggestions an older
+  build writes later.
 
 ### Security
 

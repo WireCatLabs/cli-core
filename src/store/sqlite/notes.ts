@@ -76,6 +76,8 @@ export interface Link {
   origin: (typeof LINK_SOURCES)[number]
   targetText: string | null
   role: string | null
+  /** What a chat is for in a project, from the purposes memo's config lists; `null` means `work`. */
+  purpose: string | null
   evidence: string | null
   provenance: string | null
   confirmed: boolean
@@ -101,6 +103,7 @@ export interface LinkInput {
   anchor?: string
   origin?: (typeof LINK_ORIGINS)[number]
   role?: string
+  purpose?: string
   evidence?: string
   provenance?: string
   confirmed?: boolean
@@ -257,6 +260,7 @@ export const linkOf = (database: CacheDatabase, row: Row): Link => {
     origin: row.source as Link["origin"],
     targetText: row.target_text == null ? null : String(row.target_text),
     role: row.role == null ? null : String(row.role),
+    purpose: row.purpose == null ? null : String(row.purpose),
     evidence: row.evidence == null ? null : String(row.evidence),
     provenance: metadata.provenance ?? null,
     confirmed: Number(row.confirmed) === 1,
@@ -336,6 +340,9 @@ const ownerLink = (input: LinkInput): LinkInput => {
   return input
 }
 
+/** The store keeps no list of purposes: memo's config holds it, and checks a purpose before it gets here. */
+export const purposeOf = (purpose: string): string => textOf(purpose, "a purpose", 100)
+
 /** Writes one link; an identical resolved link is answered instead of doubled. */
 export const insertLink = (context: StoreContext, input: LinkInput): Link => {
   const { database, now } = context
@@ -360,7 +367,8 @@ export const insertLink = (context: StoreContext, input: LinkInput): Link => {
   const row = database
     .prepare(
       "INSERT INTO links (from_type, from_id, to_type, to_id, kind, anchor, source, target_text, target_folded, role, evidence, " +
-        "metadata, confirmed, created_at, author, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
+        "metadata, confirmed, created_at, author, updated_at, purpose) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) " +
+        "RETURNING id",
     )
     .get(
       from.type,
@@ -379,6 +387,7 @@ export const insertLink = (context: StoreContext, input: LinkInput): Link => {
       at,
       origin === "owner" ? "owner" : null,
       at,
+      input.purpose === undefined ? null : purposeOf(input.purpose),
     )
   if (to === null && targetText !== null) resolveKey(database, targetKey(targetText))
   return linkOf(database, database.prepare("SELECT * FROM links WHERE id = ?").get(Number(row?.id)) as Row)
