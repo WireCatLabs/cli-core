@@ -17,6 +17,8 @@ export interface FakeMail {
   from: FakePerson
   to: FakePerson[]
   cc?: FakePerson[]
+  /** The Date header, when it differs from the server's internal date `receivedAt`. */
+  date?: string
   text?: string
   html?: string
   listId?: string
@@ -99,7 +101,7 @@ export const rawOf = (m: FakeMail): Uint8Array => {
     ...(m.listId ? [`List-Id: News <${m.listId}>`, `List-Unsubscribe: <mailto:leave@${m.listId}>`] : []),
     `Subject: ${m.subject}`,
     `Message-ID: <${m.messageId}@example.test>`,
-    `Date: ${new Date(m.receivedAt).toUTCString()}`,
+    `Date: ${m.date ?? new Date(m.receivedAt).toUTCString()}`,
     "MIME-Version: 1.0",
     ...(m.extraHeaders ?? []),
   ]

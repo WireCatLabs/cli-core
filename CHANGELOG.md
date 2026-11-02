@@ -20,6 +20,13 @@ shape of this file.
 
 ### Fixed
 
+- **`schedule agent` help no longer shows `skill show follow-ups` to a CLI without that skill.** The prompt example is
+  the follow-up review for a messenger and a read-only `search messages` summary for a CLI with `messenger: false`
+  (mail).
+- **Mail sync stores `sent_at`.** It is the Date header, or the server's internal date when the header is missing or
+  unreadable; `received_at` is unchanged. Each sync also gives up to 5,000 emails stored without `sent_at` the internal
+  date (`MailStore.backfillSentAt`), so the `emails_by_time` index becomes useful and an account fills in about a day.
+  No schema change.
 - **A scheduled run's `inbox --new` and `review --new` keep their own point** (`schedule-<name>-review`), so a
   schedule no longer moves the owner's. An agent over MCP keeps its own, as before.
 

@@ -18,6 +18,7 @@ import {
   titleOf,
 } from "./email-index.js"
 import {
+  backfillSentAt,
   type EmailLocationInput,
   type FolderEmail,
   folderEmails,
@@ -325,6 +326,8 @@ export interface MailStore extends PartialMailStore, MailActivityStore {
     flags: ReadonlyMap<string, { read?: boolean; flagged?: boolean }>,
     now: number,
   ): Promise<number>
+  /** Gives up to `limit` emails stored without `sent_at` their internal date; answers how many. */
+  backfillSentAt(accountId: number, limit: number): Promise<number>
   /** The live emails whose location in `folder` has this UIDVALIDITY, oldest UID first. */
   folderEmails(accountId: number, folder: string, uidvalidity: string): Promise<FolderEmail[]>
   /**
@@ -956,11 +959,8 @@ export const mailStoreOver = (
       return count
     })
   },
-  async setFlags(accountId, flags, now) {
-    return write(database, () => {
-      return setEmailFlags(database, accountId, flags, now)
-    })
-  },
+  setFlags: async (accountId, flags, now) => write(database, () => setEmailFlags(database, accountId, flags, now)),
+  backfillSentAt: async (accountId, limit) => write(database, () => backfillSentAt(database, accountId, limit)),
   folderEmails: async (accountId, folder, uidvalidity) => folderEmails(database, accountId, folder, uidvalidity),
   setLocations: async (accountId, folder, uidvalidity, found) =>
     write(database, () => setLocations(database, accountId, folder, uidvalidity, found)),
