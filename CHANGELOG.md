@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.547.0 — 02.11.2026
+
 ### Added
 
 - **A server's refused SEARCH fails that folder, not the run, and proves nothing.** A mail source throws
