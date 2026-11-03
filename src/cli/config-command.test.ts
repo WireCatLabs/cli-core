@@ -533,11 +533,13 @@ describe("every setting in the file (WC-CMD-30)", () => {
     expect(read()).toBe(before)
   })
 
-  it("**creates no section**: a file without defaults gets nothing from migrate", async () => {
-    const text = '{"profiles":{"work":{"limit":5}}}'
-    const { env, read } = setUp(text)
-    expect((await call(["config", "migrate", "--json"], env)).answer.added).toEqual([])
-    expect(read()).toBe(text)
+  it("**creates defaults when the file has none**, after what is there, and no other section", async () => {
+    const { env, read } = setUp('{"profiles":{"work":{"limit":5}}}')
+    expect((await call(["config", "migrate", "--json"], env)).answer.added).toHaveLength(declared.length)
+    const migrated = JSON.parse(read())
+    expect(Object.keys(migrated)).toEqual(["profiles", "defaults"])
+    expect(migrated.profiles).toEqual({ work: { limit: 5 } })
+    expect(migrated.defaults).toMatchObject({ limit: 20, keep_runs_for_days: 30 })
   })
 
   it("**a removed default stays removed**, while the other missing ones are added", async () => {

@@ -532,9 +532,10 @@ export const settingsFor = <T extends object = Record<never, never>>(
         allSettings.includes(key) && v.safeParse(readSchema, { defaults: { [key]: value } }).success,
     )
     .map((setting) => ({ ...setting, key: `defaults.${setting.key}` }))
+  // `defaults` needs no field of its own, so it is the one section created: every key then shows (RISK-2125).
   const withDefaults = (raw: unknown, except: readonly string[] = []) =>
     withSettingDefaults(
-      raw,
+      isScope(raw) && !Object.hasOwn(raw, "defaults") ? { ...raw, defaults: {} } : raw,
       declaredSettings.filter(({ key }) => !except.includes(key)),
     )
 
