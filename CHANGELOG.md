@@ -17,8 +17,19 @@ shape of this file.
   question, or a group whose newest message mentions or replies to the owner — with the messages since the owner
   last wrote, the oldest of them, and the split by kind. Muted or archived one-to-one chats are left out, as in
   `inbox`.
-
-## 0.562.0 — 03.11.2026
+- **tg, max, wa, mail, gcal and drive's config file holds every shared setting with its default.** A first run now
+  writes all of them into `defaults`, not five; `config set` and `config unset` add the missing ones (but not the one
+  just unset); and the new `<cli> config migrate` fills an existing file. Your values, their order and unknown keys
+  stay; a file without `defaults` gets that section, and no other section is created. `config show` gives each of
+  these settings its `default` and `description`, and no longer creates the file when there is none. `settingsFor`
+  returns `declaredSettings` and `migrate(path)`; `extension.settings` declares a CLI's own (cli-base WC-CMD-30).
+  Settings with no single default (`timeout_ms`, `color`, `requests_per_minute`, the embedding model) and objects
+  (`permissions`, `models`) are left out.
+- **`MailReads.mount`: the steps a mail review hands on name where the host mounted it.** A host that mounts `review`
+  and `messages acknowledge` elsewhere passes their paths and the option naming the mailbox — memo passes
+  `review: "mail review"`, `conversation: null` (it mounts no thread read) and `mailbox: { option: "source", value }`
+  — and `next` names those paths and `--source email:<account>`. `mailReviewSteps(mount)` gives the definitions for
+  a host's step checks; a mail CLI leaves it out, and its step lines carry the profile as before.
 
 ### Changed — may break callers
 
@@ -30,6 +41,8 @@ shape of this file.
   meeting and evidence findings (`mail-findings.dedicated-review`), and the generic action kind no longer lists any
   findings batch. Meeting findings were open to another agent with a reason before; now only the owner reviews them.
 
+## 0.562.0 — 03.11.2026
+
 ### Added
 
 - **A CLI can write each of its settings into its config file with the default, so the owner sees every setting
@@ -38,21 +51,8 @@ shape of this file.
   owner's values, their order and unknown keys. It does not create a section that is not there.
   `settingRows(raw, declared)` gives `config show` each setting with its value, default, description and `from`
   (`config file` or `default`). memo is the first user (cli-base WC-CMD-30).
-- **tg, max, wa, mail, gcal and drive's config file holds every shared setting with its default.** A first run now
-  writes all of them into `defaults`, not five; `config set` and `config unset` add the missing ones (but not the one
-  just unset); and the new `<cli> config migrate` fills an existing file. Your values, their order and unknown keys
-  stay; a file without `defaults` gets that section, and no other section is created. `config show` gives each of
-  these settings its `default` and `description`, and no longer creates the file when there is none. `settingsFor`
-  returns `declaredSettings` and `migrate(path)`; `extension.settings` declares a CLI's own (cli-base WC-CMD-30).
-  Settings with no single default (`timeout_ms`, `color`, `requests_per_minute`, the embedding model) and objects
-  (`permissions`, `models`) are left out.
 - **`KEEP_SUCCESSFUL_RUNS_FOR_DAYS` and `RUNS_SIZE_LIMIT_MB` are exported** beside `KEEP_RUNS_FOR_DAYS`. A host can
   then name the run-record defaults it writes into its config file.
-- **`MailReads.mount`: the steps a mail review hands on name where the host mounted it.** A host that mounts `review`
-  and `messages acknowledge` elsewhere passes their paths and the option naming the mailbox — memo passes
-  `review: "mail review"`, `conversation: null` (it mounts no thread read) and `mailbox: { option: "source", value }`
-  — and `next` names those paths and `--source email:<account>`. `mailReviewSteps(mount)` gives the definitions for
-  a host's step checks; a mail CLI leaves it out, and its step lines carry the profile as before.
 
 ### Fixed
 
