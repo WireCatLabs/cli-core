@@ -8,7 +8,7 @@ import { runEmbedders } from "../embeddings/embed.js"
 import { DEFAULT_TEXT_MODEL } from "../embeddings/models.js"
 import type { MessengerTraits } from "../ports/traits.js"
 import { MESSAGE_PARSING } from "../search/lucene/types.js"
-import { planQuestion } from "../search/question-plan.js"
+import { planQuestion, questionLookup } from "../search/question-plan.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
 import { calendarAccounts, searchEvents } from "./events-search.js"
 import { excerpt } from "./excerpt.js"
@@ -159,10 +159,15 @@ export const searchAll = async (
   let events: SearchAllFound["events"]
   let messagesBy: SearchAllFound["messages"]
   let server: ServerSearched | undefined
+  // Every word of a sentence is rarely in one record: a question finds what holds some of them, as `--discover` does.
+  const discover = !request.exact && questionLookup(request.text) !== undefined
   let coverage: SearchCoverage | undefined
 
   const messagesOf = async (kind: "messages" | "mail") => {
     const given = request.scope?.[kind]
+    // Discovery reads the local archive, as `search messages --discover` does: a named server keeps the words as typed.
+    const discovers = discover && (kind === "mail" || request.backend !== "server")
+    const backend = discovers ? "archive" : request.backend
     const query: SearchQuery = {
       text: request.text,
       kind,
@@ -171,12 +176,13 @@ export const searchAll = async (
         ? {
             // Server hits are matched by chat and message id, which another account can share.
             ...(request.backend === "server" || given ? {} : { source: "all" }),
-            ...(request.backend === undefined ? {} : { backend: request.backend }),
+            ...(backend === undefined ? {} : { backend }),
             ...(request.server === undefined ? {} : { server: request.server }),
           }
         : {}),
       limit: window,
       ...(request.exact ? { exact: true } : {}),
+      ...(discovers ? { discover: true } : {}),
       ...(request.timezone === undefined ? {} : { timezone: request.timezone }),
       ...(request.signal === undefined ? {} : { signal: request.signal }),
     }
@@ -259,6 +265,7 @@ export const searchAll = async (
             embedders,
             ...(chosen === undefined ? {} : notesScopeOf(chosen)),
             ...(request.exact ? { exact: true } : {}),
+            ...(discover ? { discover: true } : {}),
             ...(request.timezone === undefined ? {} : { timezone: request.timezone }),
             ...(request.env === undefined ? {} : { env: request.env }),
           })
@@ -296,6 +303,7 @@ export const searchAll = async (
             ...(command === undefined ? {} : { command }),
             ...(request.env === undefined ? {} : { env: request.env }),
             ...(request.exact ? { exact: true } : {}),
+            ...(discover ? { discover: true } : {}),
             ...(request.timezone === undefined ? {} : { timezone: request.timezone }),
             ...(request.signal === undefined ? {} : { signal: request.signal }),
           })

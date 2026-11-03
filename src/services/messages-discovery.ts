@@ -7,7 +7,7 @@ import type { MessengerTraits } from "../ports/traits.js"
 import { fieldsOfQuery, meaningWords } from "../search/lucene/meaning-parts.js"
 import { validateFields } from "../search/lucene/registry.js"
 import { exhausted, MESSAGE_PARSING, outOfTime, QUERY_LIMITS } from "../search/lucene/types.js"
-import { planQuestion, words } from "../search/question-plan.js"
+import { anyOfTerms, lookupTerms, planQuestion, questionText, words } from "../search/question-plan.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
 import type { FoundMessage, SearchFound, SearchQuery } from "./messages.js"
 import { searchCombined } from "./messages-combined.js"
@@ -103,20 +103,9 @@ type Scope = Pick<SearchQuery, "text" | "ast">
 const scopeOf = (root: QueryNode | undefined): Scope =>
   root === undefined ? {} : { ast: { version: 1, language: "lucene-v1", root } }
 
-/**
- * The query discovery searches. A question's own "?" would parse as a one-character wildcard and send it to strict
- * search (BUG-395); the colon of a time or ratio ("22:00", "1:1") would parse as a field and fail the whole search,
- * and escaped it is syntax again, so it splits the numbers (BUG-450). A quoted timestamp keeps its colons (BUG-458).
- */
+/** The query discovery searches: a question's text cleaned as `questionText` says. */
 export const discoveryRequest = (asked: SearchQuery): SearchQuery =>
-  asked.ast !== undefined || asked.exact || !asked.text
-    ? asked
-    : {
-        ...asked,
-        text: asked.text
-          .replace(/(?<=\p{L})\?(?=\s|$)/gu, "")
-          .replace(/"(?:[^"\\]|\\.)*"|(?<=\d):(?=\d)/gu, (found) => (found === ":" ? " " : found)),
-      }
+  asked.ast !== undefined || asked.exact || !asked.text ? asked : { ...asked, text: questionText(asked.text) }
 
 export const searchDiscovery = async (
   store: MessageStore,
@@ -148,10 +137,7 @@ export const searchDiscovery = async (
     : undefined
   const question = root === undefined ? text : meaningWords(root)
   if (!question) return searchLucene(store, account, request, messenger)
-  const terms =
-    root === undefined
-      ? [...new Set(plan.terms.concat(plan.aliases.flatMap((alias) => words(alias.split(" -> ")[1] ?? ""))))]
-      : [...new Set(words(question))]
+  const terms = root === undefined ? lookupTerms(plan) : [...new Set(words(question))]
   if (!terms.length) return searchLucene(store, account, request, messenger)
   if (terms.length > 64) exhausted("discovery terms")
   const narrowing = root === undefined ? undefined : fieldsOfQuery(root, EVERY_MESSAGE)
@@ -190,7 +176,7 @@ export const searchDiscovery = async (
     truncated ||= found.hasMore || found.query.combined.truncated
   }
   check()
-  const relaxed = root === undefined ? `(${terms.join(" OR ")})${plan.scope ? ` ${plan.scope}` : ""}` : text
+  const relaxed = root === undefined ? anyOfTerms(terms, plan.scope) : text
   const partialRequest = { ...request, text: relaxed, ast: undefined, limit: 300, context: 0, thread: undefined }
   const partial = await searchLucene(store, account, partialRequest, messenger)
   add(partial.items)
