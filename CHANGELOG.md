@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.562.0 — 03.11.2026
+
 ### Added
 
 - **A CLI can write each of its settings into its config file with the default, so the owner sees every setting
