@@ -55,6 +55,7 @@ const OTHERS: Entry[] = [
   validation("mail-findings.stale", "mail findings cite mail that changed since it was read; stage a new batch"),
   validation("mail-findings.partial", "a cited email is not stored whole yet; cite it once it is"),
   validation("evidence-findings.dedicated-review", "review evidence findings through the dedicated findings command"),
+  validation("mail-findings.dedicated-review", "review mail findings through the dedicated findings command"),
   validation("document.changed", "the document changed while it was read; nothing was saved"),
   ["document.not-imported", "not_found", "the document is not imported in this source account"],
   ["extraction.invalid-proposals", "invalid_response", "the model's memory proposals could not be used"],

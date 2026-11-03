@@ -1,8 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
-import { MEETING_FINDINGS_KIND } from "../meetings/index.js"
 import { assertMayDecide, type Decider } from "../store/decisions.js"
-import { EVIDENCE_FINDINGS_KIND } from "../store/evidence-findings.js"
-import { proposerOfAction } from "../store/index.js"
+import { assertGenericAction, proposerOfAction } from "../store/index.js"
 import type { MessageStore, ProposedAction } from "../store/store.js"
 import { createTaskService, type Task } from "../tasks/index.js"
 import { taskAccount } from "./task-rules.js"
@@ -22,19 +20,16 @@ export const approveAsTask = async (
   by: Decider,
 ): Promise<{ proposal: ProposedAction; task: Task }> => {
   const proposal = await store.proposedActions.get(id)
-  if (proposal.kind === MEETING_FINDINGS_KIND)
-    throw new CliError("validation_error", "review meeting findings through the dedicated findings command", {
-      reason: "meeting-findings.dedicated-review",
-    })
-  if (proposal.kind === EVIDENCE_FINDINGS_KIND)
-    throw new CliError("validation_error", "review evidence findings through the dedicated findings command", {
-      reason: "evidence-findings.dedicated-review",
-    })
+  assertGenericAction(proposal.kind)
   if (proposal.status !== "proposed")
     throw new CliError("validation_error", `a ${proposal.status} action cannot be approved`, {
       reason: "proposal.wrong-state",
     })
-  assertMayDecide({ id: proposal.id, proposedBy: proposerOfAction(proposal) }, by, store.decisionPolicy)
+  assertMayDecide(
+    { id: proposal.id, kind: proposal.kind, proposedBy: proposerOfAction(proposal) },
+    by,
+    store.decisionPolicy,
+  )
   if (proposal.account === null)
     throw new CliError("validation_error", "a proposal names the account that would act; this one names none")
   const { task } = await createTaskService({ store: store.tasks }).add({

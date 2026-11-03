@@ -21,7 +21,7 @@ import type { AccountKey, EmailMarks } from "../../store/store.js"
 import { readPastMark } from "../marks.js"
 import { hitText } from "../read.js"
 import { type MailReview, OWED_DAYS, REVIEW_THREADS, reviewMail } from "../review.js"
-import type { MailReads } from "./index.js"
+import type { MailMount, MailReads } from "./index.js"
 
 const DAY = 86_400_000
 
@@ -35,31 +35,48 @@ export const MAIL_REVIEW_QUERY = defineQuery({
   ],
 })
 
-/** The mail review's steps; a host lists them beside its own so its step checks know them. */
-export const MAIL_REVIEW_STEPS = defineSteps([
-  {
-    id: "mail-messages.acknowledge",
-    command: "messages acknowledge",
-    args: [
-      { name: "holder", required: true },
-      { name: "cursor", required: true },
-    ],
-    why: "once these are processed, this moves the holder's mark past them",
-  },
-  {
-    id: "mail-review.next",
-    command: "review",
-    args: [{ name: "query", required: true }],
-    why: "the next review starts where this one ended",
-  },
-  {
-    id: "mail-conversations.show",
-    command: "conversations show",
-    args: [{ name: "conversation", required: true }],
-    why: "only the newest emails of the thread were read here; this reads it whole",
-  },
-])
-const step = (id: string) => MAIL_REVIEW_STEPS.find((one) => one.id === id) as StepDefinition
+/** The mail review's steps where a host mounted them; a host lists them beside its own so its step checks know them. */
+export const mailReviewSteps = (mount: MailMount = {}): StepDefinition[] => {
+  const mailbox = mount.mailbox ? [{ name: mount.mailbox.option, required: true }] : []
+  return defineSteps([
+    {
+      id: "mail-messages.acknowledge",
+      command: mount.acknowledge ?? "messages acknowledge",
+      args: [{ name: "holder", required: true }, { name: "cursor", required: true }, ...mailbox],
+      why: "once these are processed, this moves the holder's mark past them",
+    },
+    {
+      id: "mail-review.next",
+      command: mount.review ?? "review",
+      args: [{ name: "query", required: true }, ...mailbox],
+      why: "the next review starts where this one ended",
+    },
+    ...(mount.conversation === null
+      ? []
+      : [
+          {
+            id: "mail-conversations.show",
+            command: mount.conversation ?? "conversations show",
+            args: [{ name: "conversation", required: true }, ...mailbox],
+            why: "only the newest emails of the thread were read here; this reads it whole",
+          },
+        ]),
+  ])
+}
+
+/** The steps of a mail CLI, whose profile names the mailbox. */
+export const MAIL_REVIEW_STEPS = mailReviewSteps()
+
+type Steps = (id: string, args: Record<string, unknown>) => NextStep[]
+
+const stepsFor = (mount: MailMount | undefined, mailbox: AccountKey): Steps => {
+  const definitions = mailReviewSteps(mount)
+  const where = mount?.mailbox ? { [mount.mailbox.option]: mount.mailbox.value(mailbox) } : {}
+  return (id, args) => {
+    const definition = definitions.find((one) => one.id === id)
+    return definition ? [stepOf(definition, { args: { ...args, ...where } })] : []
+  }
+}
 
 const waitingHours = (value: unknown): number =>
   value === true ? AGENDA_DEFAULTS.waiting / 3_600_000 : parseDuration(String(value), "--waiting") / 3_600_000
@@ -79,20 +96,21 @@ const markText = (marks: EmailMarks | undefined) => {
   return shown ? `\n  [${shown}]` : ""
 }
 
-const reviewAnswer = (found: MailReview, mailbox: AccountKey, fresh: boolean) => {
+const reviewAnswer = (found: MailReview, mailbox: AccountKey, fresh: boolean, step: Steps) => {
   const read = found.chats
     .flatMap((chat) => chat.messages.map((message) => ({ ...message, chatTitle: chat.title })))
     .sort((a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp))
   const cut = found.chats.filter((chat) => chat.more)
   const ref = (thread: string) => formatReference({ type: "chat", ...mailbox, chat: thread })
   const turns = found.unanswered !== undefined || found.waiting !== undefined
+  const wholeThreads = cut.flatMap((chat) => step("mail-conversations.show", { conversation: ref(chat.id) }))
   const missing: Missing[] = [
     ...(cut.length > 0
       ? [
           {
             field: "items",
             why: `only the newest emails of ${cut.length} thread(s)`,
-            step: "mail-conversations.show",
+            ...(wholeThreads.length ? { step: "mail-conversations.show" } : {}),
           },
         ]
       : []),
@@ -110,13 +128,9 @@ const reviewAnswer = (found: MailReview, mailbox: AccountKey, fresh: boolean) =>
   ]
   const next: NextStep[] = [
     ...(!fresh && !turns
-      ? [
-          stepOf(step("mail-review.next"), {
-            args: { query: `date>${quoted(found.complete ? found.until : found.since)}` },
-          }),
-        ]
+      ? step("mail-review.next", { query: `date>${quoted(found.complete ? found.until : found.since)}` })
       : []),
-    ...cut.map((chat) => stepOf(step("mail-conversations.show"), { args: { conversation: ref(chat.id) } })),
+    ...wholeThreads,
   ]
   return listOf("review", {
     items: read.map((message) => ({
@@ -184,12 +198,10 @@ const holderReview = async (command: Command, mail: MailReads, holder: string, q
     partial: false,
     quiet: 0,
   }
-  const answer = reviewAnswer(found, mailbox, true)
+  const step = stepsFor(mail.mount, mailbox)
+  const answer = reviewAnswer(found, mailbox, true, step)
   const skipped = Object.entries(read.skipped).filter(([, count]) => count > 0)
-  answer.next = [
-    stepOf(step("mail-messages.acknowledge"), { args: { holder, cursor: read.cursor } }),
-    ...(answer.next ?? []),
-  ]
+  answer.next = [...step("mail-messages.acknowledge", { holder, cursor: read.cursor }), ...(answer.next ?? [])]
   answer.missing = [
     ...(answer.missing ?? []),
     ...(read.held > 0 ? [{ field: "items", why: `${read.held} partial emails held until they are whole` }] : []),
@@ -298,7 +310,7 @@ an agent over MCP, and each scheduled run.`,
         return { found, mailbox, saved }
       })
       const output = outputFor(this)
-      const answer = reviewAnswer(found, mailbox, saved !== undefined)
+      const answer = reviewAnswer(found, mailbox, saved !== undefined, stepsFor(mail.mount, mailbox))
       if (meta) answer.meta = { ...meta, ...answer.meta }
       renderAnswer(this, output, answer, () => {
         const read = found.chats.flatMap((chat) => chat.messages)

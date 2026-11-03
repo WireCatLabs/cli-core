@@ -163,6 +163,7 @@ write chats unarchive
 write chats unmute
 write chats unpin
 write chats update
+write config migrate
 write config repair
 write config set
 write config unset
