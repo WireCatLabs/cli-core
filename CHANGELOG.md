@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.563.0 — 03.11.2026
+
 ### Changed — may break callers
 
 - **Mail sync reads attachments up to 10 MB a file by default, and can skip them.** Until now every attachment was
