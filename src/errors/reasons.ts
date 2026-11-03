@@ -244,7 +244,7 @@ const OTHERS: Entry[] = [
   validation("task.category-unknown", "the category is not in the task category list"),
   validation("task.claimed", "someone else holds the task"),
   validation("task.closed", "the task is already closed"),
-  ["task.stale", "configuration_error", "the task changed since it was read; read it again"],
+  ["task.stale", "conflict", "the task changed since it was read; read it again"],
   validation("task.column", "the task beside which it moves is in another column than the status asked for"),
   validation("task.dependency-cycle", "the task would depend on itself"),
   validation(
