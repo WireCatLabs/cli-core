@@ -1,11 +1,12 @@
 import { CliError } from "@wirecat/cli-base"
-import { annotate, sharedCommand } from "@wirecat/cli-base/commands"
+import { annotate, metaOf, sharedCommand } from "@wirecat/cli-base/commands"
 import { timezoneOf } from "@wirecat/cli-base/query"
-import { clockMeta, type Effects } from "@wirecat/cli-base/standards"
+import { clockMeta, type Effects, type NextStep } from "@wirecat/cli-base/standards"
 import { Argument, type Command, InvalidArgumentError, Option } from "commander"
 import { environmentOf, outputFor, runBudgetOf } from "../../cli/context.js"
 import { honoursDryRun } from "../../cli/dry-run-guard.js"
 import { changesStore, ownerOnlyOption, writesFileOnlyWith } from "../../cli/effects.js"
+import { type Body, renderAnswer } from "../../cli/envelope.js"
 import { queryTerms, withQuery } from "../../cli/list-query.js"
 import { terminalAsker } from "../../cli/messenger/ask.js"
 import { lineOf } from "../../cli/steps.js"
@@ -14,6 +15,7 @@ import type { AppIdentity } from "../../ports/app.js"
 import { secretInput } from "../../runs/run-context.js"
 import { searchEvents } from "../../services/events-search.js"
 import { dateWindow } from "../../services/moment.js"
+import { embedEvents } from "../../services/notes-search.js"
 import { linkPeople } from "../../services/people.js"
 import type { AccountKey, MessageStore } from "../../store/store.js"
 import { BUSY_QUERY, BUSY_QUERY_NOTE, busyAnswer, busyQuery, workingHoursOf } from "../busy.js"
@@ -62,67 +64,66 @@ import {
   type WriteContext,
 } from "../writes.js"
 import { CALENDARS_QUERY, declareCalendarAnswers, PEOPLE_QUERY } from "./answers.js"
+import { hitsBody, itemBody, listBody, messagesOf, pathOf } from "./bodies.js"
+import { ICS_MAX_BYTES, readIcsFile, writeIcsFile } from "./files.js"
 import { localTimesView } from "./local-times.js"
 import { addRemind } from "./remind.js"
 import { addSearchAll } from "./search-all.js"
 
-export interface CalendarCommandDeps {
-  store: EventStore
-  /** The selected profile's calendar account: every command reads and syncs only it. */
-  accountId: number
-  /** The same account as the shared store names it, for search and people. */
+/**
+ * The selected profile's calendar, opened by the app for one command and closed once its answer is built, before
+ * anything is printed (WC-LIFE-4). Nothing of it outlives the command, so concurrent runs share no state (WC-ARCH-22).
+ */
+export interface CalendarRun {
+  /** The profile's name, which `store status` gives as each sync's `profile`. */
+  profile: string
+  /** The profile's calendar account as the shared store names it: every command reads and syncs only it. */
   account: AccountKey
-  /** The profile's name, which `status` gives as each sync's `profile`. */
-  profile?: string
-  /** The shared store: `search`, `people link` and the person of an attendee read it. */
+  accountId: number
+  store: EventStore
+  /** The shared store: `search`, `people link`, `--source` and an attendee's person read it. */
   messages?: MessageStore
-  /** The provider; `sync` and `calendars list` read it. */
-  source?: CalendarSource
-  /**
-   * The source answers `freeBusy`: mounts `calendars busy`. A flag rather than a look at `source`, which a CLI may
-   * build only once a profile is open.
-   */
-  freeBusy?: boolean
-  /**
-   * The source answers `search`: `search` takes `--backend server` and asks the provider. A flag, as `freeBusy`, so the
-   * source can stay unbuilt until a profile is open.
-   */
-  serverSearch?: boolean
+  /** The provider, built on first use: a command that only reads the store never reads the sign-in. */
+  source: () => CalendarSource
+  /** The provider's writer and the profile's guard, for the write commands. */
+  writes?: () => CalendarWrites
+  /** The iCalendar feeds the profile follows; `sync` and `calendars list` read them after the provider. */
+  feeds?: () => CalendarFeeds
   /** For a source with `expands: "local"`. */
   expand?: CalendarExpander
-  /**
-   * The iCalendar feeds the profile follows, as read-only calendars of its account: mounts `calendars add|remove`,
-   * and `sync` and `calendars list` read them after the provider. Read only once a profile is open.
-   */
-  feeds?: CalendarFeeds
-  /** After `sync --embed`: embeds new events for search by meaning (`embedEvents`), as drive's `sync --embed`. */
-  embed?: (max: number) => Promise<{ model: string; embedded: number; left: boolean }>
-  /**
-   * `view` is the text a person reads in place of the default rendering: the times on the zone's wall clock, and the
-   * zone named. It takes the host's own body (`renderAnswer` passes it) or, without one, renders `value`.
-   */
-  write: (value: unknown, format: "json" | "jsonl" | "text", view?: (body?: unknown) => string) => void
-  /** A line for the person beside the answer, never in it: which accounts `search all` read and which it skipped. */
-  note?: (text: string) => void
-  /**
-   * The CLI itself. With it and `messages`, `search` also has `all`: messages, notes, events and named meetings in the
-   * shared store, as a messenger's `search all`.
-   */
-  app?: AppIdentity
-  now?: () => number
-  /** The zone `today`, `week` and a bare date are read in; the computer's when absent. */
-  timezone?: string
-  /** The provider's writer and the profile's guard: `events create|update|delete|respond` exist only with it. */
-  writes?: CalendarWrites
-  /** Writes `events export --output`'s file; without it the export is printed only. */
-  writeFile?: (path: string, content: string) => Promise<void>
-  /** Reads `events import`'s file; without it, and the writer's `import`, there is no `events import`. */
-  readFile?: (path: string) => Promise<string>
+  env?: NodeJS.ProcessEnv
   /**
    * A profile lock pins the process (WC-ACCT-5): `events list --source` may then read only the profile's account, and
    * `links review` lists only its choices.
    */
   locked?: boolean
+  close?: () => Promise<void>
+}
+
+/** What the provider can do, known when the commands are built, before any profile is open. */
+export interface CalendarCommandOptions {
+  /** The CLI itself: the first word of examples, the store's command name, and `search all`. */
+  app: AppIdentity
+  /**
+   * Opens the selected profile's calendar for one command. `readOnly` is true when the command only reads the store, so
+   * parallel reads take no write lock; the app may still open it writable, for a profile's first run say.
+   */
+  open: (command: Command, access: { readOnly: boolean }) => Promise<CalendarRun>
+  /** The source answers `freeBusy`: mounts `calendars busy`. */
+  freeBusy?: boolean
+  /** The source answers `search`: `search events` takes `--backend server|both`. */
+  serverSearch?: boolean
+  /** The profile may follow iCalendar feeds: mounts `calendars add|remove`. */
+  feeds?: boolean
+  /** The provider takes writes: mounts `events create|update|delete|respond|remind`, and what its writer adds. */
+  writes?: { quickAdd?: boolean; move?: boolean; importEvent?: boolean }
+  /** Reads `events import`'s file; a file on disk, at most 10 MB, when absent. */
+  readFile?: (path: string) => Promise<string>
+  /** Writes `events export --output`'s file; owner-only (0600), whole or not at all, when absent. */
+  writeFile?: (path: string, content: string) => Promise<void>
+  now?: () => number
+  /** The zone `today`, `week` and a bare date are read in; the computer's when absent. */
+  timezone?: string
 }
 
 const LOCAL_READ: Effects = { remote: "none", local: "read" }
@@ -142,8 +143,6 @@ const REVIEW_UNTRUSTED = ["candidates.title"]
 const SEARCH_UNTRUSTED = ["hits.title", "hits.location", "hits.excerpt"]
 const SERVER_SEARCH_UNTRUSTED = ["hits.title", "hits.location"]
 const IMPORT_UNTRUSTED = ["imported.uid", "imported.entry.title", "skipped.uid", "skipped.reason"]
-/** The largest .ics file `events import` reads. */
-const ICS_MAX_BYTES = 10 * 1024 * 1024
 
 const eachMarked = <T extends { items: object[] }>(answer: T, untrusted: string[]) => ({
   ...answer,
@@ -168,38 +167,31 @@ const minutes = (text: string) => {
   return value
 }
 
-const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDeps): void => {
+/** A search tops up its pending word index before it answers, which is a write; every other read only reads. */
+const readsOnly = (command: Command): boolean =>
+  metaOf(command).effects?.local !== "write" && pathOf(command)[0] !== "search"
+
+const addCalendarCommandsDefinition = (program: Command, options: CalendarCommandOptions): void => {
   const mounted = new Set(program.commands)
-  const now = () => deps.now?.() ?? Date.now()
-  const zone = () => timezoneOf(deps.timezone)
-  const print = (value: unknown, command: Command) => {
-    const opts = command.optsWithGlobals()
-    deps.write(value, opts.json ? "json" : opts.jsonl ? "jsonl" : "text", (body) =>
-      localTimesView(body ?? value, zone(), outputFor(command).color),
-    )
+  const now = () => options.now?.() ?? Date.now()
+  const zone = () => timezoneOf(options.timezone)
+  const answer = (command: Command, body: Body, view?: (body: Body) => string) => {
+    const output = outputFor(command)
+    renderAnswer(command, output, body, view ?? ((shown) => localTimesView(shown, zone(), output.color)))
   }
-  const messages = (what: string) => {
-    if (!deps.messages) throw new CliError("configuration_error", `${what} needs the shared store`)
-    return deps.messages
-  }
-  const personOfEmail: PersonOfEmail | undefined = deps.messages
-    ? async (email) => {
-        const person = await messages("a person").people.personOf({ provider: "email", id: email })
-        return person ? `person:${person.uid}` : null
-      }
-    : undefined
-  const personId = async (reference: string): Promise<number | null> => {
-    const text = reference.replace(/^person:/u, "")
-    if (/^[1-9]\d*$/u.test(text)) return Number(text)
-    const person = await messages("person:").people.personOf({ provider: "email", id: text.trim().toLowerCase() })
-    return person ? Number(person.uid) : null
+  /** Opens the profile for `work` and closes it before the answer prints, also when `work` fails. */
+  const within: Within = async (command, work, view) => {
+    const run = await options.open(command, { readOnly: readsOnly(command) })
+    let body: Body
+    try {
+      body = await work(run)
+    } finally {
+      await run.close?.()
+    }
+    answer(command, body, view)
   }
   const example = (command: Command, ...lines: string[]) =>
-    annotate(command, { examples: lines.map((line) => `${program.name()} personal ${line}`) })
-  const source = () => {
-    if (!deps.source) throw new CliError("configuration_error", "the calendar provider is unavailable")
-    return deps.source
-  }
+    annotate(command, { examples: lines.map((line) => `${options.app.command} personal ${line}`) })
 
   const calendars = annotate(program.command("calendars").description("the account's calendars"), { effects: GROUP })
   withQuery(
@@ -213,12 +205,16 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
     CALENDARS_QUERY,
   ).action(async (words: string[], _opts: unknown, command: Command) => {
     const terms = [...queryTerms(words, CALENDARS_QUERY, "calendars list")]
-    const found = [...(await source().calendars()), ...((await deps.feeds?.source.calendars()) ?? [])]
-    const listed = await deps.store.saveCalendars(deps.accountId, found, now())
-    const items = listed
-      .map(calendarItem)
-      .filter((item) => terms.every(([field, value]) => String(item[field as keyof typeof item]) === value))
-    print({ items, page: 1, limit: items.length, hasMore: false }, command)
+    await within(command, async (run) => {
+      // WC-CMD-20: the provider's list has no filter for these terms (Google's calendarList.list takes only a minimum
+      // access role, and synced is this store's own), and every calendar it answers is saved, so they narrow here.
+      const found = [...(await run.source().calendars()), ...((await run.feeds?.().source.calendars()) ?? [])]
+      const listed = await run.store.saveCalendars(run.accountId, found, now())
+      const items = listed
+        .map(calendarItem)
+        .filter((item) => terms.every(([field, value]) => String(item[field as keyof typeof item]) === value))
+      return listBody(command, { items, page: 1 })
+    })
   })
   for (const [name, synced] of [
     ["sync", true],
@@ -230,19 +226,24 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
         .argument("<calendar>", "the calendar's id, the provider's id, or its title"),
       `calendars ${name} 3`,
     ).action(async (reference: string, _opts: unknown, command: Command) => {
-      const calendar = await calendarIn(deps.store, deps.accountId, reference)
-      await deps.store.setCalendarSynced(calendar.id, synced, now())
-      print(calendarItem({ ...calendar, synced }), command)
+      await within(command, async (run) => {
+        const calendar = await calendarIn(run.store, run.accountId, reference)
+        await run.store.setCalendarSynced(calendar.id, synced, now())
+        return itemBody(calendarItem({ ...calendar, synced }))
+      })
     })
 
-  if (deps.feeds) {
-    const feeds = () => deps.feeds as CalendarFeeds
+  if (options.feeds) {
+    const feedsOf = (run: CalendarRun) => {
+      if (!run.feeds) throw new CliError("configuration_error", "this profile follows no feeds")
+      return run.feeds()
+    }
     example(
       // A fetch, but also a new secret and a new address every later sync reads: the read-only lock refuses it.
       changesStore(annotate(calendars.command("add"), { effects: FETCH, offline: false, mcp: false }))
         .description(
           "follow an iCalendar feed, such as a holiday calendar or a published .ics address, as a read-only calendar " +
-            "of this profile; sync reads it again each time. The address is kept as a secret and never printed",
+            "of this profile that sync reads again each time; the address is kept as a secret and never printed",
         )
         .summary("follow an iCalendar feed as a read-only calendar")
         .addArgument(secretInput(new Argument("<url>", "the feed's https://, http:// or webcal:// address")))
@@ -251,47 +252,46 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
     ).action(async (url: string, opts: { title?: string }, command: Command) => {
       if (command.optsWithGlobals<{ offline?: boolean }>().offline)
         throw new CliError("permission_error", "calendars add reads the feed; leave out --offline")
-      const { calendar, events } = await feeds().add(url, opts.title === undefined ? {} : { title: opts.title })
-      if (isPlainHttp(url))
-        outputFor(command).renderer.warn(
-          "this feed's address starts with http://, so the feed and any token in its address travel unencrypted; " +
-            "use https:// if the server offers it",
-        )
-      const [saved] = await deps.store.saveCalendars(deps.accountId, [calendar], now())
-      print(
-        {
+      await within(command, async (run) => {
+        const { calendar, events } = await feedsOf(run).add(url, opts.title === undefined ? {} : { title: opts.title })
+        if (isPlainHttp(url))
+          outputFor(command).renderer.warn(
+            "this feed's address starts with http://, so the feed and any token in its address travel unencrypted; " +
+              "use https:// if the server offers it",
+          )
+        const [saved] = await run.store.saveCalendars(run.accountId, [calendar], now())
+        return itemBody({
           ...calendarItem(saved as NonNullable<typeof saved>),
           events,
           hint: `run ${lineOf(command, "sync")} to store its events`,
-        },
-        command,
-      )
+        })
+      })
     })
     example(
       annotate(calendars.command("remove"), { effects: LOCAL_WRITE, mcp: false })
         .description(
           "stop following a feed calendars add added: its address is forgotten and its stored events are deleted, " +
-            "not cancelled. Only a feed; calendars unsync stops a provider's calendar",
+            "not cancelled; only a feed, as calendars unsync stops a provider's calendar",
         )
         .argument("<calendar>", "the feed calendar's id, its ics: id, or its title"),
       "calendars remove 7",
     ).action(async (reference: string, _opts: unknown, command: Command) => {
-      const calendar = await calendarIn(deps.store, deps.accountId, reference)
-      if (!isFeedCalendar(calendar))
-        throw new CliError(
-          "validation_error",
-          `calendar ${calendar.id} is not a feed; calendars remove takes only feeds`,
-          {
-            reason: "feed.not-a-feed",
-          },
-        )
-      await feeds().remove(calendar.externalId)
-      const { entries, events } = await deps.store.forgetCalendar(calendar.id, now())
-      print({ ...calendarItem({ ...calendar, synced: false }), removed: entries, events }, command)
+      await within(command, async (run) => {
+        const calendar = await calendarIn(run.store, run.accountId, reference)
+        if (!isFeedCalendar(calendar))
+          throw new CliError(
+            "validation_error",
+            `calendar ${calendar.id} is not a feed; calendars remove takes only feeds`,
+            { reason: "feed.not-a-feed" },
+          )
+        await feedsOf(run).remove(calendar.externalId)
+        const { entries, events } = await run.store.forgetCalendar(calendar.id, now())
+        return itemBody({ ...calendarItem({ ...calendar, synced: false }), removed: entries, events })
+      })
     })
   }
 
-  if (deps.freeBusy)
+  if (options.freeBusy)
     example(
       withQuery(
         annotate(calendars.command("busy"), { effects: REMOTE_READ, offline: false, partial: true }).description(
@@ -301,7 +301,7 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
         BUSY_QUERY,
       ).addHelpText("after", BUSY_QUERY_NOTE),
       "calendars busy person:ana@example.com --json",
-      "calendars busy start>=2026-11-02 end<=2026-11-06 person:ana@example.com --duration-minutes 30 " +
+      "calendars busy starts_at>=2026-11-02 ends_at<=2026-11-06 person:ana@example.com --duration-minutes 30 " +
         "--hours 10:00-16:00",
     )
       .option("--duration-minutes <minutes>", "find free stretches at least this long, 5–1440", minutes)
@@ -316,15 +316,15 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
             reason: "busy.offline",
           })
         const hours = workingHoursOf(opts.hours)
-        const query = await busyQuery(words, { store: deps.store, accountId: deps.accountId, zone: zone(), now: now() })
-        print(
-          await busyAnswer(source(), query, {
+        await within(command, async (run) => {
+          const query = await busyQuery(words, { store: run.store, accountId: run.accountId, zone: zone(), now: now() })
+          const { meta, ...busy } = await busyAnswer(run.source(), query, {
             zone: zone(),
             now: now(),
             ...(opts.durationMinutes === undefined ? {} : { slot: { minutes: opts.durationMinutes, hours } }),
-          }),
-          command,
-        )
+          })
+          return itemBody(busy, { meta })
+        })
       })
 
   example(
@@ -353,71 +353,76 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
       if (command.optsWithGlobals<{ full?: boolean }>().full)
         throw new CliError("validation_error", "sync starts over with --rescan; --full only widens output")
       const { signal } = environmentOf(command)
-      const report = await syncWithFeeds(source(), deps.feeds, deps.store, {
-        accountId: deps.accountId,
-        now: now(),
-        budget: runBudgetOf(command, opts.maxPages),
-        ...(signal ? { signal } : {}),
-        ...(opts.rescan ? { full: true } : {}),
-        ...(deps.expand ? { expand: deps.expand } : {}),
-      })
-      if (opts.embed && !deps.embed) throw new CliError("configuration_error", "this tool cannot embed events")
-      // A run its budget stopped has no time left for the model; the run that finishes the round embeds.
-      const embeddings = opts.embed && !report.stopped ? await deps.embed?.(EMBED_MAX) : undefined
-      const timeout = command.optsWithGlobals<{ timeout?: string }>().timeout
-      // The same command again, never --rescan: that would drop the round this run leaves in progress. A run that moved
-      // nothing on would only repeat itself, so it gets no step an agent may run unasked.
-      const stuck = report.state === "partial" && report.progress.steps === 0 && !report.synced.some((one) => one.error)
-      const next =
-        report.state === "partial" && !stuck && !report.synced.some((one) => one.error !== undefined)
-          ? [
-              {
-                kind: "command" as const,
-                step: "calendar.sync",
-                command: "sync",
-                args: Object.fromEntries(
-                  Object.entries({ max_pages: opts.maxPages, timeout, embed: opts.embed }).filter(
-                    ([, value]) => value !== undefined,
+      await within(command, async (run) => {
+        if (opts.embed && !run.messages) throw new CliError("configuration_error", "this tool cannot embed events")
+        const report = await syncWithFeeds(run.source(), run.feeds?.(), run.store, {
+          accountId: run.accountId,
+          now: now(),
+          budget: runBudgetOf(command, opts.maxPages),
+          ...(signal ? { signal } : {}),
+          ...(opts.rescan ? { full: true } : {}),
+          ...(run.expand ? { expand: run.expand } : {}),
+        })
+        // A run its budget stopped has no time left for the model; the run that finishes the round embeds.
+        const embeddings =
+          opts.embed && !report.stopped && run.messages
+            ? await embedEvents(run.messages, {
+                maxChunks: EMBED_MAX,
+                ...(run.env ? { env: run.env } : {}),
+                command: options.app.command,
+              })
+            : undefined
+        const failed = report.synced.filter((one) => one.error !== undefined)
+        const timeout = command.optsWithGlobals<{ timeout?: string }>().timeout
+        // The same command again, never --rescan: that would drop the round this run leaves in progress. A run that
+        // moved nothing on would only repeat itself, so it gets no step; a sync sends the provider no write, so
+        // running it again is safe.
+        const stuck = report.state === "partial" && report.progress.steps === 0 && failed.length === 0
+        const why = failed.length
+          ? "a calendar failed to sync; running sync again retries it"
+          : "the sync stopped before its end to answer in time; running it again goes on from there"
+        const next: NextStep[] | undefined =
+          failed.length || (report.state === "partial" && !stuck)
+            ? [
+                {
+                  kind: "command",
+                  step: "calendar.sync",
+                  command: "sync",
+                  args: Object.fromEntries(
+                    Object.entries({ max_pages: opts.maxPages, timeout, embed: opts.embed }).filter(
+                      ([, value]) => value !== undefined,
+                    ),
                   ),
-                ),
-                why: "the sync stopped before its end to answer in time; running it again goes on from where it stopped",
-                safe_to_auto_execute: true,
-              },
-            ]
-          : undefined
-      const progressAt = lineOf(command, "store status")
-      report.hint = stuck
-        ? `this run moved nothing on: raise --timeout or --max-pages, then run sync again; see progress: ${progressAt}`
-        : report.state === "partial"
-          ? `run sync again to continue; see progress: ${progressAt}`
-          : report.hint
-      if (report.hint === undefined) delete report.hint
-      const failed = report.synced.filter((one) => one.error !== undefined)
-      if (failed.length)
-        // A failure prints nothing on stdout (WC-OUT-14), so the error carries every calendar's result.
-        throw new CliError(
-          "provider_error",
-          `${failed.map((one) => `calendar ${one.calendarId} (${one.title ?? one.externalId}): ${one.error}`).join("; ")}` +
-            " — run sync again to retry",
+                  why,
+                  safe_to_auto_execute: true,
+                },
+              ]
+            : undefined
+        const progressAt = lineOf(command, "store status")
+        report.hint = failed.length
+          ? `${failed.map((one) => `calendar ${one.calendarId} (${one.title ?? one.externalId}): ${one.error}`).join("; ")}` +
+            " — run sync again to retry"
+          : stuck
+            ? `this run moved nothing on: raise --timeout or --max-pages, then run sync again; see progress: ${progressAt}`
+            : report.state === "partial"
+              ? `run sync again to continue; see progress: ${progressAt}`
+              : report.hint
+        if (report.hint === undefined) delete report.hint
+        // What the healthy calendars brought is saved and answered; each failed one is an issue (WC-OUT-7, WC-OUT-8).
+        const issues = failed.map((one) => ({
+          code: "provider_error" as const,
+          reason: "sync.partial",
+          source: `calendar:${one.calendarId}`,
+        }))
+        const partial = report.state === "partial" || issues.length > 0
+        return itemBody(
+          { ...report, ...(embeddings === undefined ? {} : { embeddings }) },
           {
-            reason: "sync.partial",
-            calendars: report.synced.map((one) => ({
-              calendar_id: String(one.calendarId),
-              external_id: one.externalId,
-              title: one.title,
-              round: one.round,
-              state: one.state,
-              saved: one.saved,
-              removed: one.removed,
-              occurrences: one.occurrences,
-              ...(one.error === undefined ? {} : { error: one.error }),
-            })),
-            retryable: true,
-            // A sync sends the provider no write, so running it again changes nothing there.
-            sent: false,
+            ...(partial ? { meta: { complete: false, ...(issues.length ? { issues } : {}) } } : {}),
+            ...(next ? { next } : {}),
           },
         )
-      print({ ...report, ...(embeddings === undefined ? {} : { embeddings }), ...(next ? { next } : {}) }, command)
+      })
     })
 
   const store = annotate(program.command("store").description("the local store of calendar events"), {
@@ -429,14 +434,31 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
     ),
     "store status --json",
   ).action(async (_opts: unknown, command: Command) => {
-    print(
-      await calendarStatus(deps.store, deps.accountId, {
-        profile: deps.profile ?? `account ${deps.accountId}`,
-        now: now(),
-      }),
-      command,
+    await within(command, async (run) =>
+      listBody(command, await calendarStatus(run.store, run.accountId, { profile: run.profile, now: now() })),
     )
   })
+
+  const personOfEmail = (run: CalendarRun): PersonOfEmail | undefined => {
+    const shared = run.messages
+    return shared
+      ? async (email) => {
+          const person = await shared.people.personOf({ provider: "email", id: email })
+          return person ? `person:${person.uid}` : null
+        }
+      : undefined
+  }
+  const personId =
+    (run: CalendarRun) =>
+    async (reference: string): Promise<number | null> => {
+      const text = reference.replace(/^person:/u, "")
+      if (/^[1-9]\d*$/u.test(text)) return Number(text)
+      const person = await messagesOf(run, "person:").people.personOf({
+        provider: "email",
+        id: text.trim().toLowerCase(),
+      })
+      return person ? Number(person.uid) : null
+    }
 
   const events = annotate(program.command("events").description("the account's stored events"), { effects: GROUP })
   example(
@@ -455,76 +477,71 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
     .option(
       "--source <accounts>",
       "calendar accounts held in the store to read as one list: all, a provider, or a list such as " +
-        `${program.name()}:work,${program.name()}:personal or group:<name>; the profile's account when absent`,
+        `${options.app.command}:work,${options.app.command}:personal or group:<name>; the profile's account when absent`,
     )
     .action(async (words: string[], opts: { limit: number; page: number; source?: string }, command: Command) => {
-      const own: ReadAccount = { id: deps.accountId, key: deps.account }
-      const { accounts, skipped } =
-        opts.source === undefined
-          ? { accounts: [own], skipped: [] }
-          : await sourceAccounts(messages("--source"), deps.account, opts.source, program.name())
-      if (deps.locked && accounts.some(({ id }) => id !== own.id))
-        throw new CliError(
-          "permission_error",
-          "this process is locked to one profile; --source may name only its own account",
-          { reason: "profile.locked" },
-        )
-      const filter = await eventsFilter(words, {
-        store: deps.store,
-        accountId: deps.accountId,
-        accountIds: accounts.map(({ id }) => id),
-        zone: zone(),
-        now: now(),
-        personOf: personId,
-      })
-      print(
-        {
-          ...eachMarked(
-            await eventsAnswer(deps.store, filter && { ...filter, limit: opts.limit }, opts.page),
+      await within(command, async (run) => {
+        const own: ReadAccount = { id: run.accountId, key: run.account }
+        const { accounts, skipped } =
+          opts.source === undefined
+            ? { accounts: [own], skipped: [] }
+            : await sourceAccounts(messagesOf(run, "--source"), run.account, opts.source, options.app.command)
+        if (run.locked && accounts.some(({ id }) => id !== own.id))
+          throw new CliError(
+            "permission_error",
+            "this process is locked to one profile; --source may name only its own account",
+            { reason: "profile.locked" },
+          )
+        const filter = await eventsFilter(words, {
+          store: run.store,
+          accountId: run.accountId,
+          accountIds: accounts.map(({ id }) => id),
+          zone: zone(),
+          now: now(),
+          personOf: personId(run),
+        })
+        return listBody(
+          command,
+          eachMarked(
+            await eventsAnswer(run.store, filter && { ...filter, limit: opts.limit }, opts.page),
             EVENT_ITEM_UNTRUSTED,
           ),
-          meta: { ...(await accountsMeta(deps.store, accounts, skipped, now())), ...clockMeta(now(), zone()) },
-        },
-        command,
-      )
+          { ...(await accountsMeta(run.store, accounts, skipped, now())), ...clockMeta(now(), zone()) },
+        )
+      })
     })
   const exporter = example(
     withQuery(
-      annotate(events.command("export"), { effects: deps.writeFile ? LOCAL_WRITE : LOCAL_READ }).description(
+      annotate(events.command("export"), { effects: LOCAL_WRITE }).description(
         `write stored events as iCalendar (.ics), at most ${EXPORT_MAX}: one with id:<id>, or those the query ` +
           "finds; each occurrence of a repeating event as an event of its own",
       ),
       EVENTS_QUERY,
     ).addHelpText("after", EVENTS_QUERY_NOTE),
-    ...(deps.writeFile
-      ? [
-          "events export id:42 --output planning.ics",
-          "events export 'starts_at:[2026-11-02 TO 2026-11-09}' NOT event_type:birthday --output week.ics",
-        ]
-      : ["events export id:42", "events export 'starts_at:[2026-11-02 TO 2026-11-09}' NOT event_type:birthday"]),
+    "events export id:42 --output planning.ics",
+    "events export 'starts_at:[2026-11-02 TO 2026-11-09}' NOT event_type:birthday --output week.ics",
   )
   // Not over MCP: an agent would choose where on the owner's disk to write. It gets the text in the answer.
-  if (deps.writeFile)
-    writesFileOnlyWith(
-      exporter.addOption(ownerOnlyOption("--output <file>", "the file to write; printed in the answer when absent")),
-      "output",
-    )
+  writesFileOnlyWith(
+    exporter.addOption(ownerOnlyOption("--output <file>", "the file to write; printed in the answer when absent")),
+    "output",
+  )
   exporter.action(async (words: string[], opts: { output?: string }, command: Command) => {
-    const filter = await eventsFilter(words, {
-      store: deps.store,
-      accountId: deps.accountId,
-      zone: zone(),
-      now: now(),
-      personOf: personId,
+    if (opts.output !== undefined && !opts.output.trim())
+      throw new CliError("validation_error", "--output names no file")
+    await within(command, async (run) => {
+      const filter = await eventsFilter(words, {
+        store: run.store,
+        accountId: run.accountId,
+        zone: zone(),
+        now: now(),
+        personOf: personId(run),
+      })
+      const exported = await eventsIcs(run.store, run.accountId, filter, { now: now(), product: options.app.command })
+      if (opts.output === undefined) return itemBody({ ...exported, untrusted: ["content"] })
+      await (options.writeFile ?? writeIcsFile)(opts.output, exported.content)
+      return itemBody({ format: exported.format, events: exported.events, output: opts.output })
     })
-    const exported = await eventsIcs(deps.store, deps.accountId, filter, { now: now(), product: program.name() })
-    if (opts.output === undefined) {
-      print({ ...exported, untrusted: ["content"] }, command)
-      return
-    }
-    if (!opts.output.trim()) throw new CliError("validation_error", "--output names no file")
-    await deps.writeFile?.(opts.output, exported.content)
-    print({ format: exported.format, events: exported.events, output: opts.output }, command)
   })
   example(
     annotate(events.command("show"), { effects: LOCAL_READ })
@@ -532,8 +549,10 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
       .argument("<event>", "the event's id, or event:<id>"),
     "events show event:42 --json",
   ).action(async (reference: string, _opts: unknown, command: Command) => {
-    const shown = await eventAnswer(await eventOf(deps.store, deps.accountId, eventIdOf(reference)), personOfEmail)
-    print({ ...shown, untrusted: CALENDAR_UNTRUSTED_FIELDS }, command)
+    await within(command, async (run) => {
+      const shown = await eventAnswer(await eventOf(run.store, run.accountId, eventIdOf(reference)), personOfEmail(run))
+      return itemBody({ ...shown, untrusted: CALENDAR_UNTRUSTED_FIELDS })
+    })
   })
 
   example(
@@ -556,47 +575,42 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
         zone: zone(),
         now: now(),
       })
-      const details =
-        reference === undefined
-          ? await nextMeeting(deps.store, deps.accountId, now())
-          : await eventOf(deps.store, deps.accountId, eventIdOf(reference))
-      const { meta, ...prepared } = await eventPreparation(details, {
-        store: deps.store,
-        messages: messages("events prepare"),
-        account: { id: deps.accountId, key: deps.account },
-        personOf: personOfEmail ?? (async () => null),
-        now: now(),
-        ...(opts.limit === undefined ? {} : { limit: opts.limit }),
-        ...(window.since === undefined ? {} : { since: window.since }),
+      await within(command, async (run) => {
+        const details =
+          reference === undefined
+            ? await nextMeeting(run.store, run.accountId, now())
+            : await eventOf(run.store, run.accountId, eventIdOf(reference))
+        const { meta, ...prepared } = await eventPreparation(details, {
+          store: run.store,
+          messages: messagesOf(run, "events prepare"),
+          account: { id: run.accountId, key: run.account },
+          personOf: personOfEmail(run) ?? (async () => null),
+          now: now(),
+          ...(opts.limit === undefined ? {} : { limit: opts.limit }),
+          ...(window.since === undefined ? {} : { since: window.since }),
+        })
+        return itemBody(prepared, { meta: { ...meta, ...window.meta, ...clockMeta(now(), zone()) } })
       })
-      print({ ...prepared, meta: { ...meta, ...window.meta, ...clockMeta(now(), zone()) } }, command)
     })
 
-  if (deps.writes) addRemind(events, deps.writes, { deps, now, zone, print, example })
+  if (options.writes) addRemind(events, { within, now, zone, example })
 
-  const app = deps.messages ? deps.app : undefined
   const searches = annotate(
-    program
-      .command("search")
-      .description(
-        app
-          ? "find stored things by text: events, or all of messages, notes and events"
-          : "find stored things by text: events",
-      ),
+    program.command("search").description("find stored things by text: events, or all of messages, notes and events"),
     { effects: GROUP },
   )
-  if (app) addSearchAll(searches, { deps, app, zone, messages, example })
+  addSearchAll(searches, { within, app: options.app, zone, example })
   const search = example(
-    annotate(searches.command("events"), { effects: deps.serverSearch ? LOCAL_OR_REMOTE_READ : LOCAL_READ })
+    annotate(searches.command("events"), { effects: options.serverSearch ? LOCAL_OR_REMOTE_READ : LOCAL_READ })
       .description(
-        deps.serverSearch
+        options.serverSearch
           ? "find stored events by words, and by meaning when its model is downloaded; with --backend server, ask " +
               "the provider instead, or with --backend both, ask both"
           : "find stored events by words, and by meaning when its model is downloaded",
       )
       .argument("<query...>", "what to find in titles, descriptions, places and attendees"),
     "search events roadmap planning --json",
-    ...(deps.serverSearch
+    ...(options.serverSearch
       ? ["search events --backend server quarterly review", "search events --backend both quarterly review"]
       : []),
   )
@@ -609,7 +623,7 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
     )
     .option("--exact", "every word as written, no word stems")
     .option("--newest", "latest start first instead of best first")
-  if (deps.serverSearch)
+  if (options.serverSearch)
     search.addOption(
       new Option(
         "--backend <archive|server|both>",
@@ -626,18 +640,9 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
       opts: { limit: number; cursor: number; exact?: boolean; newest?: boolean; backend?: string },
       command: Command,
     ) => {
-      const archived = () =>
-        searchEvents(messages("search"), words.join(" "), {
-          accounts: [deps.account],
-          limit: opts.limit,
-          offset: opts.cursor,
-          timezone: zone(),
-          command: program.name(),
-          ...(opts.exact ? { exact: true } : {}),
-          ...(opts.newest ? { newest: true } : {}),
-        })
-      if (opts.backend === "server" || opts.backend === "both") {
-        const flag = `search events --backend ${opts.backend}`
+      const flag = `search events --backend ${opts.backend}`
+      const server = opts.backend === "server" || opts.backend === "both"
+      if (server) {
         if (command.optsWithGlobals<{ offline?: boolean }>().offline)
           throw new CliError("permission_error", `${flag} asks the provider; leave out --offline`, {
             reason: "search.offline",
@@ -652,28 +657,35 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
             `${flag} takes neither --cursor nor --newest: the provider ranks and pages its own hits`,
             { reason: "search.server-options" },
           )
-        const served = await serverSearchAnswer(source(), deps.store, {
-          accountId: deps.accountId,
-          account: deps.account,
+      }
+      await within(command, async (run) => {
+        const archived = () =>
+          searchEvents(messagesOf(run, "search"), words.join(" "), {
+            accounts: [run.account],
+            limit: opts.limit,
+            offset: opts.cursor,
+            timezone: zone(),
+            command: options.app.command,
+            ...(opts.exact ? { exact: true } : {}),
+            ...(opts.newest ? { newest: true } : {}),
+          })
+        if (!server) return hitsBody(command, { ...(await archived()), untrusted: SEARCH_UNTRUSTED })
+        const served = await serverSearchAnswer(run.source(), run.store, {
+          accountId: run.accountId,
+          account: run.account,
           query: words.join(" "),
           limit: opts.limit,
         })
-        if (opts.backend === "server") print({ ...served, untrusted: SERVER_SEARCH_UNTRUSTED }, command)
-        else
-          print(
-            {
-              ...(await bothSearchAnswer(deps.store, deps.accountId, await archived(), served, opts.limit)),
-              untrusted: SEARCH_UNTRUSTED,
-            },
-            command,
-          )
-        return
-      }
-      print({ ...(await archived()), untrusted: SEARCH_UNTRUSTED }, command)
+        if (opts.backend === "server") return hitsBody(command, { ...served, untrusted: SERVER_SEARCH_UNTRUSTED })
+        return hitsBody(command, {
+          ...(await bothSearchAnswer(run.store, run.accountId, await archived(), served, opts.limit)),
+          untrusted: SEARCH_UNTRUSTED,
+        })
+      })
     },
   )
 
-  if (deps.writes) addEventWrites(events, deps.writes, { deps, now, zone, print, example })
+  if (options.writes) addEventWrites(events, options.writes, { within, now, zone, example, readFile: options.readFile })
 
   const people = annotate(program.command("people").description("the people in the account's events"), {
     effects: GROUP,
@@ -690,13 +702,16 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
   ).action(async (words: string[], _opts: unknown, command: Command) => {
     const reference = queryTerms(words, PEOPLE_QUERY, "people list").get("event")
     const event = reference === undefined ? undefined : eventIdOf(reference)
-    const filter = event === undefined ? weekFilter(deps.accountId, zone(), now()) : undefined
-    const people = await peopleAnswer(deps.store, deps.accountId, {
-      ...(event === undefined ? {} : { event }),
-      ...(filter ? { filter } : {}),
-      ...(personOfEmail ? { personOf: personOfEmail } : {}),
+    await within(command, async (run) => {
+      const filter = event === undefined ? weekFilter(run.accountId, zone(), now()) : undefined
+      const personOf = personOfEmail(run)
+      const found = await peopleAnswer(run.store, run.accountId, {
+        ...(event === undefined ? {} : { event }),
+        ...(filter ? { filter } : {}),
+        ...(personOf ? { personOf } : {}),
+      })
+      return listBody(command, eachMarked(found, ATTENDEE_UNTRUSTED))
     })
-    print(eachMarked(people, ATTENDEE_UNTRUSTED), command)
   })
   example(
     annotate(people.command("link"), { effects: LOCAL_WRITE })
@@ -705,15 +720,14 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
       .argument("<other>", "the same person in another tool, as <provider>:<person>, or me"),
     "people link email:ana@example.com telegram:12345",
   ).action(async (person: string, other: string, _opts: unknown, command: Command) => {
-    const linked = await linkPeople(messages("people link"), deps.account, person, other)
-    print(
-      {
+    await within(command, async (run) => {
+      const linked = await linkPeople(messagesOf(run, "people link"), run.account, person, other)
+      return itemBody({
         person: `person:${linked.uid}`,
         name: linked.name,
         identities: linked.identities.map(({ provider, id }) => `${provider}:${id}`),
-      },
-      command,
-    )
+      })
+    })
   })
 
   const links = annotate(program.command("links").description("calendar copies the rules could not join alone"), {
@@ -725,13 +739,15 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
     ),
     "links review --json",
   ).action(async (_opts: unknown, command: Command) => {
-    // Locked to a profile (WC-ACCT-5), or with no shared store to name the others by, only the profile's own account.
-    const own = deps.locked || !deps.messages
-    const answer = await reviewsAnswer(deps.store, own ? [deps.accountId] : undefined)
-    const accounts = own
-      ? [`${deps.account.provider}:${deps.account.account}`]
-      : await calendarAccountNames(deps.store, messages("links review"), deps.account)
-    print({ ...eachMarked(answer, REVIEW_UNTRUSTED), meta: { accounts, complete: true } }, command)
+    await within(command, async (run) => {
+      // Locked to a profile (WC-ACCT-5), or with no shared store to name the others by, only the profile's own account.
+      const own = run.locked || !run.messages
+      const found = await reviewsAnswer(run.store, own ? [run.accountId] : undefined)
+      const accounts = own
+        ? [`${run.account.provider}:${run.account.account}`]
+        : await calendarAccountNames(run.store, messagesOf(run, "links review"), run.account)
+      return listBody(command, eachMarked(found, REVIEW_UNTRUSTED), { accounts, complete: true })
+    })
   })
   example(
     annotate(links.command("resolve"), { effects: LOCAL_WRITE })
@@ -740,7 +756,7 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
       .argument("<choice>", "one of its candidates, as event:<id>, or apart"),
     "links resolve 7 event:42",
   ).action(async (review: string, choice: string, _opts: unknown, command: Command) => {
-    print(await resolveAnswer(deps.store, deps.accountId, review, choice, now()), command)
+    await within(command, async (run) => itemBody(await resolveAnswer(run.store, run.accountId, review, choice, now())))
   })
 
   const leaves = (command: Command): Command[] =>
@@ -748,35 +764,54 @@ const addCalendarCommandsDefinition = (program: Command, deps: CalendarCommandDe
   declareCalendarAnswers(program, program.commands.filter((one) => !mounted.has(one)).flatMap(leaves))
 }
 
-interface WriteHelpers {
-  deps: CalendarCommandDeps
+/** Opens the profile for one command, builds its answer and prints it once the profile is closed. */
+export type Within = (
+  command: Command,
+  work: (run: CalendarRun) => Promise<Body>,
+  view?: (body: Body) => string,
+) => Promise<void>
+
+export interface CommandHelpers {
+  within: Within
   now: () => number
   zone: () => string
-  print: (value: unknown, command: Command) => void
   example: (command: Command, ...lines: string[]) => Command
 }
 
 const collect = (value: string, previous: string[] = []) => [...previous, value]
 
-const addEventWrites = (events: Command, writes: CalendarWrites, { deps, now, zone, print, example }: WriteHelpers) => {
-  const context = (command: Command): WriteContext => ({
-    store: deps.store,
-    accountId: deps.accountId,
-    writes,
-    ask: terminalAsker(command),
-    now: now(),
-    zone: zone(),
-    names: {
-      notify: "--notify or --no-notify",
-      id: "--operation-id",
-      calendar: "--calendar",
-      series: "--series",
-      following: "--following",
-      repeat: "--repeat",
-    },
-  })
-  const printWritten = (value: object, command: Command) =>
-    print({ ...value, untrusted: CALENDAR_UNTRUSTED_FIELDS }, command)
+interface WriteHelpers extends CommandHelpers {
+  readFile?: (path: string) => Promise<string>
+}
+
+const addEventWrites = (
+  events: Command,
+  traits: NonNullable<CalendarCommandOptions["writes"]>,
+  { within, now, zone, example, readFile }: WriteHelpers,
+) => {
+  const contextOf = (run: CalendarRun, command: Command): WriteContext => {
+    if (!run.writes) throw new CliError("configuration_error", "this profile cannot write to its calendars")
+    return {
+      store: run.store,
+      accountId: run.accountId,
+      writes: run.writes(),
+      ask: terminalAsker(command),
+      now: now(),
+      zone: zone(),
+      names: {
+        notify: "--notify or --no-notify",
+        id: "--operation-id",
+        calendar: "--calendar",
+        series: "--series",
+        following: "--following",
+        repeat: "--repeat",
+      },
+    }
+  }
+  const written = (command: Command, write: (context: WriteContext) => Promise<object>) =>
+    within(command, async (run) =>
+      itemBody({ ...(await write(contextOf(run, command))), untrusted: CALENDAR_UNTRUSTED_FIELDS }),
+    )
   // Left out on purpose: with other attendees the owner must choose, so neither switch is the default.
   const notify = (command: Command) =>
     command
@@ -823,7 +858,7 @@ const addEventWrites = (events: Command, writes: CalendarWrites, { deps, now, zo
       .argument("<event>", "the event's id, or event:<id>")
       .option("--calendar <id>", "the calendar, by id or title, when the event is on more than one of the account's")
 
-  const quick = writes.writer.quickAdd !== undefined
+  const quick = traits.quickAdd === true
   const create = example(
     notify(
       fields(write("create"), false)
@@ -850,7 +885,7 @@ const addEventWrites = (events: Command, writes: CalendarWrites, { deps, now, zo
     create.option(
       "--text <text>",
       "one line the provider reads the title, date, time and place from, in place of the other fields; nobody is " +
-        "mailed without --notify, and a retry after outcome_unknown may add the event twice",
+        "mailed without --notify",
     )
   create.action(
     async (
@@ -859,27 +894,19 @@ const addEventWrites = (events: Command, writes: CalendarWrites, { deps, now, zo
       command: Command,
     ) => {
       const { notify: choice, operationId: id, text, ...rest } = opts
+      const options = { ...(choice === undefined ? {} : { notify: choice }), ...(id === undefined ? {} : { id }) }
       if (text !== undefined) {
         const given = Object.keys(fieldsOf(rest))
-        if (given.length || id !== undefined)
+        if (given.length)
           throw new CliError(
             "validation_error",
-            `--text takes the whole event from its line; leave out ${[...given.map(flagOf), ...(id === undefined ? [] : ["--operation-id"])].join(", ")}`,
+            `--text takes the whole event from its line; leave out ${given.map(flagOf).join(", ")}`,
             { reason: "event.text-with-fields", param: "--text" },
           )
-        printWritten(
-          await createEventFromText(context(command), calendar, text, choice === undefined ? {} : { notify: choice }),
-          command,
-        )
+        await written(command, (context) => createEventFromText(context, calendar, text, options))
         return
       }
-      printWritten(
-        await createEvent(context(command), calendar, fieldsOf(rest), {
-          ...(choice === undefined ? {} : { notify: choice }),
-          ...(id === undefined ? {} : { id }),
-        }),
-        command,
-      )
+      await written(command, (context) => createEvent(context, calendar, fieldsOf(rest), options))
     },
   )
   example(
@@ -912,12 +939,8 @@ const addEventWrites = (events: Command, writes: CalendarWrites, { deps, now, zo
       operationId: id,
       ...rest
     } = opts
-    printWritten(
-      await updateEvent(context(command), reference, fieldsOf(rest), {
-        ...choicesOf(opts),
-        ...(id === undefined ? {} : { id }),
-      }),
-      command,
+    await written(command, (context) =>
+      updateEvent(context, reference, fieldsOf(rest), { ...choicesOf(opts), ...(id === undefined ? {} : { id }) }),
     )
   })
   example(
@@ -933,10 +956,9 @@ const addEventWrites = (events: Command, writes: CalendarWrites, { deps, now, zo
     "events delete event:42 --no-notify",
     "events delete event:42 --following --no-notify",
   ).action(async (reference: string, opts: Choices, command: Command) => {
-    printWritten(await deleteEvent(context(command), reference, choicesOf(opts)), command)
+    await written(command, (context) => deleteEvent(context, reference, choicesOf(opts)))
   })
-  const readFile = deps.readFile
-  if (writes.writer.importEvent && readFile)
+  if (traits.importEvent)
     example(
       write("import")
         .description(
@@ -947,14 +969,16 @@ const addEventWrites = (events: Command, writes: CalendarWrites, { deps, now, zo
         .argument("<file>", "the .ics file to read"),
       "events import Work planning.ics",
     ).action(async (calendar: string, file: string, _opts: unknown, command: Command) => {
-      const text = await readFile(file)
+      const text = await (readFile ?? readIcsFile)(file)
       if (Buffer.byteLength(text, "utf8") > ICS_MAX_BYTES)
         throw new CliError("validation_error", `${file} is larger than ${ICS_MAX_BYTES / 1024 / 1024} MB`, {
           reason: "ics.too-large",
         })
-      print({ ...(await importEvents(context(command), calendar, text)), untrusted: IMPORT_UNTRUSTED }, command)
+      await within(command, async (run) =>
+        itemBody({ ...(await importEvents(contextOf(run, command), calendar, text)), untrusted: IMPORT_UNTRUSTED }),
+      )
     })
-  if (writes.writer.move)
+  if (traits.move)
     example(
       notify(
         target(write("move"))
@@ -965,9 +989,8 @@ const addEventWrites = (events: Command, writes: CalendarWrites, { deps, now, zo
       "events move event:42 --to-calendar 4 --no-notify",
     ).action(async (reference: string, opts: Choices & { toCalendar: string }, command: Command) => {
       const { series, calendar, notify } = opts
-      printWritten(
-        await moveEvent(context(command), reference, opts.toCalendar, choicesOf({ series, calendar, notify })),
-        command,
+      await written(command, (context) =>
+        moveEvent(context, reference, opts.toCalendar, choicesOf({ series, calendar, notify })),
       )
     })
   example(
@@ -978,7 +1001,7 @@ const addEventWrites = (events: Command, writes: CalendarWrites, { deps, now, zo
     ),
     "events respond event:42 accepted --notify",
   ).action(async (reference: string, response: EventResponse, opts: Choices, command: Command) => {
-    printWritten(await respondToEvent(context(command), reference, response, choicesOf(opts)), command)
+    await written(command, (context) => respondToEvent(context, reference, response, choicesOf(opts)))
   })
 }
 

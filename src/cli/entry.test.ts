@@ -169,7 +169,7 @@ describe("startCli", () => {
   })
 
   it("**opens the browser detached** and fails with a step when the opener is missing", async () => {
-    const { io, spawned } = fakeIo()
+    const { io, spawned } = fakeIo({ tty: true })
     let failure: unknown
     await start(io, async ({ openBrowser }) => {
       const opened = openBrowser("https://example.test/sign-in")
@@ -185,6 +185,21 @@ describe("startCli", () => {
     ])
     expect(spawned[0]?.child.unref).toHaveBeenCalled()
     expect(failure).toMatchObject({ code: "configuration_error" })
+  })
+
+  it.each([
+    ["no terminal", false, {}, []],
+    ["CI", true, { CI: "true" }, []],
+    ["--no-input", true, {}, ["--no-input"]],
+    ["--json", true, {}, ["--json"]],
+  ])("opens no browser with %s (WC-CMD-15)", async (_name, terminal, env, flags) => {
+    const { io, spawned } = fakeIo({ tty: terminal, env })
+    await start(io, async ({ openBrowser }) => {
+      const program = new Command("demo").option("--json").option("--no-input").exitOverride()
+      program.parse(["node", "demo", ...flags])
+      await openBrowser("https://example.test/sign-in", undefined, program)
+    })
+    expect(spawned).toEqual([])
   })
 
   it("skips the first-run questions when no one can answer them", async () => {

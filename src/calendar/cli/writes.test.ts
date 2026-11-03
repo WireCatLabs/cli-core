@@ -14,7 +14,7 @@ import type { GuardSettings } from "../../sends/guard.js"
 import { SendJournal, sendsPathFor } from "../../sends/journal.js"
 import type { Level } from "../../sends/permissions.js"
 import { CALENDAR_UNTRUSTED_FIELDS } from "../reads.js"
-import { checkCalendarAnswer } from "../testing/answers.js"
+import { calendarTestProgram } from "../testing/answers.js"
 import { fakeCalendarWriter, memoryEventStore } from "../testing/index.js"
 import { CALENDAR_WRITE_KEYS } from "../writer.js"
 import { type CalendarWrites, createEvent, newEventId, updateEvent } from "../writes.js"
@@ -91,7 +91,7 @@ const setup = async (
     ],
     NOW,
   )
-  const writer = fakeCalendarWriter()
+  const writer = fakeCalendarWriter({ now: () => NOW })
   await store.saveEntries(calendar?.id as number, writer.put("primary", review, series, slot), NOW)
   const home = mkdtempSync(join(tmpdir(), "calendar-writes-"))
   const env = { HOME: home, XDG_DATA_HOME: home, GCAL_STATE_DIR: home }
@@ -102,19 +102,30 @@ const setup = async (
     sendsPerHour: 30,
     ...(options.lock ? { readOnlyLock: options.lock } : {}),
   })
-  const written: Record<string, unknown>[] = []
   const files = new Map<string, string>()
-  const program = () => {
-    const root = new Command("gcal").exitOverride().configureOutput({ writeErr: () => undefined })
-    root.option("--yes").option("--dry-run").option("--json").option("--jsonl")
-    addCalendarCommands(root, {
+  const writes: CalendarWrites = {
+    writer,
+    app,
+    settings,
+    env,
+    ...(options.extraKeys ? { extraKeys: options.extraKeys } : {}),
+  }
+  const harness = calendarTestProgram(
+    {
+      profile: "work",
       store,
       accountId: 1,
       account: { provider: "google-calendar", account: "owner-1" },
-      write: (value) => written.push(value as Record<string, unknown>),
+      source: () => {
+        throw new Error("no provider reads in these tests")
+      },
+      writes: () => writes,
+      env,
+    },
+    {
+      app,
       now: () => NOW,
-      timezone: "UTC",
-      writes: { writer, app, settings, env, ...(options.extraKeys ? { extraKeys: options.extraKeys } : {}) },
+      writes: { quickAdd: true, move: true, importEvent: true },
       readFile: async (path) => {
         const text = files.get(path)
         if (text === undefined) throw new CliError("not_found", `no file ${path}`)
@@ -123,17 +134,11 @@ const setup = async (
       writeFile: async (path, content) => {
         files.set(path, content)
       },
-    })
-    return root
-  }
-  const parse = async (args: string[]) => {
-    const root = program()
-    const before = written.length
-    await root.parseAsync(args, { from: "user" })
-    if (written.length > before) checkCalendarAnswer(root, args, written.at(-1))
-    return written.at(-1) as Record<string, unknown>
-  }
-  const cli = (...args: string[]) => parse([...args, "--json"])
+    },
+  )
+  const program = () => harness.root
+  const cli = harness.cli
+  const parse = (args: string[]) => harness.cli(...args)
   const journal = () => new SendJournal(sendsPathFor(app, "work", env)).entries()
   const eventOf = async (externalId: string) =>
     (await store.entry(calendar?.id as number, externalId))?.eventId as number
@@ -153,7 +158,7 @@ const at = ["--start-time", "2026-11-02T10:00", "--end-time", "2026-11-02T11:00"
 describe("calendar write commands", () => {
   it("exist only when the CLI passes a writer", () => {
     const root = new Command("gcal")
-    addCalendarCommands(root, { store: memoryEventStore(), accountId: 1, account: {} as never, write: () => undefined })
+    addCalendarCommands(root, { app, open: () => Promise.reject(new Error("not opened")) })
     const events = root.commands.find((one) => one.name() === "events")
     expect(events?.commands.map((one) => one.name())).toEqual(["list", "export", "show", "prepare"])
   })
@@ -198,23 +203,52 @@ describe("calendar write commands", () => {
     })
   })
 
-  it("create --text refuses other fields and an operation id, and says a lost answer is not safe to retry", async () => {
-    const { cli, writer } = await setup()
+  it("create --text refuses other fields, and a retry with a lost answer's id finds its event (WC-CMD-6)", async () => {
+    const { cli, writer } = await setup({ permissions: ALLOW })
     await expect(cli(...create, "--text", "Lunch tomorrow")).rejects.toMatchObject({
       code: "validation_error",
       details: { reason: "event.text-with-fields" },
     })
-    await expect(
-      cli("events", "create", "primary", "--text", "Lunch", "--operation-id", newEventId()),
-    ).rejects.toMatchObject({ code: "validation_error" })
     await expect(cli("events", "create", "primary", "--text", "  ")).rejects.toMatchObject({
       code: "validation_error",
     })
+    await expect(
+      cli("events", "create", "primary", "--text", "Lunch", "--operation-id", newEventId()),
+    ).rejects.toMatchObject({ code: "validation_error", details: { param: "--operation-id" } })
     expect(writer.calls).toEqual([])
     writer.loseNextAnswer()
-    const lost = cli("events", "create", "primary", "--text", "Lunch tomorrow")
-    await expect(lost).rejects.toMatchObject({ code: "outcome_unknown", details: { retryable: false } })
-    await expect(lost).rejects.toThrow(/cannot be retried safely/u)
+    const lost = await cli("events", "create", "primary", "--text", "Lunch tomorrow").catch((error) => error)
+    expect(lost).toMatchObject({ code: "outcome_unknown" })
+    const id = lost.details.operation_id as string
+    expect(lost.message).toContain(`--operation-id ${id}`)
+    const retried = await cli("events", "create", "primary", "--text", "Lunch tomorrow", "--operation-id", id)
+    expect(retried).toMatchObject({ operation_id: id, entry: { title: "Lunch tomorrow" } })
+    expect(writer.calls.filter(({ write }) => write === "quick-add")).toHaveLength(1)
+    expect(writer.held("primary").filter(({ title }) => title === "Lunch tomorrow")).toHaveLength(1)
+  })
+
+  it("create --text with a lost answer's id adds the event when the first attempt made none", async () => {
+    const { cli, writer } = await setup({ permissions: ALLOW })
+    writer.loseNextAnswer()
+    const lost = await cli("events", "create", "primary", "--text", "Dinner Friday").catch((error) => error)
+    const id = lost.details.operation_id as string
+    await cli("events", "create", "primary", "--text", "Coffee Monday", "--operation-id", id)
+    expect(writer.calls.filter(({ write }) => write === "quick-add")).toHaveLength(2)
+  })
+
+  it("create --text refuses a retry it cannot judge: two candidates, or a writer that cannot list them", async () => {
+    const { cli, writer } = await setup({ permissions: ALLOW })
+    writer.loseNextAnswer()
+    const lost = await cli("events", "create", "primary", "--text", "Lunch Friday").catch((error) => error)
+    const id = lost.details.operation_id as string
+    await cli("events", "create", "primary", "--text", "Lunch")
+    await expect(
+      cli("events", "create", "primary", "--text", "Lunch Friday", "--operation-id", id),
+    ).rejects.toMatchObject({ details: { reason: "event.quick-add-ambiguous" } })
+    delete (writer as { quickAdded?: unknown }).quickAdded
+    await expect(
+      cli("events", "create", "primary", "--text", "Lunch Friday", "--operation-id", id),
+    ).rejects.toMatchObject({ code: "validation_error", details: { param: "--operation-id" } })
   })
 
   it("create --text is checked by events.create and the provider's own key", async () => {
@@ -242,7 +276,8 @@ describe("calendar write commands", () => {
     expect(content).toContain("SUMMARY:Example review\r\n")
     expect(content).toContain("ATTENDEE;PARTSTAT=ACCEPTED:mailto:ana@example.com\r\n")
     const week = await cli("events", "export", "starts_at>=2026-10-27", "--output", "week.ics")
-    expect(week).toEqual({ format: "ics", events: 2, output: "week.ics" })
+    const { meta: _meta, ...written } = week
+    expect(written).toEqual({ format: "ics", events: 2, output: "week.ics" })
     const uids = (files.get("week.ics") ?? "").match(/^UID:.*$/gmu)
     expect(uids).toEqual(["UID:e1@example.com", "UID:s1_20261028T100000Z"])
     expect((await cli("events", "export", "event_type:birthday")).events).toBe(0)
@@ -506,13 +541,7 @@ describe("calendar write commands", () => {
 
   it("a CLI that names CALENDAR_WRITE_KEYS lets the owner set events.notify and events.delete.series", () => {
     const root = new Command("gcal")
-    addCalendarCommands(root, {
-      store: memoryEventStore(),
-      accountId: 1,
-      account: {} as never,
-      write: () => undefined,
-      writes: { writer: fakeCalendarWriter(), app, settings: () => ({}) as never },
-    })
+    addCalendarCommands(root, { app, open: () => Promise.reject(new Error("not opened")), writes: {} })
     const known = knownPermissionKeys(root, commandPermissions({ extra: CALENDAR_WRITE_KEYS }))
     for (const key of ["events.create", "events.update", "events.delete", "events.respond", ...CALENDAR_WRITE_KEYS])
       expect(known).toContain(key)
@@ -913,9 +942,9 @@ describe("events move", () => {
   })
 
   it("is not offered for a writer that cannot move", async () => {
-    const { program, writer } = await setup()
-    delete (writer as { move?: unknown }).move
-    const events = program().commands.find((one) => one.name() === "events")
+    const root = new Command("gcal")
+    addCalendarCommands(root, { app, open: () => Promise.reject(new Error("not opened")), writes: { quickAdd: true } })
+    const events = root.commands.find((one) => one.name() === "events")
     expect(events?.commands.map((one) => one.name())).not.toContain("move")
   })
 })

@@ -21,8 +21,12 @@ export interface EntryContext {
   atStart: (command: Command) => Promise<void>
   /** A yes/no question on stderr; false without asking when there is no terminal, under CI, `--json`, `--jsonl` or `--no-input`. */
   ask: (question: string, command?: Command) => Promise<boolean>
-  /** Opens the URL in the system browser, or in `browser` when given; never waits for the browser to close. */
-  openBrowser: (url: string, browser?: string) => Promise<void>
+  /**
+   * Opens the URL in the system browser, or in `browser` when given; never waits for the browser to close. Does nothing
+   * where nobody can use a browser (WC-CMD-15): under CI, `--json`, `--jsonl`, `--no-input`, or with no terminal.
+   * The caller prints the URL either way.
+   */
+  openBrowser: (url: string, browser?: string, command?: Command) => Promise<void>
   /** True once a reader closed the output (`| head`): nothing more reaches the terminal. */
   outputClosed: () => boolean
 }
@@ -139,7 +143,9 @@ export const startCli = async (entry: CliEntry): Promise<void> => {
       })
       return /^(y|yes)$/i.test(answer.trim())
     },
-    openBrowser: (url, browser) => openBrowser(url, browser, io),
+    openBrowser: async (url, browser, command) => {
+      if (!headless(command)) await openBrowser(url, browser, io)
+    },
     outputClosed: () => closed,
   }
   let code: number | undefined

@@ -4,17 +4,15 @@ import type { AddressInfo } from "node:net"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { metaOf } from "@wirecat/cli-base/commands"
-import { Command } from "commander"
+import type { Command } from "commander"
 import { afterEach, describe, expect, it } from "vitest"
-import { provide } from "../cli/context.js"
 import { isStoreChange } from "../cli/effects.js"
 import { maskArgv } from "../runs/run-context.js"
 import type { GuardSettings } from "../sends/guard.js"
 import { openCache } from "../store/open.js"
 import { type MessageStore, openStore, orphanPointers } from "../store/store.js"
-import { addCalendarCommands } from "./cli/index.js"
 import { type FeedRecord, fetchFeed, fetchFeedIfChanged, icsFeeds } from "./feeds.js"
-import { checkCalendarAnswer } from "./testing/answers.js"
+import { calendarTestProgram } from "./testing/answers.js"
 import { fakeCalendarSource, fakeCalendarWriter } from "./testing/index.js"
 
 const NOW = Date.UTC(2026, 9, 27, 9)
@@ -187,38 +185,27 @@ const setup = async ({ realFetch = false } = {}) => {
         }),
   })
   const source = fakeCalendarSource()
-  const stderr: string[] = []
   const writer = fakeCalendarWriter()
   const home = mkdtempSync(join(tmpdir(), "calendar-feeds-home-"))
   const settings = (): GuardSettings => ({ profile: "work", permissions: {}, permissionSources: {}, sendsPerHour: 30 })
-  const written: Record<string, unknown>[] = []
   let now = NOW
-  const program = () => {
-    const root = new Command("gcal").exitOverride().configureOutput({ writeErr: () => undefined })
-    root.option("--yes").option("--json").option("--jsonl").option("--offline")
-    addCalendarCommands(root, {
+  const writes = { writer, app, settings, env: { HOME: home, GCAL_STATE_DIR: home } }
+  const harness = calendarTestProgram(
+    {
+      profile: "work",
       store: store.calendar,
       accountId,
       account,
       messages: store,
-      source,
-      freeBusy: true,
-      feeds,
-      write: (value) => written.push(value as Record<string, unknown>),
-      now: () => now,
-      timezone: "UTC",
-      writes: { writer, app, settings, env: { HOME: home, GCAL_STATE_DIR: home } },
-    })
-    provide(root, { streams: { data: () => undefined, diagnostic: (text) => stderr.push(text) } })
-    return root
-  }
-  const cli = async (...args: string[]) => {
-    const root = program()
-    const before = written.length
-    await root.parseAsync(args, { from: "user" })
-    if (written.length > before) checkCalendarAnswer(root, args, written.at(-1))
-    return written.at(-1) as Record<string, unknown> & { items: Record<string, unknown>[] }
-  }
+      source: () => source,
+      feeds: () => feeds,
+      writes: () => writes,
+    },
+    { app, now: () => now, freeBusy: true, feeds: true, writes: {} },
+  )
+  const program = () => harness.root
+  const cli = harness.cli
+  const stderr = harness.stderr
   return {
     cli,
     program,
@@ -248,7 +235,7 @@ describe("feed calendars", () => {
     const feed = String(added.id)
 
     const report = await cli("sync")
-    expect(report).toMatchObject({ complete: true, feeds: [{ calendarId: Number(feed), events: 4, skipped: 0 }] })
+    expect(report).toMatchObject({ complete: true, feeds: [{ calendar_id: Number(feed), events: 4, skipped: 0 }] })
     expect(asked).toEqual([ADDRESS, ADDRESS])
     const events = (await cli("events", "list", `calendar:${feed}`, "starts_at>=2026-10-01")).items
     expect(events.map((one) => [one.title, one.starts_at])).toEqual(
@@ -261,7 +248,7 @@ describe("feed calendars", () => {
       ].sort((a, b) => String(a[1]).localeCompare(String(b[1]))),
     )
 
-    const busy = await cli("calendars", "busy", "start>=2026-10-28", "end<=2026-10-29")
+    const busy = await cli("calendars", "busy", "starts_at>=2026-10-28", "ends_at<=2026-10-29")
     expect((busy.calendars as { calendar: string }[]).map((one) => one.calendar)).not.toContain(feed)
     await expect(cli("calendars", "busy", `calendar:${feed}`)).rejects.toMatchObject({
       details: { reason: "busy.feed" },
@@ -331,7 +318,7 @@ describe("feed calendars", () => {
     const people = "SELECT count(*) AS n FROM identities WHERE external_id LIKE '%.only.in.feed@example.com'"
     expect(count(people)).toBe(2)
     const found = async () =>
-      ((await cli("search", "events", "weekly")).hits as { title: string }[]).map((one) => one.title)
+      ((await cli("search", "events", "weekly")).items as { title: string }[]).map((one) => one.title)
     expect(await found()).not.toEqual([])
 
     const removed = await cli("calendars", "remove", "Matches")
@@ -397,7 +384,7 @@ describe("feed calendars", () => {
 
     later(3_600_000)
     const unchanged = await cli("sync")
-    expect(unchanged).toMatchObject({ feeds: [{ calendarId: Number(feed), events: 4, skipped: 0, unchanged: true }] })
+    expect(unchanged).toMatchObject({ feeds: [{ calendar_id: Number(feed), events: 4, skipped: 0, unchanged: true }] })
     expect((unchanged.synced as { unseen: number }[]).every((one) => one.unseen === 0)).toBe(true)
     expect(await titles()).toEqual(before)
 
