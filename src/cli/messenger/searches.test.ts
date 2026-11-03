@@ -180,6 +180,17 @@ describe("searches", () => {
     expect((await call("searches", "delete", "x", "--json")).code).toBe(5)
     expect((await call("searches", "list", "--json")).code).toBe(0)
   })
+
+  it("answers --chat with the chat: query that searches one chat, and that query runs", async () => {
+    const call = await setup()
+    for (const path of ["messages", "all"]) {
+      const wrong = await call("search", path, "invoice", "--chat", "7", "--json")
+      expect(wrong.code).not.toBe(0)
+      expect(wrong.stderr).toContain(`search ${path} 'chat:<chat> words'`)
+      const right = await call("search", path, "chat:7 invoice", "--json")
+      expect([path, right.code, json(right).items.length > 0]).toEqual([path, 0, true])
+    }
+  })
 })
 
 it("tells in each search's help what transcript:, content: and filename: narrow to and which keys hold the answer", async () => {

@@ -19,6 +19,7 @@ import * as v from "valibot"
 import { currentRun } from "../runs/scope.js"
 import { compactText, entityRows, rowShapeOf, rowsOfEntity, TEXT_CHARS } from "./compact.js"
 import { environmentOf, setExitCode } from "./context.js"
+import { largeAnswerSteps, SOFT_OUTPUT_BYTES } from "./output-budget.js"
 import { withoutProviderRefs } from "./provider-refs.js"
 import { nextStep, rootOf, runnable, stepLine, withLines, withSafety } from "./steps.js"
 
@@ -195,6 +196,15 @@ const compactSteps = (root: Command, steps: readonly NextStep[]): NextStep[] =>
     step.kind === "command" ? { ...step, line: `${step.line ?? stepLine(root, step)} ${COMPACT_FLAG}` } : step,
   )
 
+/** A JSON answer past the soft budget, printed whole, with one more step: the same read in the compact form. */
+const withLargeAnswerStep = <B extends { next?: NextStep[] }>(command: Command, body: B): B => {
+  if ((body.next?.length ?? 0) >= MAX_NEXT_STEPS) return body
+  const added = largeAnswerSteps(command)
+  if (added.length === 0 || Buffer.byteLength(JSON.stringify(body)) <= SOFT_OUTPUT_BYTES) return body
+  const root = rootOf(command)
+  return { ...body, next: [...(body.next ?? []), ...withLines(root, runnable(root, added))] }
+}
+
 /** An answer as JSON lines: one line per item, then the end line. One thing is a list of one that has no more. */
 const linesOf = <T>(body: ListEnvelope<T> | ItemEnvelope<T>): string =>
   jsonlOf(
@@ -224,9 +234,11 @@ export const renderAnswer = <T>(
   const next = environmentOf(command).agent ? runnableSteps : withLines(root, runnableSteps)
   const kept = withoutProviderRefs({ ...body, ...(next.length > 0 ? { next } : {}) }) as Body<T>
   if (next.length === 0) delete (kept as { next?: unknown }).next
-  const whole = sealed(kept) as ListEnvelope<T> | ItemEnvelope<T>
+  const sealedBody = sealed(kept) as ListEnvelope<T> | ItemEnvelope<T>
   const environment = environmentOf(command)
   const drawn = compact && !environment.agent
+  const whole =
+    format === "json" && !drawn && !environment.agent ? withLargeAnswerStep(command, sealedBody) : sealedBody
   if (drawn) {
     const lined = whole.next ? { ...whole, next: compactSteps(root, whole.next) } : whole
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone

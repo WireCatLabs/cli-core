@@ -31,6 +31,14 @@ shape of this file.
 
 ### Added
 
+- **An answer over the output cap says what to run instead (WC-OUT-22).** The `output.too-large` failure now names up
+  to two reads, both safe to run unasked: the same command line with `--compact`, when the command declares a row and
+  was not compact already, and the same line with a `--limit` scaled down to fit. The lines are rebuilt from the
+  words the caller typed, never from the answer. The failure also carries `needed_bytes`.
+- **A JSON answer over 256 KiB adds one step to the compact form.** The answer is still printed whole. Nothing is
+  added when the answer already names two steps, over MCP, or for a command with no declared row.
+- **`search messages --chat` and `search all --chat` say how to search one chat:** `chat:<chat>` in the query.
+
 - **`readEmailWhole` reads one stored email again from its mail server, every attachment of it with no limit.** It
   saves the new text on the email as a sync does, keeping its mailboxes, flags and rule, and answers each attachment's
   bytes for the caller to save. Gmail's email is found by id, another server's at its stored place.

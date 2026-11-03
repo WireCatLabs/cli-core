@@ -6,6 +6,7 @@ import { searchNotesOf } from "../../services/notes-search.js"
 import type { SearchAllIncludingMeetingsFound } from "../../services/search-all-meetings.js"
 import { LOCAL_READ, REMOTE_READ } from "../effects.js"
 import { renderAnswer } from "../envelope.js"
+import { withOptionHints } from "../option-hints.js"
 import { positiveCount } from "../paging.js"
 import { runsSearchCommand } from "../runs/search-command.js"
 import { commandAt } from "../steps.js"
@@ -279,6 +280,13 @@ export const searchCommand = (messenger: Messenger, { topics = false }: { topics
   })) {
     const command = commandAt(search, path)
     if (command) annotate(command, { examples: [`${messenger.app.command} personal search ${path} ${args}`] })
+  }
+  for (const path of ["all", "messages"]) {
+    const command = commandAt(search, path)
+    if (command)
+      withOptionHints(command, {
+        "--chat": `search in one chat with chat:<chat> in the query: search ${path} 'chat:<chat> words'`,
+      })
   }
   return search
 }
