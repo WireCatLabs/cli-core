@@ -3,6 +3,8 @@ import { dirname, resolve } from "node:path"
 import { CliError, configFilePath, resolvePaths } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import type { FetchLike } from "@wirecat/cli-base/http"
+import { timezoneOf } from "@wirecat/cli-base/query"
+import { clockMeta } from "@wirecat/cli-base/standards"
 import { isNewer, latestVersion } from "@wirecat/cli-base/update"
 import { Command } from "commander"
 import { type AppIdentity, envName, readOnlyLockOf } from "../ports/app.js"
@@ -179,7 +181,14 @@ export const appDoctorCommand = (app: AppIdentity, configuration: Configuration,
         ? await onlineCheck(app, env, environment.fetch ?? fetch, options)
         : undefined
       const output = outputFor(this)
-      renderAnswer(this, output, itemOf({ ...report, ...local.fields, ...(online ? { online } : {}) }))
+      renderAnswer(
+        this,
+        output,
+        itemOf(
+          { ...report, ...local.fields, ...(online ? { online } : {}) },
+          { meta: clockMeta(Date.now(), timezoneOf()) },
+        ),
+      )
       for (const fix of fixes) output.renderer.note(`to make it private: ${fix}`)
       for (const note of local.notes) output.renderer.note(note)
     })

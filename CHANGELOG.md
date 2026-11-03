@@ -18,6 +18,11 @@ shape of this file.
 - **`KEEP_SUCCESSFUL_RUNS_FOR_DAYS` and `RUNS_SIZE_LIMIT_MB` are exported** beside `KEEP_RUNS_FOR_DAYS`. A host can
   then name the run-record defaults it writes into its config file.
 
+### Fixed
+
+- **The shared `doctor` (`appDoctorCommand`) answers with the clock:** `meta.now`, `meta.now_local` and
+  `meta.timezone`, as a setup check should (WC-TIME-7). A CLI that kept its own doctor for this can use the shared one.
+
 ## 0.561.0 — 03.11.2026
 
 ### Changed — may break callers
