@@ -30,13 +30,6 @@ shape of this file.
   next key in the new project and keeps its parent, and its old key still finds it. The answer names them as
   `movedSubtasks: [{ from, to }]`, old key and new; the field is left out when nothing moved with the task. A subtask
   moved on its own still needs `parent: null` in the same edit (`task.is-subtask`).
-- **Owner-only proposals refuse an agent on every decide path.** `mayDecide` and `assertMayDecide` now read
-  the row's stored `kind`: a `mail_findings` or `meeting_findings` row is the owner's alone, whatever
-  `agent_decisions` says. The registry's `get` and `list` rows carry `ownerOnly` from their kind, and the generic
-  action kind marks a stored findings row too, so a host checking `assertMayDecide(await registry.get(id), …)` is
-  refused. `approveAsTask` and `proposedActions.approve` / `reject` refuse a mail findings batch as they refuse
-  meeting and evidence findings (`mail-findings.dedicated-review`), and the generic action kind no longer lists any
-  findings batch. Meeting findings were open to another agent with a reason before; now only the owner reviews them.
 
 - **Owner-only proposals refuse an agent on every decide path.** `mayDecide` and `assertMayDecide` now read
   the row's stored `kind`: a `mail_findings` or `meeting_findings` row is the owner's alone, whatever
