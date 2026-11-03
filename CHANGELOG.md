@@ -9,14 +9,32 @@ shape of this file.
 
 ### Changed — may break callers
 
+- **Mail sync reads attachments up to 10 MB a file by default, and can skip them.** Until now every attachment was
+  read, whatever its size; at the next bump a file over 10 MB is no longer read into the index unless the caller
+  passes a policy. `MailSyncOptions.attachments` takes a `MailAttachmentPolicy` (`read`, `maxBytes`); left out it is
+  `DEFAULT_ATTACHMENT_POLICY`. A file the policy leaves is stored with its name, type and size but no text, with
+  `extractionError` `not-read` or `too-large` (`POLICY_SKIPS`), and the run's `attachments` log says the same.
+  Partial completion and `retryAttachments` follow it too.
 - **Moving a task to another project moves its subtasks with it.** `tasks.edit(id, { project })` on a task with
   subtasks no longer refuses with `task.has-subtasks`; that reason is gone. Every subtask, all the way down, takes the
   next key in the new project and keeps its parent, and its old key still finds it. The answer names them as
   `movedSubtasks: [{ from, to }]`, old key and new; the field is left out when nothing moved with the task. A subtask
   moved on its own still needs `parent: null` in the same edit (`task.is-subtask`).
 
+- **Owner-only proposals refuse an agent on every decide path.** `mayDecide` and `assertMayDecide` now read
+  the row's stored `kind`: a `mail_findings` or `meeting_findings` row is the owner's alone, whatever
+  `agent_decisions` says. The registry's `get` and `list` rows carry `ownerOnly` from their kind, and the generic
+  action kind marks a stored findings row too, so a host checking `assertMayDecide(await registry.get(id), …)` is
+  refused. `approveAsTask` and `proposedActions.approve` / `reject` refuse a mail findings batch as they refuse
+  meeting and evidence findings (`mail-findings.dedicated-review`), and the generic action kind no longer lists any
+  findings batch. Meeting findings were open to another agent with a reason before; now only the owner reviews them.
+
 ### Added
 
+- **`readEmailWhole` reads one stored email again from its mail server, every attachment of it with no limit.** It
+  saves the new text on the email as a sync does, keeping its mailboxes, flags and rule, and answers each attachment's
+  bytes for the caller to save. Gmail's email is found by id, another server's at its stored place.
+  `store.mail.emailPlace(accountId, externalId)` gives an email's thread and stored places.
 - **`stats messages responses`**: how fast replies come in one-to-one chats, the owner's (`--who me`) or the other
   side's (`--who others`): count, median, p90, mean and four time buckets, in total or `--by day` in `--timezone`.
   Several messages in a row followed by one answer are one reply, timed from the first. Reads by index, so all time
@@ -38,16 +56,6 @@ shape of this file.
   `review: "mail review"`, `conversation: null` (it mounts no thread read) and `mailbox: { option: "source", value }`
   — and `next` names those paths and `--source email:<account>`. `mailReviewSteps(mount)` gives the definitions for
   a host's step checks; a mail CLI leaves it out, and its step lines carry the profile as before.
-
-### Changed — may break callers
-
-- **Owner-only proposals refuse an agent on every decide path.** `mayDecide` and `assertMayDecide` now read
-  the row's stored `kind`: a `mail_findings` or `meeting_findings` row is the owner's alone, whatever
-  `agent_decisions` says. The registry's `get` and `list` rows carry `ownerOnly` from their kind, and the generic
-  action kind marks a stored findings row too, so a host checking `assertMayDecide(await registry.get(id), …)` is
-  refused. `approveAsTask` and `proposedActions.approve` / `reject` refuse a mail findings batch as they refuse
-  meeting and evidence findings (`mail-findings.dedicated-review`), and the generic action kind no longer lists any
-  findings batch. Meeting findings were open to another agent with a reason before; now only the owner reviews them.
 
 ## 0.562.0 — 03.11.2026
 

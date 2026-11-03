@@ -2,7 +2,13 @@ import { CliError } from "@wirecat/cli-base"
 import type { LoadEngine } from "../readers/types.js"
 import type { MessageStore } from "../store/index.js"
 import { mailAccountKey } from "./account-key.js"
-import { type AttachmentLog, addressOf, FETCH_CHUNK, readAttachments } from "./attachments.js"
+import {
+  type AttachmentLog,
+  addressOf,
+  FETCH_CHUNK,
+  type MailAttachmentPolicy,
+  readAttachments,
+} from "./attachments.js"
 import { sentAtOf } from "./email-input.js"
 import { mailFolders } from "./folders.js"
 import { mailHeadersOf } from "./headers.js"
@@ -26,6 +32,7 @@ export const retryUnread = async ({
   max,
   maxBodyChars,
   maxAttachmentChars,
+  policy,
   now,
   loadEngine,
   index,
@@ -37,6 +44,7 @@ export const retryUnread = async ({
   max: number
   maxBodyChars: number
   maxAttachmentChars: number
+  policy?: MailAttachmentPolicy
   now: () => number
   loadEngine: LoadEngine
   index: MailSyncOptions["index"]
@@ -85,7 +93,7 @@ export const retryUnread = async ({
       const files = await readAttachments(
         mail,
         item.messageId,
-        { loadEngine, maxAttachmentChars, at: startedAt },
+        { loadEngine, maxAttachmentChars, at: startedAt, ...(policy ? { policy } : {}) },
         attachments,
       )
       for (const file of files)

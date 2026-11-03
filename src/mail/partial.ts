@@ -2,7 +2,7 @@ import type { BudgetStop } from "../background/budget.js"
 import type { JsonValue } from "../meetings/index.js"
 import type { LoadEngine } from "../readers/types.js"
 import type { MessageStore, PartialEmail } from "../store/index.js"
-import { type AttachmentLog, FETCH_CHUNK, readAttachments } from "./attachments.js"
+import { type AttachmentLog, FETCH_CHUNK, type MailAttachmentPolicy, readAttachments } from "./attachments.js"
 import { parsedEmail } from "./email-input.js"
 import { mailHeadersOf } from "./headers.js"
 import { parseMail } from "./parse.js"
@@ -41,6 +41,7 @@ export const completePartial = async ({
   folders,
   maxBodyChars,
   maxAttachmentChars,
+  policy,
   loadEngine,
   now,
   take,
@@ -54,6 +55,7 @@ export const completePartial = async ({
   folders: () => Promise<readonly string[]>
   maxBodyChars: number
   maxAttachmentChars: number
+  policy?: MailAttachmentPolicy
   loadEngine: LoadEngine
   now: number
   /** A budgeted run's next request, or why there is none. */
@@ -125,7 +127,7 @@ export const completePartial = async ({
         const files = await readAttachments(
           mail,
           email.externalId,
-          { loadEngine, maxAttachmentChars, at: now, ...(signal ? { signal } : {}) },
+          { loadEngine, maxAttachmentChars, at: now, ...(policy ? { policy } : {}), ...(signal ? { signal } : {}) },
           attachments,
         )
         const { [PARTIAL]: _partial, ...metadata } = email.metadata ?? {}
