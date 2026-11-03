@@ -61,6 +61,19 @@ shape of this file.
   question, or a group whose newest message mentions or replies to the owner — with the messages since the owner
   last wrote, the oldest of them, and the split by kind. Muted or archived one-to-one chats are left out, as in
   `inbox`.
+- **`has:transcript` in the messages query language** finds a voice message that has a transcription, so
+  `stats messages show --by day -- has:transcript date>=30d` counts transcribed voice messages per day. In mail it
+  finds nothing.
+- **`store chats status`** counts the account's searchable chats of every kind, channels included, by how much of each
+  the archive holds: `{ chats, fetched, partial, never, oldest_message_at }`. `fetched` is held back to the first
+  message, up to date and without gaps; `never` has no fetch recorded and no message held; the rest is `partial`,
+  including WhatsApp chats whose history was pushed. One statement over the store, no list of chats. tg, max and wa
+  get it with the bump.
+- **Meeting counts per day, week or series.** `readMeetingCounts` (services) and `store.meetings.meetingCounts`
+  answer meetings, minutes, mean minutes and meetings with a transcript, in total and per row, over the same
+  selection as `readMeetingStats`, reading `meetings` alone through `meetings_by_time`. `meetingCountsItem` and the
+  `meeting_counts` entity are the answer, for zoom-cli's `stats meetings history`. A meeting with no end counts in
+  `meetings`, not in `minutes`. `MeetingStatsStore` gains `meetingCounts`; only cli-core's own store implements it.
 - **tg, max, wa, mail, gcal and drive's config file holds every shared setting with its default.** A first run now
   writes all of them into `defaults`, not five; `config set` and `config unset` add the missing ones (but not the one
   just unset); and the new `<cli> config migrate` fills an existing file. Your values, their order and unknown keys
