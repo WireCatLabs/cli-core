@@ -127,6 +127,7 @@ import { reactionChange } from "./reaction-change.js"
 import { recipient, recipientAdded, recipientChange, recipientOff, recipientRemoved } from "./recipient.js"
 import { recordedRun, runDetails, runHit, runLocation } from "./recorded-run.js"
 import { relationship } from "./relationship.js"
+import { responseTimes, waitingChats } from "./reply-stats.js"
 import { retention } from "./retention.js"
 import { savedSearch, searchHistoryClear } from "./saved-search.js"
 import { sendAttempt } from "./send-attempt.js"
@@ -324,6 +325,7 @@ export {
   relationship,
   reminder,
   removedModelKey,
+  responseTimes,
   retention,
   runDetails,
   runHit,
@@ -375,6 +377,7 @@ export {
   topicIcon,
   trackedChat,
   trackedChatHistory,
+  waitingChats,
   watchedMessage,
   watchItem,
 }
@@ -631,6 +634,8 @@ export const ENTITIES = {
   topic,
   folder,
   message_counts: messageCounts,
+  response_times: responseTimes,
+  waiting_chats: waitingChats,
   ranking,
   admin_report: adminReport,
   analysis_consent: analysisConsent,

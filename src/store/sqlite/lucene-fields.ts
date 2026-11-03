@@ -475,14 +475,11 @@ const messengerOnly =
 
 const topic: FieldCompiler = messengerOnly(({ value }) => always(bound("m.thread_external_id = ?", value)))
 
-const kind: FieldCompiler = messengerOnly(({ value }) =>
-  always(
-    bound(
-      "CASE WHEN json_extract(c.metadata,'$.peerKind') IN ('private','saved','bot','service','group','channel','unknown') THEN json_extract(c.metadata,'$.peerKind') WHEN c.kind='dialog' AND json_extract(c.metadata,'$.isBot')=1 THEN 'bot' WHEN c.kind='dialog' THEN 'private' ELSE c.kind END = ?",
-      value.toLowerCase(),
-    ),
-  ),
-)
+/** What `kind:` matches for a chat aliased `c`: private, saved, bot, service, group, channel or unknown. */
+export const PEER_KIND =
+  "CASE WHEN json_extract(c.metadata,'$.peerKind') IN ('private','saved','bot','service','group','channel','unknown') THEN json_extract(c.metadata,'$.peerKind') WHEN c.kind='dialog' AND json_extract(c.metadata,'$.isBot')=1 THEN 'bot' WHEN c.kind='dialog' THEN 'private' ELSE c.kind END"
+
+const kind: FieldCompiler = messengerOnly(({ value }) => always(bound(`${PEER_KIND} = ?`, value.toLowerCase())))
 
 const has: FieldCompiler = ({ value }, { corpus, mail }) => {
   const wanted = value.toLowerCase()

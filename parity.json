@@ -1127,6 +1127,11 @@
       "value": "<json>",
       "meaning": "the complete ranking component weights; replaces preset weights when --score is given"
     },
+    "--who": {
+      "value": "<side>",
+      "default": "me",
+      "meaning": "whose replies are timed: the owner's (me) or the other side's (others)"
+    },
     "--with-notes": {
       "meaning": "include your private notes, subject to contacts.notes.list permission"
     },
@@ -4531,6 +4536,15 @@
         "--selection": "all"
       }
     },
+    "stats messages responses": {
+      "in": "all",
+      "options": {
+        "--by": "all",
+        "--source": "all",
+        "--timezone": "all",
+        "--who": "all"
+      }
+    },
     "stats messages show": {
       "in": "all",
       "options": {
@@ -4605,6 +4619,13 @@
         "--answerer": "all",
         "--limit": "all",
         "--saved": "all",
+        "--source": "all",
+        "--timezone": "all"
+      }
+    },
+    "stats messages waiting": {
+      "in": "all",
+      "options": {
         "--source": "all",
         "--timezone": "all"
       }

@@ -275,6 +275,8 @@ export type {
 export type {
   BoardCounts,
   BoardOptions,
+  EditedTask,
+  MovedSubtask,
   NewWorkTask,
   RevisionCheck,
   TaskAssignment,

@@ -639,6 +639,9 @@ Administrator reports are mounted by the same `statsCommand`: `stats messages un
 `stats contacts responses`, `stats chats newcomers` and `stats messages discussion`. They read
 held data only; [the guide](rankings.md#find-questions-and-posts-that-need-attention) explains
 explicit reply attribution, selected answerers, unknown joining dates and bounded evidence.
+`stats messages responses` (reply times in one-to-one chats) and `stats messages waiting` (chats whose newest
+message asks the owner something) are dashboard aggregates over the same store:
+[reply times and chats waiting on you](rankings.md#reply-times-and-chats-waiting-on-you).
 
 
 `--json` prints text as it was written; MCP answers show control and direction characters visibly in
