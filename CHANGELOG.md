@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.563.0 — 03.11.2026
+
 ### Changed — may break callers
 
 - **Moving a task to another project moves its subtasks with it.** `tasks.edit(id, { project })` on a task with
