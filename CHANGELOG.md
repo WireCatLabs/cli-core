@@ -7,6 +7,14 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **Moving a task to another project moves its subtasks with it.** `tasks.edit(id, { project })` on a task with
+  subtasks no longer refuses with `task.has-subtasks`; that reason is gone. Every subtask, all the way down, takes the
+  next key in the new project and keeps its parent, and its old key still finds it. The answer names them as
+  `movedSubtasks: [{ from, to }]`, old key and new; the field is left out when nothing moved with the task. A subtask
+  moved on its own still needs `parent: null` in the same edit (`task.is-subtask`).
+
 ### Added
 
 - **`stats messages responses`**: how fast replies come in one-to-one chats, the owner's (`--who me`) or the other

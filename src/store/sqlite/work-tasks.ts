@@ -88,7 +88,8 @@ export interface TaskFields {
   category?: string
   /**
    * Another owner project, by key or `project:<id>`: the task takes the next key there; its old key still finds it.
-   * A subtask moves only with `parent: null` in the same edit.
+   * Its subtasks, all the way down, move with it and keep their parents. A subtask moves only with `parent: null` in
+   * the same edit.
    */
   project?: string
   /** A project task's kind, bug, feature or chore. */
@@ -150,6 +151,17 @@ export interface TaskDetails {
   updatedAt: string
 }
 
+/** A subtask that moved to another project with its parent: its key before and after. */
+export interface MovedSubtask {
+  from: string
+  to: string
+}
+
+/** What `edit` answers: the task, and the subtasks a move to another project took with it. */
+export interface EditedTask extends TaskDetails {
+  movedSubtasks?: MovedSubtask[]
+}
+
 export interface RevisionCheck {
   /** The revision the caller read; a write on any other is refused (`task.stale`). */
   revision?: number
@@ -205,7 +217,7 @@ export interface TaskEvent {
 /** Tasks beyond the package's four message kinds, and the fields the package does not know, on any task. */
 export interface WorkTasks extends TaskRelationsStore {
   create(input: NewWorkTask, by: Author): Promise<TaskDetails>
-  edit(id: string, fields: TaskFields, by: Author, check?: RevisionCheck): Promise<TaskDetails>
+  edit(id: string, fields: TaskFields, by: Author, check?: RevisionCheck): Promise<EditedTask>
   assign(id: string, assignment: TaskAssignment, by: Author, check?: RevisionCheck): Promise<TaskDetails>
   unassign(id: string, assignment: TaskAssignment, by: Author, check?: RevisionCheck): Promise<TaskDetails>
   /**
@@ -418,7 +430,7 @@ export const workTaskOperationsOver = (context: StoreContext): WorkTaskOperation
 
   /** The task takes the target's next number and key; the source's counter never goes back, so its old key stays unique. */
   const moveToProject = (task: number, before: Row, target: number, actor: Actor, at: number, detach: boolean) => {
-    if (target === Number(before.project_id)) return
+    if (target === Number(before.project_id)) return []
     if (!onBoard(task)) throw new CliError("validation_error", "only a project task moves to another project")
     const targetRow = database.prepare("SELECT key FROM projects WHERE id = ?").get(target) as Row
     if (String(targetRow.key).length === INBOX_KEY_LENGTH)
@@ -431,38 +443,41 @@ export const workTaskOperationsOver = (context: StoreContext): WorkTaskOperation
         { reason: "task.is-subtask", parent },
       )
     }
-    const children = database
-      .prepare("SELECT key FROM tasks WHERE parent_id = ? AND deleted_at IS NULL ORDER BY id")
-      .all(task)
-      .map((row) => String(row.key))
-    if (children.length)
-      throw new CliError(
-        "validation_error",
-        `${String(before.key)} has subtasks (${children.join(", ")}); move or detach them first`,
-        { reason: "task.has-subtasks", subtasks: children },
+    const renumber = (row: Row, parent: SqlValue) => {
+      const counted = database
+        .prepare(
+          "UPDATE projects SET tasks_count = tasks_count + 1, updated_at = ? WHERE id = ? RETURNING key, tasks_count",
+        )
+        .get(at, target) as Row
+      const number = Number(counted.tasks_count)
+      const key = `${String(counted.key)}-${number}`
+      database
+        .prepare("UPDATE tasks SET project_id = ?, number = ?, key = ?, parent_id = ?, updated_at = ? WHERE id = ?")
+        .run(target, number, key, parent, at, Number(row.id))
+      recordTaskEvent(
+        database,
+        Number(row.id),
+        actor,
+        "project",
+        {
+          project: [`project:${row.project_id}`, `project:${target}`],
+          key: [String(row.key), key],
+          ...(row.parent_id === parent ? {} : { parent: [`task:${taskIdOf(database, Number(row.parent_id))}`, null] }),
+        },
+        at,
       )
-    const counted = database
-      .prepare(
-        "UPDATE projects SET tasks_count = tasks_count + 1, updated_at = ? WHERE id = ? RETURNING key, tasks_count",
-      )
-      .get(at, target) as Row
-    const number = Number(counted.tasks_count)
-    const key = `${String(counted.key)}-${number}`
-    database
-      .prepare("UPDATE tasks SET project_id = ?, number = ?, key = ?, parent_id = NULL, updated_at = ? WHERE id = ?")
-      .run(target, number, key, at, task)
-    recordTaskEvent(
-      database,
-      task,
-      actor,
-      "project",
-      {
-        project: [`project:${before.project_id}`, `project:${target}`],
-        key: [String(before.key), key],
-        ...(before.parent_id == null ? {} : { parent: [`task:${taskIdOf(database, Number(before.parent_id))}`, null] }),
-      },
-      at,
-    )
+      return key
+    }
+    renumber(before, null)
+    const moved: MovedSubtask[] = []
+    const childrenOf = database.prepare("SELECT * FROM tasks WHERE parent_id = ? AND deleted_at IS NULL ORDER BY id")
+    for (const queue = [task]; queue.length > 0; ) {
+      for (const child of childrenOf.all(queue.shift() as number) as Row[]) {
+        moved.push({ from: String(child.key), to: renumber(child, child.parent_id as SqlValue) })
+        queue.push(Number(child.id))
+      }
+    }
+    return moved
   }
 
   const edit = (task: number, fields: TaskFields, actor: Actor, created = false) => {
@@ -547,14 +562,17 @@ export const workTaskOperationsOver = (context: StoreContext): WorkTaskOperation
       change("type", fields.type, "type")
       bump = true
     }
-    if (fields.project !== undefined)
-      moveToProject(task, before, projectOf(fields.project), actor, at, fields.parent === null)
+    const moved =
+      fields.project === undefined
+        ? []
+        : moveToProject(task, before, projectOf(fields.project), actor, at, fields.parent === null)
     if (set.length === 0) {
       if (bump) database.prepare("UPDATE tasks SET revision = revision + 1 WHERE id = ?").run(task)
-      return
+      return moved
     }
     if (bump) set.push("revision = revision + 1")
     database.prepare(`UPDATE tasks SET ${set.join(", ")}, updated_at = ? WHERE id = ?`).run(...values, at, task)
+    return moved
   }
 
   /** The column's tasks in board order, the moving one left out; no priority reads as 0, the bottom of low. */
@@ -680,11 +698,11 @@ export const workTaskOperationsOver = (context: StoreContext): WorkTaskOperation
     },
     edit: async (id, fields, by, check = {}) => {
       const task = required(id)
-      write(database, () => {
+      const moved = write(database, () => {
         checkRevision(rowById(task), check.revision)
-        edit(task, fields, authorActor(context, by).actor)
+        return edit(task, fields, authorActor(context, by).actor)
       })
-      return details(task)
+      return moved.length > 0 ? { ...details(task), movedSubtasks: moved } : details(task)
     },
     /** `edit` inside the caller's write, so a decision that edits a task rolls back with it. */
     editNow: (id, fields, by) => {

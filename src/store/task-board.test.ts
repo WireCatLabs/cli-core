@@ -206,9 +206,6 @@ describe("the task board", () => {
     })
     expect((await add("HRB", "Next")).key).toBe("HRB-4")
 
-    await expect(store.tasks.edit(parent.id, { project: "OPS" }, "owner")).rejects.toMatchObject({
-      details: { reason: "task.has-subtasks", subtasks: [sub.key] },
-    })
     await expect(store.tasks.edit(sub.id, { project: "OPS" }, "owner")).rejects.toMatchObject({
       details: { reason: "task.is-subtask", parent: parent.key },
     })
@@ -221,6 +218,33 @@ describe("the task board", () => {
     })
     expect(await parentList(`parent:${parent.key}`)).toEqual([])
     expect(await parentList("parent:any")).toEqual([])
+  })
+
+  it("moves a task's subtasks, all the way down, with it and keeps their parents", async () => {
+    const { store, add } = await board()
+    const parent = await add("HRB", "Launch")
+    const sub = await store.tasks.create({ project: "HRB", title: "Sub", type: "chore", parent: parent.id }, "owner")
+    const leaf = await store.tasks.create({ project: "HRB", title: "Leaf", type: "chore", parent: sub.id }, "owner")
+    await add("OPS", "Existing")
+
+    const moved = await store.tasks.edit(parent.id, { project: "OPS" }, "owner")
+
+    expect(moved).toMatchObject({
+      key: "OPS-2",
+      parent: null,
+      movedSubtasks: [
+        { from: "HRB-2", to: "OPS-3" },
+        { from: "HRB-3", to: "OPS-4" },
+      ],
+    })
+    expect(await store.tasks.details(sub.key)).toMatchObject({ key: "OPS-3", projectKey: "OPS", parent: "task:OPS-2" })
+    expect(await store.tasks.details(leaf.key)).toMatchObject({ key: "OPS-4", parent: "task:OPS-3" })
+    expect((await store.tasks.details("OPS-3")).revision).toBeGreaterThan(sub.revision)
+    expect((await store.tasks.events("OPS-4")).at(-1)).toMatchObject({
+      kind: "project",
+      changes: { project: ["project:1", "project:2"], key: ["HRB-3", "OPS-4"] },
+    })
+    expect((await store.tasks.edit("OPS-4", { title: "Leaf again" }, "owner")).movedSubtasks).toBeUndefined()
   })
 
   it("changes a project task's kind within bug, feature and chore, and the revision moves", async () => {
