@@ -227,10 +227,9 @@ const OTHERS: Entry[] = [
   ["task.stale", "configuration_error", "the task changed since it was read; read it again"],
   validation("task.column", "the task beside which it moves is in another column than the status asked for"),
   validation("task.dependency-cycle", "the task would depend on itself"),
-  validation("task.has-subtasks", "the task has subtasks; move or detach them before it moves to another project"),
   validation(
     "task.is-subtask",
-    "a subtask moves to another project only when it is detached from its parent in the same write",
+    "a subtask moves to another project alone only when it is detached from its parent in the same write",
   ),
   validation("task.duplicate-candidates", "open tasks may be the same job: attach to one, or add it as new"),
   validation(
@@ -318,7 +317,6 @@ export const DETAILS = [
   "operation_ids",
   "text_limit",
   "store_refused_in",
-  "subtasks",
   "partial_output",
   "parent",
   "path",
