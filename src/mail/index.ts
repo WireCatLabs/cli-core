@@ -1,4 +1,5 @@
 export { mailAccountKey } from "./account-key.js"
+export { DEFAULT_ATTACHMENT_POLICY, type MailAttachmentPolicy, POLICY_SKIPS } from "./attachments.js"
 export { BULK, bulkBox } from "./bulk.js"
 export { factsOf } from "./facts.js"
 export {
@@ -120,3 +121,4 @@ export {
   RETRYABLE_ATTACHMENTS,
   syncMail,
 } from "./sync.js"
+export { readEmailWhole, type WholeAttachment } from "./whole.js"

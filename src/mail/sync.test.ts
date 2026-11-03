@@ -3,6 +3,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { CliError } from "@wirecat/cli-base"
 import { afterEach, describe, expect, it } from "vitest"
+import { importEngine } from "../attachments/extract.js"
 import { runBudget } from "../background/budget.js"
 import { formatLocator } from "../domain/locator.js"
 import { type MessageStore, openStore } from "../store/index.js"
@@ -12,6 +13,7 @@ import type { MailRule } from "./rules.js"
 import type { MailSource } from "./source.js"
 import { type MailSyncOptions, syncMail } from "./sync.js"
 import { type FakeMail, type FakeMailbox, fakeArchiveSource, fakeMailSource } from "./testing/index.js"
+import { readEmailWhole } from "./whole.js"
 
 const ME = "owner@example.test"
 const KEY = { provider: "email", account: ME }
@@ -687,6 +689,106 @@ describe("syncMail attachments", () => {
     expect((await importInto(env)).deleted).toBe(1)
     expect((await s.mail.email(id, "9001"))?.attachments[0]?.text).toBeNull()
     expect(await s.knowledge.annotation(KEY, note.id)).toMatchObject({ targetState: "deleted", text: "Own analysis" })
+  })
+})
+
+describe("syncMail attachment policy", () => {
+  const csv = { name: "budget.csv", mime: "text/csv", content: "name,value\r\nSynthetic,123\r\n" }
+  const sync = async (env: NodeJS.ProcessEnv, attachments: MailSyncOptions["attachments"]) =>
+    importMail({
+      store: await store(env),
+      source: sourceOf(env),
+      account: { address: ME },
+      since: SINCE,
+      now: () => NOW,
+      ...(attachments ? { attachments } : {}),
+    })
+
+  it("reads no attachment when the policy is off, and none above the size limit", async () => {
+    const off = setup([mail(1, { attachment: csv })])
+    expect((await sync(off.env, { read: false, maxBytes: 1024 })).attachments).toEqual([
+      { message: "9001", part: 0, status: "not-read" },
+    ])
+    expect((await emails(off.env))[0]?.attachments[0]).toMatchObject({
+      name: "budget.csv",
+      text: null,
+      extractionError: "not-read",
+    })
+
+    const small = setup([mail(1, { attachment: csv })])
+    expect((await sync(small.env, { read: true, maxBytes: 8 })).attachments).toEqual([
+      { message: "9001", part: 0, status: "too-large" },
+    ])
+    expect((await emails(small.env))[0]?.attachments[0]).toMatchObject({ extractionError: "too-large", size: 27 })
+  })
+
+  it("reads attachments up to 10 MB by default", async () => {
+    const { env } = setup([mail(1, { attachment: csv })])
+    expect((await sync(env, undefined)).attachments).toEqual([{ message: "9001", part: 0, status: "extracted" }])
+  })
+})
+
+describe("readEmailWhole", () => {
+  const pdfLike = { name: "budget.csv", mime: "text/csv", content: "name,value\r\nSynthetic,123\r\n" }
+  const whole = async (env: NodeJS.ProcessEnv, externalId: string, source = sourceOf(env)) =>
+    readEmailWhole({
+      store: await store(env),
+      source,
+      address: ME,
+      externalId,
+      folders: async () => [GMAIL_ALL_MAIL],
+      maxBodyChars: 10_000,
+      maxAttachmentChars: 10_000,
+      loadEngine: importEngine,
+      now: NOW,
+    })
+
+  it("reads an attachment the sync's limit left, indexes its text and answers its bytes", async () => {
+    const { env } = setup([mail(1, { attachment: pdfLike, labels: ["Work"], flagged: true, seen: true })])
+    await importMail({
+      store: await store(env),
+      source: sourceOf(env),
+      account: { address: ME },
+      since: SINCE,
+      now: () => NOW,
+      attachments: { read: true, maxBytes: 8 },
+    })
+    const kept = ({ mailboxes, read, flagged, mailRuleId }: Awaited<ReturnType<typeof emails>>[number]) => ({
+      mailboxes: mailboxes.map(({ externalId }) => externalId).sort(),
+      read,
+      flagged,
+      mailRuleId,
+    })
+    const before = kept((await emails(env))[0] as Awaited<ReturnType<typeof emails>>[number])
+
+    const [file] = await whole(env, "9001")
+
+    expect(kept((await emails(env))[0] as Awaited<ReturnType<typeof emails>>[number])).toEqual(before)
+    expect(before.mailboxes).toHaveLength(3)
+    expect(before.flagged).toBe(true)
+
+    expect(file).toMatchObject({ position: 0, name: "budget.csv", mime: "text/csv", status: "extracted" })
+    expect(new TextDecoder().decode(file?.bytes ?? new Uint8Array())).toContain("Synthetic,123")
+    expect((await emails(env))[0]?.attachments[0]).toMatchObject({ extractionError: null })
+    expect((await emails(env))[0]?.attachments[0]?.text).toContain("name: Synthetic; value: 123")
+  })
+
+  it("reads at the stored place on a server without ids, and refuses an email it does not store", async () => {
+    const { env } = setup([mail(1, { attachment: pdfLike })], { quick: true })
+    await importMail({
+      store: await store(env),
+      source: sourceOf(env),
+      account: { address: ME },
+      since: SINCE,
+      now: () => NOW,
+      attachments: { read: false, maxBytes: 8 },
+    })
+    const stored = (await emails(env))[0]?.externalId as string
+    const { find: _byId, ...noIds } = sourceOf(env)
+
+    expect((await whole(env, stored, noIds))[0]).toMatchObject({ status: "extracted" })
+    expect((await emails(env))[0]?.attachments[0]?.extractionError).toBeNull()
+    await expect(whole(env, "missing", noIds)).rejects.toMatchObject({ code: "not_found" })
   })
 })
 

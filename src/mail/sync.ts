@@ -4,7 +4,7 @@ import { importEngine } from "../attachments/extract.js"
 import type { EmailLocationInput, FolderEmail, MessageStore, ThreadSave } from "../store/index.js"
 import { isBusy } from "../store/sqlite/transaction.js"
 import { mailAccountKey } from "./account-key.js"
-import { FETCH_CHUNK, MAX_ATTACHMENT_CHARS, readAttachments } from "./attachments.js"
+import { DEFAULT_ATTACHMENT_POLICY, FETCH_CHUNK, MAX_ATTACHMENT_CHARS, readAttachments } from "./attachments.js"
 import { BULK, bulkBox } from "./bulk.js"
 import { parsedEmail } from "./email-input.js"
 import { factsOf } from "./facts.js"
@@ -86,6 +86,7 @@ export const syncMail = async (
     folders: () => mailFolders(options.account, source),
     maxBodyChars: options.maxBodyChars ?? MAX_BODY_CHARS,
     maxAttachmentChars: options.maxAttachmentChars ?? MAX_ATTACHMENT_CHARS,
+    policy: options.attachments ?? DEFAULT_ATTACHMENT_POLICY,
     loadEngine: options.loadEngine ?? importEngine,
     now: (options.now ?? Date.now)(),
     ...(options.budget ? { take: () => options.budget?.take() ?? null } : {}),
@@ -222,6 +223,7 @@ const syncRound = async (
     max = 200,
     maxBodyChars = MAX_BODY_CHARS,
     maxAttachmentChars = MAX_ATTACHMENT_CHARS,
+    attachments: policy = DEFAULT_ATTACHMENT_POLICY,
     now = Date.now,
     ages,
     loadEngine = importEngine,
@@ -243,6 +245,7 @@ const syncRound = async (
       max,
       maxBodyChars,
       maxAttachmentChars,
+      policy,
       now,
       loadEngine,
       index,
@@ -843,7 +846,7 @@ const syncRound = async (
       const files = await readAttachments(
         mail,
         item.messageId,
-        { loadEngine, maxAttachmentChars, at: startedAt, ...(signal ? { signal } : {}) },
+        { loadEngine, maxAttachmentChars, at: startedAt, policy, ...(signal ? { signal } : {}) },
         attachments,
       ).catch(async (error: unknown) => {
         await stopIfAborted()
