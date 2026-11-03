@@ -78,7 +78,8 @@ export const adminEntityKey = (row: Pick<AdminRow, "account" | "id">): string =>
 const personKey = (node: Pick<AdminNode, "account" | "sender">) =>
   JSON.stringify([node.account.provider, node.account.account, node.sender])
 const locator = (node: RankingGraphNode) => formatLocator({ ...node.account, chat: node.chatId, message: node.id })
-const stats = (delays: number[]) => {
+/** Median and nearest-rank p90 of reply delays, the numbers every response-time answer reports. */
+export const delayStats = (delays: number[]) => {
   const sorted = delays.toSorted((a, b) => a - b)
   const middle = Math.floor(sorted.length / 2)
   return {
@@ -190,7 +191,7 @@ export const calculateAdminStatistics = (
             (node) => node.account.provider === person.provider && node.account.account === person.account,
           ).length,
           answered: rows.length,
-          ...stats(rows.map((row) => row.contribution as number)),
+          ...delayStats(rows.map((row) => row.contribution as number)),
           status: "observed",
         },
         rows,
@@ -247,7 +248,7 @@ export const calculateAdminStatistics = (
           pending: end > options.cutoff,
           questions: held.length,
           answered: delays.length,
-          ...stats(delays),
+          ...delayStats(delays),
           status: "partial",
         },
         contributions,

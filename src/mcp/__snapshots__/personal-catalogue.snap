@@ -98,9 +98,11 @@ read  stats contacts top
 read  stats messages counters show
 read  stats messages discussion
 read  stats messages evidence
+read  stats messages responses
 read  stats messages show
 read  stats messages top
 read  stats messages unanswered
+read  stats messages waiting
 read  stats tasks show
 read  store check
 read  store gaps show

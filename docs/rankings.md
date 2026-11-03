@@ -142,6 +142,48 @@ remain pinned; typed report options replace inherited values. Each new run captu
 cutoff for replies. A saved report cannot run as a different report kind or an ordinary ranking.
 Report history stores parameters and resolved selections, never result messages. Evidence is not recorded.
 
+## Reply times and chats waiting on you
+
+Two answers for a dashboard, from the local store only. Both take after `--` only `date:`, `chat:` and `kind:`
+terms, AND-ed; anything else is refused. Each term becomes an index bound, so even all time on a large store reads
+by index and never scans every message. Neither command keeps search history.
+
+```sh
+app stats messages responses --who me --by day --timezone Europe/Madrid --json -- date>=30d
+app stats messages responses --who others --json -- 'date:[60d TO 30d]'
+app stats messages waiting --json -- kind:private
+```
+
+`responses` measures replies in one-to-one chats. `--who me` (the default) times the owner's answers; `--who others`
+times the other side's answers to the owner. Several messages in a row followed by one answer count as one reply,
+timed from the first of them to the answer. The period selects replies by the time of the reply, and a reply early in
+the period is still timed from the message it answers, however old. `--by day` adds one row per calendar day of the
+reply in `--timezone`; `--by total` (the default) leaves `rows` empty.
+
+```json
+{ "item": { "who": "me", "replies": 233, "median_ms": 1260000, "p90_ms": 15400000, "mean_ms": 4100000,
+  "buckets": { "under_5m": 81, "under_1h": 74, "under_1d": 61, "over_1d": 17 },
+  "rows": [ { "key": "2026-11-01", "replies": 9, "median_ms": 900000, "p90_ms": 7200000, "mean_ms": 2100000 } ] } }
+```
+
+The median and p90 are computed as in `stats contacts responses`; the mean is rounded to a millisecond. The buckets
+are separate ranges: under 5 minutes, 5 minutes to under an hour, an hour to under a day, a day or more. With no
+replies the timings are `null`. Groups are left out: a mention of the owner is held only for mentions by id, and
+finding them would read every group message in the period. Chats with bots, service chats and Saved Messages are
+never counted.
+
+`waiting` counts the chats whose newest message is not the owner's and asks something of the owner: in a one-to-one
+chat a question (`?` outside links, as `unanswered` reads it), in a group a mention of the owner by id or by
+`@username`, or a reply to one of the owner's messages. Muted or archived one-to-one chats are left out, as `inbox`
+leaves them out; channels, bots, service chats, Saved Messages and chats not searchable are never read. `messages` is
+the other side's messages since the owner last wrote in those chats, counted no further back than 100 per chat;
+`oldest_at` is the oldest of them. `date:` bounds the time of each chat's newest message.
+
+```json
+{ "item": { "chats": 7, "messages": 19, "oldest_at": "2026-10-28T09:12:00.000Z",
+  "by_kind": { "private": 5, "group": 2 } } }
+```
+
 ## Save a resolved ranking
 
 ```sh

@@ -1435,6 +1435,16 @@ const samples: Record<EntityName, unknown> = {
   },
   folder: { id: "2", title: "Synthetic folder", chat_ids: ["7"], include: ["groups"] },
   message_counts: { by: "chat", total: 3, rows: [{ key: "7", ref: "chat:chat/500/7", name: "Book club", count: 3 }] },
+  response_times: {
+    who: "me",
+    replies: 2,
+    median_ms: 90_000,
+    p90_ms: 120_000,
+    mean_ms: 90_000,
+    buckets: { under_5m: 2, under_1h: 0, under_1d: 0, over_1d: 0 },
+    rows: [{ key: "2026-11-01", replies: 2, median_ms: 90_000, p90_ms: 120_000, mean_ms: 90_000 }],
+  },
+  waiting_chats: { chats: 1, messages: 2, oldest_at: at, by_kind: { private: 1, group: 0 } },
   ranking: {
     target: "messages",
     measure: "reactions",
