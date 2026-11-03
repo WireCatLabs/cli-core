@@ -5,6 +5,19 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Added
+
+- **`stats messages responses`**: how fast replies come in one-to-one chats, the owner's (`--who me`) or the other
+  side's (`--who others`): count, median, p90, mean and four time buckets, in total or `--by day` in `--timezone`.
+  Several messages in a row followed by one answer are one reply, timed from the first. Reads by index, so all time
+  works on a large store; the query after `--` takes `date:`, `chat:` and `kind:` only.
+- **`stats messages waiting`**: how many chats wait on the owner — a one-to-one chat whose newest message is a
+  question, or a group whose newest message mentions or replies to the owner — with the messages since the owner
+  last wrote, the oldest of them, and the split by kind. Muted or archived one-to-one chats are left out, as in
+  `inbox`.
+
 ## 0.562.0 — 03.11.2026
 
 ### Added
