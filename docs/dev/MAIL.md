@@ -69,6 +69,17 @@ account `{ provider: "email", account: <address, lower case> }`.
   store version, and an older build simply leaves the email partial.
 - **Limits.** `max` new messages a run, newest first (200; no limit when budgeted); `maxBodyChars` (`MAX_BODY_CHARS`); attachment text up to
   `MAX_ATTACHMENT_CHARS` (200,000); a run stops between batches of 50 on `signal`, after saving its resume point.
+- **Attachments.** `attachments` (`MailAttachmentPolicy`, default `DEFAULT_ATTACHMENT_POLICY`: on, 10 MB a file) says
+  whether a sync reads attachments into the index and the largest file it reads. A file the policy leaves is stored
+  with its name, type and size, no text, and `extractionError` `not-read` (policy off) or `too-large`; the run's
+  `attachments` log says the same. No file is kept either way. The email still arrives whole from the server: the
+  limit keeps a large file out of the text readers and the index, not off the network. Sync, partial completion and
+  `retryAttachments` follow the policy.
+- **One email read whole.** `readEmailWhole({ store, source, address, externalId, folders, … })` reads one stored email
+  from its source again, as partial completion does, and every attachment with no size limit. It saves the email as a
+  sync would (keeping its mailboxes, flags and rule) and answers each attachment with its bytes; it writes no file and
+  runs no `index` step, so the new text gets vectors at the next sync. No command calls it yet: the mail CLI's
+  `messages show` is meant to.
 - **Transport failures.** A chunk in which every message failed stops the run, after saving its resume point; one
   unreadable message costs only itself and is tried again next run.
 - **`budget`.** A `RunBudget` (`runBudgetOf` in a command) makes the run budgeted (WC-LIFE-16): it reads the window in

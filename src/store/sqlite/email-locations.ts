@@ -71,6 +71,18 @@ export interface PartialEmail {
   locations: EmailLocationInput[]
 }
 
+const placed = (row: Record<string, unknown>): PartialEmail => ({
+  externalId: String(row.external_id),
+  threadExternalId: String(row.thread),
+  receivedAt: row.at === null ? null : Number(row.at),
+  metadata: fromJson(row.metadata),
+  locations: (JSON.parse(String(row.places)) as EmailLocationInput[]).map((place) => ({
+    folder: String(place.folder),
+    uidvalidity: String(place.uidvalidity),
+    uid: Number(place.uid),
+  })),
+})
+
 export const partialEmails = (
   database: CacheDatabase,
   accountId: number,
@@ -99,18 +111,24 @@ export const partialEmails = (
   return {
     total: rows.length ? Number(rows[0]?.total) : 0,
     stuck: Number(stuck?.n ?? 0),
-    emails: rows.map((row) => ({
-      externalId: String(row.external_id),
-      threadExternalId: String(row.thread),
-      receivedAt: row.at === null ? null : Number(row.at),
-      metadata: fromJson(row.metadata),
-      locations: (JSON.parse(String(row.places)) as EmailLocationInput[]).map((place) => ({
-        folder: String(place.folder),
-        uidvalidity: String(place.uidvalidity),
-        uid: Number(place.uid),
-      })),
-    })),
+    emails: rows.map(placed),
   }
+}
+
+/** One live email's thread and stored places, newest first, in the shape `partialEmails` gives; `null` if not stored. */
+export const emailPlace = (database: CacheDatabase, accountId: number, externalId: string): PartialEmail | null => {
+  const row = database
+    .prepare(
+      `SELECT e.external_id, t.external_id AS thread, coalesce(e.received_at, e.sent_at) AS at, e.metadata,
+         (SELECT json_group_array(json_object('folder', folder, 'uidvalidity', uidvalidity, 'uid', uid))
+            FROM (SELECT b.external_id AS folder, l.uidvalidity, l.uid
+                    FROM email_locations l JOIN mailboxes b ON b.id = l.mailbox_id
+                    WHERE l.email_id = e.id ORDER BY l.rowid DESC)) AS places
+       FROM emails e JOIN email_threads t ON t.id = e.email_thread_id
+       WHERE e.account_id = ? AND e.external_id = ? AND e.deleted_at IS NULL`,
+    )
+    .get(accountId, externalId)
+  return row ? placed(row) : null
 }
 
 /** Replaces a partial email's `metadata.partial`, as a failed read records itself; a whole email is left alone. */
@@ -124,12 +142,15 @@ export const markPartial = (database: CacheDatabase, accountId: number, external
 
 export interface PartialMailStore {
   partialEmails(accountId: number, limit: number): Promise<{ emails: PartialEmail[]; total: number; stuck: number }>
+  /** One live email's thread and stored places, newest first; `null` when it is not stored. */
+  emailPlace(accountId: number, externalId: string): Promise<PartialEmail | null>
   /** Records a failed read of a partial email in its `metadata.partial`; a whole email is left alone. */
   markPartial(accountId: number, externalId: string, mark: Metadata): Promise<void>
 }
 
 export const partialMail = (database: CacheDatabase): PartialMailStore => ({
   partialEmails: async (accountId, limit) => partialEmails(database, accountId, limit),
+  emailPlace: async (accountId, externalId) => emailPlace(database, accountId, externalId),
   markPartial: async (accountId, externalId, mark) => {
     write(database, () => markPartial(database, accountId, externalId, mark))
   },

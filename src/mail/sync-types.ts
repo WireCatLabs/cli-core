@@ -1,6 +1,7 @@
 import type { BudgetStop, RunBudget } from "../background/budget.js"
 import type { LoadEngine } from "../readers/types.js"
 import type { AccountKey, MessageStore } from "../store/index.js"
+import type { MailAttachmentPolicy } from "./attachments.js"
 import type { PartialOutcome } from "./partial.js"
 import type { TagOutcome } from "./rule-tags.js"
 import type { MailRule } from "./rules.js"
@@ -70,6 +71,8 @@ export interface MailSyncOptions {
   max?: number
   maxBodyChars?: number
   maxAttachmentChars?: number
+  /** Whether attachments are read into the index, and up to what size; `DEFAULT_ATTACHMENT_POLICY` when left out. */
+  attachments?: MailAttachmentPolicy
   now?: () => number
   /** Domain registration dates already known, for the sender score a rule asks for. */
   ages?: ReadonlyMap<string, DomainAge>
