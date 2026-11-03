@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.563.0 — 03.11.2026
+
 ### Added
 
 - **`stats messages responses`**: how fast replies come in one-to-one chats, the owner's (`--who me`) or the other
