@@ -695,9 +695,12 @@ export const searchNotes = async (
     list.forEach(({ ref, note, at }, rank) => {
       if (tierRefs.has(ref)) return
       const held = ranked.get(ref) ?? { note, at, score: 0, foundBy: [] }
-      held.score += 1 / (RRF_K + rank + 1)
       held.foundBy.push(by)
       ranked.set(ref, held)
+      // A question's any-word list holds nearly every note meaning finds; a second vote there buried notes found by
+      // words alone (recall@10 0.55 against 1.00, cli-testing knowledge-graph-memory, MEMO-36).
+      if (by === "meaning" && lookup !== undefined && held.foundBy.includes("words")) return
+      held.score += 1 / (RRF_K + rank + 1)
     })
   add(matched.items, "words")
   if (meaning !== undefined) add(meaning, "meaning")

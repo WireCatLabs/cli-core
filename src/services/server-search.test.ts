@@ -113,15 +113,23 @@ describe("server search beside the archive", () => {
     expect(found.server).toMatchObject({ backend: "both", calls: 1, new: 1 })
   })
 
-  it("**search all** reads a question in the archive by discovery, as --discover does, without the server", async () => {
-    const one = await setup()
+  it("**search all** asks the server a question as typed and reads the archive by discovery", async () => {
+    const one = await setup(async () => ({
+      items: [hit("8", "2", "invoices sent")],
+      hasMore: false,
+      chats: [chat("8")],
+    }))
     const found = await servicesFor(one.deps).messages.searchAll({
       text: "When is the invoice due?",
       limit: 20,
       only: ["messages"],
     })
-    expect(found.items.map(({ ref }) => ref).sort()).toEqual(["msg:test/500/7/1", "msg:test/500/7/4"])
-    expect(one.asked).toEqual([])
+    expect(found.items.map(({ ref }) => ref).sort()).toEqual([
+      "msg:test/500/7/1",
+      "msg:test/500/7/4",
+      "msg:test/500/8/2",
+    ])
+    expect(one.asked).toHaveLength(1)
   })
 
   it("**search all** on a fresh store, with no row for its own account yet, still asks the server", async () => {

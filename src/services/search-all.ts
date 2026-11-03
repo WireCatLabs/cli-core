@@ -165,9 +165,8 @@ export const searchAll = async (
 
   const messagesOf = async (kind: "messages" | "mail") => {
     const given = request.scope?.[kind]
-    // Discovery reads the local archive, as `search messages --discover` does: a named server keeps the words as typed.
+    // The server still gets the question as typed: a query that is not a sentence still finds what it holds.
     const discovers = discover && (kind === "mail" || request.backend !== "server")
-    const backend = discovers ? "archive" : request.backend
     const query: SearchQuery = {
       text: request.text,
       kind,
@@ -176,7 +175,7 @@ export const searchAll = async (
         ? {
             // Server hits are matched by chat and message id, which another account can share.
             ...(request.backend === "server" || given ? {} : { source: "all" }),
-            ...(backend === undefined ? {} : { backend }),
+            ...(request.backend === undefined ? {} : { backend: request.backend }),
             ...(request.server === undefined ? {} : { server: request.server }),
           }
         : {}),
