@@ -13,6 +13,7 @@ shape of this file.
   `mailReadCommands` takes `whole(command, store, mailbox, emailId)`; with it the command is a fetch, reads such an
   email from the server before it answers (`readEmailWhole`), and shows the new text. When that read fails it shows
   the stored email with `meta.complete: false` and an issue `mail.attachments-unread`. Without `whole` nothing changes.
+  `readEmailWhole`'s body and text limits, reader and clock now default as sync's do.
 
 ## 0.563.0 — 03.11.2026
 
