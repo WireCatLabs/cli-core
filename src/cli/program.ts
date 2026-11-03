@@ -55,6 +55,7 @@ import { type FirstScreen, installHelp } from "./help/first-screen.js"
 import { showInputFields } from "./input-fields.js"
 import { MAX_BUFFERED_INPUT, provideInputPolicy } from "./input-policy.js"
 import { checkJson, liftJson } from "./json-fields.js"
+import { tooLargeSteps } from "./output-budget.js"
 import type { CommandPermissions } from "./permission-keys.js"
 import { PreviewComplete, preview } from "./preview.js"
 import { commandWords, isProfileName, liftProfile, sampleCommand, takesProfile, valuedOptions } from "./profile.js"
@@ -868,6 +869,15 @@ const commandPath = (program: Command, rest: string[]): string => {
   return words.join(" ")
 }
 
+const budgetSteps = (program: Command, path: string, failure: unknown) => {
+  const command = path ? commandAt(program, path) : undefined
+  if (!command || !(failure instanceof CliError) || failure.details?.reason !== "output.too-large") return []
+  const { max_bytes: maxBytes, needed_bytes: neededBytes } = failure.details
+  return typeof maxBytes === "number" && typeof neededBytes === "number"
+    ? tooLargeSteps(command, { maxBytes, neededBytes })
+    : []
+}
+
 interface Failure {
   object: ReturnType<typeof errorObjectOf>
   record?: ReturnType<typeof errorRecordOf>
@@ -896,7 +906,10 @@ const failed = (
     ...(effects ? { effects } : {}),
   })
   const { next: _named, ...said } = built.error
-  const steps = failureSteps(program, built.error)
+  const steps = failureSteps(program, {
+    ...built.error,
+    next: [...(built.error.next ?? []), ...budgetSteps(program, path, failure)],
+  })
   const object: typeof built = { ...built, error: { ...said, ...(steps.length > 0 ? { next: steps } : {}) } }
   showInputFields(object, (path && commandAt(program, path)) || program)
   const command = path || app.command

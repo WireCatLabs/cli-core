@@ -147,6 +147,7 @@ export const execution = (
               reason: "output.too-large",
               max_bytes: maxOutputBytes,
               emitted_bytes: bytes,
+              needed_bytes: bytes + size,
               partial_output: bytes > 0,
             },
           )
