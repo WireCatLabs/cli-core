@@ -36,7 +36,7 @@ describe("first-run configuration", () => {
     expect(result.limit).toBe(9)
     expect(result.commandTimeoutMs).toBe(1000)
     expect(existsSync(result.configPath)).toBe(true)
-    expect(JSON.parse(readFileSync(result.configPath, "utf8"))).toEqual(DEFAULT_CONFIG)
+    expect(JSON.parse(readFileSync(result.configPath, "utf8"))).toMatchObject(DEFAULT_CONFIG)
     writeFileSync(result.configPath, "invalid JSON")
     expect(() => resolveSettings({}, { env: { APP_CONFIG_DIR: directory } })).toThrow("not valid JSON")
   })

@@ -381,6 +381,9 @@ describe("the configuration file", () => {
   })
 })
 
+const sections = (whole: Record<string, unknown>) =>
+  Object.fromEntries(Object.entries(whole).filter(([name]) => name !== "defaults"))
+
 describe("changing a setting", () => {
   const path = () => join(configDir, "config.json")
   const file = () => JSON.parse(readFileSync(path(), "utf8"))
@@ -388,17 +391,18 @@ describe("changing a setting", () => {
   it("writes a profile's setting as the type the file holds, and removes it again", () => {
     expect(changeSetting(path(), { profile: "work", setting: "limit", value: "50" })).toBe(50)
     changeSetting(path(), { profile: "work", setting: "record", value: "true" })
-    expect(file()).toEqual({ profiles: { work: { limit: 50, record: true } } })
+    expect(sections(file())).toEqual({ profiles: { work: { limit: 50, record: true } } })
+    expect(file().defaults).toMatchObject({ limit: 20, record: true })
 
     changeSetting(path(), { profile: "work", setting: "limit", value: undefined })
     changeSetting(path(), { profile: "work", setting: "record", value: undefined })
-    expect(file()).toEqual({})
+    expect(sections(file())).toEqual({})
   })
 
   it("**writes one permission key at a time**, and refuses a level that is not one", () => {
     changeSetting(path(), { profile: "work", setting: "permissions.messages.delete", value: "allow" })
     changeSetting(path(), { profile: "work", setting: "permissions.contacts", value: "readonly" })
-    expect(file()).toEqual({
+    expect(sections(file())).toEqual({
       profiles: { work: { permissions: { "messages.delete": "allow", contacts: "readonly" } } },
     })
     expect(() => changeSetting(path(), { profile: "work", setting: "permissions.contacts", value: "maybe" })).toThrow(
@@ -411,7 +415,7 @@ describe("changing a setting", () => {
 
   it("writes to `defaults` when no profile is named", () => {
     changeSetting(path(), { profile: undefined, setting: "keep_runs_for_days", value: "7" })
-    expect(file().defaults).toEqual({ keep_runs_for_days: 7 })
+    expect(file().defaults).toMatchObject({ keep_runs_for_days: 7 })
   })
 
   it("**refuses a value the reader would refuse, and leaves the file as it was**", () => {
@@ -467,7 +471,7 @@ describe("a bot's settings", () => {
     const path = join(configDir, "config.json")
     changeSetting(path, { profile: "sales", setting: "sends_per_hour", value: "200", kind: "bot" })
     changeSetting(path, { profile: undefined, setting: "read_other_bots", value: "true", kind: "bot" })
-    expect(JSON.parse(readFileSync(path, "utf8"))).toEqual({
+    expect(sections(JSON.parse(readFileSync(path, "utf8")))).toEqual({
       profiles: {},
       bot: { defaults: { read_other_bots: true }, profiles: { sales: { sends_per_hour: 200 } } },
     })
@@ -475,7 +479,7 @@ describe("a bot's settings", () => {
 
     changeSetting(path, { profile: "sales", setting: "sends_per_hour", value: undefined, kind: "bot" })
     changeSetting(path, { profile: undefined, setting: "read_other_bots", value: undefined, kind: "bot" })
-    expect(JSON.parse(readFileSync(path, "utf8"))).toEqual({ profiles: {} })
+    expect(sections(JSON.parse(readFileSync(path, "utf8")))).toEqual({ profiles: {} })
   })
 })
 

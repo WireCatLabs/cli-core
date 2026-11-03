@@ -1024,6 +1024,12 @@
     ],
     "$schema": "http://json-schema.org/draft-07/schema#"
   },
+  "config migrate": {
+    "type": "object",
+    "properties": {},
+    "required": [],
+    "$schema": "http://json-schema.org/draft-07/schema#"
+  },
   "config repair": {
     "type": "object",
     "properties": {
