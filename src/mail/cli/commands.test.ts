@@ -1,13 +1,13 @@
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { captureStreams } from "@wirecat/cli-base"
+import { CliError, captureStreams } from "@wirecat/cli-base"
 import { describe, expect, it } from "vitest"
 import { type ProgramDefinition, run } from "../../cli/program.js"
 import { settingsFor } from "../../cli/settings.js"
 import type { AttachmentInput, EmailInput } from "../../store/index.js"
 import { type AccountKey, openStore } from "../../store/store.js"
-import { mailReadCommands } from "./index.js"
+import { type MailReads, mailReadCommands } from "./index.js"
 
 const app = {
   command: "mail",
@@ -54,7 +54,18 @@ const email = (externalId: string, day: number, fields: Partial<EmailInput>): Em
   ...fields,
 })
 
-const seeded = async (storeFails?: Error) => {
+const tooLarge = (): AttachmentInput => ({
+  ...bill(""),
+  text: null,
+  extraction: "failed",
+  extractor: null,
+  extractionError: "too-large",
+})
+
+const seeded = async (
+  storeFails?: Error,
+  { skipped, whole }: { skipped?: boolean; whole?: MailReads["whole"] } = {},
+) => {
   const root = mkdtempSync(join(tmpdir(), "mail-cli-"))
   const env = { MAIL_CONFIG_DIR: join(root, "config"), MAIL_STATE_DIR: join(root, "state") }
   mkdirSync(env.MAIL_CONFIG_DIR, { recursive: true })
@@ -67,7 +78,7 @@ const seeded = async (storeFails?: Error) => {
     externalId: "thread-bill",
     now: at(20),
     emails: [
-      email("<bill@example.com>", 3, { attachments: [bill("Итого 85,93 € к оплате")] }),
+      email("<bill@example.com>", 3, { attachments: [skipped ? tooLarge() : bill("Итого 85,93 € к оплате")] }),
       email("<paid@example.com>", 4, {
         subject: "Re: Счёт за октябрь",
         from: { address: MINE.account, name: "Me" },
@@ -108,6 +119,7 @@ const seeded = async (storeFails?: Error) => {
     commands: () =>
       mailReadCommands({
         app,
+        ...(whole ? { whole } : {}),
         read: async (_command, work) => {
           const opened = await openStore({ path })
           const failing = storeFails && {
@@ -183,6 +195,42 @@ describe("mail read commands", () => {
     )
     expect(theirs.code).not.toBe(0)
     expect(theirs.err).toContain("not mail of this profile")
+  })
+
+  it("reads again an email whose attachment the sync's limit left, and shows the stored one when that fails", async () => {
+    const asked: string[] = []
+    const { json } = await seeded(undefined, {
+      skipped: true,
+      whole: async (_command, store, mailbox, emailId) => {
+        asked.push(emailId)
+        const { id } = await store.accounts.storedAccount(mailbox)
+        await store.mail.saveThread({
+          accountId: id,
+          externalId: "thread-bill",
+          now: at(21),
+          emails: [email("<bill@example.com>", 3, { attachments: [bill("Итого 85,93 € к оплате")] })],
+        })
+      },
+    })
+    expect((await json("messages", "show", BILL)).item.attachments[0]).toMatchObject({ text: "Итого 85,93 € к оплате" })
+    expect(asked).toEqual(["<bill@example.com>"])
+    await json("messages", "show", BILL)
+    expect(asked).toHaveLength(1)
+
+    const offline = await seeded(undefined, {
+      skipped: true,
+      whole: async () => {
+        throw new CliError("network_error", "no network")
+      },
+    })
+    const answer = await offline.mail("messages", "show", BILL, "--json")
+    expect(answer.code).toBe(10)
+    const stored = JSON.parse(answer.out)
+    expect(stored.item.attachments[0]).toMatchObject({ extraction: "too-large" })
+    expect(stored.meta).toMatchObject({
+      complete: false,
+      issues: [{ code: "network_error", reason: "mail.attachments-unread", source: "server" }],
+    })
   })
 
   it("lists threads newest first, filters them by their fields, and shows one oldest first", async () => {

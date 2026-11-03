@@ -5,7 +5,7 @@ import { Command, InvalidArgumentError } from "commander"
 import * as v from "valibot"
 import { answerEntity } from "../../cli/answer-entity.js"
 import { environmentOf, outputFor } from "../../cli/context.js"
-import { LOCAL_READ, REMOTE_READ } from "../../cli/effects.js"
+import { FETCH, LOCAL_READ, REMOTE_READ } from "../../cli/effects.js"
 import { itemOf, listOf, renderAnswer, snakeKeys } from "../../cli/envelope.js"
 import { listQuery, typedQuery, withQuery } from "../../cli/list-query.js"
 import { messagesAnswer, offsetOf, shownOf } from "../../cli/messenger/search-answers.js"
@@ -13,6 +13,7 @@ import { backendRequest, noteServer, serverSearchOptions } from "../../cli/messe
 import { positiveCount } from "../../cli/paging.js"
 import { formatReference, parseReference } from "../../domain/references.js"
 import { count, reference, text, time, untrusted } from "../../entities/fields.js"
+import { POLICY_SKIPS } from "../../mail/attachments.js"
 import type { ShownMail } from "../../mail/read.js"
 import { attachmentsText, hitText, searchMail, showMail, withAttachmentText } from "../../mail/read.js"
 import { type MailServerAccess, searchMailServer } from "../../mail/server-search.js"
@@ -58,6 +59,20 @@ export interface MailReads {
   mount?: MailMount
   /** How `--server-time` help states its default when a provider's own differs (`MailServerAccess.timeMs`). */
   serverTimeDefault?: string
+  /**
+   * Reads one stored email again from the mailbox's server, every attachment whatever its size (`readEmailWhole`).
+   * With it, `messages show` reads an email whose attachment a sync's policy left unread before it answers.
+   */
+  whole?: (command: Command, store: MessageStore, mailbox: AccountKey, emailId: string) => Promise<void>
+}
+
+/** The shown email whose attachment a sync's policy left without text, if any. */
+const policySkipped = (emails: ShownMail[]): ShownMail | undefined => {
+  const shown = emails.find((email) => email.anchor) ?? emails[0]
+  const skips: readonly string[] = POLICY_SKIPS
+  return shown?.attachments?.some((file) => skips.includes(String((file as { extraction?: unknown }).extraction)))
+    ? shown
+    : undefined
 }
 
 const DEFAULT_LIMIT = 20
@@ -261,7 +276,7 @@ const shownText = (emails: ShownMail[]) =>
 const messagesCommand = (mail: MailReads): Command => {
   const messages = new Command("messages").summary("read stored emails").description("read the emails sync stored")
   annotate(messages.command("show"), {
-    effects: LOCAL_READ,
+    effects: mail.whole ? FETCH : LOCAL_READ,
     examples: [
       `${mail.app.command} personal messages show 'msg:email/me%40example.com/thread-1/%3Cid%40example.com%3E'`,
       `${mail.app.command} personal messages show 'msg:email/me%40example.com/thread-1/%3Cid%40example.com%3E' --before-n 2`,
@@ -278,8 +293,20 @@ const messagesCommand = (mail: MailReads): Command => {
     .action(async function (this: Command, reference: string) {
       const { beforeN, afterN } = this.opts<{ beforeN: number; afterN: number }>()
       const full = detailOf(this) === "full"
+      let unread: { code: ErrorCode; reason: string; source: string } | undefined
       const emails = await mail.read(this, async (store, mailbox) => {
         threadOf(mailbox, reference)
+        const shown = await showMail(store, reference, { before: beforeN, after: afterN, full })
+        const skipped = mail.whole ? policySkipped(shown) : undefined
+        if (!skipped || !mail.whole) return shown
+        try {
+          await mail.whole(this, store, mailbox, skipped.id)
+        } catch (error) {
+          if (!(error instanceof CliError)) throw error
+          // The stored email is still worth showing; the answer says its attachments were not read.
+          unread = { code: error.code, reason: "mail.attachments-unread", source: "server" }
+          return shown
+        }
         return showMail(store, reference, { before: beforeN, after: afterN, full })
       })
       const output = outputFor(this)
@@ -289,7 +316,10 @@ const messagesCommand = (mail: MailReads): Command => {
         output,
         beforeN || afterN
           ? listOf("messages show", { items: shown, limit: Math.max(1, shown.length), has_more: false })
-          : itemOf(shown.find((_, at) => emails[at]?.anchor) ?? shown[0]),
+          : itemOf(
+              shown.find((_, at) => emails[at]?.anchor) ?? shown[0],
+              unread ? { meta: { complete: false, issues: [unread] } } : undefined,
+            ),
         () => shownText(emails),
       )
     })
