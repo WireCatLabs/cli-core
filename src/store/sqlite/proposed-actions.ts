@@ -293,38 +293,47 @@ export const proposalOperationsOver = (context: StoreContext): ProposalOperation
   }
 }
 
+/** Stored kinds a generic action path never decides: each has its own review, which checks what the batch cites. */
+const DEDICATED_REVIEW: Record<string, { what: string; reason: string }> = {
+  [MEETING_FINDINGS_KIND]: { what: "meeting findings", reason: "meeting-findings.dedicated-review" },
+  [EVIDENCE_FINDINGS_KIND]: { what: "evidence findings", reason: "evidence-findings.dedicated-review" },
+  [MAIL_FINDINGS_KIND]: { what: "mail findings", reason: "mail-findings.dedicated-review" },
+}
+
+/** Refuses a findings batch on a generic action path: approving one as an action would skip its own checks. */
+export const assertGenericAction = (kind: string): void => {
+  const dedicated = DEDICATED_REVIEW[kind]
+  if (dedicated)
+    throw new CliError("validation_error", `review ${dedicated.what} through the dedicated findings command`, {
+      reason: dedicated.reason,
+    })
+}
+
 export const proposedActionsStoreOver = (context: StoreContext): ProposedActionsStore => {
   const operations = proposalOperationsOver(context)
   const generic = (id: string) => {
-    const kind = operations.get(id).kind
-    if (kind === MEETING_FINDINGS_KIND)
-      throw new CliError("validation_error", "review meeting findings through the dedicated findings command", {
-        reason: "meeting-findings.dedicated-review",
-      })
-    if (kind === EVIDENCE_FINDINGS_KIND)
-      throw new CliError("validation_error", "review evidence findings through the dedicated findings command", {
-        reason: "evidence-findings.dedicated-review",
-      })
+    const { kind } = operations.get(id)
+    assertGenericAction(kind)
+    return kind
   }
   return {
     propose: async (input) => {
-      if (input.kind === MEETING_FINDINGS_KIND)
-        throw new CliError("validation_error", "stage meeting findings through the dedicated findings command")
-      if (input.kind === EVIDENCE_FINDINGS_KIND)
-        throw new CliError("validation_error", "stage evidence findings through the dedicated findings command")
+      const dedicated = DEDICATED_REVIEW[input.kind]
+      if (dedicated)
+        throw new CliError("validation_error", `stage ${dedicated.what} through the dedicated findings command`)
       return operations.propose(input)
     },
     get: async (id) => operations.get(id),
     pending: async (options) => operations.pending(options),
     list: async (options) => operations.list(options),
     approve: async (id, by, result) => {
-      generic(id)
-      assertMayDecide({ id, proposedBy: operations.proposer(id) }, by, context.decisions)
+      const kind = generic(id)
+      assertMayDecide({ id, kind, proposedBy: operations.proposer(id) }, by, context.decisions)
       return operations.approve(id, result, deciderAuthor(by))
     },
     reject: async (id, by, reason) => {
-      generic(id)
-      assertMayDecide({ id, proposedBy: operations.proposer(id) }, by, context.decisions)
+      const kind = generic(id)
+      assertMayDecide({ id, kind, proposedBy: operations.proposer(id) }, by, context.decisions)
       return operations.reject(id, deciderAuthor(by), reason?.trim() ? { reason: reason.trim() } : undefined)
     },
     executed: async (id, result) => {
