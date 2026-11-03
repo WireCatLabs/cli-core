@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs"
 import { CliError, configFilePath, resolvePaths, saveConfigFile } from "@wirecat/cli-base"
 import * as v from "valibot"
-import { AI_ENTRIES, type AISettings, resolveAISettings } from "../analysis/settings.js"
+import { AI_DEFAULTS, AI_ENTRIES, type AISettings, resolveAISettings } from "../analysis/settings.js"
 import { parseDuration } from "../domain/duration.js"
 import { DEFAULT_RERANK_MODEL, RERANK_MODELS } from "../embeddings/models.js"
 import { type AppIdentity, envName, readOnlyLockOf } from "../ports/app.js"
@@ -37,6 +37,7 @@ import { DEFAULT_CONFIG, ensureDefaultConfig } from "./default-config.js"
 import { profilesHere } from "./messenger/accounts.js"
 import type { CommandPermissions } from "./permission-keys.js"
 import { usableProfileName } from "./profile.js"
+import { type DeclaredSetting, withSettingDefaults } from "./setting-defaults.js"
 import { permissionCeiling } from "./setup-answers.js"
 
 const DEFAULT_LIMIT = DEFAULT_CONFIG.defaults.limit
@@ -186,6 +187,71 @@ const SHARED_DEFAULTS_ONLY = {
 }
 
 /**
+ * Written into the file's `defaults` at the value the code applies when the file says nothing (WC-CMD-30). Left out:
+ * objects, and settings whose absence means something no value says (`timeout_ms`, `color`, `requests_per_minute`,
+ * the embedding model), since writing any value would change what they do.
+ */
+const SHARED_SETTINGS: readonly DeclaredSetting[] = [
+  { key: "limit", default: DEFAULT_LIMIT, description: "how many items a list shows at once" },
+  { key: "keep_runs_for_days", default: DEFAULT_KEEP_RUNS_FOR_DAYS, description: "days a run is kept" },
+  {
+    key: "sends_per_hour",
+    default: DEFAULT_SENDS_PER_HOUR,
+    description: "the most messages an account sends in an hour; a bot has none unless its section sets one",
+  },
+  { key: "update_check", default: true, description: "check once a day for a newer version" },
+  {
+    key: "skill_hint",
+    default: true,
+    description: "tell an agent once a day that `skill install` would give it this tool's guide",
+  },
+  { key: "record", default: true, description: "keep every run in runs list; false keeps failed runs only" },
+  {
+    key: "record_input",
+    default: true,
+    description: 'keep what was typed in a run\'s command line: true, false, or "failed" for failed runs only',
+  },
+  {
+    key: "keep_successful_runs_for_days",
+    default: KEEP_SUCCESSFUL_RUNS_FOR_DAYS,
+    description: "days a successful run is kept",
+  },
+  { key: "runs_size_limit_mb", default: RUNS_SIZE_LIMIT_MB, description: "the most megabytes all runs may take" },
+  { key: "sender_colors", default: false, description: "color each sender's name in a conversation" },
+  { key: "search_catch_up", default: false, description: "prepare local search after a gaps repair" },
+  {
+    key: "history_dialog_days",
+    default: DEFAULT_HISTORY_LIMITS.dialogDays,
+    description: "days of a one-to-one chat's pushed history the store keeps",
+  },
+  {
+    key: "history_group_days",
+    default: DEFAULT_HISTORY_LIMITS.groupDays,
+    description: "days of a group's pushed history the store keeps",
+  },
+  {
+    key: "history_group_members_max",
+    default: DEFAULT_HISTORY_LIMITS.groupMembersMax,
+    description: "a group with more people than this keeps no pushed history",
+  },
+  {
+    key: "picture_search",
+    default: false,
+    description: "search and images embed read the pictures themselves, with a model on this computer",
+  },
+  {
+    key: "search_reranker",
+    default: DEFAULT_RERANK_MODEL,
+    description: "the reranker that orders search's first hits, or off",
+  },
+  {
+    key: "embedding_provider",
+    default: AI_DEFAULTS.embeddingProvider as string,
+    description: "local or openai: what turns text into vectors for search by meaning",
+  },
+]
+
+/**
  * **What one messenger adds to the file**, merged into the one strict schema — a field an adapter
  * reads but the schema did not know would be refused as unknown. Each entry must be optional.
  */
@@ -197,6 +263,8 @@ export interface SettingsExtension<T extends object = Record<never, never>> {
   profile?: v.ObjectEntries
   /** For the whole program only, never per profile. */
   defaults?: v.ObjectEntries
+  /** Its own scalar settings, written into the file's `defaults` beside the shared ones (WC-CMD-30). */
+  settings?: readonly DeclaredSetting[]
   /** Profiles this messenger keeps in files of its own, beyond the config file and the remembered accounts. */
   profiles?: (env: NodeJS.ProcessEnv) => string[]
   /**
@@ -456,6 +524,20 @@ export const settingsFor = <T extends object = Record<never, never>>(
       (app.sends === true && setting === "sends_per_hour"),
   )
 
+  const readSchema = extension.schema ?? schema
+  // An app with a schema of its own may refuse a shared key in `defaults`; writing it would break that file.
+  const declaredSettings: DeclaredSetting[] = [...SHARED_SETTINGS, ...(extension.settings ?? [])]
+    .filter(
+      ({ key, default: value }) =>
+        allSettings.includes(key) && v.safeParse(readSchema, { defaults: { [key]: value } }).success,
+    )
+    .map((setting) => ({ ...setting, key: `defaults.${setting.key}` }))
+  const withDefaults = (raw: unknown, except: readonly string[] = []) =>
+    withSettingDefaults(
+      raw,
+      declaredSettings.filter(({ key }) => !except.includes(key)),
+    )
+
   const PROFILE = envName(app, "PROFILE")
   const PROFILE_LOCK = envName(app, "PROFILE_LOCK")
   const TIMEOUT = envName(app, "TIMEOUT")
@@ -464,7 +546,6 @@ export const settingsFor = <T extends object = Record<never, never>>(
   const configPathFor = ({ env = process.env, configDir }: ResolveOptions) =>
     configFilePath(configDir ?? resolvePaths({ appName: app.appName, prefix: app.envPrefix, env }).config)
 
-  const readSchema = extension.schema ?? schema
   const context = (file: string) => ({ file, tool: app.command })
 
   /** The file with every problem found; what loads is the file without the settings they name. */
@@ -516,7 +597,7 @@ export const settingsFor = <T extends object = Record<never, never>>(
     const env = options.env ?? process.env
     const configPath = configPathFor(options)
     try {
-      if (!options.readOnly) ensureDefaultConfig(configPath)
+      if (!options.readOnly) ensureDefaultConfig(configPath, withDefaults(DEFAULT_CONFIG).config)
     } catch (error) {
       throw new CliError("configuration_error", error instanceof Error ? error.message : String(error))
     }
@@ -770,7 +851,7 @@ export const settingsFor = <T extends object = Record<never, never>>(
         )
       if (!known && valueAt(raw, at) === undefined)
         throw new CliError("validation_error", `no setting called "${setting}" — one of: ${allSettings.join(", ")}`)
-      saveConfigFile(path, withoutPath(raw, at).config)
+      saveConfigFile(path, withDefaults(withoutPath(raw, at).config, [at.join(".")]).config)
       return null
     }
 
@@ -796,14 +877,25 @@ export const settingsFor = <T extends object = Record<never, never>>(
     )
     if (added) throw new CliError("validation_error", `${setting} cannot be "${value}": ${added.what}`)
     const checked = v.safeParse(readSchema, changed)
-    saveConfigFile(path, checked.success ? checked.output : changed)
+    saveConfigFile(path, withDefaults(checked.success ? checked.output : changed).config)
     return valueAt(checked.success ? checked.output : changed, at) ?? null
+  }
+
+  /** Each declared setting the file lacks, at its default, on the file as written; the keys added. */
+  const migrate = (path: string): string[] => {
+    const read = readConfigFile(path)
+    if ("issue" in read) throw new CliError("configuration_error", issueMessage([read.issue]))
+    const { config, added } = withDefaults(read.raw)
+    if (added.length > 0) saveConfigFile(path, config)
+    return added
   }
 
   return {
     resolveSettings,
     configuredProfiles,
     changeSetting,
+    migrate,
+    declaredSettings,
     allSettings,
     defaultsOnlyKeys,
     schema,

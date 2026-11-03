@@ -68,6 +68,7 @@ export const configCommand = (
     const context = baseContext(this, (flags, options) =>
       config.resolveSettings(flags, {
         ...options,
+        readOnly: true,
         needsProfile: false,
         withIssues: true,
         ...(bot ? { kind: "bot" } : {}),
@@ -91,7 +92,13 @@ export const configCommand = (
         paths_overridden: overridden,
         settings: [...config.allSettings, "command_timeout_ms"]
           .filter((setting) => bot || setting !== "read_other_bots")
-          .map((setting) => sourced(settings, setting)),
+          .map((setting) => {
+            const declared = config.declaredSettings.find(({ key }) => key === `defaults.${setting}`)
+            return {
+              ...sourced(settings, setting),
+              ...(declared ? { default: declared.default, description: declared.description } : {}),
+            }
+          }),
         store_settings: await storeSettings(env),
       }),
     )
@@ -222,9 +229,29 @@ export const configCommand = (
     })
   }
 
+  command.addCommand(migrateCommand(app, config))
   command.addCommand(repairCommand(app, config))
   return command
 }
+
+const migrateCommand = (app: AppIdentity, config: Configuration): Command =>
+  profileFree(
+    grantsAuthority(
+      annotate(new Command("migrate"), { effects: LOCAL_WRITE, examples: [`${app.command} config migrate`] }),
+    ),
+  )
+    .description("write each setting the file lacks at its default, keeping yours")
+    .action(function (this: Command) {
+      const context = baseContext(this, (flags, options) =>
+        config.resolveSettings(flags, { ...options, needsProfile: false, withIssues: true }),
+      )
+      const file = context.settings.configPath
+      const added = config.migrate(file)
+      renderAnswer(this, context, itemOf({ config_file: file, added }))
+      context.renderer.note(
+        added.length > 0 ? `added ${added.join(", ")} to ${file}` : `${file} already has every setting`,
+      )
+    })
 
 /**
  * Mends JSON syntax with one reading and keeps every value (NEED-2178): no network, no AI, since the file may hold

@@ -25,7 +25,9 @@ const program = () => {
 describe("the permission keys a file may name", () => {
   it("**lists every write key the code checks**, so a new write cannot be refused as unknown", () => {
     const written = sources(join(import.meta.dirname, ".."))
-      .flatMap((path) => [...readFileSync(path, "utf8").matchAll(/\b(?:key|writes): "([a-z][a-z.-]*)"/g)])
+      .flatMap((path) => [
+        ...readFileSync(path, "utf8").matchAll(/\b(?:key|writes): "([a-z][a-z.-]*)"(?!,?\s*default:)/g),
+      ])
       .map((match) => match[1] as string)
     expect(written.length).toBeGreaterThan(0)
     expect(written.filter((key) => !WRITE_KEYS.includes(key))).toEqual([])

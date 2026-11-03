@@ -411,7 +411,7 @@ describe("changing a setting", () => {
 
   it("writes to `defaults` when no profile is named", () => {
     changeSetting(path(), { profile: undefined, setting: "keep_runs_for_days", value: "7" })
-    expect(file().defaults).toEqual({ keep_runs_for_days: 7 })
+    expect(file().defaults).toMatchObject({ keep_runs_for_days: 7 })
   })
 
   it("**refuses a value the reader would refuse, and leaves the file as it was**", () => {

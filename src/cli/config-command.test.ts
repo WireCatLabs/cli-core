@@ -132,7 +132,7 @@ describe("config", () => {
     expect(shown.answer.profiles).toEqual(["work"])
     expect(shown.answer.settings).toEqual(
       expect.arrayContaining([
-        { setting: "limit", value: 5, from: "config file" },
+        expect.objectContaining({ setting: "limit", value: 5, from: "config file", default: 20 }),
         { setting: "region", value: "eu", from: "config file" },
       ]),
     )
@@ -468,5 +468,92 @@ describe("config", () => {
       const refused = await repairCall(["config", "show"], setUp(BROKEN).env)
       expect(refused.out).toContain("`chat config repair` repairs it")
     })
+  })
+})
+
+describe("every setting in the file (WC-CMD-30)", () => {
+  const setUp = (text?: string) => {
+    const root = mkdtempSync(join(tmpdir(), "config-"))
+    const env = { CHAT_CONFIG_DIR: join(root, "config"), CHAT_STATE_DIR: join(root, "state") }
+    const file = join(root, "config", "config.json")
+    if (text !== undefined) {
+      mkdirSync(join(root, "config"), { recursive: true })
+      writeFileSync(file, text)
+    }
+    return { env, file, read: () => readFileSync(file, "utf8") }
+  }
+  const declared = config.declaredSettings.map(({ key }) => key.replace("defaults.", ""))
+
+  it("**a first run writes every declared setting at its default**, and a CLI that is not a messenger gets none of a messenger's", async () => {
+    const { env, read } = setUp()
+    expect((await call(["work", "config", "set", "region", "eu"], env)).code).toBe(0)
+    const written = JSON.parse(read())
+    expect(Object.keys(written.defaults)).toEqual(expect.arrayContaining(declared))
+    expect(written.defaults).toMatchObject({ limit: 20, record: true, search_reranker: "mmarco", sender_colors: false })
+
+    const tool = settingsFor({ ...app, messenger: false })
+    const keys = tool.declaredSettings.map(({ key }) => key)
+    expect(keys).toContain("defaults.keep_successful_runs_for_days")
+    expect(keys).not.toContain("defaults.sender_colors")
+  })
+
+  it("**config show does not write the file**, and gives each declared setting its default and what it does", async () => {
+    const missing = setUp()
+    expect((await call(["config", "show", "--json"], missing.env)).code).toBe(0)
+    expect(existsSync(missing.file)).toBe(false)
+
+    const text = '{"defaults":{"limit":7}}'
+    const { env, read } = setUp(text)
+    const rows = (await call(["config", "show", "--json"], env)).answer.settings
+    expect(read()).toBe(text)
+    expect(rows.find((row: { setting: string }) => row.setting === "keep_runs_for_days")).toMatchObject({
+      value: 30,
+      default: 30,
+      from: "default",
+      description: "days a run is kept",
+    })
+  })
+
+  it("**config migrate adds what is missing and keeps values, order and unknown keys**, and a second run changes nothing", async () => {
+    const { env, read } = setUp(
+      JSON.stringify({ profiles: { work: { limit: 5 } }, defaults: { limit: 7, region_old: "eu" }, custom: 1 }),
+    )
+    const first = await call(["config", "migrate", "--json"], env)
+    expect(first.code).toBe(0)
+    expect(first.answer.added).toEqual(declared.filter((key) => key !== "limit").map((key) => `defaults.${key}`))
+    const migrated = JSON.parse(read())
+    expect(Object.keys(migrated)).toEqual(["profiles", "defaults", "custom"])
+    expect(Object.keys(migrated.defaults).slice(0, 2)).toEqual(["limit", "region_old"])
+    expect(migrated.defaults).toMatchObject({ limit: 7, region_old: "eu", keep_runs_for_days: 30 })
+    expect(migrated.profiles).toEqual({ work: { limit: 5 } })
+
+    const before = read()
+    const again = await call(["config", "migrate", "--json"], env)
+    expect(again.answer.added).toEqual([])
+    expect(read()).toBe(before)
+  })
+
+  it("**creates no section**: a file without defaults gets nothing from migrate", async () => {
+    const text = '{"profiles":{"work":{"limit":5}}}'
+    const { env, read } = setUp(text)
+    expect((await call(["config", "migrate", "--json"], env)).answer.added).toEqual([])
+    expect(read()).toBe(text)
+  })
+
+  it("**a removed default stays removed**, while the other missing ones are added", async () => {
+    const { env, read } = setUp('{"defaults":{"limit":7,"record":false}}')
+    expect((await call(["config", "unset", "limit", "--defaults"], env)).code).toBe(0)
+    const defaults = JSON.parse(read()).defaults
+    expect(defaults).not.toHaveProperty("limit")
+    expect(defaults).toHaveProperty("keep_runs_for_days", 30)
+  })
+
+  it("**an app with a schema of its own gets only the settings that schema takes**", () => {
+    const schema = v.strictObject({
+      profiles: v.optional(v.record(v.string(), v.object({})), {}),
+      defaults: v.optional(v.strictObject({ limit: v.optional(v.number()), record: v.optional(v.boolean()) })),
+    })
+    const own = settingsFor({ ...app, messenger: false }, { schema })
+    expect(own.declaredSettings.map(({ key }) => key)).toEqual(["defaults.limit", "defaults.record"])
   })
 })
