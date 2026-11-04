@@ -9,6 +9,12 @@ shape of this file.
 
 ### Changed — may break callers
 
+- **cli-core accepts `@wirecat/cli-base` 0.76.0 and 0.77.0 (peer range `>=0.75.0 <0.78.0`) and builds with
+  0.77.0**, whose vocabulary has the `schedule` resource and the `agent`, `command` and `exec` verbs. The command
+  lint now checks `schedule agent|command|exec` instead of skipping them in `lint/baseline`. A CLI that mounts
+  `schedule` (tg, max, wa, gcal, mail, memo) removes the same entries from its own baseline when it bumps cli-base
+  to 0.77.0: they are stale there and fail its lint. 0.76.0 adds the `conflict` error code; nothing here uses it yet.
+
 - **`search all` finds records for a question typed as a sentence.** When the text is a question in natural language
   and not `exact`, messages and mail go through discovery (as `search messages --discover`), and notes and calendar
   events search any of the question's content words, ranked by the store. Before, every word had to be in one record,
