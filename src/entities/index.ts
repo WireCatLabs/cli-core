@@ -79,6 +79,7 @@ import {
   topicIcon,
 } from "./list-results.js"
 import { messageEvent, serveSummary, watchedMessage, watchItem } from "./listener.js"
+import { mailCounts } from "./mail-counts.js"
 import { mailFindings } from "./mail-findings.js"
 import { mediaArchive, mediaArchiveCheck, mediaArchiveMove, mediaArchiveTimer } from "./media-archive.js"
 import {
@@ -277,6 +278,7 @@ export {
   job,
   joinRequest,
   linkedPerson,
+  mailCounts,
   mediaArchive,
   mediaArchiveCheck,
   mediaArchiveMove,
@@ -641,6 +643,7 @@ export const ENTITIES = {
   message_counts: messageCounts,
   response_times: responseTimes,
   waiting_chats: waitingChats,
+  mail_counts: mailCounts,
   ranking,
   admin_report: adminReport,
   analysis_consent: analysisConsent,

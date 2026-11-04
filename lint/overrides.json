@@ -19,5 +19,12 @@
     "reason": "WireCat Desktop's Analytics page asks for it (spec A3, 2026-11-02): whose replies are timed, the owner's or the other side's; a measure, not a filter, so not a query field; it goes into cli-base's vocabulary with role target",
     "owner": "@leemour",
     "review_after": "2026-12-01"
+  },
+  {
+    "rule": "filter-flag",
+    "target": "stats tasks show --chat",
+    "reason": "stats tasks show took a query on 2026-11-03 and --chat predates it; tg and max tests and tg's docs call it, so it stays until they move to -- chat:<chat>. Awaits the owner's review in the pull request that added the query",
+    "owner": "@leemour",
+    "review_after": "2026-12-01"
   }
 ]

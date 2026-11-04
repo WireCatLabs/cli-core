@@ -1455,6 +1455,7 @@ const samples: Record<EntityName, unknown> = {
     rows: [{ key: "2026-11-01", replies: 2, median_ms: 90_000, p90_ms: 120_000, mean_ms: 90_000 }],
   },
   waiting_chats: { chats: 1, messages: 2, oldest_at: at, by_kind: { private: 1, group: 0 } },
+  mail_counts: { by: "day", received: 4, sent: 1, rows: [{ key: "2026-11-01", name: null, received: 4, sent: 1 }] },
   ranking: {
     target: "messages",
     measure: "reactions",
@@ -1618,7 +1619,23 @@ const samples: Record<EntityName, unknown> = {
   },
   task_stats: {
     open: 2,
-    rows: [{ chat: "chat:synthetic/1/2", open: 2, oldest_open_at: at, median_close_ms: null }],
+    created: 3,
+    closed: 1,
+    median_close_ms: 60_000,
+    mean_open_age_ms: 120_000,
+    rows: [
+      {
+        chat: "chat:synthetic/1/2",
+        key: "chat:synthetic/1/2",
+        name: "Book club",
+        open: 2,
+        created: 3,
+        closed: 1,
+        oldest_open_at: at,
+        median_close_ms: 60_000,
+        mean_open_age_ms: 120_000,
+      },
+    ],
   },
 }
 

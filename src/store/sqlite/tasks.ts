@@ -30,6 +30,7 @@ import { CLEAR_SUGGESTION, type CloseSuggestion, closeSuggestionOf, SUGGESTION_C
 import { type TaskCloseStore, taskCloseOver } from "./task-close-store.js"
 import { inboxKey, typedKey } from "./task-keys.js"
 import { type TaskPairs, taskPairsOver } from "./task-pairs.js"
+import { type TaskStats, taskStatsOver } from "./task-stats.js"
 import { taskRowOf, thingOf } from "./things.js"
 import { read, write } from "./transaction.js"
 import { recordTaskEvent, type WorkTasks, workTasksOver } from "./work-tasks.js"
@@ -43,6 +44,7 @@ export interface StoreTaskStore
     WorkTasks,
     TaskSimilarity,
     TaskPairs,
+    TaskStats,
     TaskCloseStore {
   /** The default list (or one an older build saved here) with the shared config file's `task_categories` edits. */
   categories(): Promise<readonly TaskCategory[]>
@@ -147,6 +149,7 @@ export const taskStoreOver = (context: StoreContext): StoreTaskStore => {
     ...workTasksOver(context),
     ...similarity,
     ...taskPairsOver(context, similarity),
+    ...taskStatsOver(context, (account) => inbox(account, false)),
     ...taskCloseOver(context),
     rowOf: (id) => taskRowOf(database, id),
     categories: async () => listOf(),

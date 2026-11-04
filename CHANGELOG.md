@@ -27,6 +27,17 @@ shape of this file.
   selection as `readMeetingStats`, reading `meetings` alone through `meetings_by_time`. `meetingCountsItem` and the
   `meeting_counts` entity are the answer, for zoom-cli's `stats meetings history`. A meeting with no end counts in
   `meetings`, not in `minutes`. `MeetingStatsStore` gains `meetingCounts`; only cli-core's own store implements it.
+- **`stats tasks show` counts by chat, meeting or project, over a period.** `--by meeting` keys a row by the meeting a
+  task came from (`meeting:<account>/<meeting>`); `--by project` reads the owner's project tasks, every project
+  (`project:<id>`). A query after `--` takes the task query's fields and `created` for the period: `created` counts
+  the tasks opened in it, `closed` those closed in it, `open` is always open now (`-- created>=30d`). The item gains
+  `created`, `closed`, `median_close_ms` and `mean_open_age_ms`; each row gains `key`, `name` (chat title, meeting
+  title, project name), `created`, `closed` and `mean_open_age_ms`. Rows of `--by chat` keep `chat`; the others have
+  none. `--timezone` places calendar days such as `created>=today`.
+- **`created:` in the project task query** (`PROJECT_TASK_FIELDS`), beside `closed:`: `created>=30d`.
+- **`mailStats` from `./mail`**: stored mail received and sent per calendar day, week (by its Monday) or sender, for
+  the `search mail` query, counts only and no search recorded; `mailStatsItem` turns it into the new `mail_counts`
+  entity, `{ by, received, sent, rows: [{ key, name, received, sent }] }`. By sender it counts received mail only.
 
 ## 0.563.0 — 03.11.2026
 
