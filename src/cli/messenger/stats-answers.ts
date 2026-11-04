@@ -13,8 +13,8 @@ import type { MessageStats } from "../../services/messages-search.js"
 import type { RankingFound } from "../../services/rankings.js"
 import type { ReplyTimes, Waiting } from "../../services/reply-stats.js"
 import type { RetentionService } from "../../services/retention.js"
+import type { TaskStats } from "../../services/task-stats.js"
 import type { AccountKey, RankedEvidence, StoredHit } from "../../store/store.js"
-import type { GroupStats } from "../../tasks/index.js"
 import { type ItemBody, itemOf, type ListBody, listOf } from "../envelope.js"
 import { nextStep } from "../steps.js"
 import { chatRef, contactRef } from "./chat-answers.js"
@@ -544,16 +544,28 @@ export const chatStatsAnswer = (
 /** Said where the store has kept no join, leave or other chat event for the chat: a 0 would read as nobody joined. */
 export const MEMBERS_UNRECORDED = "joins and leaves are not recorded for this chat yet, so they are not counted"
 
-/** `stats tasks show`, CLI and MCP alike. */
-export const taskStatsAnswer = (rows: GroupStats[], account: AccountKey): ItemBody<Of<"task_stats">> =>
+/** `stats tasks show`, CLI and MCP alike. A row of `--by chat` also names its chat as `chat`, as it always has. */
+export const taskStatsAnswer = (stats: TaskStats, account: AccountKey): ItemBody<Of<"task_stats">> =>
   itemOf({
-    open: rows.reduce((sum, row) => sum + row.open, 0),
-    rows: rows.map((row) => ({
-      chat: chatRef(account, row.group),
-      open: row.open,
-      oldest_open_at: row.oldestOpenAt?.toISOString() ?? null,
-      median_close_ms: row.medianCloseMs ?? null,
-    })),
+    open: stats.open,
+    created: stats.created,
+    closed: stats.closed,
+    median_close_ms: stats.medianCloseMs ?? null,
+    mean_open_age_ms: stats.meanOpenAgeMs ?? null,
+    rows: stats.rows.map((row) => {
+      const chat = stats.by === "chat" ? chatRef(account, row.group) : undefined
+      return {
+        ...(chat === undefined ? {} : { chat }),
+        key: chat ?? (stats.by === "project" ? `project:${row.group}` : row.group),
+        name: row.name,
+        open: row.open,
+        created: row.created,
+        closed: row.closed,
+        oldest_open_at: row.oldestOpenAt?.toISOString() ?? null,
+        median_close_ms: row.medianCloseMs ?? null,
+        mean_open_age_ms: row.meanOpenAgeMs ?? null,
+      }
+    }),
   })
 
 const replyFigures = (one: Pick<ReplyTimes, "replies" | "medianMs" | "p90Ms" | "meanMs">) => ({

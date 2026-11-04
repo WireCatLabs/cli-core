@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto"
 import { CliError } from "@wirecat/cli-base"
-import { calendarKey } from "../../domain/calendar.js"
+import { calendarKey, weekKey } from "../../domain/calendar.js"
 import {
   RETENTION_TOLERANCE,
   type RetentionOptions,
@@ -12,11 +12,6 @@ import { chatCompleteness } from "./completeness.js"
 import type { StoreContext } from "./open.js"
 
 const iso = (at: number) => new Date(at).toISOString()
-const week = (day: string) => {
-  const date = new Date(`${day}T00:00:00Z`)
-  date.setUTCDate(date.getUTCDate() - ((date.getUTCDay() + 6) % 7))
-  return date.toISOString().slice(0, 10)
-}
 export const retentionQuery = (
   context: StoreContext,
   accountPk: number,
@@ -62,7 +57,7 @@ export const retentionQuery = (
       pk = Number(row.pk),
       end = joinedAt + options.within
     const day = dayOf(joinedAt),
-      cohort = options.by === "week" ? week(day) : day
+      cohort = options.by === "week" ? weekKey(day) : day
     const absence = departureStatement.get(chatPk, Math.max(joinedAt, Number(row.first_seen_at)), options.cutoff, pk)
     const upper = absence ? Number(absence.observed_at) : null
     const positive = lastPositiveStatement.get(pk, upper ?? options.cutoff + 1)

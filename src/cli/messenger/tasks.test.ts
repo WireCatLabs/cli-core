@@ -9,7 +9,10 @@ import type { Message } from "../../domain/models.js"
 import { DEFAULT_TASK_CATEGORIES, withTaskCategory } from "../../domain/task-categories.js"
 import { ENTITIES, task, taskPair } from "../../entities/index.js"
 
+import { sampleMeeting } from "../../meetings/testing/index.js"
+import { createTaskFromMeeting } from "../../services/meeting-tasks.js"
 import { openCache } from "../../store/open.js"
+import { TASK_STATS_SQL } from "../../store/sqlite/task-stats.js"
 import { openStore } from "../../store/store.js"
 import { run } from "../program.js"
 import { settingsFor } from "../settings.js"
@@ -413,12 +416,99 @@ describe("tasks", () => {
 
     expect(json(await call("stats", "tasks", "show", "--json")).item).toEqual({
       open: 2,
-      rows: [{ chat: "chat:chat/500/7", open: 2, oldest_open_at: expect.any(String), median_close_ms: null }],
+      created: 2,
+      closed: 0,
+      median_close_ms: null,
+      mean_open_age_ms: expect.any(Number),
+      rows: [
+        {
+          chat: "chat:chat/500/7",
+          key: "chat:chat/500/7",
+          name: "Ana",
+          open: 2,
+          created: 2,
+          closed: 0,
+          oldest_open_at: expect.any(String),
+          median_close_ms: null,
+          mean_open_age_ms: expect.any(Number),
+        },
+      ],
     })
     expect(json(await call("stats", "tasks", "show", "--type", "question", "--json")).item.rows).toMatchObject([
       { chat: "chat:chat/500/7", open: 1 },
     ])
     expect((await call("stats", "tasks", "show", "--jsonl")).code).not.toBe(0)
+  })
+
+  it("**counts tasks by chat, meeting or project**, the period on opening and closing, open always now", async () => {
+    const call = await setup()
+    const promise = item(await call("tasks", "add", PROMISE, "--type", "promise", "--category", "money", "--json"))
+    const question = item(
+      await call("tasks", "add", "msg:chat/500/7/2", "--type", "question", "--category", "money", "--json"),
+    )
+    await call("tasks", "close", promise.id, "--as", "done", "--json")
+    const store = await openStore({ path: join(call.root, "m.db") })
+    const accountId = (await store.accounts.storedAccount(account)).id
+    const input = sampleMeeting()
+    input.meeting.accountId = accountId
+    const meeting = (await store.meetings.saveMeeting(input)).meeting.id
+    await createTaskFromMeeting(store, account, {
+      source: `meeting:${accountId}/${meeting}`,
+      kind: "request",
+      origin: "owner",
+    })
+    const project = await store.knowledge.addProject({ name: "Harbour", key: "HRB" })
+    await store.tasks.create({ project: "HRB", title: "Ship it", type: "feature" }, "owner")
+    await store.close()
+    const database = await openCache(join(call.root, "m.db"))
+    database.prepare("UPDATE tasks SET created_at = ? WHERE package_id = ?").run(Date.UTC(2020, 0, 1), question.id)
+    const searches = () => Number(database.prepare("SELECT count(*) AS n FROM searches").get()?.n)
+    const before = searches()
+    const stats = async (...argv: string[]) =>
+      item(await call("stats", "tasks", "show", "--no-record", "--json", ...argv))
+    const totals = ({ open, created, closed }: { open: number; created: number; closed: number }) => [
+      open,
+      created,
+      closed,
+    ]
+
+    const all = await stats()
+    expect(totals(all)).toEqual([2, 3, 1])
+    expect(all.rows[0]).toMatchObject({ key: "chat:chat/500/7", name: "Ana", open: 1, created: 2, closed: 1 })
+    expect(totals(await stats("--", "created>=30d"))).toEqual([2, 2, 1])
+    expect(totals(await stats("--", "created<2021-01-01"))).toEqual([2, 1, 0])
+    expect(await stats("--by", "meeting")).toMatchObject({
+      open: 1,
+      rows: [{ key: `meeting:${accountId}/${meeting}`, name: "Example planning", open: 1, created: 1, closed: 0 }],
+    })
+    const board = await stats("--by", "project")
+    expect(board.rows).toEqual([expect.objectContaining({ key: `project:${project.id}`, name: "Harbour", open: 1 })])
+    expect(board.rows[0]).not.toHaveProperty("chat")
+    expect(searches()).toBe(before)
+
+    const nested = await call("stats", "tasks", "show", "--json", "--", "kind:question OR created>=30d")
+    expect([nested.code, nested.stderr]).toEqual([2, expect.stringContaining("required term")])
+    expect((await call("stats", "tasks", "show", "--json", "--", "created_at>=30d")).code).toBe(2)
+    database.close()
+  })
+
+  it("reads no big table whole for stats tasks show", async () => {
+    const call = await setup()
+    const database = await openCache(join(call.root, "m.db"))
+    const plans = [
+      TASK_STATS_SQL.rows(false, ""),
+      TASK_STATS_SQL.rows(true, ""),
+      TASK_STATS_SQL.chat,
+      TASK_STATS_SQL.meeting,
+      TASK_STATS_SQL.project,
+    ].flatMap((sql) =>
+      database
+        .prepare(`EXPLAIN QUERY PLAN ${sql}`)
+        .all(...Array.from({ length: (sql.match(/\?/g) ?? []).length }, () => "[]"))
+        .map(({ detail }) => String(detail)),
+    )
+    expect(plans.filter((line) => /^SCAN (messages|emails|meetings)\b(?! USING)/.test(line))).toEqual([])
+    database.close()
   })
 
   it("refuses what is not this account's locator, an unknown type, and writes on a read-only profile", async () => {

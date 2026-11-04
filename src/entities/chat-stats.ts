@@ -65,16 +65,32 @@ export const chatStats = v.strictObject({
   ),
 })
 
-/** Open and closed tasks, one row per chat. */
+const ms = v.nullable(v.pipe(v.number(), v.minValue(0)))
+
+/**
+ * Open and closed tasks, one row per chat, meeting or project. `open` is open now; `created` and `closed` count the
+ * tasks opened and closed in the query's period, every task without one.
+ */
 export const taskStats = v.strictObject({
   /** Open tasks across every row. */
   open: count,
+  created: count,
+  closed: count,
+  median_close_ms: ms,
+  mean_open_age_ms: ms,
   rows: v.array(
     v.strictObject({
-      chat: reference,
+      /** Rows of `--by chat` only. */
+      chat: v.optional(reference),
+      /** The chat reference, `meeting:<account>/<meeting>` or `project:<id>`. */
+      key: text,
+      name: v.nullable(text),
       open: count,
+      created: count,
+      closed: count,
       oldest_open_at: v.nullable(time),
-      median_close_ms: v.nullable(v.pipe(v.number(), v.minValue(0))),
+      median_close_ms: ms,
+      mean_open_age_ms: ms,
     }),
   ),
 })

@@ -160,7 +160,7 @@
     "--by": {
       "value": "<grouping>",
       "meaning": "what to count by",
-      "note": "each command names its own groupings — stats messages show chat, sender, day or hour, and searches create the same for stats messages show --saved; stats chats show day or week, as a series beside its totals — so it differs on purpose (Help text rule 4)"
+      "note": "each command names its own groupings — stats messages show chat, sender, day or hour, and searches create the same for stats messages show --saved; stats chats show day or week, as a series beside its totals; stats tasks show chat, meeting or project — so it differs on purpose (Help text rule 4)"
     },
     "--calls": {
       "value": "<who>",
@@ -4636,7 +4636,13 @@
     "stats tasks show": {
       "in": "all",
       "options": {
+        "--by": {
+          "in": "all"
+        },
         "--chat": {
+          "in": "all"
+        },
+        "--timezone": {
           "in": "all"
         },
         "--type": {

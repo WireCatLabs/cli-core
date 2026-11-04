@@ -591,6 +591,30 @@ including a chat whose history the messenger pushed (WhatsApp): it has messages 
 `oldest_message_at` is the oldest live message over those chats, or `null`. `ChatStore.chatCoverage(key)` is the
 same answer for a caller with a store.
 
+## Task and mail statistics
+
+`stats tasks show` (`tasksStatsCommand(messenger)`, mounted by tg, max and memo) answers `{ item }`, the
+`task_stats` entity: `open`, `created`, `closed`, `median_close_ms`, `mean_open_age_ms` and one row per group.
+
+- `--by chat` (the default) groups this account's tasks by where they were found; a row keeps `chat`, and its `key`
+  is the same chat reference. `--by meeting` reads only tasks found in a meeting, keyed `meeting:<account>/<meeting>`.
+  `--by project` reads the owner's project tasks across every project, keyed `project:<id>`; it ignores the account.
+- The query after `--` takes the fields of `tasks list` except `created_at` and `closed_at`, plus `created`, the
+  period. `created` counts the tasks opened in the period; `closed` counts those done or dismissed in it, reading the
+  same range on the close time; `open` is the tasks open now, whatever the period. Give `created` as a required term:
+  inside `OR` or `NOT` it is refused. Without it every task counts. The other terms narrow all three counts.
+- `median_close_ms` is the median time from opening to closing of the tasks closed in the period;
+  `mean_open_age_ms` the mean age of the open ones now. Both are `null` with nothing to measure.
+- `--timezone` places calendar days such as `created>=today`. It reads the tasks table and, once, the names of the
+  rows' chats, meetings or projects.
+
+`mailStats(store, runAs, { by, text, accounts, mailAccount, timezone, limit })` from `./mail` counts stored mail
+for a `search mail` query: the same fields, and the same mail left out (deleted mail). `outgoing` decides received
+or sent. `by: "day" | "week"` buckets by the email's date in `timezone` (a week by its Monday), keeps the latest
+`limit` buckets, oldest first; `by: "sender"` keys by the sender's address with their name, busiest first, and
+counts received mail only (`sent` is 0 there; the top-level `sent` still counts). `mailStatsItem` gives the
+`mail_counts` entity. It records no search.
+
 ## MCP from browser clients
 
 Non-messenger consumers can use `serveOverHttp` and `revokeAll` from `/mcp`. The same entry exports
