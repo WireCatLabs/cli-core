@@ -60,7 +60,7 @@ stored mail again. The settings therefore belong to mail-cli, after a cli-core r
   `not-read`), or with `--save-dir <dir>`, it calls `readEmailWhole` with the profile's own source and shows the new
   text. `--save-dir` is owner-only (`writesFileOnlyWith`): it writes each attachment there under a name made safe for a
   file, never over an existing file, and answers each path. Without a network the stored email is shown with a warning.
-  `mailReadCommands` then needs a way to open the profile's source.
+  `mailReadCommands` takes the read as `whole`, so the shared command stays the one place that shows an email.
 
 This change is the cli-core part only.
 

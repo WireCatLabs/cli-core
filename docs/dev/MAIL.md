@@ -78,8 +78,7 @@ account `{ provider: "email", account: <address, lower case> }`.
 - **One email read whole.** `readEmailWhole({ store, source, address, externalId, folders, … })` reads one stored email
   from its source again, as partial completion does, and every attachment with no size limit. It saves the email as a
   sync would (keeping its mailboxes, flags and rule) and answers each attachment with its bytes; it writes no file and
-  runs no `index` step, so the new text gets vectors at the next sync. No command calls it yet: the mail CLI's
-  `messages show` is meant to.
+  runs no `index` step, so the new text gets vectors at the next sync. `mailReadCommands` takes it as `whole`.
 - **Transport failures.** A chunk in which every message failed stops the run, after saving its resume point; one
   unreadable message costs only itself and is tried again next run.
 - **`budget`.** A `RunBudget` (`runBudgetOf` in a command) makes the run budgeted (WC-LIFE-16): it reads the window in
@@ -112,6 +111,9 @@ messages`, `review`, `messages show` and `conversations list|show`. `read(comman
 names the profile's mailbox; every command reads that mailbox alone and refuses another one's reference. A thread is a
 conversation, `chat:email/<address>/<thread>`; `conversations list` filters on `subject`, `emails_count` and
 `last_email_at` in SQL (`THREAD_COLUMNS`). The store keeps text, not the RFC 5322 source, so there is no `--raw`.
+With `whole(command, store, mailbox, emailId)`, `messages show` becomes a fetch: before it answers it reads again an
+email whose attachment a sync's policy left (`too-large`, `not-read`). When that read fails it shows the stored email
+with `meta.complete: false` and an issue `mail.attachments-unread` carrying the failure's code.
 
 ## Review
 

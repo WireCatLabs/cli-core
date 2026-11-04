@@ -63,6 +63,11 @@ const OTHERS: Entry[] = [
   validation("file.locked", "another process holds the file's lock"),
   ["mail.source-failed", "provider_error", "the mail server refused or did not complete a request"],
   ["mail.search-refused", "provider_error", "the mail server refused to search a folder"],
+  [
+    "mail.attachments-unread",
+    "provider_unavailable",
+    "the email could not be read again, so its skipped attachments have no text",
+  ],
   ["mirror.partial", "provider_error", "some mirrored files were not synced"],
   ["profile.wrong-account", "authentication_error", "the signed-in source account does not match this profile"],
   validation("push.too-many-files", "the folder holds more files than one push takes"),

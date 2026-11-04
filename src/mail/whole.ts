@@ -1,11 +1,12 @@
 import { CliError } from "@wirecat/cli-base"
+import { importEngine } from "../attachments/extract.js"
 import type { LoadEngine } from "../readers/types.js"
 import type { MessageStore } from "../store/index.js"
 import { mailAccountKey } from "./account-key.js"
-import { type AttachmentLog, readAttachments } from "./attachments.js"
+import { type AttachmentLog, MAX_ATTACHMENT_CHARS, readAttachments } from "./attachments.js"
 import { parsedEmail } from "./email-input.js"
 import { mailHeadersOf } from "./headers.js"
-import { parseMail } from "./parse.js"
+import { MAX_BODY_CHARS, parseMail } from "./parse.js"
 import { PARTIAL } from "./partial.js"
 import type { Listed, MailSource, Quick } from "./source.js"
 
@@ -30,20 +31,20 @@ export const readEmailWhole = async ({
   address,
   externalId,
   folders,
-  maxBodyChars,
-  maxAttachmentChars,
-  loadEngine,
-  now,
+  maxBodyChars = MAX_BODY_CHARS,
+  maxAttachmentChars = MAX_ATTACHMENT_CHARS,
+  loadEngine = importEngine,
+  now = Date.now(),
 }: {
   store: MessageStore
   source: MailSource
   address: string
   externalId: string
   folders: () => Promise<readonly string[]>
-  maxBodyChars: number
-  maxAttachmentChars: number
-  loadEngine: LoadEngine
-  now: number
+  maxBodyChars?: number
+  maxAttachmentChars?: number
+  loadEngine?: LoadEngine
+  now?: number
 }): Promise<WholeAttachment[]> => {
   const { id: accountId } = await store.accounts.storedAccount(mailAccountKey(address))
   const stored = await store.mail.emailPlace(accountId, externalId)
