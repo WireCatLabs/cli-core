@@ -42,7 +42,7 @@ const rowOf = (batch: EvidenceFindingsBatch, createdAt: string): ProposalRow => 
 
 /**
  * An agent's batch of cited facts and tasks from stored messages, mail and documents. Confirming accepts the parts
- * named, or every finding not rejected before; the rest are rejected. Meeting findings stay with their meeting.
+ * named, or every finding not rejected before; the rest are rejected. Meeting findings have their own kind.
  */
 export const findingsKind = (store: Pick<MessageStore, "evidenceFindings" | "proposedActions">): ProposalKind => {
   // The batch view carries no staging time; its stored proposal does.

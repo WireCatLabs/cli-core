@@ -18,6 +18,7 @@ const one = (token: string): string[] => {
   if (bare?.[1]) return bare[2] ? range("", bare[1], bare[2]) : [bare[1]]
   const part = /^([1-9]\d*)\/([A-Za-z0-9_-]{1,64})$/.exec(token)
   if (part) return [token]
+  if (/^[a-z][a-z_]*:[A-Za-z][A-Za-z0-9]*-[1-9]\d*$/.test(token)) return [token]
   const prefixed = /^([a-z][a-z_]*):([1-9]\d*)(?:-(?:([a-z][a-z_]*):)?([1-9]\d*))?$/.exec(token)
   if (prefixed?.[1] && prefixed[2]) {
     const [, prefix, from, other, to] = prefixed
@@ -25,12 +26,12 @@ const one = (token: string): string[] => {
     return to ? range(`${prefix}:`, from, to) : [`${prefix}:${from}`]
   }
   if (/^[1-9]\d*-[a-z]/.test(token)) return refuse(`a range stays inside one prefix: ${token}`)
-  return refuse(`not a proposal id: ${token}; use 17070, 17070-17079, fact:512 or 17080/f2`)
+  return refuse(`not a proposal id: ${token}; use 17070, 17070-17079, fact:512, close:Q-15 or 17080/f2`)
 }
 
 /**
- * Proposal ids from the command line, before any reference parsing: `17070-17079,fact:500-502,17080/f1` becomes
- * each id once, in the order given.
+ * Proposal ids from the command line, before any reference parsing: `17070-17079,fact:500-502,17080/f1,close:Q-15`
+ * becomes each id once, in the order given. A task key after a prefix is one id, never a range.
  */
 export const parseProposalIds = (text: readonly string[]): string[] => {
   const ids = [...new Set(text.flatMap((arg) => arg.split(",")).flatMap((token) => one(token.trim())))]
