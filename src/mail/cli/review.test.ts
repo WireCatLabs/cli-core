@@ -168,6 +168,7 @@ describe("mail review", () => {
       "sender_name",
       "text",
       "timestamp",
+      "untrusted",
     ])
     expect(threads(await box.json([]))).toEqual(["t-bill"])
   })
@@ -414,6 +415,9 @@ describe("what the mail pipeline reads and may write under the read-only lock", 
     expect(byThread["t-new"]?.email).toMatchObject({ new_sender: true, sender_identities: 1 })
     const cited = byThread["t-new"] as (typeof answer.items)[number]
     expect(cited.text).toBe("hello\n\nCan we meet on Friday?")
+    expect((cited as typeof cited & { untrusted: string[] }).untrusted).toEqual(
+      expect.arrayContaining(["text", "sender_name", "email.subject", "email.from.name"]),
+    )
     const staged = await box.withStore(async (store) => {
       await store.knowledge.addProject({ name: "Example" })
       return store.mailFindings.stage(

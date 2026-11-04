@@ -58,6 +58,10 @@ shape of this file.
 
 - **`review --holder` gives each email's own text** (`mailOwnText`), so an agent's model does not read earlier mail
   or signatures. The fingerprint a finding cites is still taken over the stored body; other reads show the whole text.
+- **Review and inbox items say which fields others wrote** (WC-SECR-21): `summaryOf` items, and so every catch-up
+  answer and each mail `review` item, carry `untrusted` (`SUMMARY_UNTRUSTED`: chat title, sender name, text,
+  transcript, attachment names); a mail review item adds the email's subject and the names in its headers, as search
+  hits do. The `message.summary` entity takes the field.
 
 ## 0.563.0 — 03.11.2026
 

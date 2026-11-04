@@ -8,10 +8,11 @@ import { LOCAL_READ } from "../../cli/effects.js"
 import { listOf, renderAnswer } from "../../cli/envelope.js"
 import { listQuery, nativeField, nativeTerms, queryHelp, typedQuery } from "../../cli/list-query.js"
 import { pointsOf } from "../../cli/messenger/catch-up.js"
-import { catchUpQuery, summaryOf } from "../../cli/messenger/catch-up-answers.js"
+import { catchUpQuery, SUMMARY_UNTRUSTED, summaryOf } from "../../cli/messenger/catch-up-answers.js"
 import { messageItem } from "../../cli/messenger/message-items.js"
 import { checkPoints } from "../../cli/messenger/points.js"
 import { unansweredHours } from "../../cli/messenger/review.js"
+import { MAIL_HIT_UNTRUSTED } from "../../cli/messenger/search-answers.js"
 import { mailOwnText } from "../../conversations/mail-text.js"
 import { parseDuration } from "../../domain/duration.js"
 import { formatReference } from "../../domain/references.js"
@@ -24,6 +25,8 @@ import { type MailReview, OWED_DAYS, REVIEW_THREADS, reviewMail } from "../revie
 import type { MailMount, MailReads } from "./index.js"
 
 const DAY = 86_400_000
+
+const REVIEW_UNTRUSTED = [...SUMMARY_UNTRUSTED, ...MAIL_HIT_UNTRUSTED]
 
 /** Where a mail review starts: a time only; one thread is `conversations show`. */
 export const MAIL_REVIEW_QUERY = defineQuery({
@@ -148,6 +151,7 @@ const reviewAnswer = (found: MailReview, mailbox: AccountKey, fresh: boolean, st
             }
           : {}),
       },
+      untrusted: REVIEW_UNTRUSTED,
     })),
     limit: Math.max(1, read.length),
     has_more: false,
