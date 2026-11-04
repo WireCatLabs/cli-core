@@ -27,6 +27,16 @@ shape of this file.
   selection as `readMeetingStats`, reading `meetings` alone through `meetings_by_time`. `meetingCountsItem` and the
   `meeting_counts` entity are the answer, for zoom-cli's `stats meetings history`. A meeting with no end counts in
   `meetings`, not in `minutes`. `MeetingStatsStore` gains `meetingCounts`; only cli-core's own store implements it.
+- **`mailOwnText(body)` (`@wirecat/cli-core/mail`): what an email says itself, without quoted earlier mail and the
+  signature.** It drops `>` lines, cuts at a reply header ("On … wrote:", "Le … a écrit :", "Am … schrieb …:",
+  "… написал(а):", Gmail's Russian "<address>:") and at an Outlook From/Sent block in English, German, French, Spanish
+  and Russian, and drops the `-- ` signature, sign-offs and mobile footers. A forwarded message stays whole; an email
+  that is only a quote keeps its body.
+
+### Changed
+
+- **`review --holder` gives each email's own text** (`mailOwnText`), so an agent's model does not read earlier mail
+  or signatures. The fingerprint a finding cites is still taken over the stored body; other reads show the whole text.
 
 ## 0.563.0 — 03.11.2026
 

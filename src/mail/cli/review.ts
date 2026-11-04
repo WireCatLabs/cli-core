@@ -12,8 +12,8 @@ import { catchUpQuery, summaryOf } from "../../cli/messenger/catch-up-answers.js
 import { messageItem } from "../../cli/messenger/message-items.js"
 import { checkPoints } from "../../cli/messenger/points.js"
 import { unansweredHours } from "../../cli/messenger/review.js"
+import { mailOwnText } from "../../conversations/mail-text.js"
 import { parseDuration } from "../../domain/duration.js"
-
 import { formatReference } from "../../domain/references.js"
 import { AGENDA_DEFAULTS } from "../../services/agenda.js"
 import { REVIEW_DAYS, reviewStart } from "../../services/inbox.js"
@@ -175,8 +175,10 @@ const holderReview = async (command: Command, mail: MailReads, holder: string, q
       : new Map()
     return { read, mailbox, marks }
   })
+  // An agent reads this: earlier mail and signatures stay out of its text; the fingerprint is over the stored body.
+  const emails = read.emails.map((email) => ({ ...email, text: mailOwnText(email.text) }))
   const chats = new Map<string, MailReview["chats"][number]>()
-  for (const email of read.emails) {
+  for (const email of emails) {
     const chat = chats.get(email.chatId) ?? {
       id: email.chatId,
       title: email.chatTitle,
@@ -216,7 +218,7 @@ const holderReview = async (command: Command, mail: MailReads, holder: string, q
         ? `${holder}: past ${read.mark.throughId}; acknowledge with --cursor ${read.cursor}${read.more ? "; more after these" : ""}`
         : `${holder} has no mark yet: it starts from now — acknowledge with --cursor ${read.cursor}`,
     )
-    return read.emails.map((hit) => `${hitText(hit)}${markText(marks.get(hit.id))}\n`).join("")
+    return emails.map((hit) => `${hitText(hit)}${markText(marks.get(hit.id))}\n`).join("")
   })
 }
 
@@ -254,7 +256,8 @@ export const mailReviewCommand = (mail: MailReads): Command =>
     .option(
       "--holder <name>",
       "read for this holder — an agent or a pipeline — what is stored past its processing mark, by store order; " +
-        "bulk, envelopes, drafts, suspicious senders and partial mail left out; `messages acknowledge` moves the mark",
+        "bulk, envelopes, drafts, suspicious senders and partial mail left out; each text without quoted earlier mail " +
+        "or the signature; `messages acknowledge` moves the mark",
     )
     .option(
       "--new",

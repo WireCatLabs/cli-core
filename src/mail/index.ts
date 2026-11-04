@@ -1,3 +1,4 @@
+export { mailOwnText } from "../conversations/mail-text.js"
 export { mailAccountKey } from "./account-key.js"
 export { DEFAULT_ATTACHMENT_POLICY, type MailAttachmentPolicy, POLICY_SKIPS } from "./attachments.js"
 export { BULK, bulkBox } from "./bulk.js"
