@@ -7,6 +7,22 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **cli-core now needs `@wirecat/cli-base` 0.76.0 or later** (peer range `>=0.76.0 <0.78.0`), which holds
+  `loadConstants`.
+
+### Added
+
+- **`@wirecat/cli-core/constants`: WireCat's sign-in apps ship in cli-core's `constants.json`.** `constants()` reads
+  cli-base's, cli-core's and the tool's `constants.json` once per process, merged, validated and frozen; a tool
+  passes its own layer and a schema built on `constantsSchema`. It holds WireCat's Google Desktop app
+  (`google.app.client_id`, `client_secret`) and Microsoft client id (`microsoft.app.client_id`), which drive and mail
+  kept in source and gcal expected from a file CI wrote. `googleApp({ env, prefix, clientFile })` picks the
+  owner's `--client-file`, then `<PREFIX>_GOOGLE_CLIENT_ID` (a `_SECRET` alone is a `configuration_error`, reason
+  `sign-in.secret-without-id`), then WireCat's app, and says which (`source`: `file`, `env`, `wirecat`). See
+  [Constants](docs/dev/CONSTANTS.md).
+
 ## 0.565.0 — 05.11.2026
 
 ### Changed — may break callers
