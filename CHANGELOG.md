@@ -19,6 +19,13 @@ shape of this file.
 
 ### Added
 
+- **The proposal registry reviews meeting findings and task close suggestions.** `proposalRegistry` registers
+  `meeting_findings` (a meeting's staged batch, decided part by part as in `meetings actions confirm`) and
+  `task_close` (an agent's suggested close, id `close:<task key>`; confirming closes the task as suggested, rejecting
+  clears the suggestion). Both are owner only: `isOwnerOnlyKind` now names `task_close` too, so `mayDecide` refuses an
+  agent by the row's kind. `parseProposalIds` takes a task key after a prefix (`close:Q-15`). Moved from cli-memo,
+  which registered both itself; a host that registers a kind of the same name now gets `configuration_error`.
+
 - **A mail CLI's `messages show` can read an email again when a sync's limit left its attachment unread.**
   `mailReadCommands` takes `whole(command, store, mailbox, emailId)`; with it the command is a fetch, reads such an
   email from the server before it answers (`readEmailWhole`), and shows the new text. When that read fails it shows

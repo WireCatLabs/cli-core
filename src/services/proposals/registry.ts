@@ -7,9 +7,11 @@ import { invoiceKind, paymentKind } from "./kinds/finance.js"
 import { findingsKind } from "./kinds/findings.js"
 import { keyDocumentKind } from "./kinds/key-document.js"
 import { mailFindingsKind } from "./kinds/mail-findings.js"
+import { meetingFindingsKind } from "./kinds/meeting-findings.js"
 import { memoryKind } from "./kinds/memory.js"
 import { relationshipKind } from "./kinds/relationship.js"
 import { relationshipUpdateKind } from "./kinds/relationship-update.js"
+import { taskCloseKind } from "./kinds/task-close.js"
 import type { Decided, ProposalFilter, ProposalKind, ProposalRegistry, ProposalRow } from "./types.js"
 
 const PREFIX = /^([a-z][a-z_]*):/
@@ -145,6 +147,8 @@ export const proposalRegistry = (store: MessageStore): ProposalRegistry => {
     memoryKind(store),
     findingsKind(store),
     mailFindingsKind(store),
+    meetingFindingsKind(store),
+    taskCloseKind(store),
   ])
     registry.register(kind)
   registry.register(actionKind(store, registry.claimed))

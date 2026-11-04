@@ -2,6 +2,9 @@ import { CliError } from "@wirecat/cli-base"
 import { MEETING_FINDINGS_KIND } from "../meetings/index.js"
 import { MAIL_FINDINGS_KIND } from "./mail-findings.js"
 
+/** An agent's suggested close of a task: kept on the task, not in `proposed_actions`. */
+export const TASK_CLOSE_KIND = "task_close"
+
 /**
  * Who proposed something waiting for the owner. `unknown` is a suggestion that names no author, such as an
  * unconfirmed link written without provenance: only the owner decides it. `verified: false` is a bot named only by
@@ -39,11 +42,11 @@ export interface Refusal {
 }
 
 /**
- * Stored proposal kinds only the owner decides, whatever `agent_decisions` says. Read from the row's kind, so a path
- * that sees the row as something else — a generic action, a host's own kind — still refuses an agent.
+ * Proposal kinds only the owner decides, whatever `agent_decisions` says. Read from the row's kind, so a path that
+ * sees the row as something else — a generic action, a host's own kind — still refuses an agent.
  */
 export const isOwnerOnlyKind = (kind: string | undefined): boolean =>
-  kind === MAIL_FINDINGS_KIND || kind === MEETING_FINDINGS_KIND
+  kind === MAIL_FINDINGS_KIND || kind === MEETING_FINDINGS_KIND || kind === TASK_CLOSE_KIND
 
 /**
  * The one check every decide path runs before it confirms or rejects a proposal. `null` means allowed. Every Claude
