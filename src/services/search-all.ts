@@ -77,6 +77,8 @@ export interface SearchAllFound {
   events?: { by: "words" | "words and meaning"; meaningSkipped?: string }
   /** How the messages were searched, when they were; never by meaning with `exact` or the server alone. */
   messages?: { by: "words" | "words and meaning"; meaningSkipped?: MeaningSkipped }
+  /** How the mail was searched, when it was; never by meaning with `exact`. */
+  mail?: { by: "words" | "words and meaning"; meaningSkipped?: MeaningSkipped }
   /** The messenger's server step for messages, as `search messages` reports it. */
   server?: ServerSearched
   /** What the store held of the chats the messages were searched in; absent when messages were not searched. */
@@ -157,7 +159,7 @@ export const searchAll = async (
   let hasMore = false
   let notes: SearchAllFound["notes"]
   let events: SearchAllFound["events"]
-  let messagesBy: SearchAllFound["messages"]
+  const by: { messages?: SearchAllFound["messages"]; mail?: SearchAllFound["mail"] } = {}
   let server: ServerSearched | undefined
   // Every word of a sentence is rarely in one record: a question finds what holds some of them, as `--discover` does.
   const discover = !request.exact && questionLookup(request.text) !== undefined
@@ -218,7 +220,7 @@ export const searchAll = async (
     }
     const byWords = found.items.map((hit) => itemOf(hit, ["words"]))
     // Server hits are only those the server returned; the local vectors would add others.
-    if (kind === "mail" || !meaning || request.exact || request.backend === "server") return byWords
+    if (!meaning || request.exact || (kind === "messages" && request.backend === "server")) return byWords
     const filters = filtersBeside(request.text)
     const lane =
       filters === undefined
@@ -230,10 +232,10 @@ export const searchAll = async (
           }
         : await meaning(request.text, read, embedders)
     if ("skipped" in lane) {
-      messagesBy = { by: "words", meaningSkipped: lane.skipped }
+      by[kind] = { by: "words", meaningSkipped: lane.skipped }
       return byWords
     }
-    messagesBy = { by: "words and meaning", ...(lane.partly ? { meaningSkipped: lane.partly } : {}) }
+    by[kind] = { by: "words and meaning", ...(lane.partly ? { meaningSkipped: lane.partly } : {}) }
     const near = await nearEligible(store, account, query, messenger, lane.ranked, filters ? { text: filters } : {})
     // One list per resource, as notes give theirs, so messages get no second vote against mail.
     const fused = new Map<string, { item: SearchAllItem; score: number }>()
@@ -243,6 +245,8 @@ export const searchAll = async (
     near.forEach((hit, rank) => {
       const held = fused.get(hit.locator)
       if (held) held.item.foundBy = ["words", "meaning"]
+      // As in notes: a question's any-word list already holds what meaning finds, and a second vote buries the rest.
+      if (held && discovers) return
       fused.set(hit.locator, {
         item: held?.item ?? itemOf(hit, ["meaning"]),
         score: (held?.score ?? 0) + 1 / (RRF_K + rank + 1),
@@ -355,7 +359,8 @@ export const searchAll = async (
     skipped,
     ...(notes === undefined ? {} : { notes }),
     ...(events === undefined ? {} : { events }),
-    ...(messagesBy === undefined ? {} : { messages: messagesBy }),
+    ...(by.messages === undefined ? {} : { messages: by.messages }),
+    ...(by.mail === undefined ? {} : { mail: by.mail }),
     ...(server === undefined ? {} : { server }),
     ...(coverage === undefined ? {} : { coverage }),
   }
