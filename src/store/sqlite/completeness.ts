@@ -42,18 +42,64 @@ export const chatCompleteness = ({ database }: StoreContext, accountKey: number,
     )
     .all(accountKey, JSON.stringify(chatIds))
     .map((row): ChatCompleteness => {
-      const stretches = Number(row.stretches)
-      const reachesStart = Number(row.start) === 1
-      const upToDate = row.newest === null ? null : row.held !== null && Number(row.held) >= Number(row.newest)
-      const gaps = stretches > 1
-      const fetched = stretches > 0 || reachesStart
-      return {
-        chatId: String(row.chat),
-        state: !fetched ? "unknown" : upToDate !== false && !gaps && reachesStart ? "complete" : "partial",
-        upToDate,
-        gaps,
-        reachesStart,
-        fetchedAt: toIso(row.fetched),
-      }
+      const facts = factsOf(row)
+      return { chatId: String(row.chat), ...facts, fetchedAt: toIso(row.fetched) }
     })
+}
+
+const factsOf = (row: Record<string, unknown>) => {
+  const stretches = Number(row.stretches)
+  const reachesStart = Number(row.start) === 1
+  const upToDate = row.newest === null ? null : row.held !== null && Number(row.held) >= Number(row.newest)
+  const gaps = stretches > 1
+  const fetched = stretches > 0 || reachesStart
+  const state: ChatCompleteness["state"] = !fetched
+    ? "unknown"
+    : upToDate !== false && !gaps && reachesStart
+      ? "complete"
+      : "partial"
+  return { state, upToDate, gaps, reachesStart }
+}
+
+export interface ChatCoverage {
+  chats: number
+  /** Held back to the first message, up to date, without gaps: `complete` above. */
+  fetched: number
+  partial: number
+  /** No fetch ever recorded and no message held. */
+  never: number
+  oldestMessageAt: string | null
+}
+
+export const COVERAGE_SQL = `SELECT c.last_message_at AS newest, c.message_count AS messages,
+     (SELECT m.sent_at FROM messages m WHERE m.chat_id = c.id AND m.deleted_at IS NULL
+       ORDER BY m.sent_at DESC LIMIT 1) AS held,
+     (SELECT m.sent_at FROM messages m WHERE m.chat_id = c.id AND m.deleted_at IS NULL
+       ORDER BY m.sent_at ASC LIMIT 1) AS oldest,
+     (SELECT count(*) FROM sync_ranges r WHERE r.chat_id = c.id) AS stretches,
+     EXISTS (SELECT 1 FROM sync_cursors s WHERE s.account_id = c.account_id AND s.key = 'history_start:' || c.external_id
+       AND NOT EXISTS (SELECT 1 FROM sync_ranges r WHERE r.chat_id = c.id AND r.from_key < CAST(s.value AS INTEGER)))
+       AS start,
+     EXISTS (SELECT 1 FROM sync_cursors s WHERE s.account_id = c.account_id
+       AND s.key IN ('history_start:' || c.external_id, 'fetched:' || c.external_id)) AS recorded
+   FROM chats c WHERE c.account_id = ? AND c.searchable = 1`
+
+/**
+ * `chatCompleteness` over every searchable chat of the account in one statement. A chat whose history was pushed
+ * into the store (WhatsApp) has messages and no fetch record, so it counts as partial, not never. The newest and
+ * oldest held are read with ORDER BY … LIMIT 1, so each stops at the first live row of `messages_by_time` rather than
+ * relying on the planner's min/max shortcut, which the deleted_at filter may defeat.
+ */
+export const chatCoverage = ({ database }: StoreContext, accountKey: number): ChatCoverage => {
+  const rows = database.prepare(COVERAGE_SQL).all(accountKey)
+  const coverage: ChatCoverage = { chats: rows.length, fetched: 0, partial: 0, never: 0, oldestMessageAt: null }
+  let oldest: number | null = null
+  for (const row of rows) {
+    if (row.oldest !== null && (oldest === null || Number(row.oldest) < oldest)) oldest = Number(row.oldest)
+    if (factsOf(row).state === "complete") coverage.fetched += 1
+    else if (Number(row.stretches) === 0 && Number(row.recorded) === 0 && Number(row.messages) === 0)
+      coverage.never += 1
+    else coverage.partial += 1
+  }
+  return { ...coverage, oldestMessageAt: toIso(oldest) }
 }

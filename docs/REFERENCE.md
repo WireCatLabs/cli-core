@@ -580,6 +580,17 @@ with system fonts disabled. SVG does not load resvg. Pass a renderer loader as t
 while keeping the neutral data and command contract. Images default to a dark theme. ECharts is pinned at 6.1.0; its published unpacked files
 plus zrender and tslib total about 61.6 MiB before package-manager deduplication.
 
+## Archive coverage
+
+`store chats status` answers, from the store alone, how many of the account's searchable chats (every kind, channels
+included) the archive holds in full: `{ chats, fetched, partial, never, oldest_message_at }`, and
+`fetched + partial + never` is always `chats`. `fetched` is a chat that `ChatStore.chatCompleteness` calls
+`complete` — held back to its first message, up to date with the chat list and without gaps. `never` has no fetch
+recorded (no stretch, no `history_start:` or `fetched:` mark) and no message held. Everything else is `partial`,
+including a chat whose history the messenger pushed (WhatsApp): it has messages and no fetch record.
+`oldest_message_at` is the oldest live message over those chats, or `null`. `ChatStore.chatCoverage(key)` is the
+same answer for a caller with a store.
+
 ## MCP from browser clients
 
 Non-messenger consumers can use `serveOverHttp` and `revokeAll` from `/mcp`. The same entry exports

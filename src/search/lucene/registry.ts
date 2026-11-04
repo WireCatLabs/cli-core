@@ -214,7 +214,7 @@ export const QUERY_FIELDS: readonly MessageField[] = [
   {
     name: "has",
     example: "has:file",
-    index: "attachments / messages_fts links",
+    index: "attachments / messages_fts links / message_transcripts",
     aliases: [],
     type: "enum",
     operators: terms,
@@ -234,6 +234,7 @@ export const QUERY_FIELDS: readonly MessageField[] = [
       "contact",
       "location",
       "poll",
+      "transcript",
     ],
   },
   {

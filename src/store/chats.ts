@@ -6,7 +6,7 @@ import { keysOver } from "./keys.js"
 import { type ChatRekey, type ChatRekeys, rekeyChat, rekeyChats } from "./sqlite/chat-rekey.js"
 import type { ChatMetadata, LeftChat } from "./sqlite/chats.js"
 import * as chatQueries from "./sqlite/chats.js"
-import type { ChatCompleteness } from "./sqlite/completeness.js"
+import type { ChatCompleteness, ChatCoverage } from "./sqlite/completeness.js"
 import * as completeness from "./sqlite/completeness.js"
 import type { ChatHistoryShape, StoredHistorySkip } from "./sqlite/history-skips.js"
 import * as history from "./sqlite/history-skips.js"
@@ -61,6 +61,8 @@ export interface ChatsStore {
   leftChats(key: AccountKey, options?: { clear?: boolean }): Promise<LeftChats>
   /** Per chat: whether its history is held up to date, without gaps, back to its start. */
   chatCompleteness(key: AccountKey, chatIds: Id[]): Promise<ChatCompleteness[]>
+  /** Over every searchable chat: how many are held in full, in part, or never fetched, and the oldest message held. */
+  chatCoverage(key: AccountKey): Promise<ChatCoverage>
   /** Per chat that has messages: how many, the oldest and newest, and when the last one was stored. */
   chatStats(key: AccountKey, chatId?: Id): Promise<ChatStats[]>
   /**
@@ -171,6 +173,13 @@ export const chatsStoreOver = (context: StoreContext): ChatsStore => {
     chatCompleteness: async (key, chatIds) => {
       const accountKey = findAccountPk(key)
       return accountKey === undefined ? [] : completeness.chatCompleteness(context, accountKey, chatIds)
+    },
+
+    chatCoverage: async (key) => {
+      const accountKey = findAccountPk(key)
+      return accountKey === undefined
+        ? { chats: 0, fetched: 0, partial: 0, never: 0, oldestMessageAt: null }
+        : completeness.chatCoverage(context, accountKey)
     },
 
     chatStats: async (key, chatId) => {

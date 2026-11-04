@@ -104,6 +104,7 @@ read  stats messages top
 read  stats messages unanswered
 read  stats messages waiting
 read  stats tasks show
+read  store chats status
 read  store check
 read  store gaps show
 read  store info

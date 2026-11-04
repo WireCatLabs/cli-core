@@ -69,8 +69,49 @@ export interface MeetingStats {
   weeks: MeetingWeekStats[]
 }
 
+export type MeetingCountsGrouping = "day" | "week" | "series"
+export const MEETING_COUNTS_GROUPINGS: readonly MeetingCountsGrouping[] = ["day", "week", "series"]
+
+export interface MeetingCountsInput extends MeetingStatsSelection {
+  by: MeetingCountsGrouping
+  /** The zone days and weeks are read in; UTC when not given. */
+  timeZone?: string
+  /** Most rows: the newest days or weeks, or the busiest series (default 100). */
+  limit?: number
+}
+
+/** One selected meeting as the counts need it; no title text but the series' or the meeting's own name. */
+export interface MeetingCountsMeeting {
+  startedAt: number | null
+  /** `duration_ms`, else `ended_at - started_at`; `null` for a meeting with no end. */
+  durationMs: number | null
+  transcribed: boolean
+  seriesKey: string | null
+  seriesTitle: string | null
+}
+
+export interface MeetingCountsRow {
+  /** A day or the Monday of a week (`YYYY-MM-DD` in the zone), or `series:<external id>`, or `NO_SERIES`. */
+  key: string
+  /** The series title under `series`; `null` otherwise. */
+  name: string | null
+  meetings: number
+  minutes: number
+  /** Over the meetings with a duration; `null` when none has one. */
+  meanMinutes: number | null
+  transcripts: number
+}
+
+export interface MeetingCounts extends Omit<MeetingCountsRow, "key" | "name"> {
+  by: MeetingCountsGrouping
+  timeZone: string
+  rows: MeetingCountsRow[]
+  hasMore: boolean
+}
+
 export interface MeetingStatsStore {
   meetingStats(input: MeetingStatsInput): Promise<MeetingStats>
+  meetingCounts(input: MeetingCountsInput): Promise<MeetingCounts>
 }
 
 const zoneOf = (timeZone: string | undefined): string => {
@@ -88,6 +129,92 @@ const weekStart = (at: number, format: Intl.DateTimeFormat): string => {
   const parts = Object.fromEntries(format.formatToParts(new Date(at)).map((part) => [part.type, part.value]))
   const day = Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day))
   return new Date(day - DAYS.indexOf(parts.weekday ?? "Mon") * 86_400_000).toISOString().slice(0, 10)
+}
+
+const dayKey = (at: number, format: Intl.DateTimeFormat): string => {
+  const parts = Object.fromEntries(format.formatToParts(new Date(at)).map((part) => [part.type, part.value]))
+  return `${parts.year}-${parts.month}-${parts.day}`
+}
+
+const zoneFormat = (zone: string) =>
+  new Intl.DateTimeFormat("en-US", {
+    timeZone: zone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    weekday: "short",
+  })
+
+/** The row of meetings outside any series, under `--by series`; a constant for the same reason as `UNKNOWN_SPEAKER`. */
+export const NO_SERIES = "no-series"
+const MOST_COUNT_ROWS = 100
+
+const minutesOf = (ms: number) => Math.round(ms / 60_000)
+const meanOf = (ms: number, timed: number) => (timed === 0 ? null : Math.round(ms / timed / 6_000) / 10)
+
+/**
+ * Meetings, minutes and meetings with a transcript, in total and per day, week or series. A meeting with no end
+ * counts in `meetings` but not in `minutes` or the mean; one with no start counts in the totals and in its series,
+ * never in a day or week. Days and weeks with no meeting have no row.
+ */
+export const aggregateMeetingCounts = (
+  meetings: readonly MeetingCountsMeeting[],
+  by: MeetingCountsGrouping,
+  timeZone?: string,
+  limit = MOST_COUNT_ROWS,
+): MeetingCounts => {
+  if (!MEETING_COUNTS_GROUPINGS.includes(by))
+    throw new CliError("validation_error", `--by takes ${MEETING_COUNTS_GROUPINGS.join(", ")}`)
+  if (!Number.isSafeInteger(limit) || limit < 1) throw new CliError("validation_error", "--limit is a positive number")
+  const zone = zoneOf(timeZone)
+  const format = zoneFormat(zone)
+  const sum = () => ({ meetings: 0, ms: 0, timed: 0, transcripts: 0 })
+  type Sum = ReturnType<typeof sum> & { name: string | null }
+  const add = (into: Sum, meeting: MeetingCountsMeeting) => {
+    into.meetings += 1
+    if (meeting.durationMs !== null) {
+      into.ms += Math.max(0, meeting.durationMs)
+      into.timed += 1
+    }
+    if (meeting.transcribed) into.transcripts += 1
+  }
+  const total: Sum = { ...sum(), name: null }
+  const groups = new Map<string, Sum>()
+  for (const meeting of meetings) {
+    add(total, meeting)
+    const key =
+      by === "series"
+        ? meeting.seriesKey === null
+          ? NO_SERIES
+          : `series:${meeting.seriesKey}`
+        : meeting.startedAt === null
+          ? null
+          : by === "day"
+            ? dayKey(meeting.startedAt, format)
+            : weekStart(meeting.startedAt, format)
+    if (key === null) continue
+    const group = groups.get(key) ?? { ...sum(), name: by === "series" ? meeting.seriesTitle : null }
+    add(group, meeting)
+    groups.set(key, group)
+  }
+  const ordered = [...groups.entries()].sort(([a, one], [b, other]) =>
+    by === "series" ? other.ms - one.ms || other.meetings - one.meetings || a.localeCompare(b) : b.localeCompare(a),
+  )
+  const kept = ordered.slice(0, limit)
+  if (by !== "series") kept.reverse()
+  const counted = ({ meetings: count, ms, timed, transcripts }: Sum) => ({
+    meetings: count,
+    minutes: minutesOf(ms),
+    meanMinutes: meanOf(ms, timed),
+    transcripts,
+  })
+  return {
+    by,
+    timeZone: zone,
+    ...counted(total),
+    rows: kept.map(([key, group]) => ({ key, name: group.name, ...counted(group) })),
+    hasMore: ordered.length > limit,
+  }
 }
 
 /** Lines with no speaker at all; a constant, since a `key: "…"` literal reads as a permission key to the key test. */
@@ -108,13 +235,7 @@ const speakerOf = (row: MeetingStatsRow) =>
  */
 export const aggregateMeetingStats = (rows: readonly MeetingStatsRow[], timeZone?: string): MeetingStats => {
   const zone = zoneOf(timeZone)
-  const format = new Intl.DateTimeFormat("en-US", {
-    timeZone: zone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    weekday: "short",
-  })
+  const format = zoneFormat(zone)
   const speakers = new Map<string, MeetingSpeakerStats & { seen: Set<number> }>()
   const weeks = new Map<string, { meetings: Set<number>; talkMs: number }>()
   const meetings = new Set<number>()
