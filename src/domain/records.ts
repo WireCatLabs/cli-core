@@ -14,6 +14,8 @@ export interface RecordRelation {
   role: string
   type: string
   external_id: string
+  /** A `settles` relation's share of the payment, as a decimal in its currency; without one, as far as both allow. */
+  amount?: string
 }
 
 export interface EnvelopeRecord {
@@ -53,6 +55,7 @@ const TYPE = "^(invoice|payment|person|organization|project|custom:[a-z0-9][a-z0
 const MAX_ID = 512
 const MAX_FIELDS_BYTES = 65_536
 const MAX_RELATIONS = 100
+const DECIMAL = "^[0-9]{1,16}(\\.[0-9]{1,6})?$"
 
 /** The v1 envelope as JSON Schema (Draft 2020-12); `schemas/records-envelope.v1.schema.json` is this, written out. */
 export const RECORDS_ENVELOPE_SCHEMA = {
@@ -105,6 +108,11 @@ export const RECORDS_ENVELOPE_SCHEMA = {
         role: { type: "string", pattern: WORD },
         type: { type: "string", pattern: TYPE },
         external_id: { type: "string", minLength: 1, maxLength: MAX_ID },
+        amount: {
+          type: "string",
+          pattern: DECIMAL,
+          description: "A settles relation's share of the payment, a decimal in its currency",
+        },
       },
     },
   },
@@ -112,6 +120,7 @@ export const RECORDS_ENVELOPE_SCHEMA = {
 
 const wordPattern = new RegExp(WORD)
 const typePattern = new RegExp(TYPE)
+const decimalPattern = new RegExp(DECIMAL)
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value)
@@ -151,14 +160,19 @@ const relationErrors = (relations: unknown, at: (string | number)[]): IngestErro
   return relations.flatMap((relation, index) => {
     const here = [...at, index]
     if (!isObject(relation)) return [invalid(here, "a relation is an object")]
-    const extra = extraKeys(relation, ["role", "type", "external_id"])
-    if (extra.length > 0) return [invalid([...here, extra[0] as string], "a relation holds role, type and external_id")]
+    const extra = extraKeys(relation, ["role", "type", "external_id", "amount"])
+    if (extra.length > 0)
+      return [invalid([...here, extra[0] as string], "a relation holds role, type, external_id and amount")]
     if (typeof relation.role !== "string" || !wordPattern.test(relation.role))
       return [invalid([...here, "role"], "a role is lowercase letters, digits, - and _")]
     if (typeof relation.type !== "string" || !typePattern.test(relation.type))
       return [invalid([...here, "type"], `a type is one of ${RECORD_ENTITY_TYPES.join(", ")} or custom:<name>`)]
     if (!idText(relation.external_id))
       return [invalid([...here, "external_id"], `an external id takes 1–${MAX_ID} characters`)]
+    if (relation.amount !== undefined && (typeof relation.amount !== "string" || !decimalPattern.test(relation.amount)))
+      return [invalid([...here, "amount"], 'an amount is a decimal string, such as "13000.00"')]
+    if (relation.amount !== undefined && relation.role !== "settles")
+      return [invalid([...here, "amount"], "only a settles relation carries an amount")]
     return []
   })
 }
@@ -261,7 +275,13 @@ export const recordFingerprint = (fields: Record<string, unknown>, relations: Re
         canonical({
           fields,
           relations: relations
-            .map((relation) => [relation.role, relation.type, relation.external_id])
+            // A relation without an amount keeps the fingerprint it had before amounts existed.
+            .map((relation) => [
+              relation.role,
+              relation.type,
+              relation.external_id,
+              ...(relation.amount === undefined ? [] : [relation.amount]),
+            ])
             .sort((a, b) => a.join("\0").localeCompare(b.join("\0"))),
         }),
       ),

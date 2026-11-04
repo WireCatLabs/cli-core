@@ -948,5 +948,11 @@ export const GENERATED: { name: string; statements: string[] }[] = [
     "statements": [
       "-- Tests wrote the fake `chat` messenger of src/testing/shared-program.ts into real stores until a test could no longer\n-- open one (#2438). Deleting an account is the store's own purge, in code (every child row, the people only it saw,\n-- the vectors only it held), so the next writable open removes every `chat` account and deletes this key\n-- (purgeTestAccounts). A store without one gets no key, so a test's own `chat` rows written after this stay.\nINSERT OR REPLACE INTO store_settings (key, value, at)\nSELECT 'test_accounts_to_purge', '1', unixepoch() * 1000 WHERE EXISTS (SELECT 1 FROM accounts WHERE provider = 'chat');"
     ]
+  },
+  {
+    "name": "20261104232153_version-49-relation-amounts",
+    "statements": [
+      "ALTER TABLE `record_relations` ADD `amount` text;"
+    ]
   }
 ]

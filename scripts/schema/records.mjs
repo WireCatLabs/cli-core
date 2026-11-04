@@ -40,6 +40,9 @@ export const recordTables = [
       c("target_external_id", "text", { notnull: true }),
       fk("target_id", "records", { note: "null until the target is imported" }),
       c("created_at", "integer", { notnull: true }),
+      c("amount", "text", {
+        note: "the share of a payment a settles relation names, a decimal in its currency; null: as far as both allow",
+      }),
     ],
     keys: ["UNIQUE (record_id, role, target_type, target_external_id)", "INDEX (target_type, target_external_id)"],
   },

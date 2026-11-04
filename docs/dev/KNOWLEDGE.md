@@ -150,8 +150,11 @@ transaction it rolls back.
 
 An `invoice` or `payment` record becomes an `invoice:` or `payment:` proposal by the bot `import`, never a confirmed
 row. Its `counterparty`, `issuer`, `payer`, `payee` and `project` come from a store ref in its fields or from a
-relation to another record of the account; a payment's `settles` relations allocate it to those invoices as far as
-both allow. A relation whose target is not imported, or has no entity, keeps the record waiting (`waiting` in the
+relation to another record of the account; a payment's `settles` relations allocate it to those invoices: by the
+relation's `amount` when it has one (amounts past the payment are `record.over-payment`), else as far as the payment
+and what other payments, confirmed or proposed, leave open on the invoice allow. A changed record of a payment the
+import proposed and the owner has not decided takes its allocations again (`store.finance.unallocate`, then the
+relations) and is flagged only when more than its `settles` relations changed. A relation whose target is not imported, or has no entity, keeps the record waiting (`waiting` in the
 receipt); it gets its entity when the target does. A `person`, `organization` or `project` record gets its entity
 only from the owner (`store.records.map`), never by name. A record changed or deleted at the source after its entity
 was made leaves the entity alone and is `flagged`.

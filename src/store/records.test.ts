@@ -126,6 +126,145 @@ it("never links an organization by its name: the invoice waits until the owner m
   ).rejects.toMatchObject({ code: "permission_error" })
 })
 
+const invoice = (externalId: string, total: string): EnvelopeRecord => ({
+  key: `invoice-${externalId}`,
+  type: "invoice",
+  external_id: externalId,
+  operation: "upsert",
+  fields: {
+    direction: "receivable",
+    number: externalId,
+    currency: "RUB",
+    lines: [{ description: "SEO", amount: total }],
+  },
+  relations: [{ role: "counterparty", type: "organization", external_id: "client" }],
+})
+const settles = (externalId: string, amount?: string) => ({
+  role: "settles",
+  type: "invoice",
+  external_id: externalId,
+  ...(amount === undefined ? {} : { amount }),
+})
+const client: EnvelopeRecord = {
+  key: "client",
+  type: "organization",
+  external_id: "client",
+  operation: "upsert",
+  fields: { name: "ООО Ромашка" },
+}
+const mapped = async () => {
+  const f = await fixture()
+  await take(f.store, envelope([client]))
+  await f.store.records.map({ ...SOURCE, type: "organization", externalId: "client" }, f.romashka.ref, "owner")
+  return f
+}
+const allocationsOf = async (store: Awaited<ReturnType<typeof openStore>>, externalId: string) => {
+  const record = await store.records.get({ ...SOURCE, type: "payment", externalId })
+  const { allocations } = await store.finance.payment(record?.entity as string)
+  const numbers = new Map((await store.finance.invoices()).map((one) => [one.ref, one.number]))
+  return allocations.map((one) => `${numbers.get(one.invoice)} ${one.amount}`).sort()
+}
+
+it("splits a payment across invoices by the amounts its relations give", async () => {
+  const { store } = await mapped()
+  const receipt = await take(
+    store,
+    envelope([
+      invoice("SEO-03", "75000.00"),
+      invoice("SEO-04A", "20000.00"),
+      payment(
+        "PA-14",
+        { amount: "15000.00" },
+        { relations: [settles("SEO-03", "13000.00"), settles("SEO-04A", "2000")] },
+      ),
+    ]),
+  )
+  expect(receipt).toMatchObject({ created: 3, refused: 0 })
+  expect(await allocationsOf(store, "PA-14")).toEqual(["SEO-03 13000.00", "SEO-04A 2000.00"])
+})
+
+it("never lets one batch of proposed payments cover an invoice more than once", async () => {
+  const { store } = await mapped()
+  const amounts = ["35000.00", "2000.00", "25000.00", "15000.00"]
+  const receipt = await take(
+    store,
+    envelope([
+      invoice("SEO-03", "75000.00"),
+      ...amounts.map((amount, at) => payment(`PA-${at}`, { amount }, { relations: [settles("SEO-03")] })),
+    ]),
+  )
+  expect(receipt).toMatchObject({ created: 5, refused: 0 })
+  expect(await allocationsOf(store, "PA-3")).toEqual(["SEO-03 13000.00"])
+  const [seo] = await store.finance.invoices()
+  const allocated = (await store.finance.invoice(seo?.ref as string)).allocations.map((one) => Number(one.amount))
+  expect(allocated.reduce((sum, one) => sum + one, 0)).toBe(75000)
+  for (const ref of receipt.proposed.filter((one) => one.startsWith("payment:")))
+    await store.finance.confirm(ref, "owner")
+  expect(await store.finance.invoice(seo?.ref as string)).toMatchObject({ status: "paid", open: "0.00" })
+})
+
+it("refuses settles amounts that add up to more than the payment, at the amount that goes past it", async () => {
+  const { store } = await mapped()
+  const receipt = await take(
+    store,
+    envelope([
+      invoice("SEO-03", "75000.00"),
+      payment(
+        "PA-14",
+        { amount: "15000.00" },
+        { relations: [settles("SEO-03", "13000.00"), settles("SEO-03A", "2000.01")] },
+      ),
+    ]),
+  )
+  expect(receipt).toMatchObject({ created: 1, refused: 1 })
+  expect(receipt.errors).toEqual([
+    expect.objectContaining({
+      pointer: "/records/1/relations/1/amount",
+      code: "record.over-payment",
+      key: "payment-PA-14",
+    }),
+  ])
+  const other = await take(
+    store,
+    envelope([
+      payment(
+        "PA-15",
+        { amount: "10.00" },
+        { relations: [{ role: "payer", type: "organization", external_id: "client", amount: "1" }] },
+      ),
+    ]),
+  )
+  expect(other.errors).toEqual([
+    expect.objectContaining({ pointer: "/records/0/relations/0/amount", code: "record.invalid" }),
+  ])
+})
+
+it("takes a changed split again while the payment is proposed, and only flags it once the owner confirmed it", async () => {
+  const { store } = await mapped()
+  const invoices = [invoice("SEO-03", "75000.00"), invoice("SEO-04A", "20000.00")]
+  await take(
+    store,
+    envelope([
+      ...invoices,
+      payment("PA-14", { amount: "15000.00" }, { relations: [settles("SEO-03"), settles("SEO-04A")] }),
+    ]),
+  )
+  expect(await allocationsOf(store, "PA-14")).toEqual(["SEO-03 15000.00"])
+
+  const split = (first: string, second: string) =>
+    payment("PA-14", { amount: "15000.00" }, { relations: [settles("SEO-03", first), settles("SEO-04A", second)] })
+  const again = await take(store, envelope([split("13000.00", "2000.00")], "second"))
+  expect(again).toMatchObject({ updated: 1, refused: 0, flagged: [] })
+  expect(await allocationsOf(store, "PA-14")).toEqual(["SEO-03 13000.00", "SEO-04A 2000.00"])
+  const key = { ...SOURCE, type: "payment", externalId: "PA-14" }
+  expect(await store.records.get(key)).toMatchObject({ flagged: false })
+
+  await store.finance.confirm((await store.records.get(key))?.entity as string, "owner")
+  const late = await take(store, envelope([split("10000.00", "5000.00")], "third"))
+  expect(late.flagged).toEqual([expect.objectContaining({ key: "payment-PA-14" })])
+  expect(await allocationsOf(store, "PA-14")).toEqual(["SEO-03 13000.00", "SEO-04A 2000.00"])
+})
+
 it("keeps minor units exact for RUB and JPY and refuses more decimals than the currency has", async () => {
   const { store } = await fixture()
   const receipt = await take(

@@ -10,7 +10,7 @@ import {
 } from "../../domain/records.js"
 import type { CacheDatabase } from "../driver.js"
 import { accountPk, findAccountPk } from "./accounts.js"
-import { financeOperationsOver, type InvoiceInput, type PaymentInput } from "./finance.js"
+import { financeOperationsOver, type InvoiceInput, type PaymentDetail, type PaymentInput } from "./finance.js"
 import type { Author } from "./memories.js"
 import { requiredThing } from "./notes.js"
 import type { StoreContext } from "./open.js"
@@ -28,7 +28,7 @@ export interface SourceRecord extends RecordKey {
   fields: Record<string, unknown>
   revision: number | null
   fingerprint: string
-  relations: { role: string; type: string; externalId: string; resolved: boolean }[]
+  relations: { role: string; type: string; externalId: string; amount: string | null; resolved: boolean }[]
   /** The entity made from it or mapped to it by the owner; `null` while it waits or for a type without a table. */
   entity: string | null
   /** The source changed or deleted it after its entity was made: the owner should look at the entity. */
@@ -85,6 +85,11 @@ export interface RecordStore {
 }
 
 type Row = Record<string, unknown>
+interface Share {
+  invoice: string
+  /** As the source gave it; `null` settles as far as both allow. */
+  amount: string | null
+}
 
 const PROJECTED = {
   invoice: { roles: ["issuer", "counterparty", "project"], many: [] as string[] },
@@ -96,7 +101,7 @@ const IMPORTER: Author = { bot: "import" }
 const REFERENCE_FIELDS = ["issuer", "counterparty", "project", "payer", "payee"]
 
 /** `at` names the record's member at fault; a refused entity is the fields' fault. */
-const refusal = (message: string, code: string, at?: string): never => {
+const refusal = (message: string, code: string, at?: string | (string | number)[]): never => {
   throw new CliError("validation_error", message, { reason: code, ...(at === undefined ? {} : { at }) })
 }
 
@@ -105,6 +110,13 @@ const codeOf = (error: CliError): string => {
   if (typeof reason === "string") return reason
   return error.code === "not_found" ? "record.reference-not-found" : "record.entity"
 }
+
+/** A record's fingerprint without its settles relations: what an import may not change on a payment it proposed. */
+const unsettled = (fields: Row, relations: RecordRelation[]) =>
+  recordFingerprint(
+    fields,
+    relations.filter((relation) => relation.role !== "settles"),
+  )
 
 const iso = (value: unknown) => new Date(Number(value)).toISOString()
 
@@ -176,14 +188,15 @@ export const recordStoreOver = (context: StoreContext): RecordStore => {
   const entityRef = (type: unknown, id: unknown): string | null =>
     type == null ? null : (referenceOfThing(database, storedThing(type, id)) ?? `${String(type)}:${String(id)}`)
 
-  /** Roles a projection needs whose target has no entity yet, and the entities of the rest. */
+  /** Roles a projection needs whose target has no entity yet, the entities of the rest, and what each invoice gets. */
   const relatedOf = (recordId: number, type: Projected) => {
     const { roles, many } = PROJECTED[type]
     const rows = sql(
-      "SELECT rr.role, t.entity_type, t.entity_id FROM record_relations rr " +
-        "LEFT JOIN records t ON t.id = rr.target_id AND t.deleted_at IS NULL WHERE rr.record_id = ?",
+      "SELECT rr.role, rr.amount, t.entity_type, t.entity_id FROM record_relations rr " +
+        "LEFT JOIN records t ON t.id = rr.target_id AND t.deleted_at IS NULL WHERE rr.record_id = ? ORDER BY rr.id",
     ).all(recordId)
     const related = new Map<string, string[]>()
+    const shares: Share[] = []
     const missing = new Set<string>()
     for (const row of rows) {
       const role = String(row.role)
@@ -191,21 +204,25 @@ export const recordStoreOver = (context: StoreContext): RecordStore => {
       const ref = entityRef(row.entity_type, row.entity_id)
       if (ref === null) missing.add(role)
       else related.set(role, [...(related.get(role) ?? []), ref])
+      if (ref !== null && role === "settles")
+        shares.push({ invoice: ref, amount: row.amount == null ? null : String(row.amount) })
     }
     for (const [role, refs] of related)
       if (refs.length > 1 && !many.includes(role)) refusal(`a record has one ${role}`, "record.relation-ambiguous")
-    return { related, missing: [...missing] }
+    return { related, shares, missing: [...missing] }
   }
 
   /** Makes the proposal a waiting invoice or payment record stands for, once every reference it names has an entity. */
   const project = (row: Row, source: EnvelopeSource): { proposed?: string; missing: string[] } => {
     const type = row.type as Projected
-    const { related, missing } = relatedOf(Number(row.id), type)
+    const { related, shares, missing } = relatedOf(Number(row.id), type)
     if (missing.length > 0) return { missing }
     const fields = JSON.parse(String(row.fields)) as Row
     for (const name of REFERENCE_FIELDS) stringField(fields, name)
     const ref =
-      type === "invoice" ? finance.addInvoice(invoiceOf(fields, related, source)).ref : settle(fields, related, source)
+      type === "invoice"
+        ? finance.addInvoice(invoiceOf(fields, related, source)).ref
+        : settle(finance.addPayment(paymentOf(fields, related, source)), shares)
     const entity = requiredThing(database, ref)
     sql("UPDATE records SET entity_type = ?, entity_id = ?, projected_fingerprint = fingerprint WHERE id = ?").run(
       entity.type,
@@ -215,19 +232,81 @@ export const recordStoreOver = (context: StoreContext): RecordStore => {
     return { proposed: ref, missing: [] }
   }
 
-  /** A payment settles each invoice it names as far as both allow, in the order named. */
-  const settle = (fields: Row, related: Map<string, string[]>, source: EnvelopeSource): string => {
-    const made = finance.addPayment(paymentOf(fields, related, source))
+  /**
+   * What other payments leave open on an invoice. Proposed ones count too: the owner confirms them later, so payments
+   * of one batch would otherwise each take the whole invoice.
+   */
+  const freeOn = (invoice: string, payment: string): number => {
+    const [target, own] = [requiredThing(database, invoice), requiredThing(database, payment)]
+    const row = sql(
+      "SELECT i.total - (SELECT coalesce(sum(a.amount), 0) FROM payment_allocations a JOIN payments p ON p.id = " +
+        "a.payment_id WHERE a.invoice_id = i.id AND a.payment_id <> ? AND p.deleted_at IS NULL " +
+        "AND p.review <> 'rejected') AS free FROM invoices i WHERE i.id = ?",
+    ).get(own.id, target.id)
+    return Number(row?.free ?? 0)
+  }
+
+  /** A payment settles each invoice it names by the amount the source gives, then the rest as far as both allow. */
+  const settle = (made: PaymentDetail, shares: Share[]): string => {
     const units = (amount: string) => minorUnits(amount, made.currency)
     let left = units(made.unallocated)
-    for (const invoice of related.get("settles") ?? []) {
-      const share = Math.min(left, units(finance.invoice(invoice).open))
+    const given = shares.filter((one) => one.amount !== null)
+    for (const { invoice, amount } of [...given, ...shares.filter((one) => one.amount === null)]) {
+      const share = amount === null ? Math.min(left, freeOn(invoice, made.ref)) : units(amount)
       if (share <= 0) continue
-      const amount = formatDecimal(share, scaleOf(made.currency))
-      finance.allocate({ payment: made.ref, invoice, amount, by: IMPORTER })
+      finance.allocate({
+        payment: made.ref,
+        invoice,
+        amount: formatDecimal(share, scaleOf(made.currency)),
+        by: IMPORTER,
+      })
       left -= share
     }
     return made.ref
+  }
+
+  /** A payment the import proposed and the owner has not decided yet takes its record's settles relations again. */
+  const resettle = (recordId: number, ref: string): boolean => {
+    const payment = finance.payment(ref)
+    if (payment.review !== "proposed" || payment.author.type !== "bot" || payment.author.name !== IMPORTER.bot)
+      return false
+    for (const { invoice } of payment.allocations) finance.unallocate({ payment: ref, invoice, by: IMPORTER })
+    settle(finance.payment(ref), relatedOf(recordId, "payment").shares)
+    return true
+  }
+
+  /** The settles amounts a payment record gives, refused at the first one that is not money or goes past the payment. */
+  const checkShares = (record: EnvelopeRecord) => {
+    const relations = record.relations ?? []
+    if (record.type !== "payment" || !relations.some((relation) => relation.amount !== undefined)) return
+    const fields = record.fields ?? {}
+    if (typeof fields.currency !== "string") return
+    const currency = fields.currency
+    let left: number
+    try {
+      left = minorUnits(fields.amount, currency)
+    } catch {
+      return
+    }
+    for (const [index, { amount }] of relations.entries()) {
+      if (amount === undefined) continue
+      const at = ["relations", index, "amount"]
+      let units = 0
+      try {
+        units = minorUnits(amount, currency, "a settles amount")
+      } catch (error) {
+        if (!(error instanceof CliError)) throw error
+        refusal(error.message, codeOf(error), at)
+      }
+      if (units <= 0) refusal("a settles amount is more than 0", "money.amount", at)
+      left -= units
+      if (left < 0)
+        refusal(
+          `the settles amounts add up to more than the payment's ${String(fields.amount)} ${currency}`,
+          "record.over-payment",
+          at,
+        )
+    }
   }
 
   /** Records that waited on `target` and may now have their entity, and theirs in turn. */
@@ -262,12 +341,22 @@ export const recordStoreOver = (context: StoreContext): RecordStore => {
     }
   }
 
+  const storedRelations = (recordId: number): RecordRelation[] =>
+    sql("SELECT role, target_type, target_external_id FROM record_relations WHERE record_id = ?")
+      .all(recordId)
+      .map((row) => ({
+        role: String(row.role),
+        type: String(row.target_type),
+        external_id: String(row.target_external_id),
+      }))
+
   const relate = (recordId: number, accountId: number, relations: RecordRelation[], at: number) => {
     sql("DELETE FROM record_relations WHERE record_id = ?").run(recordId)
     for (const relation of relations)
       sql(
-        "INSERT OR IGNORE INTO record_relations (record_id, role, target_type, target_external_id, target_id, created_at) " +
-          "VALUES (?, ?, ?, ?, (SELECT id FROM records WHERE account_id = ? AND type = ? AND external_id = ?), ?)",
+        "INSERT OR IGNORE INTO record_relations (record_id, role, target_type, target_external_id, target_id, " +
+          "created_at, amount) VALUES (?, ?, ?, ?, (SELECT id FROM records WHERE account_id = ? AND type = ? " +
+          "AND external_id = ?), ?, ?)",
       ).run(
         recordId,
         relation.role,
@@ -277,6 +366,7 @@ export const recordStoreOver = (context: StoreContext): RecordStore => {
         relation.type,
         relation.external_id,
         at,
+        relation.amount ?? null,
       )
   }
 
@@ -319,6 +409,13 @@ export const recordStoreOver = (context: StoreContext): RecordStore => {
     const fields = JSON.stringify(record.fields)
     if (stored && stored.fingerprint === fingerprint && stored.deleted_at == null)
       return { status: "unchanged", id: Number(stored.id) }
+    checkShares(record)
+    // Whether the payment the record stands for differs in more than whom it settles, against the stored version.
+    const beyondSettles =
+      stored?.entity_id != null &&
+      (stored.projected_fingerprint !== stored.fingerprint ||
+        unsettled(JSON.parse(String(stored.fields)) as Row, storedRelations(Number(stored.id))) !==
+          unsettled(record.fields ?? {}, relations))
     const id = stored
       ? Number(stored.id)
       : Number(
@@ -340,15 +437,25 @@ export const recordStoreOver = (context: StoreContext): RecordStore => {
       ).run(id, record.type, record.external_id, accountId)
     relate(id, accountId, relations, time)
     let projected = false
+    let flagged = stored?.entity_id != null && stored.projected_fingerprint !== fingerprint
     if (isProjected(record.type) && stored?.entity_id == null) {
       const done = project({ id, type: record.type, fields, account_id: accountId }, source)
       if (done.proposed) proposed.push(done.proposed)
       projected = done.proposed !== undefined
+    } else if (record.type === "payment" && stored?.entity_type === "payment" && stored.deleted_at == null) {
+      const ref = `payment:${Number(stored.entity_id)}`
+      if (resettle(id, ref)) {
+        proposed.push(ref)
+        if (!beyondSettles) {
+          sql("UPDATE records SET projected_fingerprint = fingerprint WHERE id = ?").run(id)
+          flagged = false
+        }
+      }
     }
     return {
       status: stored ? "updated" : "created",
       id,
-      flagged: stored?.entity_id != null && stored.projected_fingerprint !== fingerprint,
+      flagged,
       // Records waiting on this one move only when it has an entity: made now, or back from a delete.
       complete: projected || (stored?.deleted_at != null && stored.entity_id != null),
     }
@@ -394,8 +501,8 @@ export const recordStoreOver = (context: StoreContext): RecordStore => {
             if (done.complete) complete.push(done.id)
           } catch (error) {
             if (!(error instanceof CliError)) throw error
-            const at = (error.details as { at?: string } | undefined)?.at ?? "fields"
-            const pointer = pointerOf("records", item.index, at)
+            const at = (error.details as { at?: string | (string | number)[] } | undefined)?.at ?? "fields"
+            const pointer = pointerOf("records", item.index, ...[at].flat())
             outcomes.push({
               index: item.index,
               key: item.record.key,
@@ -425,13 +532,15 @@ export const recordStoreOver = (context: StoreContext): RecordStore => {
     revision: row.revision == null ? null : Number(row.revision),
     fingerprint: String(row.fingerprint),
     relations: sql(
-      "SELECT role, target_type, target_external_id, target_id FROM record_relations WHERE record_id = ? ORDER BY id",
+      "SELECT role, target_type, target_external_id, target_id, amount FROM record_relations WHERE record_id = ? " +
+        "ORDER BY id",
     )
       .all(Number(row.id))
       .map((relation) => ({
         role: String(relation.role),
         type: String(relation.target_type),
         externalId: String(relation.target_external_id),
+        amount: relation.amount == null ? null : String(relation.amount),
         resolved: relation.target_id != null,
       })),
     entity: entityRef(row.entity_type, row.entity_id),

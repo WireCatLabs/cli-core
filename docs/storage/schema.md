@@ -1951,6 +1951,7 @@ A record's reference to another record of the same account. A target not yet imp
 | `target_external_id` | text | not null |  |  |
 | `target_id` | integer |  | → `records.id` | null until the target is imported |
 | `created_at` | integer | not null |  | when this row was saved here |
+| `amount` | text |  |  | the share of a payment a settles relation names, a decimal in its currency; null: as far as both allow |
 
 *Keys and indexes:* `UNIQUE (record_id, role, target_type, target_external_id)`, `INDEX (target_type, target_external_id)`, `INDEX (target_id)`
 

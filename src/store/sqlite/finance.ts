@@ -213,6 +213,11 @@ export interface FinanceStore {
    */
   allocate(input: { payment: string; invoice: string; amount: string; by: Author }): Promise<Allocation>
   /**
+   * Takes one allocation back from a payment still proposed, under the same rule as `allocate`. A confirmed payment's
+   * allocations are decided money and stay.
+   */
+  unallocate(input: { payment: string; invoice: string; by: Author }): Promise<PaymentDetail>
+  /**
    * The owner confirms a proposed `invoice:` or `payment:`; only the owner decides money. A payment whose allocations
    * would settle more than an invoice's total, given the confirmed payments by then, is refused and stays proposed.
    */
@@ -588,6 +593,18 @@ export const financeOperationsOver = (context: StoreContext): FinanceOperations 
     return type === "invoice" ? invoiceDetail(ref) : paymentDetail(ref)
   }
 
+  const mayAllocate = (row: Row, by: Author) => {
+    if (by === "owner") return
+    const own =
+      row.author_type === "bot" && row.author_name != null && botKey(String(row.author_name)) === botKey(by.bot)
+    if (row.review !== "proposed" || !own)
+      refuse(
+        `only the owner allocates payment:${row.id}; a bot allocates only from a payment it proposed that is still proposed`,
+        "finance.owner-only",
+        "permission_error",
+      )
+  }
+
   const limitOf = (limit: number | undefined) => Math.min(Math.max(limit ?? 100, 1), 500)
 
   return {
@@ -834,16 +851,7 @@ export const financeOperationsOver = (context: StoreContext): FinanceOperations 
     allocate: ({ payment, invoice, amount, by }) => {
       const row = rowOf(payment, "payment")
       const ref = `payment:${row.id}`
-      if (by !== "owner") {
-        const own =
-          row.author_type === "bot" && row.author_name != null && botKey(String(row.author_name)) === botKey(by.bot)
-        if (row.review !== "proposed" || !own)
-          refuse(
-            `only the owner allocates ${ref}; a bot allocates only from a payment it proposed that is still proposed`,
-            "finance.owner-only",
-            "permission_error",
-          )
-      }
+      mayAllocate(row, by)
       if (row.review === "rejected" || row.deleted_at != null)
         refuse(`${ref} is ${String(row.review)}`, "finance.allocate")
       const currency = String(row.currency)
@@ -857,6 +865,29 @@ export const financeOperationsOver = (context: StoreContext): FinanceOperations 
       })
       const found = allocationsWhere("payment_id", Number(row.id)).find((one) => one.invoice === `invoice:${invoiceId}`)
       return found as Allocation
+    },
+    unallocate: ({ payment, invoice, by }) => {
+      const row = rowOf(payment, "payment")
+      const ref = `payment:${row.id}`
+      mayAllocate(row, by)
+      if (row.review !== "proposed" || row.deleted_at != null)
+        refuse(
+          `${ref} is ${row.deleted_at != null ? "deleted" : String(row.review)}; only a proposed payment's ` +
+            "allocations are taken back",
+          "finance.unallocate",
+        )
+      const target = rowOf(invoice, "invoice")
+      write(database, () => {
+        const gone = database
+          .prepare("DELETE FROM payment_allocations WHERE payment_id = ? AND invoice_id = ?")
+          .run(Number(row.id), Number(target.id))
+        if (gone.changes === 0)
+          throw new CliError("not_found", `${ref} is not allocated to invoice:${target.id}`, {
+            reason: "finance.not-allocated",
+          })
+        settle(Number(target.id))
+      })
+      return paymentDetail(ref)
     },
     confirm: (reference, by, reason) => decide(reference, by, reason, true),
     reject: (reference, by, reason) => decide(reference, by, reason, false),
@@ -890,6 +921,7 @@ export const financeStoreOver = (context: StoreContext): FinanceStore => {
     payment: async (reference) => operations.payment(reference),
     payments: async (filter) => operations.payments(filter),
     allocate: async (input) => operations.allocate(input),
+    unallocate: async (input) => operations.unallocate(input),
     confirm: async (reference, by, reason) => operations.confirm(reference, by, reason),
     reject: async (reference, by, reason) => operations.reject(reference, by, reason),
     openTotals: async (filter) => operations.openTotals(filter),

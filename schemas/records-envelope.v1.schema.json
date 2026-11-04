@@ -101,6 +101,11 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 512
+        },
+        "amount": {
+          "type": "string",
+          "pattern": "^[0-9]{1,16}(\\.[0-9]{1,6})?$",
+          "description": "A settles relation's share of the payment, a decimal in its currency"
         }
       }
     }
