@@ -168,6 +168,7 @@ describe("mail review", () => {
       "sender_name",
       "text",
       "timestamp",
+      "untrusted",
     ])
     expect(threads(await box.json([]))).toEqual(["t-bill"])
   })
@@ -388,14 +389,16 @@ describe("what the mail pipeline reads and may write under the read-only lock", 
     return { answer, cursor: next.find((one) => one.step === "mail-messages.acknowledge")?.args?.cursor as string }
   }
 
-  it("leaves out suspicious senders and gives each email its fingerprint and whether its sender is new", async () => {
+  it("leaves out suspicious senders and gives each email its own text, its fingerprint and whether its sender is new", async () => {
     const box = await mailbox()
     await box.thread("t-first", email("first", 3))
     await box.synced()
     const start = await read(box)
     expect((await box.cli(["messages", "acknowledge", "--holder", "triage", "--cursor", start.cursor])).code).toBe(0)
     await box.thread("t-again", email("again", 1))
-    await box.thread("t-new", email("hello", 1, { from: { address: "bob@example.org", name: "Bob" } }))
+    const reply =
+      "Can we meet on Friday?\n-- \nBob Example\n\nOn Mon, 3 Nov 2026, Ann <ann@example.com> wrote:\n> earlier"
+    await box.thread("t-new", email("hello", 1, { from: { address: "bob@example.org", name: "Bob" }, bodyText: reply }))
     await box.thread("t-scam", email("scam", 1, { from: { address: "scam@example.net", name: null } }))
     await box.withStore((store) =>
       store.mail.setSenderScores(
@@ -414,6 +417,10 @@ describe("what the mail pipeline reads and may write under the read-only lock", 
     expect(byThread["t-again"]?.email).toMatchObject({ new_sender: false, sender_identities: 1 })
     expect(byThread["t-new"]?.email).toMatchObject({ new_sender: true, sender_identities: 1 })
     const cited = byThread["t-new"] as (typeof answer.items)[number]
+    expect(cited.text).toBe("hello\n\nCan we meet on Friday?")
+    expect((cited as typeof cited & { untrusted: string[] }).untrusted).toEqual(
+      expect.arrayContaining(["text", "sender_name", "email.subject", "email.from.name"]),
+    )
     const staged = await box.withStore(async (store) => {
       await store.knowledge.addProject({ name: "Example" })
       return store.mailFindings.stage(

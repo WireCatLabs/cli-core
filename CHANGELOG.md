@@ -86,6 +86,20 @@ shape of this file.
 - **`mailStats` from `./mail`**: stored mail received and sent per calendar day, week (by its Monday) or sender, for
   the `search mail` query, counts only and no search recorded; `mailStatsItem` turns it into the new `mail_counts`
   entity, `{ by, received, sent, rows: [{ key, name, received, sent }] }`. By sender it counts received mail only.
+- **`mailOwnText(body)` (`@wirecat/cli-core/mail`): what an email says itself, without quoted earlier mail and the
+  signature.** It drops `>` lines, cuts at a reply header ("On … wrote:", "Le … a écrit :", "Am … schrieb …:",
+  "… написал(а):", Gmail's Russian "<address>:") and at an Outlook From/Sent block in English, German, French, Spanish
+  and Russian, and drops the `-- ` signature, sign-offs and mobile footers. A forwarded message stays whole; an email
+  that is only a quote keeps its body.
+
+### Security
+
+- **`review --holder` gives each email's own text** (`mailOwnText`), so an agent's model does not read earlier mail
+  or signatures. The fingerprint a finding cites is still taken over the stored body; other reads show the whole text.
+- **Review and inbox items say which fields others wrote** (WC-SECR-21): `summaryOf` items, and so every catch-up
+  answer and each mail `review` item, carry `untrusted` (`SUMMARY_UNTRUSTED`: chat title, sender name, text,
+  transcript, attachment names); a mail review item adds the email's subject and the names in its headers, as search
+  hits do. The `message.summary` entity takes the field.
 
 ### Fixed
 
