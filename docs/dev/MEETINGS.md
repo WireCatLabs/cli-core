@@ -269,6 +269,20 @@ not counted. Weeks start on Monday in `timeZone` (UTC when not given). Words are
 transcript text is read. More than `maxRows` lines (default and at most 500000) is an error, never a silent cut.
 `aggregateMeetingStats` is the same arithmetic over rows a host already has.
 
+`readMeetingCounts(store, { by, timeZone, limit, ...selection })` answers how many meetings there were and how long
+they took, per day, per week (its Monday) or per series, over the same selection, with `meetingCountsItem` as the
+answer (`{ by, meetings, minutes, mean_minutes, transcripts, rows: [{ key, name, meetings, minutes, mean_minutes,
+transcripts }], has_more }`). It reads `meetings` alone, one row per meeting through `meetings_by_time`, never
+transcript lines, so it has no row cap. A meeting's length is `duration_ms`, else its end less its start; a meeting
+with no end counts in `meetings` but not in `minutes`, and `mean_minutes` is over the meetings that have a length
+(`null` when none has). `transcripts` counts the meetings with a current transcript. Days and weeks are read in
+`timeZone` (UTC when not given); a day or week with no meeting has no row, and a meeting with no start is in the
+totals and its series but in no day or week. Under `series` a row is keyed `series:<the series' external id>` and
+named by the series title (else its newest meeting's title), busiest by minutes first; every meeting outside a
+series shares one row keyed `NO_SERIES` (`no-series`) with no name. `limit` (default 100) keeps the newest days or
+weeks, oldest first, or the busiest series, and `has_more` says it left rows out. `aggregateMeetingCounts` is the
+same arithmetic over meetings a host already has.
+
 ## Project-word discovery SDK
 
 `readMeetingProjectDiscovery` from the services export resolves one existing project through

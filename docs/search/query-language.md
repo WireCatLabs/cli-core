@@ -410,7 +410,7 @@ enum или unsupported сочетание дают ошибку, а не пус
 | `date` | time | ISO/calendar timezone; today, yesterday, 30m/2h/7d ago | `date:[2026-01-01 TO 2026-02-01}` | term, phrase, range |
 | `source` | enum | internal, file | `source:internal` | term, phrase |
 | `kind` | enum | private, saved, bot, service, group, channel, unknown | `kind:private` | term, phrase |
-| `has` | enum | text, attachment, link, file, photo, image, video, audio, voice, sticker, contact, location, poll | `has:file` | term, phrase |
+| `has` | enum | text, attachment, link, file, photo, image, video, audio, voice, sticker, contact, location, poll, transcript | `has:file` | term, phrase |
 | `topic` | kw | string id, one chat required | `chat:7 AND topic:42` | term, phrase |
 | `in` | kw | lowercase provider/account class | `in:bots` | term, phrase |
 | `preset` | enum | password, code, api-key, secret, card, bank, passport, phone, email, telegram-link, url, contact, location | `preset:secret` | term, phrase |
@@ -445,7 +445,9 @@ enum или unsupported сочетание дают ошибку, а не пус
 MAX — нет, там ищите по расширению (`filename:*.pdf`). `/` в запросе начинает regex, поэтому полный
 тип пишется в кавычках (`mime:"application/pdf"`), а `mime:image` находит любые картинки.
 Ссылку на сайт находит фраза: `has:link AND "github.com"`; ссылка только карточкой предпросмотра
-тоже считается. `tag:work` находит сообщение с меткой `work`, сообщение в чате с этой меткой и
+тоже считается. `has:transcript` находит голосовое сообщение, у которого есть расшифровка
+(`stats messages show --by day -- has:transcript date>=30d` считает расшифрованные голосовые по дням); в почте
+оно ничего не находит. `tag:work` находит сообщение с меткой `work`, сообщение в чате с этой меткой и
 сообщение от человека с этой меткой. Метки ставит владелец: `tags add work --chat <chat>`,
 `--contact <person>` или `--message <id> --chat <chat>`; они живут только в локальном хранилище и
 никуда не отправляются. Метка — 1–32 символа a–z, цифры и дефис, регистр не важен; `NOT tag:work`

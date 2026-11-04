@@ -1,5 +1,11 @@
 import { CliError } from "@wirecat/cli-base"
-import { aggregateMeetingStats, type MeetingStatsRow, type MeetingStatsStore } from "../../meetings/index.js"
+import {
+  aggregateMeetingCounts,
+  aggregateMeetingStats,
+  type MeetingCountsMeeting,
+  type MeetingStatsRow,
+  type MeetingStatsStore,
+} from "../../meetings/index.js"
 import { checkMeetingCancelled } from "./meeting-operation.js"
 import { positiveReadInteger } from "./meeting-reads.js"
 import { meetingSelectionSql } from "./meeting-selection.js"
@@ -7,6 +13,15 @@ import type { StoreContext } from "./open.js"
 import { read } from "./transaction.js"
 
 const MOST_ROWS = 500_000
+
+/** One row per selected meeting through `meetings_by_time`; a current transcript is neither deleted nor superseded. */
+export const meetingCountsSql = (where: string) =>
+  `SELECT m.started_at, coalesce(m.duration_ms, m.ended_at - m.started_at) AS duration_ms,
+     EXISTS (SELECT 1 FROM meeting_transcripts t WHERE t.meeting_id = m.id AND t.deleted_at IS NULL
+       AND t.superseded_at IS NULL) AS transcribed,
+     s.external_id AS series_key, CASE WHEN s.id IS NULL THEN NULL ELSE coalesce(s.title, m.title) END AS series_title
+   FROM meetings m LEFT JOIN meeting_series s ON s.id = m.meeting_series_id
+   WHERE ${where} ORDER BY m.started_at DESC`
 
 /**
  * One transcript per meeting — its earliest current one — so a local transcript beside the provider's does not count
@@ -58,6 +73,27 @@ export const meetingStatsOver = ({ database }: StoreContext): MeetingStatsStore 
         ),
         input.timeZone,
       )
+    })
+  },
+  async meetingCounts(input) {
+    checkMeetingCancelled(input.signal)
+    positiveReadInteger(input.accountId, "accountId")
+    return read(database, () => {
+      const { clauses, params } = meetingSelectionSql(input)
+      const meetings = database
+        .prepare(meetingCountsSql(clauses.join(" AND ")))
+        .all(...params)
+        .map(
+          (row): MeetingCountsMeeting => ({
+            startedAt: row.started_at === null ? null : Number(row.started_at),
+            durationMs: row.duration_ms === null ? null : Number(row.duration_ms),
+            transcribed: Number(row.transcribed) === 1,
+            seriesKey: row.series_key === null ? null : String(row.series_key),
+            seriesTitle: row.series_title === null ? null : String(row.series_title),
+          }),
+        )
+      checkMeetingCancelled(input.signal)
+      return aggregateMeetingCounts(meetings, input.by, input.timeZone, input.limit)
     })
   },
 })

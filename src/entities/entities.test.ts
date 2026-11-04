@@ -940,6 +940,15 @@ const samples: Record<EntityName, unknown> = {
     weeks: [{ week_start: "2026-10-19", meetings: 1, talk_ms: 5000 }],
     top_speakers: [],
   },
+  meeting_counts: {
+    by: "week",
+    meetings: 2,
+    minutes: 90,
+    mean_minutes: 45,
+    transcripts: 1,
+    rows: [{ key: "2026-10-19", name: null, meetings: 2, minutes: 90, mean_minutes: 45, transcripts: 1 }],
+    has_more: false,
+  },
   meeting_participants: {
     schema_version: 1,
     kind: "meeting_participants",
@@ -1120,6 +1129,7 @@ const samples: Record<EntityName, unknown> = {
     held: [],
   },
   store_clear: { cleared: false, dry_run: true, chats: 0, messages: 0, left: [] },
+  chat_coverage: { chats: 3, fetched: 1, partial: 1, never: 1, oldest_message_at: "2026-01-01T00:00:00.000Z" },
   store_export: { path: "./synthetic.jsonl", format: "jsonl", count: 0 },
   store_gap_plan: {
     version: 1,

@@ -84,6 +84,7 @@ import { mediaArchive, mediaArchiveCheck, mediaArchiveMove, mediaArchiveTimer } 
 import {
   event,
   meeting,
+  meetingCounts,
   meetingDetails,
   meetingHit,
   meetingLink,
@@ -144,6 +145,7 @@ import {
   storeRestore,
 } from "./store-maintenance.js"
 import {
+  chatCoverage,
   storeChatStatus,
   storeClear,
   storeExport,
@@ -211,6 +213,7 @@ export {
   chat,
   chatAdminChange,
   chatArchive,
+  chatCoverage,
   chatEvent,
   chatFolderChange,
   chatFolderOrder,
@@ -542,6 +545,7 @@ export const ENTITIES = {
   meeting_review: meetingReview,
   meeting_link: meetingLink,
   meeting_stats: meetingStats,
+  meeting_counts: meetingCounts,
   meeting_speaker: meetingSpeaker,
   meeting_participants: meetingParticipants,
   meeting_passage: meetingPassage,
@@ -579,6 +583,7 @@ export const ENTITIES = {
   job,
   store_chat_status: storeChatStatus,
   store_clear: storeClear,
+  chat_coverage: chatCoverage,
   store_export: storeExport,
   store_gap_plan: storeGapPlan,
   store_gap_repair: storeGapRepair,

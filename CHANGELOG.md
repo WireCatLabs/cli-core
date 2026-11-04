@@ -14,6 +14,19 @@ shape of this file.
   email from the server before it answers (`readEmailWhole`), and shows the new text. When that read fails it shows
   the stored email with `meta.complete: false` and an issue `mail.attachments-unread`. Without `whole` nothing changes.
   `readEmailWhole`'s body and text limits, reader and clock now default as sync's do.
+- **`has:transcript` in the messages query language** finds a voice message that has a transcription, so
+  `stats messages show --by day -- has:transcript date>=30d` counts transcribed voice messages per day. In mail it
+  finds nothing.
+- **`store chats status`** counts the account's searchable chats of every kind, channels included, by how much of each
+  the archive holds: `{ chats, fetched, partial, never, oldest_message_at }`. `fetched` is held back to the first
+  message, up to date and without gaps; `never` has no fetch recorded and no message held; the rest is `partial`,
+  including WhatsApp chats whose history was pushed. One statement over the store, no list of chats. tg, max and wa
+  get it with the bump.
+- **Meeting counts per day, week or series.** `readMeetingCounts` (services) and `store.meetings.meetingCounts`
+  answer meetings, minutes, mean minutes and meetings with a transcript, in total and per row, over the same
+  selection as `readMeetingStats`, reading `meetings` alone through `meetings_by_time`. `meetingCountsItem` and the
+  `meeting_counts` entity are the answer, for zoom-cli's `stats meetings history`. A meeting with no end counts in
+  `meetings`, not in `minutes`. `MeetingStatsStore` gains `meetingCounts`; only cli-core's own store implements it.
 - **An imported payment split across invoices settles each by the amount its source gives (store version 49).** A
   `settles` relation of the v1 records envelope takes an optional `amount`, a decimal in the payment's currency,
   kept in `record_relations.amount`. Additive within schema version 1: an older build refuses such a relation with
