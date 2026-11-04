@@ -2,6 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import { kindIn } from "../domain/providers.js"
 import type { WarmEmbedders } from "../embeddings/embed.js"
 import { meaningFloor } from "../embeddings/models.js"
+import { questionLookup, questionText } from "../search/question-plan.js"
 import type { EventHit, NearestEvent } from "../store/index.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
 import { excerpt } from "./excerpt.js"
@@ -15,6 +16,8 @@ export interface EventsQuery {
   accounts?: readonly AccountKey[]
   /** Every word as written: no stems. */
   exact?: boolean
+  /** A question typed as a sentence finds what holds some of its words, as `search messages --discover` does. */
+  discover?: boolean
   /** Latest start first instead of best first. */
   newest?: boolean
   /** For `date:`, which reads an event's start — the zone a bare day is read in. */
@@ -153,6 +156,7 @@ export const searchEvents = async (
     offset = 0,
     accounts,
     exact,
+    discover,
     newest,
     timezone,
     signal,
@@ -163,13 +167,14 @@ export const searchEvents = async (
   }: EventsQuery = {},
 ): Promise<EventsFound> => {
   if (!query.trim()) throw new CliError("validation_error", "say what to find in the events")
-  const { root, stemmer } = await storeQuery(store, query, {
+  const asked = discover && !exact && !newest ? questionLookup(query) : undefined
+  const { root, stemmer } = await storeQuery(store, asked ?? query, {
     ...(exact ? { exact: true } : {}),
     ...(timezone === undefined ? {} : { timezone }),
   })
   const accountIds = accounts === undefined ? undefined : await accountIdsOf(store, accounts)
   if (accountIds?.length === 0) return { query, by: "words", hits: [], has_more: false }
-  const words = plainQueryWords(query)
+  const words = plainQueryWords(asked === undefined ? query : questionText(query))
   const window = offset + limit
   let meaningSkipped: string | undefined
   let meaning: NearestEvent[] | undefined

@@ -1,3 +1,4 @@
+import { CliError } from "@wirecat/cli-base"
 import { implicitTextTerms, parseLucene, walkQuery } from "@wirecat/cli-base/query"
 import { normalize } from "../store/normalize.js"
 import { MESSAGE_PARSING } from "./lucene/types.js"
@@ -143,4 +144,40 @@ export function planQuestion(text: string, strict = false) {
   const render = (ws: string[]) => [...new Set(ws)].join(" ") + (scope ? ` ${scope}` : "")
   const queries = [...new Set([render(terms), render(alias)])].slice(0, 2)
   return { changed: true, natural: true, queries, scope, terms, rankingTerms: original, removed, aliases: changes }
+}
+
+/**
+ * Text as a question is searched. Its own "?" would parse as a one-character wildcard and send it to strict search
+ * (BUG-395); the colon of a time or ratio ("22:00", "1:1") would parse as a field and fail the whole search, and
+ * escaped it is syntax again, so it splits the numbers (BUG-450). A quoted timestamp keeps its colons (BUG-458).
+ */
+export const questionText = (text: string) =>
+  text
+    .replace(/(?<=\p{L})\?(?=\s|$)/gu, "")
+    .replace(/"(?:[^"\\]|\\.)*"|(?<=\d):(?=\d)/gu, (found) => (found === ":" ? " " : found))
+
+/** The words a question's partial lookup takes: its content words and the words its aliases stand for. */
+export const lookupTerms = (plan: ReturnType<typeof planQuestion>) => [
+  ...new Set(plan.terms.concat(plan.aliases.flatMap((alias) => words(alias.split(" -> ")[1] ?? "")))),
+]
+
+/** Any of the words, and every field the question names. */
+export const anyOfTerms = (terms: string[], scope: string) => `(${terms.join(" OR ")})${scope ? ` ${scope}` : ""}`
+
+/**
+ * The partial lookup `search messages --discover` runs, for a store that has no discovery of its own: a question's
+ * content words joined by OR, its fields kept. `undefined` when the text is not a question in natural language, so
+ * words and query syntax are searched as typed.
+ */
+export const questionLookup = (text: string): string | undefined => {
+  let plan: ReturnType<typeof planQuestion>
+  try {
+    plan = planQuestion(questionText(text))
+  } catch (error) {
+    // A query the messages language refuses is not a plain question; the store's own parser answers it.
+    if (error instanceof CliError) return undefined
+    throw error
+  }
+  const terms = plan.changed ? lookupTerms(plan) : []
+  return terms.length ? anyOfTerms(terms, plan.scope) : undefined
 }
