@@ -18,13 +18,15 @@ export { type MailIdsInput, mailIds } from "./ids.js"
 export { decodedLabelName, decodeMailboxName, labelName, systemLabel } from "./labels.js"
 export {
   acknowledgeMark,
+  advancePastSkipped,
   cursorOf,
   HOLD_PARTIAL_MS,
   HOLDER,
-  holderHasMail,
   MARK_BATCH,
   type MailMark,
+  type MailWaiting,
   type MarkRead,
+  mailWaiting,
   markOf,
   marksOf,
   readPastMark,

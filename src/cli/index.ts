@@ -331,6 +331,11 @@ export {
 } from "./envelope.js"
 export { withAbort } from "./execution.js"
 export {
+  parseEvidenceFindingsJson,
+  parseMailFindingsJson,
+  parseMeetingFindingsJson,
+} from "./findings-input.js"
+export {
   askSetupQuestions,
   asksAtStart,
   type FirstRun,
@@ -407,11 +412,6 @@ export {
 } from "./mcp-server-command.js"
 export { formatMeetingBatch, prepareMeetingBatch } from "./meeting-batch.js"
 export { meetingEvidenceItem, meetingPersonContextItem } from "./meeting-evidence-answer.js"
-export {
-  parseEvidenceFindingsJson,
-  parseMailFindingsJson,
-  parseMeetingFindingsJson,
-} from "./meeting-findings-input.js"
 export { meetingPreparationAnswer } from "./meeting-preparation-answer.js"
 export {
   type MeetingPreparationReader,
@@ -506,7 +506,12 @@ export {
 } from "./project-status.js"
 export { STATUS_ROWS, STATUS_SIGNAL_ROWS } from "./project-status-rows.js"
 export { fieldsOf, projectFields } from "./result-fields.js"
-export type { ScheduleHost } from "./schedule/schedule-command.js"
+export {
+  SCHEDULE_SETTINGS,
+  type ScheduleHost,
+  type ScheduleLimits,
+  scheduleLimitsOf,
+} from "./schedule/schedule-command.js"
 export { type DeclaredSetting, type SettingRow, settingRows, withSettingDefaults } from "./setting-defaults.js"
 export {
   type Config,

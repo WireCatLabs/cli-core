@@ -18,6 +18,7 @@ import { describe, expect, it, vi } from "vitest"
 import { runSchedule, type Schedule, scheduleFile } from "../../background/schedules.js"
 import type { Ran, ServerSystem } from "../../background/system.js"
 import type { Chat } from "../../domain/models.js"
+import type { MailWaiting } from "../../mail/marks.js"
 import type { MessengerAdapter } from "../../ports/messenger.js"
 import { pickChat } from "../../resolve.js"
 import { type BaseEnvironment, baseContext, provide } from "../context.js"
@@ -25,7 +26,7 @@ import type { Messenger } from "../messenger/context.js"
 import { scheduleCommand } from "../messenger/schedule-command.js"
 import { run } from "../program.js"
 import { settingsFor } from "../settings.js"
-import { scheduleCommandFor } from "./schedule-command.js"
+import { type ScheduleLimits, scheduleCommandFor } from "./schedule-command.js"
 
 const app = { command: "chat", appName: "chat-cli", envPrefix: "CHAT", description: "A test", version: "1.0.0" }
 const messenger: Messenger = {
@@ -154,7 +155,9 @@ describe.runIf(posix)("schedule on Linux", () => {
     }
     const result = await call(["list", "kind:agent name:brief", "--json"], env, system)
     expect(result.code, result.err).toBe(0)
-    expect(JSON.parse(result.out).items).toEqual([{ name: "brief", kind: "agent", when: "every 1h", last: null }])
+    expect(JSON.parse(result.out).items).toEqual([
+      { name: "brief", kind: "agent", when: "every 1h", last: null, spent_today_usd: 0 },
+    ])
     const refused = await call(["list", "kind:agent OR kind:command", "--json"], env, system)
     expect(refused.code).toBe(2)
     expect(ran).toEqual([])
@@ -694,8 +697,19 @@ describe("a failing schedule", () => {
 })
 
 describe.runIf(process.platform !== "win32")("an agent gated on new mail", () => {
-  const gated = (hasMail: () => boolean) => {
-    const { env: bare } = setup()
+  const MINUTE = 60_000
+  const waitingMail = (emails: number, minutesAgo = 0): MailWaiting => ({
+    unmarked: false,
+    emails,
+    oldestStoredAt: emails ? Date.now() - minutesAgo * MINUTE : null,
+  })
+  const gated = (waiting: () => MailWaiting, limits: ScheduleLimits = {}) => {
+    const { env: bare, root } = setup()
+    // Prints what claude's JSON answer holds: the report, the run's cost, and the holder the run was started for.
+    writeFileSync(
+      join(root, "bin", "claude"),
+      `#!/bin/sh\nprintf '{"type":"result","result":"holder %s","total_cost_usd":3}' "$CHAT_MAIL_HOLDER"\n`,
+    )
     // This host resolves settings in full, so the timer's run names the profile its schedule file holds.
     const env = { ...bare, CHAT_PROFILE: "default" }
     const { system } = machine("linux")
@@ -709,8 +723,9 @@ describe.runIf(process.platform !== "win32")("an agent gated on new mail", () =>
       },
       newMail: async (_command: Command, holder: string) => {
         asked.push(holder)
-        return hasMail()
+        return waiting()
       },
+      limits: () => limits,
     }
     const call = async (argv: string[]) => {
       const streams = captureStreams()
@@ -725,42 +740,85 @@ describe.runIf(process.platform !== "win32")("an agent gated on new mail", () =>
       )
       return { code, out: streams.stdout.join(""), err: streams.stderr.join("") }
     }
-    return { env, asked, call }
+    const add = async (...flags: string[]) => {
+      const added = await call(["default", "schedule", "agent", "triage", "claude", "p", "--every", "5m", ...flags])
+      expect(added.code, added.err).toBe(0)
+      return scheduleFile(env.CHAT_STATE_DIR, "triage")
+    }
+    const ran = (file: string) => existsSync(join(file, "..", "last.json"))
+    return { env, asked, call, add, ran }
   }
 
   it("may check every 5 minutes, and starts the agent only when mail is stored past the holder's mark", async () => {
-    let mail = false
-    const { env, asked, call } = gated(() => mail)
-    const added = await call([
-      "default",
-      "schedule",
-      "agent",
-      "triage",
-      "claude",
-      "p",
-      "--every",
-      "5m",
-      "--on-new-mail",
-      "mail-triage",
-    ])
-    expect(added.code, added.err).toBe(0)
-    const file = scheduleFile(env.CHAT_STATE_DIR, "triage")
+    let mail = waitingMail(0)
+    const { asked, call, add, ran } = gated(() => mail)
+    const file = await add("--on-new-mail", "mail-triage")
     expect(JSON.parse(readFileSync(file, "utf8"))).toMatchObject({ when: { every: 5 }, onNewMail: "mail-triage" })
 
     const skipped = await call(["schedule", "exec", file])
     expect(skipped.code, skipped.err).toBe(0)
-    expect(existsSync(join(file, "..", "last.json"))).toBe(false)
+    expect(ran(file)).toBe(false)
     const byHand = await call(["schedule", "run", "triage"])
-    expect(JSON.parse(byHand.out).item).toMatchObject({ skipped: true, holder: "mail-triage" })
+    expect(JSON.parse(byHand.out).item).toMatchObject({ skipped: true, why: expect.stringContaining("mail-triage") })
 
-    mail = true
-    expect((await call(["schedule", "exec", file])).code).toBe(0)
-    expect(existsSync(join(file, "..", "last.json"))).toBe(true)
+    mail = waitingMail(1)
+    expect((await call(["schedule", "run", "triage"])).code).toBe(0)
+    expect(readFileSync(join(file, "..", "latest.md"), "utf8")).toBe("holder mail-triage")
     expect(asked).toEqual(["mail-triage", "mail-triage", "mail-triage"])
   })
 
+  it("on its timer, waits until 10 emails wait or the oldest has waited 30 minutes", async () => {
+    let mail = waitingMail(9, 29)
+    const { call, add, ran } = gated(() => mail)
+    const file = await add("--on-new-mail", "mail-triage", "--max-cost-per-day", "0")
+
+    await call(["schedule", "exec", file])
+    expect(ran(file)).toBe(false)
+    mail = waitingMail(10, 1)
+    await call(["schedule", "exec", file])
+    expect(ran(file)).toBe(true)
+
+    const second = gated(() => waitingMail(1, 31))
+    const later = await second.add("--on-new-mail", "mail-triage")
+    await second.call(["schedule", "exec", later])
+    expect(second.ran(later)).toBe(true)
+  })
+
+  it("takes the config file's batch and wait, and a schedule's own flags over them", async () => {
+    const config = gated(() => waitingMail(3), { mailBatch: 3 })
+    const file = await config.add("--on-new-mail", "mail-triage")
+    await config.call(["schedule", "exec", file])
+    expect(config.ran(file)).toBe(true)
+
+    const flagged = gated(() => waitingMail(3, 20), { mailBatch: 3, mailWaitMinutes: 10 })
+    const own = await flagged.add("--on-new-mail", "mail-triage", "--mail-batch", "20", "--mail-wait", "1h")
+    expect(JSON.parse(readFileSync(own, "utf8"))).toMatchObject({ mailBatch: 20, mailWaitMinutes: 60 })
+    await flagged.call(["schedule", "exec", own])
+    expect(flagged.ran(own)).toBe(false)
+  })
+
+  it("starts no run once the day's runs cost the daily cap, says so, and starts again the next day", async () => {
+    const { call, add } = gated(() => waitingMail(1, 60), { maxCostPerDay: 100 })
+    const file = await add("--on-new-mail", "mail-triage", "--max-cost-per-day", "5")
+    const spent = () => JSON.parse(readFileSync(join(file, "..", "spend.json"), "utf8")).usd
+
+    await call(["schedule", "exec", file])
+    expect(JSON.parse(readFileSync(join(file, "..", "last.json"), "utf8"))).toMatchObject({ costUsd: 3 })
+    await call(["schedule", "exec", file])
+    expect(spent()).toBe(6)
+    await call(["schedule", "exec", file])
+    expect(spent()).toBe(6)
+    const listed = JSON.parse((await call(["schedule", "list"])).out).items[0]
+    expect(listed).toMatchObject({ spent_today_usd: 6, last: { skipped: { why: expect.stringContaining("$5.00") } } })
+
+    const spend = join(file, "..", "spend.json")
+    writeFileSync(spend, JSON.stringify({ day: "2000-01-01", usd: 6 }))
+    await call(["schedule", "exec", file])
+    expect(spent()).toBe(3)
+  })
+
   it("keeps the hourly floor for an agent that is not gated, and refuses a holder name that is not one", async () => {
-    const { call } = gated(() => true)
+    const { call } = gated(() => waitingMail(1))
     expect((await call(["schedule", "agent", "x", "claude", "p", "--every", "5m"])).err).toContain(
       "at least 60 minutes",
     )

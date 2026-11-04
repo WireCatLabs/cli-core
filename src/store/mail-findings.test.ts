@@ -2,7 +2,7 @@ import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, expect, it } from "vitest"
-import { parseMailFindingsJson } from "../cli/meeting-findings-input.js"
+import { parseMailFindingsJson } from "../cli/findings-input.js"
 import { formatLocator } from "../domain/locator.js"
 import type { MailFinding, MailFindingsInput } from "../mail/findings.js"
 import { proposalRegistry } from "../services/proposals/registry.js"
@@ -87,6 +87,14 @@ it("refuses mail that changed, partial mail, a finding citing nothing, and more 
   const partial = { ...(await f.task("t1")), evidence: [await f.cite("t-big", "big")] }
 
   await expect(stage([changed as MailFinding])).rejects.toMatchObject({ details: { reason: "mail-findings.stale" } })
+  const invented = {
+    ...(await f.task("t1")),
+    evidence: [{ reference: f.ref("t-lease", "never-sent"), fingerprint: "0".repeat(64) }],
+  }
+  await expect(stage([invented as MailFinding])).rejects.toMatchObject({
+    code: "not_found",
+    details: { reason: "mail-findings.not-stored" },
+  })
   await expect(stage([partial as MailFinding])).rejects.toMatchObject({ details: { reason: "mail-findings.partial" } })
   await expect(stage([{ ...(await f.task("t1")), evidence: [] }])).rejects.toThrow("1–8 cited")
   await expect(
@@ -182,4 +190,5 @@ it("lets only the owner decide, and makes each accepted finding where it belongs
   expect((await f.store.memories.get(made.m1 as string)).status).toBe("confirmed")
   expect(made.l1).toMatch(/^link:/)
   expect(made.c1).toMatch(/^person:/)
+  expect((await f.store.people.personByUid((made.c1 as string).slice("person:".length)))?.name).toBe("Ann Lessor")
 })

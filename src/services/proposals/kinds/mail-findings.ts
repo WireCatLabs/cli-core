@@ -50,8 +50,9 @@ const rowOf = (batch: MailFindingsBatch, createdAt: string): ProposalRow => {
 }
 
 /**
- * What an agent read in new mail, one batch per mailbox and run. Only the owner decides it (NEED-2187): an agent's
- * confirmation is refused whatever `agent_decisions` says. Confirming accepts the parts named, or every finding not
+ * What an agent read in new mail, one batch per mailbox and run. Only the owner decides it — mail is text a stranger
+ * wrote, so an agent that read it must not also approve what it made of it: an agent's confirmation is refused
+ * whatever `agent_decisions` says. Confirming accepts the parts named, or every finding not
  * rejected before; the rest are rejected.
  */
 export const mailFindingsKind = (store: Pick<MessageStore, "mailFindings" | "proposedActions">): ProposalKind => {

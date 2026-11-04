@@ -1,5 +1,5 @@
 import { expect, it } from "vitest"
-import { parseMeetingFindingsJson } from "./meeting-findings-input.js"
+import { parseMeetingFindingsJson } from "./findings-input.js"
 
 const input = {
   schema_version: 1,

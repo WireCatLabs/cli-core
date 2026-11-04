@@ -1,5 +1,5 @@
 import { afterEach, expect, it } from "vitest"
-import { parseEvidenceFindingsJson } from "../cli/meeting-findings-input.js"
+import { parseEvidenceFindingsJson } from "../cli/findings-input.js"
 import { contextEvidenceFingerprint } from "../context/evidence.js"
 import type { FindingsInput } from "../meetings/index.js"
 import { contextEvidenceFixture } from "../testing/context-evidence.js"
