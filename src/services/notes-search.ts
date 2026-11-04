@@ -308,6 +308,8 @@ export interface FoundNote {
   links: { to: Link["to"]; target_text: Link["targetText"]; kind: Link["kind"]; anchor: Link["anchor"] }[]
   /** Which halves of the search found it. */
   found_by: ("title" | "words" | "meaning")[]
+  /** The cosine of the nearest chunk, when meaning found it: comparable with other records under the same model. */
+  meaning_score?: number
 }
 
 export interface LinkedRecord {
@@ -630,6 +632,7 @@ export const searchNotes = async (
   }
   let meaningSkipped: string | undefined
   let meaning: { ref: string; note: Note; at: string }[] | undefined
+  const cosines = new Map<string, number>()
   /** Every note found by meaning; `meaningComplete` is false when the nearest overall were cut at the depth. */
   let meaningRefs: Set<string> | undefined
   let meaningComplete = true
@@ -646,7 +649,7 @@ export const searchNotes = async (
     const depth = Math.max(window, CANDIDATES)
     try {
       const within = narrowing === undefined ? undefined : await filterRefs(store, narrowing, scope)
-      let nearest: { ref: string }[]
+      let nearest: { ref: string; score: number }[]
       if (within === undefined) {
         nearest = await nearestNotes(store, words, { ...lane, limit: depth })
         meaningComplete = nearest.length < depth
@@ -661,8 +664,9 @@ export const searchNotes = async (
         narrowing,
         scope,
       )
-      meaning = nearest.flatMap(({ ref }) => {
+      meaning = nearest.flatMap(({ ref, score }) => {
         const found = allowed.get(ref)
+        if (found) cosines.set(ref, score)
         return found ? [{ ref, ...found }] : []
       })
       meaningRefs ??= new Set(meaning.map(({ ref }) => ref))
@@ -744,6 +748,7 @@ export const searchNotes = async (
       excerpt: firstLine(note.text, words),
       links,
       found_by: foundBy,
+      ...(cosines.has(ref) ? { meaning_score: cosines.get(ref) as number } : {}),
     })
     for (const link of new Map(links.map((link) => [link.to ?? `?${link.target_text}`, link])).values()) {
       const key = link.to ?? `?${link.target_text}`
