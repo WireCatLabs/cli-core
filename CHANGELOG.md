@@ -54,7 +54,7 @@ shape of this file.
   and Russian, and drops the `-- ` signature, sign-offs and mobile footers. A forwarded message stays whole; an email
   that is only a quote keeps its body.
 
-### Changed
+### Security
 
 - **`review --holder` gives each email's own text** (`mailOwnText`), so an agent's model does not read earlier mail
   or signatures. The fingerprint a finding cites is still taken over the stored body; other reads show the whole text.
