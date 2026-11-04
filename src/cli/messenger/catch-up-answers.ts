@@ -49,6 +49,9 @@ export const catchUpQuery = (
 type Read = Message & { chatTitle?: string | null }
 
 /** One message of a catch-up answer: the fields `inbox` and `review` show, for every messenger and for mail. */
+/** Written by others, and by the owner, so an agent quotes it and never follows it (WC-SECR-21). */
+export const SUMMARY_UNTRUSTED = ["chat_title", "sender_name", "text", "transcript", "attachments.name"]
+
 export const summaryOf = (message: Read, reader: AccountKey) => {
   const { ref, chat_id, chat_title, timestamp, sender_name, sender_is_me, outgoing, text, transcript, attachments } =
     messageItem(message, reader)
@@ -63,6 +66,7 @@ export const summaryOf = (message: Read, reader: AccountKey) => {
     text,
     ...(transcript === undefined ? {} : { transcript }),
     attachments,
+    untrusted: SUMMARY_UNTRUSTED,
   }
 }
 
