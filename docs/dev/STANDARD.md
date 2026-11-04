@@ -1018,6 +1018,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--max-chats` | `<n>` | at most this many chats in one run. **local graph work defaults to 20; opt-in --sync-first network refresh defaults to 5, so help distinguishes the two uses** | `20` | `conversations embed`, `conversations links rebuild`, `conversations rebuild`, `search conversations`, `search messages` (max, tg only), `stats contacts top` (max, tg only), `stats messages show` (max, tg only), `stats messages top` (max, tg only) |
 | `--max-chunks` | `<n>` | at most this many chunks embedded in one run | `2000` | `conversations embed`, `conversations rebuild`, `search conversations` |
 | `--max-cost` | `<usd>` | stop an agent's run that costs more than this, in US dollars |  | `schedule agent` (planned) |
+| `--max-cost-per-day` | `<usd>` | start no agent run for the rest of the day once its runs cost this much, in US dollars |  | `schedule agent` (planned) |
 | `--max-gaps` | `<n>` | maximum interior coverage gaps repaired in this run |  | `store gaps repair` |
 | `--max-input-bytes` | `<bytes>` | at most this many bytes of buffered stdin | `16777216` | every command |
 | `--max-meetings` | `<n>` | how many of the meeting account's meetings to look through, newest first, or all for every one (default 100) |  | `search all` (planned) |
