@@ -19,6 +19,7 @@ import { fieldsOfQuery as fieldsOf, meaningWords } from "../search/lucene/meanin
 import { validateFields } from "../search/lucene/registry.js"
 import { hasStems, type ResolvedNode } from "../search/lucene/resolved.js"
 import { isQueryLimit, SEARCH_QUERY } from "../search/lucene/types.js"
+import { questionLookup, questionText } from "../search/question-plan.js"
 import { createStemmer, DEFAULT_STEMMERS, type Stemmer } from "../search/stem.js"
 import { type SearchTotal, TOTAL_CAP, totalOf } from "../search/total.js"
 import type { Link, NearestNote, Note, NoteHit } from "../store/index.js"
@@ -349,6 +350,8 @@ export interface NotesQuery {
   withInternal?: boolean
   source?: Note["source"]
   exact?: boolean
+  /** A question typed as a sentence finds what holds some of its words, as `search messages --discover` does. */
+  discover?: boolean
   timezone?: string
   env?: NodeJS.ProcessEnv
   /** The tool's command, named in the hint when the model is missing. */
@@ -592,6 +595,7 @@ export const searchNotes = async (
     withInternal,
     source: given,
     exact = false,
+    discover = false,
     timezone,
     env,
     command,
@@ -608,13 +612,15 @@ export const searchNotes = async (
   const filter =
     [expression ? `(${expression})` : "", label === undefined ? "" : `tag:${label}`].filter(Boolean).join(" AND ") ||
     undefined
-  const parsed = query.trim() ? parsedQuery(query, exact) : undefined
+  const lookup = discover && !exact ? questionLookup(query) : undefined
+  const parsed = query.trim() ? parsedQuery(lookup === undefined ? query : questionText(query), exact) : undefined
   const words = parsed === undefined ? "" : meaningWords(parsed)
   const narrowing = allOf([
     ...(parsed === undefined ? [] : [fieldsOfQuery(parsed)].filter((node) => node !== undefined)),
     ...(filter === undefined ? [] : [parsedQuery(filter)]),
   ])
-  const text = [query.trim() ? `(${query})` : "", filter ?? ""].filter(Boolean).join(" AND ")
+  const asked = lookup ?? query
+  const text = [asked.trim() ? `(${asked})` : "", filter ?? ""].filter(Boolean).join(" AND ")
   const window = offset + limit
   const scope = {
     ...(folderIds === undefined ? {} : { folderIds }),
@@ -689,9 +695,12 @@ export const searchNotes = async (
     list.forEach(({ ref, note, at }, rank) => {
       if (tierRefs.has(ref)) return
       const held = ranked.get(ref) ?? { note, at, score: 0, foundBy: [] }
-      held.score += 1 / (RRF_K + rank + 1)
       held.foundBy.push(by)
       ranked.set(ref, held)
+      // A question's any-word list holds nearly every note meaning finds; a second vote there buried notes found by
+      // words alone (recall@10 0.55 against 1.00, cli-testing knowledge-graph-memory, MEMO-36).
+      if (by === "meaning" && lookup !== undefined && held.foundBy.includes("words")) return
+      held.score += 1 / (RRF_K + rank + 1)
     })
   add(matched.items, "words")
   if (meaning !== undefined) add(meaning, "meaning")

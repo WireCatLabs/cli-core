@@ -308,7 +308,7 @@ export const messagesService = (deps: ServiceDeps): MessagesService => {
     )
   }
 
-  const serverThenStore = async (store: MessageStore, account: AccountKey, query: SearchQuery) => {
+  const serverThenStore = async (store: MessageStore, account: AccountKey, query: SearchQuery, lanes = true) => {
     const server = await searchServer(deps, query)
     const only =
       query.backend === "server" && server
@@ -322,8 +322,8 @@ export const messagesService = (deps: ServiceDeps): MessagesService => {
       account,
       only ? { ...query, only } : query,
       deps.messenger,
-      query.discover && query.kind !== "mail" ? meaningLane(deps) : undefined,
-      query.discover && query.kind !== "mail" ? rerankLane(deps) : undefined,
+      lanes && query.discover && query.kind !== "mail" ? meaningLane(deps) : undefined,
+      lanes && query.discover && query.kind !== "mail" ? rerankLane(deps) : undefined,
     )
     return { found, server }
   }
@@ -332,7 +332,8 @@ export const messagesService = (deps: ServiceDeps): MessagesService => {
     (store: MessageStore, account: AccountKey) =>
     async (query: SearchQuery): Promise<SearchFound> => {
       await topUp(store)
-      const { found, server } = await serverThenStore(store, account, query)
+      // `search all` adds meaning itself, and a reranker's load would cost it seconds on every question.
+      const { found, server } = await serverThenStore(store, account, query, false)
       return withServer(found, account, server)
     }
 

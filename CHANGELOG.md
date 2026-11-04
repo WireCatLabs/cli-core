@@ -7,6 +7,16 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **`search all` finds records for a question typed as a sentence.** When the text is a question in natural language
+  and not `exact`, messages and mail go through discovery (as `search messages --discover`), and notes and calendar
+  events search any of the question's content words, ranked by the store. Before, every word had to be in one record,
+  so a question found nothing (MEMO-36). tg, max and wa still ask the messenger's server with the question as typed.
+  For a question, a note found by both words and meaning gets one vote, not two, so notes found by words alone are not
+  buried. Plain words, query syntax and `exact` are searched strictly, as before. `searchNotes` and `searchEvents`
+  take `discover`.
+
 ### Added
 
 - **A mail CLI's `messages show` can read an email again when a sync's limit left its attachment unread.**
