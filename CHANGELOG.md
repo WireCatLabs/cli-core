@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.575.0 — 05.11.2026
+
 ### Added
 
 - **Orders in the store (store version 50).** `store.orders` keeps what the owner, his business or a client ordered:
