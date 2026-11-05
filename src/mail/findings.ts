@@ -12,8 +12,10 @@ import {
   findingFields,
   findingHash,
   findingId,
+  findingNeeds,
   findingText,
   meetingTimestamp,
+  snakeCase,
   type TaskFinding,
   validateBatch,
   validateFinding,
@@ -30,7 +32,8 @@ interface Cited {
   evidence: FindingEvidence[]
 }
 export type MailTaskFinding = TaskFinding
-export type MailFactFinding = FactFinding
+/** The owner reads `reason` beside every finding when he decides it, so every kind gives one. */
+export type MailFactFinding = FactFinding & { reason: string }
 export interface MailTaskUpdateFinding extends Cited {
   kind: "task_update"
   task: string
@@ -46,6 +49,7 @@ export interface MailMemoryFinding extends Cited {
   body: string
   subject?: string
   project?: string
+  reason: string
 }
 /** Address → person, person → organization, or thread → project. */
 export interface MailLinkFinding extends Cited {
@@ -58,7 +62,7 @@ export interface MailNewContactFinding extends Cited {
   kind: "new_contact"
   address: string
   name: string
-  reason?: string
+  reason: string
 }
 /** An invoice the mail carries; accepting it records the invoice through `store.finance`, confirmed. */
 export interface MailInvoiceFinding extends Cited {
@@ -183,6 +187,96 @@ const RULES: FindingsRules = {
   inboxTasks: true,
 }
 
+/**
+ * What each kind takes besides `id`, `kind` and `evidence`, in the order the validator reads them: `needs` it refuses
+ * without, `may` it takes. `--help`, `details.allowed` and `details.needs` all read this table, so they cannot drift
+ * from the checks. Some fields go together (due_at with due_evidence) or replace each other (counterparty or
+ * counterparty_name); the check of each kind says which.
+ */
+export const MAIL_FINDING_FIELDS = {
+  task: {
+    needs: ["type", "title", "reason", "commitment"],
+    may: ["project", "dueAt", "dueEvidence", "assignee", "assigneeEvidence", "externalId", "sourceUrl"],
+  },
+  task_update: { needs: ["task", "change", "reason"], may: ["dueAt", "detail"] },
+  fact: { needs: ["type", "statement", "reason"], may: ["subject", "project"] },
+  memory: { needs: ["memoryKind", "scope", "body", "reason"], may: ["subject", "project"] },
+  link: { needs: ["from", "to", "reason"], may: [] },
+  new_contact: { needs: ["address", "name", "reason"], may: [] },
+  invoice: {
+    needs: ["direction", "currency", "lines", "reason"],
+    may: [
+      "counterparty",
+      "counterpartyName",
+      "counterpartyEmail",
+      "total",
+      "number",
+      "issueDate",
+      "dueDate",
+      "project",
+    ],
+  },
+  payment: {
+    needs: ["direction", "amount", "currency", "date", "reason"],
+    may: [
+      "payer",
+      "payerName",
+      "payerEmail",
+      "payee",
+      "payeeName",
+      "payeeEmail",
+      "reference",
+      "allocations",
+      "project",
+    ],
+  },
+  order: {
+    needs: ["purpose", "supplierName", "reason"],
+    may: [
+      "customer",
+      "customerName",
+      "customerEmail",
+      "supplier",
+      "number",
+      "total",
+      "currency",
+      "status",
+      "orderDate",
+      "fulfilledDate",
+      "invoice",
+      "payment",
+      "project",
+      "sourceUrl",
+    ],
+  },
+  order_update: { needs: ["supplierName", "number", "status", "reason"], may: ["date"] },
+} as const satisfies Record<MailFinding["kind"], { needs: readonly string[]; may: readonly string[] }>
+
+type MailFindingKind = keyof typeof MAIL_FINDING_FIELDS
+const MAIL_FINDING_KINDS = Object.keys(MAIL_FINDING_FIELDS) as MailFindingKind[]
+
+/** The fixed values a field takes, shown in `--help` beside it; the checks read the same lists. */
+const VALUES: Partial<Record<MailFindingKind, Record<string, readonly string[]>>> = {
+  task: { type: ["bug", "feature", "chore"], commitment: ["explicit", "inferred"] },
+  task_update: { change: ["close", "due", "detail"] },
+  memory: { memoryKind: MEMORY_KINDS, scope: MEMORY_SCOPES },
+  invoice: { direction: INVOICE_DIRECTIONS },
+  payment: { direction: MONEY_DIRECTIONS },
+  order: { purpose: ORDER_PURPOSES, status: ORDER_STATUSES },
+  order_update: { status: ORDER_STATUSES },
+}
+
+/** One line per kind, `kind: needed fields; optional ones`, for `mail findings add --help`. */
+export const mailFindingFieldsHelp = (): string =>
+  MAIL_FINDING_KINDS.map((kind) => {
+    const { needs, may } = MAIL_FINDING_FIELDS[kind]
+    const named = (field: string) => {
+      const values = VALUES[kind]?.[field]
+      return values ? `${snakeCase(field)} ${values.join("|")}` : snakeCase(field)
+    }
+    return `  ${kind}: ${needs.map(named).join(", ")}${may.length ? `; optional ${may.map(named).join(", ")}` : ""}`
+  }).join("\n")
+
 const typeOf = (reference: string): string | undefined => {
   try {
     const parsed = parseReference(reference)
@@ -217,24 +311,18 @@ const optional = <K extends string, V>(key: K, value: unknown, read: (value: unk
 
 const one = (raw: Record<string, unknown>, ids: Set<string>): MailFinding => {
   if (!raw || typeof raw !== "object") return invalid("a finding is an object")
-  if (raw.kind === "fact") return validateFinding(raw as never, RULES, ids) as MailFinding
+  if (!MAIL_FINDING_KINDS.includes(raw.kind as MailFindingKind))
+    return invalid(`a mail finding is a ${MAIL_FINDING_KINDS.join(", ")}`)
+  const { needs, may } = MAIL_FINDING_FIELDS[raw.kind as MailFindingKind]
+  findingFields(raw, ["id", "kind", ...needs, ...may, "evidence"], RULES.singular)
+  findingNeeds(raw, needs, RULES.singular)
+  if (raw.kind === "fact") {
+    const { reason, ...fact } = raw
+    return { ...(validateFinding(fact as never, RULES, ids) as FactFinding), reason: findingText(reason, 2000) }
+  }
   if (raw.kind === "task") {
     const { externalId, sourceUrl, ...task } = raw
-    let checked: MailTaskFinding
-    try {
-      checked = validateFinding(task as never, RULES, ids) as MailTaskFinding
-    } catch (error) {
-      if (!isCliError(error) || error.details.reason !== "finding.unknown-field") throw error
-      const allowed = [...(error.details.allowed as string[]), "external_id", "source_url"]
-      throw new CliError(
-        "validation_error",
-        error.message.replace(/; it takes .*$/, `; it takes ${allowed.join(", ")}`),
-        {
-          ...error.details,
-          allowed,
-        },
-      )
-    }
+    const checked = validateFinding(task as never, RULES, ids) as MailTaskFinding
     return {
       ...checked,
       ...optional("externalId", externalId, (value) => {
@@ -267,7 +355,6 @@ const one = (raw: Record<string, unknown>, ids: Set<string>): MailFinding => {
   }
   switch (raw.kind) {
     case "task_update": {
-      findingFields(raw, ["id", "kind", "task", "change", "dueAt", "detail", "reason", "evidence"], RULES.singular)
       const task = reference(raw.task, /^task:[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/, "a task update's task")
       const change = raw.change
       if (change !== "close" && change !== "due" && change !== "detail")
@@ -289,11 +376,6 @@ const one = (raw: Record<string, unknown>, ids: Set<string>): MailFinding => {
       }
     }
     case "memory": {
-      findingFields(
-        raw,
-        ["id", "kind", "memoryKind", "scope", "body", "subject", "project", "evidence"],
-        RULES.singular,
-      )
       if (!MEMORY_KINDS.includes(raw.memoryKind as never))
         return invalid(`a memory's memory_kind is ${MEMORY_KINDS.join(", ")}`)
       if (!MEMORY_SCOPES.includes(raw.scope as never)) return invalid("a memory's scope is personal or work")
@@ -309,11 +391,11 @@ const one = (raw: Record<string, unknown>, ids: Set<string>): MailFinding => {
           ? {}
           : { subject: reference(raw.subject, /^(person|organization|project):[1-9]\d*$/, "a memory's subject") }),
         ...(raw.project === undefined ? {} : { project: reference(raw.project, /^project:[1-9]\d*$/, "a project") }),
+        reason: findingText(raw.reason, 2000),
         evidence,
       }
     }
     case "link": {
-      findingFields(raw, ["id", "kind", "from", "to", "reason", "evidence"], RULES.singular)
       const from = findingText(raw.from, 400)
       const to = findingText(raw.to, 80)
       const wanted = LINKS[typeOf(from) ?? ""]
@@ -324,7 +406,6 @@ const one = (raw: Record<string, unknown>, ids: Set<string>): MailFinding => {
       return { id, kind: "link", from, to, reason: findingText(raw.reason, 2000), evidence }
     }
     case "new_contact": {
-      findingFields(raw, ["id", "kind", "address", "name", "reason", "evidence"], RULES.singular)
       const address = findingText(raw.address, 320).toLowerCase()
       if (!ADDRESS.test(address)) return invalid("a new contact's address is an email address")
       return {
@@ -332,32 +413,11 @@ const one = (raw: Record<string, unknown>, ids: Set<string>): MailFinding => {
         kind: "new_contact",
         address,
         name: findingText(raw.name, 200),
-        ...(raw.reason === undefined ? {} : { reason: findingText(raw.reason, 2000) }),
+        reason: findingText(raw.reason, 2000),
         evidence,
       }
     }
     case "invoice": {
-      findingFields(
-        raw,
-        [
-          "id",
-          "kind",
-          "direction",
-          "counterparty",
-          "counterpartyName",
-          "counterpartyEmail",
-          "currency",
-          "lines",
-          "total",
-          "number",
-          "issueDate",
-          "dueDate",
-          "project",
-          "reason",
-          "evidence",
-        ],
-        RULES.singular,
-      )
       if (!Array.isArray(raw.lines) || raw.lines.length < 1 || raw.lines.length > 50)
         return invalid("an invoice finding has 1–50 lines")
       const lines = raw.lines.map((line: unknown) => {
@@ -390,29 +450,6 @@ const one = (raw: Record<string, unknown>, ids: Set<string>): MailFinding => {
       }
     }
     case "payment": {
-      findingFields(
-        raw,
-        [
-          "id",
-          "kind",
-          "direction",
-          "payer",
-          "payerName",
-          "payerEmail",
-          "payee",
-          "payeeName",
-          "payeeEmail",
-          "amount",
-          "currency",
-          "date",
-          "reference",
-          "allocations",
-          "project",
-          "reason",
-          "evidence",
-        ],
-        RULES.singular,
-      )
       let allocations: MailPaymentFinding["allocations"]
       if (raw.allocations !== undefined) {
         if (!Array.isArray(raw.allocations) || raw.allocations.length < 1 || raw.allocations.length > 8)
@@ -444,32 +481,6 @@ const one = (raw: Record<string, unknown>, ids: Set<string>): MailFinding => {
       }
     }
     case "order": {
-      findingFields(
-        raw,
-        [
-          "id",
-          "kind",
-          "purpose",
-          "customer",
-          "customerName",
-          "customerEmail",
-          "supplier",
-          "supplierName",
-          "number",
-          "total",
-          "currency",
-          "status",
-          "orderDate",
-          "fulfilledDate",
-          "invoice",
-          "payment",
-          "project",
-          "sourceUrl",
-          "reason",
-          "evidence",
-        ],
-        RULES.singular,
-      )
       return {
         id,
         kind: "order",
@@ -494,11 +505,6 @@ const one = (raw: Record<string, unknown>, ids: Set<string>): MailFinding => {
       }
     }
     case "order_update": {
-      findingFields(
-        raw,
-        ["id", "kind", "supplierName", "number", "status", "date", "reason", "evidence"],
-        RULES.singular,
-      )
       const status = oneOf(raw.status, ORDER_STATUSES, "an order update's status")
       if (raw.date !== undefined && status !== "delivered") return invalid("only a delivered order update gives date")
       return {
@@ -513,9 +519,7 @@ const one = (raw: Record<string, unknown>, ids: Set<string>): MailFinding => {
       }
     }
     default:
-      return invalid(
-        "a mail finding is a task, task_update, fact, memory, link, new_contact, invoice, payment, order or order_update",
-      )
+      return invalid(`a mail finding is a ${MAIL_FINDING_KINDS.join(", ")}`)
   }
 }
 

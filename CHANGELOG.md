@@ -7,6 +7,29 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`invoices` takes `number`.** `finance.invoices({ number })` lists the invoices whose printed number is exactly
+  that, as `orders.list({ number })` does for orders.
+- **`MAIL_FINDING_FIELDS` and `mailFindingFieldsHelp()`.** The fields each mail finding kind needs and takes, the
+  table the validator itself reads, so a host's `--help` lists them without drifting from the checks.
+
+### Changed — may break callers
+
+- **Every mail finding kind needs `reason`.** A fact, a memory and a new contact had none or an optional one; the
+  owner reads it beside each finding when he decides. A missing field is refused with its name, the finding and what
+  that kind needs (`finding.missing-field`, `details.fields`, `details.needs`). Batches staged before keep theirs.
+
+### Fixed
+
+- **A `messages reset` that leaves the mark where it is still counts.** It adds to `resets`, so the holder's next
+  findings key is new, and says "mark unchanged … counted as a reset"; the answer gives `resets`. Before, it wrote
+  nothing, and a run after it was refused with `mail-findings.key-used`.
+- **`review --holder` gives no `mail-findings.add` step when it gives no emails.**
+- **A task finding's `due_at` refusals say what is needed.** A date without a time and timezone, `due_at` without
+  `due_evidence`, and `due_evidence` given as evidence objects each name the field and show the right form, such as
+  `"due_at":"2026-11-09T09:00:00Z","due_evidence":["<reference>"]`.
+
 ## 0.581.0 — 05.11.2026
 
 ### Added
