@@ -8,6 +8,28 @@ shape of this file.
 ## Unreleased
 
 
+### Added
+
+- **An imported payment split across invoices settles each by the amount its source gives (store version 49).** A
+  `settles` relation of the v1 records envelope takes an optional `amount`, a decimal in the payment's currency,
+  kept in `record_relations.amount`. Additive within schema version 1: an older build refuses such a relation with
+  `record.invalid` rather than reading it wrongly. Amounts that add up to more than the payment are refused with
+  `record.over-payment` at `/records/<n>/relations/<m>/amount`; an amount on another role with `record.invalid`.
+- **`store.finance.unallocate({ payment, invoice, by })` takes one allocation back** from a payment still proposed,
+  under `allocate`'s rule (the owner any, a bot only its own); a confirmed payment's allocations stay
+  (`finance.unallocate`), and a missing one is `not_found` (`finance.not-allocated`).
+
+### Fixed
+
+- **One import can no longer over-cover an invoice.** A `settles` relation without an amount now takes only what other
+  payments, confirmed or still proposed, leave open on the invoice; before, every proposed payment of a batch saw the
+  whole invoice open, and the owner's confirm then failed with `finance.over-invoice`.
+- **A changed import updates the allocations of a payment the import proposed and the owner has not decided.** Its
+  allocations follow the record's `settles` relations again; it is `flagged` only when more than those changed, or
+  once the owner confirmed or rejected it.
+
+## 0.565.0 — 05.11.2026
+
 ### Changed — may break callers
 
 - **The shared calendar commands print their own answers and open the profile per command.**
@@ -53,23 +75,6 @@ shape of this file.
   each with its level under `permission.also` and refuses as the run would, so gcal's `api.calendar.*` keys show.
 - **A CLI that is not a messenger previews a `--dry-run` under `<PREFIX>_READ_ONLY`** (WC-PERM-12); it sends nothing.
   A messenger's preview stays refused under the lock.
-- **An imported payment split across invoices settles each by the amount its source gives (store version 49).** A
-  `settles` relation of the v1 records envelope takes an optional `amount`, a decimal in the payment's currency,
-  kept in `record_relations.amount`. Additive within schema version 1: an older build refuses such a relation with
-  `record.invalid` rather than reading it wrongly. Amounts that add up to more than the payment are refused with
-  `record.over-payment` at `/records/<n>/relations/<m>/amount`; an amount on another role with `record.invalid`.
-- **`store.finance.unallocate({ payment, invoice, by })` takes one allocation back** from a payment still proposed,
-  under `allocate`'s rule (the owner any, a bot only its own); a confirmed payment's allocations stay
-  (`finance.unallocate`), and a missing one is `not_found` (`finance.not-allocated`).
-
-### Fixed
-
-- **One import can no longer over-cover an invoice.** A `settles` relation without an amount now takes only what other
-  payments, confirmed or still proposed, leave open on the invoice; before, every proposed payment of a batch saw the
-  whole invoice open, and the owner's confirm then failed with `finance.over-invoice`.
-- **A changed import updates the allocations of a payment the import proposed and the owner has not decided.** Its
-  allocations follow the record's `settles` relations again; it is `flagged` only when more than those changed, or
-  once the owner confirmed or rejected it.
 
 ## 0.564.0 — 05.11.2026
 
