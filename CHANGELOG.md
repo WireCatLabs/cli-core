@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.584.0 — 06.11.2026
+
 ### Added
 
 - **`schedule list` gives an agent schedule's cost caps.** `max_cost_usd` is the cap on one run (`--max-cost`, null
