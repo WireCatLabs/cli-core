@@ -22,6 +22,7 @@ import {
 import { DEFAULT_HISTORY_LIMITS, HISTORY_MAX_DAYS, type HistoryLimits } from "../services/history-limits.js"
 import { storePath } from "../store/path.js"
 import { sharedConfigPath } from "../store/shared-config.js"
+import { registryProfiles } from "./bot/registry.js"
 import {
   type ConfigIssue,
   checkConfigText,
@@ -34,7 +35,7 @@ import {
   withoutPath,
 } from "./config-issues.js"
 import { DEFAULT_CONFIG, ensureDefaultConfig } from "./default-config.js"
-import { profilesHere } from "./messenger/accounts.js"
+import { profilesHere, profilesWithAccounts } from "./messenger/accounts.js"
 import type { CommandPermissions } from "./permission-keys.js"
 import { usableProfileName } from "./profile.js"
 import { type DeclaredSetting, withSettingDefaults } from "./setting-defaults.js"
@@ -393,8 +394,16 @@ export interface Settings extends AISettings {
   configFound: boolean
   /** Profiles the configuration file names, whether or not anyone has logged in to them. */
   configuredProfiles: string[]
-  /** Every profile on this computer — what `account list` shows and a missing profile's error lists. */
+  /** Every profile on this computer, bots included — what a missing profile's error lists. */
   profilesHere: string[]
+  /**
+   * The profiles here that are an account, not only a bot — what `account list` shows. A name only the file's bot
+   * section names, with no personal section, recorded login or messenger profile of its own, is a bot. Absent for an
+   * app that builds `Settings` itself; `profilesHere` stands in.
+   */
+  accountProfiles?: string[]
+  /** Every name with a bot: the file's bot section, or a bot's own files. `account list` marks these. */
+  botProfiles?: string[]
   /** Where each value came from — `config show` prints it. */
   sources: Record<string, Source>
   /** This profile's entries and the shared defaults, for an adapter resolving its own fields with `first`. */
@@ -536,7 +545,7 @@ export const settingsFor = <T extends object = Record<never, never>>(
         allSettings.includes(key) && v.safeParse(readSchema, { defaults: { [key]: value } }).success,
     )
     .map((setting) => ({ ...setting, key: `defaults.${setting.key}` }))
-  // `defaults` needs no field of its own, so it is the one section created: every key then shows (RISK-2125).
+  // `defaults` needs no field of its own, so it is the one section created: every key then shows.
   const withDefaults = (raw: unknown, except: readonly string[] = []) =>
     withSettingDefaults(
       isScope(raw) && !Object.hasOwn(raw, "defaults") ? { ...raw, defaults: {} } : raw,
@@ -603,6 +612,19 @@ export const settingsFor = <T extends object = Record<never, never>>(
   const profilesOf = (config: Config, env: NodeJS.ProcessEnv): string[] =>
     profilesHere(app, [...namedProfiles(config), ...(extension.profiles?.(env) ?? [])], env)
 
+  const botsOf = (config: Config, env: NodeJS.ProcessEnv): string[] =>
+    [...new Set([...Object.keys(config.bot?.profiles ?? {}), ...registryProfiles(app, env)])].sort()
+
+  // The shared `profiles` section is no sign of an account: a bot's owner may set something there for both sides.
+  const accountsOf = (config: Config, env: NodeJS.ProcessEnv, bots: readonly string[]): string[] => {
+    const personal = new Set([
+      ...Object.keys(config.personal?.profiles ?? {}),
+      ...profilesWithAccounts(app, env),
+      ...(extension.profiles?.(env) ?? []),
+    ])
+    return profilesOf(config, env).filter((name) => !bots.includes(name) || personal.has(name))
+  }
+
   const resolveSettings = (flags: GlobalFlags = {}, options: ResolveOptions = {}): Settings & T => {
     const env = options.env ?? process.env
     const configPath = configPathFor(options)
@@ -632,6 +654,7 @@ export const settingsFor = <T extends object = Record<never, never>>(
       lock,
     )
     const kind = options.kind ?? "personal"
+    const bots = botsOf(config, env)
     const name = usableProfileName(profile.value)
     const configured = config.profiles[name] ?? {}
     const shared = config.defaults ?? {}
@@ -758,6 +781,8 @@ export const settingsFor = <T extends object = Record<never, never>>(
       configFound: existsSync(configPath),
       configuredProfiles: namedProfiles(config),
       profilesHere: profilesOf(config, env),
+      accountProfiles: accountsOf(config, env, bots),
+      botProfiles: bots,
       sources: {
         ...ai.sources,
         profile: profile.from,
@@ -879,12 +904,23 @@ export const settingsFor = <T extends object = Record<never, never>>(
     if (kind !== "bot" && botOnlyKeys.includes(setting)) {
       throw new CliError("validation_error", `${setting} is a bot's setting — add --bot`)
     }
-    const changed = structuredClone(raw)
-    setAt(changed, at, level === undefined ? parseValue(value) : value.trim())
     const had = new Set(before.map((issue) => issue.at.join(".")))
-    const added = schemaIssues(changed, readSchema, context(path)).find(
-      (issue) => !had.has(issue.at.join(".")) || issue.at.join(".") === at.join("."),
-    )
+    const tried = (typed: unknown) => {
+      const changed = structuredClone(raw)
+      setAt(changed, at, typed)
+      const added = schemaIssues(changed, readSchema, context(path)).find(
+        (issue) => !had.has(issue.at.join(".")) || issue.at.join(".") === at.join("."),
+      )
+      return { changed, added }
+    }
+    const parsed = level === undefined ? parseValue(value) : value.trim()
+    let { changed, added } = tried(parsed)
+    // `phone_number_id 100000000000001` parses as a number; a setting that takes text keeps the digits as typed,
+    // never through a number, which rounds any id past 2^53.
+    if (added && typeof parsed !== "string") {
+      const asText = tried(value.trim())
+      if (!asText.added) ({ changed, added } = asText)
+    }
     if (added) throw new CliError("validation_error", `${setting} cannot be "${value}": ${added.what}`)
     const checked = v.safeParse(readSchema, changed)
     saveConfigFile(path, withDefaults(checked.success ? checked.output : changed).config)

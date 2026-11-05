@@ -11,7 +11,7 @@ import { settingsFor } from "../../cli/settings.js"
 import { overrideSharedContract } from "../../cli/shared-contracts.js"
 import type { EmailInput, MailboxInput } from "../../store/index.js"
 import { type AccountKey, openStore } from "../../store/store.js"
-import { holderHasMail, marksOf } from "../marks.js"
+import { advancePastSkipped, mailWaiting, marksOf } from "../marks.js"
 import { type MailMount, mailReadCommands } from "./index.js"
 
 const app = {
@@ -375,6 +375,9 @@ describe("a holder's processing mark", () => {
     expect(marks.map((one) => one.holder)).toEqual(["digest", "triage"])
     expect((await box.cli(["messages", "acknowledge", "--holder", "Bad Name", "--cursor", "1.1"])).code).toBe(2)
     expect((await box.cli(["messages", "acknowledge", "--holder", "triage", "--cursor", "soon"])).code).toBe(2)
+    const forged = await box.cli(["messages", "acknowledge", "--holder", "triage", "--cursor", "999999999.1"])
+    expect(forged.code).toBe(2)
+    expect(forged.err).toContain("mail.cursor-ahead")
     expect(await box.refused(["--holder", "triage", "--unanswered"])).toBe(2)
   })
 })
@@ -445,7 +448,7 @@ describe("what the mail pipeline reads and may write under the read-only lock", 
   it("lets a read-only run move its mark, and refuses every other local write", async () => {
     const box = await mailbox()
     await box.synced()
-    const lock = { MAIL_READ_ONLY: "1" }
+    const lock = { MAIL_READ_ONLY: "1", MAIL_MAIL_HOLDER: "triage" }
     const { cursor } = await read(box, lock)
 
     expect((await box.cli(["messages", "acknowledge", "--holder", "triage", "--cursor", cursor], lock)).code).toBe(0)
@@ -454,22 +457,83 @@ describe("what the mail pipeline reads and may write under the read-only lock", 
     expect((await box.cli(["scribble"])).code).toBe(0)
   })
 
-  it("wakes a holder only for mail it reads, and moves its mark over mail that is only skipped", async () => {
+  it("lets a scheduled agent move only the holder its schedule names; the owner moves any", async () => {
     const box = await mailbox()
     await box.synced()
-    expect(await box.withStore((store) => holderHasMail(store, "triage"))).toBe(true)
+    const { cursor } = await read(box)
+    const ack = (holder: string, extra: Record<string, string>) =>
+      box.cli(["messages", "acknowledge", "--holder", holder, "--cursor", cursor], extra)
+    const scheduled = { MAIL_READ_ONLY: "1", MAIL_MAIL_HOLDER: "triage" }
+
+    const other = await ack("digest", scheduled)
+    expect(other.code).toBe(5)
+    expect(other.err).toContain("mail.holder-not-yours")
+    expect((await ack("triage", { MAIL_READ_ONLY: "1" })).code).toBe(5)
+    expect((await ack("triage", { AI_AGENT: "claude-code_2-1_agent" })).code).toBe(5)
+    expect((await ack("triage", scheduled)).code).toBe(0)
+    expect((await ack("digest", {})).code).toBe(0)
+  })
+
+  it("wakes a holder only for mail it reads, without moving its mark; moving past skipped mail is its own step", async () => {
+    const box = await mailbox()
+    await box.synced()
+    const waiting = () => box.withStore((store) => mailWaiting(store, "triage"))
+    expect(await waiting()).toMatchObject({ unmarked: true, emails: 0 })
     const { cursor } = await read(box)
     await box.cli(["messages", "acknowledge", "--holder", "triage", "--cursor", cursor])
-    expect(await box.withStore((store) => holderHasMail(store, "triage"))).toBe(false)
+    expect(await waiting()).toEqual({ unmarked: false, emails: 0, oldestStoredAt: null })
 
     await box.thread("t-bulk", email("bulk", 1, { mailboxes: [BULK] }))
     await box.synced()
-    expect(await box.withStore((store) => holderHasMail(store, "triage"))).toBe(false)
+    const before = (await box.withStore((store) => marksOf(store, MINE)))[0]?.throughId
+    expect((await waiting()).emails).toBe(0)
+    expect((await box.withStore((store) => marksOf(store, MINE)))[0]?.throughId).toBe(before)
+    await box.withStore((store) => advancePastSkipped(store, "triage"))
     expect((await box.withStore((store) => marksOf(store, MINE)))[0]?.skipped.bulk).toBe(1)
 
     await box.thread("t-ann", email("ann", 1))
+    await box.thread("t-bob", email("bob", 1))
     await box.synced()
-    expect(await box.withStore((store) => holderHasMail(store, "triage"))).toBe(true)
+    const two = await waiting()
+    expect(two.emails).toBe(2)
+    expect(two.oldestStoredAt).toBeGreaterThan(Date.now() - HOUR)
+  })
+
+  it("keeps a suspicious sender's emails on the mark and offers them again once the score is cleared", async () => {
+    const box = await mailbox()
+    await box.synced()
+    const ack = async (cursor: string) =>
+      expect((await box.cli(["messages", "acknowledge", "--holder", "triage", "--cursor", cursor])).code).toBe(0)
+    await ack((await read(box)).cursor)
+    await box.thread("t-scam", email("scam", 1, { from: { address: "scam@example.net", name: null } }))
+    const score = (demoted: boolean) =>
+      box.withStore((store) =>
+        store.mail.setSenderScores(
+          box.accountId,
+          [{ address: "scam@example.net", score: demoted ? 9 : 0, signals: [], demoted }],
+          Date.now(),
+        ),
+      )
+    await score(true)
+    await box.synced()
+    const doubted = await read(box)
+    expect(doubted.answer.items).toEqual([])
+    await ack(doubted.cursor)
+    expect((await box.withStore((store) => marksOf(store, MINE)))[0]).toMatchObject({
+      skipped: { suspicious: 1 },
+      suspicious: [expect.any(Number)],
+    })
+
+    await score(false)
+    expect((await box.withStore((store) => mailWaiting(store, "triage"))).emails).toBe(1)
+    const cleared = await read(box)
+    expect(texts(cleared.answer)).toEqual(["text of scam"])
+    await ack(cleared.cursor)
+    expect((await box.withStore((store) => marksOf(store, MINE)))[0]).toMatchObject({
+      read: 1,
+      suspicious: [],
+      skipped: { suspicious: 1 },
+    })
   })
 })
 
@@ -488,6 +552,26 @@ describe("the steps a review hands on", () => {
     expect(steps((await box.cli(["review", "date>2h"])).out)).toMatchObject([
       { step: "mail-review.next", command: "review", line: expect.stringMatching(/^mail ya review /) },
     ])
+  })
+
+  it("offers one thread to read whole and names the other cut threads under missing", async () => {
+    const box = await mailbox()
+    const long = (thread: string) =>
+      Array.from({ length: 51 }, (_, n) => email(`${thread}-${n}`, 2 - n / 100, { subject: thread }))
+    await box.thread("t-a", ...long("t-a"))
+    await box.thread("t-b", ...long("t-b"))
+    await box.thread("t-c", ...long("t-c"))
+    await box.synced()
+
+    const answer = JSON.parse((await box.cli(["review", "date>1d"])).out) as {
+      next: { step: string }[]
+      missing: { why: string; step?: string }[]
+    }
+
+    expect(answer.next.map((one) => one.step)).toEqual(["mail-review.next", "mail-conversations.show"])
+    const cut = answer.missing.find((one) => one.step === "mail-conversations.show")?.why ?? ""
+    expect(cut).toContain("3 thread(s)")
+    expect(cut.match(/chat:email\//g)).toHaveLength(2)
   })
 
   it("in a host, run where it mounted them, naming the mailbox", async () => {

@@ -7,7 +7,6 @@ shape of this file.
 
 ## Unreleased
 
-
 ### Added
 
 - **An imported payment split across invoices settles each by the amount its source gives (store version 49).** A
@@ -27,6 +26,138 @@ shape of this file.
 - **A changed import updates the allocations of a payment the import proposed and the owner has not decided.** Its
   allocations follow the record's `settles` relations again; it is `flagged` only when more than those changed, or
   once the owner confirmed or rejected it.
+
+## 0.570.0 — 05.11.2026
+
+### Added
+
+- **`facts.unconfirm(ref, by, reason?)` takes back the approval of an accepted fact** of any type: it waits as
+  `proposed` again and `confirmedBy` is cleared. Only the owner may (`permission_error`, `proposal.owner-only`). It
+  refuses a fact that is not accepted (`fact.not-accepted`), the owner's own fact, which was never proposed
+  (`fact.owner-written`), and a correction, because the fact it superseded cannot be put back as it was
+  (`fact.unconfirm-correction`). The step goes into the fact's `metadata.history` with who had confirmed it, the
+  `metadata.decision` it took back and the reason; `metadata.decision` is cleared.
+- **`commands --json` and `commands info` give every command its permission `level` and `permission` key** under a
+  named profile, not only the denied ones: `availability: { available, level, permission?, reason? }`, where `level` is
+  `allow`, `ask`, `readonly` or `deny` and `permission` the key it comes from (absent when no key governs the
+  command). MCP `tools_search` shows the same. A caller that compared `availability` to `{ available: true }` exactly
+  now sees two more keys.
+
+## 0.569.0 — 05.11.2026
+
+### Changed — may break callers
+
+- **A claude agent schedule runs on Sonnet and starts lean.** `schedule agent` takes `--model <model>` (an alias such
+  as `sonnet` or `opus`, a model id, or `""` for the harness's own default). Without it, a claude schedule runs on
+  `sonnet` and a codex schedule on codex's own default; a host's config file may change either
+  (`schedule_model_claude`, `schedule_model_codex` in `SCHEDULE_SETTINGS`): flag, then config file, then default.
+  A new claude schedule also starts with `--tools Bash --strict-mcp-config --disable-slash-commands
+  --setting-sources ""`: none of the owner's MCP servers, skills, settings or CLAUDE.md, while `--permission-mode
+  dontAsk` and `--allowedTools` still hold. A "say ok" run measured $0.152 and 37,925 input tokens before, $0.019 and
+  4,740 after. `schedule_lean_start: false` keeps the owner's setup. Both are read when the schedule is added; an
+  existing schedule keeps its argv until it is added again. `ScheduleLimits` gains `models` and `leanStart`.
+
+## 0.568.0 — 05.11.2026
+
+### Changed — may break callers
+
+- **`holderHasMail` is gone: `mailWaiting` checks and `advancePastSkipped` moves.** `holderHasMail` read like a
+  check but moved the holder's mark on every schedule tick. `mailWaiting(store, holder)` only reads: how many emails
+  past the holder's marks would reach it and when the oldest was stored, or `unmarked`. `advancePastSkipped(store,
+  holder)` moves the mark over the mail at its head the holder would only skip, and leaves it for the next check when
+  a sync holds the store. `ScheduleHost.newMail` now returns `MailWaiting`. A host calls `advancePastSkipped`, then
+  `mailWaiting`.
+- **A gated agent schedule waits for a batch of mail.** On its timer, `schedule agent --on-new-mail <holder>` starts
+  the agent once 10 emails wait for it or the oldest has waited 30 minutes; `--mail-wait <duration>` and
+  `--mail-batch <n>` change that per schedule, and a host's `ScheduleHost.limits` gives its config file's values
+  (`SCHEDULE_SETTINGS`, read with `scheduleLimitsOf`): flag, then config file, then default. `schedule run` by hand
+  still starts it for any mail. Its skipped answer names `why` instead of `holder`.
+- **An agent schedule stops for the day at a cost cap.** A claude run is asked for its JSON answer, so its cost
+  (`total_cost_usd`) is kept in `last.json` (`costUsd`) and summed per local day in `spend.json`; the report kept is
+  the answer's text. Once a day's runs cost `--max-cost-per-day` (default 5 US dollars, or the config file's; 0 for
+  none), no run starts until the next day; `last.json` says why under `skipped`, and `schedule list` shows the day's
+  spend and the skip.
+- **`messages acknowledge` moves only a holder the caller may move.** A run that `schedule agent --on-new-mail` started
+  gets `<PREFIX>_MAIL_HOLDER` and moves that holder's mark only; any other agent, or a run under the read-only lock,
+  is refused with `mail.holder-not-yours`; the owner moves any. A cursor past the newest stored email, or read in the
+  future, is refused with `mail.cursor-ahead`. A scheduled triage agent needs `--on-new-mail`.
+- **`review --holder` leaves out suspicious senders, and now keeps them on the mark.** Their
+  emails stay on the holder's mark and come in a later review once the sender's score is cleared, instead of being
+  passed for good. This was listed under Added in the release that brought it; it changes what an existing caller
+  reads.
+- **A mail findings citation of an email the store does not hold is `not_found`** with reason
+  `mail-findings.not-stored`, no longer `mail-findings.stale`, which told the agent to read the mailbox again. An email
+  deleted after the batch was staged still makes accepting it stale.
+- **`parseMailFindingsJson`, `parseMeetingFindingsJson` and `parseEvidenceFindingsJson` live in
+  `src/cli/findings-input.ts`;** the exports from `@wirecat/cli-core/cli` are unchanged. `findingText` and
+  `findingFields` are the checks themselves, not wrappers.
+
+### Fixed
+
+- **An accepted `new_contact` mail finding names the person.** Sync already names a sender's person from the From
+  display name, so accepting set nothing while the receipt said accepted; the owner's chosen name now replaces it.
+- **`mail review` offers at most two next steps.** It gave one `conversations show` step per cut thread, up to 50;
+  it now gives one, and names the other cut threads under `missing`.
+
+## 0.567.0 — 05.11.2026
+
+### Added
+
+- **`<tool> bot list` runs without a profile word**, as `account list` does; `<tool> <profile> bot list` still
+  works.
+- **A scheduled agent may run other CLIs the host declares** (`ScheduleHost.agentRuns`, type `AgentCli`): memo's
+  mail triage runs `mail`. Claude gets `Bash(<cli>:*)` for each; codex may write each one's state, config and cache
+  folders; every run sets `<PREFIX>_READ_ONLY=1` and `<PREFIX>_SCHEDULED` for each, whatever the schedule file says.
+  `runSchedule` takes the same list as `agentRuns`.
+- **`<PREFIX>_READ_ONLY` lets through one authority change, `rules add`, when the command is marked
+  `narrowsUnderLock`** (`LOCKED_AUTHORITY_COMMANDS`, `admittedUnderLock`). The command narrows itself under the lock;
+  every other command marked `grantsAuthority` is still refused, and MCP still needs `mcp.authority`.
+
+### Fixed
+
+- **`account list` no longer lists a bot as an account that is not signed in.** A name that only the bot side
+  uses (the file's `bot` section, a bot's own files) and that has no personal section, recorded login or session is
+  left out; `bot list` has it. A profile that is an account and a bot too says `bot: true`, a new optional field of
+  `account_profile`. `mcp serve --profiles all` serves the same account profiles. `Settings` gains the optional
+  `accountProfiles` and `botProfiles`.
+- **`config set` keeps a long id as the digits typed.** `config set --bot phone_number_id 100000000000001` was
+  parsed as a number and refused by a setting that takes text; when the parsed value is refused and the text as
+  typed passes, the text is kept, never through a JS number.
+
+### Changed — may break callers
+
+- **A write on a stale task revision fails with `conflict`, exit 15, not `configuration_error`, exit 3.** The reason
+  stays `task.stale` with the task's current `revision` in `details`; only the code and the exit number change
+  (cli-base's new `conflict`). A caller that branched on `configuration_error` for it should branch on the reason or
+  the new code. `vocabulary.stale`, `tag-review.stale` and `meeting-project.stale` keep `configuration_error` for now.
+
+## 0.566.0 — 05.11.2026
+
+### Changed — may break callers
+
+- **cli-core now needs `@wirecat/cli-base` 0.76.0 or later** (peer range `>=0.76.0 <0.78.0`), which holds
+  `loadConstants`.
+- **`appDoctorCommand`'s `oauthClient` returns `oauthClientReport`'s shape, `{ client, source, reason? }`**, and a
+  throw there is reported as `{ client: null, source: null, reason }` (was `error`). drive's and gcal's callers
+  change with their bump.
+
+### Added
+
+- **`@wirecat/cli-core/constants`: WireCat's sign-in apps ship in cli-core's `constants.json`.** `constants()` reads
+  cli-base's, cli-core's and the tool's `constants.json` once per process, merged, validated and frozen; a tool
+  passes its own layer and a schema built on `constantsSchema`. It holds WireCat's Google Desktop app
+  (`google.app.client_id`, `client_secret`) and Microsoft client id (`microsoft.app.client_id`), which drive and mail
+  kept in source and gcal expected from a file CI wrote. `googleApp({ env, prefix, clientFile, clientId,
+  configClientId })` and `microsoftApp(…)` pick the app in WC-SECR-25's order: `--client-file` or `--client-id`
+  (`flag`), `<PREFIX>_<PROVIDER>_CLIENT_ID` (`env`), the account's `<provider>.client_id` (`config`), WireCat's app
+  (`constants`); a `_SECRET` with no id is a `configuration_error`, reason `sign-in.secret-without-id`. `oauthApp`
+  does the same for a provider whose app is in a tool's layer, such as Zoom, and returns nothing when there is none.
+  `oauthClientReport(app, reason?)` is `doctor`'s `oauth_client`: `{ client: "wirecat" | "own" | null, source }`.
+  See [Constants](docs/dev/CONSTANTS.md).
+- **A sign-in entry records where its app came from** (`clientSource` in the standard and drive entries, read back
+  as `client.source`), so `doctor` reports the app the account signed in with. The standard entry also keeps
+  WireCat's public secret, so a refresh still works after a release ships another default app; an owner's own
+  secret is still never written.
 
 ## 0.565.0 — 05.11.2026
 

@@ -40,6 +40,7 @@ const SIGN_IN: Entry[] = [
   ["sign-in.client-file-invalid", "configuration_error", "the file is not a Desktop app OAuth client JSON"],
   ["oauth.scope-missing", "permission_error", "the sign-in lacks a permission this command needs"],
   ["sign-in.client-rejected", "configuration_error", "the provider rejected the OAuth client"],
+  ["sign-in.secret-without-id", "configuration_error", "an OAuth client secret is set without its client id"],
 ]
 
 /** Reasons every CLI over a provider's API raises alike: gcal and drive today. */
@@ -66,6 +67,7 @@ const OTHERS: Entry[] = [
   validation("meeting-findings.dedicated-review", "review meeting findings through the dedicated findings command"),
   validation("evidence-findings.stale", "evidence findings changed since they were read; stage a new batch"),
   validation("mail-findings.stale", "mail findings cite mail that changed since it was read; stage a new batch"),
+  ["mail-findings.not-stored", "not_found", "a mail finding cites an email the store does not hold"],
   validation("mail-findings.partial", "a cited email is not stored whole yet; cite it once it is"),
   validation("evidence-findings.dedicated-review", "review evidence findings through the dedicated findings command"),
   validation("mail-findings.dedicated-review", "review mail findings through the dedicated findings command"),
@@ -74,6 +76,8 @@ const OTHERS: Entry[] = [
   ["extraction.invalid-proposals", "invalid_response", "the model's memory proposals could not be used"],
   validation("extraction.text-too-long", "the text is too long for memory extraction"),
   validation("file.locked", "another process holds the file's lock"),
+  validation("mail.cursor-ahead", "an acknowledge cursor is past the newest stored email"),
+  ["mail.holder-not-yours", "permission_error", "a run moves only the mark of the holder its schedule names"],
   ["mail.source-failed", "provider_error", "the mail server refused or did not complete a request"],
   ["mail.search-refused", "provider_error", "the mail server refused to search a folder"],
   [
@@ -169,7 +173,10 @@ const OTHERS: Entry[] = [
   validation("input.required", "the command needs an answer and cannot ask for one"),
   validation("input.too-large", "the input is over its size limit"),
   ["meeting-project.stale", "configuration_error", "the meeting's project changed meanwhile"],
+  validation("fact.not-accepted", "only an accepted fact can be unconfirmed"),
+  validation("fact.owner-written", "the owner wrote this fact; it was never proposed, so it cannot be unconfirmed"),
   validation("fact.payment-retired", "a payment is a payments row in store.finance, not a fact"),
+  validation("fact.unconfirm-correction", "an accepted correction cannot be unconfirmed; its superseded fact stays"),
   validation("finance.allocate", "the invoice or payment cannot take an allocation in its state"),
   validation("finance.currency", "the payment and the invoice are in different currencies; nothing is converted"),
   validation("finance.field", "a field of the invoice or payment is not valid"),
@@ -246,7 +253,7 @@ const OTHERS: Entry[] = [
   validation("task.category-unknown", "the category is not in the task category list"),
   validation("task.claimed", "someone else holds the task"),
   validation("task.closed", "the task is already closed"),
-  ["task.stale", "configuration_error", "the task changed since it was read; read it again"],
+  ["task.stale", "conflict", "the task changed since it was read; read it again"],
   validation("task.column", "the task beside which it moves is in another column than the status asked for"),
   validation("task.dependency-cycle", "the task would depend on itself"),
   validation(

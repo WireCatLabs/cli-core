@@ -32,6 +32,7 @@ import { entityRows, type RowTable } from "./compact.js"
 import { type BaseEnvironment, outputFor, provide } from "./context.js"
 import { refuseByCommandPermissions, refuseWriteBeforeConnecting } from "./early-refusal.js"
 import {
+  admittedUnderLock,
   changesAuthorityAt,
   changesAuthorityNow,
   isLogin,
@@ -453,7 +454,7 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
           `serve first (\`${command} ${options.relayed.profile} server stop\`), or update ${command}, which then runs it here`,
         { sent: false },
       )
-    if (lock && changesAuthorityNow(action) && !flags.dryRun)
+    if (lock && changesAuthorityNow(action) && !admittedUnderLock(action) && !flags.dryRun)
       throw new CliError(
         "permission_error",
         `this process is read-only (${lock}) — \`${command} ${path.join(" ")}\` changes what a later run may do; ` +

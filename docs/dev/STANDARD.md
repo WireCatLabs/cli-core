@@ -1024,6 +1024,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--max-chats` | `<n>` | at most this many chats in one run. **local graph work defaults to 20; opt-in --sync-first network refresh defaults to 5, so help distinguishes the two uses** | `20` | `conversations embed`, `conversations links rebuild`, `conversations rebuild`, `search conversations`, `search messages` (max, tg only), `stats contacts top` (max, tg only), `stats messages show` (max, tg only), `stats messages top` (max, tg only) |
 | `--max-chunks` | `<n>` | at most this many chunks embedded in one run | `2000` | `conversations embed`, `conversations rebuild`, `search conversations` |
 | `--max-cost` | `<usd>` | stop an agent's run that costs more than this, in US dollars |  | `schedule agent` (planned) |
+| `--max-cost-per-day` | `<usd>` | start no agent run for the rest of the day once its runs cost this much, in US dollars |  | `schedule agent` (planned) |
 | `--max-gaps` | `<n>` | maximum interior coverage gaps repaired in this run |  | `store gaps repair` |
 | `--max-input-bytes` | `<bytes>` | at most this many bytes of buffered stdin | `16777216` | every command |
 | `--max-meetings` | `<n>` | how many of the meeting account's meetings to look through, newest first, or all for every one (default 100) |  | `search all` (planned) |
@@ -1040,7 +1041,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--mentions-me` |  | require a mention of you or a reply to you |  | `replies edit` |
 | `--message` | `<message>` | the message to tag or untag: its id in --chat, or a msg: locator alone |  | `tags add`, `tags remove` |
 | `--method` | `<method>` | how to log in when there is no session |  | `setup` |
-| `--model` | `<model>` | which model runs analysis, embedding or local speech recognition; the command identifies the applicable model family |  | `conversations embed`, `conversations embeddings clear`, `conversations embeddings status`, `conversations links rebuild`, `conversations related`, `conversations status`, `inbox`, `messages list`, `messages transcribe` — MAX retains its own transcriber and names its model-list command; the shared TG/WA transcriber explains that choosing a model implies local recognition. Both select a downloaded speech model. Align the remaining MAX command when it adopts the shared transcriber., `review`, `search conversations` |
+| `--model` | `<model>` | which model runs analysis, embedding or local speech recognition; the command identifies the applicable model family |  | `conversations embed`, `conversations embeddings clear`, `conversations embeddings status`, `conversations links rebuild`, `conversations related`, `conversations status`, `inbox`, `messages list`, `messages transcribe` — MAX retains its own transcriber and names its model-list command; the shared TG/WA transcriber explains that choosing a model implies local recognition. Both select a downloaded speech model. Align the remaining MAX command when it adopts the shared transcriber., `review`, `schedule agent` (planned), `search conversations` |
 | `--multiple` |  | people may pick several answers |  | `polls create` |
 | `--new` |  | what arrived since the last check, each message once — for scheduled runs. **tasks add instead opens the task although tasks that may be the same job were listed** |  | `inbox`, `mentions list`, `review`, `tasks add` |
 | `--newest` |  | newest first instead of best first |  | `bot search messages` (planned), `search messages`, `searches create` |
@@ -1351,7 +1352,9 @@ The three tools, their arguments and what each permission shows are on the handb
   with an error naming the key. The owner turns it on in a terminal — `<cli> <profile> config set
   permissions.mcp.authority allow`, with `--bot` for a bot server. Discovery and execution read current permissions. An agent never changes
   the key itself: `config set|unset` run over MCP refuses `permissions.mcp…` and a whole `permissions` that names
-  it, on any profile and in the defaults. `<PREFIX>_READ_ONLY` still refuses them all (SEC-47).
+  it, on any profile and in the defaults. `<PREFIX>_READ_ONLY` still refuses them all (SEC-47), except the closed
+  list `LOCKED_AUTHORITY_COMMANDS`, today only mail's `rules add`, which a command marked `narrowsUnderLock`
+  narrows itself under the lock.
 - **`bot api` execution requires `bot.api`** (NEED-1679 B): its calls go to the messenger's Bot API as they are
   given, so they skip the send guard and the bot's recipient list. The key works as `mcp.authority` does: `deny` by
   default for an MCP server, a broader `bot: allow` does not lift it, at `deny` or `readonly` the commands remain

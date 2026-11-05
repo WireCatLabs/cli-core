@@ -76,7 +76,7 @@ const onlyActions = (store: MessageStore) => {
 }
 const agent = { bot: "claude-code", model: "synthetic" }
 
-/** SEC-118: every decide path in core refuses an agent deciding its own proposal, and lets the owner decide it. */
+/** Every decide path in core refuses an agent deciding its own proposal, and lets the owner decide it. */
 describe("an agent cannot decide its own proposal", () => {
   it("on a fact, accepted or rejected", async () => {
     const store = await opened()
@@ -262,7 +262,7 @@ const mailBatch = async (store: MessageStore) => {
   }
 }
 
-/** SEC-121: an owner-only kind refuses an agent with a reason on every decide path, even with agent decisions on. */
+/** An owner-only kind refuses an agent with a reason on every decide path, even with agent decisions on. */
 describe.each([
   ["mail findings", mailBatch],
   ["meeting findings", meetingBatch],

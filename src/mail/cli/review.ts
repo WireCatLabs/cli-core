@@ -106,14 +106,17 @@ const reviewAnswer = (found: MailReview, mailbox: AccountKey, fresh: boolean, st
   const cut = found.chats.filter((chat) => chat.more)
   const ref = (thread: string) => formatReference({ type: "chat", ...mailbox, chat: thread })
   const turns = found.unanswered !== undefined || found.waiting !== undefined
-  const wholeThreads = cut.flatMap((chat) => step("mail-conversations.show", { conversation: ref(chat.id) }))
+  const [first, ...rest] = cut.map((chat) => ref(chat.id))
+  const wholeThread = first === undefined ? [] : step("mail-conversations.show", { conversation: first })
   const missing: Missing[] = [
-    ...(cut.length > 0
+    ...(first !== undefined
       ? [
           {
             field: "items",
-            why: `only the newest emails of ${cut.length} thread(s)`,
-            ...(wholeThreads.length ? { step: "mail-conversations.show" } : {}),
+            why:
+              `only the newest emails of ${cut.length} thread(s)` +
+              (rest.length ? `; read the others whole the same way: ${rest.join(", ")}` : ""),
+            ...(wholeThread.length ? { step: "mail-conversations.show" } : {}),
           },
         ]
       : []),
@@ -133,7 +136,7 @@ const reviewAnswer = (found: MailReview, mailbox: AccountKey, fresh: boolean, st
     ...(!fresh && !turns
       ? step("mail-review.next", { query: `date>${quoted(found.complete ? found.until : found.since)}` })
       : []),
-    ...wholeThreads,
+    ...wholeThread,
   ]
   return listOf("review", {
     items: read.map((message) => ({

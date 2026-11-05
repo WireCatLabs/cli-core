@@ -1,4 +1,5 @@
 export { AI_ENTRIES, AI_SETTING_KEYS, type AISettings, resolveAISettings } from "../analysis/settings.js"
+export type { AgentCli } from "../background/schedules.js"
 export { parseDuration } from "../domain/duration.js"
 export {
   openOf,
@@ -278,6 +279,7 @@ export { type Closeable, withDeadline } from "./deadline.js"
 export { DEFAULT_CONFIG, ensureDefaultConfig } from "./default-config.js"
 export { DISCOVERY_DESCRIPTIONS } from "./discovery-descriptions.js"
 export {
+  admittedUnderLock,
   changesAuthority,
   changesAuthorityAt,
   changesAuthorityNow,
@@ -294,8 +296,10 @@ export {
   judgedTargets,
   LOCAL_READ,
   LOCAL_WRITE,
+  LOCKED_AUTHORITY_COMMANDS,
   logsInOrOut,
   NO_EFFECTS,
+  narrowsUnderLock,
   ownerOnlyOption,
   PROPOSE_COMMANDS,
   previewFlag,
@@ -331,6 +335,11 @@ export {
   snakeKeysKeeping,
 } from "./envelope.js"
 export { withAbort } from "./execution.js"
+export {
+  parseEvidenceFindingsJson,
+  parseMailFindingsJson,
+  parseMeetingFindingsJson,
+} from "./findings-input.js"
 export {
   askSetupQuestions,
   asksAtStart,
@@ -408,11 +417,6 @@ export {
 } from "./mcp-server-command.js"
 export { formatMeetingBatch, prepareMeetingBatch } from "./meeting-batch.js"
 export { meetingEvidenceItem, meetingPersonContextItem } from "./meeting-evidence-answer.js"
-export {
-  parseEvidenceFindingsJson,
-  parseMailFindingsJson,
-  parseMeetingFindingsJson,
-} from "./meeting-findings-input.js"
 export { meetingPreparationAnswer } from "./meeting-preparation-answer.js"
 export {
   type MeetingPreparationReader,
@@ -507,7 +511,12 @@ export {
 } from "./project-status.js"
 export { STATUS_ROWS, STATUS_SIGNAL_ROWS } from "./project-status-rows.js"
 export { fieldsOf, projectFields } from "./result-fields.js"
-export type { ScheduleHost } from "./schedule/schedule-command.js"
+export {
+  SCHEDULE_SETTINGS,
+  type ScheduleHost,
+  type ScheduleLimits,
+  scheduleLimitsOf,
+} from "./schedule/schedule-command.js"
 export { type DeclaredSetting, type SettingRow, settingRows, withSettingDefaults } from "./setting-defaults.js"
 export {
   type Config,

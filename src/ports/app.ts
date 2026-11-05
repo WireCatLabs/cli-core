@@ -46,6 +46,9 @@ export const readOnlyLockOf = (app: AppIdentity, env: NodeJS.ProcessEnv): string
   return value === undefined || value.trim() === "" || value === "0" ? undefined : name
 }
 
+/** The holder a scheduled run was started for (`schedule agent --on-new-mail`): the only mark that run may move. */
+export const mailHolderVariable = (app: AppIdentity): string => envName(app, "MAIL_HOLDER")
+
 export const MESSENGER_CHANGE_REFUSAL = "send, react, change chats or change the account"
 
 /** The one wording for a write `<PREFIX>_READ_ONLY` stops: `what` finishes "it cannot …". */

@@ -102,6 +102,28 @@ export const isProposal = (command: Command): boolean => {
   return PROPOSE_COMMANDS.some((listed) => path === listed || path.endsWith(` ${listed}`))
 }
 
+/**
+ * The authority changes `<PREFIX>_READ_ONLY` lets through, a closed list: `mail rules add`, which the owner lets the
+ * scheduled mail triage run. Such a command is marked `narrowsUnderLock` **and** has one of these paths, and under the
+ * lock it narrows itself: it only adds what the owner can list and remove, and replaces nothing. Adding a path widens
+ * what a read-only agent decides for later runs, so it needs its own review.
+ */
+export const LOCKED_AUTHORITY_COMMANDS = ["rules add"] as const
+
+const NARROWS = new WeakSet<Command>()
+
+/** Marks an authority change that checks the lock itself; the lock lets it through only when its path is listed. */
+export const narrowsUnderLock = <T extends Command>(command: T): T => {
+  NARROWS.add(command)
+  return command
+}
+
+export const admittedUnderLock = (command: Command): boolean => {
+  if (!NARROWS.has(command)) return false
+  const path = pathOf(command).join(" ")
+  return LOCKED_AUTHORITY_COMMANDS.some((listed) => path === listed || path.endsWith(` ${listed}`))
+}
+
 const STORE_WRITES = new WeakSet<Command>()
 
 /** A local edit remains an edit even when it first fetches metadata from the messenger. */
