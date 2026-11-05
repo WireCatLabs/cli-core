@@ -190,7 +190,7 @@ const OTHERS: Entry[] = [
   validation("finance.ref", "the reference names no invoice or payment"),
   validation("finance.status", "the invoice's status does not allow this"),
   validation("finance.total", "the invoice's total is not the sum of its lines"),
-  validation("finance.unallocate", "only a proposed payment's allocations are taken back"),
+  validation("finance.unallocate", "a rejected or deleted payment's allocations are not taken back"),
   validation("record.entity", "the invoice or payment the record stands for was refused"),
   ["record.map-owner-only", "permission_error", "only the owner says which entity a source record is"],
   validation("record.map-type", "a record maps only to an entity of its own type"),

@@ -7,6 +7,13 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **The owner sets a confirmed payment's wrong split right.** `store.finance.unallocate` now takes an allocation back
+  from a confirmed payment too, when `by` is the owner; `allocate` then puts the right amounts on, under the same
+  over-payment, over-invoice and currency rules, and the invoices' statuses follow. A bot is still refused on a
+  confirmed payment (`finance.owner-only`); a rejected or deleted payment is `finance.unallocate`.
+
 ## 0.571.0 — 05.11.2026
 
 ### Added

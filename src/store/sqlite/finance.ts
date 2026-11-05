@@ -213,8 +213,8 @@ export interface FinanceStore {
    */
   allocate(input: { payment: string; invoice: string; amount: string; by: Author }): Promise<Allocation>
   /**
-   * Takes one allocation back from a payment still proposed, under the same rule as `allocate`. A confirmed payment's
-   * allocations are decided money and stay.
+   * Takes one allocation back, under the same rule as `allocate`: the owner from any payment, confirmed too, to set a
+   * wrong split right; a bot only from one it proposed that is still proposed.
    */
   unallocate(input: { payment: string; invoice: string; by: Author }): Promise<PaymentDetail>
   /**
@@ -870,9 +870,9 @@ export const financeOperationsOver = (context: StoreContext): FinanceOperations 
       const row = rowOf(payment, "payment")
       const ref = `payment:${row.id}`
       mayAllocate(row, by)
-      if (row.review !== "proposed" || row.deleted_at != null)
+      if (row.review === "rejected" || row.deleted_at != null)
         refuse(
-          `${ref} is ${row.deleted_at != null ? "deleted" : String(row.review)}; only a proposed payment's ` +
+          `${ref} is ${row.deleted_at != null ? "deleted" : "rejected"}; only a proposed or confirmed payment's ` +
             "allocations are taken back",
           "finance.unallocate",
         )
