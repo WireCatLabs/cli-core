@@ -53,7 +53,9 @@ reason `sign-in.secret-without-id`.
 - `oauthApp({ provider, env, prefix, clientId?, configClientId?, wirecat? })`: any provider, with WireCat's app from
   the tool's layer; `undefined` when nothing names an app and `wirecat.client_id` is empty.
 - `oauthClientReport(app, reason?)` → `doctor`'s `oauth_client`, `{ client: "wirecat" | "own" | null, source,
-  reason? }`. Pass the signed-in entry's `client` when it has a `source`, else the app a new sign-in would use.
+  reason? }`, for the app a new sign-in would use (doctor reads no keyring). `appDoctorCommand`'s `oauthClient`
+  returns it; a throw there becomes a null client with the message as its `reason`.
 
-`client` carries its `source`, and the standard and drive sign-in entries save it as `clientSource`, so refresh,
-revoke and `doctor` see the app the account signed in with.
+`client` carries its `source`, and the standard and drive sign-in entries save it as `clientSource`. A refresh and a
+revoke use the app the entry saved, and the standard entry keeps WireCat's public secret, so they work after a
+release ships another default app.

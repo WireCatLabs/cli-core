@@ -11,6 +11,9 @@ shape of this file.
 
 - **cli-core now needs `@wirecat/cli-base` 0.76.0 or later** (peer range `>=0.76.0 <0.78.0`), which holds
   `loadConstants`.
+- **`appDoctorCommand`'s `oauthClient` returns `oauthClientReport`'s shape, `{ client, source, reason? }`**, and a
+  throw there is reported as `{ client: null, source: null, reason }` (was `error`). drive's and gcal's callers
+  change with their bump.
 
 ### Added
 

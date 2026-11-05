@@ -127,10 +127,7 @@ export interface OAuthClientReport {
   reason?: string
 }
 
-/**
- * `doctor`'s `oauth_client` for one provider. Pass the signed-in entry's app when it records its source, else what a
- * new sign-in would use.
- */
+/** `doctor`'s `oauth_client` for one provider: the app a new sign-in would use; doctor reads no keyring. */
 export const oauthClientReport = (
   app: { source?: AppSource | undefined } | undefined,
   reason?: string,
