@@ -5,7 +5,7 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
-## 0.582.0 — 05.11.2026
+## Unreleased
 
 ### Changed — may break callers
 
@@ -22,6 +22,8 @@ shape of this file.
   drops `data.source`, which equals its `basis`. `who.name` and a chat row's `role` are left out instead of `null`.
   The promise row of `--compact` prints `basis`. On the E7 fixture JSON goes from 3,998 to 3,676 bytes and compact
   from 1,511 to 1,387.
+
+## 0.582.0 — 05.11.2026
 
 ### Added
 
