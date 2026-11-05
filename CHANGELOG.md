@@ -7,6 +7,15 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`facts.unconfirm(ref, by, reason?)` takes back the approval of an accepted fact** of any type: it waits as
+  `proposed` again and `confirmedBy` is cleared. Only the owner may (`permission_error`, `proposal.owner-only`). It
+  refuses a fact that is not accepted (`fact.not-accepted`), the owner's own fact, which was never proposed
+  (`fact.owner-written`), and a correction, because the fact it superseded cannot be put back as it was
+  (`fact.unconfirm-correction`). The step goes into the fact's `metadata.history` with who had confirmed it, the
+  `metadata.decision` it took back and the reason; `metadata.decision` is cleared.
+
 ## 0.569.0 — 05.11.2026
 
 ### Changed — may break callers
