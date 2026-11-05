@@ -133,6 +133,54 @@ describe("a CLI that declares its own permission keys", () => {
     expect(called).not.toHaveBeenCalled()
   })
 
+  it("**a preview shows and judges every other key the real run checks**", async () => {
+    const { definition, env } = fixture({ "api.calendar.events.delete": "deny" })
+    const keyed = {
+      ...definition,
+      configuration: settingsFor(app, {
+        permissions: commandPermissions({
+          extra: ["api.calendar.calendarList.list", "api.calendar.events.delete"],
+          alsoChecks: (path) => (path.join(" ") === "api call" ? ["api.calendar.calendarList.list"] : []),
+        }),
+      }),
+    }
+    const streams = captureStreams()
+    expect(await run(["work", "api", "call", "x", "--dry-run", "--json"], keyed, { streams, env, tty: false })).toBe(0)
+    expect(JSON.parse(streams.stdout.join("")).item.permission).toEqual({
+      key: "api.call",
+      level: "allow",
+      also: [{ key: "api.calendar.calendarList.list", level: "allow" }],
+    })
+    const denied = {
+      ...keyed,
+      configuration: settingsFor(app, {
+        permissions: commandPermissions({
+          extra: ["api.calendar.calendarList.list", "api.calendar.events.delete"],
+          alsoChecks: () => ["api.calendar.events.delete"],
+        }),
+      }),
+    }
+    const refused = captureStreams()
+    await run(["work", "api", "call", "x", "--dry-run", "--json"], denied, { streams: refused, env, tty: false })
+    expect(JSON.parse(refused.stderr.join("")).error).toMatchObject({
+      code: "permission_error",
+      details: { permission: "api.calendar.events.delete" },
+    })
+  })
+
+  it("**previews a write under the read-only lock** and sends nothing (WC-PERM-12)", async () => {
+    const { definition, env, called } = fixture({ api: "allow" })
+    const streams = captureStreams()
+    const code = await run(["work", "api", "call", "x", "--dry-run", "--json"], definition, {
+      streams,
+      env: { ...env, CAL_READ_ONLY: "1" },
+      tty: false,
+    })
+    expect(code).toBe(0)
+    expect(JSON.parse(streams.stdout.join("")).item.permission).toMatchObject({ key: "api.call" })
+    expect(called).not.toHaveBeenCalled()
+  })
+
   it("**an MCP server's --permission takes the CLI's keys and only tightens**", async () => {
     const { definition, configuration, env, called } = fixture({ "api.call": "readonly" })
     const resolve = (...permission: string[]) => configuration.resolveSettings({ profile: "work", permission }, { env })

@@ -46,14 +46,14 @@ const bound = (field: string, side: "lower" | "upper", example: string) => (node
 }
 
 /**
- * `calendars busy`'s query: the window by the answer's own `start` and `end`, and whom to ask. `calendar` and
+ * `calendars busy`'s query: the window by the answer's own `starts_at` and `ends_at`, and whom to ask. `calendar` and
  * `person` repeat, and every one named is asked: the free stretches are those they all share.
  */
 export const BUSY_QUERY: QueryRegistry = {
   entity: "calendar_busy",
   backend: "native",
   fields: queryFieldsOf(calendarBusy, {
-    native: ["start", "end", "calendar", "person"],
+    native: ["starts_at", "ends_at", "calendar", "person"],
     relations: {
       calendar: {
         type: "kw",
@@ -62,10 +62,10 @@ export const BUSY_QUERY: QueryRegistry = {
       },
       person: { type: "kw", example: "person:ana@example.com", relation: "someone else, by address; repeat for more" },
     },
-    examples: { start: "start>=2026-11-02", end: "end<=2026-11-06" },
+    examples: { starts_at: "starts_at>=2026-11-02", ends_at: "ends_at<=2026-11-06" },
     validate: {
-      start: bound("start", "lower", "start>=2026-11-02"),
-      end: bound("end", "upper", "end<=2026-11-06"),
+      starts_at: bound("starts_at", "lower", "starts_at>=2026-11-02"),
+      ends_at: bound("ends_at", "upper", "ends_at<=2026-11-06"),
     },
   }).map((field) =>
     field.native
@@ -75,7 +75,7 @@ export const BUSY_QUERY: QueryRegistry = {
 }
 
 export const BUSY_QUERY_NOTE =
-  "\nWithout start: from the start of today, in your time zone. Without end: seven days after the start. " +
+  "\nWithout starts_at: from the start of today, in your time zone. Without ends_at: seven days after the start. " +
   "Without calendar: every calendar that syncs."
 
 export const busyQuery = async (
@@ -91,8 +91,8 @@ export const busyQuery = async (
   const terms = nativeTermLists(listQuery(typedQuery(query), BUSY_QUERY, BUSY), BUSY, ["calendar", "person"])
   for (const [field, nodes] of terms)
     for (const node of nodes) {
-      if (field === "start") from = timeWindow(node, zone, now).lower
-      else if (field === "end") to = timeWindow(node, zone, now).upper
+      if (field === "starts_at") from = timeWindow(node, zone, now).lower
+      else if (field === "ends_at") to = timeWindow(node, zone, now).upper
       else if (field === "calendar") {
         const calendar = await calendarIn(context.store, context.accountId, node.value)
         if (isFeedCalendar(calendar))
@@ -183,7 +183,7 @@ export const freeSlots = (
 }
 
 const iso = (at: number) => new Date(at).toISOString()
-const times = ({ from, to }: SyncWindow) => ({ start: iso(from), end: iso(to) })
+const times = ({ from, to }: SyncWindow) => ({ starts_at: iso(from), ends_at: iso(to) })
 
 /**
  * `calendars busy`: the provider's busy times for the query, and with `slot` the free stretches every calendar and

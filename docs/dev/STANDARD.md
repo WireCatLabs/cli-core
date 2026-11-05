@@ -194,6 +194,9 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `move` | move a thing to another place in the source: a file to a folder, an event to a calendar |  |
 | `copy` | copy a file in the source |  |
 | `run` | run a saved job once, now, as its timer would |  |
+| `exec` | what a timer itself starts: one saved schedule, from its file; a person uses run |  |
+| `agent` | save a timer that starts an agent with a prompt, read-only; a verb under schedule, never a resource |  |
+| `command` | save a timer that runs one of this tool's own commands; a verb under schedule |  |
 | `claim` | take a thing for a while so no other agent works it at once; the claim lapses by itself |  |
 | `release` | give back what claim took, before it lapses |  |
 | `merge` | fold a duplicate into the thing that stays; nothing is deleted |  |
@@ -290,6 +293,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `recordings` | collection | the files a provider recorded of a meeting |  |
 | `jobs` | collection | work this tool runs in the background or on a timer |  |
 | `actions` | collection | what an agent proposes to do; the owner confirms or rejects each |  |
+| `findings` | collection | what an agent read in stored mail, staged in batches with citations; nothing is recorded until the owner confirms. What it proposes to do is actions |  |
 | `agents` | collection | the agents whose actions are recorded in the shared store |  |
 | `reminders` | collection | scheduled notices about stored work, claimed and acknowledged with delivery receipts |  |
 | `key-documents` | collection | selected source documents that a project keeps as its starting references |  |
@@ -330,6 +334,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `privacy` | singular | who may find, see, call or add the account |  |
 | `metadata` | singular | a profile's cached source attributes |  |
 | `auth` | singular | the credentials a bot profile uses: its token and the secrets beside it |  |
+| `schedule` | singular | a profile's timers the owner saved, each running a command of this tool or an agent; the tool's own background work is jobs |  |
 
 <!-- resources: end -->
 
@@ -754,6 +759,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--cc` | `<address>` | string | an e-mail address that gets a copy; repeat it for more |  |
 | `--bcc` | `<address>` | string | an e-mail address that gets a blind copy; repeat it for more |  |
 | `--reply-all` |  | switch | with --reply-to, an e-mail reply also goes to everyone the message went to |  |
+| `--trimmed` |  | switch | each e-mail's own text, without the quoted earlier mail and the signature; refused with --full |  |
 
 <!-- flags: end -->
 

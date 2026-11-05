@@ -95,8 +95,16 @@ describe("config", () => {
       .replace("one of: ", "")
       .split(", ")
     expect(offered).toEqual(expect.arrayContaining(["limit", "search_stemmers.latin"]))
-    for (const setting of ["sends_per_hour", "sender_colors", "phone_countries", "task_agent_close", "read_other_bots"])
-      expect(offered).not.toContain(setting)
+    const messengers = [
+      "sends_per_hour",
+      "sender_colors",
+      "phone_countries",
+      "task_agent_close",
+      "read_other_bots",
+      "speech_model",
+      "picture_search",
+    ]
+    for (const setting of messengers) expect(offered).not.toContain(setting)
     expect(offered.some((setting) => setting.startsWith("task_") || setting.startsWith("account_groups"))).toBe(false)
 
     for (const [setting, value] of [
@@ -112,6 +120,20 @@ describe("config", () => {
       expect(code).toBe(2)
       expect(JSON.parse(streams.stderr[0] ?? "{}").error.message).toContain(`no setting called "${setting}"`)
     }
+
+    const shown = captureStreams()
+    await run(
+      ["work", "config", "show", "--json"],
+      { app: tool, commands: () => [configCommand(tool, own)] },
+      { streams: shown, tty: false, env: { ...env, MESSAGING_STORE: join(root, "w.db") } },
+    )
+    const { item } = JSON.parse(shown.stdout.join("")) as {
+      item: { settings: { setting: string }[]; store_settings: { setting: string }[] }
+    }
+    const listed = [...item.settings, ...item.store_settings].map(({ setting }) => setting)
+    expect(listed).toEqual(expect.arrayContaining(["limit"]))
+    for (const setting of listed)
+      expect(messengers.includes(setting) || /^task_(categories|agent_close|first_pass)/u.test(setting)).toBe(false)
   })
 
   it("**saves a setting, shows where it came from, and removes it again** — a messenger's own included", async () => {
@@ -465,6 +487,10 @@ describe("config", () => {
         config.resolveSettings({}, { env: setUp(text).env, needsProfile: false, withIssues: true }).configIssues?.[0]
       expect(issueOf(BROKEN)).toMatchObject({ kind: "invalid_json", fix: "chat config repair" })
       expect(issueOf('{"a": 1 "b": 2}')).not.toHaveProperty("fix")
+      const own = settingsFor(app, { configRepair: false })
+      expect(
+        own.resolveSettings({}, { env: setUp(BROKEN).env, needsProfile: false, withIssues: true }).configIssues?.[0],
+      ).not.toHaveProperty("fix")
       const refused = await repairCall(["config", "show"], setUp(BROKEN).env)
       expect(refused.out).toContain("`chat config repair` repairs it")
     })

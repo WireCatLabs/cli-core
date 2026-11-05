@@ -44,6 +44,14 @@ describe("checkConfigText", () => {
     },
   )
 
+  it("**names no repair** for a CLI whose own config has none", () => {
+    const repairable = BROKEN.find(([, , , , fix]) => fix)
+    if (!repairable) throw new Error("no repairable example")
+    const [issue] = checkConfigText(repairable[1], { file, tool: "app", schema: flat, repair: false }).issues
+    expect(issue).toBeDefined()
+    expect(issue?.fix).toBeUndefined()
+  })
+
   it("**checks a flat file**: unknown settings, wrong values and permission keys no command checks", () => {
     const text = JSON.stringify({ limit: "x", limitt: 1, permissions: { "messages.send": "allow", "bogus.x": "deny" } })
     const { issues, config } = checkConfigText(text, {

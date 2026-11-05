@@ -307,6 +307,20 @@ describe("search all by meaning", () => {
     expect(opened.models).toBe(1)
   })
 
+  it("**ranks the sources as one list**: at the same rank, a hit meaning found goes ahead of one it did not", async () => {
+    download()
+    const { store, all } = await setUp()
+    await store.notes.addNote({ text: "fish" })
+    await embedNotes(store, { threads: 1 })
+
+    const found = await all("fish", { only: ["messages", "notes"] })
+
+    expect(found.items.map(({ kind, foundBy }) => [kind, foundBy])).toEqual([
+      ["note", ["words", "meaning"]],
+      ["message", ["words"]],
+    ])
+  })
+
   it("takes a lane built from a store and env alone, as memo has them", async () => {
     download()
     const { store, embeddings } = await setUp()

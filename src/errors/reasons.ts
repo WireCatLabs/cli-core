@@ -38,6 +38,19 @@ const SIGN_IN: Entry[] = [
   ["oauth.not-saved", "configuration_error", "the sign-in cannot be saved or read where it is kept"],
   ["sign-in.client-file-open", "configuration_error", "other users of this computer can read the client file"],
   ["sign-in.client-file-invalid", "configuration_error", "the file is not a Desktop app OAuth client JSON"],
+  ["oauth.scope-missing", "permission_error", "the sign-in lacks a permission this command needs"],
+  ["sign-in.client-rejected", "configuration_error", "the provider rejected the OAuth client"],
+]
+
+/** Reasons every CLI over a provider's API raises alike: gcal and drive today. */
+const PROVIDER_API: Entry[] = [
+  ["offline.refused", "permission_error", "this command needs the provider; --offline was given"],
+  validation("api.unknown-method", "the provider has no method by this name"),
+  ["api.disabled", "configuration_error", "the provider's API is turned off for this OAuth project"],
+  ["provider.usage-limit", "rate_limited", "the account's usage limit at the provider is reached; wait, do not retry"],
+  ["file.not-found", "not_found", "the file named, or its folder, does not exist"],
+  validation("file.not-a-file", "the path names a folder or another thing that is not a file"),
+  ["file.denied", "permission_error", "the file cannot be opened: permission denied"],
 ]
 
 const OTHERS: Entry[] = [
@@ -98,6 +111,7 @@ const OTHERS: Entry[] = [
   validation("event.repeat-split", "the series cannot be split at this occurrence, or was split there already"),
   validation("event.repeat-count", "a COUNT series is split only with a rule for its new part"),
   validation("event.unmovable", "the provider keeps this kind of event on its calendar"),
+  validation("event.quick-add-ambiguous", "more than one event could be the one a lost quick add made"),
   validation("event.text-with-fields", "--text takes the whole event from its line, so no field option goes with it"),
   validation("calendar.ambiguous", "two or more calendars have this name; name one by its id"),
   validation("export.too-many", "the query finds more events than one export writes"),
@@ -277,7 +291,7 @@ export const INPUT_FIELD_REASONS: ErrorReason[] = defineReasons([
 export const REASONS: ErrorReason[] = defineReasons([
   ...QUERY_REASONS,
   ...INPUT_FIELD_REASONS,
-  ...[...QUERY, ...SIGN_IN, ...OTHERS].map(([reason, code, message]) => ({
+  ...[...QUERY, ...SIGN_IN, ...PROVIDER_API, ...OTHERS].map(([reason, code, message]) => ({
     reason,
     code,
     message,

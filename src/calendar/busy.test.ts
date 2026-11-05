@@ -1,11 +1,9 @@
 import { metaSchema } from "@wirecat/cli-base/standards"
-import { Command } from "commander"
 import * as v from "valibot"
 import { describe, expect, it } from "vitest"
 import { freeSlots, workingHoursOf } from "./busy.js"
-import { addCalendarCommands } from "./cli/index.js"
 import { repeatRule } from "./recurrence.js"
-import { checkCalendarAnswer } from "./testing/answers.js"
+import { calendarTestProgram } from "./testing/answers.js"
 import { fakeCalendarSource, memoryEventStore } from "./testing/index.js"
 
 const HOUR = 3_600_000
@@ -25,28 +23,16 @@ const setup = async (options: { freeBusy?: boolean } = { freeBusy: true }) => {
   })
   source.setBusy("ana@example.com", [{ from: Date.UTC(2026, 10, 2, 11), to: Date.UTC(2026, 10, 2, 12) }])
   source.setBusy("bo@example.com", { error: "notFound" })
-  const written: Record<string, unknown>[] = []
-  const root = new Command("gcal")
-    .exitOverride()
-    .configureOutput({ writeErr: () => undefined })
-    .option("--json")
-    .option("--jsonl")
-  addCalendarCommands(root, {
-    store,
-    accountId: 1,
-    account: { provider: "example-calendar", account: "owner-1" },
-    source,
-    write: (value) => written.push(value as Record<string, unknown>),
-    now: () => NOW,
-    timezone: "UTC",
-    ...options,
-  })
-  const cli = async (...args: string[]) => {
-    await root.parseAsync([...args, "--json"], { from: "user" })
-    checkCalendarAnswer(root, args, written.at(-1))
-    return written.at(-1) as Record<string, unknown>
-  }
-  return { cli, root }
+  return calendarTestProgram(
+    {
+      profile: "personal",
+      store,
+      accountId: 1,
+      account: { provider: "example-calendar", account: "owner-1" },
+      source: () => source,
+    },
+    { now: () => NOW, ...options },
+  )
 }
 
 describe("calendars busy", () => {
@@ -58,21 +44,21 @@ describe("calendars busy", () => {
 
   it("answers the synced calendars and each person named, with only their busy times", async () => {
     const { cli } = await setup()
-    const answer = await cli("calendars", "busy", "start>=today", "end<=today", "person:Ana@example.com")
+    const answer = await cli("calendars", "busy", "starts_at>=today", "ends_at<=today", "person:Ana@example.com")
     expect(answer).toEqual({
-      start: "2026-11-02T00:00:00.000Z",
-      end: "2026-11-03T00:00:00.000Z",
+      starts_at: "2026-11-02T00:00:00.000Z",
+      ends_at: "2026-11-03T00:00:00.000Z",
       timezone: "UTC",
       calendars: [
         {
           calendar: "1",
           id: "primary",
-          busy: [{ start: "2026-11-02T09:00:00.000Z", end: "2026-11-02T10:00:00.000Z" }],
+          busy: [{ starts_at: "2026-11-02T09:00:00.000Z", ends_at: "2026-11-02T10:00:00.000Z" }],
         },
         {
           person: "ana@example.com",
           id: "ana@example.com",
-          busy: [{ start: "2026-11-02T11:00:00.000Z", end: "2026-11-02T12:00:00.000Z" }],
+          busy: [{ starts_at: "2026-11-02T11:00:00.000Z", ends_at: "2026-11-02T12:00:00.000Z" }],
         },
       ],
       meta: {
@@ -87,13 +73,13 @@ describe("calendars busy", () => {
   it("finds the free stretches everyone shares in working hours, and names whom the provider could not see", async () => {
     const { cli } = await setup()
     const answer = await cli(
-      ...["calendars", "busy", "end<=2026-11-02", "person:ana@example.com", "person:bo@example.com"],
+      ...["calendars", "busy", "ends_at<=2026-11-02", "person:ana@example.com", "person:bo@example.com"],
       ...["--duration-minutes", "60", "--hours", "08:00-13:00"],
     )
     expect(answer.slots).toEqual([
-      { start: "2026-11-02T08:00:00.000Z", end: "2026-11-02T09:00:00.000Z" },
-      { start: "2026-11-02T10:00:00.000Z", end: "2026-11-02T11:00:00.000Z" },
-      { start: "2026-11-02T12:00:00.000Z", end: "2026-11-02T13:00:00.000Z" },
+      { starts_at: "2026-11-02T08:00:00.000Z", ends_at: "2026-11-02T09:00:00.000Z" },
+      { starts_at: "2026-11-02T10:00:00.000Z", ends_at: "2026-11-02T11:00:00.000Z" },
+      { starts_at: "2026-11-02T12:00:00.000Z", ends_at: "2026-11-02T13:00:00.000Z" },
     ])
     expect(answer.unknown).toEqual(["bo@example.com"])
     expect(answer.calendars).toContainEqual({
@@ -118,20 +104,19 @@ describe("calendars busy", () => {
   })
 
   it("refuses --offline before asking the provider", async () => {
-    const { cli, root } = await setup()
-    root.option("--offline")
+    const { cli } = await setup()
     await expect(cli("--offline", "calendars", "busy")).rejects.toMatchObject({ details: { reason: "busy.offline" } })
   })
 
-  it("asks for a week from today without a window, and a week from its start with start alone", async () => {
+  it("asks for a week from today without a window, and a week from its start with starts_at alone", async () => {
     const { cli } = await setup()
     expect(await cli("calendars", "busy")).toMatchObject({
-      start: "2026-11-02T00:00:00.000Z",
-      end: "2026-11-09T00:00:00.000Z",
+      starts_at: "2026-11-02T00:00:00.000Z",
+      ends_at: "2026-11-09T00:00:00.000Z",
     })
-    expect(await cli("calendars", "busy", "start>=2026-11-04")).toMatchObject({
-      start: "2026-11-04T00:00:00.000Z",
-      end: "2026-11-11T00:00:00.000Z",
+    expect(await cli("calendars", "busy", "starts_at>=2026-11-04")).toMatchObject({
+      starts_at: "2026-11-04T00:00:00.000Z",
+      ends_at: "2026-11-11T00:00:00.000Z",
     })
   })
 
@@ -144,9 +129,9 @@ describe("calendars busy", () => {
       )
     expect(await reason("week")).toMatch(/^query\./u)
     expect(await reason("from:2026-11-02")).toMatch(/^query\./u)
-    expect(await reason("start<2026-11-02")).toBe("query.unsupported-operator")
-    expect(await reason("end>=2026-11-02")).toBe("query.unsupported-operator")
-    expect(await reason("start>=2026-11-02", "start>=2026-11-03")).toBe("query.unsupported-placement")
+    expect(await reason("starts_at<2026-11-02")).toBe("query.unsupported-operator")
+    expect(await reason("ends_at>=2026-11-02")).toBe("query.unsupported-operator")
+    expect(await reason("starts_at>=2026-11-02", "starts_at>=2026-11-03")).toBe("query.unsupported-placement")
     expect(await reason("person:ana")).toBe("validation_error")
   })
 })

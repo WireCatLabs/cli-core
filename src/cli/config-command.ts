@@ -99,7 +99,7 @@ export const configCommand = (
               ...(declared ? { default: declared.default, description: declared.description } : {}),
             }
           }),
-        store_settings: await storeSettings(env),
+        store_settings: (await storeSettings(env)).filter(({ setting }) => offersStoreSetting(app, setting)),
       }),
     )
 
