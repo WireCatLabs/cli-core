@@ -387,7 +387,8 @@ describe("facts", () => {
 
   it("unconfirm an accepted fact an agent proposed back to proposed, keeping the step in its history", async () => {
     const path = join(mkdtempSync(join(tmpdir(), "memories-")), "store.db")
-    const store = await open(path)
+    const store = await openStore({ path, decisions: { agentDecisions: true, ruleProposalsOwnerOnly: true } })
+    live.push(store)
     const proposed = await store.facts.add({ type: "promise", statement: "Ana sends the draft", by: agent })
     await store.facts.accept(proposed.ref, { bot: "reviewer", reason: "the thread says so" })
     await expect(store.facts.unconfirm(proposed.ref, { bot: "reviewer", reason: "wrong" })).rejects.toMatchObject({
