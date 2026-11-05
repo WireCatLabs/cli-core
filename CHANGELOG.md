@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.577.0 — 05.11.2026
+
 ### Added
 
 - **Tasks keep their id in an outside service and the page they are about (store version 51).** `tasks.provider`
