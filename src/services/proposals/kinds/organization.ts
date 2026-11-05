@@ -36,7 +36,14 @@ export const proposeOrganization = (
   store: Pick<MessageStore, "proposedActions">,
   input: OrganizationProposal,
   by: Author,
-): Promise<ProposedAction> => store.proposedActions.propose({ kind: ORGANIZATION_ADD_KIND, by, payload: input })
+  reason?: string,
+): Promise<ProposedAction> =>
+  store.proposedActions.propose({
+    kind: ORGANIZATION_ADD_KIND,
+    by,
+    payload: input,
+    ...(reason === undefined ? {} : { reason }),
+  })
 
 export const organizationKind = (store: Pick<MessageStore, "proposedActions" | "knowledge">): ProposalKind => ({
   kind: "organization",
