@@ -276,16 +276,58 @@ export const createEvent = async (
 
 /** The longest line `createEventFromText` sends; a quick add is one sentence, not a description. */
 const TEXT_MAX = 1000
+/** How far the provider's clock may run behind this computer's when a retry looks for what a lost quick add made. */
+const CLOCK_SKEW_MS = 120_000
+const TIME_DIGITS = 9
+
+/**
+ * A quick add's id: `q`, which no hex create id has, then when it was sent, so a retry knows from when to look for the
+ * event it may have made.
+ */
+const quickId = (at: number) => `q${at.toString(32).padStart(TIME_DIGITS, "0")}${newEventId()}`
+const QUICK_ID = new RegExp(`^q[a-v0-9]{${TIME_DIGITS}}[a-f0-9]{32}$`, "u")
+const sentAt = (id: string) => Number.parseInt(id.slice(1, 1 + TIME_DIGITS), 32)
+
+const wordsOf = (text: string) => text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []
+
+/**
+ * What a lost quick add made: an event this account made on the calendar since the attempt, whose title's every word
+ * is in the line. The provider builds the title from the line's own words.
+ */
+const lostQuickAdd = async (context: WriteContext, calendar: StoredCalendar, line: string, id: string) => {
+  const quickAdded = context.writes.writer.quickAdded
+  if (!quickAdded)
+    throw new CliError(
+      "validation_error",
+      `this provider cannot find a lost quick add; leave out ${context.names.id}`,
+      {
+        param: context.names.id,
+      },
+    )
+  const words = new Set(wordsOf(line))
+  const found = (await quickAdded.call(context.writes.writer, calendar, sentAt(id) - CLOCK_SKEW_MS)).filter(
+    (entry) => entry.status !== "cancelled" && wordsOf(entry.title ?? "").every((word) => words.has(word)),
+  )
+  if (found.length > 1)
+    throw new CliError(
+      "validation_error",
+      `${found.length} events made since that attempt could be the one it added; look with events list ` +
+        "changed_at>=today and add it again only if none is",
+      { reason: "event.quick-add-ambiguous", operation_id: id, retryable: false },
+    )
+  return found[0]
+}
 
 /**
  * An event the provider makes from one line of text, as Google's quickAdd. Nobody is mailed unless `notify` says so:
- * the attendees are known only once the provider has read the text.
+ * the attendees are known only once the provider has read the text. The provider picks the event's id, so a retry
+ * with the `id` a lost attempt named first looks for the event that attempt made.
  */
 export const createEventFromText = async (
   context: WriteContext,
   calendarReference: string,
   text: string,
-  options: { notify?: boolean } = {},
+  options: { notify?: boolean; id?: string } = {},
 ) => {
   const quickAdd = context.writes.writer.quickAdd
   if (!quickAdd) throw new CliError("configuration_error", "this provider cannot make an event from text")
@@ -293,38 +335,29 @@ export const createEventFromText = async (
   if (!line) throw new CliError("validation_error", "the text is empty: say what, when and where")
   if (line.length > TEXT_MAX || /[\r\n]/u.test(line))
     throw new CliError("validation_error", `the text is one line of at most ${TEXT_MAX} characters`)
+  if (options.id !== undefined && !QUICK_ID.test(options.id))
+    throw new CliError("validation_error", `${context.names.id} is the id a quick add's outcome_unknown named`, {
+      param: context.names.id,
+    })
   const calendar = writable(await calendarIn(context.store, context.accountId, calendarReference))
+  const lost = options.id === undefined ? undefined : await lostQuickAdd(context, calendar, line, options.id)
   const notify = options.notify ?? false
-  const guard = writeGuard(context, keysFor(context, "quick-add", notify))
-  const id = newEventId()
+  const id = lost ? (options.id as string) : quickId(context.now)
   let entry: EntryInput
-  try {
-    entry = await guardedWrite(
-      guard,
-      { chatId: null, kind: "edit", key: COMMAND_KEY["quick-add"], operationId: id, sendId: id, notify },
-      () => quickAdd.call(context.writes.writer, calendar, line, { notify }),
-    )
-  } catch (error) {
-    if (isCliError(error) && error.code === "outcome_unknown")
-      throw new CliError(
-        "outcome_unknown",
-        `${error.message} — the provider may have made the event, and a create from text cannot be retried safely: ` +
-          "sync, then look with events list changed_at>=today before adding it again",
-        { ...error.details, operation_id: id, retryable: false },
-      )
-    throw error
-  }
-  let saved: StoredEntry | undefined
-  try {
-    ;[saved] = await context.store.saveEntries(calendar.id, [entry], context.now)
-  } catch (error) {
-    throw new CliError(
-      isCliError(error) ? error.code : "invalid_response",
-      `the provider made event ${entry.externalId}, but the local store did not save it ` +
-        `(${error instanceof Error ? error.message : String(error)}); sync to store it — do not create it again`,
-      { ...(isCliError(error) ? error.details : {}), operation_id: id, id: entry.externalId, retryable: false },
+  if (lost) entry = lost
+  else {
+    const guard = writeGuard(context, keysFor(context, "quick-add", notify))
+    entry = await retryable(context, id, () =>
+      guardedWrite(
+        guard,
+        { chatId: null, kind: "edit", key: COMMAND_KEY["quick-add"], operationId: id, sendId: id, notify },
+        () => quickAdd.call(context.writes.writer, calendar, line, { notify }),
+      ),
     )
   }
+  const [saved] = await savedAfterCreate(context, id, () =>
+    context.store.saveEntries(calendar.id, [entry], context.now),
+  )
   return answerOf(id, saved, (entry.recurrence?.length ?? 0) > 0)
 }
 

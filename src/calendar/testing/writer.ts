@@ -27,8 +27,10 @@ export interface FakeCalendarWriter extends CalendarWriter {
   readonly calls: FakeCalendarWriterCall[]
 }
 
-export const fakeCalendarWriter = (options: { provider?: string } = {}): FakeCalendarWriter => {
+export const fakeCalendarWriter = (options: { provider?: string; now?: () => number } = {}): FakeCalendarWriter => {
+  const now = options.now ?? Date.now
   const calendars = new Map<string, Map<string, EntryInput>>()
+  const made = new Map<string, number>()
   const calls: FakeCalendarWriterCall[] = []
   let version = 0
   let lose = false
@@ -111,7 +113,11 @@ export const fakeCalendarWriter = (options: { provider?: string } = {}): FakeCal
         participants: [],
       })
       of(calendar.externalId).set(id, entry)
+      made.set(id, now())
       return answer(entry)
+    },
+    async quickAdded(calendar, since) {
+      return [...of(calendar.externalId).values()].filter((one) => (made.get(one.externalId) ?? -1) >= since)
     },
     /** Keeps one event per UID on a calendar: a UID sent again replaces the event under the same id. */
     async importEvent(calendar, event) {

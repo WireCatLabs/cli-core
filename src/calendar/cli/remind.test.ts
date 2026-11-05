@@ -2,14 +2,12 @@ import { existsSync, mkdtempSync, readFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { metaOf } from "@wirecat/cli-base/commands"
-import { Command } from "commander"
 import { describe, expect, it } from "vitest"
 import type { EntryInput } from "../../meetings/index.js"
 import type { GuardSettings } from "../../sends/guard.js"
 import type { Level } from "../../sends/permissions.js"
-import { checkCalendarAnswer } from "../testing/answers.js"
+import { calendarTestProgram } from "../testing/answers.js"
 import { fakeCalendarSource, fakeCalendarWriter, memoryEventStore } from "../testing/index.js"
-import { addCalendarCommands } from "./index.js"
 
 const MINUTE = 60_000
 const NOW = Date.UTC(2026, 10, 2, 9)
@@ -48,30 +46,25 @@ const setup = (options: { permissions?: Record<string, Level>; lock?: string } =
     ...(options.lock ? { readOnlyLock: options.lock } : {}),
   })
   let clock = NOW
-  const written: Record<string, unknown>[] = []
-  const program = () => {
-    const root = new Command("gcal").exitOverride().configureOutput({ writeErr: () => undefined })
-    root.option("--yes").option("--json").option("--offline")
-    addCalendarCommands(root, {
+  const writes = { writer: fakeCalendarWriter(), app, settings, env }
+  const harness = calendarTestProgram(
+    {
+      profile: "work",
       store,
       accountId: 1,
       account: { provider: "example-calendar", account: "owner-1" },
-      source,
-      write: (value) => written.push(value as Record<string, unknown>),
-      now: () => clock,
-      timezone: "UTC",
-      writes: { writer: fakeCalendarWriter(), app, settings, env },
-    })
-    return root
-  }
-  const remind = async (...args: string[]) => {
-    const root = program()
-    const before = written.length
-    const argv = ["events", "remind", ...args, "--json"]
-    await root.parseAsync(argv, { from: "user" })
-    if (written.length > before) checkCalendarAnswer(root, argv, written.at(-1))
-    return (written.length > before ? written.at(-1) : undefined) as { items: { title: string; ref: string }[] }
-  }
+      source: () => source,
+      writes: () => writes,
+      env,
+    },
+    { app, now: () => clock, writes: {} },
+  )
+  const program = () => harness.root
+  const remind = async (...args: string[]) =>
+    (await harness.cli("events", "remind", ...args)) as unknown as {
+      items: { title: string; ref: string }[]
+      meta: Record<string, unknown>
+    }
   const titles = async (...args: string[]) => (await remind(...args)).items.map(({ title }) => title)
   return { store, source, remind, titles, home, program, setClock: (at: number) => (clock = at) }
 }

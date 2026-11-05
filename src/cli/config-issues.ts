@@ -385,13 +385,21 @@ export const checkConfigText = <T extends v.GenericSchema>(
     tool,
     schema,
     knownPermissions,
-  }: { file: string; tool: string; schema: T; knownPermissions?: ReadonlySet<string> },
+    repair = true,
+  }: {
+    file: string
+    tool: string
+    schema: T
+    knownPermissions?: ReadonlySet<string>
+    /** `false` for a CLI with its own `config` that has no `repair`: no fix then names one. */
+    repair?: boolean
+  },
 ): { issues: ConfigIssue[]; config: v.InferOutput<T> | undefined } => {
   const parsed = parseConfigText(text, file)
   if ("issue" in parsed) {
     const issue = publicIssue(parsed.issue)
     // Offered only where it would work, so the desktop never shows a Repair button that fails.
-    if (repairConfigText(text).state === "repaired") issue.fix = `${tool} config repair`
+    if (repair && repairConfigText(text).state === "repaired") issue.fix = `${tool} config repair`
     return { issues: [issue], config: undefined }
   }
   // valibot reads a list as an object, so `[]` would pass for `{}`.

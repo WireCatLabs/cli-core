@@ -25,6 +25,8 @@ export interface CommandPermissions {
   extra: readonly PermissionKey[]
   /** cli-core's built-in levels and the CLI's own; they only ever tighten. */
   defaults: Readonly<Record<PermissionKey, Level>>
+  /** The other keys a command's real run checks, so its `--dry-run` preview shows each: gcal's `api.calendar.*`. */
+  alsoChecks?: (path: readonly string[]) => readonly PermissionKey[]
 }
 
 /** Either way of naming a program's keys: a messenger's per-command mapping, or a declared CLI's own. */
@@ -52,10 +54,12 @@ export const commandPermissions = ({
   keyOf = commandPathKey,
   extra = [],
   defaults = {},
+  alsoChecks,
 }: Partial<CommandPermissions> = {}): CommandPermissions => ({
   keyOf,
   extra: [AUTHORITY_KEY, ...extra],
   defaults: { ...DEFAULT_PERMISSIONS, ...defaults },
+  ...(alsoChecks ? { alsoChecks } : {}),
 })
 
 const pathOf = (command: Command): string[] => {
