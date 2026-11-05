@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.574.0 — 05.11.2026
+
 ### Fixed
 
 - **A finished request no longer keeps the command in memory until its time limit ends.** The limit was a timer that
