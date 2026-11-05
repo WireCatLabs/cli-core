@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.576.0 — 05.11.2026
+
 ### Added
 
 - **`review --holder` gives an agent the bulk mail that is not surely a newsletter.** Shops, banks and site forms put
