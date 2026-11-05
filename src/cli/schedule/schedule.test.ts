@@ -18,6 +18,7 @@ import { describe, expect, it, vi } from "vitest"
 import { runSchedule, type Schedule, scheduleFile } from "../../background/schedules.js"
 import type { Ran, ServerSystem } from "../../background/system.js"
 import type { Chat } from "../../domain/models.js"
+import { scheduledJob } from "../../entities/index.js"
 import type { MailWaiting } from "../../mail/marks.js"
 import type { MessengerAdapter } from "../../ports/messenger.js"
 import { pickChat } from "../../resolve.js"
@@ -220,7 +221,15 @@ describe.runIf(posix)("schedule on Linux", () => {
     const result = await call(["list", "kind:agent name:brief", "--json"], env, system)
     expect(result.code, result.err).toBe(0)
     expect(JSON.parse(result.out).items).toEqual([
-      { name: "brief", kind: "agent", when: "every 1h", last: null, spent_today_usd: 0 },
+      {
+        name: "brief",
+        kind: "agent",
+        when: "every 1h",
+        last: null,
+        spent_today_usd: 0,
+        max_cost_usd: null,
+        max_cost_per_day_usd: 5,
+      },
     ])
     const refused = await call(["list", "kind:agent OR kind:command", "--json"], env, system)
     expect(refused.code).toBe(2)
@@ -922,7 +931,7 @@ describe.runIf(process.platform !== "win32")("an agent gated on new mail", () =>
 
   it("starts no run once the day's runs cost the daily cap, says so, and starts again the next day", async () => {
     const { call, add } = gated(() => waitingMail(1, 60), { maxCostPerDay: 100 })
-    const file = await add("--on-new-mail", "mail-triage", "--max-cost-per-day", "5")
+    const file = await add("--on-new-mail", "mail-triage", "--max-cost-per-day", "5", "--max-cost", "2")
     const spent = () => JSON.parse(readFileSync(join(file, "..", "spend.json"), "utf8")).usd
 
     await call(["schedule", "exec", file])
@@ -932,7 +941,13 @@ describe.runIf(process.platform !== "win32")("an agent gated on new mail", () =>
     await call(["schedule", "exec", file])
     expect(spent()).toBe(6)
     const listed = JSON.parse((await call(["schedule", "list"])).out).items[0]
-    expect(listed).toMatchObject({ spent_today_usd: 6, last: { skipped: { why: expect.stringContaining("$5.00") } } })
+    expect(listed).toMatchObject({
+      spent_today_usd: 6,
+      max_cost_usd: 2,
+      max_cost_per_day_usd: 5,
+      last: { cost_usd: 3, skipped: { why: expect.stringContaining("$5.00") } },
+    })
+    expect(v.safeParse(scheduledJob, listed).success).toBe(true)
 
     const spend = join(file, "..", "spend.json")
     writeFileSync(spend, JSON.stringify({ day: "2000-01-01", usd: 6 }))
