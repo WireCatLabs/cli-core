@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.564.0 — 05.11.2026
+
 ### Changed — may break callers
 
 - **`search all` ranks its sources as one list** (MEMO-37). Each source's hit at one rank used to get the same score,
