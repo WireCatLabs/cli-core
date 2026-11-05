@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.573.0 — 05.11.2026
+
 ### Added
 
 - **The owner sets a confirmed payment's wrong split right.** `store.finance.unallocate` now takes an allocation back
