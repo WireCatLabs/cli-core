@@ -56,7 +56,10 @@ const finding = v.variant("kind", [
     ...base,
     kind: v.literal("invoice"),
     direction: v.picklist(INVOICE_DIRECTIONS),
-    counterparty: reference,
+    counterparty: v.optional(reference),
+    /** A counterparty the store may not hold yet; the owner's accept finds its organization or makes one. */
+    counterparty_name: v.optional(text),
+    counterparty_email: v.optional(text),
     currency: text,
     lines: v.array(
       v.strictObject({
@@ -78,7 +81,11 @@ const finding = v.variant("kind", [
     kind: v.literal("payment"),
     direction: v.picklist(MONEY_DIRECTIONS),
     payer: v.optional(reference),
+    payer_name: v.optional(text),
+    payer_email: v.optional(text),
     payee: v.optional(reference),
+    payee_name: v.optional(text),
+    payee_email: v.optional(text),
     amount: text,
     currency: text,
     date: text,
@@ -92,6 +99,8 @@ const finding = v.variant("kind", [
     kind: v.literal("order"),
     purpose: v.picklist(ORDER_PURPOSES),
     customer: v.optional(reference),
+    customer_name: v.optional(text),
+    customer_email: v.optional(text),
     supplier: v.optional(reference),
     supplier_name: text,
     number: v.optional(text),

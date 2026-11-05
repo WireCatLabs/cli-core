@@ -16,6 +16,24 @@ shape of this file.
   `organization_add`, so no schema change; `proposalRegistry` lists it in `review`, and confirming it adds the
   organization (`made: ["organization:<id>"]`), rejecting it adds nothing. The owner still adds one directly with
   `knowledge.addOrganization`. `ORGANIZATION_ADD_KIND` and `OrganizationProposal` are exported from `services`.
+- **`mailFindings.check` tries a whole mail findings batch without staging it.** It makes every check `stage`
+  makes, the trial write of each invoice, payment and order included, rolls everything back and answers
+  `{ valid, findings, batch, problems }`: one problem per finding that would be refused, with its id, kind, code,
+  message and details, and the batch's own problems (`mail-findings.key-used` when the key holds other input). Its
+  input is `readMailFindingsJson`, the decoded JSON before validation.
+- **Mail findings name a party the store does not hold yet.** An invoice takes `counterparty_name`, a payment
+  `payer_name` and `payee_name`, an order `customer_name`, each with an optional `<party>_email` that sent or
+  received a cited email. The owner's accept finds the organization by that address, by its company domain or by
+  exact name, or makes a company of that name and joins the address to it; two matches are refused
+  (`finance.party`).
+
+### Fixed
+
+- **An unknown finding field is named.** The refusal says the field, the finding's id and kind and what that kind
+  takes, also in `details` (`fields`, `allowed`, `finding`, `kind`, reason `finding.unknown-field`); it was only
+  "unknown mail finding field".
+- **An order is not proposed twice.** Staging an `order` whose shop and number already wait in a proposed mail
+  findings batch is refused (`order.proposed`), as one already stored is (`order.duplicate`).
 
 ## 0.577.0 — 05.11.2026
 

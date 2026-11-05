@@ -2,7 +2,7 @@ import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, expect, it } from "vitest"
-import { parseMailFindingsJson } from "../cli/findings-input.js"
+import { parseMailFindingsJson, readMailFindingsJson } from "../cli/findings-input.js"
 import { formatLocator } from "../domain/locator.js"
 import type { MailFinding, MailFindingsInput } from "../mail/findings.js"
 import { proposalRegistry } from "../services/proposals/registry.js"
@@ -368,4 +368,179 @@ it("keeps a marketplace task's id and link, and an order's page, from the findin
     sourceUrl: "https://www.avito.ru/profile/messenger/channel/u2i-abc",
   })
   expect(await f.store.orders.get(made.o1 as string)).toMatchObject({ sourceUrl: order.source_url })
+})
+
+it("names the unknown field, its finding and what that kind takes", async () => {
+  const f = await fixture()
+  const json = JSON.stringify({
+    schema_version: 1,
+    key: "mail-triage:40",
+    extractor: "synthetic",
+    findings: [
+      {
+        id: "f1",
+        kind: "fact",
+        type: "fact",
+        statement: "x",
+        expires_at: "2027-01-01",
+        evidence: [await f.cite("t-lease", "lease")],
+      },
+    ],
+  })
+  expect(() => parseMailFindingsJson(json)).toThrow(
+    expect.objectContaining({
+      message: expect.stringMatching(/unknown mail finding field expires_at in f1 \(fact\); it takes id, project/),
+      details: expect.objectContaining({
+        reason: "finding.unknown-field",
+        fields: ["expires_at"],
+        finding: "f1",
+        kind: "fact",
+        allowed: ["id", "project", "subject", "evidence", "kind", "type", "statement"],
+      }),
+    }),
+  )
+})
+
+it("checks a whole batch without staging it, naming every finding's problem", async () => {
+  const f = await fixture()
+  const cited = [await f.cite("t-lease", "lease")]
+  const input = readMailFindingsJson(
+    JSON.stringify({
+      schema_version: 1,
+      key: "mail-triage:41",
+      extractor: "synthetic",
+      findings: [
+        { id: "f1", kind: "fact", type: "fact", statement: "Certificate 12-345", expires: "x", evidence: cited },
+        {
+          id: "i1",
+          kind: "invoice",
+          direction: "payable",
+          currency: "EUR",
+          lines: [{ description: "Desk", amount: "1" }],
+          reason: "r",
+          evidence: cited,
+        },
+        {
+          id: "t1",
+          kind: "task",
+          type: "chore",
+          title: "Sign",
+          reason: "asked",
+          commitment: "explicit",
+          evidence: cited,
+        },
+      ],
+    }),
+  )
+  const checked = await f.store.mailFindings.check(MINE, input, agent)
+  expect(checked).toMatchObject({ valid: false, findings: 3, batch: null })
+  expect(checked.problems.map((one) => [one.finding, one.kind, one.details?.reason ?? null])).toEqual([
+    ["f1", "fact", "finding.unknown-field"],
+    ["i1", "invoice", null],
+  ])
+  expect(checked.problems[1]?.message).toMatch(/counterparty_name/)
+
+  const fixed = { ...input, findings: input.findings.filter((one) => one.id === "t1") }
+  expect(await f.store.mailFindings.check(MINE, fixed, agent)).toEqual({
+    valid: true,
+    findings: 1,
+    batch: null,
+    problems: [],
+  })
+  expect((await f.store.mailFindings.list()).items).toEqual([])
+  const staged = await f.store.mailFindings.stage(MINE, fixed, agent)
+  expect(await f.store.mailFindings.check(MINE, fixed, agent)).toMatchObject({ valid: true, batch: staged.id })
+  expect((await f.store.mailFindings.check(MINE, input, agent)).problems).toContainEqual(
+    expect.objectContaining({ finding: null, details: { reason: "mail-findings.key-used" } }),
+  )
+})
+
+it("records an invoice to a counterparty named only in the mail, finding its organization or making one", async () => {
+  const f = await fixture()
+  const cited = [await f.cite("t-lease", "lease")]
+  const invoice = (id: string, key: string, party: Record<string, string>) =>
+    f.batch(
+      [
+        {
+          id,
+          kind: "invoice",
+          direction: "payable",
+          ...party,
+          currency: "EUR",
+          lines: [{ description: "Accounting", amount: "49.00" }],
+          reason: "the monthly bill",
+          evidence: cited,
+        } as MailFinding,
+      ],
+      key,
+    )
+  const accept = async (batch: Awaited<ReturnType<typeof f.store.mailFindings.stage>>) => {
+    const reviewed = await f.store.mailFindings.review(batch.id, {
+      fingerprint: batch.fingerprint,
+      accept: batch.input.findings.map((one) => one.id),
+      by: "owner",
+    })
+    return f.store.finance.invoice(reviewed.receipt?.items[0]?.reference as string)
+  }
+  const stranger = await invoice("i0", "mail-triage:50", {
+    counterpartyName: "Lab",
+    counterpartyEmail: "x@else.example",
+  })
+  expect((await f.store.mailFindings.check(MINE, stranger, agent)).problems[0]?.message).toMatch(
+    /neither sent nor received/,
+  )
+
+  const named = await invoice("i1", "mail-triage:51", {
+    counterpartyName: "Ann Lab GmbH",
+    counterpartyEmail: "ann@example.com",
+  })
+  expect((await f.store.mailFindings.check(MINE, named, agent)).valid).toBe(true)
+  const first = await accept(await f.store.mailFindings.stage(MINE, named, agent))
+  expect(await f.store.knowledge.organizations()).toEqual([
+    expect.objectContaining({ name: "Ann Lab GmbH", kind: "company" }),
+  ])
+  expect(first.counterparty).toMatchObject({ ref: (await f.store.knowledge.organizations())[0]?.ref })
+
+  const again = await accept(
+    await f.store.mailFindings.stage(
+      MINE,
+      await invoice("i2", "mail-triage:52", { counterpartyName: "ann lab gmbh" }),
+      agent,
+    ),
+  )
+  expect(again.counterparty).toEqual(first.counterparty)
+  expect(await f.store.knowledge.organizations()).toHaveLength(1)
+  const byAddress = await accept(
+    await f.store.mailFindings.stage(
+      MINE,
+      await invoice("i3", "mail-triage:53", { counterpartyName: "Ann Lab", counterpartyEmail: "ann@example.com" }),
+      agent,
+    ),
+  )
+  expect(byAddress.counterparty).toEqual(first.counterparty)
+})
+
+it("refuses an order that already waits for the owner in another findings batch", async () => {
+  const f = await fixture()
+  const order = async (key: string, cited: readonly [string, string]) =>
+    f.batch(
+      [
+        {
+          id: "o1",
+          kind: "order",
+          purpose: "personal",
+          supplierName: "Shop One",
+          number: "A-1",
+          reason: "the order is placed",
+          evidence: [await f.cite(...cited)],
+        },
+      ],
+      key,
+    )
+  await f.store.mailFindings.stage(MINE, await order("mail-triage:60", ["t-lease", "lease"]), agent)
+  await expect(
+    f.store.mailFindings.stage(MINE, await order("mail-triage:61", ["t-0", "ask-0"]), agent),
+  ).rejects.toMatchObject({
+    details: { reason: "order.proposed" },
+  })
 })

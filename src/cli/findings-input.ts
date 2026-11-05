@@ -13,6 +13,14 @@ const keys: Record<string, string> = {
   due_date: "dueDate",
   unit_price: "unitPrice",
   supplier_name: "supplierName",
+  counterparty_name: "counterpartyName",
+  counterparty_email: "counterpartyEmail",
+  payer_name: "payerName",
+  payer_email: "payerEmail",
+  payee_name: "payeeName",
+  payee_email: "payeeEmail",
+  customer_name: "customerName",
+  customer_email: "customerEmail",
   order_date: "orderDate",
   fulfilled_date: "fulfilledDate",
   external_id: "externalId",
@@ -47,6 +55,9 @@ export const parseMeetingFindingsJson = (text: string): MeetingFindingsInput =>
   parseFindingsJson(text, "meeting findings", validateMeetingFindings)
 export const parseEvidenceFindingsJson = (text: string): FindingsInput =>
   parseFindingsJson(text, "evidence findings", validateEvidenceFindings)
+/** A mail findings batch as `mail findings add --dry-run` reads it: snake_case JSON, for `mailFindings.check`. */
+export const readMailFindingsJson = (text: string): MailFindingsInput =>
+  parseFindingsJson(text, "mail findings", (input: MailFindingsInput) => input)
 /** A mail findings batch as `mail findings add` reads it: snake_case JSON, checked for shape before the store. */
 export const parseMailFindingsJson = (text: string): MailFindingsInput =>
   parseFindingsJson(text, "mail findings", validateMailFindings)
