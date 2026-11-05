@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.582.0 — 05.11.2026
+
 ### Added
 
 - **`knowledge.updateOrganization(organization, { name })` renames an organization**, given as `organization:<id>` or
