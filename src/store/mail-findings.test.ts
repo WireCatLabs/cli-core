@@ -4,7 +4,12 @@ import { join } from "node:path"
 import { afterEach, expect, it } from "vitest"
 import { parseMailFindingsJson, readMailFindingsJson } from "../cli/findings-input.js"
 import { formatLocator } from "../domain/locator.js"
-import type { MailFinding, MailFindingsInput } from "../mail/findings.js"
+import {
+  MAIL_FINDING_FIELDS,
+  type MailFinding,
+  type MailFindingsInput,
+  mailFindingFieldsHelp,
+} from "../mail/findings.js"
 import { proposalRegistry } from "../services/proposals/registry.js"
 import type { EmailInput } from "./index.js"
 import { type AccountKey, type MessageStore, openStore } from "./store.js"
@@ -147,7 +152,14 @@ it("lets only the owner decide, and makes each accepted finding where it belongs
           reason: "you replied",
           evidence: [await f.cite("t-lease", "reply")],
         },
-        { id: "f1", kind: "fact", type: "decision", statement: "The lease starts in May", evidence: lease },
+        {
+          id: "f1",
+          kind: "fact",
+          type: "decision",
+          statement: "The lease starts in May",
+          reason: "the lease says so",
+          evidence: lease,
+        },
         {
           id: "m1",
           kind: "memory",
@@ -155,6 +167,7 @@ it("lets only the owner decide, and makes each accepted finding where it belongs
           scope: "personal",
           body: "Ann rents the flat",
           project: f.project.ref,
+          reason: "worth keeping",
           evidence: lease,
         },
         {
@@ -165,7 +178,14 @@ it("lets only the owner decide, and makes each accepted finding where it belongs
           reason: "about the flat",
           evidence: lease,
         },
-        { id: "c1", kind: "new_contact", address: "ann@example.com", name: "Ann Lessor", evidence: lease },
+        {
+          id: "c1",
+          kind: "new_contact",
+          address: "ann@example.com",
+          name: "Ann Lessor",
+          reason: "she wrote",
+          evidence: lease,
+        },
       ],
       "mail-triage:8",
     ),
@@ -266,6 +286,7 @@ it("records invoices, payments, orders and certificate facts only when the owner
         kind: "fact",
         type: "fact",
         statement: "Certificate 12-345 for the e-signature, account id 998, expires 2027-03-01",
+        reason: "the issuer sent it",
         evidence: cited,
       },
     ],
@@ -370,7 +391,7 @@ it("keeps a marketplace task's id and link, and an order's page, from the findin
   expect(await f.store.orders.get(made.o1 as string)).toMatchObject({ sourceUrl: order.source_url })
 })
 
-it("names the unknown field, its finding and what that kind takes", async () => {
+it("names the unknown or missing field, its finding and what that kind takes, as help lists it", async () => {
   const f = await fixture()
   const json = JSON.stringify({
     schema_version: 1,
@@ -382,6 +403,7 @@ it("names the unknown field, its finding and what that kind takes", async () => 
         kind: "fact",
         type: "fact",
         statement: "x",
+        reason: "r",
         expires_at: "2027-01-01",
         evidence: [await f.cite("t-lease", "lease")],
       },
@@ -389,16 +411,68 @@ it("names the unknown field, its finding and what that kind takes", async () => 
   })
   expect(() => parseMailFindingsJson(json)).toThrow(
     expect.objectContaining({
-      message: expect.stringMatching(/unknown mail finding field expires_at in f1 \(fact\); it takes id, project/),
+      message: expect.stringMatching(/unknown mail finding field expires_at in f1 \(fact\); it takes id, kind, type/),
       details: expect.objectContaining({
         reason: "finding.unknown-field",
         fields: ["expires_at"],
         finding: "f1",
         kind: "fact",
-        allowed: ["id", "project", "subject", "evidence", "kind", "type", "statement"],
+        allowed: ["id", "kind", "type", "statement", "reason", "subject", "project", "evidence"],
       }),
     }),
   )
+  const order = {
+    schema_version: 1,
+    key: "mail-triage:40",
+    extractor: "synthetic",
+    findings: [
+      {
+        id: "o1",
+        kind: "order",
+        purpose: "personal",
+        supplier_name: "Shop",
+        evidence: [await f.cite("t-lease", "lease")],
+      },
+    ],
+  }
+  expect(() => parseMailFindingsJson(JSON.stringify(order))).toThrow(
+    expect.objectContaining({
+      message: "missing mail finding field reason in o1 (order); it needs purpose, supplier_name, reason",
+      details: expect.objectContaining({ reason: "finding.missing-field", fields: ["reason"], kind: "order" }),
+    }),
+  )
+  const cited = await f.cite("t-lease", "lease")
+  const task = (due: Record<string, unknown>) =>
+    JSON.stringify({
+      ...order,
+      findings: [
+        {
+          id: "t1",
+          kind: "task",
+          type: "chore",
+          title: "Sign",
+          reason: "asked",
+          commitment: "explicit",
+          ...due,
+          evidence: [cited],
+        },
+      ],
+    })
+  expect(() => parseMailFindingsJson(task({ due_at: "2026-11-09", due_evidence: [cited.reference] }))).toThrow(
+    /due_at must be an ISO timestamp with a timezone, such as 2026-11-09T09:00:00Z/,
+  )
+  expect(() => parseMailFindingsJson(task({ due_at: "2026-11-09T09:00:00Z" }))).toThrow(
+    /due_at comes with due_evidence/,
+  )
+  expect(() => parseMailFindingsJson(task({ due_at: "2026-11-09T09:00:00Z", due_evidence: [cited] }))).toThrow(
+    /due_evidence lists 1–8 references .*not evidence objects/,
+  )
+  expect(
+    parseMailFindingsJson(task({ due_at: "2026-11-09T09:00:00Z", due_evidence: [cited.reference] })).findings[0],
+  ).toMatchObject({ dueAt: "2026-11-09T09:00:00.000Z" })
+  const help = mailFindingFieldsHelp()
+  expect(help).toContain("  order: purpose personal|business|client|other, supplier_name, reason; optional customer,")
+  expect(help.split("\n").map((line) => line.trim().split(":")[0])).toEqual(Object.keys(MAIL_FINDING_FIELDS))
 })
 
 it("checks a whole batch without staging it, naming every finding's problem", async () => {

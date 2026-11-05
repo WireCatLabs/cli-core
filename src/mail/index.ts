@@ -4,11 +4,13 @@ export { DEFAULT_ATTACHMENT_POLICY, type MailAttachmentPolicy, POLICY_SKIPS } fr
 export { BULK, bulkBox } from "./bulk.js"
 export { factsOf } from "./facts.js"
 export {
+  MAIL_FINDING_FIELDS,
   MAIL_FINDINGS_KIND,
   MAIL_FINDINGS_PER_RUN,
   MAIL_FINDINGS_PER_SENDER,
   type MailFinding,
   type MailFindingsInput,
+  mailFindingFieldsHelp,
   mailFindingFingerprint,
   validateMailFindings,
 } from "./findings.js"

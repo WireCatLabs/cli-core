@@ -239,7 +239,8 @@ const holderReview = async (command: Command, mail: MailReads, holder: string, q
   const step = stepsFor(mail.mount, mailbox)
   const answer = reviewAnswer(found, mailbox, true, step)
   const skipped = Object.entries(read.skipped).filter(([, count]) => count > 0)
-  const stage = read.findingsKey === undefined ? [] : step("mail-findings.add", { key: read.findingsKey })
+  const stage =
+    read.findingsKey === undefined || emails.length === 0 ? [] : step("mail-findings.add", { key: read.findingsKey })
   answer.next = [
     ...stage,
     ...step("mail-messages.acknowledge", { holder, cursor: read.cursor }),
@@ -266,7 +267,7 @@ const holderReview = async (command: Command, mail: MailReads, holder: string, q
   renderAnswer(command, output, answer, () => {
     output.renderer.note(
       read.mark
-        ? `${holder}: past ${read.mark.throughId}; findings key ${read.findingsKey}; acknowledge with --cursor ${read.cursor}${read.more ? "; more after these" : ""}`
+        ? `${holder}: past ${read.mark.throughId}${emails.length ? `; findings key ${read.findingsKey}` : ""}; acknowledge with --cursor ${read.cursor}${read.more ? "; more after these" : ""}`
         : `${holder} has no mark yet: it starts from now — acknowledge with --cursor ${read.cursor}`,
     )
     return emails.map((hit) => `${hitText(hit)}${markText(marks.get(hit.id), hit.excerptOnly)}\n`).join("")
