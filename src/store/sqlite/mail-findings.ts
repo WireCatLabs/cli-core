@@ -2,15 +2,19 @@ import { CliError } from "@wirecat/cli-base"
 import { contextEvidenceFingerprint } from "../../context/evidence.js"
 import { parseLocator } from "../../domain/locator.js"
 import {
+  checkMailFindings,
   MAIL_FINDINGS_PER_SENDER,
   type MailFinding,
   type MailFindingsInput,
   mailFindingFingerprint,
+  mailFindingProblem,
   validateMailFindings,
 } from "../../mail/findings.js"
+import { FREE_MAIL } from "../../mail/score.js"
 import { type FindingOutcome, type FindingsReceipt, findingHash } from "../../meetings/index.js"
 import { assertMayDecide, type Decider } from "../decisions.js"
 import { MAIL_FINDINGS_KIND, type MailFindingsBatch, type MailFindingsStore } from "../mail-findings.js"
+import { fold } from "../normalize.js"
 import type { AccountKey } from "../types.js"
 import { financeOperationsOver } from "./finance.js"
 import { findingsAgent, findingsCoreOver } from "./findings-core.js"
@@ -150,6 +154,70 @@ export const mailFindingsStoreOver = (context: StoreContext): MailFindingsStore 
     return read
   }
 
+  const organizationsOf = (sql: string, ...params: string[]): number[] => [
+    ...new Set(
+      database
+        .prepare(sql)
+        .all(...params)
+        .map((row) => Number(row.id)),
+    ),
+  ]
+  const BY_ADDRESS =
+    "SELECT o.id FROM organizations o JOIN organization_identities oi ON oi.organization_id = o.id " +
+    "JOIN identities i ON i.id = oi.identity_id WHERE o.deleted_at IS NULL AND i.provider = 'email' AND "
+
+  /**
+   * The organization a finding names but does not reference: the one its address belongs to, else the one its
+   * company domain belongs to, else the one of exactly this name; else a new company. Its address joins it, so the
+   * next mail from it finds it. Only the owner's accept runs this for real; staging runs it and rolls it back.
+   */
+  const organizationNamed = (name: string, email: string | undefined): string => {
+    const domain = email?.split("@")[1]
+    let found = email === undefined ? [] : organizationsOf(`${BY_ADDRESS}lower(i.external_id) = ?`, email)
+    if (!found.length && domain && !FREE_MAIL.has(domain))
+      found = organizationsOf(`${BY_ADDRESS}substr(lower(i.external_id), -length(?)) = ?`, `@${domain}`, `@${domain}`)
+    if (!found.length)
+      found = database
+        .prepare("SELECT id, name FROM organizations WHERE deleted_at IS NULL")
+        .all()
+        .filter((row) => fold(String(row.name)).trim() === fold(name).trim())
+        .map((row) => Number(row.id))
+    if (found.length > 1)
+      return invalid(
+        `${found.length} organizations match ${name} (${found.map((id) => `organization:${id}`).join(", ")}); ` +
+          "name the one meant as a reference",
+        "finance.party",
+      )
+    const at = now()
+    const id =
+      found[0] ??
+      Number(
+        database
+          .prepare(
+            "INSERT INTO organizations (kind, name, scope, created_at, updated_at) VALUES ('company', ?, 'work', ?, ?) RETURNING id",
+          )
+          .get(name, at, at)?.id,
+      )
+    if (email !== undefined) {
+      database
+        .prepare(
+          "INSERT INTO identities (provider, external_id, created_at, updated_at) VALUES ('email', ?, ?, ?) " +
+            "ON CONFLICT (provider, external_id) DO NOTHING",
+        )
+        .run(email, at, at)
+      database
+        .prepare(
+          "INSERT INTO organization_identities (identity_id, organization_id, method, author, created_at, updated_at) " +
+            "SELECT id, ?, 'mail-finding', 'owner', ?, ? FROM identities WHERE provider = 'email' AND external_id = ? " +
+            "ON CONFLICT (identity_id, organization_id) DO NOTHING",
+        )
+        .run(id, at, at, email)
+    }
+    return `organization:${id}`
+  }
+  const partyOf = (reference: string | undefined, name: string | undefined, email: string | undefined) =>
+    reference ?? (name === undefined ? undefined : organizationNamed(name, email))
+
   /** The invoice, payment or order an accepted finding records: the owner's own entry, citing the mail it came from. */
   const entry = (finding: MailFinding, evidence: string[]): (() => { ref: string }) | undefined => {
     const by = "owner" as const
@@ -160,7 +228,7 @@ export const mailFindingsStoreOver = (context: StoreContext): MailFindingsStore 
             by,
             evidence,
             direction: finding.direction,
-            counterparty: finding.counterparty,
+            counterparty: partyOf(finding.counterparty, finding.counterpartyName, finding.counterpartyEmail) as string,
             currency: finding.currency,
             lines: finding.lines,
             ...(finding.total === undefined ? {} : { total: finding.total }),
@@ -170,23 +238,38 @@ export const mailFindingsStoreOver = (context: StoreContext): MailFindingsStore 
             ...(finding.project === undefined ? {} : { project: finding.project }),
           })
       case "payment":
-        return () =>
-          finance.addPayment({
+        return () => {
+          const payer = partyOf(finding.payer, finding.payerName, finding.payerEmail)
+          const payee = partyOf(finding.payee, finding.payeeName, finding.payeeEmail)
+          return finance.addPayment({
             by,
             evidence,
             direction: finding.direction,
             amount: finding.amount,
             currency: finding.currency,
             date: finding.date,
-            ...(finding.payer === undefined ? {} : { payer: finding.payer }),
-            ...(finding.payee === undefined ? {} : { payee: finding.payee }),
+            ...(payer === undefined ? {} : { payer }),
+            ...(payee === undefined ? {} : { payee }),
             ...(finding.reference === undefined ? {} : { reference: finding.reference }),
             ...(finding.allocations === undefined ? {} : { allocations: finding.allocations }),
             ...(finding.project === undefined ? {} : { project: finding.project }),
           })
+        }
       case "order": {
-        const { id: _id, kind: _kind, evidence: _cited, reason: _reason, ...fields } = finding
-        return () => orders.add({ ...fields, by, evidence })
+        const {
+          id: _id,
+          kind: _kind,
+          evidence: _cited,
+          reason: _reason,
+          customer: given,
+          customerName,
+          customerEmail,
+          ...fields
+        } = finding
+        return () => {
+          const customer = partyOf(given, customerName, customerEmail)
+          return orders.add({ ...fields, ...(customer === undefined ? {} : { customer }), by, evidence })
+        }
       }
       default:
         return undefined
@@ -214,6 +297,34 @@ export const mailFindingsStoreOver = (context: StoreContext): MailFindingsStore 
       )
       .get(address.toLowerCase())
 
+  /** Whether `address` sent or received one of the emails `finding` cites. */
+  const inCitedMail = (address: string, finding: MailFinding, read: Map<string, Row>): boolean => {
+    const ids = finding.evidence.map(({ reference }) => Number(read.get(reference)?.id))
+    const marks = ids.map(() => "?").join(",")
+    return Boolean(
+      database
+        .prepare(
+          `SELECT 1 FROM emails WHERE id IN (${marks}) AND lower(from_address) = ? UNION ALL ` +
+            `SELECT 1 FROM email_recipients WHERE email_id IN (${marks}) AND lower(address) = ? LIMIT 1`,
+        )
+        .get(...ids, address, ...ids, address),
+    )
+  }
+
+  /** A proposed findings batch that already holds this shop's order with this number. */
+  const proposedOrder = (supplierName: string, number: string): string | undefined => {
+    const shop = fold(supplierName).trim()
+    return database
+      .prepare(
+        "SELECT p.id, json_extract(f.value, '$.supplierName') AS shop FROM proposed_actions p, " +
+          "json_each(p.payload, '$.findings') f WHERE p.kind = ? AND p.status = 'proposed' " +
+          "AND json_extract(f.value, '$.kind') = 'order' AND trim(json_extract(f.value, '$.number')) = ?",
+      )
+      .all(MAIL_FINDINGS_KIND, number.trim())
+      .filter((row) => fold(String(row.shop)).trim() === shop)
+      .map((row) => String(row.id))[0]
+  }
+
   /** Whatever a finding names must be stored: a task to update, a subject, a link's ends, a contact's address. */
   const targets = (finding: MailFinding, read: Map<string, Row>) => {
     const thing = (reference: string | undefined, what: string) => {
@@ -240,6 +351,23 @@ export const mailFindingsStoreOver = (context: StoreContext): MailFindingsStore 
       case "invoice":
       case "payment":
       case "order":
+        for (const address of [
+          "counterpartyEmail" in finding ? finding.counterpartyEmail : undefined,
+          "payerEmail" in finding ? finding.payerEmail : undefined,
+          "payeeEmail" in finding ? finding.payeeEmail : undefined,
+          "customerEmail" in finding ? finding.customerEmail : undefined,
+        ])
+          if (address !== undefined && !inCitedMail(address, finding, read))
+            return invalid(`${address} neither sent nor received the mail finding ${finding.id} cites`)
+        if (finding.kind === "order" && finding.number !== undefined) {
+          const waiting = proposedOrder(finding.supplierName, finding.number)
+          if (waiting)
+            return invalid(
+              `order ${finding.number} from ${finding.supplierName} already waits for the owner in findings batch ` +
+                `${waiting}; leave it out, or send an order_update once it is stored and its status changes`,
+              "order.proposed",
+            )
+        }
         wouldWrite(
           entry(
             finding,
@@ -251,15 +379,8 @@ export const mailFindingsStoreOver = (context: StoreContext): MailFindingsStore 
         orderOfShop(context, finding.supplierName, finding.number)
         return
       case "new_contact": {
-        const ids = finding.evidence.map(({ reference }) => Number(read.get(reference)?.id))
-        const marks = ids.map(() => "?").join(",")
-        const named = database
-          .prepare(
-            `SELECT 1 FROM emails WHERE id IN (${marks}) AND lower(from_address) = ? UNION ALL ` +
-              `SELECT 1 FROM email_recipients WHERE email_id IN (${marks}) AND lower(address) = ? LIMIT 1`,
-          )
-          .get(...ids, finding.address, ...ids, finding.address)
-        if (!named) return invalid(`${finding.address} neither sent nor received the mail finding ${finding.id} cites`)
+        if (!inCitedMail(finding.address, finding, read))
+          return invalid(`${finding.address} neither sent nor received the mail finding ${finding.id} cites`)
         if (!identityOfAddress(finding.address)) throw new CliError("not_found", `no stored contact ${finding.address}`)
         return
       }
@@ -339,25 +460,35 @@ export const mailFindingsStoreOver = (context: StoreContext): MailFindingsStore 
     }
   }
 
+  /** The batch this agent already staged under the input's key: the same input's, or a refusal for another's. */
+  /** `whole` is false for a checked batch that lost findings to their problems: no staged input can equal it. */
+  const heldBatch = (account: number, input: MailFindingsInput, by: ReturnType<typeof findingsAgent>, whole = true) => {
+    const { actor } = authorActor(context, by)
+    const held = database
+      .prepare(
+        "SELECT id FROM proposed_actions WHERE account_id = ? AND kind = ? AND proposed_by_type = ? AND proposed_by_id = ? AND json_extract(payload, '$.key') = ? ORDER BY id LIMIT 1",
+      )
+      .get(account, MAIL_FINDINGS_KIND, actor.type, actor.id, input.key)
+    if (!held) return undefined
+    const proposal = load(String(held.id))
+    if (!whole || (proposal.payload as StoredInput).inputHash !== findingHash({ input, model: by.model ?? null }))
+      return invalid(
+        `the findings batch key ${input.key} was already used for different input (batch ${proposal.id}); ` +
+          "check a batch with --dry-run before staging it",
+        "mail-findings.key-used",
+      )
+    return proposal
+  }
+
   return {
     stage: async (key, raw, rawAgent) => {
       const input = validateMailFindings(raw)
       const by = findingsAgent(rawAgent)
       return write(database, () => {
         const account = mailbox(key)
-        const { actor } = authorActor(context, by)
         const inputHash = findingHash({ input, model: by.model ?? null })
-        const held = database
-          .prepare(
-            "SELECT id FROM proposed_actions WHERE account_id = ? AND kind = ? AND proposed_by_type = ? AND proposed_by_id = ? AND json_extract(payload, '$.key') = ? ORDER BY id LIMIT 1",
-          )
-          .get(account, MAIL_FINDINGS_KIND, actor.type, actor.id, input.key)
-        if (held) {
-          const proposal = load(String(held.id))
-          if ((proposal.payload as StoredInput).inputHash !== inputHash)
-            return invalid("the findings batch key was already used for different input")
-          return view(proposal)
-        }
+        const held = heldBatch(account, input, by)
+        if (held) return view(held)
         const read = cite(input.findings, account)
         for (const finding of input.findings) targets(finding, read)
         const fingerprints = input.findings.map(mailFindingFingerprint)
@@ -371,6 +502,39 @@ export const mailFindingsStoreOver = (context: StoreContext): MailFindingsStore 
           }),
         )
       })
+    },
+    check: async (key, raw, rawAgent) => {
+      const { batch: input, problems } = checkMailFindings(raw)
+      const by = findingsAgent(rawAgent)
+      const batchProblem = (error: unknown) => problems.push(mailFindingProblem(null, error))
+      let batch: string | null = null
+      // authorActor and the trial writes touch the store; everything here is rolled back.
+      wouldWrite(() => {
+        const account = mailbox(key)
+        try {
+          batch = heldBatch(account, input, by, problems.length === 0)?.id ?? null
+        } catch (error) {
+          batchProblem(error)
+        }
+        if (batch !== null) return
+        const valid: MailFinding[] = []
+        for (const finding of input.findings) {
+          try {
+            targets(finding, cite([finding], account))
+            valid.push(finding)
+          } catch (error) {
+            problems.push(mailFindingProblem(finding, error))
+          }
+        }
+        try {
+          if (valid.length === input.findings.length) cite(valid, account)
+          const fingerprints = valid.map(mailFindingFingerprint)
+          if (new Set(fingerprints).size !== fingerprints.length) invalid("the batch contains duplicate findings")
+        } catch (error) {
+          batchProblem(error)
+        }
+      })
+      return { valid: problems.length === 0, findings: raw.findings?.length ?? 0, batch, problems }
     },
     get: async (id) => view(load(id)),
     list: async ({ account, status, limit = 20, offset = 0 } = {}) => {

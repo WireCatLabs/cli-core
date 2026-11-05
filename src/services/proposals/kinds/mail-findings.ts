@@ -21,7 +21,14 @@ const summaryOf = (finding: MailFinding): string => {
     case "new_contact":
       return `${finding.name} <${finding.address}>`
     case "invoice":
-      return words("invoice", finding.number, finding.total, finding.currency, `· ${finding.reason}`)
+      return words(
+        "invoice",
+        finding.number,
+        finding.total,
+        finding.currency,
+        finding.counterpartyName,
+        `· ${finding.reason}`,
+      )
     case "payment":
       return words("payment", finding.amount, finding.currency, finding.date, `· ${finding.reason}`)
     case "order":

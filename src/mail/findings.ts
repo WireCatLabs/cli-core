@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-base"
+import { CliError, isCliError } from "@wirecat/cli-base"
 import { EXTERNAL_ID_CHARS, externalIdOf, SOURCE_URL_CHARS, sourceUrlOf } from "../domain/external-links.js"
 import { INVOICE_DIRECTIONS, MONEY_DIRECTIONS } from "../domain/finance.js"
 import { MEMORY_KINDS, MEMORY_SCOPES } from "../domain/knowledge.js"
@@ -64,8 +64,15 @@ export interface MailNewContactFinding extends Cited {
 export interface MailInvoiceFinding extends Cited {
   kind: "invoice"
   direction: (typeof INVOICE_DIRECTIONS)[number]
-  /** `person:` or `organization:`. */
-  counterparty: string
+  /** `person:` or `organization:`; or `counterpartyName`, never both. */
+  counterparty?: string
+  /**
+   * A party the store may not hold yet: on the owner's accept, the organization its `counterpartyEmail` or that
+   * address's domain belongs to, else the one of exactly this name, else a new company of this name.
+   */
+  counterpartyName?: string
+  /** The party's own address, which a cited email was sent from or to. */
+  counterpartyEmail?: string
   currency: string
   lines: { description: string; quantity?: string; unitPrice?: string; amount?: string }[]
   /** The total printed on it: the store refuses it unless it is the lines' sum. */
@@ -80,8 +87,13 @@ export interface MailInvoiceFinding extends Cited {
 export interface MailPaymentFinding extends Cited {
   kind: "payment"
   direction: (typeof MONEY_DIRECTIONS)[number]
+  /** Each party a reference, or a name and an optional address as an invoice's `counterpartyName` is. */
   payer?: string
+  payerName?: string
+  payerEmail?: string
   payee?: string
+  payeeName?: string
+  payeeEmail?: string
   amount: string
   currency: string
   /** `YYYY-MM-DD`. */
@@ -99,6 +111,9 @@ export interface MailOrderFinding extends Cited {
   purpose: (typeof ORDER_PURPOSES)[number]
   /** Whom it is for; the owner when left out. */
   customer?: string
+  /** A customer the store may not hold yet, as an invoice's `counterpartyName` is. */
+  customerName?: string
+  customerEmail?: string
   supplier?: string
   supplierName: string
   number?: string
@@ -202,8 +217,23 @@ const one = (raw: Record<string, unknown>, ids: Set<string>): MailFinding => {
   if (raw.kind === "fact") return validateFinding(raw as never, RULES, ids) as MailFinding
   if (raw.kind === "task") {
     const { externalId, sourceUrl, ...task } = raw
+    let checked: MailTaskFinding
+    try {
+      checked = validateFinding(task as never, RULES, ids) as MailTaskFinding
+    } catch (error) {
+      if (!isCliError(error) || error.details.reason !== "finding.unknown-field") throw error
+      const allowed = [...(error.details.allowed as string[]), "external_id", "source_url"]
+      throw new CliError(
+        "validation_error",
+        error.message.replace(/; it takes .*$/, `; it takes ${allowed.join(", ")}`),
+        {
+          ...error.details,
+          allowed,
+        },
+      )
+    }
     return {
-      ...(validateFinding(task as never, RULES, ids) as MailTaskFinding),
+      ...checked,
       ...optional("externalId", externalId, (value) => {
         const { provider, id } = externalIdOf(findingText(value, EXTERNAL_ID_CHARS + 40))
         return `${provider}:${id}`
@@ -217,6 +247,20 @@ const one = (raw: Record<string, unknown>, ids: Set<string>): MailFinding => {
     const text = findingText(value, 400)
     if (!pattern.test(text)) return invalid(`${what} is not a reference of the kind it takes: ${text}`)
     return text
+  }
+  /** A party as a `person:`/`organization:` reference, or as `<field>_name` with an optional `<field>_email`. */
+  const party = (field: "counterparty" | "payer" | "payee" | "customer", what: string): Record<string, string> => {
+    const [given, name, email] = [raw[field], raw[`${field}Name`], raw[`${field}Email`]]
+    if (given !== undefined && name !== undefined) return invalid(`${what} is ${field} or ${field}_name, not both`)
+    if (email !== undefined && name === undefined) return invalid(`${field}_email comes with ${field}_name`)
+    return {
+      ...optional(field, given, (value) => reference(value, PARTY, what)),
+      ...optional(`${field}Name`, name, (value) => word(value, 200)),
+      ...optional(`${field}Email`, email, (value) => {
+        const address = findingText(value, 320).toLowerCase()
+        return ADDRESS.test(address) ? address : invalid(`${field}_email is an email address`)
+      }),
+    }
   }
   switch (raw.kind) {
     case "task_update": {
@@ -297,6 +341,8 @@ const one = (raw: Record<string, unknown>, ids: Set<string>): MailFinding => {
           "kind",
           "direction",
           "counterparty",
+          "counterpartyName",
+          "counterpartyEmail",
           "currency",
           "lines",
           "total",
@@ -314,7 +360,7 @@ const one = (raw: Record<string, unknown>, ids: Set<string>): MailFinding => {
       const lines = raw.lines.map((line: unknown) => {
         if (!line || typeof line !== "object") return invalid("an invoice line is an object")
         const fields = line as Record<string, unknown>
-        findingFields(fields, ["description", "quantity", "unitPrice", "amount"], "invoice line")
+        findingFields(fields, ["description", "quantity", "unitPrice", "amount"], "invoice line", raw)
         return {
           description: word(fields.description, 500),
           ...optional("quantity", fields.quantity, (value) => word(value, 20)),
@@ -326,7 +372,9 @@ const one = (raw: Record<string, unknown>, ids: Set<string>): MailFinding => {
         id,
         kind: "invoice",
         direction: oneOf(raw.direction, INVOICE_DIRECTIONS, "an invoice's direction"),
-        counterparty: reference(raw.counterparty, PARTY, "an invoice's counterparty"),
+        ...(raw.counterparty === undefined && raw.counterpartyName === undefined
+          ? invalid("an invoice names its counterparty: counterparty person:N|organization:N, or counterparty_name")
+          : party("counterparty", "an invoice's counterparty")),
         currency: word(raw.currency, 3),
         lines,
         ...optional("total", raw.total, (value) => word(value, 30)),
@@ -346,7 +394,11 @@ const one = (raw: Record<string, unknown>, ids: Set<string>): MailFinding => {
           "kind",
           "direction",
           "payer",
+          "payerName",
+          "payerEmail",
           "payee",
+          "payeeName",
+          "payeeEmail",
           "amount",
           "currency",
           "date",
@@ -365,7 +417,7 @@ const one = (raw: Record<string, unknown>, ids: Set<string>): MailFinding => {
         allocations = raw.allocations.map((share: unknown) => {
           if (!share || typeof share !== "object") return invalid("an allocation is an invoice and an amount")
           const fields = share as Record<string, unknown>
-          findingFields(fields, ["invoice", "amount"], "allocation")
+          findingFields(fields, ["invoice", "amount"], "allocation", raw)
           return {
             invoice: reference(fields.invoice, INVOICE, "an allocation's invoice"),
             amount: word(fields.amount, 30),
@@ -376,8 +428,8 @@ const one = (raw: Record<string, unknown>, ids: Set<string>): MailFinding => {
         id,
         kind: "payment",
         direction: oneOf(raw.direction, MONEY_DIRECTIONS, "a payment's direction"),
-        ...optional("payer", raw.payer, (value) => reference(value, PARTY, "a payment's payer")),
-        ...optional("payee", raw.payee, (value) => reference(value, PARTY, "a payment's payee")),
+        ...party("payer", "a payment's payer"),
+        ...party("payee", "a payment's payee"),
         amount: word(raw.amount, 30),
         currency: word(raw.currency, 3),
         date: word(raw.date, 10),
@@ -396,6 +448,8 @@ const one = (raw: Record<string, unknown>, ids: Set<string>): MailFinding => {
           "kind",
           "purpose",
           "customer",
+          "customerName",
+          "customerEmail",
           "supplier",
           "supplierName",
           "number",
@@ -417,7 +471,7 @@ const one = (raw: Record<string, unknown>, ids: Set<string>): MailFinding => {
         id,
         kind: "order",
         purpose: oneOf(raw.purpose, ORDER_PURPOSES, "an order's purpose"),
-        ...optional("customer", raw.customer, (value) => reference(value, PARTY, "an order's customer")),
+        ...party("customer", "an order's customer"),
         ...optional("supplier", raw.supplier, (value) => reference(value, PARTY, "an order's supplier")),
         supplierName: word(raw.supplierName, 200),
         ...optional("number", raw.number, (value) => word(value, 80)),
@@ -466,11 +520,60 @@ const one = (raw: Record<string, unknown>, ids: Set<string>): MailFinding => {
  * The shape of a mail findings batch: 1–30 findings, each citing 1–8 `msg:email/…` references with fingerprints.
  * What needs the store — the fingerprints, partial mail, the per-sender cap, the targets — the store checks.
  */
+const KEY = /^[a-z0-9][a-z0-9-]{0,39}:[1-9]\d*$/
+const KEY_SHAPE = "a mail findings key is <holder>:<through_id>, such as mail-triage:9123456"
+
 export const validateMailFindings = (input: MailFindingsInput): MailFindingsInput => {
   const batch = validateBatch(input, RULES, MAIL_FINDINGS_PER_RUN, one)
-  if (!/^[a-z0-9][a-z0-9-]{0,39}:[1-9]\d*$/.test(batch.key))
-    return invalid("a mail findings key is <holder>:<through_id>, such as mail-triage:9123456")
+  if (!KEY.test(batch.key)) return invalid(KEY_SHAPE)
   return batch
+}
+
+/** Why one finding, or the batch when `finding` is null, would be refused. */
+export interface MailFindingProblem {
+  finding: string | null
+  kind: string | null
+  code: string
+  message: string
+  details?: Record<string, unknown>
+}
+
+export const mailFindingProblem = (raw: unknown, error: unknown): MailFindingProblem => {
+  if (!isCliError(error)) throw error
+  const fields = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {}
+  const details = Object.fromEntries(
+    Object.entries(error.details).filter(([key]) => key !== "finding" && key !== "kind"),
+  )
+  return {
+    finding: typeof fields.id === "string" ? fields.id : null,
+    kind: typeof fields.kind === "string" ? fields.kind : null,
+    code: error.code,
+    message: error.message,
+    ...(Object.keys(details).length ? { details } : {}),
+  }
+}
+
+/**
+ * `validateMailFindings` finding by finding: the envelope still refuses the whole batch, but a bad finding no longer
+ * hides the next one, so `mail findings add --dry-run` names every problem at once.
+ */
+export const checkMailFindings = (
+  input: MailFindingsInput,
+): { batch: MailFindingsInput; problems: MailFindingProblem[] } => {
+  const problems: MailFindingProblem[] = []
+  const batch = validateBatch(input, RULES, MAIL_FINDINGS_PER_RUN, (finding: Record<string, unknown>, ids) => {
+    try {
+      return one(finding, ids)
+    } catch (error) {
+      problems.push(mailFindingProblem(finding, error))
+      return undefined
+    }
+  })
+  if (!KEY.test(batch.key)) problems.push({ finding: null, kind: null, code: "validation_error", message: KEY_SHAPE })
+  return {
+    batch: { ...batch, findings: batch.findings.filter((one): one is MailFinding => one !== undefined) },
+    problems,
+  }
 }
 
 export const mailFindingFingerprint = ({ id: _id, ...finding }: MailFinding): string => findingHash(finding)

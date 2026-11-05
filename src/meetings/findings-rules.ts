@@ -76,8 +76,36 @@ export const findingText = (value: unknown, limit: number): string => {
   return value.trim()
 }
 export const findingHash = (value: unknown): string => createHash("sha256").update(JSON.stringify(value)).digest("hex")
-export const findingFields = (value: object, allowed: string[], noun: string): void => {
-  if (Object.keys(value).some((key) => !allowed.includes(key))) invalid(`unknown ${noun} field`)
+const snakeCase = (key: string) => key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
+
+/**
+ * Refuses a field `allowed` does not list, naming it, the finding it is in and what that kind takes: an agent fixes
+ * the batch from the message alone. `of` is the finding a nested object (an invoice line) belongs to.
+ */
+export const findingFields = (
+  value: object,
+  allowed: string[],
+  noun: string,
+  of: { id?: unknown; kind?: unknown } = value as { id?: unknown; kind?: unknown },
+): void => {
+  const unknown = Object.keys(value).filter((key) => !allowed.includes(key))
+  if (!unknown.length) return
+  const fields = unknown.map(snakeCase)
+  const takes = allowed.map(snakeCase)
+  const id = typeof of.id === "string" ? of.id : null
+  const kind = typeof of.kind === "string" ? of.kind : null
+  const where = id || kind ? ` in ${[id, kind && `(${kind})`].filter(Boolean).join(" ")}` : ""
+  throw new CliError(
+    "validation_error",
+    `unknown ${noun} field${fields.length > 1 ? "s" : ""} ${fields.join(", ")}${where}; it takes ${takes.join(", ")}`,
+    {
+      reason: "finding.unknown-field",
+      fields,
+      allowed: takes,
+      ...(id ? { finding: id } : {}),
+      ...(kind ? { kind } : {}),
+    },
+  )
 }
 /** What differs between findings kinds: their wording and what one cited reference must look like. */
 export interface FindingsRules {

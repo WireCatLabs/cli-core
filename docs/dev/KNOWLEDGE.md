@@ -160,6 +160,18 @@ owner could not accept is refused with the same reason; an `order_update` needs 
 evidence; an `order_update` sets the status, the delivery day of a delivered one, and adds its mail to the order's
 evidence. Certificate numbers, account ids and expiry dates are `fact` findings: the statement carries them.
 
+A party the store may not hold yet is given by name: an invoice's `counterparty_name`, a payment's `payer_name` or
+`payee_name`, an order's `customer_name`, each in place of the reference and with an optional `<party>_email` that
+must have sent or received a cited email. Accepting finds the organization that address belongs to, else one with
+an address at its company domain (never a free mail domain), else one of exactly that name (case and accents
+ignored), else makes a `company`, and joins the address to it; more than one match is refused (`finance.party`). An
+`order` whose shop and number already wait in a proposed batch is refused (`order.proposed`), as a stored one is
+(`order.duplicate`).
+
+`mailFindings.check` makes every check `stage` makes, the trial writes included, and rolls back, listing each
+finding's problem rather than stopping at the first; `memo mail findings add --dry-run` is built on it. An unknown
+field is refused with its name, its finding's id and kind, and the fields that kind takes (`finding.unknown-field`).
+
 ## Source records and imports
 
 `ingest(store, envelope, { account, dryRun })` (`./services`) takes what a source sends: the v1 envelope
