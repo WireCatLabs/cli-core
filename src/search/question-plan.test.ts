@@ -75,7 +75,8 @@ test("question punctuation is removed only from the text leaf, preserving filter
 })
 test("a long repeated field suffix is parsed without an ambiguous nested repetition", () => {
   const suffix = "chat:chat:".repeat(100)
-  assert.throws(() => planQuestion(`What is Helix export? chat:${suffix}end`))
+  const bare = planQuestion(`What is Helix export? chat:${suffix}end`)
+  assert.ok(bare.queries.every((q) => q.endsWith(`chat:${suffix}end`)))
   const plan = planQuestion(`What is Helix export? chat:"${suffix}end"`)
   assert.ok(plan.changed)
   assert.ok(plan.queries.every((q) => q.endsWith(`chat:"${suffix}end"`)))

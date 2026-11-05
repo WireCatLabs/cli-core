@@ -7,12 +7,29 @@ shape of this file.
 
 ## Unreleased
 
+## 0.564.0 — 05.11.2026
+
 ### Changed — may break callers
 
+- **`search all` ranks its sources as one list** (MEMO-37). Each source's hit at one rank used to get the same score,
+  so the sources took turns in the order they were read (messages, mail, notes, events). Now hits at the same rank
+  are ordered by cosine, since one model scores every source; a hit meaning did not find comes after those it did.
+  Each source's own order is kept. Without the model nothing changes. `search notes` and `search events` hits found
+  by meaning carry `meaning_score`, the cosine.
+- **tg, max and wa `search all` change with the bump, with no code change in them.** Mail is searched by meaning when
+  the store holds mail, a question's message found both by words and by meaning gets one vote, and once vectors
+  exist the hits at one rank are ordered by meaning score.
 - **`search all` searches mail by meaning too** (MEMO-38). Mail was only ever searched by words there, though its
   threads had vectors. The meaning lane now reads a mail account's thread vectors through the mail store, and
   `search all` fuses them with the word hits as it does for messages; the answer says how in `mail`. For a question,
   a mail or message found by words gets no second vote from meaning, as in notes.
+
+- **cli-core accepts `@wirecat/cli-base` 0.76 and 0.77 (peer range `>=0.75.0 <0.78.0`) and builds with
+  0.77.1**, whose vocabulary has the `schedule` resource, the `agent`, `command` and `exec` verbs and `--trimmed`. The command
+  lint now checks `schedule agent|command|exec` instead of skipping them in `lint/baseline`. A CLI that mounts
+  `schedule` (tg, max, wa, gcal, mail, memo) removes the same entries from its own baseline when it bumps cli-base
+  to 0.77.0: they are stale there and fail its lint. 0.76.0 adds the `conflict` error code; nothing here uses it yet.
+
 - **`search all` finds records for a question typed as a sentence.** When the text is a question in natural language
   and not `exact`, messages and mail go through discovery (as `search messages --discover`), and notes and calendar
   events search any of the question's content words, ranked by the store. Before, every word had to be in one record,

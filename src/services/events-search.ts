@@ -54,6 +54,8 @@ export interface FoundEvent {
   /** When the store's copy last changed. */
   updated_at: string
   found_by: ("words" | "meaning")[]
+  /** The cosine of its series' nearest piece, when meaning found it: comparable with other records under the same model. */
+  meaning_score?: number
 }
 
 export interface EventsFound {
@@ -227,12 +229,16 @@ export const searchEvents = async (
     })
   add(found.items, "words")
   add(meaning, "meaning")
+  const cosines = new Map(meaning.map((hit) => [keyOf(hit), hit.score]))
   const ordered = [...ranked.values()].sort((a, b) => b.score - a.score)
   const hasMore = ordered.length > window || found.hasMore
   return {
     query,
     by,
-    hits: ordered.slice(offset, window).map(({ hit, by: halves }) => foundEvent(hit, query, halves)),
+    hits: ordered.slice(offset, window).map(({ hit, by: halves }) => {
+      const cosine = cosines.get(keyOf(hit))
+      return { ...foundEvent(hit, query, halves), ...(cosine === undefined ? {} : { meaning_score: cosine }) }
+    }),
     has_more: hasMore,
     ...(hasMore && window <= MAX_EVENTS_OFFSET ? { next_offset: window } : {}),
     ...truncated,

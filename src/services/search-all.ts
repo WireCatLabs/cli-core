@@ -163,6 +163,8 @@ export const searchAll = async (
   let server: ServerSearched | undefined
   // Every word of a sentence is rarely in one record: a question finds what holds some of them, as `--discover` does.
   const discover = !request.exact && questionLookup(request.text) !== undefined
+  /** Each hit found by meaning, by its cosine: one model for every source, so these compare across them. */
+  const cosines = new Map<string, number>()
   let coverage: SearchCoverage | undefined
 
   const messagesOf = async (kind: "messages" | "mail") => {
@@ -243,6 +245,7 @@ export const searchAll = async (
       fused.set(item.ref, { item, score: 1 / (RRF_K + rank + 1) })
     })
     near.forEach((hit, rank) => {
+      cosines.set(hit.locator, hit.cosine)
       const held = fused.get(hit.locator)
       if (held) held.item.foundBy = ["words", "meaning"]
       // As in notes: a question's any-word list already holds what meaning finds, and a second vote buries the rest.
@@ -277,6 +280,7 @@ export const searchAll = async (
             by: found.by,
             ...(found.meaning_skipped === undefined ? {} : { meaningSkipped: found.meaning_skipped }),
           }
+          for (const hit of found.hits) if (hit.meaning_score !== undefined) cosines.set(hit.ref, hit.meaning_score)
           lists.push(
             found.hits.map((hit) => ({
               kind: hit.kind ?? "note",
@@ -315,6 +319,7 @@ export const searchAll = async (
             by: found.by,
             ...(found.meaning_skipped === undefined ? {} : { meaningSkipped: found.meaning_skipped }),
           }
+          for (const hit of found.hits) if (hit.meaning_score !== undefined) cosines.set(hit.ref, hit.meaning_score)
           lists.push(
             found.hits.map((hit) => ({
               kind: "event",
@@ -340,14 +345,7 @@ export const searchAll = async (
     await embedders.close()
   }
 
-  const ranked = new Map<string, { item: SearchAllItem; score: number }>()
-  for (const list of lists)
-    list.forEach((item, rank) => {
-      const held = ranked.get(item.ref) ?? { item, score: 0 }
-      held.score += 1 / (RRF_K + rank + 1)
-      ranked.set(item.ref, held)
-    })
-  const ordered = [...ranked.values()].sort((a, b) => b.score - a.score).map(({ item }) => item)
+  const ordered = oneList(lists, cosines)
   const more = hasMore || ordered.length > window
   return {
     query: request.text,
@@ -364,4 +362,24 @@ export const searchAll = async (
     ...(server === undefined ? {} : { server }),
     ...(coverage === undefined ? {} : { coverage }),
   }
+}
+
+/**
+ * Every source's hits as one list: by the rank each has in its own source, then by cosine. Rank alone gave every
+ * source's hit at one rank the same score, so the sources took turns and the order among them was the order they were
+ * read in (MEMO-37). One model scores every source, so cosine compares across them; a hit meaning did not find comes
+ * after those it did at the same rank. Each source's own order is kept, so recall at any depth past the number of
+ * sources does not change.
+ */
+const oneList = (lists: SearchAllItem[][], cosines: Map<string, number>): SearchAllItem[] => {
+  const place = new Map<string, { item: SearchAllItem; rank: number }>()
+  for (const list of lists)
+    list.forEach((item, rank) => {
+      const held = place.get(item.ref)
+      if (!held || rank < held.rank) place.set(item.ref, { item, rank })
+    })
+  const cosine = (ref: string) => cosines.get(ref) ?? Number.NEGATIVE_INFINITY
+  return [...place.values()]
+    .sort((a, b) => a.rank - b.rank || cosine(b.item.ref) - cosine(a.item.ref))
+    .map(({ item }) => item)
 }
