@@ -25,6 +25,15 @@ shape of this file.
   the answer's text. Once a day's runs cost `--max-cost-per-day` (default 5 US dollars, or the config file's; 0 for
   none), no run starts until the next day; `last.json` says why under `skipped`, and `schedule list` shows the day's
   spend and the skip.
+- **A claude agent schedule runs on Sonnet and starts lean.** `schedule agent` takes `--model <model>` (an alias such
+  as `sonnet` or `opus`, a model id, or `""` for the harness's own default). Without it, a claude schedule runs on
+  `sonnet` and a codex schedule on codex's own default; a host's config file may change either
+  (`schedule_model_claude`, `schedule_model_codex` in `SCHEDULE_SETTINGS`): flag, then config file, then default.
+  A new claude schedule also starts with `--tools Bash --strict-mcp-config --disable-slash-commands
+  --setting-sources ""`: none of the owner's MCP servers, skills, settings or CLAUDE.md, while `--permission-mode
+  dontAsk` and `--allowedTools` still hold. A "say ok" run measured $0.152 and 37,925 input tokens before, $0.019 and
+  4,740 after. `schedule_lean_start: false` keeps the owner's setup. Both are read when the schedule is added; an
+  existing schedule keeps its argv until it is added again. `ScheduleLimits` gains `models` and `leanStart`.
 - **`messages acknowledge` moves only a holder the caller may move.** A run that `schedule agent --on-new-mail` started
   gets `<PREFIX>_MAIL_HOLDER` and moves that holder's mark only; any other agent, or a run under the read-only lock,
   is refused with `mail.holder-not-yours`; the owner moves any. A cursor past the newest stored email, or read in the

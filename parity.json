@@ -3972,6 +3972,12 @@
           "planned": {
             "wa": "wa backlog: mount the shared schedule command"
           }
+        },
+        "--model": {
+          "in": ["max", "tg"],
+          "planned": {
+            "wa": "wa backlog: mount the shared schedule command"
+          }
         }
       }
     },
