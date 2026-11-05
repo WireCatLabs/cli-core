@@ -9,6 +9,14 @@ shape of this file.
 
 ### Changed — may break callers
 
+- **`search all` ranks its sources as one list** (MEMO-37). Each source's hit at one rank used to get the same score,
+  so the sources took turns in the order they were read (messages, mail, notes, events). Now hits at the same rank
+  are ordered by cosine, since one model scores every source; a hit meaning did not find comes after those it did.
+  Each source's own order is kept. Without the model nothing changes. `search notes` and `search events` hits found
+  by meaning carry `meaning_score`, the cosine.
+- **tg, max and wa `search all` change with the bump, with no code change in them.** Mail is searched by meaning when
+  the store holds mail, a question's message found both by words and by meaning gets one vote, and once vectors
+  exist the hits at one rank are ordered by meaning score.
 - **`search all` searches mail by meaning too** (MEMO-38). Mail was only ever searched by words there, though its
   threads had vectors. The meaning lane now reads a mail account's thread vectors through the mail store, and
   `search all` fuses them with the word hits as it does for messages; the answer says how in `mail`. For a question,
