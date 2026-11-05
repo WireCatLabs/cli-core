@@ -226,6 +226,8 @@ const statusCommand = (messenger: Messenger): Command =>
           "who replies next, open questions both ways, promises, amounts with their direction, payments recorded, " +
           "how long each --context-query has been quiet on their side, and how much of the chat is held. Amounts, " +
           "directions and promises found by words are marked pattern: read the cited message before trusting one. " +
+          "Others' questions in a group with no role, and others' word-found promises in a group, are counted on " +
+          "the chat's row as unlisted, not listed. " +
           "Only this profile's account is read; the other linked chats are named, and memo projects status reads them",
       )
       .argument("<project>", "an existing project's id, key, exact name or alias")
