@@ -23,6 +23,8 @@ None open.
 
 ## Next (P2)
 
+- **CORE-45** · P2 · Personal CRM as typed tables (slice B2): `pipelines`, `pipeline_stages`, `opportunities`, status
+  kept apart from stage; people on a deal are links with a role. Like the finance tables (#2425). Same plan, §4.3.
 - **CORE-42** · P2 · Take cli-base ≥ 0.66.1 so a bare number counts as a word of a `--discover` question: today any
   number ("after 21 days") sends the question to strict search, which usually finds nothing (cli-base#409). Moves the
   `@wirecat/cli-base` peer range to 0.66, so the tools built on Core move with it. `src/services/messages-discovery.ts`.
@@ -41,7 +43,8 @@ None open.
 - **CORE-5** · P2 · Let a new source join without editing this package: the provider list is fixed
   (`src/domain/providers.ts:14`) and Google Drive is hard-coded in the document code
   (`src/services/document-source.ts:8,17`). Needed before the Slack, Google Meet, Notion and Calendar CLIs. No
-  separate SDK: cli-core is the shared base (owner, 2026-10-23). Plan first.
+  separate SDK: cli-core is the shared base (owner, 2026-10-23; questioned again as NEED-2153). Plan first. Data with
+  no CLI of its own may come in through `ingest` and the records envelope (#2439) instead.
 - **CORE-6** · P2 · 🟡 Search start-up measured: model open 1.44 s, empty-store reopen 8.4 ms, bare Node 31.7 ms
   (medians). Next compare one-shot CLI and long-lived MCP on the same synthetic corpus before optimizing.
   [Runner and limits](https://github.com/WireCatLabs/cli-testing/tree/main/performance/search/startup) · [notes](BACKLOG-NOTES.md#core-6).

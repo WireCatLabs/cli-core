@@ -3,6 +3,8 @@
 Someday work: P3 items, nice-to-haves and research. Same ids, marks and one-line format as
 [BACKLOG.md](BACKLOG.md#rules). An item moves to [BACKLOG.md](BACKLOG.md) when it becomes P2.
 
+- **CORE-46** · P3 · `ingest` (#2439) over authenticated local HTTP and provider webhooks, bound to 127.0.0.1: a
+  later plan (NEED-2160 A). cli-private `plans/2026-11-02-business-ingestion.md` (TASK-886) §8.
 - **CORE-13** · P3 · Serve relay, what v1 leaves out: a Windows named pipe, `ask` forwarded to the client, waiting
   for a starting serve, per-watcher buffers, `mcp serve --http` through serve, a path type on options.
   [The serve relay](ARCHITECTURE.md#the-serve-relay) · [notes](BACKLOG-NOTES.md#core-13).
