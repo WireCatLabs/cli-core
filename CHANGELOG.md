@@ -5,6 +5,48 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Changed — may break callers
+
+- **`holderHasMail` is gone: `mailWaiting` checks and `advancePastSkipped` moves.** `holderHasMail` read like a
+  check but moved the holder's mark on every schedule tick. `mailWaiting(store, holder)` only reads: how many emails
+  past the holder's marks would reach it and when the oldest was stored, or `unmarked`. `advancePastSkipped(store,
+  holder)` moves the mark over the mail at its head the holder would only skip, and leaves it for the next check when
+  a sync holds the store. `ScheduleHost.newMail` now returns `MailWaiting`. A host calls `advancePastSkipped`, then
+  `mailWaiting`.
+- **A gated agent schedule waits for a batch of mail.** On its timer, `schedule agent --on-new-mail <holder>` starts
+  the agent once 10 emails wait for it or the oldest has waited 30 minutes; `--mail-wait <duration>` and
+  `--mail-batch <n>` change that per schedule, and a host's `ScheduleHost.limits` gives its config file's values
+  (`SCHEDULE_SETTINGS`, read with `scheduleLimitsOf`): flag, then config file, then default. `schedule run` by hand
+  still starts it for any mail. Its skipped answer names `why` instead of `holder`.
+- **An agent schedule stops for the day at a cost cap.** A claude run is asked for its JSON answer, so its cost
+  (`total_cost_usd`) is kept in `last.json` (`costUsd`) and summed per local day in `spend.json`; the report kept is
+  the answer's text. Once a day's runs cost `--max-cost-per-day` (default 5 US dollars, or the config file's; 0 for
+  none), no run starts until the next day; `last.json` says why under `skipped`, and `schedule list` shows the day's
+  spend and the skip.
+- **`messages acknowledge` moves only a holder the caller may move.** A run that `schedule agent --on-new-mail` started
+  gets `<PREFIX>_MAIL_HOLDER` and moves that holder's mark only; any other agent, or a run under the read-only lock,
+  is refused with `mail.holder-not-yours`; the owner moves any. A cursor past the newest stored email, or read in the
+  future, is refused with `mail.cursor-ahead`. A scheduled triage agent needs `--on-new-mail`.
+- **`review --holder` leaves out suspicious senders, and now keeps them on the mark.** Their
+  emails stay on the holder's mark and come in a later review once the sender's score is cleared, instead of being
+  passed for good. This was listed under Added in the release that brought it; it changes what an existing caller
+  reads.
+- **A mail findings citation of an email the store does not hold is `not_found`** with reason
+  `mail-findings.not-stored`, no longer `mail-findings.stale`, which told the agent to read the mailbox again. An email
+  deleted after the batch was staged still makes accepting it stale.
+- **`parseMailFindingsJson`, `parseMeetingFindingsJson` and `parseEvidenceFindingsJson` live in
+  `src/cli/findings-input.ts`;** the exports from `@wirecat/cli-core/cli` are unchanged. `findingText` and
+  `findingFields` are the checks themselves, not wrappers.
+
+### Fixed
+
+- **An accepted `new_contact` mail finding names the person.** Sync already names a sender's person from the From
+  display name, so accepting set nothing while the receipt said accepted; the owner's chosen name now replaces it.
+- **`mail review` offers at most two next steps.** It gave one `conversations show` step per cut thread, up to 50;
+  it now gives one, and names the other cut threads under `missing`.
+
 ## 0.567.0 — 05.11.2026
 
 ### Added

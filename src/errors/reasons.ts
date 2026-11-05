@@ -67,6 +67,7 @@ const OTHERS: Entry[] = [
   validation("meeting-findings.dedicated-review", "review meeting findings through the dedicated findings command"),
   validation("evidence-findings.stale", "evidence findings changed since they were read; stage a new batch"),
   validation("mail-findings.stale", "mail findings cite mail that changed since it was read; stage a new batch"),
+  ["mail-findings.not-stored", "not_found", "a mail finding cites an email the store does not hold"],
   validation("mail-findings.partial", "a cited email is not stored whole yet; cite it once it is"),
   validation("evidence-findings.dedicated-review", "review evidence findings through the dedicated findings command"),
   validation("mail-findings.dedicated-review", "review mail findings through the dedicated findings command"),
@@ -75,6 +76,8 @@ const OTHERS: Entry[] = [
   ["extraction.invalid-proposals", "invalid_response", "the model's memory proposals could not be used"],
   validation("extraction.text-too-long", "the text is too long for memory extraction"),
   validation("file.locked", "another process holds the file's lock"),
+  validation("mail.cursor-ahead", "an acknowledge cursor is past the newest stored email"),
+  ["mail.holder-not-yours", "permission_error", "a run moves only the mark of the holder its schedule names"],
   ["mail.source-failed", "provider_error", "the mail server refused or did not complete a request"],
   ["mail.search-refused", "provider_error", "the mail server refused to search a folder"],
   [

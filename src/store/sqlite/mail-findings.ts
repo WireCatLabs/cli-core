@@ -98,9 +98,10 @@ export const mailFindingsStoreOver = (context: StoreContext): MailFindingsStore 
 
   /**
    * Reads each cited email once: it must be stored, whole, and hash to the fingerprint given. Every finding cites
-   * mail of the batch's own mailbox, and no sender other than the owner is behind more than five findings.
+   * mail of the batch's own mailbox, and no sender other than the owner is behind more than five findings. An email
+   * gone by the time the owner decides changed since it was read; one never stored was never read.
    */
-  const cite = (findings: MailFinding[], account: number) => {
+  const cite = (findings: MailFinding[], account: number, deciding = false) => {
     const read = new Map<string, Row>()
     const perSender = new Map<string, number>()
     let bytes = 0
@@ -112,7 +113,11 @@ export const mailFindingsStoreOver = (context: StoreContext): MailFindingsStore 
         if (!row) {
           const at = parseLocator(reference)
           row = database.prepare(EMAIL).get(at.account, at.chat, at.message)
-          if (!row) return stale()
+          if (!row && deciding) return stale()
+          if (!row)
+            throw new CliError("not_found", `no stored email ${reference}; cite only mail a review gave`, {
+              reason: "mail-findings.not-stored",
+            })
           bytes += Buffer.byteLength(String(row.body)) + Buffer.byteLength(String(row.subject ?? ""))
           if (bytes > TEXT_BUDGET) return invalid(`finding evidence exceeds the ${TEXT_BUDGET}-byte stored text budget`)
           if (row.partial)
@@ -241,9 +246,7 @@ export const mailFindingsStoreOver = (context: StoreContext): MailFindingsStore 
       }
       case "new_contact": {
         const person = Number(identityOfAddress(finding.address)?.person_id)
-        database
-          .prepare("UPDATE persons SET name = ?, updated_at = ? WHERE id = ? AND name IS NULL")
-          .run(finding.name, now(), person)
+        database.prepare("UPDATE persons SET name = ?, updated_at = ? WHERE id = ?").run(finding.name, now(), person)
         return `person:${person}`
       }
     }
@@ -335,7 +338,7 @@ export const mailFindingsStoreOver = (context: StoreContext): MailFindingsStore 
         // Rejecting creates nothing, so a batch whose mail changed can still be closed; accepting needs the
         // accepted findings' own mail unchanged.
         const chosen = batch.input.findings.filter((finding) => accepted.includes(finding.id))
-        if (chosen.length) cite(chosen, account)
+        if (chosen.length) cite(chosen, account, true)
         if (proposal.proposedBy.type !== "bot" || !proposal.proposedBy.name)
           return invalid("a findings author must be an agent")
         const agent = {

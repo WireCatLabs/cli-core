@@ -1,4 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
+import { isBusy } from "../store/sqlite/transaction.js"
 import type { AccountKey, MarkedEmail, MessageStore, StoredHit } from "../store/store.js"
 
 /** A holder's name: what `--holder` takes and the mark's key ends with. */
@@ -7,8 +8,10 @@ export const HOLDER = /^[a-z0-9][a-z0-9-]{0,39}$/
 export const MARK_BATCH = 200
 /** A partial email waits this long to be stored whole, then is skipped. */
 export const HOLD_PARTIAL_MS = 7 * 86_400_000
-/** Held emails kept on one mark at most; past it the oldest are skipped as partial. */
+/** Held, or suspicious, emails kept on one mark at most; past it the oldest are dropped. */
 const MOST_HELD = 500
+/** A cursor read at most this far in the future is a clock apart, not a forgery. */
+const CLOCK_SLACK_MS = 60_000
 const PREFIX = "consumer:"
 
 export type SkipReason = "bulk" | "envelope" | "partial" | "draft" | "suspicious"
@@ -24,6 +27,8 @@ export interface MailMark {
   /** ms: when the email at `throughId` was received; for display. */
   throughAt: number | null
   held: number[]
+  /** Emails skipped while their sender looked suspicious; offered again once the sender's score is cleared. */
+  suspicious: number[]
   read: number
   skipped: Record<SkipReason, number>
   /** ms. */
@@ -47,6 +52,7 @@ const parsed = (holder: string, value: string, at: number): MailMark | undefined
       throughId: saved.throughId,
       throughAt: saved.throughAt ?? null,
       held: Array.isArray(saved.held) ? saved.held.filter((id) => typeof id === "number") : [],
+      suspicious: Array.isArray(saved.suspicious) ? saved.suspicious.filter((id) => typeof id === "number") : [],
       read: saved.read ?? 0,
       skipped: { ...noneSkipped(), ...saved.skipped },
       updatedAt: at,
@@ -120,7 +126,7 @@ export const readPastMark = async (
   holder: string,
   options: { now?: number; limit?: number } = {},
 ): Promise<MarkRead> => {
-  const { wanted, ...read } = await examine(store, mailbox, holder, options)
+  const { wanted, oldestStoredAt: _, ...read } = await examine(store, mailbox, holder, options)
   return { emails: await store.mail.emailHits(wanted), ...read }
 }
 
@@ -129,59 +135,103 @@ const examine = async (
   store: MessageStore,
   mailbox: AccountKey,
   holder: string,
-  { now = Date.now(), limit = MARK_BATCH }: { now?: number; limit?: number },
-): Promise<Omit<MarkRead, "emails"> & { wanted: number[] }> => {
-  const mark = await markOf(store, mailbox, holder)
+  { now = Date.now(), limit = MARK_BATCH, after }: { now?: number; limit?: number; after?: number },
+): Promise<Omit<MarkRead, "emails"> & { wanted: number[]; oldestStoredAt: number | null }> => {
+  const saved = await markOf(store, mailbox, holder)
   const account = await accountOf(store, mailbox)
-  const empty = { wanted: [], more: false, held: 0, skipped: noneSkipped(), mark }
+  const empty = { wanted: [], oldestStoredAt: null, more: false, held: 0, skipped: noneSkipped(), mark: saved }
   if (!account) return { ...empty, cursor: cursorOf(0, now) }
-  if (!mark) return { ...empty, cursor: cursorOf(await store.mail.newestEmailId(account.id), now) }
-  const found = await store.mail.emailsAfter(account.id, mark.throughId, limit + 1, mark.held)
+  if (!saved) return { ...empty, cursor: cursorOf(await store.mail.newestEmailId(account.id), now) }
+  const mark = after === undefined ? saved : { ...saved, throughId: after, held: [], suspicious: [] }
+  const found = await store.mail.emailsAfter(account.id, mark.throughId, limit + 1, [...mark.held, ...mark.suspicious])
   // Mail a running sync stored is read once that sync ended: it files bulk mail only at its end.
   const settled = await store.sync.syncState(mailbox, "mail_coverage")
   const settledAt = settled ? Date.parse(settled.at) : Number.POSITIVE_INFINITY
-  const after = found.filter((email) => email.id > mark.throughId)
-  const unsettled = after.findIndex((email) => email.storedAt > settledAt)
-  const fresh = unsettled === -1 ? after : after.slice(0, unsettled)
+  const newer = found.filter((email) => email.id > mark.throughId)
+  const unsettled = newer.findIndex((email) => email.storedAt > settledAt)
+  const fresh = unsettled === -1 ? newer : newer.slice(0, unsettled)
   const batch = fresh.slice(0, limit)
   const examined = [...found.filter((email) => email.id <= mark.throughId), ...batch]
   const skipped = noneSkipped()
   const wanted: number[] = []
+  let oldestStoredAt: number | null = null
   let held = 0
   for (const email of examined) {
     const said = verdict(email, now)
-    if (said === "read") wanted.push(email.id)
-    else if (said === "held") held += 1
+    if (said === "read") {
+      wanted.push(email.id)
+      oldestStoredAt = Math.min(oldestStoredAt ?? email.storedAt, email.storedAt)
+    } else if (said === "held") held += 1
     else if (email.id > mark.throughId) skipped[said] += 1
   }
   return {
     wanted: wanted.sort((a, b) => a - b),
+    oldestStoredAt,
     cursor: cursorOf(batch.at(-1)?.id ?? mark.throughId, now),
-    more: after.length > batch.length,
+    more: newer.length > batch.length,
     held,
     skipped,
-    mark,
+    mark: saved,
   }
 }
 
+/** Mail past a holder's marks that would reach it: how many emails, and when the oldest of them was stored. */
+export interface MailWaiting {
+  /** No mark yet in some mailbox: the holder's first run sets it. */
+  unmarked: boolean
+  emails: number
+  /** ms. */
+  oldestStoredAt: number | null
+}
+
 /**
- * Whether the holder has mail to read in any stored mailbox — what a schedule asks before it starts the holder's
- * agent, so a run with nothing new costs no model call. Mail that is only skipped (bulk, envelopes, drafts,
- * suspicious senders) moves the holder's mark here, as the agent would have acknowledged it, or it would wait
- * forever behind the mark. A holder with no mark yet has mail to read: its first run sets the mark.
+ * What waits for the holder in every stored mailbox, read only: what a schedule asks before it starts the holder's
+ * agent, so a run with nothing new costs no model call. Bulk, envelopes, drafts, suspicious senders and partial mail
+ * do not count.
  */
-export const holderHasMail = async (store: MessageStore, holder: string, now = Date.now()): Promise<boolean> => {
+export const mailWaiting = async (store: MessageStore, holder: string, now = Date.now()): Promise<MailWaiting> => {
+  const waiting: MailWaiting = { unmarked: false, emails: 0, oldestStoredAt: null }
+  for (const mailbox of await store.accounts.accounts()) {
+    if (mailbox.provider !== "email") continue
+    let after: number | undefined
+    for (;;) {
+      const read = await examine(store, mailbox, holder, { now, ...(after === undefined ? {} : { after }) })
+      if (!read.mark) {
+        waiting.unmarked = true
+        break
+      }
+      waiting.emails += read.wanted.length
+      if (read.oldestStoredAt !== null)
+        waiting.oldestStoredAt = Math.min(waiting.oldestStoredAt ?? read.oldestStoredAt, read.oldestStoredAt)
+      const through = Number(read.cursor.split(".")[0])
+      if (!read.more || through === (after ?? read.mark.throughId)) break
+      after = through
+    }
+  }
+  return waiting
+}
+
+/**
+ * Moves the holder's mark, in every stored mailbox, over the mail at its head that it would only skip — bulk,
+ * envelopes, drafts, suspicious senders — as the agent would have acknowledged it, so a quiet holder's next check
+ * does not read it all again. Suspicious senders' emails stay on the mark to be offered again. It stops at the first
+ * email the holder reads. A store busy with a sync is left alone: the next check moves it.
+ */
+export const advancePastSkipped = async (store: MessageStore, holder: string, now = Date.now()): Promise<void> => {
   for (const mailbox of await store.accounts.accounts()) {
     if (mailbox.provider !== "email") continue
     for (;;) {
       const read = await examine(store, mailbox, holder, { now })
-      if (!read.mark || read.wanted.length > 0) return true
-      if (read.cursor === cursorOf(read.mark.throughId, now)) break
-      await acknowledgeMark(store, mailbox, holder, read.cursor, now)
+      if (!read.mark || read.wanted.length > 0 || read.cursor === cursorOf(read.mark.throughId, now)) break
+      try {
+        await acknowledgeMark(store, mailbox, holder, read.cursor, now)
+      } catch (error) {
+        if (isBusy(error)) return
+        throw error
+      }
       if (!read.more) break
     }
   }
-  return false
 }
 
 /**
@@ -200,6 +250,15 @@ export const acknowledgeMark = async (
   const { throughId, readAt } = parseCursor(cursor)
   const account = await accountOf(store, mailbox)
   if (!account) throw new CliError("not_found", `no mail of ${mailbox.account} is stored`)
+  const newest = await store.mail.newestEmailId(account.id)
+  if (throughId > newest || readAt > now + CLOCK_SLACK_MS)
+    throw new CliError(
+      "validation_error",
+      `--cursor ${cursor} is past the newest stored email; acknowledge a cursor review gave`,
+      {
+        reason: "mail.cursor-ahead",
+      },
+    )
   const mark = await markOf(store, mailbox, holder)
   const from = mark?.throughId ?? throughId
   if (throughId < from)
@@ -207,7 +266,8 @@ export const acknowledgeMark = async (
   const examined: MarkedEmail[] = []
   let after = from
   const held = new Set(mark?.held ?? [])
-  const again = await store.mail.emailsAfter(account.id, Number.MAX_SAFE_INTEGER, 0, [...held])
+  const doubted = new Set(mark?.suspicious ?? [])
+  const again = await store.mail.emailsAfter(account.id, Number.MAX_SAFE_INTEGER, 0, [...held, ...doubted])
   examined.push(...again)
   while (after < throughId) {
     const page = (await store.mail.emailsAfter(account.id, after, MARK_BATCH)).filter((one) => one.id <= throughId)
@@ -218,16 +278,21 @@ export const acknowledgeMark = async (
   const skipped = { ...(mark?.skipped ?? noneSkipped()) }
   let read = mark?.read ?? 0
   const keep: number[] = []
+  const suspicious: number[] = []
   const live = new Set(again.map((one) => one.id))
   for (const id of held) if (!live.has(id)) held.delete(id)
   for (const email of examined) {
     const said = verdict(email, readAt)
     const wasHeld = held.has(email.id)
+    const wasDoubted = doubted.has(email.id) && !wasHeld
     if (said === "held" || (said === "read" && email.changedAt > readAt) || (wasHeld && email.changedAt > readAt)) {
       if (email.partial && now - email.storedAt >= HOLD_PARTIAL_MS) skipped.partial += 1
       else keep.push(email.id)
-    } else if (said === "read") read += wasHeld || email.id > from ? 1 : 0
-    else if (!wasHeld || said === "partial") skipped[said] += 1
+    } else if (said === "read") read += wasHeld || wasDoubted || email.id > from ? 1 : 0
+    else if (said === "suspicious") {
+      suspicious.push(email.id)
+      if (!wasDoubted && !wasHeld) skipped.suspicious += 1
+    } else if (!wasDoubted && (!wasHeld || said === "partial")) skipped[said] += 1
   }
   const kept = [...new Set(keep)].sort((a, b) => a - b)
   skipped.partial += Math.max(0, kept.length - MOST_HELD)
@@ -236,6 +301,7 @@ export const acknowledgeMark = async (
     throughId,
     throughAt: through?.id === throughId ? through.at : (mark?.throughAt ?? null),
     held: kept.slice(-MOST_HELD),
+    suspicious: [...new Set(suspicious)].sort((a, b) => a - b).slice(-MOST_HELD),
     read,
     skipped,
   }

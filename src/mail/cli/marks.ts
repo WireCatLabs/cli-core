@@ -1,10 +1,13 @@
+import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import * as v from "valibot"
 import { answerEntity } from "../../cli/answer-entity.js"
-import { outputFor } from "../../cli/context.js"
+import { actorOf } from "../../cli/author.js"
+import { environmentOf, outputFor } from "../../cli/context.js"
 import { LOCAL_WRITE, proposesOnly } from "../../cli/effects.js"
 import { itemOf, renderAnswer } from "../../cli/envelope.js"
+import { mailHolderVariable, readOnlyLockOf } from "../../ports/app.js"
 import { acknowledgeMark, type MailMark } from "../marks.js"
 import type { MailReads } from "./index.js"
 
@@ -45,7 +48,8 @@ export const markText = (mark: MailMark) =>
 
 /**
  * `messages acknowledge`: a holder says it is done with what `review --holder` gave it, and its mark moves there. It
- * only moves the holder's own bookkeeping forward, so a read-only scheduled run may do it.
+ * only moves the holder's own bookkeeping forward, so a read-only scheduled run may do it — for the holder its
+ * schedule names only: an email that talks its reader into acknowledging would otherwise silence another pipeline.
  */
 export const acknowledgeCommand = (mail: MailReads): Command =>
   answerEntity(
@@ -69,6 +73,17 @@ export const acknowledgeCommand = (mail: MailReads): Command =>
     .requiredOption("--cursor <cursor>", "the cursor `review --holder` gave")
     .action(async function (this: Command) {
       const { holder, cursor } = this.opts<{ holder: string; cursor: string }>()
+      const env = environmentOf(this).env ?? process.env
+      const named = env[mailHolderVariable(mail.app)]?.trim()
+      const owner = actorOf(this) === "owner" && !readOnlyLockOf(mail.app, env)
+      if (named ? named !== holder : !owner)
+        throw new CliError(
+          "permission_error",
+          named
+            ? `this run moves only ${named}'s mark, not ${holder}'s`
+            : `an agent moves only the mark of the holder its schedule names (schedule agent --on-new-mail ${holder}); the owner moves any`,
+          { reason: "mail.holder-not-yours" },
+        )
       const mark = await mail.read(this, (store, mailbox) => acknowledgeMark(store, mailbox, holder, cursor))
       renderAnswer(this, outputFor(this), itemOf(markItem(mark)), () => markText(mark))
     })

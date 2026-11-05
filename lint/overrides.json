@@ -26,5 +26,12 @@
     "reason": "stats tasks show took a query on 2026-11-03 and --chat predates it; tg and max tests and tg's docs call it, so it stays until they move to -- chat:<chat>. Awaits the owner's review in the pull request that added the query",
     "owner": "@leemour",
     "review_after": "2026-12-01"
+  },
+  {
+    "rule": "option-role",
+    "target": "schedule agent --max-cost-per-day",
+    "reason": "the owner chose a daily cost cap for agent schedules on 2026-11-05, beside --max-cost (budget, US dollars); the word goes into cli-base's vocabulary in its next release",
+    "owner": "@leemour",
+    "review_after": "2026-12-05"
   }
 ]

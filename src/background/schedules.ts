@@ -1,8 +1,8 @@
 import { spawn } from "node:child_process"
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
-import { join } from "node:path"
+import { basename, join } from "node:path"
 import { CliError, errorCodes, writeSecurely } from "@wirecat/cli-base"
-import { type AppIdentity, readOnlyLockOf } from "../ports/app.js"
+import { type AppIdentity, mailHolderVariable, readOnlyLockOf } from "../ports/app.js"
 import { recordLogFor } from "../runs/record-log.js"
 import { childTrace } from "../runs/scope.js"
 import type { ServerSystem } from "./system.js"
@@ -21,6 +21,67 @@ export interface Schedule {
   createdAt: string
   /** A holder whose mark gates the run: it starts only when mail is stored past that mark. */
   onNewMail?: string
+  /** Gated on mail: start once the oldest waiting email has waited this many minutes, or `mailBatch` emails wait. */
+  mailWaitMinutes?: number
+  mailBatch?: number
+  /** An agent's: no run starts for the rest of the local day once its runs cost this much, in US dollars. */
+  maxCostPerDay?: number
+}
+
+/** What a gated agent waits for, and what a day of its runs may cost, when neither its flags nor the config say. */
+export const SCHEDULE_DEFAULTS = { mailWaitMinutes: 30, mailBatch: 10, maxCostPerDay: 5 } as const
+
+/** One local day's cost of a schedule's runs, as the harness reported it (`spend.json` beside the schedule). */
+export interface DaySpend {
+  /** The local date, YYYY-MM-DD. */
+  day: string
+  usd: number
+}
+
+export const localDay = (at: Date): string =>
+  `${at.getFullYear()}-${String(at.getMonth() + 1).padStart(2, "0")}-${String(at.getDate()).padStart(2, "0")}`
+
+const spendFile = (file: string) => join(file, "..", "spend.json")
+
+/** What the schedule's runs cost today; nothing before its first priced run of the day. */
+export const spentToday = (file: string, now = new Date()): number => {
+  try {
+    const spend = JSON.parse(readFileSync(spendFile(file), "utf8")) as DaySpend
+    return spend.day === localDay(now) && typeof spend.usd === "number" ? spend.usd : 0
+  } catch {
+    return 0
+  }
+}
+
+const addSpend = (folder: string, usd: number, at: Date) => {
+  const file = join(folder, "schedule.json")
+  const spend: DaySpend = { day: localDay(at), usd: spentToday(file, at) + usd }
+  writeFileSync(spendFile(file), `${JSON.stringify(spend)}\n`, { mode: 0o600 })
+}
+
+/**
+ * Claude reports a run's cost only in its JSON answer, so a scheduled claude run asks for it; the report kept is the
+ * answer's text. Codex reports none.
+ */
+const priced = (argv: string[]): string[] => {
+  const [program = ""] = argv
+  const claude = /^claude(\.exe|\.cmd)?$/i.test(basename(program))
+  return claude && argv.includes("-p") && !argv.includes("--output-format")
+    ? [...argv, "--output-format", "json"]
+    : argv
+}
+
+const reportOf = (stdout: Buffer): { text: Buffer; costUsd?: number } => {
+  try {
+    const answer = JSON.parse(stdout.toString("utf8")) as { type?: unknown; result?: unknown; total_cost_usd?: unknown }
+    if (answer?.type !== "result") return { text: stdout }
+    return {
+      text: typeof answer.result === "string" ? Buffer.from(answer.result) : stdout,
+      ...(typeof answer.total_cost_usd === "number" ? { costUsd: answer.total_cost_usd } : {}),
+    }
+  } catch {
+    return { text: stdout }
+  }
 }
 
 /** Another CLI a scheduled agent may run by name, as the host declares it: `memo`'s agent runs `mail`. */
@@ -41,6 +102,10 @@ export interface LastRun {
   failingSince?: string
   /** Failed runs in a row; absent once a run succeeds. */
   failures?: number
+  /** What the run cost, as the harness reported it; absent when it reports none. */
+  costUsd?: number
+  /** The last time the timer did not start it, and why; a run after it clears this. */
+  skipped?: { at: string; why: string }
 }
 
 const REASON_ID = /^[a-z0-9][a-z0-9.-]{0,79}$/
@@ -79,7 +144,15 @@ const readRun = (path: string): LastRun | undefined => {
  */
 export const recordRun = (
   path: string,
-  run: { at: string; exitCode: number; output: string; traceId?: string; reason?: string; errorCode?: string },
+  run: {
+    at: string
+    exitCode: number
+    output: string
+    traceId?: string
+    reason?: string
+    errorCode?: string
+    costUsd?: number
+  },
 ): LastRun => {
   const before = readRun(path)
   const { reason, errorCode, ...rest } = run
@@ -95,6 +168,14 @@ export const recordRun = (
         }
   writeSecurely(path, `${JSON.stringify(last, null, 2)}\n`, 0o600)
   return last
+}
+
+/** Notes on the last run that the timer left this one out, keeping that run's result. */
+export const recordSkip = (file: string, why: string, at = new Date()): void => {
+  const path = join(file, "..", "last.json")
+  const before = readRun(path)
+  if (!before) return
+  writeSecurely(path, `${JSON.stringify({ ...before, skipped: { at: at.toISOString(), why } }, null, 2)}\n`, 0o600)
 }
 
 const shortTime = (iso: string) => {
@@ -554,13 +635,14 @@ const attemptSchedule = async (
   const agent = schedule.kind === "agent"
   const output = join(runs, `${stamp}.${agent ? "md" : "log"}`)
   const errors = agent ? join(runs, `${stamp}.log`) : output
-  const [program = "", ...args] = agent ? schedule.argv : [...system.entry, ...schedule.argv]
+  const [program = "", ...args] = agent ? priced(schedule.argv) : [...system.entry, ...schedule.argv]
   const trace = childTrace()
   const childEnv = {
     ...env,
     ...schedule.environment,
     TRACEPARENT: trace.traceparent,
     [`${app.envPrefix}_SCHEDULED`]: schedule.name,
+    ...(schedule.onNewMail ? { [mailHolderVariable(app)]: schedule.onNewMail } : {}),
     // A run started under the lock stays under it, whatever the schedule file says.
     ...(agent || readOnlyLockOf(app, env) ? { [`${app.envPrefix}_READ_ONLY`]: "1" } : {}),
     ...(agent
@@ -578,6 +660,7 @@ const attemptSchedule = async (
   const facts = { schedule: schedule.name, kind: schedule.kind }
   const began = now().getTime()
   log.info({ event: "schedule.start", ...facts })
+  let costUsd: number | undefined
   const exitCode = await new Promise<number>((resolve) => {
     const child = spawn(program, args, { env: childEnv, cwd: folder, stdio: ["ignore", "pipe", "pipe"] })
     const out: Buffer[] = []
@@ -599,23 +682,28 @@ const attemptSchedule = async (
     child.on("close", (code, killedBy) => {
       signal?.removeEventListener("abort", stop)
       if (kill) clearTimeout(kill)
-      writeFileSync(output, Buffer.concat(agent ? out : [...out, ...err]), { mode: 0o600 })
+      const report = agent ? reportOf(Buffer.concat(out)) : { text: Buffer.concat([...out, ...err]) }
+      costUsd = report.costUsd
+      writeFileSync(output, report.text, { mode: 0o600 })
       if (agent) writeFileSync(errors, Buffer.concat(err), { mode: 0o600 })
       resolve(code ?? (killedBy === "SIGKILL" ? 137 : killedBy === "SIGTERM" ? 143 : 1))
     })
   })
   const ended = now()
+  if (costUsd !== undefined) addSpend(folder, costUsd, ended)
   log[exitCode === 0 ? "info" : "error"]({
     event: "schedule.exit",
     ...facts,
     exitCode,
     durationMs: ended.getTime() - began,
+    ...(costUsd === undefined ? {} : { costUsd }),
   })
   return recordRun(join(folder, "last.json"), {
     at: ended.toISOString(),
     exitCode,
     output,
     traceId: trace.traceId,
+    ...(costUsd === undefined ? {} : { costUsd }),
     ...(exitCode === 0 ? {} : failureOf(readFileSync(errors, "utf8"), exitCode)),
   })
 }

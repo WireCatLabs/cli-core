@@ -10,17 +10,20 @@ import {
   lastRun,
   listSchedules,
   readSchedule,
+  recordSkip,
   runSchedule,
+  SCHEDULE_DEFAULTS,
   type Schedule,
   scheduleFile,
   scheduleName,
+  spentToday,
   timerFor,
   type When,
 } from "../../background/schedules.js"
 import { type ServerSystem, thisMachine } from "../../background/system.js"
 import { locationVariables } from "../../background/units.js"
 import { parseDuration } from "../../domain/duration.js"
-import { HOLDER } from "../../mail/marks.js"
+import { HOLDER, type MailWaiting } from "../../mail/marks.js"
 import { type AppIdentity, readOnlyLockOf } from "../../ports/app.js"
 import { aheadOf } from "../../services/moment.js"
 import { storePath } from "../../store/path.js"
@@ -29,6 +32,7 @@ import { grantsAuthority, LOCAL_READ, LOCAL_WRITE, REMOTE_WRITE } from "../effec
 import { type AnswerOutput, itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { withQuery } from "../list-query.js"
 import { SCHEDULES_QUERY, scheduleFilter } from "../messenger/list-result-queries.js"
+import type { DeclaredSetting } from "../setting-defaults.js"
 import { lineOf } from "../steps.js"
 
 /** Each run of an agent is a paid model call that reads chats; keeping the store current is `serve`'s job. */
@@ -115,10 +119,12 @@ export interface ScheduleHost {
     resolving?: { needsProfile?: boolean },
   ): AnswerOutput & { env: NodeJS.ProcessEnv; profile: string }
   /**
-   * Whether mail is stored past the holder's mark (`holderHasMail`). Given, `schedule agent` takes `--on-new-mail`:
-   * the agent then runs only after a sync stored mail it has not processed.
+   * What mail waits past the holder's mark (`mailWaiting`). Given, `schedule agent` takes `--on-new-mail`: the agent
+   * then runs only once enough of it waits, or the oldest has waited long enough.
    */
-  newMail?: (command: Command, holder: string) => Promise<boolean>
+  newMail?: (command: Command, holder: string) => Promise<MailWaiting>
+  /** The config file's limits for agent schedules; a schedule's own flags win, `SCHEDULE_DEFAULTS` fill the rest. */
+  limits?: (command: Command) => ScheduleLimits
   /**
    * Other CLIs the scheduled agent may run besides this one, each under its own `<PREFIX>_READ_ONLY`: memo's mail
    * triage runs `mail`. Claude may run them; codex may write their state, config and cache folders.
@@ -126,12 +132,60 @@ export interface ScheduleHost {
   agentRuns?: readonly AgentCli[]
 }
 
+export type ScheduleLimits = Partial<Pick<Schedule, "mailWaitMinutes" | "mailBatch" | "maxCostPerDay">>
+
+/** The agent-schedule limits a host with `newMail` writes into its config file's top level (WC-CMD-30). */
+export const SCHEDULE_SETTINGS: readonly DeclaredSetting[] = [
+  {
+    key: "schedule_mail_wait",
+    default: `${SCHEDULE_DEFAULTS.mailWaitMinutes}m`,
+    description: "an agent gated on new mail starts once the oldest waiting email has waited this long",
+  },
+  {
+    key: "schedule_mail_batch",
+    default: SCHEDULE_DEFAULTS.mailBatch,
+    description: "or once this many emails wait for it",
+  },
+  {
+    key: "schedule_max_cost_per_day",
+    default: SCHEDULE_DEFAULTS.maxCostPerDay,
+    description: "US dollars an agent schedule's runs may cost in a day before it waits for the next; 0 for no cap",
+  },
+]
+
+/** `SCHEDULE_SETTINGS` as the config file gives them; a missing or unusable value is left to the default. */
+export const scheduleLimitsOf = (config: {
+  schedule_mail_wait?: unknown
+  schedule_mail_batch?: unknown
+  schedule_max_cost_per_day?: unknown
+}): ScheduleLimits => {
+  const { schedule_mail_wait: wait, schedule_mail_batch: batch, schedule_max_cost_per_day: cap } = config
+  return {
+    ...(typeof wait === "string"
+      ? { mailWaitMinutes: Math.ceil(parseDuration(wait, "schedule_mail_wait") / 60_000) }
+      : {}),
+    ...(typeof batch === "number" && Number.isSafeInteger(batch) && batch >= 1 ? { mailBatch: batch } : {}),
+    ...(typeof cap === "number" && Number.isFinite(cap) && cap >= 0 ? { maxCostPerDay: cap } : {}),
+  }
+}
+
+const given = (limits: ScheduleLimits): ScheduleLimits =>
+  Object.fromEntries(Object.entries(limits).filter(([, value]) => value !== undefined))
+
+const usd = (value: number) => `$${value.toFixed(2)}`
+
 /**
  * Runs the CLI's own commands, or an agent, later or on a timer — through systemd (Linux), launchd
  * (macOS) or Task Scheduler (Windows). Every timer runs `schedule exec <file>`; the schedule file holds
  * the rest, so what runs and with which variables is the same on all three.
  */
-export const scheduleCommandFor = ({ app, context: contextOf, newMail, agentRuns = [] }: ScheduleHost): Command => {
+export const scheduleCommandFor = ({
+  app,
+  context: contextOf,
+  newMail,
+  limits: configured,
+  agentRuns = [],
+}: ScheduleHost): Command => {
   const agentClis = [app, ...agentRuns]
   const command = new Command("schedule").description(
     `run a ${app.command} command or an agent later or on a timer (systemd, launchd, Task Scheduler); an agent cannot send`,
@@ -174,11 +228,41 @@ export const scheduleCommandFor = ({ app, context: contextOf, newMail, agentRuns
     }
     return { context, system, state, say, timer, environment, save }
   }
-  /** A schedule gated on new mail waits while nothing is stored past its holder's mark. */
-  const waits = async (self: Command, file: string): Promise<string | undefined> => {
-    const holder = existsSync(file) ? readSchedule(file).onNewMail : undefined
-    if (holder === undefined || !newMail || (await newMail(self, holder))) return undefined
-    return holder
+  /**
+   * Why a run does not start now, or nothing: an agent whose runs reached the day's cost cap waits for tomorrow, and
+   * one gated on mail waits for mail past its holder's mark — on its timer, until enough of it waits.
+   */
+  const waits = async (self: Command, file: string, { timed }: { timed: boolean }): Promise<string | undefined> => {
+    if (!existsSync(file)) return undefined
+    const schedule = readSchedule(file)
+    const { mailWaitMinutes, mailBatch, maxCostPerDay } = {
+      ...SCHEDULE_DEFAULTS,
+      ...given(configured?.(self) ?? {}),
+      ...given({
+        mailWaitMinutes: schedule.mailWaitMinutes,
+        mailBatch: schedule.mailBatch,
+        maxCostPerDay: schedule.maxCostPerDay,
+      }),
+    }
+    if (schedule.kind === "agent" && maxCostPerDay > 0) {
+      const spent = spentToday(file)
+      if (spent >= maxCostPerDay) {
+        const why = `today's runs cost ${usd(spent)}, the ${usd(maxCostPerDay)} a day allowed; it runs again tomorrow`
+        recordSkip(file, why)
+        return why
+      }
+    }
+    const holder = schedule.onNewMail
+    if (holder === undefined || !newMail) return undefined
+    const waiting = await newMail(self, holder)
+    if (waiting.unmarked) return undefined
+    if (waiting.emails === 0) return `no mail stored past ${holder}'s mark`
+    const waited = waiting.oldestStoredAt === null ? 0 : Date.now() - waiting.oldestStoredAt
+    if (!timed || waiting.emails >= mailBatch || waited >= mailWaitMinutes * 60_000) return undefined
+    return (
+      `${waiting.emails} email(s) wait past ${holder}'s mark; it starts at ${mailBatch}, ` +
+      `or once the oldest has waited ${mailWaitMinutes}m`
+    )
   }
 
   withWhen(
@@ -230,12 +314,35 @@ export const scheduleCommandFor = ({ app, context: contextOf, newMail, agentRuns
         new Option("--max-cost <usd>", "claude only: stop a run that costs more than this, in US dollars").argParser(
           Number,
         ),
+      )
+      .addOption(
+        new Option(
+          "--max-cost-per-day <usd>",
+          `claude only: start no run for the rest of the day once its runs cost this much, in US dollars; 0 for no cap (default ${SCHEDULE_DEFAULTS.maxCostPerDay}, or the config file's)`,
+        ).argParser(Number),
       ),
   ).action(async function (this: Command, name: string, harness: Harness, prompt: string) {
     const { context, system, environment, save } = prepare(this)
-    const options = this.opts<WhenOptions & { maxCost?: number; onNewMail?: string }>()
+    const options = this.opts<
+      WhenOptions & {
+        maxCost?: number
+        maxCostPerDay?: number
+        onNewMail?: string
+        mailWait?: string
+        mailBatch?: string
+      }
+    >()
     if (options.onNewMail !== undefined && !HOLDER.test(options.onNewMail))
       throw new CliError("validation_error", `--on-new-mail takes a holder: lower-case letters, digits and dashes`)
+    if ((options.mailWait !== undefined || options.mailBatch !== undefined) && options.onNewMail === undefined)
+      throw new CliError("validation_error", "--mail-wait and --mail-batch shape a run gated by --on-new-mail")
+    if (options.maxCostPerDay !== undefined && !(Number.isFinite(options.maxCostPerDay) && options.maxCostPerDay >= 0))
+      throw new CliError("validation_error", "--max-cost-per-day takes US dollars, 0 or more")
+    const mailBatch = options.mailBatch === undefined ? undefined : Number(options.mailBatch)
+    if (mailBatch !== undefined && !(Number.isSafeInteger(mailBatch) && mailBatch >= 1))
+      throw new CliError("validation_error", "--mail-batch takes a count of emails, 1 or more")
+    const mailWaitMinutes =
+      options.mailWait === undefined ? undefined : Math.ceil(parseDuration(options.mailWait, "--mail-wait") / 60_000)
     const program = findProgram(harness, context.env, system.platform)
     if (!program) throw new CliError("not_found", `${harness} is not on PATH`)
     const folders = agentClis.flatMap((one) => {
@@ -277,6 +384,9 @@ export const scheduleCommandFor = ({ app, context: contextOf, newMail, agentRuns
       environment: environment(),
       createdAt: new Date().toISOString(),
       ...(options.onNewMail ? { onNewMail: options.onNewMail } : {}),
+      ...(mailWaitMinutes === undefined ? {} : { mailWaitMinutes }),
+      ...(mailBatch === undefined ? {} : { mailBatch }),
+      ...(options.maxCostPerDay === undefined ? {} : { maxCostPerDay: options.maxCostPerDay }),
     })
   })
   if (newMail)
@@ -285,6 +395,14 @@ export const scheduleCommandFor = ({ app, context: contextOf, newMail, agentRuns
       ?.option(
         "--on-new-mail <holder>",
         `run only when mail is stored past this holder's mark — after a sync brought new mail; may check every ${GATED_AGENT_MINIMUM_MINUTES}m`,
+      )
+      .option(
+        "--mail-wait <duration>",
+        `with --on-new-mail: start once the oldest waiting email has waited this long (default ${SCHEDULE_DEFAULTS.mailWaitMinutes}m, or the config file's)`,
+      )
+      .option(
+        "--mail-batch <n>",
+        `with --on-new-mail: or once this many emails wait (default ${SCHEDULE_DEFAULTS.mailBatch}, or the config file's)`,
       )
 
   withQuery(
@@ -303,6 +421,7 @@ export const scheduleCommandFor = ({ app, context: contextOf, newMail, agentRuns
         kind: schedule.kind,
         when: describeWhen(schedule.when),
         last: lastRun(scheduleFile(state, schedule.name)) ?? null,
+        ...(schedule.kind === "agent" ? { spentTodayUsd: spentToday(scheduleFile(state, schedule.name)) } : {}),
       }))
       const answer = listOf("schedule list", {
         items: rows.map((row) => snakeKeys(row)),
@@ -315,7 +434,7 @@ export const scheduleCommandFor = ({ app, context: contextOf, newMail, agentRuns
           return ""
         }
         return rows
-          .map(({ name, kind, when, last }) =>
+          .map(({ name, kind, when, last, spentTodayUsd }) =>
             [
               name,
               kind,
@@ -327,6 +446,10 @@ export const scheduleCommandFor = ({ app, context: contextOf, newMail, agentRuns
                       `${last.failures} in a row${last.reason ? `: ${last.reason}` : ""} — ${last.output}`
                     : "")
                 : "not run yet",
+              ...(spentTodayUsd ? [`today ${usd(spentTodayUsd)}`] : []),
+              ...(last?.skipped
+                ? [`skipped ${last.skipped.at.slice(0, 16).replace("T", " ")}: ${last.skipped.why}`]
+                : []),
             ].join("  "),
           )
           .join("\n")
@@ -341,9 +464,8 @@ export const scheduleCommandFor = ({ app, context: contextOf, newMail, agentRuns
     .argument("<name>", "the schedule's name, as `schedule list` shows it")
     .action(async function (this: Command, name: string) {
       const { context, system, state, say, timer } = prepare(this)
-      const holder = await waits(this, scheduleFile(state, scheduleName(name)))
-      if (holder !== undefined)
-        return say({ name, skipped: true, holder }, [`${name}: skipped — no mail stored past ${holder}'s mark`])
+      const why = await waits(this, scheduleFile(state, scheduleName(name)), { timed: false })
+      if (why !== undefined) return say({ name, skipped: true, why }, [`${name}: skipped — ${why}`])
       const last = await untilChildEnds(this, (signal) =>
         runSchedule(app, system, context.env, scheduleFile(state, scheduleName(name)), {
           timer: timer(),
@@ -382,7 +504,7 @@ export const scheduleCommandFor = ({ app, context: contextOf, newMail, agentRuns
     .action(async function (this: Command, file: string) {
       // A timer starts it with no profile named; the schedule's own environment carries the profile.
       const { context, system, timer } = prepare(this, { needsProfile: false })
-      if ((await waits(this, file)) !== undefined) return
+      if ((await waits(this, file, { timed: true })) !== undefined) return
       const last = await untilChildEnds(this, (signal) =>
         runSchedule(app, system, context.env, file, {
           timer: timer(),
