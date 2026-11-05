@@ -42,6 +42,10 @@ export const taskCard = v.strictObject({
   revision: v.number(),
   parent: v.nullable(reference),
   source: v.nullable(text),
+  /** `<service>:<id>`, its id in an outside service, such as `avito:4512345678`. */
+  external_id: v.nullable(text),
+  /** The http or https page it is about, such as an Avito ad. */
+  source_url: v.nullable(text),
   due_at: nullableTime,
   next_check_at: nullableTime,
   closed_at: nullableTime,

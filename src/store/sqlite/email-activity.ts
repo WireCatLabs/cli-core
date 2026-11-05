@@ -75,6 +75,8 @@ export interface MailActivityStore {
    * processing mark reads next. The id is the store's insert order, so mail stored late is never behind the mark.
    */
   emailsAfter(accountId: number, afterId: number, limit: number, ids?: readonly number[]): Promise<MarkedEmail[]>
+  /** The account's live emails stored before `beforeId`, newest first, at most `limit`: what a mark moved back reads. */
+  emailsBefore(accountId: number, beforeId: number, limit: number): Promise<MarkedEmail[]>
   /** The account's newest store id; 0 with no mail. */
   newestEmailId(accountId: number): Promise<number>
   /** Every `sync_cursors` value of the account whose key starts with `prefix`. */
@@ -241,6 +243,11 @@ export const emailsAfter = (
 
 export const mailActivity = (database: CacheDatabase): MailActivityStore => ({
   emailsAfter: async (accountId, afterId, limit, ids) => emailsAfter(database, accountId, afterId, limit, ids),
+  emailsBefore: async (accountId, beforeId, limit) =>
+    database
+      .prepare(`${MARKED} WHERE e.id < ? AND e.account_id = ? AND e.deleted_at IS NULL ORDER BY e.id DESC LIMIT ?`)
+      .all(beforeId, accountId, limit)
+      .map(markedOf),
   newestEmailId: async (accountId) =>
     Number(database.prepare("SELECT max(id) AS id FROM emails WHERE account_id = ?").get(accountId)?.id ?? 0),
   statesLike: async (accountId, prefix) =>

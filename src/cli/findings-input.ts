@@ -15,6 +15,8 @@ const keys: Record<string, string> = {
   supplier_name: "supplierName",
   order_date: "orderDate",
   fulfilled_date: "fulfilledDate",
+  external_id: "externalId",
+  source_url: "sourceUrl",
 }
 const parseFindingsJson = <T>(text: string, label: string, validate: (input: T) => T): T => {
   if (Buffer.byteLength(text, "utf8") > 65536)

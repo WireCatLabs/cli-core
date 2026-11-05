@@ -43,6 +43,10 @@ export interface TaskFinding extends FindingBase {
   dueEvidence?: string[]
   assignee?: string
   assigneeEvidence?: string[]
+  /** Mail only: `<service>:<id>` in the outside service the mail came from, such as `avito:4512345678`. */
+  externalId?: string
+  /** Mail only: the http or https page the task is about, such as the conversation the mail links to. */
+  sourceUrl?: string
 }
 export type Finding = FactFinding | TaskFinding | PaymentFinding
 export interface FindingsInput {

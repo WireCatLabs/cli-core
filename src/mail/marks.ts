@@ -392,3 +392,105 @@ export const acknowledgeMark = async (
   await store.sync.setSyncState(mailbox, key, JSON.stringify(next))
   return { holder, ...next, updatedAt: now }
 }
+
+/** Where the owner moves a holder's mark back to: the emails received since a time, or the last n it was given. */
+export type MarkRewind = { since: number } | { last: number }
+
+export interface RewoundMark {
+  mark: MailMark
+  /** Where the mark was before. */
+  fromId: number
+  /** The emails between the new mark and the old one the holder reads whole again. */
+  again: number
+  /** Bulk emails between them: excerpts again, unless they are surely newsletters. */
+  bulk: number
+  /** Emails between them the holder skips again: drafts, envelopes, suspicious senders, partial mail. */
+  skipped: number
+  /** The mark is moved only when not dry. */
+  dry: boolean
+}
+
+/**
+ * Moves the holder's mark back, so its next reviews give it that mail again: past every email received since
+ * `since`, or past the last `last` emails it was given. The owner's alone: a holder only ever moves its own mark
+ * forward. The id is the store's insert order, so an older email stored after the earliest one picked is read again too;
+ * the answer counts them all.
+ */
+export const rewindMark = async (
+  store: MessageStore,
+  mailbox: AccountKey,
+  holder: string,
+  to: MarkRewind,
+  { now = Date.now(), dry = false }: { now?: number; dry?: boolean } = {},
+): Promise<RewoundMark> => {
+  const key = keyOf(holder)
+  const account = await accountOf(store, mailbox)
+  if (!account) throw new CliError("not_found", `no mail of ${mailbox.account} is stored`)
+  const mark = await markOf(store, mailbox, holder)
+  if (!mark)
+    throw new CliError("not_found", `${holder} has no mark in ${mailbox.account}: its first review starts it`, {
+      reason: "mail.no-mark",
+    })
+  if ("last" in to && (!Number.isSafeInteger(to.last) || to.last < 1))
+    throw new CliError("validation_error", "--last takes a whole number of emails, 1 or more")
+  if ("since" in to && !Number.isFinite(to.since)) throw new CliError("validation_error", "--since-time takes a time")
+  const given = (email: MarkedEmail) => {
+    const said = verdict(email, now)
+    return said === "read" || said === "held" || said === "bulk"
+  }
+  const between: MarkedEmail[] = []
+  let through = mark.throughId
+  let before = mark.throughId + 1
+  for (let counted = 0; ; ) {
+    const page = await store.mail.emailsBefore(account.id, before, MARK_BATCH)
+    if (page.length === 0) {
+      if ("last" in to && between.length > 0) through = 0
+      break
+    }
+    let done = false
+    for (const email of page) {
+      if ("last" in to) {
+        between.push(email)
+        if (given(email)) counted += 1
+        if (counted === to.last) {
+          through = email.id - 1
+          done = true
+          break
+        }
+      } else {
+        // An email is stored after it arrives, so once stored before the time, none further back arrived after it.
+        if (email.storedAt < to.since - CLOCK_SLACK_MS) {
+          done = true
+          break
+        }
+        between.push(email)
+        if ((email.at ?? email.storedAt) >= to.since) through = email.id - 1
+      }
+    }
+    if (done) break
+    before = page.at(-1)?.id ?? 0
+  }
+  const moved = between.filter((email) => email.id > through)
+  const count = (pick: (said: ReturnType<typeof verdict>) => boolean) =>
+    moved.filter((email) => pick(verdict(email, now))).length
+  const answer = {
+    fromId: mark.throughId,
+    again: count((said) => said === "read" || said === "held"),
+    bulk: count((said) => said === "bulk"),
+    skipped: count((said) => said !== "read" && said !== "held" && said !== "bulk"),
+    dry,
+  }
+  if (through >= mark.throughId) return { mark, ...answer }
+  const [last] = through > 0 ? await store.mail.emailsBefore(account.id, through + 1, 1) : []
+  const at = last?.id === through ? last.at : null
+  const next = {
+    throughId: through,
+    throughAt: at,
+    held: mark.held.filter((id) => id <= through),
+    suspicious: mark.suspicious.filter((id) => id <= through),
+    read: mark.read,
+    skipped: mark.skipped,
+  }
+  if (!dry) await store.sync.setSyncState(mailbox, key, JSON.stringify(next))
+  return { mark: { holder, ...next, updatedAt: dry ? mark.updatedAt : now }, ...answer }
+}

@@ -119,6 +119,8 @@ export const findingsCoreOver = (context: StoreContext, kind: string) => {
         type: finding.type,
         description: `${finding.commitment}: ${finding.reason}`,
         ...(finding.dueAt ? { dueAt: new Date(finding.dueAt) } : {}),
+        ...(finding.externalId ? { externalId: finding.externalId } : {}),
+        ...(finding.sourceUrl ? { sourceUrl: finding.sourceUrl } : {}),
       },
       agent,
     )

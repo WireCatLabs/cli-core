@@ -22,7 +22,7 @@ import { atDetail } from "../../output-detail.js"
 import type { AppIdentity } from "../../ports/app.js"
 import { type ServerSearched, type ServerSkip, sourceKey } from "../../services/server-search.js"
 import { type AccountKey, type MessageStore, queryFilter, THREAD_COLUMNS } from "../../store/store.js"
-import { acknowledgeCommand } from "./marks.js"
+import { acknowledgeCommand, resetMarkCommand } from "./marks.js"
 import { mailReviewCommand } from "./review.js"
 
 export { bulkTriageOf, MAIL_BULK_SETTINGS } from "./bulk-settings.js"
@@ -328,6 +328,7 @@ const messagesCommand = (mail: MailReads): Command => {
       )
     })
   messages.addCommand(acknowledgeCommand(mail))
+  messages.addCommand(resetMarkCommand(mail))
   return messages
 }
 

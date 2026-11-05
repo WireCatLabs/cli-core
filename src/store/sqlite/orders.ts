@@ -1,4 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
+import { sourceUrlOf } from "../../domain/external-links.js"
 import { FINANCE_REVIEWS, type FinanceReview } from "../../domain/finance.js"
 import { currencyOf, formatDecimal, minorUnits, scaleOf } from "../../domain/money.js"
 import { ORDER_PURPOSES, ORDER_STATUSES, type OrderPurpose, type OrderStatus, orderTitle } from "../../domain/orders.js"
@@ -32,6 +33,8 @@ export interface Order extends Reviewed {
   fulfilledDate: string | null
   invoice: string | null
   payment: string | null
+  /** The order's page at the shop, http or https. */
+  sourceUrl: string | null
 }
 
 export interface OrderInput extends Written {
@@ -50,6 +53,8 @@ export interface OrderInput extends Written {
   fulfilledDate?: string
   invoice?: string
   payment?: string
+  /** The order's page at the shop: an http or https address. */
+  sourceUrl?: string
 }
 
 export interface OrderFilter {
@@ -122,6 +127,7 @@ export const orderOperationsOver = (context: StoreContext): OrderOperations => {
       fulfilledDate: row.fulfilled_date == null ? null : String(row.fulfilled_date),
       invoice: row.invoice_id == null ? null : `invoice:${row.invoice_id}`,
       payment: row.payment_id == null ? null : `payment:${row.payment_id}`,
+      sourceUrl: row.source_url == null ? null : String(row.source_url),
       ...reviewedOf(row, "order"),
     }
   }
@@ -182,6 +188,7 @@ export const orderOperationsOver = (context: StoreContext): OrderOperations => {
       if (total !== null && total < 0) refuse("an order's amount is 0 or more", "money.amount")
       const orderDate = isoDate(input.orderDate, "an order's date")
       const fulfilledDate = isoDate(input.fulfilledDate, "an order's delivery date")
+      const sourceUrl = input.sourceUrl === undefined ? null : sourceUrlOf(input.sourceUrl, "order.source-url")
       const id = write(database, () => {
         if (number !== null && ordersOfShop(database, supplierName, number).length)
           refuse(`order ${number} from ${supplierName} is already stored; change its status instead`, "order.duplicate")
@@ -196,8 +203,8 @@ export const orderOperationsOver = (context: StoreContext): OrderOperations => {
             .prepare(
               "INSERT INTO orders (customer_type, customer_id, purpose, supplier_type, supplier_id, supplier_name, number, " +
                 "currency, total, status, order_date, fulfilled_date, invoice_id, payment_id, project_id, review, " +
-                "author_type, author_id, model, confirmed_by_type, confirmed_by_id, source, metadata, created_at, updated_at) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
+                "author_type, author_id, model, confirmed_by_type, confirmed_by_id, source, metadata, created_at, updated_at, " +
+                "source_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
             )
             .get(
               customer.type,
@@ -225,6 +232,7 @@ export const orderOperationsOver = (context: StoreContext): OrderOperations => {
               by.metadata,
               at,
               at,
+              sourceUrl,
             )?.id,
         )
         keepEvidence("order", made, by)
