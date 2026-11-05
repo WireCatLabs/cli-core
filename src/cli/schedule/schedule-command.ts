@@ -219,6 +219,13 @@ const shown = (argv: string[]) => argv.map((arg) => (arg === "" ? '""' : arg)).j
 
 const usd = (value: number) => `$${value.toFixed(2)}`
 
+/** The per-run cap an agent schedule was made with (`--max-cost`, passed to claude as --max-budget-usd), or null. */
+const runCapOf = (argv: readonly string[]): number | null => {
+  const at = argv.indexOf("--max-budget-usd")
+  const cap = at < 0 ? Number.NaN : Number(argv[at + 1])
+  return Number.isFinite(cap) ? cap : null
+}
+
 /**
  * Runs the CLI's own commands, or an agent, later or on a timer — through systemd (Linux), launchd
  * (macOS) or Task Scheduler (Windows). Every timer runs `schedule exec <file>`; the schedule file holds
@@ -277,18 +284,20 @@ export const scheduleCommandFor = ({
    * Why a run does not start now, or nothing: an agent whose runs reached the day's cost cap waits for tomorrow, and
    * one gated on mail waits for mail past its holder's mark — on its timer, until enough of it waits.
    */
+  /** A schedule's own limits, else the config file's, else the defaults. */
+  const limitsOf = (self: Command, schedule: Schedule) => ({
+    ...SCHEDULE_DEFAULTS,
+    ...given(configured?.(self) ?? {}),
+    ...given({
+      mailWaitMinutes: schedule.mailWaitMinutes,
+      mailBatch: schedule.mailBatch,
+      maxCostPerDay: schedule.maxCostPerDay,
+    }),
+  })
   const waits = async (self: Command, file: string, { timed }: { timed: boolean }): Promise<string | undefined> => {
     if (!existsSync(file)) return undefined
     const schedule = readSchedule(file)
-    const { mailWaitMinutes, mailBatch, maxCostPerDay } = {
-      ...SCHEDULE_DEFAULTS,
-      ...given(configured?.(self) ?? {}),
-      ...given({
-        mailWaitMinutes: schedule.mailWaitMinutes,
-        mailBatch: schedule.mailBatch,
-        maxCostPerDay: schedule.maxCostPerDay,
-      }),
-    }
+    const { mailWaitMinutes, mailBatch, maxCostPerDay } = limitsOf(self, schedule)
     if (schedule.kind === "agent" && maxCostPerDay > 0) {
       const spent = spentToday(file)
       if (spent >= maxCostPerDay) {
@@ -483,7 +492,13 @@ export const scheduleCommandFor = ({
         kind: schedule.kind,
         when: describeWhen(schedule.when),
         last: lastRun(scheduleFile(state, schedule.name)) ?? null,
-        ...(schedule.kind === "agent" ? { spentTodayUsd: spentToday(scheduleFile(state, schedule.name)) } : {}),
+        ...(schedule.kind === "agent"
+          ? {
+              spentTodayUsd: spentToday(scheduleFile(state, schedule.name)),
+              maxCostUsd: runCapOf(schedule.argv),
+              maxCostPerDayUsd: limitsOf(this, schedule).maxCostPerDay,
+            }
+          : {}),
       }))
       const answer = listOf("schedule list", {
         items: rows.map((row) => snakeKeys(row)),
@@ -496,7 +511,7 @@ export const scheduleCommandFor = ({
           return ""
         }
         return rows
-          .map(({ name, kind, when, last, spentTodayUsd }) =>
+          .map(({ name, kind, when, last, spentTodayUsd, maxCostPerDayUsd }) =>
             [
               name,
               kind,
@@ -508,7 +523,9 @@ export const scheduleCommandFor = ({
                       `${last.failures} in a row${last.reason ? `: ${last.reason}` : ""} — ${last.output}`
                     : "")
                 : "not run yet",
-              ...(spentTodayUsd ? [`today ${usd(spentTodayUsd)}`] : []),
+              ...(spentTodayUsd
+                ? [`today ${usd(spentTodayUsd)}${maxCostPerDayUsd ? ` of ${usd(maxCostPerDayUsd)}` : ""}`]
+                : []),
               ...(last?.skipped
                 ? [`skipped ${last.skipped.at.slice(0, 16).replace("T", " ")}: ${last.skipped.why}`]
                 : []),

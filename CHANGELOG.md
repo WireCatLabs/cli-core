@@ -7,6 +7,17 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`schedule list` gives an agent schedule's cost caps.** `max_cost_usd` is the cap on one run (`--max-cost`, null
+  when none) and `max_cost_per_day_usd` the daily cap in force, the schedule's `--max-cost-per-day` or the config's
+  (0 for none), so a screen can show `$0.84 of $5.00`; the text line says `today $0.84 of $5.00`.
+
+### Fixed
+
+- **`schedule list`'s output schema describes what it prints.** `spent_today_usd`, and the last run's `cost_usd`
+  and `skipped`, were printed but missing from the strict `scheduled_job` schema.
+
 ## 0.583.0 — 05.11.2026
 
 ### Changed — may break callers

@@ -47,8 +47,17 @@ export const scheduledJob = v.strictObject({
       error_code: v.optional(text),
       failing_since: v.optional(time),
       failures: v.optional(v.number()),
+      cost_usd: v.optional(v.number()),
+      /** The last time a run did not start, and why: the day's cost cap, or too little new mail. */
+      skipped: v.optional(v.strictObject({ at: time, why: text })),
     }),
   ),
+  /** Agent schedules: what today's runs cost, in US dollars. */
+  spent_today_usd: v.optional(v.number()),
+  /** Agent schedules: the cap on one run (`--max-cost`), null when none. */
+  max_cost_usd: v.optional(v.nullable(v.number())),
+  /** Agent schedules: the daily cap in force, the schedule's `--max-cost-per-day` or the config's; 0 for none. */
+  max_cost_per_day_usd: v.optional(v.number()),
 })
 
 export const botTemplate = v.strictObject({
