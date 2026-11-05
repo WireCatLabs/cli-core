@@ -99,6 +99,8 @@ const mailMarkReset = v.strictObject({
   bulk: v.number(),
   /** Emails between the two marks it skips again: drafts, envelopes, suspicious senders, partial mail. */
   skipped: v.number(),
+  /** How often the owner moved this mark back, this reset counted even when the mark stays: the findings key names it. */
+  resets: v.number(),
   /** Nothing moved: `--dry-run` only counts. */
   dry_run: v.boolean(),
 })
@@ -131,7 +133,8 @@ export const resetMarkCommand = (mail: MailReads): Command =>
     .description(
       "the owner moves a holder's mark back past the mail received since --since-time, or past the last --last " +
         "emails it was given; its next reviews give that mail again. The answer says how many emails it reads " +
-        "again. An agent cannot: a holder only moves its own mark forward, with `messages acknowledge`",
+        "again. Every reset counts, even one that leaves the mark where it is, so the holder's next findings key " +
+        "is new. An agent cannot: a holder only moves its own mark forward, with `messages acknowledge`",
     )
     .requiredOption("--holder <name>", "whose mark: lower-case letters, digits and dashes, such as mail-triage")
     .option("--since-time <time>", "read again what was received since this ISO 8601 time, or 2d ago")
@@ -166,13 +169,16 @@ export const resetMarkCommand = (mail: MailReads): Command =>
         again: reset.again,
         bulk: reset.bulk,
         skipped: reset.skipped,
+        resets: reset.mark.resets,
         dry_run: reset.dry,
       }
       renderAnswer(this, outputFor(this), itemOf(item), () => {
         const mark =
           reset.mark.throughId === reset.fromId
-            ? `the mark stays at ${reset.fromId}`
-            : `the mark ${reset.dry ? "would move" : "moved"} from ${reset.fromId} to ${reset.mark.throughId}`
+            ? `mark unchanged at ${reset.fromId}, ${reset.dry ? "would be counted" : "counted"} as a reset ` +
+              `(resets ${reset.mark.resets}): the next run gets a new findings key`
+            : `the mark ${reset.dry ? "would move" : "moved"} from ${reset.fromId} to ${reset.mark.throughId} ` +
+              `(resets ${reset.mark.resets})`
         return (
           `${holder} ${reset.dry ? "would read" : "reads"} ${reset.again} emails again, and ${reset.bulk} bulk ` +
           `ones as excerpts unless they are newsletters; ${reset.skipped} are skipped again; ${mark}\n`

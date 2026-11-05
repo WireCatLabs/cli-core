@@ -567,6 +567,7 @@ describe("what the mail pipeline reads and may write under the read-only lock", 
               kind: "new_contact",
               address: "bob@example.org",
               name: "Bob Example",
+              reason: "he wrote",
               evidence: [{ reference: cited.ref, fingerprint: cited.email.fingerprint as string }],
             },
           ],
@@ -635,6 +636,26 @@ describe("what the mail pipeline reads and may write under the read-only lock", 
     expect(after.id).not.toBe(before.id)
     expect((await stage(again.key, again.answer.items)).id).toBe(after.id)
     expect((await box.withStore((store) => store.mailFindings.get(before.id))).status).toBe("proposed")
+
+    const later = new Date(Date.now() + HOUR).toISOString()
+    const stays = await box.cli(["messages", "reset", "--holder", "triage", "--since-time", later, ...source])
+    const counted = JSON.parse(stays.out).item
+    expect(counted).toMatchObject({ again: 0, resets: 2 })
+    expect(counted.mark.through_id).toBe(counted.from_id)
+    expect((await review()).key).toBe(`${first.key}-r2`)
+
+    await box.cli([
+      "messages",
+      "acknowledge",
+      "--holder",
+      "triage",
+      "--cursor",
+      String((await review()).cursor),
+      ...source,
+    ])
+    const empty = await review()
+    expect(empty.answer.items).toEqual([])
+    expect(empty.answer.next.map((one) => one.step)).not.toContain("mail-findings.add")
   })
 
   it("lets a read-only run move its mark, and refuses every other local write", async () => {

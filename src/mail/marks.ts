@@ -498,12 +498,12 @@ export const rewindMark = async (
     skipped: count((said) => said !== "read" && said !== "held" && said !== "bulk"),
     dry,
   }
-  if (through >= mark.throughId) return { mark, ...answer }
-  const [last] = through > 0 ? await store.mail.emailsBefore(account.id, through + 1, 1) : []
-  const at = last?.id === through ? last.at : null
+  // A reset that lands where the mark already is still counts: the owner asked for a fresh findings key.
+  const stays = through >= mark.throughId
+  const [last] = !stays && through > 0 ? await store.mail.emailsBefore(account.id, through + 1, 1) : []
   const next = {
-    throughId: through,
-    throughAt: at,
+    throughId: stays ? mark.throughId : through,
+    throughAt: stays ? mark.throughAt : last?.id === through ? last.at : null,
     held: mark.held.filter((id) => id <= through),
     suspicious: mark.suspicious.filter((id) => id <= through),
     read: mark.read,

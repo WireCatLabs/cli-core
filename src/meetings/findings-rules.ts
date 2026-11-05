@@ -76,7 +76,15 @@ export const findingText = (value: unknown, limit: number): string => {
   return value.trim()
 }
 export const findingHash = (value: unknown): string => createHash("sha256").update(JSON.stringify(value)).digest("hex")
-const snakeCase = (key: string) => key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
+export const snakeCase = (key: string) => key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
+const findingWhere = (of: { id?: unknown; kind?: unknown }) => {
+  const id = typeof of.id === "string" ? of.id : null
+  const kind = typeof of.kind === "string" ? of.kind : null
+  return {
+    where: id || kind ? ` in ${[id, kind && `(${kind})`].filter(Boolean).join(" ")}` : "",
+    named: { ...(id ? { finding: id } : {}), ...(kind ? { kind } : {}) },
+  }
+}
 
 /**
  * Refuses a field `allowed` does not list, naming it, the finding it is in and what that kind takes: an agent fixes
@@ -92,19 +100,24 @@ export const findingFields = (
   if (!unknown.length) return
   const fields = unknown.map(snakeCase)
   const takes = allowed.map(snakeCase)
-  const id = typeof of.id === "string" ? of.id : null
-  const kind = typeof of.kind === "string" ? of.kind : null
-  const where = id || kind ? ` in ${[id, kind && `(${kind})`].filter(Boolean).join(" ")}` : ""
+  const { where, named } = findingWhere(of)
   throw new CliError(
     "validation_error",
     `unknown ${noun} field${fields.length > 1 ? "s" : ""} ${fields.join(", ")}${where}; it takes ${takes.join(", ")}`,
-    {
-      reason: "finding.unknown-field",
-      fields,
-      allowed: takes,
-      ...(id ? { finding: id } : {}),
-      ...(kind ? { kind } : {}),
-    },
+    { reason: "finding.unknown-field", fields, allowed: takes, ...named },
+  )
+}
+/** Refuses a finding that leaves out a field `needed` lists, naming each one missing and all it needs. */
+export const findingNeeds = (value: Record<string, unknown>, needed: readonly string[], noun: string): void => {
+  const missing = needed.filter((key) => value[key] === undefined)
+  if (!missing.length) return
+  const fields = missing.map(snakeCase)
+  const needs = needed.map(snakeCase)
+  const { where, named } = findingWhere(value)
+  throw new CliError(
+    "validation_error",
+    `missing ${noun} field${fields.length > 1 ? "s" : ""} ${fields.join(", ")}${where}; it needs ${needs.join(", ")}`,
+    { reason: "finding.missing-field", fields, needs, ...named },
   )
 }
 /** What differs between findings kinds: their wording and what one cited reference must look like. */
@@ -227,11 +240,16 @@ export const validateFinding = (finding: Finding, rules: FindingsRules, ids: Set
   if (!TASK_TYPES.includes(finding.type)) return invalid("a task finding type is bug, chore or feature")
   if (!["explicit", "inferred"].includes(finding.commitment))
     return invalid("task commitment must be explicit or inferred")
-  if (
-    (finding.dueAt === undefined) !== (finding.dueEvidence === undefined) ||
-    (finding.assignee === undefined) !== (finding.assigneeEvidence === undefined)
-  )
-    return invalid("optional dates and assignees require their supporting evidence")
+  if ((finding.dueAt === undefined) !== (finding.dueEvidence === undefined))
+    return invalid(
+      `due_at comes with due_evidence: the ${rules.cited} references of this finding's evidence that give the date, ` +
+        `as a list of strings such as ["<reference>"]`,
+    )
+  if ((finding.assignee === undefined) !== (finding.assigneeEvidence === undefined))
+    return invalid(
+      `assignee comes with assignee_evidence: the ${rules.cited} references of this finding's evidence that name ` +
+        `them, as a list of strings such as ["<reference>"]`,
+    )
   if (
     finding.assignee !== undefined &&
     (typeof finding.assignee !== "string" || !/^person:[1-9]\d*$/.test(finding.assignee))
@@ -247,24 +265,30 @@ export const validateFinding = (finding: Finding, rules: FindingsRules, ids: Set
     ...(finding.dueAt === undefined
       ? {}
       : {
-          dueAt: meetingTimestamp(finding.dueAt, "finding due date"),
-          dueEvidence: support(finding.dueEvidence, evidence),
+          dueAt: meetingTimestamp(finding.dueAt, "a task's due_at"),
+          dueEvidence: support(finding.dueEvidence, evidence, "due_evidence"),
         }),
     ...(finding.assignee === undefined
       ? {}
-      : { assignee: finding.assignee, assigneeEvidence: support(finding.assigneeEvidence, evidence) }),
+      : {
+          assignee: finding.assignee,
+          assigneeEvidence: support(finding.assigneeEvidence, evidence, "assignee_evidence"),
+        }),
   }
 }
 
 /** A date's or assignee's support: references the finding's own evidence cites. */
-export const support = (value: unknown, evidence: readonly FindingEvidence[]): string[] => {
+export const support = (value: unknown, evidence: readonly FindingEvidence[], field: string): string[] => {
   if (
     !Array.isArray(value) ||
     value.length < 1 ||
     value.length > 8 ||
     value.some((ref) => typeof ref !== "string" || !evidence.some((item) => item.reference === ref))
   )
-    return invalid("date and assignee support must cite the finding's evidence")
+    return invalid(
+      `${field} lists 1–8 references this finding's evidence cites, as plain strings such as ["<reference>"], ` +
+        "not evidence objects",
+    )
   return [...new Set(value as string[])].sort()
 }
 

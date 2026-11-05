@@ -142,7 +142,9 @@ there, never back; it only adds to the holder's own bookkeeping, so a read-only 
 (`destroysNothing`). Only the owner moves a mark back: `messages reset --holder <name>` with `--since-time <time>`
 (past every email received since then) or `--last <n>` (past the last n emails the holder was given), and
 `--dry-run` to count first (`rewindMark`). It answers how many emails are read whole again, how many bulk ones come
-again as excerpts and how many are skipped again. It is no proposal, so the read-only lock, a scheduled holder and an
+again as excerpts and how many are skipped again. Every reset counts on the mark (`resets`), one that leaves the
+mark where it is too, so the holder's next findings key is new. `review --holder` gives the `mail-findings.add` step
+only when it gives emails. It is no proposal, so the read-only lock, a scheduled holder and an
 agent are refused (`mail.reset-owner-only`). Envelopes and drafts are skipped and counted. Mail sent to many (the bulk mailbox or a List-Id)
 goes through `newsletterSorter` (`src/mail/newsletter.ts`): words in the subject and the first lines, in Russian,
 English and Spanish, the sender's address and an emoji or unsubscribe link score it as a newsletter, which is skipped

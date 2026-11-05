@@ -170,7 +170,9 @@ ignored), else makes a `company`, and joins the address to it; more than one mat
 
 `mailFindings.check` makes every check `stage` makes, the trial writes included, and rolls back, listing each
 finding's problem rather than stopping at the first; `memo mail findings add --dry-run` is built on it. An unknown
-field is refused with its name, its finding's id and kind, and the fields that kind takes (`finding.unknown-field`).
+field is refused with its name, its finding's id and kind, and the fields that kind takes (`finding.unknown-field`);
+a missing one, such as `reason`, which every kind needs, with what that kind needs (`finding.missing-field`). Both
+read `MAIL_FINDING_FIELDS`, which `mailFindingFieldsHelp()` prints for a host's `--help`.
 
 ## Source records and imports
 

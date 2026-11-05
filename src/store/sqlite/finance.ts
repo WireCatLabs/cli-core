@@ -198,6 +198,8 @@ export interface FinanceStore {
       /** Issued or partly paid. */
       open?: boolean
       counterparty?: string
+      /** The number printed on it, exactly. */
+      number?: string
     },
   ): Promise<Invoice[]>
   /** The owner sends a draft: its status then follows its allocations. */
@@ -720,7 +722,7 @@ export const financeOperationsOver = (context: StoreContext): FinanceOperations 
         .prepare(
           `${INVOICES} WHERE i.deleted_at IS NULL AND (? IS NULL OR i.direction = ?) AND (? IS NULL OR i.status = ?) ` +
             "AND (? IS NULL OR i.review = ?) AND (? IS NULL OR i.project_id = ?) " +
-            "AND (? IS NULL OR (i.counterparty_type = ? AND i.counterparty_id = ?)) " +
+            "AND (? IS NULL OR (i.counterparty_type = ? AND i.counterparty_id = ?)) AND (? IS NULL OR i.number = ?) " +
             `${filter.open ? "AND i.status IN ('issued', 'partly_paid') " : ""}AND ${by.sql} ` +
             "ORDER BY i.created_at DESC, i.id DESC LIMIT ?",
         )
@@ -736,6 +738,8 @@ export const financeOperationsOver = (context: StoreContext): FinanceOperations 
           counterparty?.type ?? null,
           counterparty?.type ?? null,
           counterparty?.id ?? null,
+          filter.number ?? null,
+          filter.number ?? null,
           ...by.params,
           limitOf(filter.limit),
         )
