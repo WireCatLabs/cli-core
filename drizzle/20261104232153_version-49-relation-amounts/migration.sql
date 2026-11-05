@@ -1,0 +1,1 @@
+ALTER TABLE `record_relations` ADD `amount` text;

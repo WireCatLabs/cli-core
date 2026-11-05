@@ -1939,6 +1939,7 @@ export const recordRelations = sqliteTable(
     targetExternalId: text("target_external_id").notNull(),
     targetId: integer("target_id").references(() => records.id),
     createdAt: integer("created_at").notNull(),
+    amount: text("amount"),
   },
   (table) => [
     unique().on(table.recordId, table.role, table.targetType, table.targetExternalId),
