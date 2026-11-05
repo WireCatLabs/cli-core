@@ -3,6 +3,8 @@ import { MAIL_FINDINGS_KIND, type MailFindingsBatch, type MessageStore } from ".
 import type { Decided, ProposalKind, ProposalRow } from "../types.js"
 import { kept, proposerOfAuthor } from "./shared.js"
 
+const words = (...parts: (string | undefined)[]) => parts.filter(Boolean).join(" ")
+
 /** A finding's one line in the inbox; never the email's text, only what the agent wrote. */
 const summaryOf = (finding: MailFinding): string => {
   switch (finding.kind) {
@@ -18,6 +20,14 @@ const summaryOf = (finding: MailFinding): string => {
       return `${finding.from} → ${finding.to}`
     case "new_contact":
       return `${finding.name} <${finding.address}>`
+    case "invoice":
+      return words("invoice", finding.number, finding.total, finding.currency, `· ${finding.reason}`)
+    case "payment":
+      return words("payment", finding.amount, finding.currency, finding.date, `· ${finding.reason}`)
+    case "order":
+      return words("order", finding.number, finding.supplierName, finding.status ?? "placed", `· ${finding.reason}`)
+    case "order_update":
+      return words("order", finding.number, finding.supplierName, finding.status, `· ${finding.reason}`)
   }
 }
 

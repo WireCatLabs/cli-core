@@ -21,6 +21,17 @@ shape of this file.
   `mail_bulk_newsletter_score`, `mail_bulk_newsletter_words`, `mail_bulk_newsletter_senders`, `mail_bulk_order_words`),
   read by `bulkTriageOf` into `MailReads.bulkTriage`, and passed to `mailWaiting` and `advancePastSkipped` as their
   new last argument; without it the defaults apply.
+- **Orders in the store (store version 50).** `store.orders` keeps what the owner, his business or a client ordered:
+  for whom (`customer`, the owner when left out) and why (`purpose`: `personal`, `business`, `client`, `other`), the
+  shop as its mail names it with an optional `supplier` reference, the shop's number, amount and currency, the status
+  (`placed`, `shipped`, `delivered`, `cancelled`, `returned`), the order and delivery days, and links to an invoice and
+  a payment. The owner's entry is confirmed at once; an agent's is an `order` proposal (`order:<id>`) only the owner
+  decides. One shop's number is stored once (`order.duplicate`), and only the owner moves an order's status on.
+- **Mail findings take invoices, payments and orders.** A `mail_findings` batch now takes the kinds `invoice`,
+  `payment`, `order` and `order_update` (a later mail's status for a stored order, found by `supplier_name` and
+  `number`). Staging checks each the way `store.finance` and `store.orders` check the owner's own entry and refuses
+  the batch with that reason; nothing is written until the owner accepts, which records the confirmed row with the
+  cited mail as its evidence. The agent still only proposes.
 
 ## 0.574.0 — 05.11.2026
 

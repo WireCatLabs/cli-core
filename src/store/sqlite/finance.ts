@@ -47,7 +47,7 @@ export interface Party {
   owner: boolean
 }
 
-interface Reviewed {
+export interface Reviewed {
   review: FinanceReview
   /** `name` is a bot's handle and `kind` whether it is an agent or a rule; both `null` for a person. */
   author: { type: Actor["type"]; id: string; name: string | null; kind: "agent" | "rule" | null }
@@ -126,7 +126,7 @@ export interface PaymentDetail extends Payment {
   allocations: Allocation[]
 }
 
-interface Written {
+export interface Written {
   /** The owner's entry is confirmed at once; a bot's waits as proposed for the owner. */
   by: Author
   project?: string
@@ -230,7 +230,7 @@ export interface FinanceStore {
 
 type Row = Record<string, unknown>
 
-const refuse = (
+export const refuse = (
   message: string,
   reason: string,
   code: "validation_error" | "permission_error" = "validation_error",
@@ -238,20 +238,20 @@ const refuse = (
   throw new CliError(code, message, { reason })
 }
 
-const oneOf = <T extends string>(value: unknown, allowed: readonly T[], what: string): T => {
+export const oneOf = <T extends string>(value: unknown, allowed: readonly T[], what: string): T => {
   if (typeof value !== "string" || !allowed.includes(value as T))
     return refuse(`${what} is one of ${allowed.join(", ")}`, "finance.field")
   return value as T
 }
 
-const text = (value: unknown, what: string, limit: number): string | null => {
+export const text = (value: unknown, what: string, limit: number): string | null => {
   if (value === undefined || value === null) return null
   if (typeof value !== "string" || !value.trim() || value.length > limit || value.includes("\0"))
     return refuse(`${what} takes 1–${limit} characters`, "finance.field")
   return value.trim()
 }
 
-const isoDate = (value: unknown, what: string): string | null => {
+export const isoDate = (value: unknown, what: string): string | null => {
   if (value === undefined || value === null) return null
   const date = typeof value === "string" ? value.trim() : ""
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || new Date(`${date}T00:00:00Z`).toISOString().slice(0, 10) !== date)
@@ -259,7 +259,7 @@ const isoDate = (value: unknown, what: string): string | null => {
   return date
 }
 
-const iso = (value: unknown) => new Date(Number(value)).toISOString()
+export const iso = (value: unknown) => new Date(Number(value)).toISOString()
 
 const evidenceList = (value: unknown): string[] => {
   if (value === undefined) return []
@@ -290,12 +290,9 @@ const PAYMENTS =
   "SELECT p.*, (SELECT coalesce(sum(amount), 0) FROM payment_allocations WHERE payment_id = p.id) AS allocated, " +
   "b.name AS author_name, b.kind AS author_kind FROM payments p LEFT JOIN bots b ON p.author_type = 'bot' AND b.id = p.author_id"
 
-type FinanceOperations = {
-  [K in keyof FinanceStore]: FinanceStore[K] extends (...args: infer A) => Promise<infer R> ? (...args: A) => R : never
-}
-
-export const financeOperationsOver = (context: StoreContext): FinanceOperations => {
-  const { database, now } = context
+/** What invoices, payments and orders share: their parties, who wrote them, and how the owner decides them. */
+export const reviewedRowsOver = (context: StoreContext) => {
+  const { database } = context
 
   const partyOf = (type: unknown, id: unknown): Party | null => {
     if (type == null) return null
@@ -309,7 +306,7 @@ export const financeOperationsOver = (context: StoreContext): FinanceOperations 
       return refuse(`${what} is a person: or organization: reference, not ${reference}`, "finance.party")
     return thing
   }
-  const reviewedOf = (row: Row, type: "invoice" | "payment"): Reviewed => ({
+  const reviewedOf = (row: Row, type: "invoice" | "payment" | "order"): Reviewed => ({
     review: row.review as FinanceReview,
     author: authorOf(row),
     model: row.model == null ? null : String(row.model),
@@ -324,6 +321,53 @@ export const financeOperationsOver = (context: StoreContext): FinanceOperations 
     createdAt: iso(row.created_at),
     updatedAt: iso(row.updated_at),
   })
+
+  const written = (input: Written) => {
+    const owner = input.by === "owner"
+    const { actor, model } = authorActor(context, input.by)
+    const source = owner ? "owner" : (text(input.source, "a source", 80) ?? "agent")
+    const reason = owner ? null : text(input.reason, "a reason", 2000)
+    return {
+      owner,
+      actor,
+      model,
+      source,
+      review: owner ? "confirmed" : "proposed",
+      confirmedType: owner ? actor.type : null,
+      confirmedId: owner ? actor.id : null,
+      metadata: reason === null ? null : JSON.stringify({ reason }),
+      project: input.project === undefined ? null : projectId(database, input.project),
+      evidence: evidenceList(input.evidence),
+    }
+  }
+
+  const keepEvidence = (type: "invoice" | "payment" | "order", id: number, by: ReturnType<typeof written>) => {
+    if (by.evidence.length) linkEvidence(context, { type, id }, by.evidence, by.owner ? "owner" : "agent")
+  }
+
+  const ownerOnly = (by: Author, what: string) => {
+    if (by !== "owner") refuse(`only the owner ${what}`, "finance.owner-only", "permission_error")
+  }
+
+  const keepDecision = (table: "invoices" | "payments" | "orders", id: number, by: Decider, reason?: string) => {
+    const why = [by === "owner" ? undefined : by.reason.trim(), reason?.trim() || undefined].filter(Boolean).join(": ")
+    if (by === "owner" && !why) return
+    const decision = by === "owner" ? { by: "owner", reason: why } : { by: "agent", bot: by.bot, reason: why }
+    database
+      .prepare(`UPDATE ${table} SET metadata = json_set(coalesce(metadata, '{}'), '$.decision', json(?)) WHERE id = ?`)
+      .run(JSON.stringify(decision), id)
+  }
+
+  return { partyOf, partyThing, reviewedOf, written, keepEvidence, ownerOnly, keepDecision }
+}
+
+type FinanceOperations = {
+  [K in keyof FinanceStore]: FinanceStore[K] extends (...args: infer A) => Promise<infer R> ? (...args: A) => R : never
+}
+
+export const financeOperationsOver = (context: StoreContext): FinanceOperations => {
+  const { database, now } = context
+  const { partyOf, partyThing, reviewedOf, written, keepEvidence, ownerOnly, keepDecision } = reviewedRowsOver(context)
 
   const invoiceOf = (row: Row): Invoice => {
     const currency = String(row.currency)
@@ -492,42 +536,6 @@ export const financeOperationsOver = (context: StoreContext): FinanceOperations 
       )
       .run(Number(payment.id), Number(invoice.id), units, actor.type, actor.id, at, at)
     return Number(invoice.id)
-  }
-
-  const written = (input: Written) => {
-    const owner = input.by === "owner"
-    const { actor, model } = authorActor(context, input.by)
-    const source = owner ? "owner" : (text(input.source, "a source", 80) ?? "agent")
-    const reason = owner ? null : text(input.reason, "a reason", 2000)
-    return {
-      owner,
-      actor,
-      model,
-      source,
-      review: owner ? "confirmed" : "proposed",
-      confirmedType: owner ? actor.type : null,
-      confirmedId: owner ? actor.id : null,
-      metadata: reason === null ? null : JSON.stringify({ reason }),
-      project: input.project === undefined ? null : projectId(database, input.project),
-      evidence: evidenceList(input.evidence),
-    }
-  }
-
-  const keepEvidence = (type: "invoice" | "payment", id: number, by: ReturnType<typeof written>) => {
-    if (by.evidence.length) linkEvidence(context, { type, id }, by.evidence, by.owner ? "owner" : "agent")
-  }
-
-  const ownerOnly = (by: Author, what: string) => {
-    if (by !== "owner") refuse(`only the owner ${what}`, "finance.owner-only", "permission_error")
-  }
-
-  const keepDecision = (table: "invoices" | "payments", id: number, by: Decider, reason?: string) => {
-    const why = [by === "owner" ? undefined : by.reason.trim(), reason?.trim() || undefined].filter(Boolean).join(": ")
-    if (by === "owner" && !why) return
-    const decision = by === "owner" ? { by: "owner", reason: why } : { by: "agent", bot: by.bot, reason: why }
-    database
-      .prepare(`UPDATE ${table} SET metadata = json_set(coalesce(metadata, '{}'), '$.decision', json(?)) WHERE id = ?`)
-      .run(JSON.stringify(decision), id)
   }
 
   /** A proposed payment's allocations count once confirmed; by then other confirmed payments may cover the invoice. */

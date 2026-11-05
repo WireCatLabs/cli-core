@@ -1,6 +1,8 @@
 import { CliError } from "@wirecat/cli-base"
+import { INVOICE_DIRECTIONS, MONEY_DIRECTIONS } from "../domain/finance.js"
 import { MEMORY_KINDS, MEMORY_SCOPES } from "../domain/knowledge.js"
 import { formatLocator, parseLocator } from "../domain/locator.js"
+import { ORDER_PURPOSES, ORDER_STATUSES } from "../domain/orders.js"
 import { parseReference } from "../domain/references.js"
 import {
   type FactFinding,
@@ -57,6 +59,68 @@ export interface MailNewContactFinding extends Cited {
   name: string
   reason?: string
 }
+/** An invoice the mail carries; accepting it records the invoice through `store.finance`, confirmed. */
+export interface MailInvoiceFinding extends Cited {
+  kind: "invoice"
+  direction: (typeof INVOICE_DIRECTIONS)[number]
+  /** `person:` or `organization:`. */
+  counterparty: string
+  currency: string
+  lines: { description: string; quantity?: string; unitPrice?: string; amount?: string }[]
+  /** The total printed on it: the store refuses it unless it is the lines' sum. */
+  total?: string
+  number?: string
+  issueDate?: string
+  dueDate?: string
+  project?: string
+  reason: string
+}
+/** A payment the mail confirms, such as a receipt; accepting it records the payment through `store.finance`. */
+export interface MailPaymentFinding extends Cited {
+  kind: "payment"
+  direction: (typeof MONEY_DIRECTIONS)[number]
+  payer?: string
+  payee?: string
+  amount: string
+  currency: string
+  /** `YYYY-MM-DD`. */
+  date: string
+  /** The payment's own reference text, such as the receipt number. */
+  reference?: string
+  /** Stored invoices it settles, in the payment's currency. */
+  allocations?: { invoice: string; amount: string }[]
+  project?: string
+  reason: string
+}
+/** An order the mail confirms; accepting it records the order through `store.orders`. */
+export interface MailOrderFinding extends Cited {
+  kind: "order"
+  purpose: (typeof ORDER_PURPOSES)[number]
+  /** Whom it is for; the owner when left out. */
+  customer?: string
+  supplier?: string
+  supplierName: string
+  number?: string
+  total?: string
+  currency?: string
+  status?: (typeof ORDER_STATUSES)[number]
+  orderDate?: string
+  fulfilledDate?: string
+  invoice?: string
+  payment?: string
+  project?: string
+  reason: string
+}
+/** A later mail about a stored order, found by its shop and number: shipped, delivered, cancelled, returned. */
+export interface MailOrderUpdateFinding extends Cited {
+  kind: "order_update"
+  supplierName: string
+  number: string
+  status: (typeof ORDER_STATUSES)[number]
+  /** `YYYY-MM-DD`, the delivery day of a delivered order. */
+  date?: string
+  reason: string
+}
 export type MailFinding =
   | MailTaskFinding
   | MailFactFinding
@@ -64,6 +128,10 @@ export type MailFinding =
   | MailMemoryFinding
   | MailLinkFinding
   | MailNewContactFinding
+  | MailInvoiceFinding
+  | MailPaymentFinding
+  | MailOrderFinding
+  | MailOrderUpdateFinding
 
 export interface MailFindingsInput {
   schemaVersion: 1
@@ -110,6 +178,21 @@ const LINKS: Record<string, string> = {
 }
 
 const ADDRESS = /^[^\s@<>]+@[^\s@<>]+$/
+const PARTY = /^(person|organization):[1-9]\d*$/
+const INVOICE = /^invoice:[1-9]\d*$/
+const PAYMENT = /^payment:[1-9]\d*$/
+const PROJECT = /^project:[1-9]\d*$/
+
+const oneOf = <T extends string>(value: unknown, allowed: readonly T[], what: string): T => {
+  if (typeof value !== "string" || !allowed.includes(value as T)) return invalid(`${what} is ${allowed.join(", ")}`)
+  return value as T
+}
+
+/** Money and dates stay text here: the store's finance and order services check them as they check the owner's. */
+const word = (value: unknown, limit: number) => findingText(value, limit)
+
+const optional = <K extends string, V>(key: K, value: unknown, read: (value: unknown) => V): { [P in K]?: V } =>
+  (value === undefined ? {} : { [key]: read(value) }) as { [P in K]?: V }
 
 const one = (raw: Record<string, unknown>, ids: Set<string>): MailFinding => {
   if (!raw || typeof raw !== "object") return invalid("a finding is an object")
@@ -192,8 +275,172 @@ const one = (raw: Record<string, unknown>, ids: Set<string>): MailFinding => {
         evidence,
       }
     }
+    case "invoice": {
+      findingFields(
+        raw,
+        [
+          "id",
+          "kind",
+          "direction",
+          "counterparty",
+          "currency",
+          "lines",
+          "total",
+          "number",
+          "issueDate",
+          "dueDate",
+          "project",
+          "reason",
+          "evidence",
+        ],
+        RULES.singular,
+      )
+      if (!Array.isArray(raw.lines) || raw.lines.length < 1 || raw.lines.length > 50)
+        return invalid("an invoice finding has 1–50 lines")
+      const lines = raw.lines.map((line: unknown) => {
+        if (!line || typeof line !== "object") return invalid("an invoice line is an object")
+        const fields = line as Record<string, unknown>
+        findingFields(fields, ["description", "quantity", "unitPrice", "amount"], "invoice line")
+        return {
+          description: word(fields.description, 500),
+          ...optional("quantity", fields.quantity, (value) => word(value, 20)),
+          ...optional("unitPrice", fields.unitPrice, (value) => word(value, 30)),
+          ...optional("amount", fields.amount, (value) => word(value, 30)),
+        }
+      })
+      return {
+        id,
+        kind: "invoice",
+        direction: oneOf(raw.direction, INVOICE_DIRECTIONS, "an invoice's direction"),
+        counterparty: reference(raw.counterparty, PARTY, "an invoice's counterparty"),
+        currency: word(raw.currency, 3),
+        lines,
+        ...optional("total", raw.total, (value) => word(value, 30)),
+        ...optional("number", raw.number, (value) => word(value, 80)),
+        ...optional("issueDate", raw.issueDate, (value) => word(value, 10)),
+        ...optional("dueDate", raw.dueDate, (value) => word(value, 10)),
+        ...optional("project", raw.project, (value) => reference(value, PROJECT, "a project")),
+        reason: findingText(raw.reason, 2000),
+        evidence,
+      }
+    }
+    case "payment": {
+      findingFields(
+        raw,
+        [
+          "id",
+          "kind",
+          "direction",
+          "payer",
+          "payee",
+          "amount",
+          "currency",
+          "date",
+          "reference",
+          "allocations",
+          "project",
+          "reason",
+          "evidence",
+        ],
+        RULES.singular,
+      )
+      let allocations: MailPaymentFinding["allocations"]
+      if (raw.allocations !== undefined) {
+        if (!Array.isArray(raw.allocations) || raw.allocations.length < 1 || raw.allocations.length > 8)
+          return invalid("a payment finding's allocations are 1–8 invoices it settles")
+        allocations = raw.allocations.map((share: unknown) => {
+          if (!share || typeof share !== "object") return invalid("an allocation is an invoice and an amount")
+          const fields = share as Record<string, unknown>
+          findingFields(fields, ["invoice", "amount"], "allocation")
+          return {
+            invoice: reference(fields.invoice, INVOICE, "an allocation's invoice"),
+            amount: word(fields.amount, 30),
+          }
+        })
+      }
+      return {
+        id,
+        kind: "payment",
+        direction: oneOf(raw.direction, MONEY_DIRECTIONS, "a payment's direction"),
+        ...optional("payer", raw.payer, (value) => reference(value, PARTY, "a payment's payer")),
+        ...optional("payee", raw.payee, (value) => reference(value, PARTY, "a payment's payee")),
+        amount: word(raw.amount, 30),
+        currency: word(raw.currency, 3),
+        date: word(raw.date, 10),
+        ...optional("reference", raw.reference, (value) => word(value, 500)),
+        ...(allocations === undefined ? {} : { allocations }),
+        ...optional("project", raw.project, (value) => reference(value, PROJECT, "a project")),
+        reason: findingText(raw.reason, 2000),
+        evidence,
+      }
+    }
+    case "order": {
+      findingFields(
+        raw,
+        [
+          "id",
+          "kind",
+          "purpose",
+          "customer",
+          "supplier",
+          "supplierName",
+          "number",
+          "total",
+          "currency",
+          "status",
+          "orderDate",
+          "fulfilledDate",
+          "invoice",
+          "payment",
+          "project",
+          "reason",
+          "evidence",
+        ],
+        RULES.singular,
+      )
+      return {
+        id,
+        kind: "order",
+        purpose: oneOf(raw.purpose, ORDER_PURPOSES, "an order's purpose"),
+        ...optional("customer", raw.customer, (value) => reference(value, PARTY, "an order's customer")),
+        ...optional("supplier", raw.supplier, (value) => reference(value, PARTY, "an order's supplier")),
+        supplierName: word(raw.supplierName, 200),
+        ...optional("number", raw.number, (value) => word(value, 80)),
+        ...optional("total", raw.total, (value) => word(value, 30)),
+        ...optional("currency", raw.currency, (value) => word(value, 3)),
+        ...optional("status", raw.status, (value) => oneOf(value, ORDER_STATUSES, "an order's status")),
+        ...optional("orderDate", raw.orderDate, (value) => word(value, 10)),
+        ...optional("fulfilledDate", raw.fulfilledDate, (value) => word(value, 10)),
+        ...optional("invoice", raw.invoice, (value) => reference(value, INVOICE, "an order's invoice")),
+        ...optional("payment", raw.payment, (value) => reference(value, PAYMENT, "an order's payment")),
+        ...optional("project", raw.project, (value) => reference(value, PROJECT, "a project")),
+        reason: findingText(raw.reason, 2000),
+        evidence,
+      }
+    }
+    case "order_update": {
+      findingFields(
+        raw,
+        ["id", "kind", "supplierName", "number", "status", "date", "reason", "evidence"],
+        RULES.singular,
+      )
+      const status = oneOf(raw.status, ORDER_STATUSES, "an order update's status")
+      if (raw.date !== undefined && status !== "delivered") return invalid("only a delivered order update gives date")
+      return {
+        id,
+        kind: "order_update",
+        supplierName: word(raw.supplierName, 200),
+        number: word(raw.number, 80),
+        status,
+        ...optional("date", raw.date, (value) => word(value, 10)),
+        reason: findingText(raw.reason, 2000),
+        evidence,
+      }
+    }
     default:
-      return invalid("a mail finding is a task, task_update, fact, memory, link or new_contact")
+      return invalid(
+        "a mail finding is a task, task_update, fact, memory, link, new_contact, invoice, payment, order or order_update",
+      )
   }
 }
 

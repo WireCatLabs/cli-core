@@ -221,6 +221,7 @@ export type {
   NotesStore,
   NoteTag,
 } from "./sqlite/notes.js"
+export type { Order, OrderFilter, OrderInput, OrdersStore } from "./sqlite/orders.js"
 export type { PrivateContact, PrivateContactNote } from "./sqlite/private-people.js"
 export {
   assertGenericAction,

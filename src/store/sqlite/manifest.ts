@@ -81,6 +81,8 @@ export const MANIFEST: ManifestEntry[] = [
   { name: "20261102192959_version-47-records", version: 47, minCompatible: 34 },
   { name: "20261102222340_version-48-test-accounts", version: 48, minCompatible: 34 },
   { name: "20261104232153_version-49-relation-amounts", version: 49, minCompatible: 34 },
+  { name: "20261105125314_version-50-orders", version: 50, minCompatible: 34 },
+  { name: "20261105125315_version-50-orders-rules", version: 50, minCompatible: 34 },
 ]
 
 export const generatedMigrations = (
