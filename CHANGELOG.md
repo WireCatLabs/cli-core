@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.565.0 — 05.11.2026
+
 ### Changed — may break callers
 
 - **The shared calendar commands print their own answers and open the profile per command.**
