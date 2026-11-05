@@ -36,6 +36,11 @@ shape of this file.
 - **`speech_model` and `picture_search` are messenger settings**, and `config show` of a CLI that is not a
   messenger lists no messenger store setting (`phone_countries`, `task_categories.*`, `task_agent_close*`,
   `task_first_pass_per_chat`).
+- **cli-core accepts `@wirecat/cli-base` 0.76 and 0.77 (peer range `>=0.75.0 <0.78.0`) and builds with
+  0.77.1**, whose vocabulary has the `schedule` resource, the `agent`, `command` and `exec` verbs and `--trimmed`. The command
+  lint now checks `schedule agent|command|exec` instead of skipping them in `lint/baseline`. A CLI that mounts
+  `schedule` (tg, max, wa, gcal, mail, memo) removes the same entries from its own baseline when it bumps cli-base
+  to 0.77.0: they are stale there and fail its lint. 0.76.0 adds the `conflict` error code; nothing here uses it yet.
 
 ### Added
 
@@ -64,13 +69,6 @@ shape of this file.
   threads had vectors. The meaning lane now reads a mail account's thread vectors through the mail store, and
   `search all` fuses them with the word hits as it does for messages; the answer says how in `mail`. For a question,
   a mail or message found by words gets no second vote from meaning, as in notes.
-
-- **cli-core accepts `@wirecat/cli-base` 0.76 and 0.77 (peer range `>=0.75.0 <0.78.0`) and builds with
-  0.77.1**, whose vocabulary has the `schedule` resource, the `agent`, `command` and `exec` verbs and `--trimmed`. The command
-  lint now checks `schedule agent|command|exec` instead of skipping them in `lint/baseline`. A CLI that mounts
-  `schedule` (tg, max, wa, gcal, mail, memo) removes the same entries from its own baseline when it bumps cli-base
-  to 0.77.0: they are stale there and fail its lint. 0.76.0 adds the `conflict` error code; nothing here uses it yet.
-
 - **`search all` finds records for a question typed as a sentence.** When the text is a question in natural language
   and not `exact`, messages and mail go through discovery (as `search messages --discover`), and notes and calendar
   events search any of the question's content words, ranked by the store. Before, every word had to be in one record,
