@@ -144,7 +144,10 @@ const meCommand = (bot: BotMessenger): Command =>
 
 const listCommand = (bot: BotMessenger, tokenVariable: string): Command =>
   withQuery(
-    annotate(new Command("list"), { effects: LOCAL_READ, examples: botExamples(bot, "list", "list --check") }),
+    annotate(new Command("list"), {
+      effects: LOCAL_READ,
+      examples: [`${bot.app.command} bot list`, `${bot.app.command} bot list --check`],
+    }),
     BOT_PROFILES_QUERY,
   )
     .description(
@@ -154,7 +157,7 @@ const listCommand = (bot: BotMessenger, tokenVariable: string): Command =>
     .option("--check", "ask the messenger who each bot is, with its token")
     .action(async function (this: Command, words: string[]) {
       const wanted = botProfileName(words)
-      const context = botContext(this, bot)
+      const context = botContext(this, bot, { needsProfile: false })
       const check = this.opts<{ check?: boolean }>().check === true
       if (check) online(context, this)
       await context.run(async (events) => {
