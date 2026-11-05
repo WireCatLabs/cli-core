@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.579.0 — 05.11.2026
+
 ### Added
 
 - **An agent's new organization is a proposal for the owner: the `organization` proposal kind and
