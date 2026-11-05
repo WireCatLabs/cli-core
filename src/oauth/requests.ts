@@ -1,4 +1,5 @@
 import { CliError, isCliError } from "@wirecat/cli-base"
+import { withTimeLimit } from "../http/time-limit.js"
 import type { ExchangeContext, OAuthProvider, RequestContext, TokenSet } from "./provider.js"
 
 const REQUEST_LIMIT_MS = 30_000
@@ -11,22 +12,22 @@ const object = (value: unknown): Record<string, unknown> => {
   return value as Record<string, unknown>
 }
 
-const requestSignal = (signal?: AbortSignal) =>
-  signal ? AbortSignal.any([signal, AbortSignal.timeout(REQUEST_LIMIT_MS)]) : AbortSignal.timeout(REQUEST_LIMIT_MS)
+const requestSignal = (deadline: AbortSignal, signal?: AbortSignal) =>
+  signal ? AbortSignal.any([signal, deadline]) : deadline
 
 const cancelledBy = (signal?: AbortSignal) => {
   if (!signal?.aborted) return
   throw isCliError(signal.reason) ? signal.reason : new CliError("cancelled", "sign-in was cancelled")
 }
 
-const post = async (url: string, body: URLSearchParams, context: RequestContext) => {
+const post = async (url: string, body: URLSearchParams, context: RequestContext, deadline: AbortSignal) => {
   cancelledBy(context.signal)
   try {
     return await context.fetch(url, {
       method: "POST",
       headers: { "content-type": "application/x-www-form-urlencoded", accept: "application/json" },
       body,
-      signal: requestSignal(context.signal),
+      signal: requestSignal(deadline, context.signal),
       redirect: "error",
     })
   } catch {
@@ -44,16 +45,29 @@ const clientFields = ({ client }: RequestContext): Record<string, string> => ({
  * The token endpoint, form-encoded, for both grants. Nothing from the request or the response reaches a message or
  * a log record: both carry codes and tokens.
  */
-export const requestTokens = async (
+export const requestTokens = (
   provider: OAuthProvider,
   params: Record<string, string>,
   context: ExchangeContext,
+): Promise<TokenSet> =>
+  withTimeLimit(REQUEST_LIMIT_MS, (deadline) => exchangeTokens(provider, params, context, deadline))
+
+const exchangeTokens = async (
+  provider: OAuthProvider,
+  params: Record<string, string>,
+  context: ExchangeContext,
+  deadline: AbortSignal,
 ): Promise<TokenSet> => {
   const operation = params.grant_type ?? "unknown"
   const record = (level: "info" | "warn" | "error", fields: Record<string, unknown>) =>
     context.log?.[level]({ event: TOKEN_LOG_EVENT, provider: provider.id, operation, pid: process.pid, ...fields })
   const again = `run ${context.signInCommand} again`
-  const response = await post(provider.tokenUrl, new URLSearchParams({ ...params, ...clientFields(context) }), context)
+  const response = await post(
+    provider.tokenUrl,
+    new URLSearchParams({ ...params, ...clientFields(context) }),
+    context,
+    deadline,
+  )
   if (!response) {
     record("warn", { outcome: "no_response" })
     throw new CliError(
@@ -137,11 +151,9 @@ export const revokeToken = async (
   if (provider.revoke) return provider.revoke(tokens, context)
   if (!provider.revokeUrl)
     throw new CliError("validation_error", `${provider.name} declares no way to revoke a sign-in`)
-  const response = await post(
-    provider.revokeUrl,
-    new URLSearchParams({ token: tokens.refreshToken, ...clientFields(context) }),
-    context,
-  )
+  const { revokeUrl } = provider
+  const form = new URLSearchParams({ token: tokens.refreshToken, ...clientFields(context) })
+  const response = await withTimeLimit(REQUEST_LIMIT_MS, (deadline) => post(revokeUrl, form, context, deadline))
   context.log?.[response?.ok ? "info" : "warn"]({
     event: TOKEN_LOG_EVENT,
     provider: provider.id,

@@ -1,5 +1,6 @@
 import type { Chat } from "../../domain/models.js"
 import { failureKey } from "../../errors/failures.js"
+import { withTimeLimit } from "../../http/time-limit.js"
 import type { ServeNotice } from "./serve-notice.js"
 
 /** The provider's own catch-up lands first; this pass then finds most chats already current. */
@@ -60,8 +61,9 @@ export const startSync = ({
   let started = false
   let done: StartSyncSummary | undefined
 
-  const run = async () => {
-    const stop = AbortSignal.any([controller.signal, AbortSignal.timeout(budgetMs)])
+  const run = () => withTimeLimit(budgetMs, (deadline) => catchUp(AbortSignal.any([controller.signal, deadline])))
+
+  const catchUp = async (stop: AbortSignal) => {
     const floor = now() - windowMs
     const moved: { chat: Chat; lastAt: number; held: number | undefined }[] = []
     for (const chat of await chats(stop)) {

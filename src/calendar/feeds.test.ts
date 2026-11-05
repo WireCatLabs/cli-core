@@ -116,6 +116,21 @@ describe("fetchFeed", () => {
     })
   })
 
+  it("stops its time limit once the feed is read", async () => {
+    let signal: AbortSignal | null | undefined
+    const answer = (async (_url: unknown, init?: RequestInit) => {
+      signal = init?.signal
+      return new Response(ics())
+    }) as typeof fetch
+    await fetchFeed("https://example.test/feed.ics", {
+      name: "feed 1",
+      fetch: answer,
+      limits: { maxBytes: 4096, timeoutMs: 30, redirects: 5 },
+    })
+    await new Promise((resolve) => setTimeout(resolve, 80))
+    expect(signal?.aborted).toBe(false)
+  })
+
   it("sends the last ETag and Last-Modified back, and a 304 is unchanged with no body read", async () => {
     const asked: Record<string, string | undefined>[] = []
     const base = await serve((request, response) => {

@@ -7,6 +7,14 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- **A finished request no longer keeps the command in memory until its time limit ends.** The limit was a timer that
+  ran to the end even after the answer came, and it held everything the command had loaded; tg-cli and max-cli
+  already fixed the same thing in their own requests, and tg ran out of memory on macOS before that. This covers the
+  OAuth token and revoke requests, the OpenAI model request, the bot-registry checks, calendar feeds and serve's
+  catch-up on start. `timeLimit` and `withTimeLimit` (`src/http/time-limit.ts`) are the stoppable limit now.
+
 ## 0.573.0 — 05.11.2026
 
 ### Added

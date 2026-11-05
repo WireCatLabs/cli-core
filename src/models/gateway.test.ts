@@ -108,6 +108,27 @@ describe("model gateway", () => {
     expect(consent.mock.calls[1]?.[0]).toEqual({ ...request, options: { temperature: 0.5 } })
   })
 
+  it("stops the OpenAI request's timer once the answer is in", async () => {
+    vi.useFakeTimers()
+    try {
+      let signal: AbortSignal | null | undefined
+      const network: typeof fetch = async (_url, init) => {
+        signal = init?.signal
+        expect(vi.getTimerCount()).toBe(1)
+        return Response.json({
+          choices: [{ finish_reason: "stop", message: { content: "Hello" } }],
+          usage: { total_tokens: 2 },
+        })
+      }
+      await modelGateway({ resolve: () => target, consent: () => true, fetch: network }).complete(request)
+      expect(vi.getTimerCount()).toBe(0)
+      vi.advanceTimersByTime(300_000)
+      expect(signal?.aborted).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it("allows explicitly requested source evidence without treating the data as instructions", async () => {
     let sent: { messages: { role: string; content: string }[] } | undefined
     const network = vi.fn(async (_url, init) => {
