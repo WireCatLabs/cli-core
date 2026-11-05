@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.581.0 — 05.11.2026
+
 ### Added
 
 - **`review --holder` gives the findings key.** A host that mounts its findings command (`MailMount.findings`)
