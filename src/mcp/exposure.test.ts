@@ -67,7 +67,7 @@ describe("what the shared commands keep off MCP servers (NEED-1411, owner 2026-1
       toolsFromCommands(withChatDeletion(), { exclude: [["bot"]], includeUnavailable: true, levels })
     const allowed = catalogue({}).find((tool) => tool.command === path)
     const denied = catalogue({ [key]: "deny" }).find((tool) => tool.command === path)
-    expect(allowed?.availability?.()).toEqual({ available: true })
+    expect(allowed?.availability?.()).toMatchObject({ available: true, permission: key, level: expect.any(String) })
     expect(denied?.availability?.()).toMatchObject({ available: false, permission: key })
   })
 
@@ -92,7 +92,7 @@ describe("what the shared commands keep off MCP servers (NEED-1411, owner 2026-1
     const variants: Record<string, Level>[] = [{}, { mcp: "allow" }]
     for (const levels of variants)
       expect(listed(levels)?.availability?.()).toMatchObject({ available: false, permission: "mcp.authority" })
-    expect(listed({ "mcp.authority": "allow" })?.availability?.()).toEqual({ available: true })
+    expect(listed({ "mcp.authority": "allow" })?.availability?.()).toMatchObject({ available: true })
   })
 
   it("finite project scanning is offered through the same discoverable catalogue", () => {

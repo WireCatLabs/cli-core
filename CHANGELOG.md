@@ -15,6 +15,11 @@ shape of this file.
   (`fact.owner-written`), and a correction, because the fact it superseded cannot be put back as it was
   (`fact.unconfirm-correction`). The step goes into the fact's `metadata.history` with who had confirmed it, the
   `metadata.decision` it took back and the reason; `metadata.decision` is cleared.
+- **`commands --json` and `commands info` give every command its permission `level` and `permission` key** under a
+  named profile, not only the denied ones: `availability: { available, level, permission?, reason? }`, where `level` is
+  `allow`, `ask`, `readonly` or `deny` and `permission` the key it comes from (absent when no key governs the
+  command). MCP `tools_search` shows the same. A caller that compared `availability` to `{ available: true }` exactly
+  now sees two more keys.
 
 ## 0.569.0 — 05.11.2026
 
