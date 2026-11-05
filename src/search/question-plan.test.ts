@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { test } from "vitest"
-import { planQuestion, questionTerms } from "./question-plan.js"
+import { planQuestion, questionLookup, questionTerms } from "./question-plan.js"
 
 test("question scaffolding changes while content and filters survive", () => {
   const plan = planQuestion("How many days are logs kept for Canyon log retention? chat:301 from:700")
@@ -112,4 +112,12 @@ test("questionTerms keeps a question's content words and leaves other text alone
   assert.deepEqual(questionTerms("почему перенесли релиз"), ["перенесли", "релиз"])
   assert.deepEqual(questionTerms("did we book the hotel"), ["book", "hotel"])
   assert.equal(questionTerms("риелтор ипотека"), null)
+})
+test("a question's partial lookup ORs its content words and keeps its fields", () => {
+  assert.equal(
+    questionLookup("What is the current confirmed delivery date for Amber Kite? chat:301"),
+    "(current OR confirmed OR delivery OR date OR amber OR kite) chat:301",
+  )
+  for (const typed of ["amber kite", "Amber AND Kite", '"What is Amber Kite?"', "What is"])
+    assert.equal(questionLookup(typed), undefined, typed)
 })

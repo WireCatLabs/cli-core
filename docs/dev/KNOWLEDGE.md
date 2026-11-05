@@ -88,12 +88,13 @@ decide for the owner. Each runs `mayDecide` before it changes anything: an agent
 decides its own bot's proposal (every Claude Code session is the bot `claude-code`), never a rule scorer's or
 one that names no author, and nothing unless the host's `agent_decisions` is on: `openStore` keeps it off unless
 the host passes `decisions: { agentDecisions: true }` from the owner's explicit `agent_decisions: true`. Mail and
-meeting findings, and any row marked `ownerOnly` (a registry row takes it from its kind), are the owner's alone even
+meeting findings, task close suggestions, and any row marked `ownerOnly` (a registry row takes it from its kind), are the owner's alone even
 then: `mayDecide` reads the row's stored `kind`, so a path that sees the batch as a generic action refuses too. `proposalRegistry`
 (`./services`) is the one inbox over every kind (`relationship`, `key_document`, `fact`, `invoice`, `payment`,
-`memory`, `findings`, `action`); a new kind is a `ProposalKind` that registers its id `prefix` or the stored proposal kinds it owns.
+`memory`, `findings`, `mail_findings`, `meeting_findings`, `task_close`, `action`); a new kind is a `ProposalKind` that registers its id `prefix` or the stored proposal kinds it owns.
 Ids are bare numbers for stored proposals and `fact:`, `invoice:`, `payment:`, `memory:`, `link:`, `key:` for the rest;
-`parseProposalIds` reads ranges and lists of them; only a findings batch takes part ids (`17080/f2`). A link
+a task close is `close:<task key>` (`close:Q-15`). `parseProposalIds` reads ranges and lists of them (never a range of
+task keys); only a findings batch takes part ids (`17080/f2`). A link
 keeps no actor, only provenance text, so an unconfirmed link is the owner's alone to decide, and only the owner
 removes a link or writes a confirmed link of any kind (`notes.addLink`, `relate` with `by: "owner"`); an agent's
 link is written unconfirmed. Only the owner removes or reverses an accepted fact; an agent withdraws only its own

@@ -1,6 +1,15 @@
+import { mkdtempSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
 import { contextEvidenceFingerprint } from "../../context/evidence.js"
+import { sampleMeeting } from "../../meetings/testing/index.js"
+import { mayDecide } from "../../store/decisions.js"
+import { openStore } from "../../store/store.js"
 import { contextEvidenceFixture } from "../../testing/context-evidence.js"
+import { storeOnlyDeps } from "../deps.js"
+import { cueEvidence } from "../meeting-evidence.js"
+import { tasksService } from "../tasks.js"
 import { proposalRegistry } from "./registry.js"
 
 const handles: { close(): unknown }[] = []
@@ -210,5 +219,109 @@ describe("the action kind", () => {
       status: "rejected",
       result: { reason: "not now" },
     })
+  })
+})
+
+describe("the owner-only meeting findings and task close kinds", () => {
+  const ownerOnlyFixture = async () => {
+    const store = await openStore({
+      path: join(mkdtempSync(join(tmpdir(), "owner-kinds-")), "store.db"),
+      decisions: { agentDecisions: true, ruleProposalsOwnerOnly: true },
+    })
+    handles.push(store)
+    const account = { provider: "example", account: "synthetic" }
+    const seed = sampleMeeting()
+    seed.meeting.accountId = await store.accounts.saveAccount(account, { name: "Synthetic" })
+    const meeting = await store.meetings.saveMeeting(seed)
+    const project = await store.knowledge.addProject({ name: "Harbour Observatory", key: "HOB" })
+    await store.knowledge.linkMeetingProject(account, String(meeting.meeting.id), project.id, { by: "owner" })
+    const transcript = meeting.transcripts[0]
+    if (!transcript?.rows[0]) throw new Error("Missing synthetic cue")
+    const cue = cueEvidence(seed.meeting.accountId, meeting.meeting.id, transcript.transcript, transcript.rows[0])
+    const evidence = [{ reference: cue.reference, fingerprint: cue.fingerprint }]
+    const task = (id: string, title: string) => ({
+      id,
+      kind: "task" as const,
+      type: "chore" as const,
+      title,
+      reason: "asked in the meeting",
+      commitment: "inferred" as const,
+      project: project.ref,
+      evidence,
+    })
+    await store.tasks.create({ project: project.ref, title: "Send the signed lease", type: "chore" }, "owner")
+    const [board] = await store.tasks.find({ project: project.ref, status: "open", limit: 1 })
+    const note = await store.notes.addNote({ text: "Synthetic request" })
+    const app = { command: "chat", appName: "chat-cli", envPrefix: "CHAT", description: "", version: "1.0.0" }
+    const { task: noted } = await tasksService(storeOnlyDeps(store, account, { app })).add(note.ref, "request", "owner")
+    const [lease, request] = [board, await store.tasks.details(noted.id)]
+    if (!lease) throw new Error("Missing task")
+    for (const one of [lease, request])
+      await store.tasks.suggestClose(one.id, { as: "done", certainty: 0.8, reason: "you replied" }, { bot: "codex" })
+    const batch = await store.meetingFindings.stage(
+      account,
+      {
+        schemaVersion: 1,
+        key: "followups",
+        extractor: "synthetic",
+        findings: [task("a", "Draft"), task("b", "Budget")],
+      },
+      agent,
+    )
+    return { store, project, batch, lease, request, registry: proposalRegistry(store) }
+  }
+
+  it("lists each once, owner only, and refuses an agent on every one", async () => {
+    const f = await ownerOnlyFixture()
+    const { items } = await f.registry.list({ limit: 10, offset: 0 })
+    expect(items.map((row) => [row.kind, row.ownerOnly])).toEqual(
+      expect.arrayContaining([
+        ["meeting_findings", true],
+        ["task_close", true],
+        ["task_close", true],
+      ]),
+    )
+    expect(items).toHaveLength(3)
+    expect(await f.registry.get(`close:${f.lease.key}`)).toMatchObject({
+      kind: "task_close",
+      subject: f.lease.ref,
+      score: 0.8,
+      reason: "you replied",
+      ownerOnly: true,
+    })
+    const ids = [f.batch.id, `close:${f.lease.key}`]
+    for (const confirm of [true, false]) {
+      const tried = await f.registry.decide(ids, { confirm, by: codex })
+      expect(tried.decided).toEqual([])
+      expect(tried.refused.map((one) => one.reason)).toEqual(["proposal.owner-only", "proposal.owner-only"])
+    }
+    const close = await f.registry.get(`close:${f.lease.key}`)
+    const unmarked = { id: close.id, proposedBy: close.proposedBy, kind: close.kind }
+    expect(mayDecide(unmarked, codex, f.store.decisionPolicy)).toMatchObject({ reason: "proposal.owner-only" })
+  })
+
+  it("on the owner's confirm makes the meeting tasks named and closes the suggested tasks", async () => {
+    const f = await ownerOnlyFixture()
+    const ids = [`${f.batch.id}/a`, `close:${f.lease.key}`, `close:${f.request.key}`]
+    const { decided, refused } = await f.registry.decide(ids, { confirm: true, by: "owner" })
+    expect(refused).toEqual([])
+    expect(decided).toMatchObject([
+      { kind: "meeting_findings", status: "confirmed", made: [expect.stringMatching(/^task:/)] },
+      { kind: "task_close", status: "confirmed", made: [f.lease.ref] },
+      { kind: "task_close", status: "confirmed", made: [f.request.ref] },
+    ])
+    const titles = (await f.store.tasks.find({ project: f.project.ref, limit: 10 })).map((one) => one.title)
+    expect(titles).toContain("Draft")
+    expect(titles).not.toContain("Budget")
+    expect(await f.store.tasks.details(f.lease.id)).toMatchObject({ status: "done", closeSuggestion: null })
+    expect(await f.store.tasks.get(f.request.id)).toMatchObject({ state: "done", reason: "you replied" })
+    expect((await f.registry.list({ limit: 10, offset: 0, kinds: ["task_close"] })).items).toEqual([])
+  })
+
+  it("on the owner's reject leaves the task open without the suggestion", async () => {
+    const f = await ownerOnlyFixture()
+    const { decided } = await f.registry.decide([`close:${f.lease.key}`], { confirm: false, by: "owner" })
+    expect(decided).toMatchObject([{ kind: "task_close", status: "rejected", made: [] }])
+    expect(await f.store.tasks.details(f.lease.id)).toMatchObject({ status: "open", closeSuggestion: null })
   })
 })

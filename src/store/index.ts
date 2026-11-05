@@ -249,7 +249,7 @@ export type { SyncStateSave } from "./sqlite/sync.js"
 export type { TagCreationOptions, TagCreationReview } from "./sqlite/tag-creation.js"
 export type { TagKind, TagRow } from "./sqlite/tags.js"
 export type { TaskSort } from "./sqlite/task-board.js"
-export { PROJECT_TASK_FIELDS, TASK_SORTS } from "./sqlite/task-board.js"
+export { PROJECT_TASK_FIELDS, TASK_SORTS, withoutField } from "./sqlite/task-board.js"
 export type { SimilarSubject, SimilarTask, TaskDraft } from "./sqlite/task-candidates.js"
 export { type AgentCloseSettings, type CloseSuggestion, certaintyOf } from "./sqlite/task-close.js"
 export type { NamedAuthor, TaskComment } from "./sqlite/task-comments.js"
@@ -257,6 +257,7 @@ export type { TaskPair, TaskPairDecision, TaskPairSide } from "./sqlite/task-pai
 export { TASK_PAIR_DECISIONS } from "./sqlite/task-pairs.js"
 export type { TaskRelation, TaskRelationKind, TaskRelationsStore } from "./sqlite/task-relations.js"
 export { TASK_RELATION_KINDS } from "./sqlite/task-relations.js"
+export type { TaskStatRow, TaskStatScope } from "./sqlite/task-stats.js"
 export type { StoreTaskStore } from "./sqlite/tasks.js"
 export type {
   TagPreflight,

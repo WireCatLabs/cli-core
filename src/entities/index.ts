@@ -79,6 +79,7 @@ import {
   topicIcon,
 } from "./list-results.js"
 import { messageEvent, serveSummary, watchedMessage, watchItem } from "./listener.js"
+import { mailCounts } from "./mail-counts.js"
 import { mailFindings } from "./mail-findings.js"
 import { mediaArchive, mediaArchiveCheck, mediaArchiveMove, mediaArchiveTimer } from "./media-archive.js"
 import {
@@ -277,6 +278,7 @@ export {
   job,
   joinRequest,
   linkedPerson,
+  mailCounts,
   mediaArchive,
   mediaArchiveCheck,
   mediaArchiveMove,
@@ -414,19 +416,22 @@ export const ENTITIES = {
     attachments: v.optional(v.array(hitFile)),
     untrusted,
   }),
-  "message.summary": v.pick(message, [
-    "ref",
-    "chat_id",
-    "chat_title",
-    "timestamp",
-    "sender_name",
-    "sender_is_me",
-    "outgoing",
-    "text",
-    "transcript",
-    "attachments",
-    "email",
-  ]),
+  "message.summary": v.strictObject({
+    ...v.pick(message, [
+      "ref",
+      "chat_id",
+      "chat_title",
+      "timestamp",
+      "sender_name",
+      "sender_is_me",
+      "outgoing",
+      "text",
+      "transcript",
+      "attachments",
+      "email",
+    ]).entries,
+    untrusted,
+  }),
   message_link: messageLink,
   message_write: messageWrite,
   message_send: messageSend,
@@ -641,6 +646,7 @@ export const ENTITIES = {
   message_counts: messageCounts,
   response_times: responseTimes,
   waiting_chats: waitingChats,
+  mail_counts: mailCounts,
   ranking,
   admin_report: adminReport,
   analysis_consent: analysisConsent,

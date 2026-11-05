@@ -1,3 +1,4 @@
+export { mailOwnText } from "../conversations/mail-text.js"
 export { mailAccountKey } from "./account-key.js"
 export { DEFAULT_ATTACHMENT_POLICY, type MailAttachmentPolicy, POLICY_SKIPS } from "./attachments.js"
 export { BULK, bulkBox } from "./bulk.js"
@@ -111,6 +112,15 @@ export { type MailCriteria, mailCriteriaOf, narrows } from "./server-query.js"
 export { type MailServerAccess, type MailServerRequest, searchMailServer } from "./server-search.js"
 export type { Listed, MailSource, Quick, Searched } from "./source.js"
 export { SEARCH_REFUSED, searchRefused } from "./source.js"
+export {
+  MAIL_STATS_BY,
+  type MailStats,
+  type MailStatsBy,
+  type MailStatsRequest,
+  type MailStatsRow,
+  mailStats,
+  mailStatsItem,
+} from "./stats.js"
 export { listedOf, type StoredMail } from "./stored.js"
 export {
   MAX_ATTACHMENT_CHARS,

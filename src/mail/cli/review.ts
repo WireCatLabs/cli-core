@@ -8,12 +8,13 @@ import { LOCAL_READ } from "../../cli/effects.js"
 import { listOf, renderAnswer } from "../../cli/envelope.js"
 import { listQuery, nativeField, nativeTerms, queryHelp, typedQuery } from "../../cli/list-query.js"
 import { pointsOf } from "../../cli/messenger/catch-up.js"
-import { catchUpQuery, summaryOf } from "../../cli/messenger/catch-up-answers.js"
+import { catchUpQuery, SUMMARY_UNTRUSTED, summaryOf } from "../../cli/messenger/catch-up-answers.js"
 import { messageItem } from "../../cli/messenger/message-items.js"
 import { checkPoints } from "../../cli/messenger/points.js"
 import { unansweredHours } from "../../cli/messenger/review.js"
+import { MAIL_HIT_UNTRUSTED } from "../../cli/messenger/search-answers.js"
+import { mailOwnText } from "../../conversations/mail-text.js"
 import { parseDuration } from "../../domain/duration.js"
-
 import { formatReference } from "../../domain/references.js"
 import { AGENDA_DEFAULTS } from "../../services/agenda.js"
 import { REVIEW_DAYS, reviewStart } from "../../services/inbox.js"
@@ -24,6 +25,8 @@ import { type MailReview, OWED_DAYS, REVIEW_THREADS, reviewMail } from "../revie
 import type { MailMount, MailReads } from "./index.js"
 
 const DAY = 86_400_000
+
+const REVIEW_UNTRUSTED = [...SUMMARY_UNTRUSTED, ...MAIL_HIT_UNTRUSTED]
 
 /** Where a mail review starts: a time only; one thread is `conversations show`. */
 export const MAIL_REVIEW_QUERY = defineQuery({
@@ -148,6 +151,7 @@ const reviewAnswer = (found: MailReview, mailbox: AccountKey, fresh: boolean, st
             }
           : {}),
       },
+      untrusted: REVIEW_UNTRUSTED,
     })),
     limit: Math.max(1, read.length),
     has_more: false,
@@ -175,8 +179,10 @@ const holderReview = async (command: Command, mail: MailReads, holder: string, q
       : new Map()
     return { read, mailbox, marks }
   })
+  // An agent reads this: earlier mail and signatures stay out of its text; the fingerprint is over the stored body.
+  const emails = read.emails.map((email) => ({ ...email, text: mailOwnText(email.text) }))
   const chats = new Map<string, MailReview["chats"][number]>()
-  for (const email of read.emails) {
+  for (const email of emails) {
     const chat = chats.get(email.chatId) ?? {
       id: email.chatId,
       title: email.chatTitle,
@@ -216,7 +222,7 @@ const holderReview = async (command: Command, mail: MailReads, holder: string, q
         ? `${holder}: past ${read.mark.throughId}; acknowledge with --cursor ${read.cursor}${read.more ? "; more after these" : ""}`
         : `${holder} has no mark yet: it starts from now — acknowledge with --cursor ${read.cursor}`,
     )
-    return read.emails.map((hit) => `${hitText(hit)}${markText(marks.get(hit.id))}\n`).join("")
+    return emails.map((hit) => `${hitText(hit)}${markText(marks.get(hit.id))}\n`).join("")
   })
 }
 
@@ -254,7 +260,8 @@ export const mailReviewCommand = (mail: MailReads): Command =>
     .option(
       "--holder <name>",
       "read for this holder — an agent or a pipeline — what is stored past its processing mark, by store order; " +
-        "bulk, envelopes, drafts, suspicious senders and partial mail left out; `messages acknowledge` moves the mark",
+        "bulk, envelopes, drafts, suspicious senders and partial mail left out; each text without quoted earlier mail " +
+        "or the signature; `messages acknowledge` moves the mark",
     )
     .option(
       "--new",

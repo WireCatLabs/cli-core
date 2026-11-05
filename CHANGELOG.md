@@ -7,7 +7,28 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **`search all` searches mail by meaning too** (MEMO-38). Mail was only ever searched by words there, though its
+  threads had vectors. The meaning lane now reads a mail account's thread vectors through the mail store, and
+  `search all` fuses them with the word hits as it does for messages; the answer says how in `mail`. For a question,
+  a mail or message found by words gets no second vote from meaning, as in notes.
+- **`search all` finds records for a question typed as a sentence.** When the text is a question in natural language
+  and not `exact`, messages and mail go through discovery (as `search messages --discover`), and notes and calendar
+  events search any of the question's content words, ranked by the store. Before, every word had to be in one record,
+  so a question found nothing (MEMO-36). tg, max and wa still ask the messenger's server with the question as typed.
+  For a question, a note found by both words and meaning gets one vote, not two, so notes found by words alone are not
+  buried. Plain words, query syntax and `exact` are searched strictly, as before. `searchNotes` and `searchEvents`
+  take `discover`.
+
 ### Added
+
+- **The proposal registry reviews meeting findings and task close suggestions.** `proposalRegistry` registers
+  `meeting_findings` (a meeting's staged batch, decided part by part as in `meetings actions confirm`) and
+  `task_close` (an agent's suggested close, id `close:<task key>`; confirming closes the task as suggested, rejecting
+  clears the suggestion). Both are owner only: `isOwnerOnlyKind` now names `task_close` too, so `mayDecide` refuses an
+  agent by the row's kind. `parseProposalIds` takes a task key after a prefix (`close:Q-15`). Moved from cli-memo,
+  which registered both itself; a host that registers a kind of the same name now gets `configuration_error`.
 
 - **A mail CLI's `messages show` can read an email again when a sync's limit left its attachment unread.**
   `mailReadCommands` takes `whole(command, store, mailbox, emailId)`; with it the command is a fetch, reads such an
@@ -27,6 +48,22 @@ shape of this file.
   selection as `readMeetingStats`, reading `meetings` alone through `meetings_by_time`. `meetingCountsItem` and the
   `meeting_counts` entity are the answer, for zoom-cli's `stats meetings history`. A meeting with no end counts in
   `meetings`, not in `minutes`. `MeetingStatsStore` gains `meetingCounts`; only cli-core's own store implements it.
+- **`stats tasks show` counts by chat, meeting or project, over a period.** `--by meeting` keys a row by the meeting a
+  task came from (`meeting:<account>/<meeting>`); `--by project` reads the owner's project tasks, every project
+  (`project:<id>`). A query after `--` takes the task query's fields and `created` for the period: `created` counts
+  the tasks opened in it, `closed` those closed in it, `open` is always open now (`-- created>=30d`). The item gains
+  `created`, `closed`, `median_close_ms` and `mean_open_age_ms`; each row gains `key`, `name` (chat title, meeting
+  title, project name), `created`, `closed` and `mean_open_age_ms`. Rows of `--by chat` keep `chat`; the others have
+  none. `--timezone` places calendar days such as `created>=today`.
+- **`created:` in the project task query** (`PROJECT_TASK_FIELDS`), beside `closed:`: `created>=30d`.
+- **`mailStats` from `./mail`**: stored mail received and sent per calendar day, week (by its Monday) or sender, for
+  the `search mail` query, counts only and no search recorded; `mailStatsItem` turns it into the new `mail_counts`
+  entity, `{ by, received, sent, rows: [{ key, name, received, sent }] }`. By sender it counts received mail only.
+- **`mailOwnText(body)` (`@wirecat/cli-core/mail`): what an email says itself, without quoted earlier mail and the
+  signature.** It drops `>` lines, cuts at a reply header ("On … wrote:", "Le … a écrit :", "Am … schrieb …:",
+  "… написал(а):", Gmail's Russian "<address>:") and at an Outlook From/Sent block in English, German, French, Spanish
+  and Russian, and drops the `-- ` signature, sign-offs and mobile footers. A forwarded message stays whole; an email
+  that is only a quote keeps its body.
 - **An imported payment split across invoices settles each by the amount its source gives (store version 49).** A
   `settles` relation of the v1 records envelope takes an optional `amount`, a decimal in the payment's currency,
   kept in `record_relations.amount`. Additive within schema version 1: an older build refuses such a relation with
@@ -35,6 +72,15 @@ shape of this file.
 - **`store.finance.unallocate({ payment, invoice, by })` takes one allocation back** from a payment still proposed,
   under `allocate`'s rule (the owner any, a bot only its own); a confirmed payment's allocations stay
   (`finance.unallocate`), and a missing one is `not_found` (`finance.not-allocated`).
+
+### Security
+
+- **`review --holder` gives each email's own text** (`mailOwnText`), so an agent's model does not read earlier mail
+  or signatures. The fingerprint a finding cites is still taken over the stored body; other reads show the whole text.
+- **Review and inbox items say which fields others wrote** (WC-SECR-21): `summaryOf` items, and so every catch-up
+  answer and each mail `review` item, carry `untrusted` (`SUMMARY_UNTRUSTED`: chat title, sender name, text,
+  transcript, attachment names); a mail review item adds the email's subject and the names in its headers, as search
+  hits do. The `message.summary` entity takes the field.
 
 ### Fixed
 

@@ -53,6 +53,7 @@ export const PROJECT_TASK_FIELDS: readonly FieldSpec[] = [
       "the due date as a board groups it: overdue (open work due before today), today, upcoming (the next 7 days " +
       "after today), later, or none",
   }),
+  field("created", "time", "created:>=30d", { relation: "when it was opened" }),
   field("closed", "time", "closed:>=14d", { relation: "when it was done or dismissed" }),
   field("ready", "bool", "ready:true", { relation: "open work whose blocked-by tasks are all done" }),
   field("text", "txt", "text:invoice", { relation: "words of the title and description; a bare word means this" }),
@@ -215,6 +216,7 @@ export const projectTaskColumns = (now: number, zone: string): ColumnMap => ({
   agent: { where: agentWhere },
   parent: { where: parentWhere },
   due: { type: "time", sql: "t.due_at" },
+  created: { type: "time", sql: "t.created_at" },
   closed: { type: "time", sql: "t.closed_at" },
   overdue: { where: (node) => truth(node, dueGroups(now, zone).overdue) },
   when: {

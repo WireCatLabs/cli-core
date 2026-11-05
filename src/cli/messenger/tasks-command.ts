@@ -8,12 +8,14 @@ import { aheadOf, momentOf } from "../../services/moment.js"
 import { refuseAlreadyRead } from "../../services/task-analysis.js"
 import { unlistedNote } from "../../services/task-categories.js"
 import { ARRIVAL_WINDOW, applyTaskRulesToChats, type ChatRulePass } from "../../services/task-rules.js"
+import { TASK_STATS_BY, type TaskStatsBy } from "../../services/task-stats.js"
 import {
   CLAIM_LEASE_MS,
   closedStateOf,
   type PairDecision,
   TASK_PAIR_QUERY,
   TASK_QUERY,
+  TASK_STATS_QUERY,
   type TaskCard,
   type TaskLinkOptionKind,
   type TaskPlan,
@@ -846,33 +848,69 @@ export const tasksCommand = (messenger: Messenger): Command => {
   return tasks
 }
 
+const statsByOf = (value: string): TaskStatsBy => {
+  if (!(TASK_STATS_BY as readonly string[]).includes(value))
+    throw new CliError("validation_error", `--by takes ${TASK_STATS_BY.join(", ")}`)
+  return value as TaskStatsBy
+}
+
+const minutes = (ms: number | undefined) => (ms === undefined ? "" : `${Math.round(ms / 60_000)} min`)
+
 export const tasksStatsCommand = (messenger: Messenger): Command => {
-  return annotate(new Command("show"), { effects: LOCAL_READ, output: { entity: "task_stats" } })
-    .description("per chat: how many tasks are open, the oldest open one, the median time to close")
+  return withQuery(
+    annotate(new Command("show"), {
+      effects: LOCAL_READ,
+      output: { entity: "task_stats" },
+      examples: [`${messenger.app.command} stats tasks show --by meeting -- created>=30d`],
+    }),
+    TASK_STATS_QUERY,
+  )
+    .summary("count tasks by chat, meeting or project, open and closed")
+    .description(
+      "tasks per chat, meeting or project: open now, and opened and closed in the period (created: in the query), " +
+        "with the median time to close and the mean age of the open ones",
+    )
+    .option(
+      "--by <group>",
+      "chat (default) or meeting: this account's tasks; project: the owner's project tasks, every project",
+      statsByOf,
+    )
     .option("--chat <chat>", `only this chat; ${messenger.chatArgument}`)
     .option("--type <type>", "only this type: question, request, mention or promise", taskTypeOf)
-    .action(async function (this: Command) {
+    .option("--timezone <zone>", "the IANA timezone for calendar days in the period, such as created>=today")
+    .action(async function (this: Command, words: string[]) {
       const context = messengerContext(this, messenger)
-      const { chat, type } = this.opts<{ chat?: string; type?: TaskView["kind"] }>()
+      const { by, chat, type, timezone } = this.opts<{
+        by?: TaskStatsBy
+        chat?: string
+        type?: TaskView["kind"]
+        timezone?: string
+      }>()
       refuseJsonl(context.format)
-      const { rows, account } = await context.withServices(async (services) => ({
-        rows: await services.tasks.stats({
+      const query = listQuery(typedQuery(words), TASK_STATS_QUERY, "stats tasks show")
+      const { stats, account } = await context.withServices(async (services) => ({
+        stats: await services.tasks.stats({
+          ...(by === undefined ? {} : { by }),
           ...(chat === undefined ? {} : { chat }),
-          ...(type === undefined ? {} : { type }),
+          ...(type === undefined ? {} : { kind: type }),
+          ...(query === undefined ? {} : { query }),
+          ...(timezone === undefined ? {} : { timezone }),
         }),
         account: await services.messages.reader(),
       }))
-      if (rows.length === 0) context.renderer.note("no tasks yet")
-      renderAnswer(this, context, taskStatsAnswer(rows, account), () =>
-        rows.length === 0
+      if (stats.rows.length === 0) context.renderer.note("no tasks yet")
+      renderAnswer(this, context, taskStatsAnswer(stats, account), () =>
+        stats.rows.length === 0
           ? ""
-          : `${rows
-              .map(({ group, open, oldestOpenAt, medianCloseMs }) =>
+          : `${stats.rows
+              .map(({ group, name, open, created, closed, oldestOpenAt, medianCloseMs }) =>
                 [
-                  group,
+                  name ? `${name} (${group})` : group,
                   `${open} open`,
+                  `${created} created`,
+                  `${closed} closed`,
                   oldestOpenAt ? `oldest ${oldestOpenAt.toISOString().slice(0, 16).replace("T", " ")}` : "",
-                  medianCloseMs === undefined ? "" : `median ${Math.round(medianCloseMs / 60_000)} min to close`,
+                  medianCloseMs === undefined ? "" : `median ${minutes(medianCloseMs)} to close`,
                 ]
                   .filter(Boolean)
                   .join("  "),

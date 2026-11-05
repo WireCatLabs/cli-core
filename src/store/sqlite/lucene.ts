@@ -17,6 +17,7 @@ import {
   type Leaf,
   SPEECH,
 } from "./lucene-fields.js"
+import { GROUPS, type QueryGroup, type QueryGrouping } from "./lucene-groups.js"
 import type { StoreContext } from "./open.js"
 import { hitsByPk } from "./search.js"
 import { read } from "./transaction.js"
@@ -24,6 +25,7 @@ import { type TranscriptPart, transcriptItems, transcriptTerms } from "./transcr
 import type { ScoredHit } from "./words.js"
 
 export { type Corpus, prefixOf } from "./lucene-fields.js"
+export type { QueryGroup, QueryGrouping } from "./lucene-groups.js"
 
 const MESSAGES: Corpus = {
   rows: "messages",
@@ -49,28 +51,6 @@ const MAIL: Corpus = {
   thread: "email_thread",
 }
 
-export type QueryGrouping = "chat" | "sender" | "time"
-export interface QueryGroup {
-  provider?: string
-  account?: string
-  id: string | null
-  name: string | null
-  outgoing?: boolean
-  count: number
-}
-const GROUPS: Record<QueryGrouping, { key: string; select: string }> = {
-  chat: {
-    key: "m.chat_id",
-    select: "ac.provider AS provider, ac.external_id AS account, c.external_id AS id, c.title AS name",
-  },
-  sender: {
-    key: "coalesce(m.sender_identity_id, -m.account_id)",
-    select:
-      "ac.provider AS provider, ac.external_id AS account, i.external_id AS id, i.name AS name, max(m.outgoing) AS outgoing",
-  },
-  // Quarter hours, so a calendar day or hour in any zone (+05:30, +05:45) is a whole number of buckets.
-  time: { key: "m.sent_at / 900000", select: "CAST(min(m.sent_at / 900000) * 900000 AS TEXT) AS id, NULL AS name" },
-}
 export const matchQuery = (context: StoreContext, execution: QueryExecution): Promise<Page<ScoredHit>> =>
   runQuery(context, execution) as Promise<Page<ScoredHit>>
 /** Every match counted once, grouped; the work and candidate budgets of a search still apply. */

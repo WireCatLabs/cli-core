@@ -1,5 +1,5 @@
 import { CliError, isCliError, singleLine } from "@wirecat/cli-base"
-import { type QueryAst, type QueryRegistry, queryFieldsOf, walkQuery } from "@wirecat/cli-base/query"
+import { OPERATORS_BY_TYPE, type QueryAst, type QueryRegistry, queryFieldsOf, walkQuery } from "@wirecat/cli-base/query"
 import type * as v from "valibot"
 import { isLocator, parseLocator } from "../domain/locator.js"
 import { formatReference } from "../domain/references.js"
@@ -20,7 +20,6 @@ import { type ColumnMap, queryFilter, type Where } from "../store/store.js"
 import {
   type ClosedState,
   createTaskService,
-  type GroupStats,
   isClosedState,
   TASK_KINDS,
   TASK_STATES,
@@ -32,6 +31,7 @@ import type { ServiceDeps } from "./deps.js"
 import { storedChatId } from "./message-resolution.js"
 import { categorize, type TaskCategory, taskCategoryOf, type UnlistedCategory } from "./task-categories.js"
 import { taskAccount } from "./task-rules.js"
+import { PERIOD_FIELD, type TaskStats, type TaskStatsRequest, taskStatsOf } from "./task-stats.js"
 import { taskTagFilters } from "./task-tag-filters.js"
 
 export { TASK_KINDS, TASK_STATES }
@@ -71,6 +71,23 @@ export const TASK_QUERY = {
       claimed_by: "claimed_by:session-1",
     },
   }),
+} as const satisfies QueryRegistry
+
+/** `stats tasks show`: the task query's fields, with the period as `created` in place of the two time fields. */
+export const TASK_STATS_QUERY = {
+  entity: "task",
+  backend: "sql",
+  fields: [
+    ...TASK_QUERY.fields.filter(({ name }) => name !== "created_at" && name !== "closed_at"),
+    {
+      name: PERIOD_FIELD,
+      type: "time",
+      operators: OPERATORS_BY_TYPE.time,
+      example: `${PERIOD_FIELD}>=30d`,
+      relation:
+        "the period: created counts the tasks opened in it, closed the tasks done or dismissed in it; open is open now",
+    },
+  ],
 } as const satisfies QueryRegistry
 
 /** Which pairs `tasks duplicates list` lists: those waiting for the reviewing agent, or those it left to the owner. */
@@ -275,7 +292,8 @@ export interface TasksService {
   close(id: string, options: CloseRequest): Promise<ClosedTask>
   /** The owner refuses an agent's close: the task stays open and the suggestion goes. */
   reject(id: string, by: TaskOrigin): Promise<TaskCard>
-  stats(filter?: { chat?: string; type?: TaskKind }): Promise<GroupStats[]>
+  /** `chat` narrows to one chat, by name or id; see `taskStatsOf` for what each count means. */
+  stats(request?: Omit<TaskStatsRequest, "group"> & { chat?: string }): Promise<TaskStats>
   /** Title, description, due date and next check; `null` clears one. */
   plan(id: string, plan: TaskPlan, by: TaskOrigin): Promise<TaskCard>
   /**
@@ -341,6 +359,14 @@ export const tasksService = (deps: ServiceDeps, categories?: readonly TaskCatego
 
   const groupOf = async (store: MessageStore, account: AccountKey, chat: string | undefined) =>
     chat === undefined ? undefined : storedChatId(deps.messenger, chat, store, account, { includeLeft: true })
+  /** The task query's columns, with each `chat:` name in the query resolved to its stored chat id once. */
+  const queryColumns = async (store: MessageStore, account: AccountKey, query: QueryAst | undefined) => {
+    const groups = new Map<string, string>()
+    for (const node of query ? walkQuery(query.root) : [])
+      if (node.field === "chat" && node.operator !== "wildcard" && !groups.has(node.value))
+        groups.set(node.value, await storedChatId(deps.messenger, node.value, store, account, { includeLeft: true }))
+    return taskColumns(groups, await taskTagFilters(store, query))
+  }
 
   const refuseBare = (target: string): never => {
     throw new CliError(
@@ -400,15 +426,9 @@ export const tasksService = (deps: ServiceDeps, categories?: readonly TaskCatego
   return {
     list: ({ query, limit, offset, previews }) =>
       inStore(async (store, account) => {
-        const groups = new Map<string, string>()
-        for (const node of query ? walkQuery(query.root) : [])
-          if (node.field === "chat" && node.operator !== "wildcard" && !groups.has(node.value))
-            groups.set(
-              node.value,
-              await storedChatId(deps.messenger, node.value, store, account, { includeLeft: true }),
-            )
-        const tags = await taskTagFilters(store, query)
-        const where = query ? queryFilter(query, taskColumns(groups, tags), { command: "tasks list" }) : undefined
+        const where = query
+          ? queryFilter(query, await queryColumns(store, account, query), { command: "tasks list" })
+          : undefined
         const rows = await store.tasks.query(taskAccount(account), where, { limit: limit + 1, offset })
         const shown = rows.slice(0, limit)
         return {
@@ -723,14 +743,15 @@ export const tasksService = (deps: ServiceDeps, categories?: readonly TaskCatego
         return store.tasks.similar({ task: subject }, options)
       }),
 
-    stats: (filter = {}) =>
+    stats: ({ chat, ...request } = {}) =>
       inStore(async (store, account) => {
-        const group = await groupOf(store, account, filter.chat)
-        const rows = await service(store).stats({
-          account: taskAccount(account),
-          ...(filter.type === undefined ? {} : { kind: filter.type }),
-        })
-        return group === undefined ? rows : rows.filter((one) => one.group === group)
+        const group = await groupOf(store, account, chat)
+        return taskStatsOf(
+          store,
+          account,
+          { ...request, ...(group === undefined ? {} : { group }) },
+          await queryColumns(store, account, request.query),
+        )
       }),
   }
 }

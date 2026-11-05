@@ -84,6 +84,7 @@ describe("parseProposalIds", () => {
       "17080/f2",
     ])
     expect(parseProposalIds(["memory:9-memory:10"])).toEqual(["memory:9", "memory:10"])
+    expect(parseProposalIds(["close:Q-15,close:HRB2-3"])).toEqual(["close:Q-15", "close:HRB2-3"])
   })
 
   it.each([
