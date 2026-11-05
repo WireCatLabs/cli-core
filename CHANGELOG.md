@@ -9,6 +9,11 @@ shape of this file.
 
 ### Added
 
+- **An agent's new organization is a proposal for the owner: the `organization` proposal kind and
+  `proposeOrganization(store, { name, kind, scope? }, by)`.** It is stored in `proposed_actions` as
+  `organization_add`, so no schema change; `proposalRegistry` lists it in `review`, and confirming it adds the
+  organization (`made: ["organization:<id>"]`), rejecting it adds nothing. The owner still adds one directly with
+  `knowledge.addOrganization`. `ORGANIZATION_ADD_KIND` and `OrganizationProposal` are exported from `services`.
 - **`mailFindings.check` tries a whole mail findings batch without staging it.** It makes every check `stage`
   makes, the trial write of each invoice, payment and order included, rolls everything back and answers
   `{ valid, findings, batch, problems }`: one problem per finding that would be refused, with its id, kind, code,

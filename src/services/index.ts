@@ -482,12 +482,15 @@ export {
   type Decision,
   emptyProposalRegistry,
   FACT_SUMMARIES,
+  ORGANIZATION_ADD_KIND,
+  type OrganizationProposal,
   type ProposalFilter,
   type ProposalKind,
   type ProposalRegistry,
   type ProposalRow,
   parseProposalIds,
   proposalRegistry,
+  proposeOrganization,
 } from "./proposals/index.js"
 export type { RetentionQuery, RetentionService } from "./retention.js"
 export { retentionService } from "./retention.js"
