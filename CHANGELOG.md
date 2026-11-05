@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.580.0 — 05.11.2026
+
 ### Added
 
 - **`mailFindings.check` tries a whole mail findings batch without staging it.** It makes every check `stage`
