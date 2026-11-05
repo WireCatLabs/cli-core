@@ -40,6 +40,7 @@ const SIGN_IN: Entry[] = [
   ["sign-in.client-file-invalid", "configuration_error", "the file is not a Desktop app OAuth client JSON"],
   ["oauth.scope-missing", "permission_error", "the sign-in lacks a permission this command needs"],
   ["sign-in.client-rejected", "configuration_error", "the provider rejected the OAuth client"],
+  ["sign-in.secret-without-id", "configuration_error", "an OAuth client secret is set without its client id"],
 ]
 
 /** Reasons every CLI over a provider's API raises alike: gcal and drive today. */

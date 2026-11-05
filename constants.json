@@ -1,0 +1,13 @@
+{
+  "google": {
+    "app": {
+      "client_id": "_WAlQe_1Jamd97lrbGU1kcXOJ8TWiJSbdfyTOEEF6IqtlI9-L2lr8iTW7MmAqUn7XMpK1OXeRZNLCFlYULdV3C5HGV28xT2CL0QFEI3FC3oHZp-ak5TX9g",
+      "client_secret": "X6afcHNZ_v0d_N6-jCWHFQSeT2O-saKLY8_WY_W5aIlswI6q2EZ6GtF3IFhy6WjIHUzB"
+    }
+  },
+  "microsoft": {
+    "app": {
+      "client_id": "f7f05d3a-b948-4d50-b3ce-59c816ce69e9"
+    }
+  }
+}

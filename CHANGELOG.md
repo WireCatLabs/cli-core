@@ -7,6 +7,32 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **cli-core now needs `@wirecat/cli-base` 0.76.0 or later** (peer range `>=0.76.0 <0.78.0`), which holds
+  `loadConstants`.
+- **`appDoctorCommand`'s `oauthClient` returns `oauthClientReport`'s shape, `{ client, source, reason? }`**, and a
+  throw there is reported as `{ client: null, source: null, reason }` (was `error`). drive's and gcal's callers
+  change with their bump.
+
+### Added
+
+- **`@wirecat/cli-core/constants`: WireCat's sign-in apps ship in cli-core's `constants.json`.** `constants()` reads
+  cli-base's, cli-core's and the tool's `constants.json` once per process, merged, validated and frozen; a tool
+  passes its own layer and a schema built on `constantsSchema`. It holds WireCat's Google Desktop app
+  (`google.app.client_id`, `client_secret`) and Microsoft client id (`microsoft.app.client_id`), which drive and mail
+  kept in source and gcal expected from a file CI wrote. `googleApp({ env, prefix, clientFile, clientId,
+  configClientId })` and `microsoftApp(…)` pick the app in WC-SECR-25's order: `--client-file` or `--client-id`
+  (`flag`), `<PREFIX>_<PROVIDER>_CLIENT_ID` (`env`), the account's `<provider>.client_id` (`config`), WireCat's app
+  (`constants`); a `_SECRET` with no id is a `configuration_error`, reason `sign-in.secret-without-id`. `oauthApp`
+  does the same for a provider whose app is in a tool's layer, such as Zoom, and returns nothing when there is none.
+  `oauthClientReport(app, reason?)` is `doctor`'s `oauth_client`: `{ client: "wirecat" | "own" | null, source }`.
+  See [Constants](docs/dev/CONSTANTS.md).
+- **A sign-in entry records where its app came from** (`clientSource` in the standard and drive entries, read back
+  as `client.source`), so `doctor` reports the app the account signed in with. The standard entry also keeps
+  WireCat's public secret, so a refresh still works after a release ships another default app; an owner's own
+  secret is still never written.
+
 ## 0.565.0 — 05.11.2026
 
 ### Changed — may break callers

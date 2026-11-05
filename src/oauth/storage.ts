@@ -8,7 +8,7 @@ import {
   systemKeyring,
   type WriteOptions,
 } from "@wirecat/cli-base"
-import type { OAuthClient, TokenSet } from "./provider.js"
+import type { AppSource, OAuthClient, TokenSet } from "./provider.js"
 
 export interface StoredTokens {
   tokens: TokenSet
@@ -88,8 +88,9 @@ export const standardCodec = (providerId: string): TokenCodec => ({
     const clientId = text(value.clientId)
     if (value.version !== 1 || value.provider !== providerId || !refreshToken || !clientId) throw invalid()
     if (!Array.isArray(value.scopes) || !value.scopes.every((scope) => typeof scope === "string")) throw invalid()
+    const source = text(value.clientSource) as AppSource | undefined
     return {
-      client: { clientId },
+      client: defined({ clientId, clientSecret: text(value.clientSecret), source }),
       tokens: defined({
         accessToken: text(value.accessToken),
         refreshToken,
@@ -107,6 +108,10 @@ export const standardCodec = (providerId: string): TokenCodec => ({
         version: 1,
         provider: providerId,
         clientId: client.clientId,
+        // Only WireCat's secret, which is public: a later release may ship another default app, and a refresh needs
+        // the secret of the app that signed in. An owner's own secret stays where the owner keeps it.
+        clientSecret: client.source === "constants" ? client.clientSecret : undefined,
+        clientSource: client.source,
         accessToken: tokens.accessToken,
         refreshToken: tokens.refreshToken,
         expiresAt: tokens.expiresAt,
@@ -130,7 +135,11 @@ export const driveSessionCodec: TokenCodec = {
     const clientId = text(value.clientId)
     if (!refreshToken || !clientId || typeof value.principal !== "string") throw invalid()
     return {
-      client: defined({ clientId, clientSecret: text(value.clientSecret) }),
+      client: defined({
+        clientId,
+        clientSecret: text(value.clientSecret),
+        source: text(value.clientSource) as AppSource | undefined,
+      }),
       tokens: defined({
         accessToken: text(fields.access_token),
         refreshToken,
@@ -148,6 +157,7 @@ export const driveSessionCodec: TokenCodec = {
       ...extra,
       clientId: client.clientId,
       ...(client.clientSecret ? { clientSecret: client.clientSecret } : {}),
+      ...(client.source ? { clientSource: client.source } : {}),
       tokens: defined({
         ...oldTokens,
         access_token: tokens.accessToken,
