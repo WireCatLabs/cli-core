@@ -1,4 +1,5 @@
 export { AI_ENTRIES, AI_SETTING_KEYS, type AISettings, resolveAISettings } from "../analysis/settings.js"
+export type { AgentCli } from "../background/schedules.js"
 export { parseDuration } from "../domain/duration.js"
 export {
   openOf,
@@ -278,6 +279,7 @@ export { type Closeable, withDeadline } from "./deadline.js"
 export { DEFAULT_CONFIG, ensureDefaultConfig } from "./default-config.js"
 export { DISCOVERY_DESCRIPTIONS } from "./discovery-descriptions.js"
 export {
+  admittedUnderLock,
   changesAuthority,
   changesAuthorityAt,
   changesAuthorityNow,
@@ -294,8 +296,10 @@ export {
   judgedTargets,
   LOCAL_READ,
   LOCAL_WRITE,
+  LOCKED_AUTHORITY_COMMANDS,
   logsInOrOut,
   NO_EFFECTS,
+  narrowsUnderLock,
   ownerOnlyOption,
   PROPOSE_COMMANDS,
   previewFlag,
