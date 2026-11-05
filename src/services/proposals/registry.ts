@@ -10,6 +10,7 @@ import { mailFindingsKind } from "./kinds/mail-findings.js"
 import { meetingFindingsKind } from "./kinds/meeting-findings.js"
 import { memoryKind } from "./kinds/memory.js"
 import { orderKind } from "./kinds/orders.js"
+import { organizationKind } from "./kinds/organization.js"
 import { relationshipKind } from "./kinds/relationship.js"
 import { relationshipUpdateKind } from "./kinds/relationship-update.js"
 import { taskCloseKind } from "./kinds/task-close.js"
@@ -146,6 +147,7 @@ export const proposalRegistry = (store: MessageStore): ProposalRegistry => {
     invoiceKind(store),
     paymentKind(store),
     orderKind(store),
+    organizationKind(store),
     memoryKind(store),
     findingsKind(store),
     mailFindingsKind(store),

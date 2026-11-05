@@ -1,4 +1,5 @@
 export { parseProposalIds } from "./ids.js"
 export { FACT_SUMMARIES } from "./kinds/findings.js"
+export { ORGANIZATION_ADD_KIND, type OrganizationProposal, proposeOrganization } from "./kinds/organization.js"
 export { emptyProposalRegistry, proposalRegistry } from "./registry.js"
 export type { Decided, Decision, ProposalFilter, ProposalKind, ProposalRegistry, ProposalRow } from "./types.js"

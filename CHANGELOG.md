@@ -5,6 +5,16 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Added
+
+- **An agent's new organization is a proposal for the owner: the `organization` proposal kind and
+  `proposeOrganization(store, { name, kind, scope? }, by)`.** It is stored in `proposed_actions` as
+  `organization_add`, so no schema change; `proposalRegistry` lists it in `review`, and confirming it adds the
+  organization (`made: ["organization:<id>"]`), rejecting it adds nothing. The owner still adds one directly with
+  `knowledge.addOrganization`. `ORGANIZATION_ADD_KIND` and `OrganizationProposal` are exported from `services`.
+
 ## 0.577.0 — 05.11.2026
 
 ### Added
