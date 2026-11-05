@@ -40,6 +40,7 @@ const SIGN_IN: Entry[] = [
   ["sign-in.client-file-invalid", "configuration_error", "the file is not a Desktop app OAuth client JSON"],
   ["oauth.scope-missing", "permission_error", "the sign-in lacks a permission this command needs"],
   ["sign-in.client-rejected", "configuration_error", "the provider rejected the OAuth client"],
+  ["sign-in.secret-without-id", "configuration_error", "an OAuth client secret is set without its client id"],
 ]
 
 /** Reasons every CLI over a provider's API raises alike: gcal and drive today. */
@@ -246,7 +247,7 @@ const OTHERS: Entry[] = [
   validation("task.category-unknown", "the category is not in the task category list"),
   validation("task.claimed", "someone else holds the task"),
   validation("task.closed", "the task is already closed"),
-  ["task.stale", "configuration_error", "the task changed since it was read; read it again"],
+  ["task.stale", "conflict", "the task changed since it was read; read it again"],
   validation("task.column", "the task beside which it moves is in another column than the status asked for"),
   validation("task.dependency-cycle", "the task would depend on itself"),
   validation(

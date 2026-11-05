@@ -27,13 +27,21 @@ export const accountCommand = (messenger: Messenger): Command => {
         ACCOUNT_PROFILES_QUERY,
       )
         .summary("profiles on this computer and their signed-in accounts")
-        .description("every profile on this computer, and the account each is logged in as; asks the messenger nothing")
+        .description(
+          "every account profile on this computer, and the account each is logged in as; a name that is only a bot " +
+            "is left out (`bot list` has it), one that is a bot too says `bot: true`; asks the messenger nothing",
+        )
         .action(async function (this: Command, words: string[]) {
           const terms = queryTerms(words, ACCOUNT_PROFILES_QUERY, "account list")
           const context = messengerContext(this, messenger, { needsProfile: false })
           const { app, provider } = messenger
           const current = context.settings.sources.profile === NONE_NAMED ? undefined : context.settings.profile
-          const profiles = [...new Set([...(current === undefined ? [] : [current]), ...context.settings.profilesHere])]
+          const { profilesHere, accountProfiles = profilesHere, botProfiles = [] } = context.settings
+          const isAccount = (profile: string) =>
+            accountProfiles.includes(profile) || messenger.profileState?.(profile, context.env) === "signed-in"
+          const profiles = [
+            ...new Set([...(current === undefined ? [] : [current]), ...profilesHere.filter(isAccount)]),
+          ]
             .filter((profile) => terms.get("profile") === undefined || profile === terms.get("profile"))
             .filter(
               (profile) =>
@@ -56,6 +64,7 @@ export const accountCommand = (messenger: Messenger): Command => {
                 ...(messenger.profileState
                   ? { signed_in: messenger.profileState(profile, context.env) !== "signed-out" }
                   : {}),
+                ...(botProfiles.includes(profile) ? { bot: true } : {}),
               })
             }
             renderAnswer(this, context, wholeList("account list", items))

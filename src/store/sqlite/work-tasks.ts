@@ -316,7 +316,7 @@ const timesAsIso = (changes: Record<string, [unknown, unknown]>): Record<string,
 export const checkRevision = (row: Row, expected: number | undefined): void => {
   if (expected === undefined || Number(row.revision) === expected) return
   throw new CliError(
-    "configuration_error",
+    "conflict",
     `task ${String(row.key)} changed since revision ${expected}; it is at ${String(row.revision)}: read it again`,
     { reason: "task.stale", revision: Number(row.revision) },
   )

@@ -169,6 +169,27 @@ describe("the order a setting is decided in", () => {
     expect(own.resolveSettings({}, { env, configDir, needsProfile: false }).profilesHere).toEqual(["sales"])
   })
 
+  it("**tells a bot from an account**: a name only a bot uses is no account profile", () => {
+    const env = { APP_STATE_DIR: mkdtempSync(join(tmpdir(), "app-state-")) }
+    withConfig(
+      JSON.stringify({
+        profiles: { work: {}, cloud: { limit: 5 } },
+        personal: { profiles: { both: {} } },
+        bot: { profiles: { cloud: {}, both: {}, signed: {} } },
+      }),
+    )
+    mkdirSync(join(env.APP_STATE_DIR, "accounts"))
+    writeFileSync(join(env.APP_STATE_DIR, "accounts", "signed.json"), '{"account":"1"}')
+    mkdirSync(join(env.APP_STATE_DIR, "bots"))
+    writeFileSync(join(env.APP_STATE_DIR, "bots", "support.json"), "{}")
+
+    const here = settings({}, env)
+
+    expect(here.profilesHere).toEqual(["both", "cloud", "signed", "work"])
+    expect(here.accountProfiles).toEqual(["both", "signed", "work"])
+    expect(here.botProfiles).toEqual(["both", "cloud", "signed", "support"])
+  })
+
   it("takes a profile from the first word or APP_PROFILE, and runs a no-account command without", () => {
     const env = { APP_STATE_DIR: mkdtempSync(join(tmpdir(), "app-state-")) }
     withConfig(JSON.stringify({ profiles: { work: {}, personal: {} } }))
@@ -397,6 +418,24 @@ describe("changing a setting", () => {
     changeSetting(path(), { profile: "work", setting: "limit", value: undefined })
     changeSetting(path(), { profile: "work", setting: "record", value: undefined })
     expect(sections(file())).toEqual({})
+  })
+
+  it("**keeps an id as the digits typed** when the setting takes text, never rounding it through a number", () => {
+    const ids = settingsFor(
+      { command: "app", appName: "app-cli", envPrefix: "APP", description: "", version: "0.0.0" },
+      { profile: { phone_number_id: v.optional(v.pipe(v.string(), v.regex(/^\d+$/))) } },
+    )
+    const long = "12345678901234567890"
+
+    expect(ids.changeSetting(path(), { profile: "cloud", kind: "bot", setting: "phone_number_id", value: long })).toBe(
+      long,
+    )
+    expect(ids.changeSetting(path(), { profile: "cloud", setting: "phone_number_id", value: '"42"' })).toBe("42")
+    expect(ids.changeSetting(path(), { profile: "cloud", setting: "limit", value: "50" })).toBe(50)
+    expect(file().bot.profiles.cloud.phone_number_id).toBe(long)
+    expect(() => ids.changeSetting(path(), { profile: "cloud", setting: "phone_number_id", value: "12ab" })).toThrow(
+      /phone_number_id cannot be "12ab"/,
+    )
   })
 
   it("**writes one permission key at a time**, and refuses a level that is not one", () => {

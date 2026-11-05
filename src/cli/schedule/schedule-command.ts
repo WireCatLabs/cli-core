@@ -4,6 +4,7 @@ import { CliError, resolvePaths, writeSecurely } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Argument, Command, Option } from "commander"
 import {
+  type AgentCli,
   describeWhen,
   findProgram,
   lastRun,
@@ -133,6 +134,11 @@ export interface ScheduleHost {
   newMail?: (command: Command, holder: string) => Promise<MailWaiting>
   /** The config file's settings for agent schedules; a schedule's own flags win, the defaults fill the rest. */
   limits?: (command: Command) => ScheduleLimits
+  /**
+   * Other CLIs the scheduled agent may run besides this one, each under its own `<PREFIX>_READ_ONLY`: memo's mail
+   * triage runs `mail`. Claude may run them; codex may write their state, config and cache folders.
+   */
+  agentRuns?: readonly AgentCli[]
 }
 
 export type ScheduleLimits = Partial<
@@ -218,7 +224,14 @@ const usd = (value: number) => `$${value.toFixed(2)}`
  * (macOS) or Task Scheduler (Windows). Every timer runs `schedule exec <file>`; the schedule file holds
  * the rest, so what runs and with which variables is the same on all three.
  */
-export const scheduleCommandFor = ({ app, context: contextOf, newMail, limits: configured }: ScheduleHost): Command => {
+export const scheduleCommandFor = ({
+  app,
+  context: contextOf,
+  newMail,
+  limits: configured,
+  agentRuns = [],
+}: ScheduleHost): Command => {
+  const agentClis = [app, ...agentRuns]
   const command = new Command("schedule").description(
     `run a ${app.command} command or an agent later or on a timer (systemd, launchd, Task Scheduler); an agent cannot send`,
   )
@@ -338,7 +351,7 @@ export const scheduleCommandFor = ({ app, context: contextOf, newMail, limits: c
       }),
     )
       .description(
-        `start an agent (claude or codex) with a prompt on a timer; it runs with ${app.envPrefix}_READ_ONLY=1, so it reads and drafts and cannot send — its answer is kept and you are notified`,
+        `start an agent (claude or codex) with a prompt on a timer; it runs with ${agentClis.map((one) => `${one.envPrefix}_READ_ONLY=1`).join(" and ")}, so it reads and drafts and cannot send — its answer is kept and you are notified`,
       )
       .argument("<name>", "lowercase letters, digits and dashes")
       .addArgument(new Argument("<harness>", "the agent to start").choices(HARNESSES))
@@ -391,7 +404,10 @@ export const scheduleCommandFor = ({ app, context: contextOf, newMail, limits: c
     const modelFlag = model ? ["--model", model] : []
     const program = findProgram(harness, context.env, system.platform)
     if (!program) throw new CliError("not_found", `${harness} is not on PATH`)
-    const paths = resolvePaths({ appName: app.appName, prefix: app.envPrefix, env: context.env })
+    const folders = agentClis.flatMap((one) => {
+      const paths = resolvePaths({ appName: one.appName, prefix: one.envPrefix, env: context.env })
+      return [paths.state, paths.config, paths.cache]
+    })
     const argv =
       harness === "claude"
         ? [
@@ -402,7 +418,7 @@ export const scheduleCommandFor = ({ app, context: contextOf, newMail, limits: c
             "--permission-mode",
             "dontAsk",
             "--allowedTools",
-            `Bash(${app.command}:*)`,
+            ...agentClis.map((one) => `Bash(${one.command}:*)`),
             "--no-session-persistence",
             ...modelFlag,
             ...((settings.leanStart ?? true) ? LEAN_CLAUDE : []),
@@ -415,14 +431,11 @@ export const scheduleCommandFor = ({ app, context: contextOf, newMail, limits: c
             "--ephemeral",
             "--sandbox",
             "workspace-write",
-            // The CLI reaches the messenger and writes its store and state, and nothing else.
+            // The CLIs reach their provider and write the store and their own state, and nothing else.
             "-c",
             "sandbox_workspace_write.network_access=true",
             ...modelFlag,
-            ...[dirname(storePath(context.env)), paths.state, paths.config, paths.cache].flatMap((dir) => [
-              "--add-dir",
-              dir,
-            ]),
+            ...[dirname(storePath(context.env)), ...folders].flatMap((dir) => ["--add-dir", dir]),
             prompt,
           ]
     await save({
@@ -518,6 +531,7 @@ export const scheduleCommandFor = ({ app, context: contextOf, newMail, limits: c
       const last = await untilChildEnds(this, (signal) =>
         runSchedule(app, system, context.env, scheduleFile(state, scheduleName(name)), {
           timer: timer(),
+          agentRuns,
           ...(signal ? { signal } : {}),
         }),
       )
@@ -556,6 +570,7 @@ export const scheduleCommandFor = ({ app, context: contextOf, newMail, limits: c
       const last = await untilChildEnds(this, (signal) =>
         runSchedule(app, system, context.env, file, {
           timer: timer(),
+          agentRuns,
           untilUnlocked: true,
           ...(signal ? { signal } : {}),
         }),

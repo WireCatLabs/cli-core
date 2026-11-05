@@ -36,6 +36,7 @@ const serve = async (
   requests: object[],
   {
     profiles = ["work", "personal"],
+    bots = [] as string[],
     argv = ["mcp", "serve", "--profiles", "all"],
     profileState = undefined as Messenger["profileState"],
     extra = {} as Record<string, string>,
@@ -51,7 +52,10 @@ const serve = async (
   mkdirSync(env.CHAT_CONFIG_DIR, { recursive: true })
   writeFileSync(
     join(env.CHAT_CONFIG_DIR, "config.json"),
-    JSON.stringify({ profiles: Object.fromEntries(profiles.map((one) => [one, {}])) }),
+    JSON.stringify({
+      profiles: Object.fromEntries(profiles.map((one) => [one, {}])),
+      bot: { profiles: Object.fromEntries(bots.map((one) => [one, {}])) },
+    }),
   )
   const { script, log } = fakeProfileServer()
   const stdin = new PassThrough()
@@ -111,6 +115,11 @@ describe("chat mcp serve --profiles", () => {
       arguments: { command: "inbox" },
     })
     expect(log()).toContain("start work mcp serve")
+    expect(stderr.join("")).toContain("serving every profile (personal, work)")
+  })
+
+  it("--profiles all leaves out a name that is only a bot", async () => {
+    const { stderr } = await serve([...HANDSHAKE, { id: 2, method: "tools/list" }], { bots: ["cloudtest"] })
     expect(stderr.join("")).toContain("serving every profile (personal, work)")
   })
 

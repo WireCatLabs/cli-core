@@ -195,6 +195,20 @@ describe("zm's existing entry", () => {
 })
 
 describe("new entries", () => {
+  it("keep the app's source, and the secret only of WireCat's public app", () => {
+    const keyring = memoryKeyring()
+    const storage = credentialStorage({
+      credentials: { service: "cal-cli", configDir: folder(), storage: "keyring", keyring },
+      account: oauthAccount("google", "personal"),
+      codec: standardCodec("google"),
+    })
+    const tokens = { refreshToken: "r", scopes: ["s"] }
+    storage.write({ tokens, client: { clientId: "own", clientSecret: "owners-own", source: "env" } })
+    expect(storage.read()?.client).toEqual({ clientId: "own", source: "env" })
+    storage.write({ tokens, client: { clientId: "wc", clientSecret: "public", source: "constants" } })
+    expect(storage.read()?.client).toEqual({ clientId: "wc", clientSecret: "public", source: "constants" })
+  })
+
   it("live under oauth:<provider>:<profile> and round-trip", () => {
     const keyring = memoryKeyring()
     const storage = credentialStorage({

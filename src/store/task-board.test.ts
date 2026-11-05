@@ -362,7 +362,7 @@ describe("the task board", () => {
     await expect(
       store.tasks.assign(task.id, { to: "person:21", role: "assignee" }, "owner", { revision: task.revision }),
     ).rejects.toMatchObject({
-      code: "configuration_error",
+      code: "conflict",
       details: { reason: "task.stale", revision: titled.revision },
     })
     const assigned = await store.tasks.assign(task.id, { to: "person:21", role: "assignee" }, "owner", titled)

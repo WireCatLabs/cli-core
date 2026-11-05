@@ -51,7 +51,10 @@ const definition = (availability?: AppMcpOptions["availability"]): ProgramDefini
       permissionExample: "events.delete=deny",
       ...(availability ? { availability } : {}),
     }),
-    appDoctorCommand(app, configuration, { oauthClient: (env) => ({ client: env.CAL_CLIENT_ID ? "own" : "wirecat" }) }),
+    appDoctorCommand(app, configuration, {
+      oauthClient: (env) =>
+        env.CAL_CLIENT_ID ? { client: "own", source: "env" } : { client: "wirecat", source: "constants" },
+    }),
   ],
 })
 
@@ -193,7 +196,7 @@ describe("appDoctorCommand", () => {
     })
     expect(item).toMatchObject({
       store: { path: env.MESSAGING_STORE, exists: false },
-      oauth_client: { client: "wirecat" },
+      oauth_client: { client: "wirecat", source: "constants" },
       profile_lock: "work",
       read_only: null,
       profiles: ["personal", "work"],

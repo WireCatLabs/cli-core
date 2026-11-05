@@ -18,5 +18,7 @@ description = "Values the tests write on purpose"
 regexTarget = "match"
 regexes = [
   '''(?i)s3cret|from-env|from-keyring|hunter2|t0ken|secret-[ab]|in-keyring''',
+  # WireCat's Google Desktop app secret, obscured in constants.json (src/constants/obscure.ts); public by Google's rules.
+  '''X6afcHNZ_v0d_N6-jCWHFQSeT2O-saKLY8_WY_W5aIlswI6q2EZ6GtF3IFhy6WjIHUzB''',
 ]
 paths = ['''pnpm-lock\.yaml''']

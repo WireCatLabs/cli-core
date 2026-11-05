@@ -1352,7 +1352,9 @@ The three tools, their arguments and what each permission shows are on the handb
   with an error naming the key. The owner turns it on in a terminal — `<cli> <profile> config set
   permissions.mcp.authority allow`, with `--bot` for a bot server. Discovery and execution read current permissions. An agent never changes
   the key itself: `config set|unset` run over MCP refuses `permissions.mcp…` and a whole `permissions` that names
-  it, on any profile and in the defaults. `<PREFIX>_READ_ONLY` still refuses them all (SEC-47).
+  it, on any profile and in the defaults. `<PREFIX>_READ_ONLY` still refuses them all (SEC-47), except the closed
+  list `LOCKED_AUTHORITY_COMMANDS`, today only mail's `rules add`, which a command marked `narrowsUnderLock`
+  narrows itself under the lock.
 - **`bot api` execution requires `bot.api`** (NEED-1679 B): its calls go to the messenger's Bot API as they are
   given, so they skip the send guard and the bot's recipient list. The key works as `mcp.authority` does: `deny` by
   default for an MCP server, a broader `bot: allow` does not lift it, at `deny` or `readonly` the commands remain

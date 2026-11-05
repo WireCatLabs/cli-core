@@ -7,6 +7,7 @@ import { timezoneOf } from "@wirecat/cli-base/query"
 import { clockMeta } from "@wirecat/cli-base/standards"
 import { isNewer, latestVersion } from "@wirecat/cli-base/update"
 import { Command } from "commander"
+import type { OAuthClientReport } from "../constants/index.js"
 import { type AppIdentity, envName, readOnlyLockOf } from "../ports/app.js"
 import { storePath } from "../store/path.js"
 import { type BaseEnvironment, environmentOf, outputFor } from "./context.js"
@@ -20,10 +21,11 @@ import type { Configuration } from "./settings.js"
 
 export interface AppDoctorOptions {
   /**
-   * Which OAuth client the CLI signs in with — WireCat's or one of the owner's own — read from the environment and
-   * files only. A throw is reported as its message.
+   * The OAuth app a new sign-in would use (WC-SECR-25), read from the environment and files only, usually
+   * `oauthClientReport` of the tool's `googleApp`/`oauthApp`. A throw is reported as a null client with its message as
+   * the reason.
    */
-  oauthClient?: (env: NodeJS.ProcessEnv) => { client: "wirecat" | "own" }
+  oauthClient?: (env: NodeJS.ProcessEnv) => OAuthClientReport
   /** The npm package, so `--online` can say whether a newer version is published; without it that check is left out. */
   packageName?: string
   /**
@@ -107,12 +109,12 @@ export const appDoctorReport = (
 ) => {
   const paths = resolvePaths({ appName: app.appName, prefix: app.envPrefix, env })
   const store = resolve(storePath(env))
-  let oauth: { client: "wirecat" | "own" | null; error?: string } | undefined
+  let oauth: OAuthClientReport | undefined
   if (options.oauthClient)
     try {
       oauth = options.oauthClient(env)
     } catch (error) {
-      oauth = { client: null, error: failure(error) }
+      oauth = { client: null, source: null, reason: failure(error) }
     }
   const common = {
     version: app.version,
