@@ -247,10 +247,10 @@ describe("reviewed meeting findings", () => {
         { ...f.input, findings: [{ ...task, dueAt: "2026-11-01T10:00:00Z" }] },
         agent,
       ),
-    ).rejects.toThrow("supporting evidence")
+    ).rejects.toThrow("due_at comes with due_evidence")
     await expect(
       f.store.meetingFindings.stage(account, { ...f.input, findings: [{ ...task, assignee: "person:1" }] }, agent),
-    ).rejects.toThrow("supporting evidence")
+    ).rejects.toThrow("assignee comes with assignee_evidence")
     await expect(
       f.store.meetingFindings.stage(account, { ...f.input, extractor: "x".repeat(70000) }, agent),
     ).rejects.toThrow("65536")

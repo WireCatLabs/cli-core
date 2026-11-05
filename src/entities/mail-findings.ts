@@ -31,6 +31,8 @@ const finding = v.variant("kind", [
     subject: v.optional(reference),
     type: v.picklist(FACT_TYPES),
     statement: text,
+    /** Every new finding gives one; a batch staged before reason was needed on every kind has none. */
+    reason: v.optional(text),
   }),
   v.strictObject({
     ...base,
@@ -49,6 +51,7 @@ const finding = v.variant("kind", [
     body: text,
     subject: v.optional(reference),
     project: v.optional(reference),
+    reason: v.optional(text),
   }),
   v.strictObject({ ...base, kind: v.literal("link"), from: reference, to: reference, reason: text }),
   v.strictObject({ ...base, kind: v.literal("new_contact"), address: text, name: text, reason: v.optional(text) }),
