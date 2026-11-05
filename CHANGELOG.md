@@ -7,6 +7,20 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`knowledge.updateOrganization(organization, { name })` renames an organization**, given as `organization:<id>` or
+  by its id; its kind and scope stay. An agent's rename is a proposal for the owner: the `organization_rename`
+  proposal kind and `proposeOrganizationRename(store, { organization, name }, by, reason?)`. It shows in `review` as
+  an `organization` row (`rename organization:3 to ...`); confirming it renames, rejecting it changes nothing. No
+  schema change.
+
+### Fixed
+
+- **`knowledge.organizations` answers a `name:` term.** `ORGANIZATIONS_QUERY` listed `name`, but the store had no
+  column for it, so `organizations list name:acme` failed. The match ignores case in any script, and `name:*acme*`
+  finds a name that holds a word.
+
 ## 0.581.0 — 05.11.2026
 
 ### Added

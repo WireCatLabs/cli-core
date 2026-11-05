@@ -7,7 +7,13 @@ export const ORGANIZATIONS_QUERY: QueryRegistry = {
   backend: "sql",
   fields: queryFieldsOf(organization, {
     native: ["id", "kind", "scope", "created_at"],
-    examples: { id: "id:1", kind: "kind:company", scope: "scope:work", created_at: "created_at>=2026-01-01" },
+    examples: {
+      id: "id:1",
+      kind: "kind:company",
+      name: "name:*acme*",
+      scope: "scope:work",
+      created_at: "created_at>=2026-01-01",
+    },
   }),
 }
 export const PROJECTS_QUERY: QueryRegistry = {

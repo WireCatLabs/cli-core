@@ -483,7 +483,9 @@ export {
   emptyProposalRegistry,
   FACT_SUMMARIES,
   ORGANIZATION_ADD_KIND,
+  ORGANIZATION_RENAME_KIND,
   type OrganizationProposal,
+  type OrganizationRenameProposal,
   type ProposalFilter,
   type ProposalKind,
   type ProposalRegistry,
@@ -491,6 +493,7 @@ export {
   parseProposalIds,
   proposalRegistry,
   proposeOrganization,
+  proposeOrganizationRename,
 } from "./proposals/index.js"
 export type { RetentionQuery, RetentionService } from "./retention.js"
 export { retentionService } from "./retention.js"

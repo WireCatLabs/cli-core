@@ -292,3 +292,39 @@ it("filters projects by name with wildcards and keeps account task inboxes out u
   expect((await list("name:telegram*")).length).toBe(0)
   expect(await list("name:telegram* AND kind:inbox")).toEqual(inboxes)
 })
+
+describe("organizations by name and rename", () => {
+  const names = async (f: Awaited<ReturnType<typeof fixture>>, text: string) => {
+    const query = parseLucene(text)
+    validateQuery(query, ORGANIZATIONS_QUERY)
+    return (await f.store.knowledge.organizations(query)).map((org) => org.name)
+  }
+
+  it("finds a name by a wildcard in any case and script, together with other fields", async () => {
+    const f = await fixture()
+    await f.store.knowledge.addOrganization({ kind: "company", name: "Acme Studio" })
+    await f.store.knowledge.addOrganization({ kind: "team", name: "Тартус" })
+    await f.store.knowledge.addOrganization({ kind: "team", name: "Other" })
+    expect(await names(f, "name:*ACME*")).toEqual(["Acme Studio"])
+    expect(await names(f, "name:*ТАРТ*")).toEqual(["Тартус"])
+    expect(await names(f, "name:*тарт*")).toEqual(["Тартус"])
+    expect(await names(f, "name:other")).toEqual(["Other"])
+    expect(await names(f, "kind:team AND NOT name:*тарт*")).toEqual(["Other"])
+  })
+
+  it("renames an organization by its reference or id, and refuses an unknown one", async () => {
+    const f = await fixture()
+    const org = await f.store.knowledge.addOrganization({ kind: "company", name: "Acme", scope: "work" })
+    expect(await f.store.knowledge.updateOrganization(org.ref, { name: "Acme Studio" })).toMatchObject({
+      id: org.id,
+      name: "Acme Studio",
+      kind: "company",
+      scope: "work",
+    })
+    expect((await f.store.knowledge.updateOrganization(org.id, { name: "Acme Group" })).name).toBe("Acme Group")
+    await expect(f.store.knowledge.updateOrganization("organization:999", { name: "X" })).rejects.toMatchObject({
+      code: "not_found",
+    })
+    await expect(f.store.knowledge.updateOrganization(org.ref, { name: "  " })).rejects.toThrow()
+  })
+})
