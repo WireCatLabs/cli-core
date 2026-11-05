@@ -182,10 +182,51 @@ describe("compactText", () => {
     expect(text.split("\n")).toEqual([
       "key: BOOK",
       "title: Книжный клуб",
-      "# messages: 2 · ref: msg:max/500/-1001/<id> · chat_title: Книжный клуб · sender_name: Анна · 2026-10-01 · Europe/Madrid",
+      "# 2026-10-01 · Europe/Madrid",
+      "# messages: 2 · ref: msg:max/500/-1001/<id> · chat_title: Книжный клуб · sender_name: Анна",
       "#1 · 10-01 09:11 · Встречаемся в четверг?",
       "#2 · 10-01 09:12 · Встречаемся в четверг?",
     ])
+  })
+
+  it("says the days and zone of all sections once, above the first", () => {
+    const shape: RowShape = { columns: [], sections: { first: "message", second: "message" } }
+    const late = msg(3, { timestamp: "2026-10-06T18:31:00.000Z" })
+    const text = compactText(itemOf({ first: [msg(1)], second: [late] }), shape, zone)
+    expect(text.split("\n").filter((line) => line.startsWith("# "))).toEqual([
+      "# 2026-10-01…2026-10-06 · Europe/Madrid",
+      "# first: 1",
+      "# second: 1",
+    ])
+  })
+
+  it("says a day once above its messages when a list in time order has several a day", () => {
+    const at = (id: number, iso: string) => msg(id, { timestamp: iso })
+    const text = compactText(
+      list([
+        at(1, "2026-10-01T07:00:00.000Z"),
+        at(2, "2026-10-01T08:00:00.000Z"),
+        at(3, "2026-10-01T09:00:00.000Z"),
+        at(4, "2026-10-02T07:00:00.000Z"),
+        at(5, "2026-10-02T08:00:00.000Z"),
+        at(6, "2026-10-02T09:00:00.000Z"),
+      ]),
+      message,
+      zone,
+    )
+    expect(text.split("\n").slice(1, 6)).toEqual([
+      "# 2026-10-01",
+      "#1 · 09:00 · Встречаемся в четверг?",
+      "#2 · 10:00 · Встречаемся в четверг?",
+      "#3 · 11:00 · Встречаемся в четверг?",
+      "# 2026-10-02",
+    ])
+    const shuffled = list([
+      at(1, "2026-10-01T07:00:00.000Z"),
+      at(2, "2026-10-02T07:00:00.000Z"),
+      at(3, "2026-10-01T08:00:00.000Z"),
+    ])
+    expect(compactText(shuffled, message, zone)).toContain("#2 · 10-02 09:00 · Встречаемся")
   })
 
   it("counts a chat's unread messages and leaves a zero out", () => {

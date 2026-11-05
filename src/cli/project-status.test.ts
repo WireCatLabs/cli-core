@@ -66,6 +66,18 @@ describe("projectStatusAnswer", () => {
     expect(item.coverage).toBeUndefined()
   })
 
+  it("leaves out what the rest of the answer already says", async () => {
+    const { item } = projectStatusAnswer(await statusOf(), hints)
+    expect(item).not.toHaveProperty("window")
+    const [question] = item.questions as Record<string, unknown>[]
+    expect(question).not.toHaveProperty("chat")
+    expect(question).not.toHaveProperty("basis")
+    const [promise] = item.promises as { basis: string; data: Record<string, unknown> }[]
+    expect(promise?.basis).toBe("pattern")
+    expect(promise?.data).not.toHaveProperty("source")
+    expect(item.chats.find((one) => one.chat === "chat:max/11/-950")).not.toHaveProperty("role")
+  })
+
   it("counts on the chat's row what it does not list: a role-less group's questions, others' word promises", async () => {
     const leads = HARBOUR.map((chat) =>
       chat.id === "-950"
@@ -90,7 +102,7 @@ describe("projectStatusAnswer", () => {
     const rows = new Map(item.chats.map((one) => [one.chat, one]))
     expect(rows.get("chat:max/11/-950")?.unlisted).toEqual({ questions: 2 })
     expect(rows.get("chat:max/11/-900")?.unlisted).toEqual({ promises: 1 })
-    expect((item.questions as { chat: string }[]).map((one) => one.chat)).not.toContain("chat:max/11/-950")
+    expect((item.questions as { ref: string }[]).filter((one) => one.ref.startsWith("msg:max/11/-950/"))).toEqual([])
     expect(item.promises).toEqual([expect.objectContaining({ ref: "msg:telegram/22/555/11", basis: "pattern" })])
   })
 

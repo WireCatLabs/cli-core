@@ -262,6 +262,8 @@ interface Cell {
   text: string
   /** The date, in the answer's zone, for the header's span. */
   date?: string
+  /** A `time` cell's clock time alone, printed under a day line. */
+  time?: string
 }
 
 const cellOf = (item: Fields, column: RowColumn, clock: Clock): Cell | undefined => {
@@ -276,7 +278,9 @@ const cellOf = (item: Fields, column: RowColumn, clock: Clock): Cell | undefined
       const parts = clock.parts(iso)
       if (!parts) return { text: clean(iso) }
       const day = parts.date.slice(5)
-      return { text: column.as === "day" ? day : `${day} ${parts.time}`, date: parts.date }
+      return column.as === "day"
+        ? { text: day, date: parts.date }
+        : { text: `${day} ${parts.time}`, date: parts.date, time: parts.time }
     }
     case "count":
       return typeof value === "number" && value !== 0
@@ -332,12 +336,30 @@ const span = (dates: readonly string[]) => {
 interface Drawn {
   header: string[]
   lines: string[]
+  dates: string[]
 }
 
 // A column every row prints the same, a chat's title in a list of its messages, is said once in the header.
 const sameEverywhere = (rows: readonly { cells: readonly (Cell | undefined)[] }[], index: number): boolean => {
   const first = rows[0]?.cells[index]?.text
   return first !== undefined && rows.every(({ cells }) => cells[index]?.text === first)
+}
+
+const ordered = (dates: readonly string[]) =>
+  dates.every((one, at) => at === 0 || one >= (dates[at - 1] as string)) ||
+  dates.every((one, at) => at === 0 || one <= (dates[at - 1] as string))
+
+/**
+ * The column whose date is said once on a `# YYYY-MM-DD` line above its rows: a list in time order, such as a chat's
+ * messages. Only when days hold three rows on average: with fewer, the day lines cost more than they save.
+ */
+const dayColumn = (rows: readonly { cells: readonly (Cell | undefined)[] }[], shape: RowShape, hoisted: boolean[]) => {
+  const index = shape.columns.findIndex((column, at) => column.as === "time" && !hoisted[at])
+  if (index < 0) return -1
+  const dates = rows.map(({ cells }) => cells[index]?.date)
+  if (dates.some((one) => one === undefined)) return -1
+  const days = dates as string[]
+  return ordered(days) && new Set(days).size * 3 <= days.length ? index : -1
 }
 
 const rowsOfItems = (items: readonly unknown[], shape: RowShape, clock: Clock, chars: number): Drawn => {
@@ -360,16 +382,29 @@ const rowsOfItems = (items: readonly unknown[], shape: RowShape, clock: Clock, c
     if (!hoist || !column || !item) return []
     return [`${sourceOf(item, column) ?? fieldsOfColumn(column.field)[0]}: ${rows[0]?.cells[index]?.text}`]
   })
-  const lines = rows.map(({ cells, text, item }) => {
+  const byDay = dayColumn(rows, shape, hoisted)
+  let shownDay: string | undefined
+  const lines = rows.flatMap(({ cells, text, item }) => {
     const parts = cells.map((cell, index) => (hoisted[index] ? undefined : cell?.text))
+    const dayLine: string[] = []
+    const cell = cells[byDay]
+    if (byDay >= 0 && cell?.date && cell.time) {
+      if (cell.date !== shownDay) dayLine.push(`# ${cell.date}`)
+      shownDay = cell.date
+      parts[byDay] = cell.time
+    }
     const shortened = prefix ? clean(prefix) : undefined
     if (shortened && parts[0]?.startsWith(shortened)) parts[0] = `#${parts[0].slice(shortened.length)}`
     const shown = [...parts, text].filter((part): part is string => part !== undefined && part !== "")
-    return guarded(shown.length ? shown.join(" · ") : item ? blockLine(item, chars) : "")
+    return [...dayLine, guarded(shown.length ? shown.join(" · ") : item ? blockLine(item, chars) : "")]
   })
+  const header = [...(prefix ? [`ref: ${clean(prefix)}<id>`] : []), ...named]
+  return { header, lines, dates }
+}
+
+const spanOf = (dates: readonly string[], clock: Clock) => {
   const when = span(dates)
-  const header = [...(prefix ? [`ref: ${clean(prefix)}<id>`] : []), ...named, ...(when ? [when, clock.zone] : [])]
-  return { header, lines }
+  return when ? [when, clock.zone] : []
 }
 
 const blockLine = (fields: Fields, chars: number) => blockOf(fields, chars).join("  ")
@@ -443,20 +478,26 @@ export const compactText = <T>(
   const chars = options.textChars ?? TEXT_CHARS
   let lines: string[] = []
   if ("items" in body) {
-    const { header, lines: rows } = rowsOfItems(body.items, shape, clock, chars)
-    lines = (header.length ? [`# ${header.join(" · ")}`] : []).concat(rows.length ? rows : ["# nothing found"])
+    const { header, lines: rows, dates } = rowsOfItems(body.items, shape, clock, chars)
+    const head = [...header, ...spanOf(dates, clock)]
+    lines = (head.length ? [`# ${head.join(" · ")}`] : []).concat(rows.length ? rows : ["# nothing found"])
   } else if (isFields(body.item)) {
     const sections = shape.sections ?? {}
     const rest = Object.fromEntries(
       Object.entries(body.item).filter(([name]) => !Object.hasOwn(sections, name) && !shape.hidden?.includes(name)),
     )
     lines = blockOf(rest, chars, "", shape.whole).map(guarded)
+    let dates: string[] = []
+    let drawn: string[] = []
     for (const [name, entity] of Object.entries(sections)) {
       const list = body.item[name]
       if (!Array.isArray(list)) continue
-      const { header, lines: rows } = rowsOfItems(list, rowsOf(entity), clock, chars)
-      lines = lines.concat([`# ${[`${clean(name)}: ${list.length}`, ...header].join(" · ")}`], rows)
+      const { header, lines: rows, dates: more } = rowsOfItems(list, rowsOf(entity), clock, chars)
+      dates = dates.concat(more)
+      drawn = drawn.concat([`# ${[`${clean(name)}: ${list.length}`, ...header].join(" · ")}`], rows)
     }
+    const when = spanOf(dates, clock)
+    lines = lines.concat(when.length ? [`# ${when.join(" · ")}`] : [], drawn)
   } else if (present(body.item)) lines = [guarded(cut(clean(String(body.item)), chars))]
   return lines.concat(footerOf(body as Body)).join("\n")
 }

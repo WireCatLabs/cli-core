@@ -19,7 +19,7 @@ export const STATUS_SIGNAL_ROWS: Readonly<Record<string, RowShape>> = {
     columns: [
       ...where,
       { field: "at", as: "day" },
-      { field: "data.source" },
+      { field: "basis" },
       { field: "data.side" },
       { field: "data.due", as: "day" },
       { field: "data.status" },

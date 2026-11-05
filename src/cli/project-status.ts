@@ -40,23 +40,25 @@ const SECTIONS = {
 /** The `project_status` answer drawn by `--compact`: a row per chat, then each listed signal with its own row. */
 export const projectStatusRow = (signals: readonly { id: string }[]): RowShape => ({
   columns: [],
-  hidden: ["project", "window", "purposes", "signals"],
+  hidden: ["project", "purposes", "signals"],
   sections: {
     ...SECTIONS,
     ...Object.fromEntries(signals.flatMap(({ id }) => (ON_CHAT_ROW.has(id) ? [] : [[listKey(id), `status.${id}`]]))),
   },
 })
 
-const who = v.strictObject({ ref: v.optional(v.string()), name: v.nullable(v.string()), owner: v.boolean() })
+const who = v.strictObject({ ref: v.optional(v.string()), name: v.optional(v.string()), owner: v.boolean() })
 
 const statusItem = v.looseObject({
   ref: v.nullable(v.string()),
-  chat: v.nullable(v.string()),
+  /** Left out when `ref` is a message of that chat. */
+  chat: v.optional(v.nullable(v.string())),
   at: v.nullable(v.string()),
   who: v.optional(who),
   /** Every ref the item cites, when it cites more than `ref`. */
   evidence: v.optional(v.array(v.string())),
-  basis: v.picklist(["store", "fact", "task", "pattern"]),
+  /** Left out for `store`, what most items are read from. */
+  basis: v.optional(v.picklist(["fact", "task", "pattern"])),
   data: v.record(v.string(), v.unknown()),
 })
 
@@ -65,7 +67,6 @@ export const projectStatusSchema = v.looseObject({
   project: v.string(),
   key: v.nullable(v.string()),
   name: v.string(),
-  window: v.strictObject({ since: v.string(), until: v.string() }),
   /** Each signal's version, so a saved answer says which rules made it. */
   signals: v.record(v.string(), v.number()),
   money: v.array(
@@ -76,7 +77,7 @@ export const projectStatusSchema = v.looseObject({
       chat: v.string(),
       title: v.nullable(v.string()),
       kind: v.string(),
-      role: v.nullable(v.string()),
+      role: v.optional(v.string()),
       purpose: v.optional(v.string()),
       project: v.optional(v.string()),
       coverage: v.string(),
@@ -207,15 +208,36 @@ const missingOf = (found: ProjectStatus, hints: ProjectStatusHints): Missing[] =
 }
 
 const whoOf = (one: StatusWho | null) =>
-  one === null ? {} : { who: { ...(one.ref === null ? {} : { ref: one.ref }), name: one.name, owner: one.owner } }
+  one === null
+    ? {}
+    : {
+        who: {
+          ...(one.ref === null ? {} : { ref: one.ref }),
+          ...(one.name === null ? {} : { name: one.name }),
+          owner: one.owner,
+        },
+      }
 
-/** An item as listed: its first ref, every ref only when there are more. */
-const listed = ({ signal: _signal, who, evidence, ...one }: StatusItem) => ({
-  ...one,
-  ref: evidence[0]?.ref ?? one.chat,
-  ...whoOf(who),
-  ...(evidence.length > 1 ? { evidence: evidence.map((each) => each.ref) } : {}),
-})
+const inChat = (ref: string | null, chat: string | null) =>
+  ref !== null && chat !== null && (ref === chat || ref.startsWith(`msg:${chat.slice("chat:".length)}/`))
+
+/**
+ * An item as listed: its first ref, every ref only when there are more. What the rest of the item already says is
+ * left out: the chat its message ref names, the `store` basis, and a promise's `source`, which is its basis.
+ */
+const listed = ({ signal: _signal, who, evidence, chat, basis, data, ...one }: StatusItem) => {
+  const ref = evidence[0]?.ref ?? chat
+  const { source, ...rest } = data as { source?: unknown }
+  return {
+    ...(inChat(ref, chat) ? {} : { chat }),
+    ...one,
+    ...(basis === "store" ? {} : { basis }),
+    data: source === basis ? rest : data,
+    ref,
+    ...whoOf(who),
+    ...(evidence.length > 1 ? { evidence: evidence.map((each) => each.ref) } : {}),
+  }
+}
 
 /**
  * Low signal items, counted on their chat's row instead of listed: questions others ask in a group with no role (a
@@ -265,7 +287,7 @@ const chatRow = (found: ProjectStatus, hints: ProjectStatusHints, chat: StatusCh
     chat: chat.ref,
     title: chat.title,
     kind: chat.kind,
-    role: chat.role,
+    ...(chat.role === null ? {} : { role: chat.role }),
     ...(Array.isArray(found.purposes) && found.purposes.length === 1 ? {} : { purpose: chat.purpose }),
     ...(chat.project === found.project.ref ? {} : { project: chat.project }),
     coverage: chat.coverage.completeness.state,
@@ -298,7 +320,6 @@ export const projectStatusAnswer = (found: ProjectStatus, hints: ProjectStatusHi
     project: found.project.ref,
     key: found.project.key,
     name: found.project.name,
-    window: found.window,
     signals: Object.fromEntries(found.signals.map(({ id, version }) => [id, version])),
     money: found.money.open,
     chats: found.chats.map((chat) =>
