@@ -759,6 +759,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--cc` | `<address>` | string | an e-mail address that gets a copy; repeat it for more |  |
 | `--bcc` | `<address>` | string | an e-mail address that gets a blind copy; repeat it for more |  |
 | `--reply-all` |  | switch | with --reply-to, an e-mail reply also goes to everyone the message went to |  |
+| `--trimmed` |  | switch | each e-mail's own text, without the quoted earlier mail and the signature; refused with --full |  |
 
 <!-- flags: end -->
 

@@ -9,8 +9,8 @@ shape of this file.
 
 ### Changed — may break callers
 
-- **cli-core accepts `@wirecat/cli-base` 0.76.0 and 0.77.0 (peer range `>=0.75.0 <0.78.0`) and builds with
-  0.77.0**, whose vocabulary has the `schedule` resource and the `agent`, `command` and `exec` verbs. The command
+- **cli-core accepts `@wirecat/cli-base` 0.76 and 0.77 (peer range `>=0.75.0 <0.78.0`) and builds with
+  0.77.1**, whose vocabulary has the `schedule` resource, the `agent`, `command` and `exec` verbs and `--trimmed`. The command
   lint now checks `schedule agent|command|exec` instead of skipping them in `lint/baseline`. A CLI that mounts
   `schedule` (tg, max, wa, gcal, mail, memo) removes the same entries from its own baseline when it bumps cli-base
   to 0.77.0: they are stale there and fail its lint. 0.76.0 adds the `conflict` error code; nothing here uses it yet.
