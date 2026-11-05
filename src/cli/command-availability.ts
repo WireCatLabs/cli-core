@@ -24,7 +24,10 @@ export interface DiscoveredCommand extends CommandInfo {
 export interface CommandAvailability {
   available: boolean
   reason?: string
+  /** The permission key the profile judges this command by; absent when no key governs it. */
   permission?: string
+  /** The profile's level for that key, so a caller sees `readonly` and `ask` before it runs anything. */
+  level?: Level
 }
 
 /** Discovery and execution use the same permission decision. */
@@ -37,12 +40,18 @@ export const commandAvailability = (
   mcp = true,
   declared?: CommandPermissions,
 ): CommandAvailability => {
+  const declaredKey = declared?.keyOf(info.path)
+  const key = declared ? declaredKey : (keyOf?.(info.path) ?? keyForCommand(info.path))
+  const level = key ? levelFor(levels, key, declared?.defaults).level : "allow"
+  const judged = { ...(key ? { permission: key } : {}), level }
   const blocked = (reason: string, permission?: string): CommandAvailability => ({
     available: false,
     reason,
-    ...(permission ? { permission } : {}),
+    ...judged,
+    ...(permission && permission !== judged.permission
+      ? { permission, level: levelFor(levels, permission).level }
+      : {}),
   })
-  const declaredKey = declared?.keyOf(info.path)
   // As `refuseByCommandPermissions` judges it before the run: a keyed write to the service.
   const declaredChange = Boolean(declaredKey) && info.effects?.remote === "write"
   if (readOnly && (changesMessenger(info) || declaredChange || authority?.(info.path)))
@@ -51,11 +60,8 @@ export const commandAvailability = (
     return blocked(`the profile keeps ${AUTHORITY_KEY} off`, AUTHORITY_KEY)
   if (mcp && isBotApi(info.path) && !botApiAllowed(levels))
     return blocked(`the profile requires ${BOT_API_KEY}: allow`, BOT_API_KEY)
-  const key = declared ? declaredKey : (keyOf?.(info.path) ?? keyForCommand(info.path))
-  const level = key ? levelFor(levels, key, declared?.defaults).level : "allow"
-  if (level === "deny") return blocked(`the profile denies ${key}`, key ?? undefined)
-  if (level === "readonly" && writes(info.effects))
-    return blocked(`${key} is readonly in this profile`, key ?? undefined)
+  if (level === "deny") return blocked(`the profile denies ${key}`)
+  if (level === "readonly" && writes(info.effects)) return blocked(`${key} is readonly in this profile`)
   const denied = (declared ? [] : readKeysForCommand(info.path)).find((read) => levelFor(levels, read).level === "deny")
-  return denied ? blocked(`the profile denies ${denied}`, denied) : { available: true }
+  return denied ? blocked(`the profile denies ${denied}`, denied) : { available: true, ...judged }
 }

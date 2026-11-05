@@ -395,8 +395,11 @@ A permission changes what an agent may execute, not whether the command exists. 
 `commands --json` retain the command catalogue. With a named profile, CLI help, text discovery,
 `commands --json` and `commands info` also show current availability. Without a named profile,
 discovery stays independent of account settings; help still works if settings need repair. MCP `tools_search` returns denied commands with
-`availability: { available: false, reason, permission }`; permitted commands have
-`availability: { available: true }`. Both complete listings and search results include this field.
+`availability: { available: false, reason, permission, level }`; permitted commands have
+`availability: { available: true, permission, level }`. Both complete listings and search results include this field.
+Every command carries its `level` (`allow`, `ask`, `readonly` or `deny`, as the profile resolves it), and `permission`
+names the key that level comes from; a command no key governs has `level: "allow"` and no `permission`. So an agent
+or WireCat Desktop sees which commands ask first, not only the denied ones.
 Availability is read from current settings, and execution checks permissions again before opening a
 connection or changing anything. A command being listed grants no permission to run it.
 

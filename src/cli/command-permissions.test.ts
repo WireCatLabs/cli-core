@@ -226,11 +226,11 @@ describe("a CLI that declares its own permission keys", () => {
       readOnly: true,
       permissions,
     })
-    expect(tools.find((tool) => tool.command === "api call")?.availability?.()).toEqual({
+    expect(tools.find((tool) => tool.command === "api call")?.availability?.()).toMatchObject({
       available: false,
       reason: "the read-only lock blocks this change",
     })
-    expect(tools.find((tool) => tool.command === "events list")?.availability?.()).toEqual({ available: true })
+    expect(tools.find((tool) => tool.command === "events list")?.availability?.()).toMatchObject({ available: true })
     const offered = toolsFromCommands(commands, { levels: levels(), readOnly: true, permissions })
     expect(offered.map((tool) => tool.command)).not.toContain("api call")
     const program = { commands, run: (argv: string[], given: object) => run(argv, definition, { ...given, env }) }
@@ -259,12 +259,13 @@ describe("a CLI that declares its own permission keys", () => {
       available: false,
       reason: "the profile denies events.list",
       permission: "events.list",
+      level: "deny",
     })
     expect(tools.find((tool) => tool.command === "api call")?.availability?.()).toMatchObject({
       available: false,
       permission: "api.call",
     })
-    expect(tools.find((tool) => tool.command === "api list")?.availability?.()).toEqual({ available: true })
+    expect(tools.find((tool) => tool.command === "api list")?.availability?.()).toMatchObject({ available: true })
     const program = { commands, run: (argv: string[], given: object) => run(argv, definition, { ...given, env }) }
     const answer = await runCommandForAgent(program, ["events", "list"], {}, { profile: "work", levels, permissions })
     expect(answer).toMatchObject({ error: { error: { code: "permission_error" } } })
@@ -281,8 +282,9 @@ describe("a CLI that declares its own permission keys", () => {
       available: false,
       reason: "the profile denies api.list",
       permission: "api.list",
+      level: "deny",
     })
-    expect(tools.find((tool) => tool.command === "events list")?.availability?.()).toEqual({ available: true })
+    expect(tools.find((tool) => tool.command === "events list")?.availability?.()).toMatchObject({ available: true })
     const program = { commands, run: (argv: string[], given: object) => run(argv, definition, { ...given, env }) }
     const answer = await runCommandForAgent(program, ["api", "list"], {}, { profile: "work", levels, keyOf })
     expect(answer).toMatchObject({ error: { error: { code: "permission_error" } } })

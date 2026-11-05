@@ -51,9 +51,9 @@ describe("profile-aware CLI discovery", () => {
     expect(result.code).toBe(0)
     const commands = JSON.parse(result.stdout).commands[0].commands
     expect(commands.map((one: { name: string }) => one.name)).toEqual(["list", "send"])
-    expect(commands[0].availability).toEqual({ available: true })
+    expect(commands[0].availability).toEqual({ available: true, permission: "messages.list", level: "allow" })
     expect(commands[1]).toMatchObject({
-      availability: { available: false, permission: "messages.send", reason: expect.any(String) },
+      availability: { available: false, permission: "messages.send", level: "deny", reason: expect.any(String) },
       arguments: [{ name: "chat" }, { name: "text" }],
     })
     const projected = await call(["limited", "commands", "messages", "--json=availability"])
@@ -75,7 +75,7 @@ describe("profile-aware CLI discovery", () => {
     ]) {
       const result = await call(["limited", "commands", "info", ...path, "--json"])
       expect(result.code).toBe(0)
-      expect(JSON.parse(result.stdout).availability).toEqual({ available: true })
+      expect(JSON.parse(result.stdout).availability).toMatchObject({ available: true })
     }
   })
 
@@ -115,6 +115,6 @@ describe("availability of a sync command", () => {
   ])("is withheld by a deny on its own key: %j", (path, key) => {
     const info = { path, effects: REMOTE_READ }
     expect(commandAvailability(info, { [key]: "deny" })).toMatchObject({ available: false, permission: key })
-    expect(commandAvailability(info, {})).toEqual({ available: true })
+    expect(commandAvailability(info, {})).toEqual({ available: true, permission: key, level: "allow" })
   })
 })
