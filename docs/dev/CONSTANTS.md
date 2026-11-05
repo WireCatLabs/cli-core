@@ -34,9 +34,26 @@ call for a layer decides its schema.
 
 ## Sign-in apps
 
-`googleApp({ env, prefix, clientFile })` returns `{ client, source }`: the owner's `--client-file` (`file`, read with
-`readClientFile`, which refuses a file others can read), else `<PREFIX>_GOOGLE_CLIENT_ID` with an optional
-`<PREFIX>_GOOGLE_CLIENT_SECRET` (`env`; a secret alone is a `configuration_error`, reason
-`sign-in.secret-without-id`), else WireCat's app (`wirecat`). A tool whose layer overrides the app passes its
-`constants`. Microsoft has no helper: mail's own app comes from its per-mailbox setting, so mail reads
-`constants().microsoft.app.client_id` as its fallback.
+The app a sign-in uses follows [WC-SECR-25](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/security.md#wc-secr-25--sign-in-with-wirecats-app-by-default-and-let-the-owner-choose-their-own),
+first match wins:
+
+| `source` | Where the app comes from |
+|---|---|
+| `flag` | `--client-file` (Google only, read with `readClientFile`, which refuses a file others can read) or `--client-id` |
+| `env` | `<PREFIX>_<PROVIDER>_CLIENT_ID`, such as `GCAL_GOOGLE_CLIENT_ID` |
+| `config` | the account's config key `<provider>.client_id`, which the tool reads and passes as `configClientId` |
+| `constants` | WireCat's app from `constants.json` |
+
+A secret, where the provider needs one, always comes from `<PREFIX>_<PROVIDER>_CLIENT_SECRET` and pairs with the id
+found by `flag`, `env` or `config`; a config file never holds it. A secret with no id is a `configuration_error`,
+reason `sign-in.secret-without-id`.
+
+- `googleApp({ env, prefix, clientFile?, clientId?, configClientId?, platform?, constants? })` → `{ client, source }`.
+- `microsoftApp({ env, prefix, clientId?, configClientId?, constants? })`: WireCat's Microsoft app has no secret.
+- `oauthApp({ provider, env, prefix, clientId?, configClientId?, wirecat? })`: any provider, with WireCat's app from
+  the tool's layer; `undefined` when nothing names an app and `wirecat.client_id` is empty.
+- `oauthClientReport(app, reason?)` → `doctor`'s `oauth_client`, `{ client: "wirecat" | "own" | null, source,
+  reason? }`. Pass the signed-in entry's `client` when it has a `source`, else the app a new sign-in would use.
+
+`client` carries its `source`, and the standard and drive sign-in entries save it as `clientSource`, so refresh,
+revoke and `doctor` see the app the account signed in with.

@@ -18,10 +18,17 @@ shape of this file.
   cli-base's, cli-core's and the tool's `constants.json` once per process, merged, validated and frozen; a tool
   passes its own layer and a schema built on `constantsSchema`. It holds WireCat's Google Desktop app
   (`google.app.client_id`, `client_secret`) and Microsoft client id (`microsoft.app.client_id`), which drive and mail
-  kept in source and gcal expected from a file CI wrote. `googleApp({ env, prefix, clientFile })` picks the
-  owner's `--client-file`, then `<PREFIX>_GOOGLE_CLIENT_ID` (a `_SECRET` alone is a `configuration_error`, reason
-  `sign-in.secret-without-id`), then WireCat's app, and says which (`source`: `file`, `env`, `wirecat`). See
-  [Constants](docs/dev/CONSTANTS.md).
+  kept in source and gcal expected from a file CI wrote. `googleApp({ env, prefix, clientFile, clientId,
+  configClientId })` and `microsoftApp(…)` pick the app in WC-SECR-25's order: `--client-file` or `--client-id`
+  (`flag`), `<PREFIX>_<PROVIDER>_CLIENT_ID` (`env`), the account's `<provider>.client_id` (`config`), WireCat's app
+  (`constants`); a `_SECRET` with no id is a `configuration_error`, reason `sign-in.secret-without-id`. `oauthApp`
+  does the same for a provider whose app is in a tool's layer, such as Zoom, and returns nothing when there is none.
+  `oauthClientReport(app, reason?)` is `doctor`'s `oauth_client`: `{ client: "wirecat" | "own" | null, source }`.
+  See [Constants](docs/dev/CONSTANTS.md).
+- **A sign-in entry records where its app came from** (`clientSource` in the standard and drive entries, read back
+  as `client.source`), so `doctor` reports the app the account signed in with. The standard entry also keeps
+  WireCat's public secret, so a refresh still works after a release ships another default app; an owner's own
+  secret is still never written.
 
 ## 0.565.0 — 05.11.2026
 

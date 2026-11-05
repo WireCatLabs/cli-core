@@ -4,7 +4,13 @@ import type { Logger } from "@wirecat/cli-base"
 export interface OAuthClient {
   clientId: string
   clientSecret?: string
+  /** Where the sign-in found the app (WC-SECR-25); saved with the entry, so `doctor` reports the app it used. */
+  source?: AppSource
 }
+
+/** `flag`: `--client-file` or `--client-id`; `env`: `<TOOL>_<PROVIDER>_CLIENT_ID`; `config`: the account's
+ * `<provider>.client_id`; `constants`: WireCat's app. */
+export type AppSource = "flag" | "env" | "config" | "constants"
 
 export interface TokenSet {
   accessToken?: string

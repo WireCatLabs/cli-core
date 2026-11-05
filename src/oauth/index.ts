@@ -7,7 +7,7 @@ export {
   type TokensOptions,
   tokenKeeper,
 } from "./keeper.js"
-export type { ExchangeContext, OAuthClient, OAuthProvider, RequestContext, TokenSet } from "./provider.js"
+export type { AppSource, ExchangeContext, OAuthClient, OAuthProvider, RequestContext, TokenSet } from "./provider.js"
 export { requestTokens, revokeToken, TOKEN_LOG_ALLOW, TOKEN_LOG_EVENT } from "./requests.js"
 export {
   type CredentialStorageOptions,
