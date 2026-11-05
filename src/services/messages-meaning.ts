@@ -21,8 +21,18 @@ export const meaningLane =
     const store = await deps.store()
     const ready: AccountKey[] = []
     const without: AccountKey[] = []
-    for (const one of accounts) ((await store.vectors.hasMessageVectors(one, target.key)) ? ready : without).push(one)
-    if (ready.length === 0) return skipped("no message has a vector yet", "conversations.rebuild")
+    // Mail keeps its vectors by thread, not by message: its accounts are read through the mail store.
+    const mail = new Map<AccountKey, number>()
+    const stored = await store.accounts.storedAccounts()
+    for (const one of accounts) {
+      const id =
+        one.provider === "email"
+          ? stored.find(({ provider, account }) => provider === one.provider && account === one.account)?.id
+          : undefined
+      if (id !== undefined) mail.set(one, Number(id))
+      else ((await store.vectors.hasMessageVectors(one, target.key)) ? ready : without).push(one)
+    }
+    if (ready.length === 0 && mail.size === 0) return skipped("no message has a vector yet", "conversations.rebuild")
     const words = plainWords(question)
     try {
       const ranked: MeaningRanked = []
@@ -40,10 +50,21 @@ export const meaningLane =
                 })
             for (const { chatId, messageId, score } of near) ranked.push({ ...one, chatId, id: messageId, score })
           }
+          for (const [one, accountId] of mail) {
+            const near = await store.mail.nearest(target.key, query as Float32Array, {
+              accountId,
+              limit: MEANING_DEPTH,
+            })
+            if (near.length === 0) without.push(one)
+            for (const { threadExternalId, externalId, score } of near)
+              ranked.push({ ...one, chatId: threadExternalId, id: externalId, score })
+          }
         }
         if (shared && !deps.embedders) await lookUp(await shared.get(target.key, () => target.open()))
         else await withEmbedder(deps, target, DEFAULT_TEXT_MODEL, {}, lookUp)
       }
+      if (ranked.length === 0 && without.length === accounts.length)
+        return skipped("no message has a vector yet", "conversations.rebuild")
       return {
         model: target.id,
         ranked: ranked.sort((a, b) => b.score - a.score).slice(0, MEANING_DEPTH),

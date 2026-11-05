@@ -39,7 +39,10 @@ shape of this file.
 - **`parseMailFindingsJson`, `parseMeetingFindingsJson` and `parseEvidenceFindingsJson` live in
   `src/cli/findings-input.ts`;** the exports from `@wirecat/cli-core/cli` are unchanged. `findingText` and
   `findingFields` are the checks themselves, not wrappers.
-
+- **`search all` searches mail by meaning too** (MEMO-38). Mail was only ever searched by words there, though its
+  threads had vectors. The meaning lane now reads a mail account's thread vectors through the mail store, and
+  `search all` fuses them with the word hits as it does for messages; the answer says how in `mail`. For a question,
+  a mail or message found by words gets no second vote from meaning, as in notes.
 - **`search all` finds records for a question typed as a sentence.** When the text is a question in natural language
   and not `exact`, messages and mail go through discovery (as `search messages --discover`), and notes and calendar
   events search any of the question's content words, ranked by the store. Before, every word had to be in one record,
