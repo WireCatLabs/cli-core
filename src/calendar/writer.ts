@@ -70,9 +70,14 @@ export interface CalendarWriter {
   ): Promise<EntryInput>
   /**
    * Optional: the provider makes an event from one line of text, reading its date, time and place its own way. The
-   * provider picks the id, so a retry after `outcome_unknown` may make a second event.
+   * provider picks the id, so a retry after `outcome_unknown` first asks `quickAdded`.
    */
   quickAdd?(calendar: StoredCalendar, text: string, options: { notify: boolean }): Promise<EntryInput>
+  /**
+   * With `quickAdd`: the events this account made on `calendar` at or after `since` (epoch ms), so a retry of a quick
+   * add whose answer was lost finds the event instead of making a second one.
+   */
+  quickAdded?(calendar: StoredCalendar, since: number): Promise<EntryInput[]>
   /**
    * Optional: adds a private copy of an event read from an iCalendar file, under its own UID, as Google's
    * `events.import`. The provider mails nobody. Sending the same UID again goes to the provider again; what it does

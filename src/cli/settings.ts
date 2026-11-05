@@ -178,6 +178,8 @@ export const MESSENGER_ONLY_SETTINGS: readonly string[] = [
   "history_group_days",
   "history_group_members_max",
   "read_other_bots",
+  "speech_model",
+  "picture_search",
 ]
 
 /** One program, one version: whether to look for a newer one is not a per-profile matter. */
@@ -272,6 +274,8 @@ export interface SettingsExtension<T extends object = Record<never, never>> {
    * `--permission` then take any command path, which the program checks against its commands.
    */
   permissions?: CommandPermissions
+  /** `false` for a CLI with its own `config` that has no `repair`: no config issue then names one. */
+  configRepair?: boolean
 }
 
 export interface SettingsExtensionContext {
@@ -554,7 +558,12 @@ export const settingsFor = <T extends object = Record<never, never>>(
     const read = readConfigText(path)
     if ("issue" in read) return { config: { profiles: {} }, issues: [read.issue] }
     if (read.text === undefined) return { config: { profiles: {} }, issues: [] }
-    const { config, issues } = checkConfigText(read.text, { file: path, tool: app.command, schema: readSchema })
+    const { config, issues } = checkConfigText(read.text, {
+      file: path,
+      tool: app.command,
+      schema: readSchema,
+      repair: extension.configRepair !== false,
+    })
     return { config: (config ?? { profiles: {} }) as Config, issues }
   }
 

@@ -9,7 +9,7 @@ import { event } from "../../meetings/index.js"
 
 const nullableText = v.nullable(text)
 const nullableTime = v.nullable(time)
-const stretch = v.strictObject({ start: time, end: time })
+const stretch = v.strictObject({ starts_at: time, ends_at: time })
 const epochWindow = v.strictObject({ from: v.number(), to: v.number() })
 
 export const calendar = v.strictObject({
@@ -39,8 +39,8 @@ const busyRow = v.strictObject({
 })
 
 export const calendarBusy = v.strictObject({
-  start: time,
-  end: time,
+  starts_at: time,
+  ends_at: time,
   timezone: text,
   calendars: v.array(busyRow),
   slots: v.optional(v.array(stretch)),
@@ -317,8 +317,7 @@ const ANSWERS: Record<string, { name: string; schema?: v.GenericSchema }> = {
 }
 
 /**
- * Each command's answer entity: one item of a list, or the one value. They describe what a host prints, with the
- * keys in snake_case, though a command hands its host some keys in camelCase (`notSynced`, `hasMore`).
+ * Each command's answer entity: one item of a list, or the one value, as the command prints it.
  */
 export const declareCalendarAnswers = (program: Command, commands: readonly Command[]): void => {
   const pathOf = (command: Command) => {

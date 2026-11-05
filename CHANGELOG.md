@@ -7,6 +7,47 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **The shared calendar commands print their own answers and open the profile per command.**
+  `addCalendarCommands(program, { app, open, freeBusy?, serverSearch?, feeds?, writes?, readFile?, writeFile? })`
+  replaces `CalendarCommandDeps`. `open(command, { readOnly })` returns a `CalendarRun` (event store, shared store,
+  account, profile, `locked`, and `source()`, `writes()`, `feeds()` built on first use); it is closed before the
+  answer prints. Each command answers in the standard envelope (`renderAnswer`) with its `meta` as built, so nothing
+  in between can drop it, and `write`, `note`, `embed`, `store`, `accountId` and the other per-profile fields are gone
+  from the options. The tree is built once with no state per call (WC-ARCH-22). `events export --output` and
+  `events import` read and write files themselves (0600, `file.not-found`, `file.not-a-file`, `file.denied`) unless
+  the app passes `readFile` / `writeFile`. `search all` is always mounted.
+- **`calendars busy` answers and queries `starts_at` / `ends_at`**, as every event answer does, in place of `start`
+  / `end` (WC-OUT-12): `calendars busy starts_at>=2026-11-02 ends_at<=2026-11-06`.
+- **`sync` keeps what the other calendars brought when one fails** (WC-OUT-8). It answers with `meta.complete: false`
+  and an issue per failed calendar (`sync.partial`, source `calendar:<id>`) instead of a `provider_error` with an
+  empty stdout.
+- **`events create --text` takes `--operation-id`.** A quick add whose answer was lost names an id starting with
+  `q`; run again with it, the create looks for the event that attempt made through the writer's new optional
+  `quickAdded(calendar, since)` before it sends the line again (WC-CMD-6). Two candidates are refused
+  (`event.quick-add-ambiguous`).
+- **`EntryContext.openBrowser(url, browser?, command?)` opens nothing where nobody can use a browser** (WC-CMD-15):
+  under `CI`, `--json`, `--jsonl`, `--no-input`, or with no terminal. The caller prints the URL either way.
+- **Shared reasons for CLIs over a provider's API:** `offline.refused`, `api.unknown-method`, `api.disabled`,
+  `provider.usage-limit`, `oauth.scope-missing`, `sign-in.client-rejected`, `file.not-found`, `file.not-a-file` and
+  `file.denied` are in cli-core's list. A CLI that registered one of them itself must drop its copy: two entries of
+  one reason are refused.
+- **`speech_model` and `picture_search` are messenger settings**, and `config show` of a CLI that is not a
+  messenger lists no messenger store setting (`phone_countries`, `task_categories.*`, `task_agent_close*`,
+  `task_first_pass_per_chat`).
+
+### Added
+
+- **`actorOf(command)` is exported from `./cli`:** who acts in this run, the owner or the agent by its name, as a
+  `Decider` for the document knowledge's confirm, stale and reverse needs it.
+- **`checkConfigText(text, { repair: false })` and `settingsFor(app, { configRepair: false })`** for a CLI with its
+  own `config` that has no `repair`: an invalid file's issue then names no `config repair` to run.
+- **`commandPermissions({ alsoChecks })`:** the other keys a command's real run checks. A `--dry-run` preview shows
+  each with its level under `permission.also` and refuses as the run would, so gcal's `api.calendar.*` keys show.
+- **A CLI that is not a messenger previews a `--dry-run` under `<PREFIX>_READ_ONLY`** (WC-PERM-12); it sends nothing.
+  A messenger's preview stays refused under the lock.
+
 ## 0.564.0 — 05.11.2026
 
 ### Changed — may break callers
