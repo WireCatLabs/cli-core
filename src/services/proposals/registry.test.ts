@@ -6,6 +6,7 @@ import { DEFAULT_DECISION_POLICY } from "../../store/decisions.js"
 import { openCache } from "../../store/open.js"
 import { openStore } from "../../store/store.js"
 import { parseProposalIds } from "./ids.js"
+import { proposeOrganization } from "./kinds/organization.js"
 import { emptyProposalRegistry, proposalRegistry } from "./registry.js"
 import type { ProposalKind, ProposalRow } from "./types.js"
 
@@ -300,5 +301,28 @@ describe("the review fixes", () => {
     })
     await f.registry.decide([f.relation.id], { confirm: false, by: "owner", reason: "not a client" })
     expect((await f.store.proposedActions.get(f.relation.id)).result).toEqual({ reason: "not a client" })
+  })
+})
+
+describe("an agent's new organization", () => {
+  it("waits as a proposal and exists once confirmed", async () => {
+    const f = await fixture()
+    const proposal = await proposeOrganization(f.store, { name: "Synthetic Dairy", kind: "company" }, claude)
+    expect((await f.store.knowledge.organizations()).map((org) => org.name)).not.toContain("Synthetic Dairy")
+    const row = await f.registry.get(proposal.id)
+    expect(row).toMatchObject({ kind: "organization", status: "proposed", summary: "add company Synthetic Dairy" })
+
+    const { decided } = await f.registry.decide([proposal.id], { confirm: true, by: "owner" })
+    expect(decided).toMatchObject([
+      { kind: "organization", status: "confirmed", made: [expect.stringMatching(/^organization:/)] },
+    ])
+    expect((await f.store.knowledge.organizations()).map((org) => org.name)).toContain("Synthetic Dairy")
+  })
+
+  it("makes nothing when rejected", async () => {
+    const f = await fixture()
+    const proposal = await proposeOrganization(f.store, { name: "Synthetic Dairy", kind: "company" }, claude)
+    await f.registry.decide([proposal.id], { confirm: false, by: "owner" })
+    expect((await f.store.knowledge.organizations()).map((org) => org.name)).not.toContain("Synthetic Dairy")
   })
 })
