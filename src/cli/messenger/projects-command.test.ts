@@ -161,7 +161,7 @@ describe("projects status", () => {
     const body = JSON.parse(stdout)
     expect(body.item).toMatchObject({ project: expect.stringMatching(/^project:\d+$/), name: "Harbour" })
     expect(body.item.chats).toEqual([expect.objectContaining({ chat: "chat:chat/500/7", coverage: "unknown" })])
-    expect(body.item.reply_next[0].data.next).toBe("nobody")
+    expect(body.item.chats[0].next).toBe("nobody")
     expect(body.item.topics[0].data).toMatchObject({ query: "crew note", theirs_last: "2026-01-01T00:10:00.000Z" })
     expect(body.meta).toMatchObject({ complete: false, accounts: ["chat/500"] })
     expect(body.next[0]).toMatchObject({
@@ -174,7 +174,7 @@ describe("projects status", () => {
     const { call } = await setUp()
     const compact = await call("projects", "status", "Harbour", ...WINDOW, "--compact")
     expect(compact.code).toBe(0)
-    expect(compact.stdout).toContain("msg:chat/500/7/10 · chat:chat/500/7 · nobody · 01-01")
+    expect(compact.stdout).toContain("chat:chat/500/7 · next nobody")
     const text = await call("projects", "status", "Harbour", ...WINDOW)
     expect(text.stdout).toContain("HARB · Harbour · 1 linked chats in 1 accounts, 2025-11-30 to 2026-02-01")
     expect(text.stdout).toContain("  1. chat default messages sync 7 --since-time 2025-11-30")

@@ -1,12 +1,20 @@
 import type { Missing, NextStep } from "@wirecat/cli-base/standards"
 import * as v from "valibot"
 import type { Id } from "../domain/models.js"
-import type { OutOfScope, ProjectStatus, StatusChatSummary, StatusItem } from "../services/project-status/index.js"
+import type {
+  OutOfScope,
+  ProjectStatus,
+  StatusChatSummary,
+  StatusItem,
+  StatusWho,
+} from "../services/project-status/index.js"
+import type { CoverageData } from "../services/project-status/signals/coverage.js"
+import type { ReplyNextData } from "../services/project-status/signals/reply-next.js"
 import type { AccountKey } from "../store/store.js"
 import type { RowShape } from "./compact.js"
 import { snakeKeys } from "./envelope.js"
 import { heldPhrase } from "./messenger/search-answers.js"
-import { STATUS_SIGNAL_ROWS } from "./project-status-rows.js"
+import { ON_CHAT_ROW, STATUS_SIGNAL_ROWS } from "./project-status-rows.js"
 
 export interface ProjectStatusHints {
   /** The step that syncs a chat held in part back to `since` (`YYYY-MM-DD`); null when no command here can. */
@@ -23,30 +31,31 @@ const day = (at: string | number) => new Date(at).toISOString().slice(0, 10)
 const listKey = (signal: string) => signal.replaceAll("-", "_")
 
 const SECTIONS = {
-  signals: "status.signal",
   money: "status.money",
   chats: "status.chat",
   out_of_scope: "status.out-of-scope",
   failed: "status.failed",
 }
 
-/** The `project_status` answer drawn by `--compact`: each signal's list with that signal's row. */
+/** The `project_status` answer drawn by `--compact`: a row per chat, then each listed signal with its own row. */
 export const projectStatusRow = (signals: readonly { id: string }[]): RowShape => ({
   columns: [],
+  hidden: ["project", "window", "purposes", "signals"],
   sections: {
     ...SECTIONS,
-    ...Object.fromEntries(signals.map(({ id }) => [listKey(id), `status.${id}`])),
+    ...Object.fromEntries(signals.flatMap(({ id }) => (ON_CHAT_ROW.has(id) ? [] : [[listKey(id), `status.${id}`]]))),
   },
 })
 
+const who = v.strictObject({ ref: v.optional(v.string()), name: v.nullable(v.string()), owner: v.boolean() })
+
 const statusItem = v.looseObject({
-  signal: v.string(),
   ref: v.nullable(v.string()),
   chat: v.nullable(v.string()),
-  chat_title: v.nullable(v.string()),
   at: v.nullable(v.string()),
-  who: v.nullable(v.strictObject({ ref: v.nullable(v.string()), name: v.nullable(v.string()), owner: v.boolean() })),
-  evidence: v.array(v.strictObject({ ref: v.string(), fingerprint: v.nullable(v.string()) })),
+  who: v.optional(who),
+  /** Every ref the item cites, when it cites more than `ref`. */
+  evidence: v.optional(v.array(v.string())),
   basis: v.picklist(["store", "fact", "task", "pattern"]),
   data: v.record(v.string(), v.unknown()),
 })
@@ -57,7 +66,8 @@ export const projectStatusSchema = v.looseObject({
   key: v.nullable(v.string()),
   name: v.string(),
   window: v.strictObject({ since: v.string(), until: v.string() }),
-  signals: v.array(v.strictObject({ id: v.string(), version: v.number() })),
+  /** Each signal's version, so a saved answer says which rules made it. */
+  signals: v.record(v.string(), v.number()),
   money: v.array(
     v.strictObject({ direction: v.string(), currency: v.nullable(v.string()), amount: v.string(), rows: v.number() }),
   ),
@@ -67,11 +77,19 @@ export const projectStatusSchema = v.looseObject({
       title: v.nullable(v.string()),
       kind: v.string(),
       role: v.nullable(v.string()),
-      purpose: v.string(),
-      project: v.string(),
+      purpose: v.optional(v.string()),
+      project: v.optional(v.string()),
       coverage: v.string(),
-      attention: v.number(),
-      why: v.nullable(v.string()),
+      attention: v.optional(v.number()),
+      why: v.optional(v.string()),
+      last: v.optional(v.strictObject({ ref: v.string(), at: v.string(), who })),
+      next: v.optional(v.picklist(["owner", "them", "named", "nobody"])),
+      waiting_since: v.optional(v.nullable(v.string())),
+      addressed: v.optional(v.strictObject({ ref: v.nullable(v.string()), name: v.nullable(v.string()) })),
+      overdue: v.optional(v.boolean()),
+      held: v.optional(v.strictObject({ messages: v.number(), oldest_at: v.nullable(v.string()) })),
+      sync_command: v.optional(v.nullable(v.string())),
+      unlisted: v.optional(v.record(v.string(), v.number())),
     }),
   ),
   purposes: v.union([v.literal("all"), v.array(v.string())]),
@@ -188,28 +206,91 @@ const missingOf = (found: ProjectStatus, hints: ProjectStatusHints): Missing[] =
   ]
 }
 
-const withPlace = (found: ProjectStatus, hints: ProjectStatusHints) => {
-  const titles = new Map(found.chats.map((chat) => [chat.ref, chat.title]))
-  const sync = (one: StatusItem) => {
-    const chat = found.chats.find((each) => each.ref === one.chat)
-    const step = chat && partial(found, chat) ? hints.sync(chat, day(found.window.since)) : null
-    return step ? hints.line(step) : null
+const whoOf = (one: StatusWho | null) =>
+  one === null ? {} : { who: { ...(one.ref === null ? {} : { ref: one.ref }), name: one.name, owner: one.owner } }
+
+/** An item as listed: its first ref, every ref only when there are more. */
+const listed = ({ signal: _signal, who, evidence, ...one }: StatusItem) => ({
+  ...one,
+  ref: evidence[0]?.ref ?? one.chat,
+  ...whoOf(who),
+  ...(evidence.length > 1 ? { evidence: evidence.map((each) => each.ref) } : {}),
+})
+
+/**
+ * Low signal items, counted on their chat's row instead of listed: questions others ask in a group with no role (a
+ * leads group's requests), promises found by words that others wrote in a group, and past the newest one per chat.
+ */
+const unlistedOf = (found: ProjectStatus): Set<StatusItem> => {
+  const chats = new Map(found.chats.map((chat) => [chat.ref, chat]))
+  const patterned = new Set<string>()
+  return new Set(
+    found.items.filter((one) => {
+      const chat = one.chat === null ? undefined : chats.get(one.chat)
+      if (!chat) return false
+      if (one.signal === "questions")
+        return (one.data as { side: string }).side === "theirs" && chat.role === null && chat.kind !== "dialog"
+      if (one.signal !== "promises" || one.basis !== "pattern") return false
+      if (chat.kind !== "dialog" && !one.who?.owner) return true
+      if (!patterned.has(chat.ref)) {
+        patterned.add(chat.ref)
+        return false
+      }
+      return true
+    }),
+  )
+}
+
+const counted = (items: StatusItem[]) => {
+  const counts: Record<string, number> = {}
+  for (const one of items) counts[one.signal] = (counts[one.signal] ?? 0) + 1
+  return counts
+}
+
+// The newest held message is the row's `last`.
+const heldOf = (one: StatusItem) => {
+  const { messages, oldestAt } = (one.data as unknown as CoverageData).held
+  return { messages, oldestAt }
+}
+
+/** A chat with what is said once per chat: its newest message, whose move it is, and how much of it is held. */
+const chatRow = (found: ProjectStatus, hints: ProjectStatusHints, chat: StatusChatSummary, unlisted: StatusItem[]) => {
+  const weight = found.attention.find((one) => one.chat === chat.ref)
+  const of = (signal: string) => found.items.find((one) => one.signal === signal && one.chat === chat.ref)
+  const reply = of("reply-next")
+  const held = of("coverage")
+  const sync = held && partial(found, chat) ? hints.sync(chat, day(found.window.since)) : null
+  const replied = reply?.data as ReplyNextData | undefined
+  return {
+    chat: chat.ref,
+    title: chat.title,
+    kind: chat.kind,
+    role: chat.role,
+    ...(Array.isArray(found.purposes) && found.purposes.length === 1 ? {} : { purpose: chat.purpose }),
+    ...(chat.project === found.project.ref ? {} : { project: chat.project }),
+    coverage: chat.coverage.completeness.state,
+    ...(weight ? { attention: weight.weight, why: weight.why } : {}),
+    ...(reply && replied
+      ? {
+          last: { ref: reply.evidence[0]?.ref, at: reply.at, ...whoOf(reply.who) },
+          next: replied.next,
+          ...(replied.next === "nobody" ? {} : { waitingSince: replied.waitingSince }),
+          ...(replied.addressed ? { addressed: replied.addressed } : {}),
+          ...(replied.overdue ? { overdue: true } : {}),
+        }
+      : {}),
+    ...(held ? { held: heldOf(held), syncCommand: sync ? hints.line(sync) : null } : {}),
+    ...(unlisted.length ? { unlisted: counted(unlisted) } : {}),
   }
-  return (one: StatusItem) => ({
-    ...one,
-    ref: one.evidence[0]?.ref ?? one.chat,
-    chatTitle: one.chat === null ? null : (titles.get(one.chat) ?? null),
-    ...(one.signal === "coverage" ? { syncCommand: sync(one) } : {}),
-  })
 }
 
 /** The answer of `projects status`: the item, two steps at most, what is missing, and the window. */
 export const projectStatusAnswer = (found: ProjectStatus, hints: ProjectStatusHints) => {
-  const weights = new Map(found.attention.map((one) => [one.chat, one]))
-  const place = withPlace(found, hints)
+  const unlisted = unlistedOf(found)
   const lists = Object.fromEntries(
     found.signals.flatMap(({ id }) => {
-      const items = found.items.filter((one) => one.signal === id).map(place)
+      if (ON_CHAT_ROW.has(id)) return []
+      const items = found.items.filter((one) => one.signal === id && !unlisted.has(one)).map(listed)
       return items.length ? [[listKey(id), items]] : []
     }),
   )
@@ -218,19 +299,16 @@ export const projectStatusAnswer = (found: ProjectStatus, hints: ProjectStatusHi
     key: found.project.key,
     name: found.project.name,
     window: found.window,
-    signals: found.signals,
+    signals: Object.fromEntries(found.signals.map(({ id, version }) => [id, version])),
     money: found.money.open,
-    chats: found.chats.map((chat) => ({
-      chat: chat.ref,
-      title: chat.title,
-      kind: chat.kind,
-      role: chat.role,
-      purpose: chat.purpose,
-      project: chat.project,
-      coverage: chat.coverage.completeness.state,
-      attention: weights.get(chat.ref)?.weight ?? 0,
-      why: weights.get(chat.ref)?.why ?? null,
-    })),
+    chats: found.chats.map((chat) =>
+      chatRow(
+        found,
+        hints,
+        chat,
+        [...unlisted].filter((one) => one.chat === chat.ref),
+      ),
+    ),
     purposes: found.purposes,
     ...(found.outOfScope.length
       ? {
@@ -266,8 +344,8 @@ const NEXT_WORDS: Record<string, string> = { owner: "YOU", them: "them", nobody:
 
 const chatLine = (found: ProjectStatus, chat: StatusChatSummary): string[] => {
   const of = (signal: string) => found.items.filter((one) => one.signal === signal && one.chat === chat.ref)
-  const [last] = of("last-message")
-  const reply = of("reply-next")[0]?.data as
+  const [last] = of("reply-next")
+  const reply = last?.data as
     | { next: string; waitingSince: string | null; addressed: { name: string | null } | null }
     | undefined
   const head = [

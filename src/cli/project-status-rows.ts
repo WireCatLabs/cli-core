@@ -1,25 +1,18 @@
 import type { RowColumn, RowShape } from "./compact.js"
 
-const where: RowColumn[] = [{ field: "ref" }, { field: ["chat_title", "chat"] }]
+const where: RowColumn[] = [{ field: "ref" }]
 const who: RowColumn = { field: ["who.owner", "who.name"], tag: "you" }
 
+/** Signals of one item per chat, drawn on the chat's row rather than as a list of their own. */
+export const ON_CHAT_ROW: ReadonlySet<string> = new Set(["reply-next", "coverage"])
+
 /**
- * The compact row of each status signal's items, by `status.<signal id>`; a signal's file and its row are the two
- * places a new signal touches. They live here because a service may not import the CLI's row type.
+ * The compact row of each listed status signal's items, by `status.<signal id>`; a signal's file and its row are the
+ * two places a new signal touches. They live here because a service may not import the CLI's row type.
  */
 export const STATUS_SIGNAL_ROWS: Readonly<Record<string, RowShape>> = {
-  "status.last-message": { columns: [...where, { field: "at", as: "time" }, who] },
-  "status.reply-next": {
-    columns: [
-      ...where,
-      { field: "data.next" },
-      { field: "data.addressed.name" },
-      { field: "data.waiting_since", as: "day" },
-      { field: "data.overdue", tag: "overdue" },
-    ],
-  },
   "status.questions": {
-    columns: [...where, { field: "at", as: "day" }, { field: "data.side" }, who],
+    columns: [...where, { field: "at", as: "day" }, who],
     text: ["data.excerpt"],
   },
   "status.promises": {
@@ -53,19 +46,8 @@ export const STATUS_SIGNAL_ROWS: Readonly<Record<string, RowShape>> = {
     columns: [
       ...where,
       { field: "data.query" },
-      { field: "data.theirs_last", as: "day" },
       { field: "data.yours_last", as: "day" },
       { field: "data.silent_since", as: "day" },
-    ],
-  },
-  "status.coverage": {
-    columns: [
-      { field: "chat" },
-      { field: "chat_title" },
-      { field: "data.state" },
-      { field: "data.held.messages", as: "count", tag: "held" },
-      { field: "data.held.oldest_at", as: "day" },
-      { field: "sync_command" },
     ],
   },
   "status.children": {
@@ -86,10 +68,14 @@ export const STATUS_ROWS: Readonly<Record<string, RowShape>> = {
     columns: [
       { field: "chat" },
       { field: "title" },
-      { field: "kind" },
       { field: "role" },
-      { field: "attention", as: "count", tag: "attention" },
-      { field: "why" },
+      { field: "next", prefix: "next" },
+      { field: "addressed.name" },
+      { field: "waiting_since", as: "day" },
+      { field: "overdue", tag: "overdue" },
+      { field: "held.messages", as: "count", tag: "held" },
+      { field: "unlisted.questions", as: "count", tag: "questions unlisted" },
+      { field: "unlisted.promises", as: "count", tag: "promises unlisted" },
     ],
   },
   "status.money": {
@@ -100,7 +86,6 @@ export const STATUS_ROWS: Readonly<Record<string, RowShape>> = {
       { field: "rows", as: "count", tag: "rows" },
     ],
   },
-  "status.signal": { columns: [{ field: "id" }, { field: "version" }] },
   "status.out-of-scope": {
     columns: [
       { field: "chat" },

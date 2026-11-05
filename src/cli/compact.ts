@@ -29,6 +29,8 @@ export interface RowShape {
   sections?: Readonly<Record<string, string>>
   /** An item answer's fields printed whole, never cut: a cursor that is pasted back. */
   whole?: readonly string[]
+  /** An item answer's fields left out: bookkeeping an agent reads in `--json` if it ever needs it. */
+  hidden?: readonly string[]
 }
 
 export interface CompactOptions {
@@ -445,7 +447,9 @@ export const compactText = <T>(
     lines = (header.length ? [`# ${header.join(" · ")}`] : []).concat(rows.length ? rows : ["# nothing found"])
   } else if (isFields(body.item)) {
     const sections = shape.sections ?? {}
-    const rest = Object.fromEntries(Object.entries(body.item).filter(([name]) => !Object.hasOwn(sections, name)))
+    const rest = Object.fromEntries(
+      Object.entries(body.item).filter(([name]) => !Object.hasOwn(sections, name) && !shape.hidden?.includes(name)),
+    )
     lines = blockOf(rest, chars, "", shape.whole).map(guarded)
     for (const [name, entity] of Object.entries(sections)) {
       const list = body.item[name]

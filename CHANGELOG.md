@@ -27,6 +27,19 @@ shape of this file.
   holder with no mark yet is `mail.no-mark`. `rewindMark` is the function under it, and `MailActivityStore` gets
   `emailsBefore`.
 
+### Changed — may break callers
+
+- **`projects status` fits 4 KB of JSON and 1.5 KB compact on the status fixture (was 11.2 KB and 3.6 KB).** Most of
+  it was rows the owner would not call status. Each chat's row now carries what is said once per chat: `last` (the
+  newest message's ref, time and sender), `next`, `waiting_since`, `addressed`, `overdue`, and for a chat held in part
+  `held` and `sync_command`; the `last_message`, `reply_next` and `coverage` lists are gone, and the `last-message`
+  signal with them (reply-next already cites the newest message). Others' questions in a group with no role, and
+  others' promises found by words in a group or past the newest one per chat, are counted on the chat's row under
+  `unlisted` instead of listed. A listed item drops `signal` and `chat_title`, keeps `evidence` (now plain refs) only
+  when it cites more than `ref`, and `who` only when set. `signals` is `{ id: version }`; a chat row leaves out
+  `purpose` when one purpose was read, `project` when it is the root, and `attention` when it is 0. `--compact` leaves
+  out `project`, `window`, `purposes` and `signals` (new `RowShape.hidden`). The human form is unchanged.
+
 ## 0.576.0 — 05.11.2026
 
 ### Added
