@@ -14,6 +14,15 @@ shape of this file.
   over-payment, over-invoice and currency rules, and the invoices' statuses follow. A bot is still refused on a
   confirmed payment (`finance.owner-only`); a rejected or deleted payment is `finance.unallocate`.
 
+## 0.572.0 — 05.11.2026
+
+### Changed — may break callers
+
+- **`facts.unconfirm` is now `facts.revoke`**, its refusal reason `fact.unconfirm-correction` is
+  `fact.revoke-correction`, and the step it writes into a fact's `metadata.history` is `revoked`. memo's command is
+  `memo facts revoke`, a word the shared vocabulary has ("take back what was granted"); `unconfirm` is not in it. Nothing
+  called the old names but memo's unreleased command, which moves with this.
+
 ## 0.571.0 — 05.11.2026
 
 ### Added
