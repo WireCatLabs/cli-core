@@ -7,6 +7,13 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **A write on a stale task revision fails with `conflict`, exit 15, not `configuration_error`, exit 3.** The reason
+  stays `task.stale` with the task's current `revision` in `details`; only the code and the exit number change
+  (cli-base's new `conflict`). A caller that branched on `configuration_error` for it should branch on the reason or
+  the new code. `vocabulary.stale`, `tag-review.stale` and `meeting-project.stale` keep `configuration_error` for now.
+
 ### Added
 
 - **`<tool> bot list` runs without a profile word**, as `account list` does; `<tool> <profile> bot list` still
@@ -27,10 +34,6 @@ shape of this file.
 
 ### Changed — may break callers
 
-- **A write on a stale task revision fails with `conflict`, exit 15, not `configuration_error`, exit 3.** The reason
-  stays `task.stale` with the task's current `revision` in `details`; only the code and the exit number change
-  (cli-base's new `conflict`). A caller that branched on `configuration_error` for it should branch on the reason or
-  the new code. `vocabulary.stale`, `tag-review.stale` and `meeting-project.stale` keep `configuration_error` for now.
 - **cli-core now needs `@wirecat/cli-base` 0.76.0 or later** (peer range `>=0.76.0 <0.78.0`), which holds
   `loadConstants`.
 - **`appDoctorCommand`'s `oauthClient` returns `oauthClientReport`'s shape, `{ client, source, reason? }`**, and a
