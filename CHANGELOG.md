@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.570.0 — 05.11.2026
+
 ### Added
 
 - **`facts.unconfirm(ref, by, reason?)` takes back the approval of an accepted fact** of any type: it waits as
