@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.583.0 — 05.11.2026
+
 ### Changed — may break callers
 
 - **`--compact` says a day once above its rows in a list in time order.** When a list's rows are sorted by time and
