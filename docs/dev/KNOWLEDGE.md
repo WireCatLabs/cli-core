@@ -91,8 +91,8 @@ the host passes `decisions: { agentDecisions: true }` from the owner's explicit 
 meeting findings, task close suggestions, and any row marked `ownerOnly` (a registry row takes it from its kind), are the owner's alone even
 then: `mayDecide` reads the row's stored `kind`, so a path that sees the batch as a generic action refuses too. `proposalRegistry`
 (`./services`) is the one inbox over every kind (`relationship`, `key_document`, `fact`, `invoice`, `payment`,
-`memory`, `findings`, `mail_findings`, `meeting_findings`, `task_close`, `action`); a new kind is a `ProposalKind` that registers its id `prefix` or the stored proposal kinds it owns.
-Ids are bare numbers for stored proposals and `fact:`, `invoice:`, `payment:`, `memory:`, `link:`, `key:` for the rest;
+`order`, `memory`, `findings`, `mail_findings`, `meeting_findings`, `task_close`, `action`); a new kind is a `ProposalKind` that registers its id `prefix` or the stored proposal kinds it owns.
+Ids are bare numbers for stored proposals and `fact:`, `invoice:`, `payment:`, `order:`, `memory:`, `link:`, `key:` for the rest;
 a task close is `close:<task key>` (`close:Q-15`). `parseProposalIds` reads ranges and lists of them (never a range of
 task keys); only a findings batch takes part ids (`17080/f2`). A link
 keeps no actor, only provenance text, so an unconfirmed link is the owner's alone to decide, and only the owner
@@ -138,6 +138,21 @@ row and the owner's acceptance confirms it in the same write. The first writable
 payment facts the same way; a fact that could not be a row stays a `statement` with its fields under
 `metadata.retired_payment`. `projects status` lists payments and open invoices from `store.finance`, and its open
 total counts confirmed invoices only.
+
+`store.orders` keeps orders (store version 50): whom an order is for (`customer`, a `person:` or `organization:`, the
+owner's own person when left out), why (`purpose`: `personal`, `business`, `client` or `other`), the shop as its mail
+names it (`supplierName`) with an optional `supplier` reference, the shop's number, an optional amount with its
+currency, a status (`placed`, `shipped`, `delivered`, `cancelled`, `returned`), the order and delivery days, and
+optional `invoice:` and `payment:` links. Like an invoice, the owner's entry is confirmed at once and an agent's is an
+`order` proposal only the owner decides. One shop's number is stored once (`order.duplicate`, the name compared in any
+letter case); `orderOfShop` finds it again, and only the owner moves its status on (`setStatus`).
+
+A mail findings batch (`store.mailFindings`) also takes `invoice`, `payment`, `order` and `order_update` findings.
+Staging runs what accepting would write through `store.finance` or `store.orders` and rolls it back, so a batch the
+owner could not accept is refused with the same reason; an `order_update` needs the stored order of its
+`supplier_name` and `number` (`order.not-found`). Accepting writes the owner's confirmed row with the cited mail as its
+evidence; an `order_update` sets the status, the delivery day of a delivered one, and adds its mail to the order's
+evidence. Certificate numbers, account ids and expiry dates are `fact` findings: the statement carries them.
 
 ## Source records and imports
 

@@ -1900,6 +1900,49 @@ export const paymentAllocations = sqliteTable(
   ],
 )
 
+export const orders = sqliteTable(
+  "orders",
+  {
+    id: integer("id").primaryKey(),
+    customerType: text("customer_type").notNull(),
+    customerId: integer("customer_id").notNull(),
+    purpose: text("purpose").notNull(),
+    supplierType: text("supplier_type"),
+    supplierId: integer("supplier_id"),
+    supplierName: text("supplier_name").notNull(),
+    number: text("number"),
+    currency: text("currency"),
+    /** Minor units of `currency`. */
+    total: integer("total"),
+    status: text("status").notNull(),
+    orderDate: text("order_date"),
+    fulfilledDate: text("fulfilled_date"),
+    invoiceId: integer("invoice_id").references(() => invoices.id),
+    paymentId: integer("payment_id").references(() => payments.id),
+    projectId: integer("project_id").references(() => projects.id),
+    review: text("review").notNull(),
+    authorType: text("author_type").notNull(),
+    authorId: integer("author_id").notNull(),
+    model: text("model"),
+    confirmedByType: text("confirmed_by_type"),
+    confirmedById: integer("confirmed_by_id"),
+    source: text("source").notNull(),
+    metadata: text("metadata"),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+    deletedAt: integer("deleted_at"),
+  },
+  (table) => [
+    index("orders_by_customer_type_customer_id").on(table.customerType, table.customerId),
+    index("orders_by_supplier_type_supplier_id").on(table.supplierType, table.supplierId),
+    index("orders_by_invoice_id").on(table.invoiceId),
+    index("orders_by_payment_id").on(table.paymentId),
+    index("orders_by_project_id").on(table.projectId),
+    index("orders_by_author_type_author_id").on(table.authorType, table.authorId),
+    index("orders_by_confirmed_by_type_confirmed_by_id").on(table.confirmedByType, table.confirmedById),
+  ],
+)
+
 /** What a source said about one of its records, as it said it: the layer under the entity an import makes. */
 export const records = sqliteTable(
   "records",

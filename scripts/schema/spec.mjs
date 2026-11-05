@@ -1684,7 +1684,7 @@ const GROUPS = [
   [
     "finance",
     "Money",
-    "Invoices, payments and what settles what, in exact minor units per currency. Totals are per currency: the store converts nothing.",
+    "Invoices, payments and what settles what, in exact minor units per currency, and the orders they pay for. Totals are per currency: the store converts nothing.",
     [],
     financeTables,
   ],

@@ -1,4 +1,5 @@
 import { invoiceLine, paymentLine } from "../../domain/finance.js"
+import { orderLine } from "../../domain/orders.js"
 import { filesAccountSql, providerLabel, providerNamed } from "../../domain/providers.js"
 import { oneLine, type RefState, type RefSummary, type RefSummaryKind } from "../../domain/ref-summaries.js"
 import { formatReference, parseReference, type Reference } from "../../domain/references.js"
@@ -258,6 +259,14 @@ const READERS = {
     at: "x.created_at",
     deleted: "x.deleted_at",
   })),
+  order: byId("order", "orders", () => ({
+    title:
+      "json_object('id', x.id, 'number', x.number, 'supplierName', x.supplier_name, 'total', x.total, " +
+      "'currency', x.currency, 'status', x.status, 'review', x.review)",
+    holder: "(SELECT name FROM projects WHERE id = x.project_id)",
+    at: "x.created_at",
+    deleted: "x.deleted_at",
+  })),
 } satisfies Record<string, Reader>
 
 type ReaderName = keyof typeof READERS
@@ -377,6 +386,8 @@ const titleOf = (kind: RefSummaryKind, reference: Reference, found: Found): stri
       return fieldsOf(found.title, invoiceLine)
     case "payment":
       return fieldsOf(found.title, paymentLine)
+    case "order":
+      return fieldsOf(found.title, orderLine)
     case "folder":
       return reference.type === "folder" && reference.path !== null && found.title !== null
         ? `${found.title}/${reference.path}`

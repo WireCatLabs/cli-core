@@ -954,5 +954,25 @@ export const GENERATED: { name: string; statements: string[] }[] = [
     "statements": [
       "ALTER TABLE `record_relations` ADD `amount` text;"
     ]
+  },
+  {
+    "name": "20261105125314_version-50-orders",
+    "statements": [
+      "CREATE TABLE `orders` (\n\t`id` integer PRIMARY KEY,\n\t`customer_type` text NOT NULL,\n\t`customer_id` integer NOT NULL,\n\t`purpose` text NOT NULL,\n\t`supplier_type` text,\n\t`supplier_id` integer,\n\t`supplier_name` text NOT NULL,\n\t`number` text,\n\t`currency` text,\n\t`total` integer,\n\t`status` text NOT NULL,\n\t`order_date` text,\n\t`fulfilled_date` text,\n\t`invoice_id` integer,\n\t`payment_id` integer,\n\t`project_id` integer,\n\t`review` text NOT NULL,\n\t`author_type` text NOT NULL,\n\t`author_id` integer NOT NULL,\n\t`model` text,\n\t`confirmed_by_type` text,\n\t`confirmed_by_id` integer,\n\t`source` text NOT NULL,\n\t`metadata` text,\n\t`created_at` integer NOT NULL,\n\t`updated_at` integer NOT NULL,\n\t`deleted_at` integer,\n\tCONSTRAINT `fk_orders_invoice_id_invoices_id_fk` FOREIGN KEY (`invoice_id`) REFERENCES `invoices`(`id`),\n\tCONSTRAINT `fk_orders_payment_id_payments_id_fk` FOREIGN KEY (`payment_id`) REFERENCES `payments`(`id`),\n\tCONSTRAINT `fk_orders_project_id_projects_id_fk` FOREIGN KEY (`project_id`) REFERENCES `projects`(`id`)\n);",
+      "CREATE INDEX `orders_by_customer_type_customer_id` ON `orders` (`customer_type`,`customer_id`);",
+      "CREATE INDEX `orders_by_supplier_type_supplier_id` ON `orders` (`supplier_type`,`supplier_id`);",
+      "CREATE INDEX `orders_by_invoice_id` ON `orders` (`invoice_id`);",
+      "CREATE INDEX `orders_by_payment_id` ON `orders` (`payment_id`);",
+      "CREATE INDEX `orders_by_project_id` ON `orders` (`project_id`);",
+      "CREATE INDEX `orders_by_author_type_author_id` ON `orders` (`author_type`,`author_id`);",
+      "CREATE INDEX `orders_by_confirmed_by_type_confirmed_by_id` ON `orders` (`confirmed_by_type`,`confirmed_by_id`);"
+    ]
+  },
+  {
+    "name": "20261105125315_version-50-orders-rules",
+    "statements": [
+      "-- The store's code checks these first and says why; the triggers keep a stray write from another build or a hand\n-- edit from storing an order with an unknown status or purpose, or an amount without its currency.\nCREATE TRIGGER orders_valid_bi BEFORE INSERT ON orders\n  WHEN new.customer_type NOT IN ('person', 'organization')\n    OR new.purpose NOT IN ('personal', 'business', 'client', 'other')\n    OR new.status NOT IN ('placed', 'shipped', 'delivered', 'cancelled', 'returned')\n    OR new.review NOT IN ('proposed', 'confirmed', 'rejected')\n    OR (new.total IS NULL) <> (new.currency IS NULL) OR new.total < 0 BEGIN\n  SELECT RAISE(ABORT, 'orders: a person or organization customer, a known purpose, status and review, an amount with its currency');\nEND;",
+      "CREATE TRIGGER orders_valid_bu BEFORE UPDATE ON orders\n  WHEN new.customer_type NOT IN ('person', 'organization')\n    OR new.purpose NOT IN ('personal', 'business', 'client', 'other')\n    OR new.status NOT IN ('placed', 'shipped', 'delivered', 'cancelled', 'returned')\n    OR new.review NOT IN ('proposed', 'confirmed', 'rejected')\n    OR (new.total IS NULL) <> (new.currency IS NULL) OR new.total < 0 BEGIN\n  SELECT RAISE(ABORT, 'orders: a person or organization customer, a known purpose, status and review, an amount with its currency');\nEND;"
+    ]
   }
 ]
