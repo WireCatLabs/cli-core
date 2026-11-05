@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.569.0 — 05.11.2026
+
 ### Changed — may break callers
 
 - **A claude agent schedule runs on Sonnet and starts lean.** `schedule agent` takes `--model <model>` (an alias such
