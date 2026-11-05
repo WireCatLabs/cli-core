@@ -1089,6 +1089,25 @@ describe("chats create, join and leave", () => {
     for (const item of answer(listed).items) expect(v.safeParse(ENTITIES.account_profile, item).success).toBe(true)
   })
 
+  it("**leaves out a name that is only a bot**, and marks an account that is a bot too", async () => {
+    const env = sandbox()
+    mkdirSync(env.CHAT_CONFIG_DIR, { recursive: true })
+    writeFileSync(
+      join(env.CHAT_CONFIG_DIR, "config.json"),
+      JSON.stringify({ bot: { profiles: { cloudtest: { limit: 5 }, work: {} } } }),
+    )
+    rememberAccount(app, "work", "501", env)
+    const { CHAT_PROFILE: _, ...unnamed } = env
+
+    const listed = await call(["account", "list", "--json"], base, unnamed, { profileState: () => "signed-out" })
+
+    expect(listed.code).toBe(0)
+    expect(answer(listed).items).toEqual([
+      { profile: "work", current: false, account: "501", name: null, signed_in: false, bot: true },
+    ])
+    for (const item of answer(listed).items) expect(v.safeParse(ENTITIES.account_profile, item).success).toBe(true)
+  })
+
   it("**assumes no profile, not even the only one** — an account command says what to name", async () => {
     const { CHAT_PROFILE: _, ...env } = sandbox()
 

@@ -12,7 +12,7 @@ import { baseContext, secretInputOf } from "../context.js"
 import { terminalAsker } from "../messenger/ask.js"
 import { refuseUnknownPermissionKeys } from "../permission-keys.js"
 import { asFirstWord } from "../profile.js"
-import type { Settings } from "../settings.js"
+import type { ResolveOptions, Settings } from "../settings.js"
 import { botCopy } from "./copy.js"
 import type { BotAdapter, BotChatRef, BotConnectOptions, BotMessenger } from "./port.js"
 import { botFiles, ChatRegistry } from "./registry.js"
@@ -41,8 +41,14 @@ const refuseBotPermissions = (
 }
 
 /** What a bot command needs, resolved once: the bot's settings, its token, its lists. */
-export const botContext = (command: Command, bot: BotMessenger) => {
-  const base = baseContext(command, (flags, options) => bot.resolveSettings(flags, { ...options, kind: "bot" }))
+export const botContext = (
+  command: Command,
+  bot: BotMessenger,
+  resolving: Pick<ResolveOptions, "needsProfile"> = {},
+) => {
+  const base = baseContext(command, (flags, options) =>
+    bot.resolveSettings(flags, { ...options, ...resolving, kind: "bot" }),
+  )
   const { settings, env, keyring } = base
   const profile = settings.profile
   const files = botFiles(bot.app, profile, env)

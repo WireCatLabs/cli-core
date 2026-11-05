@@ -102,8 +102,10 @@ export const servedProfiles = (
     )
   if (lock) return { set: { option: lock, profiles: () => [lock], key: `_${lock}` } }
   if (names.length === 1 && names[0] === EVERY_PROFILE) {
-    const every = () =>
-      messenger.resolveSettings(self.optsWithGlobals(), { env, needsProfile: false, readOnly: true }).profilesHere
+    const every = () => {
+      const here = messenger.resolveSettings(self.optsWithGlobals(), { env, needsProfile: false, readOnly: true })
+      return here.accountProfiles ?? here.profilesHere
+    }
     return { set: { option: EVERY_PROFILE, profiles: every, key: ALL_PROFILES } }
   }
   if (names.length === 0 || names.includes(EVERY_PROFILE))

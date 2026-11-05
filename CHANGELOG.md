@@ -7,6 +7,22 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`<tool> bot list` runs without a profile word**, as `account list` does; `<tool> <profile> bot list` still
+  works.
+
+### Fixed
+
+- **`account list` no longer lists a bot as an account that is not signed in.** A name that only the bot side
+  uses (the file's `bot` section, a bot's own files) and that has no personal section, recorded login or session is
+  left out; `bot list` has it. A profile that is an account and a bot too says `bot: true`, a new optional field of
+  `account_profile`. `mcp serve --profiles all` serves the same account profiles. `Settings` gains the optional
+  `accountProfiles` and `botProfiles`.
+- **`config set` keeps a long id as the digits typed.** `config set --bot phone_number_id 100000000000001` was
+  parsed as a number and refused by a setting that takes text; when the parsed value is refused and the text as
+  typed passes, the text is kept, never through a JS number.
+
 ## 0.566.0 — 05.11.2026
 
 ### Changed — may break callers
