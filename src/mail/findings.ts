@@ -153,7 +153,10 @@ export type MailFinding =
 
 export interface MailFindingsInput {
   schemaVersion: 1
-  /** `<holder>:<through_id>`: one batch per run of a holder over the mail it was given. */
+  /**
+   * `<holder>:<through_id>`, with `-r<resets>` after the owner moved the mark back: one batch per run of a holder over
+   * the mail it was given. `review --holder` gives it.
+   */
   key: string
   extractor: string
   findings: MailFinding[]
@@ -520,8 +523,10 @@ const one = (raw: Record<string, unknown>, ids: Set<string>): MailFinding => {
  * The shape of a mail findings batch: 1–30 findings, each citing 1–8 `msg:email/…` references with fingerprints.
  * What needs the store — the fingerprints, partial mail, the per-sender cap, the targets — the store checks.
  */
-const KEY = /^[a-z0-9][a-z0-9-]{0,39}:[1-9]\d*$/
-const KEY_SHAPE = "a mail findings key is <holder>:<through_id>, such as mail-triage:9123456"
+const KEY = /^[a-z0-9][a-z0-9-]{0,39}:[1-9]\d*(-r[1-9]\d*)?$/
+const KEY_SHAPE =
+  "a mail findings key is the one `review --holder` gave: <holder>:<through_id>, and -r<resets> after a reset, " +
+  "such as mail-triage:9123456 or mail-triage:9123456-r1"
 
 export const validateMailFindings = (input: MailFindingsInput): MailFindingsInput => {
   const batch = validateBatch(input, RULES, MAIL_FINDINGS_PER_RUN, one)

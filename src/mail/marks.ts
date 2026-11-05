@@ -33,6 +33,8 @@ export interface MailMark {
   suspicious: number[]
   read: number
   skipped: Record<SkipReason, number>
+  /** How often the owner moved the mark back: a findings key names it, so a run after a reset never reuses one. */
+  resets: number
   /** ms. */
   updatedAt: number
 }
@@ -64,6 +66,7 @@ const parsed = (holder: string, value: string, at: number): MailMark | undefined
       suspicious: Array.isArray(saved.suspicious) ? saved.suspicious.filter((id) => typeof id === "number") : [],
       read: saved.read ?? 0,
       skipped: { ...noneSkipped(), ...saved.skipped },
+      resets: typeof saved.resets === "number" ? saved.resets : 0,
       updatedAt: at,
     }
   } catch {
@@ -104,6 +107,14 @@ const verdict = (email: MarkedEmail, now: number): SkipReason | "held" | "read" 
 /** The mark's state, as a cursor `acknowledge` takes back: the last id read, and when it was read. */
 export const cursorOf = (throughId: number, readAt: number) => `${throughId}.${readAt}`
 
+/**
+ * The findings key of one run: `<holder>:<through_id>`, and `-r<resets>` once the owner moved the mark back, so the
+ * runs after a reset never reach a key a batch staged before it holds. The same review gives the same key: a retry
+ * of one run stages nothing twice.
+ */
+export const findingsKeyOf = (holder: string, throughId: number, resets: number) =>
+  `${holder}:${throughId}${resets > 0 ? `-r${resets}` : ""}`
+
 const parseCursor = (cursor: string) => {
   const match = /^(\d+)\.(\d+)$/.exec(cursor.trim())
   if (!match)
@@ -127,6 +138,8 @@ export interface MarkRead {
   excerpts: BulkExcerpt[]
   /** What `acknowledge --cursor` takes once the holder is done with these. */
   cursor: string
+  /** The key a findings batch over these emails takes; `undefined` while nothing is stored to read. */
+  findingsKey: string | undefined
   /** More is stored after this batch: read again after acknowledging. */
   more: boolean
   held: number
@@ -209,8 +222,12 @@ const examine = async (
     skipped: noneSkipped(),
     mark: saved,
   }
-  if (!account) return { ...empty, cursor: cursorOf(0, now) }
-  if (!saved) return { ...empty, cursor: cursorOf(await store.mail.newestEmailId(account.id), now) }
+  const keyed = (throughId: number) => ({
+    cursor: cursorOf(throughId, now),
+    findingsKey: throughId > 0 ? findingsKeyOf(holder, throughId, saved?.resets ?? 0) : undefined,
+  })
+  if (!account) return { ...empty, ...keyed(0) }
+  if (!saved) return { ...empty, ...keyed(await store.mail.newestEmailId(account.id)) }
   const mark = after === undefined ? saved : { ...saved, throughId: after, held: [], suspicious: [] }
   const found = await store.mail.emailsAfter(account.id, mark.throughId, limit + 1, [...mark.held, ...mark.suspicious])
   // Mail a running sync stored is read once that sync ended: it files bulk mail only at its end.
@@ -241,7 +258,7 @@ const examine = async (
     wanted: wanted.sort((a, b) => a - b),
     sorted: new Map([...sorted].filter(([, one]) => one.verdict === "excerpt")),
     oldestStoredAt,
-    cursor: cursorOf(batch.at(-1)?.id ?? mark.throughId, now),
+    ...keyed(batch.at(-1)?.id ?? mark.throughId),
     more: newer.length > batch.length,
     held,
     skipped,
@@ -388,6 +405,7 @@ export const acknowledgeMark = async (
     suspicious: [...new Set(suspicious)].sort((a, b) => a - b).slice(-MOST_HELD),
     read,
     skipped,
+    resets: mark?.resets ?? 0,
   }
   await store.sync.setSyncState(mailbox, key, JSON.stringify(next))
   return { holder, ...next, updatedAt: now }
@@ -490,6 +508,7 @@ export const rewindMark = async (
     suspicious: mark.suspicious.filter((id) => id <= through),
     read: mark.read,
     skipped: mark.skipped,
+    resets: mark.resets + 1,
   }
   if (!dry) await store.sync.setSyncState(mailbox, key, JSON.stringify(next))
   return { mark: { holder, ...next, updatedAt: dry ? mark.updatedAt : now }, ...answer }

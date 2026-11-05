@@ -57,11 +57,23 @@ const mounted = (shared: Command[]): Command[] => {
   const review = shared.find((one) => one.name() === "review") as Command
   const messages = shared.find((one) => one.name() === "messages") as Command
   const acknowledge = messages.commands.find((one) => one.name() === "acknowledge") as Command
-  for (const command of [review, acknowledge])
+  const reset = messages.commands.find((one) => one.name() === "reset") as Command
+  for (const command of [review, acknowledge, reset])
     overrideSharedContract(command, "the host names the mailbox with --source.", (one) => {
       one.option("--source <accounts>", "the one mailbox")
     })
-  return [new Command("mail").addCommand(review), new Command("messages").addCommand(acknowledge)]
+  // memo's own command; the test stages through the store, so it only has to exist for the step.
+  const findings = new Command("findings").addCommand(
+    annotate(new Command("add"), { effects: LOCAL_WRITE })
+      .argument("<file>")
+      .option("--key <key>")
+      .option("--source <accounts>")
+      .action(() => {}),
+  )
+  return [
+    new Command("mail").addCommand(review).addCommand(findings),
+    new Command("messages").addCommand(acknowledge).addCommand(reset),
+  ]
 }
 
 const mailbox = async (mount?: MailMount) => {
@@ -563,6 +575,66 @@ describe("what the mail pipeline reads and may write under the read-only lock", 
       )
     })
     expect(staged.status).toBe("proposed")
+  })
+
+  it("gives a new findings key after the owner moves the mark back, so a run stages while an earlier batch waits", async () => {
+    const box = await mailbox({ ...MEMO_MOUNT, findings: "mail findings add" })
+    const source = ["--source", "email:me@example.com"]
+    const review = async () => {
+      const done = await box.cli(["mail", "review", "--holder", "triage", ...source])
+      expect(done.code, done.err).toBe(0)
+      const answer = JSON.parse(done.out) as {
+        items: { ref: string; email: { fingerprint: string } }[]
+        next: { step: string; args: { key?: string; cursor?: string } }[]
+      }
+      const arg = (step: string) => answer.next.find((one) => one.step === step)?.args
+      return { answer, key: arg("mail-findings.add")?.key as string, cursor: arg("mail-messages.acknowledge")?.cursor }
+    }
+    const stage = (key: string, items: { ref: string; email: { fingerprint: string } }[]) =>
+      box.withStore((store) =>
+        store.mailFindings.stage(
+          MINE,
+          {
+            schemaVersion: 1,
+            key,
+            extractor: "test",
+            findings: items.map((item, n) => ({
+              id: `t${n}`,
+              kind: "task" as const,
+              type: "chore" as const,
+              title: `Answer ${n}`,
+              reason: "asked",
+              commitment: "explicit" as const,
+              evidence: [{ reference: item.ref, fingerprint: item.email.fingerprint }],
+            })),
+          },
+          { bot: "triage" },
+        ),
+      )
+    await box.synced()
+    const start = await review()
+    await box.cli(["messages", "acknowledge", "--holder", "triage", "--cursor", String(start.cursor), ...source])
+    await box.withStore((store) => store.knowledge.addProject({ name: "Inbox" }))
+    await box.thread("t-ask", email("ask", 1))
+    await box.synced()
+
+    const first = await review()
+    expect(first.key).toMatch(/^triage:[1-9]\d*$/)
+    const before = await stage(first.key, first.answer.items)
+    expect(before.status).toBe("proposed")
+    expect((await stage(first.key, first.answer.items)).id).toBe(before.id)
+    await box.cli(["messages", "acknowledge", "--holder", "triage", "--cursor", String(first.cursor), ...source])
+
+    const reset = await box.cli(["messages", "reset", "--holder", "triage", "--last", "1", ...source])
+    expect(reset.code, reset.err).toBe(0)
+    const again = await review()
+    expect(again.key).toBe(`${first.key}-r1`)
+    expect(again.answer.items.map((one) => one.ref)).toEqual(first.answer.items.map((one) => one.ref))
+    const after = await stage(again.key, again.answer.items)
+    expect(after.status).toBe("proposed")
+    expect(after.id).not.toBe(before.id)
+    expect((await stage(again.key, again.answer.items)).id).toBe(after.id)
+    expect((await box.withStore((store) => store.mailFindings.get(before.id))).status).toBe("proposed")
   })
 
   it("lets a read-only run move its mark, and refuses every other local write", async () => {

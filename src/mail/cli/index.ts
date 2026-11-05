@@ -44,6 +44,8 @@ export interface MailMount {
   acknowledge?: string
   /** `null`: the host mounts no thread read, so a review offers none. */
   conversation?: string | null
+  /** The host's command that stages a findings batch with `--key`; `review --holder` then gives that key as a step. */
+  findings?: string
   /** In snake_case, as a step names it: memo's `source`, with `email:<account>`. */
   mailbox?: { option: string; value: (mailbox: AccountKey) => string }
 }
