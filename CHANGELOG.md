@@ -7,8 +7,6 @@ shape of this file.
 
 ## Unreleased
 
-## 0.575.0 — 05.11.2026
-
 ### Added
 
 - **`review --holder` gives an agent the bulk mail that is not surely a newsletter.** Shops, banks and site forms put
@@ -23,6 +21,11 @@ shape of this file.
   `mail_bulk_newsletter_score`, `mail_bulk_newsletter_words`, `mail_bulk_newsletter_senders`, `mail_bulk_order_words`),
   read by `bulkTriageOf` into `MailReads.bulkTriage`, and passed to `mailWaiting` and `advancePastSkipped` as their
   new last argument; without it the defaults apply.
+
+## 0.575.0 — 05.11.2026
+
+### Added
+
 - **Orders in the store (store version 50).** `store.orders` keeps what the owner, his business or a client ordered:
   for whom (`customer`, the owner when left out) and why (`purpose`: `personal`, `business`, `client`, `other`), the
   shop as its mail names it with an optional `supplier` reference, the shop's number, amount and currency, the status
