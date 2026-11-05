@@ -97,8 +97,8 @@ a task close is `close:<task key>` (`close:Q-15`). `parseProposalIds` reads rang
 task keys); only a findings batch takes part ids (`17080/f2`). A link
 keeps no actor, only provenance text, so an unconfirmed link is the owner's alone to decide, and only the owner
 removes a link or writes a confirmed link of any kind (`notes.addLink`, `relate` with `by: "owner"`); an agent's
-link is written unconfirmed. Only the owner removes, reverses or unconfirms an accepted fact; an agent withdraws only
-its own proposed fact or memory. `facts.unconfirm` returns an agent's accepted fact to proposed and keeps the step,
+link is written unconfirmed. Only the owner removes, reverses or revokes an accepted fact; an agent withdraws only
+its own proposed fact or memory. `facts.revoke` returns an agent's accepted fact to proposed and keeps the step,
 with the decision it took back, in `metadata.history`; it refuses the owner's own fact and an accepted correction,
 whose superseded fact's earlier status is not kept. The policy is set once at `openStore({ decisions })` and read by every check. An agent's
 `relate` returns a `relationship` proposal.

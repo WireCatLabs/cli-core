@@ -86,7 +86,7 @@ export interface FactsStore {
    * The owner takes back the approval of an accepted fact an agent proposed: it waits as `proposed` again. The step is
    * kept in `metadata.history`, with the decision it took back.
    */
-  unconfirm(reference: string, by: Decider, reason?: string): Promise<Fact>
+  revoke(reference: string, by: Decider, reason?: string): Promise<Fact>
   /** The owner, or an agent for the owner, turns down a proposed fact; it stays, marked `rejected`. */
   reject(reference: string, by: Decider, reason?: string): Promise<Fact>
   /**
@@ -310,7 +310,7 @@ export const factOperationsOver = (context: StoreContext): FactOperations => {
       database.prepare("UPDATE facts SET status = 'reversed', updated_at = ? WHERE id = ?").run(now(), Number(row.id))
       return factOf(rowOf(reference))
     },
-    unconfirm: (reference, by, reason) => {
+    revoke: (reference, by, reason) => {
       const row = rowOf(reference)
       const ref = `fact:${row.id}`
       assertMayWithdraw({ id: ref, proposedBy: { type: "unknown" }, proposed: false }, by)
@@ -319,7 +319,7 @@ export const factOperationsOver = (context: StoreContext): FactOperations => {
         if (current.status !== "accepted")
           throw new CliError(
             "validation_error",
-            `only an accepted fact can be unconfirmed; ${ref} is ${String(current.status)}`,
+            `only an accepted fact can be revoked; ${ref} is ${String(current.status)}`,
             { reason: "fact.not-accepted" },
           )
         if (current.author_type === "person")
@@ -334,14 +334,14 @@ export const factOperationsOver = (context: StoreContext): FactOperations => {
             "validation_error",
             `${ref} corrects fact:${current.supersedes_id}, which stopped holding when ${ref} was accepted; ` +
               "remove it or correct it with another fact instead",
-            { reason: "fact.unconfirm-correction" },
+            { reason: "fact.revoke-correction" },
           )
         const at = now()
         const { decision, history, ...metadata } = (
           current.metadata == null ? {} : JSON.parse(String(current.metadata))
         ) as { decision?: unknown; history?: unknown[] }
         const step = {
-          step: "unconfirmed",
+          step: "revoked",
           by: "owner",
           at: iso(at),
           confirmedBy: { type: current.confirmed_by_type, id: String(current.confirmed_by_id) },
@@ -411,7 +411,7 @@ export const factsStoreOver = (context: StoreContext): FactsStore => {
     list: async (options) => operations.list(options),
     accept: async (reference, by, reason) => operations.accept(reference, by, reason),
     reverse: async (reference, by) => operations.reverse(reference, by),
-    unconfirm: async (reference, by, reason) => operations.unconfirm(reference, by, reason),
+    revoke: async (reference, by, reason) => operations.revoke(reference, by, reason),
     reject: async (reference, by, reason) => operations.reject(reference, by, reason),
     remove: async (reference, by) => operations.remove(reference, by),
     sources: async (reference) => operations.sources(reference),
