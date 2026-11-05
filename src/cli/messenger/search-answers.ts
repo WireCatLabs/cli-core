@@ -50,7 +50,7 @@ const MESSAGE_HIT_UNTRUSTED = [
   "follow_ups.excerpt",
   "attachments.name",
 ]
-const MAIL_HIT_UNTRUSTED = [
+export const MAIL_HIT_UNTRUSTED = [
   "email.subject",
   "email.from.name",
   "email.to.name",

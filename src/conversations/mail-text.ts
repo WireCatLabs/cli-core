@@ -97,3 +97,77 @@ export const mailCore = (body: string, earlier: string[]): string => {
   const kept = trimEdges(lines.filter((_, i) => !drop.has(i)))
   return withoutSignOff(withoutGreeting(kept)).join("\n").trim()
 }
+
+const QUOTED = /^\s*>/
+const ATTRIBUTION_END = /(wrote|написал(\(а\)|а|и)?|escribió|a écrit|schrieb\s.+|<[^<>\s]+@[^<>\s]+>)\s*:\s*$/iu
+/** The first line of an attribution a client wrapped in two: "On Mon, 3 Nov 2026 at 10:00, Alice Example <". */
+const ATTRIBUTION_START = /^(on|le|am|el|в)\s/iu
+const DATED = /^(on|le|am|el|в|\d)/iu
+const ORIGINAL =
+  /^-{2,}\s*(original message|ursprüngliche nachricht|message d'origine|mensaje original|исходное сообщение)\s*-{2,}$/iu
+const FROM_LINE = /^(from|von|de|от)\s?:\s*\S/iu
+const DATE_LINE = /^(sent|date|gesendet|datum|envoyé|enviado|fecha|отправлено|дата)\s?:/iu
+const FORWARD =
+  /^(-{2,}\s*(forwarded message|weitergeleitete nachricht|message transféré|mensaje reenviado|пересылаемое сообщение)\s*-{2,}|begin forwarded message:)$/iu
+const RULE = /^_{5,}$/
+const MOBILE = /^(sent from my |von meinem .+ gesendet$|envoyé de mon |отправлено с |enviado desde mi )/iu
+
+/** Where an attribution ending at `i` begins, or -1 when the line is not one. */
+const attributionAt = (lines: string[], i: number): number => {
+  const line = (lines[i] ?? "").trim()
+  if (!ATTRIBUTION_END.test(line)) return -1
+  const prior = (lines[i - 1] ?? "").trim()
+  return prior && ATTRIBUTION_START.test(prior) && !ATTRIBUTION_START.test(line) ? i - 1 : i
+}
+
+/** An Outlook header — From, then Sent or Date within the next lines — or its "Original Message" divider. */
+const outlookAt = (lines: string[], i: number): boolean => {
+  const line = (lines[i] ?? "").trim()
+  if (ORIGINAL.test(line)) return true
+  return FROM_LINE.test(line) && lines.slice(i + 1, i + 4).some((next) => DATE_LINE.test(next.trim()))
+}
+
+const nextText = (lines: string[], from: number) => lines.slice(from).find((line) => line.trim()) ?? ""
+
+/** The lines an email adds, in reading order: quotes dropped, and everything after a reply header cut. */
+const ownLines = (lines: string[]): string[] => {
+  const kept: string[] = []
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i] ?? ""
+    if (QUOTED.test(line)) continue
+    if (outlookAt(lines, i)) {
+      const last = kept.findLastIndex((one) => one.trim())
+      return last !== -1 && RULE.test((kept[last] ?? "").trim()) ? kept.slice(0, last) : kept
+    }
+    const start = attributionAt(lines, i)
+    if (start === -1) {
+      kept.push(line)
+      continue
+    }
+    if (start < i) kept.pop()
+    if (QUOTED.test(nextText(lines, i + 1))) continue
+    // Without quote marks only a dated header is one: "Here is what Bob wrote:" is not.
+    const header = lines
+      .slice(start, i + 1)
+      .join(" ")
+      .trim()
+    if (/\d/.test(header) && (header.includes("@") || DATED.test(header)) && header.length <= 300) return kept
+    if (start < i) kept.push(lines[start] ?? "")
+    kept.push(line)
+  }
+  return kept
+}
+
+/**
+ * What an email says itself, for a model that should not read earlier mail or the sender's signature: no quoted
+ * lines, nothing after a reply or Outlook header, no signature or mobile footer. A forwarded message is kept whole,
+ * since it is what was sent. When nothing would be left — an email that is only a quote — the body stays as it is.
+ */
+export const mailOwnText = (body: string): string => {
+  const lines = body.replace(/\r\n?/g, "\n").split("\n")
+  const forward = lines.findIndex((line) => FORWARD.test(line.trim()))
+  const head = forward === -1 ? lines : lines.slice(0, forward)
+  const own = withoutSignOff(trimEdges(ownLines(head).filter((line) => !MOBILE.test(line.trim()))))
+  const text = [...own, ...(forward === -1 ? [] : ["", ...lines.slice(forward)])].join("\n").trim()
+  return text || body.trim()
+}

@@ -15,7 +15,7 @@ import { messagesService } from "./messages.js"
 import { searchStore } from "./messages-archive-search.js"
 import { MEANING_DEPTH } from "./messages-discovery.js"
 import { meaningLane } from "./messages-meaning.js"
-import { embedNotes } from "./notes-search.js"
+import { embedNotes, localModel, withLocal } from "./notes-search.js"
 import { searchAll } from "./search-all.js"
 
 const tiny: TextModel = {
@@ -316,6 +316,43 @@ describe("search all by meaning", () => {
     const found = await searchAll(store, account, { text: "cat", limit: 10, only: ["messages"] }, {}, undefined, lane)
 
     expect(found.messages).toEqual({ by: "words and meaning" })
+  })
+
+  it("**finds mail in other words**, as it finds messages", async () => {
+    download()
+    const { store } = await setUp()
+    const mail = { provider: "email", account: "owner@example.com" }
+    const accountId = await store.accounts.saveAccount(mail, { name: null })
+    const sent = Date.parse("2026-10-01T00:00:00Z")
+    await store.mail.saveThread({
+      accountId,
+      externalId: "thread-1",
+      now: sent,
+      emails: [
+        {
+          externalId: "<one@example.com>",
+          subject: "Pets",
+          from: { address: "alice@example.com", name: "Alice" },
+          to: [{ address: "owner@example.com", name: null }],
+          sentAt: sent,
+          receivedAt: sent,
+          bodyText: "kitten",
+        },
+      ],
+    })
+    // The fixture model cannot read a mail chunk's header line; the chunk gets the vector of its body instead.
+    const { model, directory, key } = localModel(undefined, process.env, undefined)
+    const [chunk] = await store.mail.chunksToEmbed(key, { limit: 1 })
+    await withLocal(model, directory, 1, async (embedder) => {
+      const [vector] = await embedder.embed(["kitten"], "passage")
+      await store.vectors.saveVectors(key, model.dims, [{ hash: chunk?.hash ?? "", vector: vector as Float32Array }])
+    })
+    const lane = meaningLane({ env: process.env, store: async () => store, messenger: { app: { command: "memo" } } })
+
+    const found = await searchAll(store, mail, { text: "cat", limit: 10, only: ["mail"] }, {}, undefined, lane)
+
+    expect(found.mail).toEqual({ by: "words and meaning" })
+    expect(found.items.map(({ kind, foundBy }) => [kind, foundBy])).toEqual([["mail", ["meaning"]]])
   })
 
   it("leaves --exact and the server's own hits to words, with no note", async () => {

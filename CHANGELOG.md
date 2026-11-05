@@ -9,6 +9,11 @@ shape of this file.
 
 ### Changed — may break callers
 
+- **`search all` searches mail by meaning too** (MEMO-38). Mail was only ever searched by words there, though its
+  threads had vectors. The meaning lane now reads a mail account's thread vectors through the mail store, and
+  `search all` fuses them with the word hits as it does for messages; the answer says how in `mail`. For a question,
+  a mail or message found by words gets no second vote from meaning, as in notes.
+
 - **cli-core accepts `@wirecat/cli-base` 0.76 and 0.77 (peer range `>=0.75.0 <0.78.0`) and builds with
   0.77.1**, whose vocabulary has the `schedule` resource, the `agent`, `command` and `exec` verbs and `--trimmed`. The command
   lint now checks `schedule agent|command|exec` instead of skipping them in `lint/baseline`. A CLI that mounts
@@ -61,6 +66,20 @@ shape of this file.
 - **`mailStats` from `./mail`**: stored mail received and sent per calendar day, week (by its Monday) or sender, for
   the `search mail` query, counts only and no search recorded; `mailStatsItem` turns it into the new `mail_counts`
   entity, `{ by, received, sent, rows: [{ key, name, received, sent }] }`. By sender it counts received mail only.
+- **`mailOwnText(body)` (`@wirecat/cli-core/mail`): what an email says itself, without quoted earlier mail and the
+  signature.** It drops `>` lines, cuts at a reply header ("On … wrote:", "Le … a écrit :", "Am … schrieb …:",
+  "… написал(а):", Gmail's Russian "<address>:") and at an Outlook From/Sent block in English, German, French, Spanish
+  and Russian, and drops the `-- ` signature, sign-offs and mobile footers. A forwarded message stays whole; an email
+  that is only a quote keeps its body.
+
+### Security
+
+- **`review --holder` gives each email's own text** (`mailOwnText`), so an agent's model does not read earlier mail
+  or signatures. The fingerprint a finding cites is still taken over the stored body; other reads show the whole text.
+- **Review and inbox items say which fields others wrote** (WC-SECR-21): `summaryOf` items, and so every catch-up
+  answer and each mail `review` item, carry `untrusted` (`SUMMARY_UNTRUSTED`: chat title, sender name, text,
+  transcript, attachment names); a mail review item adds the email's subject and the names in its headers, as search
+  hits do. The `message.summary` entity takes the field.
 
 ## 0.563.0 — 03.11.2026
 
