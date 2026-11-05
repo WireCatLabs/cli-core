@@ -5,6 +5,22 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Added
+
+- **`review --holder` gives the findings key.** A host that mounts its findings command (`MailMount.findings`)
+  gets a `mail-findings.add` step with `key` before the acknowledge step, so an agent copies the key instead of
+  building it from the cursor. The text answer names it too.
+
+### Fixed
+
+- **A run after `messages reset` can stage its findings.** The reset counts on the mark (`resets`), and the findings
+  key of a mark moved back is `<holder>:<through_id>-r<resets>`, such as `mail-triage:277352-r1`. The runs after a
+  reset reached the through id of a batch staged before it and were refused (`mail-findings.key-used`), so their
+  mark stayed. Keys of marks never moved back keep their shape, and the same review still gives the same key, so
+  a retry of one run stages nothing twice.
+
 ## 0.580.0 — 05.11.2026
 
 ### Added

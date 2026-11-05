@@ -1,7 +1,14 @@
 import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { defineQuery } from "@wirecat/cli-base/query"
-import { defineSteps, type Missing, type NextStep, type StepDefinition, stepOf } from "@wirecat/cli-base/standards"
+import {
+  defineSteps,
+  MAX_NEXT_STEPS,
+  type Missing,
+  type NextStep,
+  type StepDefinition,
+  stepOf,
+} from "@wirecat/cli-base/standards"
 import { Command } from "commander"
 import { environmentOf, outputFor } from "../../cli/context.js"
 import { LOCAL_READ } from "../../cli/effects.js"
@@ -42,7 +49,18 @@ export const MAIL_REVIEW_QUERY = defineQuery({
 /** The mail review's steps where a host mounted them; a host lists them beside its own so its step checks know them. */
 export const mailReviewSteps = (mount: MailMount = {}): StepDefinition[] => {
   const mailbox = mount.mailbox ? [{ name: mount.mailbox.option, required: true }] : []
+  const findings = mount.findings
+    ? [
+        {
+          id: "mail-findings.add",
+          command: mount.findings,
+          args: [{ name: "key", required: true }, ...mailbox],
+          why: "stage what these emails ask under this key, before acknowledging them",
+        },
+      ]
+    : []
   return defineSteps([
+    ...findings,
     {
       id: "mail-messages.acknowledge",
       command: mount.acknowledge ?? "messages acknowledge",
@@ -221,7 +239,12 @@ const holderReview = async (command: Command, mail: MailReads, holder: string, q
   const step = stepsFor(mail.mount, mailbox)
   const answer = reviewAnswer(found, mailbox, true, step)
   const skipped = Object.entries(read.skipped).filter(([, count]) => count > 0)
-  answer.next = [...step("mail-messages.acknowledge", { holder, cursor: read.cursor }), ...(answer.next ?? [])]
+  const stage = read.findingsKey === undefined ? [] : step("mail-findings.add", { key: read.findingsKey })
+  answer.next = [
+    ...stage,
+    ...step("mail-messages.acknowledge", { holder, cursor: read.cursor }),
+    ...(answer.next ?? []),
+  ].slice(0, MAX_NEXT_STEPS)
   answer.missing = [
     ...(answer.missing ?? []),
     ...(read.held > 0 ? [{ field: "items", why: `${read.held} partial emails held until they are whole` }] : []),
@@ -243,7 +266,7 @@ const holderReview = async (command: Command, mail: MailReads, holder: string, q
   renderAnswer(command, output, answer, () => {
     output.renderer.note(
       read.mark
-        ? `${holder}: past ${read.mark.throughId}; acknowledge with --cursor ${read.cursor}${read.more ? "; more after these" : ""}`
+        ? `${holder}: past ${read.mark.throughId}; findings key ${read.findingsKey}; acknowledge with --cursor ${read.cursor}${read.more ? "; more after these" : ""}`
         : `${holder} has no mark yet: it starts from now — acknowledge with --cursor ${read.cursor}`,
     )
     return emails.map((hit) => `${hitText(hit)}${markText(marks.get(hit.id), hit.excerptOnly)}\n`).join("")
