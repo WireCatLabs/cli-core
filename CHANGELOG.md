@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.567.0 — 05.11.2026
+
 ### Added
 
 - **`<tool> bot list` runs without a profile word**, as `account list` does; `<tool> <profile> bot list` still
