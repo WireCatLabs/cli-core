@@ -128,6 +128,70 @@ describe("a CLI that is not a messenger", () => {
   })
 })
 
+describe.runIf(process.platform !== "win32")("an agent that may run another CLI", () => {
+  const mail = { command: "mail", appName: "mail-cli", envPrefix: "MAIL" }
+  const add = async (harness: string) => {
+    const { env, root } = setup()
+    const mailEnv = { ...env, MAIL_STATE_DIR: join(root, "mail-state"), MAIL_CONFIG_DIR: join(root, "mail-config") }
+    const resolveSettings = settingsFor(app).resolveSettings
+    const host = {
+      app,
+      agentRuns: [mail],
+      context: (command: Command) => {
+        const base = baseContext(command, resolveSettings)
+        return { ...base, profile: base.settings.profile }
+      },
+    }
+    const streams = captureStreams()
+    const code = await run(
+      ["default", "schedule", "agent", "triage", harness, "sort the mail", "--at", "08:30"],
+      { app, commands: () => [scheduleCommandFor(host)] },
+      { streams, env: mailEnv, system: machine("linux").system },
+    )
+    expect(code, streams.stderr.join("")).toBe(0)
+    return { root, file: scheduleFile(env.CHAT_STATE_DIR, "triage") }
+  }
+
+  it("lets claude run both CLIs and nothing else", async () => {
+    const { file } = await add("claude")
+    const { argv } = JSON.parse(readFileSync(file, "utf8")) as Schedule
+    expect(argv.slice(argv.indexOf("--allowedTools"), argv.indexOf("--no-session-persistence"))).toEqual([
+      "--allowedTools",
+      "Bash(chat:*)",
+      "Bash(mail:*)",
+    ])
+  })
+
+  it("lets codex write the other CLI's state and config folders too", async () => {
+    const { file, root } = await add("codex")
+    const { argv } = JSON.parse(readFileSync(file, "utf8")) as Schedule
+    const dirs = argv.flatMap((word, at) => (argv[at - 1] === "--add-dir" ? [word] : []))
+    expect(dirs).toEqual(expect.arrayContaining([root, join(root, "mail-state"), join(root, "mail-config")]))
+  })
+
+  it("runs the agent with the other CLI locked read-only and told it runs from a schedule", async () => {
+    const { env } = setup()
+    const { system } = machine("linux", [process.execPath])
+    const file = scheduleFile(env.CHAT_STATE_DIR, "triage")
+    mkdirSync(join(file, ".."), { recursive: true })
+    const script = "console.log(process.env.CHAT_READ_ONLY, process.env.MAIL_READ_ONLY, process.env.MAIL_SCHEDULED)"
+    writeFileSync(
+      file,
+      JSON.stringify({
+        name: "triage",
+        kind: "agent",
+        argv: [process.execPath, "-e", script],
+        when: { daily: "08:30" },
+        environment: { CHAT_PROFILE: "work", MAIL_READ_ONLY: "0" },
+        createdAt: "",
+      }),
+    )
+    const last = await runSchedule(app, system, env, file, { agentRuns: [mail] })
+    expect(last.exitCode).toBe(0)
+    expect(readFileSync(join(file, "..", "latest.md"), "utf8")).toBe("1 1 triage\n")
+  })
+})
+
 // Unit text for Linux and macOS holds POSIX paths; on Windows the real timer is checked by schedules.os.test.ts.
 const posix = process.platform !== "win32"
 

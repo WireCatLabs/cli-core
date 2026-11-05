@@ -126,6 +126,19 @@ describe("bot list", () => {
       { name: "support", token: "keyring", problem: "authentication_error" },
     ])
   })
+
+  it("**needs no profile word**, and still takes one", async () => {
+    await call(["sales", "bot", "auth", "set"])
+    const { CHAT_PROFILE: _, ...unnamed } = env
+    env = unnamed
+
+    const bare = await call(["bot", "list", "--json"])
+    const named = await call(["sales", "bot", "list", "--json"])
+
+    expect(bare.code).toBe(0)
+    expect(bare.answer.items).toEqual([{ name: "sales", token: "keyring" }])
+    expect(named.answer.items).toEqual(bare.answer.items)
+  })
 })
 
 describe("bot recipients", () => {

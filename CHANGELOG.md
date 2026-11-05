@@ -47,6 +47,66 @@ shape of this file.
 - **`mail review` offers at most two next steps.** It gave one `conversations show` step per cut thread, up to 50;
   it now gives one, and names the other cut threads under `missing`.
 
+## 0.567.0 — 05.11.2026
+
+### Added
+
+- **`<tool> bot list` runs without a profile word**, as `account list` does; `<tool> <profile> bot list` still
+  works.
+- **A scheduled agent may run other CLIs the host declares** (`ScheduleHost.agentRuns`, type `AgentCli`): memo's
+  mail triage runs `mail`. Claude gets `Bash(<cli>:*)` for each; codex may write each one's state, config and cache
+  folders; every run sets `<PREFIX>_READ_ONLY=1` and `<PREFIX>_SCHEDULED` for each, whatever the schedule file says.
+  `runSchedule` takes the same list as `agentRuns`.
+- **`<PREFIX>_READ_ONLY` lets through one authority change, `rules add`, when the command is marked
+  `narrowsUnderLock`** (`LOCKED_AUTHORITY_COMMANDS`, `admittedUnderLock`). The command narrows itself under the lock;
+  every other command marked `grantsAuthority` is still refused, and MCP still needs `mcp.authority`.
+
+### Fixed
+
+- **`account list` no longer lists a bot as an account that is not signed in.** A name that only the bot side
+  uses (the file's `bot` section, a bot's own files) and that has no personal section, recorded login or session is
+  left out; `bot list` has it. A profile that is an account and a bot too says `bot: true`, a new optional field of
+  `account_profile`. `mcp serve --profiles all` serves the same account profiles. `Settings` gains the optional
+  `accountProfiles` and `botProfiles`.
+- **`config set` keeps a long id as the digits typed.** `config set --bot phone_number_id 100000000000001` was
+  parsed as a number and refused by a setting that takes text; when the parsed value is refused and the text as
+  typed passes, the text is kept, never through a JS number.
+
+### Changed — may break callers
+
+- **A write on a stale task revision fails with `conflict`, exit 15, not `configuration_error`, exit 3.** The reason
+  stays `task.stale` with the task's current `revision` in `details`; only the code and the exit number change
+  (cli-base's new `conflict`). A caller that branched on `configuration_error` for it should branch on the reason or
+  the new code. `vocabulary.stale`, `tag-review.stale` and `meeting-project.stale` keep `configuration_error` for now.
+
+## 0.566.0 — 05.11.2026
+
+### Changed — may break callers
+
+- **cli-core now needs `@wirecat/cli-base` 0.76.0 or later** (peer range `>=0.76.0 <0.78.0`), which holds
+  `loadConstants`.
+- **`appDoctorCommand`'s `oauthClient` returns `oauthClientReport`'s shape, `{ client, source, reason? }`**, and a
+  throw there is reported as `{ client: null, source: null, reason }` (was `error`). drive's and gcal's callers
+  change with their bump.
+
+### Added
+
+- **`@wirecat/cli-core/constants`: WireCat's sign-in apps ship in cli-core's `constants.json`.** `constants()` reads
+  cli-base's, cli-core's and the tool's `constants.json` once per process, merged, validated and frozen; a tool
+  passes its own layer and a schema built on `constantsSchema`. It holds WireCat's Google Desktop app
+  (`google.app.client_id`, `client_secret`) and Microsoft client id (`microsoft.app.client_id`), which drive and mail
+  kept in source and gcal expected from a file CI wrote. `googleApp({ env, prefix, clientFile, clientId,
+  configClientId })` and `microsoftApp(…)` pick the app in WC-SECR-25's order: `--client-file` or `--client-id`
+  (`flag`), `<PREFIX>_<PROVIDER>_CLIENT_ID` (`env`), the account's `<provider>.client_id` (`config`), WireCat's app
+  (`constants`); a `_SECRET` with no id is a `configuration_error`, reason `sign-in.secret-without-id`. `oauthApp`
+  does the same for a provider whose app is in a tool's layer, such as Zoom, and returns nothing when there is none.
+  `oauthClientReport(app, reason?)` is `doctor`'s `oauth_client`: `{ client: "wirecat" | "own" | null, source }`.
+  See [Constants](docs/dev/CONSTANTS.md).
+- **A sign-in entry records where its app came from** (`clientSource` in the standard and drive entries, read back
+  as `client.source`), so `doctor` reports the app the account signed in with. The standard entry also keeps
+  WireCat's public secret, so a refresh still works after a release ships another default app; an owner's own
+  secret is still never written.
+
 ## 0.565.0 — 05.11.2026
 
 ### Changed — may break callers
