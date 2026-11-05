@@ -17,6 +17,7 @@ import type { Author } from "./memories.js"
 import { holdingText } from "./note-index.js"
 import { insertLink, type Link, linkOf } from "./notes.js"
 import type { StoreContext } from "./open.js"
+import { type OrganizationsStore, organizationOf, organizationsStoreOver } from "./organizations.js"
 import type { ProposedAction } from "./proposed-actions.js"
 import { queryFilter } from "./query-filter.js"
 import {
@@ -123,7 +124,7 @@ export interface Reminder {
 
 export type LabelledType = "note" | "document" | "person" | "organization" | "project" | "task" | "meeting" | "folder"
 
-export interface KnowledgeStore extends VocabularyStore, MeetingProjectsStore {
+export interface KnowledgeStore extends VocabularyStore, MeetingProjectsStore, OrganizationsStore {
   taskIds(
     key: AccountKey,
     options?: { state?: "open" | "done" | "dismissed"; limit?: number; offset?: number; sources?: string[] },
@@ -159,7 +160,6 @@ export interface KnowledgeStore extends VocabularyStore, MeetingProjectsStore {
     name: string
     scope?: Organization["scope"]
   }): Promise<Organization>
-  organizations(query?: QueryAst): Promise<Organization[]>
   /** A project; its key is made from the name when none is given. */
   addProject(input: {
     name: string
@@ -418,14 +418,6 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
     return found
   }
 
-  const organizationOf = (row: Row): Organization => ({
-    id: String(row.id),
-    ref: `organization:${row.id}`,
-    kind: row.kind as Organization["kind"],
-    name: String(row.name),
-    scope: row.scope as Organization["scope"],
-    createdAt: iso(row.created_at),
-  })
   const projectOf = (row: Row): Project => ({
     id: String(row.id),
     ref: `project:${row.id}`,
@@ -511,6 +503,7 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
 
   return {
     ...vocabularyStoreOver(context),
+    ...organizationsStoreOver(context),
     ...meetingProjectsStoreOver(context),
     taskIds: async (key, options = {}) => {
       const { limit, offset } = bounded(options.limit, options.offset)
@@ -689,22 +682,6 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
           at,
         )
       return organizationOf(row as Row)
-    },
-    organizations: async (query) => {
-      const where =
-        query &&
-        queryFilter(query, {
-          id: { type: "kw", sql: "CAST(id AS TEXT)" },
-          kind: { type: "enum", sql: "kind" },
-          scope: { type: "enum", sql: "scope" },
-          created_at: { type: "time", sql: "created_at" },
-        })
-      return database
-        .prepare(
-          `SELECT * FROM organizations WHERE deleted_at IS NULL${where ? ` AND (${where.sql})` : ""} ORDER BY name, id LIMIT 500`,
-        )
-        .all(...(where?.params ?? []))
-        .map(organizationOf)
     },
     addProject: async ({ name, key, type = "other", organization, scope = "personal", description }) =>
       write(database, () => {

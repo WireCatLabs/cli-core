@@ -6,7 +6,7 @@ import { DEFAULT_DECISION_POLICY } from "../../store/decisions.js"
 import { openCache } from "../../store/open.js"
 import { openStore } from "../../store/store.js"
 import { parseProposalIds } from "./ids.js"
-import { proposeOrganization } from "./kinds/organization.js"
+import { proposeOrganization, proposeOrganizationRename } from "./kinds/organization.js"
 import { emptyProposalRegistry, proposalRegistry } from "./registry.js"
 import type { ProposalKind, ProposalRow } from "./types.js"
 
@@ -324,5 +324,31 @@ describe("an agent's new organization", () => {
     const proposal = await proposeOrganization(f.store, { name: "Synthetic Dairy", kind: "company" }, claude)
     await f.registry.decide([proposal.id], { confirm: false, by: "owner" })
     expect((await f.store.knowledge.organizations()).map((org) => org.name)).not.toContain("Synthetic Dairy")
+  })
+})
+
+describe("an agent's organization rename", () => {
+  it("keeps the name until confirmed, then renames", async () => {
+    const f = await fixture()
+    const org = await f.store.knowledge.addOrganization({ kind: "company", name: "Synthetic Dairy" })
+    const proposal = await proposeOrganizationRename(f.store, { organization: org.ref, name: "Synthetic Farm" }, claude)
+    expect((await f.store.knowledge.organizations()).map((one) => one.name)).toContain("Synthetic Dairy")
+    expect(await f.registry.get(proposal.id)).toMatchObject({
+      kind: "organization",
+      status: "proposed",
+      subject: org.ref,
+      summary: `rename ${org.ref} to Synthetic Farm`,
+    })
+
+    await f.registry.decide([proposal.id], { confirm: true, by: "owner" })
+    expect((await f.store.knowledge.organizations()).map((one) => one.name)).toContain("Synthetic Farm")
+  })
+
+  it("changes nothing when rejected", async () => {
+    const f = await fixture()
+    const org = await f.store.knowledge.addOrganization({ kind: "company", name: "Synthetic Dairy" })
+    const proposal = await proposeOrganizationRename(f.store, { organization: org.ref, name: "Synthetic Farm" }, claude)
+    await f.registry.decide([proposal.id], { confirm: false, by: "owner" })
+    expect((await f.store.knowledge.organizations()).map((one) => one.name)).toContain("Synthetic Dairy")
   })
 })
