@@ -1,6 +1,8 @@
 import { CliError } from "@wirecat/cli-base"
+import { mailOwnText } from "../conversations/mail-text.js"
 import { isBusy } from "../store/sqlite/transaction.js"
 import type { AccountKey, MarkedEmail, MessageStore, StoredHit } from "../store/store.js"
+import { BULK_TRIAGE_DEFAULTS, type BulkSorted, type BulkTriage, newsletterSorter } from "./newsletter.js"
 
 /** A holder's name: what `--holder` takes and the mark's key ends with. */
 export const HOLDER = /^[a-z0-9][a-z0-9-]{0,39}$/
@@ -14,7 +16,7 @@ const MOST_HELD = 500
 const CLOCK_SLACK_MS = 60_000
 const PREFIX = "consumer:"
 
-export type SkipReason = "bulk" | "envelope" | "partial" | "draft" | "suspicious"
+export type SkipReason = "bulk" | "newsletter" | "envelope" | "partial" | "draft" | "suspicious"
 
 /**
  * How far one holder — an agent, a pipeline — has processed an account's mail, in the shared store (`sync_cursors`,
@@ -35,7 +37,14 @@ export interface MailMark {
   updatedAt: number
 }
 
-const noneSkipped = (): Record<SkipReason, number> => ({ bulk: 0, envelope: 0, partial: 0, draft: 0, suspicious: 0 })
+const noneSkipped = (): Record<SkipReason, number> => ({
+  bulk: 0,
+  newsletter: 0,
+  envelope: 0,
+  partial: 0,
+  draft: 0,
+  suspicious: 0,
+})
 
 const keyOf = (holder: string) => {
   if (!HOLDER.test(holder))
@@ -102,9 +111,20 @@ const parseCursor = (cursor: string) => {
   return { throughId: Number(match[1]), readAt: Number(match[2]) }
 }
 
+/** A bulk email that is not surely a newsletter: the holder gets its subject and first lines only. */
+export interface BulkExcerpt {
+  email: StoredHit
+  /** The first lines of its own text, without the subject. */
+  excerpt: string
+  /** What kept it, or the newsletter signs too few to leave it out. */
+  cues: string[]
+}
+
 export interface MarkRead {
   /** The emails for the holder, oldest first; bulk, envelopes, drafts, suspicious senders and partial mail left out. */
   emails: StoredHit[]
+  /** Bulk mail past the mark that is not surely a newsletter, oldest first; none when the triage gives no excerpts. */
+  excerpts: BulkExcerpt[]
   /** What `acknowledge --cursor` takes once the holder is done with these. */
   cursor: string
   /** More is stored after this batch: read again after acknowledging. */
@@ -124,22 +144,71 @@ export const readPastMark = async (
   store: MessageStore,
   mailbox: AccountKey,
   holder: string,
-  options: { now?: number; limit?: number } = {},
+  options: { now?: number; limit?: number; triage?: BulkTriage } = {},
 ): Promise<MarkRead> => {
-  const { wanted, oldestStoredAt: _, ...read } = await examine(store, mailbox, holder, options)
-  return { emails: await store.mail.emailHits(wanted), ...read }
+  const { wanted, sorted, oldestStoredAt: _, ...read } = await examine(store, mailbox, holder, options)
+  const excerpts = wanted.flatMap((id) => {
+    const one = sorted.get(id)
+    return one ? [{ email: one.email, excerpt: one.excerpt, cues: one.cues }] : []
+  })
+  const emails = await store.mail.emailHits(wanted.filter((id) => !sorted.has(id)))
+  return { emails, excerpts, ...read }
 }
 
-/** `readPastMark` without the emails' text: the store ids it would read, by their verdicts. */
+type Sorted = Map<number, BulkSorted & { email: StoredHit }>
+
+/**
+ * The batch's bulk emails a holder might read, sorted by `newsletterSorter`, and where the batch ends so it holds at
+ * most `perRead` excerpts. Drafts, envelopes, suspicious senders and partial mail keep their own verdicts.
+ */
+const sortBulk = async (
+  store: MessageStore,
+  batch: MarkedEmail[],
+  triage: BulkTriage,
+): Promise<{ sorted: Sorted; end: number }> => {
+  const sorted: Sorted = new Map()
+  if (!triage.excerpts) return { sorted, end: batch.length }
+  const sort = newsletterSorter(triage.cues)
+  let excerpts = 0
+  for (const [index, marked] of batch.entries()) {
+    if (!marked.bulk || marked.draft || marked.envelope || marked.demoted || marked.partial) continue
+    const [email] = await store.mail.emailHits([marked.id])
+    if (!email) continue
+    const subject = email.email?.subject ?? null
+    const body = subject && email.text.startsWith(`${subject}\n\n`) ? email.text.slice(subject.length + 2) : email.text
+    const one = sort({ subject, text: mailOwnText(body), from: email.email?.from?.address ?? null })
+    if (one.verdict === "excerpt" && excerpts === triage.perRead) return { sorted, end: index }
+    if (one.verdict === "excerpt") excerpts += 1
+    sorted.set(marked.id, { ...one, email })
+  }
+  return { sorted, end: batch.length }
+}
+
+/** `readPastMark` before it reads the emails: the store ids it would read by their verdicts, and the bulk sorted. */
 const examine = async (
   store: MessageStore,
   mailbox: AccountKey,
   holder: string,
-  { now = Date.now(), limit = MARK_BATCH, after }: { now?: number; limit?: number; after?: number },
-): Promise<Omit<MarkRead, "emails"> & { wanted: number[]; oldestStoredAt: number | null }> => {
+  {
+    now = Date.now(),
+    limit = MARK_BATCH,
+    after,
+    triage = BULK_TRIAGE_DEFAULTS,
+  }: { now?: number; limit?: number; after?: number; triage?: BulkTriage },
+): Promise<
+  Omit<MarkRead, "emails" | "excerpts"> & { wanted: number[]; sorted: Sorted; oldestStoredAt: number | null }
+> => {
   const saved = await markOf(store, mailbox, holder)
   const account = await accountOf(store, mailbox)
-  const empty = { wanted: [], oldestStoredAt: null, more: false, held: 0, skipped: noneSkipped(), mark: saved }
+  const empty = {
+    wanted: [],
+    sorted: new Map(),
+    oldestStoredAt: null,
+    more: false,
+    held: 0,
+    skipped: noneSkipped(),
+    mark: saved,
+  }
   if (!account) return { ...empty, cursor: cursorOf(0, now) }
   if (!saved) return { ...empty, cursor: cursorOf(await store.mail.newestEmailId(account.id), now) }
   const mark = after === undefined ? saved : { ...saved, throughId: after, held: [], suspicious: [] }
@@ -150,7 +219,8 @@ const examine = async (
   const newer = found.filter((email) => email.id > mark.throughId)
   const unsettled = newer.findIndex((email) => email.storedAt > settledAt)
   const fresh = unsettled === -1 ? newer : newer.slice(0, unsettled)
-  const batch = fresh.slice(0, limit)
+  const { sorted, end } = await sortBulk(store, fresh.slice(0, limit), triage)
+  const batch = fresh.slice(0, end)
   const examined = [...found.filter((email) => email.id <= mark.throughId), ...batch]
   const skipped = noneSkipped()
   const wanted: number[] = []
@@ -158,7 +228,10 @@ const examine = async (
   let held = 0
   for (const email of examined) {
     const said = verdict(email, now)
-    if (said === "read") {
+    const bulk = sorted.get(email.id)
+    if (bulk?.verdict === "newsletter") {
+      if (email.id > mark.throughId) skipped.newsletter += 1
+    } else if (said === "read" || bulk) {
       wanted.push(email.id)
       oldestStoredAt = Math.min(oldestStoredAt ?? email.storedAt, email.storedAt)
     } else if (said === "held") held += 1
@@ -166,6 +239,7 @@ const examine = async (
   }
   return {
     wanted: wanted.sort((a, b) => a - b),
+    sorted: new Map([...sorted].filter(([, one]) => one.verdict === "excerpt")),
     oldestStoredAt,
     cursor: cursorOf(batch.at(-1)?.id ?? mark.throughId, now),
     more: newer.length > batch.length,
@@ -186,16 +260,21 @@ export interface MailWaiting {
 
 /**
  * What waits for the holder in every stored mailbox, read only: what a schedule asks before it starts the holder's
- * agent, so a run with nothing new costs no model call. Bulk, envelopes, drafts, suspicious senders and partial mail
- * do not count.
+ * agent, so a run with nothing new costs no model call. Newsletters, envelopes, drafts, suspicious senders and partial
+ * mail do not count; other bulk mail counts as the excerpt the holder gets, unless the triage gives none.
  */
-export const mailWaiting = async (store: MessageStore, holder: string, now = Date.now()): Promise<MailWaiting> => {
+export const mailWaiting = async (
+  store: MessageStore,
+  holder: string,
+  now = Date.now(),
+  triage: BulkTriage = BULK_TRIAGE_DEFAULTS,
+): Promise<MailWaiting> => {
   const waiting: MailWaiting = { unmarked: false, emails: 0, oldestStoredAt: null }
   for (const mailbox of await store.accounts.accounts()) {
     if (mailbox.provider !== "email") continue
     let after: number | undefined
     for (;;) {
-      const read = await examine(store, mailbox, holder, { now, ...(after === undefined ? {} : { after }) })
+      const read = await examine(store, mailbox, holder, { now, triage, ...(after === undefined ? {} : { after }) })
       if (!read.mark) {
         waiting.unmarked = true
         break
@@ -212,16 +291,21 @@ export const mailWaiting = async (store: MessageStore, holder: string, now = Dat
 }
 
 /**
- * Moves the holder's mark, in every stored mailbox, over the mail at its head that it would only skip — bulk,
- * envelopes, drafts, suspicious senders — as the agent would have acknowledged it, so a quiet holder's next check
+ * Moves the holder's mark, in every stored mailbox, over the mail at its head that it would only skip — newsletters,
+ * bulk mail the triage gives no excerpt of, envelopes, drafts, suspicious senders — as the agent would have acknowledged it, so a quiet holder's next check
  * does not read it all again. Suspicious senders' emails stay on the mark to be offered again. It stops at the first
  * email the holder reads. A store busy with a sync is left alone: the next check moves it.
  */
-export const advancePastSkipped = async (store: MessageStore, holder: string, now = Date.now()): Promise<void> => {
+export const advancePastSkipped = async (
+  store: MessageStore,
+  holder: string,
+  now = Date.now(),
+  triage: BulkTriage = BULK_TRIAGE_DEFAULTS,
+): Promise<void> => {
   for (const mailbox of await store.accounts.accounts()) {
     if (mailbox.provider !== "email") continue
     for (;;) {
-      const read = await examine(store, mailbox, holder, { now })
+      const read = await examine(store, mailbox, holder, { now, triage })
       if (!read.mark || read.wanted.length > 0 || read.cursor === cursorOf(read.mark.throughId, now)) break
       try {
         await acknowledgeMark(store, mailbox, holder, read.cursor, now)

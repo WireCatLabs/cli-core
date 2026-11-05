@@ -20,8 +20,9 @@ import { AGENDA_DEFAULTS } from "../../services/agenda.js"
 import { REVIEW_DAYS, reviewStart } from "../../services/inbox.js"
 import type { AccountKey, EmailMarks } from "../../store/store.js"
 import { readPastMark } from "../marks.js"
+import { BULK_TRIAGE_DEFAULTS } from "../newsletter.js"
 import { hitText } from "../read.js"
-import { type MailReview, OWED_DAYS, REVIEW_THREADS, reviewMail } from "../review.js"
+import { type MailHit, type MailReview, OWED_DAYS, REVIEW_THREADS, reviewMail } from "../review.js"
 import type { MailMount, MailReads } from "./index.js"
 
 const DAY = 86_400_000
@@ -89,9 +90,10 @@ const quoted = (value: string) => `"${value.replaceAll("\\", "\\\\").replaceAll(
 /** A file name for the mailbox's points: they describe the mailbox, whichever profile reads it. */
 const pointsName = (mailbox: AccountKey) => encodeURIComponent(mailbox.account)
 
-const markText = (marks: EmailMarks | undefined) => {
+const markText = (marks: EmailMarks | undefined, excerptOnly = false) => {
   const said = [
-    marks?.bulk ? "bulk" : "",
+    marks?.bulk || excerptOnly ? "bulk" : "",
+    excerptOnly ? "excerpt only" : "",
     marks?.listId ? `list ${marks.listId}` : "",
     marks?.ruleId ? `rule ${marks.ruleId}` : "",
   ]
@@ -100,9 +102,14 @@ const markText = (marks: EmailMarks | undefined) => {
 }
 
 const reviewAnswer = (found: MailReview, mailbox: AccountKey, fresh: boolean, step: Steps) => {
+  // Excerpts come after the mail written to the owner, so an agent with a budget reads that first.
   const read = found.chats
     .flatMap((chat) => chat.messages.map((message) => ({ ...message, chatTitle: chat.title })))
-    .sort((a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp))
+    .sort(
+      (a, b) =>
+        Number(a.excerptOnly ?? false) - Number(b.excerptOnly ?? false) ||
+        Date.parse(a.timestamp) - Date.parse(b.timestamp),
+    )
   const cut = found.chats.filter((chat) => chat.more)
   const ref = (thread: string) => formatReference({ type: "chat", ...mailbox, chat: thread })
   const turns = found.unanswered !== undefined || found.waiting !== undefined
@@ -143,7 +150,8 @@ const reviewAnswer = (found: MailReview, mailbox: AccountKey, fresh: boolean, st
       ...summaryOf(message, mailbox),
       email: {
         ...messageItem(message, mailbox).email,
-        bulk: message.marks?.bulk ?? false,
+        bulk: (message.marks?.bulk ?? false) || message.excerptOnly === true,
+        ...(message.excerptOnly ? { excerpt_only: true } : {}),
         list_id: message.marks?.listId ?? null,
         rule_id: message.marks?.ruleId ?? null,
         ...(message.marks
@@ -171,19 +179,22 @@ const holderReview = async (command: Command, mail: MailReads, holder: string, q
       "validation_error",
       "--holder reads past its own mark — not with a query, --unanswered or --waiting",
     )
+  const triage = mail.bulkTriage?.(command) ?? BULK_TRIAGE_DEFAULTS
   const { read, mailbox, marks } = await mail.read(command, async (store, mailbox) => {
-    const read = await readPastMark(store, mailbox, holder)
-    const account = read.emails.length ? await store.accounts.storedAccount(mailbox) : undefined
-    const marks = account
-      ? await store.mail.emailMarks(
-          account.id,
-          read.emails.map((one) => one.id),
-        )
-      : new Map()
+    const read = await readPastMark(store, mailbox, holder, { triage })
+    const ids = [...read.emails, ...read.excerpts.map(({ email }) => email)].map((one) => one.id)
+    const account = ids.length ? await store.accounts.storedAccount(mailbox) : undefined
+    const marks = account ? await store.mail.emailMarks(account.id, ids) : new Map()
     return { read, mailbox, marks }
   })
   // An agent reads this: earlier mail and signatures stay out of its text; the fingerprint is over the stored body.
-  const emails = read.emails.map((email) => ({ ...email, text: mailOwnText(email.text) }))
+  const emails: MailHit[] = [
+    ...read.emails.map((email) => ({ ...email, text: mailOwnText(email.text) })),
+    ...read.excerpts.map(({ email, excerpt }) => {
+      const subject = email.email?.subject
+      return { ...email, text: subject ? `${subject}\n\n${excerpt}` : excerpt, excerptOnly: true as const }
+    }),
+  ]
   const chats = new Map<string, MailReview["chats"][number]>()
   for (const email of emails) {
     const chat = chats.get(email.chatId) ?? {
@@ -217,6 +228,16 @@ const holderReview = async (command: Command, mail: MailReads, holder: string, q
     ...(skipped.length
       ? [{ field: "items", why: `left out: ${skipped.map(([reason, count]) => `${count} ${reason}`).join(", ")}` }]
       : []),
+    ...(read.excerpts.length
+      ? [
+          {
+            field: "items",
+            why:
+              `${read.excerpts.length} bulk emails (excerpt_only) as their subject and first lines: ` +
+              "read one whole with `messages show <ref>` when it is an order, an invoice or a request",
+          },
+        ]
+      : []),
   ]
   const output = outputFor(command)
   renderAnswer(command, output, answer, () => {
@@ -225,7 +246,7 @@ const holderReview = async (command: Command, mail: MailReads, holder: string, q
         ? `${holder}: past ${read.mark.throughId}; acknowledge with --cursor ${read.cursor}${read.more ? "; more after these" : ""}`
         : `${holder} has no mark yet: it starts from now — acknowledge with --cursor ${read.cursor}`,
     )
-    return emails.map((hit) => `${hitText(hit)}${markText(marks.get(hit.id))}\n`).join("")
+    return emails.map((hit) => `${hitText(hit)}${markText(marks.get(hit.id), hit.excerptOnly)}\n`).join("")
   })
 }
 
@@ -263,8 +284,9 @@ export const mailReviewCommand = (mail: MailReads): Command =>
     .option(
       "--holder <name>",
       "read for this holder — an agent or a pipeline — what is stored past its processing mark, by store order; " +
-        "bulk, envelopes, drafts, suspicious senders and partial mail left out; each text without quoted earlier mail " +
-        "or the signature; `messages acknowledge` moves the mark",
+        "newsletters, envelopes, drafts, suspicious senders and partial mail left out; other bulk mail after the rest, " +
+        "as its subject and first lines (excerpt_only); each text without quoted earlier mail or the signature; " +
+        "`messages acknowledge` moves the mark",
     )
     .option(
       "--new",

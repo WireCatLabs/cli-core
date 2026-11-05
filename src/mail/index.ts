@@ -20,6 +20,7 @@ export { decodedLabelName, decodeMailboxName, labelName, systemLabel } from "./l
 export {
   acknowledgeMark,
   advancePastSkipped,
+  type BulkExcerpt,
   cursorOf,
   HOLD_PARTIAL_MS,
   HOLDER,
@@ -33,6 +34,18 @@ export {
   readPastMark,
   type SkipReason,
 } from "./marks.js"
+export {
+  BULK_TRIAGE_DEFAULTS,
+  type BulkSorted,
+  type BulkTriage,
+  excerptOf,
+  NEWSLETTER_DEFAULTS,
+  NEWSLETTER_SENDERS,
+  NEWSLETTER_WORDS,
+  type NewsletterCues,
+  newsletterSorter,
+  ORDER_WORDS,
+} from "./newsletter.js"
 export { type MailTurn, mailTurn } from "./owed.js"
 export {
   type Address,

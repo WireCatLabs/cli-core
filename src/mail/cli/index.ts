@@ -14,6 +14,7 @@ import { positiveCount } from "../../cli/paging.js"
 import { formatReference, parseReference } from "../../domain/references.js"
 import { count, reference, text, time, untrusted } from "../../entities/fields.js"
 import { POLICY_SKIPS } from "../../mail/attachments.js"
+import type { BulkTriage } from "../../mail/newsletter.js"
 import type { ShownMail } from "../../mail/read.js"
 import { attachmentsText, hitText, searchMail, showMail, withAttachmentText } from "../../mail/read.js"
 import { type MailServerAccess, searchMailServer } from "../../mail/server-search.js"
@@ -24,6 +25,7 @@ import { type AccountKey, type MessageStore, queryFilter, THREAD_COLUMNS } from 
 import { acknowledgeCommand } from "./marks.js"
 import { mailReviewCommand } from "./review.js"
 
+export { bulkTriageOf, MAIL_BULK_SETTINGS } from "./bulk-settings.js"
 export { mailMark, markItem, markText } from "./marks.js"
 export { MAIL_REVIEW_QUERY, MAIL_REVIEW_STEPS, mailReviewSteps } from "./review.js"
 
@@ -64,6 +66,8 @@ export interface MailReads {
    * With it, `messages show` reads an email whose attachment a sync's policy left unread before it answers.
    */
   whole?: (command: Command, store: MessageStore, mailbox: AccountKey, emailId: string) => Promise<void>
+  /** How `review --holder` treats bulk mail, from the host's config file (`MAIL_BULK_SETTINGS`); defaults without it. */
+  bulkTriage?: (command: Command) => BulkTriage
 }
 
 /** The shown email whose attachment a sync's policy left without text, if any. */

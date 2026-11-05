@@ -11,7 +11,8 @@ import { settingsFor } from "../../cli/settings.js"
 import { overrideSharedContract } from "../../cli/shared-contracts.js"
 import type { EmailInput, MailboxInput } from "../../store/index.js"
 import { type AccountKey, openStore } from "../../store/store.js"
-import { advancePastSkipped, mailWaiting, marksOf } from "../marks.js"
+import { advancePastSkipped, mailWaiting, marksOf, readPastMark } from "../marks.js"
+import { BULK_TRIAGE_DEFAULTS } from "../newsletter.js"
 import { type MailMount, mailReadCommands } from "./index.js"
 
 const app = {
@@ -317,11 +318,13 @@ describe("a holder's processing mark", () => {
 
     await box.thread("t-late", email("late-old", 24 * 20))
     await box.thread("t-new", email("new", 1))
-    await box.thread("t-bulk", email("bulk", 1, { mailboxes: [BULK] }))
+    await box.thread("t-bulk", email("bulk", 1, { mailboxes: [BULK], subject: "Weekly digest: autumn sale" }))
     await box.synced()
     const second = await box.read()
     expect(texts(second.answer).sort()).toEqual(["text of late-old", "text of new"])
-    expect(second.answer.missing).toContainEqual(expect.objectContaining({ why: expect.stringContaining("1 bulk") }))
+    expect(second.answer.missing).toContainEqual(
+      expect.objectContaining({ why: expect.stringContaining("1 newsletter") }),
+    )
 
     const again = await box.read()
     expect(texts(again.answer).sort()).toEqual(["text of late-old", "text of new"])
@@ -329,6 +332,69 @@ describe("a holder's processing mark", () => {
     expect(mark).toMatchObject({ read: 2, skipped: { bulk: 1, envelope: 0, partial: 0, draft: 0 } })
     expect((await box.read()).answer.items).toEqual([])
     expect(await box.ack(again.cursor)).toMatchObject({ read: 2 })
+  })
+
+  it("gives bulk mail that is not surely a newsletter as an excerpt, after the rest; newsletters stay out", async () => {
+    const box = await setUp()
+    await box.synced()
+    await box.ack((await box.read()).cursor)
+    const lead = [
+      "Имя: Иван",
+      "Телефон: +7 900 000-00-00",
+      "Номер заявки в админке: 4512",
+      "Хочу посмотреть бизнес. ".repeat(40),
+    ].join("\n")
+    const site = { address: "info@burobiz.example", name: null }
+    await box.thread(
+      "t-lead",
+      email("lead", 3, { mailboxes: [BULK], from: site, subject: "Форма: «Бизнес покажет»", bodyText: lead }),
+    )
+    await box.thread(
+      "t-news",
+      email("news", 2, {
+        mailboxes: [BULK],
+        from: { address: "news@shop.example", name: "Shop" },
+        subject: "Новинки недели",
+      }),
+    )
+    await box.thread("t-ann", email("ann", 1))
+    await box.synced()
+    const { answer } = await box.read()
+    expect(threads(answer)).toEqual(["t-ann", "t-lead"])
+    const shown = answer.items[1]
+    expect(shown?.email).toMatchObject({ bulk: true, excerpt_only: true })
+    expect(shown?.text.startsWith("Форма: «Бизнес покажет»\n\nИмя: Иван\nТелефон")).toBe(true)
+    expect(shown?.text.length).toBeLessThan(BULK_TRIAGE_DEFAULTS.cues.excerptChars + 30)
+    expect(answer.items[0]?.email.excerpt_only).toBeUndefined()
+    const why = (answer.missing ?? []).map((one) => one.why)
+    expect(why).toContainEqual(expect.stringContaining("left out: 1 newsletter"))
+    expect(why).toContainEqual(expect.stringContaining("1 bulk emails (excerpt_only)"))
+  })
+
+  it("ends a read at its share of excerpts, so the next read gives the rest; without excerpts all bulk stays out", async () => {
+    const box = await setUp()
+    await box.synced()
+    await box.ack((await box.read()).cursor)
+    for (const [id, hours] of [
+      ["one", 3],
+      ["two", 2],
+    ] as const)
+      await box.thread(`t-${id}`, email(id, hours, { mailboxes: [BULK], subject: `Your order ${id}` }))
+    await box.thread("t-ann", email("ann", 1))
+    await box.synced()
+    const read = (triage = BULK_TRIAGE_DEFAULTS) =>
+      box.withStore((store) => readPastMark(store, MINE, "triage", { triage }))
+    const first = await read({ ...BULK_TRIAGE_DEFAULTS, perRead: 1 })
+    expect(first.excerpts.map(({ excerpt }) => excerpt)).toEqual(["text of one"])
+    expect(first.emails).toEqual([])
+    expect(first.more).toBe(true)
+    await box.ack(first.cursor)
+    const rest = await read({ ...BULK_TRIAGE_DEFAULTS, perRead: 1 })
+    expect(rest.excerpts.map(({ excerpt }) => excerpt)).toEqual(["text of two"])
+    expect(rest.emails.map((one) => one.email?.subject)).toEqual(["ann"])
+    const none = await read({ ...BULK_TRIAGE_DEFAULTS, excerpts: false })
+    expect(none.excerpts).toEqual([])
+    expect(none.skipped.bulk).toBe(1)
   })
 
   it("never moves back, and two holders keep their own marks", async () => {
@@ -483,7 +549,7 @@ describe("what the mail pipeline reads and may write under the read-only lock", 
     await box.cli(["messages", "acknowledge", "--holder", "triage", "--cursor", cursor])
     expect(await waiting()).toEqual({ unmarked: false, emails: 0, oldestStoredAt: null })
 
-    await box.thread("t-bulk", email("bulk", 1, { mailboxes: [BULK] }))
+    await box.thread("t-bulk", email("bulk", 1, { mailboxes: [BULK], subject: "Скидки до 50%: успейте" }))
     await box.synced()
     const before = (await box.withStore((store) => marksOf(store, MINE)))[0]?.throughId
     expect((await waiting()).emails).toBe(0)
