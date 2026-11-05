@@ -7,6 +7,21 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`review --holder` gives an agent the bulk mail that is not surely a newsletter.** Shops, banks and site forms put
+  List-Unsubscribe on orders, invoices and lead forms too, and the holder read left all of it out. Now
+  `newsletterSorter` scores each bulk email by words in its subject and first lines (Russian, English, Spanish), its
+  sender's address, an emoji or an unsubscribe link: a newsletter is left out and counted under `missing` as
+  `newsletter`; an order word in the subject, an order's or a request's number, or a reply keeps it. A kept email
+  comes after the other mail, as its subject and first lines, with `email.bulk: true` and `email.excerpt_only: true`;
+  `messages show <ref>` reads it whole. At most 30 excerpts a read; the read then ends early and the next gives the
+  rest. `mailWaiting` and `advancePastSkipped` count and stop at excerpts the same way. A host sets it from its config
+  file: `MAIL_BULK_SETTINGS` (`mail_bulk_excerpts`, `mail_bulk_excerpts_per_read`, `mail_bulk_excerpt_chars`,
+  `mail_bulk_newsletter_score`, `mail_bulk_newsletter_words`, `mail_bulk_newsletter_senders`, `mail_bulk_order_words`),
+  read by `bulkTriageOf` into `MailReads.bulkTriage`, and passed to `mailWaiting` and `advancePastSkipped` as their
+  new last argument; without it the defaults apply.
+
 ## 0.575.0 — 05.11.2026
 
 ### Added

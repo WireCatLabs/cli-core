@@ -139,8 +139,19 @@ mail. The mark counts by `emails.id`, the store's insert order, so mail stored l
 it. `review --holder <name>` reads up to 200 emails past the mark, and the held ones now whole, and gives a cursor
 (`<last id>.<read time>`); it moves nothing. `messages acknowledge --holder <name> --cursor <cursor>` moves the mark
 there, never back; it only adds to the holder's own bookkeeping, so a read-only scheduled run may run it
-(`destroysNothing`). Mail sent to many (the bulk mailbox or a List-Id), envelopes and drafts are skipped and counted;
-a partial email is held until it is whole, or skipped after 7 days; one that changed after the read is held once more,
+(`destroysNothing`). Envelopes and drafts are skipped and counted. Mail sent to many (the bulk mailbox or a List-Id)
+goes through `newsletterSorter` (`src/mail/newsletter.ts`): words in the subject and the first lines, in Russian,
+English and Spanish, the sender's address and an emoji or unsubscribe link score it as a newsletter, which is skipped
+as `newsletter`; an order word in the subject, an order's or a request's number or a reply keeps it. What is kept
+comes after the other mail as its subject and first lines (`excerpt_only`), at most 30 a read: the read ends before
+the 31st, so the next read gives it. A host sets the words, the score and the limits from its config file through
+`MailReads.bulkTriage` (`MAIL_BULK_SETTINGS`, `bulkTriageOf`), and passes the same triage to `mailWaiting` and
+`advancePastSkipped`. Measured 2026-11-05 on the owner's last 90 days of bulk mail (10 252 emails, 0.05 ms each): 1 335
+left out as newsletters, none of the 442 site lead forms among them; of 200 sampled newsletter verdicts 199 were
+newsletters, and the one GitHub reply among them is kept by the reply rule now. A local embedding model (e5-small) found about 430 more newsletters
+in 30 days at about 95% precision, for 10 ms an email, 1.2 s to load and 1 GB, and a labelled set to compare with, so
+the sorter has no model. The mark itself counts what it passed by the plain verdicts: bulk mail, excerpt or not, adds
+to `skipped.bulk`. A partial email is held until it is whole, or skipped after 7 days; one that changed after the read is held once more,
 so the holder sees it at least once. A holder with no mark starts from the newest stored email. Reads stop at mail a
 running sync stored, which files bulk mail only at its end. `marksOf` lists the marks, for `status`.
 
