@@ -259,7 +259,7 @@ it("lets an agent allocate only from its own proposed payment, and drops a rejec
   expect(await f.store.finance.invoice(invoice.ref)).toMatchObject({ status: "paid" })
 })
 
-it("takes an allocation back only from a proposed payment, and keeps a confirmed one's", async () => {
+it("takes an allocation back from a proposed payment, the owner's or the bot's own", async () => {
   const f = await fixture()
   const invoice = await f.invoice()
   const proposed = await f.store.finance.addPayment({
@@ -281,12 +281,39 @@ it("takes an allocation back only from a proposed payment, and keeps a confirmed
   ).rejects.toMatchObject({ code: "not_found", details: { reason: "finance.not-allocated" } })
   await f.store.finance.allocate({ payment: proposed.ref, invoice: invoice.ref, amount: "13000.00", by: "owner" })
   expect(await f.store.finance.payment(proposed.ref)).toMatchObject({ allocated: "13000.00" })
+})
 
-  const confirmed = await f.payment("1000.00", { allocations: [{ invoice: invoice.ref, amount: "1000.00" }] })
+it("lets only the owner move money between invoices of a confirmed payment, within both totals", async () => {
+  const f = await fixture()
+  const seo = await f.invoice([{ description: "SEO, октябрь", unitPrice: "23000.00" }])
+  const support = await f.invoice([{ description: "Поддержка, октябрь", unitPrice: "12000.00" }])
+  const paid = await f.payment("35000.00", {
+    allocations: [
+      { invoice: seo.ref, amount: "23000.00" },
+      { invoice: support.ref, amount: "10000.00" },
+    ],
+  })
   await expect(
-    f.store.finance.unallocate({ payment: confirmed.ref, invoice: invoice.ref, by: "owner" }),
-  ).rejects.toMatchObject({ details: { reason: "finance.unallocate" } })
-  expect(await f.store.finance.invoice(invoice.ref)).toMatchObject({ paid: "1000.00" })
+    f.store.finance.allocate({ payment: paid.ref, invoice: seo.ref, amount: "2000.00", by: "owner" }),
+  ).rejects.toMatchObject({ details: { reason: "finance.over-invoice" } })
+
+  for (const by of [claude, codex])
+    await expect(f.store.finance.unallocate({ payment: paid.ref, invoice: seo.ref, by })).rejects.toMatchObject({
+      code: "permission_error",
+      details: { reason: "finance.owner-only" },
+    })
+
+  const back = await f.store.finance.unallocate({ payment: paid.ref, invoice: seo.ref, by: "owner" })
+  expect(back).toMatchObject({ review: "confirmed", allocated: "10000.00", unallocated: "25000.00" })
+  expect(await f.store.finance.invoice(seo.ref)).toMatchObject({ status: "issued", paid: "0.00" })
+
+  await f.store.finance.allocate({ payment: paid.ref, invoice: seo.ref, amount: "21000.00", by: "owner" })
+  await f.store.finance.allocate({ payment: paid.ref, invoice: support.ref, amount: "2000.00", by: "owner" })
+  expect(await f.store.finance.invoice(seo.ref)).toMatchObject({ status: "partly_paid", paid: "21000.00" })
+  expect(await f.store.finance.invoice(support.ref)).toMatchObject({ status: "paid", paid: "12000.00" })
+  await expect(
+    f.store.finance.allocate({ payment: paid.ref, invoice: support.ref, amount: "0.01", by: "owner" }),
+  ).rejects.toMatchObject({ details: { reason: "finance.over-invoice" } })
 })
 
 it("keeps a draft unpaid until the owner issues it, and proposes an agent's invoice", async () => {
