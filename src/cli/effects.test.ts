@@ -9,15 +9,19 @@ import { describe, expect, it } from "vitest"
 import { keyForCommand, WRITE_KEYS } from "../sends/permissions.js"
 import { messenger, sharedProgram } from "../testing/shared-program.js"
 import {
+  admittedUnderLock,
   changesAuthority,
   destroysNothing,
   FETCH,
+  grantsAuthority,
   isOtherServiceCall,
   isStoreChange,
   judgedEffects,
   judgedTargets,
   LOCAL_WRITE,
+  LOCKED_AUTHORITY_COMMANDS,
   logsInOrOut,
+  narrowsUnderLock,
   PROPOSE_COMMANDS,
   proposesOnly,
   refuseUnderReadOnly,
@@ -279,6 +283,54 @@ describe("command effects", () => {
     expect(targets("conversations embed")?.effects).toEqual({ remote: "write", local: "none" })
     expect(targets("conversations links rebuild")?.effects).toEqual({ remote: "write", local: "none" })
     expect(targets("server restart")?.effects).toEqual({ remote: "none", local: "write" })
+  })
+})
+
+describe("an authority change the lock admits", () => {
+  const ruleAdd = (words: string[], mark: boolean) => {
+    let ran = false
+    let parent = new Command(words[0] as string)
+    const top = parent
+    for (const word of words.slice(1, -1)) parent = parent.command(word)
+    const leaf = grantsAuthority(annotate(new Command(words.at(-1) as string), { effects: LOCAL_WRITE }))
+    parent.addCommand(
+      (mark ? narrowsUnderLock(leaf) : leaf).action(() => {
+        ran = true
+      }),
+    )
+    return { top, leaf, ran: () => ran }
+  }
+  const locked = async (words: string[], mark: boolean) => {
+    const { top, ran } = ruleAdd(words, mark)
+    const streams = captureStreams()
+    const code = await run(
+      words,
+      { app: sharedProgram.app, commands: () => [top] },
+      {
+        streams,
+        tty: false,
+        env: { CHAT_READ_ONLY: "1" },
+      },
+    )
+    return { code, ran: ran(), stderr: streams.stderr.join("") }
+  }
+
+  it("is a closed list of one path", () => {
+    expect([...LOCKED_AUTHORITY_COMMANDS]).toEqual(["rules add"])
+  })
+
+  it("runs a marked rules add under the lock", async () => {
+    expect(await locked(["rules", "add"], true)).toMatchObject({ code: 0, ran: true })
+    expect(admittedUnderLock(ruleAdd(["personal", "rules", "add"], true).leaf)).toBe(true)
+  })
+
+  it("refuses an unmarked rules add, and a marked authority change on any other path", async () => {
+    const unmarked = await locked(["rules", "add"], false)
+    expect([unmarked.code, unmarked.ran]).toEqual([5, false])
+    expect(JSON.parse(unmarked.stderr).error.message).toContain("changes what a later run may do")
+    expect(await locked(["rules", "remove"], true)).toMatchObject({ code: 5, ran: false })
+    expect(await locked(["rules", "import"], true)).toMatchObject({ code: 5, ran: false })
+    expect(admittedUnderLock(ruleAdd(["moderation", "prules", "add"], true).leaf)).toBe(false)
   })
 })
 

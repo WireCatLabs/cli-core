@@ -23,6 +23,9 @@ export interface Schedule {
   onNewMail?: string
 }
 
+/** Another CLI a scheduled agent may run by name, as the host declares it: `memo`'s agent runs `mail`. */
+export type AgentCli = Pick<AppIdentity, "command" | "appName" | "envPrefix">
+
 export interface LastRun {
   at: string
   exitCode: number
@@ -474,6 +477,7 @@ export const runSchedule = async (
     killAfterMs = KILL_AFTER_MS,
     untilUnlocked = false,
     wait = pause,
+    agentRuns = [],
   }: {
     now?: () => Date
     timer?: Timer
@@ -481,6 +485,8 @@ export const runSchedule = async (
     killAfterMs?: number
     untilUnlocked?: boolean
     wait?: (ms: number, signal?: AbortSignal) => Promise<void>
+    /** The other CLIs an agent may run; each runs under its own read-only lock and knows it runs from a schedule. */
+    agentRuns?: readonly AgentCli[]
   } = {},
 ): Promise<LastRun> => {
   const schedule = readSchedule(file)
@@ -490,7 +496,7 @@ export const runSchedule = async (
   const agent = schedule.kind === "agent"
   const retries = untilUnlocked && !("every" in schedule.when)
   const firstAt = now().getTime()
-  let last = await attemptSchedule(app, system, env, schedule, folder, { now, signal, killAfterMs })
+  let last = await attemptSchedule(app, system, env, schedule, folder, { now, signal, killAfterMs, agentRuns })
   for (
     let delay = LOCKED_FIRST_WAIT_MS;
     retries && lockedOut(last) && !signal?.aborted && now().getTime() - firstAt + delay <= LOCKED_GIVE_UP_MS;
@@ -498,7 +504,7 @@ export const runSchedule = async (
   ) {
     await wait(delay, signal)
     if (signal?.aborted) break
-    last = await attemptSchedule(app, system, env, schedule, folder, { now, signal, killAfterMs })
+    last = await attemptSchedule(app, system, env, schedule, folder, { now, signal, killAfterMs, agentRuns })
   }
   const { exitCode, output } = last
   const errors = agent ? output.replace(/\.md$/, ".log") : output
@@ -533,7 +539,12 @@ const attemptSchedule = async (
   env: NodeJS.ProcessEnv,
   schedule: Schedule,
   folder: string,
-  { now, signal, killAfterMs }: { now: () => Date; signal: AbortSignal | undefined; killAfterMs: number },
+  {
+    now,
+    signal,
+    killAfterMs,
+    agentRuns,
+  }: { now: () => Date; signal: AbortSignal | undefined; killAfterMs: number; agentRuns: readonly AgentCli[] },
 ): Promise<LastRun> => {
   const runs = join(folder, "runs")
   const stamp = now()
@@ -552,6 +563,14 @@ const attemptSchedule = async (
     [`${app.envPrefix}_SCHEDULED`]: schedule.name,
     // A run started under the lock stays under it, whatever the schedule file says.
     ...(agent || readOnlyLockOf(app, env) ? { [`${app.envPrefix}_READ_ONLY`]: "1" } : {}),
+    ...(agent
+      ? Object.fromEntries(
+          agentRuns.flatMap((other) => [
+            [`${other.envPrefix}_READ_ONLY`, "1"],
+            [`${other.envPrefix}_SCHEDULED`, schedule.name],
+          ]),
+        )
+      : {}),
   }
   // The child's output is data, and an agent's is another program's: it is kept as it came. These lines say
   // only when it ran and how it ended.

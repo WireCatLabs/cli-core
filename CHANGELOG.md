@@ -11,6 +11,13 @@ shape of this file.
 
 - **`<tool> bot list` runs without a profile word**, as `account list` does; `<tool> <profile> bot list` still
   works.
+- **A scheduled agent may run other CLIs the host declares** (`ScheduleHost.agentRuns`, type `AgentCli`): memo's
+  mail triage runs `mail`. Claude gets `Bash(<cli>:*)` for each; codex may write each one's state, config and cache
+  folders; every run sets `<PREFIX>_READ_ONLY=1` and `<PREFIX>_SCHEDULED` for each, whatever the schedule file says.
+  `runSchedule` takes the same list as `agentRuns`.
+- **`<PREFIX>_READ_ONLY` lets through one authority change, `rules add`, when the command is marked
+  `narrowsUnderLock`** (`LOCKED_AUTHORITY_COMMANDS`, `admittedUnderLock`). The command narrows itself under the lock;
+  every other command marked `grantsAuthority` is still refused, and MCP still needs `mcp.authority`.
 
 ### Fixed
 
