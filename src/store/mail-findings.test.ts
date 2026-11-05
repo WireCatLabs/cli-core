@@ -321,3 +321,51 @@ it("records invoices, payments, orders and certificate facts only when the owner
     evidence: [cited[0]?.reference, shipped[0]?.reference],
   })
 })
+
+it("keeps a marketplace task's id and link, and an order's page, from the findings JSON to what accepting makes", async () => {
+  const f = await fixture()
+  const cited = await f.cite("t-lease", "lease")
+  const json = (finding: Record<string, unknown>) =>
+    JSON.stringify({ schema_version: 1, key: "mail-triage:30", extractor: "synthetic", findings: [finding] })
+  const task = {
+    id: "t1",
+    kind: "task",
+    type: "chore",
+    title: "Reply on Avito to Ivan",
+    reason: "Ivan asks about the café",
+    commitment: "explicit",
+    external_id: "Avito:4512345678",
+    source_url: "https://www.avito.ru/profile/messenger/channel/u2i-abc",
+    evidence: [cited],
+  }
+  expect(() => parseMailFindingsJson(json({ ...task, source_url: "javascript:alert(1)" }))).toThrow(/source URL/)
+  expect(() => parseMailFindingsJson(json({ ...task, external_id: "4512345678" }))).toThrow(/<service>:<id>/)
+  const order = {
+    id: "o1",
+    kind: "order",
+    purpose: "personal",
+    supplier_name: "Amazon.es",
+    number: "406-3547475-4115561",
+    source_url: "https://www.amazon.es/gp/your-account/order-details?orderID=406-3547475-4115561",
+    reason: "the order is placed",
+    evidence: [cited],
+  }
+  const input = parseMailFindingsJson(json(task))
+  const batch = await f.store.mailFindings.stage(
+    MINE,
+    { ...input, findings: [...input.findings, ...parseMailFindingsJson(json(order)).findings] },
+    agent,
+  )
+
+  const reviewed = await f.store.mailFindings.review(batch.id, {
+    fingerprint: batch.fingerprint,
+    accept: ["t1", "o1"],
+    by: "owner",
+  })
+  const made = Object.fromEntries((reviewed.receipt?.items ?? []).map((one) => [one.id, one.reference]))
+  expect(await f.store.tasks.details(made.t1 as string)).toMatchObject({
+    externalId: "avito:4512345678",
+    sourceUrl: "https://www.avito.ru/profile/messenger/channel/u2i-abc",
+  })
+  expect(await f.store.orders.get(made.o1 as string)).toMatchObject({ sourceUrl: order.source_url })
+})

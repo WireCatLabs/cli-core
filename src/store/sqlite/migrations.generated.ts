@@ -974,5 +974,15 @@ export const GENERATED: { name: string; statements: string[] }[] = [
       "-- The store's code checks these first and says why; the triggers keep a stray write from another build or a hand\n-- edit from storing an order with an unknown status or purpose, or an amount without its currency.\nCREATE TRIGGER orders_valid_bi BEFORE INSERT ON orders\n  WHEN new.customer_type NOT IN ('person', 'organization')\n    OR new.purpose NOT IN ('personal', 'business', 'client', 'other')\n    OR new.status NOT IN ('placed', 'shipped', 'delivered', 'cancelled', 'returned')\n    OR new.review NOT IN ('proposed', 'confirmed', 'rejected')\n    OR (new.total IS NULL) <> (new.currency IS NULL) OR new.total < 0 BEGIN\n  SELECT RAISE(ABORT, 'orders: a person or organization customer, a known purpose, status and review, an amount with its currency');\nEND;",
       "CREATE TRIGGER orders_valid_bu BEFORE UPDATE ON orders\n  WHEN new.customer_type NOT IN ('person', 'organization')\n    OR new.purpose NOT IN ('personal', 'business', 'client', 'other')\n    OR new.status NOT IN ('placed', 'shipped', 'delivered', 'cancelled', 'returned')\n    OR new.review NOT IN ('proposed', 'confirmed', 'rejected')\n    OR (new.total IS NULL) <> (new.currency IS NULL) OR new.total < 0 BEGIN\n  SELECT RAISE(ABORT, 'orders: a person or organization customer, a known purpose, status and review, an amount with its currency');\nEND;"
     ]
+  },
+  {
+    "name": "20261105144549_version-51-task-links",
+    "statements": [
+      "ALTER TABLE `orders` ADD `source_url` text;",
+      "ALTER TABLE `tasks` ADD `provider` text;",
+      "ALTER TABLE `tasks` ADD `external_id` text;",
+      "ALTER TABLE `tasks` ADD `source_url` text;",
+      "CREATE INDEX `tasks_by_provider_external_id` ON `tasks` (`provider`,`external_id`) WHERE external_id IS NOT NULL;"
+    ]
   }
 ]

@@ -66,6 +66,8 @@ const taskCardSample = {
   revision: 1,
   parent: null,
   source: null,
+  external_id: null,
+  source_url: null,
   due_at: null,
   next_check_at: null,
   closed_at: null,

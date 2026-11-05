@@ -1,4 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
+import { EXTERNAL_ID_CHARS, externalIdOf, SOURCE_URL_CHARS, sourceUrlOf } from "../domain/external-links.js"
 import { INVOICE_DIRECTIONS, MONEY_DIRECTIONS } from "../domain/finance.js"
 import { MEMORY_KINDS, MEMORY_SCOPES } from "../domain/knowledge.js"
 import { formatLocator, parseLocator } from "../domain/locator.js"
@@ -109,6 +110,8 @@ export interface MailOrderFinding extends Cited {
   invoice?: string
   payment?: string
   project?: string
+  /** The order's page at the shop, http or https. */
+  sourceUrl?: string
   reason: string
 }
 /** A later mail about a stored order, found by its shop and number: shipped, delivered, cancelled, returned. */
@@ -196,7 +199,18 @@ const optional = <K extends string, V>(key: K, value: unknown, read: (value: unk
 
 const one = (raw: Record<string, unknown>, ids: Set<string>): MailFinding => {
   if (!raw || typeof raw !== "object") return invalid("a finding is an object")
-  if (raw.kind === "task" || raw.kind === "fact") return validateFinding(raw as never, RULES, ids) as MailFinding
+  if (raw.kind === "fact") return validateFinding(raw as never, RULES, ids) as MailFinding
+  if (raw.kind === "task") {
+    const { externalId, sourceUrl, ...task } = raw
+    return {
+      ...(validateFinding(task as never, RULES, ids) as MailTaskFinding),
+      ...optional("externalId", externalId, (value) => {
+        const { provider, id } = externalIdOf(findingText(value, EXTERNAL_ID_CHARS + 40))
+        return `${provider}:${id}`
+      }),
+      ...optional("sourceUrl", sourceUrl, (value) => sourceUrlOf(findingText(value, SOURCE_URL_CHARS))),
+    }
+  }
   const id = findingId(raw.id, ids)
   const evidence = validEvidence(raw.evidence, RULES)
   const reference = (value: unknown, pattern: RegExp, what: string) => {
@@ -393,6 +407,7 @@ const one = (raw: Record<string, unknown>, ids: Set<string>): MailFinding => {
           "invoice",
           "payment",
           "project",
+          "sourceUrl",
           "reason",
           "evidence",
         ],
@@ -414,6 +429,9 @@ const one = (raw: Record<string, unknown>, ids: Set<string>): MailFinding => {
         ...optional("invoice", raw.invoice, (value) => reference(value, INVOICE, "an order's invoice")),
         ...optional("payment", raw.payment, (value) => reference(value, PAYMENT, "an order's payment")),
         ...optional("project", raw.project, (value) => reference(value, PROJECT, "a project")),
+        ...optional("sourceUrl", raw.sourceUrl, (value) =>
+          sourceUrlOf(findingText(value, SOURCE_URL_CHARS), "order.source-url"),
+        ),
         reason: findingText(raw.reason, 2000),
         evidence,
       }

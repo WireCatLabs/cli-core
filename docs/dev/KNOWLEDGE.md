@@ -145,7 +145,13 @@ names it (`supplierName`) with an optional `supplier` reference, the shop's numb
 currency, a status (`placed`, `shipped`, `delivered`, `cancelled`, `returned`), the order and delivery days, and
 optional `invoice:` and `payment:` links. Like an invoice, the owner's entry is confirmed at once and an agent's is an
 `order` proposal only the owner decides. One shop's number is stored once (`order.duplicate`, the name compared in any
-letter case); `orderOfShop` finds it again, and only the owner moves its status on (`setStatus`).
+letter case); `orderOfShop` finds it again, and only the owner moves its status on (`setStatus`). Since store
+version 51 an order also keeps `sourceUrl`, its http or https page at the shop.
+
+A task keeps, since store version 51, the id of what it is about in an outside service (`externalId`, given and shown
+as `<service>:<id>` such as `avito:4512345678`, stored as `tasks.provider` and `tasks.external_id` so two services'
+ids never collide) and the http or https page it is about (`sourceUrl`). Several tasks may share one id: a buyer who
+writes every day gets a task a day. A mail `task` finding carries both as `external_id` and `source_url`.
 
 A mail findings batch (`store.mailFindings`) also takes `invoice`, `payment`, `order` and `order_update` findings.
 Staging runs what accepting would write through `store.finance` or `store.orders` and rolls it back, so a batch the

@@ -119,6 +119,7 @@ export const financeTables = [
       ...reviewed(),
       ...ts(),
       del(),
+      c("source_url", "text", { note: "the http or https page of the order at the shop, such as an Amazon order" }),
     ],
   },
 ]

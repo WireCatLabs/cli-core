@@ -1407,6 +1407,13 @@ const NEW = {
           notnull: true,
           note: "bumped by triggers when a person could conflict: title, description, status, priority, agent, due date, project, parent, assignees or tags; never by a claim, a follow-up time or a close suggestion. A write made on an older revision is refused",
         }),
+        c("provider", "text", {
+          note: "the outside service `external_id` belongs to, lower case, such as avito or amazon; set with it or not at all",
+        }),
+        c("external_id", "text", {
+          note: "the task's id in that service, such as an Avito conversation or listing; the same id may be on several tasks",
+        }),
+        c("source_url", "text", { note: "the http or https page the task is about, such as an Avito ad" }),
       ],
       keys: [
         "UNIQUE (project_id, number)",
@@ -1416,6 +1423,7 @@ const NEW = {
         "INDEX (project_id, status, next_check_at)",
         "INDEX (project_id, source_locator)",
         "INDEX (source_group)",
+        "INDEX (provider, external_id) WHERE external_id IS NOT NULL",
       ],
     },
     {

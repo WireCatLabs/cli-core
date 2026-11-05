@@ -36,6 +36,10 @@ export const task = v.strictObject({
   chat: v.optional(v.nullable(reference)),
   /** The message it came from. */
   source_message: v.optional(v.nullable(reference)),
+  /** `<service>:<id>`, its id in an outside service, such as `avito:4512345678`. */
+  external_id: v.optional(v.nullable(text)),
+  /** The http or https page it is about, such as an Avito ad. */
+  source_url: v.optional(v.nullable(text)),
   /** 0 to 1, higher first; `priority_label` reads it as low, medium, high or critical. */
   priority: v.optional(v.nullable(v.number())),
   priority_label: v.optional(v.nullable(v.picklist(PRIORITY_LABELS))),
