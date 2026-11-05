@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import { type BotSubject, type StoredActivity, scorePerson } from "./check.js"
 import { askCas, askLols, askRegistries, notCovered } from "./registries.js"
 
@@ -202,5 +202,34 @@ describe("the public ban lists", () => {
       ["unknown", "lists Telegram accounts only, not WhatsApp ones"],
       ["unknown", "lists Telegram accounts only, not WhatsApp ones"],
     ])
+  })
+})
+
+describe("the registries' time limit", () => {
+  it("stops its timer once a registry has answered", async () => {
+    vi.useFakeTimers()
+    try {
+      let signal: AbortSignal | null | undefined
+      const watched: typeof fetch = async (_input, init) => {
+        signal = init?.signal
+        expect(vi.getTimerCount()).toBe(1)
+        return new Response(JSON.stringify({ ok: false }), { status: 200 })
+      }
+      await askCas("7", { fetch: watched })
+      expect(vi.getTimerCount()).toBe(0)
+      vi.advanceTimersByTime(60_000)
+      expect(signal?.aborted).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it("still reports a registry that does not answer in time", async () => {
+    const hanging: typeof fetch = (_input, init) =>
+      new Promise((_, reject) => init?.signal?.addEventListener("abort", () => reject(init.signal?.reason)))
+    expect(await askCas("7", { fetch: hanging, timeoutMs: 20 })).toMatchObject({
+      answer: "unknown",
+      detail: "did not answer in time",
+    })
   })
 })

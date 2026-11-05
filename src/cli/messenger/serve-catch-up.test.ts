@@ -121,6 +121,24 @@ describe("serve's catch-up on start", () => {
     expect(notes[0]?.text).toContain("2 left")
   })
 
+  it("stops its time budget once the pass is done", async () => {
+    let seen: AbortSignal | undefined
+    const { sync } = passOver(
+      [chat("7", "2026-11-02T10:00:00.000Z")],
+      { 7: "2026-11-02T08:00:00.000Z" },
+      async (_chatId, _sinceMs, stop) => {
+        seen = stop
+        return { fetched: 1 }
+      },
+      30,
+    )
+
+    sync.start()
+    await settle(100)
+    expect(seen?.aborted).toBe(false)
+    await sync.stop()
+  })
+
   it("does nothing when serve stops before the pass begins", async () => {
     const asked: string[] = []
     const { sync } = passOver(

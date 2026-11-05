@@ -2,6 +2,7 @@ import { createHash, randomBytes } from "node:crypto"
 import { CliError, isCliError } from "@wirecat/cli-base"
 import { zonedMoment } from "@wirecat/cli-base/query"
 import { runBudget } from "../background/budget.js"
+import { timeLimit } from "../http/time-limit.js"
 import type { CalendarInput, EntryInput, EventStore, StoredCalendar } from "../meetings/index.js"
 import { calendarText, joinUrlWithoutQuery } from "../meetings/index.js"
 import { expandSeries, unexpandable } from "./expand.js"
@@ -143,8 +144,8 @@ export const fetchFeedIfChanged = async (
     ...(since?.lastModified ? { "if-modified-since": since.lastModified } : {}),
   }
   const run = options.fetch ?? fetch
-  const timeout = AbortSignal.timeout(limits.timeoutMs)
-  const signal = options.signal ? AbortSignal.any([options.signal, timeout]) : timeout
+  const timeout = timeLimit(limits.timeoutMs)
+  const signal = options.signal ? AbortSignal.any([options.signal, timeout.signal]) : timeout.signal
   let url = feedAddress(address)
   try {
     for (let hop = 0; ; hop++) {
@@ -190,7 +191,7 @@ export const fetchFeedIfChanged = async (
   } catch (error) {
     if (isCliError(error)) throw error
     if (options.signal?.aborted) throw new CliError("cancelled", `reading ${name} was cancelled`)
-    if (timeout.aborted)
+    if (timeout.signal.aborted)
       throw new CliError("timeout", `${name} did not answer within ${Math.round(limits.timeoutMs / 1000)} s`, {
         reason: "feed.timeout",
         retryable: true,
@@ -205,6 +206,8 @@ export const fetchFeedIfChanged = async (
         retryable: true,
       },
     )
+  } finally {
+    timeout.clear()
   }
 }
 

@@ -1,4 +1,5 @@
 import type { Id } from "../domain/models.js"
+import { withTimeLimit } from "../http/time-limit.js"
 import type { RegistryReason } from "./reasons.js"
 
 export type RegistryName = "cas" | "lols"
@@ -44,16 +45,18 @@ const getJson = async (
   { fetch: fetchFn = fetch, timeoutMs = TIMEOUT_MS }: RegistryOptions,
 ): Promise<{ status: number; body: unknown } | { failed: string }> => {
   try {
-    const response = await fetchFn(url, {
-      headers: { accept: "application/json", ...headers },
-      signal: AbortSignal.timeout(timeoutMs),
-      redirect: "error",
+    const { status, text } = await withTimeLimit(timeoutMs, async (signal) => {
+      const response = await fetchFn(url, {
+        headers: { accept: "application/json", ...headers },
+        signal,
+        redirect: "error",
+      })
+      return { status: response.status, text: await response.text() }
     })
-    const text = await response.text()
     try {
-      return { status: response.status, body: JSON.parse(text) }
+      return { status, body: JSON.parse(text) }
     } catch {
-      return { failed: `answered ${response.status} with something that is not JSON` }
+      return { failed: `answered ${status} with something that is not JSON` }
     }
   } catch (error) {
     return {
