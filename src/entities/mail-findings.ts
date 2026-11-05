@@ -19,6 +19,10 @@ const finding = v.variant("kind", [
     due_evidence: v.optional(v.array(reference)),
     assignee: v.optional(reference),
     assignee_evidence: v.optional(v.array(reference)),
+    /** `<service>:<id>` in the outside service the mail came from, such as `avito:4512345678`. */
+    external_id: v.optional(text),
+    /** The http or https page the task is about, such as the conversation the mail links to. */
+    source_url: v.optional(text),
   }),
   v.strictObject({
     ...base,
@@ -99,6 +103,8 @@ const finding = v.variant("kind", [
     invoice: v.optional(reference),
     payment: v.optional(reference),
     project: v.optional(reference),
+    /** The order's page at the shop, http or https. */
+    source_url: v.optional(text),
     reason: text,
   }),
   v.strictObject({

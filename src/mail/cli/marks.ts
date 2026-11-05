@@ -8,7 +8,8 @@ import { environmentOf, outputFor } from "../../cli/context.js"
 import { LOCAL_WRITE, proposesOnly } from "../../cli/effects.js"
 import { itemOf, renderAnswer } from "../../cli/envelope.js"
 import { mailHolderVariable, readOnlyLockOf } from "../../ports/app.js"
-import { acknowledgeMark, type MailMark } from "../marks.js"
+import { momentOf } from "../../services/moment.js"
+import { acknowledgeMark, type MailMark, rewindMark } from "../marks.js"
 import type { MailReads } from "./index.js"
 
 const iso = (ms: number | null) => (ms === null ? null : new Date(ms).toISOString())
@@ -86,4 +87,95 @@ export const acknowledgeCommand = (mail: MailReads): Command =>
         )
       const mark = await mail.read(this, (store, mailbox) => acknowledgeMark(store, mailbox, holder, cursor))
       renderAnswer(this, outputFor(this), itemOf(markItem(mark)), () => markText(mark))
+    })
+
+const mailMarkReset = v.strictObject({
+  mark: mailMark,
+  /** Where the mark was before. */
+  from_id: v.number(),
+  /** Emails the holder reads whole again. */
+  again: v.number(),
+  /** Bulk emails it gets again as excerpts, unless they are surely newsletters. */
+  bulk: v.number(),
+  /** Emails between the two marks it skips again: drafts, envelopes, suspicious senders, partial mail. */
+  skipped: v.number(),
+  /** Nothing moved: `--dry-run` only counts. */
+  dry_run: v.boolean(),
+})
+
+const wholeNumber = (value: string): number => {
+  const parsed = Number(value)
+  if (!Number.isSafeInteger(parsed) || parsed < 1)
+    throw new CliError("validation_error", `--last takes a whole number of emails, 1 or more — got ${value}`)
+  return parsed
+}
+
+/**
+ * `messages reset`: the owner moves a holder's mark back, so its next reviews give it that mail again — after its
+ * rules changed, say. An agent never does: a holder that could move its own mark back could be talked by an email
+ * into reading the whole mailbox again, so this is no proposal and the read-only lock refuses it.
+ */
+export const resetMarkCommand = (mail: MailReads): Command =>
+  answerEntity(
+    annotate(new Command("reset"), {
+      effects: LOCAL_WRITE,
+      examples: [
+        `${mail.app.command} personal messages reset --holder mail-triage --last 8 --dry-run`,
+        `${mail.app.command} personal messages reset --holder mail-triage --since-time 2026-11-04T00:00:00Z`,
+      ],
+    }),
+    "mail_mark_reset",
+    mailMarkReset,
+  )
+    .summary("move a holder's processing mark back, so it reads that mail again (owner only)")
+    .description(
+      "the owner moves a holder's mark back past the mail received since --since-time, or past the last --last " +
+        "emails it was given; its next reviews give that mail again. The answer says how many emails it reads " +
+        "again. An agent cannot: a holder only moves its own mark forward, with `messages acknowledge`",
+    )
+    .requiredOption("--holder <name>", "whose mark: lower-case letters, digits and dashes, such as mail-triage")
+    .option("--since-time <time>", "read again what was received since this ISO 8601 time, or 2d ago")
+    .option("--last <n>", "read again the last n emails the holder was given", wholeNumber)
+    .option("--dry-run", "count what would be read again, and move nothing")
+    .action(async function (this: Command) {
+      const { holder, sinceTime, last, dryRun } = this.opts<{
+        holder: string
+        sinceTime?: string
+        last?: number
+        dryRun?: boolean
+      }>()
+      if ((sinceTime === undefined) === (last === undefined))
+        throw new CliError("validation_error", "give --since-time or --last, one of them")
+      const env = environmentOf(this).env ?? process.env
+      if (env[mailHolderVariable(mail.app)]?.trim() || actorOf(this) !== "owner" || readOnlyLockOf(mail.app, env))
+        throw new CliError(
+          "permission_error",
+          "only the owner moves a holder's mark back; an agent only acknowledges",
+          {
+            reason: "mail.reset-owner-only",
+          },
+        )
+      const now = Date.now()
+      const to = last === undefined ? { since: momentOf(sinceTime as string, "--since-time", now) } : { last }
+      const reset = await mail.read(this, (store, mailbox) =>
+        rewindMark(store, mailbox, holder, to, { now, dry: dryRun === true }),
+      )
+      const item = {
+        mark: markItem(reset.mark),
+        from_id: reset.fromId,
+        again: reset.again,
+        bulk: reset.bulk,
+        skipped: reset.skipped,
+        dry_run: reset.dry,
+      }
+      renderAnswer(this, outputFor(this), itemOf(item), () => {
+        const mark =
+          reset.mark.throughId === reset.fromId
+            ? `the mark stays at ${reset.fromId}`
+            : `the mark ${reset.dry ? "would move" : "moved"} from ${reset.fromId} to ${reset.mark.throughId}`
+        return (
+          `${holder} ${reset.dry ? "would read" : "reads"} ${reset.again} emails again, and ${reset.bulk} bulk ` +
+          `ones as excerpts unless they are newsletters; ${reset.skipped} are skipped again; ${mark}\n`
+        )
+      })
     })

@@ -1662,8 +1662,11 @@ A task or ticket, for people and agents alike. Everything it concerns — people
 | `priority_score` | real |  |  | 0 to 1, higher first: low, medium, high, critical by quarters; orders a board column. `priority` is kept from it for builds before version 41 |
 | `agent` | text |  |  | the agent working on it, by name; unlike a claim it does not lapse |
 | `revision` | integer | not null |  | bumped by triggers when a person could conflict: title, description, status, priority, agent, due date, project, parent, assignees or tags; never by a claim, a follow-up time or a close suggestion. A write made on an older revision is refused |
+| `provider` | text |  |  | the outside service `external_id` belongs to, lower case, such as avito or amazon; set with it or not at all |
+| `external_id` | text |  |  | the task's id in that service, such as an Avito conversation or listing; the same id may be on several tasks |
+| `source_url` | text |  |  | the http or https page the task is about, such as an Avito ad |
 
-*Keys and indexes:* `UNIQUE (project_id, number)`, `INDEX (title_folded)`, `INDEX (id) WHERE close_reason IS NOT NULL AND close_reason_folded IS NULL`, `INDEX (project_id, status, due_at)`, `INDEX (project_id, status, next_check_at)`, `INDEX (project_id, source_locator)`, `INDEX (source_group)`, `INDEX (parent_id)`, `INDEX (closed_by_type, closed_by_id)`, `INDEX (author_type, author_id)`, `INDEX (close_suggested_by_type, close_suggested_by_id)`
+*Keys and indexes:* `UNIQUE (project_id, number)`, `INDEX (title_folded)`, `INDEX (id) WHERE close_reason IS NOT NULL AND close_reason_folded IS NULL`, `INDEX (project_id, status, due_at)`, `INDEX (project_id, status, next_check_at)`, `INDEX (project_id, source_locator)`, `INDEX (source_group)`, `INDEX (provider, external_id) WHERE external_id IS NOT NULL`, `INDEX (parent_id)`, `INDEX (closed_by_type, closed_by_id)`, `INDEX (author_type, author_id)`, `INDEX (close_suggested_by_type, close_suggested_by_id)`
 
 ### `task_key_counters`
 
@@ -1944,6 +1947,7 @@ An order the owner placed with a shop or a supplier, or took from a client: for 
 | `created_at` | integer | not null |  | when this row was saved here |
 | `updated_at` | integer | not null |  | when this row last changed here |
 | `deleted_at` | integer |  |  | gone at the source; sync never hard-deletes |
+| `source_url` | text |  |  | the http or https page of the order at the shop, such as an Amazon order |
 
 *Keys and indexes:* `INDEX (customer_type, customer_id)`, `INDEX (supplier_type, supplier_id)`, `INDEX (invoice_id)`, `INDEX (payment_id)`, `INDEX (project_id)`, `INDEX (author_type, author_id)`, `INDEX (confirmed_by_type, confirmed_by_id)`
 

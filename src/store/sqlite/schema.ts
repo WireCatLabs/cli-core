@@ -1622,6 +1622,9 @@ export const tasks = sqliteTable(
     priorityScore: real("priority_score"),
     agent: text("agent"),
     revision: integer("revision").notNull().default(1),
+    provider: text("provider"),
+    externalId: text("external_id"),
+    sourceUrl: text("source_url"),
   },
   (table) => [
     unique().on(table.projectId, table.number),
@@ -1635,6 +1638,7 @@ export const tasks = sqliteTable(
     index("tasks_by_project_id_status_next_check_at").on(table.projectId, table.status, table.nextCheckAt),
     index("tasks_by_project_id_source_locator").on(table.projectId, table.sourceLocator),
     index("tasks_by_source_group").on(table.sourceGroup),
+    index("tasks_by_provider_external_id").on(table.provider, table.externalId).where(sql`external_id IS NOT NULL`),
     index("tasks_by_parent_id").on(table.parentId),
     index("tasks_by_closed_by_type_closed_by_id").on(table.closedByType, table.closedById),
     index("tasks_by_author_type_author_id").on(table.authorType, table.authorId),
@@ -1931,6 +1935,7 @@ export const orders = sqliteTable(
     createdAt: integer("created_at").notNull(),
     updatedAt: integer("updated_at").notNull(),
     deletedAt: integer("deleted_at"),
+    sourceUrl: text("source_url"),
   },
   (table) => [
     index("orders_by_customer_type_customer_id").on(table.customerType, table.customerId),

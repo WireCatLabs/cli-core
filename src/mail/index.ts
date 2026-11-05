@@ -28,10 +28,13 @@ export {
   type MailMark,
   type MailWaiting,
   type MarkRead,
+  type MarkRewind,
   mailWaiting,
   markOf,
   marksOf,
+  type RewoundMark,
   readPastMark,
+  rewindMark,
   type SkipReason,
 } from "./marks.js"
 export {

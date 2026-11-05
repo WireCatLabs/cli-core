@@ -414,6 +414,60 @@ describe("a holder's processing mark", () => {
     expect((await box.read()).answer.items).toEqual([])
   })
 
+  it("lets the owner move a mark back by the last emails or by time, so the holder reads that mail again", async () => {
+    const box = await setUp()
+    await box.synced()
+    await box.ack((await box.read()).cursor)
+    for (const [id, hours] of [
+      ["one", 3],
+      ["two", 2],
+      ["three", 1],
+    ] as const)
+      await box.thread(`t-${id}`, email(id, hours))
+    await box.thread("t-bulk", email("bulk", 1, { mailboxes: [BULK], subject: "Your order bulk" }))
+    await box.synced()
+    await box.ack((await box.read()).cursor)
+    const reset = async (...argv: string[]) => {
+      const done = await box.cli(["messages", "reset", "--holder", "triage", ...argv])
+      expect(done.code, done.err).toBe(0)
+      return JSON.parse(done.out).item
+    }
+
+    const dry = await reset("--last", "2", "--dry-run")
+    expect(dry).toMatchObject({ again: 1, bulk: 1, dry_run: true })
+    expect(dry.mark.through_id).toBeLessThan(dry.from_id)
+    expect((await box.read()).answer.items).toEqual([])
+
+    expect(await reset("--last", "2")).toMatchObject({ again: 1, bulk: 1, dry_run: false })
+    const again = await box.read()
+    expect(texts(again.answer)).toEqual(["text of three", "text of bulk"])
+    await box.ack(again.cursor)
+
+    const since = new Date(Date.now() - 2.5 * HOUR).toISOString()
+    expect(await reset("--since-time", since)).toMatchObject({ again: 2, bulk: 1 })
+    expect(texts((await box.read()).answer)).toEqual(["text of two", "text of three", "text of bulk"])
+  })
+
+  it("refuses to move a mark back for an agent, without a mark, or without saying how far", async () => {
+    const box = await setUp()
+    const reset = (argv: string[], extra: Record<string, string> = {}) =>
+      box.cli(["messages", "reset", "--holder", "triage", ...argv], extra)
+    const missing = await reset(["--last", "1"])
+    expect(missing.code).toBe(6)
+    expect(missing.err).toContain("mail.no-mark")
+    await box.synced()
+    await box.ack((await box.read()).cursor)
+    expect((await reset([])).code).toBe(2)
+    expect((await reset(["--last", "1", "--since-time", "1d"])).code).toBe(2)
+    expect((await reset(["--last", "0"])).code).toBe(2)
+    expect((await reset(["--last", "1"], { MAIL_READ_ONLY: "1", MAIL_MAIL_HOLDER: "triage" })).code).toBe(5)
+    const agent = await reset(["--last", "1"], { AI_AGENT: "claude-code_2-1_agent" })
+    expect(agent.code).toBe(5)
+    expect(agent.err).toContain("mail.reset-owner-only")
+    expect((await reset(["--last", "1"], { MAIL_MAIL_HOLDER: "triage" })).code).toBe(5)
+    expect((await reset(["--last", "1"])).code).toBe(0)
+  })
+
   it("holds a partial email until it is whole, then gives it once", async () => {
     const box = await setUp()
     await box.synced()

@@ -7,6 +7,24 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **Tasks keep their id in an outside service and the page they are about (store version 51).** `tasks.provider`
+  and `tasks.external_id` hold a task's id in a service such as Avito, Cian or hh.ru, given and shown as
+  `<service>:<id>` (`avito:4512345678`), so ids of two services never collide; several tasks may share one.
+  `tasks.source_url` and `orders.source_url` hold the http or https page a task or an order is about, such as an Avito
+  ad or an Amazon order; anything else is refused (`task.source-url`, `order.source-url`, `task.external-id`).
+  `TaskFields.externalId` and `sourceUrl` set them on create and edit, `null` clears them; `TaskDetails` and the
+  `task` entity carry `external_id` and `source_url`; `OrderInput` and `Order` carry `sourceUrl`. Mail findings take
+  `external_id` and `source_url` on a `task` and `source_url` on an `order`, and accepting keeps them. `minCompatible`
+  stays 34.
+- **The owner moves a holder's mail mark back: `messages reset`.** `--holder <name>` with `--since-time <time>` or
+  `--last <n>`, and `--dry-run` to count first; the answer (`mail_mark_reset`) says how many emails the holder reads
+  whole again, how many bulk ones come again as excerpts and how many are skipped again. It is owner only: no
+  proposal, refused under the read-only lock, for a scheduled holder and for an agent (`mail.reset-owner-only`); a
+  holder with no mark yet is `mail.no-mark`. `rewindMark` is the function under it, and `MailActivityStore` gets
+  `emailsBefore`.
+
 ### Changed — may break callers
 
 - **`projects status` fits 4 KB of JSON and 1.5 KB compact on the status fixture (was 11.2 KB and 3.6 KB).** Most of

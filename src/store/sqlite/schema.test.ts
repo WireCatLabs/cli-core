@@ -490,6 +490,8 @@ describe("the link kinds", () => {
 describe("the data-model rules (cli-base docs/standards/data-model.md)", () => {
   const UNKEYED_EXTERNAL_ID: Record<string, string> = {
     meeting_participants: "one row per person in a meeting, keyed by (meeting_id, identity_id); external_id is extra",
+    tasks:
+      "the id of what a task is about in an outside service (an Avito conversation), not the task's own record: several tasks share one",
   }
   const ENTITIES = ["persons", "events", "event_series", "documents"]
   const ENTITY_SOURCE_COLUMNS: Record<string, string> = {

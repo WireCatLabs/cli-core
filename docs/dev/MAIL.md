@@ -139,7 +139,11 @@ mail. The mark counts by `emails.id`, the store's insert order, so mail stored l
 it. `review --holder <name>` reads up to 200 emails past the mark, and the held ones now whole, and gives a cursor
 (`<last id>.<read time>`); it moves nothing. `messages acknowledge --holder <name> --cursor <cursor>` moves the mark
 there, never back; it only adds to the holder's own bookkeeping, so a read-only scheduled run may run it
-(`destroysNothing`). Envelopes and drafts are skipped and counted. Mail sent to many (the bulk mailbox or a List-Id)
+(`destroysNothing`). Only the owner moves a mark back: `messages reset --holder <name>` with `--since-time <time>`
+(past every email received since then) or `--last <n>` (past the last n emails the holder was given), and
+`--dry-run` to count first (`rewindMark`). It answers how many emails are read whole again, how many bulk ones come
+again as excerpts and how many are skipped again. It is no proposal, so the read-only lock, a scheduled holder and an
+agent are refused (`mail.reset-owner-only`). Envelopes and drafts are skipped and counted. Mail sent to many (the bulk mailbox or a List-Id)
 goes through `newsletterSorter` (`src/mail/newsletter.ts`): words in the subject and the first lines, in Russian,
 English and Spanish, the sender's address and an emoji or unsubscribe link score it as a newsletter, which is skipped
 as `newsletter`; an order word in the subject, an order's or a request's number or a reply keeps it. What is kept

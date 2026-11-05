@@ -1,6 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import type { QueryAst } from "@wirecat/cli-base/query"
 import { timezoneOf } from "@wirecat/cli-base/query"
+import { externalIdOf, externalIdText, sourceUrlOf } from "../../domain/external-links.js"
 import { TASK_TYPES, WORK_TASK_TYPES } from "../../domain/knowledge.js"
 import {
   checkedScore,
@@ -94,6 +95,10 @@ export interface TaskFields {
   project?: string
   /** A project task's kind, bug, feature or chore. */
   type?: WorkTaskType
+  /** `<service>:<id>`, the task's id in an outside service, such as `avito:4512345678`; `null` clears it. */
+  externalId?: string | null
+  /** The http or https page the task is about, such as an Avito ad; `null` clears it. */
+  sourceUrl?: string | null
 }
 
 export interface NewWorkTask extends Omit<TaskFields, "reason" | "project" | "type"> {
@@ -133,6 +138,9 @@ export interface TaskDetails {
   parent: string | null
   /** What a task found in a message points at; null for a task made here. */
   source: string | null
+  /** `<service>:<id>` in an outside service, such as `avito:4512345678`. */
+  externalId: string | null
+  sourceUrl: string | null
   dueAt: string | null
   nextCheckAt: string | null
   closedAt: string | null
@@ -389,6 +397,8 @@ export const workTaskOperationsOver = (context: StoreContext): WorkTaskOperation
       revision: Number(row.revision),
       parent: row.parent_id == null ? null : reference(Number(row.parent_id)),
       source: row.source_locator == null ? null : String(row.source_locator),
+      externalId: externalIdText(row.provider, row.external_id),
+      sourceUrl: row.source_url == null ? null : String(row.source_url),
       dueAt: iso(row.due_at),
       nextCheckAt: iso(row.next_check_at),
       closedAt: iso(row.closed_at),
@@ -555,6 +565,13 @@ export const workTaskOperationsOver = (context: StoreContext): WorkTaskOperation
       change("close_reason", reason)
       change("close_reason_folded", folded(reason))
     }
+    if (fields.externalId !== undefined) {
+      const external = fields.externalId === null ? null : externalIdOf(fields.externalId)
+      change("provider", external?.provider ?? null)
+      change("external_id", external?.id ?? null)
+    }
+    if (fields.sourceUrl !== undefined)
+      change("source_url", fields.sourceUrl === null ? null : sourceUrlOf(fields.sourceUrl))
     if (fields.category !== undefined) change("category", fields.category, "category")
     if (fields.type !== undefined && fields.type !== before.type) {
       if (!WORK_TASK_TYPES.includes(fields.type) || !onBoard(task))
