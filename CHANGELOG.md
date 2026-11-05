@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.568.0 — 05.11.2026
+
 ### Changed — may break callers
 
 - **`holderHasMail` is gone: `mailWaiting` checks and `advancePastSkipped` moves.** `holderHasMail` read like a
