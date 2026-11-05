@@ -5,15 +5,10 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
-## 0.582.0 — 05.11.2026
+## Unreleased
 
 ### Added
 
-- **`knowledge.updateOrganization(organization, { name })` renames an organization**, given as `organization:<id>` or
-  by its id; its kind and scope stay. An agent's rename is a proposal for the owner: the `organization_rename`
-  proposal kind and `proposeOrganizationRename(store, { organization, name }, by, reason?)`. It shows in `review` as
-  an `organization` row (`rename organization:3 to ...`); confirming it renames, rejecting it changes nothing. No
-  schema change.
 - **`invoices` takes `number`.** `finance.invoices({ number })` lists the invoices whose printed number is exactly
   that, as `orders.list({ number })` does for orders.
 - **`MAIL_FINDING_FIELDS` and `mailFindingFieldsHelp()`.** The fields each mail finding kind needs and takes, the
@@ -27,9 +22,6 @@ shape of this file.
 
 ### Fixed
 
-- **`knowledge.organizations` answers a `name:` term.** `ORGANIZATIONS_QUERY` listed `name`, but the store had no
-  column for it, so `organizations list name:acme` failed. The match ignores case in any script, and `name:*acme*`
-  finds a name that holds a word.
 - **A `messages reset` that leaves the mark where it is still counts.** It adds to `resets`, so the holder's next
   findings key is new, and says "mark unchanged … counted as a reset"; the answer gives `resets`. Before, it wrote
   nothing, and a run after it was refused with `mail-findings.key-used`.
@@ -37,6 +29,22 @@ shape of this file.
 - **A task finding's `due_at` refusals say what is needed.** A date without a time and timezone, `due_at` without
   `due_evidence`, and `due_evidence` given as evidence objects each name the field and show the right form, such as
   `"due_at":"2026-11-09T09:00:00Z","due_evidence":["<reference>"]`.
+
+## 0.582.0 — 05.11.2026
+
+### Added
+
+- **`knowledge.updateOrganization(organization, { name })` renames an organization**, given as `organization:<id>` or
+  by its id; its kind and scope stay. An agent's rename is a proposal for the owner: the `organization_rename`
+  proposal kind and `proposeOrganizationRename(store, { organization, name }, by, reason?)`. It shows in `review` as
+  an `organization` row (`rename organization:3 to ...`); confirming it renames, rejecting it changes nothing. No
+  schema change.
+
+### Fixed
+
+- **`knowledge.organizations` answers a `name:` term.** `ORGANIZATIONS_QUERY` listed `name`, but the store had no
+  column for it, so `organizations list name:acme` failed. The match ignores case in any script, and `name:*acme*`
+  finds a name that holds a word.
 
 ## 0.581.0 — 05.11.2026
 
