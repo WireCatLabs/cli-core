@@ -12,10 +12,12 @@ import { type FindingOutcome, type FindingsReceipt, findingHash } from "../../me
 import { assertMayDecide, type Decider } from "../decisions.js"
 import { MAIL_FINDINGS_KIND, type MailFindingsBatch, type MailFindingsStore } from "../mail-findings.js"
 import type { AccountKey } from "../types.js"
+import { financeOperationsOver } from "./finance.js"
 import { findingsAgent, findingsCoreOver } from "./findings-core.js"
-import { authorActor, memoriesStoreOver } from "./memories.js"
+import { authorActor, linkEvidence, memoriesStoreOver } from "./memories.js"
 import { insertLink, requiredThing } from "./notes.js"
 import type { StoreContext } from "./open.js"
+import { orderOfShop, orderOperationsOver } from "./orders.js"
 import { linkIdentityToPerson } from "./person-links.js"
 import { type ProposedAction, proposalOperationsOver } from "./proposed-actions.js"
 import { addComment } from "./task-comments.js"
@@ -49,6 +51,8 @@ export const mailFindingsStoreOver = (context: StoreContext): MailFindingsStore 
   const core = findingsCoreOver(context, MAIL_FINDINGS_KIND)
   const memories = memoriesStoreOver(context)
   const tasks = workTaskOperationsOver(context)
+  const finance = financeOperationsOver(context)
+  const orders = orderOperationsOver(context)
 
   const mailbox = (key: AccountKey): number => {
     if (key?.provider !== "email" || typeof key.account !== "string" || !key.account.trim())
@@ -146,6 +150,62 @@ export const mailFindingsStoreOver = (context: StoreContext): MailFindingsStore 
     return read
   }
 
+  /** The invoice, payment or order an accepted finding records: the owner's own entry, citing the mail it came from. */
+  const entry = (finding: MailFinding, evidence: string[]): (() => { ref: string }) | undefined => {
+    const by = "owner" as const
+    switch (finding.kind) {
+      case "invoice":
+        return () =>
+          finance.addInvoice({
+            by,
+            evidence,
+            direction: finding.direction,
+            counterparty: finding.counterparty,
+            currency: finding.currency,
+            lines: finding.lines,
+            ...(finding.total === undefined ? {} : { total: finding.total }),
+            ...(finding.number === undefined ? {} : { number: finding.number }),
+            ...(finding.issueDate === undefined ? {} : { issueDate: finding.issueDate }),
+            ...(finding.dueDate === undefined ? {} : { dueDate: finding.dueDate }),
+            ...(finding.project === undefined ? {} : { project: finding.project }),
+          })
+      case "payment":
+        return () =>
+          finance.addPayment({
+            by,
+            evidence,
+            direction: finding.direction,
+            amount: finding.amount,
+            currency: finding.currency,
+            date: finding.date,
+            ...(finding.payer === undefined ? {} : { payer: finding.payer }),
+            ...(finding.payee === undefined ? {} : { payee: finding.payee }),
+            ...(finding.reference === undefined ? {} : { reference: finding.reference }),
+            ...(finding.allocations === undefined ? {} : { allocations: finding.allocations }),
+            ...(finding.project === undefined ? {} : { project: finding.project }),
+          })
+      case "order": {
+        const { id: _id, kind: _kind, evidence: _cited, reason: _reason, ...fields } = finding
+        return () => orders.add({ ...fields, by, evidence })
+      }
+      default:
+        return undefined
+    }
+  }
+
+  /** Runs what accepting would write and rolls it back, so staging refuses what the owner's accept would refuse. */
+  const ROLLBACK = Symbol("rollback")
+  const wouldWrite = (make: () => unknown) => {
+    try {
+      write(database, () => {
+        make()
+        throw ROLLBACK
+      })
+    } catch (error) {
+      if (error !== ROLLBACK) throw error
+    }
+  }
+
   const identityOfAddress = (address: string) =>
     database
       .prepare(
@@ -176,6 +236,19 @@ export const mailFindingsStoreOver = (context: StoreContext): MailFindingsStore 
       case "link":
         thing(finding.from, "the link's source")
         thing(finding.to, "the link's target")
+        return
+      case "invoice":
+      case "payment":
+      case "order":
+        wouldWrite(
+          entry(
+            finding,
+            finding.evidence.map((one) => one.reference),
+          ) as () => unknown,
+        )
+        return
+      case "order_update":
+        orderOfShop(context, finding.supplierName, finding.number)
         return
       case "new_contact": {
         const ids = finding.evidence.map(({ reference }) => Number(read.get(reference)?.id))
@@ -243,6 +316,20 @@ export const mailFindingsStoreOver = (context: StoreContext): MailFindingsStore 
         if (!link.confirmed)
           database.prepare("UPDATE links SET confirmed = 1, updated_at = ? WHERE id = ?").run(now(), Number(link.id))
         return `link:${link.id}`
+      }
+      case "invoice":
+      case "payment":
+      case "order":
+        return (entry(finding, evidence) as () => { ref: string })().ref
+      case "order_update": {
+        const order = orderOfShop(context, finding.supplierName, finding.number)
+        orders.setStatus(order, {
+          status: finding.status,
+          by: "owner",
+          ...(finding.date === undefined ? {} : { date: finding.date }),
+        })
+        linkEvidence(context, { type: "order", id: Number(order.slice("order:".length)) }, evidence, "owner")
+        return order
       }
       case "new_contact": {
         const person = Number(identityOfAddress(finding.address)?.person_id)

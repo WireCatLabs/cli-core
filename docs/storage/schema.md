@@ -5,7 +5,7 @@ Every table of the shared store (tg, max, memo, zm) as its migrations create it.
 `drizzle/` must agree with it. `pnpm schema:check` fails when they do not, and `src/store/sqlite/schema.test.ts`
 checks every table and column of a new store against this page.
 
-114 tables, 25 full-text indexes.
+115 tables, 25 full-text indexes.
 
 ## Conventions
 
@@ -1810,7 +1810,7 @@ What happened, as its evidence shows: a fact, a statement, a question, a decisio
 
 ## Money
 
-Invoices, payments and what settles what, in exact minor units per currency. Totals are per currency: the store converts nothing.
+Invoices, payments and what settles what, in exact minor units per currency, and the orders they pay for. Totals are per currency: the store converts nothing.
 
 ### `invoices`
 
@@ -1910,6 +1910,42 @@ How much of a payment settles an invoice. A payment's allocations never exceed i
 | `updated_at` | integer | not null |  | when this row last changed here |
 
 *Keys and indexes:* `UNIQUE (payment_id, invoice_id)`, `INDEX (invoice_id)`, `INDEX (author_type, author_id)`
+
+### `orders`
+
+An order the owner placed with a shop or a supplier, or took from a client: for whom, from whom, its number, amount and how far delivery got. The mail-triage agent proposes them from order and delivery mail.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | PK |  |  |
+| `customer_type` | text | not null |  | `person` or `organization`: whom the order is for, the owner's own person for his own purchase |
+| `customer_id` | integer | not null |  | the row in the `customer_type` table |
+| `purpose` | text | not null |  | personal, business, client, other: why it was ordered |
+| `supplier_type` | text |  |  | `person` or `organization` |
+| `supplier_id` | integer |  |  | the row in the `supplier_type` table |
+| `supplier_name` | text | not null |  | the shop or supplier as its mail names it; an update finds the order by it and the number |
+| `number` | text |  |  | the shop's order number |
+| `currency` | text |  |  | ISO 4217, upper case; set with `total` or not at all |
+| `total` | integer |  |  | in minor units of `currency` (kopecks, cents; yen for JPY): never a float; null when the mail gives no amount |
+| `status` | text | not null |  | placed, shipped, delivered, cancelled, returned |
+| `order_date` | text |  |  | `YYYY-MM-DD` |
+| `fulfilled_date` | text |  |  | `YYYY-MM-DD`: the day it was delivered |
+| `invoice_id` | integer |  | → `invoices.id` | the `invoice` it belongs to |
+| `payment_id` | integer |  | → `payments.id` | the `payment` it belongs to |
+| `project_id` | integer |  | → `projects.id` | the `project` it belongs to |
+| `review` | text | not null |  | proposed, confirmed, rejected: the owner's entry is confirmed at once, an agent's or an import's waits |
+| `author_type` | text | not null |  | `person` or `bot` |
+| `author_id` | integer | not null |  | the row in the `author_type` table |
+| `model` | text |  |  | the model that wrote it, for an agent's |
+| `confirmed_by_type` | text |  |  | who confirmed it; null while proposed |
+| `confirmed_by_id` | integer |  |  | who confirmed it; null while proposed |
+| `source` | text | not null |  | owner, agent, an import |
+| `metadata` | text |  |  | JSON: what the source sends that has no column, and is not searched |
+| `created_at` | integer | not null |  | when this row was saved here |
+| `updated_at` | integer | not null |  | when this row last changed here |
+| `deleted_at` | integer |  |  | gone at the source; sync never hard-deletes |
+
+*Keys and indexes:* `INDEX (customer_type, customer_id)`, `INDEX (supplier_type, supplier_id)`, `INDEX (invoice_id)`, `INDEX (payment_id)`, `INDEX (project_id)`, `INDEX (author_type, author_id)`, `INDEX (confirmed_by_type, confirmed_by_id)`
 
 ## Source records
 

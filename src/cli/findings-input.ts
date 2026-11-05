@@ -9,6 +9,12 @@ const keys: Record<string, string> = {
   due_evidence: "dueEvidence",
   assignee_evidence: "assigneeEvidence",
   memory_kind: "memoryKind",
+  issue_date: "issueDate",
+  due_date: "dueDate",
+  unit_price: "unitPrice",
+  supplier_name: "supplierName",
+  order_date: "orderDate",
+  fulfilled_date: "fulfilledDate",
 }
 const parseFindingsJson = <T>(text: string, label: string, validate: (input: T) => T): T => {
   if (Buffer.byteLength(text, "utf8") > 65536)

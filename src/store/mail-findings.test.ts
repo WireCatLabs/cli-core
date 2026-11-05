@@ -192,3 +192,132 @@ it("lets only the owner decide, and makes each accepted finding where it belongs
   expect(made.c1).toMatch(/^person:/)
   expect((await f.store.people.personByUid((made.c1 as string).slice("person:".length)))?.name).toBe("Ann Lessor")
 })
+
+it("records invoices, payments, orders and certificate facts only when the owner accepts, and moves an order on", async () => {
+  const f = await fixture()
+  const shop = await f.store.knowledge.addOrganization({ kind: "company", name: "Shop One" })
+  const cited = [await f.cite("t-lease", "lease")]
+  const invoice: MailFinding = {
+    id: "i1",
+    kind: "invoice",
+    direction: "payable",
+    counterparty: shop.ref,
+    currency: "EUR",
+    lines: [{ description: "Desk", amount: "120.00" }],
+    total: "120.00",
+    number: "INV-7",
+    dueDate: "2026-11-20",
+    reason: "the shop bills the desk",
+    evidence: cited,
+  }
+  const stage = async (findings: MailFinding[], key: string) =>
+    f.store.mailFindings.stage(MINE, await f.batch(findings, key), agent)
+
+  await expect(stage([{ ...invoice, total: "99.00" } as MailFinding], "mail-triage:20")).rejects.toMatchObject({
+    details: { reason: "finance.total" },
+  })
+  await expect(
+    stage(
+      [
+        {
+          id: "o9",
+          kind: "order_update",
+          supplierName: "Shop One",
+          number: "A-1",
+          status: "shipped",
+          reason: "x",
+          evidence: cited,
+        },
+      ],
+      "mail-triage:21",
+    ),
+  ).rejects.toMatchObject({ details: { reason: "order.not-found" } })
+
+  const batch = await stage(
+    [
+      invoice,
+      {
+        id: "p1",
+        kind: "payment",
+        direction: "out",
+        payee: shop.ref,
+        amount: "120.00",
+        currency: "EUR",
+        date: "2026-11-05",
+        reference: "receipt 55",
+        reason: "the receipt for the desk",
+        evidence: cited,
+      },
+      {
+        id: "o1",
+        kind: "order",
+        purpose: "personal",
+        supplier: shop.ref,
+        supplierName: "Shop One",
+        number: "A-1",
+        total: "120.00",
+        currency: "EUR",
+        orderDate: "2026-11-04",
+        reason: "the desk is ordered",
+        evidence: cited,
+      },
+      {
+        id: "f1",
+        kind: "fact",
+        type: "fact",
+        statement: "Certificate 12-345 for the e-signature, account id 998, expires 2027-03-01",
+        evidence: cited,
+      },
+    ],
+    "mail-triage:22",
+  )
+  expect(await f.store.finance.invoices()).toEqual([])
+  expect(await f.store.orders.list()).toEqual([])
+
+  const reviewed = await f.store.mailFindings.review(batch.id, {
+    fingerprint: batch.fingerprint,
+    accept: ["i1", "p1", "o1", "f1"],
+    by: "owner",
+  })
+  const made = Object.fromEntries((reviewed.receipt?.items ?? []).map((one) => [one.id, one.reference]))
+  expect(await f.store.finance.invoice(made.i1 as string)).toMatchObject({
+    review: "confirmed",
+    total: "120.00",
+    number: "INV-7",
+    evidence: [cited[0]?.reference],
+  })
+  expect(await f.store.finance.payment(made.p1 as string)).toMatchObject({ review: "confirmed", amount: "120.00" })
+  const owner = (await f.store.orders.get(made.o1 as string)).customer
+  expect(owner).toMatchObject({ owner: true })
+  expect(await f.store.orders.get(made.o1 as string)).toMatchObject({
+    purpose: "personal",
+    status: "placed",
+    total: "120.00",
+    supplier: { ref: shop.ref },
+    evidence: [cited[0]?.reference],
+  })
+  expect(made.f1).toMatch(/^fact:/)
+
+  const shipped = [await f.cite("t-lease", "reply")]
+  const update = await stage(
+    [
+      {
+        id: "u1",
+        kind: "order_update",
+        supplierName: "shop one",
+        number: "A-1",
+        status: "delivered",
+        date: "2026-11-06",
+        reason: "the shop says it was delivered",
+        evidence: shipped,
+      },
+    ],
+    "mail-triage:23",
+  )
+  await f.store.mailFindings.review(update.id, { fingerprint: update.fingerprint, accept: ["u1"], by: "owner" })
+  expect(await f.store.orders.get(made.o1 as string)).toMatchObject({
+    status: "delivered",
+    fulfilledDate: "2026-11-06",
+    evidence: [cited[0]?.reference, shipped[0]?.reference],
+  })
+})

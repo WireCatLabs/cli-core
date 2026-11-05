@@ -50,6 +50,7 @@ import { noteSearchOver } from "./sqlite/note-search.js"
 import { type NotesStore, notesStoreOver } from "./sqlite/notes.js"
 import type { StoreContext } from "./sqlite/open.js"
 import { openStoreContext, type StoreOptions } from "./sqlite/open-store.js"
+import { type OrdersStore, ordersStoreOver } from "./sqlite/orders.js"
 import { projectAnnotationStoreOver } from "./sqlite/project-transfer/store.js"
 import { type ProposedActionsStore, proposedActionsStoreOver } from "./sqlite/proposed-actions.js"
 import { type RecordStore, recordStoreOver } from "./sqlite/records.js"
@@ -121,6 +122,8 @@ export interface MessageStore {
   readonly facts: FactsStore
   /** Invoices, payments and their allocations, in exact minor units; an agent's or an import's wait for the owner. */
   readonly finance: FinanceStore
+  /** What the owner, his business or a client ordered and how far delivery got; an agent's wait for the owner. */
+  readonly orders: OrdersStore
   /** What each import said, by the source's identity; `ingest` (services) is the way in. */
   readonly records: RecordStore
   /** What agents concluded: summaries, digests, facts, preferences, each with evidence and a scope. */
@@ -238,6 +241,7 @@ const storeOver = (context: StoreContext): MessageStore => {
   }
   const facts = once(() => factsStoreOver(context))
   const finance = once(() => financeStoreOver(context))
+  const orders = once(() => ordersStoreOver(context))
   const records = once(() => recordStoreOver(context))
   const memories = once(() => memoriesStoreOver(context))
   const proposedActions = once(() => proposedActionsStoreOver(context))
@@ -345,6 +349,9 @@ const storeOver = (context: StoreContext): MessageStore => {
     },
     get finance() {
       return finance()
+    },
+    get orders() {
+      return orders()
     },
     get records() {
       return records()

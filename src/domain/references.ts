@@ -33,6 +33,7 @@ export const SIMPLE_REFERENCES = [
   "event",
   "invoice",
   "payment",
+  "order",
   "entity",
 ] as const
 export type SimpleReference = (typeof SIMPLE_REFERENCES)[number]

@@ -1,5 +1,7 @@
 import * as v from "valibot"
+import { INVOICE_DIRECTIONS, MONEY_DIRECTIONS } from "../domain/finance.js"
 import { FACT_TYPES, MEMORY_KINDS, MEMORY_SCOPES, WORK_TASK_TYPES } from "../domain/knowledge.js"
+import { ORDER_PURPOSES, ORDER_STATUSES } from "../domain/orders.js"
 import { author, id, reference, text, time } from "./fields.js"
 
 const evidence = v.strictObject({ reference, fingerprint: text })
@@ -46,6 +48,68 @@ const finding = v.variant("kind", [
   }),
   v.strictObject({ ...base, kind: v.literal("link"), from: reference, to: reference, reason: text }),
   v.strictObject({ ...base, kind: v.literal("new_contact"), address: text, name: text, reason: v.optional(text) }),
+  v.strictObject({
+    ...base,
+    kind: v.literal("invoice"),
+    direction: v.picklist(INVOICE_DIRECTIONS),
+    counterparty: reference,
+    currency: text,
+    lines: v.array(
+      v.strictObject({
+        description: text,
+        quantity: v.optional(text),
+        unit_price: v.optional(text),
+        amount: v.optional(text),
+      }),
+    ),
+    total: v.optional(text),
+    number: v.optional(text),
+    issue_date: v.optional(text),
+    due_date: v.optional(text),
+    project: v.optional(reference),
+    reason: text,
+  }),
+  v.strictObject({
+    ...base,
+    kind: v.literal("payment"),
+    direction: v.picklist(MONEY_DIRECTIONS),
+    payer: v.optional(reference),
+    payee: v.optional(reference),
+    amount: text,
+    currency: text,
+    date: text,
+    reference: v.optional(text),
+    allocations: v.optional(v.array(v.strictObject({ invoice: reference, amount: text }))),
+    project: v.optional(reference),
+    reason: text,
+  }),
+  v.strictObject({
+    ...base,
+    kind: v.literal("order"),
+    purpose: v.picklist(ORDER_PURPOSES),
+    customer: v.optional(reference),
+    supplier: v.optional(reference),
+    supplier_name: text,
+    number: v.optional(text),
+    total: v.optional(text),
+    currency: v.optional(text),
+    status: v.optional(v.picklist(ORDER_STATUSES)),
+    order_date: v.optional(text),
+    fulfilled_date: v.optional(text),
+    invoice: v.optional(reference),
+    payment: v.optional(reference),
+    project: v.optional(reference),
+    reason: text,
+  }),
+  v.strictObject({
+    ...base,
+    kind: v.literal("order_update"),
+    supplier_name: text,
+    number: text,
+    status: v.picklist(ORDER_STATUSES),
+    date: v.optional(text),
+    reason: text,
+  }),
 ])
 const outcome = v.strictObject({
   id,

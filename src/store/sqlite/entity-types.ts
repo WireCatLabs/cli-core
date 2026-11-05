@@ -28,6 +28,7 @@ export const ENTITY_TABLES = {
   memory: "memories",
   message: "messages",
   note: "notes",
+  order: "orders",
   organization: "organizations",
   payment: "payments",
   person: "persons",
