@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.572.0 — 05.11.2026
+
 ### Changed — may break callers
 
 - **`facts.unconfirm` is now `facts.revoke`**, its refusal reason `fact.unconfirm-correction` is
