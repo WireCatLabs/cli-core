@@ -26,7 +26,7 @@ import type { Messenger } from "../messenger/context.js"
 import { scheduleCommand } from "../messenger/schedule-command.js"
 import { run } from "../program.js"
 import { settingsFor } from "../settings.js"
-import { type ScheduleLimits, scheduleCommandFor } from "./schedule-command.js"
+import { type ScheduleLimits, scheduleCommandFor, scheduleLimitsOf } from "./schedule-command.js"
 
 const app = { command: "chat", appName: "chat-cli", envPrefix: "CHAT", description: "A test", version: "1.0.0" }
 const messenger: Messenger = {
@@ -374,9 +374,47 @@ describe.runIf(posix)("schedule agent", () => {
       "--allowedTools",
       "Bash(chat:*)",
       "--no-session-persistence",
+      "--model",
+      "sonnet",
+      "--tools",
+      "Bash",
+      "--strict-mcp-config",
+      "--disable-slash-commands",
+      "--setting-sources",
+      "",
       "--max-budget-usd",
       "2",
     ])
+  })
+
+  it("leaves codex on its own model and start unless a model is named", async () => {
+    const { env } = setup()
+    await call(["agent", "plain", "codex", "p", "--at", "08:30"], env, machine("linux").system)
+    const plain = JSON.parse(readFileSync(scheduleFile(env.CHAT_STATE_DIR, "plain"), "utf8")) as Schedule
+    expect(plain.argv).not.toContain("--model")
+    expect(plain.argv.at(-1)).toBe("p")
+
+    await call(
+      ["agent", "named", "codex", "p", "--at", "08:30", "--model", "a-codex-model"],
+      env,
+      machine("linux").system,
+    )
+    const named = JSON.parse(readFileSync(scheduleFile(env.CHAT_STATE_DIR, "named"), "utf8")) as Schedule
+    expect(named.argv.join(" ")).toContain("--model a-codex-model")
+  })
+
+  it('takes --model over the default, "" for claude\'s own, and refuses one that reads as a flag', async () => {
+    const { env } = setup()
+    const { system } = machine("linux")
+    const argvOf = (name: string) =>
+      (JSON.parse(readFileSync(scheduleFile(env.CHAT_STATE_DIR, name), "utf8")) as Schedule).argv
+    await call(["agent", "deep", "claude", "p", "--at", "08:30", "--model", "opus"], env, system)
+    expect(argvOf("deep").join(" ")).toContain("--model opus")
+    await call(["agent", "own", "claude", "p", "--at", "08:30", "--model", ""], env, system)
+    expect(argvOf("own")).not.toContain("--model")
+    const dash = await call(["agent", "bad", "claude", "p", "--at", "08:30", "--model=--tools"], env, system)
+    expect(dash.code).not.toBe(0)
+    expect(dash.err).toContain("--model takes")
   })
 
   it("refuses to run an agent more often than hourly, and a harness that is not installed", async () => {
@@ -859,6 +897,27 @@ describe.runIf(process.platform !== "win32")("an agent gated on new mail", () =>
     expect(JSON.parse(readFileSync(own, "utf8"))).toMatchObject({ mailBatch: 20, mailWaitMinutes: 60 })
     await flagged.call(["schedule", "exec", own])
     expect(flagged.ran(own)).toBe(false)
+  })
+
+  it("takes the config file's model and lean start, and --model over the config", async () => {
+    const argvOf = (file: string) => (JSON.parse(readFileSync(file, "utf8")) as Schedule).argv
+    const configured = gated(() => waitingMail(0), { models: { claude: "haiku" }, leanStart: false })
+    const file = await configured.add("--on-new-mail", "mail-triage")
+    expect(argvOf(file).join(" ")).toContain("--model haiku")
+    expect(argvOf(file)).not.toContain("--strict-mcp-config")
+    expect(argvOf(file)).not.toContain("--setting-sources")
+
+    const flagged = gated(() => waitingMail(0), { models: { claude: "haiku" } })
+    const own = await flagged.add("--on-new-mail", "mail-triage", "--model", "opus")
+    expect(argvOf(own).join(" ")).toContain("--model opus")
+    expect(argvOf(own)).toContain("--strict-mcp-config")
+  })
+
+  it("reads the model and lean start from the config file's keys, and ignores a model that reads as a flag", () => {
+    expect(
+      scheduleLimitsOf({ schedule_model_claude: " opus ", schedule_model_codex: "", schedule_lean_start: false }),
+    ).toEqual({ models: { claude: "opus", codex: "" }, leanStart: false })
+    expect(scheduleLimitsOf({ schedule_model_claude: "--tools", schedule_lean_start: "no" })).toEqual({})
   })
 
   it("starts no run once the day's runs cost the daily cap, says so, and starts again the next day", async () => {

@@ -42,6 +42,15 @@ const GATED_AGENT_MINIMUM_MINUTES = 5
 const COMMAND_MINIMUM_MINUTES = 1
 const HARNESSES = ["claude", "codex"] as const
 type Harness = (typeof HARNESSES)[number]
+/** A mid-tier model by default; codex has no alias of that tier, so it takes its own default. Empty: the harness's own. */
+const AGENT_MODELS: Record<Harness, string> = { claude: "sonnet", codex: "" }
+/** An alias or a model id; a leading dash would read as the harness's next flag. */
+const isModel = (model: string) => /^([A-Za-z0-9][\w.:/@[\]-]*)?$/.test(model)
+/**
+ * Claude starts without the owner's MCP servers, skills, settings and CLAUDE.md: a run reads its instructions
+ * through the CLI, and the rest was most of its starting context. Auth, `--permission-mode` and `--allowedTools` hold.
+ */
+const LEAN_CLAUDE = ["--tools", "Bash", "--strict-mcp-config", "--disable-slash-commands", "--setting-sources", ""]
 
 interface WhenOptions {
   every?: string
@@ -123,7 +132,7 @@ export interface ScheduleHost {
    * then runs only once enough of it waits, or the oldest has waited long enough.
    */
   newMail?: (command: Command, holder: string) => Promise<MailWaiting>
-  /** The config file's limits for agent schedules; a schedule's own flags win, `SCHEDULE_DEFAULTS` fill the rest. */
+  /** The config file's settings for agent schedules; a schedule's own flags win, the defaults fill the rest. */
   limits?: (command: Command) => ScheduleLimits
   /**
    * Other CLIs the scheduled agent may run besides this one, each under its own `<PREFIX>_READ_ONLY`: memo's mail
@@ -132,9 +141,14 @@ export interface ScheduleHost {
   agentRuns?: readonly AgentCli[]
 }
 
-export type ScheduleLimits = Partial<Pick<Schedule, "mailWaitMinutes" | "mailBatch" | "maxCostPerDay">>
+export type ScheduleLimits = Partial<
+  Pick<Schedule, "mailWaitMinutes" | "mailBatch" | "maxCostPerDay"> & {
+    models: Partial<Record<Harness, string>>
+    leanStart: boolean
+  }
+>
 
-/** The agent-schedule limits a host with `newMail` writes into its config file's top level (WC-CMD-30). */
+/** The agent-schedule settings a host with `newMail` writes into its config file's top level (WC-CMD-30). */
 export const SCHEDULE_SETTINGS: readonly DeclaredSetting[] = [
   {
     key: "schedule_mail_wait",
@@ -151,6 +165,24 @@ export const SCHEDULE_SETTINGS: readonly DeclaredSetting[] = [
     default: SCHEDULE_DEFAULTS.maxCostPerDay,
     description: "US dollars an agent schedule's runs may cost in a day before it waits for the next; 0 for no cap",
   },
+  {
+    key: "schedule_model_claude",
+    default: AGENT_MODELS.claude,
+    description:
+      "the model a new claude agent schedule runs on, unless --model names one; empty for claude's own default",
+  },
+  {
+    key: "schedule_model_codex",
+    default: AGENT_MODELS.codex,
+    description:
+      "the model a new codex agent schedule runs on, unless --model names one; empty for codex's own default",
+  },
+  {
+    key: "schedule_lean_start",
+    default: true,
+    description:
+      "a new claude agent schedule starts without your MCP servers, skills, settings and CLAUDE.md; false loads them",
+  },
 ]
 
 /** `SCHEDULE_SETTINGS` as the config file gives them; a missing or unusable value is left to the default. */
@@ -158,9 +190,20 @@ export const scheduleLimitsOf = (config: {
   schedule_mail_wait?: unknown
   schedule_mail_batch?: unknown
   schedule_max_cost_per_day?: unknown
+  schedule_model_claude?: unknown
+  schedule_model_codex?: unknown
+  schedule_lean_start?: unknown
 }): ScheduleLimits => {
   const { schedule_mail_wait: wait, schedule_mail_batch: batch, schedule_max_cost_per_day: cap } = config
+  const models = Object.fromEntries(
+    HARNESSES.flatMap((harness) => {
+      const model = config[`schedule_model_${harness}`]
+      return typeof model === "string" && isModel(model.trim()) ? [[harness, model.trim()]] : []
+    }),
+  )
   return {
+    ...(Object.keys(models).length ? { models } : {}),
+    ...(typeof config.schedule_lean_start === "boolean" ? { leanStart: config.schedule_lean_start } : {}),
     ...(typeof wait === "string"
       ? { mailWaitMinutes: Math.ceil(parseDuration(wait, "schedule_mail_wait") / 60_000) }
       : {}),
@@ -171,6 +214,8 @@ export const scheduleLimitsOf = (config: {
 
 const given = (limits: ScheduleLimits): ScheduleLimits =>
   Object.fromEntries(Object.entries(limits).filter(([, value]) => value !== undefined))
+
+const shown = (argv: string[]) => argv.map((arg) => (arg === "" ? '""' : arg)).join(" ")
 
 const usd = (value: number) => `$${value.toFixed(2)}`
 
@@ -222,7 +267,7 @@ export const scheduleCommandFor = ({
       await timer().install(schedule, [...system.entry, "schedule", "exec", file])
       say(scheduleAnswer(schedule, { file, timer: timer().where(schedule.name), replaced }), [
         `${replaced ? "Replaced" : "Added"} ${schedule.name}: ${describeWhen(schedule.when)}.`,
-        `It runs: ${schedule.kind === "agent" ? schedule.argv.join(" ") : `${app.command} ${schedule.argv.join(" ")}`}`,
+        `It runs: ${schedule.kind === "agent" ? shown(schedule.argv) : `${app.command} ${shown(schedule.argv)}`}`,
         `Output: ${join(dirname(file), "runs")} · now: ${lineOf(self, `schedule run ${schedule.name}`)} · stop: ${lineOf(self, `schedule remove ${schedule.name}`)}`,
       ])
     }
@@ -301,6 +346,7 @@ export const scheduleCommandFor = ({
         examples: [
           `${app.command} personal schedule agent review claude "review what came in overnight and draft replies" --at 08:30`,
           `${app.command} personal schedule agent triage codex "list what needs an answer today" --every 2h --max-cost 1`,
+          `${app.command} personal schedule agent weekly claude "review the week's open threads" --at 09:00 --model opus`,
         ],
       }),
     )
@@ -310,6 +356,10 @@ export const scheduleCommandFor = ({
       .argument("<name>", "lowercase letters, digits and dashes")
       .addArgument(new Argument("<harness>", "the agent to start").choices(HARNESSES))
       .argument("<prompt>", `what to do, e.g. "${promptExample(app)}"`)
+      .option(
+        "--model <model>",
+        `the model it runs on: an alias such as sonnet, or a model id; "" for the harness's default (default sonnet for claude, codex's own for codex, or the config file's)`,
+      )
       .addOption(
         new Option("--max-cost <usd>", "claude only: stop a run that costs more than this, in US dollars").argParser(
           Number,
@@ -325,6 +375,7 @@ export const scheduleCommandFor = ({
     const { context, system, environment, save } = prepare(this)
     const options = this.opts<
       WhenOptions & {
+        model?: string
         maxCost?: number
         maxCostPerDay?: number
         onNewMail?: string
@@ -343,6 +394,14 @@ export const scheduleCommandFor = ({
       throw new CliError("validation_error", "--mail-batch takes a count of emails, 1 or more")
     const mailWaitMinutes =
       options.mailWait === undefined ? undefined : Math.ceil(parseDuration(options.mailWait, "--mail-wait") / 60_000)
+    if (options.model !== undefined && !isModel(options.model))
+      throw new CliError(
+        "validation_error",
+        `--model takes an alias such as sonnet or a model id, not "${options.model}"`,
+      )
+    const settings = configured?.(this) ?? {}
+    const model = options.model ?? settings.models?.[harness] ?? AGENT_MODELS[harness]
+    const modelFlag = model ? ["--model", model] : []
     const program = findProgram(harness, context.env, system.platform)
     if (!program) throw new CliError("not_found", `${harness} is not on PATH`)
     const folders = agentClis.flatMap((one) => {
@@ -361,6 +420,8 @@ export const scheduleCommandFor = ({
             "--allowedTools",
             ...agentClis.map((one) => `Bash(${one.command}:*)`),
             "--no-session-persistence",
+            ...modelFlag,
+            ...((settings.leanStart ?? true) ? LEAN_CLAUDE : []),
             ...(options.maxCost ? ["--max-budget-usd", String(options.maxCost)] : []),
           ]
         : [
@@ -373,6 +434,7 @@ export const scheduleCommandFor = ({
             // The CLIs reach their provider and write the store and their own state, and nothing else.
             "-c",
             "sandbox_workspace_write.network_access=true",
+            ...modelFlag,
             ...[dirname(storePath(context.env)), ...folders].flatMap((dir) => ["--add-dir", dir]),
             prompt,
           ]
