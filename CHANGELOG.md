@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.571.0 — 05.11.2026
+
 ### Added
 
 - **An imported payment split across invoices settles each by the amount its source gives (store version 49).** A
