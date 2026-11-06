@@ -123,6 +123,7 @@ it("keeps two portals' contacts of one id apart", async () => {
   const boris = await store.people.personOf({ provider: "example-crm", id: "portal-b/5" })
   expect(ana?.uid).toBeDefined()
   expect(ana?.uid).not.toBe(boris?.uid)
+  expect(await store.crm.count(PORTAL, "person")).toBe(1)
 })
 
 it("skips and names an item whose stage is not stored or whose money the store refuses", async () => {

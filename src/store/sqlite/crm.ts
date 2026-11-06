@@ -52,7 +52,7 @@ export interface CrmCopies {
     before: number,
     options?: { dryRun?: boolean },
   ): Promise<number>
-  /** How many of the kind the account holds, not deleted. */
+  /** How many of the kind the account holds, not deleted; every contact it ever saved. */
   count(key: AccountKey, kind: CrmKind): Promise<number>
 }
 
@@ -438,6 +438,13 @@ export const crmCopiesOver = (context: StoreContext, people: AccountPeople): Crm
           .map((row) => Number(row.id))
         return dryRun ? gone.length : markDeleted(kind, gone)
       }),
-    count: async (key, kind) => stored(key, kind).length,
+    count: async (key, kind) =>
+      kind === "person"
+        ? Number(
+            database
+              .prepare("SELECT count(*) AS n FROM identities WHERE provider = ? AND substr(external_id, 1, ?) = ?")
+              .get(key.provider, key.account.length + 1, `${key.account}/`)?.n,
+          )
+        : stored(key, kind).length,
   }
 }
