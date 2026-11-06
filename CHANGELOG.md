@@ -25,19 +25,6 @@ shape of this file.
   the run, and `schedule list` shows it. `ServerSystem.run` takes an optional `{ input, timeoutMs }`.
 - **`store.mail.writtenTo(addresses)`.** Of these addresses, the ones the owner wrote to: To or Cc of a live outgoing
   email in any account, in lower case, in one read.
-
-### Fixed
-
-- **`search all` finds mail by meaning through the vector index.** The mail half of the meaning lane read every mail
-  vector of each mailbox (`store.mail.nearest`, #2471), most of a `search all` on a large store: 9.5 s warm and
-  44–71 s with a cold disk on the owner's store. It now asks the model's vector index for the nearest
-  thread pieces and attachments, with the same results, and scans only when the index is not ready or a thread is
-  named (3.9 s warm on the same query).
-
-## Unreleased
-
-### Added
-
 - **A CRM write port, `CrmWriter`** (`@wirecat/cli-core/crm`), beside `CrmSource`: `create`, `update`, `move`,
   `close` and `remove` of deals and leads, each sent once with its `operationId` and answering the whole item as the
   CRM holds it. `capabilities` names the kinds and verbs it takes and whether it recognises a repeated operation id
@@ -57,6 +44,14 @@ shape of this file.
   anything is sent, and that a lost answer ends after one request.
 - **`CrmItem.closedReason`** is stored as the deal's or lead's `closed_reason`, and `store.crm.refOf` finds the stored
   copy of a CRM id.
+
+### Fixed
+
+- **`search all` finds mail by meaning through the vector index.** The mail half of the meaning lane read every mail
+  vector of each mailbox (`store.mail.nearest`, #2471), most of a `search all` on a large store: 9.5 s warm and
+  44–71 s with a cold disk on the owner's store. It now asks the model's vector index for the nearest
+  thread pieces and attachments, with the same results, and scans only when the index is not ready or a thread is
+  named (3.9 s warm on the same query).
 
 ## 0.592.0 — 06.11.2026
 
