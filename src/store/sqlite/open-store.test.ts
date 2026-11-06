@@ -44,10 +44,11 @@ it.skipIf(process.platform !== "linux")(
     first.database.exec("BEGIN IMMEDIATE")
     const held = locksOn(file)
     expect(held).toBeGreaterThan(0)
-    const second = await openStoreContext({ path: file }).catch((error: unknown) => error)
+    // The open itself waits on the write lock held above and gives up; the descriptor work happens before that.
+    const second = await openStoreContext({ path: file }).catch(() => null)
     expect(locksOn(file)).toBe(held)
     first.database.exec("ROLLBACK")
     first.database.close()
-    if (!(second instanceof Error)) second.database.close()
+    second?.database.close()
   },
 )
