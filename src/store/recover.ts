@@ -388,6 +388,8 @@ export interface RecoverOptions {
   sqlite3?: string
   now?: () => number
   note?: (text: string) => void
+  /** Copies the readable rows into the new file; `copyReadableRows` unless a test gives its own. */
+  copy?: (path: string, target: string) => Promise<{ errors: string[]; read: Record<string, number> }>
 }
 
 const refuseInUse = (path: string) => {
@@ -414,10 +416,11 @@ export const recoverStore = async ({
   sqlite3 = "sqlite3",
   now = Date.now,
   note = () => {},
+  copy,
 }: RecoverOptions): Promise<Recovery> => {
   const started = Date.now()
   if (!existsSync(path)) throw new CliError("not_found", `no store at ${path}`)
-  const program = sqlite3Program(sqlite3)
+  const program = copy ? { program: sqlite3, version: "given", usable: true } : sqlite3Program(sqlite3)
   if (!program.usable) {
     throw new CliError(
       "configuration_error",
@@ -460,7 +463,7 @@ export const recoverStore = async ({
   let read: Record<string, number>
   let opened: Awaited<ReturnType<typeof openSqlite>>
   try {
-    ;({ errors: copyErrors, read } = await copyReadableRows(path, target, sqlite3))
+    ;({ errors: copyErrors, read } = await (copy ?? ((from, to) => copyReadableRows(from, to, sqlite3)))(path, target))
     copied = Date.now()
     opened = await openSqlite(target)
   } catch (error) {

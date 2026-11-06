@@ -5,7 +5,15 @@ import { Command } from "commander"
 import { type DamageExplanation, explainDamage } from "../store/damage.js"
 import { storeHealth } from "../store/health.js"
 import { storePath } from "../store/path.js"
-import { activeTimers, type Recovery, recoverStore, sqlite3Program, storeHolders, tableRows } from "../store/recover.js"
+import {
+  activeTimers,
+  type RecoverOptions,
+  type Recovery,
+  recoverStore,
+  sqlite3Program,
+  storeHolders,
+  tableRows,
+} from "../store/recover.js"
 import { openSqlite } from "../store/store.js"
 import { environmentOf, outputFor } from "./context.js"
 import { LOCAL_READ, LOCAL_WRITE } from "./effects.js"
@@ -102,9 +110,21 @@ export type RecoveryRun = Omit<Recovery, "health" | "copyErrors"> & {
 /** `store recover run`: refuses while a WireCat timer is scheduled, so none writes to the file being replaced. */
 export const storeRecoveryRun = async (
   env: NodeJS.ProcessEnv,
-  { command, version, note }: { command: string; version?: string; note?: (text: string) => void },
+  {
+    command,
+    version,
+    note,
+    timers: scheduled = activeTimers,
+    copy,
+  }: {
+    command: string
+    version?: string
+    note?: (text: string) => void
+    timers?: () => string[] | undefined
+    copy?: RecoverOptions["copy"]
+  },
 ): Promise<RecoveryRun> => {
-  const timers = activeTimers() ?? []
+  const timers = scheduled() ?? []
   if (timers.length > 0)
     throw new CliError("validation_error", `stop the timers first, they open the store: ${stopTimers(timers)}`, {
       reason: "store.in-use",
@@ -114,6 +134,7 @@ export const storeRecoveryRun = async (
     command,
     ...(version ? { version } : {}),
     ...(note ? { note } : {}),
+    ...(copy ? { copy } : {}),
   })
   const mail = recovery.mailToFetch.map(
     ({ account, emails }) => `mail <profile of ${account}> sync --rescan   # ${emails} emails`,

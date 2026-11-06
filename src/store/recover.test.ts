@@ -1,12 +1,12 @@
-import { closeSync, existsSync, mkdtempSync, openSync, writeSync } from "node:fs"
+import { closeSync, copyFileSync, existsSync, mkdtempSync, openSync, readdirSync, writeSync } from "node:fs"
 import { tmpdir } from "node:os"
-import { join } from "node:path"
+import { dirname, join } from "node:path"
 import { describe, expect, it } from "vitest"
 import { explainDamage } from "./damage.js"
 import { storeHealth } from "./health.js"
 import { migrate } from "./migrations.js"
 import { openCache } from "./open.js"
-import { recoverStore, sqlite3Program } from "./recover.js"
+import { danglingRows, recoverStore, sqlite3Program, tableRows } from "./recover.js"
 
 const seeded = async () => {
   const path = join(mkdtempSync(join(tmpdir(), "store-recover-")), "m.db")
@@ -56,18 +56,78 @@ describe("store health", () => {
   })
 })
 
-describe.skipIf(!sqlite3Program().usable)("store recovery", () => {
-  it("rebuilds a damaged store from its readable rows, checks it, and keeps the damaged file beside it", async () => {
+const recovered = async (path: string) => {
+  expect((await storeHealth(path, { deep: true })).ok).toBe(true)
+  const database = await openCache(path)
+  expect(database.prepare("SELECT count(*) AS n FROM chats").get()?.n).toBe(2)
+  expect(database.prepare("SELECT rowid FROM chats_fts WHERE chats_fts MATCH 'Book'").all()).toHaveLength(1)
+  database.close()
+}
+
+/** Stands in for `sqlite3 .recover`, which some builds leave out: the rows as they were before the damage. */
+const copyOf = (clean: string) => async (_path: string, target: string) => {
+  copyFileSync(clean, target)
+  return { errors: [], read: { chats: 2, accounts: 1 } }
+}
+
+describe("store recovery", () => {
+  it("rebuilds every index from the copied rows, checks it, and keeps the damaged file beside it", async () => {
+    const { path, root, pageSize } = await seeded()
+    const clean = `${path}.clean`
+    copyFileSync(path, clean)
+    damage(path, root, pageSize)
+    const recovery = await recoverStore({ path, command: "chat", copy: copyOf(clean) })
+    expect(recovery.health.ok).toBe(true)
+    expect(recovery.rebuilt.searchIndexes).toContain("email_words")
+    expect(recovery.lost).toEqual([])
+    expect(recovery.dangling).toEqual([])
+    expect(existsSync(recovery.keptAt)).toBe(true)
+    await recovered(path)
+  })
+
+  it("names what is missing when it cannot copy: no sqlite3 program", async () => {
+    const { path } = await seeded()
+    expect(sqlite3Program("no-such-sqlite3")).toMatchObject({ usable: false, version: null })
+    await expect(recoverStore({ path, command: "chat", sqlite3: "no-such-sqlite3" })).rejects.toMatchObject({
+      details: { reason: "store.sqlite3-missing" },
+    })
+  })
+
+  it("leaves the store as it was, and its own file gone, when the copy fails", async () => {
+    const { path } = await seeded()
+    const failing = async () => {
+      throw new Error("copy failed")
+    }
+    await expect(recoverStore({ path, command: "chat", copy: failing })).rejects.toThrow("copy failed")
+    expect(readdirSync(dirname(path)).filter((file) => file.includes("recovering"))).toEqual([])
+    expect((await storeHealth(path, { deep: true })).ok).toBe(true)
+  })
+
+  it("counts the rows of every data table, leaving search shadow tables out", async () => {
+    const { path } = await seeded()
+    const database = await openCache(path)
+    const rows = tableRows(database)
+    database.close()
+    expect(rows).toMatchObject({ chats: 2, accounts: 1 })
+    expect(Object.keys(rows).some((table) => table.startsWith("chats_fts_"))).toBe(false)
+  })
+
+  it("lists rows that point at a row the store does not hold", async () => {
+    const { path } = await seeded()
+    const database = await openCache(path)
+    database.exec("PRAGMA foreign_keys = OFF")
+    database.exec("DELETE FROM accounts WHERE id = 1")
+    expect(danglingRows(database)).toContainEqual({ table: "chats", parent: "accounts", rows: 2, missing: [1] })
+    database.close()
+  })
+})
+
+describe.skipIf(!sqlite3Program().usable)("store recovery with the sqlite3 program", () => {
+  it("copies the readable rows of a damaged store with .recover", async () => {
     const { path, root, pageSize } = await seeded()
     damage(path, root, pageSize)
     const recovery = await recoverStore({ path, command: "chat" })
     expect(recovery.health.ok).toBe(true)
-    expect(recovery.rebuilt.searchIndexes).toContain("email_words")
-    expect(existsSync(recovery.keptAt)).toBe(true)
-    expect((await storeHealth(path, { deep: true })).ok).toBe(true)
-    const database = await openCache(path)
-    expect(database.prepare("SELECT count(*) AS n FROM chats").get()?.n).toBe(2)
-    expect(database.prepare("SELECT rowid FROM chats_fts WHERE chats_fts MATCH 'Book'").all()).toHaveLength(1)
-    database.close()
+    await recovered(path)
   })
 })
