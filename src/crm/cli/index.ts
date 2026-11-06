@@ -150,17 +150,25 @@ const crmWrite = v.strictObject({
   operation_id: text,
   deal: v.optional(dealEntity),
   lead: v.optional(dealEntity),
+  untrusted: v.array(text),
 })
 
 const crmRemoval = v.strictObject({ operation_id: text, ref: text, removed: count })
 
-/** `--field code=value`, repeated; an empty value clears the field. */
-const fieldPair = (value: string, previous: Record<string, string | null> = {}) => {
-  const at = value.indexOf("=")
-  if (at < 1) throw new InvalidArgumentError("expected code=value")
-  const given = value.slice(at + 1)
-  return { ...previous, [value.slice(0, at)]: given === "" ? null : given }
+const collect = (value: string, previous: string[] = []) => {
+  if (value.indexOf("=") < 1) throw new InvalidArgumentError("expected code=value")
+  return [...previous, value]
 }
+
+/** `--field code=value` pairs; an empty value clears the field. */
+const customOf = (pairs: readonly string[]): Record<string, string | null> =>
+  Object.fromEntries(
+    pairs.map((pair) => {
+      const at = pair.indexOf("=")
+      const given = pair.slice(at + 1)
+      return [pair.slice(0, at), given === "" ? null : given]
+    }),
+  )
 
 const integer = (most: number) => (value: string) => {
   if (!/^[1-9]\d*$/.test(value) || Number(value) > most) throw new InvalidArgumentError(`expected 1 to ${most}`)
@@ -375,7 +383,11 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
       }
     }
     const answered = (operationId: string, item: Deal) =>
-      itemOf({ operation_id: operationId, [kind]: { ...(snakeKeys(item) as object), untrusted: DEAL_UNTRUSTED } })
+      itemOf({
+        operation_id: operationId,
+        [kind]: { ...(snakeKeys(item) as object), untrusted: DEAL_UNTRUSTED },
+        untrusted: DEAL_UNTRUSTED.map((field) => `${kind}.${field}`),
+      })
     const write = (name: string, verb: (typeof writes.verbs)[number], description: string) => {
       if (!writes.verbs.includes(verb)) return undefined
       const command = answerEntity(
@@ -409,12 +421,14 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
         .option(
           "--field <key=value>",
           "one of the CRM's own fields, by its code; repeat for more, empty clears it",
-          fieldPair,
+          collect,
+          // The empty default marks the flag as repeatable, so an agent's tool takes a list.
+          [] as string[],
         )
-    type Typed = Omit<CrmFieldsInput, "custom"> & { field?: Record<string, string | null>; operationId?: string }
+    type Typed = Omit<CrmFieldsInput, "custom"> & { field?: string[]; operationId?: string }
     const inputOf = ({ field, operationId: _id, ...rest }: Typed): CrmFieldsInput => ({
       ...Object.fromEntries(Object.entries(rest).filter(([, value]) => value !== undefined)),
-      ...(field ? { custom: field } : {}),
+      ...(field?.length ? { custom: customOf(field) } : {}),
     })
     const idOf = (opts: { operationId?: string }) =>
       opts.operationId === undefined ? {} : { operationId: opts.operationId }

@@ -15,8 +15,8 @@ export interface CrmWriteFixture {
   pipeline: CrmPipeline
   /** Custom field codes that are a neutral field under the CRM's own name (Bitrix24's `stageId`, `ASSIGNED_BY_ID`). */
   aliases: readonly string[]
-  /** Makes the next write's answer lost after the CRM got it; absent skips that case. */
-  loseNextAnswer?: () => void
+  /** Makes the next write's answer lost after the CRM got it, as a dropped connection does. */
+  loseNextAnswer: () => void
   /** How many write requests reached the CRM so far. */
   requests: () => number
 }
@@ -132,7 +132,6 @@ export const crmWriteContract = (make: () => CrmWriteFixture | Promise<CrmWriteF
       name: "a lost answer is outcome_unknown after one request, never retried",
       async run() {
         const fixture = await openStages()
-        if (!fixture.loseNextAnswer) return
         const before = fixture.requests()
         fixture.loseNextAnswer()
         await refusedWith("outcome_unknown", () =>

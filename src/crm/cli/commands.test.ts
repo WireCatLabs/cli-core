@@ -3,6 +3,7 @@ import { mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
+import { describeProgram } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import * as v from "valibot"
 import { afterEach, describe, expect, it } from "vitest"
@@ -12,6 +13,7 @@ import { provide } from "../../cli/context.js"
 import { run } from "../../cli/program.js"
 import { runsCommand } from "../../cli/runs/command.js"
 import { CRM_OPENS } from "../../domain/providers.js"
+import { toolsFromCommands } from "../../mcp/agent.js"
 import type { AppIdentity } from "../../ports/app.js"
 import { SendJournal, sendsPathFor } from "../../sends/journal.js"
 import type { Level } from "../../sends/permissions.js"
@@ -277,6 +279,16 @@ describe("CRM write commands", () => {
     expect(closed.item.deal).toMatchObject({ status: "lost", closed_reason: "Example: chose another supplier" })
   })
 
+  it("are MCP writes, and --field takes a list", () => {
+    const root = new Command("crm")
+    addCrmCommands(root, { app: APP, open: () => Promise.reject(new Error("not opened")), writes: WRITES })
+    const tools = toolsFromCommands(describeProgram(root))
+    const update = tools.find(({ command }) => command === "deals update")
+    expect(update?.writes).toBe(true)
+    expect(JSON.stringify(update?.input.entries.field)).toContain("array")
+    expect(tools.find(({ command }) => command === "deals list")?.writes).toBe(false)
+  })
+
   it("--dry-run previews a write and sends nothing", async () => {
     const { cli, ref, source } = await synced()
     expect((await cli("deals", "delete", ref, "--dry-run")).item).toMatchObject({ preview: true })
@@ -326,7 +338,8 @@ describe("CRM write commands", () => {
       code: "validation_error",
     })
     expect(source.writes).toEqual([])
-    await cli("deals", "update", ref, "--field", "UF_CRM_SOURCE=web")
+    const done = await cli("deals", "update", ref, "--field", "UF_CRM_SOURCE=web", "--field", "UF_CRM_NOTE=x")
     expect(source.writes).toHaveLength(1)
+    expect(done.item.untrusted).toContain("deal.title")
   })
 })
