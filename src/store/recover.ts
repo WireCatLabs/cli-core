@@ -172,7 +172,8 @@ export interface DerivedRebuild {
   unfilled: string[]
   mentions: number
   vectorModels: string[]
-  chunksWithoutVector: number
+  /** Per model: pieces of text a search by meaning computes a vector for when it first needs one. */
+  chunksWithoutVector: Record<string, number>
 }
 
 /** Each index recreated empty, and how it is filled again from the data: the same code the tools index with. */
@@ -268,12 +269,15 @@ export const rebuildDerived = (
   involvementStoreOver({ database, now }).rebuild()
   note("indexing the stored vectors")
   const vectorModels = fillVectorIndexes(database)
-  const chunksWithoutVector = Number(
+  // Per model, so each lookup is one probe of the embeddings' primary key.
+  const without = database.prepare(
+    "SELECT count(*) AS n FROM chunks k WHERE NOT EXISTS (SELECT 1 FROM embeddings v WHERE v.model = ? AND v.content_hash = k.content_hash)",
+  )
+  const chunksWithoutVector = Object.fromEntries(
     database
-      .prepare(
-        "SELECT count(*) AS n FROM chunks k WHERE NOT EXISTS (SELECT 1 FROM embeddings v WHERE v.content_hash = k.content_hash)",
-      )
-      .get()?.n,
+      .prepare("SELECT model FROM vector_indexes ORDER BY model")
+      .all()
+      .map((row) => [String(row.model), Number(without.get(String(row.model))?.n)]),
   )
   return {
     lostAndFound,
