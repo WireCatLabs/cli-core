@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.589.0 — 06.11.2026
+
 ### Added
 
 - **`crm` is a provider kind, and `search all` reads deals and leads.** A CRM CLI registers its provider with
