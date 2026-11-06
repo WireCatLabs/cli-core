@@ -24,6 +24,9 @@ const DEFAULTS = {
   "canonical_tags.kind": "tag",
   "taggings.main": 0,
   "searches.runs": 0,
+  "pipelines.kind": "deal",
+  "pipeline_stages.outcome": "open",
+  "opportunities.kind": "deal",
 }
 const CASCADE = new Set([
   "message_links.chat_id",

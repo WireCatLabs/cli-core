@@ -308,7 +308,7 @@ export const reviewedRowsOver = (context: StoreContext) => {
       return refuse(`${what} is a person: or organization: reference, not ${reference}`, "finance.party")
     return thing
   }
-  const reviewedOf = (row: Row, type: "invoice" | "payment" | "order" | "deal"): Reviewed => ({
+  const reviewedOf = (row: Row, type: "invoice" | "payment" | "order" | "deal" | "lead"): Reviewed => ({
     review: row.review as FinanceReview,
     author: authorOf(row),
     model: row.model == null ? null : String(row.model),
@@ -343,7 +343,11 @@ export const reviewedRowsOver = (context: StoreContext) => {
     }
   }
 
-  const keepEvidence = (type: "invoice" | "payment" | "order" | "deal", id: number, by: ReturnType<typeof written>) => {
+  const keepEvidence = (
+    type: "invoice" | "payment" | "order" | "deal" | "lead",
+    id: number,
+    by: ReturnType<typeof written>,
+  ) => {
     if (by.evidence.length) linkEvidence(context, { type, id }, by.evidence, by.owner ? "owner" : "agent")
   }
 

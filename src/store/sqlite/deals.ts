@@ -1,5 +1,15 @@
 import { CliError } from "@wirecat/cli-base"
-import { DEAL_ROLES, DEAL_STATUSES, type DealRole, type DealStatus, dealLine } from "../../domain/deals.js"
+import {
+  DEAL_KINDS,
+  DEAL_ROLES,
+  DEAL_STATUSES,
+  type DealKind,
+  type DealRole,
+  type DealStatus,
+  dealLine,
+  STAGE_OUTCOMES,
+  type StageOutcome,
+} from "../../domain/deals.js"
 import { FINANCE_REVIEWS, type FinanceReview } from "../../domain/finance.js"
 import { currencyOf, formatDecimal, minorUnits, scaleOf } from "../../domain/money.js"
 import { assertMayDecide, type Decider, deciderAuthor } from "../decisions.js"
@@ -15,12 +25,20 @@ import { write } from "./transaction.js"
 export interface PipelineStage {
   name: string
   position: number
+  /** What reaching it means: a CRM marks the stages that win or lose a deal. */
+  outcome: StageOutcome
+  /** Its id in the pipeline's CRM; `null` for the owner's own. */
+  externalId: string | null
   /** Open deals standing in it, the owner's and agents' not rejected. */
   open: number
 }
 
 export interface Pipeline {
   name: string
+  kind: DealKind
+  /** The CRM account it was copied from; `null` for the owner's own. */
+  account: { provider: string; account: string } | null
+  externalId: string | null
   stages: PipelineStage[]
   createdAt: string
 }
@@ -31,7 +49,9 @@ export interface DealPerson extends Party {
 
 export interface Deal extends Reviewed {
   id: string
+  /** `deal:<id>` or `lead:<id>`, as its kind is. */
   ref: string
+  kind: DealKind
   title: string
   /** One line with stage, amount and status, as a list or the review inbox prints it. */
   summary: string
@@ -49,9 +69,13 @@ export interface Deal extends Reviewed {
   /** Why it was won or lost, as the owner said when closing it. */
   closedReason: string | null
   people: DealPerson[]
+  /** Its order in its stage's column on a board, lowest first; `null` sorts last. */
+  rank: number | null
 }
 
 export interface DealInput extends Written {
+  /** `deal` when left out; the stage is looked for in pipelines of this kind. */
+  kind?: DealKind
   title: string
   /** A stage's name; `pipeline` names its pipeline when more than one has a stage of that name. */
   stage: string
@@ -65,6 +89,8 @@ export interface DealInput extends Written {
 }
 
 export interface DealFilter {
+  /** `deal` when left out. */
+  kind?: DealKind
   status?: DealStatus
   /** A stage's or pipeline's name, in any letter case. */
   stage?: string
@@ -82,7 +108,13 @@ export interface DealFilter {
  * proposed for him, and only he decides it. Only the owner makes a pipeline, moves a deal or closes it.
  */
 export interface DealsStore {
-  addPipeline(input: { name: string; stages: string[]; by: Author }): Promise<Pipeline>
+  /** A pipeline of the owner's own, of deals unless `kind` says leads; a stage's outcome is `open` when left out. */
+  addPipeline(input: {
+    name: string
+    kind?: DealKind
+    stages: (string | { name: string; outcome?: StageOutcome })[]
+    by: Author
+  }): Promise<Pipeline>
   pipelines(): Promise<Pipeline[]>
   add(input: DealInput): Promise<Deal>
   get(reference: string): Promise<Deal>
@@ -130,16 +162,17 @@ export const dealOperationsOver = (context: StoreContext): DealOperations => {
     }
   }
 
-  const peopleOf = (id: number): DealPerson[] =>
+  const peopleOf = (kind: DealKind, id: number): DealPerson[] =>
     database
       .prepare(
-        `SELECT to_id, role FROM links WHERE from_type = 'deal' AND from_id = ? AND kind = ${linkKind("related-to")} ` +
+        `SELECT to_id, role FROM links WHERE from_type = ? AND from_id = ? AND kind = ${linkKind("related-to")} ` +
           "AND to_type = 'person' AND to_id IS NOT NULL ORDER BY id",
       )
-      .all(id)
+      .all(kind, id)
       .map((row) => ({ ...(partyOf("person", row.to_id) as Party), role: row.role as DealRole }))
 
   const dealOf = (row: Row): Deal => {
+    const kind = row.kind as DealKind
     const currency = row.currency == null ? null : String(row.currency)
     const amount = row.amount == null || currency === null ? null : Number(row.amount)
     const fields = {
@@ -153,7 +186,8 @@ export const dealOperationsOver = (context: StoreContext): DealOperations => {
     }
     return {
       id: String(row.id),
-      ref: `deal:${row.id}`,
+      ref: `${kind}:${row.id}`,
+      kind,
       title: fields.title,
       summary: dealLine(fields),
       pipeline: String(row.pipeline_name),
@@ -165,29 +199,38 @@ export const dealOperationsOver = (context: StoreContext): DealOperations => {
       closeDate: row.close_date == null ? null : String(row.close_date),
       closedDate: row.closed_date == null ? null : String(row.closed_date),
       closedReason: closedReasonOf(row.metadata),
-      people: peopleOf(fields.id),
-      ...reviewedOf(row, "deal"),
+      people: peopleOf(kind, fields.id),
+      rank: row.rank == null ? null : Number(row.rank),
+      ...reviewedOf(row, kind),
     }
   }
 
   const rowOf = (reference: string): Row => {
     const thing = requiredThing(database, reference.includes(":") ? reference : `deal:${reference}`, "the deal")
-    if (thing.type !== "deal") return refuse(`${reference} is not a deal`, "deal.ref")
+    if (thing.type !== "deal" && thing.type !== "lead") return refuse(`${reference} is not a deal`, "deal.ref")
     return database.prepare(`${DEALS} WHERE d.id = ?`).get(thing.id) as Row
   }
 
-  const pipelineNamed = (name: string): number => {
-    const found = database.prepare("SELECT id FROM pipelines WHERE name_folded = ?").get(fold(name.trim()))
-    if (!found) throw new CliError("not_found", `no pipeline named ${name}`, { reason: "pipeline.not-found" })
-    return Number(found.id)
+  /** CRM accounts may each have a pipeline of the owner's name, so a name that is not unique is refused, never picked. */
+  const pipelineNamed = (name: string, kind: DealKind): number => {
+    const found = database
+      .prepare("SELECT id FROM pipelines WHERE name_folded = ? AND kind = ?")
+      .all(fold(name.trim()), kind)
+    if (found.length === 0)
+      throw new CliError("not_found", `no pipeline named ${name}`, { reason: "pipeline.not-found" })
+    if (found.length > 1) return refuse(`more than one pipeline is named ${name}`, "pipeline.ambiguous")
+    return Number(found[0]?.id)
   }
 
-  /** A stage by name, in one pipeline when it is named, else in the only pipeline that has one of that name. */
-  const stageNamed = (stage: string, pipeline: string | number | undefined): number => {
-    const within = typeof pipeline === "string" ? pipelineNamed(pipeline) : (pipeline ?? null)
+  /** A stage by name, in one pipeline when it is named, else in the only pipeline of the kind that has one. */
+  const stageNamed = (stage: string, pipeline: string | number | undefined, kind: DealKind): number => {
+    const within = typeof pipeline === "string" ? pipelineNamed(pipeline, kind) : (pipeline ?? null)
     const rows = database
-      .prepare("SELECT id FROM pipeline_stages WHERE name_folded = ? AND (? IS NULL OR pipeline_id = ?)")
-      .all(fold(stage.trim()), within, within)
+      .prepare(
+        "SELECT s.id FROM pipeline_stages s JOIN pipelines p ON p.id = s.pipeline_id WHERE s.name_folded = ? " +
+          "AND p.kind = ? AND (? IS NULL OR s.pipeline_id = ?)",
+      )
+      .all(fold(stage.trim()), kind, within, within)
     if (rows.length === 0)
       return refuse(`no stage named ${stage}${within === null ? "" : " in that pipeline"}`, "deal.stage")
     if (rows.length > 1)
@@ -195,22 +238,37 @@ export const dealOperationsOver = (context: StoreContext): DealOperations => {
     return Number(rows[0]?.id)
   }
 
-  const pipelinesOf = (): Pipeline[] => {
+  const pipelinesOf = (id?: number): Pipeline[] => {
+    const only = id ?? null
     const stages = database
       .prepare(
-        "SELECT s.pipeline_id, s.name, s.position, (SELECT count(*) FROM opportunities d WHERE d.stage_id = s.id " +
-          "AND d.status = 'open' AND d.review <> 'rejected' AND d.deleted_at IS NULL) AS open " +
-          "FROM pipeline_stages s ORDER BY s.pipeline_id, s.position",
+        "SELECT s.pipeline_id, s.name, s.position, s.outcome, s.external_id, (SELECT count(*) FROM opportunities d " +
+          "WHERE d.stage_id = s.id AND d.status = 'open' AND d.review <> 'rejected' AND d.deleted_at IS NULL) AS open " +
+          "FROM pipeline_stages s WHERE ? IS NULL OR s.pipeline_id = ? ORDER BY s.pipeline_id, s.position, s.id",
       )
-      .all()
+      .all(only, only)
     return database
-      .prepare("SELECT id, name, created_at FROM pipelines ORDER BY name_folded")
-      .all()
+      .prepare(
+        "SELECT p.id, p.name, p.kind, p.external_id, p.created_at, a.provider, a.external_id AS account " +
+          "FROM pipelines p LEFT JOIN accounts a ON a.id = p.account_id WHERE ? IS NULL OR p.id = ? " +
+          "ORDER BY p.account_id IS NOT NULL, p.name_folded, p.id",
+      )
+      .all(only, only)
       .map((pipeline) => ({
         name: String(pipeline.name),
+        kind: pipeline.kind as DealKind,
+        account:
+          pipeline.provider == null ? null : { provider: String(pipeline.provider), account: String(pipeline.account) },
+        externalId: pipeline.external_id == null ? null : String(pipeline.external_id),
         stages: stages
           .filter((stage) => stage.pipeline_id === pipeline.id)
-          .map((stage) => ({ name: String(stage.name), position: Number(stage.position), open: Number(stage.open) })),
+          .map((stage) => ({
+            name: String(stage.name),
+            position: Number(stage.position),
+            outcome: stage.outcome as StageOutcome,
+            externalId: stage.external_id == null ? null : String(stage.external_id),
+            open: Number(stage.open),
+          })),
         createdAt: new Date(Number(pipeline.created_at)).toISOString(),
       }))
   }
@@ -218,14 +276,14 @@ export const dealOperationsOver = (context: StoreContext): DealOperations => {
   const stillOpen = (row: Row, what: string) => {
     if (row.status !== "open" || row.review === "rejected" || row.deleted_at != null)
       refuse(
-        `deal:${row.id} is ${row.deleted_at != null ? "deleted" : row.review === "rejected" ? "rejected" : String(row.status)}; it no longer ${what}`,
+        `${String(row.kind)}:${row.id} is ${row.deleted_at != null ? "deleted" : row.review === "rejected" ? "rejected" : String(row.status)}; it no longer ${what}`,
         "deal.closed",
       )
   }
 
   const decide = (reference: string, by: Decider, reason: string | undefined, confirm: boolean): Deal => {
     const row = rowOf(reference)
-    const ref = `deal:${row.id}`
+    const ref = `${String(row.kind)}:${row.id}`
     assertMayDecide(
       { id: ref, proposedBy: proposerOf(database, row.author_type, row.author_id), ownerOnly: true },
       by,
@@ -251,29 +309,46 @@ export const dealOperationsOver = (context: StoreContext): DealOperations => {
   }
 
   return {
-    addPipeline: ({ name, stages, by }) => {
+    addPipeline: ({ name, kind = "deal", stages, by }) => {
       ownerOnly(by, "makes a pipeline")
       const named = text(name, "a pipeline's name", 80) ?? refuse("a pipeline needs a name", "pipeline.field")
+      const holds = oneOf(kind, DEAL_KINDS, "a pipeline's kind")
       if (!Array.isArray(stages) || stages.length === 0 || stages.length > MAX_STAGES)
         refuse(`a pipeline has 1–${MAX_STAGES} stages`, "pipeline.field")
-      const kept = stages.map((stage) => text(stage, "a stage's name", 80) as string)
-      if (new Set(kept.map(fold)).size !== kept.length) refuse("each stage is named once", "pipeline.field")
-      write(database, () => {
-        if (database.prepare("SELECT 1 FROM pipelines WHERE name_folded = ?").get(fold(named)))
+      const kept = stages.map((stage) => {
+        const one = typeof stage === "string" ? { name: stage } : stage
+        return {
+          name: text(one.name, "a stage's name", 80) as string,
+          outcome: oneOf(one.outcome ?? "open", STAGE_OUTCOMES, "a stage's outcome"),
+        }
+      })
+      if (new Set(kept.map((stage) => fold(stage.name))).size !== kept.length)
+        refuse("each stage is named once", "pipeline.field")
+      const id = write(database, () => {
+        if (
+          database
+            .prepare("SELECT 1 FROM pipelines WHERE name_folded = ? AND kind = ? AND account_id IS NULL")
+            .get(fold(named), holds)
+        )
           refuse(`a pipeline named ${named} is already stored`, "pipeline.duplicate")
         const at = now()
-        const id = database
-          .prepare("INSERT INTO pipelines (name, name_folded, created_at, updated_at) VALUES (?, ?, ?, ?) RETURNING id")
-          .get(named, fold(named), at, at)?.id
+        const made = Number(
+          database
+            .prepare(
+              "INSERT INTO pipelines (kind, name, name_folded, created_at, updated_at) VALUES (?, ?, ?, ?, ?) RETURNING id",
+            )
+            .get(holds, named, fold(named), at, at)?.id,
+        )
         const insert = database.prepare(
-          "INSERT INTO pipeline_stages (pipeline_id, name, name_folded, position, created_at, updated_at) " +
-            "VALUES (?, ?, ?, ?, ?, ?)",
+          "INSERT INTO pipeline_stages (pipeline_id, name, name_folded, position, outcome, created_at, updated_at) " +
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
         )
         kept.forEach((stage, at_) => {
-          insert.run(Number(id), stage, fold(stage), at_ + 1, at, at)
+          insert.run(made, stage.name, fold(stage.name), at_ + 1, stage.outcome, at, at)
         })
+        return made
       })
-      return pipelinesOf().find((pipeline) => fold(pipeline.name) === fold(named)) as Pipeline
+      return pipelinesOf(id)[0] as Pipeline
     },
     pipelines: () => pipelinesOf(),
     add: (input) => {
@@ -287,8 +362,9 @@ export const dealOperationsOver = (context: StoreContext): DealOperations => {
       const closeDate = isoDate(input.closeDate, "a deal's close date")
       const people = input.people ?? []
       if (people.length > MAX_PEOPLE) refuse(`a deal names at most ${MAX_PEOPLE} people`, "deal.field")
+      const kind = oneOf(input.kind ?? "deal", DEAL_KINDS, "a deal's kind")
       const id = write(database, () => {
-        const stage = stageNamed(stageText, input.pipeline)
+        const stage = stageNamed(stageText, input.pipeline, kind)
         const organization = partyThing(input.organization, "the organization")
         if (organization !== undefined && organization.type !== "organization")
           refuse(`the organization is an organization: reference, not ${input.organization}`, "deal.field")
@@ -302,11 +378,12 @@ export const dealOperationsOver = (context: StoreContext): DealOperations => {
         const made = Number(
           database
             .prepare(
-              "INSERT INTO opportunities (title, organization_id, project_id, stage_id, status, currency, amount, " +
+              "INSERT INTO opportunities (kind, title, organization_id, project_id, stage_id, status, currency, amount, " +
                 "close_date, review, author_type, author_id, model, confirmed_by_type, confirmed_by_id, source, metadata, " +
-                "created_at, updated_at) VALUES (?, ?, ?, ?, 'open', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
+                "created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'open', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
             )
             .get(
+              kind,
               title,
               organization?.id ?? null,
               by.project,
@@ -328,17 +405,27 @@ export const dealOperationsOver = (context: StoreContext): DealOperations => {
         )
         const link = database.prepare(
           "INSERT INTO links (from_type, from_id, to_type, to_id, kind, role, source, confirmed, created_at, author, " +
-            `updated_at) VALUES ('deal', ?, 'person', ?, ${linkKind("related-to")}, ?, ?, 1, ?, ?, ?)`,
+            `updated_at) VALUES (?, ?, 'person', ?, ${linkKind("related-to")}, ?, ?, 1, ?, ?, ?)`,
         )
         for (const person of persons)
-          link.run(made, person.id, person.role, by.owner ? "owner" : "suggested", at, by.owner ? "owner" : "agent", at)
-        keepEvidence("deal", made, by)
+          link.run(
+            kind,
+            made,
+            person.id,
+            person.role,
+            by.owner ? "owner" : "suggested",
+            at,
+            by.owner ? "owner" : "agent",
+            at,
+          )
+        keepEvidence(kind, made, by)
         return made
       })
-      return dealOf(rowOf(`deal:${id}`))
+      return dealOf(rowOf(`${kind}:${id}`))
     },
     get: (reference) => dealOf(rowOf(reference)),
     list: (filter = {}) => {
+      const kind = oneOf(filter.kind ?? "deal", DEAL_KINDS, "a deal's kind")
       const project = filter.project === undefined ? null : projectId(database, filter.project)
       const organization = partyThing(filter.organization, "the organization")
       const by = proposedBySql("d.author_type", "d.author_id", filter.proposedBy)
@@ -349,11 +436,12 @@ export const dealOperationsOver = (context: StoreContext): DealOperations => {
       const limit = Math.min(Math.max(filter.limit ?? 100, 1), 500)
       return database
         .prepare(
-          `${DEALS} WHERE d.deleted_at IS NULL AND (? IS NULL OR d.status = ?) AND (? IS NULL OR d.review = ?) ` +
+          `${DEALS} WHERE d.deleted_at IS NULL AND d.kind = ? AND (? IS NULL OR d.status = ?) AND (? IS NULL OR d.review = ?) ` +
             "AND (? IS NULL OR d.project_id = ?) AND (? IS NULL OR s.name_folded = ?) AND (? IS NULL OR p.name_folded = ?) " +
             `AND (? IS NULL OR d.organization_id = ?) AND ${by.sql} ORDER BY d.created_at DESC, d.id DESC LIMIT ?`,
         )
         .all(
+          kind,
           status,
           status,
           review,
@@ -375,13 +463,13 @@ export const dealOperationsOver = (context: StoreContext): DealOperations => {
       ownerOnly(by, "moves a deal")
       const row = rowOf(reference)
       stillOpen(row, "moves")
-      const next = stageNamed(text(stage, "a stage's name", 80) ?? "", Number(row.pipeline_id))
+      const next = stageNamed(text(stage, "a stage's name", 80) ?? "", Number(row.pipeline_id), row.kind as DealKind)
       write(database, () => {
         database
           .prepare("UPDATE opportunities SET stage_id = ?, updated_at = ? WHERE id = ?")
           .run(next, now(), Number(row.id))
       })
-      return dealOf(rowOf(`deal:${row.id}`))
+      return dealOf(rowOf(`${String(row.kind)}:${row.id}`))
     },
     close: (reference, { status, date, reason, by }) => {
       ownerOnly(by, "closes a deal")
@@ -398,7 +486,7 @@ export const dealOperationsOver = (context: StoreContext): DealOperations => {
           )
           .run(outcome, day, now(), why, why, Number(row.id))
       })
-      return dealOf(rowOf(`deal:${row.id}`))
+      return dealOf(rowOf(`${String(row.kind)}:${row.id}`))
     },
     confirm: (reference, by, reason) => decide(reference, by, reason, true),
     reject: (reference, by, reason) => decide(reference, by, reason, false),

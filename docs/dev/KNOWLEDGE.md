@@ -154,10 +154,15 @@ ids never collide) and the http or https page it is about (`sourceUrl`). Several
 writes every day gets a task a day. A mail `task` finding carries both as `external_id` and `source_url`.
 
 `store.deals` keeps the owner's sales pipelines and the deals in them (store version 52). A pipeline is a name and its
-stages in order, made by the owner only (`addPipeline`); names compare in any letter case. A deal (table
-`opportunities`, ref `deal:<id>`) has a title, an optional organization and project, a stage, a status (`open`, `won`,
-`lost`) kept apart from the stage, an optional expected amount with its currency, the expected close day and the day
-it closed. A stage is found by name, in the named pipeline or the only one that has it (`deal.stage`). The people on a
+stages in order, and holds deals or leads (`kind`); the owner makes his own (`addPipeline`), unique by name in any
+letter case per kind, and a CRM sync will copy an account's (`account`, `externalId`; any name). Each stage has an
+`outcome` (`open`, `won`, `lost`), as a CRM marks the stages that end a deal; positions are not unique, so a sync or
+a reorder can swap two. A deal or a lead (table `opportunities`, ref `deal:<id>` or `lead:<id>`, each resolving only
+its own kind) has a title, an optional organization and project, a stage of a pipeline of its kind (a trigger refuses
+another), a status (`open`, `won`, `lost`) kept apart from the stage, an optional expected amount with its currency,
+the expected close day, the day it closed and a `rank` in its stage's board column. Calls without `kind` work on
+deals. A stage is found by name, in the named pipeline or the only one of the kind that has it (`deal.stage`); a
+pipeline name several pipelines share is refused (`pipeline.ambiguous`). The people on a
 deal are `links` of kind `related-to` with a `role` (`owner`, `contact`, `decision-maker`). Like an order, the owner's
 deal is confirmed at once and an agent's is a `deal` proposal only the owner decides; only the owner moves a deal,
 within its own pipeline (a trigger refuses another), or closes it, and a closed deal keeps its last stage.

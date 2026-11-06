@@ -17,6 +17,12 @@ shape of this file.
   units with its currency, the expected close day and the day it closed. The people on a deal are `related-to` links
   with a role (`owner`, `contact`, `decision-maker`). The owner's deal is confirmed at once; an agent's is a `deal`
   proposal only the owner decides. Only the owner moves a deal, within its own pipeline, or closes it.
+  A pipeline holds deals or leads (`kind`, `addPipeline({ kind })`); a lead is a row of `opportunities` with ref
+  `lead:<id>` (`add({ kind: "lead" })`, `list({ kind: "lead" })`; calls without `kind` work on deals). Each stage has
+  an `outcome` (`open`, `won`, `lost`), and stage positions are not unique, so stages can be reordered. A pipeline may
+  belong to a CRM account (`account`, `externalId`, with the stage's `externalId`), so two accounts can each have a
+  pipeline named "Sales"; the owner's own pipeline names stay unique per kind. A deal has a `rank` for its order on a
+  board.
 
 ## 0.584.0 — 06.11.2026
 

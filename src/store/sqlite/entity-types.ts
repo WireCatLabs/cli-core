@@ -23,6 +23,7 @@ export const ENTITY_TABLES = {
   identity: "identities",
   image: "attachments",
   invoice: "invoices",
+  lead: "opportunities",
   meeting: "meetings",
   meeting_transcript: "meeting_transcripts",
   meeting_transcript_row: "meeting_transcript_rows",

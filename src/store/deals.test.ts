@@ -95,6 +95,34 @@ it("keeps an agent's deal proposed for the owner alone, and names the pipeline w
   await registry.decide([proposed.ref], { confirm: true, by: "owner" })
   expect(await store.deals.list({ pipeline: "PARTNERS" })).toMatchObject([{ ref: proposed.ref, review: "confirmed" }])
   expect((await store.deals.pipelines()).find((one) => one.name === "Partners")?.stages).toEqual([
-    { name: "КП", position: 1, open: 1 },
+    { name: "КП", position: 1, outcome: "open", externalId: null, open: 1 },
   ])
+})
+
+it("keeps a lead pipeline apart from the deal pipeline of the same name, with the outcome of each stage", async () => {
+  const { store } = await fixture()
+  const leads = await store.deals.addPipeline({
+    name: "продажи",
+    kind: "lead",
+    stages: ["Новый", { name: "Спам", outcome: "lost" }],
+    by: "owner",
+  })
+  expect(leads).toMatchObject({ kind: "lead", account: null, externalId: null })
+  expect(leads.stages.map((stage) => stage.outcome)).toEqual(["open", "lost"])
+  await expect(
+    store.deals.addPipeline({ name: "Продажи", kind: "lead", stages: ["A"], by: "owner" }),
+  ).rejects.toMatchObject({ details: { reason: "pipeline.duplicate" } })
+  await expect(store.deals.add({ by: "owner", title: "X", stage: "Новый" })).rejects.toMatchObject({
+    details: { reason: "deal.stage" },
+  })
+
+  const lead = await store.deals.add({ by: "owner", kind: "lead", title: "Заявка с сайта", stage: "Новый" })
+  expect(lead).toMatchObject({ ref: `lead:${lead.id}`, kind: "lead", pipeline: "продажи", rank: null })
+  expect(await store.deals.list()).toEqual([])
+  expect((await store.deals.list({ kind: "lead" })).map((one) => one.ref)).toEqual([lead.ref])
+  expect((await store.deals.move(lead.ref, { stage: "Спам", by: "owner" })).stage).toBe("Спам")
+  expect((await store.refs.summaries([lead.ref])).get(lead.ref)).toMatchObject({
+    kind: "lead",
+    title: "Заявка с сайта · Спам",
+  })
 })

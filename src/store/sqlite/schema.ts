@@ -1948,14 +1948,26 @@ export const orders = sqliteTable(
   ],
 )
 
-/** A sales pipeline of the owner's: the stages a deal goes through, in order. */
-export const pipelines = sqliteTable("pipelines", {
-  id: integer("id").primaryKey(),
-  name: text("name").notNull(),
-  nameFolded: text("name_folded").notNull().unique(),
-  createdAt: integer("created_at").notNull(),
-  updatedAt: integer("updated_at").notNull(),
-})
+/** A sales pipeline: the stages a deal or a lead goes through, in order; the owner's own or a CRM account's. */
+export const pipelines = sqliteTable(
+  "pipelines",
+  {
+    id: integer("id").primaryKey(),
+    accountId: integer("account_id").references(() => accounts.id),
+    externalId: text("external_id"),
+    kind: text("kind").notNull().default("deal"),
+    name: text("name").notNull(),
+    nameFolded: text("name_folded").notNull(),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("pipelines_by_account_id_external_id")
+      .on(table.accountId, table.externalId)
+      .where(sql`account_id IS NOT NULL AND external_id IS NOT NULL`),
+    uniqueIndex("pipelines_by_name_folded_kind").on(table.nameFolded, table.kind).where(sql`account_id IS NULL`),
+  ],
+)
 
 export const pipelineStages = sqliteTable(
   "pipeline_stages",
@@ -1967,17 +1979,26 @@ export const pipelineStages = sqliteTable(
     name: text("name").notNull(),
     nameFolded: text("name_folded").notNull(),
     position: integer("position").notNull(),
+    outcome: text("outcome").notNull().default("open"),
+    externalId: text("external_id"),
     createdAt: integer("created_at").notNull(),
     updatedAt: integer("updated_at").notNull(),
   },
-  (table) => [unique().on(table.pipelineId, table.nameFolded), unique().on(table.pipelineId, table.position)],
+  (table) => [
+    unique().on(table.pipelineId, table.nameFolded),
+    uniqueIndex("pipeline_stages_by_pipeline_id_external_id")
+      .on(table.pipelineId, table.externalId)
+      .where(sql`external_id IS NOT NULL`),
+    index("pipeline_stages_by_pipeline_id_position").on(table.pipelineId, table.position),
+  ],
 )
 
-/** A deal: what the owner hopes to sell, where it stands in its pipeline, and whether it ended. */
+/** A deal or a lead: what the owner hopes to sell, where it stands in its pipeline, and whether it ended. */
 export const opportunities = sqliteTable(
   "opportunities",
   {
     id: integer("id").primaryKey(),
+    kind: text("kind").notNull().default("deal"),
     title: text("title").notNull(),
     organizationId: integer("organization_id").references(() => organizations.id),
     projectId: integer("project_id").references(() => projects.id),
@@ -1990,6 +2011,7 @@ export const opportunities = sqliteTable(
     amount: integer("amount"),
     closeDate: text("close_date"),
     closedDate: text("closed_date"),
+    rank: real("rank"),
     review: text("review").notNull(),
     authorType: text("author_type").notNull(),
     authorId: integer("author_id").notNull(),

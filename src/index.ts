@@ -1,7 +1,16 @@
 export { bareCheck, type CheckWords, checkWords } from "./domain/checks.js"
 export type { CounterField, CounterObservation, CounterObservations, CounterState } from "./domain/counters.js"
 export { COUNTER_FIELDS, counterValue, observedCounters } from "./domain/counters.js"
-export { DEAL_ROLES, DEAL_STATUSES, type DealRole, type DealStatus } from "./domain/deals.js"
+export {
+  DEAL_KINDS,
+  DEAL_ROLES,
+  DEAL_STATUSES,
+  type DealKind,
+  type DealRole,
+  type DealStatus,
+  STAGE_OUTCOMES,
+  type StageOutcome,
+} from "./domain/deals.js"
 export {
   FINANCE_REVIEWS,
   type FinanceReview,

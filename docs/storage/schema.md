@@ -1957,15 +1957,20 @@ The owner's sales pipelines and the deals in them, with the expected amount in e
 
 ### `pipelines`
 
-A sales pipeline of the owner's: the stages a deal goes through, in order. Only the owner makes one.
+A sales pipeline: the stages a deal or a lead goes through, in order. The owner makes his own; a CRM sync copies an account's.
 
 | Column | Type | Constraints | References | Meaning |
 |---|---|---|---|---|
 | `id` | integer | PK |  |  |
-| `name` | text | not null |  | as the owner typed it |
-| `name_folded` | text | not null, unique |  | the name in one letter case: one per owner |
+| `account_id` | integer |  | → `accounts.id` | the CRM account it was copied from; null for the owner's own |
+| `external_id` | text |  |  | the pipeline's id in that CRM |
+| `kind` | text | not null |  | deal or lead: what its stages hold |
+| `name` | text | not null |  | as the owner or the CRM wrote it |
+| `name_folded` | text | not null |  | the name in one letter case: one per kind among the owner's own, any among a CRM's |
 | `created_at` | integer | not null |  | when this row was saved here |
 | `updated_at` | integer | not null |  | when this row last changed here |
+
+*Keys and indexes:* `UNIQUE (account_id, external_id) WHERE account_id IS NOT NULL AND external_id IS NOT NULL`, `UNIQUE (name_folded, kind) WHERE account_id IS NULL`
 
 ### `pipeline_stages`
 
@@ -1977,19 +1982,22 @@ One stage of a pipeline, such as a first call or a sent quote.
 | `pipeline_id` | integer | not null | → `pipelines.id` | the `pipeline` it belongs to |
 | `name` | text | not null |  |  |
 | `name_folded` | text | not null |  | the name in one letter case, unique in its pipeline |
-| `position` | integer | not null |  | 1, 2, …: the order a deal goes through them |
+| `position` | integer | not null |  | 1, 2, …: the order a deal goes through them; not unique, so a sync or a reorder can swap two |
+| `outcome` | text | not null |  | open, won, lost: a CRM marks the stages that end a deal |
+| `external_id` | text |  |  | the stage's id in its pipeline's CRM |
 | `created_at` | integer | not null |  | when this row was saved here |
 | `updated_at` | integer | not null |  | when this row last changed here |
 
-*Keys and indexes:* `UNIQUE (pipeline_id, name_folded)`, `UNIQUE (pipeline_id, position)`
+*Keys and indexes:* `UNIQUE (pipeline_id, name_folded)`, `UNIQUE (pipeline_id, external_id) WHERE external_id IS NOT NULL`, `INDEX (pipeline_id, position)`
 
 ### `opportunities`
 
-A deal (`deal:<id>`): what the owner hopes to sell, to whom, where it stands in its pipeline and whether it ended. The people on it are `links` (kind `related-to`, `role` owner, contact or decision-maker). A deal is not a project.
+A deal (`deal:<id>`) or a lead (`lead:<id>`): what the owner hopes to sell, to whom, where it stands in its pipeline and whether it ended. The people on it are `links` (kind `related-to`, `role` owner, contact or decision-maker). A deal is not a project.
 
 | Column | Type | Constraints | References | Meaning |
 |---|---|---|---|---|
 | `id` | integer | PK |  |  |
+| `kind` | text | not null |  | deal or lead, as its stage's pipeline is |
 | `title` | text | not null |  |  |
 | `organization_id` | integer |  | → `organizations.id` | the `organization` it belongs to |
 | `project_id` | integer |  | → `projects.id` | the `project` it belongs to |
@@ -1999,6 +2007,7 @@ A deal (`deal:<id>`): what the owner hopes to sell, to whom, where it stands in 
 | `amount` | integer |  |  | the expected amount, in minor units of `currency` (kopecks, cents; yen for JPY): never a float |
 | `close_date` | text |  |  | `YYYY-MM-DD`: the day it is expected to close |
 | `closed_date` | text |  |  | `YYYY-MM-DD`: the day it was won or lost |
+| `rank` | real |  |  | its order in its stage's column on a board, lowest first; null sorts last |
 | `review` | text | not null |  | proposed, confirmed, rejected: the owner's entry is confirmed at once, an agent's or an import's waits |
 | `author_type` | text | not null |  | `person` or `bot` |
 | `author_id` | integer | not null |  | the row in the `author_type` table |

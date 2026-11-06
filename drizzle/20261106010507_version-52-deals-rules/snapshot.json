@@ -1,7 +1,7 @@
 {
-  "id": "ec68174d-f116-494a-bfc5-f04937a1736f",
+  "id": "7e681a78-68f8-4b98-ba3c-824cf7155747",
   "prevIds": [
-    "8ccac1cb-4838-4377-8de2-57aeb3958d1b"
+    "c27e7891-1890-46ad-be46-b1747fd88110"
   ],
   "version": "7",
   "dialect": "sqlite",
@@ -8918,6 +8918,16 @@
     },
     {
       "table": "opportunities",
+      "name": "kind",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "'deal'",
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "opportunities",
       "name": "title",
       "type": "text",
       "notNull": true,
@@ -9000,6 +9010,16 @@
       "table": "opportunities",
       "name": "closed_date",
       "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "opportunities",
+      "name": "rank",
+      "type": "real",
       "notNull": false,
       "autoincrement": false,
       "default": null,
@@ -9948,6 +9968,26 @@
     },
     {
       "table": "pipeline_stages",
+      "name": "outcome",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "'open'",
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "pipeline_stages",
+      "name": "external_id",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "pipeline_stages",
       "name": "created_at",
       "type": "integer",
       "notNull": true,
@@ -9973,6 +10013,36 @@
       "notNull": false,
       "autoincrement": false,
       "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "pipelines",
+      "name": "account_id",
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "pipelines",
+      "name": "external_id",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "pipelines",
+      "name": "kind",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "'deal'",
       "generated": null,
       "entityType": "columns"
     },
@@ -14869,6 +14939,78 @@
       "entityType": "indexes"
     },
     {
+      "table": "pipeline_stages",
+      "name": "pipeline_stages_by_pipeline_id_external_id",
+      "columns": [
+        {
+          "value": "pipeline_id",
+          "isExpression": false
+        },
+        {
+          "value": "external_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": "external_id IS NOT NULL",
+      "origin": "manual",
+      "entityType": "indexes"
+    },
+    {
+      "table": "pipeline_stages",
+      "name": "pipeline_stages_by_pipeline_id_position",
+      "columns": [
+        {
+          "value": "pipeline_id",
+          "isExpression": false
+        },
+        {
+          "value": "position",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "entityType": "indexes"
+    },
+    {
+      "table": "pipelines",
+      "name": "pipelines_by_account_id_external_id",
+      "columns": [
+        {
+          "value": "account_id",
+          "isExpression": false
+        },
+        {
+          "value": "external_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": "account_id IS NOT NULL AND external_id IS NOT NULL",
+      "origin": "manual",
+      "entityType": "indexes"
+    },
+    {
+      "table": "pipelines",
+      "name": "pipelines_by_name_folded_kind",
+      "columns": [
+        {
+          "value": "name_folded",
+          "isExpression": false
+        },
+        {
+          "value": "kind",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": "account_id IS NULL",
+      "origin": "manual",
+      "entityType": "indexes"
+    },
+    {
       "table": "poll_votes",
       "name": "poll_votes_by_identity_id",
       "columns": [
@@ -17376,6 +17518,21 @@
       "entityType": "fks"
     },
     {
+      "table": "pipelines",
+      "name": "fk_pipelines_account_id_accounts_id_fk",
+      "columns": [
+        "account_id"
+      ],
+      "tableTo": "accounts",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "nameExplicit": false,
+      "entityType": "fks"
+    },
+    {
       "table": "poll_votes",
       "name": "fk_poll_votes_chat_id_chats_id_fk",
       "columns": [
@@ -19105,16 +19262,6 @@
       "entityType": "uniques"
     },
     {
-      "table": "pipeline_stages",
-      "name": "pipeline_stages_pipeline_id_position_unique",
-      "columns": [
-        "pipeline_id",
-        "position"
-      ],
-      "nameExplicit": false,
-      "entityType": "uniques"
-    },
-    {
       "table": "poll_votes",
       "name": "poll_votes_chat_id_message_external_id_identity_id_unique",
       "columns": [
@@ -19205,15 +19352,6 @@
       "name": "tags_name_unique",
       "columns": [
         "name"
-      ],
-      "nameExplicit": false,
-      "entityType": "uniques"
-    },
-    {
-      "table": "pipelines",
-      "name": "pipelines_name_folded_unique",
-      "columns": [
-        "name_folded"
       ],
       "nameExplicit": false,
       "entityType": "uniques"
