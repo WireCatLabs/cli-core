@@ -683,6 +683,14 @@ message asks the owner something) are dashboard aggregates over the same store:
 strings and keys. `--json=id,text` keeps only those fields. MCP contact searches keep third-party registries off
 unless the caller explicitly sets `registries: true`.
 
+## The store schema a version speaks
+
+`package.json` carries `wirecat.store`: `speaks`, the newest store schema this version migrates a file to, and
+`minCompatible`, the oldest schema whose tools still read and write a file this version has migrated. A tool's
+`@wirecat/cli-core` dependency says which of these it gets, so an installer can tell from the npm registry, before
+installing, whether a tool would refuse the owner's store (its `speaks` is below the file's `min_compatible`) or
+lock older tools out of it (its `minCompatible` is above what they speak).
+
 ## How often, and what may break
 
 **Release when a consumer needs it, at any time** ([WC-REL-8](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/releases.md#wc-rel-8--any-package-may-release-at-any-time)). Changes wait under `## Unreleased`

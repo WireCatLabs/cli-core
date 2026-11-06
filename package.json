@@ -13,6 +13,12 @@
     "url": "https://github.com/WireCatLabs/cli-core/issues"
   },
   "type": "module",
+  "wirecat": {
+    "store": {
+      "speaks": 52,
+      "minCompatible": 34
+    }
+  },
   "engines": {
     "node": "^22.16.0 || >=24"
   },

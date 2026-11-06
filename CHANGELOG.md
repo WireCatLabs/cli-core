@@ -7,6 +7,19 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`package.json` says which store schema the version speaks.** `wirecat.store` holds `speaks`, the newest schema
+  it migrates a file to, and `minCompatible`, the oldest schema that can still use a file it migrated, so an
+  installer can check a tool against the owner's store from the npm registry before installing it.
+
+### Fixed
+
+- **A read-only open migrates an older store first.** `openStore({ readOnly: true })` on a file at an older schema
+  opens it the ordinary way once, which migrates it, then opens it read-only, instead of refusing it with
+  `configuration_error`. A tool whose first command only reads no longer needs a workaround. A newer incompatible
+  schema is still refused, and a missing file is still not created.
+
 ## 0.595.0 — 06.11.2026
 
 ### Added

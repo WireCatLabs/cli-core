@@ -3,6 +3,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, expect, it, vi } from "vitest"
 import { contextEvidenceFixture } from "../testing/context-evidence.js"
+import { rollBackTo } from "../testing/older-store.js"
 import { MIGRATIONS } from "./migrations.js"
 import { openCache, openFile } from "./open.js"
 import * as sqlite from "./sqlite/open.js"
@@ -68,7 +69,7 @@ it("keeps an existing DELETE journal mode and enforces the native read-only hand
   expect(() => opened.database.exec("CREATE TABLE forbidden(id INTEGER)")).toThrow()
 })
 
-it.each(["missing-history", "empty-history", "old", "new-incompatible", "invalid"])(
+it.each(["missing-history", "empty-history", "new-incompatible", "invalid"])(
   "refuses %s schema without maintenance and closes the connection",
   async (kind) => {
     const file = path(),
@@ -78,7 +79,6 @@ it.each(["missing-history", "empty-history", "old", "new-incompatible", "invalid
     handles.push(db)
     if (kind === "missing-history") db.exec("DROP TABLE schema_migrations")
     else if (kind === "empty-history") db.exec("DELETE FROM schema_migrations")
-    else if (kind === "old") db.prepare("DELETE FROM schema_migrations WHERE version=?").run(latest)
     else if (kind === "new-incompatible")
       db.prepare("INSERT INTO schema_migrations VALUES(?,?,0)").run(latest + 1, latest + 1)
     else db.prepare("UPDATE schema_migrations SET min_compatible=0 WHERE version=?").run(latest)
@@ -112,4 +112,20 @@ it("accepts a newer additive schema without recording a migration or creating a 
   handles.push(store)
   expect(await store.meetings.account(9999)).toBeNull()
   expect(db.prepare("SELECT * FROM schema_migrations ORDER BY version").all()).toEqual(before)
+})
+
+it("migrates a store one schema behind, then opens it read-only", async () => {
+  const file = path(),
+    writable = await openStore({ path: file })
+  await writable.close()
+  const db = await openCache(file)
+  handles.push(db)
+  rollBackTo(db, latest)
+  const versions = () => db.prepare("SELECT max(version) AS version FROM schema_migrations").get()
+  expect(versions()).toEqual({ version: latest - 1 })
+  const store = await openStore({ path: file, readOnly: true, command: "tool", version: "1.0.0" })
+  handles.push(store)
+  expect(versions()).toEqual({ version: latest })
+  expect(await store.meetings.account(9999)).toBeNull()
+  await expect(store.accounts.saveAccount({ provider: "invented", account: "new" }, { name: "New" })).rejects.toThrow()
 })
