@@ -1969,8 +1969,9 @@ A sales pipeline: the stages a deal or a lead goes through, in order. The owner 
 | `name_folded` | text | not null |  | the name in one letter case: one per kind among the owner's own, any among a CRM's |
 | `created_at` | integer | not null |  | when this row was saved here |
 | `updated_at` | integer | not null |  | when this row last changed here |
+| `deleted_at` | integer |  |  | the CRM no longer lists it; kept, since deals may still stand in it |
 
-*Keys and indexes:* `UNIQUE (account_id, external_id) WHERE account_id IS NOT NULL AND external_id IS NOT NULL`, `UNIQUE (name_folded, kind) WHERE account_id IS NULL`
+*Keys and indexes:* `UNIQUE (account_id, kind, external_id) WHERE account_id IS NOT NULL AND external_id IS NOT NULL`, `UNIQUE (name_folded, kind) WHERE account_id IS NULL`
 
 ### `pipeline_stages`
 
@@ -1987,6 +1988,7 @@ One stage of a pipeline, such as a first call or a sent quote.
 | `external_id` | text |  |  | the stage's id in its pipeline's CRM |
 | `created_at` | integer | not null |  | when this row was saved here |
 | `updated_at` | integer | not null |  | when this row last changed here |
+| `deleted_at` | integer |  |  | the CRM no longer lists it; kept, since deals may still stand in it |
 
 *Keys and indexes:* `UNIQUE (pipeline_id, name_folded)`, `UNIQUE (pipeline_id, external_id) WHERE external_id IS NOT NULL`, `INDEX (pipeline_id, position)`
 

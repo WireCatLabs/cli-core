@@ -207,21 +207,36 @@ it("takes a deal's own status over its stage's outcome, as a CRM that keeps won 
   expect(byId.d3).toMatchObject({ stage: "Won", status: "won" })
 })
 
-it("keeps a deal pipeline and finds it by kind when a lead pipeline comes with the same id, naming the one it skipped", async () => {
+it("keeps a deal pipeline and a lead pipeline with the same id apart", async () => {
   const store = await open()
   await store.crm.saveItems(PORTAL, "deal", [{ externalId: "d1", title: "x", pipeline: "p1", stage: "s1" }])
   const leads = await store.crm.savePipelines(PORTAL, "lead", [
     { ...SALES, name: "Leads", stages: [{ externalId: "l1", name: "New", position: 1, outcome: "open" }] },
   ])
-  expect(leads).toMatchObject({ saved: 0, skipped: [{ externalId: "p1", reason: "crm.pipeline-clash" }] })
+  expect(leads).toEqual({ saved: 1, skipped: [] })
   expect((await store.deals.pipelines({ account: PORTAL })).map(({ kind, name }) => [kind, name])).toEqual([
+    ["lead", "Leads"],
     ["deal", "Sales"],
   ])
   const lead = await store.crm.saveItems(PORTAL, "lead", [
     { externalId: "x1", title: "x", pipeline: "p1", stage: "l1" },
   ])
-  expect(lead.skipped.map(({ reason }) => reason)).toEqual(["crm.stage-unknown"])
+  expect(lead).toEqual({ saved: 1, skipped: [] })
   expect(
     (await store.crm.saveItems(PORTAL, "deal", [{ externalId: "d2", title: "y", pipeline: "p1", stage: "s2" }])).saved,
   ).toBe(1)
+})
+
+it("leaves out a pipeline the CRM no longer lists, keeps its deals, lists it again when the CRM does, and an empty list marks nothing", async () => {
+  const store = await open()
+  await store.crm.saveItems(PORTAL, "deal", [{ externalId: "d1", title: "x", pipeline: "p1", stage: "s1" }])
+  await store.crm.savePipelines(PORTAL, "deal", [])
+  expect(await store.deals.pipelines({ account: PORTAL })).toHaveLength(1)
+  await store.crm.savePipelines(PORTAL, "deal", [{ ...SALES, externalId: "p2", name: "Other" }])
+  expect((await store.deals.pipelines({ account: PORTAL })).map(({ name }) => name)).toEqual(["Other"])
+  const [deal] = await store.deals.list({ account: PORTAL })
+  expect(deal).toMatchObject({ externalId: "d1", pipelineName: "Sales" })
+  expect((await store.deals.pipeline(deal?.pipeline as string)).name).toBe("Sales")
+  await store.crm.savePipelines(PORTAL, "deal", [SALES])
+  expect((await store.deals.pipelines({ account: PORTAL })).map(({ name }) => name)).toEqual(["Sales"])
 })

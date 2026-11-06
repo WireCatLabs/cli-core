@@ -44,11 +44,11 @@ const listAll = async (source: CrmSource, kind: CrmKind, cursor: string | null) 
 export const crmSourceContract = (make: () => CrmSourceFixture | Promise<CrmSourceFixture>): ContractCase[] => {
   const cases: ContractCase[] = [
     {
-      name: "pipelines: unique ids across both kinds, stages with a known outcome and unique ids",
+      name: "pipelines: unique ids in each kind, stages with a known outcome and unique ids",
       async run() {
         const { source } = await make()
-        const seen = new Set<string>()
         for (const kind of DEAL_KINDS.filter((one) => source.traits.kinds.includes(one))) {
+          const seen = new Set<string>()
           const pipelines = await source.pipelines(kind)
           assert.ok(pipelines.length > 0, `${kind}: at least one pipeline`)
           for (const pipeline of pipelines) {

@@ -301,11 +301,13 @@ export const dealOperationsOver = (context: StoreContext) => {
 
   const kindOf = (kind: unknown): DealKind => (kind === undefined ? "deal" : oneOf(kind, DEAL_KINDS, "a kind"))
 
-  const pipelineRows = (kind: DealKind | undefined, scope?: DealScope) =>
+  /** A pipeline the CRM deleted is left out, unless named by its reference: its deals still stand in it. */
+  const pipelineRows = (kind: DealKind | undefined, scope?: DealScope, { deleted = false } = {}) =>
     database
       .prepare(
         "SELECT p.*, a.provider AS account_provider, a.external_id AS account_external_id FROM pipelines p " +
-          "LEFT JOIN accounts a ON a.id = p.account_id WHERE (? IS NULL OR p.kind = ?) ORDER BY p.name_folded, p.id",
+          "LEFT JOIN accounts a ON a.id = p.account_id WHERE (? IS NULL OR p.kind = ?) " +
+          `${deleted ? "" : "AND p.deleted_at IS NULL "}ORDER BY p.name_folded, p.id`,
       )
       .all(kind ?? null, kind ?? null)
       .filter((row) => inScope(scope, row))
@@ -317,7 +319,7 @@ export const dealOperationsOver = (context: StoreContext) => {
   const pipelineRow = (reference: string, kind: DealKind | undefined, scope?: DealScope): Row => {
     const named = reference.trim()
     if (/^pipeline:\d+$/.test(named)) {
-      const row = pipelineRows(kind, scope).find((one) => `pipeline:${one.id}` === named)
+      const row = pipelineRows(kind, scope, { deleted: true }).find((one) => `pipeline:${one.id}` === named)
       if (!row) throw new CliError("not_found", `no ${kind ?? ""} pipeline ${named}`, { reason: "pipeline.not-found" })
       return row
     }
@@ -517,7 +519,9 @@ export const dealOperationsOver = (context: StoreContext) => {
         })
         return made
       })
-      return pipelinesOf(pipelineRows(pipelineKind).filter((row) => Number(row.id) === id))[0] as Pipeline
+      return pipelinesOf(
+        pipelineRows(pipelineKind, undefined, { deleted: true }).filter((row) => Number(row.id) === id),
+      )[0] as Pipeline
     },
     pipelines: (filter: { kind?: DealKind; account?: DealScope } = {}): Pipeline[] =>
       pipelinesOf(pipelineRows(filter.kind === undefined ? undefined : kindOf(filter.kind), filter.account)),

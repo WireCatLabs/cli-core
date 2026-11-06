@@ -225,7 +225,6 @@ const OTHERS: Entry[] = [
   validation("pipeline.field", "a pipeline needs a name and at least one stage, each named once"),
   ["pipeline.not-found", "not_found", "no stored pipeline has that name or reference"],
   validation("crm.stage-unknown", "a CRM item stands in a stage the store does not hold; it was not kept"),
-  validation("crm.pipeline-clash", "a CRM pipeline has the id of a stored pipeline of the other kind; it was not kept"),
   validation("crm.item-invalid", "a CRM item has a field the store refuses, such as a currency it does not keep"),
   validation("crm.pipeline-required", "the CRM has more than one pipeline of the kind; the write names one"),
   validation("crm.write-unsupported", "the CRM does not take this write, or does not recognise a repeated one"),
