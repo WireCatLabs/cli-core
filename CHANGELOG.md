@@ -9,9 +9,44 @@ shape of this file.
 
 ### Added
 
+- **A CRM write port, `CrmWriter`** (`@wirecat/cli-core/crm`), beside `CrmSource`: `create`, `update`, `move`,
+  `close` and `remove` of deals and leads, each sent once with its `operationId` and answering the whole item as the
+  CRM holds it. `capabilities` names the kinds and verbs it takes and whether it recognises a repeated operation id
+  (Bitrix24's `Idempotency-Key`). Fields use `CrmItem`'s names, plus `owner` (a CRM user's id) and `custom` (the CRM's
+  own fields by code). An adapter refuses a custom code that is a neutral field under another name, such as a stage
+  or an owner. `CRM_WRITE_DEFAULTS` and `CRM_WRITE_KEYS` go into a CLI's `commandPermissions`.
+- **`deals` and `leads` `create`, `update`, `move`, `close` and `delete`** in `addCrmCommands`, mounted by its new
+  `writes` option (the writer's capabilities) and run through `CrmRun.writes`. Each goes through the write guard and
+  the send journal, honours `--dry-run`, and is exposed over MCP as a write. A write is never sent twice: a lost
+  answer is `outcome_unknown`, and `--operation-id` is offered only by a CRM that recognises a repeat. A stage in
+  `create` or `update` also checks the `move` key, and a won or lost stage the `close` key. An owner other than the
+  sign-in's own user (`CrmWrites.self`) checks `crm.assign-others`, denied by default. `delete` asks by default. The
+  item the CRM answers is stored as a sync would store it, and the answer carries it with its `operation_id`.
+  `--field <key=value>` sets a custom field; an empty value clears it.
+- **`crmWriteContract` and a write side on `fakeCrmSource`** (`@wirecat/cli-core/crm/testing`). The contract checks
+  that an update of one field answers the whole item, that a custom code naming a neutral field is refused before
+  anything is sent, and that a lost answer ends after one request.
+- **`CrmItem.closedReason`** is stored as the deal's or lead's `closed_reason`, and `store.crm.refOf` finds the stored
+  copy of a CRM id.
+
+## 0.593.0 — 06.11.2026
+
+### Added
+
 - **`questionLookup` is public** (`@wirecat/cli-core/services`): the rule `search all` uses to search a question
   typed as a sentence with discovery, so a CLI's own message search can do the same and find a short reply by the
   message it answers.
+- **`schedule agent` and `schedule command` take `--to <route>`, repeatable.** After the run, when `--notify-on`
+  says so, the scheduler sends the result through the owner's own CLI: `telegram-bot:<profile>/<chat id or
+  user:id>` runs `tg <profile> bot messages send`, `email:<profile>/<address>` runs `mail <profile> messages send`.
+  A finished run sends its output (an agent's report, a command's log): to a bot as one message up to 4096
+  characters, else as a file with its first lines as the caption; by mail as the body, the title as the subject. A
+  failed run sends one line: exit code, reason id, the log's path. The run itself stays read-only; nothing it prints
+  can change where the result goes; a run under `<PREFIX>_READ_ONLY` sends nothing. Each route's outcome is in
+  `last.json` as `deliveries` (`to`, `ok`, a dotted `reason`, the sending CLI's error code); a failed send never fails
+  the run, and `schedule list` shows it. `ServerSystem.run` takes an optional `{ input, timeoutMs }`.
+- **`store.mail.writtenTo(addresses)`.** Of these addresses, the ones the owner wrote to: To or Cc of a live outgoing
+  email in any account, in lower case, in one read.
 
 ### Fixed
 
@@ -44,17 +79,6 @@ shape of this file.
   in `@wirecat/cli-core`.
 - **`DealFilter.account` and `offset`, `pipelines({ account })`.** A list reads the owner's own (`"own"`) or one CRM
   account's copies, a page at a time.
-- **`schedule agent` and `schedule command` take `--to <route>`, repeatable.** After the run, when `--notify-on`
-  says so, the scheduler sends the result through the owner's own CLI: `telegram-bot:<profile>/<chat id or
-  user:id>` runs `tg <profile> bot messages send`, `email:<profile>/<address>` runs `mail <profile> messages send`.
-  A finished run sends its output (an agent's report, a command's log): to a bot as one message up to 4096
-  characters, else as a file with its first lines as the caption; by mail as the body, the title as the subject. A
-  failed run sends one line: exit code, reason id, the log's path. The run itself stays read-only; nothing it prints
-  can change where the result goes; a run under `<PREFIX>_READ_ONLY` sends nothing. Each route's outcome is in
-  `last.json` as `deliveries` (`to`, `ok`, a dotted `reason`, the sending CLI's error code); a failed send never fails
-  the run, and `schedule list` shows it. `ServerSystem.run` takes an optional `{ input, timeoutMs }`.
-- **`store.mail.writtenTo(addresses)`.** Of these addresses, the ones the owner wrote to: To or Cc of a live outgoing
-  email in any account, in lower case, in one read.
 
 - **`syncCrm` and the `CrmSource` port, in `@wirecat/cli-core/crm`.** A CRM CLI writes an adapter (`pipelines(kind)`,
   `changes(kind, cursor, page)` answering a page or `{ reset: true }`, and `ids(kind, page)` when the CRM does not name

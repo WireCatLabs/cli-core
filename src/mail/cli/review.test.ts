@@ -413,6 +413,31 @@ describe("a holder's processing mark", () => {
     expect(why).toContainEqual(expect.stringContaining("1 bulk emails (excerpt_only)"))
   })
 
+  it("reads an order, an invoice or a shipment whole although it has List-Unsubscribe; its list's mail stays bulk", async () => {
+    const box = await setUp()
+    await box.synced()
+    await box.ack((await box.read()).cursor)
+    await box.thread("t-order", email("order", 3, { mailboxes: [BULK], subject: "Ваш заказ № 4512 отправлен" }))
+    await box.thread("t-ad", email("ad", 2, { mailboxes: [BULK], subject: "Account update" }))
+    await box.synced()
+    const { answer } = await box.read()
+    expect(threads(answer)).toEqual(["t-order", "t-ad"])
+    expect(answer.items.map((one) => one.email.excerpt_only === true)).toEqual([false, true])
+  })
+
+  it("gives partial bulk mail as an excerpt, flagged", async () => {
+    const box = await setUp()
+    await box.synced()
+    await box.ack((await box.read()).cursor)
+    await box.thread(
+      "t-partial",
+      email("partial", 1, { mailboxes: [BULK], metadata: PARTIAL, subject: "Account update" }),
+    )
+    await box.synced()
+    const { answer } = await box.read()
+    expect(answer.items[0]?.email).toMatchObject({ excerpt_only: true, partial: true })
+  })
+
   it("ends a read at its share of excerpts, so the next read gives the rest; without excerpts all bulk stays out", async () => {
     const box = await setUp()
     await box.synced()
@@ -421,7 +446,7 @@ describe("a holder's processing mark", () => {
       ["one", 3],
       ["two", 2],
     ] as const)
-      await box.thread(`t-${id}`, email(id, hours, { mailboxes: [BULK], subject: `Your order ${id}` }))
+      await box.thread(`t-${id}`, email(id, hours, { mailboxes: [BULK], subject: `Your account ${id}` }))
     await box.thread("t-ann", email("ann", 1))
     await box.synced()
     const read = (triage = BULK_TRIAGE_DEFAULTS) =>
@@ -466,7 +491,7 @@ describe("a holder's processing mark", () => {
       ["three", 1],
     ] as const)
       await box.thread(`t-${id}`, email(id, hours))
-    await box.thread("t-bulk", email("bulk", 1, { mailboxes: [BULK], subject: "Your order bulk" }))
+    await box.thread("t-bulk", email("bulk", 1, { mailboxes: [BULK], subject: "Your account bulk" }))
     await box.synced()
     await box.ack((await box.read()).cursor)
     const reset = async (...argv: string[]) => {

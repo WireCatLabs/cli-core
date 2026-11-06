@@ -54,6 +54,8 @@ export interface CrmCopies {
   ): Promise<number>
   /** How many of the kind the account holds, not deleted; every contact it ever saved. */
   count(key: AccountKey, kind: CrmKind): Promise<number>
+  /** The stored copy's `deal:<id>` or `lead:<id>`, deleted or not; `null` when the store holds none. */
+  refOf(key: AccountKey, kind: DealKind, externalId: string): Promise<string | null>
 }
 
 type Row = Record<string, unknown>
@@ -229,7 +231,11 @@ export const crmCopiesOver = (context: StoreContext, people: AccountPeople): Crm
       kind === "lead" && item.deal
         ? database.prepare("SELECT id FROM deals WHERE account_id = ? AND external_id = ?").get(accountId, item.deal)
         : undefined
-    const metadata = { ...(item.metadata ?? {}), ...(item.url ? { url: item.url } : {}) }
+    const metadata = {
+      ...(item.metadata ?? {}),
+      ...(item.url ? { url: item.url } : {}),
+      ...(item.closedReason && status !== "open" ? { closed_reason: textOf(item.closedReason, 2000) } : {}),
+    }
     const values = {
       title,
       organization: item.organization ? organizationIdOf(accountId, item.organization) : null,
@@ -466,5 +472,15 @@ export const crmCopiesOver = (context: StoreContext, people: AccountPeople): Crm
               .get(key.provider, key.account.length + 1, `${key.account}/`)?.n,
           )
         : stored(key, kind).length,
+    refOf: async (key, kind, externalId) => {
+      const accountId = findAccountPk(context, key)
+      const row =
+        accountId === undefined
+          ? undefined
+          : database
+              .prepare(`SELECT id FROM ${TABLES[kind]} WHERE account_id = ? AND external_id = ?`)
+              .get(accountId, externalId)
+      return row ? `${kind}:${row.id}` : null
+    },
   }
 }

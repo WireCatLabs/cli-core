@@ -290,6 +290,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `stages` | collection | steps of a pipeline, each open, won or lost |  |
 | `products` | collection | goods and services the owner sells, with their prices |  |
 | `users` | collection | people who work in the owner's account at a service, such as a CRM's employees |  |
+| `fields` | collection | a record type's field definitions: code, label, type and options, such as a CRM's custom fields |  |
 | `identities` | collection | ways to reach a person or an organization: an account in one messenger or mailbox, an e-mail address, a phone |  |
 | `facts` | collection | what happened, with evidence |  |
 | `memories` | collection | what an agent concluded, with evidence and scope |  |
@@ -705,6 +706,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--every` | `<duration>` | duration | repeat this often |  |
 | `--evidence` | `<ref...>` | list | what shows it: msg:, note:, meeting:, person: or another reference |  |
 | `--exclude-chat` | `<chat>` | id | never show this chat in it; repeat it for more |  |
+| `--field` | `<key=value>` | string | set one named field on a write, as key=value; repeat it for more |  |
 | `--file` | `<file>` | path | a file to send with the message; the text becomes its caption |  |
 | `--filename` | `<name>` | string | the name others see for the file, instead of its name on disk |  |
 | `--history` |  | switch | the people added also see the messages from before they came |  |
@@ -772,6 +774,12 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--bcc` | `<address>` | string | an e-mail address that gets a blind copy; repeat it for more |  |
 | `--reply-all` |  | switch | with --reply-to, an e-mail reply also goes to everyone the message went to |  |
 | `--trimmed` |  | switch | each e-mail's own text, without the quoted earlier mail and the signature; refused with --full |  |
+| `--pipeline` | `<pipeline>` | string | a CRM pipeline: pipeline:<id>, or a name only one pipeline has |  |
+| `--stage` | `<stage>` | string | a stage of the record's pipeline, by the CRM's id or its name |  |
+| `--amount` | `<decimal>` | string | a sum of money as a decimal, such as 1500.50, in --currency |  |
+| `--currency` | `<code>` | string | an ISO 4217 code, such as EUR |  |
+| `--close-date` | `<date>` | time | the day a deal or lead is expected to close, YYYY-MM-DD |  |
+| `--owner` | `<user>` | id | the CRM user a record is assigned to, by the CRM's id |  |
 
 <!-- flags: end -->
 

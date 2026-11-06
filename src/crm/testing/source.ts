@@ -1,15 +1,31 @@
+import { CliError } from "@wirecat/cli-base"
 import type { CrmItem, CrmKind, CrmOrganization, CrmPerson, CrmPipeline, CrmRecords } from "../../domain/crm.js"
 import type { DealKind } from "../../domain/deals.js"
 import type { CrmChanges, CrmIdPage, CrmSource, CrmSourceTraits } from "../source.js"
+import { CRM_VERBS, type CrmFields, type CrmVerb, type CrmWriteCapabilities, type CrmWriter } from "../writer.js"
 
 export interface FakeCrmSourceOptions {
   traits?: Partial<CrmSourceTraits>
   /** Rows per page of `changes()` and `ids()`; 2 when absent, so every list has several pages. */
   pageSize?: number
+  /** What the write side takes: every verb on both kinds, not idempotent, when absent. */
+  capabilities?: Partial<CrmWriteCapabilities>
 }
 
-/** A CRM held in memory, with a change feed: what the contracts sync against, and what a CLI's tests may use. */
-export interface FakeCrmSource extends CrmSource {
+/** One write the fake CRM was sent, in order. */
+export interface FakeCrmWrite {
+  verb: CrmVerb
+  kind: DealKind
+  externalId: string | null
+  operationId: string
+}
+
+/**
+ * A CRM held in memory, with a change feed and a write side: what the contracts sync and write against, and what a
+ * CLI's tests may use. Custom field codes `stage`, `pipeline`, `owner` and `status` are refused, as an adapter refuses
+ * a custom code that names one of the neutral fields.
+ */
+export interface FakeCrmSource extends CrmSource, CrmWriter {
   /** Adds or changes a row; it is in the next `changes()`. */
   put<K extends CrmKind>(kind: K, record: CrmRecords[K]): void
   /** Deletes a row: named in `removed` when `removedInChanges`, otherwise only missing from `ids()`. */
@@ -19,9 +35,16 @@ export interface FakeCrmSource extends CrmSource {
   expireCursors(kind: CrmKind): void
   /** Lists no id at all, as a CRM does for a sign-in that lost its rights. */
   hideAll(hidden: boolean): void
+  /** The next write is carried out and its answer lost: it throws `outcome_unknown`. */
+  loseNextAnswer(): void
   /** Requests made, by method. */
   readonly calls: { pipelines: number; changes: number; ids: number }
+  /** Writes sent, refused ones included. */
+  readonly writes: FakeCrmWrite[]
 }
+
+/** Custom codes the fake refuses: each is a neutral field under another name. */
+export const FAKE_CRM_ALIASES = ["stage", "pipeline", "owner", "status"]
 
 interface Held {
   record: unknown
@@ -66,6 +89,16 @@ export const fakeCrmSource = (options: FakeCrmSourceOptions = {}): FakeCrmSource
   const expired = new Map<CrmKind, number>()
   let hidden = false
   const calls = { pipelines: 0, changes: 0, ids: 0 }
+  const capabilities: CrmWriteCapabilities = {
+    kinds: ["deal", "lead"],
+    verbs: CRM_VERBS,
+    idempotent: false,
+    ...options.capabilities,
+  }
+  const writes: FakeCrmWrite[] = []
+  const answered = new Map<string, CrmItem | undefined>()
+  let made = 0
+  let lose = false
   const of = (kind: CrmKind) => {
     const held = rows.get(kind) ?? new Map<string, Held>()
     rows.set(kind, held)
@@ -76,10 +109,114 @@ export const fakeCrmSource = (options: FakeCrmSourceOptions = {}): FakeCrmSource
     const next = at + size
     return { slice: list.slice(at, next), nextPage: next < list.length ? String(next) : undefined }
   }
-  return {
+  const held = (kind: DealKind, externalId: string) => {
+    const found = of(kind).get(externalId)
+    if (!found || found.deleted) throw new CliError("not_found", `the CRM has no ${kind} ${externalId}`)
+    return found.record as CrmItem
+  }
+  const placed = (kind: DealKind, pipelineId: string | undefined, stageId: string | undefined) => {
+    const pipeline =
+      pipelineId === undefined ? pipelines[kind][0] : pipelines[kind].find((one) => one.externalId === pipelineId)
+    const stage =
+      stageId === undefined ? pipeline?.stages[0] : pipeline?.stages.find((one) => one.externalId === stageId)
+    if (!pipeline || !stage) throw new CliError("validation_error", `the CRM has no stage ${stageId} there`)
+    return { pipeline: pipeline.externalId, stage: stage.externalId, outcome: stage.outcome }
+  }
+  const applied = (item: CrmItem, fields: CrmFields): CrmItem => {
+    const { custom, owner, pipeline, stage, ...named } = fields
+    const metadata = {
+      ...item.metadata,
+      ...(owner === undefined ? {} : { owner }),
+      ...(custom ? { custom: { ...(item.metadata?.custom as object), ...custom } } : {}),
+    }
+    return {
+      ...item,
+      ...Object.fromEntries(Object.entries(named).filter(([, value]) => value !== undefined)),
+      ...(pipeline === undefined ? {} : { pipeline }),
+      ...(stage === undefined ? {} : { stage }),
+      metadata,
+      updatedAt: null,
+    }
+  }
+  const refuseAliases = (fields: CrmFields) => {
+    const refused = Object.keys(fields.custom ?? {}).find((code) => FAKE_CRM_ALIASES.includes(code))
+    if (refused) throw new CliError("validation_error", `${refused} is not a custom field`)
+  }
+  /** Each write once: a repeated idempotent id answers its first outcome; a lost answer still made the change. */
+  const write = <T extends CrmItem | undefined>(
+    verb: CrmVerb,
+    kind: DealKind,
+    externalId: string | null,
+    operationId: string,
+    act: () => T,
+  ): T => {
+    writes.push({ verb, kind, externalId, operationId })
+    if (capabilities.idempotent && answered.has(operationId)) return answered.get(operationId) as T
+    const done = act()
+    if (capabilities.idempotent) answered.set(operationId, done)
+    if (lose) {
+      lose = false
+      throw new CliError("outcome_unknown", "the CRM did not answer")
+    }
+    return done
+  }
+  const saved = (kind: DealKind, item: CrmItem) => {
+    fake.put(kind, item)
+    return held(kind, item.externalId)
+  }
+  const fake: FakeCrmSource = {
     provider: "example-crm",
     traits,
     calls,
+    capabilities,
+    writes,
+    loseNextAnswer() {
+      lose = true
+    },
+    async create(kind, draft, { operationId }) {
+      refuseAliases(draft)
+      return write("create", kind, null, operationId, () => {
+        const { pipeline, stage } = placed(kind, draft.pipeline, draft.stage)
+        made += 1
+        const blank: CrmItem = { externalId: `${kind}-new-${made}`, title: draft.title, pipeline, stage }
+        return saved(kind, applied(blank, { ...draft, pipeline, stage }))
+      })
+    },
+    async update(kind, externalId, patch, { operationId }) {
+      refuseAliases(patch)
+      return write("update", kind, externalId, operationId, () => {
+        const item = held(kind, externalId)
+        const at = patch.stage === undefined ? {} : placed(kind, patch.pipeline ?? item.pipeline, patch.stage)
+        return saved(kind, applied(item, { ...patch, ...at }))
+      })
+    },
+    async move(kind, externalId, stage, { operationId }) {
+      return write("move", kind, externalId, operationId, () => {
+        const item = held(kind, externalId)
+        return saved(kind, { ...item, stage: placed(kind, item.pipeline, stage).stage, status: null, updatedAt: null })
+      })
+    },
+    async close(kind, externalId, outcome, { operationId, reason }) {
+      return write("close", kind, externalId, operationId, () => {
+        const item = held(kind, externalId)
+        const pipeline = pipelines[kind].find((one) => one.externalId === item.pipeline)
+        const closing = pipeline?.stages.find((one) => one.outcome === outcome)
+        return saved(kind, {
+          ...item,
+          ...(closing ? { stage: closing.externalId } : {}),
+          status: outcome,
+          closedReason: reason ?? null,
+          updatedAt: null,
+        })
+      })
+    },
+    async remove(kind, externalId, { operationId }) {
+      write("remove", kind, externalId, operationId, () => {
+        held(kind, externalId)
+        fake.delete(kind, externalId)
+        return undefined
+      })
+    },
     put(kind, record) {
       version += 1
       // A CRM stamps each change; without one here the store would take its own clock, which an id pass skips.
@@ -137,6 +274,7 @@ export const fakeCrmSource = (options: FakeCrmSourceOptions = {}): FakeCrmSource
       return { ids: slice, ...(nextPage === undefined ? {} : { nextPage }) }
     },
   }
+  return fake
 }
 
 export const exampleDeal = (externalId: string, extra: Partial<CrmItem> = {}): CrmItem => ({
