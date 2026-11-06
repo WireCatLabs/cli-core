@@ -31,6 +31,35 @@ shape of this file.
   answer's `store.damage` (`explainDamage`: what, causes, investigate, impact, external_unaffected, steps), and
   `storeSummary` takes `{ deep, command }`.
 
+## 0.596.0 — 06.11.2026
+
+### Added
+
+- **`package.json` says which store schema the version speaks.** `wirecat.store` holds `speaks`, the newest schema
+  it migrates a file to, and `minCompatible`, the oldest schema that can still use a file it migrated, so an
+  installer can check a tool against the owner's store from the npm registry before installing it.
+
+### Fixed
+
+- **A read-only open migrates an older store first.** `openStore({ readOnly: true })` on a file at an older schema
+  opens it the ordinary way once, which migrates it, then opens it read-only, instead of refusing it with
+  `configuration_error`. A tool whose first command only reads no longer needs a workaround. A newer incompatible
+  schema is still refused, and a missing file is still not created.
+
+## 0.595.0 — 06.11.2026
+
+### Added
+
+- **A rollback copy before a breaking store upgrade.** Before a migration that raises `min_compatible` (after which
+  older tools refuse the store), the base tables it names are copied into `backups/` beside the store, as
+  `<store>-rollback-schema-<version>-<time>.db`, with the schema as it was. Search indexes, vectors and other derived
+  tables are never copied. Without the free space for it, the upgrade runs anyway and warns. `store restore <copy>`
+  puts the tables back and returns the store to that version, so the older tool opens it again; its `store rebuild`
+  then refreshes the search indexes. The copy is deleted on the first open a day after the upgrade succeeded.
+- **`Migration.tables`** and the manifest's `tables`: required on a migration that raises `minCompatible`, the base
+  tables it changes by their names before it. `generatedMigrations` refuses a raising one without it, or one that
+  names a derived table.
+
 ## 0.594.0 — 06.11.2026
 
 ### Added

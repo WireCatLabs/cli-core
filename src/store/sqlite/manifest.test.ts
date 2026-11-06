@@ -43,6 +43,14 @@ describe("the generated migrations", () => {
     expect(MIGRATIONS.map(({ version }) => version)).toEqual(MIGRATIONS.map((_, index) => 1 + index))
   })
 
+  it("are described by package.json's wirecat.store — edit it when this fails", () => {
+    const { wirecat } = JSON.parse(readFileSync(join(import.meta.dirname, "../../../package.json"), "utf8"))
+    expect(wirecat.store).toEqual({
+      speaks: MIGRATIONS.at(-1)?.version,
+      minCompatible: Math.max(...MIGRATIONS.map(({ minCompatible }) => minCompatible)),
+    })
+  })
+
   it("**never rebuild a base table** or add a column an older build cannot fill", () => {
     // A version that raises minCompatible to itself locks every older build out, so it may drop.
     for (const { version, minCompatible, statements } of generatedMigrations()) {

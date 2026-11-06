@@ -533,7 +533,13 @@ it by editing that line in a PR of its own, merged before the migration.
    (`manifest.test.ts:38-44`).
 6. **`minCompatible` stays where it is** — 30 after the tag compatibility boundary — for an additive change. Every manifest row declares it explicitly; it cannot decrease. Raising it locks every
    older build out of the file: ask the owner first; it is a major version of this package, and
-   tg-cli and max-cli ship their upgrade the same day.
+   tg-cli and max-cli ship their upgrade the same day. Such a row also names `tables`: every base table the
+   migration changes, by its name before it, including those its statements' triggers write (an `UPDATE chats` of a
+   title writes `chat_revisions`). Never a derived one: search indexes, vectors, chunks, mentions and involvements
+   are rebuilt. Before the migration runs, `src/store/sqlite/rollback-copy.ts` copies them, with `store_settings`,
+   `search_index_state` and the whole schema, into `backups/` beside the store; `store restore <copy>` returns the
+   store to the old version. The rollback undoes the schema of every migration in that upgrade and the rows of the
+   named tables; rows an additive migration of the same upgrade rewrote in a table not named stay as they are.
 7. **`pnpm db:bundle`** after every `db:generate` and every edit of a `migration.sql`. It rewrites
    `src/store/sqlite/migrations.generated.ts`; `pnpm build` does not, and the test "are bundled
    exactly as drizzle-kit wrote them" (`manifest.test.ts:22`) fails until you run it.

@@ -1,9 +1,11 @@
 # Opening a store for reads
 
 `openStore({ readOnly: true })` opens an existing compatible database through a native read-only
-SQLite connection under Node and Bun. It performs no store creation, migration, folded-name fill,
-normalization backfill, stemming maintenance or log pruning. Ordinary `openStore` retains those
-maintenance responsibilities; reading through an ordinary connection is not a no-maintenance open.
+SQLite connection under Node and Bun. It performs no store creation, folded-name fill, normalization
+backfill, stemming maintenance or log pruning. Ordinary `openStore` retains those maintenance
+responsibilities; reading through an ordinary connection is not a no-maintenance open. The one exception
+is a file at an older schema: it is first opened the ordinary way, which migrates it and does that
+maintenance, then closed and opened read-only, since a new tool's first command may only read.
 
 ```ts
 import { openStore } from "@wirecat/cli-core/store"
@@ -30,12 +32,13 @@ the explicitly bounded, no-maintenance context readers.
 | --- | --- |
 | Missing file or parent | `not_found`; neither is created |
 | Missing/empty/invalid schema history | `configuration_error`; no initialization or repair |
-| Schema older than this package | `configuration_error`; explicit maintenance is needed first |
+| Schema older than this package | Migrated by an ordinary writable open, then opened read-only; fails as an ordinary open would where the file cannot be written |
 | Current schema | Open without maintenance |
 | Newer additive schema whose `min_compatible` permits this package | Open without recording a migration |
 | Newer incompatible schema | `configuration_error`; upgrade the tool |
 
-The read-only path never falls back to a writable connection. Schema history is inspected without
+Apart from migrating an older schema, the read-only path never uses a writable connection, and it
+never reads through one. Schema history is inspected without
 creating the history table or entering a write transaction. A compatible schema does not prove
 derived indexes are populated: bounded readers retain missing/pending/unknown coverage rather than
 filling them. The runtime's existing in-memory SQLite capability probe still runs once per process;

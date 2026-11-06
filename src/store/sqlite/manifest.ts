@@ -1,5 +1,6 @@
 import type { Migration } from "../migrations.js"
 import { GENERATED } from "./migrations.generated.js"
+import { isDerivedTable } from "./rollback-copy.js"
 
 /**
  * Every folder drizzle-kit generated, in order, and the schema version it becomes. Consecutive
@@ -13,7 +14,38 @@ export interface ManifestEntry {
   name: string
   version: number
   minCompatible: number
+  /** Required on a version that raises `minCompatible`: the base tables it changes (`Migration.tables`). */
+  tables?: string[]
 }
+
+const V31_TABLES = [
+  "accounts",
+  "account_identities",
+  "agent_actions",
+  "aliases",
+  "attachments",
+  "bot_updates",
+  "chats",
+  "documents",
+  "email_threads",
+  "emails",
+  "facts",
+  "links",
+  "mail_rules",
+  "mailboxes",
+  "meeting_series",
+  "meetings",
+  "memories",
+  "messages",
+  "notes",
+  "projects",
+  "proposed_actions",
+  "reminders",
+  "store_settings",
+  "sync_cursors",
+  "syncs",
+  "taggings",
+]
 
 /** One migration creates the whole schema; every later one is added as the next version. */
 export const MANIFEST: ManifestEntry[] = [
@@ -52,14 +84,24 @@ export const MANIFEST: ManifestEntry[] = [
   { name: "20261021224625_version-28-chat-state", version: 28, minCompatible: 1 },
   { name: "20261023105057_version-29-transcript-words", version: 29, minCompatible: 1 },
   { name: "20261023105101_version-29-transcript-words-triggers", version: 29, minCompatible: 1 },
-  { name: "20261025064253_version-30-reviewed-tag-consolidation", version: 30, minCompatible: 30 },
+  {
+    name: "20261025064253_version-30-reviewed-tag-consolidation",
+    version: 30,
+    minCompatible: 30,
+    tables: ["tags", "auto_tag_claims"],
+  },
   { name: "20261025064302_version-30-resolved-tag-view", version: 30, minCompatible: 30 },
-  { name: "20261025070402_version-31-drive-account", version: 31, minCompatible: 31 },
-  { name: "20261025071848_version-32-files", version: 32, minCompatible: 32 },
+  { name: "20261025070402_version-31-drive-account", version: 31, minCompatible: 31, tables: V31_TABLES },
+  {
+    name: "20261025071848_version-32-files",
+    version: 32,
+    minCompatible: 32,
+    tables: ["accounts", "documents", "identities", "store_settings"],
+  },
   { name: "20261025071850_version-32-files-data", version: 32, minCompatible: 32 },
   { name: "20261025072643_version-33-calendars", version: 33, minCompatible: 32 },
   { name: "20261025072644_version-33-calendars-triggers", version: 33, minCompatible: 32 },
-  { name: "20261025182500_version-34-vector-index", version: 34, minCompatible: 34 },
+  { name: "20261025182500_version-34-vector-index", version: 34, minCompatible: 34, tables: [] },
   { name: "20261025182501_version-34-vector-index-triggers", version: 34, minCompatible: 34 },
   { name: "20261027102259_version-35-calendar-neutral", version: 35, minCompatible: 34 },
   { name: "20261027102302_version-35-calendar-neutral-data", version: 35, minCompatible: 34 },
@@ -102,10 +144,26 @@ export const generatedMigrations = (
     const last = migrations.at(-1)
     if (last && last.version !== entry.version && entry.minCompatible < last.minCompatible)
       throw new Error("migration minCompatible cannot decrease")
+    const derived = entry.tables?.filter(isDerivedTable) ?? []
+    if (derived.length > 0)
+      throw new Error(
+        `migration ${entry.version} names derived tables (${derived.join(", ")}); they are rebuilt, never copied`,
+      )
     if (last?.version !== entry.version) {
-      migrations.push({ version: entry.version, minCompatible: entry.minCompatible, statements: [...found.statements] })
+      if (last && entry.minCompatible > last.minCompatible && entry.tables === undefined)
+        throw new Error(
+          `migration ${entry.version} raises minCompatible, so it names the base tables it changes (tables)`,
+        )
+      migrations.push({
+        version: entry.version,
+        minCompatible: entry.minCompatible,
+        statements: [...found.statements],
+        ...(entry.tables ? { tables: [...entry.tables] } : {}),
+      })
     } else if (last.minCompatible !== entry.minCompatible) {
       throw new Error(`the rows of version ${entry.version} disagree on minCompatible`)
+    } else if (entry.tables && JSON.stringify(entry.tables) !== JSON.stringify(last.tables)) {
+      throw new Error(`the rows of version ${entry.version} disagree on tables`)
     } else {
       last.statements.push(...found.statements)
     }

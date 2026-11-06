@@ -1,6 +1,6 @@
 {
   "name": "@wirecat/cli-core",
-  "version": "0.594.0",
+  "version": "0.596.0",
   "description": "The messenger-neutral half of a messaging CLI: domain model, message locators, rendering, name resolution, the SQLite seam, the command skeleton and shared read commands, the send guard, run records and the message store",
   "license": "Apache-2.0",
   "author": "Viacheslav Ptsarev",
@@ -13,6 +13,12 @@
     "url": "https://github.com/WireCatLabs/cli-core/issues"
   },
   "type": "module",
+  "wirecat": {
+    "store": {
+      "speaks": 53,
+      "minCompatible": 34
+    }
+  },
   "engines": {
     "node": "^22.16.0 || >=24"
   },
