@@ -127,7 +127,11 @@ const line = (text: string) => text.replace(/\s+/g, " ").trim()
  * A found message or email for a reader: its reference first, then when and from whom, who else it went to and
  * where it is filed, its subject or chat, and an excerpt — the whole text only at `full`.
  */
-export const hitText = (item: StoredHit & { excerpt?: string }, level?: "brief" | "full"): string => {
+export const hitText = (
+  item: StoredHit & { excerpt?: string },
+  level?: "brief" | "full",
+  shown: (time: string) => string = (time) => time,
+): string => {
   const mail = item.email
   const names = (people: { name: string | null; address: string }[]) =>
     people.map(({ name, address }) => line(name ?? address)).join(", ")
@@ -143,7 +147,7 @@ export const hitText = (item: StoredHit & { excerpt?: string }, level?: "brief" 
   const who = line(item.senderName ?? item.senderId ?? "unknown")
   return [
     item.locator,
-    `  ${item.timestamp}  ${who}${level === "brief" || !between ? "" : `  ${between}`}`,
+    `  ${shown(item.timestamp)}  ${who}${level === "brief" || !between ? "" : `  ${between}`}`,
     ...(level === "brief" || !item.chatTitle ? [] : [`  ${line(item.chatTitle)}`]),
     `  ${level === "full" ? item.text.replace(/\n/g, "\n  ") : line(item.excerpt ?? item.text)}`,
   ].join("\n")

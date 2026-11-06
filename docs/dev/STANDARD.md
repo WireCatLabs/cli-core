@@ -639,6 +639,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--project` | `<project>` | string | a project: its key or project:<id> |  |
 | `--recheck-since-time` | `<time>` | time | look again from this day, for what arrived late |  |
 | `--run` | `<id>` | id | the run it is about |  |
+| `--write` | `<id>` | id | one write of a run, by the operation_id its answer listed: undo or act on that write alone |  |
 | `--target` | `<ref>` | string | what it acts on, as a reference: msg:, chat:, person:, task:, … |  |
 | `--secret` | `<name>` | choice | which secret beside a bot's token to keep, typed at a hidden prompt; never the secret itself |  |
 | `--store-token` | `<profile>` | string | keep a token an operation returns only in this bot profile's keyring; never print it |  |
@@ -684,15 +685,6 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--revote` |  | switch | people may change their vote |  |
 | `--send-as` | `<id>` | id | send as this identity of the chat |  |
 | `--voice` | `<file>` | path | an Ogg Opus file sent as a voice message |  |
-| `--about-text` | `<who>` | choice | who sees the about text: everyone, contacts or nobody |  |
-| `--calls` | `<who>` | choice | whose calls ring: everyone, contacts or nobody |  |
-| `--chat-invites` | `<who>` | choice | who may add the account to groups and channels: everyone, contacts or nobody |  |
-| `--find-by-phone` | `<who>` | choice | who finds the account by its number: everyone, contacts or nobody |  |
-| `--hide-online` | `<on\|off>` | choice | hide online status and last seen |  |
-| `--last-seen` | `<who>` | choice | who sees when the account was last online: everyone, contacts or nobody |  |
-| `--phone-number` | `<who>` | choice | who sees the number: everyone, contacts or nobody |  |
-| `--profile-photo` | `<who>` | choice | who sees the profile photo: everyone, contacts or nobody |  |
-| `--read-receipts` | `<on\|off>` | choice | send read receipts |  |
 | `--until` | `<time>` | time | only until then: a local time, or a duration from now |  |
 | `--agenda` | `<text>` | string | the meeting's agenda |  |
 | `--allow-chats` | `<ids>` | list | the chats allowed, by comma-separated ids; empty clears |  |
@@ -755,6 +747,15 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--lease` | `<duration>` | duration | how long a claim lasts before it lapses by itself; claiming again extends it |  |
 | `--filter` | `<query>` | string | a query every result must also match, beside the search's own words |  |
 | `--values` | `<json>` | string | cell values as JSON rows for an explicit range update or row append; not a list filter |  |
+| `--about-text` | `<who>` | choice | who sees the about text: everyone, contacts or nobody |  |
+| `--calls` | `<who>` | choice | whose calls ring: everyone, contacts or nobody |  |
+| `--chat-invites` | `<who>` | choice | who may add the account to groups and channels: everyone, contacts or nobody |  |
+| `--find-by-phone` | `<who>` | choice | who finds the account by its number: everyone, contacts or nobody |  |
+| `--hide-online` | `<on\|off>` | choice | hide online status and last seen |  |
+| `--last-seen` | `<who>` | choice | who sees when the account was last online: everyone, contacts or nobody |  |
+| `--phone-number` | `<who>` | choice | who sees the number: everyone, contacts or nobody |  |
+| `--profile-photo` | `<who>` | choice | who sees the profile photo: everyone, contacts or nobody |  |
+| `--read-receipts` | `<on\|off>` | choice | send read receipts |  |
 | `--end-time` | `<time>` | time | when it ends |  |
 | `--start-date` | `<date>` | time | the first day of something that lasts whole days, such as an all-day event |  |
 | `--end-date` | `<date>` | time | the last day of something that lasts whole days, such as an all-day event |  |

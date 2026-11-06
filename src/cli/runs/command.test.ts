@@ -177,3 +177,39 @@ it("answers runs list and runs show in their declared shape for a run with its c
   for (const id of [called.id, quiet.id])
     v.parse(ENTITIES["run.details"], (await answer(["runs", "show", id, "--json"])).item)
 })
+
+it("shows a person the times of runs list and runs show in the local zone, and keeps UTC in JSON", async () => {
+  const before = process.env.TZ
+  process.env.TZ = "Asia/Vladivostok"
+  try {
+    const env = { ...process.env, APP_STATE_DIR: mkdtempSync(join(tmpdir(), "runs-command-")) }
+    const app = { command: "tg", appName: "app-cli", envPrefix: "APP", description: "Synthetic CLI", version: "1.0.0" }
+    const item = startRun({
+      runsDir: runsDirFor(app, env),
+      profile: "synthetic",
+      command: "chats list",
+      service: "tg",
+      cliVersion: app.version,
+    })
+    await item.finish("success")
+    const answered = async (tty: boolean, ...argv: string[]) => {
+      const streams = captureStreams()
+      const code = await run(argv, { app, commands: () => [runsCommand(app)] }, { streams, env, tty })
+      expect(code, streams.stderr.join("")).toBe(0)
+      return { out: streams.stdout.join(""), err: streams.stderr.join("") }
+    }
+    for (const argv of [
+      ["runs", "list"],
+      ["runs", "show", item.id],
+    ]) {
+      const shown = await answered(true, ...argv)
+      expect(shown.out, argv.join(" ")).toMatch(/\d{4}-\d{2}-\d{2} \d{2}:\d{2}/)
+      expect(shown.out, argv.join(" ")).not.toMatch(/\d{2}:\d{2}:\d{2}(\.\d+)?Z/)
+      expect(shown.err, argv.join(" ")).toContain("times in Asia/Vladivostok")
+    }
+    const json = JSON.parse((await answered(false, "runs", "list", "--json")).out)
+    expect(json.items[0].started_at).toMatch(/Z$/)
+  } finally {
+    process.env.TZ = before
+  }
+})

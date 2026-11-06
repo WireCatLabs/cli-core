@@ -146,7 +146,12 @@ const mailbox = async (mount?: MailMount) => {
     const code = await run(["ya", ...argv, "--json"], definition, { streams, tty: false, env: { ...env, ...extra } })
     return { code, out: streams.stdout.join(""), err: streams.stderr.join("") }
   }
-  return { env, accountId, withStore, synced, thread, json, refused, cli }
+  const person = async (argv: string[]) => {
+    const streams = captureStreams()
+    const code = await run(["ya", "review", ...argv], definition, { streams, tty: true, env })
+    return { code, out: streams.stdout.join(""), err: streams.stderr.join("") }
+  }
+  return { env, accountId, withStore, synced, thread, json, refused, cli, person }
 }
 
 const texts = (answer: { items: { text: string }[] }) => answer.items.map((one) => one.text.split("\n").at(-1))
@@ -184,6 +189,31 @@ describe("mail review", () => {
       "untrusted",
     ])
     expect(threads(await box.json([]))).toEqual(["t-bill"])
+  })
+
+  it("shows a person the emails and the range in the local zone, with one line naming it", async () => {
+    const before = process.env.TZ
+    process.env.TZ = "Asia/Vladivostok"
+    try {
+      const box = await mailbox()
+      await box.thread("t-bill", email("bill", 30), email("paid", 2, { from: me, to: [ann], outgoing: true }))
+      await box.synced()
+      const shown = await box.person(["date>1d"])
+      expect(shown.code, shown.err).toBe(0)
+      const local = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Vladivostok",
+        dateStyle: "short",
+        timeStyle: "short",
+        hourCycle: "h23",
+      })
+      const paid = local.format(Date.now() - 2 * HOUR).replace(",", "")
+      expect(shown.out).toContain(paid)
+      expect(shown.out).not.toMatch(/\d{2}:\d{2}:\d{2}(\.\d+)?Z/)
+      expect(shown.err).toMatch(/from \d{4}-\d{2}-\d{2} \d{2}:\d{2} to \d{4}-\d{2}-\d{2} \d{2}:\d{2}/)
+      expect(shown.err).toContain("times in Asia/Vladivostok")
+    } finally {
+      process.env.TZ = before
+    }
   })
 
   it("--new shows each email once, and mail stored later in the next run", async () => {
