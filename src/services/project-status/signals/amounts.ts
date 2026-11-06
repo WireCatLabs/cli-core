@@ -76,13 +76,14 @@ export const centsText = (cents: number): string => `${Math.floor(cents / 100)}.
 /**
  * Every message with an amount and a money word, folded by amount and currency per chat: the first ask is `since`, a
  * later "paid" message naming the same amount makes it `paid-mentioned`. Instalments are not summed into a total.
+ * Nothing when the project keeps books: a word match also finds the owner's quotes and prices, which owe nothing.
  */
 export const amounts: StatusSignal<AmountsData> = {
   id: "amounts",
-  version: 1,
+  version: 2,
   scope: "chat",
-  read: async (_context, chat) => {
-    if (!chat) return []
+  read: async (context, chat) => {
+    if (!chat || context.books) return []
     const groups = new Map<string, Row[]>()
     for (const row of rowsOf(chat)) {
       const key = `${row.cents}|${row.currency ?? ""}`

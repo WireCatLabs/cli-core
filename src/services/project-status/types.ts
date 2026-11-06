@@ -44,6 +44,8 @@ export interface StatusContext {
   }
   /** Read only: facts, tasks, chats. */
   store: MessageStore
+  /** The project or a child has a confirmed invoice or payment: money is then read from those rows, never from words. */
+  books: boolean
   /** `--context-query` texts: every word of one must appear in one message. */
   contextQueries: string[]
 }

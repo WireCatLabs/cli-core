@@ -53,7 +53,7 @@ describe("projectStatusAnswer", () => {
     expect(next[0]?.why).toContain("held in part")
     expect(missing.map((one) => one.field)).toEqual(["history"])
     expect(meta).toMatchObject({ complete: false, accounts: ["max/11", "telegram/22"] })
-    expect(item.money).toContainEqual({ direction: "to_us", currency: "EUR", amount: "1200.00", rows: 1 })
+    expect(item.money).toEqual([])
     expect(item.chats.find((one) => one.chat === "chat:telegram/22/555")).toMatchObject({
       coverage: "partial",
       held: { messages: 3, oldest_at: "2026-10-20T09:00:00.000Z" },

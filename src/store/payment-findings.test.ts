@@ -202,13 +202,15 @@ describe("project status payments", () => {
   it("lists payments and open invoices by their refs and totals only confirmed invoices", async () => {
     const f = await fixture()
     const before = await projectStatus(f.store, { project: "HRB", asOf: NOW })
-    expect(before.money.open).toContainEqual({ direction: "to_us", currency: "EUR", amount: "1200.00", rows: 1 })
+    expect(before.money.open).toEqual([])
+    expect(before.items.some((one) => one.signal === "amounts")).toBe(true)
 
     const [owed] = await f.confirm(await f.stage("owed", [{ payment: f.expected }]))
     const found = await projectStatus(f.store, { project: "HRB", asOf: NOW })
     expect(found.money.open.filter((one) => one.direction === "to_us")).toEqual([
       { direction: "to_us", currency: "EUR", amount: "1200.00", rows: 1 },
     ])
+    expect(found.items.filter((one) => one.signal === "amounts")).toEqual([])
 
     const [paid] = await f.confirm(
       await f.stage("paid", [{ payment: { ...f.expected, state: "paid", paid_at: "2026-10-30" }, supersedes: owed }]),
