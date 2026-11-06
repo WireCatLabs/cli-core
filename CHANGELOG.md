@@ -49,6 +49,11 @@ shape of this file.
 - **Shared answer entities `deal`, `lead`, `pipeline` and `stage`.** memo's `deals`, `leads` and `pipelines` and every
   CRM CLI answer them in one shape: a deal or lead as the store gives it, a pipeline with its stages and, from
   `pipelines show`, its funnel.
+- **`schedule agent` and `schedule command` take `--notify-on always|failures|never`.** The value is kept as `notify` in
+  the schedule file and shown by `schedule list`. A schedule without it keeps working: an agent that repeats with
+  `--every` notifies on failures only, any other schedule as before. A schedule's `last.skipped` carries a dotted
+  `reason` next to `why`: `cost.day-cap`, `mail.none-new`, `mail.below-threshold`; `schedule run` answers with the same
+  `reason` when it skips.
 
 ### Changed — may break callers
 
@@ -70,14 +75,6 @@ shape of this file.
   owner's do, as deals do since 0.588.0. `organization_add` and `organization_rename` rows already stored stay listed
   and decidable through the `organization` review kind, and `ORGANIZATION_ADD_KIND` and `ORGANIZATION_RENAME_KIND`
   stay exported.
-
-### Added
-
-- **`schedule agent` and `schedule command` take `--notify-on always|failures|never`.** The value is kept as `notify` in
-  the schedule file and shown by `schedule list`. A schedule without it keeps working: an agent that repeats with
-  `--every` notifies on failures only, any other schedule as before. A schedule's `last.skipped` carries a dotted
-  `reason` next to `why`: `cost.day-cap`, `mail.none-new`, `mail.below-threshold`; `schedule run` answers with the same
-  `reason` when it skips.
 
 ## 0.589.0 — 06.11.2026
 
