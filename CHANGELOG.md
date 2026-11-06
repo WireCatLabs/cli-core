@@ -38,6 +38,23 @@ shape of this file.
   any letter case; its hits are `deal` and `lead`, their title and excerpt marked untrusted. A query with a field,
   a wildcard or NOT skips `crm` with its reason. `--source` and a profile lock narrow it to the accounts named.
   `crm` joins the default `RESOURCES_SEARCHED`; tg, max, wa and the calendar CLIs pass their own lists and are unchanged.
+- **`store.crm` writes a CRM account's copies.** `savePipelines` and `saveItems` upsert pipelines, stages, deals and
+  leads by the CRM's ids, with no review (NEED-2271 A): status follows the stage's outcome, money keeps its minor
+  units, the people on an item are `links` with their role, and the stage history counts from the CRM's own times.
+  `savePeople` stores contacts as identities through `savePeople`, joined to a person by exact email only, their ids
+  kept apart per account (`crmIdentityId`, `<account>/<id>`). `saveOrganizations` keeps each company as a source record
+  whose organization is made for it on first sight, never one found by name (WC-DATA-6). `remove` and
+  `removeUnlisted` mark rows deleted (WC-DATA-7), never one the CRM changed after the list began. An item whose
+  stage is not stored, or whose money the store refuses, is skipped and named. Neutral types (`CrmItem`,
+  `CrmPipeline`, `CrmPerson`, `CrmOrganization`) are in `@wirecat/cli-core`.
+- **`DealFilter.account` and `offset`, `pipelines({ account })`.** A list reads the owner's own (`"own"`) or one CRM
+  account's copies, a page at a time.
+
+### Changed — may break callers
+
+- **`store.deals.add`, `move` and `close` leave a CRM's copies alone.** Moving or closing a copy is refused
+  (`deal.copy`): the CRM is where it changes. A stage or a pipeline named in `add` is looked up among the owner's own
+  pipelines only, so a synced CRM stage never makes it ambiguous.
 
 ### Changed — may break callers
 

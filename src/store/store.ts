@@ -31,6 +31,7 @@ import { type BotUpdateStore, botUpdateStoreOver } from "./sqlite/bot-updates.js
 import { eventStoreOver } from "./sqlite/calendar.js"
 import { type CatalogStore, catalogStoreOver } from "./sqlite/catalog.js"
 import { contextEvidenceOver, contextIndexOver, contextRecordsOver } from "./sqlite/context-evidence.js"
+import { type CrmCopies, crmCopiesOver } from "./sqlite/crm.js"
 import { type DealsStore, dealsStoreOver } from "./sqlite/deals.js"
 import { type MailStore, mailStoreOver } from "./sqlite/emails.js"
 import { type EventSearch, eventSearchOver } from "./sqlite/event-search.js"
@@ -127,6 +128,8 @@ export interface MessageStore {
   readonly orders: OrdersStore
   /** The owner's sales pipelines and the deals in them; an agent's deal waits for the owner. */
   readonly deals: DealsStore
+  /** A CRM account's pipelines, deals, leads, contacts and companies, written as the CRM has them. */
+  readonly crm: CrmCopies
   /** What each import said, by the source's identity; `ingest` (services) is the way in. */
   readonly records: RecordStore
   /** What agents concluded: summaries, digests, facts, preferences, each with evidence and a scope. */
@@ -246,6 +249,7 @@ const storeOver = (context: StoreContext): MessageStore => {
   const finance = once(() => financeStoreOver(context))
   const orders = once(() => ordersStoreOver(context))
   const deals = once(() => dealsStoreOver(context))
+  const crm = once(() => crmCopiesOver(context, accountPeopleOver(context)))
   const records = once(() => recordStoreOver(context))
   const memories = once(() => memoriesStoreOver(context))
   const proposedActions = once(() => proposedActionsStoreOver(context))
@@ -359,6 +363,9 @@ const storeOver = (context: StoreContext): MessageStore => {
     },
     get deals() {
       return deals()
+    },
+    get crm() {
+      return crm()
     },
     get records() {
       return records()
