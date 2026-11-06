@@ -1,0 +1,425 @@
+import { CliError } from "@wirecat/cli-base"
+import { annotate, metaOf, sharedCommand } from "@wirecat/cli-base/commands"
+import type { QueryRegistry } from "@wirecat/cli-base/query"
+import type { NextStep } from "@wirecat/cli-base/standards"
+import { type Command, InvalidArgumentError } from "commander"
+import * as v from "valibot"
+import { answerEntity } from "../../cli/answer-entity.js"
+import { environmentOf, outputFor, runBudgetOf } from "../../cli/context.js"
+import { honoursDryRun } from "../../cli/dry-run-guard.js"
+import { FETCH, LOCAL_READ, NO_EFFECTS } from "../../cli/effects.js"
+import { type Body, itemOf, listOf, renderAnswer, snakeKeys } from "../../cli/envelope.js"
+import { queryTerms, termField, withQuery } from "../../cli/list-query.js"
+import { lineOf } from "../../cli/steps.js"
+import { CRM_KINDS } from "../../domain/crm.js"
+import { DEAL_KINDS, DEAL_STATUSES, type DealKind } from "../../domain/deals.js"
+import { count, text } from "../../entities/fields.js"
+import type { AppIdentity } from "../../ports/app.js"
+import type { Deal, DealFilter, Pipeline } from "../../store/sqlite/deals.js"
+import type { MessageStore } from "../../store/store.js"
+import type { AccountKey } from "../../store/types.js"
+import type { CrmSource } from "../source.js"
+import { crmStatus, syncCrm } from "../sync.js"
+import { addCrmSearchAll } from "./search-all.js"
+
+/**
+ * The selected profile's CRM account, opened by the app for one command and closed once its answer is built, before
+ * anything is printed (WC-LIFE-4).
+ */
+export interface CrmRun {
+  /** The profile's name, which `store status` gives as each sync's `profile`. */
+  profile: string
+  /** The profile's CRM account as the shared store names it: every command reads and syncs only it. */
+  account: AccountKey
+  store: MessageStore
+  /** The CRM, built on first use: a command that only reads the store never reads the sign-in. */
+  source: () => CrmSource
+  /** A profile lock pins the process (WC-ACCT-5): `search all` then reads only this account's deals. */
+  locked?: boolean
+  env?: NodeJS.ProcessEnv
+  close?: () => Promise<void>
+}
+
+export interface CrmCommandOptions {
+  /** The CLI itself: the first word of examples, and `search all`. */
+  app: AppIdentity
+  /** Opens the selected profile for one command; `readOnly` when the command only reads the store. */
+  open: (command: Command, access: { readOnly: boolean }) => Promise<CrmRun>
+  /** The CRM has leads: mounts `leads list|show`. True when absent. */
+  leads?: boolean
+  now?: () => number
+}
+
+const MOST = 500
+
+const DEAL_FIELDS = [
+  termField("status", "enum", "status:open", { values: DEAL_STATUSES }),
+  termField("stage", "kw", 'stage:"Quote sent"', { relation: "a stage's name, in any letter case" }),
+  termField("pipeline", "kw", "pipeline:Sales", { relation: "pipeline:<id>, or a name only one pipeline has" }),
+  termField("organization", "ref", 'organization:"organization:3"'),
+]
+
+/** What `deals list` and `leads list` narrow by, the same in memo and every CRM CLI (WC-OUT-11). */
+export const DEALS_QUERY = { entity: "deal", backend: "native", fields: DEAL_FIELDS } as const satisfies QueryRegistry
+export const LEADS_QUERY = { entity: "lead", backend: "native", fields: DEAL_FIELDS } as const satisfies QueryRegistry
+export const PIPELINES_QUERY = {
+  entity: "pipeline",
+  backend: "native",
+  fields: [termField("kind", "enum", "kind:lead", { values: DEAL_KINDS })],
+} as const satisfies QueryRegistry
+export const STAGES_QUERY = {
+  entity: "stage",
+  backend: "native",
+  fields: [
+    termField("kind", "enum", "kind:deal", { values: DEAL_KINDS }),
+    termField("pipeline", "kw", "pipeline:Sales", { relation: "pipeline:<id>, or a name only one pipeline has" }),
+  ],
+} as const satisfies QueryRegistry
+
+/** A CRM's users typed these; a list item names its own, as `events list` does. */
+const DEAL_UNTRUSTED = ["title", "summary", "stage", "pipeline_name", "organization.name", "people.name"]
+const PIPELINE_UNTRUSTED = ["name", "stages.name"]
+const STAGE_UNTRUSTED = ["name", "pipeline_name"]
+
+const crmSync = v.strictObject({
+  provider: text,
+  account: text,
+  pipelines: count,
+  synced: v.array(
+    v.strictObject({
+      kind: v.picklist(CRM_KINDS),
+      round: v.picklist(["full", "changes"]),
+      reset: v.boolean(),
+      state: v.picklist(["partial", "complete"]),
+      saved: count,
+      removed: count,
+      unlisted: count,
+      pass: v.optional(v.picklist(["complete", "partial", "held"])),
+      error: v.optional(text),
+    }),
+  ),
+  issues: v.array(
+    v.strictObject({
+      kind: v.picklist(CRM_KINDS),
+      reason: text,
+      message: text,
+      external_id: v.optional(text),
+    }),
+  ),
+  complete: v.boolean(),
+  state: v.picklist(["partial", "complete"]),
+  stopped: v.optional(v.picklist(["requests", "deadline", "cancelled"])),
+  progress: v.strictObject({ requests: count, saved: count, steps: count }),
+  hint: v.optional(text),
+})
+
+const crmSyncProgress = v.strictObject({
+  kind: v.picklist(CRM_KINDS),
+  round: v.nullable(v.picklist(["full", "changes"])),
+  id_pass: v.nullable(text),
+  stored: count,
+  job: text,
+  profile: text,
+  done: count,
+  total: v.nullable(count),
+  remaining: v.nullable(count),
+  state: v.picklist(["partial", "complete"]),
+  updated_at: v.nullable(text),
+  cursor_age_ms: v.nullable(count),
+  line: text,
+})
+
+const integer = (most: number) => (value: string) => {
+  if (!/^[1-9]\d*$/.test(value) || Number(value) > most) throw new InvalidArgumentError(`expected 1 to ${most}`)
+  return Number(value)
+}
+
+/** The words below the program, as `page.next` and `sync`'s next step run it again. */
+const pathOf = (command: Command): string[] =>
+  command.parent?.parent ? [...pathOf(command.parent), command.name()] : [command.name()]
+
+const marked = <T extends object>(items: T[], untrusted: string[]) =>
+  items.map((item) => ({ ...(snakeKeys(item) as object), untrusted }))
+
+export type CrmWithin = (command: Command, work: (run: CrmRun) => Promise<Body>) => Promise<void>
+
+const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions): void => {
+  const now = () => options.now?.() ?? Date.now()
+  const within: CrmWithin = async (command, work) => {
+    const run = await options.open(command, { readOnly: metaOf(command).effects?.local !== "write" })
+    let body: Body
+    try {
+      body = await work(run)
+    } finally {
+      await run.close?.()
+    }
+    renderAnswer(command, outputFor(command), body)
+  }
+  const example = (command: Command, ...lines: string[]) =>
+    annotate(command, { examples: lines.map((line) => `${options.app.command} work ${line}`) })
+
+  example(
+    answerEntity(
+      annotate(program.command("sync"), { effects: FETCH, offline: false, cooperative: true, partial: true }),
+      "crm_sync",
+      crmSync,
+    ).description(
+      "bring the CRM's copy in the local store up to date: pipelines, companies, contacts, deals and leads that " +
+        "changed since the last sync, or everything with --rescan; a run stops before its deadline or --max-pages " +
+        "and the next one goes on from there",
+    ),
+    "sync",
+    "sync --rescan",
+    "sync --max-pages 20",
+  )
+    .option("--rescan", "list everything again, every id too, dropping a round in progress")
+    .option("--max-pages <pages>", "at most this many requests to the CRM in this run", integer(100_000))
+    .action(async (opts: { maxPages?: number; rescan?: boolean }, command: Command) => {
+      const { signal } = environmentOf(command)
+      await within(command, async (run) => {
+        const report = await syncCrm(run.source(), run.store, run.account, {
+          now: now(),
+          budget: runBudgetOf(command, opts.maxPages),
+          ...(signal ? { signal } : {}),
+          ...(opts.rescan ? { rescan: true } : {}),
+        })
+        const failed = report.synced.filter((one) => one.error !== undefined)
+        const timeout = command.optsWithGlobals<{ timeout?: string }>().timeout
+        // The same command again, never --rescan: that would drop the round this run leaves in progress.
+        const stuck = report.state === "partial" && report.progress.steps === 0 && failed.length === 0
+        const next: NextStep[] | undefined =
+          failed.length || (report.state === "partial" && !stuck)
+            ? [
+                {
+                  kind: "command",
+                  step: "crm.sync",
+                  command: "sync",
+                  args: Object.fromEntries(
+                    Object.entries({ max_pages: opts.maxPages, timeout }).filter(([, value]) => value !== undefined),
+                  ),
+                  why: failed.length
+                    ? "a kind failed to sync; running sync again retries it"
+                    : "the sync stopped before its end to answer in time; running it again goes on from there",
+                  safe_to_auto_execute: true,
+                },
+              ]
+            : undefined
+        const progressAt = lineOf(command, "store status")
+        const hint = failed.length
+          ? `${failed.map((one) => `${one.kind}: ${one.error}`).join("; ")} — run sync again to retry`
+          : stuck
+            ? `this run moved nothing on: raise --timeout or --max-pages, then run sync again; see progress: ${progressAt}`
+            : report.state === "partial"
+              ? `run sync again to continue; see progress: ${progressAt}`
+              : undefined
+        const { hint: _hint, ...rest } = report
+        // What the healthy kinds brought is saved and answered; each failure and each item not kept is an issue.
+        const issues = [
+          ...failed.map((one) => ({
+            code: "provider_error" as const,
+            reason: "sync.partial",
+            source: `crm:${one.kind}`,
+          })),
+          ...report.issues.map((one) => ({
+            code: "validation_error" as const,
+            reason: one.reason,
+            source: one.externalId === undefined ? `crm:${one.kind}` : `crm:${one.kind}/${one.externalId}`,
+          })),
+        ]
+        const partial = report.state === "partial" || issues.length > 0
+        return itemOf(snakeKeys({ ...rest, ...(hint === undefined ? {} : { hint }) }), {
+          ...(partial ? { meta: { complete: false, ...(issues.length ? { issues } : {}) } } : {}),
+          ...(next ? { next } : {}),
+        })
+      })
+    })
+
+  const store = annotate(program.command("store").description("the local copy of the CRM"), { effects: NO_EFFECTS })
+  example(
+    answerEntity(
+      annotate(store.command("status"), { effects: LOCAL_READ }),
+      "crm_sync_progress",
+      crmSyncProgress,
+    ).description(
+      "how far each kind's sync is: rows saved, partial or complete, when it last moved, how many are stored",
+    ),
+    "store status --json",
+  ).action(async (_opts: unknown, command: Command) => {
+    await within(command, async (run) => {
+      const status = await crmStatus(run.store, run.account, { profile: run.profile, now: now() })
+      return listOf(pathOf(command).join(" "), {
+        items: status.items,
+        limit: status.limit,
+        has_more: false,
+        page: 1,
+      })
+    })
+  })
+
+  const items = (kind: DealKind) => {
+    const plural = `${kind}s`
+    const query = kind === "deal" ? DEALS_QUERY : LEADS_QUERY
+    const group = annotate(program.command(plural), { effects: NO_EFFECTS }).description(
+      kind === "deal"
+        ? "the CRM's deals as last synced: stage, status, amount and the people on them"
+        : "the CRM's leads as last synced",
+    )
+    example(
+      withQuery(
+        annotate(group.command("list"), { effects: LOCAL_READ, output: { entity: kind } }).description(
+          `${plural} copied from the CRM, newest first; run sync to bring them up to date`,
+        ),
+        query,
+      )
+        .option("--limit <n>", `${plural} per page, 1–${MOST}`, integer(MOST), 50)
+        .option("--page <n>", "which page, starting at 1", integer(1_000_000), 1),
+      `${plural} list status:open --json`,
+      `${plural} list stage:"Quote sent"`,
+    ).action(async (words: string[], opts: { limit: number; page: number }, command: Command) => {
+      const terms = queryTerms(words, query, `${plural} list`)
+      await within(command, async (run) => {
+        const filter: DealFilter = {
+          kind,
+          account: run.account,
+          ...(terms.has("status") ? { status: terms.get("status") as DealFilter["status"] } : {}),
+          ...(terms.has("stage") ? { stage: terms.get("stage") as string } : {}),
+          ...(terms.has("pipeline") ? { pipeline: terms.get("pipeline") as string } : {}),
+          ...(terms.has("organization") ? { organization: terms.get("organization") as string } : {}),
+        }
+        const found = await run.store.deals.list({
+          ...filter,
+          limit: Math.min(opts.limit + 1, MOST),
+          offset: (opts.page - 1) * opts.limit,
+        })
+        return listOf(pathOf(command).join(" "), {
+          items: marked(found.slice(0, opts.limit), DEAL_UNTRUSTED),
+          limit: opts.limit,
+          page: opts.page,
+          has_more: found.length > opts.limit,
+          ...(words.length ? { args: { query: words } } : {}),
+        })
+      })
+    })
+    example(
+      annotate(group.command("show"), { effects: LOCAL_READ, output: { entity: kind } })
+        .description(`one ${kind} with its pipeline, stage, status, amount and the people on it`)
+        .argument("<ref>", `${kind}:<id>, as a list shows it`),
+      `${plural} show ${kind}:12`,
+    ).action(async (reference: string, _opts: unknown, command: Command) => {
+      await within(command, async (run) => {
+        const found = await ownCopy(run, kind, reference)
+        return itemOf({ ...(snakeKeys(found) as object), untrusted: DEAL_UNTRUSTED })
+      })
+    })
+  }
+
+  /** A row of this profile's account: another account's copy, or the owner's own, is not found here. */
+  const ownCopy = async (run: CrmRun, kind: DealKind, reference: string): Promise<Deal> => {
+    if (!reference.startsWith(`${kind}:`))
+      throw new CliError("validation_error", `${kind}s show takes a ${kind}:<id> reference, as a list shows it`, {
+        reason: "ref.malformed",
+      })
+    const found = await run.store.deals.get(reference)
+    if (found.account?.provider !== run.account.provider || found.account.account !== run.account.account)
+      throw new CliError("not_found", `${reference} is not a copy from this profile's CRM account`)
+    return found
+  }
+
+  items("deal")
+  if (options.leads !== false) items("lead")
+
+  const pipelines = annotate(program.command("pipelines"), { effects: NO_EFFECTS }).description(
+    "the CRM's pipelines and their stages, as last synced",
+  )
+  example(
+    withQuery(
+      annotate(pipelines.command("list"), { effects: LOCAL_READ, output: { entity: "pipeline" } }).description(
+        "pipelines copied from the CRM, with their stages in order and how many are open in each",
+      ),
+      PIPELINES_QUERY,
+    ),
+    "pipelines list --json",
+    "pipelines list kind:lead",
+  ).action(async (words: string[], _opts: unknown, command: Command) => {
+    const terms = queryTerms(words, PIPELINES_QUERY, "pipelines list")
+    await within(command, async (run) => {
+      const found = await run.store.deals.pipelines({
+        account: run.account,
+        ...(terms.has("kind") ? { kind: terms.get("kind") as DealKind } : {}),
+      })
+      return listOf(pathOf(command).join(" "), {
+        items: marked(found, PIPELINE_UNTRUSTED),
+        limit: Math.max(1, found.length),
+        page: 1,
+        has_more: false,
+        ...(words.length ? { args: { query: words } } : {}),
+      })
+    })
+  })
+  example(
+    annotate(pipelines.command("show"), { effects: LOCAL_READ, output: { entity: "pipeline" } })
+      .description("one pipeline with its funnel: how many reached each stage, how many went on, and the win rate")
+      .argument("<pipeline>", "pipeline:<id>, or a name only one of the CRM's pipelines has"),
+    "pipelines show pipeline:3",
+  ).action(async (reference: string, _opts: unknown, command: Command) => {
+    await within(command, async (run) => {
+      const report = await run.store.deals.pipeline(reference, { account: run.account })
+      return itemOf({ ...(snakeKeys(report) as object), untrusted: PIPELINE_UNTRUSTED })
+    })
+  })
+
+  const stages = annotate(program.command("stages"), { effects: NO_EFFECTS }).description(
+    "the stages of the CRM's pipelines, as last synced",
+  )
+  example(
+    withQuery(
+      annotate(stages.command("list"), { effects: LOCAL_READ, output: { entity: "stage" } }).description(
+        "every stage of the CRM's pipelines in order, with its outcome and how many are open in it",
+      ),
+      STAGES_QUERY,
+    ),
+    "stages list --json",
+    "stages list kind:lead",
+  ).action(async (words: string[], _opts: unknown, command: Command) => {
+    const terms = queryTerms(words, STAGES_QUERY, "stages list")
+    await within(command, async (run) => {
+      const kind = terms.has("kind") ? (terms.get("kind") as DealKind) : undefined
+      const all = await run.store.deals.pipelines({ account: run.account, ...(kind ? { kind } : {}) })
+      const chosen: Pipeline[] = terms.has("pipeline")
+        ? [
+            await run.store.deals.pipeline(terms.get("pipeline") as string, {
+              account: run.account,
+              ...(kind ? { kind } : {}),
+            }),
+          ]
+        : all
+      const found = chosen.flatMap((pipeline) =>
+        pipeline.stages.map(({ name, position, outcome, externalId, open }) => ({
+          name,
+          position,
+          outcome,
+          externalId,
+          open,
+          pipeline: pipeline.ref,
+          pipelineName: pipeline.name,
+          kind: pipeline.kind,
+        })),
+      )
+      return listOf(pathOf(command).join(" "), {
+        items: marked(found, STAGE_UNTRUSTED),
+        limit: Math.max(1, found.length),
+        page: 1,
+        has_more: false,
+        ...(words.length ? { args: { query: words } } : {}),
+      })
+    })
+  })
+
+  const search =
+    program.commands.find((one) => one.name() === "search") ??
+    annotate(program.command("search"), { effects: NO_EFFECTS }).description("search what the local store holds")
+  addCrmSearchAll(search, { within, app: options.app, example })
+}
+
+// honoursDryRun: a host program other than `run` would otherwise let a write through under --dry-run.
+export const addCrmCommands = honoursDryRun(sharedCommand(addCrmCommandsDefinition))

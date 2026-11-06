@@ -26,18 +26,18 @@ import {
 import { backendOptions, backendRequest, noteServer } from "./search-backend-options.js"
 import { topicsSearchCommand } from "./topics-command.js"
 
-export const searchAllOnlyOf = (value: string): SourceSearched[] => {
+export const searchAllOnlyOf = (value: string, allowed: readonly string[] = SOURCE_SEARCHED): SourceSearched[] => {
   const chosen = value.split(",").map((one) => one.trim())
   if (chosen.includes("mail"))
     throw new CliError(
       "validation_error",
       "mail is searched by the separate memo CLI: install @wirecat/cli-memo, then `memo search mail …`",
     )
-  const unknown = chosen.find((one) => !(SOURCE_SEARCHED as readonly string[]).includes(one))
+  const unknown = chosen.find((one) => !allowed.includes(one))
   if (unknown !== undefined || chosen.length === 0)
     throw new CliError(
       "validation_error",
-      `--only takes ${SOURCE_SEARCHED.join(", ")}, separated by commas; meetings when --source names a meeting account`,
+      `--only takes ${allowed.join(", ")}, separated by commas; meetings when --source names a meeting account`,
     )
   return [...new Set(chosen)] as SourceSearched[]
 }
@@ -59,12 +59,14 @@ const maxMeetingsOf = (value: string): number | "all" => {
  * `search all`'s scope, paging and matching options, the same in every CLI that mounts it (WC-ACCT-8): a messenger's
  * and a calendar's.
  */
-export const searchAllOptions = (command: Command): Command =>
+/** `allowed`: the resources `--only` takes, a CRM CLI's with `crm`. */
+export const searchAllOptions = (command: Command, allowed: readonly string[] = SOURCE_SEARCHED): Command =>
   command
     .option(
       "--only <resources>",
-      "only these resources, separated by commas: messages, notes, events; meetings when --source names a meeting account",
-      searchAllOnlyOf,
+      `only these resources, separated by commas: ${allowed.filter((one) => one !== "meetings").join(", ")}; ` +
+        "meetings when --source names a meeting account",
+      (value: string) => searchAllOnlyOf(value, allowed),
     )
     .option(
       "--source <accounts>",
