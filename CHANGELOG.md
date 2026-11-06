@@ -16,6 +16,15 @@ shape of this file.
   a wildcard or NOT skips `crm` with its reason. `--source` and a profile lock narrow it to the accounts named.
   `crm` joins the default `RESOURCES_SEARCHED`; tg, max, wa and the calendar CLIs pass their own lists and are unchanged.
 
+### Changed — may break callers
+
+- **Project status money comes only from the books.** `ProjectStatus.money.open` sums what confirmed open
+  invoices still owe and never an amount found by words in messages, so a project with no confirmed invoices answers
+  `money: []`. When the project or a child has a confirmed invoice or payment, the `amounts` signal (version 2) lists
+  nothing: its word match also found the owner's own quotes, product prices and deposits and called them open, about
+  50 of them on one real project whose books say nothing is owed. A project with no books still gets its `amounts`
+  items, marked `basis: pattern`. `StatusContext` has a new required `books` flag.
+
 ## 0.588.0 — 06.11.2026
 
 ### Changed — may break callers

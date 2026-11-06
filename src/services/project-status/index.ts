@@ -77,7 +77,7 @@ export interface ProjectStatus {
   chats: StatusChatSummary[]
   /** Every signal's items, in signal order, then chat order. */
   items: StatusItem[]
-  /** Open amounts and what confirmed open invoices still owe, summed per direction and currency. */
+  /** What confirmed open invoices still owe, summed per direction and currency; never an amount found in words. */
   money: { open: MoneyTotal[] }
   outOfScope: OutOfScope[]
   /** The purposes read: `all`, or the list. */
@@ -137,26 +137,24 @@ const inAccounts = (accounts: AccountKey[] | undefined, provider: string, accoun
 
 const failure = (error: unknown) => (error instanceof Error ? error.message : String(error))
 
-/**
- * An open ask, or a confirmed open invoice; an ask that a confirmed row cites is counted once, as the row. A proposed
- * row promises nothing yet, so the ask it cites still counts.
- */
-const counted = (items: StatusItem[]) => {
-  const confirmed = (item: StatusItem) =>
-    item.signal === "payments" && (item.data as { status?: string }).status === "confirmed"
-  const recorded = new Set(items.filter(confirmed).flatMap((item) => item.evidence.slice(1).map((one) => one.ref)))
-  return (item: StatusItem, state: string | undefined) =>
-    item.signal === "payments"
-      ? state === "expected" && confirmed(item)
-      : item.signal === "amounts" && state === "open" && !item.evidence.some((one) => recorded.has(one.ref))
+const owed = (item: StatusItem) => {
+  const data = item.data as { state?: string; status?: string }
+  return item.signal === "payments" && data.state === "expected" && data.status === "confirmed"
+}
+
+const keepsBooks = async (store: MessageStore, projects: string[]) => {
+  for (const project of projects) {
+    const filter = { project, review: "confirmed" as const, limit: 1 }
+    if ((await store.finance.invoices(filter)).length || (await store.finance.payments(filter)).length) return true
+  }
+  return false
 }
 
 const totalsOf = (items: StatusItem[]): MoneyTotal[] => {
   const totals = new Map<string, MoneyTotal & { cents: number }>()
-  const open = counted(items)
   for (const item of items) {
-    const data = item.data as { amount?: string; currency?: string | null; direction?: string; state?: string }
-    if (!open(item, data.state) || data.amount === undefined) continue
+    const data = item.data as { amount?: string; currency?: string | null; direction?: string }
+    if (!owed(item) || data.amount === undefined) continue
     const key = `${data.direction}|${data.currency ?? ""}`
     const total = totals.get(key) ?? {
       direction: data.direction ?? "unknown",
@@ -241,6 +239,7 @@ export const projectStatus = async (store: MessageStore, input: ProjectStatusInp
     chats,
     project: { ...root, children, cut },
     store,
+    books: await keepsBooks(store, [root.ref, ...children.map((child) => child.ref)]),
     contextQueries: input.contextQueries ?? [],
   }
   const items: StatusItem[] = []

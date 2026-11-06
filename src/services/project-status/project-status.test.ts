@@ -55,6 +55,7 @@ const contextOf = (chats: StatusChat[] = []): StatusContext => ({
   chats,
   project: { ref: "project:1", key: "HRB", name: "Harbour site", children: [], cut: [] },
   store: {} as MessageStore,
+  books: false,
   contextQueries: [],
 })
 
@@ -65,7 +66,7 @@ describe("projectStatus on the harbour fixture", () => {
     const { store } = await seeded()
     const found = await projectStatus(store, { project: "HRB", asOf: NOW, contextQueries: ["1C"] })
 
-    expect(found.money.open).toContainEqual({ direction: "to_us", currency: "EUR", amount: "1200.00", rows: 1 })
+    expect(found.money.open).toEqual([])
     const owed = found.items.find((one) => one.signal === "amounts" && one.chat === "chat:max/11/-900")
     expect(owed).toMatchObject({
       basis: "pattern",
