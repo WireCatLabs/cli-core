@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.594.0 — 06.11.2026
+
 ### Added
 
 - **A CRM write port, `CrmWriter`** (`@wirecat/cli-core/crm`), beside `CrmSource`: `create`, `update`, `move`,
