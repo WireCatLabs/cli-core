@@ -615,7 +615,7 @@ const decryptCommand = (): Command =>
  */
 const restoreCommand = (messenger: Messenger): Command =>
   annotate(new Command("restore"), { output: { entity: "store_restore" }, effects: LOCAL_WRITE })
-    .summary("restore a backup while keeping the current store, or roll back a breaking upgrade")
+    .summary("restore a backup and keep the current store, or roll back a breaking upgrade")
     .description(
       "put a backup in place of the store; the store it replaces is kept beside it, never deleted. Given a rollback " +
         "copy (backups/<store>-rollback-schema-<version>-<time>.db, kept for a day before an upgrade older tools " +
