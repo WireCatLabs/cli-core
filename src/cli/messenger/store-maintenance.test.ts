@@ -501,6 +501,44 @@ describe("store backup", () => {
 })
 
 describe("store restore", () => {
+  it("**rolls a breaking upgrade back from its rollback copy**, so this build opens the store again", async () => {
+    const env = envFor()
+    const store = String(env.MESSAGING_STORE)
+    const database = await seeded(env)
+    const breaking = {
+      version: latest + 1,
+      minCompatible: latest + 1,
+      tables: ["chats"],
+      statements: ["ALTER TABLE chats ADD folder text", "UPDATE chats SET folder = 'inbox'"],
+    }
+    migrate(database, { migrations: [...MIGRATIONS, breaking], rollback: { store, freeBytes: () => 1e12 } })
+    database.close()
+    const backups = join(dirname(store), "backups")
+    const [copy] = readdirSync(backups)
+    const file = join(backups, String(copy))
+    expect((await call(["store", "info", "--json"], env)).answer.schema).toMatchObject({ version: latest + 1 })
+
+    const { code, answer, stderr } = await call(["store", "restore", file, "--json"], env)
+    expect(code, stderr.join("\n")).toBe(0)
+    expect(answer).toMatchObject({
+      path: store,
+      restored_from: file,
+      rolled_back: true,
+      schema: latest,
+      was: latest + 1,
+    })
+    expect(answer.tables).toContainEqual({ table: "chats", rows: 2 })
+    expect(stderr.join("\n")).toContain("run its `store rebuild`")
+    const after = await openCache(store)
+    try {
+      expect(() => migrate(after, { migrations: MIGRATIONS })).not.toThrow()
+      expect(after.prepare("SELECT 1 FROM pragma_table_info('chats') WHERE name = 'folder'").get()).toBeUndefined()
+    } finally {
+      after.close()
+    }
+    expect(await messagesIn(store)).toBe(2)
+  })
+
   it("**puts the backup in place and keeps the store it replaced**", async () => {
     const { env, file } = await backedUp()
     const database = await openCache(String(env.MESSAGING_STORE))

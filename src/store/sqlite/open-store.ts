@@ -15,6 +15,7 @@ import { openSqlite, type StoreContext } from "./open.js"
 import { movePaymentFacts } from "./payment-facts.js"
 import { loadProviders } from "./providers.js"
 import { assertReadCompatible } from "./read-compatibility.js"
+import { pruneRollbackCopies } from "./rollback-copy.js"
 import { stemsState } from "./stems.js"
 import { fillStems, followDefaultStemmers } from "./stems-fill.js"
 import { moveSuggestedLinks } from "./suggested-links.js"
@@ -79,8 +80,14 @@ export const openStoreContext = async ({
   try {
     if (readOnly) assertReadCompatible(database, command)
     else {
-      const notice = migrate(database, { now, command, ...(version ? { version } : {}) })
+      const notice = migrate(database, {
+        now,
+        command,
+        ...(version ? { version } : {}),
+        rollback: { store: file, warn },
+      })
       if (notice) warn(notice)
+      pruneRollbackCopies(database, now())
       fillFiles(database, now)
       fillFolded(database)
       fillJoinKeys(database)

@@ -7,6 +7,18 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **A rollback copy before a breaking store upgrade.** Before a migration that raises `min_compatible` (after which
+  older tools refuse the store), the base tables it names are copied into `backups/` beside the store, as
+  `<store>-rollback-schema-<version>-<time>.db`, with the schema as it was. Search indexes, vectors and other derived
+  tables are never copied. Without the free space for it, the upgrade runs anyway and warns. `store restore <copy>`
+  puts the tables back and returns the store to that version, so the older tool opens it again; its `store rebuild`
+  then refreshes the search indexes. The copy is deleted on the first open a day after the upgrade succeeded.
+- **`Migration.tables`** and the manifest's `tables`: required on a migration that raises `minCompatible`, the base
+  tables it changes by their names before it. `generatedMigrations` refuses a raising one without it, or one that
+  names a derived table.
+
 ## 0.594.0 — 06.11.2026
 
 ### Added

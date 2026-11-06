@@ -41,6 +41,7 @@ import {
   resetNoteIndex,
   resetSearchIndex,
   resetStems,
+  rollBack,
   searchIndexState,
   stemmerCache,
   stemsState,
@@ -433,7 +434,11 @@ const migrateCommand = (messenger: Messenger): Command =>
       }
       const answer = await reading(path, (database) => {
         const from = schemaOf(database).version
-        migrate(database, { command: messenger.app.command, version: messenger.app.version })
+        migrate(database, {
+          command: messenger.app.command,
+          version: messenger.app.version,
+          rollback: { store: path, warn: (line) => renderer.warn(line) },
+        })
         const { normalized, indexed, terms } = buildWordIndex(database, (note) => renderer.note(note))
         const stemmed = buildStems(database, (note) => renderer.note(note))
         const notes = buildNoteIndex(database, (note) => renderer.note(note))
@@ -610,9 +615,16 @@ const decryptCommand = (): Command =>
  */
 const restoreCommand = (messenger: Messenger): Command =>
   annotate(new Command("restore"), { output: { entity: "store_restore" }, effects: LOCAL_WRITE })
-    .summary("restore a backup while keeping the current store")
-    .description("put a backup in place of the store; the store it replaces is kept beside it, never deleted")
-    .argument("<file>", "a file `store backup` wrote; one written with --encrypt asks for its password")
+    .summary("restore a backup and keep the current store, or roll back a breaking upgrade")
+    .description(
+      "put a backup in place of the store; the store it replaces is kept beside it, never deleted. Given a rollback " +
+        "copy (backups/<store>-rollback-schema-<version>-<time>.db, kept for a day before an upgrade older tools " +
+        "cannot open), put its tables back in the store and return it to that version instead",
+    )
+    .argument(
+      "<file>",
+      "a file `store backup` wrote, or a rollback copy; one written with --encrypt asks for its password",
+    )
     .action(async function (this: Command, file: string) {
       const path = storePath(environmentOf(this).env ?? process.env)
       const given = resolve(file)
@@ -635,6 +647,7 @@ const restoreFrom = async (command: Command, messenger: Messenger, backup: strin
   if (existsSync(path) && realpathSync(backup) === realpathSync(path)) {
     throw new CliError("validation_error", `${backup} is the store itself`)
   }
+  if (await isRollbackCopy(backup)) return rollBackFrom(command, messenger, backup)
   const schema = await backupSchema(backup)
 
   const stamp = stampNow()
@@ -663,6 +676,51 @@ const restoreFrom = async (command: Command, messenger: Messenger, backup: strin
       `the backup is behind this build; the next command migrates it — \`${lineOf(command, "store migrate")}\` now`,
     )
   }
+}
+
+const isRollbackCopy = async (file: string): Promise<boolean> => {
+  try {
+    return await readingOnly(
+      file,
+      (database) => database.prepare("SELECT 1 FROM sqlite_master WHERE name = 'rollback_meta'").get() !== undefined,
+    )
+  } catch {
+    return false
+  }
+}
+
+/** In place, in one transaction: the copy holds only the tables the upgrade changed, never a whole store. */
+const rollBackFrom = async (command: Command, messenger: Messenger, copy: string) => {
+  const { renderer } = outputFor(command)
+  const path = storePath(environmentOf(command).env ?? process.env)
+  if (!existsSync(path)) throw new CliError("not_found", `no store at ${path} to roll back`)
+  const waitMs = environmentOf(command).storeLockWaitMs
+  await quiesce(path, messenger, "restore", (message) => renderer.warn(message), waitMs)
+  const { database } = await openSqlite(path)
+  let rolled: ReturnType<typeof rollBack>
+  try {
+    rolled = rollBack(database, copy)
+  } finally {
+    database.close()
+  }
+  result(command, {
+    path,
+    restoredFrom: copy,
+    rolledBack: true,
+    schema: rolled.from,
+    was: rolled.was,
+    tables: rolled.restored,
+    rebuilt: rolled.rebuilt,
+    foreignKeyViolations: rolled.foreignKeyViolations,
+  })
+  const taken = new Date(rolled.createdAt).toISOString()
+  renderer.note(
+    `the store is back at schema ${rolled.from}; ${rolled.tables.length > 0 ? rolled.tables.join(", ") : "no table"} ` +
+      `hold what they held at ${taken}, and what was written to them since is not kept`,
+  )
+  renderer.note("open it with the older tool and run its `store rebuild`: the search indexes are behind the tables")
+  renderer.note(`a tool that speaks schema ${rolled.to} or later migrates it again on its next run`)
+  renderer.note("restart every serve and mcp of either CLI that was running, so they read the restored store")
 }
 
 const backupSchema = async (backup: string) => {
