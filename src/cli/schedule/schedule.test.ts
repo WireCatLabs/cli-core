@@ -200,7 +200,7 @@ describe.runIf(process.platform !== "win32")("an agent that may run another CLI"
 
   describe("agent input", () => {
     const agentFile = (env: NodeJS.ProcessEnv) => {
-      const file = scheduleFile(env.CHAT_STATE_DIR, "triage")
+      const file = scheduleFile(env.CHAT_STATE_DIR ?? "", "triage")
       mkdirSync(join(file, ".."), { recursive: true })
       const script = "process.stdin.on('data', (chunk) => process.stdout.write(chunk))"
       writeFileSync(
