@@ -43,8 +43,15 @@ export interface CrmCopies {
   /**
    * After a complete list of the kind's ids: marks deleted every stored one the list lacks that the CRM has not
    * changed since `before` (epoch ms), so a row made while the list was read is never taken for a deleted one.
+   * `dryRun` only counts them.
    */
-  removeUnlisted(key: AccountKey, kind: CrmKind, listed: string[], before: number): Promise<number>
+  removeUnlisted(
+    key: AccountKey,
+    kind: CrmKind,
+    listed: string[],
+    before: number,
+    options?: { dryRun?: boolean },
+  ): Promise<number>
   /** How many of the kind the account holds, not deleted. */
   count(key: AccountKey, kind: CrmKind): Promise<number>
 }
@@ -423,15 +430,13 @@ export const crmCopiesOver = (context: StoreContext, people: AccountPeople): Crm
             .map((row) => Number(row.id)),
         )
       }),
-    removeUnlisted: async (key, kind, listed, before) =>
+    removeUnlisted: async (key, kind, listed, before, { dryRun } = {}) =>
       write(database, () => {
         const held = new Set(listed)
-        return markDeleted(
-          kind,
-          stored(key, kind)
-            .filter((row) => !held.has(String(row.external_id)) && Number(row.updated_at) < before)
-            .map((row) => Number(row.id)),
-        )
+        const gone = stored(key, kind)
+          .filter((row) => !held.has(String(row.external_id)) && Number(row.updated_at) < before)
+          .map((row) => Number(row.id))
+        return dryRun ? gone.length : markDeleted(kind, gone)
       }),
     count: async (key, kind) => stored(key, kind).length,
   }

@@ -150,6 +150,8 @@ it("marks deleted what the CRM deleted or no longer lists, never a row changed s
   })
   await store.crm.saveItems(PORTAL, "deal", [item("d1", 1_000), item("d2", 1_000), item("d3", 9_000)])
   expect(await store.crm.remove(PORTAL, "deal", ["d1"])).toBe(1)
+  expect(await store.crm.removeUnlisted(PORTAL, "deal", [], 5_000, { dryRun: true })).toBe(1)
+  expect(await store.crm.count(PORTAL, "deal")).toBe(2)
   expect(await store.crm.removeUnlisted(PORTAL, "deal", [], 5_000)).toBe(1)
   expect((await store.deals.list({ account: PORTAL })).map(({ externalId }) => externalId)).toEqual(["d3"])
   await store.crm.saveItems(PORTAL, "deal", [item("d1", 10_000)])
