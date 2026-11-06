@@ -2,9 +2,9 @@ import * as v from "valibot"
 import { hitFile } from "./attachment.js"
 import { count, reference, text, time, untrusted } from "./fields.js"
 
-/** One result of `search all`: a message, a mail, a note, a calendar event or a meeting passage, best first. */
+/** One result of `search all`: a message, a mail, a note, a calendar event, a meeting passage, a deal or a lead. */
 export const hit = v.strictObject({
-  kind: v.picklist(["message", "mail", "note", "document", "event", "meeting"]),
+  kind: v.picklist(["message", "mail", "note", "document", "event", "meeting", "deal", "lead"]),
   ref: reference,
   provider: text,
   url: v.optional(text),

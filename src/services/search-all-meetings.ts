@@ -405,6 +405,7 @@ const searchAllOfSource = async (
         mail: named("mail"),
         notes: named("notes"),
         events: named("events"),
+        crm: named("crm"),
       },
       ...(meetings[0] ? { meetingAccount: meetings[0] } : {}),
     },

@@ -12,6 +12,7 @@ import {
 } from "../../domain/deals.js"
 import { currencyOf, formatDecimal, minorUnits, scaleOf } from "../../domain/money.js"
 import { fold } from "../normalize.js"
+import type { AccountKey } from "../types.js"
 import { type ProposedByFilter, proposedBySql } from "./actors.js"
 import { isoDate, oneOf, type Party, refuse, reviewedRowsOver, text } from "./finance.js"
 import { linkKind } from "./link-kinds.js"
@@ -139,6 +140,17 @@ export interface DealFilter {
   limit?: number
 }
 
+export interface DealSearch {
+  /** Words of the title, each in any letter case; a word may be a phrase. */
+  words: string[]
+  /** A title holding any of the words matches, those holding more first; otherwise every word is needed. */
+  anyWord?: boolean
+  /** Only the copies of these CRM accounts; absent, every account's and the owner's own. */
+  accounts?: AccountKey[]
+  /** 1–500, 100 by default. */
+  limit?: number
+}
+
 export interface PipelineInput {
   name: string
   /** `deal` when left out. */
@@ -162,6 +174,8 @@ export interface DealsStore {
   /** `deal:<id>` or `lead:<id>`; a bare id is a deal. */
   get(reference: string): Promise<Deal>
   list(filter?: DealFilter): Promise<Deal[]>
+  /** Deals and leads together, by the words of their title: the most words matched first, then the latest changed. */
+  find(search: DealSearch): Promise<Deal[]>
   /** To another stage of its own pipeline; a stage whose outcome is won or lost closes it, an open one reopens it. */
   move(reference: string, input: { stage: string; by: Author }): Promise<Deal>
   /** Won or lost, on `date` (today when left out); it moves to its pipeline's stage of that outcome when there is one. */
@@ -590,6 +604,36 @@ export const dealOperationsOver = (context: StoreContext) => {
         )
         .map(itemOf(kind))
     },
+    find: ({ words, anyWord, accounts, limit }: DealSearch): Deal[] => {
+      const wanted = [...new Set(words.map((word) => fold(word).trim()).filter(Boolean))]
+      if (!wanted.length) return []
+      const most = Math.min(Math.max(limit ?? 100, 1), 500)
+      const within = accounts?.map(({ provider, account }) => `${provider}\u0000${account}`)
+      // Titles are short and a CRM holds thousands, not millions: folding them here is cheaper than a word index.
+      const found = DEAL_KINDS.flatMap((kind) =>
+        database
+          .prepare(
+            `SELECT d.id, d.title, d.updated_at, a.provider, a.external_id AS account FROM ${TABLES[kind]} d ` +
+              "LEFT JOIN accounts a ON a.id = d.account_id WHERE d.deleted_at IS NULL",
+          )
+          .all()
+          .filter((row) => within === undefined || within.includes(`${row.provider}\u0000${row.account}`))
+          .map((row) => {
+            const title = fold(String(row.title))
+            return { kind, row, score: wanted.filter((word) => title.includes(word)).length }
+          })
+          .filter(({ score }) => (anyWord ? score > 0 : score === wanted.length)),
+      )
+      return found
+        .sort(
+          (a, b) =>
+            b.score - a.score ||
+            Number(b.row.updated_at) - Number(a.row.updated_at) ||
+            Number(b.row.id) - Number(a.row.id),
+        )
+        .slice(0, most)
+        .map(({ kind, row }) => read(`${kind}:${row.id}`))
+    },
     move: (reference: string, { stage, by }: { stage: string; by: Author }): Deal => {
       authorActor(context, by)
       const { kind, row } = rowOf(reference)
@@ -635,6 +679,7 @@ export const dealsStoreOver = (context: StoreContext): DealsStore => {
     add: async (input) => operations.add(input),
     get: async (reference) => operations.get(reference),
     list: async (filter) => operations.list(filter),
+    find: async (search) => operations.find(search),
     move: async (reference, input) => operations.move(reference, input),
     close: async (reference, input) => operations.close(reference, input),
   }
