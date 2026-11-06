@@ -1,4 +1,4 @@
-import type { Author, MessageStore, Organization, ProposedAction } from "../../../store/index.js"
+import type { MessageStore, Organization, ProposedAction } from "../../../store/index.js"
 import { proposerOfAction } from "../../../store/index.js"
 import type { Decided, ProposalKind, ProposalRow } from "../types.js"
 import { actionStatus, kept, pushed, storedStatus } from "./shared.js"
@@ -39,34 +39,7 @@ const rowOf = (action: ProposedAction): ProposalRow => {
   }
 }
 
-/** An agent's new organization waits as a stored proposal; the organization exists only once it is confirmed. */
-export const proposeOrganization = (
-  store: Pick<MessageStore, "proposedActions">,
-  input: OrganizationProposal,
-  by: Author,
-  reason?: string,
-): Promise<ProposedAction> =>
-  store.proposedActions.propose({
-    kind: ORGANIZATION_ADD_KIND,
-    by,
-    payload: input,
-    ...(reason === undefined ? {} : { reason }),
-  })
-
-/** An agent's rename waits as a stored proposal too; the organization keeps its name until it is confirmed. */
-export const proposeOrganizationRename = (
-  store: Pick<MessageStore, "proposedActions">,
-  input: OrganizationRenameProposal,
-  by: Author,
-  reason?: string,
-): Promise<ProposedAction> =>
-  store.proposedActions.propose({
-    kind: ORGANIZATION_RENAME_KIND,
-    by,
-    payload: input,
-    ...(reason === undefined ? {} : { reason }),
-  })
-
+/** Only rows stored before agents wrote organizations at once; they stay decidable in review. */
 export const organizationKind = (store: Pick<MessageStore, "proposedActions" | "knowledge">): ProposalKind => ({
   kind: "organization",
   stored: [ORGANIZATION_ADD_KIND, ORGANIZATION_RENAME_KIND],

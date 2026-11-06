@@ -492,8 +492,6 @@ export {
   type ProposalRow,
   parseProposalIds,
   proposalRegistry,
-  proposeOrganization,
-  proposeOrganizationRename,
 } from "./proposals/index.js"
 export type { RetentionQuery, RetentionService } from "./retention.js"
 export { retentionService } from "./retention.js"

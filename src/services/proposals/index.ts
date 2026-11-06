@@ -5,8 +5,6 @@ export {
   ORGANIZATION_RENAME_KIND,
   type OrganizationProposal,
   type OrganizationRenameProposal,
-  proposeOrganization,
-  proposeOrganizationRename,
 } from "./kinds/organization.js"
 export { emptyProposalRegistry, proposalRegistry } from "./registry.js"
 export type { Decided, Decision, ProposalFilter, ProposalKind, ProposalRegistry, ProposalRow } from "./types.js"

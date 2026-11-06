@@ -15,8 +15,11 @@ export interface AmountsData {
   amount: string
   currency: string | null
   direction: MoneyDirection
-  /** `paid-mentioned` is a message saying so, never a payment the owner recorded. */
-  state: "open" | "paid-mentioned" | "mentioned"
+  /**
+   * `asked` is a message asking for it, not a debt: a word match cannot tell a request from a price the owner quoted.
+   * `paid-mentioned` is a message saying so, never a payment the owner recorded.
+   */
+  state: "asked" | "paid-mentioned" | "mentioned"
   /** The first ask, or the first mention when nobody asked. */
   since: string
   lastAsked: string | null
@@ -80,7 +83,7 @@ export const centsText = (cents: number): string => `${Math.floor(cents / 100)}.
  */
 export const amounts: StatusSignal<AmountsData> = {
   id: "amounts",
-  version: 2,
+  version: 3,
   scope: "chat",
   read: async (context, chat) => {
     if (!chat || context.books) return []
@@ -97,7 +100,8 @@ export const amounts: StatusSignal<AmountsData> = {
       const paidAfter = done.some(
         (row) => !lastAsk || Date.parse(row.message.timestamp) >= Date.parse(lastAsk.message.timestamp),
       )
-      const state = asks.length ? (paidAfter ? "paid-mentioned" : "open") : done.length ? "paid-mentioned" : "mentioned"
+      const paid = asks.length ? paidAfter : done.length > 0
+      const state = paid ? "paid-mentioned" : asks.length ? "asked" : "mentioned"
       const cited = asks.length ? [...asks, ...(paidAfter ? done.slice(-1) : [])] : rows
       return {
         signal: "amounts",
@@ -120,6 +124,6 @@ export const amounts: StatusSignal<AmountsData> = {
   },
   attention: (items) =>
     items.flatMap((item) =>
-      item.chat !== null && item.data.state === "open" ? [{ chat: item.chat, weight: 2, why: "money open" }] : [],
+      item.chat !== null && item.data.state === "asked" ? [{ chat: item.chat, weight: 2, why: "money asked" }] : [],
     ),
 }
