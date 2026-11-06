@@ -7,6 +7,20 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`questionLookup` is public** (`@wirecat/cli-core/services`): the rule `search all` uses to search a question
+  typed as a sentence with discovery, so a CLI's own message search can do the same and find a short reply by the
+  message it answers.
+
+### Fixed
+
+- **`search all` finds mail by meaning through the vector index.** The mail half of the meaning lane read every mail
+  vector of each mailbox (`store.mail.nearest`, #2471), most of a `search all` on a large store: 9.5 s warm and
+  44–71 s with a cold disk on the owner's store. It now asks the model's vector index for the nearest
+  thread pieces and attachments, with the same results, and scans only when the index is not ready or a thread is
+  named (3.9 s warm on the same query).
+
 ## 0.592.0 — 06.11.2026
 
 ## 0.591.0 — 06.11.2026

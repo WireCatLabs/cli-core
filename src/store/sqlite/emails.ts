@@ -33,6 +33,7 @@ import { markEmailsDeleted, markEmailsRestored, recountEmailThread as recount, s
 import { bool, flag, fromJson, int, page, str, toJson } from "./events.js"
 import { folded } from "./folded.js"
 import { ensurePerson } from "./identities.js"
+import { nearestMailPieces } from "./mail-nearest.js"
 import { type MailRulesStore, mailRulesOver } from "./mail-rules.js"
 import { type AttachmentInput, attachmentOf, saveAttachment, wordsQuery } from "./meetings.js"
 import type { Orm, StoreContext } from "./open.js"
@@ -43,8 +44,6 @@ import { write } from "./transaction.js"
 import { dropUnusedVectors } from "./vector-index.js"
 
 export type { EmailLocationInput, FolderEmail, PartialEmail } from "./email-locations.js"
-
-import { dot } from "./vectors.js"
 
 type Row = Record<string, unknown>
 
@@ -1000,36 +999,10 @@ export const mailStoreOver = (
   },
   async nearest(model, query, { accountId, limit, threadExternalId, since }) {
     drainEmailIndex(database, stemmerFor)
-    const page = database.prepare(
-      `SELECT p.id, p.type, p.owner, p.position, p.email_id AS email, v.vector FROM ${MAIL_PIECES}
-         JOIN embeddings v ON v.model = ? AND v.content_hash = p.content_hash
-        WHERE p.id > ? AND p.account_id = ?
-          AND (? IS NULL OR p.thread_id IN (SELECT id FROM email_threads WHERE account_id = p.account_id AND external_id = ?))
-          AND (? IS NULL OR p.occurred_at >= ?)
-        ORDER BY p.id LIMIT 500`,
-    )
-    const best = new Map<string, number>()
-    for (let after = 0; ; ) {
-      const rows = page.all(
-        model,
-        after,
-        accountId,
-        threadExternalId ?? null,
-        threadExternalId ?? null,
-        since ?? null,
-        since ?? null,
-      )
-      for (const row of rows) {
-        const score = dot(query, row.vector as Uint8Array)
-        const key = row.type === "email_thread" ? `${row.owner}:${row.position}` : `email:${row.email}`
-        if (score > (best.get(key) ?? Number.NEGATIVE_INFINITY)) best.set(key, score)
-      }
-      if (rows.length < 500) break
-      after = Number(rows.at(-1)?.id)
-    }
+    const best = nearestMailPieces(database, model, query, { accountId, threadExternalId, since }, limit * 2)
     const threads = new Map<number, Chunk[]>()
     const emails = new Map<number, number>()
-    for (const [key, score] of [...best.entries()].sort(([, a], [, b]) => b - a)) {
+    for (const [key, score] of best) {
       if (emails.size >= limit) break
       const [owner, position] = key.split(":")
       let email = Number(position)
