@@ -125,9 +125,14 @@ export interface DealInput {
   evidence?: string[]
 }
 
+/** Whose pipelines: the owner's own, one CRM account's copies, or, left out, every one. */
+export type DealScope = "own" | AccountKey
+
 export interface DealFilter {
   /** `deal` when left out. */
   kind?: DealKind
+  /** Only the owner's own, or only one CRM account's copies. */
+  account?: DealScope
   status?: DealStatus
   /** A stage's name, in any letter case. */
   stage?: string
@@ -138,6 +143,8 @@ export interface DealFilter {
   proposedBy?: ProposedByFilter
   /** 1–500, 100 by default; newest written first. */
   limit?: number
+  /** Rows to skip before the first one answered, for the next page. */
+  offset?: number
 }
 
 export interface DealSearch {
@@ -167,9 +174,12 @@ export interface PipelineInput {
  */
 export interface DealsStore {
   addPipeline(input: PipelineInput): Promise<Pipeline>
-  pipelines(filter?: { kind?: DealKind }): Promise<Pipeline[]>
+  pipelines(filter?: { kind?: DealKind; account?: DealScope }): Promise<Pipeline[]>
   /** One pipeline by `pipeline:<id>` or a name only one pipeline has, with its funnel. */
-  pipeline(reference: string, options?: { kind?: DealKind; since?: string }): Promise<PipelineReport>
+  pipeline(
+    reference: string,
+    options?: { kind?: DealKind; since?: string; account?: DealScope },
+  ): Promise<PipelineReport>
   add(input: DealInput): Promise<Deal>
   /** `deal:<id>` or `lead:<id>`; a bare id is a deal. */
   get(reference: string): Promise<Deal>
@@ -283,28 +293,35 @@ export const dealOperationsOver = (context: StoreContext) => {
     return itemOf(kind)(row)
   }
 
+  const inScope = (scope: DealScope | undefined, row: Row) =>
+    scope === undefined ||
+    (scope === "own"
+      ? row.account_id == null
+      : row.account_provider === scope.provider && row.account_external_id === scope.account)
+
   const kindOf = (kind: unknown): DealKind => (kind === undefined ? "deal" : oneOf(kind, DEAL_KINDS, "a kind"))
 
-  const pipelineRows = (kind: DealKind | undefined) =>
+  const pipelineRows = (kind: DealKind | undefined, scope?: DealScope) =>
     database
       .prepare(
         "SELECT p.*, a.provider AS account_provider, a.external_id AS account_external_id FROM pipelines p " +
           "LEFT JOIN accounts a ON a.id = p.account_id WHERE (? IS NULL OR p.kind = ?) ORDER BY p.name_folded, p.id",
       )
       .all(kind ?? null, kind ?? null)
+      .filter((row) => inScope(scope, row))
 
   const label = (row: Row) =>
     `pipeline:${row.id} (${row.name}${row.account_provider == null ? "" : `, ${row.account_provider}:${row.account_external_id}`})`
 
   /** A pipeline by `pipeline:<id>`, or by a name only one pipeline of the kind has; never a guess. */
-  const pipelineRow = (reference: string, kind: DealKind | undefined): Row => {
+  const pipelineRow = (reference: string, kind: DealKind | undefined, scope?: DealScope): Row => {
     const named = reference.trim()
     if (/^pipeline:\d+$/.test(named)) {
-      const row = pipelineRows(kind).find((one) => `pipeline:${one.id}` === named)
+      const row = pipelineRows(kind, scope).find((one) => `pipeline:${one.id}` === named)
       if (!row) throw new CliError("not_found", `no ${kind ?? ""} pipeline ${named}`, { reason: "pipeline.not-found" })
       return row
     }
-    const rows = pipelineRows(kind).filter((one) => one.name_folded === fold(named))
+    const rows = pipelineRows(kind, scope).filter((one) => one.name_folded === fold(named))
     if (rows.length === 0)
       throw new CliError("not_found", `no ${kind === undefined ? "" : `${kind} `}pipeline named ${named}`, {
         reason: "pipeline.not-found",
@@ -349,14 +366,18 @@ export const dealOperationsOver = (context: StoreContext) => {
     }))
   }
 
-  /** A stage by name in one pipeline, or in the only pipeline of the kind that has one of that name. */
+  /**
+   * A stage by name in one pipeline, or in the only one of the owner's pipelines of the kind that has one of that
+   * name: a CRM's stages are its own, and a deal written here into one would be undone by the next sync.
+   */
   const stageRow = (stage: string, kind: DealKind, pipeline: number | undefined): Row => {
     const rows = database
       .prepare(
         "SELECT s.*, p.name AS pipeline_name FROM pipeline_stages s JOIN pipelines p ON p.id = s.pipeline_id " +
-          "WHERE s.name_folded = ? AND p.kind = ? AND (? IS NULL OR p.id = ?) ORDER BY p.id",
+          "WHERE s.name_folded = ? AND p.kind = ? AND (? IS NULL OR p.id = ?) AND (? IS NOT NULL OR p.account_id IS NULL) " +
+          "ORDER BY p.id",
       )
-      .all(fold(stage.trim()), kind, pipeline ?? null, pipeline ?? null)
+      .all(fold(stage.trim()), kind, pipeline ?? null, pipeline ?? null, pipeline ?? null)
     if (rows.length === 0)
       return refuse(
         `no stage named ${stage} in ${pipeline === undefined ? `a ${kind} pipeline` : "that pipeline"}`,
@@ -371,7 +392,7 @@ export const dealOperationsOver = (context: StoreContext) => {
   }
 
   const firstStage = (kind: DealKind, pipeline: number | undefined): Row => {
-    const pipelines = pipeline === undefined ? pipelineRows(kind) : [{ id: pipeline }]
+    const pipelines = pipeline === undefined ? pipelineRows(kind, "own") : [{ id: pipeline }]
     if (pipelines.length !== 1)
       return refuse(
         `name the stage: ${pipelines.length === 0 ? `no ${kind} pipeline is stored` : `more than one ${kind} pipeline is stored`}`,
@@ -448,6 +469,12 @@ export const dealOperationsOver = (context: StoreContext) => {
 
   const notDeleted = (row: Row, kind: DealKind, what: string) => {
     if (row.deleted_at != null) refuse(`${kind}:${row.id} is deleted; it no longer ${what}`, "deal.closed")
+    if (row.account_id != null)
+      refuse(
+        `${kind}:${row.id} is a copy from ${row.account_provider}:${row.account_external_id}; change it there, and ` +
+          "its next sync brings the change here",
+        "deal.copy",
+      )
   }
 
   return {
@@ -492,12 +519,15 @@ export const dealOperationsOver = (context: StoreContext) => {
       })
       return pipelinesOf(pipelineRows(pipelineKind).filter((row) => Number(row.id) === id))[0] as Pipeline
     },
-    pipelines: (filter: { kind?: DealKind } = {}): Pipeline[] =>
-      pipelinesOf(pipelineRows(filter.kind === undefined ? undefined : kindOf(filter.kind))),
-    pipeline: (reference: string, options: { kind?: DealKind; since?: string } = {}): PipelineReport => {
+    pipelines: (filter: { kind?: DealKind; account?: DealScope } = {}): Pipeline[] =>
+      pipelinesOf(pipelineRows(filter.kind === undefined ? undefined : kindOf(filter.kind), filter.account)),
+    pipeline: (
+      reference: string,
+      options: { kind?: DealKind; since?: string; account?: DealScope } = {},
+    ): PipelineReport => {
       const kind = options.kind === undefined ? undefined : kindOf(options.kind)
       const since = isoDate(options.since, "the first day counted")
-      return funnelOf(pipelinesOf([pipelineRow(reference, kind)])[0] as Pipeline, since)
+      return funnelOf(pipelinesOf([pipelineRow(reference, kind, options.account)])[0] as Pipeline, since)
     },
     add: (input: DealInput): Deal => {
       const kind = kindOf(input.kind)
@@ -516,7 +546,7 @@ export const dealOperationsOver = (context: StoreContext) => {
       const evidence = input.evidence ?? []
       if (!Array.isArray(evidence) || evidence.length > 8) refuse("evidence is at most 8 references", "deal.field")
       const id = write(database, () => {
-        const pipeline = input.pipeline === undefined ? undefined : Number(pipelineRow(input.pipeline, kind).id)
+        const pipeline = input.pipeline === undefined ? undefined : Number(pipelineRow(input.pipeline, kind, "own").id)
         const stageText = text(input.stage, "a stage's name", 80)
         const stage =
           stageText === null
@@ -580,13 +610,20 @@ export const dealOperationsOver = (context: StoreContext) => {
       const by = proposedBySql("d.author_type", "d.author_id", filter.proposedBy)
       const status = filter.status === undefined ? null : oneOf(filter.status, DEAL_STATUSES, "a status")
       const stage = filter.stage === undefined ? null : fold(filter.stage.trim())
-      const pipeline = filter.pipeline === undefined ? null : Number(pipelineRow(filter.pipeline, kind).id)
+      const pipeline =
+        filter.pipeline === undefined ? null : Number(pipelineRow(filter.pipeline, kind, filter.account).id)
+      const scope = filter.account
+      const own = scope === "own" ? 1 : 0
+      const provider = scope === undefined || scope === "own" ? null : scope.provider
+      const account = scope === undefined || scope === "own" ? null : scope.account
       const limit = Math.min(Math.max(filter.limit ?? 100, 1), 500)
       return database
         .prepare(
           `${itemsSql(kind)} WHERE d.deleted_at IS NULL AND (? IS NULL OR d.status = ?) ` +
             "AND (? IS NULL OR d.project_id = ?) AND (? IS NULL OR s.name_folded = ?) AND (? IS NULL OR p.id = ?) " +
-            `AND (? IS NULL OR d.organization_id = ?) AND ${by.sql} ORDER BY d.created_at DESC, d.id DESC LIMIT ?`,
+            "AND (? IS NULL OR d.organization_id = ?) AND (? = 0 OR d.account_id IS NULL) " +
+            `AND (? IS NULL OR (a.provider = ? AND a.external_id = ?)) AND ${by.sql} ` +
+            "ORDER BY d.created_at DESC, d.id DESC LIMIT ? OFFSET ?",
         )
         .all(
           status,
@@ -599,8 +636,13 @@ export const dealOperationsOver = (context: StoreContext) => {
           pipeline,
           organization?.id ?? null,
           organization?.id ?? null,
+          own,
+          provider,
+          provider,
+          account,
           ...by.params,
           limit,
+          Math.max(0, Math.trunc(filter.offset ?? 0)),
         )
         .map(itemOf(kind))
     },

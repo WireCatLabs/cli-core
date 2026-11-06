@@ -2,6 +2,17 @@ export { bareCheck, type CheckWords, checkWords } from "./domain/checks.js"
 export type { CounterField, CounterObservation, CounterObservations, CounterState } from "./domain/counters.js"
 export { COUNTER_FIELDS, counterValue, observedCounters } from "./domain/counters.js"
 export {
+  CRM_KINDS,
+  type CrmItem,
+  type CrmKind,
+  type CrmOrganization,
+  type CrmPerson,
+  type CrmPipeline,
+  type CrmRecords,
+  type CrmStage,
+  isItemKind,
+} from "./domain/crm.js"
+export {
   DEAL_KINDS,
   DEAL_ROLES,
   DEAL_STATUSES,

@@ -131,11 +131,13 @@ export type { BotUpdate, BotUpdateStore } from "./sqlite/bot-updates.js"
 export type { CatalogActor, CatalogEntry, CatalogInput, CatalogQuery, CatalogStore } from "./sqlite/catalog.js"
 export { CATALOG_QUERY } from "./sqlite/catalog.js"
 export type { ChatMetadata } from "./sqlite/chats.js"
+export { type CrmCopies, type CrmSaved, type CrmSkipped, crmIdentityId } from "./sqlite/crm.js"
 export type {
   Deal,
   DealFilter,
   DealInput,
   DealPerson,
+  DealScope,
   DealsStore,
   FunnelStage,
   Pipeline,
