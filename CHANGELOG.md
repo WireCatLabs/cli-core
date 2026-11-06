@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.595.0 — 06.11.2026
+
 ### Added
 
 - **A rollback copy before a breaking store upgrade.** Before a migration that raises `min_compatible` (after which
