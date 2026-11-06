@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.596.0 — 06.11.2026
+
 ### Added
 
 - **`package.json` says which store schema the version speaks.** `wirecat.store` holds `speaks`, the newest schema
