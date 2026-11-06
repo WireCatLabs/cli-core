@@ -12,6 +12,7 @@ import {
   examplePerson,
   type FakeCrmSource,
   fakeCrmSource,
+  LEAD_PIPELINE,
   SALES_PIPELINE,
 } from "./source.js"
 
@@ -204,6 +205,17 @@ export const crmSyncContract = (make: () => CrmSyncFixture | Promise<CrmSyncFixt
           run.issues.map(({ kind, reason, externalId }) => [kind, reason, externalId]),
           [["deal", "crm.stage-unknown", "d1"]],
         )
+      }),
+      test("a pipeline sharing the other kind's pipeline id is named as an issue, and the rest syncs", async ({
+        source,
+        sync,
+        deals,
+      }) => {
+        source.setPipelines("lead", [{ ...LEAD_PIPELINE, externalId: SALES_PIPELINE.externalId }])
+        source.put("deal", exampleDeal("d1"))
+        const run = await sync()
+        assert.deepEqual(await deals(), ["d1"])
+        assert.ok(run.issues.some(({ kind, reason }) => kind === "lead" && reason === "crm.pipeline-clash"))
       }),
       test("a contact joins a person by exact email, and a company never joins an organization by name", async ({
         source,

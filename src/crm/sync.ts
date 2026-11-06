@@ -159,8 +159,9 @@ const readPipelines = async (run: Run, kind: DealKind): Promise<BudgetStop | nul
   const why = run.budget.take()
   if (why) return why
   const pipelines = await run.source.pipelines(kind)
-  await run.store.crm.savePipelines(run.account, kind, pipelines)
-  run.report.pipelines += pipelines.length
+  const { saved, skipped } = await run.store.crm.savePipelines(run.account, kind, pipelines)
+  run.report.pipelines += saved
+  for (const one of skipped) run.report.issues.push({ kind, ...one })
   return null
 }
 
