@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.597.0 — 07.11.2026
+
 ### Added
 
 - **`--field` by label.** CRM `create` and `update` resolve `--field <key>=<value>` by the synced field definitions:
