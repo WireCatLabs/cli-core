@@ -37,6 +37,8 @@ export const scheduledJob = v.strictObject({
   name: text,
   kind: v.picklist(["command", "agent"]),
   when: text,
+  /** When a finished run shows a desktop notice: `always`, `failures` or `never`; the default is shown, not left out. */
+  notify: v.optional(v.picklist(["always", "failures", "never"])),
   last: v.nullable(
     v.strictObject({
       at: time,
@@ -49,7 +51,14 @@ export const scheduledJob = v.strictObject({
       failures: v.optional(v.number()),
       cost_usd: v.optional(v.number()),
       /** The last time a run did not start, and why: the day's cost cap, or too little new mail. */
-      skipped: v.optional(v.strictObject({ at: time, why: text })),
+      skipped: v.optional(
+        v.strictObject({
+          at: time,
+          why: text,
+          /** A dotted id for `why`, so a client can translate it: `cost.day-cap`, `mail.none-new`, `mail.below-threshold`. */
+          reason: v.optional(v.pipe(text, v.regex(/^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)+$/))),
+        }),
+      ),
     }),
   ),
   /** Agent schedules: what today's runs cost, in US dollars. */

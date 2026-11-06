@@ -225,6 +225,7 @@ describe.runIf(posix)("schedule on Linux", () => {
         name: "brief",
         kind: "agent",
         when: "every 1h",
+        notify: "failures",
         last: null,
         spent_today_usd: 0,
         max_cost_usd: null,
@@ -284,7 +285,7 @@ describe.runIf(posix)("schedule on Linux", () => {
     })
 
     const listed = JSON.parse((await call(["list", "--json"], env, system)).out)
-    expect(listed.items).toEqual([{ name: "sync", kind: "command", when: "every 15m", last: null }])
+    expect(listed.items).toEqual([{ name: "sync", kind: "command", notify: "always", when: "every 15m", last: null }])
 
     expect((await call(["remove", "sync"], env, system)).code).toBe(0)
     expect(existsSync(join(units, "chat-schedule-sync.timer"))).toBe(false)
@@ -500,6 +501,46 @@ describe("a run", () => {
     expect(last.exitCode).toBe(0)
     expect(readFileSync(join(file, "..", "latest.md"), "utf8")).toBe("read-only 1 work\n")
     expect(ran.at(-1)?.argv.slice(0, 4)).toEqual(["notify-send", "--app-name", "chat review", "chat review"])
+  })
+
+  it.each([
+    ["every", { every: 60 }, "failures"],
+    ["daily", { daily: "08:30" }, "always"],
+  ] as const)(
+    "notifies a %s agent's success according to its default, and never when told never",
+    async (_, when, mode) => {
+      const { env } = setup()
+      const { system, ran } = machine("linux", [process.execPath])
+      const make = (name: string, notify?: "never") =>
+        scheduled(env.CHAT_STATE_DIR, {
+          name,
+          kind: "agent",
+          argv: [process.execPath, "-e", 'console.log("ok")'],
+          when,
+          ...(notify ? { notify } : {}),
+        })
+      await runSchedule(app, system, env, make("plain"))
+      expect(ran.filter((one) => one.argv[0] === "notify-send")).toHaveLength(mode === "always" ? 1 : 0)
+      await runSchedule(app, system, env, make("quiet", "never"))
+      expect(ran.filter((one) => one.argv[0] === "notify-send")).toHaveLength(mode === "always" ? 1 : 0)
+    },
+  )
+
+  it("notifies a failure unless the schedule says never", async () => {
+    const { env } = setup()
+    const { system, ran } = machine("linux", [process.execPath])
+    const make = (name: string, notify: "failures" | "never") =>
+      scheduled(env.CHAT_STATE_DIR, {
+        name,
+        kind: "agent",
+        argv: [process.execPath, "-e", "process.exit(3)"],
+        when: { every: 60 },
+        notify,
+      })
+    await runSchedule(app, system, env, make("loud", "failures"))
+    expect(ran.filter((one) => one.argv[0] === "notify-send")).toHaveLength(1)
+    await runSchedule(app, system, env, make("quiet", "never"))
+    expect(ran.filter((one) => one.argv[0] === "notify-send")).toHaveLength(1)
   })
 
   it("logs its start and exit as records, never its output, and hands its trace to the child", async () => {
@@ -870,7 +911,11 @@ describe.runIf(process.platform !== "win32")("an agent gated on new mail", () =>
     expect(skipped.code, skipped.err).toBe(0)
     expect(ran(file)).toBe(false)
     const byHand = await call(["schedule", "run", "triage"])
-    expect(JSON.parse(byHand.out).item).toMatchObject({ skipped: true, why: expect.stringContaining("mail-triage") })
+    expect(JSON.parse(byHand.out).item).toMatchObject({
+      skipped: true,
+      why: expect.stringContaining("mail-triage"),
+      reason: "mail.none-new",
+    })
 
     mail = waitingMail(1)
     expect((await call(["schedule", "run", "triage"])).code).toBe(0)
@@ -929,6 +974,15 @@ describe.runIf(process.platform !== "win32")("an agent gated on new mail", () =>
     expect(scheduleLimitsOf({ schedule_model_claude: "--tools", schedule_lean_start: "no" })).toEqual({})
   })
 
+  it("stores --notify and rejects a value it does not know", async () => {
+    const { call, add } = gated(() => waitingMail(1))
+    const file = await add("--on-new-mail", "mail-triage", "--notify", "never")
+    expect(JSON.parse(readFileSync(file, "utf8"))).toMatchObject({ notify: "never" })
+    expect(JSON.parse((await call(["schedule", "list"])).out).items[0]).toMatchObject({ notify: "never" })
+    const bad = await call(["default", "schedule", "agent", "triage", "claude", "p", "--every", "5m", "--notify", "x"])
+    expect(bad.code).toBe(2)
+  })
+
   it("starts no run once the day's runs cost the daily cap, says so, and starts again the next day", async () => {
     const { call, add } = gated(() => waitingMail(1, 60), { maxCostPerDay: 100 })
     const file = await add("--on-new-mail", "mail-triage", "--max-cost-per-day", "5", "--max-cost", "2")
@@ -945,7 +999,7 @@ describe.runIf(process.platform !== "win32")("an agent gated on new mail", () =>
       spent_today_usd: 6,
       max_cost_usd: 2,
       max_cost_per_day_usd: 5,
-      last: { cost_usd: 3, skipped: { why: expect.stringContaining("$5.00") } },
+      last: { cost_usd: 3, skipped: { why: expect.stringContaining("$5.00"), reason: "cost.day-cap" } },
     })
     expect(v.safeParse(scheduledJob, listed).success).toBe(true)
 
