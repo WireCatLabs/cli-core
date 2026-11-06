@@ -32,6 +32,11 @@ shape of this file.
   as `field.unknown-kind` with the allowed words.
 - **`crmSourceContract` checks `fields()`** when an adapter has it, and `crmSyncContract` checks they are stored. The
   fake CRM has `setFields`, `calls.fields` and `SOURCE_FIELD` on its deals.
+- **A schedule's Telegram delivery is Telegram HTML.** `--to telegram-bot:<profile>/<chat>` converts the report's
+  Markdown (headings, bold, italic, code, links, lists, tables as label lines, rules) to the tags `tg` accepts and
+  sends it with `--html`; the 4096 and 1024 character limits count the converted text, and a long report's caption
+  is cut until its HTML fits. When `tg` answers `validation_error`, the send is repeated once as plain text and
+  recorded as `delivery.html-fallback`; any other failure is never resent. Email stays plain text.
 
 ### Changed — may break callers
 
