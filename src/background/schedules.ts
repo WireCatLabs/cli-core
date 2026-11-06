@@ -5,6 +5,7 @@ import { CliError, errorCodes, writeSecurely } from "@wirecat/cli-base"
 import { type AppIdentity, mailHolderVariable, readOnlyLockOf } from "../ports/app.js"
 import { recordLogFor } from "../runs/record-log.js"
 import { childTrace } from "../runs/scope.js"
+import { type Delivery, deliver } from "./deliver.js"
 import type { ServerSystem } from "./system.js"
 
 /** Minutes between runs, a daily local time, or one local moment. */
@@ -26,8 +27,10 @@ export interface Schedule {
   mailBatch?: number
   /** An agent's: no run starts for the rest of the local day once its runs cost this much, in US dollars. */
   maxCostPerDay?: number
-  /** When a finished run shows a desktop notice; absent means `notifyOf`'s default. */
+  /** When a finished run shows a desktop notice and goes along `to`; absent means `notifyOf`'s default. */
   notify?: Notify
+  /** Delivery routes (`telegram-bot:<profile>/<chat>`, `email:<profile>/<address>`) the result goes along after the run. */
+  to?: string[]
 }
 
 export const NOTIFY_WHEN = ["always", "failures", "never"] as const
@@ -115,6 +118,8 @@ export interface LastRun {
   costUsd?: number
   /** The last time the timer did not start it, and why; a run after it clears this. */
   skipped?: { at: string; why: string; reason?: SkipReason }
+  /** How the result went along each of the schedule's routes; a failed delivery never fails the run. */
+  deliveries?: Delivery[]
 }
 
 /** Why a timer left a run out, as an id a translation can key on; `why` stays the English sentence. */
@@ -185,6 +190,12 @@ export const recordRun = (
         }
   writeSecurely(path, `${JSON.stringify(last, null, 2)}\n`, 0o600)
   return last
+}
+
+const recordDeliveries = (path: string, last: LastRun, deliveries: Delivery[]): LastRun => {
+  const delivered = { ...last, deliveries }
+  writeSecurely(path, `${JSON.stringify(delivered, null, 2)}\n`, 0o600)
+  return delivered
 }
 
 /** Notes on the last run that the timer left this one out, keeping that run's result. */
@@ -627,6 +638,40 @@ export const runSchedule = async (
     await notify(system, env, title, `${first.trim().slice(0, 180)}\n${join(folder, "latest.md")}`)
   } else if (exitCode !== 0 && mode !== "never") {
     await notify(system, env, title, `failed (exit ${exitCode}) — ${errors}`)
+  }
+
+  const routes = schedule.to ?? []
+  if (routes.length > 0 && (exitCode === 0 ? mode === "always" : mode !== "never")) {
+    const at = shortTime(last.at)
+    const runEnv = { ...env, ...schedule.environment }
+    const locked = readOnlyLockOf(app, runEnv)
+    const deliveries = await deliver(
+      system,
+      runEnv,
+      routes,
+      exitCode === 0
+        ? {
+            title: `${title} · ${at}`,
+            file: { path: output, name: `${schedule.name}-${at.replace(/[ :]/g, "-")}.${agent ? "md" : "txt"}` },
+          }
+        : {
+            title: `${title} failed · ${at}`,
+            line:
+              `${title} failed at ${at} (exit ${exitCode}` +
+              `${last.failures && last.failures > 1 ? `, ${last.failures} runs in a row` : ""})` +
+              `${last.reason ? `: ${last.reason}` : ""} — ${errors}`,
+          },
+      {
+        find: (name, on) => findProgram(name, on, system.platform),
+        errorOf: reasonOf,
+        ...(locked ? { locked } : {}),
+      },
+    )
+    last = recordDeliveries(join(folder, "last.json"), last, deliveries)
+    const lost = deliveries.filter((one) => !one.ok)
+    if (lost.length > 0 && mode !== "never") {
+      await notify(system, env, title, lost.map((one) => `not delivered to ${one.to}: ${one.reason}`).join("\n"))
+    }
   }
 
   if ("once" in schedule.when) {

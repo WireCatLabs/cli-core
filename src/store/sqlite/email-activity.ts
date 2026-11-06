@@ -83,6 +83,8 @@ export interface MailActivityStore {
   statesLike(accountId: number, prefix: string): Promise<{ key: string; value: string; at: number }[]>
   /** Each live email's marks, by its Message-ID; one the store does not hold is left out. */
   emailMarks(accountId: number, externalIds: readonly string[]): Promise<Map<string, EmailMarks>>
+  /** Of these addresses, the ones the owner has written to, in lower case: To or Cc of a live outgoing email, any account. */
+  writtenTo(addresses: readonly string[]): Promise<Set<string>>
   /**
    * Each live thread of the account whose newest email is after `since` (ms), newest first, with the facts of that
    * email. `where` is a `tasks agenda` query compiled over `MAIL_AGENDA_COLUMNS`.
@@ -197,6 +199,18 @@ export const emailMarks = (database: CacheDatabase, accountId: number, externalI
   return marks
 }
 
+export const writtenTo = (database: CacheDatabase, addresses: readonly string[]): Set<string> => {
+  if (addresses.length === 0) return new Set()
+  const rows = database
+    .prepare(
+      `SELECT DISTINCT lower(r.address) AS address FROM emails e JOIN email_recipients r ON r.email_id = e.id
+       WHERE e.outgoing = 1 AND e.deleted_at IS NULL AND r.role IN ('to', 'cc')
+         AND lower(r.address) IN (SELECT value FROM json_each(?))`,
+    )
+    .all(JSON.stringify(addresses.map((address) => address.toLowerCase())))
+  return new Set(rows.map((row) => String(row.address)))
+}
+
 const MARKED = `
   SELECT e.id, e.external_id, t.external_id AS thread, coalesce(e.received_at, e.sent_at) AS at, e.created_at,
     e.updated_at, coalesce(e.draft, 0) AS draft, json_extract(e.metadata, '$.partial') IS NOT NULL AS partial,
@@ -256,5 +270,6 @@ export const mailActivity = (database: CacheDatabase): MailActivityStore => ({
       .all(accountId, prefix.length, prefix)
       .map((row) => ({ key: String(row.key), value: String(row.value), at: Number(row.updated_at) })),
   emailMarks: async (accountId, externalIds) => emailMarks(database, accountId, externalIds),
+  writtenTo: async (addresses) => writtenTo(database, addresses),
   threadActivity: async (accountId, since, where) => threadActivity(database, accountId, since, where),
 })

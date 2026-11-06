@@ -28,6 +28,17 @@ shape of this file.
   in `@wirecat/cli-core`.
 - **`DealFilter.account` and `offset`, `pipelines({ account })`.** A list reads the owner's own (`"own"`) or one CRM
   account's copies, a page at a time.
+- **`schedule agent` and `schedule command` take `--to <route>`, repeatable.** After the run, when `--notify-on`
+  says so, the scheduler sends the result through the owner's own CLI: `telegram-bot:<profile>/<chat id or
+  user:id>` runs `tg <profile> bot messages send`, `email:<profile>/<address>` runs `mail <profile> messages send`.
+  A finished run sends its output (an agent's report, a command's log): to a bot as one message up to 4096
+  characters, else as a file with its first lines as the caption; by mail as the body, the title as the subject. A
+  failed run sends one line: exit code, reason id, the log's path. The run itself stays read-only; nothing it prints
+  can change where the result goes; a run under `<PREFIX>_READ_ONLY` sends nothing. Each route's outcome is in
+  `last.json` as `deliveries` (`to`, `ok`, a dotted `reason`, the sending CLI's error code); a failed send never fails
+  the run, and `schedule list` shows it. `ServerSystem.run` takes an optional `{ input, timeoutMs }`.
+- **`store.mail.writtenTo(addresses)`.** Of these addresses, the ones the owner wrote to: To or Cc of a live outgoing
+  email in any account, in lower case, in one read.
 
 - **`syncCrm` and the `CrmSource` port, in `@wirecat/cli-core/crm`.** A CRM CLI writes an adapter (`pipelines(kind)`,
   `changes(kind, cursor, page)` answering a page or `{ reset: true }`, and `ids(kind, page)` when the CRM does not name

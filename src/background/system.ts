@@ -11,9 +11,18 @@ export interface Ran {
 }
 
 /** What `server` asks of the machine. Tests hand one in; nothing else does. */
+/** What a run may hand the program besides its words: text on its stdin, and a time after which it is stopped. */
+export interface RunOptions {
+  input?: string
+  timeoutMs?: number
+}
+
+/** The exit code a program stopped at `RunOptions.timeoutMs` answers, as `timeout(1)` does. */
+export const TIMED_OUT = 124
+
 export interface ServerSystem {
   platform: NodeJS.Platform
-  run: (argv: string[], env: NodeJS.ProcessEnv) => Promise<Ran>
+  run: (argv: string[], env: NodeJS.ProcessEnv, options?: RunOptions) => Promise<Ran>
   /** The command line that starts this CLI: the node binary and the script, both absolute. */
   entry: string[]
   uid: number
@@ -23,16 +32,31 @@ export interface ServerSystem {
   pause: () => Promise<void>
 }
 
-export const runProgram = (argv: string[], env: NodeJS.ProcessEnv): Promise<Ran> =>
+export const runProgram = (
+  argv: string[],
+  env: NodeJS.ProcessEnv,
+  { input, timeoutMs }: RunOptions = {},
+): Promise<Ran> =>
   new Promise((resolve, reject) => {
     const [file = "", ...args] = argv
-    execFile(file, args, { env, encoding: "utf8" }, (error, stdout, stderr) => {
-      if ((error as NodeJS.ErrnoException | null)?.code === "ENOENT") {
-        reject(new CliError("configuration_error", `${file} was not found — this machine has no ${file} to run serve`))
-        return
-      }
-      resolve({ code: typeof error?.code === "number" ? error.code : error ? 1 : 0, stdout, stderr })
-    })
+    const child = execFile(
+      file,
+      args,
+      { env, encoding: "utf8", ...(timeoutMs ? { timeout: timeoutMs } : {}) },
+      (error, stdout, stderr) => {
+        if ((error as NodeJS.ErrnoException | null)?.code === "ENOENT") {
+          reject(
+            new CliError("configuration_error", `${file} was not found — this machine has no ${file} to run serve`),
+          )
+          return
+        }
+        const code = error?.killed ? TIMED_OUT : typeof error?.code === "number" ? error.code : error ? 1 : 0
+        resolve({ code, stdout, stderr })
+      },
+    )
+    // A program that does not read its stdin may close it first; that is no failure of the run.
+    child.stdin?.on("error", () => {})
+    if (input !== undefined) child.stdin?.end(input)
   })
 
 export const thisMachine = (): ServerSystem => {
