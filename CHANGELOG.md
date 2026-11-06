@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.588.0 — 06.11.2026
+
 ### Changed — may break callers
 
 - **Store version 52 is amended in place: deals and leads in their own tables, a stage history, and no review.**
