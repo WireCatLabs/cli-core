@@ -2,7 +2,7 @@ import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
-import { Pacer } from "./pace.js"
+import { Pacer, waitForTurn } from "./pace.js"
 
 const fresh = () => join(mkdtempSync(join(tmpdir(), "pace-")), "pace", "p.json")
 const T = 1_000_000
@@ -55,5 +55,39 @@ describe("the request pace", () => {
     await pacer.holdFor(30_000)
 
     expect([await pacer.reserve(), await pacer.reserve()]).toEqual([T, T])
+  })
+})
+
+describe("waiting for a turn", () => {
+  const turn = async (pacer: Pacer) => {
+    const slept: number[] = []
+    const warned: string[] = []
+    await waitForTurn(pacer, {
+      name: "Example CRM",
+      operation: "deals.list",
+      warn: (message) => warned.push(message),
+      sleep: async (ms) => {
+        slept.push(ms)
+      },
+      now: () => T,
+    })
+    return { slept, warned }
+  }
+
+  it("waits a short turn silently and a long one with a warning", async () => {
+    const pacer = new Pacer(fresh(), { perMinute: 60, burst: 1 }, () => T)
+    for (const _ of [1, 2]) expect(await turn(pacer)).toEqual({ slept: [], warned: [] })
+    expect(await turn(pacer)).toEqual({ slept: [1_000], warned: [] })
+    await pacer.holdFor(30_000)
+    expect(await turn(pacer)).toEqual({
+      slept: [30_000],
+      warned: ["waiting 30 s to keep this profile's pace with Example CRM"],
+    })
+  })
+
+  it("refuses a wait longer than a run sits out, sending nothing", async () => {
+    const pacer = new Pacer(fresh(), { perMinute: 60, burst: 1 }, () => T)
+    await pacer.holdFor(10 * 60_000)
+    await expect(turn(pacer)).rejects.toMatchObject({ code: "rate_limited", details: { remembered: true } })
   })
 })

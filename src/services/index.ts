@@ -468,6 +468,7 @@ export {
   type ServerRestarts,
   upgradePackage,
 } from "./package-upgrade.js"
+export { patiently } from "./patience.js"
 export {
   type PersonMeetingContext,
   type PersonMeetingContextItem,
