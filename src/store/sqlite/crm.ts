@@ -1,5 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
-import type { CrmItem, CrmKind, CrmOrganization, CrmPerson, CrmPipeline } from "../../domain/crm.js"
+import type { CrmField, CrmItem, CrmKind, CrmOrganization, CrmPerson, CrmPipeline } from "../../domain/crm.js"
 import { DEAL_ROLES, type DealKind, STAGE_OUTCOMES } from "../../domain/deals.js"
 import { currencyOf, minorUnits } from "../../domain/money.js"
 import { recordFingerprint } from "../../domain/records.js"
@@ -38,6 +38,10 @@ export interface CrmCopies {
   savePeople(key: AccountKey, people: CrmPerson[]): Promise<CrmSaved>
   /** Companies, each an organization of its own made on first sight, kept apart from any of the same name. */
   saveOrganizations(key: AccountKey, organizations: CrmOrganization[]): Promise<CrmSaved>
+  /** One kind's whole list of the CRM's own fields: one it lacks is marked deleted, one listed again comes back. */
+  saveFields(key: AccountKey, kind: CrmKind, fields: CrmField[]): Promise<CrmSaved>
+  /** The kind's fields as last synced, in the CRM's order; none before the first sync. */
+  fields(key: AccountKey, kind: CrmKind): Promise<CrmField[]>
   /** Marks deleted what the CRM said it deleted. Contacts stay: an identity has no deleted mark. Answers how many. */
   remove(key: AccountKey, kind: CrmKind, externalIds: string[]): Promise<number>
   /**
@@ -178,6 +182,72 @@ export const crmCopiesOver = (context: StoreContext, people: AccountPeople): Crm
           )
           .run(pipelineId, stage.name, stage.folded, stage.position, stage.outcome, stage.externalId, at, at)
     }
+  }
+
+  // Unlike pipelines, an empty list does mark every field deleted: a CRM with no custom fields is an ordinary answer.
+  const saveFields = (key: AccountKey, kind: CrmKind, fields: CrmField[]): CrmSaved =>
+    write(database, () => {
+      const accountId = account(key)
+      const at = now()
+      const skipped: CrmSkipped[] = []
+      const listed = new Set<string>()
+      const upsert = database.prepare(
+        "INSERT INTO crm_fields (account_id, kind, code, label, type, multiple, filterable, options, position, " +
+          "created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (account_id, kind, code) DO " +
+          "UPDATE SET label = excluded.label, type = excluded.type, multiple = excluded.multiple, " +
+          "filterable = excluded.filterable, options = excluded.options, position = excluded.position, " +
+          "updated_at = excluded.updated_at, deleted_at = NULL",
+      )
+      for (const field of fields) {
+        const code = typeof field.code === "string" ? field.code.trim() : ""
+        if (!code || listed.has(code)) {
+          skipped.push({
+            externalId: code,
+            reason: "crm.item-invalid",
+            message: code ? `${kind} field ${code} is listed twice` : `a ${kind} field has no code`,
+          })
+          continue
+        }
+        listed.add(code)
+        const options = field.options?.map((option) => ({ id: String(option.id), label: String(option.label) }))
+        upsert.run(
+          accountId,
+          kind,
+          code,
+          textOf(field.label, 200),
+          textOf(field.type, 80) ?? "string",
+          field.multiple ? 1 : 0,
+          field.filterable ? 1 : 0,
+          options ? JSON.stringify(options) : null,
+          listed.size,
+          at,
+          at,
+        )
+      }
+      const mark = database.prepare("UPDATE crm_fields SET deleted_at = ?, updated_at = ? WHERE id = ?")
+      for (const row of database
+        .prepare("SELECT id, code FROM crm_fields WHERE account_id = ? AND kind = ? AND deleted_at IS NULL")
+        .all(accountId, kind))
+        if (!listed.has(String(row.code))) mark.run(at, at, Number(row.id))
+      return { saved: listed.size, skipped }
+    })
+
+  const fieldsOf = (key: AccountKey, kind: CrmKind): CrmField[] => {
+    const accountId = findAccountPk(context, key)
+    if (accountId === undefined) return []
+    return database
+      .prepare(
+        "SELECT * FROM crm_fields WHERE account_id = ? AND kind = ? AND deleted_at IS NULL ORDER BY position, id",
+      )
+      .all(accountId, kind)
+      .map((row) => ({
+        code: String(row.code),
+        label: row.label == null ? null : String(row.label),
+        type: String(row.type),
+        multiple: Number(row.multiple) === 1,
+        filterable: Number(row.filterable) === 1,
+        ...(row.options == null ? {} : { options: JSON.parse(String(row.options)) as CrmField["options"] }),
+      }))
   }
 
   const personIdOf = (key: AccountKey, externalId: string): number | null => {
@@ -445,6 +515,8 @@ export const crmCopiesOver = (context: StoreContext, people: AccountPeople): Crm
       return { saved: contacts.length, skipped: [] }
     },
     saveOrganizations: async (key, organizations) => saveOrganizations(key, organizations),
+    saveFields: async (key, kind, fields) => saveFields(key, kind, fields),
+    fields: async (key, kind) => fieldsOf(key, kind),
     remove: async (key, kind, externalIds) =>
       write(database, () => {
         const gone = new Set(externalIds)

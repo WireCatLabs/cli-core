@@ -5,28 +5,6 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
-<<<<<<< Updated upstream
-||||||| Stash base
-## Unreleased
-
-### Added
-
-- **CRM field definitions (store version 54).** `CrmSource.fields?(kind)` lists a CRM's own fields on deals, leads,
-  contacts or companies: `CrmField` `{ code, label, type, multiple, filterable, options? }`. `syncCrm` reads them every
-  run, after the pipelines, and `store.crm.saveFields` keeps each kind's whole list in `crm_fields`: one the CRM no
-  longer lists is marked deleted, and an empty list marks them all. `store.crm.fields(account, kind)` reads them in
-  the CRM's order. Values stay in `metadata`, keyed by code. The migration adds one table; `minCompatible` stays 34.
-- **`fields list <deals|leads|people|organizations>`** in `addCrmCommands`: the synced fields of one kind, with
-  `--limit`, `--page` and `--all`, in bitrix24-cli's `fields list` shape plus `untrusted`. An unknown kind is refused
-  as `field.unknown-kind` with the allowed words.
-- **`crmSourceContract` checks `fields()`** when an adapter has it, and `crmSyncContract` checks they are stored. The
-  fake CRM has `setFields`, `calls.fields` and `SOURCE_FIELD` on its deals.
-
-### Changed — may break callers
-
-- **A CRM sync with `fields()` makes one more request per kind**, so a `--max-pages` budget reaches the items later.
-
-=======
 ## Unreleased
 
 ### Added
@@ -51,7 +29,6 @@ shape of this file.
 
 - **A CRM sync with `fields()` makes one more request per kind**, so a `--max-pages` budget reaches the items later.
 
->>>>>>> Stashed changes
 ## 0.596.0 — 06.11.2026
 
 ### Added

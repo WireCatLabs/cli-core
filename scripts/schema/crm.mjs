@@ -131,4 +131,25 @@ export const crmTables = [
       }),
     ],
   },
+  {
+    name: "crm_fields",
+    doc: "A CRM account's own fields on its deals, leads, contacts or companies, as its sync last listed them. Their values stay in each row's `metadata`, keyed by `code`, as `{ label, value }`.",
+    cols: [
+      id(),
+      fk("account_id", "accounts", { notnull: true, note: "the CRM account whose field it is" }),
+      c("kind", "text", { notnull: true, note: "deal, lead, person or organization: what the field is on" }),
+      c("code", "text", { notnull: true, note: "the field's key in the CRM, as values in `metadata` are keyed" }),
+      c("label", "text", { note: "its title in the CRM; null when the CRM gives none" }),
+      c("type", "text", { notnull: true, note: "the CRM's own word for its type, such as string or enumeration" }),
+      c("multiple", "integer", { notnull: true, note: "1 when it holds several values" }),
+      c("filterable", "integer", { notnull: true, note: "1 when the CRM can filter a list by it" }),
+      c("options", "text", {
+        note: "JSON `[{ id, label }]`: a list field's options in the CRM's order; null on any other",
+      }),
+      c("position", "integer", { notnull: true, note: "1, 2, …: the order the CRM lists them in" }),
+      ...ts(),
+      c("deleted_at", "integer", { note: "the CRM no longer lists it; values under its code may still stand" }),
+    ],
+    keys: ["UNIQUE (account_id, kind, code)"],
+  },
 ]
