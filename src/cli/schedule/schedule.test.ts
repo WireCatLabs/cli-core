@@ -1048,3 +1048,143 @@ describe.runIf(process.platform !== "win32")("an agent gated on new mail", () =>
     expect(bad.code).toBe(2)
   })
 })
+
+describe("delivery after a run", () => {
+  const routed = (schedule: Partial<Schedule> & Pick<Schedule, "argv">, answer: Partial<Ran> = {}) => {
+    const { env, root } = setup()
+    for (const name of ["tg", "mail"]) {
+      writeFileSync(join(root, "bin", name), "#!/bin/sh\n")
+      chmodSync(join(root, "bin", name), 0o755)
+    }
+    const sent: { argv: string[]; env: NodeJS.ProcessEnv; input?: string }[] = []
+    const system: ServerSystem = {
+      platform: "linux",
+      uid: 501,
+      entry: [process.execPath],
+      spawn: () => 0,
+      pause: async () => {},
+      run: async (argv, runEnv, options) => {
+        sent.push({ argv, env: runEnv, ...(options?.input === undefined ? {} : { input: options.input }) })
+        return argv[0] === "notify-send"
+          ? { code: 0, stdout: "", stderr: "" }
+          : { code: 0, stdout: "", stderr: "", ...answer }
+      },
+    }
+    const file = scheduleFile(env.CHAT_STATE_DIR, "digest")
+    mkdirSync(join(file, ".."), { recursive: true })
+    writeFileSync(
+      file,
+      JSON.stringify({
+        name: "digest",
+        kind: "agent",
+        when: { daily: "08:30" },
+        environment: { CHAT_PROFILE: "work", PATH: env.PATH },
+        createdAt: "",
+        to: ["telegram-bot:personal/user:42", "email:work/me@example.com"],
+        ...schedule,
+      }),
+    )
+    const sends = () => sent.filter((one) => one.argv[0] !== "notify-send")
+    return { env, system, file, sent, sends }
+  }
+
+  it("sends a finished agent's report along each route, after the run and outside its lock", async () => {
+    const { env, system, file, sends } = routed({
+      argv: [process.execPath, "-e", 'console.log("Today: 3 replies owed")'],
+    })
+    const last = await runSchedule(app, system, env, file)
+
+    const [bot, mail] = sends()
+    expect(bot?.argv.slice(1, 8)).toEqual(["personal", "--json", "--no-input", "bot", "messages", "send", "--"])
+    expect(bot?.argv.slice(-2)).toEqual(["user:42", expect.stringMatching(/^chat digest · .+\nToday: 3 replies owed$/)])
+    expect(mail?.argv).toContain("me@example.com")
+    expect(mail?.input).toBe("Today: 3 replies owed\n")
+    expect(bot?.env.CHAT_READ_ONLY).toBeUndefined()
+    expect(last.deliveries).toEqual([
+      { to: "telegram-bot:personal/user:42", ok: true },
+      { to: "email:work/me@example.com", ok: true },
+    ])
+    expect(JSON.parse(readFileSync(join(file, "..", "last.json"), "utf8")).deliveries).toHaveLength(2)
+  })
+
+  it("sends a failed run's one line, and nothing when the schedule says never", async () => {
+    const failing = routed({ argv: [process.execPath, "-e", 'console.log("half a report"); process.exit(3)'] })
+    await runSchedule(app, failing.system, failing.env, failing.file)
+    const line = failing.sends()[0]?.argv.at(-1) ?? ""
+    expect(line).toMatch(/chat digest failed at .+ \(exit 3\)/)
+    expect(line).not.toContain("half a report")
+    expect(failing.sends()[0]?.argv).not.toContain("--file")
+
+    const quiet = routed({ argv: [process.execPath, "-e", "process.exit(3)"], notify: "never" })
+    await runSchedule(app, quiet.system, quiet.env, quiet.file)
+    expect(quiet.sends()).toEqual([])
+  })
+
+  it("leaves a repeating agent's success at home by default", async () => {
+    const { env, system, file, sends } = routed({
+      argv: [process.execPath, "-e", 'console.log("ok")'],
+      when: { every: 60 },
+    })
+    await runSchedule(app, system, env, file)
+    expect(sends()).toEqual([])
+  })
+
+  it("records a failed send without failing the run, keeps no message text, and says so on the desktop", async () => {
+    const stderr = `${JSON.stringify({ error: { code: "permission_error", reason: "bot.recipient-not-allowed", message: "chat Secret Family" } })}\n`
+    const { env, system, file, sent } = routed(
+      { argv: [process.execPath, "-e", 'console.log("ok")'], to: ["telegram-bot:personal/user:42"] },
+      { code: 1, stderr },
+    )
+    const last = await runSchedule(app, system, env, file)
+
+    expect(last.exitCode).toBe(0)
+    expect(last.deliveries).toEqual([
+      {
+        to: "telegram-bot:personal/user:42",
+        ok: false,
+        reason: "delivery.failed",
+        error: "permission_error (bot.recipient-not-allowed)",
+      },
+    ])
+    expect(readFileSync(join(file, "..", "last.json"), "utf8")).not.toContain("Secret Family")
+    expect(sent.at(-1)?.argv.at(-1)).toBe("not delivered to telegram-bot:personal/user:42: delivery.failed")
+  })
+
+  it("stores --to as the owner typed it, lists it, and refuses a route it cannot read", async () => {
+    const { env } = setup()
+    const { system } = machine("linux")
+    const added = await call(
+      [
+        "agent",
+        "digest",
+        "claude",
+        "p",
+        "--at",
+        "08:30",
+        "--to",
+        "telegram-bot:personal/user:42",
+        "--to",
+        "email:work/me@example.com",
+      ],
+      env,
+      system,
+    )
+    expect(added.code, added.err).toBe(0)
+    const file = scheduleFile(env.CHAT_STATE_DIR, "digest")
+    expect(JSON.parse(readFileSync(file, "utf8")).to).toEqual([
+      "telegram-bot:personal/user:42",
+      "email:work/me@example.com",
+    ])
+    const listed = JSON.parse((await call(["list", "--json"], env, system)).out).items[0]
+    expect(listed.to).toEqual(["telegram-bot:personal/user:42", "email:work/me@example.com"])
+    expect(v.safeParse(scheduledJob, listed).success).toBe(true)
+
+    const bad = await call(
+      ["agent", "other", "claude", "p", "--at", "08:30", "--to", "telegram-bot:personal/Family"],
+      env,
+      system,
+    )
+    expect(bad.code).toBe(2)
+    expect(bad.err).toContain("never a title")
+  })
+})

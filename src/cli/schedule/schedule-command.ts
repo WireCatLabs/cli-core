@@ -3,6 +3,7 @@ import { dirname, join } from "node:path"
 import { CliError, resolvePaths, writeSecurely } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Argument, Command, Option } from "commander"
+import { parseRoute, ROUTE_HELP, routeText } from "../../background/deliver.js"
 import {
   type AgentCli,
   describeWhen,
@@ -62,6 +63,7 @@ interface WhenOptions {
   at?: string
   atTime?: string
   notifyOn?: Notify
+  to?: string[]
 }
 
 const whenOf = ({ every, at, atTime }: WhenOptions, minimum: number): When => {
@@ -125,6 +127,17 @@ const withWhen = (command: Command) =>
         "desktop notice after a run (default failures for an agent that repeats with --every, else always)",
       ).choices(NOTIFY_WHEN),
     )
+    .option(
+      "--to <route>",
+      `also send the result, when --notify-on says so, by the owner's own tg or mail: ${ROUTE_HELP}; repeat it for more`,
+      (route: string, routes: string[] = []) => [...routes, routeText(parseRoute(route))],
+    )
+
+/** What a schedule keeps of `--notify-on` and `--to`. */
+const deliveryOf = ({ notifyOn, to }: WhenOptions): Pick<Schedule, "notify" | "to"> => ({
+  ...(notifyOn ? { notify: notifyOn } : {}),
+  ...(to?.length ? { to } : {}),
+})
 
 /** What the schedule command needs of a CLI: who it is and, per command, where it prints and which profile runs. */
 /** `skill show follow-ups` exists only for messenger CLIs; any other CLI gets a read-only summary it can run. */
@@ -366,7 +379,7 @@ export const scheduleCommandFor = ({
       when: whenOf(this.opts<WhenOptions>(), COMMAND_MINIMUM_MINUTES),
       environment: environment(),
       createdAt: new Date().toISOString(),
-      ...(this.opts<WhenOptions>().notifyOn ? { notify: this.opts<WhenOptions>().notifyOn } : {}),
+      ...deliveryOf(this.opts<WhenOptions>()),
     })
   })
 
@@ -412,7 +425,6 @@ export const scheduleCommandFor = ({
         onNewMail?: string
         mailWait?: string
         mailBatch?: string
-        notifyOn?: Notify
       }
     >()
     if (options.onNewMail !== undefined && !HOLDER.test(options.onNewMail))
@@ -481,7 +493,7 @@ export const scheduleCommandFor = ({
       ...(mailWaitMinutes === undefined ? {} : { mailWaitMinutes }),
       ...(mailBatch === undefined ? {} : { mailBatch }),
       ...(options.maxCostPerDay === undefined ? {} : { maxCostPerDay: options.maxCostPerDay }),
-      ...(options.notifyOn ? { notify: options.notifyOn } : {}),
+      ...deliveryOf(options),
     })
   })
   if (newMail)
@@ -516,6 +528,7 @@ export const scheduleCommandFor = ({
         kind: schedule.kind,
         when: describeWhen(schedule.when),
         notify: notifyOf(schedule),
+        ...(schedule.to?.length ? { to: schedule.to } : {}),
         last: lastRun(scheduleFile(state, schedule.name)) ?? null,
         ...(schedule.kind === "agent"
           ? {
@@ -536,12 +549,13 @@ export const scheduleCommandFor = ({
           return ""
         }
         return rows
-          .map(({ name, kind, when, notify, last, spentTodayUsd, maxCostPerDayUsd }) =>
+          .map(({ name, kind, when, notify, to, last, spentTodayUsd, maxCostPerDayUsd }) =>
             [
               name,
               kind,
               when,
               `notify ${notify}`,
+              ...(to ? [`to ${to.join(", ")}`] : []),
               last
                 ? `last ${last.at.slice(0, 16).replace("T", " ")} exit ${last.exitCode}` +
                   (last.failures
@@ -555,6 +569,9 @@ export const scheduleCommandFor = ({
               ...(last?.skipped
                 ? [`skipped ${last.skipped.at.slice(0, 16).replace("T", " ")}: ${last.skipped.why}`]
                 : []),
+              ...(last?.deliveries ?? [])
+                .filter((one) => !one.ok)
+                .map((one) => `not delivered to ${one.to}: ${one.reason}${one.error ? ` (${one.error})` : ""}`),
             ].join("  "),
           )
           .join("\n")

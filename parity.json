@@ -1065,7 +1065,7 @@
     },
     "--to": {
       "value": "<chat>",
-      "meaning": "the chat to forward it to: an id, or part of a chat name",
+      "meaning": "where it goes: the chat to forward it to (an id, or part of a chat name), or a route a schedule's result is sent along (telegram-bot:<profile>/<chat>, email:<profile>/<address>)",
       "note": "the sentence says how to name a chat the messenger's way, so it differs on purpose (Help text rule 4)"
     },
     "--topic": {
@@ -3988,6 +3988,12 @@
           "planned": {
             "wa": "wa backlog: mount the shared schedule command"
           }
+        },
+        "--to": {
+          "in": ["max", "tg"],
+          "planned": {
+            "wa": "wa backlog: mount the shared schedule command"
+          }
         }
       }
     },
@@ -4016,6 +4022,12 @@
           }
         },
         "--notify-on": {
+          "in": ["max", "tg"],
+          "planned": {
+            "wa": "wa backlog: mount the shared schedule command"
+          }
+        },
+        "--to": {
           "in": ["max", "tg"],
           "planned": {
             "wa": "wa backlog: mount the shared schedule command"

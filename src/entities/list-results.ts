@@ -39,6 +39,8 @@ export const scheduledJob = v.strictObject({
   when: text,
   /** When a finished run shows a desktop notice: `always`, `failures` or `never`; the default is shown, not left out. */
   notify: v.optional(v.picklist(["always", "failures", "never"])),
+  /** Where a run's result is sent after it: `telegram-bot:<profile>/<chat>` or `email:<profile>/<address>`. */
+  to: v.optional(v.array(text)),
   last: v.nullable(
     v.strictObject({
       at: time,
@@ -58,6 +60,17 @@ export const scheduledJob = v.strictObject({
           /** A dotted id for `why`, so a client can translate it: `cost.day-cap`, `mail.none-new`, `mail.below-threshold`. */
           reason: v.optional(v.pipe(text, v.regex(/^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)+$/))),
         }),
+      ),
+      /** How the run's result went along each route; `reason` a dotted id, `error` the sending CLI's code and reason id. */
+      deliveries: v.optional(
+        v.array(
+          v.strictObject({
+            to: text,
+            ok: v.boolean(),
+            reason: v.optional(v.pipe(text, v.regex(/^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)+$/))),
+            error: v.optional(text),
+          }),
+        ),
       ),
     }),
   ),
