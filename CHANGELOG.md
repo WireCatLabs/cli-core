@@ -7,6 +7,10 @@ shape of this file.
 
 ## Unreleased
 
+## 0.592.0 — 06.11.2026
+
+## 0.591.0 — 06.11.2026
+
 ### Added
 
 - **`questionLookup` is public** (`@wirecat/cli-core/services`): the rule `search all` uses to search a question
@@ -29,6 +33,17 @@ shape of this file.
   in `@wirecat/cli-core`.
 - **`DealFilter.account` and `offset`, `pipelines({ account })`.** A list reads the owner's own (`"own"`) or one CRM
   account's copies, a page at a time.
+- **`schedule agent` and `schedule command` take `--to <route>`, repeatable.** After the run, when `--notify-on`
+  says so, the scheduler sends the result through the owner's own CLI: `telegram-bot:<profile>/<chat id or
+  user:id>` runs `tg <profile> bot messages send`, `email:<profile>/<address>` runs `mail <profile> messages send`.
+  A finished run sends its output (an agent's report, a command's log): to a bot as one message up to 4096
+  characters, else as a file with its first lines as the caption; by mail as the body, the title as the subject. A
+  failed run sends one line: exit code, reason id, the log's path. The run itself stays read-only; nothing it prints
+  can change where the result goes; a run under `<PREFIX>_READ_ONLY` sends nothing. Each route's outcome is in
+  `last.json` as `deliveries` (`to`, `ok`, a dotted `reason`, the sending CLI's error code); a failed send never fails
+  the run, and `schedule list` shows it. `ServerSystem.run` takes an optional `{ input, timeoutMs }`.
+- **`store.mail.writtenTo(addresses)`.** Of these addresses, the ones the owner wrote to: To or Cc of a live outgoing
+  email in any account, in lower case, in one read.
 
 - **`syncCrm` and the `CrmSource` port, in `@wirecat/cli-core/crm`.** A CRM CLI writes an adapter (`pipelines(kind)`,
   `changes(kind, cursor, page)` answering a page or `{ reset: true }`, and `ids(kind, page)` when the CRM does not name
@@ -42,9 +57,26 @@ shape of this file.
   shared shape.
 - **`@wirecat/cli-core/crm/testing`:** `crmSourceContract` for a CRM adapter, `crmSyncContract` for the engine over
   a store, and `fakeCrmSource`, a CRM in memory with a change feed.
+- **`addCrmCommands(program, { app, open, leads? })`, in `@wirecat/cli-core/crm/cli`.** One set of commands for
+  every CRM CLI: root `sync` (`--rescan`, `--max-pages`, partial and cooperative, a safe next step), `store status`,
+  and `deals list|show`, `leads list|show`, `pipelines list|show` (with the funnel) and `stages list`, which read the
+  store, as the calendar's lists do, and only the profile's account. Lists take `status:`, `stage:`, `pipeline:` and
+  `organization:` (`DEALS_QUERY`, `LEADS_QUERY`), `--limit` and `--page`; what the CRM's users typed is marked
+  untrusted. `search all` reads the account's deals and leads beside the stored messages, notes and events, and
+  takes `--only crm`.
+- **Shared answer entities `deal`, `lead`, `pipeline` and `stage`.** memo's `deals`, `leads` and `pipelines` and every
+  CRM CLI answer them in one shape: a deal or lead as the store gives it, a pipeline with its stages and, from
+  `pipelines show`, its funnel.
+- **`schedule agent` and `schedule command` take `--notify-on always|failures|never`.** The value is kept as `notify` in
+  the schedule file and shown by `schedule list`. A schedule without it keeps working: an agent that repeats with
+  `--every` notifies on failures only, any other schedule as before. A schedule's `last.skipped` carries a dotted
+  `reason` next to `why`: `cost.day-cap`, `mail.none-new`, `mail.below-threshold`; `schedule run` answers with the same
+  `reason` when it skips.
 
 ### Changed — may break callers
 
+- **`answerEntity` refuses `deal`, `lead`, `pipeline` and `stage`**, now shared entities: a CLI that declared its own
+  under those names answers the shared shape instead.
 - **`store.deals.add`, `move` and `close` leave a CRM's copies alone.** Moving or closing a copy is refused
   (`deal.copy`): the CRM is where it changes. A stage or a pipeline named in `add` is looked up among the owner's own
   pipelines only, so a synced CRM stage never makes it ambiguous.
@@ -69,14 +101,6 @@ shape of this file.
   owner's do, as deals do since 0.588.0. `organization_add` and `organization_rename` rows already stored stay listed
   and decidable through the `organization` review kind, and `ORGANIZATION_ADD_KIND` and `ORGANIZATION_RENAME_KIND`
   stay exported.
-
-### Added
-
-- **`schedule agent` and `schedule command` take `--notify-on always|failures|never`.** The value is kept as `notify` in
-  the schedule file and shown by `schedule list`. A schedule without it keeps working: an agent that repeats with
-  `--every` notifies on failures only, any other schedule as before. A schedule's `last.skipped` carries a dotted
-  `reason` next to `why`: `cost.day-cap`, `mail.none-new`, `mail.below-threshold`; `schedule run` answers with the same
-  `reason` when it skips.
 
 ## 0.589.0 — 06.11.2026
 

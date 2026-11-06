@@ -53,6 +53,7 @@ import {
   conversationReadiness,
 } from "./conversation-results.js"
 import { counterRefresh, counters } from "./counters.js"
+import { deal, lead, pipeline, stage } from "./deal.js"
 import { document } from "./document.js"
 import { documentLink } from "./document-link.js"
 import { evidence } from "./evidence.js"
@@ -389,6 +390,10 @@ export {
 
 export const ENTITIES = {
   sync_progress: syncProgress,
+  deal,
+  lead,
+  pipeline,
+  stage,
   ...MEETING_RESULT_ENTITIES,
   message,
   message_context: messageContext,
