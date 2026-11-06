@@ -984,5 +984,26 @@ export const GENERATED: { name: string; statements: string[] }[] = [
       "ALTER TABLE `tasks` ADD `source_url` text;",
       "CREATE INDEX `tasks_by_provider_external_id` ON `tasks` (`provider`,`external_id`) WHERE external_id IS NOT NULL;"
     ]
+  },
+  {
+    "name": "20261106010504_version-52-deals",
+    "statements": [
+      "CREATE TABLE `opportunities` (\n\t`id` integer PRIMARY KEY,\n\t`title` text NOT NULL,\n\t`organization_id` integer,\n\t`project_id` integer,\n\t`stage_id` integer NOT NULL,\n\t`status` text NOT NULL,\n\t`currency` text,\n\t`amount` integer,\n\t`close_date` text,\n\t`closed_date` text,\n\t`review` text NOT NULL,\n\t`author_type` text NOT NULL,\n\t`author_id` integer NOT NULL,\n\t`model` text,\n\t`confirmed_by_type` text,\n\t`confirmed_by_id` integer,\n\t`source` text NOT NULL,\n\t`metadata` text,\n\t`created_at` integer NOT NULL,\n\t`updated_at` integer NOT NULL,\n\t`deleted_at` integer,\n\tCONSTRAINT `fk_opportunities_organization_id_organizations_id_fk` FOREIGN KEY (`organization_id`) REFERENCES `organizations`(`id`),\n\tCONSTRAINT `fk_opportunities_project_id_projects_id_fk` FOREIGN KEY (`project_id`) REFERENCES `projects`(`id`),\n\tCONSTRAINT `fk_opportunities_stage_id_pipeline_stages_id_fk` FOREIGN KEY (`stage_id`) REFERENCES `pipeline_stages`(`id`)\n);",
+      "CREATE TABLE `pipeline_stages` (\n\t`id` integer PRIMARY KEY,\n\t`pipeline_id` integer NOT NULL,\n\t`name` text NOT NULL,\n\t`name_folded` text NOT NULL,\n\t`position` integer NOT NULL,\n\t`created_at` integer NOT NULL,\n\t`updated_at` integer NOT NULL,\n\tCONSTRAINT `fk_pipeline_stages_pipeline_id_pipelines_id_fk` FOREIGN KEY (`pipeline_id`) REFERENCES `pipelines`(`id`),\n\tCONSTRAINT `pipeline_stages_pipeline_id_name_folded_unique` UNIQUE(`pipeline_id`,`name_folded`),\n\tCONSTRAINT `pipeline_stages_pipeline_id_position_unique` UNIQUE(`pipeline_id`,`position`)\n);",
+      "CREATE TABLE `pipelines` (\n\t`id` integer PRIMARY KEY,\n\t`name` text NOT NULL,\n\t`name_folded` text NOT NULL UNIQUE,\n\t`created_at` integer NOT NULL,\n\t`updated_at` integer NOT NULL\n);",
+      "CREATE INDEX `opportunities_by_organization_id` ON `opportunities` (`organization_id`);",
+      "CREATE INDEX `opportunities_by_project_id` ON `opportunities` (`project_id`);",
+      "CREATE INDEX `opportunities_by_stage_id` ON `opportunities` (`stage_id`);",
+      "CREATE INDEX `opportunities_by_author_type_author_id` ON `opportunities` (`author_type`,`author_id`);",
+      "CREATE INDEX `opportunities_by_confirmed_by_type_confirmed_by_id` ON `opportunities` (`confirmed_by_type`,`confirmed_by_id`);"
+    ]
+  },
+  {
+    "name": "20261106010507_version-52-deals-rules",
+    "statements": [
+      "-- The store's code checks these first and says why; the triggers keep a stray write from another build or a hand\n-- edit from storing a deal with an unknown status, or an amount without its currency.\nCREATE TRIGGER opportunities_valid_bi BEFORE INSERT ON opportunities\n  WHEN new.status NOT IN ('open', 'won', 'lost')\n    OR new.review NOT IN ('proposed', 'confirmed', 'rejected')\n    OR (new.amount IS NULL) <> (new.currency IS NULL) OR new.amount < 0 BEGIN\n  SELECT RAISE(ABORT, 'opportunities: a known status and review, an amount with its currency');\nEND;",
+      "CREATE TRIGGER opportunities_valid_bu BEFORE UPDATE ON opportunities\n  WHEN new.status NOT IN ('open', 'won', 'lost')\n    OR new.review NOT IN ('proposed', 'confirmed', 'rejected')\n    OR (new.amount IS NULL) <> (new.currency IS NULL) OR new.amount < 0 BEGIN\n  SELECT RAISE(ABORT, 'opportunities: a known status and review, an amount with its currency');\nEND;",
+      "-- A deal moves between the stages of its own pipeline only.\nCREATE TRIGGER opportunities_same_pipeline_bu BEFORE UPDATE OF stage_id ON opportunities\n  WHEN (SELECT pipeline_id FROM pipeline_stages WHERE id = new.stage_id)\n    <> (SELECT pipeline_id FROM pipeline_stages WHERE id = old.stage_id) BEGIN\n  SELECT RAISE(ABORT, 'opportunities: a deal moves within its own pipeline');\nEND;"
+    ]
   }
 ]

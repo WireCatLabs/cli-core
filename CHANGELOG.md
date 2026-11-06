@@ -7,6 +7,15 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **Deals in the store (store version 52).** `store.deals` keeps the owner's sales pipelines (`pipelines`,
+  `pipeline_stages`, made by the owner only) and the deals in them (table `opportunities`, ref `deal:<id>`): title,
+  organization, project, stage, status `open`, `won` or `lost` kept apart from the stage, the expected amount in minor
+  units with its currency, the expected close day and the day it closed. The people on a deal are `related-to` links
+  with a role (`owner`, `contact`, `decision-maker`). The owner's deal is confirmed at once; an agent's is a `deal`
+  proposal only the owner decides. Only the owner moves a deal, within its own pipeline, or closes it.
+
 ## 0.584.0 — 06.11.2026
 
 ### Added

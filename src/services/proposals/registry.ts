@@ -2,6 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import { mayDecide, type Refusal } from "../../store/decisions.js"
 import type { MessageStore } from "../../store/store.js"
 import { actionKind } from "./kinds/action.js"
+import { dealKind } from "./kinds/deals.js"
 import { factKind } from "./kinds/fact.js"
 import { invoiceKind, paymentKind } from "./kinds/finance.js"
 import { findingsKind } from "./kinds/findings.js"
@@ -147,6 +148,7 @@ export const proposalRegistry = (store: MessageStore): ProposalRegistry => {
     invoiceKind(store),
     paymentKind(store),
     orderKind(store),
+    dealKind(store),
     organizationKind(store),
     memoryKind(store),
     findingsKind(store),

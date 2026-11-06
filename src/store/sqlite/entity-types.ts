@@ -11,6 +11,7 @@ export const ENTITY_TABLES = {
   calendar_entry: "calendar_entries",
   chat: "chats",
   conversation: "conversations",
+  deal: "opportunities",
   document: "documents",
   document_picture: "documents",
   email: "emails",

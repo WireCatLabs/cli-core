@@ -104,6 +104,7 @@ const WORDS: Record<RefSummaryKind, string> = {
   invoice: "Invoice",
   payment: "Payment",
   order: "Order",
+  deal: "Deal",
   email: "Email",
   email_thread: "Email thread",
   unknown: "Unknown",

@@ -5,7 +5,7 @@ Every table of the shared store (tg, max, memo, zm) as its migrations create it.
 `drizzle/` must agree with it. `pnpm schema:check` fails when they do not, and `src/store/sqlite/schema.test.ts`
 checks every table and column of a new store against this page.
 
-115 tables, 25 full-text indexes.
+118 tables, 25 full-text indexes.
 
 ## Conventions
 
@@ -1950,6 +1950,68 @@ An order the owner placed with a shop or a supplier, or took from a client: for 
 | `source_url` | text |  |  | the http or https page of the order at the shop, such as an Amazon order |
 
 *Keys and indexes:* `INDEX (customer_type, customer_id)`, `INDEX (supplier_type, supplier_id)`, `INDEX (invoice_id)`, `INDEX (payment_id)`, `INDEX (project_id)`, `INDEX (author_type, author_id)`, `INDEX (confirmed_by_type, confirmed_by_id)`
+
+## Deals
+
+The owner's sales pipelines and the deals in them, with the expected amount in exact minor units. A deal's stage and its status (open, won, lost) are kept apart.
+
+### `pipelines`
+
+A sales pipeline of the owner's: the stages a deal goes through, in order. Only the owner makes one.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | PK |  |  |
+| `name` | text | not null |  | as the owner typed it |
+| `name_folded` | text | not null, unique |  | the name in one letter case: one per owner |
+| `created_at` | integer | not null |  | when this row was saved here |
+| `updated_at` | integer | not null |  | when this row last changed here |
+
+### `pipeline_stages`
+
+One stage of a pipeline, such as a first call or a sent quote.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | PK |  |  |
+| `pipeline_id` | integer | not null | → `pipelines.id` | the `pipeline` it belongs to |
+| `name` | text | not null |  |  |
+| `name_folded` | text | not null |  | the name in one letter case, unique in its pipeline |
+| `position` | integer | not null |  | 1, 2, …: the order a deal goes through them |
+| `created_at` | integer | not null |  | when this row was saved here |
+| `updated_at` | integer | not null |  | when this row last changed here |
+
+*Keys and indexes:* `UNIQUE (pipeline_id, name_folded)`, `UNIQUE (pipeline_id, position)`
+
+### `opportunities`
+
+A deal (`deal:<id>`): what the owner hopes to sell, to whom, where it stands in its pipeline and whether it ended. The people on it are `links` (kind `related-to`, `role` owner, contact or decision-maker). A deal is not a project.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | PK |  |  |
+| `title` | text | not null |  |  |
+| `organization_id` | integer |  | → `organizations.id` | the `organization` it belongs to |
+| `project_id` | integer |  | → `projects.id` | the `project` it belongs to |
+| `stage_id` | integer | not null | → `pipeline_stages.id` | where it stands; a closed deal keeps its last stage, and a deal moves only within its pipeline |
+| `status` | text | not null |  | open, won, lost: kept apart from the stage |
+| `currency` | text |  |  | ISO 4217, upper case; set with `amount` or not at all |
+| `amount` | integer |  |  | the expected amount, in minor units of `currency` (kopecks, cents; yen for JPY): never a float |
+| `close_date` | text |  |  | `YYYY-MM-DD`: the day it is expected to close |
+| `closed_date` | text |  |  | `YYYY-MM-DD`: the day it was won or lost |
+| `review` | text | not null |  | proposed, confirmed, rejected: the owner's entry is confirmed at once, an agent's or an import's waits |
+| `author_type` | text | not null |  | `person` or `bot` |
+| `author_id` | integer | not null |  | the row in the `author_type` table |
+| `model` | text |  |  | the model that wrote it, for an agent's |
+| `confirmed_by_type` | text |  |  | who confirmed it; null while proposed |
+| `confirmed_by_id` | integer |  |  | who confirmed it; null while proposed |
+| `source` | text | not null |  | owner, agent, an import |
+| `metadata` | text |  |  | JSON: what the source sends that has no column, and is not searched |
+| `created_at` | integer | not null |  | when this row was saved here |
+| `updated_at` | integer | not null |  | when this row last changed here |
+| `deleted_at` | integer |  |  | gone at the source; sync never hard-deletes |
+
+*Keys and indexes:* `INDEX (organization_id)`, `INDEX (project_id)`, `INDEX (stage_id)`, `INDEX (author_type, author_id)`, `INDEX (confirmed_by_type, confirmed_by_id)`
 
 ## Source records
 
