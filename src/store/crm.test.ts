@@ -119,8 +119,8 @@ it("keeps two portals' contacts of one id apart", async () => {
   const store = await open()
   await store.crm.savePeople(PORTAL, [{ externalId: "5", name: "Ana" }])
   await store.crm.savePeople(OTHER, [{ externalId: "5", name: "Boris" }])
-  const ana = await store.people.personOf({ provider: "example-crm", id: "portal-a/5" })
-  const boris = await store.people.personOf({ provider: "example-crm", id: "portal-b/5" })
+  const ana = await store.people.personOf({ provider: "example-crm", id: "portal-a/contact/5" })
+  const boris = await store.people.personOf({ provider: "example-crm", id: "portal-b/contact/5" })
   expect(ana?.uid).toBeDefined()
   expect(ana?.uid).not.toBe(boris?.uid)
   expect(await store.crm.count(PORTAL, "person")).toBe(1)
@@ -178,4 +178,50 @@ it("leaves a CRM's copies to the CRM: the owner's writes neither find its stages
   await expect(store.deals.move(copy?.ref as string, { stage: "Quote", by: "owner" })).rejects.toThrow(
     /change it there/,
   )
+})
+
+it("takes a deal's own status over its stage's outcome, as a CRM that keeps won and lost on the deal gives it", async () => {
+  const store = await open()
+  await store.crm.saveItems(PORTAL, "deal", [
+    {
+      externalId: "d1",
+      title: "Won in an open stage",
+      pipeline: "p1",
+      stage: "s2",
+      status: "won",
+      closedDate: "2026-10-30",
+    },
+    {
+      externalId: "d2",
+      title: "Lost in an open stage",
+      pipeline: "p1",
+      stage: "s2",
+      status: "lost",
+      updatedAt: Date.UTC(2026, 9, 31),
+    },
+    { externalId: "d3", title: "No status of its own", pipeline: "p1", stage: "s3" },
+  ])
+  const byId = Object.fromEntries((await store.deals.list({ account: PORTAL })).map((one) => [one.externalId, one]))
+  expect(byId.d1).toMatchObject({ stage: "Quote", status: "won", closedDate: "2026-10-30" })
+  expect(byId.d2).toMatchObject({ stage: "Quote", status: "lost", closedDate: "2026-10-31" })
+  expect(byId.d3).toMatchObject({ stage: "Won", status: "won" })
+})
+
+it("keeps a deal pipeline and finds it by kind when a lead pipeline comes with the same id, naming the one it skipped", async () => {
+  const store = await open()
+  await store.crm.saveItems(PORTAL, "deal", [{ externalId: "d1", title: "x", pipeline: "p1", stage: "s1" }])
+  const leads = await store.crm.savePipelines(PORTAL, "lead", [
+    { ...SALES, name: "Leads", stages: [{ externalId: "l1", name: "New", position: 1, outcome: "open" }] },
+  ])
+  expect(leads).toMatchObject({ saved: 0, skipped: [{ externalId: "p1", reason: "crm.pipeline-clash" }] })
+  expect((await store.deals.pipelines({ account: PORTAL })).map(({ kind, name }) => [kind, name])).toEqual([
+    ["deal", "Sales"],
+  ])
+  const lead = await store.crm.saveItems(PORTAL, "lead", [
+    { externalId: "x1", title: "x", pipeline: "p1", stage: "l1" },
+  ])
+  expect(lead.skipped.map(({ reason }) => reason)).toEqual(["crm.stage-unknown"])
+  expect(
+    (await store.crm.saveItems(PORTAL, "deal", [{ externalId: "d2", title: "y", pipeline: "p1", stage: "s2" }])).saved,
+  ).toBe(1)
 })

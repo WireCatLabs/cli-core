@@ -12,10 +12,10 @@ import { authorActor } from "./memories.js"
 import type { StoreContext } from "./open.js"
 import { write } from "./transaction.js"
 
-/** An item the store could not keep, and why: its stage is not stored yet, or a field the store refuses. */
+/** What the store could not keep, and why: an item whose stage is not stored or whose field it refuses, or a pipeline. */
 export interface CrmSkipped {
   externalId: string
-  reason: "crm.stage-unknown" | "crm.item-invalid"
+  reason: "crm.stage-unknown" | "crm.item-invalid" | "crm.pipeline-clash"
   message: string
 }
 
@@ -66,7 +66,8 @@ const SOURCE = "crm"
  * A contact's identity id: identities are unique per provider, and two portals of one CRM both have a contact 5.
  * `contact:` references percent-encode it, so the `/` stays one part.
  */
-export const crmIdentityId = (key: AccountKey, externalId: string): string => `${key.account}/${externalId}`
+export const crmIdentityId = (key: AccountKey, externalId: string, type: "contact" | "user" = "contact"): string =>
+  `${key.account}/${type}/${externalId}`
 
 const day = (value: unknown, what: string): string | null => {
   if (value === undefined || value === null || value === "") return null
@@ -89,16 +90,33 @@ export const crmCopiesOver = (context: StoreContext, people: AccountPeople): Crm
   const author = (key: AccountKey) => authorActor(context, { bot: key.provider, kind: "rule" }).actor
   const account = (key: AccountKey) => accountPk(context, key)
 
-  const pipelineOf = (accountId: number, externalId: string) =>
-    database.prepare("SELECT * FROM pipelines WHERE account_id = ? AND external_id = ?").get(accountId, externalId)
+  const pipelineOf = (accountId: number, kind: DealKind, externalId: string) =>
+    database
+      .prepare("SELECT * FROM pipelines WHERE account_id = ? AND kind = ? AND external_id = ?")
+      .get(accountId, kind, externalId)
+  // Store version 52 keeps a pipeline's id unique per account, not per kind: a lead pipeline sharing a deal pipeline's
+  // id cannot be stored until a migration widens that key, so it is skipped and named, not written over the other.
+  const otherKindHolds = (accountId: number, kind: DealKind, externalId: string) =>
+    database
+      .prepare("SELECT 1 FROM pipelines WHERE account_id = ? AND kind <> ? AND external_id = ?")
+      .get(accountId, kind, externalId) !== undefined
 
   const savePipelines = (key: AccountKey, kind: DealKind, pipelines: CrmPipeline[]): CrmSaved =>
     write(database, () => {
       const accountId = account(key)
       const at = now()
+      const skipped: CrmSkipped[] = []
       for (const pipeline of pipelines) {
+        if (otherKindHolds(accountId, kind, pipeline.externalId)) {
+          skipped.push({
+            externalId: pipeline.externalId,
+            reason: "crm.pipeline-clash",
+            message: `${kind} pipeline ${pipeline.externalId} has the id of a stored pipeline of the other kind`,
+          })
+          continue
+        }
         const name = textOf(pipeline.name, 80) ?? pipeline.externalId
-        const held = pipelineOf(accountId, pipeline.externalId)
+        const held = pipelineOf(accountId, kind, pipeline.externalId)
         const id = held
           ? Number(held.id)
           : Number(
@@ -109,13 +127,13 @@ export const crmCopiesOver = (context: StoreContext, people: AccountPeople): Crm
                 )
                 .get(accountId, pipeline.externalId, kind, name, fold(name), at, at)?.id,
             )
-        if (held && (held.name !== name || held.kind !== kind))
+        if (held && held.name !== name)
           database
-            .prepare("UPDATE pipelines SET name = ?, name_folded = ?, kind = ?, updated_at = ? WHERE id = ?")
-            .run(name, fold(name), kind, at, id)
+            .prepare("UPDATE pipelines SET name = ?, name_folded = ?, updated_at = ? WHERE id = ?")
+            .run(name, fold(name), at, id)
         saveStages(id, pipeline, at)
       }
-      return { saved: pipelines.length, skipped: [] }
+      return { saved: pipelines.length - skipped.length, skipped }
     })
 
   /**
@@ -182,13 +200,13 @@ export const crmCopiesOver = (context: StoreContext, people: AccountPeople): Crm
   }
 
   const saveItem = (key: AccountKey, accountId: number, kind: DealKind, item: CrmItem, at: number) => {
-    const pipeline = pipelineOf(accountId, item.pipeline)
+    const pipeline = pipelineOf(accountId, kind, item.pipeline)
     const stage =
       pipeline &&
       database
         .prepare("SELECT id, outcome FROM pipeline_stages WHERE pipeline_id = ? AND external_id = ?")
         .get(Number(pipeline.id), item.stage)
-    if (!pipeline || pipeline.kind !== kind || !stage)
+    if (!pipeline || !stage)
       return {
         externalId: item.externalId,
         reason: "crm.stage-unknown" as const,
@@ -200,7 +218,9 @@ export const crmCopiesOver = (context: StoreContext, people: AccountPeople): Crm
     const amount =
       currency === null ? null : minorUnits(String(item.amount), currency, `${kind} ${item.externalId}'s amount`)
     if (amount !== null && amount < 0) throw new CliError("validation_error", "an amount is 0 or more")
-    const status = String(stage.outcome)
+    if (item.status != null && !(STAGE_OUTCOMES as readonly string[]).includes(item.status))
+      throw new CliError("validation_error", `${kind} ${item.externalId}'s status is open, won or lost`)
+    const status = item.status ?? String(stage.outcome)
     const closed =
       status === "open"
         ? null

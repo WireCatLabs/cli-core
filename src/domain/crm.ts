@@ -1,4 +1,4 @@
-import type { DealKind, DealRole, StageOutcome } from "./deals.js"
+import type { DealKind, DealRole, DealStatus, StageOutcome } from "./deals.js"
 
 /** What a CRM holds that the store copies: its deals and leads, and the contacts and companies on them. */
 export const CRM_KINDS = ["organization", "person", "deal", "lead"] as const
@@ -15,7 +15,10 @@ export interface CrmStage {
 }
 
 export interface CrmPipeline {
-  /** Unique in the account across both kinds: a deal pipeline and a lead pipeline never share one. */
+  /**
+   * Unique among the account's pipelines of its kind. Until the store's key is widened, one with the id of a stored
+   * pipeline of the other kind is skipped and named.
+   */
   externalId: string
   name: string
   stages: CrmStage[]
@@ -27,6 +30,11 @@ export interface CrmItem {
   title: string
   pipeline: string
   stage: string
+  /**
+   * Whether it is still open, won or lost, where the CRM keeps that on the item (Pipedrive's `status`); left out, the
+   * stage's outcome says it.
+   */
+  status?: DealStatus | null
   /** A decimal string in `currency`; both or neither. */
   amount?: string | null
   /** ISO 4217. */
@@ -50,7 +58,10 @@ export interface CrmItem {
   metadata?: Record<string, unknown>
 }
 
-/** A CRM contact: it becomes an identity of the CRM's provider, joined to a person by exact email only. */
+/**
+ * A CRM contact: it becomes an identity of the CRM's provider, `<account>/contact/<id>`, joined to a person by exact
+ * email only. A CRM user, such as a deal's owner, is not a contact: its ids are another sequence (`<account>/user/<id>`).
+ */
 export interface CrmPerson {
   externalId: string
   name: string | null
