@@ -7,6 +7,15 @@ shape of this file.
 
 ## Unreleased
 
+## 0.586.0 — 06.11.2026
+
+### Added
+
+- **cli-core accepts `@wirecat/cli-base` 0.78 and 0.79 (peer range `>=0.76.0 <0.80.0`) and builds with 0.79.0**,
+  whose vocabulary has the finance resources `records`, `invoices`, `orders`, `payments` and the verb `allocate`
+  (0.78.0), and the CRM resources `deals`, `leads`, `pipelines`, `stages`, `products` and `users` (0.79.0), for the
+  Bitrix24 CLI `b24`. The lower bound stays, so nothing changes for a CLI on cli-base 0.76 or 0.77.
+
 ## 0.585.0 — 06.11.2026
 
 ### Added
