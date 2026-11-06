@@ -130,7 +130,7 @@ const readFrom = (found: ProjectStatus, chat: string): string => {
     | { waitingSince: string | null }
     | undefined
   const money = found.items
-    .filter((one) => one.signal === "amounts" && one.chat === chat && (one.data as { state: string }).state === "open")
+    .filter((one) => one.signal === "amounts" && one.chat === chat && (one.data as { state: string }).state === "asked")
     .map((one) => (one.data as { since: string }).since)
     .sort()[0]
   return day([money, reply?.waitingSince, found.window.since].find((one) => typeof one === "string") as string)

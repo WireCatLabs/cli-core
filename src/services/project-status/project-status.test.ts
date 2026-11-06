@@ -70,7 +70,7 @@ describe("projectStatus on the harbour fixture", () => {
     const owed = found.items.find((one) => one.signal === "amounts" && one.chat === "chat:max/11/-900")
     expect(owed).toMatchObject({
       basis: "pattern",
-      data: { amount: "1200.00", direction: "to_us", state: "open", since: `${D}T09:00:00.000Z`, asks: 2 },
+      data: { amount: "1200.00", direction: "to_us", state: "asked", since: `${D}T09:00:00.000Z`, asks: 2 },
       evidence: [{ ref: "msg:max/11/-900/3" }, { ref: "msg:max/11/-900/5" }],
     })
 
@@ -332,8 +332,8 @@ describe("amount direction", () => {
     ])
 
   it.each([
-    ["the owner asks", "me", "Оплатите, пожалуйста, 50 000 ₽", null, ["to_us", "open"]],
-    ["they ask", "Lev", "Please pay the invoice of $300", null, ["from_us", "open"]],
+    ["the owner asks", "me", "Оплатите, пожалуйста, 50 000 ₽", null, ["to_us", "asked"]],
+    ["they ask", "Lev", "Please pay the invoice of $300", null, ["from_us", "asked"]],
     ["the owner says paid", "me", "Оплатил 50 000 ₽ по счёту", null, ["from_us", "paid-mentioned"]],
     ["they say paid", "Ana", "Перевела 50 000 ₽ за сентябрь", null, ["to_us", "paid-mentioned"]],
     ["a client chat names a price", "Ana", "Цена 50 000 ₽", "client", ["to_us", "mentioned"]],

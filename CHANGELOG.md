@@ -7,6 +7,17 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **Project status calls a word-found money request `asked`, not `open`.** The `amounts` signal (version 3) gives
+  `state: "asked"` where it gave `"open"`, and `attention` says `money asked`. A word match cannot tell a real request
+  from a price the owner quoted, and "open" read as a debt. `paid-mentioned` and `mentioned` are unchanged.
+- **Agents write organizations at once.** `proposeOrganization` and `proposeOrganizationRename` are gone: an agent's
+  `organizations add` and `organizations rename` call `store.knowledge.addOrganization` and `updateOrganization` as the
+  owner's do, as deals do since 0.588.0. `organization_add` and `organization_rename` rows already stored stay listed
+  and decidable through the `organization` review kind, and `ORGANIZATION_ADD_KIND` and `ORGANIZATION_RENAME_KIND`
+  stay exported.
+
 ## 0.589.0 — 06.11.2026
 
 ### Added

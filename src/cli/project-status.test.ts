@@ -158,10 +158,10 @@ describe("a chat left out by its purpose", () => {
 })
 
 describe("projectStatusText", () => {
-  it("says who owes what, whose move it is, what went quiet, and what to run next", async () => {
+  it("says what money was asked, whose move it is, what went quiet, and what to run next", async () => {
     const text = projectStatusText(await statusOf(), hints)
     expect(text).toContain("HRB · Harbour site · 4 linked chats in 2 accounts, 2026-09-03 to 2026-11-02")
-    expect(text).toMatch(/to us +1200\.00 EUR open since 2026-10-19 \(asked 2×, last 2026-10-26\) · Harbour group/)
+    expect(text).toMatch(/to us +1200\.00 EUR asked since 2026-10-19 \(asked 2×, last 2026-10-26\) · Harbour group/)
     expect(text).toContain("Lev (contractor, dialog) · last 2026-10-28 Lev · next: YOU since 2026-10-21")
     expect(text).toContain('"1C" quiet on their side since 2026-10-12')
     expect(text).toContain("Harbour group (client, group) · last 2026-10-26 Ana · next: Kai (named) since 2026-10-26")
@@ -172,12 +172,12 @@ describe("projectStatusText", () => {
 describe("the compact form", () => {
   it("draws each signal with its own row and never prints a message beyond its excerpt", async () => {
     const compact = compactOf(await statusOf())
-    expect(compact).toContain("# amounts: 2 · data.currency: EUR · data.state: open · basis: pattern")
+    expect(compact).toContain("# amounts: 2 · data.currency: EUR · data.state: asked · basis: pattern")
     expect(compact).toContain("msg:max/11/-900/3 · to_us · 1200.00 · 10-19 · 2 asks")
     expect(compact).toContain("chat:telegram/22/555 · Lev · contractor · next owner · 10-21 · overdue · 3 held")
     expect(compact).not.toMatch(/^(window|signals|purposes):/m)
     expect(compact).not.toContain("Напоминаю")
-    expect(compact).toContain("# next: your move, money open, held in part: messages sync")
+    expect(compact).toContain("# next: your move, money asked, held in part: messages sync")
   })
 
   it("has a row for every built in signal not drawn on the chat's row", () => {

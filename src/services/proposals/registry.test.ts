@@ -6,7 +6,7 @@ import { DEFAULT_DECISION_POLICY } from "../../store/decisions.js"
 import { openCache } from "../../store/open.js"
 import { openStore } from "../../store/store.js"
 import { parseProposalIds } from "./ids.js"
-import { proposeOrganization, proposeOrganizationRename } from "./kinds/organization.js"
+import { ORGANIZATION_ADD_KIND, ORGANIZATION_RENAME_KIND } from "./kinds/organization.js"
 import { emptyProposalRegistry, proposalRegistry } from "./registry.js"
 import type { ProposalKind, ProposalRow } from "./types.js"
 
@@ -304,10 +304,24 @@ describe("the review fixes", () => {
   })
 })
 
-describe("an agent's new organization", () => {
-  it("waits as a proposal and exists once confirmed", async () => {
+type Store = Awaited<ReturnType<typeof fixture>>["store"]
+const storedAdd = (store: Store) =>
+  store.proposedActions.propose({
+    kind: ORGANIZATION_ADD_KIND,
+    by: claude,
+    payload: { name: "Synthetic Dairy", kind: "company" },
+  })
+const storedRename = (store: Store, organization: string) =>
+  store.proposedActions.propose({
+    kind: ORGANIZATION_RENAME_KIND,
+    by: claude,
+    payload: { organization, name: "Synthetic Farm" },
+  })
+
+describe("a new organization an agent proposed before agents wrote them at once", () => {
+  it("is still listed and exists once confirmed", async () => {
     const f = await fixture()
-    const proposal = await proposeOrganization(f.store, { name: "Synthetic Dairy", kind: "company" }, claude)
+    const proposal = await storedAdd(f.store)
     expect((await f.store.knowledge.organizations()).map((org) => org.name)).not.toContain("Synthetic Dairy")
     const row = await f.registry.get(proposal.id)
     expect(row).toMatchObject({ kind: "organization", status: "proposed", summary: "add company Synthetic Dairy" })
@@ -321,17 +335,17 @@ describe("an agent's new organization", () => {
 
   it("makes nothing when rejected", async () => {
     const f = await fixture()
-    const proposal = await proposeOrganization(f.store, { name: "Synthetic Dairy", kind: "company" }, claude)
+    const proposal = await storedAdd(f.store)
     await f.registry.decide([proposal.id], { confirm: false, by: "owner" })
     expect((await f.store.knowledge.organizations()).map((org) => org.name)).not.toContain("Synthetic Dairy")
   })
 })
 
-describe("an agent's organization rename", () => {
+describe("an organization rename an agent proposed before agents wrote them at once", () => {
   it("keeps the name until confirmed, then renames", async () => {
     const f = await fixture()
     const org = await f.store.knowledge.addOrganization({ kind: "company", name: "Synthetic Dairy" })
-    const proposal = await proposeOrganizationRename(f.store, { organization: org.ref, name: "Synthetic Farm" }, claude)
+    const proposal = await storedRename(f.store, org.ref)
     expect((await f.store.knowledge.organizations()).map((one) => one.name)).toContain("Synthetic Dairy")
     expect(await f.registry.get(proposal.id)).toMatchObject({
       kind: "organization",
@@ -347,7 +361,7 @@ describe("an agent's organization rename", () => {
   it("changes nothing when rejected", async () => {
     const f = await fixture()
     const org = await f.store.knowledge.addOrganization({ kind: "company", name: "Synthetic Dairy" })
-    const proposal = await proposeOrganizationRename(f.store, { organization: org.ref, name: "Synthetic Farm" }, claude)
+    const proposal = await storedRename(f.store, org.ref)
     await f.registry.decide([proposal.id], { confirm: false, by: "owner" })
     expect((await f.store.knowledge.organizations()).map((one) => one.name)).toContain("Synthetic Dairy")
   })
