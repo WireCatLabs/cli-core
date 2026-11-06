@@ -23,6 +23,19 @@ shape of this file.
 - **`DealFilter.account` and `offset`, `pipelines({ account })`.** A list reads the owner's own (`"own"`) or one CRM
   account's copies, a page at a time.
 
+- **`syncCrm` and the `CrmSource` port, in `@wirecat/cli-core/crm`.** A CRM CLI writes an adapter (`pipelines(kind)`,
+  `changes(kind, cursor, page)` answering a page or `{ reset: true }`, and `ids(kind, page)` when the CRM does not name
+  deletions) and the engine copies the account into the store: both kinds' pipelines, then companies, contacts, deals
+  and leads, each kind from its own cursor (`store.sync`, `crm:<kind>`), a page at a time, saved as it comes, so a
+  run its request budget, deadline or cancel stops goes on from there. A dead cursor starts a full round. An item
+  whose stage arrived after the pipelines were read gets them read again once; one still not kept is an issue, and
+  the round goes on. Deletions come from `changes()`, or from a list of every id that marks rows deleted only once
+  its last page arrived (resumable across runs), never a row changed since the list began, and never most of a kind
+  without `--rescan`: a sign-in that lost its rights lists no ids. `crmStatus` gives each kind's progress in the
+  shared shape.
+- **`@wirecat/cli-core/crm/testing`:** `crmSourceContract` for a CRM adapter, `crmSyncContract` for the engine over
+  a store, and `fakeCrmSource`, a CRM in memory with a change feed.
+
 ### Changed — may break callers
 
 - **`store.deals.add`, `move` and `close` leave a CRM's copies alone.** Moving or closing a copy is refused
