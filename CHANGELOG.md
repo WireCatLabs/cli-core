@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.586.0 — 06.11.2026
+
 ### Added
 
 - **cli-core accepts `@wirecat/cli-base` 0.78 and 0.79 (peer range `>=0.76.0 <0.80.0`) and builds with 0.79.0**,
