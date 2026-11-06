@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.592.0 — 06.11.2026
+
 ## 0.591.0 — 06.11.2026
 
 ### Added
