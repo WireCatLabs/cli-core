@@ -48,6 +48,7 @@ export {
   type TaskState,
 } from "../tasks/index.js"
 export type { AccountMail, AccountMeetings, AccountStore } from "./account-store.js"
+export { type DamageExplanation, explainDamage } from "./damage.js"
 export {
   assertMayDecide,
   DEFAULT_DECISION_POLICY,
@@ -74,6 +75,7 @@ export {
   type EvidenceFindingsStore,
   validateEvidenceFindings,
 } from "./evidence-findings.js"
+export { QUICK_HEALTH_CHECKS, type StoreHealth, storeHealth } from "./health.js"
 export {
   ORGANIZATIONS_QUERY,
   organization,

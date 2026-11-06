@@ -1,4 +1,4 @@
-import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs"
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { CliError } from "@wirecat/cli-base"
@@ -26,3 +26,28 @@ it.skipIf(asRoot)("reports a folder it may not create the store in the same way"
     details: { reason: "store.not-writable" },
   })
 })
+
+/** The POSIX locks this process holds on the file, as the kernel lists them. */
+const locksOn = (file: string) => {
+  const { ino } = statSync(file)
+  return readFileSync("/proc/locks", "utf8")
+    .split("\n")
+    .filter((line) => line.includes(` ${process.pid} `) && line.includes(`:${ino} `)).length
+}
+
+// Closing any descriptor of a file drops every lock the process holds on it; a second open must not close one.
+it.skipIf(process.platform !== "linux")(
+  "keeps the first connection's locks when the store is opened again",
+  async () => {
+    const file = join(mkdtempSync(join(tmpdir(), "store-locks-")), "wirecat.db")
+    const first = await openStoreContext({ path: file })
+    first.database.exec("BEGIN IMMEDIATE")
+    const held = locksOn(file)
+    expect(held).toBeGreaterThan(0)
+    const second = await openStoreContext({ path: file }).catch((error: unknown) => error)
+    expect(locksOn(file)).toBe(held)
+    first.database.exec("ROLLBACK")
+    first.database.close()
+    if (!(second instanceof Error)) second.database.close()
+  },
+)

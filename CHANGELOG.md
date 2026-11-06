@@ -7,6 +7,30 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- **Opening the store a second time in one process no longer drops the locks of the connection already open.** The
+  open touched the existing file through its own descriptor, and on Linux closing any descriptor of a file releases
+  every lock the process holds on it, so another process could checkpoint and delete the write-ahead log under a
+  writer that went on writing into it. That can damage the store. The file is now created only when it is missing.
+
+### Added
+
+- **`store recover`** tells whether the store file is damaged: it reads every page and every search index, names the
+  damaged tables, and answers in plain words what happened, likely causes, how to look further, what is affected, that
+  the messengers', mail servers' and Drive's own data is not, and the commands to run. It changes nothing.
+  `storeRecoveryCheck` gives the same to a CLI with its own `store` command.
+- **`store recover run`** rebuilds a damaged store: it copies every readable row into a new file with the `sqlite3`
+  program (3.43 or newer; node:sqlite has no recovery API), rebuilds every search index, the mentions and the vector
+  index from the data, checks the result, and puts it in place of the store, keeping the damaged file beside it. It
+  refuses while a WireCat timer is scheduled or a process has the store open, and names them. The answer lists the
+  tables that lost rows, the rows that point at lost ones, and the mail sync that fetches lost mail again.
+  `storeRecoveryRun` and `storeRecoverCommand` give it to other CLIs.
+- **`doctor --deep`** checks every page of the store and every search index (about 30 s for 6 GB). Without it, doctor
+  checks the file header, its size and the schema's own pages in milliseconds. A damaged store is explained in the
+  answer's `store.damage` (`explainDamage`: what, causes, investigate, impact, external_unaffected, steps), and
+  `storeSummary` takes `{ deep, command }`.
+
 ## 0.594.0 — 06.11.2026
 
 ### Added

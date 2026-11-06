@@ -35,6 +35,7 @@ export const doctorCommand = (messenger: Messenger): Command => {
   const command = annotate(new Command("doctor"), { effects: REMOTE_READ })
     .description(DOCTOR_SUMMARY)
     .option("--online", DOCTOR_ONLINE_OPTION)
+    .option("--deep", DOCTOR_DEEP_OPTION)
     .action(async function (this: Command) {
       const { online } = this.opts<{ online?: boolean }>()
       const { report, renderer, fixes = [] } = await diagnose(this, messenger)
@@ -53,9 +54,25 @@ export const doctorCommand = (messenger: Messenger): Command => {
         itemOf(report, { next: unchecked ? [nextStep("doctor.online", { args: { online: true } })] : [] }),
       )
       for (const fix of fixes) (renderer ?? output.renderer).note(`to make it private: ${fix}`)
+      for (const line of damageNotes(report.store)) (renderer ?? output.renderer).note(line)
     })
   command.addCommand(reportCommand(messenger))
   return command
+}
+
+export const DOCTOR_DEEP_OPTION =
+  "also read every page of the store and check every search index (about 30 s for 6 GB); without it, only the file header and schema"
+
+const summaryOptions = (command: Command, app: string) => ({
+  deep: command.opts<{ deep?: boolean }>().deep === true,
+  command: app,
+})
+
+/** The plain-words account of a damaged store, under the answer. */
+export const damageNotes = (store: unknown): string[] => {
+  const damage = (store as { damage?: { what: string; external_unaffected: string; steps: string[] } } | undefined)
+    ?.damage
+  return damage ? [damage.what, damage.external_unaffected, ...damage.steps.map((step) => `next: ${step}`)] : []
 }
 
 const INCLUDES = [
@@ -189,7 +206,7 @@ const diagnose = async (
         cli,
         config: { path, found: existsSync(path), issues: [] },
         settings: { error: messageOf(error) },
-        store: snakeKeys(await storeSummary(env)),
+        store: snakeKeys(await storeSummary(env, summaryOptions(command, app.command))),
         runs: { directory: runsDirFor(app, env), kept: listRuns(runsDirFor(app, env)).length },
         files: filesReport(files),
       },
@@ -214,7 +231,7 @@ const diagnose = async (
         cli,
         profile: null,
         config,
-        store: snakeKeys(await storeSummary(env)),
+        store: snakeKeys(await storeSummary(env, summaryOptions(command, app.command))),
         readers: engineStates(),
         runs: { directory: runsDirFor(app, env), kept: listRuns(runsDirFor(app, env)).length },
         files: filesReport(files),
@@ -251,7 +268,7 @@ const diagnose = async (
       account: { remembered: account?.account ?? null },
       // A session file on disk says nothing about whether the messenger still accepts it.
       login: { state: "not checked" },
-      store: snakeKeys(await storeSummary(env)),
+      store: snakeKeys(await storeSummary(env, summaryOptions(command, app.command))),
       readers: engineStates(),
       sends: sendsState(new SendJournal(sendsPathFor(app, profile, env))),
       flood: floodState(new FloodMemory(flood)),
