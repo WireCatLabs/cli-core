@@ -6,8 +6,9 @@ import * as v from "valibot"
 import { answerEntity } from "../../cli/answer-entity.js"
 import { environmentOf, outputFor } from "../../cli/context.js"
 import { FETCH, LOCAL_READ, REMOTE_READ } from "../../cli/effects.js"
-import { itemOf, listOf, renderAnswer, snakeKeys } from "../../cli/envelope.js"
+import { itemOf, listOf, snakeKeys } from "../../cli/envelope.js"
 import { listQuery, typedQuery, withQuery } from "../../cli/list-query.js"
+import { answerLocally, type ShownTime } from "../../cli/local-times.js"
 import { messagesAnswer, offsetOf, shownOf } from "../../cli/messenger/search-answers.js"
 import { backendRequest, noteServer, serverSearchOptions } from "../../cli/messenger/search-backend-options.js"
 import { positiveCount } from "../../cli/paging.js"
@@ -258,26 +259,34 @@ Search guide: https://github.com/WireCatLabs/cli-core/blob/main/docs/search/quer
     const issues = serverIssues(found.server)
     if (issues.length)
       answer.meta = { ...answer.meta, complete: false, issues: [...(answer.meta?.issues ?? []), ...issues] }
-    renderAnswer(this, output, answer, () => {
-      if (!found.wordsReady)
-        output.renderer.note(`the word index is still being built — \`${mail.app.command} store migrate\` finishes it`)
-      noteServer(output, found.server)
-      if (found.items.length === 0)
-        output.renderer.note(
-          found.server && !found.server.skipped
-            ? "nothing found in the local store or on the mail server"
-            : "nothing found — only mail sync stored is searched",
-        )
-      const shown = shownOf(found.items.length, (page - 1) * limit, found.total)
-      if (shown) output.renderer.note(shown)
-      return found.items.map((item) => `${hitText(item, level)}\n`).join("")
-    })
+    answerLocally(
+      this,
+      output,
+      answer,
+      (local) => {
+        if (!found.wordsReady)
+          output.renderer.note(
+            `the word index is still being built — \`${mail.app.command} store migrate\` finishes it`,
+          )
+        noteServer(output, found.server)
+        if (found.items.length === 0)
+          output.renderer.note(
+            found.server && !found.server.skipped
+              ? "nothing found in the local store or on the mail server"
+              : "nothing found — only mail sync stored is searched",
+          )
+        const shown = shownOf(found.items.length, (page - 1) * limit, found.total)
+        if (shown) output.renderer.note(shown)
+        return found.items.map((item) => `${hitText(item, level, local)}\n`).join("")
+      },
+      options.timezone,
+    )
   })
   return new Command("search").summary("search the stored mail").description("find stored emails").addCommand(leaf)
 }
 
-const shownText = (emails: ShownMail[]) =>
-  `${emails.map((email) => [hitText(email, "full"), attachmentsText(email)].filter(Boolean).join("\n")).join("\n\n")}\n`
+const shownText = (emails: ShownMail[], local: ShownTime) =>
+  `${emails.map((email) => [hitText(email, "full", local), attachmentsText(email)].filter(Boolean).join("\n")).join("\n\n")}\n`
 
 const messagesCommand = (mail: MailReads): Command => {
   const messages = new Command("messages").summary("read stored emails").description("read the emails sync stored")
@@ -317,7 +326,7 @@ const messagesCommand = (mail: MailReads): Command => {
       })
       const output = outputFor(this)
       const shown = emails.map((email) => snakeKeys(atDetail(email)))
-      renderAnswer(
+      answerLocally(
         this,
         output,
         beforeN || afterN
@@ -326,7 +335,7 @@ const messagesCommand = (mail: MailReads): Command => {
               shown.find((_, at) => emails[at]?.anchor) ?? shown[0],
               unread ? { meta: { complete: false, issues: [unread] } } : undefined,
             ),
-        () => shownText(emails),
+        (local) => shownText(emails, local),
       )
     })
   messages.addCommand(acknowledgeCommand(mail))
@@ -396,7 +405,7 @@ const conversationsCommand = (mail: MailReads): Command => {
         last_email_at: thread.lastEmailAt === null ? null : new Date(thread.lastEmailAt).toISOString(),
         untrusted: ["subject"],
       }))
-      renderAnswer(
+      answerLocally(
         this,
         outputFor(this),
         listOf("conversations list", {
@@ -406,11 +415,11 @@ const conversationsCommand = (mail: MailReads): Command => {
           page,
           ...(typed.trim() ? { args: { query: typed } } : {}),
         }),
-        () =>
+        (local) =>
           items
             .map(
               (one) =>
-                `${one.ref}\n  ${one.last_email_at ?? "time unknown"}  ${one.emails_count}  ${one.subject ?? ""}\n`,
+                `${one.ref}\n  ${one.last_email_at === null ? "time unknown" : local(one.last_email_at)}  ${one.emails_count}  ${one.subject ?? ""}\n`,
             )
             .join(""),
       )
@@ -443,11 +452,11 @@ const conversationsCommand = (mail: MailReads): Command => {
         )
       })
       const items = emails.map((email) => snakeKeys(atDetail(email)))
-      renderAnswer(
+      answerLocally(
         this,
         outputFor(this),
         listOf("conversations show", { items, limit: Math.max(1, items.length), has_more: false }),
-        () => shownText(emails),
+        (local) => shownText(emails, local),
       )
     })
   return conversations
