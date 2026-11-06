@@ -12,8 +12,9 @@ import {
 import { Command } from "commander"
 import { environmentOf, outputFor } from "../../cli/context.js"
 import { LOCAL_READ } from "../../cli/effects.js"
-import { listOf, renderAnswer } from "../../cli/envelope.js"
+import { listOf } from "../../cli/envelope.js"
 import { listQuery, nativeField, nativeTerms, queryHelp, typedQuery } from "../../cli/list-query.js"
+import { answerLocally } from "../../cli/local-times.js"
 import { pointsOf } from "../../cli/messenger/catch-up.js"
 import { catchUpQuery, SUMMARY_UNTRUSTED, summaryOf } from "../../cli/messenger/catch-up-answers.js"
 import { messageItem } from "../../cli/messenger/message-items.js"
@@ -264,13 +265,15 @@ const holderReview = async (command: Command, mail: MailReads, holder: string, q
       : []),
   ]
   const output = outputFor(command)
-  renderAnswer(command, output, answer, () => {
+  answerLocally(command, output, answer, (local) => {
     output.renderer.note(
       read.mark
         ? `${holder}: past ${read.mark.throughId}${emails.length ? `; findings key ${read.findingsKey}` : ""}; acknowledge with --cursor ${read.cursor}${read.more ? "; more after these" : ""}`
         : `${holder} has no mark yet: it starts from now — acknowledge with --cursor ${read.cursor}`,
     )
-    return emails.map((hit) => `${hitText(hit)}${markText(marks.get(hit.id), hit.excerptOnly)}\n`).join("")
+    return emails
+      .map((hit) => `${hitText(hit, undefined, local)}${markText(marks.get(hit.id), hit.excerptOnly)}\n`)
+      .join("")
   })
 }
 
@@ -368,7 +371,7 @@ an agent over MCP, and each scheduled run.`,
       const output = outputFor(this)
       const answer = reviewAnswer(found, mailbox, saved !== undefined, stepsFor(mail.mount, mailbox))
       if (meta) answer.meta = { ...meta, ...answer.meta }
-      renderAnswer(this, output, answer, () => {
+      answerLocally(this, output, answer, (local) => {
         const read = found.chats.flatMap((chat) => chat.messages)
         if (found.unanswered || found.waiting)
           output.renderer.note(
@@ -377,14 +380,17 @@ an agent over MCP, and each scheduled run.`,
               found.waiting ? `waiting ${found.waiting.olderThanHours}h or more` : "",
             ]
               .filter(Boolean)
-              .join(", ")}, threads active from ${found.since}`,
+              .join(", ")}, threads active from ${local(found.since)}`,
           )
-        else output.renderer.note(`from ${found.since} to ${found.until}${found.complete ? "" : ", incomplete"}`)
+        else
+          output.renderer.note(
+            `from ${local(found.since)} to ${local(found.until)}${found.complete ? "" : ", incomplete"}`,
+          )
         if (found.quiet > 0) output.renderer.note(`bulk:false left out ${found.quiet} threads`)
         if (read.length === 0) output.renderer.note("nothing new in the stored mail")
         return read
           .sort((a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp))
-          .map((hit) => `${hitText(hit)}${markText(hit.marks)}\n`)
+          .map((hit) => `${hitText(hit, undefined, local)}${markText(hit.marks)}\n`)
           .join("")
       })
       saved?.save(found.checked ?? {}, found.complete ? { through: found.until } : {})

@@ -7,6 +7,7 @@ import { environmentOf, outputFor } from "../context.js"
 import { LOCAL_READ, NO_EFFECTS } from "../effects.js"
 import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { typedQuery, withQuery } from "../list-query.js"
+import { answerLocally } from "../local-times.js"
 import { positiveCount } from "../paging.js"
 import { lineOf } from "../steps.js"
 import { RUNS_QUERY, runListFilter } from "./query.js"
@@ -38,7 +39,7 @@ export const runsCommand = (app: AppIdentity): Command => {
       const { renderer } = output
       const runs = listRuns(dir(this), { atLeast: page * limit + 1, filter })
       const shown = runs.slice((page - 1) * limit, page * limit)
-      renderAnswer(
+      answerLocally(
         this,
         output,
         listOf("runs list", {
@@ -72,7 +73,7 @@ export const runsCommand = (app: AppIdentity): Command => {
       const { problems } = this.opts<{ problems?: boolean }>()
       const shown = problems ? events.filter(notable) : events
       // Events are log records as written; only the run's own fields are renamed here.
-      renderAnswer(
+      answerLocally(
         this,
         output,
         itemOf({

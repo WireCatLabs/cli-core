@@ -7,6 +7,20 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`answerLocally` and `wallClock` in `@wirecat/cli-core/cli`.** `answerLocally` answers as `renderAnswer` does, and a
+  person reads each UTC time as `YYYY-MM-DD HH:MM` in the zone in use, with one `times in <zone>` line on stderr; a
+  `view` gets the formatter to build its text with. JSON, JSONL, `--compact` and agents keep UTC. `hitText` takes the
+  formatter as an optional third argument. mail can drop its own copy (`src/commands/times.ts`).
+
+### Fixed
+
+- **`search messages`, `messages show`, `conversations list|show`, mail `review`, `runs list` and `runs show` show a
+  person times in the local zone** (WC-TIME-4), with a last line `times in <zone>`. They printed UTC ISO strings
+  such as `2026-10-03T09:00:00.000Z`. `search messages --timezone` decides the zone shown. JSON and storage keep UTC.
+  `runs list|show` is shared by every tool on cli-core; the mail screens reach mail and memo at their next bump.
+
 ## 0.586.0 — 06.11.2026
 
 ### Added

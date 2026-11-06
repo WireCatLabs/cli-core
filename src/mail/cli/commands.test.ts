@@ -139,17 +139,19 @@ const seeded = async (
         },
       }),
   }
-  const mail = async (...argv: string[]) => {
+  const answered = async (tty: boolean, argv: string[]) => {
     const streams = captureStreams()
-    const code = await run(["ya", ...argv], definition, { streams, tty: false, env })
+    const code = await run(["ya", ...argv], definition, { streams, tty, env })
     return { code, out: streams.stdout.join(""), err: streams.stderr.join("") }
   }
+  const mail = (...argv: string[]) => answered(false, argv)
+  const person = (...argv: string[]) => answered(true, argv)
   const json = async (...argv: string[]) => {
     const answer = await mail(...argv, "--json", "--debug")
     expect(answer.code, answer.err).toBe(0)
     return JSON.parse(answer.out)
   }
-  return { mail, json }
+  return { mail, person, json }
 }
 
 const BILL = "msg:email/me%40example.com/thread-bill/%3Cbill%40example.com%3E"
@@ -262,6 +264,33 @@ describe("mail read commands", () => {
       const answer = await mail(...argv, "--json")
       expect(answer.code).not.toBe(0)
       expect(answer.err).not.toContain("no stored thread")
+    }
+  })
+
+  it("shows a person mail's times in the local zone, with one line naming it, and keeps UTC in JSON", async () => {
+    const before = process.env.TZ
+    process.env.TZ = "America/Los_Angeles"
+    try {
+      const { person, json } = await seeded()
+      const utc = /\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})/
+      for (const argv of [
+        ["search", "messages", "счёт"],
+        ["messages", "show", BILL],
+        ["conversations", "list"],
+        ["conversations", "show", "chat:email/me%40example.com/thread-bill"],
+      ]) {
+        const shown = await person(...argv)
+        expect(shown.code, shown.err).toBe(0)
+        expect(shown.out, argv.join(" ")).toMatch(/2026-10-\d{2} 02:00/)
+        expect(shown.out, argv.join(" ")).not.toMatch(utc)
+        expect(shown.err, argv.join(" ")).toContain("times in America/Los_Angeles")
+      }
+      const zoned = await person("search", "messages", "счёт", "--timezone", "Asia/Vladivostok")
+      expect(zoned.out).toContain("2026-10-03 19:00")
+      expect(zoned.err).toContain("times in Asia/Vladivostok")
+      expect((await json("messages", "show", BILL)).item.timestamp).toBe("2026-10-03T09:00:00.000Z")
+    } finally {
+      process.env.TZ = before
     }
   })
 })
