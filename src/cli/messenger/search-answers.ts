@@ -333,6 +333,9 @@ const ALL_HIT_UNTRUSTED: Record<HitItem["kind"], string[] | undefined> = {
   note: undefined,
   event: ["title", "excerpt"],
   meeting: ["title", "excerpt", "sender_name"],
+  // A CRM's copy is typed by the CRM's users; the owner's own deal is his, but one rule keeps a hit's marking simple.
+  deal: ["title", "excerpt"],
+  lead: ["title", "excerpt"],
 }
 
 export const allHitItem = (item: SearchAllItem | MeetingSearchItem): HitItem =>

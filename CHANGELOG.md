@@ -7,6 +7,15 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`crm` is a provider kind, and `search all` reads deals and leads.** A CRM CLI registers its provider with
+  `kind: "crm"` and `opens: CRM_OPENS` (`deals show`, `leads show`, `pipelines show`). `searchAll` has a resource
+  `crm` that finds deals and leads, the owner's own and every CRM account's copies, by the words of their title in
+  any letter case; its hits are `deal` and `lead`, their title and excerpt marked untrusted. A query with a field,
+  a wildcard or NOT skips `crm` with its reason. `--source` and a profile lock narrow it to the accounts named.
+  `crm` joins the default `RESOURCES_SEARCHED`; tg, max, wa and the calendar CLIs pass their own lists and are unchanged.
+
 ## 0.588.0 — 06.11.2026
 
 ### Changed — may break callers

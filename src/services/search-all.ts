@@ -7,7 +7,7 @@ import { INTERNAL_NOTES, kindIn } from "../domain/providers.js"
 import { runEmbedders } from "../embeddings/embed.js"
 import { DEFAULT_TEXT_MODEL } from "../embeddings/models.js"
 import type { MessengerTraits } from "../ports/traits.js"
-import { MESSAGE_PARSING } from "../search/lucene/types.js"
+import { MESSAGE_PARSING, SEARCH_QUERY } from "../search/lucene/types.js"
 import { planQuestion, questionLookup } from "../search/question-plan.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
 import { calendarAccounts, searchEvents } from "./events-search.js"
@@ -19,12 +19,12 @@ import type { SearchCoverage } from "./messages-search.js"
 import { notesScopeOf, RRF_K, searchNotes } from "./notes-search.js"
 import type { Backend, ServerOptions, ServerSearched } from "./server-search.js"
 
-export const RESOURCES_SEARCHED = ["messages", "mail", "notes", "events"] as const
+export const RESOURCES_SEARCHED = ["messages", "mail", "notes", "events", "crm"] as const
 export type SearchedResource = (typeof RESOURCES_SEARCHED)[number]
 
 export interface SearchAllItem {
-  kind: "message" | "mail" | "note" | "document" | "event"
-  /** `msg:…` for a message or a mail, `note:…` for a note, `event:…` for a calendar event. */
+  kind: "message" | "mail" | "note" | "document" | "event" | "deal" | "lead"
+  /** `msg:…` for a message or a mail, `note:…` for a note, `event:…` for a calendar event, `deal:…`, `lead:…`. */
   ref: string
   provider: string
   /** The account it was found in; a note's folder id, or `internal` for a note written in memo. */
@@ -93,7 +93,7 @@ export interface SearchAllRequest {
   only?: readonly SearchedResource[]
   exact?: boolean
   timezone?: string
-  /** For messages only; mail, notes and events are always the local store's. */
+  /** For messages only; mail, notes, events and CRM copies are always the local store's. */
   backend?: Backend
   server?: ServerOptions
   env?: NodeJS.ProcessEnv
@@ -131,7 +131,31 @@ const filtersBeside = (text: string): string | undefined => {
 }
 
 /**
- * `search all`: messages, mail, notes and calendar events from the local store — messages also from the messenger's
+ * What a deal or a lead is found by: words or phrases of its title, all of them, or any with OR. Anything else is
+ * refused, so `search all` skips deals with the reason instead of matching a field they do not have.
+ */
+export const titleWords = (text: string): { words: string[]; anyWord: boolean } => {
+  const { root } = parseLucene(text, SEARCH_QUERY)
+  const clauses = root.kind === "boolean" ? root.clauses : [{ node: root, occur: "must" as const }]
+  const words = clauses.map(({ node, occur }) =>
+    occur !== "must_not" &&
+    node.kind === "predicate" &&
+    node.field === "text" &&
+    (node.operator === "term" || node.operator === "phrase")
+      ? node.value
+      : (() => {
+          throw new CliError("validation_error", "deals and leads are found by the words of their title only")
+        })(),
+  )
+  return { words, anyWord: clauses.length > 1 && clauses.every(({ occur }) => occur === "should") }
+}
+
+/** The accounts of every CRM the store holds copies of. */
+export const crmAccounts = async (store: MessageStore): Promise<AccountKey[]> =>
+  (await store.accounts.accounts()).filter(({ provider }) => kindIn(provider) === "crm")
+
+/**
+ * `search all`: messages, mail, notes, calendar events and CRM deals and leads from the local store — messages also from the messenger's
  * server, as `search messages` asks it — each list best first, merged by reciprocal rank so no
  * resource's own scores have to be compared with another's. Events are read only when the store holds a calendar.
  */
@@ -334,6 +358,30 @@ export const searchAll = async (
             })),
           )
           accounts.push(...read.map(({ provider, account }) => ({ resource, provider, account })))
+        } else if (resource === "crm") {
+          const { words, anyWord } = titleWords(request.text)
+          const chosen = request.scope?.crm
+          const found = await store.deals.find({
+            words,
+            anyWord: anyWord || discover,
+            limit: Math.min(window + 1, 500),
+            ...(chosen === undefined ? {} : { accounts: chosen }),
+          })
+          hasMore ||= found.length > window
+          lists.push(
+            found.slice(0, window).map((deal) => ({
+              kind: deal.kind,
+              ref: deal.ref,
+              provider: deal.account?.provider ?? "crm",
+              account: deal.account?.account ?? INTERNAL_NOTES,
+              title: deal.title,
+              timestamp: deal.updatedAt,
+              text: deal.summary,
+              foundBy: ["title"],
+            })),
+          )
+          const read = chosen ?? [...(await crmAccounts(store)), { provider: "crm", account: INTERNAL_NOTES }]
+          for (const { provider, account } of read) accounts.push({ resource, provider, account })
         } else lists.push(await messagesOf(resource))
         searched.push(resource)
       } catch (error) {

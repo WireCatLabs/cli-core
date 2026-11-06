@@ -3,7 +3,7 @@ import type { Provider } from "./models.js"
 import { REF_KINDS, type RefKindName } from "./references.js"
 
 /** What a search reads; the same names `--only`, `searched` and `skipped` use. */
-export const KINDS = ["messages", "mail", "notes", "documents", "meetings", "events"] as const
+export const KINDS = ["messages", "mail", "notes", "documents", "meetings", "events", "crm"] as const
 export type Kind = (typeof KINDS)[number]
 
 export interface ProviderEntry {
@@ -17,6 +17,8 @@ export interface ProviderEntry {
 }
 
 const MESSENGER_OPENS = { chat: "messages list", message: "messages show", contact: "contacts show" } as const
+/** What a CRM CLI's entry gives as `opens`: the read commands `addCrmCommands` mounts. */
+export const CRM_OPENS = { deal: "deals show", lead: "leads show", pipeline: "pipelines show" } as const
 
 /** The seed: what cli-core knows before any CLI has written its entry into the store. */
 export const PROVIDERS: readonly ProviderEntry[] = [
