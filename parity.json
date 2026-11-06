@@ -3122,6 +3122,7 @@
     "doctor": {
       "in": "all",
       "options": {
+        "--deep": "all",
         "--online": "all"
       }
     },
@@ -4823,6 +4824,12 @@
       "in": "all"
     },
     "store rebuild": {
+      "in": "all"
+    },
+    "store recover": {
+      "in": "all"
+    },
+    "store recover run": {
       "in": "all"
     },
     "store repair": {
