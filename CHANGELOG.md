@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.593.0 — 06.11.2026
+
 ### Added
 
 - **`questionLookup` is public** (`@wirecat/cli-core/services`): the rule `search all` uses to search a question
