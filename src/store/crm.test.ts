@@ -227,11 +227,13 @@ it("keeps a deal pipeline and a lead pipeline with the same id apart", async () 
   ).toBe(1)
 })
 
-it("leaves out a pipeline the CRM no longer lists, keeps its deals, and lists it again when the CRM does", async () => {
+it("leaves out a pipeline the CRM no longer lists, keeps its deals, lists it again when the CRM does, and an empty list marks nothing", async () => {
   const store = await open()
   await store.crm.saveItems(PORTAL, "deal", [{ externalId: "d1", title: "x", pipeline: "p1", stage: "s1" }])
   await store.crm.savePipelines(PORTAL, "deal", [])
-  expect(await store.deals.pipelines({ account: PORTAL })).toEqual([])
+  expect(await store.deals.pipelines({ account: PORTAL })).toHaveLength(1)
+  await store.crm.savePipelines(PORTAL, "deal", [{ ...SALES, externalId: "p2", name: "Other" }])
+  expect((await store.deals.pipelines({ account: PORTAL })).map(({ name }) => name)).toEqual(["Other"])
   const [deal] = await store.deals.list({ account: PORTAL })
   expect(deal).toMatchObject({ externalId: "d1", pipelineName: "Sales" })
   expect((await store.deals.pipeline(deal?.pipeline as string)).name).toBe("Sales")

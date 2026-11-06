@@ -96,7 +96,10 @@ export const crmCopiesOver = (context: StoreContext, people: AccountPeople): Crm
     database
       .prepare("SELECT * FROM pipelines WHERE account_id = ? AND kind = ? AND external_id = ?")
       .get(accountId, kind, externalId)
-  /** One kind's whole list: a pipeline it lacks is marked deleted, one listed again comes back. */
+  /**
+   * One kind's whole list: a pipeline it lacks is marked deleted, one listed again comes back. An empty list marks
+   * nothing: a sign-in that lost its CRM rights lists no pipeline at all.
+   */
   const savePipelines = (key: AccountKey, kind: DealKind, pipelines: CrmPipeline[]): CrmSaved =>
     write(database, () => {
       const accountId = account(key)
@@ -120,6 +123,7 @@ export const crmCopiesOver = (context: StoreContext, people: AccountPeople): Crm
             .run(name, fold(name), at, id)
         saveStages(id, pipeline, at)
       }
+      if (pipelines.length === 0) return { saved: 0, skipped: [] }
       const listed = new Set(pipelines.map(({ externalId }) => externalId))
       const mark = database.prepare("UPDATE pipelines SET deleted_at = ?, updated_at = ? WHERE id = ?")
       for (const row of database
