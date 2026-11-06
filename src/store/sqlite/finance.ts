@@ -308,7 +308,7 @@ export const reviewedRowsOver = (context: StoreContext) => {
       return refuse(`${what} is a person: or organization: reference, not ${reference}`, "finance.party")
     return thing
   }
-  const reviewedOf = (row: Row, type: "invoice" | "payment" | "order"): Reviewed => ({
+  const reviewedOf = (row: Row, type: "invoice" | "payment" | "order" | "deal"): Reviewed => ({
     review: row.review as FinanceReview,
     author: authorOf(row),
     model: row.model == null ? null : String(row.model),
@@ -343,7 +343,7 @@ export const reviewedRowsOver = (context: StoreContext) => {
     }
   }
 
-  const keepEvidence = (type: "invoice" | "payment" | "order", id: number, by: ReturnType<typeof written>) => {
+  const keepEvidence = (type: "invoice" | "payment" | "order" | "deal", id: number, by: ReturnType<typeof written>) => {
     if (by.evidence.length) linkEvidence(context, { type, id }, by.evidence, by.owner ? "owner" : "agent")
   }
 
@@ -351,7 +351,12 @@ export const reviewedRowsOver = (context: StoreContext) => {
     if (by !== "owner") refuse(`only the owner ${what}`, "finance.owner-only", "permission_error")
   }
 
-  const keepDecision = (table: "invoices" | "payments" | "orders", id: number, by: Decider, reason?: string) => {
+  const keepDecision = (
+    table: "invoices" | "payments" | "orders" | "opportunities",
+    id: number,
+    by: Decider,
+    reason?: string,
+  ) => {
     const why = [by === "owner" ? undefined : by.reason.trim(), reason?.trim() || undefined].filter(Boolean).join(": ")
     if (by === "owner" && !why) return
     const decision = by === "owner" ? { by: "owner", reason: why } : { by: "agent", bot: by.bot, reason: why }

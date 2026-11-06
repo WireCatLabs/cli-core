@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs"
 import { calendarTables } from "./calendar.mjs"
 import { actor, c, del, fk, fts, id, meta, poly, queue, ts } from "./columns.mjs"
+import { crmTables } from "./crm.mjs"
 import { annotationTransferTable, documentRevisionsTable } from "./document-transfers.mjs"
 import { financeTables } from "./finance.mjs"
 import { recordTables } from "./records.mjs"
@@ -1695,6 +1696,13 @@ const GROUPS = [
     "Invoices, payments and what settles what, in exact minor units per currency, and the orders they pay for. Totals are per currency: the store converts nothing.",
     [],
     financeTables,
+  ],
+  [
+    "crm",
+    "Deals",
+    "The owner's sales pipelines and the deals in them, with the expected amount in exact minor units. A deal's stage and its status (open, won, lost) are kept apart.",
+    [],
+    crmTables,
   ],
   [
     "records",

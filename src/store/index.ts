@@ -132,6 +132,15 @@ export type { CatalogActor, CatalogEntry, CatalogInput, CatalogQuery, CatalogSto
 export { CATALOG_QUERY } from "./sqlite/catalog.js"
 export type { ChatMetadata } from "./sqlite/chats.js"
 export type {
+  Deal,
+  DealFilter,
+  DealInput,
+  DealPerson,
+  DealsStore,
+  Pipeline,
+  PipelineStage,
+} from "./sqlite/deals.js"
+export type {
   Email,
   EmailAddress,
   EmailAttachment,

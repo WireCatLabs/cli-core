@@ -1,10 +1,10 @@
 import { actor, c, del, fk, id, meta, ts } from "./columns.mjs"
 
-const MINOR = "in minor units of `currency` (kopecks, cents; yen for JPY): never a float"
+export const MINOR = "in minor units of `currency` (kopecks, cents; yen for JPY): never a float"
 const PARTY = "`person` or `organization`"
 
 // Who wrote a row and whether the owner stands behind it, as `facts` keeps it; `status` is the invoice's own.
-const reviewed = () => [
+export const reviewed = () => [
   c("review", "text", {
     notnull: true,
     note: "proposed, confirmed, rejected: the owner's entry is confirmed at once, an agent's or an import's waits",
