@@ -9,6 +9,10 @@ shape of this file.
 
 ### Added
 
+- **`patiently` and `waitForTurn` are public.** `patiently` (`@wirecat/cli-core/services`) sits out a provider's
+  short "wait N seconds" a few times and ends the run on a long one. `waitForTurn(pacer, { name, operation, warn,
+  sleep })` (`@wirecat/cli-core/sends`) waits for a call's turn in the profile's shared pace, warns on a wait a person
+  would notice and refuses one longer than five minutes as `rate_limited`; the messenger layer uses the same one.
 - **`store.crm` writes a CRM account's copies.** `savePipelines` and `saveItems` upsert pipelines, stages, deals and
   leads by the CRM's ids, with no review. A pipeline is keyed by its account, kind and id. An item's status is the
   CRM's own when it gives one (Pipedrive keeps won and lost on the deal), else its stage's outcome. Money keeps its

@@ -28,7 +28,7 @@ export {
   sendsPathFor,
 } from "./journal.js"
 export { type KeyedGuard, keyedGuard } from "./keyed-guard.js"
-export { DEFAULT_PACE, type PaceRate, Pacer, pacePathFor } from "./pace.js"
+export { DEFAULT_PACE, type PaceRate, Pacer, pacePathFor, type TurnOptions, waitForTurn } from "./pace.js"
 export {
   assertOverridesTighten,
   CEILING_KEY,

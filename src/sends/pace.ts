@@ -1,7 +1,8 @@
 import { readFileSync, renameSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
-import { resolvePaths } from "@wirecat/cli-base"
+import { CliError, resolvePaths } from "@wirecat/cli-base"
 import type { AppIdentity } from "../ports/app.js"
+import type { Warn } from "../runs/events.js"
 import { withFileLockAsync } from "./file-lock.js"
 
 /** How fast one profile may ask its messenger, counted across every process using it. */
@@ -74,4 +75,59 @@ export class Pacer {
     writeFileSync(temporary, JSON.stringify({ tat }), { mode: 0o600 })
     renameSync(temporary, this.path)
   }
+}
+
+/** Shorter waits pass unannounced; a person at a terminal would not notice them. */
+const ANNOUNCE_WAIT_MS = 5_000
+/** Longer than this the pace refuses instead of waiting, as a run already ends at a wait this long. */
+const LONGEST_PACE_WAIT_MS = 5 * 60_000
+
+export interface TurnOptions {
+  /** The provider, as a person calls it: `Telegram`, `Bitrix24`. */
+  name: string
+  /** The call waiting, as a warning names it. */
+  operation: string
+  /** Says so when the wait is long enough to notice, and when the pace file could not be read. */
+  warn?: Warn
+  /** Waits; a timer when absent. A test or a cancellable run passes its own. */
+  sleep?: (ms: number) => Promise<void>
+  now?: () => number
+}
+
+/**
+ * Waits for this call's turn in the profile's pace, the same wait for every provider: a short one silently, a long
+ * one with a warning, and one longer than a run would wait is refused as `rate_limited`, nothing sent. A pace file
+ * that cannot be read lets the call go: pacing is a courtesy to the provider, not a lock.
+ */
+export const waitForTurn = async (pacer: Pacer, options: TurnOptions): Promise<void> => {
+  const { name, operation, warn } = options
+  const now = options.now ?? Date.now
+  let at = now()
+  try {
+    at = await pacer.reserve()
+  } catch (error) {
+    warn?.(`could not remember ${name}'s wait (${error instanceof Error ? error.message : String(error)})`, {
+      event: "warning",
+      code: "wait_not_remembered",
+      operation,
+    })
+  }
+  const waitMs = at - now()
+  if (waitMs <= 0) return
+  if (waitMs > LONGEST_PACE_WAIT_MS)
+    throw new CliError(
+      "rate_limited",
+      `${name} asked this profile to wait, ${Math.ceil(waitMs / 1000)} s are left — nothing was sent to ${name}`,
+      { retry_after_ms: waitMs, retry_at: new Date(at).toISOString(), remembered: true },
+    )
+  if (waitMs >= ANNOUNCE_WAIT_MS) {
+    const seconds = Math.ceil(waitMs / 1000)
+    warn?.(`waiting ${seconds} s to keep this profile's pace with ${name}`, {
+      event: "warning",
+      code: "pace_wait",
+      operation,
+      counts: { seconds },
+    })
+  }
+  await (options.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))))(waitMs)
 }

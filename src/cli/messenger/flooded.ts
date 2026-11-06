@@ -3,16 +3,12 @@ import { isCliFailure } from "../../errors/failures.js"
 import { type AccountStanding, type MessengerAdapter, throughWrapper } from "../../ports/messenger.js"
 import { providerErrorKey, type Warn } from "../../runs/events.js"
 import { type FloodMemory, holdEnd, type SendBlock } from "../../sends/flood.js"
-import type { Pacer } from "../../sends/pace.js"
+import { type Pacer, waitForTurn } from "../../sends/pace.js"
 
 const LONG_LIVED = new Set(["self", "newSendId", "close", "formatMarkdown", "formatHtml", "storedChats"])
 /** Neither held nor paced, as they listen for as long as the run does; what ends them is still remembered. */
 const LISTENING = new Set(["watch", "feed", "listen", "listenHistory"])
 const BLOCKING = new Set<AccountStanding["state"]>(["frozen", "limited", "banned"])
-/** Shorter waits for the pace pass unannounced; a person at a terminal would not notice them. */
-const ANNOUNCE_WAIT_MS = 5_000
-/** Longer than this the pace refuses instead of waiting, as a run already ends at a wait this long. */
-const LONGEST_PACE_WAIT_MS = 5 * 60_000
 
 const chatOf = (args: unknown[]): string | undefined =>
   typeof args[0] === "string" && /^-?\d+$/.test(args[0]) ? args[0] : undefined
@@ -80,30 +76,7 @@ export const flooded = (
   }
 
   const turn = async (operation: string) => {
-    if (!pacer) return
-    let at = Date.now()
-    await kept(operation, async () => {
-      at = await pacer.reserve()
-    })
-    const waitMs = at - Date.now()
-    if (waitMs <= 0) return
-    if (waitMs > LONGEST_PACE_WAIT_MS) {
-      throw new CliError(
-        "rate_limited",
-        `${name} asked this profile to wait, ${Math.ceil(waitMs / 1000)} s are left — nothing was sent to ${name}`,
-        { retry_after_ms: waitMs, retry_at: new Date(at).toISOString(), remembered: true },
-      )
-    }
-    if (waitMs >= ANNOUNCE_WAIT_MS) {
-      const seconds = Math.ceil(waitMs / 1000)
-      warn(`waiting ${seconds} s to keep this profile's pace with ${name}`, {
-        event: "warning",
-        code: "pace_wait",
-        operation,
-        counts: { seconds },
-      })
-    }
-    await new Promise((resolve) => setTimeout(resolve, waitMs))
+    if (pacer) await waitForTurn(pacer, { name, operation, warn })
   }
 
   return throughWrapper(messenger, {} as MessengerAdapter, (operation, call) => {
