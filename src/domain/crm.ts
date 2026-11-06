@@ -15,10 +15,7 @@ export interface CrmStage {
 }
 
 export interface CrmPipeline {
-  /**
-   * Unique among the account's pipelines of its kind. Until the store's key is widened, one with the id of a stored
-   * pipeline of the other kind is skipped and named.
-   */
+  /** Unique among the account's pipelines of its kind; a deal pipeline and a lead pipeline may share one. */
   externalId: string
   name: string
   stages: CrmStage[]

@@ -1960,10 +1960,11 @@ export const pipelines = sqliteTable(
     nameFolded: text("name_folded").notNull(),
     createdAt: integer("created_at").notNull(),
     updatedAt: integer("updated_at").notNull(),
+    deletedAt: integer("deleted_at"),
   },
   (table) => [
-    uniqueIndex("pipelines_by_account_id_external_id")
-      .on(table.accountId, table.externalId)
+    uniqueIndex("pipelines_by_account_id_kind_external_id")
+      .on(table.accountId, table.kind, table.externalId)
       .where(sql`account_id IS NOT NULL AND external_id IS NOT NULL`),
     uniqueIndex("pipelines_by_name_folded_kind").on(table.nameFolded, table.kind).where(sql`account_id IS NULL`),
   ],
@@ -1983,6 +1984,7 @@ export const pipelineStages = sqliteTable(
     externalId: text("external_id"),
     createdAt: integer("created_at").notNull(),
     updatedAt: integer("updated_at").notNull(),
+    deletedAt: integer("deleted_at"),
   },
   (table) => [
     unique().on(table.pipelineId, table.nameFolded),

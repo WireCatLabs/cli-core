@@ -28,6 +28,15 @@ shape of this file.
   anything is sent, and that a lost answer ends after one request.
 - **`CrmItem.closedReason`** is stored as the deal's or lead's `closed_reason`, and `store.crm.refOf` finds the stored
   copy of a CRM id.
+- **A CRM's deal and lead pipelines may share an id (store version 53).** The unique key of a CRM account's pipelines
+  is now its account, kind and id, so `savePipelines` stores a lead pipeline whose id a deal pipeline already has,
+  where it used to skip it as `crm.pipeline-clash`. That reason is gone, and `crmSourceContract` checks pipeline ids
+  are unique within each kind only.
+- **Pipelines and stages the CRM no longer lists are marked deleted (store version 53),** never removed: deals may
+  still stand in them. `savePipelines` takes a kind's whole list, marks what it lacks and brings back what it lists
+  again. A deleted pipeline is left out of `pipelines()` and of a lookup by name, and still found by its
+  `pipeline:<id>`. A deleted stage is only marked. The migration adds columns and swaps one index; `minCompatible`
+  stays 34.
 
 ## 0.593.0 — 06.11.2026
 

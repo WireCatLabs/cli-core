@@ -1033,5 +1033,14 @@ export const GENERATED: { name: string; statements: string[] }[] = [
       "-- The default lead pipeline, so a lead can be recorded before the owner or an agent makes one.\nINSERT INTO pipelines (kind, name, name_folded, created_at, updated_at)\n  VALUES ('lead', 'Leads', 'leads', CAST(strftime('%s', 'now') AS INTEGER) * 1000, CAST(strftime('%s', 'now') AS INTEGER) * 1000);",
       "INSERT INTO pipeline_stages (pipeline_id, name, name_folded, position, outcome, created_at, updated_at)\n  SELECT p.id, v.name, v.name, v.position, v.outcome, p.created_at, p.created_at FROM pipelines p,\n    (SELECT 'new' AS name, 1 AS position, 'open' AS outcome UNION ALL SELECT 'contacted', 2, 'open'\n      UNION ALL SELECT 'qualified', 3, 'open' UNION ALL SELECT 'won', 4, 'won' UNION ALL SELECT 'lost', 5, 'lost') v\n  WHERE p.kind = 'lead' AND p.name_folded = 'leads' AND p.account_id IS NULL;"
     ]
+  },
+  {
+    "name": "20261106165009_version-53-crm-pipelines",
+    "statements": [
+      "ALTER TABLE `pipeline_stages` ADD `deleted_at` integer;",
+      "ALTER TABLE `pipelines` ADD `deleted_at` integer;",
+      "DROP INDEX IF EXISTS `pipelines_by_account_id_external_id`;",
+      "CREATE UNIQUE INDEX `pipelines_by_account_id_kind_external_id` ON `pipelines` (`account_id`,`kind`,`external_id`) WHERE account_id IS NOT NULL AND external_id IS NOT NULL;"
+    ]
   }
 ]

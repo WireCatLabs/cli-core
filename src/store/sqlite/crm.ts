@@ -15,7 +15,7 @@ import { write } from "./transaction.js"
 /** What the store could not keep, and why: an item whose stage is not stored or whose field it refuses, or a pipeline. */
 export interface CrmSkipped {
   externalId: string
-  reason: "crm.stage-unknown" | "crm.item-invalid" | "crm.pipeline-clash"
+  reason: "crm.stage-unknown" | "crm.item-invalid"
   message: string
 }
 
@@ -96,27 +96,12 @@ export const crmCopiesOver = (context: StoreContext, people: AccountPeople): Crm
     database
       .prepare("SELECT * FROM pipelines WHERE account_id = ? AND kind = ? AND external_id = ?")
       .get(accountId, kind, externalId)
-  // Store version 52 keeps a pipeline's id unique per account, not per kind: a lead pipeline sharing a deal pipeline's
-  // id cannot be stored until a migration widens that key, so it is skipped and named, not written over the other.
-  const otherKindHolds = (accountId: number, kind: DealKind, externalId: string) =>
-    database
-      .prepare("SELECT 1 FROM pipelines WHERE account_id = ? AND kind <> ? AND external_id = ?")
-      .get(accountId, kind, externalId) !== undefined
-
+  /** One kind's whole list: a pipeline it lacks is marked deleted, one listed again comes back. */
   const savePipelines = (key: AccountKey, kind: DealKind, pipelines: CrmPipeline[]): CrmSaved =>
     write(database, () => {
       const accountId = account(key)
       const at = now()
-      const skipped: CrmSkipped[] = []
       for (const pipeline of pipelines) {
-        if (otherKindHolds(accountId, kind, pipeline.externalId)) {
-          skipped.push({
-            externalId: pipeline.externalId,
-            reason: "crm.pipeline-clash",
-            message: `${kind} pipeline ${pipeline.externalId} has the id of a stored pipeline of the other kind`,
-          })
-          continue
-        }
         const name = textOf(pipeline.name, 80) ?? pipeline.externalId
         const held = pipelineOf(accountId, kind, pipeline.externalId)
         const id = held
@@ -129,13 +114,19 @@ export const crmCopiesOver = (context: StoreContext, people: AccountPeople): Crm
                 )
                 .get(accountId, pipeline.externalId, kind, name, fold(name), at, at)?.id,
             )
-        if (held && held.name !== name)
+        if (held && (held.name !== name || held.deleted_at != null))
           database
-            .prepare("UPDATE pipelines SET name = ?, name_folded = ?, updated_at = ? WHERE id = ?")
+            .prepare("UPDATE pipelines SET name = ?, name_folded = ?, updated_at = ?, deleted_at = NULL WHERE id = ?")
             .run(name, fold(name), at, id)
         saveStages(id, pipeline, at)
       }
-      return { saved: pipelines.length - skipped.length, skipped }
+      const listed = new Set(pipelines.map(({ externalId }) => externalId))
+      const mark = database.prepare("UPDATE pipelines SET deleted_at = ?, updated_at = ? WHERE id = ?")
+      for (const row of database
+        .prepare("SELECT id, external_id FROM pipelines WHERE account_id = ? AND kind = ? AND deleted_at IS NULL")
+        .all(accountId, kind))
+        if (!listed.has(String(row.external_id))) mark.run(at, at, Number(row.id))
+      return { saved: pipelines.length, skipped: [] }
     })
 
   /**
@@ -157,10 +148,13 @@ export const crmCopiesOver = (context: StoreContext, people: AccountPeople): Crm
     const listed = new Set(wanted.map(({ externalId }) => externalId))
     const taken = new Set(wanted.map(({ folded }) => folded))
     const rename = database.prepare("UPDATE pipeline_stages SET name_folded = ? WHERE id = ?")
+    const gone = database.prepare("UPDATE pipeline_stages SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL")
     for (const row of held) {
-      if (row.external_id != null && listed.has(String(row.external_id))) rename.run(`\u0000${row.id}`, Number(row.id))
+      const kept = row.external_id != null && listed.has(String(row.external_id))
+      if (kept) rename.run(`\u0000${row.id}`, Number(row.id))
       else if (taken.has(String(row.name_folded)))
         rename.run(`${row.name_folded} (${row.external_id ?? row.id})`, Number(row.id))
+      if (!kept) gone.run(at, Number(row.id))
     }
     const byId = new Map(held.map((row) => [String(row.external_id), row]))
     for (const stage of wanted) {
@@ -168,7 +162,8 @@ export const crmCopiesOver = (context: StoreContext, people: AccountPeople): Crm
       if (row)
         database
           .prepare(
-            "UPDATE pipeline_stages SET name = ?, name_folded = ?, position = ?, outcome = ?, updated_at = ? WHERE id = ?",
+            "UPDATE pipeline_stages SET name = ?, name_folded = ?, position = ?, outcome = ?, updated_at = ?, " +
+              "deleted_at = NULL WHERE id = ?",
           )
           .run(stage.name, stage.folded, stage.position, stage.outcome, at, Number(row.id))
       else

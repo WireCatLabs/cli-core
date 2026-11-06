@@ -16,9 +16,10 @@ export const crmTables = [
         note: "the name in one letter case: one per kind among the owner's own, any among a CRM's",
       }),
       ...ts(),
+      c("deleted_at", "integer", { note: "the CRM no longer lists it; kept, since deals may still stand in it" }),
     ],
     keys: [
-      "UNIQUE (account_id, external_id) WHERE account_id IS NOT NULL AND external_id IS NOT NULL",
+      "UNIQUE (account_id, kind, external_id) WHERE account_id IS NOT NULL AND external_id IS NOT NULL",
       "UNIQUE (name_folded, kind) WHERE account_id IS NULL",
     ],
   },
@@ -37,6 +38,7 @@ export const crmTables = [
       c("outcome", "text", { notnull: true, note: "open, won, lost: a CRM marks the stages that end a deal" }),
       c("external_id", "text", { note: "the stage's id in its pipeline's CRM" }),
       ...ts(),
+      c("deleted_at", "integer", { note: "the CRM no longer lists it; kept, since deals may still stand in it" }),
     ],
     keys: [
       "UNIQUE (pipeline_id, name_folded)",

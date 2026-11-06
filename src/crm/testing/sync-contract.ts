@@ -206,16 +206,13 @@ export const crmSyncContract = (make: () => CrmSyncFixture | Promise<CrmSyncFixt
           [["deal", "crm.stage-unknown", "d1"]],
         )
       }),
-      test("a pipeline sharing the other kind's pipeline id is named as an issue, and the rest syncs", async ({
-        source,
-        sync,
-        deals,
-      }) => {
+      test("a lead pipeline may share a deal pipeline's id", async ({ source, sync, deals }) => {
         source.setPipelines("lead", [{ ...LEAD_PIPELINE, externalId: SALES_PIPELINE.externalId }])
         source.put("deal", exampleDeal("d1"))
+        source.put("lead", exampleLead("l1", { pipeline: SALES_PIPELINE.externalId }))
         const run = await sync()
         assert.deepEqual(await deals(), ["d1"])
-        assert.ok(run.issues.some(({ kind, reason }) => kind === "lead" && reason === "crm.pipeline-clash"))
+        assert.deepEqual(run.issues, [])
       }),
       test("a contact joins a person by exact email, and a company never joins an organization by name", async ({
         source,
