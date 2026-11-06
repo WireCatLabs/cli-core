@@ -475,6 +475,7 @@ export { MODEL_CATALOGUE_QUERY, type ModelCatalogueOptions } from "./model-catal
 export { positiveCount, window, withPaging } from "./paging.js"
 export {
   type CommandPermissions,
+  type ConditionalKey,
   commandPathKey,
   commandPermissions,
   knownBeside,

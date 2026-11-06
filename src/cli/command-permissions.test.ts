@@ -5,6 +5,7 @@ import { captureStreams } from "@wirecat/cli-base"
 import { annotate, describeProgram } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { describe, expect, it, vi } from "vitest"
+import { CRM_WRITE_DEFAULTS, CRM_WRITE_KEYS, crmAlsoChecks } from "../crm/index.js"
 import { runCommandForAgent, toolsFromCommands } from "../mcp/agent.js"
 import type { Level } from "../sends/permissions.js"
 import { commandsCommand } from "./commands-command.js"
@@ -166,6 +167,36 @@ describe("a CLI that declares its own permission keys", () => {
       code: "permission_error",
       details: { permission: "api.calendar.events.delete" },
     })
+  })
+
+  it("**a CRM write's preview names the keys its arguments may add**, and a denied one does not stop it", async () => {
+    const { env } = fixture()
+    const configuration = settingsFor(app, {
+      permissions: commandPermissions({
+        extra: [...CRM_WRITE_KEYS, "api.crm.deal.update"],
+        defaults: CRM_WRITE_DEFAULTS,
+        alsoChecks: crmAlsoChecks(() => ["api.crm.deal.update"]),
+      }),
+    })
+    const definition: ProgramDefinition = {
+      app,
+      configuration,
+      commands: () => [
+        new Command("deals").addCommand(
+          annotate(new Command("update").argument("<ref>").action(vi.fn()), { effects: REMOTE_WRITE }),
+        ),
+      ],
+    }
+    const streams = captureStreams()
+    expect(await run(["work", "deals", "update", "deal:1", "--dry-run", "--json"], definition, { streams, env })).toBe(
+      0,
+    )
+    expect(JSON.parse(streams.stdout.join("")).item.permission.also).toEqual([
+      { key: "deals.move", level: "allow", when: "--stage" },
+      { key: "deals.close", level: "allow", when: "a won or lost stage" },
+      { key: "crm.assign-others", level: "deny", when: "--owner other than the sign-in's user" },
+      { key: "api.crm.deal.update", level: "allow" },
+    ])
   })
 
   it("**previews a write under the read-only lock** and sends nothing (WC-PERM-12)", async () => {
