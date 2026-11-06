@@ -240,3 +240,19 @@ it("leaves out a pipeline the CRM no longer lists, keeps its deals, lists it aga
   await store.crm.savePipelines(PORTAL, "deal", [SALES])
   expect((await store.deals.pipelines({ account: PORTAL })).map(({ name }) => name)).toEqual(["Sales"])
 })
+
+it("keeps a CRM's fields in its order and names a code it lists twice instead of keeping both", async () => {
+  const store = await open()
+  const field = (code: string, label: string) => ({ code, label, type: "string", multiple: false, filterable: true })
+  const saved = await store.crm.saveFields(PORTAL, "organization", [
+    field("B", "Second"),
+    field("A", "First"),
+    field("B", "Again"),
+  ])
+  expect(saved).toMatchObject({ saved: 2, skipped: [{ externalId: "B", reason: "crm.item-invalid" }] })
+  expect((await store.crm.fields(PORTAL, "organization")).map(({ code, label }) => [code, label])).toEqual([
+    ["B", "Second"],
+    ["A", "First"],
+  ])
+  expect(await store.crm.fields({ provider: "example-crm", account: "other" }, "organization")).toEqual([])
+})

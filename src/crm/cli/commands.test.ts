@@ -162,6 +162,38 @@ describe("CRM commands", () => {
     expect(stages.items.map(({ name }) => name)).toEqual(["New", "Converted", "Junk"])
   })
 
+  it("fields list answers a kind's synced fields in b24's shape, pages them, and refuses an unknown kind", async () => {
+    const { cli, source } = await setup()
+    source.setFields("person", [
+      { code: "UF_NOTE", label: "Note", type: "string", multiple: true, filterable: false },
+      { code: "UF_TIER", label: null, type: "integer", multiple: false, filterable: true },
+    ])
+    expect((await cli("fields", "list", "deals")).items).toEqual([])
+    await cli("sync")
+    expect((await cli("fields", "list", "deals")).items).toEqual([
+      {
+        code: "UF_SOURCE",
+        label: "Source",
+        type: "enumeration",
+        multiple: false,
+        filterable: true,
+        options: [
+          { id: "1", label: "Website" },
+          { id: "2", label: "Fair" },
+        ],
+        untrusted: ["label", "options.label"],
+      },
+    ])
+    const first = await cli("fields", "list", "people", "--limit", "1")
+    expect(first.items.map(({ code }) => code)).toEqual(["UF_NOTE"])
+    expect(first.page).toMatchObject({ has_more: true, limit: 1 })
+    expect((await cli("fields", "list", "people", "--limit", "1", "--all")).items).toHaveLength(2)
+    await expect(cli("fields", "list", "products")).rejects.toMatchObject({
+      code: "validation_error",
+      details: { reason: "field.unknown-kind", allowed: ["deals", "leads", "people", "organizations"] },
+    })
+  })
+
   it("pages a list, and shows only this profile's copies", async () => {
     const { cli, store } = await setup()
     await cli("sync")
@@ -175,11 +207,11 @@ describe("CRM commands", () => {
 
   it("a sync its page budget stops answers partial, with the step that goes on", async () => {
     const { cli } = await setup()
-    const stopped = await cli("sync", "--max-pages", "4")
+    const stopped = await cli("sync", "--max-pages", "8")
     expect(stopped.item).toMatchObject({ state: "partial", stopped: "requests" })
     expect(stopped.meta).toMatchObject({ complete: false })
     expect(stopped.next).toEqual([
-      expect.objectContaining({ step: "crm.sync", command: "sync", args: { max_pages: 4 } }),
+      expect.objectContaining({ step: "crm.sync", command: "sync", args: { max_pages: 8 } }),
     ])
     const status = await cli("store", "status")
     expect(status.items.map(({ kind, state }) => [kind, state])).toContainEqual(["deal", "partial"])

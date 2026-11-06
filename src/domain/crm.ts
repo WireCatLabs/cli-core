@@ -76,6 +76,21 @@ export interface CrmOrganization {
   metadata?: Record<string, unknown>
 }
 
+/** One of a CRM account's own fields on a kind: what the code a row's `metadata` is keyed by means. */
+export interface CrmField {
+  /** The CRM's key for it, unique in its kind. */
+  code: string
+  /** Its title in the CRM; null when the CRM gives none. */
+  label: string | null
+  /** The CRM's own word for its type, such as `string` or `enumeration`. */
+  type: string
+  multiple: boolean
+  /** Whether the CRM can filter a list by it. */
+  filterable: boolean
+  /** A list field's options in the CRM's order; absent on any other field. */
+  options?: { id: string; label: string }[]
+}
+
 export interface CrmRecords {
   deal: CrmItem
   lead: CrmItem

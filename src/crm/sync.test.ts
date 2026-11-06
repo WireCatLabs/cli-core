@@ -20,7 +20,7 @@ it("store status says which kinds a stopped sync left partial, and how much each
   const source = fakeCrmSource({ traits: { removedInChanges: true } })
   for (const id of ["d1", "d2", "d3"]) source.put("deal", exampleDeal(id))
   const now = Date.now()
-  await syncCrm(source, store, PORTAL, { now, budget: runBudget({ requests: 5 }) })
+  await syncCrm(source, store, PORTAL, { now, budget: runBudget({ requests: 9 }) })
   const { items } = await crmStatus(store, PORTAL, { profile: "work", now })
   expect(items.map(({ kind, state, stored }) => [kind, state, stored])).toEqual([
     ["organization", "complete", 0],

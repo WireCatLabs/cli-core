@@ -5,7 +5,7 @@ Every table of the shared store (tg, max, memo, zm) as its migrations create it.
 `drizzle/` must agree with it. `pnpm schema:check` fails when they do not, and `src/store/sqlite/schema.test.ts`
 checks every table and column of a new store against this page.
 
-120 tables, 25 full-text indexes.
+121 tables, 25 full-text indexes.
 
 ## Conventions
 
@@ -2068,6 +2068,28 @@ Each stage a deal or a lead entered and when, written by triggers on `deals` and
 | `changed_at` | integer | not null |  | the row's `created_at` or `updated_at` as its writer gave it |
 
 *Keys and indexes:* `INDEX (item_type, item_id)`, `INDEX (pipeline_id)`, `INDEX (from_stage_id)`, `INDEX (to_stage_id)`
+
+### `crm_fields`
+
+A CRM account's own fields on its deals, leads, contacts or companies, as its sync last listed them. Their values stay in each row's `metadata`, keyed by `code`, as `{ label, value }`.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | PK |  |  |
+| `account_id` | integer | not null | → `accounts.id` | the CRM account whose field it is |
+| `kind` | text | not null |  | deal, lead, person or organization: what the field is on |
+| `code` | text | not null |  | the field's key in the CRM, as values in `metadata` are keyed |
+| `label` | text |  |  | its title in the CRM; null when the CRM gives none |
+| `type` | text | not null |  | the CRM's own word for its type, such as string or enumeration |
+| `multiple` | integer | not null |  | 1 when it holds several values |
+| `filterable` | integer | not null |  | 1 when the CRM can filter a list by it |
+| `options` | text |  |  | JSON `[{ id, label }]`: a list field's options in the CRM's order; null on any other |
+| `position` | integer | not null |  | 1, 2, …: the order the CRM lists them in |
+| `created_at` | integer | not null |  | when this row was saved here |
+| `updated_at` | integer | not null |  | when this row last changed here |
+| `deleted_at` | integer |  |  | the CRM no longer lists it; values under its code may still stand |
+
+*Keys and indexes:* `UNIQUE (account_id, kind, code)`
 
 ## Source records
 

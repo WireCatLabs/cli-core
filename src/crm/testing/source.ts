@@ -1,5 +1,13 @@
 import { CliError } from "@wirecat/cli-base"
-import type { CrmItem, CrmKind, CrmOrganization, CrmPerson, CrmPipeline, CrmRecords } from "../../domain/crm.js"
+import type {
+  CrmField,
+  CrmItem,
+  CrmKind,
+  CrmOrganization,
+  CrmPerson,
+  CrmPipeline,
+  CrmRecords,
+} from "../../domain/crm.js"
 import type { DealKind } from "../../domain/deals.js"
 import type { CrmChanges, CrmIdPage, CrmSource, CrmSourceTraits } from "../source.js"
 import { CRM_VERBS, type CrmFields, type CrmVerb, type CrmWriteCapabilities, type CrmWriter } from "../writer.js"
@@ -31,6 +39,8 @@ export interface FakeCrmSource extends CrmSource, CrmWriter {
   /** Deletes a row: named in `removed` when `removedInChanges`, otherwise only missing from `ids()`. */
   delete(kind: CrmKind, externalId: string): void
   setPipelines(kind: DealKind, pipelines: CrmPipeline[]): void
+  /** The kind's own fields from the next `fields()` on: deals have `SOURCE_FIELD` and the rest none until set. */
+  setFields(kind: CrmKind, fields: CrmField[]): void
   /** The kind's cursors older than its latest change are refused, once, with `{ reset: true }`. */
   expireCursors(kind: CrmKind): void
   /** Lists no id at all, as a CRM does for a sign-in that lost its rights. */
@@ -38,7 +48,7 @@ export interface FakeCrmSource extends CrmSource, CrmWriter {
   /** The next write is carried out and its answer lost: it throws `outcome_unknown`. */
   loseNextAnswer(): void
   /** Requests made, by method. */
-  readonly calls: { pipelines: number; changes: number; ids: number }
+  readonly calls: { pipelines: number; fields: number; changes: number; ids: number }
   /** Writes sent, refused ones included. */
   readonly writes: FakeCrmWrite[]
 }
@@ -66,6 +76,19 @@ export const SALES_PIPELINE: CrmPipeline = {
   ],
 }
 
+/** A deal's list field, as a CRM lists one: what the fake's deals have. */
+export const SOURCE_FIELD: CrmField = {
+  code: "UF_SOURCE",
+  label: "Source",
+  type: "enumeration",
+  multiple: false,
+  filterable: true,
+  options: [
+    { id: "1", label: "Website" },
+    { id: "2", label: "Fair" },
+  ],
+}
+
 export const LEAD_PIPELINE: CrmPipeline = {
   externalId: "lead-1",
   name: "Example leads",
@@ -85,10 +108,11 @@ export const fakeCrmSource = (options: FakeCrmSourceOptions = {}): FakeCrmSource
   const size = options.pageSize ?? 2
   const rows = new Map<CrmKind, Map<string, Held>>()
   const pipelines: Record<DealKind, CrmPipeline[]> = { deal: [SALES_PIPELINE], lead: [LEAD_PIPELINE] }
+  const fields: Record<CrmKind, CrmField[]> = { deal: [SOURCE_FIELD], lead: [], person: [], organization: [] }
   let version = 0
   const expired = new Map<CrmKind, number>()
   let hidden = false
-  const calls = { pipelines: 0, changes: 0, ids: 0 }
+  const calls = { pipelines: 0, fields: 0, changes: 0, ids: 0 }
   const capabilities: CrmWriteCapabilities = {
     kinds: ["deal", "lead"],
     verbs: CRM_VERBS,
@@ -234,6 +258,13 @@ export const fakeCrmSource = (options: FakeCrmSourceOptions = {}): FakeCrmSource
     },
     setPipelines(kind, list) {
       pipelines[kind] = list
+    },
+    setFields(kind, list) {
+      fields[kind] = list
+    },
+    async fields(kind) {
+      calls.fields += 1
+      return fields[kind]
     },
     expireCursors(kind) {
       expired.set(kind, version)

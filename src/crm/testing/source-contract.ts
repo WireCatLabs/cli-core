@@ -70,6 +70,32 @@ export const crmSourceContract = (make: () => CrmSourceFixture | Promise<CrmSour
       },
     },
     {
+      name: "fields: unique codes in each kind, a type, yes-or-no flags, and a list field's options with unique ids",
+      async run() {
+        const { source } = await make()
+        if (!source.fields) return
+        for (const kind of source.traits.kinds) {
+          const fields = await source.fields(kind)
+          assert.ok(Array.isArray(fields), `${kind}: fields() answers a list`)
+          const codes = new Set<string>()
+          for (const field of fields) {
+            assert.ok(typeof field.code === "string" && field.code.trim(), `${kind}: a field has a code`)
+            assert.ok(!codes.has(field.code), `${kind} field ${field.code} is listed twice`)
+            codes.add(field.code)
+            assert.ok(field.label === null || typeof field.label === "string", `${field.code}: a label or null`)
+            assert.ok(typeof field.type === "string" && field.type.trim(), `${field.code} has a type`)
+            assert.equal(typeof field.multiple, "boolean", `${field.code}: multiple is true or false`)
+            assert.equal(typeof field.filterable, "boolean", `${field.code}: filterable is true or false`)
+            if (field.options === undefined) continue
+            const ids = new Set(field.options.map(({ id }) => id))
+            assert.equal(ids.size, field.options.length, `${field.code}: option ids are unique`)
+            for (const option of field.options)
+              assert.ok(typeof option.id === "string" && typeof option.label === "string", `${field.code}'s options`)
+          }
+        }
+      },
+    },
+    {
       name: "changes: a full list pages to its end, every item stands in a listed stage, fields in the neutral shape",
       async run() {
         const { source } = await make()
