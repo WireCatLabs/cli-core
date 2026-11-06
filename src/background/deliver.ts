@@ -80,6 +80,21 @@ export const headOf = (title: string, report: string, limit = CAPTION_CHARS): st
   return `${title}\n${line > room / 2 ? cut.slice(0, line) : cut}${more}`
 }
 
+/**
+ * `tg` answers a 400 from Telegram, which is what a refused HTML text is, as `validation_error`, and says nothing
+ * more exact. Any other code (network_error, outcome_unknown, provider_error…) may mean the message arrived.
+ */
+const REFUSED_CONTENT = "validation_error"
+
+const codeOf = (stderr: string): string | undefined => {
+  for (const line of stderr.split("\n").reverse()) {
+    try {
+      const { code } = (JSON.parse(line) as { error?: { code?: unknown } }).error ?? {}
+      if (typeof code === "string") return code
+    } catch {}
+  }
+}
+
 export interface Parcel {
   title: string
   /** A finished run: its output file, and the name the copy sent along has. */
@@ -200,7 +215,12 @@ export const deliver = async (
       }
       let ran = await system.run(argvOf(program, route, parcel.title, report, copy), childEnv, options)
       let fellBack = ""
-      if (route.kind === "telegram-bot" && ran.code !== 0 && ran.code !== TIMED_OUT) {
+      if (
+        route.kind === "telegram-bot" &&
+        ran.code !== 0 &&
+        ran.code !== TIMED_OUT &&
+        codeOf(ran.stderr) === REFUSED_CONTENT
+      ) {
         fellBack = errorOf(ran.stderr, ran.code)
         ran = await system.run(argvOf(program, route, parcel.title, report, copy, true), childEnv, options)
       }

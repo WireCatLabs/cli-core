@@ -27,6 +27,8 @@ const sender = (answer: Partial<Ran> = {}) => {
   return { system, sent }
 }
 
+const refused = (code: string) => `${JSON.stringify({ error: { code, reason: "x.y", message: "m" } })}\n`
+
 const found = { find: (name: string) => `/bin/${name}`, errorOf: (_: string, code: number) => `exit ${code}` }
 
 const report = (text: string): Parcel => {
@@ -118,6 +120,16 @@ describe("delivery", () => {
     expect(caption.match(/<a /g)?.length).toBe(caption.match(/<\/a>/g)?.length)
   })
 
+  it.each(["network_error", "outcome_unknown", "provider_error", "provider_unavailable"])(
+    "does not resend after %s, which can mean the first message arrived",
+    async (code) => {
+      const failing = sender({ code: 2, stderr: refused(code) })
+      const done = await deliver(failing.system, {}, ["telegram-bot:p/user:1"], report("**x**"), found)
+      expect(failing.sent).toHaveLength(1)
+      expect(done[0]).toMatchObject({ ok: false, reason: "delivery.failed" })
+    },
+  )
+
   it("falls back to plain text when the HTML is refused, and records why", async () => {
     const calls: string[][] = []
     const system: ServerSystem = {
@@ -125,7 +137,7 @@ describe("delivery", () => {
       run: async (argv) => {
         calls.push(argv)
         return argv.includes("--html")
-          ? { code: 2, stdout: "", stderr: "bad entities" }
+          ? { code: 2, stdout: "", stderr: refused("validation_error") }
           : { code: 0, stdout: "", stderr: "" }
       },
     }
