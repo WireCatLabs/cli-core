@@ -13,6 +13,8 @@ shape of this file.
   person reads each UTC time as `YYYY-MM-DD HH:MM` in the zone in use, with one `times in <zone>` line on stderr; a
   `view` gets the formatter to build its text with. JSON, JSONL, `--compact` and agents keep UTC. `hitText` takes the
   formatter as an optional third argument. mail can drop its own copy (`src/commands/times.ts`).
+- **cli-core accepts `@wirecat/cli-base` 0.80 (peer range `>=0.76.0 <0.81.0`) and builds with 0.80.0**, which
+  adds the `--write <id>` flag mail's `messages restore` takes. The range was `<0.80.0`.
 
 ### Fixed
 
