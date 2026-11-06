@@ -151,6 +151,8 @@ const dealSample = {
   deal: null,
   account: { provider: "example-crm", account: "portal" },
   external_id: "77",
+  assignee: "portal/user/7",
+  provider_metadata: { UF_SOURCE: { label: "Source", value: "Website", option_id: "1" } },
   people: [{ ref: "person:4", name: "Ana", owner: false, role: "contact" }],
   author: { type: "bot", id: "5", name: "example-crm", kind: "rule" },
   model: null,

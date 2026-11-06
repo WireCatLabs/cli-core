@@ -53,8 +53,20 @@ export interface CrmItem {
   updatedAt?: number | null
   /** The CRM's own page for it, http or https. */
   url?: string | null
-  /** What the CRM sends that has no column, such as custom fields with their labels; never a secret. */
+  /** The CRM user it is assigned to, by the user's id: never a contact's. */
+  assignee?: string | null
+  /**
+   * What the CRM sends that has no column; never a secret. Its own fields' values are here by code as `CrmValue`,
+   * which the deal's `provider_metadata` answers.
+   */
   metadata?: Record<string, unknown>
+}
+
+/** One of the CRM's own fields' values: its label, and for a list field the option's label and `option_id`. */
+export interface CrmValue {
+  label: string | null
+  value: unknown
+  option_id?: string | string[]
 }
 
 /**

@@ -1,3 +1,4 @@
+import type { ConditionalKey } from "../cli/permission-keys.js"
 import type { CrmItem } from "../domain/crm.js"
 import type { DealKind, DealRole } from "../domain/deals.js"
 import type { Level, PermissionKey } from "../sends/permissions.js"
@@ -35,7 +36,8 @@ export interface CrmFields {
   people?: { externalId: string; role: DealRole }[]
   /** The CRM user it is assigned to: a user's id, never a contact's. */
   owner?: string | null
-  custom?: Record<string, string | null>
+  /** A list field's option by its id; a multiple field's values as a list; `null` clears it. */
+  custom?: Record<string, string | string[] | null>
 }
 
 export type CrmDraft = CrmFields & { title: string }
@@ -48,7 +50,8 @@ export interface CrmWriteOptions {
 /**
  * Writes to one CRM account. Each answers the whole item as the CRM holds it after the write, every field and not
  * only the changed ones: the store replaces its copy with it. None of them retries: a write whose answer was lost
- * throws `outcome_unknown`.
+ * throws `outcome_unknown`. A write the CRM made whose item could then not be read back throws with `sent: true` in
+ * its details: it is journaled as sent, and the read's failure is answered on its own.
  */
 export interface CrmWriter {
   readonly provider: string
@@ -75,6 +78,41 @@ export const CRM_ASSIGN_OTHERS_KEY: PermissionKey = "crm.assign-others"
 
 /** The keys the CRM writes check beyond their command paths, for a CLI's `commandPermissions({ extra })`. */
 export const CRM_WRITE_KEYS: readonly PermissionKey[] = [CRM_ASSIGN_OTHERS_KEY]
+
+const PLURALS: Record<string, DealKind> = { deals: "deal", leads: "lead" }
+const VERB_OF: Record<string, CrmVerb> = {
+  create: "create",
+  update: "update",
+  move: "move",
+  close: "close",
+  delete: "remove",
+}
+
+/**
+ * Every key a CRM write command may check beyond its own path, for `commandPermissions({ alsoChecks })`, so its
+ * `--dry-run` names each: a stage implies the move key and a won or lost one the close key, an owner other than the
+ * sign-in's `crm.assign-others`, and `also` the CLI's own (the same `CrmWrites.alsoChecks` the real run checks).
+ */
+export const crmAlsoChecks =
+  (also?: (kind: DealKind, verb: CrmVerb) => readonly PermissionKey[]) =>
+  (path: readonly string[]): readonly (PermissionKey | ConditionalKey)[] => {
+    const [noun, command] = path
+    const kind = noun === undefined ? undefined : PLURALS[noun]
+    const verb = command === undefined ? undefined : VERB_OF[command]
+    if (path.length !== 2 || kind === undefined || verb === undefined) return []
+    const close = { key: `${noun}.close`, when: "a won or lost stage" }
+    const implied: ConditionalKey[] =
+      verb === "create" || verb === "update"
+        ? [
+            { key: `${noun}.move`, when: "--stage" },
+            close,
+            { key: CRM_ASSIGN_OTHERS_KEY, when: "--owner other than the sign-in's user" },
+          ]
+        : verb === "move"
+          ? [close]
+          : []
+    return [...implied, ...(also?.(kind, verb) ?? [])]
+  }
 
 /**
  * Built in, and only ever tightening (WC-PERM-7): an ordinary change goes ahead, a deletion asks, and a record is not

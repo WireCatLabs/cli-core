@@ -1,5 +1,5 @@
 import { CliError, isCliError } from "@wirecat/cli-base"
-import type { CrmItem } from "../domain/crm.js"
+import type { CrmField, CrmItem } from "../domain/crm.js"
 import type { DealKind } from "../domain/deals.js"
 import type { AppIdentity } from "../ports/app.js"
 import type { Warn } from "../runs/events.js"
@@ -31,6 +31,11 @@ export interface CrmWrites {
   self?: string
   env?: NodeJS.ProcessEnv
   warn?: Warn
+  /**
+   * The CLI's own keys a write also checks, such as Bitrix24's `api.crm.deal.update`; pass the same function to
+   * `crmAlsoChecks` so `--dry-run` names them.
+   */
+  alsoChecks?: (kind: DealKind, verb: CrmVerb) => readonly PermissionKey[]
 }
 
 export interface CrmWriteContext {
@@ -54,7 +59,11 @@ export interface CrmFieldsInput {
   currency?: string
   closeDate?: string
   owner?: string
-  custom?: Record<string, string | null>
+  /**
+   * `--field` pairs as typed, in order: a field by its code or whole label, a list field's option by its id or label,
+   * repeated for each value of a multiple field; an empty value clears it.
+   */
+  custom?: readonly (readonly [name: string, value: string])[]
 }
 
 const PLURAL: Record<DealKind, string> = { deal: "deals", lead: "leads" }
@@ -179,12 +188,96 @@ const fieldsOf = (input: CrmFieldsInput, pipeline: Pipeline | undefined, currenc
     if (!input.owner.trim()) throw invalid("--owner is the CRM user's id", "--owner")
     fields.owner = input.owner.trim()
   }
-  if (input.custom !== undefined && Object.keys(input.custom).length) {
-    for (const code of Object.keys(input.custom))
-      if (!FIELD_CODE.test(code)) throw invalid(`${code} is not a field code`, "--field")
-    fields.custom = input.custom
-  }
   return { fields, stage }
+}
+
+/** Case, spaces and underscores aside: `lead_source` and `Lead source` are one name, as bitrix24-cli folds them. */
+const folded = (name: string) =>
+  name
+    .trim()
+    .toLocaleLowerCase()
+    .replace(/[\s_]+/gu, " ")
+
+const named = ({ code, label }: CrmField) => ({ code, label })
+
+/** A field by its code or its whole label; two with that label are refused with both, never guessed. */
+const fieldNamed = (fields: readonly CrmField[], name: string): CrmField => {
+  const want = folded(name)
+  const byCode = fields.find((field) => folded(field.code) === want)
+  if (byCode) return byCode
+  const labelled = fields.filter((field) => field.label !== null && folded(field.label) === want)
+  if (labelled.length === 1) return labelled[0] as CrmField
+  if (labelled.length > 1)
+    throw new CliError(
+      "validation_error",
+      `${labelled.length} custom fields are labelled ${name}; name one by its code`,
+      {
+        reason: "field.ambiguous",
+        param: "--field",
+        candidates: labelled.map(named),
+      },
+    )
+  const close = fields.filter((field) =>
+    [field.code, field.label ?? ""].some((one) => {
+      const other = folded(one)
+      return other !== "" && (other.includes(want) || want.includes(other))
+    }),
+  )
+  throw new CliError(
+    "validation_error",
+    `no custom field is named ${name}${close.length ? "; close ones are in candidates" : ""} — \`fields list\` lists them`,
+    { reason: "field.unknown", param: "--field", candidates: close.map(named) },
+  )
+}
+
+const optionOf = (field: CrmField, value: string): string => {
+  if (!field.options) return value
+  const found =
+    field.options.find((option) => option.id === value.trim()) ??
+    field.options.find((option) => folded(option.label) === folded(value))
+  if (!found)
+    throw new CliError("validation_error", `${field.label ?? field.code} has no option ${value}`, {
+      reason: "field.unknown-option",
+      param: "--field",
+      field: field.code,
+      allowed: field.options,
+    })
+  return found.id
+}
+
+/**
+ * `--field` pairs by the synced field definitions: a label to its code, an option to its id, a multiple field's
+ * repeats into a list. A CRM whose definitions are not stored takes codes as typed.
+ */
+const customOf = async (
+  context: CrmWriteContext,
+  kind: DealKind,
+  pairs: CrmFieldsInput["custom"],
+): Promise<CrmFields["custom"]> => {
+  if (!pairs?.length) return undefined
+  const fields = await context.store.crm.fields(context.account, kind)
+  const values = new Map<string, { field: CrmField | null; all: (string | null)[] }>()
+  for (const [name, value] of pairs) {
+    const field = fields.length ? fieldNamed(fields, name) : null
+    const code = field?.code ?? name.trim()
+    if (!field && !FIELD_CODE.test(code)) throw invalid(`${name} is not a field code`, "--field")
+    const held = values.get(code) ?? { field, all: [] }
+    held.all.push(value === "" ? null : field ? optionOf(field, value) : value)
+    values.set(code, held)
+  }
+  return Object.fromEntries(
+    [...values].map(([code, { field, all }]) => {
+      const given = all.filter((one): one is string => one !== null)
+      if (field?.multiple) return [code, given.length ? given : null]
+      if (all.length > 1)
+        throw new CliError("validation_error", `${field?.label ?? code} holds one value; give --field once`, {
+          reason: "deal.field",
+          param: "--field",
+          field: code,
+        })
+      return [code, all[0] ?? null]
+    }),
+  )
 }
 
 /** Every key the write checks: its own, and each action its fields also take (WC-PERM-22). */
@@ -198,7 +291,7 @@ const keysOf = (
   if (stage && verb !== "move") extra.push(keyOf(kind, "move"))
   if (stage && stage.outcome !== "open") extra.push(keyOf(kind, "close"))
   if (owner != null && owner !== context.writes.self) extra.push(CRM_ASSIGN_OTHERS_KEY)
-  return { key: keyOf(kind, verb), extra }
+  return { key: keyOf(kind, verb), extra: [...extra, ...(context.writes.alsoChecks?.(kind, verb) ?? [])] }
 }
 
 /** The profile's guard over the write's own key and the keys its fields imply (`keyedGuard`). */
@@ -228,7 +321,26 @@ const written = async <T>(
   act: () => Promise<T>,
 ): Promise<T> => {
   try {
-    return await guardedWrite(guardOf(context, extra), { chatId: null, kind: "edit", key, operationId }, act)
+    // A write the CRM made and could not read back is sent: its journal line says so, and the read's failure follows.
+    const done = await guardedWrite(
+      guardOf(context, extra),
+      { chatId: null, kind: "edit", key, operationId },
+      async () => {
+        try {
+          return { item: await act(), unread: null }
+        } catch (error) {
+          if (isCliError(error) && error.details.sent === true) return { item: null, unread: error }
+          throw error
+        }
+      },
+    )
+    if (done.unread)
+      throw new CliError(
+        done.unread.code,
+        `${done.unread.message} — the CRM made the change; sync to store it, do not write it again`,
+        { ...done.unread.details, operation_id: operationId },
+      )
+    return done.item as T
   } catch (error) {
     if (!isCliError(error) || error.code !== "outcome_unknown") throw error
     const name = context.names?.id ?? "--operation-id"
@@ -288,6 +400,8 @@ export const createCrmItem = async (
   if (input.title === undefined) throw invalid(`a new ${kind} needs --title`, "--title")
   const pipeline = await pipelineOf(context, kind, input.pipeline)
   const { fields, stage } = fieldsOf({ ...input, pipeline: pipeline.ref }, pipeline, null)
+  const custom = await customOf(context, kind, input.custom)
+  if (custom) fields.custom = custom
   const operationId = operationOf(context, options.operationId)
   const item = await written(
     context,
@@ -315,6 +429,8 @@ export const updateCrmItem = async (
       ? undefined
       : await pipelineOf(context, kind, input.pipeline === undefined ? copy.pipeline : input.pipeline)
   const { fields, stage } = fieldsOf(input, pipeline, copy.currency)
+  const custom = await customOf(context, kind, input.custom)
+  if (custom) fields.custom = custom
   if (Object.keys(fields).length === 0) throw invalid("nothing to change: name a field")
   const operationId = operationOf(context, options.operationId)
   const item = await written(

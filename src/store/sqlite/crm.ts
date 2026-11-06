@@ -303,6 +303,7 @@ export const crmCopiesOver = (context: StoreContext, people: AccountPeople): Crm
     const metadata = {
       ...(item.metadata ?? {}),
       ...(item.url ? { url: item.url } : {}),
+      ...(item.assignee ? { assignee: crmIdentityId(key, item.assignee, "user") } : {}),
       ...(item.closedReason && status !== "open" ? { closed_reason: textOf(item.closedReason, 2000) } : {}),
     }
     const values = {

@@ -19,7 +19,7 @@ import { SendJournal, sendsPathFor } from "../../sends/journal.js"
 import type { Level } from "../../sends/permissions.js"
 import { type MessageStore, openStore } from "../../store/store.js"
 import { exampleDeal, exampleLead, exampleOrganization, examplePerson, fakeCrmSource } from "../testing/index.js"
-import type { CrmWriteCapabilities } from "../writer.js"
+import { type CrmWriteCapabilities, crmAlsoChecks } from "../writer.js"
 import { addCrmCommands, type CrmCommandOptions, type CrmRun } from "./index.js"
 
 const APP: AppIdentity = {
@@ -71,7 +71,9 @@ const setup = async (
   const source = fakeCrmSource({ capabilities: { idempotent: options.idempotent ?? false } })
   const home = mkdtempSync(join(tmpdir(), "crm-writes-"))
   const env = { HOME: home, XDG_DATA_HOME: home, XDG_STATE_HOME: home, CRM_STATE_DIR: home }
+  const alsoChecks: { value?: (kind: string, verb: string) => readonly string[] } = {}
   const writes = () => ({
+    ...(alsoChecks.value ? { alsoChecks: alsoChecks.value } : {}),
     writer: source,
     app: APP,
     self: "7",
@@ -132,7 +134,7 @@ const setup = async (
     }
     return envelope as Record<string, unknown> & { item: Record<string, unknown>; items: Record<string, unknown>[] }
   }
-  return { store, source, cli, journal }
+  return { store, source, cli, journal, alsoChecks }
 }
 
 describe("CRM commands", () => {
@@ -364,14 +366,74 @@ describe("CRM write commands", () => {
     })
   })
 
-  it("a custom field that names a neutral one is refused, and --field sets the others", async () => {
+  it("--field takes a field by label and an option by label, and refuses a neutral or unknown one", async () => {
     const { cli, ref, source } = await synced()
-    await expect(cli("deals", "update", ref, "--field", "stage=won")).rejects.toMatchObject({
-      code: "validation_error",
+    for (const name of ["stage", "UF_CRM_NOTE"])
+      await expect(cli("deals", "update", ref, "--field", `${name}=won`)).rejects.toMatchObject({
+        code: "validation_error",
+        details: { reason: "field.unknown" },
+      })
+    await expect(cli("deals", "update", ref, "--field", "source=Mail")).rejects.toMatchObject({
+      details: { reason: "field.unknown-option" },
+    })
+    await expect(cli("deals", "update", ref, "--field", "source=1", "--field", "source=2")).rejects.toMatchObject({
+      details: { reason: "deal.field", field: "UF_SOURCE" },
     })
     expect(source.writes).toEqual([])
-    const done = await cli("deals", "update", ref, "--field", "UF_CRM_SOURCE=web", "--field", "UF_CRM_NOTE=x")
-    expect(source.writes).toHaveLength(1)
+    const done = await cli("deals", "update", ref, "--field", "Source=fair")
+    expect(done.item.deal).toMatchObject({
+      provider_metadata: { UF_SOURCE: { label: "Source", value: "Fair", option_id: "2" } },
+    })
     expect(done.item.untrusted).toContain("deal.title")
+  })
+
+  it("--field gathers a multiple field's repeats, refuses a label two fields share, and clears with an empty value", async () => {
+    const { cli, ref, source } = await synced()
+    const tag = { code: "UF_TAGS", label: "Tags", type: "string", multiple: true, filterable: false }
+    source.setFields("deal", [
+      tag,
+      { ...tag, code: "UF_TAG_OLD", multiple: false },
+      { ...tag, code: "UF_NOTE", label: "Note", multiple: false },
+    ])
+    await cli("sync")
+    await expect(cli("deals", "update", ref, "--field", "Tags=a")).rejects.toMatchObject({
+      details: { reason: "field.ambiguous", candidates: [{ code: "UF_TAGS" }, { code: "UF_TAG_OLD" }] },
+    })
+    const set = await cli("deals", "update", ref, "--field", "UF_TAGS=a", "--field", "UF_TAGS=b", "--field", "note=x")
+    expect(set.item.deal).toMatchObject({
+      provider_metadata: { UF_TAGS: { label: "Tags", value: ["a", "b"] }, UF_NOTE: { label: "Note", value: "x" } },
+    })
+    const cleared = await cli("deals", "update", ref, "--field", "note=")
+    expect(Object.keys(cleared.item.deal as object)).toContain("provider_metadata")
+    expect((cleared.item.deal as { provider_metadata: object }).provider_metadata).not.toHaveProperty("UF_NOTE")
+  })
+
+  it("an owner on a CRM copy is its assignee, as the CRM user's identity", async () => {
+    const { cli, ref } = await synced()
+    const done = await cli("deals", "update", ref, "--owner", "7")
+    expect(done.item.deal).toMatchObject({ assignee: "portal/user/7" })
+  })
+
+  it("a CLI's own keys are checked by the write", async () => {
+    const harness = await setup({}, { writes: WRITES, permissions: { "api.crm.deal.update": "deny" } })
+    await harness.cli("sync")
+    const ref = (await harness.cli("deals", "list", "status:open")).items[0]?.ref as string
+    expect(crmAlsoChecks()(["deals", "move"])).toEqual([{ key: "deals.close", when: "a won or lost stage" }])
+    expect(crmAlsoChecks()(["deals", "list"])).toEqual([])
+    harness.alsoChecks.value = () => ["api.crm.deal.update"]
+    await expect(harness.cli("deals", "update", ref, "--title", "Example")).rejects.toMatchObject({
+      code: "permission_error",
+    })
+    expect(harness.source.writes).toEqual([])
+  })
+
+  it("a write the CRM made whose item could not be read back is journaled as sent, and the failure answered", async () => {
+    const { cli, ref, source, journal } = await synced()
+    source.failNextReadBack()
+    await expect(cli("deals", "update", ref, "--title", "Example unread")).rejects.toMatchObject({
+      code: "provider_error",
+      details: { sent: true, operation_id: expect.any(String) },
+    })
+    expect(journal()).toEqual([expect.objectContaining({ outcome: "sent", key: "deals.update" })])
   })
 })

@@ -8,7 +8,7 @@ import { answerEntity } from "../../cli/answer-entity.js"
 import { environmentOf, outputFor, runBudgetOf } from "../../cli/context.js"
 import { honoursDryRun } from "../../cli/dry-run-guard.js"
 import { FETCH, LOCAL_READ, NO_EFFECTS, REMOTE_WRITE } from "../../cli/effects.js"
-import { type Body, itemOf, listOf, renderAnswer, snakeKeys } from "../../cli/envelope.js"
+import { type Body, itemOf, listOf, renderAnswer, snakeKeys, snakeKeysKeeping } from "../../cli/envelope.js"
 import { queryTerms, termField, unfilteredQuery, withQuery } from "../../cli/list-query.js"
 import { terminalAsker } from "../../cli/messenger/ask.js"
 import { lineOf } from "../../cli/steps.js"
@@ -94,7 +94,15 @@ export const STAGES_QUERY = {
 } as const satisfies QueryRegistry
 
 /** A CRM's users typed these; a list item names its own, as `events list` does. */
-const DEAL_UNTRUSTED = ["title", "summary", "stage", "pipeline_name", "organization.name", "people.name"]
+const DEAL_UNTRUSTED = [
+  "title",
+  "summary",
+  "stage",
+  "pipeline_name",
+  "organization.name",
+  "people.name",
+  "provider_metadata",
+]
 const PIPELINE_UNTRUSTED = ["name", "stages.name"]
 const STAGE_UNTRUSTED = ["name", "pipeline_name"]
 
@@ -176,19 +184,16 @@ const FIELD_KINDS: Record<string, CrmKind> = {
 const crmRemoval = v.strictObject({ operation_id: text, ref: text, removed: count })
 
 const collect = (value: string, previous: string[] = []) => {
-  if (value.indexOf("=") < 1) throw new InvalidArgumentError("expected code=value")
+  if (value.indexOf("=") < 1) throw new InvalidArgumentError("expected key=value")
   return [...previous, value]
 }
 
-/** `--field code=value` pairs; an empty value clears the field. */
-const customOf = (pairs: readonly string[]): Record<string, string | null> =>
-  Object.fromEntries(
-    pairs.map((pair) => {
-      const at = pair.indexOf("=")
-      const given = pair.slice(at + 1)
-      return [pair.slice(0, at), given === "" ? null : given]
-    }),
-  )
+/** `--field` as typed, split at the first `=`. */
+const pairsOf = (typed: readonly string[]): [string, string][] =>
+  typed.map((pair) => {
+    const at = pair.indexOf("=")
+    return [pair.slice(0, at), pair.slice(at + 1)]
+  })
 
 const integer = (most: number) => (value: string) => {
   if (!/^[1-9]\d*$/.test(value) || Number(value) > most) throw new InvalidArgumentError(`expected 1 to ${most}`)
@@ -199,8 +204,11 @@ const integer = (most: number) => (value: string) => {
 const pathOf = (command: Command): string[] =>
   command.parent?.parent ? [...pathOf(command.parent), command.name()] : [command.name()]
 
+/** A CRM's own field codes are its keys, never ours to rename. */
+const dealKeys = snakeKeysKeeping(["providerMetadata"])
+
 const marked = <T extends object>(items: T[], untrusted: string[]) =>
-  items.map((item) => ({ ...(snakeKeys(item) as object), untrusted }))
+  items.map((item) => ({ ...(dealKeys(item) as object), untrusted }))
 
 export type CrmWithin = (command: Command, work: (run: CrmRun) => Promise<Body>) => Promise<void>
 
@@ -369,7 +377,7 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
     ).action(async (reference: string, _opts: unknown, command: Command) => {
       await within(command, async (run) => {
         const found = await ownCopy(run, kind, reference)
-        return itemOf({ ...(snakeKeys(found) as object), untrusted: DEAL_UNTRUSTED })
+        return itemOf({ ...(dealKeys(found) as object), untrusted: DEAL_UNTRUSTED })
       })
     })
     addWrites(group, kind)
@@ -405,7 +413,7 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
     const answered = (operationId: string, item: Deal) =>
       itemOf({
         operation_id: operationId,
-        [kind]: { ...(snakeKeys(item) as object), untrusted: DEAL_UNTRUSTED },
+        [kind]: { ...(dealKeys(item) as object), untrusted: DEAL_UNTRUSTED },
         untrusted: DEAL_UNTRUSTED.map((field) => `${kind}.${field}`),
       })
     const write = (name: string, verb: (typeof writes.verbs)[number], description: string) => {
@@ -440,7 +448,9 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
         )
         .option(
           "--field <key=value>",
-          "one of the CRM's own fields, by its code; repeat for more, empty clears it",
+          "one of the CRM's own fields, by its code or label as `fields list` prints them, and its value; a list " +
+            "field takes its option's label or id; repeat it for more fields, or for each value of a multiple field; " +
+            "an empty value clears it",
           collect,
           // The empty default marks the flag as repeatable, so an agent's tool takes a list.
           [] as string[],
@@ -448,7 +458,7 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
     type Typed = Omit<CrmFieldsInput, "custom"> & { field?: string[]; operationId?: string }
     const inputOf = ({ field, operationId: _id, ...rest }: Typed): CrmFieldsInput => ({
       ...Object.fromEntries(Object.entries(rest).filter(([, value]) => value !== undefined)),
-      ...(field?.length ? { custom: customOf(field) } : {}),
+      ...(field?.length ? { custom: pairsOf(field) } : {}),
     })
     const idOf = (opts: { operationId?: string }) =>
       opts.operationId === undefined ? {} : { operationId: opts.operationId }

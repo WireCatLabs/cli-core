@@ -11,6 +11,7 @@ export {
   type CrmPipeline,
   type CrmRecords,
   type CrmStage,
+  type CrmValue,
   isItemKind,
 } from "./domain/crm.js"
 export {
