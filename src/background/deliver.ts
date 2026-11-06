@@ -3,6 +3,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { CliError } from "@wirecat/cli-base"
 import { type ServerSystem, TIMED_OUT } from "./system.js"
+import { toTelegramHtml } from "./telegram-html.js"
 
 /**
  * Where a schedule's result goes after the run, by the owner's own CLI: a Telegram bot's message (`tg <profile> bot
@@ -48,10 +49,14 @@ export const DELIVERY_REASONS = {
   routeInvalid: "delivery.route-invalid",
   timeout: "delivery.timeout",
   failed: "delivery.failed",
+  htmlFallback: "delivery.html-fallback",
 } as const
 export type DeliveryReason = (typeof DELIVERY_REASONS)[keyof typeof DELIVERY_REASONS]
 
-/** One route's outcome, kept in `last.json`. `error` is the sending CLI's error code and reason id, never its message. */
+/**
+ * One route's outcome, kept in `last.json`. `error` is the sending CLI's error code and reason id, never its message.
+ * A send that went as plain text because Telegram refused the HTML is `ok` with the `html-fallback` reason.
+ */
 export interface Delivery {
   to: string
   ok: boolean
@@ -83,16 +88,54 @@ export interface Parcel {
   line?: string
 }
 
+const textOf = (title: string, report: string) => (report.trim() ? `${title}\n${report.trim()}` : title)
+
+/** The same text as Telegram HTML; the length that counts against the limits is this one. */
+const htmlOf = (title: string, report: string) => toTelegramHtml(textOf(title, report))
+
+/** The caption as HTML: the head is cut in Markdown, where no tag can be split, and cut shorter until its HTML fits. */
+export const htmlHeadOf = (title: string, report: string, limit = CAPTION_CHARS): string => {
+  let room = limit
+  for (;;) {
+    const html = toTelegramHtml(headOf(title, report, room))
+    if (html.length <= limit || room <= title.length + 40) return html.slice(0, limit)
+    room -= Math.max(html.length - limit, 1)
+  }
+}
+
 /**
  * The words that send along `route`. A bot sends a report that fits one message as its text, and a longer one as a
- * file with its head as the caption; mail takes the text on stdin. The text goes after `--`, so a report that starts
- * with a dash stays text.
+ * file with its head as the caption, both as Telegram HTML unless `plain`; mail takes the text on stdin. The text goes
+ * after `--`, so a report that starts with a dash stays text.
  */
-const argvOf = (program: string, route: Route, title: string, report: string, copy: string | undefined) => {
+const argvOf = (
+  program: string,
+  route: Route,
+  title: string,
+  report: string,
+  copy: string | undefined,
+  plain = false,
+) => {
   const lead = [program, route.profile, "--json", "--no-input"]
   if (route.kind === "email") return [...lead, "messages", "send", "--to", route.address, "--subject", title]
-  const text = copy ? headOf(title, report) : report.trim() ? `${title}\n${report.trim()}` : title
-  return [...lead, "bot", "messages", "send", ...(copy ? ["--file", copy] : []), "--", route.chat, text]
+  const text = plain
+    ? copy
+      ? headOf(title, report)
+      : headOf(title, report, TELEGRAM_TEXT_CHARS)
+    : copy
+      ? htmlHeadOf(title, report)
+      : htmlOf(title, report)
+  return [
+    ...lead,
+    "bot",
+    "messages",
+    "send",
+    ...(copy ? ["--file", copy] : []),
+    ...(plain ? [] : ["--html"]),
+    "--",
+    route.chat,
+    text,
+  ]
 }
 
 /** Hands the parcel to each route's CLI, one after another; a route that fails is recorded and the next one still goes. */
@@ -143,7 +186,7 @@ export const deliver = async (
       out.push(failed(to, DELIVERY_REASONS.programMissing, command))
       continue
     }
-    const tooLong = `${parcel.title}\n${report.trim()}`.length > TELEGRAM_TEXT_CHARS
+    const tooLong = route.kind === "telegram-bot" && htmlOf(parcel.title, report).length > TELEGRAM_TEXT_CHARS
     // The sending CLI refuses its own and the other WireCat folders, where the report lives, so it gets a copy.
     const folder =
       route.kind === "telegram-bot" && parcel.file && tooLong ? mkdtempSync(join(tmpdir(), "wirecat-deliver-")) : ""
@@ -151,12 +194,19 @@ export const deliver = async (
     try {
       if (copy && parcel.file) copyFileSync(parcel.file.path, copy)
       const { [`${prefix}_PROFILE`]: _, ...childEnv } = env
-      const ran = await system.run(argvOf(program, route, parcel.title, report, copy), childEnv, {
+      const options = {
         timeoutMs,
         ...(route.kind === "email" ? { input: report.trim() ? report : parcel.title } : {}),
-      })
-      if (ran.code === 0) out.push({ to, ok: true })
-      else if (ran.code === TIMED_OUT) out.push(failed(to, DELIVERY_REASONS.timeout))
+      }
+      let ran = await system.run(argvOf(program, route, parcel.title, report, copy), childEnv, options)
+      let fellBack = ""
+      if (route.kind === "telegram-bot" && ran.code !== 0 && ran.code !== TIMED_OUT) {
+        fellBack = errorOf(ran.stderr, ran.code)
+        ran = await system.run(argvOf(program, route, parcel.title, report, copy, true), childEnv, options)
+      }
+      if (ran.code === 0) {
+        out.push(fellBack ? { to, ok: true, reason: DELIVERY_REASONS.htmlFallback, error: fellBack } : { to, ok: true })
+      } else if (ran.code === TIMED_OUT) out.push(failed(to, DELIVERY_REASONS.timeout))
       else out.push(failed(to, DELIVERY_REASONS.failed, errorOf(ran.stderr, ran.code)))
     } catch {
       out.push(failed(to, DELIVERY_REASONS.failed))

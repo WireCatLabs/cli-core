@@ -70,6 +70,7 @@ describe("delivery", () => {
       "bot",
       "messages",
       "send",
+      "--html",
       "--",
       "user:123",
       "memo digest · 2026-11-06 08:30\n--json and more",
@@ -91,6 +92,48 @@ describe("delivery", () => {
     expect(caption.length).toBeLessThanOrEqual(CAPTION_CHARS)
     expect(caption).toMatch(/^memo digest · 2026-11-06 08:30\nline 0 of/)
     expect(caption.endsWith("… the whole report is in the file")).toBe(true)
+    expect(argv).toContain("--html")
+  })
+
+  it("sends Telegram HTML and counts the converted length when choosing message or file", async () => {
+    const { system, sent } = sender()
+    await deliver(system, {}, ["telegram-bot:p/user:1"], report("# Plan\n- **a** & b\n"), found)
+    expect(sent[0]?.argv.at(-1)).toBe("memo digest · 2026-11-06 08:30\n<b>Plan</b>\n• <b>a</b> &amp; b")
+
+    const bold = Array.from({ length: 240 }, (_, n) => `**${n}** abcdefgh`).join("\n")
+    const raw = `memo digest · 2026-11-06 08:30\n${bold}`.length
+    expect(raw).toBeLessThan(4096)
+    const longer = sender()
+    await deliver(longer.system, {}, ["telegram-bot:p/user:1"], report(bold), found)
+    expect(longer.sent[0]?.argv).toContain("--file")
+  })
+
+  it("keeps an HTML caption within the limit and leaves no tag split", async () => {
+    const { system, sent } = sender()
+    const long = Array.from({ length: 300 }, (_, n) => `**row ${n}** <x> & [l](https://e.example/a_b)`).join("\n")
+    await deliver(system, {}, ["telegram-bot:p/user:1"], report(long), found)
+    const caption = sent[0]?.argv.at(-1) ?? ""
+    expect(caption.length).toBeLessThanOrEqual(CAPTION_CHARS)
+    expect(caption.match(/<b>/g)?.length).toBe(caption.match(/<\/b>/g)?.length)
+    expect(caption.match(/<a /g)?.length).toBe(caption.match(/<\/a>/g)?.length)
+  })
+
+  it("falls back to plain text when the HTML is refused, and records why", async () => {
+    const calls: string[][] = []
+    const system: ServerSystem = {
+      ...sender().system,
+      run: async (argv) => {
+        calls.push(argv)
+        return argv.includes("--html")
+          ? { code: 2, stdout: "", stderr: "bad entities" }
+          : { code: 0, stdout: "", stderr: "" }
+      },
+    }
+    const done = await deliver(system, {}, ["telegram-bot:p/user:1"], report("**x**"), found)
+    expect(done).toEqual([{ to: "telegram-bot:p/user:1", ok: true, reason: "delivery.html-fallback", error: "exit 2" }])
+    expect(calls).toHaveLength(2)
+    expect(calls[1]).not.toContain("--html")
+    expect(calls[1]?.at(-1)).toBe("memo digest · 2026-11-06 08:30\n**x**")
   })
 
   it("mails the whole report on stdin, with the title as the subject", async () => {
@@ -138,6 +181,12 @@ describe("delivery", () => {
       { to: "telegram-bot:p/user:1", ok: false, reason: "delivery.read-only", error: "TG_READ_ONLY" },
     ])
     expect(sent).toEqual([])
+  })
+
+  it("does not retry a timed out send", async () => {
+    const timedOut = sender({ code: 124 })
+    await deliver(timedOut.system, {}, ["telegram-bot:p/user:1"], report("x"), found)
+    expect(timedOut.sent).toHaveLength(1)
   })
 
   it("records each failed route by a dotted reason and goes on to the next", async () => {

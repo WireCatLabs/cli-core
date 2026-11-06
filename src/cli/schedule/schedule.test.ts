@@ -1160,7 +1160,7 @@ describe("delivery after a run", () => {
     const last = await runSchedule(app, system, env, file)
 
     const [bot, mail] = sends()
-    expect(bot?.argv.slice(1, 8)).toEqual(["personal", "--json", "--no-input", "bot", "messages", "send", "--"])
+    expect(bot?.argv.slice(1, 8)).toEqual(["personal", "--json", "--no-input", "bot", "messages", "send", "--html"])
     expect(bot?.argv.slice(-2)).toEqual(["user:42", expect.stringMatching(/^chat digest · .+\nToday: 3 replies owed$/)])
     expect(mail?.argv).toContain("me@example.com")
     expect(mail?.input).toBe("Today: 3 replies owed\n")
