@@ -33,5 +33,19 @@
     "reason": "the owner chose a daily cost cap for agent schedules on 2026-11-05, beside --max-cost (budget, US dollars); the word goes into cli-base's vocabulary in its next release",
     "owner": "@leemour",
     "review_after": "2026-12-05"
+  },
+  {
+    "rule": "option-role",
+    "target": "schedule agent --notify-on",
+    "reason": "the owner chose when a schedule's run shows a desktop notice on 2026-11-06 (always, failures or never; plan 2026-11-02 section 9.1); the word goes into cli-base's vocabulary in its next release",
+    "owner": "@leemour",
+    "review_after": "2026-12-06"
+  },
+  {
+    "rule": "option-role",
+    "target": "schedule command --notify-on",
+    "reason": "the owner chose when a schedule's run shows a desktop notice on 2026-11-06 (always, failures or never; plan 2026-11-02 section 9.1); the word goes into cli-base's vocabulary in its next release",
+    "owner": "@leemour",
+    "review_after": "2026-12-06"
   }
 ]

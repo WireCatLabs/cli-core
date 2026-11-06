@@ -697,6 +697,10 @@
     "--notify": {
       "meaning": "tell the chat's members about the pin"
     },
+    "--notify-on": {
+      "value": "<when>",
+      "meaning": "desktop notice after a schedule's run: always, failures or never (default failures for an agent that repeats with --every, else always)"
+    },
     "--ocr": {
       "meaning": "explicitly call models.ocr for bulk image and scanned-PDF text extraction; agents normally transcribe files themselves"
     },
@@ -3978,6 +3982,12 @@
           "planned": {
             "wa": "wa backlog: mount the shared schedule command"
           }
+        },
+        "--notify-on": {
+          "in": ["max", "tg"],
+          "planned": {
+            "wa": "wa backlog: mount the shared schedule command"
+          }
         }
       }
     },
@@ -4000,6 +4010,12 @@
           }
         },
         "--every": {
+          "in": ["max", "tg"],
+          "planned": {
+            "wa": "wa backlog: mount the shared schedule command"
+          }
+        },
+        "--notify-on": {
           "in": ["max", "tg"],
           "planned": {
             "wa": "wa backlog: mount the shared schedule command"

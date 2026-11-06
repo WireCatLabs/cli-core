@@ -20,6 +20,14 @@ shape of this file.
   and decidable through the `organization` review kind, and `ORGANIZATION_ADD_KIND` and `ORGANIZATION_RENAME_KIND`
   stay exported.
 
+### Added
+
+- **`schedule agent` and `schedule command` take `--notify-on always|failures|never`.** The value is kept as `notify` in
+  the schedule file and shown by `schedule list`. A schedule without it keeps working: an agent that repeats with
+  `--every` notifies on failures only, any other schedule as before. A schedule's `last.skipped` carries a dotted
+  `reason` next to `why`: `cost.day-cap`, `mail.none-new`, `mail.below-threshold`; `schedule run` answers with the same
+  `reason` when it skips.
+
 ## 0.589.0 — 06.11.2026
 
 ### Added

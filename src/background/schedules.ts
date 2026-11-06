@@ -26,7 +26,16 @@ export interface Schedule {
   mailBatch?: number
   /** An agent's: no run starts for the rest of the local day once its runs cost this much, in US dollars. */
   maxCostPerDay?: number
+  /** When a finished run shows a desktop notice; absent means `notifyOf`'s default. */
+  notify?: Notify
 }
+
+export const NOTIFY_WHEN = ["always", "failures", "never"] as const
+export type Notify = (typeof NOTIFY_WHEN)[number]
+
+/** A repeating agent would otherwise notify on every tick; any other schedule runs rarely enough to say each result. */
+export const notifyOf = (schedule: Pick<Schedule, "kind" | "when" | "notify">): Notify =>
+  schedule.notify ?? (schedule.kind === "agent" && "every" in schedule.when ? "failures" : "always")
 
 /** What a gated agent waits for, and what a day of its runs may cost, when neither its flags nor the config say. */
 export const SCHEDULE_DEFAULTS = { mailWaitMinutes: 30, mailBatch: 10, maxCostPerDay: 5 } as const
@@ -105,8 +114,16 @@ export interface LastRun {
   /** What the run cost, as the harness reported it; absent when it reports none. */
   costUsd?: number
   /** The last time the timer did not start it, and why; a run after it clears this. */
-  skipped?: { at: string; why: string }
+  skipped?: { at: string; why: string; reason?: SkipReason }
 }
+
+/** Why a timer left a run out, as an id a translation can key on; `why` stays the English sentence. */
+export const SKIP_REASONS = {
+  costDayCap: "cost.day-cap",
+  mailNone: "mail.none-new",
+  mailBelowThreshold: "mail.below-threshold",
+} as const
+export type SkipReason = (typeof SKIP_REASONS)[keyof typeof SKIP_REASONS]
 
 const REASON_ID = /^[a-z0-9][a-z0-9.-]{0,79}$/
 
@@ -171,11 +188,16 @@ export const recordRun = (
 }
 
 /** Notes on the last run that the timer left this one out, keeping that run's result. */
-export const recordSkip = (file: string, why: string, at = new Date()): void => {
+export const recordSkip = (file: string, why: string, reason: SkipReason, at = new Date()): void => {
   const path = join(file, "..", "last.json")
   const before = readRun(path)
-  if (!before) return
-  writeSecurely(path, `${JSON.stringify({ ...before, skipped: { at: at.toISOString(), why } }, null, 2)}\n`, 0o600)
+  // A timer ticking every few minutes would rewrite the file for the same cause each time.
+  if (!before || before.skipped?.reason === reason) return
+  writeSecurely(
+    path,
+    `${JSON.stringify({ ...before, skipped: { at: at.toISOString(), why, reason } }, null, 2)}\n`,
+    0o600,
+  )
 }
 
 const shortTime = (iso: string) => {
@@ -596,13 +618,14 @@ export const runSchedule = async (
   for (const file of readdirSync(runs)) if (!kept.has(stampOf(file))) rmSync(join(runs, file), { force: true })
 
   const title = `${app.command} ${schedule.name}`
-  if (agent && exitCode === 0) {
+  const mode = notifyOf(schedule)
+  if (agent && exitCode === 0 && mode === "always") {
     const first =
       readFileSync(output, "utf8")
         .split("\n")
         .find((line) => line.trim()) ?? "report ready"
     await notify(system, env, title, `${first.trim().slice(0, 180)}\n${join(folder, "latest.md")}`)
-  } else if (exitCode !== 0) {
+  } else if (exitCode !== 0 && mode !== "never") {
     await notify(system, env, title, `failed (exit ${exitCode}) — ${errors}`)
   }
 

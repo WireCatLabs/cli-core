@@ -9,11 +9,16 @@ import {
   findProgram,
   lastRun,
   listSchedules,
+  NOTIFY_WHEN,
+  type Notify,
+  notifyOf,
   readSchedule,
   recordSkip,
   runSchedule,
   SCHEDULE_DEFAULTS,
   type Schedule,
+  SKIP_REASONS,
+  type SkipReason,
   scheduleFile,
   scheduleName,
   spentToday,
@@ -56,6 +61,7 @@ interface WhenOptions {
   every?: string
   at?: string
   atTime?: string
+  notifyOn?: Notify
 }
 
 const whenOf = ({ every, at, atTime }: WhenOptions, minimum: number): When => {
@@ -113,6 +119,12 @@ const withWhen = (command: Command) =>
     .option("--every <duration>", "repeat: 30m, 2h, 1d")
     .option("--at <HH:MM>", "every day at this local time")
     .option("--at-time <time>", "one run: 30m, 2d from now, or an ISO time; the schedule removes itself after it")
+    .addOption(
+      new Option(
+        "--notify-on <when>",
+        "desktop notice after a run (default failures for an agent that repeats with --every, else always)",
+      ).choices(NOTIFY_WHEN),
+    )
 
 /** What the schedule command needs of a CLI: who it is and, per command, where it prints and which profile runs. */
 /** `skill show follow-ups` exists only for messenger CLIs; any other CLI gets a read-only summary it can run. */
@@ -294,7 +306,11 @@ export const scheduleCommandFor = ({
       maxCostPerDay: schedule.maxCostPerDay,
     }),
   })
-  const waits = async (self: Command, file: string, { timed }: { timed: boolean }): Promise<string | undefined> => {
+  const waits = async (
+    self: Command,
+    file: string,
+    { timed }: { timed: boolean },
+  ): Promise<{ why: string; reason: SkipReason } | undefined> => {
     if (!existsSync(file)) return undefined
     const schedule = readSchedule(file)
     const { mailWaitMinutes, mailBatch, maxCostPerDay } = limitsOf(self, schedule)
@@ -302,21 +318,26 @@ export const scheduleCommandFor = ({
       const spent = spentToday(file)
       if (spent >= maxCostPerDay) {
         const why = `today's runs cost ${usd(spent)}, the ${usd(maxCostPerDay)} a day allowed; it runs again tomorrow`
-        recordSkip(file, why)
-        return why
+        recordSkip(file, why, SKIP_REASONS.costDayCap)
+        return { why, reason: SKIP_REASONS.costDayCap }
       }
     }
     const holder = schedule.onNewMail
     if (holder === undefined || !newMail) return undefined
     const waiting = await newMail(self, holder)
     if (waiting.unmarked) return undefined
-    if (waiting.emails === 0) return `no mail stored past ${holder}'s mark`
+    if (waiting.emails === 0) {
+      const why = `no mail stored past ${holder}'s mark`
+      recordSkip(file, why, SKIP_REASONS.mailNone)
+      return { why, reason: SKIP_REASONS.mailNone }
+    }
     const waited = waiting.oldestStoredAt === null ? 0 : Date.now() - waiting.oldestStoredAt
     if (!timed || waiting.emails >= mailBatch || waited >= mailWaitMinutes * 60_000) return undefined
-    return (
+    const why =
       `${waiting.emails} email(s) wait past ${holder}'s mark; it starts at ${mailBatch}, ` +
       `or once the oldest has waited ${mailWaitMinutes}m`
-    )
+    recordSkip(file, why, SKIP_REASONS.mailBelowThreshold)
+    return { why, reason: SKIP_REASONS.mailBelowThreshold }
   }
 
   withWhen(
@@ -345,6 +366,7 @@ export const scheduleCommandFor = ({
       when: whenOf(this.opts<WhenOptions>(), COMMAND_MINIMUM_MINUTES),
       environment: environment(),
       createdAt: new Date().toISOString(),
+      ...(this.opts<WhenOptions>().notifyOn ? { notify: this.opts<WhenOptions>().notifyOn } : {}),
     })
   })
 
@@ -390,6 +412,7 @@ export const scheduleCommandFor = ({
         onNewMail?: string
         mailWait?: string
         mailBatch?: string
+        notifyOn?: Notify
       }
     >()
     if (options.onNewMail !== undefined && !HOLDER.test(options.onNewMail))
@@ -458,6 +481,7 @@ export const scheduleCommandFor = ({
       ...(mailWaitMinutes === undefined ? {} : { mailWaitMinutes }),
       ...(mailBatch === undefined ? {} : { mailBatch }),
       ...(options.maxCostPerDay === undefined ? {} : { maxCostPerDay: options.maxCostPerDay }),
+      ...(options.notifyOn ? { notify: options.notifyOn } : {}),
     })
   })
   if (newMail)
@@ -491,6 +515,7 @@ export const scheduleCommandFor = ({
         name: schedule.name,
         kind: schedule.kind,
         when: describeWhen(schedule.when),
+        notify: notifyOf(schedule),
         last: lastRun(scheduleFile(state, schedule.name)) ?? null,
         ...(schedule.kind === "agent"
           ? {
@@ -511,11 +536,12 @@ export const scheduleCommandFor = ({
           return ""
         }
         return rows
-          .map(({ name, kind, when, last, spentTodayUsd, maxCostPerDayUsd }) =>
+          .map(({ name, kind, when, notify, last, spentTodayUsd, maxCostPerDayUsd }) =>
             [
               name,
               kind,
               when,
+              `notify ${notify}`,
               last
                 ? `last ${last.at.slice(0, 16).replace("T", " ")} exit ${last.exitCode}` +
                   (last.failures
@@ -543,8 +569,10 @@ export const scheduleCommandFor = ({
     .argument("<name>", "the schedule's name, as `schedule list` shows it")
     .action(async function (this: Command, name: string) {
       const { context, system, state, say, timer } = prepare(this)
-      const why = await waits(this, scheduleFile(state, scheduleName(name)), { timed: false })
-      if (why !== undefined) return say({ name, skipped: true, why }, [`${name}: skipped — ${why}`])
+      const skip = await waits(this, scheduleFile(state, scheduleName(name)), { timed: false })
+      if (skip !== undefined) {
+        return say({ name, skipped: true, why: skip.why, reason: skip.reason }, [`${name}: skipped — ${skip.why}`])
+      }
       const last = await untilChildEnds(this, (signal) =>
         runSchedule(app, system, context.env, scheduleFile(state, scheduleName(name)), {
           timer: timer(),
