@@ -166,12 +166,25 @@ export const storeBackup = v.strictObject({
   encrypted: v.optional(v.literal(true)),
 })
 export const storeDecrypt = v.strictObject({ path: text, from: text, bytes: count })
-export const storeRestore = v.strictObject({
-  path: text,
-  restored_from: text,
-  kept_at: v.nullable(text),
-  schema: count,
-})
+export const storeRestore = v.union([
+  v.strictObject({
+    path: text,
+    restored_from: text,
+    kept_at: v.nullable(text),
+    schema: count,
+  }),
+  /** From a rollback copy: its tables put back in place, the store returned to `schema` from `was`. */
+  v.strictObject({
+    path: text,
+    restored_from: text,
+    rolled_back: v.literal(true),
+    schema: count,
+    was: count,
+    tables: v.array(v.strictObject({ table: text, rows: count })),
+    rebuilt: v.array(text),
+    foreign_key_violations: count,
+  }),
+])
 export const storeReset = v.union([
   v.strictObject({ ...absent.entries, reset: v.literal(false) }),
   v.strictObject({

@@ -2,12 +2,24 @@ import { CliError } from "@wirecat/cli-base"
 import type { CacheDatabase } from "./driver.js"
 import { lockedOutNotice, recordClient, refusalAdvice, storeClients } from "./sqlite/clients.js"
 import { generatedMigrations } from "./sqlite/manifest.js"
+import {
+  discardRollbackCopy,
+  type RollbackCopy,
+  type RollbackCopyOptions,
+  recordRollbackCopy,
+  takeRollbackCopy,
+} from "./sqlite/rollback-copy.js"
 
 export interface Migration {
   version: number
   /** The oldest schema version whose statements still work on a file at this version. */
   minCompatible: number
   statements: string[]
+  /**
+   * The base tables it changes, by their names before it. Required when it raises `minCompatible`: they are copied
+   * aside before it runs, so `store restore` can take the store back to the version older tools still open.
+   */
+  tables?: string[]
   /** Runs before the statements, inside the same transaction. */
   before?: (database: CacheDatabase, now: () => number) => void
 }
@@ -17,7 +29,8 @@ export interface Migration {
  * schema. **A migration that has reached anyone's file is never edited.** After it: forward-only and additive —
  * no `DROP` and no rebuild of a base table, a new column is nullable or has a default, and every `INSERT` in the
  * store names its columns — so an older `tg` keeps writing to a file a newer `max` has migrated. Only a breaking
- * change raises `minCompatible`, and that is a major version of this package. The search indexes are derived and
+ * change raises `minCompatible`, and that is a major version of this package; it names the base tables it changes
+ * (`tables`), which are copied aside before it runs (`sqlite/rollback-copy.ts`). The search indexes are derived and
  * may be dropped and rebuilt. Every version after the first gets a `version-N.test.ts` that opens a file at N-1.
  *
  * Times are epoch milliseconds: an integer sorts and ranges without a format to agree on.
@@ -48,6 +61,27 @@ const fileState = (database: CacheDatabase): { version: number; minCompatible: n
   return { version: Number(row?.version ?? 0), minCompatible: Number(row?.min_compatible ?? 0) }
 }
 
+/** The tables every pending migration that raises `minCompatible` names; none for a new file or a foreign one. */
+const copyBeforeBreaking = (
+  database: CacheDatabase,
+  migrations: Migration[],
+  { ownTable, now }: { ownTable: string | null; now: () => number },
+  options: RollbackCopyOptions,
+): RollbackCopy | undefined => {
+  if (!hasTable(database, "schema_migrations")) return undefined
+  const file = fileState(database)
+  if (file.version === 0 || (ownTable !== null && !hasTable(database, ownTable))) return undefined
+  let floor = file.minCompatible
+  const tables: string[] = []
+  for (const migration of migrations) {
+    if (migration.version <= file.version || migration.minCompatible <= floor) continue
+    floor = migration.minCompatible
+    for (const table of migration.tables ?? []) tables.push(table)
+  }
+  if (floor === file.minCompatible) return undefined
+  return takeRollbackCopy(database, { from: file.version, to: latest(migrations), tables, at: now() }, options)
+}
+
 /**
  * Brings the file up to this version, or opens a newer one it can still write to, or refuses.
  * Inside `BEGIN IMMEDIATE`, so two processes opening an old file at once migrate it once. A migration
@@ -62,6 +96,7 @@ export const migrate = (
     command,
     version,
     ownTable = OWN_TABLE,
+    rollback,
   }: {
     migrations?: Migration[]
     now?: () => number
@@ -69,13 +104,21 @@ export const migrate = (
     /** The CLI's own version: with `command`, it is recorded so a later upgrade can name who it locks out. */
     version?: string
     ownTable?: string | null
+    /** A store on disk: before a migration that raises `minCompatible`, a copy of the tables it changes. */
+    rollback?: RollbackCopyOptions
   } = {},
 ): string | undefined => {
   const ours = latest(migrations)
+  let copy = rollback ? copyBeforeBreaking(database, migrations, { ownTable, now }, rollback) : undefined
   database.exec("BEGIN IMMEDIATE")
   try {
     database.exec(HISTORY)
     const file = fileState(database)
+    // Another process migrated the file between the copy and this transaction, and took its own.
+    if (copy && copy.from !== file.version) {
+      discardRollbackCopy(copy)
+      copy = undefined
+    }
     if (file.version > 0 && ownTable !== null && !hasTable(database, ownTable)) {
       throw new CliError(
         "configuration_error",
@@ -110,6 +153,7 @@ export const migrate = (
         .run(migration.version, migration.minCompatible, now())
     }
     if (command && version) recordClient(database, { command, version, speaks: ours }, now())
+    if (copy) recordRollbackCopy(database, copy, now())
     database.exec("COMMIT")
     return notice
   } catch (error) {
