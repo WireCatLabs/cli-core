@@ -33,6 +33,7 @@ const REFERABLE: Partial<Record<EntityType, { tombstone: boolean }>> = {
   order: { tombstone: true },
   deal: { tombstone: true },
   lead: { tombstone: true },
+  pipeline: { tombstone: false },
   message: { tombstone: true },
   email: { tombstone: true },
   email_thread: { tombstone: true },
@@ -101,16 +102,6 @@ export const thingOf = (database: CacheDatabase, reference: Reference | string):
     }
     case "entity":
       return undefined
-    case "deal":
-    case "lead": {
-      const id = storeId(parsed.id)
-      return id === undefined
-        ? undefined
-        : found(
-            parsed.type,
-            database.prepare("SELECT id FROM opportunities WHERE id = ? AND kind = ?").get(id, parsed.type),
-          )
-    }
     default: {
       const id = storeId(parsed.id)
       const known = referable(parsed.type)

@@ -26,7 +26,6 @@ const DEFAULTS = {
   "searches.runs": 0,
   "pipelines.kind": "deal",
   "pipeline_stages.outcome": "open",
-  "opportunities.kind": "deal",
 }
 const CASCADE = new Set([
   "message_links.chat_id",

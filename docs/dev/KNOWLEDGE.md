@@ -91,8 +91,8 @@ the host passes `decisions: { agentDecisions: true }` from the owner's explicit 
 meeting findings, task close suggestions, and any row marked `ownerOnly` (a registry row takes it from its kind), are the owner's alone even
 then: `mayDecide` reads the row's stored `kind`, so a path that sees the batch as a generic action refuses too. `proposalRegistry`
 (`./services`) is the one inbox over every kind (`relationship`, `key_document`, `fact`, `invoice`, `payment`,
-`order`, `deal`, `memory`, `findings`, `mail_findings`, `meeting_findings`, `task_close`, `action`); a new kind is a `ProposalKind` that registers its id `prefix` or the stored proposal kinds it owns.
-Ids are bare numbers for stored proposals and `fact:`, `invoice:`, `payment:`, `order:`, `deal:`, `memory:`, `link:`, `key:` for the rest;
+`order`, `memory`, `findings`, `mail_findings`, `meeting_findings`, `task_close`, `action`); a new kind is a `ProposalKind` that registers its id `prefix` or the stored proposal kinds it owns.
+Ids are bare numbers for stored proposals and `fact:`, `invoice:`, `payment:`, `order:`, `memory:`, `link:`, `key:` for the rest;
 a task close is `close:<task key>` (`close:Q-15`). `parseProposalIds` reads ranges and lists of them (never a range of
 task keys); only a findings batch takes part ids (`17080/f2`). A link
 keeps no actor, only provenance text, so an unconfirmed link is the owner's alone to decide, and only the owner
@@ -153,19 +153,17 @@ as `<service>:<id>` such as `avito:4512345678`, stored as `tasks.provider` and `
 ids never collide) and the http or https page it is about (`sourceUrl`). Several tasks may share one id: a buyer who
 writes every day gets a task a day. A mail `task` finding carries both as `external_id` and `source_url`.
 
-`store.deals` keeps the owner's sales pipelines and the deals in them (store version 52). A pipeline is a name and its
-stages in order, and holds deals or leads (`kind`); the owner makes his own (`addPipeline`), unique by name in any
-letter case per kind, and a CRM sync will copy an account's (`account`, `externalId`; any name). Each stage has an
-`outcome` (`open`, `won`, `lost`), as a CRM marks the stages that end a deal; positions are not unique, so a sync or
-a reorder can swap two. A deal or a lead (table `opportunities`, ref `deal:<id>` or `lead:<id>`, each resolving only
-its own kind) has a title, an optional organization and project, a stage of a pipeline of its kind (a trigger refuses
-another), a status (`open`, `won`, `lost`) kept apart from the stage, an optional expected amount with its currency,
-the expected close day, the day it closed and a `rank` in its stage's board column. Calls without `kind` work on
-deals. A stage is found by name, in the named pipeline or the only one of the kind that has it (`deal.stage`); a
-pipeline name several pipelines share is refused (`pipeline.ambiguous`). The people on a
-deal are `links` of kind `related-to` with a `role` (`owner`, `contact`, `decision-maker`). Like an order, the owner's
-deal is confirmed at once and an agent's is a `deal` proposal only the owner decides; only the owner moves a deal,
-within its own pipeline (a trigger refuses another), or closes it, and a closed deal keeps its last stage.
+`store.deals` keeps sales pipelines and the deals and leads in them (store version 52). A pipeline (`pipeline:<id>`)
+holds deals or leads (`kind`), is the owner's own or a CRM account's (`account_id`, `external_id`), and is named by its
+reference or by a name only one pipeline has (`pipeline.ambiguous` lists the candidates). Its stages are in order and
+have an `outcome` (`open`, `won`, `lost`). Deals (`deals`, `deal:<id>`) and leads (`leads`, `lead:<id>`, with the
+`deal_id` it became) have a title, an optional organization and project, a stage, a status kept apart from the stage,
+an optional expected amount with its currency, the expected close day and the day it closed. Moving to a stage whose
+outcome ends it closes it, and `close` moves it to the stage of that outcome when the pipeline has one. The people on
+it are `links` of kind `related-to` with a `role` (`owner`, `contact`, `decision-maker`). The owner and his agents
+write alike, with no review; only the author is kept. Triggers write each stage a row enters to
+`pipeline_stage_changes`, and `pipeline(ref)` counts from it how many rows reached each stage and the conversion to
+the next. The migration seeds the lead pipeline `Leads` (`new`, `contacted`, `qualified`, `won`, `lost`).
 
 A mail findings batch (`store.mailFindings`) also takes `invoice`, `payment`, `order` and `order_update` findings.
 Staging runs what accepting would write through `store.finance` or `store.orders` and rolls it back, so a batch the

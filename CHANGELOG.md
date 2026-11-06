@@ -7,6 +7,24 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **Store version 52 is amended in place: deals and leads in their own tables, a stage history, and no review.**
+  0.585.0 and 0.586.0 shipped an earlier shape of version 52, but no published CLI depends on them, so no real store
+  holds it; a store a test or a local build moved to 52 with them must be made again. Tables `deals` and `leads`
+  (refs `deal:<id>`, `lead:<id>`) replace `opportunities`; a lead may name the deal it became (`deal_id`). Pipelines
+  have a ref, `pipeline:<id>`, belong to the owner or to a CRM account (`account_id`, `external_id`, so two accounts
+  may each have "Sales"), and hold deals or leads (`kind`); stages have an `outcome` (`open`, `won`, `lost`) and an
+  `external_id`, and positions are not unique. Deals and leads keep the CRM's `account_id`, `external_id` and a board
+  `rank`. Triggers write every stage a deal or a lead enters to `pipeline_stage_changes`. The migration seeds one lead
+  pipeline, `Leads`, with the stages `new`, `contacted`, `qualified`, `won` and `lost`.
+- **`store.deals` writes for the owner and his agents alike.** The `deal` proposal kind and the review columns are
+  gone; only the author is kept. `add`, `list` take `kind` (`deal` by default; a lead may leave out its stage when one
+  lead pipeline is stored). A pipeline is named by `pipeline:<id>` or by a name only one pipeline has; a shared name
+  is refused with the candidates (`pipeline.ambiguous`). Moving to a stage whose outcome is won or lost closes the row,
+  and `close` moves it to its pipeline's stage of that outcome when there is one. `store.deals.pipeline(ref)` reports
+  each stage's open rows, how many rows reached it and the conversion to the next stage, with won, lost and win rate.
+
 ## 0.586.0 — 06.11.2026
 
 ### Added
@@ -26,12 +44,6 @@ shape of this file.
   units with its currency, the expected close day and the day it closed. The people on a deal are `related-to` links
   with a role (`owner`, `contact`, `decision-maker`). The owner's deal is confirmed at once; an agent's is a `deal`
   proposal only the owner decides. Only the owner moves a deal, within its own pipeline, or closes it.
-  A pipeline holds deals or leads (`kind`, `addPipeline({ kind })`); a lead is a row of `opportunities` with ref
-  `lead:<id>` (`add({ kind: "lead" })`, `list({ kind: "lead" })`; calls without `kind` work on deals). Each stage has
-  an `outcome` (`open`, `won`, `lost`), and stage positions are not unique, so stages can be reordered. A pipeline may
-  belong to a CRM account (`account`, `externalId`, with the stage's `externalId`), so two accounts can each have a
-  pipeline named "Sales"; the owner's own pipeline names stay unique per kind. A deal has a `rank` for its order on a
-  board.
 
 ## 0.584.0 — 06.11.2026
 

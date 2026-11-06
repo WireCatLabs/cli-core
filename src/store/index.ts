@@ -137,7 +137,10 @@ export type {
   DealInput,
   DealPerson,
   DealsStore,
+  FunnelStage,
   Pipeline,
+  PipelineInput,
+  PipelineReport,
   PipelineStage,
 } from "./sqlite/deals.js"
 export type {

@@ -77,17 +77,15 @@ const byId = (
   kind: RefSummaryKind,
   table: string,
   columns: (body: boolean) => Partial<Record<keyof Found, string>>,
-  where?: string,
 ) => ({
   kind,
-  sql: (body: boolean) =>
-    `${select(columns(body))} FROM w JOIN ${table} x ON x.id = w.k1${where === undefined ? "" : ` AND ${where}`}`,
+  sql: (body: boolean) => `${select(columns(body))} FROM w JOIN ${table} x ON x.id = w.k1`,
 })
 
-const opportunityColumns = () => ({
+const crmColumns = () => ({
   title:
     "json_object('id', x.id, 'title', x.title, 'stage', (SELECT name FROM pipeline_stages WHERE id = x.stage_id), " +
-    "'amount', x.amount, 'currency', x.currency, 'status', x.status, 'review', x.review)",
+    "'amount', x.amount, 'currency', x.currency, 'status', x.status)",
   holder: "(SELECT name FROM projects WHERE id = x.project_id)",
   at: "x.created_at",
   deleted: "x.deleted_at",
@@ -279,8 +277,9 @@ const READERS = {
     at: "x.created_at",
     deleted: "x.deleted_at",
   })),
-  deal: byId("deal", "opportunities", opportunityColumns, "x.kind = 'deal'"),
-  lead: byId("lead", "opportunities", opportunityColumns, "x.kind = 'lead'"),
+  deal: byId("deal", "deals", crmColumns),
+  lead: byId("lead", "leads", crmColumns),
+  pipeline: byId("pipeline", "pipelines", () => ({ title: "x.name", at: "x.created_at" })),
 } satisfies Record<string, Reader>
 
 type ReaderName = keyof typeof READERS
