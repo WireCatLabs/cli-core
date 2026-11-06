@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.590.0 — 06.11.2026
+
 ### Changed — may break callers
 
 - **Project status calls a word-found money request `asked`, not `open`.** The `amounts` signal (version 3) gives
