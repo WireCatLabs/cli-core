@@ -109,10 +109,11 @@ const quoted = (value: string) => `"${value.replaceAll("\\", "\\\\").replaceAll(
 /** A file name for the mailbox's points: they describe the mailbox, whichever profile reads it. */
 const pointsName = (mailbox: AccountKey) => encodeURIComponent(mailbox.account)
 
-const markText = (marks: EmailMarks | undefined, excerptOnly = false) => {
+const markText = (marks: EmailMarks | undefined, excerptOnly = false, partial = false) => {
   const said = [
     marks?.bulk || excerptOnly ? "bulk" : "",
     excerptOnly ? "excerpt only" : "",
+    partial ? "partial: not fully downloaded" : "",
     marks?.listId ? `list ${marks.listId}` : "",
     marks?.ruleId ? `rule ${marks.ruleId}` : "",
   ]
@@ -171,6 +172,7 @@ const reviewAnswer = (found: MailReview, mailbox: AccountKey, fresh: boolean, st
         ...messageItem(message, mailbox).email,
         bulk: (message.marks?.bulk ?? false) || message.excerptOnly === true,
         ...(message.excerptOnly ? { excerpt_only: true } : {}),
+        ...(message.partialExcerpt ? { partial: true } : {}),
         list_id: message.marks?.listId ?? null,
         rule_id: message.marks?.ruleId ?? null,
         ...(message.marks
@@ -209,9 +211,14 @@ const holderReview = async (command: Command, mail: MailReads, holder: string, q
   // An agent reads this: earlier mail and signatures stay out of its text; the fingerprint is over the stored body.
   const emails: MailHit[] = [
     ...read.emails.map((email) => ({ ...email, text: mailOwnText(email.text) })),
-    ...read.excerpts.map(({ email, excerpt }) => {
+    ...read.excerpts.map(({ email, excerpt, partial }) => {
       const subject = email.email?.subject
-      return { ...email, text: subject ? `${subject}\n\n${excerpt}` : excerpt, excerptOnly: true as const }
+      return {
+        ...email,
+        text: subject ? `${subject}\n\n${excerpt}` : excerpt,
+        excerptOnly: true as const,
+        ...(partial ? { partialExcerpt: true as const } : {}),
+      }
     }),
   ]
   const chats = new Map<string, MailReview["chats"][number]>()
@@ -272,7 +279,10 @@ const holderReview = async (command: Command, mail: MailReads, holder: string, q
         : `${holder} has no mark yet: it starts from now — acknowledge with --cursor ${read.cursor}`,
     )
     return emails
-      .map((hit) => `${hitText(hit, undefined, local)}${markText(marks.get(hit.id), hit.excerptOnly)}\n`)
+      .map(
+        (hit) =>
+          `${hitText(hit, undefined, local)}${markText(marks.get(hit.id), hit.excerptOnly, hit.partialExcerpt === true)}\n`,
+      )
       .join("")
   })
 }
