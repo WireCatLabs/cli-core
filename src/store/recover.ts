@@ -36,6 +36,16 @@ const INSERTED = /^INSERT OR IGNORE INTO '([^']+)'/
 const LOST_AND_FOUND = "recover_lost_and_found"
 
 /** The `sqlite3` program's version, or why it cannot be used: the recovery reads the damaged file with it. */
+/** Some builds leave out the page table `.recover` reads, and fail only when it runs. */
+const recovers = (program: string): boolean => {
+  try {
+    execFileSync(program, [":memory:", ".recover"], { stdio: ["ignore", "ignore", "pipe"] })
+    return true
+  } catch {
+    return false
+  }
+}
+
 export const sqlite3Program = (program = "sqlite3"): { program: string; version: string | null; usable: boolean } => {
   let version: string | null = null
   try {
@@ -47,8 +57,8 @@ export const sqlite3Program = (program = "sqlite3"): { program: string; version:
   }
   const parts = (version ?? "").split(".").map(Number)
   const at = SQLITE3_MINIMUM.findIndex((wanted, i) => (parts[i] ?? 0) !== wanted)
-  const usable = at === -1 || (parts[at] ?? 0) > (SQLITE3_MINIMUM[at] ?? 0)
-  return { program, version, usable }
+  const recent = at === -1 || (parts[at] ?? 0) > (SQLITE3_MINIMUM[at] ?? 0)
+  return { program, version, usable: recent && recovers(program) }
 }
 
 /** The WireCat timers still scheduled: each may open the store while it is being recovered. Linux only. */
@@ -412,8 +422,8 @@ export const recoverStore = async ({
     throw new CliError(
       "configuration_error",
       program.version
-        ? `sqlite3 ${program.version} is too old; the recovery needs ${SQLITE3_MINIMUM.join(".")} or newer`
-        : "the recovery needs the sqlite3 program: install it (apt install sqlite3, brew install sqlite)",
+        ? `sqlite3 ${program.version} cannot recover: the recovery needs ${SQLITE3_MINIMUM.join(".")} or newer, built with .recover`
+        : "the recovery needs the sqlite3 program with its .recover command: install it (apt install sqlite3, brew install sqlite)",
       { reason: "store.sqlite3-missing" },
     )
   }

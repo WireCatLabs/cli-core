@@ -3122,7 +3122,6 @@
     "doctor": {
       "in": "all",
       "options": {
-        "--deep": "all",
         "--online": "all"
       }
     },

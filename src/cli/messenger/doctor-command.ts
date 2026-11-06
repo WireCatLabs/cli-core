@@ -35,7 +35,6 @@ export const doctorCommand = (messenger: Messenger): Command => {
   const command = annotate(new Command("doctor"), { effects: REMOTE_READ })
     .description(DOCTOR_SUMMARY)
     .option("--online", DOCTOR_ONLINE_OPTION)
-    .option("--deep", DOCTOR_DEEP_OPTION)
     .action(async function (this: Command) {
       const { online } = this.opts<{ online?: boolean }>()
       const { report, renderer, fixes = [] } = await diagnose(this, messenger)
@@ -63,6 +62,7 @@ export const doctorCommand = (messenger: Messenger): Command => {
 export const DOCTOR_DEEP_OPTION =
   "also read every page of the store and check every search index (about 30 s for 6 GB); without it, only the file header and schema"
 
+/** The shared doctor stays quick; `store recover` is its deep check, and a CLI may add `--deep` to its own doctor. */
 const summaryOptions = (command: Command, app: string) => ({
   deep: command.opts<{ deep?: boolean }>().deep === true,
   command: app,

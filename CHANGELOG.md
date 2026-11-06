@@ -26,10 +26,10 @@ shape of this file.
   refuses while a WireCat timer is scheduled or a process has the store open, and names them. The answer lists the
   tables that lost rows, the rows that point at lost ones, and the mail sync that fetches lost mail again.
   `storeRecoveryRun` and `storeRecoverCommand` give it to other CLIs.
-- **`doctor --deep`** checks every page of the store and every search index (about 30 s for 6 GB). Without it, doctor
-  checks the file header, its size and the schema's own pages in milliseconds. A damaged store is explained in the
-  answer's `store.damage` (`explainDamage`: what, causes, investigate, impact, external_unaffected, steps), and
-  `storeSummary` takes `{ deep, command }`.
+- **`doctor` checks the store's health**: the file header, its size and the schema's own pages, in milliseconds. A
+  damaged store is explained in the answer's `store.damage` (`explainDamage`: what, causes, investigate, impact,
+  external_unaffected, steps) and points at `store recover`, the whole-file check. `storeSummary` takes
+  `{ deep, command }`, and `DOCTOR_DEEP_OPTION` words a CLI's own `--deep`.
 
 ## 0.596.0 — 06.11.2026
 

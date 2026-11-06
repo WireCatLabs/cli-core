@@ -416,7 +416,7 @@ with `normalize()`, and its `identity` names what built an index.
 
 `storeHealth` (`src/store/health.ts`) checks the file without changing it: quick (header, size against page count,
 the schema's pages; milliseconds) for `doctor`, deep (`PRAGMA quick_check` and each fts5 index's `integrity-check`
-under a rolled-back transaction; about 30 s for 6 GB) for `doctor --deep` and `store recover`. `explainDamage`
+under a rolled-back transaction; about 30 s for 6 GB) for `store recover` and a CLI's own `doctor --deep` (memo's). `explainDamage`
 (`src/store/damage.ts`) turns a failed check into the plain-words answer every surface shows. `recoverStore`
 (`src/store/recover.ts`) copies the readable rows with the `sqlite3` program's `.recover` (node:sqlite has no recovery
 API; free pages are skipped so deleted rows stay deleted), migrates, drops and refills every fts5 and vec0 index

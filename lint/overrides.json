@@ -61,12 +61,5 @@
     "reason": "the owner chose `store recover` (a help that inspects) with `store recover run` (the work) on 2026-11-06, for a damaged store; recover goes into cli-base's vocabulary as a verb that takes a subcommand in its next release",
     "owner": "@leemour",
     "review_after": "2026-12-06"
-  },
-  {
-    "rule": "flag-two-meanings",
-    "target": "--deep",
-    "reason": "the owner chose `doctor --deep` on 2026-11-06 for the slow whole-file check of the store, a switch; `chats members check --deep <n>` keeps its count, and cli-base adds the switch meaning in its next release",
-    "owner": "@leemour",
-    "review_after": "2026-12-06"
   }
 ]
