@@ -43,6 +43,8 @@ export interface CrmItem {
   closeDate?: string | null
   /** `YYYY-MM-DD`: when it was won or lost. */
   closedDate?: string | null
+  /** Why it was won or lost, as the CRM keeps it. */
+  closedReason?: string | null
   /** A company's id. */
   organization?: string | null
   /** Contacts on it, by their id, and the part each plays. */

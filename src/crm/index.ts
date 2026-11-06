@@ -10,3 +10,26 @@ export {
   parseCrmCursor,
   syncCrm,
 } from "./sync.js"
+export {
+  CRM_ASSIGN_OTHERS_KEY,
+  CRM_VERBS,
+  CRM_WRITE_DEFAULTS,
+  CRM_WRITE_KEYS,
+  type CrmDraft,
+  type CrmFields,
+  type CrmVerb,
+  type CrmWriteCapabilities,
+  type CrmWriteOptions,
+  type CrmWriter,
+} from "./writer.js"
+export {
+  type CrmFieldsInput,
+  type CrmWriteContext,
+  type CrmWrites,
+  type CrmWritten,
+  closeCrmItem,
+  createCrmItem,
+  moveCrmItem,
+  removeCrmItem,
+  updateCrmItem,
+} from "./writes.js"

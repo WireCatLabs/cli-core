@@ -2,17 +2,19 @@ import { CliError } from "@wirecat/cli-base"
 import { annotate, metaOf, sharedCommand } from "@wirecat/cli-base/commands"
 import type { QueryRegistry } from "@wirecat/cli-base/query"
 import type { NextStep } from "@wirecat/cli-base/standards"
-import { type Command, InvalidArgumentError } from "commander"
+import { Argument, type Command, InvalidArgumentError } from "commander"
 import * as v from "valibot"
 import { answerEntity } from "../../cli/answer-entity.js"
 import { environmentOf, outputFor, runBudgetOf } from "../../cli/context.js"
 import { honoursDryRun } from "../../cli/dry-run-guard.js"
-import { FETCH, LOCAL_READ, NO_EFFECTS } from "../../cli/effects.js"
+import { FETCH, LOCAL_READ, NO_EFFECTS, REMOTE_WRITE } from "../../cli/effects.js"
 import { type Body, itemOf, listOf, renderAnswer, snakeKeys } from "../../cli/envelope.js"
 import { queryTerms, termField, withQuery } from "../../cli/list-query.js"
+import { terminalAsker } from "../../cli/messenger/ask.js"
 import { lineOf } from "../../cli/steps.js"
 import { CRM_KINDS } from "../../domain/crm.js"
 import { DEAL_KINDS, DEAL_STATUSES, type DealKind } from "../../domain/deals.js"
+import { deal as dealEntity } from "../../entities/deal.js"
 import { count, text } from "../../entities/fields.js"
 import type { AppIdentity } from "../../ports/app.js"
 import type { Deal, DealFilter, Pipeline } from "../../store/sqlite/deals.js"
@@ -20,6 +22,17 @@ import type { MessageStore } from "../../store/store.js"
 import type { AccountKey } from "../../store/types.js"
 import type { CrmSource } from "../source.js"
 import { crmStatus, syncCrm } from "../sync.js"
+import type { CrmWriteCapabilities } from "../writer.js"
+import {
+  type CrmFieldsInput,
+  type CrmWriteContext,
+  type CrmWrites,
+  closeCrmItem,
+  createCrmItem,
+  moveCrmItem,
+  removeCrmItem,
+  updateCrmItem,
+} from "../writes.js"
 import { addCrmSearchAll } from "./search-all.js"
 
 /**
@@ -36,6 +49,8 @@ export interface CrmRun {
   source: () => CrmSource
   /** A profile lock pins the process (WC-ACCT-5): `search all` then reads only this account's deals. */
   locked?: boolean
+  /** The CRM's writer and the profile's levels, built on first use; needed by every write command. */
+  writes?: () => CrmWrites
   env?: NodeJS.ProcessEnv
   close?: () => Promise<void>
 }
@@ -47,6 +62,8 @@ export interface CrmCommandOptions {
   open: (command: Command, access: { readOnly: boolean }) => Promise<CrmRun>
   /** The CRM has leads: mounts `leads list|show`. True when absent. */
   leads?: boolean
+  /** The writer's capabilities: mounts `create`, `update`, `move`, `close` and `delete` of each kind it writes. */
+  writes?: CrmWriteCapabilities
   now?: () => number
 }
 
@@ -128,6 +145,22 @@ const crmSyncProgress = v.strictObject({
   cursor_age_ms: v.nullable(count),
   line: text,
 })
+
+const crmWrite = v.strictObject({
+  operation_id: text,
+  deal: v.optional(dealEntity),
+  lead: v.optional(dealEntity),
+})
+
+const crmRemoval = v.strictObject({ operation_id: text, ref: text, removed: count })
+
+/** `--field code=value`, repeated; an empty value clears the field. */
+const fieldPair = (value: string, previous: Record<string, string | null> = {}) => {
+  const at = value.indexOf("=")
+  if (at < 1) throw new InvalidArgumentError("expected code=value")
+  const given = value.slice(at + 1)
+  return { ...previous, [value.slice(0, at)]: given === "" ? null : given }
+}
 
 const integer = (most: number) => (value: string) => {
   if (!/^[1-9]\d*$/.test(value) || Number(value) > most) throw new InvalidArgumentError(`expected 1 to ${most}`)
@@ -311,6 +344,7 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
         return itemOf({ ...(snakeKeys(found) as object), untrusted: DEAL_UNTRUSTED })
       })
     })
+    addWrites(group, kind)
   }
 
   /** A row of this profile's account: another account's copy, or the owner's own, is not found here. */
@@ -323,6 +357,147 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
     if (found.account?.provider !== run.account.provider || found.account.account !== run.account.account)
       throw new CliError("not_found", `${reference} is not a copy from this profile's CRM account`)
     return found
+  }
+
+  const writes = options.writes
+  const addWrites = (group: Command, kind: DealKind) => {
+    if (!writes?.kinds.includes(kind)) return
+    const plural = `${kind}s`
+    const contextOf = (run: CrmRun, command: Command): CrmWriteContext => {
+      if (!run.writes) throw new CliError("configuration_error", "this profile cannot write to its CRM")
+      return {
+        store: run.store,
+        account: run.account,
+        writes: run.writes(),
+        ask: terminalAsker(command),
+        source: run.source,
+        names: { id: "--operation-id" },
+      }
+    }
+    const answered = (operationId: string, item: Deal) =>
+      itemOf({ operation_id: operationId, [kind]: { ...(snakeKeys(item) as object), untrusted: DEAL_UNTRUSTED } })
+    const write = (name: string, verb: (typeof writes.verbs)[number], description: string) => {
+      if (!writes.verbs.includes(verb)) return undefined
+      const command = answerEntity(
+        annotate(group.command(name), { effects: REMOTE_WRITE, offline: false }),
+        verb === "remove" ? "crm_removal" : "crm_write",
+        verb === "remove" ? crmRemoval : crmWrite,
+      ).description(description)
+      if (writes.idempotent)
+        command.option(
+          "--operation-id <id>",
+          "the operation_id a write that ended in outcome_unknown named: the CRM answers the repeat from its record",
+        )
+      return command
+    }
+    const reference = (command: Command) => command.argument("<ref>", `${kind}:<id>, as a list shows it`)
+    const fields = (command: Command) =>
+      command
+        .option("--title <title>", `the ${kind}'s title`)
+        .option("--pipeline <pipeline>", "pipeline:<id>, or a name only one of the CRM's pipelines has")
+        .option(
+          "--stage <stage>",
+          "a stage of its pipeline, by the CRM's id or name; checks the move key too, and the close key for a won or lost stage",
+        )
+        .option("--amount <decimal>", "the expected sum, such as 1500.50, with --currency")
+        .option("--currency <code>", "an ISO 4217 code, such as EUR")
+        .option("--close-date <date>", "the day it is expected to close, YYYY-MM-DD")
+        .option(
+          "--owner <user>",
+          "the CRM user it is assigned to; anyone but the sign-in's own user checks crm.assign-others",
+        )
+        .option(
+          "--field <key=value>",
+          "one of the CRM's own fields, by its code; repeat for more, empty clears it",
+          fieldPair,
+        )
+    type Typed = Omit<CrmFieldsInput, "custom"> & { field?: Record<string, string | null>; operationId?: string }
+    const inputOf = ({ field, operationId: _id, ...rest }: Typed): CrmFieldsInput => ({
+      ...Object.fromEntries(Object.entries(rest).filter(([, value]) => value !== undefined)),
+      ...(field ? { custom: field } : {}),
+    })
+    const idOf = (opts: { operationId?: string }) =>
+      opts.operationId === undefined ? {} : { operationId: opts.operationId }
+    const run = (command: Command, work: (context: CrmWriteContext) => Promise<Body>) =>
+      within(command, (opened) => work(contextOf(opened, command)))
+
+    const create = write("create", "create", `make a ${kind} in the CRM, then store the CRM's copy of it`)
+    if (create)
+      example(
+        fields(create),
+        `${plural} create --title "Example kitchen" --amount 15000 --currency EUR`,
+        `${plural} create --title "Example office" --pipeline Sales --stage "Quote sent" --field UF_CRM_SOURCE=web`,
+      ).action(async (opts: Typed, command: Command) => {
+        await run(command, async (context) => {
+          const done = await createCrmItem(context, kind, inputOf(opts), idOf(opts))
+          return answered(done.operationId, done.item)
+        })
+      })
+    const update = write(
+      "update",
+      "update",
+      `change a ${kind} in the CRM; what is left out keeps its value; the CRM's copy is stored again`,
+    )
+    if (update)
+      example(
+        fields(reference(update)),
+        `${plural} update ${kind}:12 --amount 18000`,
+        `${plural} update ${kind}:12 --field UF_CRM_SOURCE=`,
+      ).action(async (ref: string, opts: Typed, command: Command) => {
+        await run(command, async (context) => {
+          const done = await updateCrmItem(context, kind, ref, inputOf(opts), idOf(opts))
+          return answered(done.operationId, done.item)
+        })
+      })
+    const move = write(
+      "move",
+      "move",
+      `move a ${kind} to another stage of its pipeline; a won or lost stage checks the close key too`,
+    )
+    if (move)
+      example(
+        reference(move).argument("<stage>", "the stage, by the CRM's id or a name only one stage of its pipeline has"),
+        `${plural} move ${kind}:12 "Quote sent"`,
+      ).action(async (ref: string, stage: string, opts: { operationId?: string }, command: Command) => {
+        await run(command, async (context) => {
+          const done = await moveCrmItem(context, kind, ref, stage, idOf(opts))
+          return answered(done.operationId, done.item)
+        })
+      })
+    const close = write("close", "close", `mark a ${kind} won or lost, the CRM's own way`)
+    if (close)
+      example(
+        reference(close)
+          .addArgument(new Argument("<outcome>", "how it ended").choices(["won", "lost"]))
+          .option("--reason <text>", "why, in a few words; kept with it"),
+        `${plural} close ${kind}:12 won`,
+        `${plural} close ${kind}:12 lost --reason "Example: chose another supplier"`,
+      ).action(
+        async (
+          ref: string,
+          outcome: "won" | "lost",
+          opts: { reason?: string; operationId?: string },
+          command: Command,
+        ) => {
+          await run(command, async (context) => {
+            const done = await closeCrmItem(context, kind, ref, outcome, {
+              ...idOf(opts),
+              ...(opts.reason === undefined ? {} : { reason: opts.reason }),
+            })
+            return answered(done.operationId, done.item)
+          })
+        },
+      )
+    const remove = write("delete", "remove", `delete a ${kind} in the CRM; asks first unless allowed`)
+    if (remove)
+      example(reference(remove), `${plural} delete ${kind}:12`).action(
+        async (ref: string, opts: { operationId?: string }, command: Command) => {
+          await run(command, async (context) => {
+            const done = await removeCrmItem(context, kind, ref, idOf(opts))
+            return itemOf({ operation_id: done.operationId, ref: done.ref, removed: done.removed })
+          })
+        },
+      )
   }
 
   items("deal")
