@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.591.0 — 06.11.2026
+
 ### Added
 
 - **`patiently` and `waitForTurn` are public.** `patiently` (`@wirecat/cli-core/services`) sits out a provider's
