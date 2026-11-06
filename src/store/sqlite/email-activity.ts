@@ -61,6 +61,10 @@ export interface MarkedEmail {
   changedAt: number
   /** Sent to many: the bulk mailbox or a List-Id. */
   bulk: boolean
+  /** Its own List-Id: a real mailing list, as opposed to List-Unsubscribe or Precedence alone. */
+  listed: boolean
+  subject: string | null
+  from: string | null
   envelope: boolean
   /** Stored from its first bytes, not whole yet. */
   partial: boolean
@@ -213,7 +217,8 @@ export const writtenTo = (database: CacheDatabase, addresses: readonly string[])
 
 const MARKED = `
   SELECT e.id, e.external_id, t.external_id AS thread, coalesce(e.received_at, e.sent_at) AS at, e.created_at,
-    e.updated_at, coalesce(e.draft, 0) AS draft, json_extract(e.metadata, '$.partial') IS NOT NULL AS partial,
+    e.updated_at, e.subject, e.from_address, coalesce(e.draft, 0) AS draft,
+    coalesce(json_extract(e.headers, '$."list-id"'), json_extract(e.metadata, '$.listId')) IS NOT NULL AS listed, json_extract(e.metadata, '$.partial') IS NOT NULL AS partial,
     coalesce(json_extract(e.headers, '$."list-id"'), json_extract(e.metadata, '$.listId')) IS NOT NULL
       OR EXISTS (SELECT 1 FROM email_mailboxes m JOIN mailboxes b ON b.id = m.mailbox_id
         WHERE m.email_id = e.id AND b.kind = 'bulk') AS bulk,
@@ -231,6 +236,9 @@ const markedOf = (row: Record<string, unknown>): MarkedEmail => ({
   storedAt: Number(row.created_at),
   changedAt: Number(row.updated_at),
   bulk: Boolean(row.bulk),
+  listed: Boolean(row.listed),
+  subject: row.subject === null || row.subject === undefined ? null : String(row.subject),
+  from: row.from_address === null || row.from_address === undefined ? null : String(row.from_address),
   envelope: Boolean(row.envelope),
   partial: Boolean(row.partial),
   draft: Boolean(row.draft),

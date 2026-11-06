@@ -2,7 +2,13 @@ import { CliError } from "@wirecat/cli-base"
 import { mailOwnText } from "../conversations/mail-text.js"
 import { isBusy } from "../store/sqlite/transaction.js"
 import type { AccountKey, MarkedEmail, MessageStore, StoredHit } from "../store/store.js"
-import { BULK_TRIAGE_DEFAULTS, type BulkSorted, type BulkTriage, newsletterSorter } from "./newsletter.js"
+import {
+  BULK_TRIAGE_DEFAULTS,
+  type BulkSorted,
+  type BulkTriage,
+  newsletterSorter,
+  transactionalCue,
+} from "./newsletter.js"
 
 /** A holder's name: what `--holder` takes and the mark's key ends with. */
 export const HOLDER = /^[a-z0-9][a-z0-9-]{0,39}$/
@@ -94,11 +100,15 @@ export const marksOf = async (store: MessageStore, mailbox: AccountKey): Promise
     .sort((a, b) => a.holder.localeCompare(b.holder))
 }
 
+/** Sent to many and not an order, an invoice or a shipment: those carry List-Unsubscribe too, and are for the holder. */
+const isBulk = (email: MarkedEmail): boolean =>
+  email.bulk && (email.listed || transactionalCue({ subject: email.subject, from: email.from }) === null)
+
 /** Why an email is not for the holder, or `held` while it is partial and young, or `read`. */
 const verdict = (email: MarkedEmail, now: number): SkipReason | "held" | "read" => {
   if (email.draft) return "draft"
   if (email.envelope) return "envelope"
-  if (email.bulk) return "bulk"
+  if (isBulk(email)) return "bulk"
   if (email.demoted) return "suspicious"
   if (email.partial) return now - email.storedAt < HOLD_PARTIAL_MS ? "held" : "partial"
   return "read"
@@ -129,6 +139,8 @@ export interface BulkExcerpt {
   excerpt: string
   /** What kept it, or the newsletter signs too few to leave it out. */
   cues: string[]
+  /** Stored from its first bytes, not whole: the excerpt may be all of it that there is. */
+  partial: boolean
 }
 
 export interface MarkRead {
@@ -162,17 +174,17 @@ export const readPastMark = async (
   const { wanted, sorted, oldestStoredAt: _, ...read } = await examine(store, mailbox, holder, options)
   const excerpts = wanted.flatMap((id) => {
     const one = sorted.get(id)
-    return one ? [{ email: one.email, excerpt: one.excerpt, cues: one.cues }] : []
+    return one ? [{ email: one.email, excerpt: one.excerpt, cues: one.cues, partial: one.partial }] : []
   })
   const emails = await store.mail.emailHits(wanted.filter((id) => !sorted.has(id)))
   return { emails, excerpts, ...read }
 }
 
-type Sorted = Map<number, BulkSorted & { email: StoredHit }>
+type Sorted = Map<number, BulkSorted & { email: StoredHit; partial: boolean }>
 
 /**
  * The batch's bulk emails a holder might read, sorted by `newsletterSorter`, and where the batch ends so it holds at
- * most `perRead` excerpts. Drafts, envelopes, suspicious senders and partial mail keep their own verdicts.
+ * most `perRead` excerpts. Drafts, envelopes and suspicious senders keep their own verdicts; partial bulk mail is sorted too, and flagged.
  */
 const sortBulk = async (
   store: MessageStore,
@@ -184,7 +196,7 @@ const sortBulk = async (
   const sort = newsletterSorter(triage.cues)
   let excerpts = 0
   for (const [index, marked] of batch.entries()) {
-    if (!marked.bulk || marked.draft || marked.envelope || marked.demoted || marked.partial) continue
+    if (!isBulk(marked) || marked.draft || marked.envelope || marked.demoted) continue
     const [email] = await store.mail.emailHits([marked.id])
     if (!email) continue
     const subject = email.email?.subject ?? null
@@ -192,7 +204,7 @@ const sortBulk = async (
     const one = sort({ subject, text: mailOwnText(body), from: email.email?.from?.address ?? null })
     if (one.verdict === "excerpt" && excerpts === triage.perRead) return { sorted, end: index }
     if (one.verdict === "excerpt") excerpts += 1
-    sorted.set(marked.id, { ...one, email })
+    sorted.set(marked.id, { ...one, email, partial: marked.partial })
   }
   return { sorted, end: batch.length }
 }

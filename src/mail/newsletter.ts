@@ -161,6 +161,79 @@ const matcherOf = (words: readonly string[]) => {
   return (text: string) => [...new Set([...text.toLowerCase().matchAll(pattern)].map(([found]) => found))]
 }
 
+/** Words that, in a subject, say "a record of something of yours": a purchase, a payment, a shipment. */
+const TRANSACTIONAL_WORDS = [
+  "заказ",
+  "счёт",
+  "счет",
+  "чек",
+  "квитанци",
+  "оплат",
+  "доставк",
+  "посылк",
+  "отправлен",
+  "order",
+  "invoice",
+  "receipt",
+  "payment",
+  "shipped",
+  "shipping",
+  "delivered",
+  "delivery",
+  "tracking",
+  "refund",
+  "pedido",
+  "factura",
+  "recibo",
+  "pago",
+  "envío",
+  "reembolso",
+] as const
+
+/** An amount with its currency, either side: `1 250 ₽`, `49,90 EUR`, `$12.50`. */
+const AMOUNT = /\d[\d\s.,]*\s?(?:₽|€|\$|£|руб|р\.|rub|eur|usd|gbp)(?![\p{L}])|(?:₽|€|\$|£|rub|eur|usd|gbp)\s?\d/iu
+
+/** An order number as shops print it, such as Amazon's `406-3547475-4115561`. */
+const ORDER_ID = /(?<!\d)\d{3}-\d{7}-\d{7}(?!\d)/
+
+/** Parts of a sender's address that say "orders, billing or shipping". */
+const TRANSACTIONAL_SENDERS = new Set([
+  "order",
+  "orders",
+  "billing",
+  "invoice",
+  "invoices",
+  "receipt",
+  "receipts",
+  "payment",
+  "payments",
+  "shipping",
+  "tracking",
+])
+
+const transactionalWords = matcherOf(TRANSACTIONAL_WORDS)
+const advertisingWords = matcherOf(NEWSLETTER_WORDS)
+
+const NEWSLETTER_SENDER_PARTS = new Set<string>(NEWSLETTER_SENDERS.filter((one) => !one.includes(".")))
+
+/**
+ * What makes a bulk email transactional (an order, an invoice, a receipt, a shipment), or `null`. List-Unsubscribe
+ * sits on those too, so it proves nothing alone. Subject and sender only, so the store can ask it of every email.
+ * An order's number settles it; an amount with its currency or a word of the lists below does not, when the subject
+ * also advertises or the sender is a newsletter's ("Order now, save 20%").
+ */
+export const transactionalCue = ({ subject, from }: { subject: string | null; from: string | null }): string | null => {
+  const title = subject ?? ""
+  const number = REFERENCE_NUMBER.exec(title) ?? ORDER_ID.exec(title)
+  if (number) return number[0]
+  const parts = (from ?? "").toLowerCase().split(/[.@_+-]/)
+  if (advertisingWords(title).length > 0 || parts.some((part) => NEWSLETTER_SENDER_PARTS.has(part))) return null
+  const [word] = transactionalWords(title)
+  if (word) return word
+  if (AMOUNT.test(title)) return "an amount"
+  return parts.find((part) => TRANSACTIONAL_SENDERS.has(part)) ?? null
+}
+
 /** The first lines of an email's own text, at most `chars`, cut at a word. */
 export const excerptOf = (text: string, chars: number): string => {
   const flat = text
