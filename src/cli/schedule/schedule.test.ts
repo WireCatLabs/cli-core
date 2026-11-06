@@ -15,7 +15,13 @@ import { logRecordSchema } from "@wirecat/cli-base/standards"
 import { Command } from "commander"
 import * as v from "valibot"
 import { describe, expect, it, vi } from "vitest"
-import { runSchedule, type Schedule, scheduleFile } from "../../background/schedules.js"
+import {
+  AGENT_INPUT_MAX_CHARS,
+  type AgentInput,
+  runSchedule,
+  type Schedule,
+  scheduleFile,
+} from "../../background/schedules.js"
 import type { Ran, ServerSystem } from "../../background/system.js"
 import type { Chat } from "../../domain/models.js"
 import { scheduledJob } from "../../entities/index.js"
@@ -190,6 +196,65 @@ describe.runIf(process.platform !== "win32")("an agent that may run another CLI"
     const last = await runSchedule(app, system, env, file, { agentRuns: [mail] })
     expect(last.exitCode).toBe(0)
     expect(readFileSync(join(file, "..", "latest.md"), "utf8")).toBe("1 1 triage\n")
+  })
+
+  describe("agent input", () => {
+    const agentFile = (env: NodeJS.ProcessEnv) => {
+      const file = scheduleFile(env.CHAT_STATE_DIR, "triage")
+      mkdirSync(join(file, ".."), { recursive: true })
+      const script = "process.stdin.on('data', (chunk) => process.stdout.write(chunk))"
+      writeFileSync(
+        file,
+        JSON.stringify({
+          name: "triage",
+          kind: "agent",
+          argv: [process.execPath, "-e", script],
+          when: { daily: "08:30" },
+          environment: {},
+          createdAt: "",
+        }),
+      )
+      return file
+    }
+
+    it("hands what the host reads to the agent on its stdin, each read run through this CLI", async () => {
+      const { env } = setup()
+      const { system, ran } = machine("linux", ["/opt/node", "/opt/chat/bin/chat.js"])
+      const file = agentFile(env)
+      const agentInput: AgentInput = async (_schedule, runOne) => runOne(["skill", "show", "x"])
+      system.run = async (argv, runEnv) => {
+        ran.push({ argv, env: runEnv })
+        return { code: 0, stdout: "prepared\n", stderr: "" }
+      }
+      const last = await runSchedule(app, system, env, file, { agentInput })
+      expect(last.exitCode).toBe(0)
+      expect(readFileSync(join(file, "..", "latest.md"), "utf8")).toBe("prepared\n")
+      expect(ran[0]?.argv).toEqual(["/opt/node", "/opt/chat/bin/chat.js", "skill", "show", "x"])
+      expect(ran[0]?.env.CHAT_READ_ONLY).toBe("1")
+    })
+
+    it("cuts an input over the cap", async () => {
+      const { env } = setup()
+      const { system } = machine("linux")
+      const file = agentFile(env)
+      await runSchedule(app, system, env, file, { agentInput: async () => "x".repeat(AGENT_INPUT_MAX_CHARS + 10) })
+      const given = readFileSync(join(file, "..", "latest.md"), "utf8")
+      expect(given).toContain("[input cut at")
+      expect(given.length).toBeLessThan(AGENT_INPUT_MAX_CHARS + 200)
+    })
+
+    it("starts the agent without input when the host's read fails", async () => {
+      const { env } = setup()
+      const { system } = machine("linux")
+      const file = agentFile(env)
+      const last = await runSchedule(app, system, env, file, {
+        agentInput: async () => {
+          throw new Error("no store")
+        },
+      })
+      expect(last.exitCode).toBe(0)
+      expect(readFileSync(join(file, "..", "latest.md"), "utf8")).toBe("")
+    })
   })
 })
 
