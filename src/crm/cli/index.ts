@@ -9,10 +9,10 @@ import { environmentOf, outputFor, runBudgetOf } from "../../cli/context.js"
 import { honoursDryRun } from "../../cli/dry-run-guard.js"
 import { FETCH, LOCAL_READ, NO_EFFECTS, REMOTE_WRITE } from "../../cli/effects.js"
 import { type Body, itemOf, listOf, renderAnswer, snakeKeys } from "../../cli/envelope.js"
-import { queryTerms, termField, withQuery } from "../../cli/list-query.js"
+import { queryTerms, termField, unfilteredQuery, withQuery } from "../../cli/list-query.js"
 import { terminalAsker } from "../../cli/messenger/ask.js"
 import { lineOf } from "../../cli/steps.js"
-import { CRM_KINDS } from "../../domain/crm.js"
+import { CRM_KINDS, type CrmKind } from "../../domain/crm.js"
 import { DEAL_KINDS, DEAL_STATUSES, type DealKind } from "../../domain/deals.js"
 import { deal as dealEntity } from "../../entities/deal.js"
 import { count, text } from "../../entities/fields.js"
@@ -152,6 +152,26 @@ const crmWrite = v.strictObject({
   lead: v.optional(dealEntity),
   untrusted: v.array(text),
 })
+
+/** b24's `fields list` answer, so a CRM CLI's own command can go; `untrusted` names what the CRM's users typed. */
+const crmField = v.strictObject({
+  code: v.string(),
+  label: v.nullable(v.string()),
+  type: v.string(),
+  multiple: v.boolean(),
+  filterable: v.boolean(),
+  options: v.optional(v.array(v.strictObject({ id: v.string(), label: v.string() }))),
+  untrusted: v.array(text),
+})
+const FIELDS_QUERY = unfilteredQuery("crm_field", crmField)
+const FIELD_UNTRUSTED = ["label", "options.label"]
+/** The words `fields list` takes: its sibling commands' nouns. */
+const FIELD_KINDS: Record<string, CrmKind> = {
+  deals: "deal",
+  leads: "lead",
+  people: "person",
+  organizations: "organization",
+}
 
 const crmRemoval = v.strictObject({ operation_id: text, ref: text, removed: count })
 
@@ -603,6 +623,45 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
       })
     })
   })
+
+  const fieldKinds = Object.keys(FIELD_KINDS).filter((word) => word !== "leads" || options.leads !== false)
+  const fields = annotate(program.command("fields"), { effects: NO_EFFECTS }).description(
+    "the CRM's own fields on deals, leads, people and organizations, as last synced",
+  )
+  example(
+    withQuery(
+      answerEntity(annotate(fields.command("list"), { effects: LOCAL_READ }), "crm_field", crmField)
+        .description("the CRM's custom fields of one kind, in its order, with a list field's options")
+        .argument("<kind>", fieldKinds.join(", "))
+        .option("--limit <n>", `fields per page, 1–${MOST}`, integer(MOST), 50)
+        .option("--page <n>", "which page, starting at 1", integer(1_000_000), 1)
+        .option("--all", "every field, no paging"),
+      FIELDS_QUERY,
+    ),
+    "fields list deals",
+    "fields list people --json",
+  ).action(
+    async (kind: string, words: string[], opts: { limit: number; page: number; all?: boolean }, command: Command) => {
+      if (!fieldKinds.includes(kind))
+        throw new CliError("validation_error", `fields are listed for ${fieldKinds.join(", ")}; got ${kind}`, {
+          reason: "field.unknown-kind",
+          allowed: fieldKinds,
+        })
+      queryTerms(words, FIELDS_QUERY, "fields list")
+      await within(command, async (run) => {
+        const found = await run.store.crm.fields(run.account, FIELD_KINDS[kind] as CrmKind)
+        const offset = opts.all ? 0 : (opts.page - 1) * opts.limit
+        const end = opts.all ? found.length : offset + opts.limit
+        return listOf(pathOf(command).join(" "), {
+          items: found.slice(offset, end).map((field) => ({ ...field, untrusted: FIELD_UNTRUSTED })),
+          limit: opts.all ? Math.max(1, found.length) : opts.limit,
+          page: opts.page,
+          has_more: found.length > end,
+          ...(words.length ? { args: { query: words } } : {}),
+        })
+      })
+    },
+  )
 
   const search =
     program.commands.find((one) => one.name() === "search") ??

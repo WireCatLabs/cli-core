@@ -173,6 +173,7 @@ export const purgeAccount = ({ orm, database }: StoreContext, accountKey: number
   // The inbox project and its tasks are the owner's; only the tie to the account goes.
   orm.update(projects).set({ accountId: null }).where(eq(projects.accountId, accountKey)).run()
   orm.run(sql`DELETE FROM files WHERE account_id = ${accountKey}`)
+  orm.run(sql`DELETE FROM crm_fields WHERE account_id = ${accountKey}`)
   // An entity made from a record is the owner's and stays; only what the source said goes.
   const recordsOf = sql`(SELECT id FROM records WHERE account_id = ${accountKey})`
   orm.run(sql`DELETE FROM record_relations WHERE record_id IN ${recordsOf} OR target_id IN ${recordsOf}`)

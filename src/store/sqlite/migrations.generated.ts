@@ -1042,5 +1042,11 @@ export const GENERATED: { name: string; statements: string[] }[] = [
       "DROP INDEX IF EXISTS `pipelines_by_account_id_external_id`;",
       "CREATE UNIQUE INDEX `pipelines_by_account_id_kind_external_id` ON `pipelines` (`account_id`,`kind`,`external_id`) WHERE account_id IS NOT NULL AND external_id IS NOT NULL;"
     ]
+  },
+  {
+    "name": "20261106225547_version-54-crm-fields",
+    "statements": [
+      "CREATE TABLE `crm_fields` (\n\t`id` integer PRIMARY KEY,\n\t`account_id` integer NOT NULL,\n\t`kind` text NOT NULL,\n\t`code` text NOT NULL,\n\t`label` text,\n\t`type` text NOT NULL,\n\t`multiple` integer NOT NULL,\n\t`filterable` integer NOT NULL,\n\t`options` text,\n\t`position` integer NOT NULL,\n\t`created_at` integer NOT NULL,\n\t`updated_at` integer NOT NULL,\n\t`deleted_at` integer,\n\tCONSTRAINT `fk_crm_fields_account_id_accounts_id_fk` FOREIGN KEY (`account_id`) REFERENCES `accounts`(`id`),\n\tCONSTRAINT `crm_fields_account_id_kind_code_unique` UNIQUE(`account_id`,`kind`,`code`)\n);"
+    ]
   }
 ]
