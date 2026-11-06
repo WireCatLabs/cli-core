@@ -1,10 +1,10 @@
-import { existsSync, mkdtempSync } from "node:fs"
+import { existsSync, mkdtempSync, readdirSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, expect, it, vi } from "vitest"
 import { contextEvidenceFixture } from "../testing/context-evidence.js"
 import { rollBackTo } from "../testing/older-store.js"
-import { MIGRATIONS } from "./migrations.js"
+import { MIGRATIONS, migrate } from "./migrations.js"
 import { openCache, openFile } from "./open.js"
 import * as sqlite from "./sqlite/open.js"
 import { openStore } from "./store.js"
@@ -128,4 +128,16 @@ it("migrates a store one schema behind, then opens it read-only", async () => {
   expect(versions()).toEqual({ version: latest })
   expect(await store.meetings.account(9999)).toBeNull()
   await expect(store.accounts.saveAccount({ provider: "invented", account: "new" }, { name: "New" })).rejects.toThrow()
+})
+
+it("leaves a rollback copy when the migration before a read-only open raises min_compatible", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "readonly-store-")),
+    file = join(dir, "wirecat.db")
+  const db = await openCache(file)
+  handles.push(db)
+  migrate(db, { migrations: MIGRATIONS.filter(({ version }) => version <= 33) })
+  const store = await openStore({ path: file, readOnly: true, warn: () => {} })
+  handles.push(store)
+  expect(readdirSync(join(dir, "backups"))).toEqual([expect.stringMatching(/^wirecat-rollback-schema-33-/)])
+  expect(db.prepare("SELECT max(version) AS version FROM schema_migrations").get()).toEqual({ version: latest })
 })
