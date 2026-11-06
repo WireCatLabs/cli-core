@@ -62,3 +62,7 @@ export const PRAGMAS = `
   PRAGMA journal_mode = WAL;
   PRAGMA foreign_keys = ON;
 `
+
+/** A read-only open sets `query_only`: a search over it reads what is indexed and leaves building it to a writable open. */
+export const isQueryOnly = (database: CacheDatabase): boolean =>
+  Number(Object.values(database.prepare("PRAGMA query_only").get() ?? {})[0]) === 1

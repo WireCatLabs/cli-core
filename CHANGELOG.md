@@ -41,6 +41,13 @@ shape of this file.
   `sent: true` in the details; the error is answered with the write's `operation_id`, no longer journaled as failed.
 - **A CRM sync with `fields()` makes one more request per kind**, so a `--max-pages` budget reaches the items later.
 
+### Fixed
+
+- **A search over a read-only store no longer fails with "attempt to write a readonly database".** The message index
+  top-up and the notes, mail, events, memories and tasks index drains are skipped on a connection with `query_only`
+  (every read-only open), so `search all` in a CRM CLI answers from every source of a store only a CRM sync wrote. They
+  run on the next writable open.
+
 ## 0.596.0 — 06.11.2026
 
 ### Added
