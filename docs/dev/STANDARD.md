@@ -1073,6 +1073,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--no-serve` |  | do not start it; log in on this command's own connection unless one is running |  | every command (planned) |
 | `--notification` | `<text>` | a note only the person who pressed sees |  | `bot callbacks answer` (planned) |
 | `--notify` |  | tell the chat's members about the pin |  | `bot messages pin` (planned), `messages pin` (max, tg only) |
+| `--notify-on` | `<when>` | desktop notice after a schedule's run: always, failures or never (default failures for an agent that repeats with --every, else always) |  | `schedule agent` (planned), `schedule command` (planned) |
 | `--ocr` |  | explicitly call models.ocr for bulk image and scanned-PDF text extraction; agents normally transcribe files themselves |  | `attachments extract` |
 | `--offline` |  | answer from what was recorded and never connect; fails if nothing was |  | every command |
 | `--offset-bytes` | `<n>` | start byte offset in a retained attachment | `0` | `attachments show` |

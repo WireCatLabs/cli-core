@@ -191,7 +191,8 @@ export const recordRun = (
 export const recordSkip = (file: string, why: string, reason: SkipReason, at = new Date()): void => {
   const path = join(file, "..", "last.json")
   const before = readRun(path)
-  if (!before) return
+  // A timer ticking every few minutes would rewrite the file for the same cause each time.
+  if (!before || before.skipped?.reason === reason) return
   writeSecurely(
     path,
     `${JSON.stringify({ ...before, skipped: { at: at.toISOString(), why, reason } }, null, 2)}\n`,

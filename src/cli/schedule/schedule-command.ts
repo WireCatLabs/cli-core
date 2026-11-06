@@ -61,7 +61,7 @@ interface WhenOptions {
   every?: string
   at?: string
   atTime?: string
-  notify?: Notify
+  notifyOn?: Notify
 }
 
 const whenOf = ({ every, at, atTime }: WhenOptions, minimum: number): When => {
@@ -121,7 +121,7 @@ const withWhen = (command: Command) =>
     .option("--at-time <time>", "one run: 30m, 2d from now, or an ISO time; the schedule removes itself after it")
     .addOption(
       new Option(
-        "--notify <when>",
+        "--notify-on <when>",
         "desktop notice after a run (default failures for an agent that repeats with --every, else always)",
       ).choices(NOTIFY_WHEN),
     )
@@ -326,15 +326,18 @@ export const scheduleCommandFor = ({
     if (holder === undefined || !newMail) return undefined
     const waiting = await newMail(self, holder)
     if (waiting.unmarked) return undefined
-    if (waiting.emails === 0) return { why: `no mail stored past ${holder}'s mark`, reason: SKIP_REASONS.mailNone }
+    if (waiting.emails === 0) {
+      const why = `no mail stored past ${holder}'s mark`
+      recordSkip(file, why, SKIP_REASONS.mailNone)
+      return { why, reason: SKIP_REASONS.mailNone }
+    }
     const waited = waiting.oldestStoredAt === null ? 0 : Date.now() - waiting.oldestStoredAt
     if (!timed || waiting.emails >= mailBatch || waited >= mailWaitMinutes * 60_000) return undefined
-    return {
-      why:
-        `${waiting.emails} email(s) wait past ${holder}'s mark; it starts at ${mailBatch}, ` +
-        `or once the oldest has waited ${mailWaitMinutes}m`,
-      reason: SKIP_REASONS.mailBelowThreshold,
-    }
+    const why =
+      `${waiting.emails} email(s) wait past ${holder}'s mark; it starts at ${mailBatch}, ` +
+      `or once the oldest has waited ${mailWaitMinutes}m`
+    recordSkip(file, why, SKIP_REASONS.mailBelowThreshold)
+    return { why, reason: SKIP_REASONS.mailBelowThreshold }
   }
 
   withWhen(
@@ -363,7 +366,7 @@ export const scheduleCommandFor = ({
       when: whenOf(this.opts<WhenOptions>(), COMMAND_MINIMUM_MINUTES),
       environment: environment(),
       createdAt: new Date().toISOString(),
-      ...(this.opts<WhenOptions>().notify ? { notify: this.opts<WhenOptions>().notify } : {}),
+      ...(this.opts<WhenOptions>().notifyOn ? { notify: this.opts<WhenOptions>().notifyOn } : {}),
     })
   })
 
@@ -409,7 +412,7 @@ export const scheduleCommandFor = ({
         onNewMail?: string
         mailWait?: string
         mailBatch?: string
-        notify?: Notify
+        notifyOn?: Notify
       }
     >()
     if (options.onNewMail !== undefined && !HOLDER.test(options.onNewMail))
@@ -478,7 +481,7 @@ export const scheduleCommandFor = ({
       ...(mailWaitMinutes === undefined ? {} : { mailWaitMinutes }),
       ...(mailBatch === undefined ? {} : { mailBatch }),
       ...(options.maxCostPerDay === undefined ? {} : { maxCostPerDay: options.maxCostPerDay }),
-      ...(options.notify ? { notify: options.notify } : {}),
+      ...(options.notifyOn ? { notify: options.notifyOn } : {}),
     })
   })
   if (newMail)

@@ -921,6 +921,14 @@ describe.runIf(process.platform !== "win32")("an agent gated on new mail", () =>
     expect((await call(["schedule", "run", "triage"])).code).toBe(0)
     expect(readFileSync(join(file, "..", "latest.md"), "utf8")).toBe("holder mail-triage")
     expect(asked).toEqual(["mail-triage", "mail-triage", "mail-triage"])
+
+    mail = waitingMail(0)
+    const last = () => JSON.parse(readFileSync(join(file, "..", "last.json"), "utf8"))
+    await call(["schedule", "exec", file])
+    const first = last().skipped
+    expect(first).toMatchObject({ reason: "mail.none-new" })
+    await call(["schedule", "exec", file])
+    expect(last().skipped).toEqual(first)
   })
 
   it("on its timer, waits until 10 emails wait or the oldest has waited 30 minutes", async () => {
@@ -974,12 +982,23 @@ describe.runIf(process.platform !== "win32")("an agent gated on new mail", () =>
     expect(scheduleLimitsOf({ schedule_model_claude: "--tools", schedule_lean_start: "no" })).toEqual({})
   })
 
-  it("stores --notify and rejects a value it does not know", async () => {
+  it("stores --notify-on and rejects a value it does not know", async () => {
     const { call, add } = gated(() => waitingMail(1))
-    const file = await add("--on-new-mail", "mail-triage", "--notify", "never")
+    const file = await add("--on-new-mail", "mail-triage", "--notify-on", "never")
     expect(JSON.parse(readFileSync(file, "utf8"))).toMatchObject({ notify: "never" })
     expect(JSON.parse((await call(["schedule", "list"])).out).items[0]).toMatchObject({ notify: "never" })
-    const bad = await call(["default", "schedule", "agent", "triage", "claude", "p", "--every", "5m", "--notify", "x"])
+    const bad = await call([
+      "default",
+      "schedule",
+      "agent",
+      "triage",
+      "claude",
+      "p",
+      "--every",
+      "5m",
+      "--notify-on",
+      "x",
+    ])
     expect(bad.code).toBe(2)
   })
 

@@ -35,10 +35,17 @@
     "review_after": "2026-12-05"
   },
   {
-    "rule": "flag-two-meanings",
-    "target": "--notify",
-    "reason": "the owner chose this name on 2026-11-06 (plan 2026-11-02, section 9.1): schedule agent and schedule command take --notify <always|failures|never>, while messages pin keeps --notify as a switch; the word goes into cli-base's vocabulary with both meanings, or one is renamed before the next release",
+    "rule": "option-role",
+    "target": "schedule agent --notify-on",
+    "reason": "the owner chose when a schedule's run shows a desktop notice on 2026-11-06 (always, failures or never; plan 2026-11-02 section 9.1); the word goes into cli-base's vocabulary in its next release",
     "owner": "@leemour",
-    "review_after": "2026-12-01"
+    "review_after": "2026-12-06"
+  },
+  {
+    "rule": "option-role",
+    "target": "schedule command --notify-on",
+    "reason": "the owner chose when a schedule's run shows a desktop notice on 2026-11-06 (always, failures or never; plan 2026-11-02 section 9.1); the word goes into cli-base's vocabulary in its next release",
+    "owner": "@leemour",
+    "review_after": "2026-12-06"
   }
 ]
