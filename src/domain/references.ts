@@ -35,6 +35,8 @@ export const SIMPLE_REFERENCES = [
   "payment",
   "order",
   "deal",
+  "lead",
+  "pipeline",
   "entity",
 ] as const
 export type SimpleReference = (typeof SIMPLE_REFERENCES)[number]

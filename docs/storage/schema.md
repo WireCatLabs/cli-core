@@ -5,7 +5,7 @@ Every table of the shared store (tg, max, memo, zm) as its migrations create it.
 `drizzle/` must agree with it. `pnpm schema:check` fails when they do not, and `src/store/sqlite/schema.test.ts`
 checks every table and column of a new store against this page.
 
-118 tables, 25 full-text indexes.
+120 tables, 25 full-text indexes.
 
 ## Conventions
 
@@ -1957,15 +1957,20 @@ The owner's sales pipelines and the deals in them, with the expected amount in e
 
 ### `pipelines`
 
-A sales pipeline of the owner's: the stages a deal goes through, in order. Only the owner makes one.
+A sales pipeline: the stages a deal or a lead goes through, in order. The owner makes his own; a CRM sync copies an account's.
 
 | Column | Type | Constraints | References | Meaning |
 |---|---|---|---|---|
 | `id` | integer | PK |  |  |
-| `name` | text | not null |  | as the owner typed it |
-| `name_folded` | text | not null, unique |  | the name in one letter case: one per owner |
+| `account_id` | integer |  | → `accounts.id` | the CRM account it was copied from; null for the owner's own |
+| `external_id` | text |  |  | the pipeline's id in that CRM |
+| `kind` | text | not null |  | deal or lead: what its stages hold |
+| `name` | text | not null |  | as the owner or the CRM wrote it |
+| `name_folded` | text | not null |  | the name in one letter case: one per kind among the owner's own, any among a CRM's |
 | `created_at` | integer | not null |  | when this row was saved here |
 | `updated_at` | integer | not null |  | when this row last changed here |
+
+*Keys and indexes:* `UNIQUE (account_id, external_id) WHERE account_id IS NOT NULL AND external_id IS NOT NULL`, `UNIQUE (name_folded, kind) WHERE account_id IS NULL`
 
 ### `pipeline_stages`
 
@@ -1977,13 +1982,15 @@ One stage of a pipeline, such as a first call or a sent quote.
 | `pipeline_id` | integer | not null | → `pipelines.id` | the `pipeline` it belongs to |
 | `name` | text | not null |  |  |
 | `name_folded` | text | not null |  | the name in one letter case, unique in its pipeline |
-| `position` | integer | not null |  | 1, 2, …: the order a deal goes through them |
+| `position` | integer | not null |  | 1, 2, …: the order a deal or a lead goes through them; not unique, so a sync or a reorder can swap two |
+| `outcome` | text | not null |  | open, won, lost: a CRM marks the stages that end a deal |
+| `external_id` | text |  |  | the stage's id in its pipeline's CRM |
 | `created_at` | integer | not null |  | when this row was saved here |
 | `updated_at` | integer | not null |  | when this row last changed here |
 
-*Keys and indexes:* `UNIQUE (pipeline_id, name_folded)`, `UNIQUE (pipeline_id, position)`
+*Keys and indexes:* `UNIQUE (pipeline_id, name_folded)`, `UNIQUE (pipeline_id, external_id) WHERE external_id IS NOT NULL`, `INDEX (pipeline_id, position)`
 
-### `opportunities`
+### `deals`
 
 A deal (`deal:<id>`): what the owner hopes to sell, to whom, where it stands in its pipeline and whether it ended. The people on it are `links` (kind `related-to`, `role` owner, contact or decision-maker). A deal is not a project.
 
@@ -1993,25 +2000,72 @@ A deal (`deal:<id>`): what the owner hopes to sell, to whom, where it stands in 
 | `title` | text | not null |  |  |
 | `organization_id` | integer |  | → `organizations.id` | the `organization` it belongs to |
 | `project_id` | integer |  | → `projects.id` | the `project` it belongs to |
-| `stage_id` | integer | not null | → `pipeline_stages.id` | where it stands; a closed deal keeps its last stage, and a deal moves only within its pipeline |
-| `status` | text | not null |  | open, won, lost: kept apart from the stage |
+| `stage_id` | integer | not null | → `pipeline_stages.id` | where it stands, a stage of a deal pipeline; moving it is recorded in `pipeline_stage_changes` |
+| `status` | text | not null |  | open, won, lost: set with a stage whose outcome ends it, or by a close |
 | `currency` | text |  |  | ISO 4217, upper case; set with `amount` or not at all |
 | `amount` | integer |  |  | the expected amount, in minor units of `currency` (kopecks, cents; yen for JPY): never a float |
 | `close_date` | text |  |  | `YYYY-MM-DD`: the day it is expected to close |
 | `closed_date` | text |  |  | `YYYY-MM-DD`: the day it was won or lost |
-| `review` | text | not null |  | proposed, confirmed, rejected: the owner's entry is confirmed at once, an agent's or an import's waits |
+| `rank` | real |  |  | its order in its stage's column on a board, lowest first; null sorts last |
+| `account_id` | integer |  | → `accounts.id` | the CRM account it was copied from; null for the owner's or an agent's own |
+| `external_id` | text |  |  | its id in that CRM |
 | `author_type` | text | not null |  | `person` or `bot` |
 | `author_id` | integer | not null |  | the row in the `author_type` table |
 | `model` | text |  |  | the model that wrote it, for an agent's |
-| `confirmed_by_type` | text |  |  | who confirmed it; null while proposed |
-| `confirmed_by_id` | integer |  |  | who confirmed it; null while proposed |
-| `source` | text | not null |  | owner, agent, an import |
+| `source` | text | not null |  | owner, agent, or a CRM sync |
 | `metadata` | text |  |  | JSON: what the source sends that has no column, and is not searched |
 | `created_at` | integer | not null |  | when this row was saved here |
 | `updated_at` | integer | not null |  | when this row last changed here |
 | `deleted_at` | integer |  |  | gone at the source; sync never hard-deletes |
 
-*Keys and indexes:* `INDEX (organization_id)`, `INDEX (project_id)`, `INDEX (stage_id)`, `INDEX (author_type, author_id)`, `INDEX (confirmed_by_type, confirmed_by_id)`
+*Keys and indexes:* `UNIQUE (account_id, external_id) WHERE account_id IS NOT NULL AND external_id IS NOT NULL`, `INDEX (organization_id)`, `INDEX (project_id)`, `INDEX (stage_id)`, `INDEX (author_type, author_id)`
+
+### `leads`
+
+A lead (`lead:<id>`): a first contact in a lead pipeline, before it is a deal. People on it are `links` as on a deal.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | PK |  |  |
+| `title` | text | not null |  |  |
+| `organization_id` | integer |  | → `organizations.id` | the `organization` it belongs to |
+| `project_id` | integer |  | → `projects.id` | the `project` it belongs to |
+| `stage_id` | integer | not null | → `pipeline_stages.id` | where it stands, a stage of a lead pipeline; moving it is recorded in `pipeline_stage_changes` |
+| `status` | text | not null |  | open, won, lost: set with a stage whose outcome ends it, or by a close |
+| `currency` | text |  |  | ISO 4217, upper case; set with `amount` or not at all |
+| `amount` | integer |  |  | the expected amount, in minor units of `currency` (kopecks, cents; yen for JPY): never a float |
+| `close_date` | text |  |  | `YYYY-MM-DD`: the day it is expected to close |
+| `closed_date` | text |  |  | `YYYY-MM-DD`: the day it was won or lost |
+| `rank` | real |  |  | its order in its stage's column on a board, lowest first; null sorts last |
+| `deal_id` | integer |  | → `deals.id` | the deal it became |
+| `account_id` | integer |  | → `accounts.id` | the CRM account it was copied from; null for the owner's or an agent's own |
+| `external_id` | text |  |  | its id in that CRM |
+| `author_type` | text | not null |  | `person` or `bot` |
+| `author_id` | integer | not null |  | the row in the `author_type` table |
+| `model` | text |  |  | the model that wrote it, for an agent's |
+| `source` | text | not null |  | owner, agent, or a CRM sync |
+| `metadata` | text |  |  | JSON: what the source sends that has no column, and is not searched |
+| `created_at` | integer | not null |  | when this row was saved here |
+| `updated_at` | integer | not null |  | when this row last changed here |
+| `deleted_at` | integer |  |  | gone at the source; sync never hard-deletes |
+
+*Keys and indexes:* `UNIQUE (account_id, external_id) WHERE account_id IS NOT NULL AND external_id IS NOT NULL`, `INDEX (organization_id)`, `INDEX (project_id)`, `INDEX (stage_id)`, `INDEX (deal_id)`, `INDEX (author_type, author_id)`
+
+### `pipeline_stage_changes`
+
+Each stage a deal or a lead entered and when, written by triggers on `deals` and `leads` (a new row enters its first stage), so conversion between stages can be counted.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | PK |  |  |
+| `item_type` | text | not null |  | `deal` or `lead` |
+| `item_id` | integer | not null |  | the row in the `item_type` table |
+| `pipeline_id` | integer | not null | → `pipelines.id` | the `pipeline` it belongs to |
+| `from_stage_id` | integer |  | → `pipeline_stages.id` | null when the row was made |
+| `to_stage_id` | integer | not null | → `pipeline_stages.id` | the `pipeline_stage` it belongs to |
+| `changed_at` | integer | not null |  | the row's `created_at` or `updated_at` as its writer gave it |
+
+*Keys and indexes:* `INDEX (item_type, item_id)`, `INDEX (pipeline_id)`, `INDEX (from_stage_id)`, `INDEX (to_stage_id)`
 
 ## Source records
 

@@ -1948,14 +1948,26 @@ export const orders = sqliteTable(
   ],
 )
 
-/** A sales pipeline of the owner's: the stages a deal goes through, in order. */
-export const pipelines = sqliteTable("pipelines", {
-  id: integer("id").primaryKey(),
-  name: text("name").notNull(),
-  nameFolded: text("name_folded").notNull().unique(),
-  createdAt: integer("created_at").notNull(),
-  updatedAt: integer("updated_at").notNull(),
-})
+/** A sales pipeline: the stages a deal or a lead goes through, in order; the owner's own or a CRM account's. */
+export const pipelines = sqliteTable(
+  "pipelines",
+  {
+    id: integer("id").primaryKey(),
+    accountId: integer("account_id").references(() => accounts.id),
+    externalId: text("external_id"),
+    kind: text("kind").notNull().default("deal"),
+    name: text("name").notNull(),
+    nameFolded: text("name_folded").notNull(),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("pipelines_by_account_id_external_id")
+      .on(table.accountId, table.externalId)
+      .where(sql`account_id IS NOT NULL AND external_id IS NOT NULL`),
+    uniqueIndex("pipelines_by_name_folded_kind").on(table.nameFolded, table.kind).where(sql`account_id IS NULL`),
+  ],
+)
 
 export const pipelineStages = sqliteTable(
   "pipeline_stages",
@@ -1967,15 +1979,23 @@ export const pipelineStages = sqliteTable(
     name: text("name").notNull(),
     nameFolded: text("name_folded").notNull(),
     position: integer("position").notNull(),
+    outcome: text("outcome").notNull().default("open"),
+    externalId: text("external_id"),
     createdAt: integer("created_at").notNull(),
     updatedAt: integer("updated_at").notNull(),
   },
-  (table) => [unique().on(table.pipelineId, table.nameFolded), unique().on(table.pipelineId, table.position)],
+  (table) => [
+    unique().on(table.pipelineId, table.nameFolded),
+    uniqueIndex("pipeline_stages_by_pipeline_id_external_id")
+      .on(table.pipelineId, table.externalId)
+      .where(sql`external_id IS NOT NULL`),
+    index("pipeline_stages_by_pipeline_id_position").on(table.pipelineId, table.position),
+  ],
 )
 
 /** A deal: what the owner hopes to sell, where it stands in its pipeline, and whether it ended. */
-export const opportunities = sqliteTable(
-  "opportunities",
+export const deals = sqliteTable(
+  "deals",
   {
     id: integer("id").primaryKey(),
     title: text("title").notNull(),
@@ -1986,16 +2006,15 @@ export const opportunities = sqliteTable(
       .references(() => pipelineStages.id),
     status: text("status").notNull(),
     currency: text("currency"),
-    /** Minor units of `currency`. */
     amount: integer("amount"),
     closeDate: text("close_date"),
     closedDate: text("closed_date"),
-    review: text("review").notNull(),
+    rank: real("rank"),
+    accountId: integer("account_id").references(() => accounts.id),
+    externalId: text("external_id"),
     authorType: text("author_type").notNull(),
     authorId: integer("author_id").notNull(),
     model: text("model"),
-    confirmedByType: text("confirmed_by_type"),
-    confirmedById: integer("confirmed_by_id"),
     source: text("source").notNull(),
     metadata: text("metadata"),
     createdAt: integer("created_at").notNull(),
@@ -2003,11 +2022,78 @@ export const opportunities = sqliteTable(
     deletedAt: integer("deleted_at"),
   },
   (table) => [
-    index("opportunities_by_organization_id").on(table.organizationId),
-    index("opportunities_by_project_id").on(table.projectId),
-    index("opportunities_by_stage_id").on(table.stageId),
-    index("opportunities_by_author_type_author_id").on(table.authorType, table.authorId),
-    index("opportunities_by_confirmed_by_type_confirmed_by_id").on(table.confirmedByType, table.confirmedById),
+    uniqueIndex("deals_by_account_id_external_id")
+      .on(table.accountId, table.externalId)
+      .where(sql`account_id IS NOT NULL AND external_id IS NOT NULL`),
+    index("deals_by_organization_id").on(table.organizationId),
+    index("deals_by_project_id").on(table.projectId),
+    index("deals_by_stage_id").on(table.stageId),
+    index("deals_by_author_type_author_id").on(table.authorType, table.authorId),
+  ],
+)
+
+/** A lead: a first contact not yet a deal, in a lead pipeline; `deal_id` is the deal it became. */
+export const leads = sqliteTable(
+  "leads",
+  {
+    id: integer("id").primaryKey(),
+    title: text("title").notNull(),
+    organizationId: integer("organization_id").references(() => organizations.id),
+    projectId: integer("project_id").references(() => projects.id),
+    stageId: integer("stage_id")
+      .notNull()
+      .references(() => pipelineStages.id),
+    status: text("status").notNull(),
+    currency: text("currency"),
+    amount: integer("amount"),
+    closeDate: text("close_date"),
+    closedDate: text("closed_date"),
+    rank: real("rank"),
+    dealId: integer("deal_id").references(() => deals.id),
+    accountId: integer("account_id").references(() => accounts.id),
+    externalId: text("external_id"),
+    authorType: text("author_type").notNull(),
+    authorId: integer("author_id").notNull(),
+    model: text("model"),
+    source: text("source").notNull(),
+    metadata: text("metadata"),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+    deletedAt: integer("deleted_at"),
+  },
+  (table) => [
+    uniqueIndex("leads_by_account_id_external_id")
+      .on(table.accountId, table.externalId)
+      .where(sql`account_id IS NOT NULL AND external_id IS NOT NULL`),
+    index("leads_by_organization_id").on(table.organizationId),
+    index("leads_by_project_id").on(table.projectId),
+    index("leads_by_stage_id").on(table.stageId),
+    index("leads_by_deal_id").on(table.dealId),
+    index("leads_by_author_type_author_id").on(table.authorType, table.authorId),
+  ],
+)
+
+/** Each stage a deal or a lead entered and when, written by triggers, so conversion between stages can be counted. */
+export const pipelineStageChanges = sqliteTable(
+  "pipeline_stage_changes",
+  {
+    id: integer("id").primaryKey(),
+    itemType: text("item_type").notNull(),
+    itemId: integer("item_id").notNull(),
+    pipelineId: integer("pipeline_id")
+      .notNull()
+      .references(() => pipelines.id),
+    fromStageId: integer("from_stage_id").references(() => pipelineStages.id),
+    toStageId: integer("to_stage_id")
+      .notNull()
+      .references(() => pipelineStages.id),
+    changedAt: integer("changed_at").notNull(),
+  },
+  (table) => [
+    index("pipeline_stage_changes_by_item_type_item_id").on(table.itemType, table.itemId),
+    index("pipeline_stage_changes_by_pipeline_id").on(table.pipelineId),
+    index("pipeline_stage_changes_by_from_stage_id").on(table.fromStageId),
+    index("pipeline_stage_changes_by_to_stage_id").on(table.toStageId),
   ],
 )
 

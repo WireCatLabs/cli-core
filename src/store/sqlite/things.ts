@@ -32,6 +32,8 @@ const REFERABLE: Partial<Record<EntityType, { tombstone: boolean }>> = {
   payment: { tombstone: true },
   order: { tombstone: true },
   deal: { tombstone: true },
+  lead: { tombstone: true },
+  pipeline: { tombstone: false },
   message: { tombstone: true },
   email: { tombstone: true },
   email_thread: { tombstone: true },

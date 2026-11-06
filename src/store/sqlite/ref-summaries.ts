@@ -82,6 +82,15 @@ const byId = (
   sql: (body: boolean) => `${select(columns(body))} FROM w JOIN ${table} x ON x.id = w.k1`,
 })
 
+const crmColumns = () => ({
+  title:
+    "json_object('id', x.id, 'title', x.title, 'stage', (SELECT name FROM pipeline_stages WHERE id = x.stage_id), " +
+    "'amount', x.amount, 'currency', x.currency, 'status', x.status)",
+  holder: "(SELECT name FROM projects WHERE id = x.project_id)",
+  at: "x.created_at",
+  deleted: "x.deleted_at",
+})
+
 const READERS = {
   message: {
     kind: "message",
@@ -268,14 +277,9 @@ const READERS = {
     at: "x.created_at",
     deleted: "x.deleted_at",
   })),
-  deal: byId("deal", "opportunities", () => ({
-    title:
-      "json_object('id', x.id, 'title', x.title, 'stage', (SELECT name FROM pipeline_stages WHERE id = x.stage_id), " +
-      "'amount', x.amount, 'currency', x.currency, 'status', x.status, 'review', x.review)",
-    holder: "(SELECT name FROM projects WHERE id = x.project_id)",
-    at: "x.created_at",
-    deleted: "x.deleted_at",
-  })),
+  deal: byId("deal", "deals", crmColumns),
+  lead: byId("lead", "leads", crmColumns),
+  pipeline: byId("pipeline", "pipelines", () => ({ title: "x.name", at: "x.created_at" })),
 } satisfies Record<string, Reader>
 
 type ReaderName = keyof typeof READERS
@@ -398,6 +402,7 @@ const titleOf = (kind: RefSummaryKind, reference: Reference, found: Found): stri
     case "order":
       return fieldsOf(found.title, orderLine)
     case "deal":
+    case "lead":
       return fieldsOf(found.title, dealLine)
     case "folder":
       return reference.type === "folder" && reference.path !== null && found.title !== null

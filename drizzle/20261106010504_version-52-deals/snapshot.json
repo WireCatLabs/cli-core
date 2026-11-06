@@ -1,7 +1,7 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "8ccac1cb-4838-4377-8de2-57aeb3958d1b",
+  "id": "c9a8959c-3c8b-4ca8-a141-04e739a8b28b",
   "prevIds": [
     "0fd34d96-c22d-497a-a583-a6c12fa1c1e5"
   ],
@@ -100,6 +100,10 @@
     },
     {
       "name": "conversations",
+      "entityType": "tables"
+    },
+    {
+      "name": "deals",
       "entityType": "tables"
     },
     {
@@ -208,6 +212,10 @@
     },
     {
       "name": "involvements",
+      "entityType": "tables"
+    },
+    {
+      "name": "leads",
       "entityType": "tables"
     },
     {
@@ -331,10 +339,6 @@
       "entityType": "tables"
     },
     {
-      "name": "opportunities",
-      "entityType": "tables"
-    },
-    {
       "name": "orders",
       "entityType": "tables"
     },
@@ -356,6 +360,10 @@
     },
     {
       "name": "persons",
+      "entityType": "tables"
+    },
+    {
+      "name": "pipeline_stage_changes",
       "entityType": "tables"
     },
     {
@@ -3107,6 +3115,216 @@
       "entityType": "columns"
     },
     {
+      "table": "deals",
+      "name": "id",
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "deals",
+      "name": "title",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "deals",
+      "name": "organization_id",
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "deals",
+      "name": "project_id",
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "deals",
+      "name": "stage_id",
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "deals",
+      "name": "status",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "deals",
+      "name": "currency",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "deals",
+      "name": "amount",
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "deals",
+      "name": "close_date",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "deals",
+      "name": "closed_date",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "deals",
+      "name": "rank",
+      "type": "real",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "deals",
+      "name": "account_id",
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "deals",
+      "name": "external_id",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "deals",
+      "name": "author_type",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "deals",
+      "name": "author_id",
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "deals",
+      "name": "model",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "deals",
+      "name": "source",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "deals",
+      "name": "metadata",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "deals",
+      "name": "created_at",
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "deals",
+      "name": "updated_at",
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "deals",
+      "name": "deleted_at",
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
       "table": "decisions",
       "name": "id",
       "type": "integer",
@@ -5851,6 +6069,226 @@
       "name": "created_at",
       "type": "integer",
       "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "leads",
+      "name": "id",
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "leads",
+      "name": "title",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "leads",
+      "name": "organization_id",
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "leads",
+      "name": "project_id",
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "leads",
+      "name": "stage_id",
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "leads",
+      "name": "status",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "leads",
+      "name": "currency",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "leads",
+      "name": "amount",
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "leads",
+      "name": "close_date",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "leads",
+      "name": "closed_date",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "leads",
+      "name": "rank",
+      "type": "real",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "leads",
+      "name": "deal_id",
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "leads",
+      "name": "account_id",
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "leads",
+      "name": "external_id",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "leads",
+      "name": "author_type",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "leads",
+      "name": "author_id",
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "leads",
+      "name": "model",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "leads",
+      "name": "source",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "leads",
+      "name": "metadata",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "leads",
+      "name": "created_at",
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "leads",
+      "name": "updated_at",
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "leads",
+      "name": "deleted_at",
+      "type": "integer",
+      "notNull": false,
       "autoincrement": false,
       "default": null,
       "generated": null,
@@ -8907,216 +9345,6 @@
       "entityType": "columns"
     },
     {
-      "table": "opportunities",
-      "name": "id",
-      "type": "integer",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "entityType": "columns"
-    },
-    {
-      "table": "opportunities",
-      "name": "title",
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "entityType": "columns"
-    },
-    {
-      "table": "opportunities",
-      "name": "organization_id",
-      "type": "integer",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "entityType": "columns"
-    },
-    {
-      "table": "opportunities",
-      "name": "project_id",
-      "type": "integer",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "entityType": "columns"
-    },
-    {
-      "table": "opportunities",
-      "name": "stage_id",
-      "type": "integer",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "entityType": "columns"
-    },
-    {
-      "table": "opportunities",
-      "name": "status",
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "entityType": "columns"
-    },
-    {
-      "table": "opportunities",
-      "name": "currency",
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "entityType": "columns"
-    },
-    {
-      "table": "opportunities",
-      "name": "amount",
-      "type": "integer",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "entityType": "columns"
-    },
-    {
-      "table": "opportunities",
-      "name": "close_date",
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "entityType": "columns"
-    },
-    {
-      "table": "opportunities",
-      "name": "closed_date",
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "entityType": "columns"
-    },
-    {
-      "table": "opportunities",
-      "name": "review",
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "entityType": "columns"
-    },
-    {
-      "table": "opportunities",
-      "name": "author_type",
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "entityType": "columns"
-    },
-    {
-      "table": "opportunities",
-      "name": "author_id",
-      "type": "integer",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "entityType": "columns"
-    },
-    {
-      "table": "opportunities",
-      "name": "model",
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "entityType": "columns"
-    },
-    {
-      "table": "opportunities",
-      "name": "confirmed_by_type",
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "entityType": "columns"
-    },
-    {
-      "table": "opportunities",
-      "name": "confirmed_by_id",
-      "type": "integer",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "entityType": "columns"
-    },
-    {
-      "table": "opportunities",
-      "name": "source",
-      "type": "text",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "entityType": "columns"
-    },
-    {
-      "table": "opportunities",
-      "name": "metadata",
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "entityType": "columns"
-    },
-    {
-      "table": "opportunities",
-      "name": "created_at",
-      "type": "integer",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "entityType": "columns"
-    },
-    {
-      "table": "opportunities",
-      "name": "updated_at",
-      "type": "integer",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "entityType": "columns"
-    },
-    {
-      "table": "opportunities",
-      "name": "deleted_at",
-      "type": "integer",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "entityType": "columns"
-    },
-    {
       "table": "orders",
       "name": "id",
       "type": "integer",
@@ -9897,6 +10125,76 @@
       "entityType": "columns"
     },
     {
+      "table": "pipeline_stage_changes",
+      "name": "id",
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "pipeline_stage_changes",
+      "name": "item_type",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "pipeline_stage_changes",
+      "name": "item_id",
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "pipeline_stage_changes",
+      "name": "pipeline_id",
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "pipeline_stage_changes",
+      "name": "from_stage_id",
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "pipeline_stage_changes",
+      "name": "to_stage_id",
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "pipeline_stage_changes",
+      "name": "changed_at",
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
       "table": "pipeline_stages",
       "name": "id",
       "type": "integer",
@@ -9948,6 +10246,26 @@
     },
     {
       "table": "pipeline_stages",
+      "name": "outcome",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "'open'",
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "pipeline_stages",
+      "name": "external_id",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "pipeline_stages",
       "name": "created_at",
       "type": "integer",
       "notNull": true,
@@ -9973,6 +10291,36 @@
       "notNull": false,
       "autoincrement": false,
       "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "pipelines",
+      "name": "account_id",
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "pipelines",
+      "name": "external_id",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "pipelines",
+      "name": "kind",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "'deal'",
       "generated": null,
       "entityType": "columns"
     },
@@ -13051,6 +13399,84 @@
       "entityType": "indexes"
     },
     {
+      "table": "deals",
+      "name": "deals_by_account_id_external_id",
+      "columns": [
+        {
+          "value": "account_id",
+          "isExpression": false
+        },
+        {
+          "value": "external_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": "account_id IS NOT NULL AND external_id IS NOT NULL",
+      "origin": "manual",
+      "entityType": "indexes"
+    },
+    {
+      "table": "deals",
+      "name": "deals_by_organization_id",
+      "columns": [
+        {
+          "value": "organization_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "entityType": "indexes"
+    },
+    {
+      "table": "deals",
+      "name": "deals_by_project_id",
+      "columns": [
+        {
+          "value": "project_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "entityType": "indexes"
+    },
+    {
+      "table": "deals",
+      "name": "deals_by_stage_id",
+      "columns": [
+        {
+          "value": "stage_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "entityType": "indexes"
+    },
+    {
+      "table": "deals",
+      "name": "deals_by_author_type_author_id",
+      "columns": [
+        {
+          "value": "author_type",
+          "isExpression": false
+        },
+        {
+          "value": "author_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "entityType": "indexes"
+    },
+    {
       "table": "decisions",
       "name": "decisions_by_project_id",
       "columns": [
@@ -13708,6 +14134,98 @@
       "columns": [
         {
           "value": "project_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "entityType": "indexes"
+    },
+    {
+      "table": "leads",
+      "name": "leads_by_account_id_external_id",
+      "columns": [
+        {
+          "value": "account_id",
+          "isExpression": false
+        },
+        {
+          "value": "external_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": "account_id IS NOT NULL AND external_id IS NOT NULL",
+      "origin": "manual",
+      "entityType": "indexes"
+    },
+    {
+      "table": "leads",
+      "name": "leads_by_organization_id",
+      "columns": [
+        {
+          "value": "organization_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "entityType": "indexes"
+    },
+    {
+      "table": "leads",
+      "name": "leads_by_project_id",
+      "columns": [
+        {
+          "value": "project_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "entityType": "indexes"
+    },
+    {
+      "table": "leads",
+      "name": "leads_by_stage_id",
+      "columns": [
+        {
+          "value": "stage_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "entityType": "indexes"
+    },
+    {
+      "table": "leads",
+      "name": "leads_by_deal_id",
+      "columns": [
+        {
+          "value": "deal_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "entityType": "indexes"
+    },
+    {
+      "table": "leads",
+      "name": "leads_by_author_type_author_id",
+      "columns": [
+        {
+          "value": "author_type",
+          "isExpression": false
+        },
+        {
+          "value": "author_id",
           "isExpression": false
         }
       ],
@@ -14545,84 +15063,6 @@
       "entityType": "indexes"
     },
     {
-      "table": "opportunities",
-      "name": "opportunities_by_organization_id",
-      "columns": [
-        {
-          "value": "organization_id",
-          "isExpression": false
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "origin": "manual",
-      "entityType": "indexes"
-    },
-    {
-      "table": "opportunities",
-      "name": "opportunities_by_project_id",
-      "columns": [
-        {
-          "value": "project_id",
-          "isExpression": false
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "origin": "manual",
-      "entityType": "indexes"
-    },
-    {
-      "table": "opportunities",
-      "name": "opportunities_by_stage_id",
-      "columns": [
-        {
-          "value": "stage_id",
-          "isExpression": false
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "origin": "manual",
-      "entityType": "indexes"
-    },
-    {
-      "table": "opportunities",
-      "name": "opportunities_by_author_type_author_id",
-      "columns": [
-        {
-          "value": "author_type",
-          "isExpression": false
-        },
-        {
-          "value": "author_id",
-          "isExpression": false
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "origin": "manual",
-      "entityType": "indexes"
-    },
-    {
-      "table": "opportunities",
-      "name": "opportunities_by_confirmed_by_type_confirmed_by_id",
-      "columns": [
-        {
-          "value": "confirmed_by_type",
-          "isExpression": false
-        },
-        {
-          "value": "confirmed_by_id",
-          "isExpression": false
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "origin": "manual",
-      "entityType": "indexes"
-    },
-    {
       "table": "orders",
       "name": "orders_by_customer_type_customer_id",
       "columns": [
@@ -14865,6 +15305,138 @@
       ],
       "isUnique": false,
       "where": null,
+      "origin": "manual",
+      "entityType": "indexes"
+    },
+    {
+      "table": "pipeline_stage_changes",
+      "name": "pipeline_stage_changes_by_item_type_item_id",
+      "columns": [
+        {
+          "value": "item_type",
+          "isExpression": false
+        },
+        {
+          "value": "item_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "entityType": "indexes"
+    },
+    {
+      "table": "pipeline_stage_changes",
+      "name": "pipeline_stage_changes_by_pipeline_id",
+      "columns": [
+        {
+          "value": "pipeline_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "entityType": "indexes"
+    },
+    {
+      "table": "pipeline_stage_changes",
+      "name": "pipeline_stage_changes_by_from_stage_id",
+      "columns": [
+        {
+          "value": "from_stage_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "entityType": "indexes"
+    },
+    {
+      "table": "pipeline_stage_changes",
+      "name": "pipeline_stage_changes_by_to_stage_id",
+      "columns": [
+        {
+          "value": "to_stage_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "entityType": "indexes"
+    },
+    {
+      "table": "pipeline_stages",
+      "name": "pipeline_stages_by_pipeline_id_external_id",
+      "columns": [
+        {
+          "value": "pipeline_id",
+          "isExpression": false
+        },
+        {
+          "value": "external_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": "external_id IS NOT NULL",
+      "origin": "manual",
+      "entityType": "indexes"
+    },
+    {
+      "table": "pipeline_stages",
+      "name": "pipeline_stages_by_pipeline_id_position",
+      "columns": [
+        {
+          "value": "pipeline_id",
+          "isExpression": false
+        },
+        {
+          "value": "position",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "entityType": "indexes"
+    },
+    {
+      "table": "pipelines",
+      "name": "pipelines_by_account_id_external_id",
+      "columns": [
+        {
+          "value": "account_id",
+          "isExpression": false
+        },
+        {
+          "value": "external_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": "account_id IS NOT NULL AND external_id IS NOT NULL",
+      "origin": "manual",
+      "entityType": "indexes"
+    },
+    {
+      "table": "pipelines",
+      "name": "pipelines_by_name_folded_kind",
+      "columns": [
+        {
+          "value": "name_folded",
+          "isExpression": false
+        },
+        {
+          "value": "kind",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": "account_id IS NULL",
       "origin": "manual",
       "entityType": "indexes"
     },
@@ -16086,6 +16658,66 @@
       "entityType": "fks"
     },
     {
+      "table": "deals",
+      "name": "fk_deals_organization_id_organizations_id_fk",
+      "columns": [
+        "organization_id"
+      ],
+      "tableTo": "organizations",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "nameExplicit": false,
+      "entityType": "fks"
+    },
+    {
+      "table": "deals",
+      "name": "fk_deals_project_id_projects_id_fk",
+      "columns": [
+        "project_id"
+      ],
+      "tableTo": "projects",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "nameExplicit": false,
+      "entityType": "fks"
+    },
+    {
+      "table": "deals",
+      "name": "fk_deals_stage_id_pipeline_stages_id_fk",
+      "columns": [
+        "stage_id"
+      ],
+      "tableTo": "pipeline_stages",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "nameExplicit": false,
+      "entityType": "fks"
+    },
+    {
+      "table": "deals",
+      "name": "fk_deals_account_id_accounts_id_fk",
+      "columns": [
+        "account_id"
+      ],
+      "tableTo": "accounts",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "nameExplicit": false,
+      "entityType": "fks"
+    },
+    {
       "table": "decisions",
       "name": "fk_decisions_project_id_projects_id_fk",
       "columns": [
@@ -16572,6 +17204,81 @@
         "project_id"
       ],
       "tableTo": "projects",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "nameExplicit": false,
+      "entityType": "fks"
+    },
+    {
+      "table": "leads",
+      "name": "fk_leads_organization_id_organizations_id_fk",
+      "columns": [
+        "organization_id"
+      ],
+      "tableTo": "organizations",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "nameExplicit": false,
+      "entityType": "fks"
+    },
+    {
+      "table": "leads",
+      "name": "fk_leads_project_id_projects_id_fk",
+      "columns": [
+        "project_id"
+      ],
+      "tableTo": "projects",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "nameExplicit": false,
+      "entityType": "fks"
+    },
+    {
+      "table": "leads",
+      "name": "fk_leads_stage_id_pipeline_stages_id_fk",
+      "columns": [
+        "stage_id"
+      ],
+      "tableTo": "pipeline_stages",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "nameExplicit": false,
+      "entityType": "fks"
+    },
+    {
+      "table": "leads",
+      "name": "fk_leads_deal_id_deals_id_fk",
+      "columns": [
+        "deal_id"
+      ],
+      "tableTo": "deals",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "nameExplicit": false,
+      "entityType": "fks"
+    },
+    {
+      "table": "leads",
+      "name": "fk_leads_account_id_accounts_id_fk",
+      "columns": [
+        "account_id"
+      ],
+      "tableTo": "accounts",
       "columnsTo": [
         "id"
       ],
@@ -17196,51 +17903,6 @@
       "entityType": "fks"
     },
     {
-      "table": "opportunities",
-      "name": "fk_opportunities_organization_id_organizations_id_fk",
-      "columns": [
-        "organization_id"
-      ],
-      "tableTo": "organizations",
-      "columnsTo": [
-        "id"
-      ],
-      "onUpdate": "NO ACTION",
-      "onDelete": "NO ACTION",
-      "nameExplicit": false,
-      "entityType": "fks"
-    },
-    {
-      "table": "opportunities",
-      "name": "fk_opportunities_project_id_projects_id_fk",
-      "columns": [
-        "project_id"
-      ],
-      "tableTo": "projects",
-      "columnsTo": [
-        "id"
-      ],
-      "onUpdate": "NO ACTION",
-      "onDelete": "NO ACTION",
-      "nameExplicit": false,
-      "entityType": "fks"
-    },
-    {
-      "table": "opportunities",
-      "name": "fk_opportunities_stage_id_pipeline_stages_id_fk",
-      "columns": [
-        "stage_id"
-      ],
-      "tableTo": "pipeline_stages",
-      "columnsTo": [
-        "id"
-      ],
-      "onUpdate": "NO ACTION",
-      "onDelete": "NO ACTION",
-      "nameExplicit": false,
-      "entityType": "fks"
-    },
-    {
       "table": "orders",
       "name": "fk_orders_invoice_id_invoices_id_fk",
       "columns": [
@@ -17361,12 +18023,72 @@
       "entityType": "fks"
     },
     {
+      "table": "pipeline_stage_changes",
+      "name": "fk_pipeline_stage_changes_pipeline_id_pipelines_id_fk",
+      "columns": [
+        "pipeline_id"
+      ],
+      "tableTo": "pipelines",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "nameExplicit": false,
+      "entityType": "fks"
+    },
+    {
+      "table": "pipeline_stage_changes",
+      "name": "fk_pipeline_stage_changes_from_stage_id_pipeline_stages_id_fk",
+      "columns": [
+        "from_stage_id"
+      ],
+      "tableTo": "pipeline_stages",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "nameExplicit": false,
+      "entityType": "fks"
+    },
+    {
+      "table": "pipeline_stage_changes",
+      "name": "fk_pipeline_stage_changes_to_stage_id_pipeline_stages_id_fk",
+      "columns": [
+        "to_stage_id"
+      ],
+      "tableTo": "pipeline_stages",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "nameExplicit": false,
+      "entityType": "fks"
+    },
+    {
       "table": "pipeline_stages",
       "name": "fk_pipeline_stages_pipeline_id_pipelines_id_fk",
       "columns": [
         "pipeline_id"
       ],
       "tableTo": "pipelines",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "nameExplicit": false,
+      "entityType": "fks"
+    },
+    {
+      "table": "pipelines",
+      "name": "fk_pipelines_account_id_accounts_id_fk",
+      "columns": [
+        "account_id"
+      ],
+      "tableTo": "accounts",
       "columnsTo": [
         "id"
       ],
@@ -18158,6 +18880,15 @@
       "entityType": "pks"
     },
     {
+      "table": "deals",
+      "name": "deals_pk",
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
       "table": "decisions",
       "name": "decisions_pk",
       "columns": [
@@ -18313,6 +19044,15 @@
     {
       "table": "involvements",
       "name": "involvements_pk",
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "table": "leads",
+      "name": "leads_pk",
       "columns": [
         "id"
       ],
@@ -18527,15 +19267,6 @@
       "entityType": "pks"
     },
     {
-      "table": "opportunities",
-      "name": "opportunities_pk",
-      "columns": [
-        "id"
-      ],
-      "nameExplicit": false,
-      "entityType": "pks"
-    },
-    {
       "table": "orders",
       "name": "orders_pk",
       "columns": [
@@ -18583,6 +19314,15 @@
     {
       "table": "persons",
       "name": "persons_pk",
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "table": "pipeline_stage_changes",
+      "name": "pipeline_stage_changes_pk",
       "columns": [
         "id"
       ],
@@ -19105,16 +19845,6 @@
       "entityType": "uniques"
     },
     {
-      "table": "pipeline_stages",
-      "name": "pipeline_stages_pipeline_id_position_unique",
-      "columns": [
-        "pipeline_id",
-        "position"
-      ],
-      "nameExplicit": false,
-      "entityType": "uniques"
-    },
-    {
       "table": "poll_votes",
       "name": "poll_votes_chat_id_message_external_id_identity_id_unique",
       "columns": [
@@ -19205,15 +19935,6 @@
       "name": "tags_name_unique",
       "columns": [
         "name"
-      ],
-      "nameExplicit": false,
-      "entityType": "uniques"
-    },
-    {
-      "table": "pipelines",
-      "name": "pipelines_name_folded_unique",
-      "columns": [
-        "name_folded"
       ],
       "nameExplicit": false,
       "entityType": "uniques"

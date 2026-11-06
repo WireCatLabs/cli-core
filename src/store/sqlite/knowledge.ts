@@ -355,7 +355,9 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
       parsed.type === "invoice" ||
       parsed.type === "payment" ||
       parsed.type === "order" ||
-      parsed.type === "deal"
+      parsed.type === "deal" ||
+      parsed.type === "lead" ||
+      parsed.type === "pipeline"
     )
       return undefined
     return { type: parsed.type, id: parsed.id }
