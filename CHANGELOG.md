@@ -5,7 +5,7 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
-## Unreleased
+## 0.592.0 — 06.11.2026
 
 ### Added
 
@@ -31,8 +31,6 @@ shape of this file.
   44–71 s with a cold disk on the owner's store. It now asks the model's vector index for the nearest
   thread pieces and attachments, with the same results, and scans only when the index is not ready or a thread is
   named (3.9 s warm on the same query).
-
-## 0.592.0 — 06.11.2026
 
 ## 0.591.0 — 06.11.2026
 
