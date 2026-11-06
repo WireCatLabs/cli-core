@@ -1,4 +1,5 @@
 import type { Stemmers } from "../search/stem.js"
+import { isQueryOnly } from "./driver.js"
 import { CORPORA, corpusIndexState, drainCorpus } from "./sqlite/note-index.js"
 import type { StoreContext } from "./sqlite/open.js"
 import type { SearchIndexFill, SearchIndexState } from "./sqlite/search-index.js"
@@ -48,9 +49,12 @@ export const searchIndexStoreOver = (context: StoreContext): SearchIndexStore =>
     termCandidates: async (trigrams, lengths) => words.termCandidates(context, trigrams, lengths),
     searchIndexState: async () => searchIndex.searchIndexState(database),
     fillSearchIndex: async ({ until } = {}) =>
-      searchIndex.fillSearchIndex(database, { now: context.now, ...(until ? { until } : {}) }),
+      isQueryOnly(database)
+        ? { normalized: 0, indexed: 0, terms: 0 }
+        : searchIndex.fillSearchIndex(database, { now: context.now, ...(until ? { until } : {}) }),
     stemsState: async () => stems.stemsState(database),
     fillStems: async ({ until } = {}) => {
+      if (isQueryOnly(database)) return { stemmed: 0, drained: 0 }
       const filled = fillStems(database, { now: context.now, ...(until ? { until } : {}) })
       // Read first: every search asks, and an idle drain must not take the write lock.
       const transcripts = corpusIndexState(database, CORPORA.transcript)
