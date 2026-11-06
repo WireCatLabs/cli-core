@@ -227,6 +227,8 @@ const OTHERS: Entry[] = [
   validation("crm.stage-unknown", "a CRM item stands in a stage the store does not hold; it was not kept"),
   validation("crm.pipeline-clash", "a CRM pipeline has the id of a stored pipeline of the other kind; it was not kept"),
   validation("crm.item-invalid", "a CRM item has a field the store refuses, such as a currency it does not keep"),
+  validation("crm.pipeline-required", "the CRM has more than one pipeline of the kind; the write names one"),
+  validation("crm.write-unsupported", "the CRM does not take this write, or does not recognise a repeated one"),
   validation("crm.unlisted-held", "a list of every id would mark most of a kind deleted; nothing was, until --rescan"),
   validation("order.duplicate", "the shop's order with this number is already stored; change its status instead"),
   validation("order.proposed", "the shop's order with this number already waits for the owner in a findings batch"),

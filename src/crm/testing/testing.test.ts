@@ -6,11 +6,14 @@ import { type MessageStore, openStore } from "../../store/store.js"
 import {
   crmSourceContract,
   crmSyncContract,
+  crmWriteContract,
   exampleDeal,
   exampleLead,
   exampleOrganization,
   examplePerson,
+  FAKE_CRM_ALIASES,
   fakeCrmSource,
+  SALES_PIPELINE,
 } from "./index.js"
 
 const stores: MessageStore[] = []
@@ -41,4 +44,19 @@ describe("fake CRM source", () => {
       return { source, deadCursor: { kind: "deal", cursor } }
     }))
       it(`${c.name} (removedInChanges: ${removedInChanges})`, c.run)
+})
+
+describe("fake CRM writer", () => {
+  for (const idempotent of [false, true])
+    for (const c of crmWriteContract(() => {
+      const source = fakeCrmSource({ capabilities: { idempotent } })
+      return {
+        writer: source,
+        pipeline: SALES_PIPELINE,
+        aliases: FAKE_CRM_ALIASES,
+        loseNextAnswer: () => source.loseNextAnswer(),
+        requests: () => source.writes.length,
+      }
+    }))
+      it(`${c.name} (idempotent: ${idempotent})`, c.run)
 })
