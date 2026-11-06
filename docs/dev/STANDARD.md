@@ -154,6 +154,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `rebuild` | compute again, from what the store already holds, what the tool derives from it, keeping the owner's decisions |  |
 | `link` | record that two identities are one person |  |
 | `unlink` | undo a link |  |
+| `allocate` | match a payment to the invoice or order it settles, in whole or in part |  |
 | `lookup` | ask the messenger who is behind a phone number |  |
 | `inspect` | look at a source before taking anything from it: a chat link without joining, a mailbox without importing |  |
 | `send` | send a message |  |
@@ -279,6 +280,16 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `projects` | collection | the owner's work units with a task key |  |
 | `annotations` | collection | derived records attached to a selected entity, with explicit coverage of included and omitted facets |  |
 | `organizations` | collection | companies, teams, families or communities |  |
+| `records` | collection | documents of the owner's business, such as an invoice or a receipt, kept with the things they are about |  |
+| `invoices` | collection | bills the owner sends or receives, with their amounts and due dates |  |
+| `orders` | collection | what a customer asked for and the owner owes or delivers |  |
+| `payments` | collection | money that moved in or out, each one matched to the invoices it settles |  |
+| `deals` | collection | sales the owner works on, each at a stage of a pipeline, with an amount and an outcome |  |
+| `leads` | collection | possible customers not yet qualified into a deal |  |
+| `pipelines` | collection | ordered sets of stages a deal moves through |  |
+| `stages` | collection | steps of a pipeline, each open, won or lost |  |
+| `products` | collection | goods and services the owner sells, with their prices |  |
+| `users` | collection | people who work in the owner's account at a service, such as a CRM's employees |  |
 | `identities` | collection | ways to reach a person or an organization: an account in one messenger or mailbox, an e-mail address, a phone |  |
 | `facts` | collection | what happened, with evidence |  |
 | `memories` | collection | what an agent concluded, with evidence and scope |  |
