@@ -1,4 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
+import type { CrmValue } from "../../domain/crm.js"
 import {
   DEAL_KINDS,
   DEAL_ROLES,
@@ -87,6 +88,10 @@ export interface Deal {
   deal: string | null
   account: { provider: string; account: string } | null
   externalId: string | null
+  /** A CRM copy's assignee, as the identity `<account>/user/<id>`. */
+  assignee: string | null
+  /** A CRM copy's own fields by code, as the CRM labels them; empty on the owner's own. */
+  providerMetadata: Record<string, CrmValue>
   people: DealPerson[]
   author: { type: "person" | "bot"; id: string; name: string | null; kind: "agent" | "rule" | null }
   model: string | null
@@ -220,6 +225,20 @@ const jsonField = (metadata: unknown, key: string): string | null => {
   }
 }
 
+const isValue = (value: unknown): value is CrmValue =>
+  typeof value === "object" && value !== null && !Array.isArray(value) && "label" in value && "value" in value
+
+const providerMetadataOf = (metadata: unknown): Record<string, CrmValue> => {
+  if (metadata == null) return {}
+  try {
+    return Object.fromEntries(
+      Object.entries(JSON.parse(String(metadata)) as Record<string, unknown>).filter(([, value]) => isValue(value)),
+    ) as Record<string, CrmValue>
+  } catch {
+    return {}
+  }
+}
+
 const accountOf = (provider: unknown, external: unknown) =>
   provider == null ? null : { provider: String(provider), account: String(external) }
 
@@ -270,6 +289,8 @@ export const dealOperationsOver = (context: StoreContext) => {
         deal: row.deal_id == null ? null : `deal:${row.deal_id}`,
         account: accountOf(row.account_provider, row.account_external_id),
         externalId: row.external_id == null ? null : String(row.external_id),
+        assignee: jsonField(row.metadata, "assignee"),
+        providerMetadata: providerMetadataOf(row.metadata),
         people: peopleOf(kind, fields.id),
         author: authorOf(row),
         model: row.model == null ? null : String(row.model),

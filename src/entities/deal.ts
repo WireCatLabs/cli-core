@@ -34,6 +34,17 @@ export const deal = v.strictObject({
   /** The CRM account it is a copy from; `null` for the owner's own. */
   account: crmAccount,
   external_id: nullableText,
+  /** A CRM copy's assignee, the identity `<account>/user/<id>`. */
+  assignee: nullableText,
+  /** A CRM copy's own fields by code; a list field's value is its option's label, `option_id` its id. */
+  provider_metadata: v.record(
+    v.string(),
+    v.strictObject({
+      label: v.nullable(v.string()),
+      value: v.unknown(),
+      option_id: v.optional(v.union([v.string(), v.array(v.string())])),
+    }),
+  ),
   people: v.array(v.strictObject({ ...party.entries, role: v.picklist(["owner", "contact", "decision-maker"]) })),
   author: v.strictObject({
     type: v.picklist(["person", "bot"]),

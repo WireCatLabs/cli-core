@@ -8,11 +8,11 @@ import { answerEntity } from "../../cli/answer-entity.js"
 import { environmentOf, outputFor, runBudgetOf } from "../../cli/context.js"
 import { honoursDryRun } from "../../cli/dry-run-guard.js"
 import { FETCH, LOCAL_READ, NO_EFFECTS, REMOTE_WRITE } from "../../cli/effects.js"
-import { type Body, itemOf, listOf, renderAnswer, snakeKeys } from "../../cli/envelope.js"
-import { queryTerms, termField, withQuery } from "../../cli/list-query.js"
+import { type Body, itemOf, listOf, renderAnswer, snakeKeys, snakeKeysKeeping } from "../../cli/envelope.js"
+import { queryTerms, termField, unfilteredQuery, withQuery } from "../../cli/list-query.js"
 import { terminalAsker } from "../../cli/messenger/ask.js"
 import { lineOf } from "../../cli/steps.js"
-import { CRM_KINDS } from "../../domain/crm.js"
+import { CRM_KINDS, type CrmKind } from "../../domain/crm.js"
 import { DEAL_KINDS, DEAL_STATUSES, type DealKind } from "../../domain/deals.js"
 import { deal as dealEntity } from "../../entities/deal.js"
 import { count, text } from "../../entities/fields.js"
@@ -94,7 +94,15 @@ export const STAGES_QUERY = {
 } as const satisfies QueryRegistry
 
 /** A CRM's users typed these; a list item names its own, as `events list` does. */
-const DEAL_UNTRUSTED = ["title", "summary", "stage", "pipeline_name", "organization.name", "people.name"]
+const DEAL_UNTRUSTED = [
+  "title",
+  "summary",
+  "stage",
+  "pipeline_name",
+  "organization.name",
+  "people.name",
+  "provider_metadata",
+]
 const PIPELINE_UNTRUSTED = ["name", "stages.name"]
 const STAGE_UNTRUSTED = ["name", "pipeline_name"]
 
@@ -153,22 +161,39 @@ const crmWrite = v.strictObject({
   untrusted: v.array(text),
 })
 
+/** b24's `fields list` answer, so a CRM CLI's own command can go; `untrusted` names what the CRM's users typed. */
+const crmField = v.strictObject({
+  code: v.string(),
+  label: v.nullable(v.string()),
+  type: v.string(),
+  multiple: v.boolean(),
+  filterable: v.boolean(),
+  options: v.optional(v.array(v.strictObject({ id: v.string(), label: v.string() }))),
+  untrusted: v.array(text),
+})
+const FIELDS_QUERY = unfilteredQuery("crm_field", crmField)
+const FIELD_UNTRUSTED = ["label", "options.label"]
+/** The words `fields list` takes: its sibling commands' nouns. */
+const FIELD_KINDS: Record<string, CrmKind> = {
+  deals: "deal",
+  leads: "lead",
+  people: "person",
+  organizations: "organization",
+}
+
 const crmRemoval = v.strictObject({ operation_id: text, ref: text, removed: count })
 
 const collect = (value: string, previous: string[] = []) => {
-  if (value.indexOf("=") < 1) throw new InvalidArgumentError("expected code=value")
+  if (value.indexOf("=") < 1) throw new InvalidArgumentError("expected key=value")
   return [...previous, value]
 }
 
-/** `--field code=value` pairs; an empty value clears the field. */
-const customOf = (pairs: readonly string[]): Record<string, string | null> =>
-  Object.fromEntries(
-    pairs.map((pair) => {
-      const at = pair.indexOf("=")
-      const given = pair.slice(at + 1)
-      return [pair.slice(0, at), given === "" ? null : given]
-    }),
-  )
+/** `--field` as typed, split at the first `=`. */
+const pairsOf = (typed: readonly string[]): [string, string][] =>
+  typed.map((pair) => {
+    const at = pair.indexOf("=")
+    return [pair.slice(0, at), pair.slice(at + 1)]
+  })
 
 const integer = (most: number) => (value: string) => {
   if (!/^[1-9]\d*$/.test(value) || Number(value) > most) throw new InvalidArgumentError(`expected 1 to ${most}`)
@@ -179,8 +204,11 @@ const integer = (most: number) => (value: string) => {
 const pathOf = (command: Command): string[] =>
   command.parent?.parent ? [...pathOf(command.parent), command.name()] : [command.name()]
 
+/** A CRM's own field codes are its keys, never ours to rename. */
+const dealKeys = snakeKeysKeeping(["providerMetadata"])
+
 const marked = <T extends object>(items: T[], untrusted: string[]) =>
-  items.map((item) => ({ ...(snakeKeys(item) as object), untrusted }))
+  items.map((item) => ({ ...(dealKeys(item) as object), untrusted }))
 
 export type CrmWithin = (command: Command, work: (run: CrmRun) => Promise<Body>) => Promise<void>
 
@@ -349,7 +377,7 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
     ).action(async (reference: string, _opts: unknown, command: Command) => {
       await within(command, async (run) => {
         const found = await ownCopy(run, kind, reference)
-        return itemOf({ ...(snakeKeys(found) as object), untrusted: DEAL_UNTRUSTED })
+        return itemOf({ ...(dealKeys(found) as object), untrusted: DEAL_UNTRUSTED })
       })
     })
     addWrites(group, kind)
@@ -385,7 +413,7 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
     const answered = (operationId: string, item: Deal) =>
       itemOf({
         operation_id: operationId,
-        [kind]: { ...(snakeKeys(item) as object), untrusted: DEAL_UNTRUSTED },
+        [kind]: { ...(dealKeys(item) as object), untrusted: DEAL_UNTRUSTED },
         untrusted: DEAL_UNTRUSTED.map((field) => `${kind}.${field}`),
       })
     const write = (name: string, verb: (typeof writes.verbs)[number], description: string) => {
@@ -420,7 +448,9 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
         )
         .option(
           "--field <key=value>",
-          "one of the CRM's own fields, by its code; repeat for more, empty clears it",
+          "one of the CRM's own fields, by its code or label as `fields list` prints them, and its value; a list " +
+            "field takes its option's label or id; repeat it for more fields, or for each value of a multiple field; " +
+            "an empty value clears it",
           collect,
           // The empty default marks the flag as repeatable, so an agent's tool takes a list.
           [] as string[],
@@ -428,7 +458,7 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
     type Typed = Omit<CrmFieldsInput, "custom"> & { field?: string[]; operationId?: string }
     const inputOf = ({ field, operationId: _id, ...rest }: Typed): CrmFieldsInput => ({
       ...Object.fromEntries(Object.entries(rest).filter(([, value]) => value !== undefined)),
-      ...(field?.length ? { custom: customOf(field) } : {}),
+      ...(field?.length ? { custom: pairsOf(field) } : {}),
     })
     const idOf = (opts: { operationId?: string }) =>
       opts.operationId === undefined ? {} : { operationId: opts.operationId }
@@ -603,6 +633,45 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
       })
     })
   })
+
+  const fieldKinds = Object.keys(FIELD_KINDS).filter((word) => word !== "leads" || options.leads !== false)
+  const fields = annotate(program.command("fields"), { effects: NO_EFFECTS }).description(
+    "the CRM's own fields on deals, leads, people and organizations, as last synced",
+  )
+  example(
+    withQuery(
+      answerEntity(annotate(fields.command("list"), { effects: LOCAL_READ }), "crm_field", crmField)
+        .description("the CRM's custom fields of one kind, in its order, with a list field's options")
+        .argument("<kind>", fieldKinds.join(", "))
+        .option("--limit <n>", `fields per page, 1–${MOST}`, integer(MOST), 50)
+        .option("--page <n>", "which page, starting at 1", integer(1_000_000), 1)
+        .option("--all", "every field, no paging"),
+      FIELDS_QUERY,
+    ),
+    "fields list deals",
+    "fields list people --json",
+  ).action(
+    async (kind: string, words: string[], opts: { limit: number; page: number; all?: boolean }, command: Command) => {
+      if (!fieldKinds.includes(kind))
+        throw new CliError("validation_error", `fields are listed for ${fieldKinds.join(", ")}; got ${kind}`, {
+          reason: "field.unknown-kind",
+          allowed: fieldKinds,
+        })
+      queryTerms(words, FIELDS_QUERY, "fields list")
+      await within(command, async (run) => {
+        const found = await run.store.crm.fields(run.account, FIELD_KINDS[kind] as CrmKind)
+        const offset = opts.all ? 0 : (opts.page - 1) * opts.limit
+        const end = opts.all ? found.length : offset + opts.limit
+        return listOf(pathOf(command).join(" "), {
+          items: found.slice(offset, end).map((field) => ({ ...field, untrusted: FIELD_UNTRUSTED })),
+          limit: opts.all ? Math.max(1, found.length) : opts.limit,
+          page: opts.page,
+          has_more: found.length > end,
+          ...(words.length ? { args: { query: words } } : {}),
+        })
+      })
+    },
+  )
 
   const search =
     program.commands.find((one) => one.name() === "search") ??

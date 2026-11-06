@@ -10,6 +10,7 @@ export {
   fakeCrmSource,
   LEAD_PIPELINE,
   SALES_PIPELINE,
+  SOURCE_FIELD,
 } from "./source.js"
 export { type CrmSourceFixture, crmSourceContract } from "./source-contract.js"
 export { CRM_TRAIT_COMBINATIONS, type CrmSyncFixture, crmSyncContract } from "./sync-contract.js"

@@ -129,6 +129,7 @@ export const MANIFEST: ManifestEntry[] = [
   { name: "20261106010504_version-52-deals", version: 52, minCompatible: 34 },
   { name: "20261106010507_version-52-deals-rules", version: 52, minCompatible: 34 },
   { name: "20261106165009_version-53-crm-pipelines", version: 53, minCompatible: 34 },
+  { name: "20261106225547_version-54-crm-fields", version: 54, minCompatible: 34 },
 ]
 
 export const generatedMigrations = (

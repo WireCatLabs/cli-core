@@ -25,8 +25,17 @@ export interface CommandPermissions {
   extra: readonly PermissionKey[]
   /** cli-core's built-in levels and the CLI's own; they only ever tighten. */
   defaults: Readonly<Record<PermissionKey, Level>>
-  /** The other keys a command's real run checks, so its `--dry-run` preview shows each: gcal's `api.calendar.*`. */
-  alsoChecks?: (path: readonly string[]) => readonly PermissionKey[]
+  /**
+   * The other keys a command's real run checks, so its `--dry-run` preview shows each: gcal's `api.calendar.*`. A
+   * key with `when` is checked only for some arguments, such as a stage that closes a deal: shown, never refused.
+   */
+  alsoChecks?: (path: readonly string[]) => readonly (PermissionKey | ConditionalKey)[]
+}
+
+/** A key a write checks only when its arguments ask for it; `when` says which, in a few words. */
+export interface ConditionalKey {
+  key: PermissionKey
+  when: string
 }
 
 /** Either way of naming a program's keys: a messenger's per-command mapping, or a declared CLI's own. */

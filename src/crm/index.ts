@@ -21,6 +21,7 @@ export {
   type CrmWriteCapabilities,
   type CrmWriteOptions,
   type CrmWriter,
+  crmAlsoChecks,
 } from "./writer.js"
 export {
   type CrmFieldsInput,

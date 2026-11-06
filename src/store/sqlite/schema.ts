@@ -2099,6 +2099,29 @@ export const pipelineStageChanges = sqliteTable(
   ],
 )
 
+/** A CRM account's own fields on one kind; their values stay in each row's `metadata`, keyed by code. */
+export const crmFields = sqliteTable(
+  "crm_fields",
+  {
+    id: integer("id").primaryKey(),
+    accountId: integer("account_id")
+      .notNull()
+      .references(() => accounts.id),
+    kind: text("kind").notNull(),
+    code: text("code").notNull(),
+    label: text("label"),
+    type: text("type").notNull(),
+    multiple: integer("multiple").notNull(),
+    filterable: integer("filterable").notNull(),
+    options: text("options"),
+    position: integer("position").notNull(),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+    deletedAt: integer("deleted_at"),
+  },
+  (table) => [unique().on(table.accountId, table.kind, table.code)],
+)
+
 /** What a source said about one of its records, as it said it: the layer under the entity an import makes. */
 export const records = sqliteTable(
   "records",

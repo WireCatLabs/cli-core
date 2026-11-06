@@ -53,8 +53,20 @@ export interface CrmItem {
   updatedAt?: number | null
   /** The CRM's own page for it, http or https. */
   url?: string | null
-  /** What the CRM sends that has no column, such as custom fields with their labels; never a secret. */
+  /** The CRM user it is assigned to, by the user's id: never a contact's. */
+  assignee?: string | null
+  /**
+   * What the CRM sends that has no column; never a secret. Its own fields' values are here by code as `CrmValue`,
+   * which the deal's `provider_metadata` answers.
+   */
   metadata?: Record<string, unknown>
+}
+
+/** One of the CRM's own fields' values: its label, and for a list field the option's label and `option_id`. */
+export interface CrmValue {
+  label: string | null
+  value: unknown
+  option_id?: string | string[]
 }
 
 /**
@@ -74,6 +86,21 @@ export interface CrmOrganization {
   name: string
   url?: string | null
   metadata?: Record<string, unknown>
+}
+
+/** One of a CRM account's own fields on a kind: what the code a row's `metadata` is keyed by means. */
+export interface CrmField {
+  /** The CRM's key for it, unique in its kind. */
+  code: string
+  /** Its title in the CRM; null when the CRM gives none. */
+  label: string | null
+  /** The CRM's own word for its type, such as `string` or `enumeration`. */
+  type: string
+  multiple: boolean
+  /** Whether the CRM can filter a list by it. */
+  filterable: boolean
+  /** A list field's options in the CRM's order; absent on any other field. */
+  options?: { id: string; label: string }[]
 }
 
 export interface CrmRecords {

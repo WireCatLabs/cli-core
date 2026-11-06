@@ -1,4 +1,4 @@
-import type { CrmKind, CrmPipeline, CrmRecords } from "../domain/crm.js"
+import type { CrmField, CrmKind, CrmPipeline, CrmRecords } from "../domain/crm.js"
 import type { DealKind } from "../domain/deals.js"
 
 export interface CrmSourceTraits {
@@ -41,6 +41,11 @@ export interface CrmSource {
    * reads by its own modified time, with an overlap, and gives that time back as the cursor.
    */
   changes<K extends CrmKind>(kind: K, cursor: string | null, page?: string): Promise<CrmChanges<CrmRecords[K]>>
+  /**
+   * The CRM's own fields on one kind, in its order: what the codes in a row's `metadata` mean. Read every sync; a CRM
+   * without custom fields leaves it out, and one that has none on a kind answers `[]`.
+   */
+  fields?(kind: CrmKind): Promise<CrmField[]>
   /** Every id the CRM holds of the kind, a page at a time: how deletions are found when `removedInChanges` is false. */
   ids?(kind: CrmKind, page?: string): Promise<CrmIdPage>
 }

@@ -33,11 +33,17 @@ export const preview = (
     (!declared && key !== null && key !== undefined && WRITE_KEYS.includes(key))
   if (level === "deny" || (writes && level === "readonly"))
     throw new CliError("permission_error", `this profile does not permit ${path.join(" ")}`, { permission: key })
-  const also = (declared?.alsoChecks?.(path) ?? []).map((one) => ({
-    key: one,
-    level: levelFor(permissions, one, declared?.defaults).level,
-  }))
-  const stopped = also.find((one) => one.level === "deny" || (writes && one.level === "readonly"))
+  const also = (declared?.alsoChecks?.(path) ?? []).map((one) => {
+    const key = typeof one === "string" ? one : one.key
+    return {
+      key,
+      level: levelFor(permissions, key, declared?.defaults).level,
+      ...(typeof one === "string" ? {} : { when: one.when }),
+    }
+  })
+  const stopped = also.find(
+    (one) => one.when === undefined && (one.level === "deny" || (writes && one.level === "readonly")),
+  )
   if (stopped)
     throw new CliError("permission_error", `this profile does not permit ${stopped.key}`, { permission: stopped.key })
   return previewBody(command, { key: key ?? null, level, ...(also.length ? { also } : {}) }, messenger)
@@ -51,7 +57,9 @@ const TARGETS = new Set(["chat", "message", "person", "profile"])
  */
 export const previewBody = (
   command: Command,
-  permission: { key: PermissionKey | null; level: string; also?: { key: PermissionKey; level: string }[] } | undefined,
+  permission:
+    | { key: PermissionKey | null; level: string; also?: { key: PermissionKey; level: string; when?: string }[] }
+    | undefined,
   messenger: boolean,
 ) => {
   return {

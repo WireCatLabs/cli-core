@@ -14,6 +14,7 @@ import {
   fakeCrmSource,
   LEAD_PIPELINE,
   SALES_PIPELINE,
+  SOURCE_FIELD,
 } from "./source.js"
 
 /** A fresh, empty store and the CRM account to sync into it. */
@@ -114,7 +115,7 @@ export const crmSyncContract = (make: () => CrmSyncFixture | Promise<CrmSyncFixt
         await sync()
         source.delete("deal", "d1")
         now += DAY
-        const stopped = await sync({ budget: runBudget({ requests: 7 }) })
+        const stopped = await sync({ budget: runBudget({ requests: 11 }) })
         assert.equal(stopped.state, "partial")
         assert.equal(stopped.hint, "run sync again to continue")
         assert.deepEqual(await deals(), ["d1", "d2", "d3", "d4", "d5"])
@@ -139,6 +140,22 @@ export const crmSyncContract = (make: () => CrmSyncFixture | Promise<CrmSyncFixt
         await sync({ rescan: true })
         assert.deepEqual(await deals(), [])
       }),
+      test("stores each kind's own fields, and marks deleted one the CRM no longer lists", async ({
+        source,
+        sync,
+        store,
+        account,
+      }) => {
+        const note = { code: "UF_NOTE", label: "Note", type: "string", multiple: true, filterable: false }
+        source.setFields("person", [note])
+        await sync()
+        assert.deepEqual(await store.crm.fields(account, "deal"), [SOURCE_FIELD])
+        assert.deepEqual(await store.crm.fields(account, "person"), [note])
+        source.setFields("deal", [])
+        await sync()
+        assert.deepEqual(await store.crm.fields(account, "deal"), [])
+        assert.deepEqual(await store.crm.fields(account, "person"), [note])
+      }),
       test("a dead cursor starts a full round, marked reset", async ({ source, sync, deals }) => {
         seeded(source)
         await sync()
@@ -156,7 +173,7 @@ export const crmSyncContract = (make: () => CrmSyncFixture | Promise<CrmSyncFixt
         deals,
       }) => {
         seeded(source, 9)
-        const stopped = await sync({ budget: runBudget({ requests: 6 }) })
+        const stopped = await sync({ budget: runBudget({ requests: 10 }) })
         assert.equal(stopped.state, "partial")
         assert.equal(stopped.stopped, "requests")
         const kept = (await deals()).length

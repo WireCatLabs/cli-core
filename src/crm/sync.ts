@@ -165,6 +165,15 @@ const readPipelines = async (run: Run, kind: DealKind): Promise<BudgetStop | nul
   return null
 }
 
+const readFields = async (run: Run, kind: CrmKind): Promise<BudgetStop | null> => {
+  const why = run.budget.take()
+  if (why) return why
+  const fields = await (run.source.fields as NonNullable<CrmSource["fields"]>).call(run.source, kind)
+  const { skipped } = await run.store.crm.saveFields(run.account, kind, fields)
+  for (const one of skipped) run.report.issues.push({ kind, ...one })
+  return null
+}
+
 /** One page saved; an item whose stage is unknown gets one more chance after the kind's pipelines are read again. */
 const savePage = async (
   run: Run,
@@ -296,10 +305,11 @@ const syncKind = async (run: Run, kind: CrmKind, options: CrmSyncOptions, result
 }
 
 /**
- * Brings one CRM account's copy up to date: both kinds' pipelines, then contacts, companies, deals and leads, each
- * from its cursor or listed in full, a page at a time, each page saved with the round's place in the cursor, so a
- * run the budget stops, or one that fails, goes on from there. Deletions come from `changes()`, or from a list of
- * every id that marks only after its last page arrived, and never more than half of a kind without `--rescan`.
+ * Brings one CRM account's copy up to date: both kinds' pipelines and each kind's fields, then contacts, companies,
+ * deals and leads, each from its cursor or listed in full, a page at a time, each page saved with the round's place in
+ * the cursor, so a run the budget stops, or one that fails, goes on from there. Deletions come from `changes()`, or
+ * from a list of every id that marks only after its last page arrived, and never more than half of a kind without
+ * `--rescan`.
  */
 export const syncCrm = async (
   source: CrmSource,
@@ -340,6 +350,12 @@ export const syncCrm = async (
       stopped = await readPipelines(run, kind)
       if (options.signal?.aborted) stopped = "cancelled"
     }
+  if (run.source.fields)
+    for (const kind of kinds)
+      if (!stopped) {
+        stopped = await readFields(run, kind)
+        if (options.signal?.aborted) stopped = "cancelled"
+      }
   for (const kind of kinds) {
     const result: CrmSyncResult = {
       kind,
