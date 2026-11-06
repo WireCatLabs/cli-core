@@ -9,6 +9,9 @@ shape of this file.
 
 ### Added
 
+- **`questionLookup` is public** (`@wirecat/cli-core/services`): the rule `search all` uses to search a question
+  typed as a sentence with discovery, so a CLI's own message search can do the same and find a short reply by the
+  message it answers.
 - **`patiently` and `waitForTurn` are public.** `patiently` (`@wirecat/cli-core/services`) sits out a provider's
   short "wait N seconds" a few times and ends the run on a long one. `waitForTurn(pacer, { name, operation, warn,
   sleep })` (`@wirecat/cli-core/sends`) waits for a call's turn in the profile's shared pace, warns on a wait a person
