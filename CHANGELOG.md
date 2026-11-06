@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.585.0 — 06.11.2026
+
 ### Added
 
 - **Deals in the store (store version 52).** `store.deals` keeps the owner's sales pipelines (`pipelines`,
