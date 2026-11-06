@@ -128,6 +128,14 @@
       "types": "./dist/calendar/testing/index.d.ts",
       "default": "./dist/calendar/testing/index.js"
     },
+    "./crm": {
+      "types": "./dist/crm/index.d.ts",
+      "default": "./dist/crm/index.js"
+    },
+    "./crm/testing": {
+      "types": "./dist/crm/testing/index.d.ts",
+      "default": "./dist/crm/testing/index.js"
+    },
     "./mail": {
       "types": "./dist/mail/index.d.ts",
       "default": "./dist/mail/index.js"
