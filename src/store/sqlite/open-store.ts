@@ -11,10 +11,10 @@ import { fillFiles } from "./files.js"
 import { fillFolded } from "./folded.js"
 import { fillJoinKeys } from "./join-keys.js"
 import { logPruner } from "./log-pruning.js"
-import { openSqlite, type StoreContext } from "./open.js"
+import { type OpenedSqlite, openSqlite, type StoreContext } from "./open.js"
 import { movePaymentFacts } from "./payment-facts.js"
 import { loadProviders } from "./providers.js"
-import { assertReadCompatible } from "./read-compatibility.js"
+import { assertReadCompatible, readCompatibility } from "./read-compatibility.js"
 import { pruneRollbackCopies } from "./rollback-copy.js"
 import { stemsState } from "./stems.js"
 import { fillStems, followDefaultStemmers } from "./stems-fill.js"
@@ -23,7 +23,7 @@ import { purgeTestAccounts } from "./test-accounts.js"
 import { fillVectorIndexes } from "./vector-index.js"
 
 export interface StoreOptions {
-  /** Open an existing compatible store without maintenance; SQLite refuses writes. */
+  /** Open an existing compatible store without maintenance, migrating an older one first; SQLite refuses writes. */
   readOnly?: boolean
   path?: string
   env?: NodeJS.ProcessEnv
@@ -57,16 +57,39 @@ const createWritable = (file: string): void => {
   }
 }
 
-export const openStoreContext = async ({
-  path,
-  env,
-  now = Date.now,
-  command,
-  version,
-  warn = (line) => process.stderr.write(`${line}\n`),
-  readOnly = false,
-  decisions = DEFAULT_DECISION_POLICY,
-}: StoreOptions = {}): Promise<StoreContext> => {
+// A new tool's first command may only read; it migrates the file as its first write would.
+const openReadable = async (file: string, options: StoreOptions): Promise<OpenedSqlite> => {
+  const first = await openSqlite(file, { readOnly: true })
+  try {
+    if (readCompatibility(first.database, options.command) === "current") return first
+  } catch (error) {
+    first.database.close()
+    throw error
+  }
+  first.database.close()
+  const writable = await openStoreContext({ ...options, path: file, readOnly: false })
+  writable.database.close()
+  const migrated = await openSqlite(file, { readOnly: true })
+  try {
+    assertReadCompatible(migrated.database, options.command)
+    return migrated
+  } catch (error) {
+    migrated.database.close()
+    throw error
+  }
+}
+
+export const openStoreContext = async (options: StoreOptions = {}): Promise<StoreContext> => {
+  const {
+    path,
+    env,
+    now = Date.now,
+    command,
+    version,
+    warn = (line) => process.stderr.write(`${line}\n`),
+    readOnly = false,
+    decisions = DEFAULT_DECISION_POLICY,
+  } = options
   if (typeof readOnly !== "boolean") throw new CliError("validation_error", "readOnly must be a boolean")
   await storeCapable()
   const file = path ?? storePath(env)
@@ -75,11 +98,10 @@ export const openStoreContext = async ({
     if (!statSync(file, { throwIfNoEntry: false })?.isFile())
       throw new CliError("not_found", "The store does not exist as a file; read-only opening does not create it")
   } else createWritable(file)
-  const opened = await openSqlite(file, { readOnly })
+  const opened = readOnly ? await openReadable(file, options) : await openSqlite(file, { readOnly })
   const database = opened.database
   try {
-    if (readOnly) assertReadCompatible(database, command)
-    else {
+    if (!readOnly) {
       const notice = migrate(database, {
         now,
         command,
