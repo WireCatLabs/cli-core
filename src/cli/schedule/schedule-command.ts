@@ -6,6 +6,7 @@ import { Argument, Command, Option } from "commander"
 import { parseRoute, ROUTE_HELP, routeText } from "../../background/deliver.js"
 import {
   type AgentCli,
+  type AgentInput,
   describeWhen,
   findProgram,
   lastRun,
@@ -157,6 +158,8 @@ export interface ScheduleHost {
    * then runs only once enough of it waits, or the oldest has waited long enough.
    */
   newMail?: (command: Command, holder: string) => Promise<MailWaiting>
+  /** What an agent is given on its stdin before its first turn; see `AgentInput`. */
+  agentInput?: AgentInput
   /** The config file's settings for agent schedules; a schedule's own flags win, the defaults fill the rest. */
   limits?: (command: Command) => ScheduleLimits
   /**
@@ -260,6 +263,7 @@ export const scheduleCommandFor = ({
   app,
   context: contextOf,
   newMail,
+  agentInput,
   limits: configured,
   agentRuns = [],
 }: ScheduleHost): Command => {
@@ -594,6 +598,7 @@ export const scheduleCommandFor = ({
         runSchedule(app, system, context.env, scheduleFile(state, scheduleName(name)), {
           timer: timer(),
           agentRuns,
+          ...(agentInput ? { agentInput } : {}),
           ...(signal ? { signal } : {}),
         }),
       )
@@ -633,6 +638,7 @@ export const scheduleCommandFor = ({
         runSchedule(app, system, context.env, file, {
           timer: timer(),
           agentRuns,
+          ...(agentInput ? { agentInput } : {}),
           untilUnlocked: true,
           ...(signal ? { signal } : {}),
         }),

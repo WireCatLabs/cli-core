@@ -96,6 +96,21 @@ const reportOf = (stdout: Buffer): { text: Buffer; costUsd?: number } => {
   }
 }
 
+/**
+ * What an agent is given on its stdin before its first turn: the host's own reads of what the run is about, so
+ * the agent spends no model turns fetching them. Returns `undefined` when the schedule has none. `run` runs one
+ * command of this CLI under the run's variables and answers its stdout.
+ */
+export type AgentInput = (schedule: Schedule, run: (argv: string[]) => Promise<string>) => Promise<string | undefined>
+
+/** The most an agent's input may hold; a longer one is cut, so a mailbox in flood cannot grow every turn's context. */
+export const AGENT_INPUT_MAX_CHARS = 60_000
+
+const capped = (input: string): string =>
+  input.length <= AGENT_INPUT_MAX_CHARS
+    ? input
+    : `${input.slice(0, AGENT_INPUT_MAX_CHARS)}\n\n[input cut at ${AGENT_INPUT_MAX_CHARS} characters; the rest waits for the next run]\n`
+
 /** Another CLI a scheduled agent may run by name, as the host declares it: `memo`'s agent runs `mail`. */
 export type AgentCli = Pick<AppIdentity, "command" | "appName" | "envPrefix">
 
@@ -592,6 +607,7 @@ export const runSchedule = async (
     untilUnlocked = false,
     wait = pause,
     agentRuns = [],
+    agentInput,
   }: {
     now?: () => Date
     timer?: Timer
@@ -601,6 +617,7 @@ export const runSchedule = async (
     wait?: (ms: number, signal?: AbortSignal) => Promise<void>
     /** The other CLIs an agent may run; each runs under its own read-only lock and knows it runs from a schedule. */
     agentRuns?: readonly AgentCli[]
+    agentInput?: AgentInput
   } = {},
 ): Promise<LastRun> => {
   const schedule = readSchedule(file)
@@ -610,7 +627,13 @@ export const runSchedule = async (
   const agent = schedule.kind === "agent"
   const retries = untilUnlocked && !("every" in schedule.when)
   const firstAt = now().getTime()
-  let last = await attemptSchedule(app, system, env, schedule, folder, { now, signal, killAfterMs, agentRuns })
+  let last = await attemptSchedule(app, system, env, schedule, folder, {
+    now,
+    signal,
+    killAfterMs,
+    agentRuns,
+    agentInput,
+  })
   for (
     let delay = LOCKED_FIRST_WAIT_MS;
     retries && lockedOut(last) && !signal?.aborted && now().getTime() - firstAt + delay <= LOCKED_GIVE_UP_MS;
@@ -618,7 +641,13 @@ export const runSchedule = async (
   ) {
     await wait(delay, signal)
     if (signal?.aborted) break
-    last = await attemptSchedule(app, system, env, schedule, folder, { now, signal, killAfterMs, agentRuns })
+    last = await attemptSchedule(app, system, env, schedule, folder, {
+      now,
+      signal,
+      killAfterMs,
+      agentRuns,
+      agentInput,
+    })
   }
   const { exitCode, output } = last
   const errors = agent ? output.replace(/\.md$/, ".log") : output
@@ -681,6 +710,27 @@ export const runSchedule = async (
   return last
 }
 
+/** The agent's input, or none: a host read that fails leaves the agent to fetch what it needs itself. */
+const inputOf = async (
+  agentInput: AgentInput,
+  system: ServerSystem,
+  env: NodeJS.ProcessEnv,
+  schedule: Schedule,
+  log: ReturnType<typeof recordLogFor>,
+): Promise<string | undefined> => {
+  try {
+    const input = await agentInput(schedule, async (argv) => {
+      const ran = await system.run([...system.entry, ...argv], env)
+      if (ran.code !== 0) throw new Error(`${argv.slice(0, 3).join(" ")} exited ${ran.code}`)
+      return ran.stdout
+    })
+    return input === undefined ? undefined : capped(input)
+  } catch (error) {
+    log.warn({ event: "schedule.input-failed", schedule: schedule.name, reason: String(error) })
+    return undefined
+  }
+}
+
 /** One run of the schedule's command or agent: its output in `runs/`, its result in `last.json`. */
 const attemptSchedule = async (
   app: AppIdentity,
@@ -693,7 +743,14 @@ const attemptSchedule = async (
     signal,
     killAfterMs,
     agentRuns,
-  }: { now: () => Date; signal: AbortSignal | undefined; killAfterMs: number; agentRuns: readonly AgentCli[] },
+    agentInput,
+  }: {
+    now: () => Date
+    signal: AbortSignal | undefined
+    killAfterMs: number
+    agentRuns: readonly AgentCli[]
+    agentInput: AgentInput | undefined
+  },
 ): Promise<LastRun> => {
   const runs = join(folder, "runs")
   const stamp = now()
@@ -728,9 +785,13 @@ const attemptSchedule = async (
   const facts = { schedule: schedule.name, kind: schedule.kind }
   const began = now().getTime()
   log.info({ event: "schedule.start", ...facts })
+  const input = agent && agentInput ? await inputOf(agentInput, system, childEnv, schedule, log) : undefined
   let costUsd: number | undefined
   const exitCode = await new Promise<number>((resolve) => {
-    const child = spawn(program, args, { env: childEnv, cwd: folder, stdio: ["ignore", "pipe", "pipe"] })
+    const child = spawn(program, args, { env: childEnv, cwd: folder, stdio: ["pipe", "pipe", "pipe"] })
+    // An agent that stops reading its stdin may close it first; that is no failure of the run.
+    child.stdin?.on("error", () => {})
+    child.stdin?.end(input)
     const out: Buffer[] = []
     const err: Buffer[] = []
     child.stdout.on("data", (chunk: Buffer) => out.push(chunk))
