@@ -84,6 +84,17 @@
                   },
                   {
                     "group": [
+                      "**/crm/*",
+                      "!**/crm/index.js",
+                      "**/crm/testing/*",
+                      "!**/crm/testing/index.js",
+                      "**/crm/cli/*",
+                      "!**/crm/cli/index.js"
+                    ],
+                    "message": "src/crm/ is a module: import it through its entry points (index.ts, cli/, testing/), and export there what is new"
+                  },
+                  {
+                    "group": [
                       "**/documents/model.js",
                       "**/documents/scope.js",
                       "**/documents/catalog.js",
@@ -165,6 +176,17 @@
                   },
                   {
                     "group": [
+                      "**/crm/*",
+                      "!**/crm/index.js",
+                      "**/crm/testing/*",
+                      "!**/crm/testing/index.js",
+                      "**/crm/cli/*",
+                      "!**/crm/cli/index.js"
+                    ],
+                    "message": "src/crm/ is a module: import it through its entry points (index.ts, cli/, testing/), and export there what is new"
+                  },
+                  {
+                    "group": [
                       "**/documents/model.js",
                       "**/documents/scope.js",
                       "**/documents/catalog.js",
@@ -241,6 +263,17 @@
                   },
                   {
                     "group": [
+                      "**/crm/*",
+                      "!**/crm/index.js",
+                      "**/crm/testing/*",
+                      "!**/crm/testing/index.js",
+                      "**/crm/cli/*",
+                      "!**/crm/cli/index.js"
+                    ],
+                    "message": "src/crm/ is a module: import it through its entry points (index.ts, cli/, testing/), and export there what is new"
+                  },
+                  {
+                    "group": [
                       "**/documents/model.js",
                       "**/documents/scope.js",
                       "**/documents/catalog.js",
@@ -308,6 +341,17 @@
                   },
                   {
                     "group": [
+                      "**/crm/*",
+                      "!**/crm/index.js",
+                      "**/crm/testing/*",
+                      "!**/crm/testing/index.js",
+                      "**/crm/cli/*",
+                      "!**/crm/cli/index.js"
+                    ],
+                    "message": "src/crm/ is a module: import it through its entry points (index.ts, cli/, testing/), and export there what is new"
+                  },
+                  {
+                    "group": [
                       "**/documents/model.js",
                       "**/documents/scope.js",
                       "**/documents/catalog.js",
@@ -364,6 +408,17 @@
                       "!**/calendar/mcp/index.js"
                     ],
                     "message": "src/calendar/ is a module: import it through its entry points (index.ts, cli/, mcp/, testing/), and export there what is new"
+                  },
+                  {
+                    "group": [
+                      "**/crm/*",
+                      "!**/crm/index.js",
+                      "**/crm/testing/*",
+                      "!**/crm/testing/index.js",
+                      "**/crm/cli/*",
+                      "!**/crm/cli/index.js"
+                    ],
+                    "message": "src/crm/ is a module: import it through its entry points (index.ts, cli/, testing/), and export there what is new"
                   },
                   {
                     "group": [
@@ -581,6 +636,17 @@
                     "message": "src/calendar/ is a module: import it through its entry points (index.ts, cli/, mcp/, testing/), and export there what is new"
                   },
                   {
+                    "group": [
+                      "**/crm/*",
+                      "!**/crm/index.js",
+                      "**/crm/testing/*",
+                      "!**/crm/testing/index.js",
+                      "**/crm/cli/*",
+                      "!**/crm/cli/index.js"
+                    ],
+                    "message": "src/crm/ is a module: import it through its entry points (index.ts, cli/, testing/), and export there what is new"
+                  },
+                  {
                     "group": ["**/store/**", "**/services/**", "**/cli/**", "**/mcp/**", "**/attachments/extract.js"],
                     "message": "a reader sits below the store, the services and the commands: it imports readers/types, its own engine and the pure helpers in src/attachments/, nothing else; extract.ts calls the registry, so a reader never imports it"
                   },
@@ -646,6 +712,17 @@
                       "!**/calendar/mcp/index.js"
                     ],
                     "message": "src/calendar/ is a module: import it through its entry points (index.ts, cli/, mcp/, testing/), and export there what is new"
+                  },
+                  {
+                    "group": [
+                      "**/crm/*",
+                      "!**/crm/index.js",
+                      "**/crm/testing/*",
+                      "!**/crm/testing/index.js",
+                      "**/crm/cli/*",
+                      "!**/crm/cli/index.js"
+                    ],
+                    "message": "src/crm/ is a module: import it through its entry points (index.ts, cli/, testing/), and export there what is new"
                   },
                   {
                     "group": [
@@ -807,6 +884,17 @@
                     "message": "src/calendar/ is a module: import it through its entry points (index.ts, cli/, mcp/, testing/), and export there what is new"
                   },
                   {
+                    "group": [
+                      "**/crm/*",
+                      "!**/crm/index.js",
+                      "**/crm/testing/*",
+                      "!**/crm/testing/index.js",
+                      "**/crm/cli/*",
+                      "!**/crm/cli/index.js"
+                    ],
+                    "message": "src/crm/ is a module: import it through its entry points (index.ts, cli/, testing/), and export there what is new"
+                  },
+                  {
                     "group": ["**/store/**", "**/services/**", "**/cli/**", "**/mcp/**", "**/models/**"],
                     "message": "document domain types and scope helpers must not depend on persistence, workflows or transports"
                   }
@@ -871,6 +959,17 @@
                       "!**/calendar/mcp/index.js"
                     ],
                     "message": "src/calendar/ is a module: import it through its entry points (index.ts, cli/, mcp/, testing/), and export there what is new"
+                  },
+                  {
+                    "group": [
+                      "**/crm/*",
+                      "!**/crm/index.js",
+                      "**/crm/testing/*",
+                      "!**/crm/testing/index.js",
+                      "**/crm/cli/*",
+                      "!**/crm/cli/index.js"
+                    ],
+                    "message": "src/crm/ is a module: import it through its entry points (index.ts, cli/, testing/), and export there what is new"
                   },
                   {
                     "group": [

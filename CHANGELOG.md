@@ -9,6 +9,10 @@ shape of this file.
 
 ### Added
 
+- **`patiently` and `waitForTurn` are public.** `patiently` (`@wirecat/cli-core/services`) sits out a provider's
+  short "wait N seconds" a few times and ends the run on a long one. `waitForTurn(pacer, { name, operation, warn,
+  sleep })` (`@wirecat/cli-core/sends`) waits for a call's turn in the profile's shared pace, warns on a wait a person
+  would notice and refuses one longer than five minutes as `rate_limited`; the messenger layer uses the same one.
 - **`store.crm` writes a CRM account's copies.** `savePipelines` and `saveItems` upsert pipelines, stages, deals and
   leads by the CRM's ids, with no review. A pipeline is keyed by its account, kind and id. An item's status is the
   CRM's own when it gives one (Pipedrive keeps won and lost on the deal), else its stage's outcome. Money keeps its
@@ -34,8 +38,38 @@ shape of this file.
 - **`store.mail.writtenTo(addresses)`.** Of these addresses, the ones the owner wrote to: To or Cc of a live outgoing
   email in any account, in lower case, in one read.
 
+- **`syncCrm` and the `CrmSource` port, in `@wirecat/cli-core/crm`.** A CRM CLI writes an adapter (`pipelines(kind)`,
+  `changes(kind, cursor, page)` answering a page or `{ reset: true }`, and `ids(kind, page)` when the CRM does not name
+  deletions) and the engine copies the account into the store: both kinds' pipelines, then companies, contacts, deals
+  and leads, each kind from its own cursor (`store.sync`, `crm:<kind>`), a page at a time, saved as it comes, so a
+  run its request budget, deadline or cancel stops goes on from there. A dead cursor starts a full round. An item
+  whose stage arrived after the pipelines were read gets them read again once; one still not kept is an issue, and
+  the round goes on. Deletions come from `changes()`, or from a list of every id that marks rows deleted only once
+  its last page arrived (resumable across runs), never a row changed since the list began, and never most of a kind
+  without `--rescan`: a sign-in that lost its rights lists no ids. `crmStatus` gives each kind's progress in the
+  shared shape.
+- **`@wirecat/cli-core/crm/testing`:** `crmSourceContract` for a CRM adapter, `crmSyncContract` for the engine over
+  a store, and `fakeCrmSource`, a CRM in memory with a change feed.
+- **`addCrmCommands(program, { app, open, leads? })`, in `@wirecat/cli-core/crm/cli`.** One set of commands for
+  every CRM CLI: root `sync` (`--rescan`, `--max-pages`, partial and cooperative, a safe next step), `store status`,
+  and `deals list|show`, `leads list|show`, `pipelines list|show` (with the funnel) and `stages list`, which read the
+  store, as the calendar's lists do, and only the profile's account. Lists take `status:`, `stage:`, `pipeline:` and
+  `organization:` (`DEALS_QUERY`, `LEADS_QUERY`), `--limit` and `--page`; what the CRM's users typed is marked
+  untrusted. `search all` reads the account's deals and leads beside the stored messages, notes and events, and
+  takes `--only crm`.
+- **Shared answer entities `deal`, `lead`, `pipeline` and `stage`.** memo's `deals`, `leads` and `pipelines` and every
+  CRM CLI answer them in one shape: a deal or lead as the store gives it, a pipeline with its stages and, from
+  `pipelines show`, its funnel.
+- **`schedule agent` and `schedule command` take `--notify-on always|failures|never`.** The value is kept as `notify` in
+  the schedule file and shown by `schedule list`. A schedule without it keeps working: an agent that repeats with
+  `--every` notifies on failures only, any other schedule as before. A schedule's `last.skipped` carries a dotted
+  `reason` next to `why`: `cost.day-cap`, `mail.none-new`, `mail.below-threshold`; `schedule run` answers with the same
+  `reason` when it skips.
+
 ### Changed — may break callers
 
+- **`answerEntity` refuses `deal`, `lead`, `pipeline` and `stage`**, now shared entities: a CLI that declared its own
+  under those names answers the shared shape instead.
 - **`store.deals.add`, `move` and `close` leave a CRM's copies alone.** Moving or closing a copy is refused
   (`deal.copy`): the CRM is where it changes. A stage or a pipeline named in `add` is looked up among the owner's own
   pipelines only, so a synced CRM stage never makes it ambiguous.
@@ -52,14 +86,6 @@ shape of this file.
   owner's do, as deals do since 0.588.0. `organization_add` and `organization_rename` rows already stored stay listed
   and decidable through the `organization` review kind, and `ORGANIZATION_ADD_KIND` and `ORGANIZATION_RENAME_KIND`
   stay exported.
-
-### Added
-
-- **`schedule agent` and `schedule command` take `--notify-on always|failures|never`.** The value is kept as `notify` in
-  the schedule file and shown by `schedule list`. A schedule without it keeps working: an agent that repeats with
-  `--every` notifies on failures only, any other schedule as before. A schedule's `last.skipped` carries a dotted
-  `reason` next to `why`: `cost.day-cap`, `mail.none-new`, `mail.below-threshold`; `schedule run` answers with the same
-  `reason` when it skips.
 
 ## 0.589.0 — 06.11.2026
 
