@@ -39,7 +39,7 @@ shape of this file.
   a wildcard or NOT skips `crm` with its reason. `--source` and a profile lock narrow it to the accounts named.
   `crm` joins the default `RESOURCES_SEARCHED`; tg, max, wa and the calendar CLIs pass their own lists and are unchanged.
 - **`store.crm` writes a CRM account's copies.** `savePipelines` and `saveItems` upsert pipelines, stages, deals and
-  leads by the CRM's ids, with no review (NEED-2271 A): status follows the stage's outcome, money keeps its minor
+  leads by the CRM's ids, with no review: status follows the stage's outcome, money keeps its minor
   units, the people on an item are `links` with their role, and the stage history counts from the CRM's own times.
   `savePeople` stores contacts as identities through `savePeople`, joined to a person by exact email only, their ids
   kept apart per account (`crmIdentityId`, `<account>/<id>`). `saveOrganizations` keeps each company as a source record
