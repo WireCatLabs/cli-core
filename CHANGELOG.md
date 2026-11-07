@@ -17,6 +17,13 @@ shape of this file.
   `ended`. The kinds, their ends and roles are one registry, `RELATIONS` (`src/domain/relations.ts`), exported with
   `ORGANIZATION_ROLES`, `PROJECT_ROLES`, `standingOf` and `usableLink`.
 
+- **Relationship links know the account that reported them, when they held, and their history (store version 56).**
+  `links` gains `account_id`, `starts_at`, `ends_at` and `deleted_at`; `link_revisions` keeps one row per change of a
+  relationship link (`added`, `changed`, `ended`, `confirmed`, `withdrawn`, `restored`, `removed`), written by
+  triggers, never for a change of `updated_at` alone and never for links of other kinds. A unique key on relationship
+  links (kind, ends, anchor, role, account) lets one pair hold several roles and keeps a CRM's claim apart from the owner's;
+  the migration folds duplicates, keeping the owner's row. Forward-only; `minCompatible` stays 34.
+
 ### Changed — may break callers
 
 - **A person's role on an organization, a project, a deal or a lead must be one of that relationship's roles.**
@@ -137,6 +144,10 @@ shape of this file.
   keyed command.
 
 ### Fixed
+
+- **A CRM's deal and lead people are the CRM's report, not the owner's word.** They were stored confirmed, as if the
+  owner had said so; store version 56 marks them unconfirmed with the CRM account, and `standing` answers `reported`.
+  They still count wherever confirmed relationships count (`usableLink`), and a deal still lists them.
 
 - **`search all` in a CRM or calendar CLI without `models` no longer names a download command it lacks.** Its notes
   hint said `b24 models download e5-small`; a CLI with no `models download` now names the tools that have it (tg, max

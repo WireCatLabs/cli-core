@@ -618,6 +618,8 @@ export const pollVotes = sqliteTable(
   ],
 )
 
+export { linkRevisions } from "./schema/link-revisions.js"
+
 /**
  * One row per field a chat changed, written by a trigger on `chats` in the changing statement's transaction. No foreign
  * keys: an older build purges chats without knowing this table, and a trigger drops a purged chat's rows instead.
@@ -2251,34 +2253,7 @@ export const canonicalAutoTagClaims = sqliteTable(
   ],
 )
 
-export const links = sqliteTable(
-  "links",
-  {
-    id: integer("id").primaryKey(),
-    fromType: text("from_type").notNull(),
-    fromId: integer("from_id").notNull(),
-    toType: text("to_type"),
-    toId: integer("to_id"),
-    kind: text("kind").notNull(),
-    anchor: text("anchor"),
-    source: text("source").notNull(),
-    targetText: text("target_text"),
-    targetFolded: text("target_folded"),
-    role: text("role"),
-    evidence: text("evidence"),
-    metadata: text("metadata"),
-    confirmed: integer("confirmed").notNull().default(1),
-    createdAt: integer("created_at").notNull(),
-    author: text("author"),
-    updatedAt: integer("updated_at").notNull(),
-    purpose: text("purpose"),
-  },
-  (table) => [
-    index("links_unresolved").on(table.targetFolded).where(sql`to_id IS NULL`),
-    index("links_by_from_type_from_id").on(table.fromType, table.fromId),
-    index("links_by_to_type_to_id").on(table.toType, table.toId),
-  ],
-)
+export { links } from "./schema/links.js"
 
 /**
  * Every run of `search messages` and `stats messages show`, with the parameters as the caller gave them — never

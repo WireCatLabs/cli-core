@@ -49,7 +49,10 @@ says which roles it takes:
 
 A job title is never a role. Inverses are never stored. Every relationship read carries a derived `standing`:
 `confirmed` (the owner's), `reported` (a source account's that nobody confirmed), `proposed` (a suggestion waiting
-for review) or `ended`. Readers that count relationships (`personPreparation`, `projectStatus`, the stored project
+for review) or `ended` (`ends_at` passed, or the source stopped reporting it: `deleted_at`). Store version 56 gives a
+relationship link the account that reported it (`account_id`), when it held (`starts_at`, `ends_at`) and a history,
+`link_revisions`, written by triggers. One pair may hold several roles: the key is kind, ends, anchor, role and account, so a
+CRM's claim never replaces the owner's, and `relate` without a role answers the pair's link that is there. Readers that count relationships (`personPreparation`, `projectStatus`, the stored project
 gathering) take the usable ones, confirmed or reported, through `usableLink`. Who works on a task is
 `store.tasks.assign` (`task_assignments`: assignee, reviewer or watcher), not a link; store version 2 copied
 the old `assigned-to` links there. A relationship is a confirmed owner statement or an explicitly

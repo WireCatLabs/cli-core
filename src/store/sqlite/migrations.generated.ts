@@ -1060,5 +1060,33 @@ export const GENERATED: { name: string; statements: string[] }[] = [
     "statements": [
       "CREATE INDEX `decision_requests_by_channel_bot_profile_chat_id_message_id` ON `decision_requests` (`channel`,`bot_profile`,`chat_id`,`message_id`);"
     ]
+  },
+  {
+    "name": "20261107162427_version-56-relationship-links",
+    "statements": [
+      "CREATE TABLE `link_revisions` (\n\t`id` integer PRIMARY KEY,\n\t`link_id` integer NOT NULL,\n\t`change` text NOT NULL,\n\t`before` text,\n\t`after` text,\n\t`author` text,\n\t`account_id` integer,\n\t`created_at` integer NOT NULL\n);",
+      "ALTER TABLE `links` ADD `account_id` integer;",
+      "ALTER TABLE `links` ADD `starts_at` integer;",
+      "ALTER TABLE `links` ADD `ends_at` integer;",
+      "ALTER TABLE `links` ADD `deleted_at` integer;",
+      "CREATE INDEX `link_revisions_by_link_id_created_at` ON `link_revisions` (`link_id`,`created_at`);"
+    ]
+  },
+  {
+    "name": "20261107162448_version-56-relationship-links-history",
+    "statements": [
+      "-- A CRM's deal and lead people were stored as the owner's (confirmed = 1): they are the CRM account's report.\nUPDATE links SET confirmed = 0, account_id = (SELECT d.account_id FROM deals d WHERE d.id = links.from_id)\n  WHERE source = 'crm' AND kind = 'related-to' AND from_type = 'deal';",
+      "UPDATE links SET confirmed = 0, account_id = (SELECT l.account_id FROM leads l WHERE l.id = links.from_id)\n  WHERE source = 'crm' AND kind = 'related-to' AND from_type = 'lead';",
+      "-- The unique key below needs one row per relationship; of duplicates the owner's row stays, then the oldest.\nDELETE FROM links WHERE id IN (\n  SELECT id FROM (\n    SELECT id, row_number() OVER (\n      PARTITION BY kind, from_type, from_id, to_type, to_id, ifnull(anchor, ''), ifnull(role, ''), ifnull(account_id, 0)\n      ORDER BY confirmed DESC, id\n    ) AS n\n    FROM links WHERE kind IN ('member-of', 'related-to', 'reports-to', 'customer-of', 'partner-of') AND to_id IS NOT NULL\n  ) WHERE n > 1\n);",
+      "CREATE TRIGGER link_revisions_ai AFTER INSERT ON links\n  WHEN new.kind IN ('member-of', 'related-to', 'reports-to', 'customer-of', 'partner-of') AND new.to_id IS NOT NULL BEGIN\n  INSERT INTO link_revisions (link_id, change, before, after, author, account_id, created_at)\n  VALUES (new.id, 'added', NULL,\n    json_object('role', new.role, 'confirmed', new.confirmed, 'account_id', new.account_id, 'starts_at', new.starts_at,\n      'ends_at', new.ends_at, 'deleted_at', new.deleted_at),\n    new.author, new.account_id, new.updated_at);\nEND;",
+      "-- Only a change a reader sees: a sync that touches `updated_at` alone writes no revision.\nCREATE TRIGGER link_revisions_au AFTER UPDATE OF role, confirmed, account_id, starts_at, ends_at, deleted_at ON links\n  WHEN new.kind IN ('member-of', 'related-to', 'reports-to', 'customer-of', 'partner-of') AND new.to_id IS NOT NULL\n    AND (old.role IS NOT new.role OR old.confirmed IS NOT new.confirmed OR old.account_id IS NOT new.account_id\n      OR old.starts_at IS NOT new.starts_at OR old.ends_at IS NOT new.ends_at OR old.deleted_at IS NOT new.deleted_at) BEGIN\n  INSERT INTO link_revisions (link_id, change, before, after, author, account_id, created_at)\n  VALUES (new.id,\n    CASE\n      WHEN old.deleted_at IS NULL AND new.deleted_at IS NOT NULL THEN 'withdrawn'\n      WHEN old.deleted_at IS NOT NULL AND new.deleted_at IS NULL THEN 'restored'\n      WHEN old.confirmed = 0 AND new.confirmed = 1 THEN 'confirmed'\n      WHEN old.ends_at IS NULL AND new.ends_at IS NOT NULL THEN 'ended'\n      ELSE 'changed'\n    END,\n    json_object('role', old.role, 'confirmed', old.confirmed, 'account_id', old.account_id, 'starts_at', old.starts_at,\n      'ends_at', old.ends_at, 'deleted_at', old.deleted_at),\n    json_object('role', new.role, 'confirmed', new.confirmed, 'account_id', new.account_id, 'starts_at', new.starts_at,\n      'ends_at', new.ends_at, 'deleted_at', new.deleted_at),\n    new.author, new.account_id, new.updated_at);\nEND;",
+      "CREATE TRIGGER link_revisions_ad AFTER DELETE ON links\n  WHEN old.kind IN ('member-of', 'related-to', 'reports-to', 'customer-of', 'partner-of') AND old.to_id IS NOT NULL BEGIN\n  INSERT INTO link_revisions (link_id, change, before, after, author, account_id, created_at)\n  VALUES (old.id, 'removed',\n    json_object('role', old.role, 'confirmed', old.confirmed, 'account_id', old.account_id, 'starts_at', old.starts_at,\n      'ends_at', old.ends_at, 'deleted_at', old.deleted_at),\n    NULL, old.author, old.account_id, CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER));\nEND;"
+    ]
+  },
+  {
+    "name": "20261107163245_version-56-relationship-links-key",
+    "statements": [
+      "CREATE UNIQUE INDEX `links_relationship_key` ON `links` (`kind`,`from_type`,`from_id`,`to_type`,`to_id`,ifnull(\"anchor\", ''),ifnull(\"role\", ''),ifnull(\"account_id\", 0)) WHERE kind IN ('member-of', 'related-to', 'reports-to', 'customer-of', 'partner-of') AND to_id IS NOT NULL;"
+    ]
   }
 ]
