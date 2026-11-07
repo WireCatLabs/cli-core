@@ -269,6 +269,7 @@ export {
   type BaseEnvironment,
   baseContext,
   environmentOf,
+  inCommandRun,
   outputFor,
   provide,
   runBudgetOf,

@@ -34,6 +34,11 @@ export interface MeetingCommandDeps {
   importHelp?: string
   writeFile?: (path: string, content: string) => Promise<void>
   write: (value: unknown, format: "json" | "jsonl" | "text") => void
+  /**
+   * Runs a command that reaches the account inside cli-core's run, so it is recorded and ended by `--timeout`:
+   * `inCommandRun` from `@wirecat/cli-core/cli`. Required, since this module cannot reach the run itself.
+   */
+  inRun: <T>(command: Command, body: () => Promise<T>) => Promise<T>
   now?: () => number
 }
 const integer = (text: string) => {
@@ -173,15 +178,18 @@ const addMeetingCommandsDefinition = (program: Command, deps: MeetingCommandDeps
     .option("--since-time <time>", "fetch meetings starting at or after this ISO 8601 date or time", date)
     .option("--lookback-days <days>", "revisit recent occurrences for late transcripts (0–31)", lookbackDays, 0)
     .action(async (opts: { sinceTime?: number; lookbackDays: number }, command: Command) => {
-      if (!deps.source) throw new MeetingError("configuration_error", "meeting source is unavailable")
-      print(
-        await pull(deps.source, deps.store, {
-          accountId: deps.accountId,
-          since: opts.sinceTime === undefined ? undefined : new Date(opts.sinceTime).toISOString(),
-          now: deps.now?.(),
-          lookbackMs: opts.lookbackDays * 86400000,
-        }),
-        command,
+      const source = deps.source
+      if (!source) throw new MeetingError("configuration_error", "meeting source is unavailable")
+      await deps.inRun(command, async () =>
+        print(
+          await pull(source, deps.store, {
+            accountId: deps.accountId,
+            since: opts.sinceTime === undefined ? undefined : new Date(opts.sinceTime).toISOString(),
+            now: deps.now?.(),
+            lookbackMs: opts.lookbackDays * 86400000,
+          }),
+          command,
+        ),
       )
     })
   const importCommand = annotate(group.command("import"), {

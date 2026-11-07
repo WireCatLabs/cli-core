@@ -322,6 +322,9 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
     commandSignal: control.signal,
     trackCloseable: control.trackCloseable,
     app: definition.app,
+    // `settingsFor`'s, which every CLI passes; the definition's type is looser only so a test can stub it.
+    resolveSettings: (definition.configuration ?? settingsFor(definition.app))
+      .resolveSettings as BaseEnvironment["resolveSettings"],
     ...(definition.rows ? { rows: definition.rows } : {}),
     platform: options.platform ?? process.platform,
     exit,
