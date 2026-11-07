@@ -196,7 +196,8 @@ shape of this file.
   `deals.stages(ref)` lists every stage a deal or lead entered; `deals.setProject(ref, { project, by })` sets its
   project, on a CRM copy too: the project is the store's own field, which the CRM sync never writes.
   `knowledge.ownOrganizations()` lists the owner's companies, his own mark first, else the CRM's;
-  `orders.list({ supplier })`; `knowledge.organizations(query, { category, accounts })` keeps one category's, chosen
+  `orders.list({ supplier })`; `deals.list({ accounts })` (copies from those CRM accounts, the owner's own always);
+  `knowledge.organizations(query, { category, accounts })` keeps one category's, chosen
   in SQL. A context's `coverage` names each CRM account's sync gaps (`crmGapsOf`) and each kind the profile denies
   (`deniedKinds`: no deal or lead row, title or count is answered). A relationship (`knowledge.relations`) answers
   the `account` that reported it and how a source `derived` it.

@@ -4,7 +4,8 @@ import { join } from "node:path"
 import * as v from "valibot"
 import { afterEach, describe, expect, it } from "vitest"
 import { snakeKeys } from "../cli/envelope.js"
-import { ACME_NOW, ACME_OPENED, ACME_TELEGRAM, acmeScenario } from "../crm/testing/index.js"
+import { syncCrm } from "../crm/index.js"
+import { ACME_NOW, ACME_OPENED, ACME_PORTAL, ACME_TELEGRAM, acmeScenario, fakeCrmSource } from "../crm/testing/index.js"
 import { kindIn } from "../domain/providers.js"
 import { ENTITIES } from "../entities/index.js"
 import { type MessageStore, openStore } from "../store/store.js"
@@ -222,6 +223,23 @@ describe("categories", () => {
     ])
     expect((await canonicalPersonContext(store, refs.alice)).business.categories).toEqual(["client", "supplier"])
   })
+})
+
+it("lists full pages of deals from the accounts given, with the owner's own, in SQL", async () => {
+  const { store } = await scenario()
+  const other = { provider: "example-crm", account: "elsewhere.example" }
+  const crm = fakeCrmSource()
+  for (const id of ["e1", "e2", "e3"])
+    crm.put("deal", { externalId: id, title: `Elsewhere ${id}`, pipeline: "deal-1", stage: "new" })
+  await syncCrm(crm, store, other, { rescan: true, now: ACME_NOW })
+  await store.deals.addPipeline({ name: "Own sales", stages: ["Talk"], by: "owner" })
+  await store.deals.add({ by: "owner", title: "Own deal", stage: "Talk" })
+
+  const page = (offset: number) =>
+    store.deals.list({ accounts: [ACME_PORTAL], limit: 1, offset }).then((rows) => rows.map((one) => one.title))
+
+  expect([...(await page(0)), ...(await page(1)), ...(await page(2))]).toEqual(["Own deal", "Acme renewal"])
+  expect(await store.deals.list({ accounts: [other] })).toHaveLength(4)
 })
 
 describe("deny levels", () => {

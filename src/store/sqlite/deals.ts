@@ -149,6 +149,8 @@ export interface DealFilter {
   kind?: DealKind
   /** Only the owner's own, or only one CRM account's copies. */
   account?: DealScope
+  /** Copies only from these CRM accounts; the owner's and agents' own always, as `listRelations` keeps theirs. */
+  accounts?: AccountKey[]
   status?: DealStatus
   /** A stage's name, in any letter case. */
   stage?: string
@@ -684,12 +686,17 @@ export const dealOperationsOver = (context: StoreContext) => {
       const provider = scope === undefined || scope === "own" ? null : scope.provider
       const account = scope === undefined || scope === "own" ? null : scope.account
       const limit = limitOf(filter.limit)
+      const keys = filter.accounts?.map((one) => `${one.provider}:${one.account}`)
+      const inAccounts =
+        keys === undefined
+          ? ""
+          : `AND (d.account_id IS NULL OR a.provider || ':' || a.external_id IN (${keys.map(() => "?").join(", ") || "NULL"})) `
       return database
         .prepare(
           `${itemsSql(kind)} WHERE d.deleted_at IS NULL AND (? IS NULL OR d.status = ?) ` +
             "AND (? IS NULL OR d.project_id = ?) AND (? IS NULL OR s.name_folded = ?) AND (? IS NULL OR p.id = ?) " +
             "AND (? IS NULL OR d.organization_id = ?) AND (? = 0 OR d.account_id IS NULL) " +
-            `AND (? IS NULL OR (a.provider = ? AND a.external_id = ?)) AND ${by.sql} ` +
+            `AND (? IS NULL OR (a.provider = ? AND a.external_id = ?)) ${inAccounts}AND ${by.sql} ` +
             "ORDER BY d.created_at DESC, d.id DESC LIMIT ? OFFSET ?",
         )
         .all(
@@ -707,6 +714,7 @@ export const dealOperationsOver = (context: StoreContext) => {
           provider,
           provider,
           account,
+          ...(keys ?? []),
           ...by.params,
           limit,
           Math.max(0, Math.trunc(filter.offset ?? 0)),

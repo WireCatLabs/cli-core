@@ -169,9 +169,15 @@ export const organizationContext = async (
   const deals: Deal[] = []
   let dealsFull = false
   for (const kind of DEAL_KINDS.filter((one) => !scope.denied.has(one))) {
-    const found = await store.deals.list({ kind, organization: ref, status: "open", limit: STORE_PAGE })
+    const found = await store.deals.list({
+      kind,
+      organization: ref,
+      status: "open",
+      limit: STORE_PAGE,
+      ...(accounts === undefined ? {} : { accounts }),
+    })
     dealsFull ||= found.length >= STORE_PAGE
-    for (const deal of found) if (scope.has(deal.account)) deals.push(deal)
+    for (const deal of found) deals.push(deal)
   }
   const catalog = new Map((await store.knowledge.projects()).map((project) => [project.ref, project]))
   const projects = new Map<string, ProjectLine>()
