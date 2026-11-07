@@ -116,7 +116,7 @@ import { messageLink } from "./message-link.js"
 import { evidencePacket, messageLinks, messageTranscript } from "./message-read.js"
 import { messageDownload, messageSync } from "./message-transfer.js"
 import { messageSend, messageWrite } from "./message-write.js"
-import { model } from "./model.js"
+import { chosenModel, model } from "./model.js"
 import { modelKey, removedModelKey, storedModelKey } from "./model-key.js"
 import { note } from "./note.js"
 import { officialStats } from "./official-stats.js"
@@ -629,6 +629,7 @@ export const ENTITIES = {
   chat_folder_order: chatFolderOrder,
   chat_rules: chatRules,
   chat_moderation: chatModeration,
+  "model.chosen": chosenModel,
   model_key: modelKey,
   "model_key.stored": storedModelKey,
   "model_key.removed": removedModelKey,

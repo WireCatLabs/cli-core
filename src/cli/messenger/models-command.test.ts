@@ -191,7 +191,7 @@ describe("models text", () => {
     const { code, stdout } = await go()
 
     expect(code).toBe(0)
-    const { item } = v.parse(itemEnvelopeSchema(v.looseObject({})), JSON.parse(stdout[0] ?? ""))
+    const { item } = v.parse(itemEnvelopeSchema(ENTITIES["model.chosen"]), JSON.parse(stdout[0] ?? ""))
     expect(item).toMatchObject({ id: "e5-large", size: "large", dims: 1024, default: true, previous: "e5-small" })
     const listed = await go(["models", "list", "kind:text", "--json"])
     const { items } = v.parse(listEnvelopeSchema(modelEntity), JSON.parse(listed.stdout[0] ?? ""))

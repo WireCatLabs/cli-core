@@ -30,3 +30,13 @@ export const model = v.strictObject({
   /** The folder its files are in once downloaded, so an agent can place them by hand. */
   path: text,
 })
+
+/** `models set`: the model now in use, the one before it, and what the next syncs still embed with it. */
+export const chosenModel = v.strictObject({
+  ...model.entries,
+  previous: id,
+  /** Chunk texts the previous model has vectors for and this one has not; `null` when no store is there to count. */
+  to_embed: v.nullable(count),
+  /** Embedding time alone at the model's speed, done a part per sync; `null` when the speed or the count is unknown. */
+  estimate_seconds: v.nullable(count),
+})

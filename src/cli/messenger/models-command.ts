@@ -304,7 +304,7 @@ export const modelsCommand = (messenger: Messenger): Command => {
     })
   annotate(models.command("set"), {
     effects: LOCAL_WRITE,
-    output: { entity: "model" },
+    output: { entity: "model", view: "chosen" },
     examples: [`${tool} models set e5-large`],
   })
     .summary(SET_SUMMARY)
@@ -323,12 +323,15 @@ export const modelsCommand = (messenger: Messenger): Command => {
         renderAnswer(this, context, itemOf({ ...textModelItem(done.model, context.env), ...switchFields(done) }))
       })
     })
+  // A model added here is loaded by every CLI once chosen: an agent needs the owner's mcp.authority for it.
   reachesOtherService(
-    annotate(models.command("add"), {
-      effects: FETCH,
-      output: { entity: "model" },
-      examples: [addExample(tool)],
-    }),
+    grantsAuthority(
+      annotate(models.command("add"), {
+        effects: FETCH,
+        output: { entity: "model" },
+        examples: [addExample(tool)],
+      }),
+    ),
   )
     .description(ADD_DESCRIPTION)
     .argument("<id>", "the id to give it: a-z, 0-9, . _ -")
