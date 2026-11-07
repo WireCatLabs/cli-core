@@ -554,3 +554,26 @@ it("stops a source that pages its users itself as partial once the budget is spe
   expect(report.users).toBeUndefined()
   expect(await store.people.personOf({ provider: "email", id: "emma@northstar.example" })).toBeUndefined()
 })
+
+it("takes the owner's role change on a CRM contact as his own link beside the CRM's, with no churn", async () => {
+  const { path, store, sync, person } = await acme()
+  await sync()
+  const alice = await person("alice@acme.example")
+  const acmeRef = `organization:${(await store.knowledge.organizations()).find(({ name }) => name === "Acme Ltd")?.id}`
+  const [reported] = (await store.knowledge.relations(null, alice)).filter(({ to }) => to === acmeRef)
+  const owned = await store.knowledge.updateRelation(null, reported?.id as string, { role: "manager", by: "owner" })
+  expect(owned).toMatchObject({ role: "manager", standing: "confirmed" })
+  expect(owned.id).not.toBe(reported?.id)
+  await sync()
+  const before = await revisions(path)
+  await sync()
+  await sync()
+  expect(await revisions(path)).toBe(before)
+  const roles = (await store.knowledge.relations(null, alice))
+    .filter(({ to }) => to === acmeRef)
+    .map(({ role, standing }) => [role, standing])
+  expect(roles.sort()).toEqual([
+    ["contact", "reported"],
+    ["manager", "confirmed"],
+  ])
+})

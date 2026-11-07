@@ -70,6 +70,9 @@ shape of this file.
   confirmed, as if the owner had said so. They still count wherever confirmed relationships count (`usableLink`), and
   a deal still lists them; a view that reads `confirmed: false` as "proposed" (memo's relationships list) should read
   `standing` instead.
+- **The owner's change to a relationship a CRM reported is his own link.** `updateRelation`, `endRelation` and a
+  confirmed `relationship_update` on a reported link leave the CRM's row for its sync and write the owner's confirmed
+  link of the same pair and kind with the new values.
 - **`relate` with a role the pair does not hold yet makes a second relationship**, since one pair may hold several
   roles; without a role it answers the pair's link as before. `updateRelation` to a role the pair already holds is
   refused with `relationship.exists`.

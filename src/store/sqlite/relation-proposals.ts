@@ -147,6 +147,33 @@ export const relationProposalsOver = (context: StoreContext) => {
     return linkOf(database, database.prepare("SELECT * FROM links WHERE id = ?").get(Number(link.id)) as Row)
   }
   /**
+   * The owner's change. On a link a source reported, the source's row stays for its sync to diff, and the owner's own
+   * confirmed link of the same pair and kind takes the change: several roles per pair are allowed.
+   */
+  const ownerUpdate = (link: Link, input: RelationUpdate): Link => {
+    if (link.accountId === undefined || link.confirmed) return applyUpdate(link, input)
+    const changes = changesOf(input)
+    const pick = <K extends keyof RelationUpdate>(key: K, held: RelationUpdate[K]) =>
+      key in changes ? changes[key] : held
+    const role = pick("role", link.role)
+    const owned = insertLink(context, {
+      from: link.from,
+      to: String(link.to),
+      kind: link.kind,
+      origin: "owner",
+      by: "owner",
+      ...(role == null ? {} : { role }),
+    })
+    const { role: _, ...rest } = {
+      ...changes,
+      position: pick("position", link.position ?? null),
+      startsAt: pick("startsAt", link.startsAt ?? null),
+      endsAt: pick("endsAt", link.endsAt ?? null),
+      purpose: pick("purpose", link.purpose),
+    }
+    return applyUpdate(owned, rest)
+  }
+  /**
    * A scan's newer score on a pending proposal, in place under the same id. A rule's own row takes the new score,
    * signals, evidence and purpose; another proposer's row keeps its author, evidence and purpose and gains the signals.
    */
@@ -267,7 +294,7 @@ export const relationProposalsOver = (context: StoreContext) => {
 
     rejected: (link: Link, by: Decider, reason?: string): void => rejected(link, by, reason),
 
-    update: (link: Link, input: RelationUpdate): Link => write(database, () => applyUpdate(link, input)),
+    update: (link: Link, input: RelationUpdate): Link => write(database, () => ownerUpdate(link, input)),
 
     proposeUpdate: (link: Link, input: RelationUpdate & { reason?: string }, by: Exclude<Author, "owner">) => {
       const changes = changesOf(input)
@@ -317,7 +344,7 @@ export const relationProposalsOver = (context: StoreContext) => {
         const payload = proposal.payload as { relationship: string; changes: RelationUpdate }
         const row = database.prepare("SELECT * FROM links WHERE id = ?").get(Number(payload.relationship))
         if (!row) throw new CliError("not_found", `relationship ${payload.relationship} is gone`)
-        const link = applyUpdate(linkOf(database, row), payload.changes)
+        const link = ownerUpdate(linkOf(database, row), payload.changes)
         return {
           proposal: operations.approve(
             id,
