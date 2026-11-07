@@ -12,6 +12,9 @@ export interface Pressed {
   button: Button
 }
 
+/** Callback data of a button only a hand on the owner's own device may press, such as a review decision. */
+export const OWNER_HAND_ONLY_PREFIX = "wcr"
+
 const REFUSED: Partial<Record<Button["kind"], string>> = {
   contact: "it would hand your phone number to the bot",
   location: "it would hand your location to the bot",
@@ -56,11 +59,18 @@ export const guardedPress = async (
       "validation_error",
       `not pressed: "${button.text}" is a ${button.kind} button, which this CLI cannot press`,
     )
+  if (button.data?.startsWith(OWNER_HAND_ONLY_PREFIX))
+    throw new CliError(
+      "permission_error",
+      `not pressed: "${button.text}" decides something for the owner — press it by hand in the messenger`,
+      { reason: "press.owner-hand-only" },
+    )
   const operationId = newOperationId()
   await guardedWrite(guard, { operationId, chatId, kind: "reaction", messageId: message, key: "messages.press" }, () =>
     press(chatId, message, row, column),
   )
-  return { operationId, chatId, messageId: message, button }
+  const { data: _data, ...shown } = button
+  return { operationId, chatId, messageId: message, button: shown }
 }
 
 /** Starting a bot sends it a message — its start command — so it is guarded like one. */

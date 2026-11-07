@@ -47,7 +47,7 @@ const attachmentItem = (attachment: Attachment) =>
         phone: attachment.contact.phone,
         user_id: attachment.contact.userId,
       }),
-    buttons: attachment.buttons,
+    buttons: attachment.buttons?.map((row) => row.map(({ data: _data, ...button }) => button)),
   })
 
 const quotedItem = (quoted: QuotedMessage | null) =>

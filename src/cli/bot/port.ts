@@ -31,6 +31,12 @@ import type { BotTokenStore } from "./token.js"
  */
 export type BotChatRef = string
 
+/** An inline button that sends `data` back to the bot when pressed; Telegram allows 1 to 64 bytes of it. */
+export interface BotButton {
+  text: string
+  data: string
+}
+
 /** How one bot message goes. A bot send is never repeated — neither Bot API makes a repeat safe — so it has no send id. */
 export interface BotSendOptions {
   /** A message id in the same chat. */
@@ -42,6 +48,8 @@ export interface BotSendOptions {
   /** `text` is the messenger's HTML. */
   html?: boolean
   attachments?: Upload[]
+  /** Inline buttons under the message, row by row. */
+  buttons?: BotButton[][]
 }
 
 /** Sending, changing and deleting the bot's messages. */
@@ -51,7 +59,7 @@ export interface BotMessaging {
     chat: BotChatRef,
     messageId: Id,
     text: string,
-    options: { markup?: Markup[]; formatting?: TextSpan[]; html?: boolean },
+    options: { markup?: Markup[]; formatting?: TextSpan[]; html?: boolean; buttons?: BotButton[][] },
   ): Promise<Message>
   delete(chat: BotChatRef, messageIds: Id[]): Promise<void>
 }
