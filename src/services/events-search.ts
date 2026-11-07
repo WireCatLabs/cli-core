@@ -2,6 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import { kindIn } from "../domain/providers.js"
 import type { WarmEmbedders } from "../embeddings/embed.js"
 import { meaningFloor } from "../embeddings/models.js"
+import { plainQuery } from "../search/lucene/plain.js"
 import { questionLookup, questionText } from "../search/question-plan.js"
 import type { EventHit, NearestEvent } from "../store/index.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
@@ -169,6 +170,7 @@ export const searchEvents = async (
   }: EventsQuery = {},
 ): Promise<EventsFound> => {
   if (!query.trim()) throw new CliError("validation_error", "say what to find in the events")
+  query = plainQuery(query)
   const asked = discover && !exact && !newest ? questionLookup(query) : undefined
   const { root, stemmer } = await storeQuery(store, asked ?? query, {
     ...(exact ? { exact: true } : {}),
