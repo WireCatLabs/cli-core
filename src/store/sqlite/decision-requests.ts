@@ -29,6 +29,14 @@ export interface DecisionRequest extends DecisionMessage {
   expiresAt: number
 }
 
+/** Where and by whom the press came; every part must equal what the button was sent with. */
+export interface DecisionPress {
+  botProfile: string
+  chatId: string
+  messageId: string
+  ownerUserId: string
+}
+
 export type DecisionRefusal =
   | "decision.token-unknown"
   | "decision.token-used"
@@ -44,15 +52,14 @@ export interface DecisionRequestStore {
   /** One token per action, for one message; the tokens are returned once and kept only as digests. */
   create(input: DecisionRequestInput): { action: DecisionAction; token: string }[]
   /**
-   * Uses a token once and cancels the message's other open tokens in the same transaction. With `expect`, a token
-   * for another chat, message or owner is refused and stays open.
+   * Uses a token once and cancels the message's other open tokens in the same transaction. A token for another
+   * bot, chat, message or owner is refused as a mismatch before its state is looked at, and stays open.
    */
-  take(
-    token: string,
-    expect?: Partial<Pick<DecisionMessage, "chatId" | "messageId"> & { ownerUserId: string }>,
-  ): TakeResult
+  take(token: string, expect: DecisionPress): TakeResult
   /** Cancels every open token, of one bot when given; for turning the feature off. Returns how many. */
   cancelOpen(scope?: Partial<Pick<DecisionMessage, "channel" | "botProfile">>): number
+  /** Deletes rows that expired, were used or were cancelled more than 30 days before `at`; returns how many. */
+  prune(at?: number): number
   /** The open (unused, uncancelled, unexpired) buttons of a message, oldest first. */
   open(message: DecisionMessage): DecisionRequest[]
 }
@@ -89,6 +96,7 @@ const requestOf = (row: Row): DecisionRequest => ({
   expiresAt: row.expires_at,
 })
 
+const PRUNE_AFTER_MS = 30 * 24 * 60 * 60 * 1000
 const SAME_MESSAGE = "channel=? AND bot_profile=? AND chat_id=? AND message_id=?"
 const OPEN = "used_at IS NULL AND cancelled_at IS NULL"
 
@@ -152,7 +160,7 @@ export const decisionRequestStoreOver = ({ database, now }: StoreContext): Decis
       )
     },
 
-    take: (token, expect = {}) => {
+    take: (token, expect) => {
       if (!isDecisionToken(token)) return { ok: false, reason: "decision.token-unknown" }
       const digest = digestOf(token)
       return write(database, (): TakeResult => {
@@ -160,14 +168,16 @@ export const decisionRequestStoreOver = ({ database, now }: StoreContext): Decis
         const row = database.prepare("SELECT * FROM decision_requests WHERE token_digest=?").get(digest) as
           | Row
           | undefined
-        const reason = refusal(row, at)
-        if (reason || !row) return { ok: false, reason: reason ?? "decision.token-unknown" }
+        if (!row) return { ok: false, reason: "decision.token-unknown" }
         if (
-          (expect.chatId !== undefined && expect.chatId !== row.chat_id) ||
-          (expect.messageId !== undefined && expect.messageId !== row.message_id) ||
-          (expect.ownerUserId !== undefined && expect.ownerUserId !== row.owner_user_id)
+          expect.botProfile !== row.bot_profile ||
+          expect.chatId !== row.chat_id ||
+          expect.messageId !== row.message_id ||
+          expect.ownerUserId !== row.owner_user_id
         )
           return { ok: false, reason: "decision.token-mismatch" }
+        const reason = refusal(row, at)
+        if (reason) return { ok: false, reason }
         database.prepare("UPDATE decision_requests SET used_at=? WHERE id=?").run(at, row.id)
         const { changes } = database
           .prepare(`UPDATE decision_requests SET cancelled_at=? WHERE ${SAME_MESSAGE} AND id<>? AND ${OPEN}`)
@@ -194,6 +204,15 @@ export const decisionRequestStoreOver = ({ database, now }: StoreContext): Decis
         ),
       )
     },
+
+    prune: (at = now()) =>
+      write(database, () =>
+        Number(
+          database
+            .prepare(`DELETE FROM decision_requests WHERE expires_at < ?1 OR used_at < ?1 OR cancelled_at < ?1`)
+            .run(at - PRUNE_AFTER_MS).changes,
+        ),
+      ),
 
     open: (message) =>
       (

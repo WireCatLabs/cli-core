@@ -24,5 +24,6 @@ export const decisionRequestTables = [
       c("used_at", "integer", { note: "set once, by the press that took the token" }),
       c("cancelled_at", "integer", { note: "a sibling was used, or the owner turned the feature off" }),
     ],
+    keys: ["INDEX (channel, bot_profile, chat_id, message_id)"],
   },
 ]

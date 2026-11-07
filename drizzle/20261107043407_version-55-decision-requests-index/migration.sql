@@ -1,0 +1,1 @@
+CREATE INDEX `decision_requests_by_channel_bot_profile_chat_id_message_id` ON `decision_requests` (`channel`,`bot_profile`,`chat_id`,`message_id`);

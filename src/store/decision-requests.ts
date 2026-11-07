@@ -6,7 +6,7 @@ export const DECISION_TTL_MS = 72 * 60 * 60 * 1000
 
 export const CALLBACK_PREFIX = "wcr1:"
 
-// 16 random bytes in base64url are 22 characters, and the last one carries 4 bits: only these four can end a token.
+// 16 random bytes in base64url are 22 characters, and the last one carries 2 data bits: only these four can end a token.
 const TOKEN = /^[A-Za-z0-9_-]{21}[AQgw]$/
 const CALLBACK = /^wcr1:([A-Za-z0-9_-]{21}[AQgw])$/
 

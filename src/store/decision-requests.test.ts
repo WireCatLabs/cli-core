@@ -14,6 +14,7 @@ const keysOf = (store: MessageStore, input: Parameters<MessageStore["decisionReq
   >
 
 const MESSAGE = { channel: "telegram", botProfile: "review", chatId: "42", messageId: "7" }
+const PRESS = { botProfile: "review", chatId: "42", messageId: "7", ownerUserId: "42" }
 const BATCH = { ...MESSAGE, proposalId: "17080", batchDigest: "d1", ownerUserId: "42" }
 
 const open = async (now = () => 1_000_000) => {
@@ -71,15 +72,15 @@ describe("decision requests", () => {
     const { store } = await open()
     try {
       const { confirm, reject, later } = keysOf(store, { ...BATCH, actions: ["confirm", "reject", "later"] })
-      const taken = store.decisionRequests.take(confirm, { chatId: "42", messageId: "7", ownerUserId: "42" })
+      const taken = store.decisionRequests.take(confirm, PRESS)
       expect(taken).toMatchObject({
         ok: true,
         cancelled: 2,
         request: { action: "confirm", proposalId: "17080", batchDigest: "d1" },
       })
-      expect(store.decisionRequests.take(confirm)).toEqual({ ok: false, reason: "decision.token-used" })
-      expect(store.decisionRequests.take(reject)).toEqual({ ok: false, reason: "decision.token-cancelled" })
-      expect(store.decisionRequests.take(later)).toEqual({ ok: false, reason: "decision.token-cancelled" })
+      expect(store.decisionRequests.take(confirm, PRESS)).toEqual({ ok: false, reason: "decision.token-used" })
+      expect(store.decisionRequests.take(reject, PRESS)).toEqual({ ok: false, reason: "decision.token-cancelled" })
+      expect(store.decisionRequests.take(later, PRESS)).toEqual({ ok: false, reason: "decision.token-cancelled" })
       expect(store.decisionRequests.open(MESSAGE)).toEqual([])
     } finally {
       await store.close()
@@ -90,14 +91,48 @@ describe("decision requests", () => {
     const { store } = await open()
     try {
       const only = keysOf(store, { ...BATCH, actions: ["confirm"] })
-      expect(store.decisionRequests.take("A".repeat(22))).toEqual({ ok: false, reason: "decision.token-unknown" })
-      expect(store.decisionRequests.take("nope")).toEqual({ ok: false, reason: "decision.token-unknown" })
-      for (const expect_ of [{ ownerUserId: "43" }, { chatId: "43" }, { messageId: "8" }])
-        expect(store.decisionRequests.take(only.confirm, expect_)).toEqual({
+      expect(store.decisionRequests.take("A".repeat(22), PRESS)).toEqual({
+        ok: false,
+        reason: "decision.token-unknown",
+      })
+      expect(store.decisionRequests.take("nope", PRESS)).toEqual({ ok: false, reason: "decision.token-unknown" })
+      for (const wrong of [{ ownerUserId: "43" }, { chatId: "43" }, { messageId: "8" }, { botProfile: "other" }])
+        expect(store.decisionRequests.take(only.confirm, { ...PRESS, ...wrong })).toEqual({
           ok: false,
           reason: "decision.token-mismatch",
         })
-      expect(store.decisionRequests.take(only.confirm)).toMatchObject({ ok: true })
+      expect(store.decisionRequests.take(only.confirm, PRESS)).toMatchObject({ ok: true })
+    } finally {
+      await store.close()
+    }
+  })
+
+  it("checks the press before the token's state, so a wrong chat learns nothing", async () => {
+    const { store } = await open()
+    try {
+      const { confirm, later } = keysOf(store, { ...BATCH, actions: ["confirm", "later"] })
+      store.decisionRequests.take(confirm, PRESS)
+      const wrong = { ...PRESS, chatId: "43" }
+      expect(store.decisionRequests.take(confirm, wrong)).toEqual({ ok: false, reason: "decision.token-mismatch" })
+      expect(store.decisionRequests.take(later, wrong)).toEqual({ ok: false, reason: "decision.token-mismatch" })
+    } finally {
+      await store.close()
+    }
+  })
+
+  it("prunes rows 30 days after they expired, were used or were cancelled, and no earlier", async () => {
+    let at = 1_000_000
+    const { store } = await open(() => at)
+    try {
+      keysOf(store, { ...BATCH, actions: ["confirm", "later"] })
+      const day = 24 * 60 * 60 * 1000
+      at += DECISION_TTL_MS + 29 * day
+      expect(store.decisionRequests.prune()).toBe(0)
+      at += day + 1
+      keysOf(store, { ...BATCH, messageId: "9", actions: ["confirm"] })
+      expect(store.decisionRequests.prune()).toBe(2)
+      expect(store.decisionRequests.open({ ...MESSAGE, messageId: "9" })).toHaveLength(1)
+      expect(store.decisionRequests.prune()).toBe(0)
     } finally {
       await store.close()
     }
@@ -110,12 +145,15 @@ describe("decision requests", () => {
       const { confirm: early, later: late } = keysOf(store, { ...BATCH, actions: ["confirm", "later"] })
       at += DECISION_TTL_MS - 1
       expect(store.decisionRequests.open(MESSAGE)).toHaveLength(2)
-      expect(store.decisionRequests.take(early)).toMatchObject({ ok: true })
+      expect(store.decisionRequests.take(early, PRESS)).toMatchObject({ ok: true })
       at += 1
-      expect(store.decisionRequests.take(late)).toEqual({ ok: false, reason: "decision.token-cancelled" })
+      expect(store.decisionRequests.take(late, PRESS)).toEqual({ ok: false, reason: "decision.token-cancelled" })
       const { confirm: fresh } = keysOf(store, { ...BATCH, messageId: "9", actions: ["confirm"] })
       at += DECISION_TTL_MS
-      expect(store.decisionRequests.take(fresh)).toEqual({ ok: false, reason: "decision.token-expired" })
+      expect(store.decisionRequests.take(fresh, { ...PRESS, messageId: "9" })).toEqual({
+        ok: false,
+        reason: "decision.token-expired",
+      })
       expect(store.decisionRequests.open({ ...MESSAGE, messageId: "9" })).toEqual([])
     } finally {
       await store.close()
@@ -127,12 +165,18 @@ describe("decision requests", () => {
     try {
       const a = keysOf(store, { ...BATCH, actions: ["confirm", "reject"] })
       const b = keysOf(store, { ...BATCH, botProfile: "other", actions: ["later"] })
-      store.decisionRequests.take(a.confirm)
+      store.decisionRequests.take(a.confirm, PRESS)
       expect(store.decisionRequests.cancelOpen({ channel: "telegram", botProfile: "other" })).toBe(1)
-      expect(store.decisionRequests.take(b.later)).toEqual({ ok: false, reason: "decision.token-cancelled" })
+      expect(store.decisionRequests.take(b.later, { ...PRESS, botProfile: "other" })).toEqual({
+        ok: false,
+        reason: "decision.token-cancelled",
+      })
       const c = keysOf(store, { ...BATCH, messageId: "10", actions: ["confirm", "later"] })
       expect(store.decisionRequests.cancelOpen()).toBe(2)
-      expect(store.decisionRequests.take(c.later)).toEqual({ ok: false, reason: "decision.token-cancelled" })
+      expect(store.decisionRequests.take(c.later, { ...PRESS, messageId: "10" })).toEqual({
+        ok: false,
+        reason: "decision.token-cancelled",
+      })
       expect(store.decisionRequests.cancelOpen()).toBe(0)
     } finally {
       await store.close()
@@ -164,7 +208,7 @@ describe("store version 55", () => {
     const upgraded = await openStore({ path })
     try {
       const made = keysOf(upgraded, { ...BATCH, actions: ["confirm"] })
-      expect(upgraded.decisionRequests.take(made.confirm)).toMatchObject({ ok: true })
+      expect(upgraded.decisionRequests.take(made.confirm, PRESS)).toMatchObject({ ok: true })
     } finally {
       await upgraded.close()
     }

@@ -164,6 +164,7 @@ export type {
 } from "./sqlite/deals.js"
 export type {
   DecisionMessage,
+  DecisionPress,
   DecisionRefusal,
   DecisionRequest,
   DecisionRequestInput,

@@ -2116,6 +2116,8 @@ One button of a message that asks the owner to decide a batch. The button carrie
 | `used_at` | integer |  |  | set once, by the press that took the token |
 | `cancelled_at` | integer |  |  | a sibling was used, or the owner turned the feature off |
 
+*Keys and indexes:* `INDEX (channel, bot_profile, chat_id, message_id)`
+
 ## Source records
 
 What each import said, keyed by the source's own identity, under the entities made from it. An import never confirms money: an invoice or a payment it brings is a proposal.

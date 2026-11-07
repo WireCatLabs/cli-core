@@ -1054,5 +1054,11 @@ export const GENERATED: { name: string; statements: string[] }[] = [
     "statements": [
       "CREATE TABLE `decision_requests` (\n\t`id` integer PRIMARY KEY,\n\t`token_digest` text NOT NULL UNIQUE,\n\t`proposal_id` text NOT NULL,\n\t`action` text NOT NULL,\n\t`batch_digest` text NOT NULL,\n\t`channel` text NOT NULL,\n\t`bot_profile` text NOT NULL,\n\t`chat_id` text NOT NULL,\n\t`message_id` text NOT NULL,\n\t`owner_user_id` text NOT NULL,\n\t`created_at` integer NOT NULL,\n\t`expires_at` integer NOT NULL,\n\t`used_at` integer,\n\t`cancelled_at` integer\n);"
     ]
+  },
+  {
+    "name": "20261107043407_version-55-decision-requests-index",
+    "statements": [
+      "CREATE INDEX `decision_requests_by_channel_bot_profile_chat_id_message_id` ON `decision_requests` (`channel`,`bot_profile`,`chat_id`,`message_id`);"
+    ]
   }
 ]
