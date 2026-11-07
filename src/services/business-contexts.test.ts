@@ -110,6 +110,15 @@ describe("organization context", () => {
     expect(await refsOf("supplier")).toEqual([])
     expect(await refsOf("employer")).toEqual([refs.own])
   })
+
+  it("takes the owner's word that an organization is not his own over the CRM's flag", async () => {
+    const { store, sync, refs } = await scenario()
+    await store.knowledge.setOwnOrganization(refs.own, false)
+    await sync()
+
+    expect((await organizationContext(store, refs.acme)).categories).toEqual([])
+    expect((await organizationContext(store, refs.own)).organization.own).toBe(false)
+  })
 })
 
 describe("deal context", () => {
@@ -229,7 +238,8 @@ describe("canonical person context", () => {
       }),
     ])
     expect(emma.business.deals.items.map((one) => [one.ref, standings(one)])).toEqual([[refs.deal, ["owner:reported"]]])
-    expect(emma.coverage.notRead.map((one) => one.source)).toEqual(["messages"])
+    expect(emma.coverage.notRead.map((one) => one.source)).toEqual(["messages", "example-crm:northstar.example"])
+    expect(emma.coverage.notRead[1]?.reason).toMatch(/did not list departments: .*report/)
     expect(emma.events.recent.map((one) => one.ref)).toEqual([expect.stringMatching(/^event:/)])
   })
 
@@ -241,7 +251,11 @@ describe("canonical person context", () => {
 
     expect(found.person).toMatchObject({ name: "Dana", identities: [] })
     expect(found.business.organizations.items).toEqual([])
-    expect(found.coverage.notRead.map((one) => one.source)).toEqual(["messages", "mail"])
+    expect(found.coverage.notRead.map((one) => one.source)).toEqual([
+      "messages",
+      "mail",
+      "example-crm:northstar.example",
+    ])
     valid("person_context", found)
   })
 

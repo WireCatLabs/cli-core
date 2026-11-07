@@ -1,6 +1,7 @@
+import { crmGapsOf } from "../crm/index.js"
 import { CATEGORIES, type Category } from "../domain/categories.js"
 import { isUsable, type Standing } from "../domain/relations.js"
-import type { KnowledgeRelation, MessageStore } from "../store/index.js"
+import type { AccountKey, KnowledgeRelation, MessageStore } from "../store/index.js"
 
 /** Items a context section lists before it says `hasMore`. */
 export const SECTION_LIMIT = 20
@@ -52,6 +53,24 @@ export interface Coverage {
   /** `<provider>:<account>` of every account read. */
   accounts: string[]
   notRead: { source: string; reason: string }[]
+}
+
+/**
+ * `coverage` with what each CRM account in scope said its last sync could not read, such as reporting lines with no
+ * department scope: named, never filled in.
+ */
+export const withCrmGaps = async (
+  store: MessageStore,
+  coverage: Coverage,
+  accounts: AccountKey[] | undefined,
+): Promise<Coverage> => {
+  const keyOf = (key: AccountKey) => `${key.provider}:${key.account}`
+  const asked = accounts === undefined ? undefined : new Set(accounts.map(keyOf))
+  const notRead = [...coverage.notRead]
+  for (const key of await store.accounts.accounts())
+    if (asked === undefined || asked.has(keyOf(key)))
+      for (const gap of await crmGapsOf(store, key)) notRead.push({ source: keyOf(key), reason: gap.message })
+  return { ...coverage, notRead }
 }
 
 const roleOf = (relation: KnowledgeRelation): RelationRole => ({

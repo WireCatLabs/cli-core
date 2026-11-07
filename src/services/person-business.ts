@@ -12,6 +12,7 @@ import {
   SECTION_LIMIT,
   type Section,
   sectionOf,
+  withCrmGaps,
 } from "./business-context.js"
 import { calendarsOf, coverageOf, readsIn } from "./communications.js"
 import { type ContextOptions, type PersonContext, recordContext } from "./person-context.js"
@@ -142,6 +143,6 @@ export const canonicalPersonContext = async (
       ...(accounts === undefined ? {} : { calendarIds: inScope.map(({ id }) => id) }),
     })),
     business: await personBusiness(store, uid, limit),
-    coverage: coverageOf([record], read, left, inScope.length > 0),
+    coverage: await withCrmGaps(store, coverageOf([record], read, left, inScope.length > 0), accounts),
   }
 }

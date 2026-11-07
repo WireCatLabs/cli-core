@@ -15,6 +15,7 @@ import {
   SECTION_LIMIT,
   type Section,
   sectionOf,
+  withCrmGaps,
 } from "./business-context.js"
 import { type Communications, communicationsOf } from "./communications.js"
 import { type LinkedBy, type MoneySection, moneyOf, type OrderLine } from "./money-context.js"
@@ -217,6 +218,6 @@ export const organizationContext = async (
       limit,
       `tasks list organization:${organization.id}`,
     ),
-    coverage: talks.coverage,
+    coverage: await withCrmGaps(store, talks.coverage, accounts),
   }
 }

@@ -20,7 +20,8 @@ projects, money and communications — so memo, Desktop and MCP read the same th
 - **Read scope.** `accounts?: AccountKey[]`, the caller's `--source`/group already resolved. Left out, every
   account in the store is read; never one picked. `coverage.accounts` names each account read;
   `coverage.notRead` (`{ source, reason }`, as memo's) names each account outside the scope and each source the
-  person or people have nothing to read by: no messenger identity, no mail address, no calendar in scope. A gap is
+  person or people have nothing to read by: no messenger identity, no mail address, no calendar in scope; and each gap a CRM
+  account in scope recorded in its last sync (`crmGapsOf`), such as reporting lines with no department list. A gap is
   named, never filled.
 - **Communications.** One-to-one chats, mail with their address and calendar events they are invited to, in the
   accounts read; a group chat is not read, since what another member wrote there is not theirs. Each message, mail
@@ -72,7 +73,8 @@ reached, `linkedBy: ["project", "counterparty"]`, and appears once.
 Derived at read time from usable relationships, never stored (NEED-2377): `client` is `customer-of` an own
 organization, `supplier` one an own organization is `customer-of`, `partner` `partner-of` one, `employer` one the
 owner's person is `member-of` as `employee`, `contractor` or `founder`. Own organizations are
-`organizations.metadata.own`: set by a CRM's own-company flag or by the owner (`knowledge.setOwnOrganization`).
+`organizations.metadata.own`: the owner's mark (`knowledge.setOwnOrganization`, `own_by: "owner"`), which a sync
+never changes, else a CRM's own-company flag.
 
 ## Testing
 

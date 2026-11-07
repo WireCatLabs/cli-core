@@ -194,8 +194,9 @@ shape of this file.
 
 - **Stage history, a CRM deal's project, own organizations, orders by supplier.** `deals.stages(ref)` lists every
   stage a deal or lead entered; `deals.setProject(ref, { project, by })` sets its project, on a CRM copy too: the
-  project is the store's own field, which the CRM sync never writes. `knowledge.ownOrganizations()` and
-  `knowledge.setOwnOrganization(ref, own)` read and set the own-company mark; `orders.list({ supplier })`. A
+  project is the store's own field, which the CRM sync never writes. `knowledge.ownOrganizations()` lists the
+  owner's companies, his own mark first, else the CRM's; `orders.list({ supplier })`. A context's `coverage` names
+  each CRM account's sync gaps (`crmGapsOf`), such as reporting lines with no department list. A
   relationship (`knowledge.relations`) answers the `account` that reported it, its dates, and a source's `position`
   and `derived` when it has them.
 - **`models set <id>` chooses the local embedding model for every WireCat CLI**, kept in the shared settings file:
@@ -515,7 +516,7 @@ shape of this file.
 ### Changed — may break callers
 
 - `DealsStore` gains `stages` and `setProject`, and `OrganizationsStore` (so `KnowledgeStore`) gains
-  `ownOrganizations` and `setOwnOrganization`: a hand-written store or fake implementing them must add these.
+  `ownOrganizations`: a hand-written store or fake implementing them must add these.
 
 - **Store version 56 raises `minCompatible` to 56: a build from before it refuses the store and asks to be upgraded.**
   A build that knows no account on a link would write a CRM's people as the owner's again, or fail on the new unique
