@@ -263,6 +263,11 @@ const OTHERS: Entry[] = [
   validation("order.status", "a rejected or deleted order's status does not change"),
   ["model.not-downloaded", "not_found", "the model is not downloaded on this machine"],
   ["person.no-owner", "not_found", "no person is marked as the owner in the store"],
+  [
+    "identity.separated",
+    "conflict",
+    "the owner separated this identity from that person; only the owner links it again",
+  ],
   ["transcription.no-key", "authentication_error", "no OpenAI key is set for transcription"],
   validation("transcription.too-large", "the audio is over the transcription provider's size limit"),
   [

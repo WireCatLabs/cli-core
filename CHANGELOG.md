@@ -34,6 +34,15 @@ shape of this file.
 - **A filesystem error is no longer read as a SQLite one.** `errno` counts as SQLite's code only on bun:sqlite's
   `SQLiteError`: Windows' EIO (-4070) has SQLITE_NOTADB's low byte, and a busy check took a filesystem errno with
   BUSY's low byte for a lock.
+- **cli-core accepts cli-base 0.81 and 0.82** (peer range `>=0.80.7 <0.83.0`, developed against 0.82.0). memo moved to
+  cli-base 0.82.0, and the downstream parity check downgraded it to 0.80.7, whose option vocabulary lacks memo's
+  `--from-app` and `tasks --status`, so every cli-core pull request failed parity.
+- **People the owner separated stay apart.** An owner's unlink was checked only for the two identities being joined,
+  but a join moves whole people: a third identity with the same email address, linked to one of them, carried both
+  back together. Now no automatic join — the same email address, an account's own identity joining the owner — merges
+  two people when the owner once moved anyone of one away from anyone of the other. An agent's link of one identity
+  (a confirmed mention, a meeting participant) back over such a separation is refused with the reason
+  `identity.separated`; the owner's own link still goes through. The exact-email join stays automatic otherwise.
 
 ## 0.604.0 — 07.11.2026
 
