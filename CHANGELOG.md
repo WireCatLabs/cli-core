@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.598.0 — 07.11.2026
+
 ### Added
 
 - **`runScopeCases`** (`@wirecat/cli-core/testing`): cases that each remote command of a program runs inside
