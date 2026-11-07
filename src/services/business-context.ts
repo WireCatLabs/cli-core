@@ -5,12 +5,12 @@ import type { AccountKey, KnowledgeRelation, MessageStore } from "../store/index
 
 /** Items a context section lists before it says `hasMore`. */
 export const SECTION_LIMIT = 20
-/** `knowledge.relations` answers at most this many: a full page may hold more. */
-const RELATIONS_PAGE = 500
+/** What one store list answers at most: a read that fills it may hold more. */
+export const STORE_PAGE = 500
 
 /**
- * A bounded list: the first `limit`, how many there are, and the memo command that lists the rest (a command of
- * memo's relationship and list words, plan §4.6–4.7); `null` when nothing was left out.
+ * A bounded list: the first `limit`, how many there are, and the memo command that lists the rest; `null` when
+ * nothing was left out or no one command lists exactly the rest.
  */
 export interface Section<T> {
   items: T[]
@@ -19,17 +19,59 @@ export interface Section<T> {
   next: string | null
 }
 
-export const sectionOf = <T>(all: T[], limit: number, next: string, more = false): Section<T> => ({
-  items: all.slice(0, limit),
-  total: all.length,
-  hasMore: more || all.length > limit,
-  next: more || all.length > limit ? next : null,
-})
+export const sectionOf = <T>(
+  all: T[],
+  limit: number,
+  next: string | null,
+  { more = false, total = all.length, newest = false }: { more?: boolean; total?: number; newest?: boolean } = {},
+): Section<T> => {
+  const cut = more || total > limit || all.length > limit
+  return {
+    items: newest ? all.slice(Math.max(0, all.length - limit)) : all.slice(0, limit),
+    total,
+    hasMore: cut,
+    next: cut ? next : null,
+  }
+}
 
-/** One relationship, as seen from the entity a context is about. */
+export const keyOf = ({ provider, account }: AccountKey): string => `${provider}:${account}`
+
+/**
+ * The accounts a context reads, the caller's `--source` or group already resolved; every account when none is
+ * given. A row no account reported — the owner's, an agent's — is always in it. `left` collects every account whose
+ * rows were kept out, so `coverage` can say so.
+ */
+export interface Scope {
+  accounts: AccountKey[] | undefined
+  has(account: AccountKey | string | null | undefined): boolean
+  left: Set<string>
+}
+
+export const scopeOf = (accounts: AccountKey[] | undefined): Scope => {
+  const asked = accounts && new Set(accounts.map(keyOf))
+  const left = new Set<string>()
+  return {
+    accounts,
+    left,
+    has: (account) => {
+      if (account == null) return true
+      const key = typeof account === "string" ? account : keyOf(account)
+      if (asked === undefined || asked.has(key)) return true
+      left.add(key)
+      return false
+    },
+  }
+}
+
+export const notRejected = <T extends { review: string }>(rows: T[]): T[] =>
+  rows.filter((row) => row.review !== "rejected")
+
+/** One relationship, as seen from the entity a context is about: a link, or a proposal waiting for the owner. */
 export interface RelationRole {
-  /** `link:<id>`. */
-  link: string
+  /** `link:<id>`; absent for a proposal. */
+  link?: string
+  /** The pending `relationship` proposal's id, when it is one (`standing: proposed`). */
+  proposal?: string
   kind: KnowledgeRelation["kind"]
   role: string | null
   standing: Standing
@@ -55,22 +97,11 @@ export interface Coverage {
   notRead: { source: string; reason: string }[]
 }
 
-/**
- * `coverage` with what each CRM account in scope said its last sync could not read, such as reporting lines with no
- * department scope: named, never filled in.
- */
-export const withCrmGaps = async (
-  store: MessageStore,
-  coverage: Coverage,
-  accounts: AccountKey[] | undefined,
-): Promise<Coverage> => {
-  const keyOf = (key: AccountKey) => `${key.provider}:${key.account}`
-  const asked = accounts === undefined ? undefined : new Set(accounts.map(keyOf))
-  const notRead = [...coverage.notRead]
-  for (const key of await store.accounts.accounts())
-    if (asked === undefined || asked.has(keyOf(key)))
-      for (const gap of await crmGapsOf(store, key)) notRead.push({ source: keyOf(key), reason: gap.message })
-  return { ...coverage, notRead }
+/** A relationship's two ends and what it is, whether a link or a proposal. */
+export interface Edge {
+  from: string
+  to: string
+  role: RelationRole
 }
 
 const roleOf = (relation: KnowledgeRelation): RelationRole => ({
@@ -85,13 +116,41 @@ const roleOf = (relation: KnowledgeRelation): RelationRole => ({
   ...(relation.endsAt === undefined ? {} : { endsAt: relation.endsAt }),
 })
 
-/** Every relationship touching `ref`, both ways, with its standing; `full` when the store's page was full. */
-export const relationsOf = async (
+/**
+ * Every relationship touching `ref`, both ways, in scope: its links with their standing, and the `relationship`
+ * proposals waiting for the owner (plan §2.4). `full` when a store page was full and more may exist.
+ */
+export const edgesOf = async (
   store: MessageStore,
   ref: string,
-): Promise<{ relations: KnowledgeRelation[]; full: boolean }> => {
+  scope: Scope,
+): Promise<{ edges: Edge[]; full: boolean }> => {
   const relations = await store.knowledge.relations(null, ref)
-  return { relations, full: relations.length >= RELATIONS_PAGE }
+  const proposals = await store.proposedActions.list({
+    kinds: ["relationship"],
+    status: "proposed",
+    about: ref,
+    limit: STORE_PAGE,
+  })
+  const edges: Edge[] = relations
+    .filter((relation) => scope.has(relation.account))
+    .map((relation) => ({ from: relation.from, to: relation.to, role: roleOf(relation) }))
+  for (const proposal of proposals) {
+    const payload = proposal.payload as { from?: unknown; to?: unknown; kind?: unknown; role?: unknown }
+    if (typeof payload.from !== "string" || typeof payload.to !== "string" || typeof payload.kind !== "string") continue
+    if (!scope.has(proposal.account)) continue
+    edges.push({
+      from: payload.from,
+      to: payload.to,
+      role: {
+        proposal: proposal.id,
+        kind: payload.kind as KnowledgeRelation["kind"],
+        role: typeof payload.role === "string" ? payload.role : null,
+        standing: "proposed",
+      },
+    })
+  }
+  return { edges, full: relations.length >= STORE_PAGE || proposals.length >= STORE_PAGE }
 }
 
 /** A title for each ref, read in one batch. */
@@ -101,29 +160,32 @@ export const namesOf = async (store: MessageStore, refs: Iterable<string>): Prom
 }
 
 /**
- * The other ends of `relations` that `pick` keeps, each once with all its roles; one still usable sorts first, so
- * the current relationships lead and the ended ones follow.
+ * The other ends of `edges` that `pick` keeps, each once with all its roles: the usable ones first, then those
+ * waiting for the owner, then the ended ones.
  */
 export const grouped = (
-  relations: KnowledgeRelation[],
-  pick: (relation: KnowledgeRelation) => string | undefined,
+  edges: Edge[],
+  pick: (edge: Edge) => string | undefined,
   names: Map<string, string | null>,
 ): Related[] => {
   const byRef = new Map<string, Related>()
-  for (const relation of relations) {
-    const ref = pick(relation)
+  for (const edge of edges) {
+    const ref = pick(edge)
     if (ref === undefined) continue
     const held = byRef.get(ref) ?? { ref, name: names.get(ref) ?? null, roles: [] }
-    held.roles.push(roleOf(relation))
+    held.roles.push(edge.role)
     byRef.set(ref, held)
   }
-  const current = (one: Related) => (one.roles.some((role) => isUsable(role.standing)) ? 0 : 1)
-  return [...byRef.values()].sort((a, b) => current(a) - current(b))
+  const rank = (one: Related) =>
+    one.roles.some((role) => isUsable(role.standing))
+      ? 0
+      : one.roles.some((role) => role.standing === "proposed")
+        ? 1
+        : 2
+  return [...byRef.values()].sort((a, b) => rank(a) - rank(b))
 }
 
-/** The other end of a relationship, when `ref` is one end of it. */
-export const otherEnd = (relation: KnowledgeRelation, ref: string): string | undefined =>
-  relation.from === ref ? relation.to : relation.to === ref ? relation.from : undefined
+export const usable = (edge: Edge): boolean => isUsable(edge.role.standing)
 
 export { CATEGORIES, type Category }
 
@@ -131,36 +193,56 @@ export { CATEGORIES, type Category }
 const EMPLOYED = new Set(["employee", "contractor", "founder"])
 
 /**
- * Each organization's categories, derived from usable relationships and never stored (NEED-2377): `client` is
- * `customer-of` an own organization, `supplier` one an own organization is `customer-of`, `partner` `partner-of` one,
- * `employer` one the owner's person is `member-of` as employee, contractor or founder.
+ * Each organization's categories, derived from usable relationships in scope and never stored (NEED-2377): `client`
+ * is `customer-of` an own organization, `supplier` one an own organization is `customer-of`, `partner` `partner-of`
+ * one, `employer` one the owner's person is `member-of` as employee, contractor or founder. Read once per answer.
  */
-export const organizationCategories = async (store: MessageStore): Promise<Map<string, Category[]>> => {
+export const organizationCategories = async (store: MessageStore, scope: Scope): Promise<Map<string, Category[]>> => {
   const found = new Map<string, Set<Category>>()
   const add = (ref: string, category: Category) => found.set(ref, (found.get(ref) ?? new Set()).add(category))
   for (const own of await store.knowledge.ownOrganizations())
-    for (const relation of (await relationsOf(store, own.ref)).relations) {
-      if (!isUsable(relation.standing)) continue
-      const other = otherEnd(relation, own.ref)
+    for (const edge of (await edgesOf(store, own.ref, scope)).edges) {
+      if (!usable(edge)) continue
+      const other = edge.from === own.ref ? edge.to : edge.to === own.ref ? edge.from : undefined
       if (!other?.startsWith("organization:")) continue
-      if (relation.kind === "customer-of") add(other, relation.to === own.ref ? "client" : "supplier")
-      if (relation.kind === "partner-of") add(other, "partner")
+      if (edge.role.kind === "customer-of") add(other, edge.to === own.ref ? "client" : "supplier")
+      if (edge.role.kind === "partner-of") add(other, "partner")
     }
   const owner = await store.people.owner()
   if (owner)
-    for (const relation of (await relationsOf(store, `person:${owner.uid}`)).relations)
+    for (const edge of (await edgesOf(store, `person:${owner.uid}`, scope)).edges)
       if (
-        isUsable(relation.standing) &&
-        relation.kind === "member-of" &&
-        relation.to.startsWith("organization:") &&
-        EMPLOYED.has(relation.role ?? "")
+        usable(edge) &&
+        edge.role.kind === "member-of" &&
+        edge.to.startsWith("organization:") &&
+        EMPLOYED.has(edge.role.role ?? "")
       )
-        add(relation.to, "employer")
+        add(edge.to, "employer")
   return new Map([...found].map(([ref, categories]) => [ref, CATEGORIES.filter((one) => categories.has(one))]))
 }
 
 /** What `organizations list category:<c>` lists: the organizations of one category, as `organizations` has them. */
-export const organizationsInCategory = async (store: MessageStore, category: Category) => {
-  const categories = await organizationCategories(store)
+export const organizationsInCategory = async (store: MessageStore, category: Category, accounts?: AccountKey[]) => {
+  const categories = await organizationCategories(store, scopeOf(accounts))
   return (await store.knowledge.organizations()).filter((one) => categories.get(one.ref)?.includes(category))
 }
+
+/**
+ * The answer's `coverage`: what was read, each account kept out by the scope, and what each CRM account in scope
+ * said its last sync could not read, such as reporting lines with no department list. Named, never filled in.
+ */
+export const coverageFor = async (store: MessageStore, base: Coverage, scope: Scope): Promise<Coverage> => {
+  const read = new Set(base.accounts)
+  const notRead = [...base.notRead]
+  const named = new Set(notRead.map((one) => one.source))
+  for (const key of [...scope.left].sort())
+    if (!read.has(key) && !named.has(key)) notRead.push({ source: key, reason: "outside the accounts asked for" })
+  for (const key of await store.accounts.accounts())
+    if (scope.accounts === undefined || scope.accounts.some((one) => keyOf(one) === keyOf(key)))
+      for (const gap of await crmGapsOf(store, key)) notRead.push({ source: keyOf(key), reason: gap.message })
+  return { accounts: [...read].sort(), notRead }
+}
+
+/** Newest first; one with no date last, in a fixed order. */
+export const newestFirst = <T extends { at: string | null; ref: string }>(a: T, b: T): number =>
+  (b.at ?? "").localeCompare(a.at ?? "") || a.ref.localeCompare(b.ref)

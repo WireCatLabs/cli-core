@@ -10,23 +10,30 @@ projects, money and communications — so memo, Desktop and MCP read the same th
 ## What every answer shares
 
 - **Standing on each relationship.** A related entity (`Related`) appears once with all its `roles`; each role is
-  a `link:` ref, the kind, the role, its `standing` (`confirmed`, `reported`, `ended`, `proposed`), and, when the
+  a `link:` ref (or, for a `relationship` proposal waiting for the owner, its `proposal` id with `standing:
+  proposed`), the kind, the role, its `standing` (`confirmed`, `reported`, `ended`, `proposed`), and, when the
   link has them, the reporting `account`, the source's `position`, how it was `derived`, and its dates. The ones
   still usable sort first; ended ones stay listed after them. Read through `knowledge.relations`, so `standingOf`
   is the only rule.
-- **Bounded sections.** `{ items, total, hasMore, next }`: the first `limit` (20 by default). `next` names memo's
-  list command for the rest (`relationships list about:…`, `deals list …`): those words are memo's contract, not
-  cli-core's, and land with memo's commands.
+- **Bounded sections.** `{ items, total, hasMore, next }`: the first `limit` (20 by default), `total` the real
+  count. A read that fills the store's page (500) sets `hasMore`, and `money.complete` is `false` when a finance read
+  did. `next` is the one memo command that lists exactly the rest — `invoices list counterparty:"organization:3"`,
+  `tasks list project:ATLA` — and `null` when there is none (rows reached two ways, several projects, stages,
+  communications). The `relationships list about:…` words are memo's PR 8 contract.
 - **Read scope.** `accounts?: AccountKey[]`, the caller's `--source`/group already resolved. Left out, every
-  account in the store is read; never one picked. `coverage.accounts` names each account read;
+  account in the store is read; never one picked. The scope holds for every row a source account reported: a CRM's
+  relationships, its deals and leads (a deal context of a copy outside it is `not_found`, `deal.out-of-scope`) and
+  each account's messages, mail and events. A row no account reported — the owner's, an agent's, every invoice,
+  payment and order, which have no source account — is always in it. `coverage.accounts` names each account read;
   `coverage.notRead` (`{ source, reason }`, as memo's) names each account outside the scope and each source the
   person or people have nothing to read by: no messenger identity, no mail address, no calendar in scope; and each gap a CRM
   account in scope recorded in its last sync (`crmGapsOf`), such as reporting lines with no department list. A gap is
   named, never filled.
 - **Communications.** One-to-one chats, mail with their address and calendar events they are invited to, in the
   accounts read; a group chat is not read, since what another member wrote there is not theirs. Each message, mail
-  and event counts once however many of the people it involves. A recorded meeting counts through its calendar
-  event.
+  and event counts once however many of the people it involves. The owner is never one of the people read, even as a
+  participant or a member: through him every chat of his would count. A Zoom recording counts only through its
+  calendar event.
 
 ## Person — `canonicalPersonContext(store, "person:<uid>", options)`
 

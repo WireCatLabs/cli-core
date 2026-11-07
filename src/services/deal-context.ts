@@ -1,23 +1,26 @@
+import { CliError } from "@wirecat/cli-base"
 import { isUsable, type Standing } from "../domain/relations.js"
 import type { AccountKey, Deal, FinancePayment, Invoice, MessageStore, StageChange } from "../store/index.js"
 import {
   type Category,
   type Coverage,
+  coverageFor,
+  edgesOf,
   grouped,
   namesOf,
+  notRejected,
   organizationCategories,
   type Related,
-  relationsOf,
   SECTION_LIMIT,
   type Section,
+  STORE_PAGE,
+  scopeOf,
   sectionOf,
-  withCrmGaps,
 } from "./business-context.js"
 import { type Communications, communicationsOf, type Touch } from "./communications.js"
 import { type LinkedBy, type MoneySection, moneyOf } from "./money-context.js"
 import { openTasksOf, type TaskLine } from "./organization-context.js"
 
-const FINANCE_ROWS = 500
 const DAY = 86_400_000
 
 /** Met or written to within the deal's lifetime by one of its people: an overlap of people, not a link. */
@@ -26,7 +29,7 @@ export type DealTouch = Touch & { standing: Extract<Standing, "proposed"> }
 export interface DealContext {
   /** The row as stored: its status is the CRM's or the owner's, and a stage named won is not a payment. */
   deal: Deal
-  /** Every stage it entered, oldest first. */
+  /** The newest stages it entered, oldest of them first; `total` counts every one. */
   stages: Section<StageChange>
   organization: { ref: string; name: string | null; categories: Category[] } | null
   /** Its people, each once with every role and the standing of each. */
@@ -44,50 +47,74 @@ export interface DealContext {
 }
 
 export interface DealContextOptions {
-  /** The accounts its people's messages, mail and events are read in; left out, every account. */
+  /** The accounts read: a CRM's copy and relationships, and its people's messages, mail and events. */
   accounts?: AccountKey[]
   limit?: number
   /** ms: the end of an open deal's window; the clock when absent. */
   now?: number
 }
 
-const notRejected = <T extends { review: string }>(rows: T[]) => rows.filter((row) => row.review !== "rejected")
-
 /**
  * One answer about a deal or a lead from the store: the row, how it moved, its client, people, project, money and
- * what its people said within its lifetime. Nothing is inferred from a stage's name.
+ * what its people said within its lifetime. Nothing is inferred from a stage's name. A CRM's copy outside
+ * `accounts` is not answered, and a CRM's relationships outside it are left out.
  */
 export const dealContext = async (
   store: MessageStore,
   reference: string,
   { accounts, limit = SECTION_LIMIT, now = Date.now() }: DealContextOptions = {},
 ): Promise<DealContext> => {
+  const scope = scopeOf(accounts)
   const deal = await store.deals.get(reference)
-  const { relations, full } = await relationsOf(store, deal.ref)
-  const people = relations.filter(
-    (relation) => relation.kind === "related-to" && relation.from === deal.ref && relation.to.startsWith("person:"),
+  if (!scope.has(deal.account))
+    throw new CliError("not_found", `${deal.ref} is a copy from an account outside the accounts asked for`, {
+      reason: "deal.out-of-scope",
+    })
+  const { edges, full } = await edgesOf(store, deal.ref, scope)
+  const people = edges.filter(
+    (edge) => edge.role.kind === "related-to" && edge.from === deal.ref && edge.to.startsWith("person:"),
   )
   const names = await namesOf(
     store,
     people.map(({ to }) => to),
   )
-  const participants = grouped(people, (relation) => relation.to, names)
+  const participants = grouped(people, (edge) => edge.to, names)
   const owner =
     participants.find((one) => one.roles.some((role) => role.role === "owner" && isUsable(role.standing))) ?? null
 
   const organization = deal.organization
+  const project =
+    deal.project === null ? undefined : (await store.knowledge.projects()).find((one) => one.ref === deal.project)
   const invoices: [Invoice, LinkedBy][] = []
   const payments: [FinancePayment, LinkedBy][] = []
-  for (const [way, filter] of [
-    ["project", deal.project === null ? null : { project: deal.project }],
-    ["counterparty", organization === null ? null : { counterparty: organization.ref }],
-  ] as const) {
-    if (filter === null) continue
-    for (const invoice of notRejected(await store.finance.invoices({ ...filter, limit: FINANCE_ROWS })))
-      invoices.push([invoice, way])
-    const party = "counterparty" in filter ? { party: filter.counterparty } : filter
-    for (const payment of notRejected(await store.finance.payments({ ...party, limit: FINANCE_ROWS })))
-      payments.push([payment, way])
+  let complete = true
+  const ways = [
+    ...(deal.project === null ? [] : [["project", { project: deal.project }, { project: deal.project }] as const]),
+    ...(organization === null
+      ? []
+      : [["counterparty", { counterparty: organization.ref }, { party: organization.ref }] as const]),
+  ]
+  for (const [way, invoiceFilter, paymentFilter] of ways) {
+    const invoiceRows = await store.finance.invoices({ ...invoiceFilter, limit: STORE_PAGE })
+    const paymentRows = await store.finance.payments({ ...paymentFilter, limit: STORE_PAGE })
+    complete &&= invoiceRows.length < STORE_PAGE && paymentRows.length < STORE_PAGE
+    for (const invoice of notRejected(invoiceRows)) invoices.push([invoice, way])
+    for (const payment of notRejected(paymentRows)) payments.push([payment, way])
+  }
+  const only = ways.length === 1 ? ways[0]?.[0] : undefined
+  const moneyNext = {
+    invoices:
+      only === "project" && project
+        ? `invoices list project:${project.key}`
+        : only === "counterparty" && organization
+          ? `invoices list counterparty:"${organization.ref}"`
+          : null,
+    payments:
+      only === "project" && project
+        ? `payments list project:${project.key}`
+        : only === "counterparty" && organization
+          ? `payments list party:"${organization.ref}"`
+          : null,
   }
 
   const since = Date.parse(deal.createdAt)
@@ -98,48 +125,39 @@ export const dealContext = async (
       const record = await store.people.personByUid(one.ref.slice("person:".length))
       if (record) records.push(record)
     }
-  const talks = await communicationsOf(store, records, {
-    ...(accounts === undefined ? {} : { accounts }),
-    since,
-    until,
-    limit,
-  })
+  const talks = await communicationsOf(store, records, scope, { since, until, limit })
+  const said = talks.counts.messages + talks.counts.mail + talks.counts.meetings
   const stages = await store.deals.stages(deal.ref)
-  const about = `about:${deal.ref}`
+  const tasks = await openTasksOf(store, project ? [{ ref: project.ref, key: project.key }] : [])
   return {
     deal,
-    stages: sectionOf(stages.slice(-limit), limit, `${deal.kind}s show ${deal.ref}`, stages.length > limit),
+    stages: sectionOf(stages, limit, null, { newest: true }),
     organization:
       organization === null
         ? null
         : {
             ref: organization.ref,
             name: organization.name,
-            categories: (await organizationCategories(store)).get(organization.ref) ?? [],
+            categories: (await organizationCategories(store, scope)).get(organization.ref) ?? [],
           },
-    participants: sectionOf(participants, limit, `relationships list ${about} kind:related-to`, full),
+    participants: sectionOf(participants, limit, `relationships list about:${deal.ref} kind:related-to`, {
+      more: full,
+    }),
     owner,
     project: deal.project === null ? null : { ref: deal.project, name: deal.projectName },
-    money: moneyOf({ invoices, payments }, limit, {
-      invoices: `invoices list --project ${deal.project ?? ""}`.trim(),
-      payments: `payments list --project ${deal.project ?? ""}`.trim(),
-    }),
+    money: moneyOf({ invoices, payments }, limit, moneyNext, complete),
     window: { since: new Date(since).toISOString(), until: new Date(until).toISOString() },
     communications: {
       ...sectionOf(
         talks.items.map((touch) => ({ ...touch, standing: "proposed" as const })),
         limit,
-        `context ${deal.ref}`,
-        talks.hasMore,
+        null,
+        { more: talks.hasMore, total: Math.max(said, talks.items.length) },
       ),
       counts: talks.counts,
     },
-    tasks: sectionOf(
-      await openTasksOf(store, deal.project === null ? [] : [deal.project]),
-      limit,
-      `tasks list ${deal.project ?? ""}`.trim(),
-    ),
-    coverage: await withCrmGaps(store, talks.coverage, accounts),
+    tasks: sectionOf(tasks.tasks, limit, tasks.next, { more: tasks.full }),
+    coverage: await coverageFor(store, talks.coverage, scope),
   }
 }
 
@@ -160,7 +178,7 @@ export interface DealBrief {
   project: string | null
   /** The newest stage changes, `from → to`. */
   stages: string[]
-  money: MoneySection["totals"] & { unconfirmed: number }
+  money: MoneySection["totals"] & { unconfirmed: number; complete: boolean }
   communications: Communications["counts"] & { standing: "proposed" }
   openTasks: number
   notRead: Coverage["notRead"]
@@ -193,12 +211,7 @@ export const dealBrief = (context: DealContext): DealBrief => ({
   people: context.participants.items.map((one) => ({ ref: one.ref, name: one.name, ...briefRoles(one) })),
   project: context.project?.name ?? context.project?.ref ?? null,
   stages: context.stages.items.slice(-BRIEF_STAGES).map((change) => `${change.from ?? "∅"} → ${change.to}`),
-  money: {
-    ...context.money.totals,
-    unconfirmed:
-      context.money.invoices.items.filter((one) => one.review !== "confirmed").length +
-      context.money.payments.items.filter((one) => one.review !== "confirmed").length,
-  },
+  money: { ...context.money.totals, unconfirmed: context.money.unconfirmed, complete: context.money.complete },
   communications: { ...context.communications.counts, standing: "proposed" },
   openTasks: context.tasks.total,
   notRead: context.coverage.notRead,

@@ -22,7 +22,10 @@ const section = <T extends v.GenericSchema>(item: T) =>
 
 /** One relationship from the entity asked about: a `link:` ref, its role and its standing. */
 const relationRole = v.strictObject({
-  link: reference,
+  /** `link:<id>`; absent for a proposal. */
+  link: v.optional(reference),
+  /** A `relationship` proposal waiting for the owner: its id, with `standing: proposed`. */
+  proposal: v.optional(text),
   kind: v.picklist(RELATION_KINDS),
   role: nullableText,
   /** `reported`: a CRM account says so and nobody confirmed it; `ended`: it no longer holds. */
@@ -95,6 +98,10 @@ const money = v.strictObject({
   ),
   /** Confirmed rows only, per status (payments: direction) and currency; nothing converted. */
   totals: v.strictObject({ invoices: v.array(financeTotal), payments: v.array(financeTotal) }),
+  /** Invoices and payments still proposed, of every row read. */
+  unconfirmed: count,
+  /** `false` when a read stopped at the store's page: the totals may leave rows out. */
+  complete: v.boolean(),
 })
 
 const taskLine = v.strictObject({
@@ -203,7 +210,7 @@ export const dealBrief: v.GenericSchema = v.strictObject({
   people: v.array(v.strictObject({ ref: reference, name: nullableText, roles: v.array(text), standing })),
   project: nullableText,
   stages: v.array(text),
-  money: v.strictObject({ ...money.entries.totals.entries, unconfirmed: count }),
+  money: v.strictObject({ ...money.entries.totals.entries, unconfirmed: count, complete: v.boolean() }),
   communications: v.strictObject({ ...counts, standing: v.literal("proposed") }),
   open_tasks: count,
   not_read: coverage.entries.not_read,

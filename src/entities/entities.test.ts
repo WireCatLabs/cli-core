@@ -196,6 +196,8 @@ const moneySample = {
   },
   payments: emptySection,
   totals: { invoices: [{ status: "issued", currency: "EUR", rows: 1, total: "10.00", open: "10.00" }], payments: [] },
+  unconfirmed: 0,
+  complete: true,
 }
 
 const samples: Record<EntityName, unknown> = {
@@ -369,7 +371,7 @@ const samples: Record<EntityName, unknown> = {
     people: [{ ref: "person:4", name: "Ana", roles: ["contact"], standing: "reported" }],
     project: null,
     stages: ["∅ → Quote"],
-    money: { invoices: [], payments: [], unconfirmed: 0 },
+    money: { invoices: [], payments: [], unconfirmed: 0, complete: true },
     communications: { messages: 0, mail: 0, meetings: 0, standing: "proposed" },
     open_tasks: 0,
     not_read: [],

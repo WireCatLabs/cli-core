@@ -26,6 +26,7 @@ import { PREFERRED_FILE, syncFile } from "./files.js"
 import { type ImportedDocuments, importedDocumentWhere } from "./imported-documents.js"
 import { LINK_KINDS, LINK_ORIGINS, type LINK_SOURCES, linkKind } from "./link-kinds.js"
 import { reviewLink } from "./link-reviews.js"
+import { sourceOf } from "./link-source.js"
 import { dateFileNotes } from "./note-dates.js"
 import { holdingText } from "./note-index.js"
 import type { NoteSearch } from "./note-search.js"
@@ -264,16 +265,7 @@ export const linkOf = (database: CacheDatabase, row: Row): Link => {
   const metadata =
     row.metadata == null
       ? {}
-      : (JSON.parse(String(row.metadata)) as {
-          provenance?: string
-          position?: unknown
-          overrides?: unknown
-          derived?: unknown
-        })
-  const reporter =
-    row.account_id == null
-      ? undefined
-      : database.prepare("SELECT provider, external_id FROM accounts WHERE id = ?").get(Number(row.account_id))
+      : (JSON.parse(String(row.metadata)) as { provenance?: string; position?: unknown; overrides?: unknown })
   return {
     id: String(row.id),
     from: thingRef(database, row.from_type, row.from_id) as string,
@@ -294,8 +286,7 @@ export const linkOf = (database: CacheDatabase, row: Row): Link => {
     ...(row.deleted_at == null ? {} : { deletedAt: Number(row.deleted_at) }),
     ...(typeof metadata.position === "string" ? { position: metadata.position } : {}),
     ...(typeof metadata.overrides === "number" ? { overrides: metadata.overrides } : {}),
-    ...(reporter ? { account: `${reporter.provider}:${reporter.external_id}` } : {}),
-    ...(typeof metadata.derived === "string" ? { derived: metadata.derived } : {}),
+    ...sourceOf(database, row, metadata),
   }
 }
 

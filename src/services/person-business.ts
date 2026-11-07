@@ -2,17 +2,23 @@ import { CliError } from "@wirecat/cli-base"
 import { isUsable } from "../domain/relations.js"
 import type { AccountKey, MessageStore, PersonRecord } from "../store/store.js"
 import {
+  CATEGORIES,
   type Category,
   type Coverage,
+  coverageFor,
+  type Edge,
+  edgesOf,
   grouped,
+  keyOf,
   namesOf,
   organizationCategories,
   type Related,
-  relationsOf,
+  type Scope,
   SECTION_LIMIT,
   type Section,
+  scopeOf,
   sectionOf,
-  withCrmGaps,
+  usable,
 } from "./business-context.js"
 import { calendarsOf, coverageOf, readsIn } from "./communications.js"
 import { type ContextOptions, type PersonContext, recordContext } from "./person-context.js"
@@ -27,7 +33,7 @@ export interface PersonBusiness {
   /** Deals and leads they are on, with their roles there. */
   deals: Section<Related>
   projects: Section<Related>
-  /** `client` when they are `customer-of` one of the owner's organizations. */
+  /** `client` when they are `customer-of` an own organization, and each category of an organization they belong to. */
   categories: Category[]
 }
 
@@ -48,70 +54,61 @@ export interface CanonicalContextOptions extends ContextOptions {
 export const personBusiness = async (
   store: MessageStore,
   uid: string,
-  limit = SECTION_LIMIT,
+  { limit = SECTION_LIMIT, scope = scopeOf(undefined) }: { limit?: number; scope?: Scope } = {},
 ): Promise<PersonBusiness> => {
   const ref = `person:${uid}`
-  const { relations, full } = await relationsOf(store, ref)
+  const { edges, full } = await edgesOf(store, ref, scope)
   const names = await namesOf(
     store,
-    relations.flatMap(({ from, to }) => [from, to]),
+    edges.flatMap(({ from, to }) => [from, to]),
   )
-  const outward = (kind: string, to: string) => (relation: (typeof relations)[number]) =>
-    relation.kind === kind && relation.from === ref && relation.to.startsWith(to) ? relation.to : undefined
-  const categories = await organizationCategories(store)
+  const outward = (kind: string, to: string) => (edge: Edge) =>
+    edge.role.kind === kind && edge.from === ref && edge.to.startsWith(to) ? edge.to : undefined
+  const categories = await organizationCategories(store, scope)
   const own = new Set((await store.knowledge.ownOrganizations()).map((one) => one.ref))
   const about = `about:${ref}`
+  const more = { more: full }
+  const organizations = grouped(edges, outward("member-of", "organization:"), names).map((one) => ({
+    ...one,
+    categories: categories.get(one.ref) ?? [],
+  }))
+  const held = new Set<Category>()
+  if (edges.some((edge) => usable(edge) && edge.role.kind === "customer-of" && edge.from === ref && own.has(edge.to)))
+    held.add("client")
+  for (const one of organizations)
+    if (one.roles.some((role) => isUsable(role.standing))) for (const category of one.categories) held.add(category)
   return {
-    organizations: sectionOf(
-      grouped(relations, outward("member-of", "organization:"), names).map((one) => ({
-        ...one,
-        categories: categories.get(one.ref) ?? [],
-      })),
-      limit,
-      `relationships list ${about} kind:member-of`,
-      full,
-    ),
+    organizations: sectionOf(organizations, limit, `relationships list ${about} kind:member-of`, more),
     reportsTo: sectionOf(
-      grouped(relations, outward("reports-to", "person:"), names),
+      grouped(edges, outward("reports-to", "person:"), names),
       limit,
       `relationships list from:${ref} kind:reports-to`,
-      full,
+      more,
     ),
     directReports: sectionOf(
-      grouped(
-        relations,
-        (relation) => (relation.kind === "reports-to" && relation.to === ref ? relation.from : undefined),
-        names,
-      ),
+      grouped(edges, (edge) => (edge.role.kind === "reports-to" && edge.to === ref ? edge.from : undefined), names),
       limit,
       `relationships list to:${ref} kind:reports-to`,
-      full,
+      more,
     ),
     deals: sectionOf(
       grouped(
-        relations,
-        (relation) =>
-          relation.kind === "related-to" && relation.to === ref && /^(deal|lead):/.test(relation.from)
-            ? relation.from
-            : undefined,
+        edges,
+        (edge) =>
+          edge.role.kind === "related-to" && edge.to === ref && /^(deal|lead):/.test(edge.from) ? edge.from : undefined,
         names,
       ),
       limit,
       `relationships list ${about} kind:related-to`,
-      full,
+      more,
     ),
     projects: sectionOf(
-      grouped(relations, outward("member-of", "project:"), names),
+      grouped(edges, outward("member-of", "project:"), names),
       limit,
       `relationships list ${about} kind:member-of`,
-      full,
+      more,
     ),
-    categories: relations.some(
-      (relation) =>
-        relation.kind === "customer-of" && relation.from === ref && own.has(relation.to) && isUsable(relation.standing),
-    )
-      ? ["client"]
-      : [],
+    categories: CATEGORIES.filter((one) => held.has(one)),
   }
 }
 
@@ -129,20 +126,18 @@ export const canonicalPersonContext = async (
   if (uid === undefined) throw new CliError("validation_error", "a person is person:<id>")
   const record = await store.people.personByUid(uid)
   if (!record) throw new CliError("not_found", `no person:${uid} in the store`)
+  const scope = scopeOf(accounts)
   const stored = await store.accounts.storedAccounts()
-  const { reads, left } = readsIn(stored, record, accounts)
-  const keyOf = (key: AccountKey) => `${key.provider}:${key.account}`
-  const inScope = (await calendarsOf(store, stored)).filter(
-    (one) => accounts === undefined || accounts.some((key) => keyOf(key) === keyOf(one)),
-  )
-  const read = [...reads.map(({ key }) => keyOf(key)), ...inScope.map(keyOf)]
+  const reads = readsIn(stored, record, scope)
+  const calendars = (await calendarsOf(store, stored)).filter((one) => scope.has(one))
+  const read = [...reads.map(({ key }) => keyOf(key)), ...calendars.map(keyOf)]
   return {
     person: record,
     ...(await recordContext(store, record, reads, {
       ...options,
-      ...(accounts === undefined ? {} : { calendarIds: inScope.map(({ id }) => id) }),
+      ...(accounts === undefined ? {} : { calendarIds: calendars.map(({ id }) => id) }),
     })),
-    business: await personBusiness(store, uid, limit),
-    coverage: await withCrmGaps(store, coverageOf([record], read, left, inScope.length > 0), accounts),
+    business: await personBusiness(store, uid, { ...(limit === undefined ? {} : { limit }), scope }),
+    coverage: await coverageFor(store, coverageOf([record], read, calendars.length > 0), scope),
   }
 }

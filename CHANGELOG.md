@@ -195,10 +195,10 @@ shape of this file.
 - **Stage history, a CRM deal's project, own organizations, orders by supplier.** `deals.stages(ref)` lists every
   stage a deal or lead entered; `deals.setProject(ref, { project, by })` sets its project, on a CRM copy too: the
   project is the store's own field, which the CRM sync never writes. `knowledge.ownOrganizations()` lists the
-  owner's companies, his own mark first, else the CRM's; `orders.list({ supplier })`. A context's `coverage` names
-  each CRM account's sync gaps (`crmGapsOf`), such as reporting lines with no department list. A
-  relationship (`knowledge.relations`) answers the `account` that reported it, its dates, and a source's `position`
-  and `derived` when it has them.
+  owner's companies, his own mark first, else the CRM's; `orders.list({ supplier })`; `proposedActions.list({ about
+  })` lists the proposals naming a ref. A context's `coverage` names each CRM account's sync gaps (`crmGapsOf`), such
+  as reporting lines with no department list. A relationship (`knowledge.relations`) answers the `account` that
+  reported it, its dates, and a source's `position` and `derived` when it has them.
 - **`models set <id>` chooses the local embedding model for every WireCat CLI**, kept in the shared settings file:
   every embed and every search by meaning uses it, and `models list` marks it `default`. It refuses a model that is
   not downloaded, and says how many chunks the new model still lacks and about how long that takes. Vectors stay

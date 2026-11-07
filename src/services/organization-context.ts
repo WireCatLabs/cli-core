@@ -7,21 +7,21 @@ import { isClosedState } from "../tasks/index.js"
 import {
   type Category,
   type Coverage,
+  coverageFor,
+  edgesOf,
   grouped,
   namesOf,
+  notRejected,
   organizationCategories,
   type Related,
-  relationsOf,
   SECTION_LIMIT,
   type Section,
+  STORE_PAGE,
+  scopeOf,
   sectionOf,
-  withCrmGaps,
 } from "./business-context.js"
 import { type Communications, communicationsOf } from "./communications.js"
 import { type LinkedBy, type MoneySection, moneyOf, type OrderLine } from "./money-context.js"
-
-/** Rows read from each finance list; the list answers at most this many. */
-const FINANCE_ROWS = 500
 
 export interface DealLine {
   ref: string
@@ -66,7 +66,7 @@ export interface OrganizationContext {
   /** Open deals and leads it is the client of. */
   deals: Section<DealLine>
   money: MoneySection
-  /** Counts only, through its own people, in the accounts read. */
+  /** Counts only, through its own people other than the owner, in the accounts read. */
   communications: Communications["counts"] & { hasMore: boolean }
   /** Open tasks of its projects. */
   tasks: Section<TaskLine>
@@ -74,7 +74,7 @@ export interface OrganizationContext {
 }
 
 export interface OrganizationContextOptions {
-  /** The accounts its people's messages, mail and events are counted in; left out, every account. */
+  /** The accounts read: a CRM's relationships and deals, and its people's messages, mail and events. */
   accounts?: AccountKey[]
   /** Items per section. */
   limit?: number
@@ -93,11 +93,17 @@ export const dealLine = (deal: Deal): DealLine => ({
   project: deal.project,
 })
 
-/** Open tasks of these projects, the soonest due first. */
-export const openTasksOf = async (store: MessageStore, projects: string[]): Promise<TaskLine[]> => {
+/** Open tasks of these projects, the soonest due first, and the command that lists them when it is one project's. */
+export const openTasksOf = async (
+  store: MessageStore,
+  projects: { ref: string; key: string }[],
+): Promise<{ tasks: TaskLine[]; full: boolean; next: string | null }> => {
   const tasks: TaskLine[] = []
-  for (const project of projects)
-    for (const task of await store.tasks.find({ project, limit: 500 }))
+  let full = false
+  for (const project of projects) {
+    const found = await store.tasks.find({ project: project.ref, limit: STORE_PAGE })
+    full ||= found.length >= STORE_PAGE
+    for (const task of found)
       if (!isClosedState(task.status))
         tasks.push({
           ref: task.ref,
@@ -107,15 +113,24 @@ export const openTasksOf = async (store: MessageStore, projects: string[]): Prom
           project: task.project,
           dueAt: task.dueAt,
         })
-  return tasks.sort((a, b) => (a.dueAt ?? "~").localeCompare(b.dueAt ?? "~"))
+  }
+  const [only] = projects
+  return {
+    tasks: tasks.sort((a, b) => (a.dueAt ?? "~").localeCompare(b.dueAt ?? "~") || a.ref.localeCompare(b.ref)),
+    full,
+    next: projects.length === 1 && only ? `tasks list project:${only.key}` : null,
+  }
 }
 
-const notRejected = <T extends { review: string }>(rows: T[]) => rows.filter((row) => row.review !== "rejected")
+/** The one list command that holds every row, when the rows are all of one kind. */
+const oneKind = <T>(rows: T[], commands: [(row: T) => boolean, string][]): string | null =>
+  commands.find(([fits]) => rows.every(fits))?.[1] ?? null
 
 /**
  * One answer about an organization from the store: its people, its customers, suppliers and partners, projects,
  * open deals, money and how much the owner talks with its people. Every relationship says its standing; a source
- * nobody confirmed is `reported`, one that stopped is `ended`.
+ * nobody confirmed is `reported`, one that stopped is `ended`, one waiting for the owner `proposed`. A CRM's rows
+ * outside `accounts` are left out, and `coverage` names that CRM.
  */
 export const organizationContext = async (
   store: MessageStore,
@@ -127,50 +142,57 @@ export const organizationContext = async (
   const ref = `organization:${id}`
   const [organization] = await store.knowledge.organizations(parseLucene(`id:${id}`))
   if (!organization) throw new CliError("not_found", `no ${ref} in the store`)
+  const scope = scopeOf(accounts)
   const own = (await store.knowledge.ownOrganizations()).some((one) => one.ref === ref)
-  const { relations, full } = await relationsOf(store, ref)
+  const { edges, full } = await edgesOf(store, ref, scope)
   const names = await namesOf(
     store,
-    relations.flatMap(({ from, to }) => [from, to]),
+    edges.flatMap(({ from, to }) => [from, to]),
   )
-  const into = (kind: string, from: string) => (relation: (typeof relations)[number]) =>
-    relation.kind === kind && relation.to === ref && relation.from.startsWith(from) ? relation.from : undefined
-  const people = grouped(relations, into("member-of", "person:"), names)
-  const customers = grouped(relations, into("customer-of", ""), names)
+  const into = (kind: string, from: string) => (edge: (typeof edges)[number]) =>
+    edge.role.kind === kind && edge.to === ref && edge.from.startsWith(from) ? edge.from : undefined
+  const people = grouped(edges, into("member-of", "person:"), names)
+  const customers = grouped(edges, into("customer-of", ""), names)
   const suppliers = grouped(
-    relations,
-    (relation) => (relation.kind === "customer-of" && relation.from === ref ? relation.to : undefined),
+    edges,
+    (edge) => (edge.role.kind === "customer-of" && edge.from === ref ? edge.to : undefined),
     names,
   )
   const partners = grouped(
-    relations,
-    (relation) => (relation.kind !== "partner-of" ? undefined : relation.from === ref ? relation.to : relation.from),
+    edges,
+    (edge) => (edge.role.kind !== "partner-of" ? undefined : edge.from === ref ? edge.to : edge.from),
     names,
   )
 
   const deals: Deal[] = []
-  for (const kind of DEAL_KINDS)
-    for (const deal of await store.deals.list({ kind, organization: ref, limit: 500 })) deals.push(deal)
-  const projects = new Map<string, { name: string; via: ProjectLine["via"] }>()
-  for (const project of await store.knowledge.projects())
+  let dealsFull = false
+  for (const kind of DEAL_KINDS) {
+    const found = await store.deals.list({ kind, organization: ref, status: "open", limit: STORE_PAGE })
+    dealsFull ||= found.length >= STORE_PAGE
+    for (const deal of found) if (scope.has(deal.account)) deals.push(deal)
+  }
+  const catalog = new Map((await store.knowledge.projects()).map((project) => [project.ref, project]))
+  const projects = new Map<string, ProjectLine>()
+  for (const project of catalog.values())
     if (project.organizationId === organization.id)
-      projects.set(project.ref, { name: project.name, via: ["organization"] })
+      projects.set(project.ref, { ref: project.ref, name: project.name, via: ["organization"] })
   for (const deal of deals)
     if (deal.project !== null) {
-      const held = projects.get(deal.project) ?? { name: deal.projectName ?? deal.project, via: [] }
+      const held = projects.get(deal.project) ?? { ref: deal.project, name: deal.projectName ?? deal.project, via: [] }
       if (!held.via.includes("deal")) held.via.push("deal")
       projects.set(deal.project, held)
     }
 
-  const invoices: [Invoice, LinkedBy][] = notRejected(
-    await store.finance.invoices({ counterparty: ref, limit: FINANCE_ROWS }),
-  ).map((invoice) => [invoice, "counterparty"])
-  const payments: [FinancePayment, LinkedBy][] = notRejected(
-    await store.finance.payments({ party: ref, limit: FINANCE_ROWS }),
-  ).map((payment) => [payment, "counterparty"])
+  const invoiceRows = await store.finance.invoices({ counterparty: ref, limit: STORE_PAGE })
+  const paymentRows = await store.finance.payments({ party: ref, limit: STORE_PAGE })
+  const invoices: [Invoice, LinkedBy][] = notRejected(invoiceRows).map((invoice) => [invoice, "counterparty"])
+  const payments: [FinancePayment, LinkedBy][] = notRejected(paymentRows).map((payment) => [payment, "counterparty"])
   const orders: OrderLine[] = []
-  for (const side of ["customer", "supplier"] as const)
-    for (const order of notRejected(await store.orders.list({ [side]: ref, limit: FINANCE_ROWS })))
+  let ordersFull = false
+  for (const side of ["customer", "supplier"] as const) {
+    const found = await store.orders.list({ [side]: ref, limit: STORE_PAGE })
+    ordersFull ||= found.length >= STORE_PAGE
+    for (const order of notRejected(found))
       orders.push({
         ref: order.ref,
         title: order.title,
@@ -180,6 +202,8 @@ export const organizationContext = async (
         total: order.total,
         side,
       })
+  }
+  const financeComplete = invoiceRows.length < STORE_PAGE && paymentRows.length < STORE_PAGE && !ordersFull
 
   const members = []
   for (const person of people)
@@ -187,37 +211,46 @@ export const organizationContext = async (
       const record = await store.people.personByUid(person.ref.slice("person:".length))
       if (record) members.push(record)
     }
-  const talks = await communicationsOf(store, members, accounts === undefined ? {} : { accounts })
-  const categories = (await organizationCategories(store)).get(ref) ?? []
+  const talks = await communicationsOf(store, members, scope)
+  const categories = (await organizationCategories(store, scope)).get(ref) ?? []
+  const tasks = await openTasksOf(
+    store,
+    [...projects.keys()].flatMap((one) => {
+      const project = catalog.get(one)
+      return project ? [{ ref: one, key: project.key }] : []
+    }),
+  )
   const about = `about:${ref}`
+  const more = { more: full }
   return {
     organization: { ...organization, own },
     categories,
-    people: sectionOf(people, limit, `relationships list ${about} kind:member-of`, full),
-    customers: sectionOf(customers, limit, `relationships list to:${ref} kind:customer-of`, full),
-    suppliers: sectionOf(suppliers, limit, `relationships list from:${ref} kind:customer-of`, full),
-    partners: sectionOf(partners, limit, `relationships list ${about} kind:partner-of`, full),
-    projects: sectionOf(
-      [...projects].map(([project, held]) => ({ ref: project, ...held })),
-      limit,
-      `projects list organization:${organization.id}`,
-    ),
+    people: sectionOf(people, limit, `relationships list ${about} kind:member-of`, more),
+    customers: sectionOf(customers, limit, `relationships list to:${ref} kind:customer-of`, more),
+    suppliers: sectionOf(suppliers, limit, `relationships list from:${ref} kind:customer-of`, more),
+    partners: sectionOf(partners, limit, `relationships list ${about} kind:partner-of`, more),
+    projects: sectionOf([...projects.values()], limit, null),
     deals: sectionOf(
-      deals.filter((deal) => deal.status === "open").map(dealLine),
+      deals.map(dealLine),
       limit,
-      `deals list --organization ${ref} --status open`,
+      oneKind(deals, [
+        [(deal) => deal.kind === "deal", `deals list organization:"${ref}" status:open`],
+        [(deal) => deal.kind === "lead", `leads list organization:"${ref}" status:open`],
+      ]),
+      { more: dealsFull },
     ),
-    money: moneyOf({ invoices, payments, orders }, limit, {
-      invoices: `invoices list --counterparty ${ref}`,
-      payments: `payments list --party ${ref}`,
-      orders: `orders list --customer ${ref}`,
-    }),
+    money: moneyOf(
+      { invoices, payments, orders },
+      limit,
+      {
+        invoices: `invoices list counterparty:"${ref}"`,
+        payments: `payments list party:"${ref}"`,
+        orders: oneKind(orders, [[(order) => order.side === "customer", `orders list customer:"${ref}"`]]),
+      },
+      financeComplete,
+    ),
     communications: { ...talks.counts, hasMore: talks.hasMore },
-    tasks: sectionOf(
-      await openTasksOf(store, [...projects.keys()]),
-      limit,
-      `tasks list organization:${organization.id}`,
-    ),
-    coverage: await withCrmGaps(store, talks.coverage, accounts),
+    tasks: sectionOf(tasks.tasks, limit, tasks.next, { more: tasks.full }),
+    coverage: await coverageFor(store, talks.coverage, scope),
   }
 }

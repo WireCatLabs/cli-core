@@ -57,6 +57,10 @@ export interface MoneySection {
   payments: Section<PaymentLine>
   orders?: Section<OrderLine>
   totals: { invoices: FinanceTotal[]; payments: FinanceTotal[] }
+  /** Invoices and payments still proposed, of every row read: listed, never totalled. */
+  unconfirmed: number
+  /** `false` when a read stopped at the store's page: the totals may leave rows out. */
+  complete: boolean
 }
 
 const invoiceLine = (invoice: Invoice, linkedBy: LinkedBy): InvoiceLine => ({
@@ -121,19 +125,23 @@ const totalled = (
 export const moneyOf = (
   rows: { invoices: [Invoice, LinkedBy][]; payments: [FinancePayment, LinkedBy][]; orders?: OrderLine[] },
   limit: number,
-  next: { invoices: string; payments: string; orders?: string },
+  next: { invoices: string | null; payments: string | null; orders?: string | null },
+  complete: boolean,
 ): MoneySection => {
   const invoices = merged(rows.invoices.map(([invoice, way]) => invoiceLine(invoice, way)))
   const payments = merged(rows.payments.map(([payment, way]) => paymentLine(payment, way)))
+  const more = { more: !complete }
   return {
-    invoices: sectionOf(invoices, limit, next.invoices),
-    payments: sectionOf(payments, limit, next.payments),
-    ...(rows.orders === undefined ? {} : { orders: sectionOf(rows.orders, limit, next.orders ?? "") }),
+    invoices: sectionOf(invoices, limit, next.invoices, more),
+    payments: sectionOf(payments, limit, next.payments, more),
+    ...(rows.orders === undefined ? {} : { orders: sectionOf(rows.orders, limit, next.orders ?? null, more) }),
     totals: {
       invoices: totalled(invoices.map((one) => ({ ...one, amount: one.total, confirmed: one.review === "confirmed" }))),
       payments: totalled(
         payments.map((one) => ({ ...one, status: one.direction, confirmed: one.review === "confirmed" })),
       ),
     },
+    unconfirmed: [...invoices, ...payments].filter((one) => one.review !== "confirmed").length,
+    complete,
   }
 }
