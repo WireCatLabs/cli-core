@@ -51,7 +51,7 @@ const wordAround = (text: string, at: number): { start: number; end: number } =>
 const everyWordLiteral = (text: string, fields: ReadonlySet<string>) =>
   text.replace(/[^ \t\n\r\u3000]+/gu, (word) => literal(word, false, fields))
 
-type Reading = { at: number } | { wordless: Predicate[]; words: boolean }
+type Reading = { at: number } | { questions: number[] } | { wordless: Predicate[]; words: boolean }
 
 /** Where `text` stops being a search query (-1: somewhere unknown), or the bare words the index holds nothing for. */
 const read = (text: string, fields: ReadonlySet<string>): Reading => {
@@ -59,6 +59,12 @@ const read = (text: string, fields: ReadonlySet<string>): Reading => {
     const leaves = walkQuery(parseLucene(text, MESSAGE_PARSING).root)
     const unknown = leaves.find(({ field }) => !fields.has(field))
     if (unknown) return { at: text.lastIndexOf(unknown.field, unknown.span.start) }
+    // "invoice?" and "что с бюджетом?" ask a question; a `?` inside a word (`inv?ice`) stays one character.
+    const questions = leaves.flatMap(({ implicit, operator, value, span }) => {
+      const mark = /^[^*?]*[^*?\\]\?+$/u.test(value) && implicit && operator === "wildcard" ? /\?+$/u.exec(value) : null
+      return mark ? [span.end - mark[0].length] : []
+    })
+    if (questions.length) return { questions }
     // An emoji or a lone `^` is no word of the index, so ANDed with the rest it would find nothing at all.
     const wordless = leaves.filter(
       ({ implicit, operator, value }) =>
@@ -85,7 +91,8 @@ const without = (text: string, leaves: Predicate[]): string =>
  * Free text as the search reads it: a character the query language takes as syntax where it cannot be syntax — the
  * colon of `10:30` or `HH:MM`, a URL's slashes, an unbalanced quote or bracket — is made literal by quoting the word
  * that holds it, a `word:` that names no search field is that word, and a bare emoji or punctuation mark beside other
- * words is dropped. A query that already reads well comes back unchanged, so this can run again on its own output;
+ * words is dropped. A `?` that ends a bare word is a question mark, not a one-character wildcard. A query that
+ * already reads well, and has no such word, comes back unchanged, so this can run again on its own output;
  * field queries and Boolean operators keep their meaning. A field's own mistake (`kind:nonsense`) is left for the
  * search to report. `fields` are the names a list of its own (memories: `text`, `scope`) reads as fields.
  */
@@ -98,6 +105,15 @@ export const plainQuery = (text: string, fields: ReadonlySet<string> = SEARCH_FI
       reading = read(current, fields)
     } catch {
       return text
+    }
+    if ("questions" in reading) {
+      current = reading.questions
+        .sort((a, b) => b - a)
+        .reduce(
+          (left, at) => left.slice(0, at) + left.slice(at).replace(/^\?+/u, (marks) => "\\?".repeat(marks.length)),
+          current,
+        )
+      continue
     }
     if ("wordless" in reading) {
       // Punctuation alone (`!!!`) is no search; the parser's error says so better than an empty answer.
