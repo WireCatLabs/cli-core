@@ -17,7 +17,7 @@ import { Command, Help } from "commander"
 import { relayCommand } from "../background/relay.js"
 import { failingNotice, scheduledRuns } from "../background/schedules.js"
 import { parseDuration } from "../domain/duration.js"
-import { isCliFailure, isCommanderFailure } from "../errors/failures.js"
+import { isCliFailure, isCommanderFailure, storeDamaged } from "../errors/failures.js"
 import { failureContext } from "../errors/reasons.js"
 import { type AppIdentity, envName, readOnlyLockOf, readOnlyRefusal } from "../ports/app.js"
 import { recorded, wasSettled } from "../runs/recording.js"
@@ -898,7 +898,10 @@ const failed = (
   debug: boolean,
 ): Failure => {
   const path = commandPath(program, program.args.length > 0 ? program.args : rest)
-  const told = error instanceof NoProfileHere && !commandAt(program, "setup") ? error.withoutSetup(path) : error
+  const told =
+    error instanceof NoProfileHere && !commandAt(program, "setup")
+      ? error.withoutSetup(path)
+      : storeDamaged(error, app.command)
   const failure =
     settled.settlementFailed && isCliFailure(told)
       ? new CliError(told.code, told.message, { ...told.details, settlement_failed: true })

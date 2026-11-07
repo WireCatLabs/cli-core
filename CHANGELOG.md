@@ -28,6 +28,12 @@ shape of this file.
 
 ### Fixed
 
+- **A damaged store file is `configuration_error` (`store.damaged`), not a crash.** SQLite's "database disk image is
+  malformed" or "file is not a database", raised anywhere in a command or behind a wrapper's `cause`, was
+  `internal_error` (`command.crashed`), "this is a bug". It now says the store file is damaged and names
+  `<cli> store recover` as the next step, on the CLI, over MCP and in the run kept of it, so a scheduled run's failure
+  banner shows the reason. `storeDamaged(error, command?)` from `@wirecat/cli-core/cli` does the same for a CLI with
+  its own failure handling.
 - **`doctor --online` of a CLI built on `appDoctorCommand` runs inside cli-core's run.** It answered outside one, so
   `--record` kept no run of it and its call out was not the command's own. A config that will not load still gets an
   answer, outside a run.

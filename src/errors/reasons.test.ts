@@ -1,10 +1,13 @@
-import { readdirSync, readFileSync } from "node:fs"
+import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { DatabaseSync } from "node:sqlite"
 import { CliError, captureStreams, errorObjectOf } from "@wirecat/cli-base"
 import { BASE_REASONS, defineReasons } from "@wirecat/cli-base/standards"
 import { Command } from "commander"
 import { describe, expect, it } from "vitest"
 import { run } from "../cli/program.js"
+import { storeRecoverCommand } from "../cli/store-recover.js"
 import { CORE_DETAILS, CORE_REASONS } from "../index.js"
 import { failed } from "../mcp/tool.js"
 import { DETAILS, failureContext, REASONS } from "./reasons.js"
@@ -130,6 +133,47 @@ describe("error reasons", () => {
 
   it("refuses an app detail key that is not snake_case", () => {
     expect(() => failureContext({ details: ["migratedChatId"] })).toThrow(/snake_case: migratedChatId/)
+  })
+})
+
+describe("a damaged store file", () => {
+  const notADatabase = (): unknown => {
+    const file = join(mkdtempSync(join(tmpdir(), "store-damaged-")), "wirecat.db")
+    writeFileSync(file, "not a database, only text long enough to fill a header page".repeat(20))
+    try {
+      new DatabaseSync(file).prepare("SELECT * FROM sqlite_master").all()
+    } catch (error) {
+      return error
+    }
+    throw new Error("node:sqlite read a file that is not a database")
+  }
+  const malformed = Object.assign(new Error("database disk image is malformed"), {
+    code: "ERR_SQLITE_ERROR",
+    errcode: 11,
+  })
+
+  it.each([
+    ["SQLITE_NOTADB from node:sqlite", notADatabase()],
+    ["SQLITE_CORRUPT", malformed],
+    ["SQLITE_CORRUPT behind a wrapper", new Error("embedding failed", { cause: malformed })],
+  ])("%s is store.damaged with store recover as its next step, not a crash", async (_, error) => {
+    const streams = captureStreams()
+    const program = {
+      ...failing(error),
+      commands: () => [...failing(error).commands(), new Command("store").addCommand(storeRecoverCommand(app))],
+    }
+    const code = await run(["item", "--json", "--no-record"], program, { streams, tty: false, env: process.env })
+    const { error: object } = JSON.parse(streams.stderr[0] ?? "")
+    expect(object).toMatchObject({ code: "configuration_error", reason: "store.damaged" })
+    expect(object.message).toContain("app store recover")
+    expect(object.next).toEqual([expect.objectContaining({ command: "store recover" })])
+    expect(code).not.toBe(1)
+    expect(failed(error).structuredContent).toMatchObject({ error: { reason: "store.damaged" } })
+  })
+
+  it("leaves another SQLite failure a crash", () => {
+    const locked = Object.assign(new Error("database is locked"), { code: "ERR_SQLITE_ERROR", errcode: 5 })
+    expect(failed(locked).structuredContent).toMatchObject({ error: { reason: "command.crashed" } })
   })
 })
 
