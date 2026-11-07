@@ -285,19 +285,32 @@ CREATE TRIGGER payment_allocations_valid_bu BEFORE UPDATE ON payment_allocations
           AND payment_id = (SELECT refund_of FROM payments WHERE id = new.payment_id)), 0))
     OR ((SELECT refund_of FROM payments WHERE id = new.payment_id) IS NULL
       AND new.amount < (SELECT coalesce(sum(a.amount), 0) FROM payment_allocations a JOIN payments r ON r.id = a.payment_id
-        WHERE r.refund_of = new.payment_id AND a.invoice_id = new.invoice_id)) BEGIN
+        WHERE r.refund_of = new.payment_id AND a.invoice_id = new.invoice_id))
+    OR (new.amount < old.amount
+      AND (SELECT refund_of IS NOT NULL AND review = 'confirmed' AND deleted_at IS NULL FROM payments WHERE id = new.payment_id)
+      AND (SELECT coalesce(sum(CASE WHEN np.refund_of IS NULL THEN na.amount ELSE -na.amount END), 0)
+        FROM payment_allocations na JOIN payments np ON np.id = na.payment_id
+        WHERE na.invoice_id = new.invoice_id AND np.review = 'confirmed' AND np.deleted_at IS NULL)
+        + old.amount - new.amount > (SELECT total FROM invoices WHERE id = new.invoice_id)) BEGIN
   SELECT RAISE(ABORT, 'payment_allocations: above 0, within the payment, the invoice or the refunded share, at or above its refunds, sides unchanged');
 END;
 --> statement-breakpoint
 CREATE TRIGGER payment_allocations_refunded_bd BEFORE DELETE ON payment_allocations
-  WHEN EXISTS (SELECT 1 FROM payment_allocations a JOIN payments r ON r.id = a.payment_id
+  WHEN (SELECT review FROM invoices WHERE id = old.invoice_id) <> 'rejected' AND EXISTS (SELECT 1 FROM payment_allocations a JOIN payments r ON r.id = a.payment_id
     WHERE r.refund_of = old.payment_id AND a.invoice_id = old.invoice_id) BEGIN
   SELECT RAISE(ABORT, 'payment_allocations: a refund of this payment is allocated to the invoice; take it back first');
 END;
 --> statement-breakpoint
 CREATE TRIGGER payment_allocations_refund_bd BEFORE DELETE ON payment_allocations
   WHEN (SELECT refund_of IS NOT NULL AND review = 'confirmed' AND deleted_at IS NULL FROM payments WHERE id = old.payment_id)
+    AND (SELECT review FROM invoices WHERE id = old.invoice_id) <> 'rejected'
     AND (SELECT coalesce(sum(CASE WHEN np.refund_of IS NULL THEN na.amount ELSE -na.amount END), 0) FROM payment_allocations na JOIN payments np ON np.id = na.payment_id WHERE na.invoice_id = old.invoice_id AND np.review = 'confirmed' AND np.deleted_at IS NULL) + old.amount
       > (SELECT total FROM invoices WHERE id = old.invoice_id) BEGIN
   SELECT RAISE(ABORT, 'payment_allocations: taking a refund''s share back would pay the invoice beyond its total');
+END;
+--> statement-breakpoint
+-- A void invoice keeps what was settled on it; a rejected one lets its allocations go, as reject sets review first.
+CREATE TRIGGER payment_allocations_void_bd BEFORE DELETE ON payment_allocations
+  WHEN (SELECT status = 'void' AND review <> 'rejected' FROM invoices WHERE id = old.invoice_id) BEGIN
+  SELECT RAISE(ABORT, 'payment_allocations: a void invoice keeps its allocations');
 END;

@@ -189,3 +189,38 @@ it("keeps a payment a transaction records from changing or going, in code or in 
   await f.store.transactions.update(line.ref, { by: "owner", payment: null })
   expect(await f.store.finance.reject(proposed.ref, "owner")).toMatchObject({ review: "rejected" })
 })
+
+it("rejects a bot's invoice that was paid, refunded and paid again, letting its allocations go", async () => {
+  const f = await fixture()
+  const invoice = await f.store.finance.addInvoice({
+    by: claude,
+    direction: "receivable",
+    counterparty: f.client.ref,
+    currency: "RUB",
+    lines: [{ description: "Аренда", amount: "100.00" }],
+  })
+  const paid = await f.payment("100.00", { allocations: [{ invoice: invoice.ref, amount: "100.00" }] })
+  await f.refund(paid.ref, "100.00", { allocations: [{ invoice: invoice.ref, amount: "100.00" }] })
+  await f.payment("100.00", { allocations: [{ invoice: invoice.ref, amount: "100.00" }] })
+  expect(await f.store.finance.reject(invoice.ref, "owner")).toMatchObject({ review: "rejected", allocations: [] })
+})
+
+it("keeps a void invoice's allocations and a confirmed refund's share from being lowered, in SQL", async () => {
+  const f = await fixture()
+  const invoice = await f.invoice()
+  const paid = await f.payment("100.00", { allocations: [{ invoice: invoice.ref, amount: "100.00" }] })
+  const back = await f.refund(paid.ref, "100.00", { allocations: [{ invoice: invoice.ref, amount: "100.00" }] })
+  await f.store.finance.voidInvoice(invoice.ref, "owner")
+  const sql = await f.raw()
+  expect(sql("DELETE FROM payment_allocations WHERE payment_id = ?", Number(back.id))).toThrow(/void invoice keeps/)
+  expect(sql("DELETE FROM payment_allocations WHERE payment_id = ?", Number(paid.id))).toThrow(/payment_allocations/)
+  expect(await f.store.finance.invoice(invoice.ref)).toMatchObject({ paid: "0.00", status: "void" })
+
+  const g = await fixture()
+  const { invoice: again, back: share } = await paidAgain(g)
+  const raw = await g.raw()
+  expect(raw("UPDATE payment_allocations SET amount = 100 WHERE payment_id = ?", Number(share.id))).toThrow(
+    /payment_allocations/,
+  )
+  expect(await g.store.finance.invoice(again.ref)).toMatchObject({ paid: "100.00", status: "paid" })
+})
