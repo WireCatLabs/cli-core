@@ -284,6 +284,30 @@ it("calls a role custom only when it is neither built in nor one the owner added
   expect(await customOf()).toEqual({ contact: false, "procurement-lead": true })
 })
 
+it("shows the owner's override of a CRM-reported role, never the role it overrides", async () => {
+  const { store, refs } = await scenario()
+  const linkOf = async (about: string, kind: "member-of" | "related-to", to: string) =>
+    (await store.knowledge.listRelations({ about, kind })).items.find((one) => one.to === to || one.from === to)
+      ?.id as string
+  await store.knowledge.updateRelation(null, await linkOf(refs.alice, "member-of", refs.acme), {
+    role: "manager",
+    by: "owner",
+  })
+  await store.knowledge.updateRelation(null, await linkOf(refs.alice, "related-to", refs.deal), {
+    role: "influencer",
+    by: "owner",
+  })
+
+  const acme = await organizationContext(store, refs.acme)
+  const alice = await canonicalPersonContext(store, refs.alice)
+  const deal = await dealContext(store, refs.deal, { now: ACME_NOW })
+
+  expect(standings(acme.people.items.find((one) => one.ref === refs.alice))).toEqual(["manager:confirmed"])
+  expect(standings(alice.business.organizations.items[0])).toEqual(["manager:confirmed"])
+  expect(standings(alice.business.deals.items[0])).toEqual(["influencer:confirmed"])
+  expect(standings(deal.participants.items.find((one) => one.ref === refs.alice))).toEqual(["influencer:confirmed"])
+})
+
 describe("deny levels", () => {
   it("names no deal or lead anywhere when the profile denies them, and says so", async () => {
     const { store, refs } = await scenario()
