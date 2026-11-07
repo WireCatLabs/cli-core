@@ -1,6 +1,6 @@
-import { mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs"
+import { mkdirSync, mkdtempSync, readFileSync, symlinkSync, truncateSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
-import { join } from "node:path"
+import { dirname, join } from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
 import { Client, type ElicitResult } from "@modelcontextprotocol/client"
 import { InMemoryTransport } from "@modelcontextprotocol/server"
@@ -26,6 +26,8 @@ import { settingsFor } from "../cli/settings.js"
 import { skillCommand } from "../cli/skill-command.js"
 import { parseMarkdown } from "../domain/markdown.js"
 import type { Chat, Message } from "../domain/models.js"
+import { placedText, textModelsDirectory } from "../embeddings/embed.js"
+import { textModel } from "../embeddings/models.js"
 import { ENTITIES } from "../entities/index.js"
 import { sampleMeeting } from "../meetings/testing/index.js"
 import type { MessengerAdapter, RemoteFile, SendOptions } from "../ports/messenger.js"
@@ -2311,6 +2313,30 @@ describe("the MCP server", () => {
 
     expect(backup.isError).toBe(false)
     expect(readFileSync(join(root, "copy.db")).length).toBeGreaterThan(0)
+  })
+
+  it("**runs models set with no form**, for a client that could answer one and for one that cannot", async () => {
+    const accept = (): ElicitResult => ({ action: "accept", content: {} })
+    const clients = [{ form: accept }, {}, { form: accept, http: true }, { http: true, era: "modern" as const }]
+    for (const client of clients) {
+      const root = mkdtempSync(join(tmpdir(), "mcp-"))
+      const { call, forms, env } = await connect(scripted(), {
+        root,
+        ...client,
+        extraEnv: { WIRECAT_CONFIG_DIR: join(root, "wirecat-config") },
+      })
+      for (const [file, path] of placedText(textModel("e5-large", env), textModelsDirectory(env))) {
+        mkdirSync(dirname(path), { recursive: true })
+        writeFileSync(path, "")
+        truncateSync(path, file.bytes)
+      }
+
+      const chosen = await call("models set", { model: "e5-large" })
+
+      expect(chosen.isError, JSON.stringify(chosen.body)).toBe(false)
+      expect(chosen.body.item).toMatchObject({ id: "e5-large", default: true })
+      expect(forms).toEqual([])
+    }
   })
 
   it("**keeps a store reset off** where the profile denies store.reset, and off under `deny messages`", async () => {

@@ -346,7 +346,8 @@ shape of this file.
 - **`models set <id>` chooses the local embedding model for every WireCat CLI**, kept in the shared settings file:
   every embed and every search by meaning uses it, and `models list` marks it `default`. It refuses a model that is
   not downloaded, and says how many chunks the new model still lacks and about how long that takes. Vectors stay
-  per model, so a switch deletes nothing and switching back is instant.
+  per model, so a switch deletes nothing and switching back is instant. It asks nothing, over MCP too (permission
+  `models.set` is `allow`); `models add` needs `mcp.authority` there.
 - **`e5-large`**, multilingual-e5-large 8-bit (MIT, 579 MB, 1024 dims), the large one beside `e5-small` (small) and
   `embeddinggemma` (medium). `models list --json` gives each text model's `size`, `dims`, `terms` and
   `chunks_per_second`.

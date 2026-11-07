@@ -110,6 +110,10 @@ notes, mail, events and messages) and every search by meaning then uses it. A CL
 how many chunks the new model still lacks and about how long the syncs take over them. Until they are done, search by
 meaning reads only the new model's vectors and words find the rest. Switching back is instant.
 
+`models set` asks nothing, in a terminal or over MCP: many MCP clients cannot answer a question, and a switch can be
+undone. A profile that must not switch models denies `models.set`. `models add` still needs `mcp.authority` over
+MCP, as every command that changes what a later run does.
+
 `models add <id> --payload '<json>'` adds a model of your own from Hugging Face: `repository`, `revision`, `onnx`,
 `externalData`, `dims`, `pooling` (`mean` or `sentence_embedding`), `prefix.query`, `prefix.passage`, `maxTokens`.
 It is pinned to the commit the revision names, with each file's size and sha256, and kept in `text_models.custom`
