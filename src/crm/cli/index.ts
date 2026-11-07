@@ -152,6 +152,7 @@ const crmSync = v.strictObject({
   stopped: v.optional(v.picklist(["requests", "deadline", "cancelled"])),
   progress: v.strictObject({ requests: count, saved: count, steps: count }),
   hint: v.optional(text),
+  group_hint: v.optional(text),
 })
 
 const crmSyncProgress = v.strictObject({

@@ -508,6 +508,7 @@ export {
   profileFree,
   refuseCommandName,
   rootOf,
+  runGroup,
   takesProfile,
   usableProfileName,
 } from "./profile.js"
@@ -537,6 +538,7 @@ export {
   type ScheduleLimits,
   scheduleLimitsOf,
 } from "./schedule/schedule-command.js"
+export { deniedKinds, deniedKindsOf, type LeftOut, type SearchedKind } from "./search-left-out.js"
 export { type DeclaredSetting, type SettingRow, settingRows, withSettingDefaults } from "./setting-defaults.js"
 export {
   type Config,

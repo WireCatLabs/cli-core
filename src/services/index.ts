@@ -376,13 +376,42 @@ export const servicesFor = (deps: ServiceDeps): Services => {
   return deps.messenger.services ? { ...base, ...deps.messenger.services(base, deps) } : base
 }
 
-export { entriesOfList, type ListContext, type ListedEntry } from "../search/account-list.js"
+export {
+  entriesOfList,
+  keyOf,
+  type ListContext,
+  type ListedEntry,
+  sameAs,
+  sourceOf,
+} from "../search/account-list.js"
+export {
+  type GroupContext,
+  type GroupMember,
+  type GroupMembership,
+  type GroupReason,
+  type GroupRequest,
+  type GroupSuggestion,
+  groupMembership,
+  NOT_GROUP_NAMES,
+  PERSONAL,
+  type RunGroup,
+  scopeToGroup,
+} from "../search/groups.js"
 export { plainQuery } from "../search/lucene/plain.js"
 export { FIELD_VERSION, QUERY_FIELDS, QUERY_OPERATORS, validateAst } from "../search/lucene/registry.js"
 export { QUERY_LIMITS, QUERY_VERSION } from "../search/lucene/types.js"
 export { questionLookup } from "../search/question-plan.js"
 export { type SearchTotal, TOTAL_CAP } from "../search/total.js"
 export { TASK_KINDS, TASK_ORIGINS, type TaskKind, type TaskOrigin } from "../tasks/index.js"
+export {
+  addGroupMember,
+  type GroupMemberChange,
+  type GroupMemberMove,
+  type GroupStore,
+  listAccountGroups,
+  moveGroupMember,
+  removeGroupMember,
+} from "./account-groups.js"
 export type { AdminFound, AdminQuery, AdminSelection, AdminStatisticsService } from "./admin-statistics.js"
 export { adminStatisticsService } from "./admin-statistics.js"
 export { GAP_BOUNDS, type GapPlan, type GapRepair, gapsService, type RepairOptions } from "./archive-gaps.js"
@@ -560,7 +589,7 @@ export {
   catchUpSearch,
   validateCatchUp,
 } from "./search-catchup.js"
-export { accountsOfKind, listContextOf, type SearchKind } from "./search-kind.js"
+export { accountsOfKind, groupLockOf, listContextOf, type SearchKind } from "./search-kind.js"
 export type { SearchRefreshed, SyncOptions } from "./search-refresh.js"
 export { SYNC_BOUNDS, SYNC_KEY } from "./search-refresh.js"
 export {

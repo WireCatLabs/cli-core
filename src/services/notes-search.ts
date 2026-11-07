@@ -30,7 +30,7 @@ import { documentSource } from "./document-source.js"
 import { type EnrichOptions, type EnrichRun, enrichRecords } from "./enrichment.js"
 import { plainQueryWords, titleQuery, titleTiers } from "./notes-title-tier.js"
 import { PICTURE_FLOOR, plainWords } from "./pictures.js"
-import { listContextOf } from "./search-kind.js"
+import { groupLockOf, listContextOf } from "./search-kind.js"
 
 export interface NotesSearchRequest {
   text: string
@@ -882,8 +882,9 @@ export const searchNotesOf = async (
   {
     accounts: list,
     app,
+    env,
     ...query
-  }: Omit<NotesQuery, "folderIds" | "withInternal"> & { accounts?: string; app?: AppIdentity },
+  }: Omit<NotesQuery, "folderIds" | "withInternal"> & { accounts?: string; app?: AppIdentity; env?: NodeJS.ProcessEnv },
 ): Promise<NotesFoundOf> => {
   text = plainQuery(text)
   const own = app?.command ?? query.command
@@ -894,10 +895,15 @@ export const searchNotesOf = async (
     ...(await store.notes.documentsAccounts()).map(({ id }) => ({ provider: "notes", account: id })),
     ...[await store.notes.addedAccount()].flatMap((added) => (added ? [{ provider: "notes", account: added.id }] : [])),
   ]
+  const lock = groupLockOf(app, env)
   const named =
-    list === undefined
+    list === undefined && lock === undefined
       ? { accounts: held, skipped: [] }
-      : fitting(entriesOfList(list, await listContextOf(store, account, app)), ["notes", "documents"], what)
+      : fitting(
+          entriesOfList(list ?? `group:${lock}`, await listContextOf(store, account, app, undefined, env)),
+          ["notes", "documents"],
+          what,
+        )
   const source = query.source ?? noteSourceOfQuery(text).source
   const typed = named.accounts.filter(
     ({ account }) => source === undefined || (account === INTERNAL_NOTES) === (source === "internal"),

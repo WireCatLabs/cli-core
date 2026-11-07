@@ -1,7 +1,7 @@
 export { BUSINESS_KINDS, type BusinessKind } from "../domain/business.js"
 export type { CounterField, CounterObservations, CounterState } from "../domain/counters.js"
 export type { RetentionOptions } from "../domain/retention.js"
-export type { AccountAccounts, AccountsStore } from "./accounts.js"
+export type { AccountAccounts, AccountGroupChange, AccountsStore } from "./accounts.js"
 export type { AccountAttachments, AttachmentsStore } from "./attachments.js"
 export type { ChatsStore, LeftChat, LeftChats } from "./chats.js"
 export type { ConversationsStore } from "./conversations.js"

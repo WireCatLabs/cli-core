@@ -1,7 +1,15 @@
 import { CliError } from "@wirecat/cli-base"
 import { holdsKindOf, isKind, providerNamed } from "../domain/providers.js"
-import type { AppIdentity } from "../ports/app.js"
-import { entriesOfList, fitting, isAccountList, type ListContext, type SkippedSource } from "../search/account-list.js"
+import { type AppIdentity, envName } from "../ports/app.js"
+import {
+  entriesOfList,
+  fitting,
+  isAccountList,
+  keyOf,
+  type ListContext,
+  type SkippedSource,
+} from "../search/account-list.js"
+import { type GroupContext, groupEntries, groupMembership, hasGroup } from "../search/groups.js"
 import type { AccountKey, MessageStore, StoredAccount } from "../store/store.js"
 
 export type SearchKind = "messages" | "mail"
@@ -9,23 +17,55 @@ export type SearchKind = "messages" | "mail"
 export const NO_MAIL = "no_mail"
 
 export const MAIL = "email"
-/** What a `--source` list is resolved against: the store's accounts, groups and profiles, and the app running. */
+/** The group `<PREFIX>_GROUP_LOCK` pins this process to, if any. */
+export const groupLockOf = (app: AppIdentity | undefined, env: NodeJS.ProcessEnv | undefined): string | undefined =>
+  app === undefined || env === undefined ? undefined : env[envName(app, "GROUP_LOCK")]?.trim() || undefined
+
+/**
+ * What a `--source` list is resolved against: the store's accounts, profiles and groups — the saved ones and
+ * `personal` (WC-ACCT-13) — and the app running. Under a group lock in the run's `env` it holds only that group's
+ * accounts, so a reader that never scoped its run to the group still cannot name an account outside it.
+ */
 export const listContextOf = async (
   store: MessageStore,
   account: AccountKey,
   app: AppIdentity | undefined,
   stored?: StoredAccount[],
-): Promise<ListContext> => {
+  env?: NodeJS.ProcessEnv,
+): Promise<GroupContext> => {
   const all = stored ?? (await store.accounts.storedAccounts())
   // A fresh store has no row yet for the account it runs as.
   const held = all.some((one) => one.provider === account.provider && one.account === account.account)
     ? all
     : [...all, { id: 0, ...account, name: null, scope: "personal" as const }]
-  return {
+  const context: ListContext = {
     held,
     groups: await store.accounts.accountGroups(),
     profiles: await store.accounts.profiles(),
     running: { provider: account.provider, ...(app ? { command: app.command } : {}) },
+  }
+  const membership = groupMembership(context)
+  const groups = groupEntries(context.groups, membership)
+  const lock = groupLockOf(app, env)
+  if (lock === undefined) return { ...context, groups, membership }
+  const members = hasGroup(membership.groups, lock) ? membership.groups[lock] : undefined
+  if (!members)
+    throw new CliError(
+      "permission_error",
+      `this process is locked to group ${lock} (${envName(app as AppIdentity, "GROUP_LOCK")}), which does not exist`,
+    )
+  const only = new Set(members.map(keyOf))
+  return {
+    ...context,
+    held: held.filter((one) => only.has(keyOf(one))),
+    groups: { [lock]: groups[lock] ?? [] },
+    membership: {
+      groups: { [lock]: members },
+      duplicates: membership.duplicates.filter(({ groups: names }) => names.includes(lock)),
+      suggested: membership.suggested.filter(({ group }) => group === lock),
+      unresolved: membership.unresolved,
+    },
+    only,
   }
 }
 
@@ -39,14 +79,18 @@ export const listedAccounts = async (
   source: string | undefined,
   app: AppIdentity | undefined,
   kind?: SearchKind,
+  env?: NodeJS.ProcessEnv,
 ): Promise<{ accounts: AccountKey[]; skipped: SkippedSource[] } | undefined> => {
-  if (source === undefined) return undefined
+  const lock = groupLockOf(app, env)
+  if (source === undefined && lock === undefined) return undefined
   const stored = await store.accounts.storedAccounts()
   // A provider the store holds by that very name, and all, personal and bots, keep their old path.
   const registered =
-    isKind(source) || (providerNamed(source) !== undefined && !stored.some(({ provider }) => provider === source))
-  if (!isAccountList(source) && !registered) return undefined
-  const entries = entriesOfList(source, await listContextOf(store, account, app, stored))
+    source !== undefined &&
+    (isKind(source) || (providerNamed(source) !== undefined && !stored.some(({ provider }) => provider === source)))
+  // Under a lock every read goes through the list, which holds only the group's accounts.
+  if (lock === undefined && source !== undefined && !isAccountList(source) && !registered) return undefined
+  const entries = entriesOfList(source ?? `group:${lock}`, await listContextOf(store, account, app, stored, env))
   return fitting(
     entries,
     kind ? [kind] : ["messages", "mail"],

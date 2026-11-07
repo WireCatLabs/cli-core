@@ -11,6 +11,7 @@ import {
 import type { AppIdentity } from "../ports/app.js"
 import { typedCommand } from "../runs/scope.js"
 import { ACCOUNT_GROUPS_SETTING, type AccountGroups, groupMembers, groupName } from "../search/account-list.js"
+import { NOT_GROUP_NAMES } from "../search/groups.js"
 import { DEFAULT_STEMMERS, parseStemmers, type Stemmers } from "../search/stem.js"
 import { openCache } from "../store/open.js"
 import { storePath } from "../store/path.js"
@@ -277,6 +278,8 @@ const changeAgentClose = async (env: NodeJS.ProcessEnv, setting: string, value: 
 
 const changeGroup = async (app: AppIdentity, env: NodeJS.ProcessEnv, setting: string, value: string | undefined) => {
   const name = groupName(setting.slice(GROUP_PREFIX.length))
+  if (value !== undefined && NOT_GROUP_NAMES.has(name.toLowerCase()))
+    throw new CliError("validation_error", `"${name}" cannot name a group — --source ${name} already means something`)
   const members = value === undefined ? undefined : groupMembers(value)
   const store = await openStore({ env })
   try {

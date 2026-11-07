@@ -36,3 +36,45 @@ it("a cursor another build wrote in a shape this one does not know reads as none
   expect(parseCrmCursor("not json")).toBeNull()
   expect(parseCrmCursor(null)).toBeNull()
 })
+
+it("says on the first sync, and only then, how to add an ungrouped CRM account to a work group", async () => {
+  const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "crm-hint-")), "store.db") })
+  stores.push(store)
+  const source = fakeCrmSource()
+  source.put("deal", exampleDeal("d1"))
+  const first = await syncCrm(source, store, PORTAL)
+  expect(first.groupHint).toBe("add it to a work group: `memo groups add work example-crm:portal`")
+  expect((await syncCrm(source, store, PORTAL)).groupHint).toBeUndefined()
+})
+
+it("gives no work group hint for a CRM account a saved group other than personal lists", async () => {
+  const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "crm-hint-")), "store.db") })
+  stores.push(store)
+  await store.accounts.saveAccount(PORTAL, { name: null })
+  await store.accounts.saveAccountGroup("sales", ["example-crm:portal"])
+  const source = fakeCrmSource()
+  source.put("deal", exampleDeal("d1"))
+  expect((await syncCrm(source, store, PORTAL)).groupHint).toBeUndefined()
+})
+
+it("still hints for a CRM account whose profile is named work but no group lists, or only personal does", async () => {
+  const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "crm-hint-")), "store.db") })
+  stores.push(store)
+  await store.accounts.saveAccount(PORTAL, { name: null })
+  await store.accounts.saveProfile("crm", "work", PORTAL)
+  await store.accounts.saveAccountGroup("personal", ["example-crm:portal"])
+  const source = fakeCrmSource()
+  source.put("deal", exampleDeal("d1"))
+  expect((await syncCrm(source, store, PORTAL)).groupHint).toMatch(/memo groups add work example-crm:portal/)
+})
+
+it("still hints for a CRM account when a work group exists without it", async () => {
+  const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "crm-hint-")), "store.db") })
+  stores.push(store)
+  await store.accounts.saveAccount(PORTAL, { name: null })
+  await store.accounts.saveAccount({ provider: "telegram", account: "102" }, { name: null })
+  await store.accounts.saveAccountGroup("work", ["telegram:102"])
+  const source = fakeCrmSource()
+  source.put("deal", exampleDeal("d1"))
+  expect((await syncCrm(source, store, PORTAL)).groupHint).toMatch(/memo groups add work example-crm:portal/)
+})

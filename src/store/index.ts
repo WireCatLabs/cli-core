@@ -435,6 +435,7 @@ export {
   type AccountAccounts,
   type AccountAttachments,
   type AccountCounters,
+  type AccountGroupChange,
   type AccountKey,
   type AccountMentions,
   type AccountMessageFilter,

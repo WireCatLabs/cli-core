@@ -40,8 +40,10 @@ const itemsOf = (value: string): string[] => {
   return items
 }
 
+export const isGroupName = (name: string): boolean => GROUP_NAME.test(name)
+
 export const groupName = (name: string): string =>
-  GROUP_NAME.test(name) ? name : fail(`a group name is letters, digits, - and _ — not "${name}"`)
+  isGroupName(name) ? name : fail(`a group name is letters, digits, - and _ — not "${name}"`)
 
 /** What `config set account_groups.<name>` saves: the entries as written, so each app resolves its own profiles. */
 export const groupMembers = (value: string): string[] =>
@@ -65,6 +67,8 @@ export interface ListContext {
   profiles: Profiles
   /** The provider of the app running, and the command people call it by (`tg` for telegram). */
   running: { provider: Provider; command?: string }
+  /** Under a group lock, the only accounts (by `keyOf`) a list may name; every other one resolves to nothing. */
+  only?: ReadonlySet<string>
 }
 
 /**
@@ -220,7 +224,14 @@ const accountsOfWord = (word: string, held: readonly Held[], context: ListContex
   return held.filter((one) => one.provider === provider)
 }
 
-const keyOf = ({ provider, account }: AccountKey) => `${provider}\u0000${account}`
+export const keyOf = ({ provider, account }: AccountKey): string => `${provider}\u0000${account}`
+
+export const sourceOf = ({ provider, account }: AccountKey): string => `${provider}:${account}`
+
+export const sameAs =
+  (key: AccountKey) =>
+  (one: AccountKey): boolean =>
+    one.provider === key.provider && one.account === key.account
 
 /**
  * What `--source group:work,tg:tg3,max:Alice,email,notes:4` names, entry by entry, a group's members in its
@@ -260,14 +271,17 @@ export const entriesOfList = (value: string, context: ListContext): ListedEntry[
     entries.push({ entry: item, accounts: [accountOf(prefix, ref, held, context)] })
   }
   for (const item of itemsOf(value)) entry(item)
+  const { only } = context
   return entries.map(({ entry, accounts }) => ({
     entry,
-    accounts: accounts.map(({ provider, account, kind, kinds }) => ({
-      provider,
-      account,
-      kind,
-      ...(kinds === undefined ? {} : { kinds }),
-    })),
+    accounts: accounts
+      .filter((one) => only === undefined || only.has(keyOf(one)))
+      .map(({ provider, account, kind, kinds }) => ({
+        provider,
+        account,
+        kind,
+        ...(kinds === undefined ? {} : { kinds }),
+      })),
   }))
 }
 

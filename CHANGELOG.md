@@ -150,6 +150,36 @@ shape of this file.
   out lists both, as before. `incoming(key)` gives the live records whose relations resolve to that record;
   `incoming({ entity })` those naming the entity by ref, from every account, and those resolved to a record mapped to
   it. Each names its record's provider, account, type and id, with the role, `as` and `amount`.
+- **Account groups for memo's group word (WC-ACCT-13): `runGroup` and `scopeToGroup`.** memo lifts the first word with
+  `liftProfile`, as every CLI does. `runGroup` takes it, or `<PREFIX>_GROUP` (`all` is no group, a word that is no
+  group name is `validation_error`), and under `<PREFIX>_GROUP_LOCK` refuses any other group and `all` with
+  `permission_error`. `scopeToGroup` turns a run's `--source` into the group: none becomes `group:<name>`, a bare
+  provider or kind keeps the group's accounts of it, and `all` anywhere in the list, an account outside the group or
+  a write's `--account` outside it is refused (`validation_error`, or `permission_error` under the lock), naming the
+  entry as typed. An empty group fails as `group <name> is empty`; an unknown one is `validation_error` with
+  `details.groups`, and `details.suggested` when profiles carry its name. From `@wirecat/cli-core/cli` and
+  `@wirecat/cli-core/services`; memo wires them in its own release.
+- **Under `<PREFIX>_GROUP_LOCK`, `listContextOf` holds only the group's accounts**, so every `--source` reader fails
+  closed: a list, a bare provider or `all` resolves inside the group, and `search messages`, `search mail` and
+  `search notes` without `--source` read the group. A lock naming no group is `permission_error`. The lock is read
+  from the run's `env` only, never `process.env`: `groupLockOf(app, env)`, `listContextOf(…, env)`,
+  `listedAccounts(…, env)`, `env` on `prepareLucene`/`searchLucene`'s messenger, on `searchNotesOf` and on a
+  `GroupStore`. A caller that passes no `env` reads without a lock.
+- **Group membership for a settings page: `listAccountGroups`, `addGroupMember`, `removeGroupMember`,
+  `moveGroupMember`** (services), over `store.accounts.changeAccountGroups`. The list gives each group's members
+  with every saved entry that names them, their profile names in every app, why each is in (`setting`, or
+  `in no other group` for `personal`'s rest) and `also_in`, plus `duplicates` and `suggested`: a profile name that
+  another app's profile or a saved group shares, for an account not in that group; never applied. A member is saved
+  as `provider:account`, so renaming a profile changes nothing. memo's own notes (`notes:internal`) and an unsaved
+  running account are in no group. A remove takes out every entry that names only that
+  account, and refuses one that names others too; a move does that and the add in one write, deciding which entries
+  go inside it. `all`, `bots` and the caller's `reserved` words cannot name a group, and `config set
+  account_groups.all` and `.bots` are refused.
+- **`deniedKindsOf(permissions, kinds, by, defaults?)`** (`@wirecat/cli-core/cli`, with `deniedKinds`): the kinds
+  `search all` leaves out under a CLI's own permission levels, such as memo's, without messenger profile settings.
+- **The first CRM sync of an account only in `personal` answers `group_hint`**: ``add it to a work group:
+  `memo groups add work <provider>:<account>` `` (memo's command ships with it). Not when a saved group other than
+  `personal` lists the account, and not on later syncs. `hint` still carries "run sync again to continue".
 
 ### Changed — may break callers
 
@@ -216,6 +246,12 @@ shape of this file.
 - **A search with no letter or digit is refused** (`validation_error`, "search needs a letter or a digit to look
   for"). `""`, a lone `?`, `()` or an emoji alone found nothing and said nothing; `-` and `+` alone were refused
   before as a syntax error. A lone `*` still reads as a wildcard.
+- **`group:personal` always exists, and a saved `personal` grows.** Every `--source` reader (`listContextOf`) now
+  finds `personal`: every account in no other saved group, plus what `account_groups.personal` lists, so with nothing
+  saved it is every account. **A `personal` group saved before this release now also holds every account in no other
+  group**, not only its own list. One account may be in several groups. Before, `group:personal` with nothing saved
+  was "no account group". The bare word `personal` (messenger accounts that are not bots) is unchanged.
+  `listContextOf` returns a `GroupContext`, a `ListContext` with `membership`.
 
 ### Fixed
 
