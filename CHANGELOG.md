@@ -7,6 +7,12 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **A keyed command that declares no `effects` now counts as a write in a CLI with `commandPermissions`:** a
+  `readonly` profile and the read-only lock refuse it before it runs, where before it ran. Declare `effects` on every
+  keyed command.
+
 ### Fixed
 
 - **`search all` in a CRM or calendar CLI without `models` no longer names a download command it lacks.** Its notes

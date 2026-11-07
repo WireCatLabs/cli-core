@@ -79,10 +79,11 @@ export const refuseWriteBeforeConnecting = (
 
 /**
  * A command of a CLI that declares its own keys (`commandPermissions`), refused by its key before anything connects:
- * `deny` stops it, `readonly` stops a write, and the read-only lock stops a write to the service. `ask` is left to
- * the write guard, which can put the question. A saved or `--permission` key that names no command stops every keyed
- * command; housekeeping still runs, so `config unset` can remove it. Under the lock a non-messenger CLI still previews
- * a `--dry-run`, which sends nothing (WC-PERM-12); a messenger's preview stays refused (SEC-65).
+ * `deny` stops it, `readonly` stops a write, and the read-only lock stops a write to the service; a command that
+ * declares no effects counts as both. `ask` is left to the write guard, which can put the question. A saved or
+ * `--permission` key that names no command stops every keyed command; housekeeping still runs, so `config unset` can
+ * remove it. Under the lock a non-messenger CLI still previews a `--dry-run`, which sends nothing (WC-PERM-12); a
+ * messenger's preview stays refused (SEC-65).
  */
 export const refuseByCommandPermissions = (
   action: Command,
@@ -94,7 +95,7 @@ export const refuseByCommandPermissions = (
   const { effects } = metaOf(action)
   const lock = readOnlyLockOf(app, env)
   const preview = dryRun && app.messenger === false
-  if (lock && effects?.remote === "write" && !preview)
+  if (lock && (effects === undefined || effects.remote === "write") && !preview)
     throw readOnlyRefusal(lock, `run ${commandPathOf(action).join(" ")}`)
   const settings = resolve(withAgentLevels(action, action.optsWithGlobals<{ permission?: string[] }>()), {
     env,
@@ -114,7 +115,7 @@ export const refuseByCommandPermissions = (
       { permission: key },
     )
   }
-  if (level === "readonly" && effects !== undefined && writes(effects))
+  if (level === "readonly" && writes(effects))
     throw levelRefusal({
       profile: settings.profile,
       command: app.command,

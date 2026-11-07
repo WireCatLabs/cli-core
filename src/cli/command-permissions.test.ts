@@ -126,6 +126,24 @@ describe("a CLI that declares its own permission keys", () => {
     expect(called).not.toHaveBeenCalled()
   })
 
+  it("**counts a command that declares no effects as a write** under readonly and under the read-only lock", async () => {
+    const { definition, env, called } = fixture({ sync: "readonly", events: "readonly" })
+    const undeclared = { ...definition, commands: () => [...definition.commands(), new Command("sync").action(called)] }
+    const cal = async (extra: NodeJS.ProcessEnv, ...args: string[]) => {
+      const streams = captureStreams()
+      const code = await run(args, undeclared, { streams, env: { ...env, ...extra }, tty: false })
+      return { code, error: code === 0 ? undefined : JSON.parse(streams.stderr.join("")).error }
+    }
+    expect((await cal({}, "work", "sync", "--json")).error).toMatchObject({
+      code: "permission_error",
+      message: expect.stringContaining("does not let sync write (permissions.sync is readonly"),
+    })
+    expect((await cal({ CAL_READ_ONLY: "1" }, "work", "sync", "--json")).error?.message).toContain("it cannot run sync")
+    expect(called).not.toHaveBeenCalled()
+    expect((await cal({}, "work", "events", "list", "--json")).code).toBe(0)
+    expect(called).toHaveBeenCalledTimes(1)
+  })
+
   it("**refuses a write under the read-only lock**, whatever the profile allows", async () => {
     const { definition, env, called } = fixture({ api: "allow" })
     const streams = captureStreams()
