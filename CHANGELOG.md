@@ -27,6 +27,13 @@ shape of this file.
 
 ### Changed — may break callers
 
+- **`run()` refuses `--offline` for a command annotated `offline: false`, or under a group that is**, before its
+  action and before the first-run questions: `permission_error`, reason `offline.refused`. A command's own
+  `--dry-run` still runs. cli-core's own such commands answered `validation_error` (`upgrade`, `topics`,
+  `chats inspect`, `chats send-as`) or `busy.offline` (`calendars busy`); they now all answer `offline.refused`, exit
+  code 5 instead of 2. `refuseOffline(command, service)` in `@wirecat/cli-core/cli` is the same refusal for a command
+  whose need depends on a flag, such as `session status --check`, so b24, beeline, gcal and cli-template drop theirs.
+
 - **`foldName` folds ё into е**, so a chat, a person and a CRM field typed with е find the one named with ё. A name
   that matched one chat or person exactly may now match two (`Алена` and `Алёна`); that is refused with both
   candidates, as any other ambiguous name is. й stays apart from и. The CRM field lookup now folds on top of

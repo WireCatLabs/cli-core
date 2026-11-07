@@ -13,6 +13,35 @@ import { changesMessenger } from "./effects.js"
 import { type CommandPermissions, refuseUnknownPermissionKeys } from "./permission-keys.js"
 import { NONE_NAMED, type Settings, settingsFor } from "./settings.js"
 
+/**
+ * Refuses `--offline` for a command that needs the service: call it where the need depends on a flag, such as
+ * `session status --check`. A command that always needs it is annotated `offline: false`, and `run()` refuses it.
+ */
+export const refuseOffline = (command: Command, service: string): void => {
+  if (command.optsWithGlobals<{ offline?: boolean }>().offline)
+    throw new CliError("permission_error", `this needs ${service}; leave out --offline`, { reason: "offline.refused" })
+}
+
+/**
+ * Refuses `--offline` before anything runs when the command, or a group above it, is annotated `offline: false`. A
+ * command's own `--dry-run` passes: it answers without the service.
+ */
+export const refuseOfflineCommand = (
+  action: Command,
+  app: AppIdentity,
+  flags: { offline?: boolean; dryRun?: boolean },
+) => {
+  if (!flags.offline) return
+  if (flags.dryRun && action.options.some((option) => option.long === "--dry-run")) return
+  for (let command: Command | null = action; command; command = command.parent)
+    if (metaOf(command).offline === false)
+      throw new CliError(
+        "permission_error",
+        `\`${[app.command, ...commandPathOf(action)].join(" ")}\` needs the service, not the local copy; leave out --offline`,
+        { reason: "offline.refused" },
+      )
+}
+
 type Resolve = (flags: object, options: { env: NodeJS.ProcessEnv; needsProfile: false; readOnly: true }) => object
 
 /**

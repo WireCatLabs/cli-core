@@ -85,8 +85,11 @@ describe.each(["max", "tg"])("the shared upgrade command for %s", (command) => {
     ports.latest = vi.fn(async () => "2.0.0")
     for (const argv of [["upgrade", "--check"], ["upgrade"]]) {
       const result = await call(command, [...argv, "--offline", "--json", "--no-record"], ports)
-      expect(result.code).toBe(2)
-      expect(JSON.parse(result.stderr.at(-1) ?? "").error.message).toContain("not with --offline")
+      expect(result.code).not.toBe(0)
+      expect(JSON.parse(result.stderr.at(-1) ?? "").error).toMatchObject({
+        code: "permission_error",
+        reason: "offline.refused",
+      })
     }
     expect(ports.latest).not.toHaveBeenCalled()
     expect(ports.install).not.toHaveBeenCalled()
