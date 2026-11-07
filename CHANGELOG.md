@@ -31,6 +31,9 @@ shape of this file.
 - **`doctor --online` of a CLI built on `appDoctorCommand` runs inside cli-core's run.** It answered outside one, so
   `--record` kept no run of it and its call out was not the command's own. A config that will not load still gets an
   answer, outside a run.
+- **`apiJson` and `apiPlainJson` refuse a body holding `NaN` or `Infinity`** with `validation_error`, naming the field,
+  before anything is sent. JSON writes them as `null`, so a failed `Number(…)` reached the service as a cleared field:
+  bitrix24-cli's `deals update --owner anna` sent `assignedById: null`.
 
 ## 0.600.0 — 07.11.2026
 
