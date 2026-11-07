@@ -48,7 +48,7 @@ export const crmTables = [
   },
   {
     name: "deals",
-    doc: "A deal (`deal:<id>`): what the owner hopes to sell, to whom, where it stands in its pipeline and whether it ended. The people on it are `links` (kind `related-to`, `role` owner, contact or decision-maker). A deal is not a project.",
+    doc: "A deal (`deal:<id>`): what the owner hopes to sell, to whom, where it stands in its pipeline and whether it ended. The people on it are `links` (kind `related-to`, `role` owner, contact, decision-maker or influencer). A deal is not a project.",
     cols: [
       id(),
       c("title", "text", { notnull: true }),

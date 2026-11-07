@@ -1,6 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import type { ContextSource } from "../context/evidence.js"
 import { formatReference, parseReference } from "../domain/references.js"
+import { isUsable } from "../domain/relations.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
 import { chatCoverage } from "./chat-coverage.js"
 import { gatherProjectEvidence, type ProjectChatFetcher, type ProjectGatheringPorts } from "./project-gathering.js"
@@ -201,7 +202,7 @@ const proposedLinksOf = async (store: MessageStore, project: string): Promise<Pr
     })
     .sort((a, b) => Number(a.id) - Number(b.id))
   const legacy = (await store.knowledge.relations(null, project))
-    .filter((one) => !one.confirmed && one.kind === "member-of" && one.to === project)
+    .filter((one) => one.standing === "proposed" && one.kind === "member-of" && one.to === project)
     .map((one) => ({ from: one.from, id: `link:${one.id}`, role: one.role, purpose: one.purpose }))
   return [...proposals, ...legacy]
 }
@@ -224,7 +225,7 @@ const memberRefsOf = async (
   const confirmed = new Set<string>()
   for (const relation of await store.knowledge.relations(null, project))
     if (
-      relation.confirmed &&
+      isUsable(relation.standing) &&
       relation.kind === "member-of" &&
       relation.to === project &&
       /^person:.+/.test(relation.from)

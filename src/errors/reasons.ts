@@ -292,6 +292,7 @@ const OTHERS: Entry[] = [
   ["proposals.agent-decisions-off", "permission_error", "agent decisions are turned off; the owner decides"],
   ["proposal.unknown-kind", "not_found", "no registered proposal kind holds this id"],
   validation("relationship.exists", "a confirmed relationship already links them"),
+  validation("relationship.role-unknown", "the role is not one the relationship takes; the message lists them"),
   validation("ranking.invalid", "the ranking is not valid"),
   validation("ref.malformed", "the reference has a known kind but not its shape"),
   validation("ref.unknown-kind", "the text names no kind of reference"),

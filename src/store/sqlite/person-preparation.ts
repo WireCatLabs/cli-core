@@ -1,4 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
+import { usableLinkSql } from "../../domain/relations.js"
 import type { AccountKey } from "../types.js"
 import { linkKind } from "./link-kinds.js"
 import type { StoreContext } from "./open.js"
@@ -53,7 +54,7 @@ export const personPreparation = (
   const page = <T>(rows: T[]) => ({ items: rows.slice(0, limit), hasMore: rows.length > limit })
   return read(database, () => {
     const projects = `SELECT l.to_id FROM links l WHERE l.from_type='person' AND l.from_id=? AND l.to_type='project'
-      AND l.kind=${linkKind("member-of")} AND l.confirmed=1 AND l.to_id IN (${GLOBAL_PROJECT})`
+      AND l.kind=${linkKind("member-of")} AND ${usableLinkSql("l")} AND l.to_id IN (${GLOBAL_PROJECT})`
     const facts = database
       .prepare(
         `SELECT f.id,f.type,f.statement,f.subject_type,f.subject_id,f.project_id,f.updated_at FROM facts f

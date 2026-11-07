@@ -112,6 +112,20 @@ export {
   type RefKindName,
   type RefKindSpec,
 } from "./domain/references.js"
+export {
+  inverseOf,
+  isUsable,
+  ORGANIZATION_ROLES,
+  PROJECT_ROLES,
+  RELATION_KINDS,
+  RELATIONS,
+  type RelationKind,
+  rolesOf,
+  STANDINGS,
+  type Standing,
+  standingOf,
+  usableLink,
+} from "./domain/relations.js"
 export { normalizeTag, TAG_TYPES, type TagType } from "./domain/tags.js"
 export { type AppErrors, DETAILS as CORE_DETAILS, failureContext, REASONS as CORE_REASONS } from "./errors/reasons.js"
 export {

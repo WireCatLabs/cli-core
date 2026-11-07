@@ -34,8 +34,23 @@ duplicate owner annotations, labels or relationships attached to a different per
 ## Relationships
 
 `addOrganization` creates a company, team, family or community; `addProject` a project with its task key
-(made from the name when none is given) and type. `relate` records manual `member-of`
-or `related-to` links between explicit references, with optional role/evidence. Who works on a task is
+(made from the name when none is given) and type. `relate` records a relationship between explicit references, with
+optional role/evidence. Its kinds, their ends and their roles are one registry, `RELATIONS` in
+`src/domain/relations.ts`; `pair()` refuses ends a kind does not join and a role off the list those ends name, and
+says which roles it takes:
+
+| Kind | From → to | Roles |
+|---|---|---|
+| `member-of` | person, chat, mail thread, organization, project → organization, project | a person's: `employee`, `contractor`, `founder`, `owner`, `manager`, `adviser`, `contact` on an organization; `owner`, `manager`, `contributor`, `client-contact`, `approver` on a project; others free text |
+| `reports-to` | person → person (read backwards: `manages`) | none |
+| `customer-of` | person, organization → organization (read backwards: `supplier of`) | none |
+| `partner-of` | organization ↔ organization, stored once with the lower id as `from` | none |
+| `related-to` | person, organization, project, task, deal, lead → person, organization, project, task | a deal's or lead's: `owner`, `contact`, `decision-maker`, `influencer`; others free text |
+
+A job title is never a role. Inverses are never stored. Every relationship read carries a derived `standing`:
+`confirmed` (the owner's), `reported` (a source account's that nobody confirmed), `proposed` (a suggestion waiting
+for review) or `ended`. Readers that count relationships (`personPreparation`, `projectStatus`, the stored project
+gathering) take the usable ones, confirmed or reported, through `usableLink`. Who works on a task is
 `store.tasks.assign` (`task_assignments`: assignee, reviewer or watcher), not a link; store version 2 copied
 the old `assigned-to` links there. A relationship is a confirmed owner statement or an explicitly
 unconfirmed weak suggestion with provenance. An agent's or a rule's relationship is a `relationship`
@@ -160,7 +175,7 @@ have an `outcome` (`open`, `won`, `lost`). Deals (`deals`, `deal:<id>`) and lead
 `deal_id` it became) have a title, an optional organization and project, a stage, a status kept apart from the stage,
 an optional expected amount with its currency, the expected close day and the day it closed. Moving to a stage whose
 outcome ends it closes it, and `close` moves it to the stage of that outcome when the pipeline has one. The people on
-it are `links` of kind `related-to` with a `role` (`owner`, `contact`, `decision-maker`). The owner and his agents
+it are `links` of kind `related-to` with a `role` (`owner`, `contact`, `decision-maker`, `influencer`). The owner and his agents
 write alike, with no review; only the author is kept. Triggers write each stage a row enters to
 `pipeline_stage_changes`, and `pipeline(ref)` counts from it how many rows reached each stage and the conversion to
 the next. The migration seeds the lead pipeline `Leads` (`new`, `contacted`, `qualified`, `won`, `lost`).
