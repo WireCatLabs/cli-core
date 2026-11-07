@@ -5,7 +5,7 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
-## Unreleased
+## 0.605.0 — 07.11.2026
 
 ### Changed — may break callers
 
@@ -14,32 +14,6 @@ shape of this file.
   (`memory.already-superseded`), so two corrections of one memory cannot both stand. drive-cli writes every memory
   `proposed`, so its `memories add --supersedes` now retires the old memory only when that memory's correction is
   confirmed.
-
-### Fixed
-
-- **An agent's correction no longer retires the memory it corrects.** `store.memories.add({ supersedes })` marked the
-  old memory `superseded` as soon as the new one was written, even while the new one only waited as proposed. Now
-  `confirm` of the correction retires it; rejecting or removing the correction leaves it as it was. Retiring a
-  confirmed memory is the owner's alone, whatever `agent_decisions` says.
-
-## 0.605.0 — 07.11.2026
-
-### Added
-
-- **A run that finds the store damaged stops every later write.** When a command fails with SQLite's "database disk
-  image is malformed", "file is not a database" or an fts5 corruption, the run leaves `<store>.damaged.json` beside
-  the store (when, which command and version, the run's id, SQLite's message). While it is there, every command that
-  opens the store to write refuses with `store.damaged` and names `<cli> store recover`, so scheduled syncs fail at
-  once instead of writing into a damaged file; reads still work. `doctor` and `store recover` show it. A deep check
-  that passes (`doctor --deep`, `store recover`), `store recover run`, `store restore` and `store reset` lift it.
-  `markStoreDamaged` from `@wirecat/cli-core/store` leaves it for a CLI that reports such a failure itself.
-- **Every deep check is recorded beside the store as its last known good.** `doctor --deep`, `store recover` and the
-  check after `store recover run` write `<store>.health.json` (when, the result, the schema, the CLI and its version,
-  and `last_ok_at`, the newest check that passed); `doctor` and `store recover` answer `last_known_good` from it.
-  `storeSummary` takes the CLI's `version` for it.
-
-### Changed — may break callers
-
 - **`personContext`, `contacts context`, `contacts prepare` and `events prepare` read only accounts of the asked
   account's scope.** A personal account no longer reads a linked person's mail, messages, calendar events or recorded
   meetings in work accounts, and a work account none in personal ones. To read both, pass
@@ -49,6 +23,10 @@ shape of this file.
 
 ### Fixed
 
+- **An agent's correction no longer retires the memory it corrects.** `store.memories.add({ supersedes })` marked the
+  old memory `superseded` as soon as the new one was written, even while the new one only waited as proposed. Now
+  `confirm` of the correction retires it; rejecting or removing the correction leaves it as it was. Retiring a
+  confirmed memory is the owner's alone, whatever `agent_decisions` says.
 - **`scanProjectLinks` spreads from what it finds within one run.** A chat or person that scores the threshold or more
   is used like a confirmed link for the `spreads` scorers (`member-chats`, `member-dialog`, `chat-senders`,
   `mail-thread`), up to `MAX_HOPS` (4) times. One scan now reaches a member's dialogs and groups in every messenger
@@ -82,6 +60,20 @@ shape of this file.
 - **A personal account's `contacts context` no longer shows a person's work mail.** One exact email address joins a
   personal and a work contact into one person, and the context then read every account that had seen any of that
   person's identities. Each linked identity now also lists `seenIn`, its accounts with their scope.
+
+### Added
+
+- **A run that finds the store damaged stops every later write.** When a command fails with SQLite's "database disk
+  image is malformed", "file is not a database" or an fts5 corruption, the run leaves `<store>.damaged.json` beside
+  the store (when, which command and version, the run's id, SQLite's message). While it is there, every command that
+  opens the store to write refuses with `store.damaged` and names `<cli> store recover`, so scheduled syncs fail at
+  once instead of writing into a damaged file; reads still work. `doctor` and `store recover` show it. A deep check
+  that passes (`doctor --deep`, `store recover`), `store recover run`, `store restore` and `store reset` lift it.
+  `markStoreDamaged` from `@wirecat/cli-core/store` leaves it for a CLI that reports such a failure itself.
+- **Every deep check is recorded beside the store as its last known good.** `doctor --deep`, `store recover` and the
+  check after `store recover run` write `<store>.health.json` (when, the result, the schema, the CLI and its version,
+  and `last_ok_at`, the newest check that passed); `doctor` and `store recover` answer `last_known_good` from it.
+  `storeSummary` takes the CLI's `version` for it.
 
 ## 0.604.0 — 07.11.2026
 
