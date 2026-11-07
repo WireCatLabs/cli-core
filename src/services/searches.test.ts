@@ -93,7 +93,7 @@ describe("search history", () => {
 
   it("keeps a refused query and a run with recording off out of it", async () => {
     const { messages, path } = await setup()
-    await expect(messages.search({ text: "foo:bar", limit: 5 })).rejects.toMatchObject({
+    await expect(messages.search({ text: "kind:nonsense", limit: 5 })).rejects.toMatchObject({
       code: "validation_error",
     })
     expect(await rows(path)).toEqual([])

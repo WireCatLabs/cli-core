@@ -412,6 +412,8 @@ export const allAnswer = (
   { limit, page, again }: Paging,
   exact = false,
   skips: StoredHistorySkip[] = [],
+  /** Kinds the profile's levels kept out of the search, each with why. */
+  leftOut: readonly { why: string }[] = [],
 ): ListBody<HitItem> => {
   const limited = historyLimitGaps(skips)
   const scan = found.meetings?.complete === false ? found.meetings : undefined
@@ -453,6 +455,7 @@ export const allAnswer = (
       ...messages.missing,
       ...archive.missing,
       ...limited.missing,
+      ...leftOut.map(({ why }) => ({ field: "items", why })),
     ],
     meta: metaOf(found.accounts, found.skipped, archive.missing.length > 0 || skips.length > 0),
   })

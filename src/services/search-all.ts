@@ -1,12 +1,14 @@
 import { CliError, type ErrorCode } from "@wirecat/cli-base"
 import { parseLucene, type QueryNode } from "@wirecat/cli-base/query"
 import { type HitFile, hitFiles } from "../domain/attachments.js"
+import type { DealKind } from "../domain/deals.js"
 import { parseLocator } from "../domain/locator.js"
 import { type MailFields, senderIsMe } from "../domain/models.js"
 import { INTERNAL_NOTES, kindIn } from "../domain/providers.js"
 import { runEmbedders } from "../embeddings/embed.js"
 import { DEFAULT_TEXT_MODEL } from "../embeddings/models.js"
 import type { MessengerTraits } from "../ports/traits.js"
+import { plainQuery } from "../search/lucene/plain.js"
 import { MESSAGE_PARSING, SEARCH_QUERY } from "../search/lucene/types.js"
 import { planQuestion, questionLookup } from "../search/question-plan.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
@@ -100,6 +102,8 @@ export interface SearchAllRequest {
   signal?: AbortSignal
   /** The accounts `--source` chose, per kind; a kind left out reads every account of its own. */
   scope?: Partial<Record<SearchedResource, AccountKey[]>>
+  /** The CRM kinds `crm` reads; absent, deals and leads. */
+  crmKinds?: readonly DealKind[]
 }
 
 /** A query a resource cannot answer is skipped with its reason, never a failure of the whole search. */
@@ -162,13 +166,14 @@ export const crmAccounts = async (store: MessageStore): Promise<AccountKey[]> =>
 export const searchAll = async (
   store: MessageStore,
   account: AccountKey,
-  request: SearchAllRequest,
+  asked: SearchAllRequest,
   messenger: SearchAllMessenger = {},
   searchMessages: (query: SearchQuery) => Promise<SearchFound> = (query) =>
     searchStore(store, account, query, messenger),
   meaning?: MeaningLane,
 ): Promise<SearchAllFound> => {
-  if (!request.text.trim()) throw new CliError("validation_error", "say what to find")
+  if (!asked.text.trim()) throw new CliError("validation_error", "say what to find")
+  const request = { ...asked, text: plainQuery(asked.text) }
   const offset = request.offset ?? 0
   if (!Number.isInteger(offset) || offset < 0 || offset > MAX_SEARCH_OFFSET)
     throw new CliError("validation_error", `offset takes a whole number from 0 to ${MAX_SEARCH_OFFSET}`)
@@ -364,6 +369,7 @@ export const searchAll = async (
           const found = await store.deals.find({
             words,
             anyWord: anyWord || discover,
+            ...(request.crmKinds === undefined ? {} : { kinds: request.crmKinds }),
             limit: Math.min(window + 1, 500),
             ...(chosen === undefined ? {} : { accounts: chosen }),
           })
@@ -396,7 +402,7 @@ export const searchAll = async (
   const ordered = oneList(lists, cosines)
   const more = hasMore || ordered.length > window
   return {
-    query: request.text,
+    query: asked.text,
     items: ordered.slice(offset, window),
     hasMore: more,
     ...(more && window <= MAX_SEARCH_OFFSET ? { nextOffset: window } : {}),
