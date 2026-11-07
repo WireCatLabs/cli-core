@@ -304,6 +304,7 @@ export type {
 } from "./sqlite/records.js"
 export type { RelationFilter, RelationList, RelationListItem } from "./sqlite/relation-list.js"
 export type { LinkDecision, RelationUpdate } from "./sqlite/relation-proposals.js"
+export type { RelationReads, RelationRole, RelationRoles } from "./sqlite/relation-roles.js"
 export type {
   RelationsStore,
   ReportedIssue,

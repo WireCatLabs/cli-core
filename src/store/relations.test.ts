@@ -155,3 +155,39 @@ it("keeps a job title and the dates beside a relationship, and ends it without r
     await store.knowledge.updateRelation(null, member.id, { position: null, endsAt: null, by: "owner" }),
   ).toMatchObject({ position: null, endsAt: null, standing: "confirmed" })
 })
+
+it("takes the owner's own roles on a list beside the built-in ones, and keeps those in use", async () => {
+  const { store, acme, alice } = await fixture()
+  expect(await store.knowledge.addRole("organization", "board-member", "Board member")).toEqual(
+    expect.arrayContaining([
+      { id: "employee", label: null, builtIn: true },
+      { id: "board-member", label: "Board member", builtIn: false },
+    ]),
+  )
+  await expect(store.knowledge.addRole("organization", "employee")).rejects.toMatchObject({
+    details: { reason: "relationship.role-exists" },
+  })
+  await expect(store.knowledge.addRole("organization", "Board Member")).rejects.toMatchObject({
+    code: "validation_error",
+  })
+  const member = await store.knowledge.relate(null, {
+    by: "owner",
+    from: alice,
+    to: acme,
+    kind: "member-of",
+    role: "board-member",
+  })
+  expect(member).toMatchObject({ role: "board-member" })
+  await expect(
+    store.knowledge.relate(null, { by: "owner", from: alice, to: acme, kind: "member-of", role: "trustee" }),
+  ).rejects.toMatchObject({ details: { reason: "relationship.role-unknown" } })
+  await expect(store.knowledge.removeRole("organization", "employee")).rejects.toMatchObject({
+    details: { reason: "relationship.role-built-in" },
+  })
+  await expect(store.knowledge.removeRole("organization", "board-member")).rejects.toMatchObject({
+    details: { reason: "relationship.role-in-use", count: 1 },
+  })
+  await store.knowledge.removeRelation(null, member.id, "owner")
+  expect((await store.knowledge.removeRole("organization", "board-member")).some(({ builtIn }) => !builtIn)).toBe(false)
+  expect((await store.knowledge.roles("project")).every(({ builtIn }) => builtIn)).toBe(true)
+})

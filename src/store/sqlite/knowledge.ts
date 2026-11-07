@@ -2,7 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import { type QueryAst, walkQuery } from "@wirecat/cli-base/query"
 import { parseLocator } from "../../domain/locator.js"
 import { formatReference, parseReference, type Reference } from "../../domain/references.js"
-import { checkEnds, checkRole, isSymmetric } from "../../domain/relations.js"
+import { checkEnds, isSymmetric } from "../../domain/relations.js"
 import { normalizeTag } from "../../domain/tags.js"
 import { normalizeVocabularyName } from "../../domain/vocabulary.js"
 import { formatMeetingReference } from "../../meetings/index.js"
@@ -21,7 +21,6 @@ import type { StoreContext } from "./open.js"
 import { type OrganizationsStore, organizationOf, organizationsStoreOver } from "./organizations.js"
 import type { ProposedAction } from "./proposed-actions.js"
 import { queryFilter } from "./query-filter.js"
-import { type RelationList, relationListOver } from "./relation-list.js"
 import {
   type KnowledgeRelation,
   type LinkDecision,
@@ -31,6 +30,7 @@ import {
   relationProposalsOver,
   type Scored,
 } from "./relation-proposals.js"
+import { checkStoredRole, type RelationReads, relationReadsOver } from "./relation-roles.js"
 import type { TagCreationOptions } from "./tag-creation.js"
 import {
   addTags as addThingTags,
@@ -126,7 +126,7 @@ export interface Reminder {
 
 export type LabelledType = "note" | "document" | "person" | "organization" | "project" | "task" | "meeting" | "folder"
 
-export interface KnowledgeStore extends VocabularyStore, MeetingProjectsStore, OrganizationsStore, RelationList {
+export interface KnowledgeStore extends VocabularyStore, MeetingProjectsStore, OrganizationsStore, RelationReads {
   taskIds(
     key: AccountKey,
     options?: { state?: "open" | "done" | "dismissed"; limit?: number; offset?: number; sources?: string[] },
@@ -457,7 +457,7 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
     if (from.type === to.type && from.id === to.id)
       throw new CliError("validation_error", "a relationship needs two distinct references")
     checkEnds(input.kind, from.type, to.type)
-    if (input.role !== undefined) checkRole(input.kind, from.type, to.type, input.role.trim())
+    if (input.role !== undefined) checkStoredRole(database, input.kind, from.type, to.type, input.role.trim())
     let ends = { from: input.from, to: input.to }
     if (isSymmetric(input.kind) && to.id < from.id) [from, to, ends] = [to, from, { from: input.to, to: input.from }]
     const role = input.role === undefined ? null : input.role.trim()
@@ -525,7 +525,7 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
     ...vocabularyStoreOver(context),
     ...organizationsStoreOver(context),
     ...meetingProjectsStoreOver(context),
-    ...relationListOver(context),
+    ...relationReadsOver(context),
     taskIds: async (key, options = {}) => {
       const { limit, offset } = bounded(options.limit, options.offset)
       if (options.state !== undefined && !["open", "done", "dismissed"].includes(options.state))
@@ -843,7 +843,7 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
       const row = relation(id)
       const link = linkOf(database, row)
       if (typeof input.role === "string")
-        checkRole(link.kind, String(row.from_type), String(row.to_type), input.role.trim())
+        checkStoredRole(database, link.kind, String(row.from_type), String(row.to_type), input.role.trim())
       if (input.by === "owner") return relationOf(proposals.update(link, input))
       return proposals.proposeUpdate(link, input, input.by)
     }) as KnowledgeStore["updateRelation"],

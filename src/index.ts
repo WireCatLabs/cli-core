@@ -122,6 +122,8 @@ export {
   RELATION_KINDS,
   RELATIONS,
   type RelationKind,
+  ROLE_LISTS,
+  type RoleList,
   rolesOf,
   STANDINGS,
   type Standing,

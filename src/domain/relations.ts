@@ -83,9 +83,28 @@ export const rolesOf = (kind: string, from: string, to: string): readonly string
   return spec?.roles?.from?.[from as End] ?? spec?.roles?.to?.[to as End]
 }
 
-/** The role as given when the relationship has no list, or when it is on the list; refused otherwise. */
-export const checkRole = (kind: string, from: string, to: string, role: string): string => {
+/** The role lists the owner may add to; each is a list the registry gives some relationship's ends. */
+export const ROLE_LISTS = { organization: ORGANIZATION_ROLES, project: PROJECT_ROLES, deal: DEAL_ROLES } as const
+export type RoleList = keyof typeof ROLE_LISTS
+
+/** Which list a relationship's role comes from, or `undefined` where a role is free text. */
+export const roleListOf = (kind: string, from: string, to: string): RoleList | undefined => {
   const roles = rolesOf(kind, from, to)
+  return (Object.keys(ROLE_LISTS) as RoleList[]).find((list) => ROLE_LISTS[list] === roles)
+}
+
+/**
+ * The role as given when the relationship has no list, or when it is on the list or among `extra` (the owner's own
+ * roles for that list); refused otherwise.
+ */
+export const checkRole = (
+  kind: string,
+  from: string,
+  to: string,
+  role: string,
+  extra: readonly string[] = [],
+): string => {
+  const roles = rolesOf(kind, from, to)?.concat(extra)
   if (roles && !roles.includes(role))
     throw new CliError("validation_error", `a ${from}'s role on ${kind} ${to} is one of ${roles.join(", ")}`, {
       reason: "relationship.role-unknown",

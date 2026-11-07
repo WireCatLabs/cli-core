@@ -47,7 +47,9 @@ says which roles it takes:
 | `partner-of` | organization ↔ organization, stored once with the lower id as `from` | none |
 | `related-to` | person, organization, project, task, deal, lead → person, organization, project, task | a deal's or lead's: `owner`, `contact`, `decision-maker`, `influencer`; others free text |
 
-A job title is never a role: it is `position` beside the relationship (`metadata.position`), with `startsAt` and
+The owner may add his own roles to the organization, project and deal lists (`knowledge.addRole`, store setting
+`relationships.roles.<list>`); `knowledge.roles(list)` answers the built-in roles and his, each with `builtIn`. A
+built-in role stays, and an owner role a relationship still holds is not removed. A job title is never a role: it is `position` beside the relationship (`metadata.position`), with `startsAt` and
 `endsAt` (when it held, UTC ms, end exclusive). `endRelation` sets the end instead of removing the relationship; an
 agent's end, like any agent's change, is a `relationship_update` proposal. Inverses are never stored.
 `listRelations(filter)` answers links and pending `relationship` proposals together, filtered and paged in one query

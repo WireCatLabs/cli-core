@@ -1,5 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
-import { checkEnds, checkRole, isSymmetric, type RelationKind } from "../../domain/relations.js"
+import { checkEnds, isSymmetric, type RelationKind } from "../../domain/relations.js"
 import type { AccountKey } from "../types.js"
 import { accountPk } from "./accounts.js"
 import { crmLinkMode } from "./crm-settings.js"
@@ -7,6 +7,7 @@ import { linkKind } from "./link-kinds.js"
 import type { Author } from "./memories.js"
 import type { StoreContext } from "./open.js"
 import { relationProposalsOver } from "./relation-proposals.js"
+import { checkStoredRole } from "./relation-roles.js"
 import { referenceOfThing, type Thing, thingOf } from "./things.js"
 import { write } from "./transaction.js"
 
@@ -122,7 +123,7 @@ export const syncReportedIn = (
       if (from.type === to.type && from.id === to.id)
         throw new CliError("validation_error", "a relationship needs two distinct ends")
       checkEnds(relation.kind, from.type, to.type)
-      if (role !== null) checkRole(relation.kind, from.type, to.type, role)
+      if (role !== null) checkStoredRole(database, relation.kind, from.type, to.type, role)
     } catch (error) {
       if (!(error instanceof CliError)) throw error
       issue(relation, "relationship.invalid", error.message)

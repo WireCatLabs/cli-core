@@ -43,6 +43,10 @@ shape of this file.
   and `endsAt` (UTC ms, the end after the start); relationships answer `position`, `startsAt` and `endsAt`.
   `knowledge.endRelation(key, id, at, by)` ends one without removing it (standing `ended` from then); an agent's end
   is a `relationship_update` proposal.
+- **The owner adds his own roles to the organization, project and deal role lists.** `knowledge.roles(list)`,
+  `addRole(list, id, label?)` and `removeRole(list, id)`, kept in the store setting `relationships.roles.<list>`; a
+  role id is lowercase letters, digits and `-`. Built-in roles stay; a role a relationship still holds is not removed
+  (`relationship.role-in-use` with the count).
 - **`knowledge.listRelations(filter)` filters and pages relationships and pending relationship proposals in SQL.**
   By `kind`, `role`, `standing`, `from`, `to`, `about` (both ways, each row with `direction` and the inverse label),
   `at`, `includeEnded`, `accounts` (a source's rows only from these; the owner's always) and `deniedKinds`; `limit`
