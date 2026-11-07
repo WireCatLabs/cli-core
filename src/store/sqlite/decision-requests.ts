@@ -179,8 +179,14 @@ export const decisionRequestStoreOver = ({ database, now }: StoreContext): Decis
     cancelOpen: (scope = {}) => {
       const filters: string[] = []
       const values: string[] = []
-      if (scope.channel !== undefined) filters.push("channel=?"), values.push(scope.channel)
-      if (scope.botProfile !== undefined) filters.push("bot_profile=?"), values.push(scope.botProfile)
+      if (scope.channel !== undefined) {
+        filters.push("channel=?")
+        values.push(scope.channel)
+      }
+      if (scope.botProfile !== undefined) {
+        filters.push("bot_profile=?")
+        values.push(scope.botProfile)
+      }
       const where = [OPEN, ...filters].join(" AND ")
       return write(database, () =>
         Number(
