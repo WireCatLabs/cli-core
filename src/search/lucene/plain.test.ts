@@ -32,6 +32,8 @@ const SPECIAL_TEXT = [
   ["comparison of no field", "a>b", ["text:a>b"]],
   ["equality of no field", "a=b", ["text:a=b"]],
   ["Boolean word alone", "AND", ["text:AND"]],
+  ["question mark ending a word", "invoice?", ["text:invoice?"]],
+  ["question in Cyrillic", "что с бюджетом?", ["text:что", "text:с", "text:бюджетом?"]],
   ["NOT alone", "NOT", ["text:NOT"]],
 ] as const
 
@@ -63,6 +65,8 @@ describe("plainQuery", () => {
       'mentions:"person:12"',
       "date:[2026-01-01 TO 2026-02-01}",
       "invo*",
+      "inv?ice",
+      "text:invoice?",
       "a ! b",
     ])
       expect(plainQuery(text)).toBe(text)

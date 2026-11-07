@@ -7,7 +7,7 @@ shape of this file.
 
 ## Unreleased
 
-### Changed
+### Fixed
 
 - **`scanProjectLinks` spreads from what it finds within one run.** A chat or person that scores the threshold or more
   is used like a confirmed link for the `spreads` scorers (`member-chats`, `member-dialog`, `chat-senders`,
@@ -19,6 +19,37 @@ shape of this file.
   needs 5 in the window.
 - **`member-dialog` (version 2) counts the scanned project in the member's projects** whether the member is confirmed
   or only found, so a found member who is in another project weighs the same as a confirmed one.
+
+## 0.604.0 — 07.11.2026
+
+### Added
+
+- **A file note can carry the time its source gives it, and searches read that time.**
+  `store.notes.dateFileNotes(folderId, [{ path, modifiedAt }])` sets it (memo passes the front matter `date` or the
+  file's modification time) without counting as an edit: text, revision and `updatedAt` stay, so nothing is
+  re-embedded. `Note.modifiedAt` holds it (`null` when the source gave none, always for a note written in memo). The
+  column is the one Drive documents already fill, so `date:`, the `at` of a notes hit and `search all`'s `timestamp`
+  show it without a store version. Until now a local note was dated by the moment it was imported.
+- **`models download --json` writes byte progress lines to stderr** while a model downloads:
+  `{"event":"progress","step":"download","done","total","unit":"bytes","label":<model id>}`, at most two a second plus
+  the first and last line, so a desktop app can draw a bar. `installFiles`, `install` and the `download*Model`
+  services take a `bytes(done, total)` callback for the same count.
+
+- **A source `search all` skips names why, for a program too.** Each `skipped` entry keeps the sentence in `reason` and
+  now adds `why`, the dotted reason (`query.unknown-value`), and `token`, the part of the query that was refused
+  (`kind:nonsense`). `meta.issues` of `search all` carries `why` as `reason`, as the output standard allows.
+
+### Changed — may break callers
+
+- **A `?` that ends a bare word is a question mark, not a wildcard.** `invoice?` and `что с бюджетом?` find
+  "invoice" and "бюджет"; before, `?` asked for one more character and `invoice` itself was missed. A `?` inside a
+  word (`inv?ice`) or after a field (`text:invoice?`) is still one character.
+
+### Fixed
+
+- **`search all` ranks higher the record a question words differently.** For a question, a mail, message or note
+  that both the words and the meaning found kept only its words rank, so one meaning ranked first and words ranked
+  last stayed at the bottom of the page or off it. It now keeps the better of its two ranks, still with no second vote.
 
 ## 0.603.0 — 07.11.2026
 

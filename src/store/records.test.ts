@@ -335,3 +335,12 @@ it("publishes the envelope's JSON Schema as written in the code", () => {
   const file = new URL("../../schemas/records-envelope.v1.schema.json", import.meta.url)
   expect(JSON.parse(readFileSync(file, "utf8"))).toEqual(RECORDS_ENVELOPE_SCHEMA)
 })
+
+it("refuses an invoice whose fields.payer is not text, though payer is a payment's role", async () => {
+  const { store } = await mapped()
+  const record = invoice("SEO-09", "1000.00")
+  const result = await take(store, envelope([{ ...record, fields: { ...record.fields, payer: 5 } }]))
+  expect(result.errors).toEqual([
+    expect.objectContaining({ pointer: "/records/0/fields", code: "record.invalid", message: "fields.payer is text" }),
+  ])
+})

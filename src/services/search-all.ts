@@ -57,7 +57,11 @@ export interface SearchedAccount {
 }
 
 /** A resource not read, or a `--source` entry naming no account the search reads. */
-export type Skipped<R extends string> = { code: ErrorCode; reason: string } & (
+/**
+ * `reason` is the sentence for a person; `code` and `why` (a dotted reason such as `query.unknown-value`) are for a
+ * program, and `token` is the part of the query the source refused, when the refusal points at one.
+ */
+export type Skipped<R extends string> = { code: ErrorCode; reason: string; why?: string; token?: string } & (
   | { resource: R; source?: undefined }
   | { source: string; resource?: undefined }
 )
@@ -106,6 +110,16 @@ export interface SearchAllRequest {
   crmKinds?: readonly DealKind[]
 }
 
+const refusal = (error: CliError, text: string): { why?: string; token?: string } => {
+  const { reason, span } = (error.details ?? {}) as { reason?: unknown; span?: { start?: unknown; end?: unknown } }
+  const why = typeof reason === "string" ? reason : undefined
+  const token =
+    span && Number.isInteger(span.start) && Number.isInteger(span.end)
+      ? text.slice(span.start as number, span.end as number).trim()
+      : ""
+  return { ...(why ? { why } : {}), ...(token ? { token } : {}) }
+}
+
 /** A query a resource cannot answer is skipped with its reason, never a failure of the whole search. */
 const skippable = (error: unknown): error is CliError =>
   error instanceof CliError && (error.code === "validation_error" || error.code === "not_found")
@@ -146,7 +160,8 @@ export const titleWords = (text: string): { words: string[]; anyWord: boolean } 
     node.kind === "predicate" &&
     node.field === "text" &&
     (node.operator === "term" || node.operator === "phrase")
-      ? node.value
+      ? // A title holds "invoice", not the question mark of "invoice?".
+        node.value.replace(/\?+$/u, "") || node.value
       : (() => {
           throw new CliError("validation_error", "deals and leads are found by the words of their title only")
         })(),
@@ -277,12 +292,10 @@ export const searchAll = async (
       cosines.set(hit.locator, hit.cosine)
       const held = fused.get(hit.locator)
       if (held) held.item.foundBy = ["words", "meaning"]
-      // As in notes: a question's any-word list already holds what meaning finds, and a second vote buries the rest.
-      if (held && discovers) return
-      fused.set(hit.locator, {
-        item: held?.item ?? itemOf(hit, ["meaning"]),
-        score: (held?.score ?? 0) + 1 / (RRF_K + rank + 1),
-      })
+      const vote = 1 / (RRF_K + rank + 1)
+      // As in notes: a question's any-word list holds most of what meaning finds, so a second vote would bury the rest.
+      if (held && discovers) held.score = Math.max(held.score, vote)
+      else fused.set(hit.locator, { item: held?.item ?? itemOf(hit, ["meaning"]), score: (held?.score ?? 0) + vote })
     })
     return [...fused.values()].sort((a, b) => b.score - a.score).map(({ item }) => item)
   }
@@ -392,7 +405,7 @@ export const searchAll = async (
         searched.push(resource)
       } catch (error) {
         if (!skippable(error)) throw error
-        skipped.push({ resource, code: error.code, reason: error.message })
+        skipped.push({ resource, code: error.code, reason: error.message, ...refusal(error, request.text) })
       }
     }
   } finally {
