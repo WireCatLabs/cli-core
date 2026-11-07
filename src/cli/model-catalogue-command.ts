@@ -4,12 +4,13 @@ import { annotate } from "@wirecat/cli-base/commands"
 import { defineQuery } from "@wirecat/cli-base/query"
 import { Command } from "commander"
 import { isTextModelInstalled, textModelsDirectory } from "../embeddings/embed.js"
-import { DEFAULT_TEXT_MODEL, TEXT_MODELS } from "../embeddings/models.js"
+import { chosenTextModel, DEFAULT_TEXT_MODEL, type TextModel, textModel, textModels } from "../embeddings/models.js"
 import type { AppIdentity } from "../ports/app.js"
 import { downloadTextModel } from "../services/model-downloads.js"
+import { addCustomTextModel, type TextModelSwitch, useTextModel } from "../services/text-model-choice.js"
 import { install, installedBytes, isInstalled, modelsDirectory } from "../speech/install.js"
 import { DEFAULT_ORDER, orderedModels, speechModel } from "../speech/models.js"
-import { FETCH, LOCAL_READ, NO_EFFECTS } from "./effects.js"
+import { FETCH, grantsAuthority, LOCAL_READ, LOCAL_WRITE, NO_EFFECTS } from "./effects.js"
 import { type Body, itemOf, listOf } from "./envelope.js"
 import { listQuery, nativeTerms, termField, typedQuery, withQuery } from "./list-query.js"
 
@@ -50,22 +51,7 @@ export const modelCatalogueCommand = (app: AppIdentity, options: ModelCatalogueO
       path: join(directory, id),
     }
   }
-  const text = (id: string, env: NodeJS.ProcessEnv) => {
-    const model = TEXT_MODELS.find((one) => one.id === id)
-    if (!model) throw new CliError("validation_error", `unknown text model ${id}`)
-    const directory = textModelsDirectory(env)
-    return {
-      id,
-      kind: "text",
-      title: model.title,
-      languages: model.languages,
-      licence: model.licence,
-      size_bytes: model.files.reduce((sum, file) => sum + file.bytes, 0),
-      downloaded: isTextModelInstalled(model, directory),
-      default: id === DEFAULT_TEXT_MODEL,
-      path: join(directory, id),
-    }
-  }
+  const text = (id: string, env: NodeJS.ProcessEnv) => textModelItem(textModel(id, env), env)
   const models = annotate(new Command("models"), { effects: NO_EFFECTS }).description("models that run on this machine")
   withQuery(
     annotate(models.command("list"), {
@@ -81,7 +67,7 @@ export const modelCatalogueCommand = (app: AppIdentity, options: ModelCatalogueO
       const env = options.env()
       const items = [
         ...(options.kinds.includes("audio") ? orderedModels().map((model) => audio(model.id, env)) : []),
-        ...(options.kinds.includes("text") ? TEXT_MODELS.map((model) => text(model.id, env)) : []),
+        ...(options.kinds.includes("text") ? textModels(env).map((model) => textModelItem(model, env)) : []),
       ].filter(
         (item) =>
           (terms.get("kind") === undefined || item.kind === terms.get("kind")?.value) &&
@@ -107,7 +93,7 @@ export const modelCatalogueCommand = (app: AppIdentity, options: ModelCatalogueO
           reason: "model.offline",
         })
       const env = options.env()
-      if (TEXT_MODELS.some((model) => model.id === id)) {
+      if (textModels(env).some((model) => model.id === id)) {
         if (!options.kinds.includes("text"))
           throw new CliError("validation_error", "this tool does not use text models")
         await downloadTextModel(id, { env, acceptTerms: given.acceptTerms === true, progress: options.diagnostic })
@@ -119,6 +105,120 @@ export const modelCatalogueCommand = (app: AppIdentity, options: ModelCatalogueO
         options.output(itemOf(audio(id, env)), this)
       }
     })
+  if (options.kinds.includes("text")) {
+    annotate(models.command("set"), {
+      effects: LOCAL_WRITE,
+      output: { entity: "model", view: "chosen" },
+      examples: [`${app.command} models set e5-large`],
+    })
+      .summary(SET_SUMMARY)
+      .description(SET_DESCRIPTION)
+      .argument("<model>", "a downloaded text model id from models list")
+      .action(async function (this: Command, id: string) {
+        const env = options.env()
+        const done = await useTextModel(id, { env, command: app.command })
+        for (const line of switchNotes(done)) options.diagnostic(line)
+        options.output(itemOf({ ...textModelItem(done.model, env), ...switchFields(done) }), this)
+      })
+    // A model added here is loaded by every CLI once chosen: an agent needs the owner's mcp.authority for it.
+    grantsAuthority(
+      annotate(models.command("add"), {
+        effects: FETCH,
+        output: { entity: "model" },
+        examples: [addExample(app.command)],
+      }),
+    )
+      .description(ADD_DESCRIPTION)
+      .argument("<id>", "the id to give it: a-z, 0-9, . _ -")
+      .requiredOption("--payload <json>", "where the model is and how to run it, as JSON (below)")
+      .option("--offline", "refuse a call that needs the network")
+      .addHelpText("after", ADD_HELP)
+      .action(async function (this: Command, id: string, given: { payload: string }) {
+        if (options.offline?.() || this.optsWithGlobals<{ offline?: boolean }>().offline)
+          throw new CliError("permission_error", "adding a model reads Hugging Face; --offline was requested", {
+            reason: "model.offline",
+          })
+        const env = options.env()
+        const model = await addCustomTextModel(id, payloadOf(given.payload), { env })
+        options.diagnostic(`${model.id}: added — \`${app.command} models download ${model.id}\` fetches and checks it`)
+        options.output(itemOf(textModelItem(model, env)), this)
+      })
+  }
   if (options.jsonOption) for (const command of models.commands) command.option("--json", "print JSON")
   return models
+}
+
+/** One text model as `models list`, `download`, `use` and `add` print it, in every CLI. */
+export const textModelItem = (model: TextModel, env: NodeJS.ProcessEnv) => {
+  const directory = textModelsDirectory(env)
+  return {
+    id: model.id,
+    kind: "text" as const,
+    title: model.title,
+    languages: model.languages,
+    licence: model.licence,
+    ...(model.terms ? { terms: model.terms } : {}),
+    ...(model.size ? { size: model.size } : {}),
+    dims: model.dims,
+    ...(model.chunksPerSecond === undefined ? {} : { chunks_per_second: model.chunksPerSecond }),
+    ...(model.custom ? { custom: true } : {}),
+    size_bytes: model.files.reduce((sum, file) => sum + file.bytes, 0),
+    downloaded: isTextModelInstalled(model, directory),
+    default: model.id === chosenTextModel(env).id,
+    path: join(directory, model.id),
+  }
+}
+
+export const SET_SUMMARY = "use this text model for every embed and search by meaning, in every CLI"
+export const SET_DESCRIPTION =
+  "make a downloaded text model the one every embed and every search by meaning uses, in every WireCat CLI. " +
+  "Each model keeps its own vectors: the next syncs embed what the new one lacks, and switching back is instant"
+
+/** What `models set` adds to the model it prints. */
+export const switchFields = ({ previous, toEmbed, estimateSeconds }: TextModelSwitch) => ({
+  previous,
+  to_embed: toEmbed,
+  estimate_seconds: estimateSeconds,
+})
+
+export const switchNotes = ({ model, previous, toEmbed, estimateSeconds }: TextModelSwitch): string[] => {
+  if (previous === model.id) return [`${model.id} is already the model in use`]
+  const work =
+    estimateSeconds === null
+      ? ""
+      : `, about ${estimateSeconds < 120 ? `${estimateSeconds} s` : `${Math.ceil(estimateSeconds / 60)} min`} of embedding`
+  const left = toEmbed === null ? "everything" : `about ${toEmbed} chunk${toEmbed === 1 ? "" : "s"}`
+  return [
+    `${model.id} is now in use instead of ${previous}; ${previous}'s vectors stay, so switching back is instant`,
+    `the syncs embed ${left} with it${work}, a part each sync; until then search by meaning finds only what ` +
+      "it has embedded, and words find the rest",
+  ]
+}
+
+export const ADD_DESCRIPTION = "add an ONNX embedding model from Hugging Face, pinned and checked by sha256"
+
+export const addExample = (command: string) =>
+  `${command} models add e5-base --payload '{"repository":"Xenova/multilingual-e5-base",` +
+  `"onnx":"onnx/model_quantized.onnx","dims":768,"pooling":"mean","prefix":{"query":"query: ","passage":"passage: "}}'`
+
+export const ADD_HELP = `
+--payload is JSON:
+  repository     the Hugging Face repository, owner/name
+  revision       a branch, tag or commit (main); pinned to the commit it names now
+  onnx           the ONNX file, e.g. onnx/model_quantized.onnx
+  externalData   the weights file the ONNX file keeps beside itself, if any
+  dims           the length of its vectors
+  pooling        mean, or sentence_embedding for a model with that output
+  prefix         {"query": "...", "passage": "..."}, put before a search and a stored text
+  maxTokens      the longest text it reads (512); a longer one is cut
+  title, languages, licence, chunksPerSecond   for models list; licence comes from the model card when left out
+The repository needs tokenizer.json and tokenizer_config.json beside the ONNX file's folder.`
+
+/** `--payload`'s JSON, refused with the reason when it does not parse. */
+export const payloadOf = (text: string): unknown => {
+  try {
+    return JSON.parse(text)
+  } catch (error) {
+    throw new CliError("validation_error", `--payload is not JSON: ${(error as Error).message}`)
+  }
 }

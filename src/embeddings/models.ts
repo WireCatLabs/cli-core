@@ -1,5 +1,8 @@
 import { CliError } from "@wirecat/cli-base"
+import * as v from "valibot"
 import type { ModelFile } from "../speech/models.js"
+import { storePath } from "../store/path.js"
+import { readSharedSection, sharedConfigPath, writeSharedSection } from "../store/shared-config.js"
 
 /**
  * The text embedding models `conversations embed` can use, each **pinned to one commit** and checked by
@@ -10,6 +13,10 @@ import type { ModelFile } from "../speech/models.js"
 export interface TextModel {
   id: string
   title: string
+  /** How large it is next to the others, for a picker: small is fast, large reads best and is slowest. */
+  size?: "small" | "medium" | "large"
+  /** Added by the owner with `models add`, kept in the shared models file. */
+  custom?: boolean
   languages: string
   licence: string
   /** A licence the user accepts before the model is downloaded, or nothing for an open one. */
@@ -17,8 +24,8 @@ export interface TextModel {
   dims: number
   /** What the model was trained on; a longer text is cut. */
   maxTokens: number
-  /** About how many ~300-token chunks a second one session embeds on 8 threads, for the estimate. */
-  chunksPerSecond: number
+  /** About how many ~300-token chunks a second one session embeds on 8 threads, for the estimate; unknown for most custom models. */
+  chunksPerSecond?: number
   /** How the model's output becomes one vector. */
   pooling: "mean" | "sentence_embedding"
   /** Prepended to a search and to a stored chunk: the model was trained with them. */
@@ -33,12 +40,14 @@ const huggingFace = (repository: string, commit: string) => (name: string) =>
   `https://huggingface.co/${repository}/resolve/${commit}/${name}`
 
 const e5 = huggingFace("Xenova/multilingual-e5-small", "761b726dd34fb83930e26aab4e9ac3899aa1fa78")
+const e5Large = huggingFace("Xenova/multilingual-e5-large", "00fc3aeb3dbb95842de2ac1961d33c6319acf57b")
 const gemma = huggingFace("onnx-community/embeddinggemma-300m-ONNX", "5090578d9565bb06545b4552f76e6bc2c93e4a66")
 
 export const TEXT_MODELS: TextModel[] = [
   {
     id: "e5-small",
     title: "multilingual-e5-small, 8-bit",
+    size: "small",
     languages: "about 100 languages, Russian and English among them",
     licence: "MIT",
     dims: 384,
@@ -72,6 +81,7 @@ export const TEXT_MODELS: TextModel[] = [
   {
     id: "embeddinggemma",
     title: "EmbeddingGemma 300M, 4-bit",
+    size: "medium",
     languages: "over 100 languages — the best of the two on chat, about seven times slower",
     licence: "Gemma Terms of Use",
     terms: "https://ai.google.dev/gemma/terms",
@@ -109,19 +119,150 @@ export const TEXT_MODELS: TextModel[] = [
       },
     ],
   },
+  {
+    id: "e5-large",
+    title: "multilingual-e5-large, 8-bit",
+    size: "large",
+    languages: "about 100 languages, Russian and English among them — reads better than e5-small, several times slower",
+    licence: "MIT",
+    dims: 1024,
+    maxTokens: 512,
+    // 2026-11-07, one 8-thread session on the Ryzen AI 9 HX 470 while other benchmarks ran: 3.4 chunks/s.
+    chunksPerSecond: 4,
+    pooling: "mean",
+    prefix: { query: "query: ", passage: "passage: " },
+    onnx: "onnx/model_quantized.onnx",
+    files: [
+      {
+        name: "onnx/model_quantized.onnx",
+        url: e5Large("onnx/model_quantized.onnx"),
+        sha256: "0a8d65db9a36f810ba5da15249f13145fcdc7890e6656f1fd38cd8b7c4db1fca",
+        bytes: 561_768_762,
+      },
+      {
+        name: "tokenizer.json",
+        url: e5Large("tokenizer.json"),
+        sha256: "62c24cdc13d4c9952d63718d6c9fa4c287974249e16b7ade6d5a85e7bbb75626",
+        bytes: 17_082_660,
+      },
+      {
+        name: "tokenizer_config.json",
+        url: e5Large("tokenizer_config.json"),
+        sha256: "efb5c0d09722e5fe59a462cd2a9976ee216d55b037597d997cd3fe833216da15",
+        bytes: 418,
+      },
+    ],
+  },
 ]
 
 export const DEFAULT_TEXT_MODEL = "e5-small"
 
-export const textModel = (id: string): TextModel => {
-  const found = TEXT_MODELS.find((model) => model.id === id)
-  if (!found) {
+const SECTION = "text_models"
+
+const slug = v.pipe(v.string(), v.regex(/^[a-z0-9][a-z0-9._-]{0,62}$/, "is not a model id: a-z, 0-9, . _ -"))
+const words = v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(300))
+/** Joined under the model's folder: never absolute, never climbing out of it. */
+const fileName = v.pipe(
+  v.string(),
+  v.check(
+    (name) => /^[\w.-]+(\/[\w.-]+)*$/.test(name) && !name.split("/").some((part) => part === ".." || part === "."),
+    "is not a file inside the model's folder",
+  ),
+)
+const modelFile = v.strictObject({
+  name: fileName,
+  url: v.pipe(v.string(), v.url(), v.startsWith("https://", "has to be an https address")),
+  sha256: v.pipe(v.string(), v.regex(/^[0-9a-f]{64}$/, "has to be a sha256 in hex")),
+  bytes: v.pipe(v.number(), v.integer(), v.minValue(1)),
+})
+
+/** A model the owner adds: the same shape as a built-in one, so it is downloaded, checked and loaded the same way. */
+export const CustomTextModelShape = v.pipe(
+  v.strictObject({
+    id: slug,
+    title: words,
+    languages: words,
+    licence: words,
+    terms: v.optional(v.pipe(v.string(), v.url())),
+    dims: v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(8192)),
+    maxTokens: v.pipe(v.number(), v.integer(), v.minValue(16), v.maxValue(32_768)),
+    chunksPerSecond: v.optional(v.pipe(v.number(), v.minValue(0.01))),
+    pooling: v.picklist(["mean", "sentence_embedding"]),
+    prefix: v.strictObject({
+      query: v.pipe(v.string(), v.maxLength(200)),
+      passage: v.pipe(v.string(), v.maxLength(200)),
+    }),
+    onnx: fileName,
+    externalData: v.optional(fileName),
+    files: v.pipe(v.array(modelFile), v.minLength(1), v.maxLength(16)),
+  }),
+  v.check(
+    (model) => !TEXT_MODELS.some((one) => one.id === model.id),
+    "takes the id of a model this version ships; choose another",
+  ),
+  v.check((model) => {
+    const names = model.files.map(({ name }) => name)
+    return [model.onnx, model.externalData, "tokenizer.json", "tokenizer_config.json"].every(
+      (name) => name === undefined || names.includes(name),
+    )
+  }, "has to list its onnx file, its external data and tokenizer.json and tokenizer_config.json among files"),
+)
+export type CustomTextModel = v.InferOutput<typeof CustomTextModelShape>
+
+const TextModelsSection = v.strictObject({
+  use: v.optional(slug),
+  custom: v.optional(v.array(CustomTextModelShape)),
+})
+export type TextModelsSection = v.InferOutput<typeof TextModelsSection>
+
+/** The shared settings file every WireCat CLI reads, so one choice serves tg, MAX, memo and the rest. */
+export const textModelsFile = (env: NodeJS.ProcessEnv = process.env): string => sharedConfigPath(storePath(env), env)
+
+export const readTextModelsSection = (env: NodeJS.ProcessEnv = process.env): TextModelsSection => {
+  const path = textModelsFile(env)
+  const section = readSharedSection(path, SECTION)
+  if (section === undefined) return {}
+  const checked = v.safeParse(TextModelsSection, section)
+  if (!checked.success) {
+    const issue = checked.issues[0]
+    const at = issue ? v.getDotPath(issue) : null
     throw new CliError(
-      "validation_error",
-      `no text model ${id} — one of: ${TEXT_MODELS.map((model) => model.id).join(", ")}`,
+      "configuration_error",
+      `${path}: ${SECTION}${at ? `.${at}` : ""} ${issue?.message ?? "is not valid"}`,
     )
   }
+  const ids = checked.output.custom?.map(({ id }) => id) ?? []
+  const twice = ids.find((id, at) => ids.indexOf(id) !== at)
+  if (twice) throw new CliError("configuration_error", `${path}: ${SECTION}.custom names ${twice} twice`)
+  return checked.output
+}
+
+export const writeTextModelsSection = (section: TextModelsSection, env: NodeJS.ProcessEnv = process.env): void =>
+  writeSharedSection(
+    textModelsFile(env),
+    SECTION,
+    section.use === undefined && !section.custom?.length ? undefined : section,
+  )
+
+/** The models this version ships, then the owner's own. */
+export const textModels = (env: NodeJS.ProcessEnv = process.env): TextModel[] => [
+  ...TEXT_MODELS,
+  ...(readTextModelsSection(env).custom ?? []).map((model): TextModel => ({ ...model, custom: true })),
+]
+
+export const textModel = (id: string, env: NodeJS.ProcessEnv = process.env): TextModel => {
+  const known = textModels(env)
+  const found = known.find((model) => model.id === id)
+  if (!found) {
+    throw new CliError("validation_error", `no text model ${id} — one of: ${known.map((model) => model.id).join(", ")}`)
+  }
   return found
+}
+
+/** The model every embed and every search by meaning uses when none is named: the owner's `models use`, or e5-small. */
+export const chosenTextModel = (env: NodeJS.ProcessEnv = process.env): { id: string; from: "chosen" | "default" } => {
+  const use = readTextModelsSection(env).use
+  return use === undefined ? { id: DEFAULT_TEXT_MODEL, from: "default" } : { id: use, from: "chosen" }
 }
 
 /**
@@ -216,8 +357,14 @@ export const rerankModel = (id: string): RerankModel => {
   return found
 }
 
-/** The cosine a meaning hit must beat, measured in bench/search-quality; an unmeasured model keeps every hit. */
-/** A vector's model: the provider, the model and its size — vectors of two of them never mix. */
-export const vectorModelKey = (model: TextModel): string => `local:${model.id}:${model.dims}`
+/**
+ * A vector's model: the provider, the model and its size — vectors of two of them never mix. A custom model's key also
+ * carries its weights' hash, so an id the owner redefines as another model starts from no vectors.
+ */
+export const vectorModelKey = (model: TextModel): string => {
+  const weights = model.custom ? model.files.find(({ name }) => name === model.onnx)?.sha256.slice(0, 12) : undefined
+  return `local:${model.id}${weights ? `@${weights}` : ""}:${model.dims}`
+}
 
+/** The cosine a meaning hit must beat, measured in bench/search-quality; an unmeasured model keeps every hit. */
 export const meaningFloor = (key: string): number => (key === "local:e5-small:384" ? 0.8 : 0)

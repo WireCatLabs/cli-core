@@ -9,6 +9,17 @@ shape of this file.
 
 ### Added
 
+- **`models set <id>` chooses the local embedding model for every WireCat CLI**, kept in the shared settings file:
+  every embed and every search by meaning uses it, and `models list` marks it `default`. It refuses a model that is
+  not downloaded, and says how many chunks the new model still lacks and about how long that takes. Vectors stay
+  per model, so a switch deletes nothing and switching back is instant.
+- **`e5-large`**, multilingual-e5-large 8-bit (MIT, 579 MB, 1024 dims), the large one beside `e5-small` (small) and
+  `embeddinggemma` (medium). `models list --json` gives each text model's `size`, `dims`, `terms` and
+  `chunks_per_second`.
+- **`models add <id> --payload '<json>'` adds an ONNX embedding model from Hugging Face**, pinned to a commit with
+  each file's sha256, in the same shape as the built-in models. Its vectors' key carries its weights' hash.
+- `chosenTextModel`, `textModels` and `useTextModel` from `@wirecat/cli-core/services`; `store.vectors.vectorCounts`.
+
 - **`@wirecat/cli-core/crm` exports the field lookup the CRM writes use**, so a CRM CLI drops its copy:
   `foldFieldName`, `fieldNamed`, `optionOf`, `unknownField`, `fieldPairsOf` and the `NamedField` type they read.
   `foldName` is exported from the package root.
@@ -28,6 +39,9 @@ shape of this file.
 
 ### Fixed
 
+- **Search by meaning and every embed follow the chosen model.** Notes, mail, events, discovery's meaning lane,
+  `search all` and the message vectors of `conversations rebuild` used e5-small whatever was set; a CLI with no
+  `embedding_model` setting (memo) could not use another model at all.
 - **`doctor --online` of a CLI built on `appDoctorCommand` runs inside cli-core's run.** It answered outside one, so
   `--record` kept no run of it and its call out was not the command's own. A config that will not load still gets an
   answer, outside a run.

@@ -11,8 +11,7 @@ import {
   DEFAULT_TEXT_MODEL,
   RERANK_MODELS,
   type RerankModel,
-  TEXT_MODELS,
-  type TextModel,
+  textModels,
 } from "../../embeddings/models.js"
 import { model as modelEntity } from "../../entities/model.js"
 import {
@@ -23,6 +22,7 @@ import {
   isImageModelInstalled,
 } from "../../images/picture/models.js"
 import { downloadImageModel, downloadRerankModel, downloadTextModel } from "../../services/model-downloads.js"
+import { addCustomTextModel, useTextModel } from "../../services/text-model-choice.js"
 import {
   install,
   installedBytes,
@@ -39,7 +39,18 @@ import { baseContext, environmentOf } from "../context.js"
 import { FETCH, grantsAuthority, LOCAL_READ, LOCAL_WRITE, reachesOtherService } from "../effects.js"
 import { type Body, itemOf, listOf, renderAnswer } from "../envelope.js"
 import { listQuery, nativeTerms, typedQuery, unfilteredQuery, withQuery } from "../list-query.js"
-import { MODEL_CATALOGUE_QUERY } from "../model-catalogue-command.js"
+import {
+  ADD_DESCRIPTION,
+  ADD_HELP,
+  addExample,
+  MODEL_CATALOGUE_QUERY,
+  payloadOf,
+  SET_DESCRIPTION,
+  SET_SUMMARY,
+  switchFields,
+  switchNotes,
+  textModelItem,
+} from "../model-catalogue-command.js"
 import { nextStep } from "../steps.js"
 import type { Messenger } from "./context.js"
 
@@ -66,18 +77,6 @@ const audioItem = (model: SpeechModel, directory: string, chosen: string): Model
   size_bytes: installedBytes(model),
   downloaded: isInstalled(model, directory),
   default: model.id === chosen,
-  path: join(directory, model.id),
-})
-
-const textItem = (model: TextModel, directory: string): ModelItem => ({
-  id: model.id,
-  kind: "text",
-  title: model.title,
-  languages: model.languages,
-  licence: model.licence,
-  size_bytes: model.files.reduce((sum, file) => sum + file.bytes, 0),
-  downloaded: isTextModelInstalled(model, directory),
-  default: model.id === DEFAULT_TEXT_MODEL,
   path: join(directory, model.id),
 })
 
@@ -155,7 +154,12 @@ const downloadEmbeddingModel = async (
         acceptTerms: options.acceptTerms === true,
         progress: (line) => context.renderer.note(line),
       })
-      renderAnswer(command, context, itemOf(textItem(model, directory)), downloaded)
+      renderAnswer(
+        command,
+        context,
+        itemOf({ ...textModelItem(model, context.env), path: join(directory, model.id) }),
+        downloaded,
+      )
     },
     { unbounded: true },
   )
@@ -248,9 +252,9 @@ export const modelsCommand = (messenger: Messenger): Command => {
           kinds === undefined || kinds === "audio"
             ? orderedModels(messenger.speechModels).filter((model) => id === undefined || model.id === id)
             : []
-        const textModels =
+        const textModelsListed =
           kinds === undefined || kinds === "text"
-            ? TEXT_MODELS.filter((model) => id === undefined || model.id === id)
+            ? textModels(context.env).filter((model) => id === undefined || model.id === id)
             : []
         const rerankers =
           kinds === undefined || kinds === "reranker"
@@ -260,7 +264,7 @@ export const modelsCommand = (messenger: Messenger): Command => {
           audioModels.length > 0 ? choose(messenger, context.settings, {}, context.env, context.keyring).model.id : ""
         const catalogue = [
           ...audioModels.map((model) => audioItem(model, modelsDirectory(context.env), chosen)),
-          ...textModels.map((model) => textItem(model, textModelsDirectory(context.env))),
+          ...textModelsListed.map((model) => textModelItem(model, context.env)),
           ...rerankers.map((model) =>
             rerankItem(
               model,
@@ -293,9 +297,55 @@ export const modelsCommand = (messenger: Messenger): Command => {
     .option("--accept-terms", "accept the model's licence terms, for a model that has its own")
     .action(async function (this: Command, id: string, options: { acceptTerms?: boolean }) {
       if (orderedModels().some((model) => model.id === id)) return downloadAudioModel(this, messenger, id)
-      if (TEXT_MODELS.some((model) => model.id === id)) return downloadEmbeddingModel(this, messenger, id, options)
+      if (textModels(environmentOf(this).env ?? process.env).some((model) => model.id === id))
+        return downloadEmbeddingModel(this, messenger, id, options)
       if (RERANK_MODELS.some((model) => model.id === id)) return downloadReranker(this, messenger, id)
       throw new CliError("validation_error", "unknown model; choose an id from models list")
+    })
+  annotate(models.command("set"), {
+    effects: LOCAL_WRITE,
+    output: { entity: "model", view: "chosen" },
+    examples: [`${tool} models set e5-large`],
+  })
+    .summary(SET_SUMMARY)
+    .description(SET_DESCRIPTION)
+    .argument("<model>", "a downloaded text model id from models list")
+    .action(async function (this: Command, id: string) {
+      const context = baseContext(this, messenger.resolveSettings)
+      await context.run(async () => {
+        const done = await useTextModel(id, { env: context.env, command: messenger.app.command })
+        for (const line of switchNotes(done)) context.renderer.note(line)
+        const own = context.settings.embeddingModel
+        if (own !== undefined && own !== done.model.id)
+          context.renderer.note(
+            `this CLI's own embedding_model (${own}) still wins here; unset it to follow the choice`,
+          )
+        renderAnswer(this, context, itemOf({ ...textModelItem(done.model, context.env), ...switchFields(done) }))
+      })
+    })
+  // A model added here is loaded by every CLI once chosen: an agent needs the owner's mcp.authority for it.
+  reachesOtherService(
+    grantsAuthority(
+      annotate(models.command("add"), {
+        effects: FETCH,
+        output: { entity: "model" },
+        examples: [addExample(tool)],
+      }),
+    ),
+  )
+    .description(ADD_DESCRIPTION)
+    .argument("<id>", "the id to give it: a-z, 0-9, . _ -")
+    .requiredOption("--payload <json>", "where the model is and how to run it, as JSON (below)")
+    .addHelpText("after", ADD_HELP)
+    .action(async function (this: Command, id: string, given: { payload: string }) {
+      const context = baseContext(this, messenger.resolveSettings)
+      await context.run(async () => {
+        const model = await addCustomTextModel(id, payloadOf(given.payload), { env: context.env })
+        context.renderer.note(
+          `${model.id}: added — \`${messenger.app.command} models download ${model.id}\` fetches and checks it`,
+        )
+        renderAnswer(this, context, itemOf(textModelItem(model, context.env)))
+      })
     })
   return models
 }

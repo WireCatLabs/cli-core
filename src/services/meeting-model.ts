@@ -54,9 +54,9 @@ const validatedRemote = (remote: RemoteModel): RemoteModel => {
   return result
 }
 /** Validates a descriptor without reading keys or model files or opening a model. */
-export const meetingEmbeddingModel = (choice: ModelChoice): MeetingEmbeddingModel => {
+export const meetingEmbeddingModel = (choice: ModelChoice, env?: NodeJS.ProcessEnv): MeetingEmbeddingModel => {
   if (typeof choice === "string") {
-    const model = textModel(choice)
+    const model = textModel(choice, env)
     return { key: vectorModelKey(model), dims: model.dims, kind: "local", model: model.id }
   }
   if (!choice || typeof choice !== "object" || !choice.remote)
@@ -124,7 +124,7 @@ export const openMeetingEmbedder = async (
   choice: ModelChoice,
   options: MeetingEmbedderOptions = {},
 ): Promise<MeetingEmbedder> => {
-  const descriptor = meetingEmbeddingModel(choice)
+  const descriptor = meetingEmbeddingModel(choice, options.env)
   const { signal } = options
   cancelled(signal)
   const maxInputBytes = integer(options.maxInputBytes ?? 1024 * 1024, "input byte budget", 16 * 1024 * 1024)
@@ -137,7 +137,7 @@ export const openMeetingEmbedder = async (
   let engine: Embedder
   let remoteFailure: unknown
   if (typeof choice === "string") {
-    const model = textModel(choice)
+    const model = textModel(choice, options.env)
     const directory = options.directory ?? textModelsDirectory(options.env)
     if (!isTextModelInstalled(model, directory))
       throw new CliError("configuration_error", "The explicit local embedding model is not installed")
