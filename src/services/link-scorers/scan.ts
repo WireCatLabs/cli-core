@@ -35,6 +35,8 @@ export const DEFAULT_THRESHOLD = 0.5
 /** A person ↔ person scan keeps the old rule's reach: one weak signal is enough to ask the owner. */
 export const PERSON_THRESHOLD = 0.3
 export const DEFAULT_LIMIT = 20
+/** How many times one scan spreads from what it found; a project's links are rarely more than a few steps apart. */
+export const MAX_HOPS = 4
 
 export interface ScanInput {
   /** A project's key, name, alias or `project:<id>`; `null` runs the person ↔ person rules. */
@@ -95,8 +97,9 @@ export const combinedScore = (weights: readonly number[]): number =>
 
 /**
  * Runs the scorers for one project over the sources named, combines their signals per pair, and proposes what scores
- * `threshold` or more, highest first, at most `limit` new ones. A pair a link joins, or that was rejected once, is
- * never proposed; a pending one is updated in place. People are matched by identity only. With `write: false`
+ * `threshold` or more, highest first, at most `limit` new ones. What scores `threshold` or more is spread from as if
+ * linked, up to `MAX_HOPS` times, so one run reaches a member's chats in every messenger. A pair a link joins, or that
+ * was rejected once, is never proposed; a pending one is updated in place. People are matched by identity only. With `write: false`
  * nothing is written.
  */
 export const scanProjectLinks = async (store: MessageStore, input: ScanInput): Promise<ScanResult> => {
@@ -132,60 +135,28 @@ export const scanProjectLinks = async (store: MessageStore, input: ScanInput): P
     unresolved: 0,
   }
 
-  const pairs = new Map<string, { candidate: LinkCandidate; signals: Map<string, Signal & { purpose?: string }> }>()
-  const nameOnly = new Set<string>()
-  for (const scorer of scorers) {
-    input.signal?.throwIfAborted()
-    for (const candidate of await scorer.candidates(scorerInput)) {
-      const key = pairKey(candidate)
-      const verdict = await admissible(store, scorerInput, candidate)
-      if (verdict === "owner") continue
-      if (verdict === "name-only") {
-        if (!nameOnly.has(key)) skipped.nameOnly++
-        nameOnly.add(key)
-        continue
-      }
-      if (verdict !== "ok") {
-        skipped.unresolved++
-        continue
-      }
-      const weight = Math.min(1, Math.max(0, candidate.weight))
-      const held = pairs.get(key) ?? { candidate, signals: new Map() }
-      const scorerId = `${scorer.id}@${scorer.version}`
-      const before = held.signals.get(scorerId)
-      if (!before || before.weight < weight)
-        held.signals.set(scorerId, {
-          scorer: scorerId,
-          weight,
-          why: candidate.why.slice(0, 500),
-          ...(candidate.purpose && scorerInput.purposes.includes(candidate.purpose)
-            ? { purpose: candidate.purpose }
-            : {}),
-        })
-      held.candidate = {
-        ...held.candidate,
-        evidence: [...new Set([...held.candidate.evidence, ...candidate.evidence])],
-      }
-      pairs.set(key, held)
-    }
+  const fixed = new Map<LinkScorer, LinkCandidate[]>()
+  const candidatesOf = async (scorer: LinkScorer, seeds: ScorerInput["confirmed"]) => {
+    if (scorer.spreads) return scorer.candidates({ ...scorerInput, confirmed: seeds })
+    const held = fixed.get(scorer) ?? (await scorer.candidates(scorerInput))
+    fixed.set(scorer, held)
+    return held
   }
 
-  const scored = [...pairs.values()]
-    .map(({ candidate, signals }) => {
-      const list = [...signals.values()].sort((a, b) => b.weight - a.weight || a.scorer.localeCompare(b.scorer))
-      const purpose = list.find((one) => one.purpose)?.purpose
-      return {
-        candidate,
-        purpose,
-        signals: list.map(({ scorer, weight, why }) => ({ scorer, weight, why })),
-        score: combinedScore(list.map((one) => one.weight)),
-      }
-    })
-    .sort((a, b) => b.score - a.score || a.candidate.from.localeCompare(b.candidate.from))
+  let seeds = scorerInput.confirmed
+  let collected = await collect(store, scorerInput, scorers, (scorer) => candidatesOf(scorer, seeds))
+  for (let hop = 0; hop < MAX_HOPS && scorers.some((one) => one.spreads); hop++) {
+    const grown = await seedsOf(store, seeds, collected.scored, threshold)
+    if (!grown) break
+    seeds = grown
+    collected = await collect(store, scorerInput, scorers, (scorer) => candidatesOf(scorer, seeds))
+  }
+  skipped.nameOnly = collected.nameOnly
+  skipped.unresolved = collected.unresolved
 
   const proposals: ScannedProposal[] = []
   let fresh = 0
-  for (const { candidate, purpose, signals, score } of scored) {
+  for (const { candidate, purpose, signals, score } of collected.scored) {
     const state = await store.knowledge.relationState(null, candidate)
     if (!state) {
       skipped.unresolved++
@@ -248,6 +219,88 @@ export const scanProjectLinks = async (store: MessageStore, input: ScanInput): P
     })
   }
   return { project: project?.ref ?? null, proposals, skipped }
+}
+
+type Scored = Awaited<ReturnType<typeof collect>>["scored"]
+
+/** Every scorer's candidates, combined per pair and scored, highest first. */
+const collect = async (
+  store: MessageStore,
+  input: ScorerInput,
+  scorers: readonly LinkScorer[],
+  candidatesOf: (scorer: LinkScorer) => Promise<LinkCandidate[]>,
+) => {
+  const pairs = new Map<string, { candidate: LinkCandidate; signals: Map<string, Signal & { purpose?: string }> }>()
+  const nameOnly = new Set<string>()
+  let unresolved = 0
+  for (const scorer of scorers) {
+    input.signal?.throwIfAborted()
+    for (const candidate of await candidatesOf(scorer)) {
+      const key = pairKey(candidate)
+      const verdict = await admissible(store, input, candidate)
+      if (verdict === "owner") continue
+      if (verdict === "name-only") {
+        nameOnly.add(key)
+        continue
+      }
+      if (verdict !== "ok") {
+        unresolved++
+        continue
+      }
+      const weight = Math.min(1, Math.max(0, candidate.weight))
+      const held = pairs.get(key) ?? { candidate, signals: new Map() }
+      const scorerId = `${scorer.id}@${scorer.version}`
+      const before = held.signals.get(scorerId)
+      if (!before || before.weight < weight)
+        held.signals.set(scorerId, {
+          scorer: scorerId,
+          weight,
+          why: candidate.why.slice(0, 500),
+          ...(candidate.purpose && input.purposes.includes(candidate.purpose) ? { purpose: candidate.purpose } : {}),
+        })
+      held.candidate = {
+        ...held.candidate,
+        evidence: [...new Set([...held.candidate.evidence, ...candidate.evidence])],
+      }
+      pairs.set(key, held)
+    }
+  }
+  const scored = [...pairs.values()]
+    .map(({ candidate, signals }) => {
+      const list = [...signals.values()].sort((a, b) => b.weight - a.weight || a.scorer.localeCompare(b.scorer))
+      const purpose = list.find((one) => one.purpose)?.purpose
+      return {
+        candidate,
+        purpose,
+        signals: list.map(({ scorer, weight, why }) => ({ scorer, weight, why })),
+        score: combinedScore(list.map((one) => one.weight)),
+      }
+    })
+    .sort((a, b) => b.score - a.score || a.candidate.from.localeCompare(b.candidate.from))
+  return { scored, nameOnly: nameOnly.size, unresolved }
+}
+
+/**
+ * The links to spread from, grown by what scored `threshold` or more and was never rejected; `undefined` when
+ * nothing new was found. Spreading in one run reaches what the owner would otherwise confirm round after round.
+ */
+const seedsOf = async (
+  store: MessageStore,
+  seeds: ScorerInput["confirmed"],
+  scored: Scored,
+  threshold: number,
+): Promise<ScorerInput["confirmed"] | undefined> => {
+  const chats = new Set(seeds.chats)
+  const people = new Set(seeds.people)
+  const size = chats.size + people.size
+  for (const { candidate, score } of scored) {
+    if (score < threshold || candidate.kind !== "member-of") continue
+    if (chats.has(candidate.from) || people.has(candidate.from)) continue
+    if ((await store.knowledge.relationState(null, candidate))?.rejected !== false) continue
+    if (candidate.from.startsWith("chat:")) chats.add(candidate.from)
+    else if (candidate.from.startsWith("person:")) people.add(candidate.from)
+  }
+  return chats.size + people.size === size ? undefined : { chats: [...chats].sort(), people: [...people].sort() }
 }
 
 /** A person candidate stands only on an identity that is that person's; a chat only in a source the scan reads. */

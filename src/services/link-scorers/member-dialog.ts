@@ -3,10 +3,11 @@ import type { LinkCandidate, LinkScorer } from "./types.js"
 
 const WEIGHT = 0.6
 
-/** A dialog with a confirmed person member, divided by how many projects that person is a member of. */
+/** A dialog with a person member, divided by how many projects that person is a member of, this one counted. */
 export const memberDialog: LinkScorer = {
   id: "member-dialog",
-  version: 1,
+  version: 2,
+  spreads: true,
   candidates: async ({ store, project, confirmed, sources, owner, signal }) => {
     if (!project) return []
     const people = confirmed.people.filter((person) => person !== owner)
@@ -17,7 +18,7 @@ export const memberDialog: LinkScorer = {
         signal?.throwIfAborted()
         for (const chat of await store.chats.chatsWith(key, id)) {
           if (chat.kind !== "dialog") continue
-          if (!projects.has(person)) projects.set(person, Math.max(1, await projectsOf(store, person)))
+          if (!projects.has(person)) projects.set(person, await projectsOf(store, person, project.ref))
           const shared = projects.get(person) ?? 1
           found.push({
             from: chatRef(key, chat.id),
