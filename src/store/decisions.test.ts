@@ -317,6 +317,20 @@ describe("an agent cannot get round the check", () => {
     expect((await store.memories.get(memory.ref)).status).toBe("proposed")
   })
 
+  it("by confirming another agent's correction of a confirmed memory", async () => {
+    const store = await opened()
+    const note = await store.notes.addNote({ text: "Prefers mornings" })
+    const input = { kind: "preference" as const, scope: "work" as const, evidence: [note.ref] }
+    const old = await store.memories.add({ ...input, body: "Prefers mornings", author: "owner", status: "confirmed" })
+    const fix = await store.memories.add({ ...input, body: "Prefers evenings", author: agent, supersedes: old.ref })
+    await expect(store.memories.confirm(fix.ref, { bot: "codex", reason: "the chat says so" })).rejects.toMatchObject({
+      code: "permission_error",
+      details: { reason: "proposal.owner-only" },
+    })
+    expect((await store.memories.get(fix.ref)).status).toBe("proposed")
+    expect((await store.memories.get(old.ref)).status).toBe("confirmed")
+  })
+
   it("SEC-2: by writing a confirmed relationship link itself", async () => {
     const store = await opened()
     const project = await store.knowledge.addProject({ name: "Harbour" })

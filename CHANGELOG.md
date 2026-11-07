@@ -7,6 +7,21 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **A memory written as `proposed` with `supersedes` no longer retires the old one until it is confirmed**, the
+  owner's included. `store.memories.add` and `confirm` refuse superseding a memory that is already superseded
+  (`memory.already-superseded`), so two corrections of one memory cannot both stand. drive-cli writes every memory
+  `proposed`, so its `memories add --supersedes` now retires the old memory only when that memory's correction is
+  confirmed.
+
+### Fixed
+
+- **An agent's correction no longer retires the memory it corrects.** `store.memories.add({ supersedes })` marked the
+  old memory `superseded` as soon as the new one was written, even while the new one only waited as proposed. Now
+  `confirm` of the correction retires it; rejecting or removing the correction leaves it as it was. Retiring a
+  confirmed memory is the owner's alone, whatever `agent_decisions` says.
+
 ## 0.605.0 — 07.11.2026
 
 ### Added
