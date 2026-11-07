@@ -5,6 +5,7 @@ import { and, eq, inArray, isNull, type SQL, sql } from "./drizzle/core.js"
 import { identityOf } from "./identities.js"
 import type { StoreContext } from "./open.js"
 import { resolvePersonLinks } from "./person-resolution.js"
+import { identitySeparated, separated } from "./person-separation.js"
 import {
   accountIdentities,
   accounts,
@@ -97,7 +98,10 @@ const move = (context: StoreContext, identityPk: number, from: number, to: numbe
     .run()
 }
 
-/** A reviewed meeting participant association moves only its selected identity. */
+/**
+ * A reviewed meeting participant association moves only its selected identity. Only the owner may move it back
+ * over a separation the owner made.
+ */
 export const linkIdentityToPerson = (
   context: StoreContext,
   identityPk: number,
@@ -109,6 +113,14 @@ export const linkIdentityToPerson = (
     .from(identityLinks)
     .where(eq(identityLinks.identityId, identityPk))
     .get()
+  if (options.by !== "owner" && found?.personId !== target && identitySeparated(context, identityPk, target))
+    throw new CliError(
+      "conflict",
+      "the owner separated this identity from that person; only the owner links it again",
+      {
+        reason: "identity.separated",
+      },
+    )
   if (found) {
     move(context, identityPk, found.personId, target, options)
     return
@@ -172,22 +184,10 @@ export const mergePerson = (context: StoreContext, from: number, to: number, opt
   for (const { identityPk } of together) move(context, identityPk, from, to, options)
 }
 
-/** The owner once moved one of the two identities away from a person the other belonged to. */
-const separatedByOwner = ({ database }: StoreContext, one: number, other: number): boolean =>
-  database
-    .prepare(
-      `SELECT 1 FROM identity_link_events moved
-       JOIN identity_link_events held ON held.to_person_id = moved.from_person_id
-       WHERE moved.author = 'owner' AND ((moved.identity_id = ? AND held.identity_id = ?)
-         OR (moved.identity_id = ? AND held.identity_id = ?))
-       LIMIT 1`,
-    )
-    .get(one, other, other, one) !== undefined
-
 /**
  * Joins the identity to the person of the mail contact with this exact address, making that contact when mail has
  * not seen it yet, so whichever import comes second lands on one person. The contact is seen by no account, so it is
- * no one's mail correspondent. An owner's unlink wins: two identities the owner separated stay apart.
+ * no one's mail correspondent. An owner's unlink wins: two people the owner separated stay apart.
  */
 export const joinByAddress = (context: StoreContext, ref: IdentityRef, address: string, by: string): void => {
   const key = address.trim().toLowerCase()
@@ -200,7 +200,7 @@ export const joinByAddress = (context: StoreContext, ref: IdentityRef, address: 
     .get(key)
   if (!mail) identityOf(context, "email", key, null)
   const contact = required(context, { provider: "email", id: mail ? String(mail.external_id) : key })
-  if (contact.personPk === found.personPk || separatedByOwner(context, found.pk, contact.pk)) return
+  if (contact.personPk === found.personPk || separated(context, found.personPk, contact.personPk)) return
   mergePerson(context, found.personPk, contact.personPk, { method: "same-email", by })
   resolvePersonLinks(
     context.database,

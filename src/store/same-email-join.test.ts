@@ -75,6 +75,26 @@ describe("a provider contact with an address", () => {
     expect(await personOf(store, "google-drive", "g-1")).not.toBe(await personOf(store, "email", "alice@example.com"))
   })
 
+  it("keeps people the owner separated apart when a third identity brings the address", async () => {
+    const store = await open()
+    const whatsapp = { provider: "whatsapp", account: "wa-owner-1" }
+    await receiveMail(store)
+    await saveEditor(store)
+    await store.people.unlinkIdentity({ provider: "google-drive", id: "g-1" }, { method: "manual", by: "owner" })
+    await store.people.savePeople(whatsapp, [{ id: "z-1", name: "Alice" }])
+    await store.people.linkIdentities(
+      { provider: "google-drive", id: "g-1" },
+      { provider: "whatsapp", id: "z-1" },
+      { method: "manual", by: "owner" },
+    )
+
+    await store.people.savePeople(whatsapp, [{ id: "z-1", name: "Alice", email: "alice@example.com" }])
+
+    const separated = await personOf(store, "google-drive", "g-1")
+    expect(await personOf(store, "whatsapp", "z-1")).toBe(separated)
+    expect(await personOf(store, "email", "alice@example.com")).not.toBe(separated)
+  })
+
   it("keeps the address on the provider's contact, lower case, as the mail contact keeps its own", async () => {
     const path = join(mkdtempSync(join(tmpdir(), "same-email-")), "store.db")
     const store = await openStore({ path })
