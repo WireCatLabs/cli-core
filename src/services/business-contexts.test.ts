@@ -8,6 +8,7 @@ import { syncCrm } from "../crm/index.js"
 import { ACME_NOW, ACME_OPENED, ACME_PORTAL, ACME_TELEGRAM, acmeScenario, fakeCrmSource } from "../crm/testing/index.js"
 import { kindIn } from "../domain/providers.js"
 import { ENTITIES } from "../entities/index.js"
+import { openCache } from "../store/open.js"
 import { type MessageStore, openStore } from "../store/store.js"
 import { newestFirst } from "./business-context.js"
 import { dealBrief, dealContext } from "./deal-context.js"
@@ -242,6 +243,47 @@ it("lists full pages of deals from the accounts given, with the owner's own, in 
   expect(await store.deals.list({ accounts: [other] })).toHaveLength(4)
 })
 
+it("keeps the owner's own link out when its other end is a deal of an account outside the scope", async () => {
+  const { store, refs } = await scenario()
+  const scope = { accounts: [ACME_TELEGRAM] }
+
+  const bob = await canonicalPersonContext(store, refs.bob, scope)
+  const listed = await store.knowledge.listRelations({ about: refs.bob, ...scope, includeEnded: true })
+  const all = await store.knowledge.listRelations({ about: refs.bob, includeEnded: true })
+
+  expect(bob.business.deals.items).toEqual([])
+  expect(listed.items.map((one) => one.from)).not.toContain(refs.deal)
+  expect(all.items.map((one) => one.from)).toContain(refs.deal)
+})
+
+it("calls a role custom only when it is neither built in nor one the owner added to the list", async () => {
+  const path = join(mkdtempSync(join(tmpdir(), "business-")), "store.db")
+  const store = await openStore({ path })
+  stores.push(store)
+  const { refs } = await acmeScenario(store)
+  await store.knowledge.addRole("organization", "procurement-lead")
+  await store.knowledge.relate(null, {
+    from: refs.alice,
+    to: refs.acme,
+    kind: "member-of",
+    role: "procurement-lead",
+    by: "owner",
+  })
+  const customOf = async () =>
+    Object.fromEntries(
+      (await store.knowledge.listRelations({ about: refs.alice, kind: "member-of" })).items.map((one) => [
+        one.role,
+        one.custom,
+      ]),
+    )
+
+  expect(await customOf()).toEqual({ contact: false, "procurement-lead": false })
+  const database = await openCache(path)
+  database.prepare("DELETE FROM store_settings WHERE key = 'relationships.roles.organization'").run()
+  database.close()
+  expect(await customOf()).toEqual({ contact: false, "procurement-lead": true })
+})
+
 describe("deny levels", () => {
   it("names no deal or lead anywhere when the profile denies them, and says so", async () => {
     const { store, refs } = await scenario()
@@ -255,6 +297,9 @@ describe("deny levels", () => {
     expect(alice.business.deals).toMatchObject({ items: [], total: 0 })
     expect(JSON.stringify([acme, alice])).not.toMatch(/"(deal|lead):\d+"|"Acme renewal( · [^"]*)?"/)
     expect(acme.coverage.notRead).toEqual(expect.arrayContaining([{ source: "deals", reason: "denied" }]))
+    const bob = await store.knowledge.listRelations({ about: refs.bob, deniedKinds: ["deal"], includeEnded: true })
+    expect(bob.items.filter((one) => /^(deal|lead):/.test(one.from) || /^(deal|lead):/.test(one.to))).toEqual([])
+    expect((await canonicalPersonContext(store, refs.bob, { deniedKinds })).business.deals.items).toEqual([])
     await expect(dealContext(store, refs.deal, { deniedKinds })).rejects.toMatchObject({
       code: "permission_error",
       details: { reason: "deal.denied" },

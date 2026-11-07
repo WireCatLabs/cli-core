@@ -14,6 +14,7 @@ import { linkOf } from "./notes.js"
 import type { StoreContext } from "./open.js"
 import { proposalOperationsOver } from "./proposed-actions.js"
 import { type KnowledgeRelation, relationOf } from "./relation-proposals.js"
+import { extraRolesOf } from "./relation-roles.js"
 import { thingOf } from "./things.js"
 
 export interface RelationFilter {
@@ -29,7 +30,10 @@ export interface RelationFilter {
   at?: number
   /** Ended relationships are left out unless asked for, or unless `standing` is `ended`. */
   includeEnded?: boolean
-  /** A source's relationships only from these accounts; the owner's and agents' always. */
+  /**
+   * A source's relationships only from these accounts; the owner's and agents' too, unless an end — a CRM's deal or
+   * lead, a chat, a mail thread — belongs to an account outside them.
+   */
   accounts?: AccountKey[]
   /** No row with an end of these types, such as `deal` and `lead` a profile denies. */
   deniedKinds?: string[]
@@ -57,6 +61,13 @@ export interface RelationList {
 type Row = Record<string, unknown>
 
 const KINDS = RELATION_KINDS.map(linkKind).join(", ")
+/** The ends a relationship may have that belong to one account. */
+const ACCOUNT_ENDS = [
+  ["deal", "deals"],
+  ["lead", "leads"],
+  ["chat", "chats"],
+  ["email_thread", "email_threads"],
+] as const
 const typeOfRef = (column: string) => `substr(${column}, 1, instr(${column}, ':') - 1)`
 const idOfRef = (column: string) => `CAST(substr(${column}, instr(${column}, ':') + 1) AS INTEGER)`
 
@@ -111,7 +122,16 @@ export const relationListOver = (context: StoreContext): RelationList => {
             .get(key.provider, key.account)
           return row ? [Number(row.id)] : []
         })
-        add(`(r.account_id IS NULL OR r.account_id IN (${ids.map(() => "?").join(", ") || "NULL"}))`, ...ids)
+        const list = ids.map(() => "?").join(", ") || "NULL"
+        add(`(r.account_id IS NULL OR r.account_id IN (${list}))`, ...ids)
+        // An end that belongs to an account outside the scope keeps the row out, whoever wrote it.
+        for (const side of ["from", "to"] as const)
+          for (const [type, table] of ACCOUNT_ENDS)
+            add(
+              `NOT (r.${side}_type = '${type}' AND EXISTS (SELECT 1 FROM ${table} e WHERE e.id = r.${side}_id ` +
+                `AND e.account_id IS NOT NULL AND e.account_id NOT IN (${list})))`,
+              ...ids,
+            )
       }
       if (filter.deniedKinds?.length) {
         const list = filter.deniedKinds.map(() => "?").join(", ")
@@ -153,7 +173,8 @@ export const relationListOver = (context: StoreContext): RelationList => {
     const fromThing = thingOf(database, from)
     const toThing = thingOf(database, to)
     const roles = fromThing && toThing ? rolesOf(kind, fromThing.type, toThing.type) : undefined
-    return role !== null && roles !== undefined && !roles.includes(role)
+    if (role === null || roles === undefined || roles.includes(role) || !fromThing || !toThing) return false
+    return !extraRolesOf(database, kind, fromThing.type, toThing.type).includes(role)
   }
 
   function linkItem(id: number, at: number): RelationListItem {
