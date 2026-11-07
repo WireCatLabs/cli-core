@@ -25,7 +25,7 @@ const fixture = async () => {
     decisions: { agentDecisions: true, ruleProposalsOwnerOnly: true },
   })
   handles.push(store)
-  const project = await store.knowledge.addProject({ name: "Прокат", key: "PMED" })
+  const project = await store.knowledge.addProject({ name: "Демо", key: "DEMO" })
   const romashka = await store.knowledge.addOrganization({ kind: "company", name: "ООО Ромашка" })
   const anna = await store.people.add({ name: "Анна Иванова" })
   const invoice = (
@@ -70,7 +70,7 @@ it("confirms the owner's invoice at once, totals its lines and titles it with Cy
     review: "confirmed",
     source: "owner",
     counterparty: { ref: f.romashka.ref, name: "ООО Ромашка" },
-    projectName: "Прокат",
+    projectName: "Демо",
     title: "Invoice 42 · 50 000.00 RUB to ООО Ромашка, due 15.11 (issued)",
     lines: [
       { position: 1, quantity: "2", unitPrice: "20000.00", amount: "40000.00" },
@@ -78,9 +78,9 @@ it("confirms the owner's invoice at once, totals its lines and titles it with Cy
     ],
   })
   const summary = (await f.store.refs.summaries([invoice.ref])).get(invoice.ref)
-  expect(summary).toMatchObject({ kind: "invoice", in: "Прокат", state: "available" })
+  expect(summary).toMatchObject({ kind: "invoice", in: "Демо", state: "available" })
   expect(refLabel(summary as NonNullable<typeof summary>)).toBe(
-    "Invoice «42 · 50 000.00 RUB to ООО Ромашка, due 15.11 (issued)» (Прокат)",
+    "Invoice «42 · 50 000.00 RUB to ООО Ромашка, due 15.11 (issued)» (Демо)",
   )
 })
 
