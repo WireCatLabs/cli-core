@@ -9,6 +9,7 @@ import type { AppIdentity } from "../ports/app.js"
 import { downloadTextModel } from "../services/model-downloads.js"
 import { install, installedBytes, isInstalled, modelsDirectory } from "../speech/install.js"
 import { DEFAULT_ORDER, orderedModels, speechModel } from "../speech/models.js"
+import { stepLines } from "../terminal/step-lines.js"
 import { FETCH, LOCAL_READ, NO_EFFECTS } from "./effects.js"
 import { type Body, itemOf, listOf } from "./envelope.js"
 import { listQuery, nativeTerms, termField, typedQuery, withQuery } from "./list-query.js"
@@ -107,18 +108,47 @@ export const modelCatalogueCommand = (app: AppIdentity, options: ModelCatalogueO
           reason: "model.offline",
         })
       const env = options.env()
+      const bytes = downloadProgress(
+        stepLines(options.diagnostic, Boolean(this.optsWithGlobals<{ json?: unknown }>().json)),
+        id,
+      )
       if (TEXT_MODELS.some((model) => model.id === id)) {
         if (!options.kinds.includes("text"))
           throw new CliError("validation_error", "this tool does not use text models")
-        await downloadTextModel(id, { env, acceptTerms: given.acceptTerms === true, progress: options.diagnostic })
+        await downloadTextModel(id, {
+          env,
+          acceptTerms: given.acceptTerms === true,
+          progress: options.diagnostic,
+          bytes,
+        })
         options.output(itemOf(text(id, env)), this)
       } else {
         if (!options.kinds.includes("audio"))
           throw new CliError("validation_error", "this tool does not use audio models")
-        await install(speechModel(id), modelsDirectory(env), { verifyExisting: true, progress: options.diagnostic })
+        await install(speechModel(id), modelsDirectory(env), {
+          verifyExisting: true,
+          progress: options.diagnostic,
+          bytes,
+        })
         options.output(itemOf(audio(id, env)), this)
       }
     })
   if (options.jsonOption) for (const command of models.commands) command.option("--json", "print JSON")
   return models
+}
+
+const PROGRESS_EVERY_MS = 500
+
+/**
+ * `{"event":"progress","step":"download",…}` on stderr under --json, for a window to draw a bar by: at most every half
+ * second, but always the first line and the last.
+ */
+const downloadProgress = (emit: ReturnType<typeof stepLines>, label: string) => {
+  let last = Number.NEGATIVE_INFINITY
+  return (done: number, total: number) => {
+    const now = Date.now()
+    if (done !== total && now - last < PROGRESS_EVERY_MS) return
+    last = now
+    emit({ event: "progress", step: "download", done, total, unit: "bytes", label })
+  }
 }

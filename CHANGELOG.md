@@ -15,6 +15,10 @@ shape of this file.
   re-embedded. `Note.modifiedAt` holds it (`null` when the source gave none, always for a note written in memo). The
   column is the one Drive documents already fill, so `date:`, the `at` of a notes hit and `search all`'s `timestamp`
   show it without a store version. Until now a local note was dated by the moment it was imported.
+- **`models download --json` writes byte progress lines to stderr** while a model downloads:
+  `{"event":"progress","step":"download","done","total","unit":"bytes","label":<model id>}`, at most two a second plus
+  the first and last line, so a desktop app can draw a bar. `installFiles`, `install` and the `download*Model`
+  services take a `bytes(done, total)` callback for the same count.
 
 ### Changed — may break callers
 
