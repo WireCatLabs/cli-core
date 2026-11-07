@@ -281,6 +281,7 @@ export { sharedCommandTemplate } from "./contract-templates.js"
 export { type Closeable, withDeadline } from "./deadline.js"
 export { DEFAULT_CONFIG, ensureDefaultConfig } from "./default-config.js"
 export { DISCOVERY_DESCRIPTIONS } from "./discovery-descriptions.js"
+export { refuseOffline } from "./early-refusal.js"
 export {
   admittedUnderLock,
   changesAuthority,
