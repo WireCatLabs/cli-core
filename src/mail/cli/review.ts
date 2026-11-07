@@ -211,11 +211,9 @@ const holderReview = async (command: Command, mail: MailReads, holder: string, q
     return { read, mailbox, marks }
   })
   const markedThrough = read.mark?.throughId ?? 0
-  const heldThrough = Math.max(
+  const heldThrough = [...read.emails, ...read.excerpts.map(({ email }) => email)].reduce(
+    (most, { storeId }) => (storeId <= markedThrough ? Math.max(most, storeId) : most),
     0,
-    ...[...read.emails, ...read.excerpts.map(({ email }) => email)]
-      .map((one) => one.storeId)
-      .filter((id) => id <= markedThrough),
   )
   // A held email is older than the mark, and a cursor never moves the mark back.
   const through = (id: number) => {
