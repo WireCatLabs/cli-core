@@ -39,6 +39,10 @@ shape of this file.
 
 ### Changed — may break callers
 
+- **Store version 56 raises `minCompatible` to 56: a build from before it refuses the store and asks to be upgraded.**
+  A build that knows no account on a link would write a CRM's people as the owner's again, or fail on the new unique
+  key. Bump every CLI the same day as this release.
+
 - **A person's role on an organization, a project, a deal or a lead must be one of that relationship's roles.**
   `relate` and `updateRelation` refuse any other with `relationship.role-unknown`, naming the roles it takes; a role
   between other ends stays free text, and roles already stored are read as they are. `member-of` now joins only to an
@@ -60,103 +64,6 @@ shape of this file.
 
 - **The person a CRM contact or user makes takes its name.** Joined to the mail contact of its address first, it was
   left with no name.
-
-## 0.605.0 — 07.11.2026
-
-### Changed — may break callers
-
-- **A memory written as `proposed` with `supersedes` no longer retires the old one until it is confirmed**, the
-  owner's included. `store.memories.add` and `confirm` refuse superseding a memory that is already superseded
-  (`memory.already-superseded`), so two corrections of one memory cannot both stand. drive-cli writes every memory
-  `proposed`, so its `memories add --supersedes` now retires the old memory only when that memory's correction is
-  confirmed.
-- **`personContext`, `contacts context`, `contacts prepare` and `events prepare` read only accounts of the asked
-  account's scope.** A personal account no longer reads a linked person's mail, messages, calendar events or recorded
-  meetings in work accounts, and a work account none in personal ones. To read both, pass
-  `scopes: ["personal", "work"]` in the options of `personContext`, or of `eventPreparation`. The answer's new
-  `accounts` lists every account read with its scope. The asked account must be in the store: a missing one, or an
-  `AccountKey.scope` that differs from the stored scope, is `not_found`.
-
-### Fixed
-
-- **An agent's correction no longer retires the memory it corrects.** `store.memories.add({ supersedes })` marked the
-  old memory `superseded` as soon as the new one was written, even while the new one only waited as proposed. Now
-  `confirm` of the correction retires it; rejecting or removing the correction leaves it as it was. Retiring a
-  confirmed memory is the owner's alone, whatever `agent_decisions` says.
-- **`scanProjectLinks` spreads from what it finds within one run.** A chat or person that scores the threshold or more
-  is used like a confirmed link for the `spreads` scorers (`member-chats`, `member-dialog`, `chat-senders`,
-  `mail-thread`), up to `MAX_HOPS` (4) times. One scan now reaches a member's dialogs and groups in every messenger
-  their identities name, where before it took one owner confirmation per step and never left the first messenger.
-  On a synthetic project shaped like the PMED run, recall after two rounds rose from 27 % to 93 % (all findable
-  links), precision from 100 % to 74 %, 5 false proposals, none by name only. A rejected pair is never spread from.
-- **`chat-senders` (version 2) counts any message in a dialog or a chat of 10 people or fewer;** a bigger chat still
-  needs 5 in the window.
-- **`member-dialog` (version 2) counts the scanned project in the member's projects** whether the member is confirmed
-  or only found, so a found member who is in another project weighs the same as a confirmed one.
-- **A damaged store file is `configuration_error` (`store.damaged`), not a crash.** SQLite's "database disk image is
-  malformed" or "file is not a database", raised anywhere in a command or behind a wrapper's `cause`, was
-  `internal_error` (`command.crashed`), "this is a bug". It now says the store file is damaged and names
-  `<cli> store recover` where the CLI has it, else `<cli> doctor --deep`, else no command, on the CLI, over MCP and in
-  the run kept of it, whose frames stay SQLite's own; a scheduled run's failure banner shows the reason.
-  `storeDamaged(error, next?)` from `@wirecat/cli-core/cli` does the same for a CLI with its own failure handling. A
-  damaged file named for a document or project transfer is `validation_error` (`store.file-damaged`) naming that
-  file, and `store recover run` on a store whose header is damaged says it cannot recover it (`store.unreadable`).
-- **A filesystem error is no longer read as a SQLite one.** `errno` counts as SQLite's code only on bun:sqlite's
-  `SQLiteError`: Windows' EIO (-4070) has SQLITE_NOTADB's low byte, and a busy check took a filesystem errno with
-  BUSY's low byte for a lock.
-- **cli-core accepts cli-base 0.81 and 0.82** (peer range `>=0.80.7 <0.83.0`, developed against 0.82.0). memo moved to
-  cli-base 0.82.0, and the downstream parity check downgraded it to 0.80.7, whose option vocabulary lacks memo's
-  `--from-app` and `tasks --status`, so every cli-core pull request failed parity.
-- **People the owner separated stay apart.** An owner's unlink was checked only for the two identities being joined,
-  but a join moves whole people: a third identity with the same email address, linked to one of them, carried both
-  back together. Now no automatic join — the same email address, an account's own identity joining the owner — merges
-  two people when the owner once moved anyone of one away from anyone of the other. An agent's link of one identity
-  (a confirmed mention, a meeting participant) back over such a separation is refused with the reason
-  `identity.separated`; the owner's own link still goes through. The exact-email join stays automatic otherwise.
-- **A personal account's `contacts context` no longer shows a person's work mail.** One exact email address joins a
-  personal and a work contact into one person, and the context then read every account that had seen any of that
-  person's identities. Each linked identity now also lists `seenIn`, its accounts with their scope.
-
-### Added
-
-- **A run that finds the store damaged stops every later write.** When a command fails with SQLite's "database disk
-  image is malformed", "file is not a database" or an fts5 corruption, the run leaves `<store>.damaged.json` beside
-  the store (when, which command and version, the run's id, SQLite's message). While it is there, every command that
-  opens the store to write refuses with `store.damaged` and names `<cli> store recover`, so scheduled syncs fail at
-  once instead of writing into a damaged file; reads still work. `doctor` and `store recover` show it. A deep check
-  that passes (`doctor --deep`, `store recover`), `store recover run`, `store restore` and `store reset` lift it.
-  `markStoreDamaged` from `@wirecat/cli-core/store` leaves it for a CLI that reports such a failure itself.
-- **Every deep check is recorded beside the store as its last known good.** `doctor --deep`, `store recover` and the
-  check after `store recover run` write `<store>.health.json` (when, the result, the schema, the CLI and its version,
-  and `last_ok_at`, the newest check that passed); `doctor` and `store recover` answer `last_known_good` from it.
-  `storeSummary` takes the CLI's `version` for it.
-
-## 0.604.0 — 07.11.2026
-
-### Added
-
-- **A file note can carry the time its source gives it, and searches read that time.**
-  `store.notes.dateFileNotes(folderId, [{ path, modifiedAt }])` sets it (memo passes the front matter `date` or the
-  file's modification time) without counting as an edit: text, revision and `updatedAt` stay, so nothing is
-  re-embedded. `Note.modifiedAt` holds it (`null` when the source gave none, always for a note written in memo). The
-  column is the one Drive documents already fill, so `date:`, the `at` of a notes hit and `search all`'s `timestamp`
-  show it without a store version. Until now a local note was dated by the moment it was imported.
-- **`models download --json` writes byte progress lines to stderr** while a model downloads:
-  `{"event":"progress","step":"download","done","total","unit":"bytes","label":<model id>}`, at most two a second plus
-  the first and last line, so a desktop app can draw a bar. `installFiles`, `install` and the `download*Model`
-  services take a `bytes(done, total)` callback for the same count.
-
-- **A source `search all` skips names why, for a program too.** Each `skipped` entry keeps the sentence in `reason` and
-  now adds `why`, the dotted reason (`query.unknown-value`), and `token`, the part of the query that was refused
-  (`kind:nonsense`). `meta.issues` of `search all` carries `why` as `reason`, as the output standard allows.
-
-### Changed — may break callers
-
-- **A `?` that ends a bare word is a question mark, not a wildcard.** `invoice?` and `что с бюджетом?` find
-  "invoice" and "бюджет"; before, `?` asked for one more character and `invoice` itself was missed. A `?` inside a
-  word (`inv?ice`) or after a field (`text:invoice?`) is still one character.
-
-### Fixed
 
 - **`search all` ranks higher the record a question words differently.** For a question, a mail, message or note
   that both the words and the meaning found kept only its words rank, so one meaning ranked first and words ranked

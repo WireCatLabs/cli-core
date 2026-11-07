@@ -16,7 +16,7 @@
   "wirecat": {
     "store": {
       "speaks": 56,
-      "minCompatible": 34
+      "minCompatible": 56
     }
   },
   "engines": {
