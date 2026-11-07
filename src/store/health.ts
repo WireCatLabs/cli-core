@@ -27,8 +27,57 @@ export interface StoreHealth {
   /** Lines `quick_check` gave in all, capped at `QUICK_CHECK_LIMIT`. */
   problems?: number
   searchIndexes?: SearchIndexHealth[]
+  /** Deep only: values the tools read as JSON that SQLite's JSON functions refuse, so a read of the row fails. */
+  invalidJson?: InvalidJson[]
   ms: number
 }
+
+export interface InvalidJson {
+  table: string
+  column: string
+  rows: number
+  /** The column may not be NULL, so a recovery drops the row instead of clearing the value. */
+  required: boolean
+}
+
+/** Besides every `metadata` column: the TEXT columns the tools read with SQLite's JSON functions or JSON.parse. */
+const JSON_COLUMNS: Record<string, string[]> = {
+  accounts: ["settings"],
+  account_identities: ["mail_signals"],
+  bot_updates: ["payload"],
+  documents: ["front_matter"],
+  emails: ["headers"],
+  meeting_participants: ["sessions"],
+  messages: ["mentions", "reply_to"],
+  proposed_actions: ["payload", "result"],
+  searches: ["params"],
+  tag_consolidations: ["source_member_ids", "survivor_member_ids"],
+  task_events: ["changes"],
+}
+
+export const jsonColumns = (database: CacheDatabase): { table: string; column: string; required: boolean }[] =>
+  database
+    .prepare(
+      `SELECT m.name AS "table", c.name AS "column", c."notnull" AS required FROM sqlite_master m, pragma_table_info(m.name) c
+       WHERE m.type = 'table' AND m.sql NOT LIKE 'CREATE VIRTUAL%' ORDER BY 1, 2`,
+    )
+    .all()
+    .map((row) => ({ table: String(row.table), column: String(row.column), required: Number(row.required) === 1 }))
+    .filter(({ table, column }) => column === "metadata" || JSON_COLUMNS[table]?.includes(column))
+
+export const invalidJson = (database: CacheDatabase): InvalidJson[] =>
+  jsonColumns(database)
+    .map((one) => ({
+      ...one,
+      rows: Number(
+        database
+          .prepare(
+            `SELECT count(*) AS n FROM "${one.table}" WHERE "${one.column}" IS NOT NULL AND NOT json_valid("${one.column}")`,
+          )
+          .get()?.n,
+      ),
+    }))
+    .filter(({ rows }) => rows > 0)
 
 export const QUICK_CHECK_LIMIT = 10_000
 
@@ -199,12 +248,14 @@ export const storeHealth = async (path: string, { deep = false }: { deep?: boole
     const lines = checkLines(database)
     const pagesOk = lines.length === 1 && lines[0] === "ok"
     const indexes = searchIndexHealth(database)
+    const json = pagesOk ? invalidJson(database) : []
     return done({
-      ok: pagesOk && problems.length === 0 && indexes.every((index) => index.ok),
+      ok: pagesOk && problems.length === 0 && indexes.every((index) => index.ok) && json.length === 0,
       file,
       problems: pagesOk ? 0 : lines.length,
       damagedTables: pagesOk ? [] : damagedTables(database, lines),
       searchIndexes: indexes,
+      invalidJson: json,
     })
   } catch (error) {
     return done({ ok: false, error: messageOf(error) })
