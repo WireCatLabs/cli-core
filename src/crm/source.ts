@@ -1,4 +1,4 @@
-import type { CrmField, CrmKind, CrmPipeline, CrmRecords } from "../domain/crm.js"
+import type { CrmDepartment, CrmField, CrmKind, CrmPipeline, CrmRecords, CrmUser } from "../domain/crm.js"
 import type { DealKind } from "../domain/deals.js"
 
 export interface CrmSourceTraits {
@@ -48,4 +48,8 @@ export interface CrmSource {
   fields?(kind: CrmKind): Promise<CrmField[]>
   /** Every id the CRM holds of the kind, a page at a time: how deletions are found when `removedInChanges` is false. */
   ids?(kind: CrmKind, page?: string): Promise<CrmIdPage>
+  /** Every user of the account, active or not; a CRM that cannot list them leaves it out, and its users stay. */
+  users?(): Promise<CrmUser[]>
+  /** Every department; left out, reporting lines are unknown and none stored is withdrawn. */
+  departments?(): Promise<CrmDepartment[]>
 }

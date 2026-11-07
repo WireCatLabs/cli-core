@@ -4,7 +4,7 @@ import { progressLine, progressOf } from "../background/checkpoints.js"
 import { CRM_KINDS, type CrmItem, type CrmKind, isItemKind } from "../domain/crm.js"
 import { DEAL_KINDS, type DealKind } from "../domain/deals.js"
 import { isCliFailure } from "../errors/failures.js"
-import type { CrmSkipped } from "../store/sqlite/crm.js"
+import type { CrmRelationIssue, CrmSaved, CrmSkipped } from "../store/sqlite/crm.js"
 import type { MessageStore } from "../store/store.js"
 import type { AccountKey } from "../store/types.js"
 import type { CrmPage, CrmSource } from "./source.js"
@@ -93,8 +93,9 @@ export interface CrmSyncOptions {
 
 /** Something a run could not do that the owner should know: an item not kept, or a deletion held back. */
 export interface CrmSyncIssue {
-  kind: CrmKind
-  reason: CrmSkipped["reason"] | "crm.unlisted-held"
+  /** `user`: the account's users and departments. */
+  kind: CrmKind | "user"
+  reason: CrmSkipped["reason"] | CrmRelationIssue["reason"] | "crm.unlisted-held" | "crm.not-reported"
   message: string
   externalId?: string
 }
@@ -122,6 +123,10 @@ export interface CrmSyncReport {
   account: string
   /** Pipelines read this run, both kinds. */
   pipelines: number
+  /** Users read this run; absent when the CRM cannot list them. */
+  users?: number
+  /** Relationships the CRM reported against the owner's, each waiting as a `relationship_update` proposal. */
+  conflicts: number
   synced: CrmSyncResult[]
   issues: CrmSyncIssue[]
   /** Every kind finished its round and none failed. */
@@ -165,6 +170,51 @@ const readPipelines = async (run: Run, kind: DealKind): Promise<BudgetStop | nul
   return null
 }
 
+const noted = (run: Run, kind: CrmSyncIssue["kind"], saved: CrmSaved) => {
+  for (const { externalId, ...one } of saved.issues ?? [])
+    run.report.issues.push({ kind, ...one, ...(externalId ? { externalId } : {}) })
+  run.report.conflicts += saved.conflicts ?? 0
+}
+
+/**
+ * The account's users and departments, listed whole each run: before deals, so a deal's owner is a person. A CRM that
+ * cannot list departments says so, and no reporting line is touched.
+ */
+const readUsers = async (run: Run): Promise<BudgetStop | null> => {
+  const { source } = run
+  if (!source.users) return null
+  const why = run.budget.take()
+  if (why) return why
+  let users: Awaited<ReturnType<NonNullable<CrmSource["users"]>>>
+  let departments: Awaited<ReturnType<NonNullable<CrmSource["departments"]>>> | undefined
+  try {
+    users = await source.users()
+    if (source.departments) {
+      const stop = run.budget.take()
+      if (stop) return stop
+      departments = await source.departments()
+    }
+  } catch (error) {
+    if (run.signal?.aborted) throw error
+    // A sign-in without the users' scope still syncs the rest; nothing stored about users is withdrawn.
+    run.report.issues.push({
+      kind: "user",
+      reason: "crm.not-reported",
+      message: isCliFailure(error) ? error.message : `${source.provider} users could not be read`,
+    })
+    return null
+  }
+  if (!source.departments)
+    run.report.issues.push({
+      kind: "user",
+      reason: "crm.not-reported",
+      message: `${source.provider} lists no departments: who reports to whom is unknown`,
+    })
+  noted(run, "user", await run.store.crm.saveUsers(run.account, users, departments))
+  run.report.users = users.length
+  return null
+}
+
 const readFields = async (run: Run, kind: CrmKind): Promise<BudgetStop | null> => {
   const why = run.budget.take()
   if (why) return why
@@ -186,10 +236,13 @@ const savePage = async (
       kind === "person"
         ? await store.crm.savePeople(account, page.items as Parameters<typeof store.crm.savePeople>[1])
         : await store.crm.saveOrganizations(account, page.items as Parameters<typeof store.crm.saveOrganizations>[1])
+    noted(run, kind, saved)
     return { saved: saved.saved, stop: null }
   }
   const items = page.items as CrmItem[]
-  let { saved, skipped } = await store.crm.saveItems(account, kind, items)
+  const first = await store.crm.saveItems(account, kind, items)
+  noted(run, kind, first)
+  let { saved, skipped } = first
   let stop: BudgetStop | null = null
   if (skipped.some(({ reason }) => reason === "crm.stage-unknown") && !run.pipelinesReread.has(kind)) {
     run.pipelinesReread.add(kind)
@@ -203,6 +256,7 @@ const savePage = async (
         kind,
         items.filter(({ externalId }) => again.has(externalId)),
       )
+      noted(run, kind, retried)
       saved += retried.saved
       skipped = [...skipped.filter(({ reason }) => reason !== "crm.stage-unknown"), ...retried.skipped]
     }
@@ -305,8 +359,8 @@ const syncKind = async (run: Run, kind: CrmKind, options: CrmSyncOptions, result
 }
 
 /**
- * Brings one CRM account's copy up to date: both kinds' pipelines and each kind's fields, then contacts, companies,
- * deals and leads, each from its cursor or listed in full, a page at a time, each page saved with the round's place in
+ * Brings one CRM account's copy up to date: both kinds' pipelines and each kind's fields, then companies, contacts,
+ * the account's users and departments, deals and leads, each from its cursor or listed in full, a page at a time, each page saved with the round's place in
  * the cursor, so a run the budget stops, or one that fails, goes on from there. Deletions come from `changes()`, or
  * from a list of every id that marks only after its last page arrived, and never more than half of a kind without
  * `--rescan`.
@@ -323,6 +377,7 @@ export const syncCrm = async (
     provider: source.provider,
     account: account.account,
     pipelines: 0,
+    conflicts: 0,
     synced: [],
     issues: [],
     complete: true,
@@ -356,7 +411,12 @@ export const syncCrm = async (
         stopped = await readFields(run, kind)
         if (options.signal?.aborted) stopped = "cancelled"
       }
+  let usersRead = false
   for (const kind of kinds) {
+    if (!usersRead && isItemKind(kind)) {
+      usersRead = true
+      if (!stopped) stopped = await readUsers(run)
+    }
     const result: CrmSyncResult = {
       kind,
       round: "changes",

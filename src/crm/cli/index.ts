@@ -111,6 +111,8 @@ const crmSync = v.strictObject({
   provider: text,
   account: text,
   pipelines: count,
+  users: v.optional(count),
+  conflicts: count,
   synced: v.array(
     v.strictObject({
       kind: v.picklist(CRM_KINDS),
@@ -126,7 +128,7 @@ const crmSync = v.strictObject({
   ),
   issues: v.array(
     v.strictObject({
-      kind: v.picklist(CRM_KINDS),
+      kind: v.picklist([...CRM_KINDS, "user"]),
       reason: text,
       message: text,
       external_id: v.optional(text),

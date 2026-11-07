@@ -24,6 +24,16 @@ shape of this file.
   links (kind, ends, anchor, role, account) lets one pair hold several roles and keeps a CRM's claim apart from the owner's;
   the migration folds duplicates, keeping the owner's row. Forward-only; `minCompatible` stays 34.
 
+- **A CRM sync keeps the relationships the CRM reports, as a diff, and never overrides the owner's.** Contacts become
+  `member-of` their companies (role `contact`, the job title beside it), a deal's `assignee` its `owner`, the
+  account's users `member-of` its own companies as `employee` and, from the departments, `reports-to` their head.
+  What the CRM stops reporting is withdrawn, not deleted; a role against the owner's is a `relationship_update`
+  proposal; a contact or user never synced is a sync `issues` entry. `CrmPerson.organizations`/`position`,
+  `CrmItem.people[].primary`, `CrmOrganization.own`/`type`, `CrmUser`, `CrmDepartment` and the optional
+  `CrmSource.users()`/`departments()` carry them; every one is optional. The same diff is `store.relations.syncReported`
+  for any source. The store settings `crm.<provider>:<account>.links` (`reported` or `review`) and
+  `crm.<provider>:<account>.company-types` are offered by every CLI's `config`.
+
 ### Changed — may break callers
 
 - **A person's role on an organization, a project, a deal or a lead must be one of that relationship's roles.**
@@ -144,6 +154,11 @@ shape of this file.
   keyed command.
 
 ### Fixed
+
+- **The person a CRM contact or user makes takes its name.** Joined to the mail contact of its address first, it was
+  left with no name.
+- **Removing any relationship leaves a rejected proposal**, so neither a scan nor a source's sync brings it back; it
+  was so only for a link to a project or a suggestion.
 
 - **A CRM's deal and lead people are the CRM's report, not the owner's word.** They were stored confirmed, as if the
   owner had said so; store version 56 marks them unconfirmed with the CRM account, and `standing` answers `reported`.

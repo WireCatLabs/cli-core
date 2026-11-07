@@ -36,6 +36,7 @@ export {
 } from "./sqlite/completeness.js"
 export { CONVERSATION_COLUMNS } from "./sqlite/conversations.js"
 export type { CounterTarget } from "./sqlite/counters.js"
+export { crmSettingsOf, parseCrmSetting, parseCrmSettingValue, saveCrmSetting } from "./sqlite/crm-settings.js"
 export {
   type EmailMarks,
   MAIL_AGENDA_COLUMNS,

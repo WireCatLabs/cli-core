@@ -44,8 +44,11 @@ export interface CrmItem {
   closedReason?: string | null
   /** A company's id. */
   organization?: string | null
-  /** Contacts on it, by their id, and the part each plays. */
-  people?: { externalId: string; role: DealRole }[]
+  /**
+   * Contacts on it, by their id, the part each plays and whether the CRM marks one its main contact. Left out, the CRM
+   * did not say who is on it, and the people stored stay.
+   */
+  people?: { externalId: string; role: DealRole; primary?: boolean }[]
   /** A lead's: the deal it became. */
   deal?: string | null
   /** Epoch milliseconds, as the CRM gives them; the stage history counts from these. */
@@ -53,7 +56,7 @@ export interface CrmItem {
   updatedAt?: number | null
   /** The CRM's own page for it, http or https. */
   url?: string | null
-  /** The CRM user it is assigned to, by the user's id: never a contact's. */
+  /** The CRM user it is assigned to, by the user's id: never a contact's. It makes that user's person its `owner`. */
   assignee?: string | null
   /**
    * What the CRM sends that has no column; never a secret. Its own fields' values are here by code as `CrmValue`,
@@ -78,6 +81,13 @@ export interface CrmPerson {
   name: string | null
   email?: string | null
   phone?: string | null
+  /** The job title as the CRM writes it: kept beside the relationship, never a role. */
+  position?: string | null
+  /**
+   * The companies the contact represents, by their id; each becomes `member-of` with role `contact`. Left out, the CRM
+   * did not say, and the relationships stored stay.
+   */
+  organizations?: { externalId: string; primary?: boolean; sourceRole?: string | null }[]
 }
 
 /** A CRM company: it becomes an organization of its own, never one matched by name. */
@@ -85,7 +95,35 @@ export interface CrmOrganization {
   externalId: string
   name: string
   url?: string | null
+  /** One of the account's own companies, the owner's side of every deal, not a client. */
+  own?: boolean
+  /** The CRM's company type code; `crm.<provider>:<account>.company-types` says what one means, nothing by default. */
+  type?: string | null
   metadata?: Record<string, unknown>
+}
+
+/**
+ * A CRM user: someone of the owner's own company, such as a deal's owner. It becomes an identity of the CRM's provider,
+ * `<account>/user/<id>`, joined to a person by exact email only, and `member-of` the own company as an `employee`
+ * while it is active.
+ */
+export interface CrmUser {
+  externalId: string
+  name: string | null
+  email?: string | null
+  position?: string | null
+  /** The departments it belongs to, by their id. */
+  departments?: string[]
+  active?: boolean
+}
+
+/** A department of the own company: a user reports to its head, a head to the head of the parent. */
+export interface CrmDepartment {
+  externalId: string
+  name: string
+  parent?: string | null
+  /** The user who heads it, by the user's id. */
+  head?: string | null
 }
 
 /** One of a CRM account's own fields on a kind: what the code a row's `metadata` is keyed by means. */

@@ -255,6 +255,22 @@ const OTHERS: Entry[] = [
   validation("field.unknown-kind", "fields are listed for deals, leads, people and organizations only"),
   validation("crm.write-unsupported", "the CRM does not take this write, or does not recognise a repeated one"),
   validation("crm.unlisted-held", "a list of every id would mark most of a kind deleted; nothing was, until --rescan"),
+  validation(
+    "crm.not-reported",
+    "the CRM did not list users or departments; what they would say is unknown, nothing withdrawn",
+  ),
+  validation(
+    "crm.reference-unknown",
+    "a CRM row names a contact, company or user the store does not hold; that link was not made",
+  ),
+  validation("crm.email-ambiguous", "a CRM contact's email belongs to more than one person; the owner decides"),
+  validation("crm.own-unknown", "no own company of the CRM account is stored, so its users are no one's employees yet"),
+  validation("relationship.reference-unknown", "a reported relationship names something the store does not hold"),
+  validation("relationship.invalid", "a reported relationship joins ends or takes a role the registry refuses"),
+  validation(
+    "relationship.owner-rejected",
+    "the owner removed or rejected this relationship; a source does not bring it back",
+  ),
   validation("order.duplicate", "the shop's order with this number is already stored; change its status instead"),
   validation("order.proposed", "the shop's order with this number already waits for the owner in a findings batch"),
   validation("order.field", "a field of the order is not valid"),

@@ -23,10 +23,14 @@ import {
 } from "../store/shared-config.js"
 import {
   accountGroupsOf,
+  crmSettingsOf,
   DEFAULT_AGENT_CLOSE,
   DEFAULT_FIRST_PASS_PER_CHAT,
   firstPassPerChatOf,
   openStore,
+  parseCrmSetting,
+  parseCrmSettingValue,
+  saveCrmSetting,
   savedAgentClose,
   savedFirstPassPerChat,
   savedPhoneCountries,
@@ -59,16 +63,20 @@ export const STORE_SETTINGS = [
 ]
 
 const GROUP_PREFIX = `${ACCOUNT_GROUPS_SETTING}.`
+/** A CRM account's: whether what it reports is a relationship or waits for review, and what its company types mean. */
+const CRM_SETTINGS = ["crm.<provider>:<account>.links", "crm.<provider>:<account>.company-types"]
 
 /**
  * The store settings a CLI offers. Phone countries, task rules and account groups belong to messages; a CLI that is
  * not a messenger would change them for tg and MAX without reading them itself.
  */
 export const storeSettingsOf = (app: Pick<AppIdentity, "messenger">): string[] =>
-  app.messenger === false ? Object.keys(SCRIPTS) : [...STORE_SETTINGS, `${GROUP_PREFIX}<name>`]
+  app.messenger === false
+    ? [...Object.keys(SCRIPTS), ...CRM_SETTINGS]
+    : [...STORE_SETTINGS, `${GROUP_PREFIX}<name>`, ...CRM_SETTINGS]
 
 export const offersStoreSetting = (app: Pick<AppIdentity, "messenger">, setting: string): boolean =>
-  app.messenger !== false || setting in SCRIPTS
+  app.messenger !== false || setting in SCRIPTS || parseCrmSetting(setting) !== undefined
 
 export const isStoreSetting = (setting: string): boolean =>
   setting in SCRIPTS ||
@@ -78,7 +86,8 @@ export const isStoreSetting = (setting: string): boolean =>
   setting === AGENT_CLOSE ||
   setting === AGENT_CLOSE_MIN ||
   setting === FIRST_PASS ||
-  setting.startsWith(GROUP_PREFIX)
+  setting.startsWith(GROUP_PREFIX) ||
+  parseCrmSetting(setting) !== undefined
 
 export const changeStoreSetting = async (
   app: AppIdentity,
@@ -87,6 +96,7 @@ export const changeStoreSetting = async (
   value: string | undefined,
 ) => {
   if (setting.startsWith(GROUP_PREFIX)) return changeGroup(app, env, setting, value)
+  if (parseCrmSetting(setting)) return changeCrm(env, setting, value)
   if (setting === PHONE_COUNTRIES) return changePhoneCountries(app, env, value)
   if (setting === TASK_CATEGORIES || setting.startsWith(CATEGORY_PREFIX))
     return changeCategory(app, env, setting, value)
@@ -252,6 +262,33 @@ const changeGroup = async (app: AppIdentity, env: NodeJS.ProcessEnv, setting: st
   }
 }
 
+const crmValueText = (value: unknown): string =>
+  typeof value === "string"
+    ? value
+    : Object.entries(value as Record<string, string>)
+        .map(([type, meaning]) => `${type}=${meaning}`)
+        .join(",")
+
+const changeCrm = async (env: NodeJS.ProcessEnv, setting: string, value: string | undefined) => {
+  const { name } = parseCrmSetting(setting) as NonNullable<ReturnType<typeof parseCrmSetting>>
+  const parsed = value === undefined ? undefined : parseCrmSettingValue(name, value)
+  await (await openStore({ env })).close()
+  const database = await openCache(storePath(env))
+  try {
+    saveCrmSetting(database, setting, parsed, Date.now())
+  } finally {
+    database.close()
+  }
+  const now = parsed ?? (name === "links" ? "reported" : {})
+  return {
+    result: { store: storePath(env), scope: "store", setting, value: crmValueText(now) },
+    note:
+      name === "links"
+        ? `store-wide — the next sync of that account writes what it reports as ${now === "review" ? "proposals for the owner to review" : "reported relationships"}; relationships already stored stay`
+        : "store-wide — a company of a mapped type becomes a customer, supplier or partner of the account's own company",
+  }
+}
+
 /** Each category as `config show` lists it, and where it comes from: the shared file, an older store's list, the default. */
 const categoryRows = (saved: readonly TaskCategory[] | undefined, file: string) => {
   let edits: ReturnType<typeof readTaskCategoryEdits>
@@ -288,6 +325,7 @@ export const storeSettings = async (env: NodeJS.ProcessEnv) => {
   let categories: TaskCategory[] | undefined
   let agentClose: ReturnType<typeof savedAgentClose> = {}
   let firstPass: number | undefined
+  let crm: ReturnType<typeof crmSettingsOf> = []
   if (existsSync(path)) {
     try {
       const database = await openCache(path)
@@ -300,6 +338,7 @@ export const storeSettings = async (env: NodeJS.ProcessEnv) => {
         categories = table ? savedTaskCategories(database) : undefined
         agentClose = table ? savedAgentClose(database) : {}
         firstPass = table ? savedFirstPassPerChat(database) : undefined
+        crm = table ? crmSettingsOf(database) : []
       } finally {
         database.close()
       }
@@ -351,6 +390,7 @@ export const storeSettings = async (env: NodeJS.ProcessEnv) => {
             scope: "store",
           },
         ]),
+    ...crm.map(({ setting, value }) => ({ setting, value: crmValueText(value), from: "store", scope: "store" })),
     ...Object.entries(groups).map(([name, members]) => ({
       setting: `${GROUP_PREFIX}${name}`,
       value: members.join(","),

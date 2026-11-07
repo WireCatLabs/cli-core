@@ -184,6 +184,26 @@ write alike, with no review; only the author is kept. Triggers write each stage 
 `pipeline_stage_changes`, and `pipeline(ref)` counts from it how many rows reached each stage and the conversion to
 the next. The migration seeds the lead pipeline `Leads` (`new`, `contacted`, `qualified`, `won`, `lost`).
 
+### Relationships a source reports
+
+`store.relations.syncReported(account, relationships, scope)` writes what a source account says as a diff keyed by the
+relationship's unique key: one it newly reports is a `reported` link with the account (`confirmed = 0`,
+`account_id`), or a `relationship` proposal when the account's setting `crm.<provider>:<account>.links` is `review`;
+one it still reports is kept (no history row); one inside `scope` it no longer reports is withdrawn (`deleted_at`),
+never deleted. The owner's link always wins: a pair the owner confirmed with another role is one
+`relationship_update` proposal, never an overwrite, and a pair the owner removed or rejected stays out (every removal
+leaves a rejected `relationship` proposal). A ref the store does not hold is an issue in the answer, not an error.
+
+The CRM sync uses it for every relationship a CRM reports: a contact `member-of` its companies with role `contact`
+(the job title in `metadata.position`), a deal's or lead's contacts with their deal role, the deal's `assignee` as
+`owner`, each active user `member-of` the account's own companies (`organizations.metadata.own`, from
+`CrmOrganization.own`) as `employee` (an inactive user's withdrawn), and, when the CRM lists departments, `reports-to` the head of the user's
+department, a head the head of the parent one (`metadata.derived = "department-head"`; no head, no link). A CRM user
+is an identity `<account>/user/<id>`, joined to a person by exact email as a contact is. A field the CRM left out
+(`organizations`, `people`, `assignee`, `users()`, `departments()`) withdraws nothing. A contact whose email belongs to
+two people is named in the sync's issues. `usableLink` leaves out what an account set to `review` reports. `crm.<provider>:<account>.company-types`
+maps a CRM company type to `customer-of`, `supplier` or `partner-of`; it is empty by default and no sync reads it yet.
+
 A mail findings batch (`store.mailFindings`) also takes `invoice`, `payment`, `order` and `order_update` findings.
 Staging runs what accepting would write through `store.finance` or `store.orders` and rolls it back, so a batch the
 owner could not accept is refused with the same reason; an `order_update` needs the stored order of its

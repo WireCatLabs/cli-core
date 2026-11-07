@@ -219,8 +219,8 @@ export interface KnowledgeStore extends VocabularyStore, MeetingProjectsStore, O
   decideSuggestedLink(id: string, decision: LinkDecision): Promise<Link | null>
   relations(key: KnowledgeScope, reference?: string): Promise<KnowledgeRelation[]>
   /**
-   * Removing an unconfirmed relationship rejects it, so `by` must be allowed to decide it. Removing a link to a
-   * project, or rejecting any suggestion, leaves a rejected `relationship` proposal so a scan never proposes it again.
+   * Removing an unconfirmed relationship rejects it, so `by` must be allowed to decide it. Every removal leaves a
+   * rejected `relationship` proposal, so neither a scan nor a source's sync brings the pair back.
    */
   removeRelation(key: KnowledgeScope, id: string, by: Decider): Promise<{ id: string; removed: true }>
   confirmRelation(key: KnowledgeScope, id: string, by: Decider): Promise<KnowledgeRelation>
@@ -880,7 +880,7 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
       const link = linkOf(database, row)
       assertMayDecide({ id: `link:${id}`, proposedBy: UNVERIFIED }, by, context.decisions)
       write(database, () => {
-        if (!link.confirmed || String(row.to_type) === "project") proposals.rejected(link, by)
+        proposals.rejected(link, by)
         database.prepare("DELETE FROM links WHERE id = ?").run(Number(id))
       })
       return { id, removed: true }
