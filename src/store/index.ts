@@ -157,6 +157,13 @@ export type { AgentAction, AgentActionInput, AgentActionsStore } from "./sqlite/
 export { resetAttachmentWords } from "./sqlite/attachment-texts.js"
 export { backfillNormalized, pendingNormalization } from "./sqlite/backfill.js"
 export type { BotUpdate, BotUpdateStore } from "./sqlite/bot-updates.js"
+export type {
+  Contract,
+  ContractFields,
+  ContractFilter,
+  ContractInput,
+  ContractsStore,
+} from "./sqlite/business-contracts.js"
 export type { CatalogActor, CatalogEntry, CatalogInput, CatalogQuery, CatalogStore } from "./sqlite/catalog.js"
 export { CATALOG_QUERY } from "./sqlite/catalog.js"
 export type { ChatMetadata } from "./sqlite/chats.js"
@@ -266,6 +273,17 @@ export type {
 export type { MeetingVectorHit, MeetingVectors } from "./sqlite/meeting-vectors.js"
 export type { AttachmentInput } from "./sqlite/meetings.js"
 export type { Author, MemoriesStore, Memory, MemoryInput } from "./sqlite/memories.js"
+export type { MoneyLine, MoneyLineInput } from "./sqlite/money-lines.js"
+export type {
+  CategoryTotal,
+  MoneyTransaction,
+  SplitInput,
+  TransactionFilter,
+  TransactionInput,
+  TransactionSplit,
+  TransactionsStore,
+  TransactionUpdate,
+} from "./sqlite/money-transactions.js"
 export type { NoteIndexState } from "./sqlite/note-index.js"
 export {
   type NearestNote,
@@ -285,8 +303,9 @@ export type {
   NotesStore,
   NoteTag,
 } from "./sqlite/notes.js"
-export type { Order, OrderFilter, OrderInput, OrdersStore } from "./sqlite/orders.js"
+export type { Order, OrderDetail, OrderFilter, OrderInput, OrdersStore } from "./sqlite/orders.js"
 export type { PrivateContact, PrivateContactNote } from "./sqlite/private-people.js"
+export type { Product, ProductFilter, ProductInput, ProductsStore, ProductUpdate } from "./sqlite/products.js"
 export {
   assertGenericAction,
   PROPOSAL_STATUSES,
@@ -320,6 +339,16 @@ export {
   type SearchIndexState,
   searchIndexState,
 } from "./sqlite/search-index.js"
+export type {
+  PriceInput,
+  Subscription,
+  SubscriptionDetail,
+  SubscriptionFilter,
+  SubscriptionInput,
+  SubscriptionPrice,
+  SubscriptionsStore,
+  SubscriptionUpdate,
+} from "./sqlite/subscriptions.js"
 export type { SyncStateSave } from "./sqlite/sync.js"
 export type { TagCreationOptions, TagCreationReview } from "./sqlite/tag-creation.js"
 export type { TagKind, TagRow } from "./sqlite/tags.js"
@@ -348,6 +377,7 @@ export type {
   VocabularyStore,
   VocabularyTarget,
 } from "./sqlite/vocabulary.js"
+export type { Wallet, WalletInput, WalletsStore, WalletUpdate } from "./sqlite/wallets.js"
 export type {
   BoardCounts,
   BoardOptions,
