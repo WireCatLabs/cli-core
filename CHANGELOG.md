@@ -7,6 +7,12 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- **`search all` ranks higher the record a question words differently.** For a question, a mail, message or note
+  that both the words and the meaning found kept only its words rank, so one meaning ranked first and words ranked
+  last stayed at the bottom of the page or off it. It now keeps the better of its two ranks, still with no second vote.
+
 ## 0.603.0 — 07.11.2026
 
 ### Changed — may break callers
