@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.604.0 — 07.11.2026
+
 ### Added
 
 - **A file note can carry the time its source gives it, and searches read that time.**
