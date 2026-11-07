@@ -13,6 +13,7 @@ import { dirname, join } from "node:path"
 import { describe, expect, it } from "vitest"
 import { explainDamage } from "./damage.js"
 import { storeHealth } from "./health.js"
+import { readHealthMark } from "./marks.js"
 import { migrate } from "./migrations.js"
 import { openCache } from "./open.js"
 import { danglingRows, recoverStore, runningRecovery, sqlite3Program, storeHolders, tableRows } from "./recover.js"
@@ -92,6 +93,7 @@ describe("store recovery", () => {
     expect(recovery.lost).toEqual([])
     expect(recovery.dangling).toEqual([])
     expect(existsSync(recovery.keptAt)).toBe(true)
+    expect(readHealthMark(path)).toMatchObject({ ok: true, cli: "chat" })
     await recovered(path)
   })
 

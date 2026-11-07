@@ -26,7 +26,7 @@ export const failureKey = (error: unknown): string =>
 
 const SQLITE_CORRUPT = 11
 const SQLITE_NOTADB = 26
-const DAMAGED_TEXT = /database disk image is malformed|file is not a database/i
+const DAMAGED_TEXT = /database disk image is malformed|file is not a database|fts5: corruption/i
 
 /**
  * SQLite's primary result code: node:sqlite's `errcode`, or `errno` only on bun:sqlite's `SQLiteError`. A filesystem

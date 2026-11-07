@@ -14,8 +14,10 @@ import { Transform } from "node:stream"
 import { CliError } from "@wirecat/cli-base"
 import { holdersOf } from "../background/processes.js"
 import { isStoreDamage } from "../errors/failures.js"
+import { fileSchemaOf } from "./compatibility.js"
 import type { CacheDatabase } from "./driver.js"
 import { fts5Tables, type InvalidJson, invalidJson, type StoreHealth, storeHealth } from "./health.js"
+import { recordDeepCheck } from "./marks.js"
 import { migrate } from "./migrations.js"
 import { resetAttachmentWords } from "./sqlite/attachment-texts.js"
 import { involvementStoreOver } from "./sqlite/involvements.js"
@@ -577,6 +579,7 @@ const recoverLocked = async ({
     let dangling: DanglingRows[]
     let json: InvalidJson[]
     let fetch: { account: string; emails: number }[]
+    let schema: number
     try {
       kept = tableRows(opened.database)
       migrate(opened.database, { command, ...(version ? { version } : {}) })
@@ -586,6 +589,7 @@ const recoverLocked = async ({
       note("looking for rows that point at rows that were lost")
       dangling = danglingRows(opened.database)
       fetch = mailToFetch(opened.database)
+      schema = fileSchemaOf(opened.database).version
       opened.database.exec("PRAGMA wal_checkpoint(TRUNCATE)")
     } catch (error) {
       opened.database.close()
@@ -621,6 +625,8 @@ const recoverLocked = async ({
       if (existsSync(`${path}${suffix}`)) renameSync(`${path}${suffix}`, `${keptAt}${suffix}`)
     for (const suffix of STORE_PARTS)
       if (existsSync(`${target}${suffix}`)) renameSync(`${target}${suffix}`, `${path}${suffix}`)
+
+    recordDeepCheck(path, health, { cli: command, ...(version ? { version } : {}), schema, now })
 
     const lost = Object.entries(rowsBefore)
       .map(([table, before]) => ({ table, before, read: read[table] ?? 0, kept: kept[table] ?? 0 }))
