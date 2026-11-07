@@ -23,6 +23,7 @@ import {
   quantityOf,
   scaleOf,
 } from "../../domain/money.js"
+import { RECORD_TYPES } from "../../domain/record-types.js"
 import { assertMayDecide, botKey, type Decider, deciderAuthor } from "../decisions.js"
 import { type Actor, type ProposedByFilter, proposedBySql, proposerOf } from "./actors.js"
 import {
@@ -232,6 +233,17 @@ export interface FinanceStore {
 
 type Row = Record<string, unknown>
 
+/** The types `decide` settles money for; other proposal types get their own route. */
+const FINANCE_TYPES = ["invoice", "payment"] as const
+type FinanceType = (typeof FINANCE_TYPES)[number]
+type FinanceTable = (typeof RECORD_TYPES)[FinanceType]["table"]
+const isFinanceType = (type: string): type is FinanceType => (FINANCE_TYPES as readonly string[]).includes(type)
+
+const article = (word: string) => (/^[aeiou]/.test(word) ? "an" : "a")
+/** One article, for the first prefix only: `an invoice: or payment:`. */
+export const prefixesText = (types: readonly string[]) =>
+  `${article(types[0] ?? "")} ${types.map((type) => `${type}:`).join(" or ")}`
+
 export const refuse = (
   message: string,
   reason: string,
@@ -351,12 +363,7 @@ export const reviewedRowsOver = (context: StoreContext) => {
     if (by !== "owner") refuse(`only the owner ${what}`, "finance.owner-only", "permission_error")
   }
 
-  const keepDecision = (
-    table: "invoices" | "payments" | "orders" | "opportunities",
-    id: number,
-    by: Decider,
-    reason?: string,
-  ) => {
+  const keepDecision = (table: FinanceTable | "orders", id: number, by: Decider, reason?: string) => {
     const why = [by === "owner" ? undefined : by.reason.trim(), reason?.trim() || undefined].filter(Boolean).join(": ")
     if (by === "owner" && !why) return
     const decision = by === "owner" ? { by: "owner", reason: why } : { by: "agent", bot: by.bot, reason: why }
@@ -567,10 +574,9 @@ export const financeOperationsOver = (context: StoreContext): FinanceOperations 
 
   const decide = (reference: string, by: Decider, reason: string | undefined, confirm: boolean) => {
     const thing = requiredThing(database, reference, "the proposal")
-    if (thing.type !== "invoice" && thing.type !== "payment")
-      return refuse(`${reference} is not an invoice: or payment:`, "finance.ref")
+    if (!isFinanceType(thing.type)) return refuse(`${reference} is not ${prefixesText(FINANCE_TYPES)}`, "finance.ref")
     const type = thing.type
-    const table = type === "invoice" ? "invoices" : "payments"
+    const table = RECORD_TYPES[type].table
     const row = rowOf(reference, type)
     const ref = `${type}:${row.id}`
     assertMayDecide(

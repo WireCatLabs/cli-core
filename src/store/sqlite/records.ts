@@ -1,5 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import { formatDecimal, minorUnits, scaleOf } from "../../domain/money.js"
+import { rolesOf } from "../../domain/record-types.js"
 import {
   type EnvelopeRecord,
   type EnvelopeSource,
@@ -10,10 +11,22 @@ import {
 } from "../../domain/records.js"
 import type { CacheDatabase } from "../driver.js"
 import { accountPk, findAccountPk } from "./accounts.js"
-import { financeOperationsOver, type InvoiceInput, type PaymentDetail, type PaymentInput } from "./finance.js"
+import { financeOperationsOver, type PaymentDetail } from "./finance.js"
 import type { Author } from "./memories.js"
 import { requiredThing } from "./notes.js"
 import type { StoreContext } from "./open.js"
+import {
+  FIELD_REFERENCE_ROLES,
+  IMPORTER,
+  isProjected,
+  PROJECTED_TYPES,
+  type ProjectedType,
+  RECORD_PROJECTORS,
+  type Row,
+  refusal,
+  type Share,
+  stringField,
+} from "./record-projectors.js"
 import { referenceOfThing, storedThing } from "./things.js"
 import { read, write } from "./transaction.js"
 
@@ -84,26 +97,7 @@ export interface RecordStore {
   map(key: RecordKey, entity: string, by: Author): Promise<SourceRecord>
 }
 
-type Row = Record<string, unknown>
-interface Share {
-  invoice: string
-  /** As the source gave it; `null` settles as far as both allow. */
-  amount: string | null
-}
-
-const PROJECTED = {
-  invoice: { roles: ["issuer", "counterparty", "project"], many: [] as string[] },
-  payment: { roles: ["payer", "payee", "project", "settles"], many: ["settles"] as string[] },
-} as const
-type Projected = keyof typeof PROJECTED
-const isProjected = (type: unknown): type is Projected => type === "invoice" || type === "payment"
-const IMPORTER: Author = { bot: "import" }
-const REFERENCE_FIELDS = ["issuer", "counterparty", "project", "payer", "payee"]
-
-/** `at` names the record's member at fault; a refused entity is the fields' fault. */
-const refusal = (message: string, code: string, at?: string | (string | number)[]): never => {
-  throw new CliError("validation_error", message, { reason: code, ...(at === undefined ? {} : { at }) })
-}
+const PROJECTED_TYPES_SQL = PROJECTED_TYPES.map((type) => `'${type}'`).join(", ")
 
 const codeOf = (error: CliError): string => {
   const reason = (error.details as { reason?: unknown } | undefined)?.reason
@@ -119,58 +113,6 @@ const unsettled = (fields: Row, relations: RecordRelation[]) =>
   )
 
 const iso = (value: unknown) => new Date(Number(value)).toISOString()
-
-const stringField = (fields: Row, name: string): string | undefined => {
-  const value = fields[name]
-  if (value === undefined || value === null) return undefined
-  if (typeof value !== "string") return refusal(`fields.${name} is text`, "record.invalid")
-  return value
-}
-
-const invoiceOf = (fields: Row, related: Map<string, string[]>, source: EnvelopeSource): InvoiceInput => {
-  if (!Array.isArray(fields.lines) || fields.lines.some((line) => typeof line !== "object" || line === null))
-    return refusal("an invoice's fields.lines is a list of lines", "record.invalid")
-  const one = (role: string) => related.get(role)?.[0] ?? stringField(fields, role)
-  return {
-    ...written(source),
-    direction: fields.direction as InvoiceInput["direction"],
-    number: stringField(fields, "number"),
-    issuer: one("issuer"),
-    counterparty: one("counterparty") as string,
-    project: one("project"),
-    currency: fields.currency as string,
-    issueDate: stringField(fields, "issue_date"),
-    dueDate: stringField(fields, "due_date"),
-    total: fields.total as string | undefined,
-    lines: (fields.lines as Row[]).map((line) => ({
-      description: line.description as string,
-      quantity: line.quantity as string | undefined,
-      unitPrice: line.unit_price as string | undefined,
-      amount: line.amount as string | undefined,
-    })),
-  }
-}
-
-const paymentOf = (fields: Row, related: Map<string, string[]>, source: EnvelopeSource): PaymentInput => {
-  const one = (role: string) => related.get(role)?.[0] ?? stringField(fields, role)
-  return {
-    ...written(source),
-    direction: fields.direction as PaymentInput["direction"],
-    payer: one("payer"),
-    payee: one("payee"),
-    project: one("project"),
-    amount: fields.amount as string,
-    currency: fields.currency as string,
-    date: fields.date as string,
-    reference: stringField(fields, "reference"),
-  }
-}
-
-const written = (source: EnvelopeSource) => ({
-  by: IMPORTER,
-  source: `import:${source.provider}`,
-  reason: `imported from ${source.provider} account ${source.account}, batch ${source.batch_id}`,
-})
 
 export const recordStoreOver = (context: StoreContext): RecordStore => {
   const { database, now } = context
@@ -189,8 +131,10 @@ export const recordStoreOver = (context: StoreContext): RecordStore => {
     type == null ? null : (referenceOfThing(database, storedThing(type, id)) ?? `${String(type)}:${String(id)}`)
 
   /** Roles a projection needs whose target has no entity yet, the entities of the rest, and what each invoice gets. */
-  const relatedOf = (recordId: number, type: Projected) => {
-    const { roles, many } = PROJECTED[type]
+  const relatedOf = (recordId: number, type: ProjectedType) => {
+    const roles = rolesOf(type)
+    const known = roles.map(([name]) => name)
+    const many = roles.flatMap(([name, role]) => (role.many ? [name] : []))
     const rows = sql(
       "SELECT rr.role, rr.amount, t.entity_type, t.entity_id FROM record_relations rr " +
         "LEFT JOIN records t ON t.id = rr.target_id AND t.deleted_at IS NULL WHERE rr.record_id = ? ORDER BY rr.id",
@@ -200,7 +144,7 @@ export const recordStoreOver = (context: StoreContext): RecordStore => {
     const missing = new Set<string>()
     for (const row of rows) {
       const role = String(row.role)
-      if (!(roles as readonly string[]).includes(role)) continue
+      if (!known.includes(role)) continue
       const ref = entityRef(row.entity_type, row.entity_id)
       if (ref === null) missing.add(role)
       else related.set(role, [...(related.get(role) ?? []), ref])
@@ -212,17 +156,14 @@ export const recordStoreOver = (context: StoreContext): RecordStore => {
     return { related, shares, missing: [...missing] }
   }
 
-  /** Makes the proposal a waiting invoice or payment record stands for, once every reference it names has an entity. */
+  /** Makes the proposal a waiting record stands for, once every reference it names has an entity. */
   const project = (row: Row, source: EnvelopeSource): { proposed?: string; missing: string[] } => {
-    const type = row.type as Projected
+    const type = row.type as ProjectedType
     const { related, shares, missing } = relatedOf(Number(row.id), type)
     if (missing.length > 0) return { missing }
     const fields = JSON.parse(String(row.fields)) as Row
-    for (const name of REFERENCE_FIELDS) stringField(fields, name)
-    const ref =
-      type === "invoice"
-        ? finance.addInvoice(invoiceOf(fields, related, source)).ref
-        : settle(finance.addPayment(paymentOf(fields, related, source)), shares)
+    for (const name of FIELD_REFERENCE_ROLES) stringField(fields, name)
+    const ref = RECORD_PROJECTORS[type](fields, { related, shares }, source, { finance, settle })
     const entity = requiredThing(database, ref)
     sql("UPDATE records SET entity_type = ?, entity_id = ?, projected_fingerprint = fingerprint WHERE id = ?").run(
       entity.type,
@@ -320,7 +261,7 @@ export const recordStoreOver = (context: StoreContext): RecordStore => {
     while (queue.length > 0) {
       const rows = sql(
         "SELECT DISTINCT r.* FROM record_relations rr JOIN records r ON r.id = rr.record_id WHERE rr.target_id = ? " +
-          "AND r.entity_id IS NULL AND r.deleted_at IS NULL AND r.type IN ('invoice', 'payment')",
+          `AND r.entity_id IS NULL AND r.deleted_at IS NULL AND r.type IN (${PROJECTED_TYPES_SQL})`,
       ).all(queue.shift() as number)
       for (const row of rows) {
         try {
@@ -590,7 +531,7 @@ export const recordStoreOver = (context: StoreContext): RecordStore => {
         const rows = database
           .prepare(
             `${SELECT}WHERE a.provider = ? AND a.external_id = ? AND (? IS NULL OR r.type = ?) ` +
-              "AND (? IS NULL OR (r.entity_id IS NULL AND r.deleted_at IS NULL AND r.type IN ('invoice', 'payment'))) " +
+              `AND (? IS NULL OR (r.entity_id IS NULL AND r.deleted_at IS NULL AND r.type IN (${PROJECTED_TYPES_SQL}))) ` +
               "AND (? IS NULL OR (r.entity_id IS NOT NULL AND (r.deleted_at IS NOT NULL " +
               "OR r.projected_fingerprint IS NOT r.fingerprint))) ORDER BY r.updated_at DESC, r.id DESC LIMIT ?",
           )
