@@ -132,6 +132,9 @@ export const MANIFEST: ManifestEntry[] = [
   { name: "20261106225547_version-54-crm-fields", version: 54, minCompatible: 34 },
   { name: "20261107032742_version-55-decision-requests", version: 55, minCompatible: 34 },
   { name: "20261107043407_version-55-decision-requests-index", version: 55, minCompatible: 34 },
+  { name: "20261107162427_version-56-relationship-links", version: 56, minCompatible: 34 },
+  { name: "20261107162448_version-56-relationship-links-history", version: 56, minCompatible: 34 },
+  { name: "20261107163245_version-56-relationship-links-key", version: 56, minCompatible: 34 },
 ]
 
 export const generatedMigrations = (

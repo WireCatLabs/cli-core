@@ -385,8 +385,8 @@ export const crmCopiesOver = (context: StoreContext, people: AccountPeople): Crm
       )
       .run(kind, id, SOURCE)
     const link = database.prepare(
-      "INSERT INTO links (from_type, from_id, to_type, to_id, kind, role, source, confirmed, created_at, author, " +
-        `updated_at) VALUES (?, ?, 'person', ?, ${linkKind("related-to")}, ?, ?, 1, ?, 'rule', ?)`,
+      "INSERT INTO links (from_type, from_id, to_type, to_id, kind, role, source, confirmed, account_id, created_at, " +
+        `author, updated_at) VALUES (?, ?, 'person', ?, ${linkKind("related-to")}, ?, ?, 0, ?, ?, 'rule', ?)`,
     )
     const seen = new Set<number>()
     for (const person of item.people ?? []) {
@@ -394,7 +394,7 @@ export const crmCopiesOver = (context: StoreContext, people: AccountPeople): Crm
       const role = (DEAL_ROLES as readonly string[]).includes(person.role) ? person.role : "contact"
       if (personId === null || seen.has(personId)) continue
       seen.add(personId)
-      link.run(kind, id, personId, role, SOURCE, at, at)
+      link.run(kind, id, personId, role, SOURCE, accountId, at, at)
     }
     return null
   }

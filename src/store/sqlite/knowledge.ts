@@ -462,9 +462,13 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
       ;[from, to] = [to, from]
       ends = { from: input.to, to: input.from }
     }
+    const role = input.role === undefined ? null : input.role.trim()
     const existing = database
-      .prepare(`${RELATIONS} AND from_type=? AND from_id=? AND to_type=? AND to_id=? AND kind=?`)
-      .get(from.type, from.id, to.type, to.id, input.kind)
+      .prepare(
+        `${RELATIONS} AND from_type=? AND from_id=? AND to_type=? AND to_id=? AND kind=? AND account_id IS NULL ` +
+          "AND (? IS NULL OR ifnull(role, '') = ?)",
+      )
+      .get(from.type, from.id, to.type, to.id, input.kind, role, role)
     return { from, to, existing, ends }
   }
   /** A chat may only be the member: its reference names its own account, so it is never another account's. */

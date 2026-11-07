@@ -253,7 +253,7 @@ export const dealOperationsOver = (context: StoreContext) => {
     database
       .prepare(
         `SELECT to_id, role FROM links WHERE from_type = ? AND from_id = ? AND kind = ${linkKind("related-to")} ` +
-          "AND to_type = 'person' AND to_id IS NOT NULL ORDER BY id",
+          "AND to_type = 'person' AND to_id IS NOT NULL AND deleted_at IS NULL ORDER BY id",
       )
       .all(kind, id)
       .map((row) => ({ ...(partyOf("person", row.to_id) as Party), role: row.role as DealRole }))
@@ -619,7 +619,7 @@ export const dealOperationsOver = (context: StoreContext) => {
             )?.id,
         )
         const link = database.prepare(
-          "INSERT INTO links (from_type, from_id, to_type, to_id, kind, role, source, confirmed, created_at, author, " +
+          "INSERT OR IGNORE INTO links (from_type, from_id, to_type, to_id, kind, role, source, confirmed, created_at, author, " +
             `updated_at) VALUES (?, ?, 'person', ?, ${linkKind("related-to")}, ?, ?, 1, ?, ?, ?)`,
         )
         for (const person of persons)

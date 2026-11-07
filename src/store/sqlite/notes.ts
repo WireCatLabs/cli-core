@@ -9,6 +9,7 @@ import {
   isDocumentAccountProvider,
 } from "../../domain/providers.js"
 import { parseReference } from "../../domain/references.js"
+import { isRelationKind } from "../../domain/relations.js"
 import { normalizeTag } from "../../domain/tags.js"
 import type { Section } from "../../readers/types.js"
 import { assertMayWithdraw, type Decider } from "../decisions.js"
@@ -82,6 +83,13 @@ export interface Link {
   provenance: string | null
   confirmed: boolean
   createdAt: string
+  /** A relationship a source account reported: that account's `accounts` row. */
+  accountId?: number
+  /** When a relationship held, epoch ms; `endsAt` exclusive. */
+  startsAt?: number
+  endsAt?: number
+  /** The source stopped reporting the relationship. */
+  deletedAt?: number
 }
 
 export interface LinkListFilter {
@@ -265,6 +273,10 @@ export const linkOf = (database: CacheDatabase, row: Row): Link => {
     provenance: metadata.provenance ?? null,
     confirmed: Number(row.confirmed) === 1,
     createdAt: iso(row.created_at),
+    ...(row.account_id == null ? {} : { accountId: Number(row.account_id) }),
+    ...(row.starts_at == null ? {} : { startsAt: Number(row.starts_at) }),
+    ...(row.ends_at == null ? {} : { endsAt: Number(row.ends_at) }),
+    ...(row.deleted_at == null ? {} : { deletedAt: Number(row.deleted_at) }),
   }
 }
 
@@ -355,11 +367,15 @@ export const insertLink = (context: StoreContext, input: LinkInput): Link => {
   const targetText = input.targetText === undefined ? null : textOf(input.targetText, "a link's target", 500)
   if (to === null && targetText === null) throw new CliError("validation_error", "a link needs a target")
   if (to !== null) {
+    // A relationship's key holds its role and its source account: the owner's link with another role is another one.
+    const relationship = isRelationKind(kind)
+    const role = relationship && input.role !== undefined ? input.role.trim() : null
     const existing = database
       .prepare(
-        "SELECT * FROM links WHERE from_type = ? AND from_id = ? AND to_type = ? AND to_id = ? AND kind = ? AND anchor IS ?",
+        "SELECT * FROM links WHERE from_type = ? AND from_id = ? AND to_type = ? AND to_id = ? AND kind = ? AND anchor IS ?" +
+          (relationship ? " AND account_id IS NULL AND (? IS NULL OR ifnull(role, '') = ?)" : ""),
       )
-      .get(from.type, from.id, to.type, to.id, kind, input.anchor ?? null)
+      .get(from.type, from.id, to.type, to.id, kind, input.anchor ?? null, ...(relationship ? [role, role] : []))
     if (existing) return linkOf(database, existing)
   }
   const at = now()

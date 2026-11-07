@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX `links_relationship_key` ON `links` (`kind`,`from_type`,`from_id`,`to_type`,`to_id`,ifnull("anchor", ''),ifnull("role", ''),ifnull("account_id", 0)) WHERE kind IN ('member-of', 'related-to', 'reports-to', 'customer-of', 'partner-of') AND to_id IS NOT NULL;

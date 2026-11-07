@@ -128,5 +128,7 @@ export const isUsable = (standing: Standing): boolean => standing === "confirmed
 
 export const usableLink = (link: StandingFields, now: number): boolean => isUsable(standingOf(link, now))
 
-/** `usableLink` as SQL over the `links` row aliased `alias`. */
-export const usableLinkSql = (alias: string): string => `${alias}.confirmed = 1`
+/** `usableLink` as SQL over the `links` row aliased `alias`, at `now` (epoch ms). */
+export const usableLinkSql = (alias: string, now: number): string =>
+  `(${alias}.confirmed = 1 OR ${alias}.account_id IS NOT NULL) AND ${alias}.deleted_at IS NULL ` +
+  `AND (${alias}.ends_at IS NULL OR ${alias}.ends_at > ${Math.trunc(now)})`
