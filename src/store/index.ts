@@ -86,6 +86,7 @@ export {
 } from "./evidence-findings.js"
 export {
   type DamagedTable,
+  type InvalidJson,
   QUICK_HEALTH_CHECKS,
   type SearchIndexHealth,
   type StoreHealth,
