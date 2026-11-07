@@ -7,6 +7,19 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **`schedule agent` and `schedule command` take `--deliver-to <route>`, no longer `--to <route>`.** `--to` names who a
+  message is for in every CLI (mail's `<address>`, a messenger's `<chat>`), so mail's command lint refused the route
+  flag. `schedule list` and the answer of `schedule agent|command` name the routes `deliver_to`. The schedule file
+  still keeps them as `to`, so a schedule saved with `--to` goes on delivering; `deliveries[].to` in `last.json` is
+  unchanged.
+- **The shared commands pass `cli-dev lint` with no overrides.** `lint/overrides.json` is gone: an override here never
+  reached a CLI that mounts the commands, so each CLI failed on its bump or copied it. Needs cli-base 0.80.7, whose
+  vocabulary has `--notify-on`, `--deliver-to`, `--max-cost-per-day`, `--who`, `--open-new`, `waiting` and `recover`. A CLI that
+  copied those overrides removes them when it bumps (`cli-dev lint` reports them as stale). `stats tasks show
+  --chat` moved to the baseline.
+
 ## 0.599.0 — 07.11.2026
 
 ### Added
@@ -25,19 +38,6 @@ shape of this file.
   damaged store is explained in the answer's `store.damage` (`explainDamage`: what, causes, investigate, impact,
   external_unaffected, steps) and points at `store recover`, the whole-file check. `storeSummary` takes
   `{ deep, command }`, and `DOCTOR_DEEP_OPTION` words a CLI's own `--deep`.
-
-### Changed — may break callers
-
-- **`schedule agent` and `schedule command` take `--deliver-to <route>`, no longer `--to <route>`.** `--to` names who a
-  message is for in every CLI (mail's `<address>`, a messenger's `<chat>`), so mail's command lint refused the route
-  flag. `schedule list` and the answer of `schedule agent|command` name the routes `deliver_to`. The schedule file
-  still keeps them as `to`, so a schedule saved with `--to` goes on delivering; `deliveries[].to` in `last.json` is
-  unchanged.
-- **The shared commands pass `cli-dev lint` with no overrides.** `lint/overrides.json` is gone: an override here never
-  reached a CLI that mounts the commands, so each CLI failed on its bump or copied it. Needs cli-base 0.80.7, whose
-  vocabulary has `--notify-on`, `--deliver-to`, `--max-cost-per-day`, `--who`, `--open-new`, `waiting` and `recover`. A CLI that
-  copied those overrides removes them when it bumps (`cli-dev lint` reports them as stale). `stats tasks show
-  --chat` moved to the baseline.
 
 ### Fixed
 
