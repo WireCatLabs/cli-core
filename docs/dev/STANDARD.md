@@ -1011,6 +1011,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--checkpoints` | `<durations>` | elapsed joining ages to inspect, such as 1d,7d,30d |  | `stats chats retention` |
 | `--chunk-bytes` | `<n>` | maximum source bytes returned from a retained attachment; 1–1048576 | `524288` | `attachments show` |
 | `--claim` | `<claim>` | remove only this ownership claim: manual or auto |  | `tags remove` |
+| `--clear` |  | take the buttons off the message |  | `bot messages edit` (planned) |
 | `--close-time` | `<delay>` | it closes by itself this long after sending, like 90s or 5m |  | `polls create` (tg-only) |
 | `--closed` | `<on\|off>` | on closes a forum topic to new messages, off reopens it |  | `topics edit` (tg-only) |
 | `--comment-to` | `<post>` | comment on this channel post; the comment goes to the post's discussion group |  | `messages send` (tg-only) |
@@ -1055,6 +1056,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--expire-time` | `<time>` | it stops working then: 2026-09-25T09:00 (local time), or 30m, 2h, 7d from now. **messages pin takes only the lengths its messenger offers, and says how long a pin lasts without it — so it differs on purpose (Help text rule 4)** |  | `chats links create` (tg-only), `chats links update` (tg-only), `messages pin` (wa-only) |
 | `--extract` |  | extract text from files mapped by this download |  | `messages download` |
 | `--failed` |  | every chat whose newest job failed or died |  | `store jobs retry` |
+| `--field` | `<key=value>` | an inline button as <text>=<data>; repeat for more in one row |  | `bot messages edit` (planned), `bot messages send` (planned) |
 | `--file` | `<file>` | attach a file; images go as a photo, videos as a video. Repeat it for more |  | `bot messages send` (planned), `messages send` |
 | `--filename` | `<name>` | the name others see for the --file, instead of its name on disk |  | `messages send` (tg, wa only) |
 | `--filter` | `query` | Strict Lucene filter: any message in the conversation must match; the meaning query stays unchanged. **search notes uses it for a query every note must also match, found by words or by meaning** |  | `search conversations`, `search notes` |
