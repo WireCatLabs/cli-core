@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.603.0 — 07.11.2026
+
 ### Changed — may break callers
 
 - **A keyed command that declares no `effects` now counts as a write in a CLI with `commandPermissions`:** a
