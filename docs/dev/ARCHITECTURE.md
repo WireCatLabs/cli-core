@@ -412,6 +412,18 @@ source. `tsc` does not emit JavaScript it did not compile, so `pnpm build` copie
 `createStemmer` (`src/search/stem.ts`): it picks the stemmer by the script of a word, stems, then folds
 with `normalize()`, and its `identity` names what built an index.
 
+### Health and recovery
+
+`storeHealth` (`src/store/health.ts`) checks the file without changing it: quick (header, size against page count,
+the schema's pages; milliseconds) for `doctor`, deep (`PRAGMA quick_check` and each fts5 index's `integrity-check`
+under a rolled-back transaction; about 30 s for 6 GB) for `store recover` and a CLI's own `doctor --deep` (memo's). `explainDamage`
+(`src/store/damage.ts`) turns a failed check into the plain-words answer every surface shows. `recoverStore`
+(`src/store/recover.ts`) copies the readable rows with the `sqlite3` program's `.recover` (node:sqlite has no recovery
+API; free pages are skipped so deleted rows stay deleted), migrates, drops and refills every fts5 and vec0 index
+through the normal fill code (`FILLERS` names the recipe of each index outside the corpora), rebuilds mentions and
+involvements, checks the result deeply, and swaps it in only if no process holds the store and the file did not
+change meanwhile. A new search index needs a line in `FILLERS` unless it belongs to a corpus.
+
 ### Entities and source records
 
 The rules are in the cli-base handbook, [Data model](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/data-model.md)

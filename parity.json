@@ -4825,6 +4825,12 @@
     "store rebuild": {
       "in": "all"
     },
+    "store recover": {
+      "in": "all"
+    },
+    "store recover run": {
+      "in": "all"
+    },
     "store repair": {
       "in": "all",
       "options": {

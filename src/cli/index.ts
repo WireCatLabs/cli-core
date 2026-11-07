@@ -444,6 +444,7 @@ export {
   type ReadConnection,
   type StoredMessages,
 } from "./messenger/context.js"
+export { DOCTOR_DEEP_OPTION, damageNotes } from "./messenger/doctor-command.js"
 export { COMMAND_NEEDS } from "./messenger/lacks.js"
 export { httpTokenFile, type McpEnvironment, type McpHost, serverEntry } from "./messenger/mcp-command.js"
 export { type MessageItem, messageItem, type ReadMessage } from "./messenger/message-items.js"
@@ -622,5 +623,13 @@ export {
 } from "./shared-contracts.js"
 export { runnable, withSafety } from "./steps.js"
 export { type StoreInfo, sharedStoreCommand, storeInfo, storeInfoCommand } from "./store-info.js"
+export {
+  type RecoveryCheck,
+  type RecoveryRun,
+  recoveryNotes,
+  storeRecoverCommand,
+  storeRecoveryCheck,
+  storeRecoveryRun,
+} from "./store-recover.js"
 export { changeStoreSetting, isStoreSetting, STORE_SETTINGS, storeSettings } from "./store-settings.js"
 export { restartServers, type UpgradeContext } from "./upgrade-command.js"

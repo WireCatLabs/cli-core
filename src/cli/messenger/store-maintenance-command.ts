@@ -21,7 +21,9 @@ import { RULES_VERSION } from "../../conversations/link.js"
 import { syncsOneChat } from "../../ports/traits.js"
 import { isSealed, sealFile, unsealFile } from "../../sealed.js"
 import { fileSchemaOf, SPEAKS, writableBy } from "../../store/compatibility.js"
+import { explainDamage } from "../../store/damage.js"
 import type { CacheDatabase } from "../../store/driver.js"
+import { QUICK_HEALTH_CHECKS, storeHealth } from "../../store/health.js"
 import { migrate } from "../../store/migrations.js"
 import { openCache } from "../../store/open.js"
 import { storePath } from "../../store/path.js"
@@ -52,6 +54,7 @@ import { destroysNothing, LOCAL_READ, LOCAL_WRITE } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { lineOf, nextStep } from "../steps.js"
 import { storeInfoCommand } from "../store-info.js"
+import { storeRecoverCommand } from "../store-recover.js"
 import { answerOf } from "./ask.js"
 import type { Messenger } from "./context.js"
 import { ENCRYPT_OPTION, passwordOf } from "./password.js"
@@ -98,10 +101,30 @@ const readingOnly = async <T>(path: string, read: (database: CacheDatabase) => T
   }
 }
 
-/** `doctor`'s short summary of the store. Must answer for a broken file, so an error is a field. */
-export const storeSummary = async (env: NodeJS.ProcessEnv) => {
+/**
+ * `doctor`'s short summary of the store. Must answer for a broken file, so an error is a field. `health` is the quick
+ * check unless `deep`; `damage` says in plain words what a failed one means and what to run.
+ */
+export const storeSummary = async (
+  env: NodeJS.ProcessEnv,
+  { deep = false, command }: { deep?: boolean; command?: string } = {},
+) => {
   const path = storePath(env)
   if (!existsSync(path)) return { path, exists: false }
+  const checked = await storeHealth(path, { deep })
+  const health = {
+    checked: checked.checked,
+    covers: deep ? "every page and every search index" : QUICK_HEALTH_CHECKS,
+    ok: checked.ok,
+    ms: checked.ms,
+    ...(checked.problems ? { problems: checked.problems } : {}),
+    ...(checked.damagedTables?.length ? { damagedTables: checked.damagedTables } : {}),
+    ...(checked.searchIndexes?.some((index) => !index.ok)
+      ? { damagedSearchIndexes: checked.searchIndexes.filter((index) => !index.ok).map((index) => index.name) }
+      : {}),
+  }
+  const damage = command ? explainDamage(checked, command) : null
+  const healthOf = { health, ...(damage ? { damage } : {}) }
   try {
     return await reading(path, (database) => {
       const { version, writable } = schemaOf(database)
@@ -112,10 +135,11 @@ export const storeSummary = async (env: NodeJS.ProcessEnv) => {
         speaks: SPEAKS,
         writable,
         ...(version > 0 ? { chats: count(database, "chats"), messages: count(database, "messages") } : {}),
+        ...healthOf,
       }
     })
   } catch (error) {
-    return { path, exists: true, error: messageOf(error) }
+    return { path, exists: true, error: messageOf(error), ...healthOf }
   }
 }
 
@@ -135,6 +159,7 @@ export const storeMaintenanceCommands = (messenger: Messenger): Command[] => [
   resetCommand(messenger),
   copiesCommand(),
   storeTablesCommand(messenger),
+  storeRecoverCommand({ command: messenger.app.command, version: messenger.app.version }),
 ]
 
 /** Renaming tables under a running `serve` would pull them from under its statements. */

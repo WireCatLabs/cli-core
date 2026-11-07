@@ -1,4 +1,4 @@
-import { mkdirSync, statSync, writeFileSync } from "node:fs"
+import { accessSync, constants, existsSync, mkdirSync, statSync, writeFileSync } from "node:fs"
 import { dirname } from "node:path"
 import { CliError } from "@wirecat/cli-base"
 import { DEFAULT_DECISION_POLICY, type DecisionPolicy } from "../decisions.js"
@@ -44,9 +44,13 @@ const NOT_WRITABLE = new Set(["EACCES", "EPERM", "EROFS"])
 const createWritable = (file: string): void => {
   try {
     mkdirSync(dirname(file), { recursive: true, mode: 0o700 })
+    // Only a missing file: on Linux, closing any descriptor of a file drops every POSIX lock this process holds on it,
+    // so opening the store a second time would take SQLite's locks from the connection already open (BUG-557).
     // SQLite gives its sidecar files the database's permissions.
-    writeFileSync(file, "", { flag: "a", mode: 0o600 })
+    if (existsSync(file)) accessSync(file, constants.W_OK)
+    else writeFileSync(file, "", { flag: "wx", mode: 0o600 })
   } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "EEXIST") return
     if (!NOT_WRITABLE.has((error as NodeJS.ErrnoException).code ?? "")) throw error
     // The errno's own sentence names the path, which holds the owner's home folder.
     throw new CliError(

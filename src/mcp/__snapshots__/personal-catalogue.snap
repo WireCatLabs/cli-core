@@ -110,6 +110,7 @@ read  store gaps show
 read  store info
 read  store jobs list
 read  store jobs show
+read  store recover
 read  store status
 read  store tables list
 read  tags list
@@ -258,6 +259,7 @@ write store jobs clear
 write store jobs retry
 write store migrate
 write store rebuild
+write store recover run
 write store repair
 write store reset
 write store restore

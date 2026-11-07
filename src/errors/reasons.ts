@@ -168,6 +168,14 @@ const OTHERS: Entry[] = [
   ],
   validation("store.refused", "the local store refused the document text"),
   ["store.not-writable", "permission_error", "the message store cannot be written from this process"],
+  validation("store.in-use", "a process or a scheduled timer has the store open; stop it, then recover the store"),
+  [
+    "store.sqlite3-missing",
+    "configuration_error",
+    "recovering the store needs the sqlite3 program, 3.43 or newer, with its .recover command",
+  ],
+  validation("store.recovery-failed", "the recovered store did not pass its check, so the store was left as it was"),
+  validation("store.changed-during-recovery", "the store was written to during the recovery, so it was left as it was"),
   [
     "store.vector-extension-missing",
     "configuration_error",

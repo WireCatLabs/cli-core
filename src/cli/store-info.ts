@@ -19,6 +19,7 @@ import {
 import { environmentOf, outputFor } from "./context.js"
 import { LOCAL_READ } from "./effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "./envelope.js"
+import { storeRecoverCommand } from "./store-recover.js"
 
 export type StoreInfo = v.InferOutput<typeof storeInfoEntity>
 
@@ -90,7 +91,9 @@ export const storeInfoCommand = (): Command =>
     })
 
 /** `store info` for a tool with no `store` command of its own. */
-export const sharedStoreCommand = (): Command =>
-  annotate(new Command("store"), { effects: LOCAL_READ })
+export const sharedStoreCommand = (app?: { command: string; version?: string }): Command => {
+  const store = annotate(new Command("store"), { effects: LOCAL_READ })
     .description("the shared local store every WireCat tool reads")
     .addCommand(storeInfoCommand())
+  return app ? store.addCommand(storeRecoverCommand(app)) : store
+}
