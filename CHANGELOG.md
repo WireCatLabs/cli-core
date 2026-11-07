@@ -13,7 +13,7 @@ shape of this file.
   buttons in one row (up to 8; the data is 1 to 64 bytes, checked before anything is sent). `edit` replaces the
   message's buttons with `--field`, takes them all off with `--clear`, and leaves the choice to the messenger
   when neither is given. A bot adapter gets `buttons` (`BotButton[][]`; `[]` means none) in the options of `send` and
-  `edit`; one that cannot draw buttons must refuse them.
+  `edit`; one that cannot draw buttons must refuse them. The bot MCP tools gain `field` (one button) and `clear`.
 - **`Button.data`**, what a callback button sends the bot, for an adapter that can read it. It is never printed.
 
 ### Security
