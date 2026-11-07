@@ -16,6 +16,10 @@ shape of this file.
   the read-only lock and over MCP's `read` tool. It was refused under `<PREFIX>_READ_ONLY` even when it only printed.
   A CLI that passes `newFileOutput: writesNewFileOnlyWith` and a `writeFile` that refuses a file that exists, such as
   `writeNewFile`, gets an export that is a read without `--output` and, with it, only ever adds a file.
+- **`models download --json` writes byte progress lines to stderr** while a model downloads:
+  `{"event":"progress","step":"download","done","total","unit":"bytes","label":<model id>}`, at most two a second plus
+  the first and last line, so a desktop app can draw a bar. `installFiles`, `install` and the `download*Model`
+  services take a `bytes(done, total)` callback for the same count.
 
 ### Changed — may break callers
 

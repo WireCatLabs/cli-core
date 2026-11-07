@@ -15,6 +15,8 @@ export interface ModelDownloadOptions {
   env: NodeJS.ProcessEnv
   /** One line at a time: the size before the download, its progress, then the check. */
   progress?: (line: string) => void
+  /** The model's bytes in place so far, of its total; not the ONNX Runtime fetched after it. */
+  bytes?: (done: number, total: number) => void
 }
 
 export interface DownloadedModel<M> {
@@ -45,7 +47,7 @@ const nativeRuntime = async ({ env, progress = () => {} }: ModelDownloadOptions)
  */
 export const downloadTextModel = async (
   id: string,
-  { env, progress = () => {}, acceptTerms = false }: ModelDownloadOptions & { acceptTerms?: boolean },
+  { env, progress = () => {}, bytes, acceptTerms = false }: ModelDownloadOptions & { acceptTerms?: boolean },
 ): Promise<DownloadedModel<TextModel>> => {
   const model = textModel(id)
   if (model.terms && !acceptTerms) {
@@ -57,7 +59,7 @@ export const downloadTextModel = async (
   const directory = textModelsDirectory(env)
   if (!isTextModelInstalled(model, directory)) {
     progress(`${model.id}: ${megabytes(bytesOf(model))} from Hugging Face`)
-    await installFiles(placedText(model, directory), { progress })
+    await installFiles(placedText(model, directory), { progress, ...(bytes ? { bytes } : {}) })
   }
   await nativeRuntime({ env, progress })
   progress(`${model.id}: loading it once to check it works`)
@@ -76,13 +78,13 @@ export const downloadTextModel = async (
 /** A reranker, the same way as {@link downloadTextModel}, into the same folder. */
 export const downloadRerankModel = async (
   id: string,
-  { env, progress = () => {} }: ModelDownloadOptions,
+  { env, progress = () => {}, bytes }: ModelDownloadOptions,
 ): Promise<DownloadedModel<RerankModel>> => {
   const model = rerankModel(id)
   const directory = textModelsDirectory(env)
   if (!isTextModelInstalled(model, directory)) {
     progress(`${model.id}: ${megabytes(bytesOf(model))} from Hugging Face`)
-    await installFiles(placedText(model, directory), { progress })
+    await installFiles(placedText(model, directory), { progress, ...(bytes ? { bytes } : {}) })
   }
   await nativeRuntime({ env, progress })
   progress(`${model.id}: loading it once to check it works`)
@@ -99,13 +101,13 @@ export const downloadRerankModel = async (
 /** The picture model, the same way as {@link downloadTextModel}. */
 export const downloadImageModel = async (
   id: string,
-  { env, progress = () => {} }: ModelDownloadOptions,
+  { env, progress = () => {}, bytes }: ModelDownloadOptions,
 ): Promise<DownloadedModel<ImageModel>> => {
   const model = imageModel(id)
   const directory = imageModelsDirectory(env)
   if (!isImageModelInstalled(model, directory)) {
     progress(`${model.id}: ${megabytes(bytesOf(model))} from Hugging Face`)
-    await installFiles(placedImage(model, directory), { progress })
+    await installFiles(placedImage(model, directory), { progress, ...(bytes ? { bytes } : {}) })
   }
   progress(`${model.id}: loading it once to check it works`)
   const { openPictureEmbedder } = await import("../images/picture/embedder.js")
