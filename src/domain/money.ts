@@ -107,13 +107,6 @@ export const signedMinorUnits = (amount: unknown, currency: string, what = "an a
   return units === 0 ? 0 : -units
 }
 
-/** One sum per currency, in currency order: amounts in different currencies are never added together. */
-export const totalsByCurrency = (entries: Iterable<{ units: number; currency: string }>): Money[] => {
-  const sums = new Map<string, number>()
-  for (const { units, currency } of entries) sums.set(currency, (sums.get(currency) ?? 0) + units)
-  return [...sums.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([currency, units]) => moneyOf(units, currency))
-}
-
 export const moneyOf = (units: number, currency: string): Money => ({
   amount: formatDecimal(units, scaleOf(currency)),
   currency,

@@ -29,6 +29,7 @@ import { addedSourcesOver } from "./sqlite/added-sources.js"
 import { type AgentActionsStore, agentActionsStoreOver } from "./sqlite/agent-actions.js"
 import * as attachmentTexts from "./sqlite/attachment-texts.js"
 import { type BotUpdateStore, botUpdateStoreOver } from "./sqlite/bot-updates.js"
+import { type ContractsStore, contractsStoreOver } from "./sqlite/business-contracts.js"
 import { eventStoreOver } from "./sqlite/calendar.js"
 import { type CatalogStore, catalogStoreOver } from "./sqlite/catalog.js"
 import { contextEvidenceOver, contextIndexOver, contextRecordsOver } from "./sqlite/context-evidence.js"
@@ -50,18 +51,22 @@ import { type MeetingVectors, meetingVectorsOver } from "./sqlite/meeting-vector
 import { meetingStoreOver, type StoredMeetings } from "./sqlite/meetings.js"
 import { type MemoriesStore, memoriesStoreOver } from "./sqlite/memories.js"
 import { type SourceMentionStore, sourceMentionStoreOver } from "./sqlite/mention-sources.js"
+import { type TransactionsStore, transactionsStoreOver } from "./sqlite/money-transactions.js"
 import { noteSearchOver } from "./sqlite/note-search.js"
 import { type NotesStore, notesStoreOver } from "./sqlite/notes.js"
 import type { StoreContext } from "./sqlite/open.js"
 import { openStoreContext, type StoreOptions } from "./sqlite/open-store.js"
 import { type OrdersStore, ordersStoreOver } from "./sqlite/orders.js"
+import { type ProductsStore, productsStoreOver } from "./sqlite/products.js"
 import { projectAnnotationStoreOver } from "./sqlite/project-transfer/store.js"
 import { type ProposedActionsStore, proposedActionsStoreOver } from "./sqlite/proposed-actions.js"
 import { type RecordStore, recordStoreOver } from "./sqlite/records.js"
 import { refSummariesOf } from "./sqlite/ref-summaries.js"
 import { type RelationsStore, relationsStoreOver } from "./sqlite/reported-relations.js"
 import * as stems from "./sqlite/stems.js"
+import { type SubscriptionsStore, subscriptionsStoreOver } from "./sqlite/subscriptions.js"
 import { type StoreTaskStore, taskStoreOver } from "./sqlite/tasks.js"
+import { type WalletsStore, walletsStoreOver } from "./sqlite/wallets.js"
 import { type SyncStore, syncStoreOver } from "./sync.js"
 import { type TagsStore, tagsStoreOver } from "./tags.js"
 import type { AccountKey } from "./types.js"
@@ -129,8 +134,18 @@ export interface MessageStore {
   readonly finance: FinanceStore
   /** What the owner, his business or a client ordered and how far delivery got; an agent's wait for the owner. */
   readonly orders: OrdersStore
-  /** The owner's sales pipelines and the deals in them; an agent's deal waits for the owner. */
+  /** The owner's sales pipelines and the deals in them, written directly by the owner and his agents. */
   readonly deals: DealsStore
+  /** What the owner or a supplier sells, with its price; written directly. */
+  readonly products: ProductsStore
+  /** The contracts the owner works under; one with a value from an agent or an import waits for the owner. */
+  readonly contracts: ContractsStore
+  /** Subscriptions the owner bills or pays, with a price history never overwritten. */
+  readonly subscriptions: SubscriptionsStore
+  /** Bank accounts, cards and cash, with balances computed from their transactions. */
+  readonly wallets: WalletsStore
+  /** What statements say moved on the wallets, split by category; an agent's or an import's wait for the owner. */
+  readonly transactions: TransactionsStore
   /** A CRM account's pipelines, deals, leads, contacts and companies, written as the CRM has them. */
   readonly crm: CrmCopies
   /** Relationships a source account reports, written as a diff that never overrides the owner's. */
@@ -257,6 +272,11 @@ const storeOver = (context: StoreContext): MessageStore => {
   const finance = once(() => financeStoreOver(context))
   const orders = once(() => ordersStoreOver(context))
   const deals = once(() => dealsStoreOver(context))
+  const products = once(() => productsStoreOver(context))
+  const contracts = once(() => contractsStoreOver(context))
+  const subscriptions = once(() => subscriptionsStoreOver(context))
+  const wallets = once(() => walletsStoreOver(context))
+  const transactions = once(() => transactionsStoreOver(context))
   const crm = once(() => crmCopiesOver(context, accountPeopleOver(context)))
   const relations = once(() => relationsStoreOver(context))
   const decisionRequests = once(() => decisionRequestStoreOver(context))
@@ -373,6 +393,21 @@ const storeOver = (context: StoreContext): MessageStore => {
     },
     get deals() {
       return deals()
+    },
+    get products() {
+      return products()
+    },
+    get contracts() {
+      return contracts()
+    },
+    get subscriptions() {
+      return subscriptions()
+    },
+    get wallets() {
+      return wallets()
+    },
+    get transactions() {
+      return transactions()
     },
     get crm() {
       return crm()

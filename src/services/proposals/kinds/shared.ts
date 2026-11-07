@@ -1,5 +1,5 @@
 import type { Proposer } from "../../../store/decisions.js"
-import type { ProposalFilter, ProposalRow } from "../types.js"
+import type { Decision, ProposalFilter, ProposalKind, ProposalRow } from "../types.js"
 
 /** A stored author as a proposer, with the kind read from its bot row. */
 export const proposerOfAuthor = (author: {
@@ -58,3 +58,57 @@ export const storedStatus = (filter: ProposalFilter): "proposed" | "rejected" | 
   const status = filter.status ?? "proposed"
   return status === "proposed" || status === "rejected" ? status : undefined
 }
+
+/** What a reviewed store entry shows in the inbox: its own ref is the proposal's id. */
+export interface ReviewedEntry {
+  ref: string
+  review: "proposed" | "confirmed" | "rejected"
+  project: string | null
+  title: string
+  author: Parameters<typeof proposerOfAuthor>[0]
+  reason: string | null
+  createdAt: string
+}
+
+export const reviewedRow = (kind: string, entry: ReviewedEntry, object: string | null): ProposalRow => ({
+  id: entry.ref,
+  kind,
+  status: entry.review,
+  project: entry.project,
+  subject: entry.ref,
+  object,
+  summary: entry.title,
+  proposedBy: proposerOfAuthor(entry.author),
+  reason: entry.reason,
+  evidence: [],
+  score: null,
+  signals: null,
+  parts: null,
+  createdAt: entry.createdAt,
+})
+
+/**
+ * A kind over a store whose rows carry `review`, routed by its own prefix as invoices are. Only the owner decides
+ * money: the store refuses an agent whatever the policy says.
+ */
+export const reviewedKind = <T>(spec: {
+  kind: string
+  prefix: string
+  list: (options: ReturnType<typeof pushed> & { review?: "proposed" | "confirmed" | "rejected" }) => Promise<T[]>
+  get: (id: string) => Promise<T>
+  row: (entry: T) => ProposalRow
+  decide: (id: string, confirm: boolean, decision: Pick<Decision, "by" | "reason">) => Promise<string>
+}): ProposalKind => ({
+  kind: spec.kind,
+  prefix: spec.prefix,
+  list: async (filter) => {
+    const status = filter.status ?? "proposed"
+    const entries = await spec.list({ ...pushed(filter), ...(status === "all" ? {} : { review: status }) })
+    return kept(entries.map(spec.row), filter)
+  },
+  get: async (id) => spec.row(await spec.get(id)),
+  decide: async (id, { confirm, by, reason }) => {
+    const made = await spec.decide(id, confirm, { by, reason })
+    return { id, kind: spec.kind, status: confirm ? "confirmed" : "rejected", made: confirm ? [made] : [] }
+  },
+})
