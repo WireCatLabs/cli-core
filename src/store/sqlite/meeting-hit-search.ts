@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto"
 import { CliError } from "@wirecat/cli-base"
 import type { MeetingSearchOptions, MeetingSearchStore, SearchHit } from "../../meetings/index.js"
-import { formatMeetingReference, parseMeetingQuery } from "../../meetings/index.js"
+import { formatMeetingReference, MEETING_FIELD_NAMES, parseMeetingQuery } from "../../meetings/index.js"
+import { plainQuery } from "../../search/lucene/plain.js"
 import { matchMeetingText, meetingQuerySql, resolveMeetingQuery } from "./meeting-hit-query.js"
 import { indexedText } from "./meeting-index-values.js"
 import { checkMeetingCancelled } from "./meeting-operation.js"
@@ -104,7 +105,7 @@ export function meetingHitSearchOver({ database }: StoreContext): MeetingSearchS
         fail("Meeting search byte limit must be from 1 through 67108864")
       if (typeof rawQuery === "string" && Buffer.byteLength(rawQuery) > 65536)
         fail("Meeting search query must be a bounded string")
-      const ast = typeof rawQuery === "string" ? parseMeetingQuery(rawQuery) : rawQuery
+      const ast = typeof rawQuery === "string" ? parseMeetingQuery(plainQuery(rawQuery, MEETING_FIELD_NAMES)) : rawQuery
       return read(database, () => {
         checkMeetingCancelled(input.signal)
         const state = meetingStemState(database, input.accountId)

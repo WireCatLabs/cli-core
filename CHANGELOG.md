@@ -7,6 +7,18 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **A search for plain text with a colon, a URL or another special character finds what holds it.** `meeting at 10:30`,
+  `Answer as HH:MM` and `a:b` read the word before the colon as a field, so every source of `search all` refused the
+  query and the answer was empty. Now a `word:` that names no search field, and a word the parser cannot read as
+  syntax (a URL, an unbalanced quote or bracket, `^`, `~home`, `[draft]`, `<tag>`), are searched as words; a lone
+  emoji or punctuation mark beside other words no longer empties the answer. Field queries, Boolean operators,
+  phrases, `word*` and `/regex/` keep their meaning, and `word~1`, `/x/i` and punctuation alone keep their errors.
+  A caller that relied on the refusal of `foo:bar`, an unbalanced quote or `link:click?id=1` now gets hits, and
+  `meetings search` reads `subject:` (a message field) as a word. `plainQuery` in `./services` gives a caller the text
+  as the search reads it (cli-memo#674).
+
 ## 0.601.0 — 07.11.2026
 
 ### Added

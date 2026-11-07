@@ -52,6 +52,7 @@ const fixture = async () => {
       ["Bob Other", "Риелтор и ипотека вместе"],
       ["phone", "Договор подпишем в пятницу"],
       ["Bob Sample", "Перезвоню позже"],
+      ["Bob Sample", "Созвон в 10:30, ссылка https://example.com/a"],
     ]),
   )
   const db = await openCache(path)
@@ -78,6 +79,15 @@ const fixture = async () => {
 it("requires every bare word, as before", async () => {
   const { texts } = await fixture()
   expect(await texts("риелтор ипотека")).toEqual(["Риелтор и ипотека вместе"])
+})
+
+it("reads a time, a URL and a word: that names no field as words", async () => {
+  const { texts } = await fixture()
+  const line = ["Созвон в 10:30, ссылка https://example.com/a"]
+  expect(await texts("созвон в 10:30")).toEqual(line)
+  expect(await texts("https://example.com/a")).toEqual(line)
+  expect(await texts("ссылка: созвон")).toEqual(line)
+  expect(await texts("(созвон")).toEqual(line)
 })
 
 it("finds either side of OR", async () => {
@@ -117,7 +127,11 @@ it("finds the lines a person said, on every device linked to them", async () => 
   const { texts } = await fixture()
   expect(await texts('from:"Alice Example"')).toEqual(["Договор подпишем в пятницу", "Нужен риелтор на завтра"])
   expect(await texts("from:alice риелтор")).toEqual(["Нужен риелтор на завтра"])
-  expect(await texts('from:"Bob Sample"')).toEqual(["Ипотека одобрена банком", "Перезвоню позже"])
+  expect(await texts('from:"Bob Sample"')).toEqual([
+    "Ипотека одобрена банком",
+    "Перезвоню позже",
+    "Созвон в 10:30, ссылка https://example.com/a",
+  ])
 })
 
 it("refuses a speaker it cannot pick, and names the candidates", async () => {
@@ -131,8 +145,13 @@ it("refuses a speaker it cannot pick, and names the candidates", async () => {
 
 it("refuses operators meetings do not support", async () => {
   const { store, accountId } = await fixture()
-  for (const query of ["риел*", "text:/риел.*/", "subject:риелтор"])
+  for (const query of ["риел*", "text:/риел.*/"])
     await expect(store.meetings.searchHits(query, { accountId })).rejects.toMatchObject({ code: "validation_error" })
+})
+
+it("reads a message field meetings do not have as a word", async () => {
+  const { texts } = await fixture()
+  expect(await texts("subject:риелтор")).toEqual([])
 })
 
 it("takes words that must not become syntax as plain words", async () => {

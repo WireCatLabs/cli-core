@@ -8,6 +8,7 @@ import { INTERNAL_NOTES, kindIn } from "../domain/providers.js"
 import { runEmbedders } from "../embeddings/embed.js"
 import { DEFAULT_TEXT_MODEL } from "../embeddings/models.js"
 import type { MessengerTraits } from "../ports/traits.js"
+import { plainQuery } from "../search/lucene/plain.js"
 import { MESSAGE_PARSING, SEARCH_QUERY } from "../search/lucene/types.js"
 import { planQuestion, questionLookup } from "../search/question-plan.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
@@ -165,13 +166,14 @@ export const crmAccounts = async (store: MessageStore): Promise<AccountKey[]> =>
 export const searchAll = async (
   store: MessageStore,
   account: AccountKey,
-  request: SearchAllRequest,
+  asked: SearchAllRequest,
   messenger: SearchAllMessenger = {},
   searchMessages: (query: SearchQuery) => Promise<SearchFound> = (query) =>
     searchStore(store, account, query, messenger),
   meaning?: MeaningLane,
 ): Promise<SearchAllFound> => {
-  if (!request.text.trim()) throw new CliError("validation_error", "say what to find")
+  if (!asked.text.trim()) throw new CliError("validation_error", "say what to find")
+  const request = { ...asked, text: plainQuery(asked.text) }
   const offset = request.offset ?? 0
   if (!Number.isInteger(offset) || offset < 0 || offset > MAX_SEARCH_OFFSET)
     throw new CliError("validation_error", `offset takes a whole number from 0 to ${MAX_SEARCH_OFFSET}`)
@@ -400,7 +402,7 @@ export const searchAll = async (
   const ordered = oneList(lists, cosines)
   const more = hasMore || ordered.length > window
   return {
-    query: request.text,
+    query: asked.text,
     items: ordered.slice(offset, window),
     hasMore: more,
     ...(more && window <= MAX_SEARCH_OFFSET ? { nextOffset: window } : {}),
