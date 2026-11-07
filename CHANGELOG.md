@@ -16,6 +16,10 @@ shape of this file.
   column is the one Drive documents already fill, so `date:`, the `at` of a notes hit and `search all`'s `timestamp`
   show it without a store version. Until now a local note was dated by the moment it was imported.
 
+- **A source `search all` skips names why, for a program too.** Each `skipped` entry keeps the sentence in `reason` and
+  now adds `why`, the dotted reason (`query.unknown-value`), and `token`, the part of the query that was refused
+  (`kind:nonsense`). `meta.issues` of `search all` carries `why` as `reason`, as the output standard allows.
+
 ### Changed — may break callers
 
 - **A `?` that ends a bare word is a question mark, not a wildcard.** `invoice?` and `что с бюджетом?` find
