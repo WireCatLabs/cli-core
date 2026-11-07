@@ -295,6 +295,7 @@ const OTHERS: Entry[] = [
   validation("deal.closed", "a deleted deal or lead does not move or close"),
   validation("deal.copy", "a CRM's copy changes in the CRM; its next sync brings the change here"),
   validation("deal.field", "a field of the deal or lead is not valid"),
+  ["deal.out-of-scope", "not_found", "the deal or lead is a copy from an account outside the accounts asked for"],
   validation("deal.ref", "the reference names no deal or lead"),
   validation("deal.stage", "no stage of that name, or a stage name more than one pipeline has"),
   validation("pipeline.ambiguous", "more than one pipeline has that name; name it by its pipeline: reference"),
