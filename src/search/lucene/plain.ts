@@ -51,7 +51,7 @@ const wordAround = (text: string, at: number): { start: number; end: number } =>
 const everyWordLiteral = (text: string, fields: ReadonlySet<string>) =>
   text.replace(/[^ \t\n\r\u3000]+/gu, (word) => literal(word, false, fields))
 
-type Reading = { at: number } | { wordless: Predicate[] }
+type Reading = { at: number } | { wordless: Predicate[]; words: boolean }
 
 /** Where `text` stops being a search query (-1: somewhere unknown), or the bare words the index holds nothing for. */
 const read = (text: string, fields: ReadonlySet<string>): Reading => {
@@ -64,7 +64,8 @@ const read = (text: string, fields: ReadonlySet<string>): Reading => {
       ({ implicit, operator, value }) =>
         implicit && (operator === "term" || operator === "phrase") && !/[\p{L}\p{N}]/u.test(value),
     )
-    return { wordless: wordless.length < leaves.length ? wordless : [] }
+    const words = wordless.length < leaves.length
+    return { wordless: words ? wordless : [], words }
   } catch (error) {
     const details = isCliError(error) ? (error.details as { reason?: string; span?: { start: number } }) : undefined
     if (!details?.span || !REPAIRED.has(details.reason ?? "")) throw error
@@ -99,6 +100,8 @@ export const plainQuery = (text: string, fields: ReadonlySet<string> = SEARCH_FI
       return text
     }
     if ("wordless" in reading) {
+      // Punctuation alone (`!!!`) is no search; the parser's error says so better than an empty answer.
+      if (!reading.words && current !== text) return text
       if (!reading.wordless.length) return current
       current = without(current, reading.wordless)
       continue
