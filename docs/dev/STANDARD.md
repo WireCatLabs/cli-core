@@ -108,6 +108,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 |---|---|---|
 | `list` | show many | `ls` |
 | `show` | show one | `get`, `view` |
+| `browse` | list one level of a remote hierarchy, such as a provider's folders, to choose from; reads only |  |
 | `search` | find by text; the description says where it looks | `find`, `query` |
 | `prepare` | assemble bounded cited context for a selected upcoming activity without applying findings |  |
 | `related` | what is nearest in meaning to one thing, without a query |  |
@@ -138,7 +139,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `revoke` | take back what was granted, so it stops working: a login, an invite link, a consent |  |
 | `install` | install a system unit |  |
 | `uninstall` | remove a system unit |  |
-| `cancel` | stop a job or a pending thing |  |
+| `cancel` | stop a job, a pending thing or a subscription |  |
 | `sync` | bring the local store up to date from the source: only what changed, or the whole list where the source cannot say; a mirror syncs both ways | `refresh` |
 | `fetch` | one bounded pull of one named thing into the store, not a catch-up |  |
 | `unsync` | stop syncing a thing; what the store already holds stays |  |
@@ -154,6 +155,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `rebuild` | compute again, from what the store already holds, what the tool derives from it, keeping the owner's decisions |  |
 | `link` | record that two identities are one person |  |
 | `unlink` | undo a link |  |
+| `match` | link each waiting record to the thing its identifiers name, such as a person by e-mail address; a name alone never matches |  |
 | `allocate` | match a payment to the invoice or order it settles, in whole or in part |  |
 | `lookup` | ask the messenger who is behind a phone number |  |
 | `inspect` | look at a source before taking anything from it: a chat link without joining, a mailbox without importing |  |
@@ -289,7 +291,14 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `leads` | collection | possible customers not yet qualified into a deal |  |
 | `pipelines` | collection | ordered sets of stages a deal moves through |  |
 | `stages` | collection | steps of a pipeline, each open, won or lost |  |
-| `products` | collection | goods and services the owner sells, with their prices |  |
+| `products` | collection | goods and services the owner sells or buys, with their prices |  |
+| `lines` | collection | the rows of an order or an invoice: what, how many and at what price |  |
+| `contracts` | collection | agreements the owner is a party to, with their terms, dates and renewal |  |
+| `subscriptions` | collection | charges that repeat on a schedule, which the owner pays or is paid, with their price history |  |
+| `prices` | collection | what a thing costs over time, each price from its start date |  |
+| `wallets` | collection | places that hold the owner's money, such as a bank account, a card or cash |  |
+| `transactions` | collection | money that moved in or out of a wallet, as the bank or the owner recorded it |  |
+| `splits` | collection | parts of one transaction, each with its own amount and category |  |
 | `users` | collection | people who work in the owner's account at a service, such as a CRM's employees |  |
 | `fields` | collection | a record type's field definitions: code, label, type and options, such as a CRM's custom fields |  |
 | `identities` | collection | ways to reach a person or an organization: an account in one messenger or mailbox, an e-mail address, a phone |  |
@@ -430,6 +439,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--dry-run` |  | switch | judge and plan; do nothing |  |
 | `--accept-terms` |  | switch | accept the model's licence terms |  |
 | `--as-owner` |  | switch | record the action as the owner's although an agent's terminal runs the tool |  |
+| `--from-app` |  | switch | the owner acted in the app; its word, not a check |  |
 | `--allow-any-file` |  | switch | send a file even from a credential folder or the tool's own folders |  |
 | `--allow-dangerous` |  | switch | go ahead without the question an ask level puts before a deletion |  |
 | `--allow-writes` |  | switch | permit writing: offer the profile's writing tools, or let a generic call change the source |  |
@@ -707,7 +717,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--duration-minutes` | `<minutes>` | count | how long the meeting lasts, in minutes | minutes |
 | `--emoji` | `<emoji>` | string | the icon |  |
 | `--event-id` | `<id>` | id | the stored calendar event it is linked to, or none to unlink |  |
-| `--every` | `<duration>` | duration | repeat this often |  |
+| `--every` | `<duration>` | duration | repeat this often: a length of time for a timer (<duration>), a count and a calendar unit for a charge, such as 1-month (<count-unit>) |  |
 | `--evidence` | `<ref...>` | list | what shows it: msg:, note:, meeting:, person: or another reference |  |
 | `--exclude-chat` | `<chat>` | id | never show this chat in it; repeat it for more |  |
 | `--field` | `<key=value>` | string | set one named field on a write, as key=value; repeat it for more |  |
@@ -763,8 +773,8 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--profile-photo` | `<who>` | choice | who sees the profile photo: everyone, contacts or nobody |  |
 | `--read-receipts` | `<on\|off>` | choice | send read receipts |  |
 | `--end-time` | `<time>` | time | when it ends |  |
-| `--start-date` | `<date>` | time | the first day of something that lasts whole days, such as an all-day event |  |
-| `--end-date` | `<date>` | time | the last day of something that lasts whole days, such as an all-day event |  |
+| `--start-date` | `<date>` | time | the first day of something that lasts whole days, such as an all-day event or a contract |  |
+| `--end-date` | `<date>` | time | the last day of something that lasts whole days, such as an all-day event or a contract |  |
 | `--location` | `<text>` | string | where it takes place |  |
 | `--attendee` | `<email>` | string | a person invited to the event, by email address; repeat it for more |  |
 | `--id` | `<id>` | id | the id to create it with, chosen beforehand, so a retry finds it instead of making a second one |  |
@@ -784,6 +794,23 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--currency` | `<code>` | string | an ISO 4217 code, such as EUR |  |
 | `--close-date` | `<date>` | time | the day a deal or lead is expected to close, YYYY-MM-DD |  |
 | `--owner` | `<user>` | id | the CRM user a record is assigned to, by the CRM's id |  |
+| `--status` | `<state>` | choice | the state to put it in; the command lists the states |  |
+| `--product` | `<product>` | string | a product or service the owner sells or buys: product:<id> |  |
+| `--contract` | `<contract>` | string | a contract: contract:<id> |  |
+| `--payment` | `<payment>` | string | a payment: payment:<id> |  |
+| `--refund-of` | `<payment>` | string | the payment this one gives money back for: payment:<id> |  |
+| `--wallet` | `<wallet>` | string | a wallet: wallet:<id> |  |
+| `--supplier` | `<party>` | string | who supplies it: person:<uid> or organization:<id> |  |
+| `--customer` | `<party>` | string | who receives it and pays for it: person:<uid> or organization:<id> |  |
+| `--trial-end-date` | `<date>` | time | the day a free trial ends, YYYY-MM-DD |  |
+| `--notice-days` | `<days>` | count | how many days before its end a party must say it will not go on | days |
+| `--auto-renew` | `<on\|off>` | choice | it renews by itself at its end, or it does not |  |
+| `--opening-balance` | `<decimal>` | string | the money it held on --opening-date, as a decimal such as 1500.50; later movements count from it |  |
+| `--opening-date` | `<date>` | time | the day of the opening balance, YYYY-MM-DD |  |
+| `--institution` | `<text>` | string | the bank or other company that holds it, by name |  |
+| `--unit` | `<text>` | string | what one of it is counted in, such as hour or piece |  |
+| `--sku` | `<code>` | string | the stock code the seller gives it |  |
+| `--archived` | `<on\|off>` | choice | set it aside as no longer in use, or bring it back; what points at it keeps pointing at it |  |
 | `--notify-on` | `<when>` | choice | when a scheduled run tells the owner: always, failures or never |  |
 | `--deliver-to` | `<route>` | string | where a scheduled run's result also goes, by the owner's own CLI: telegram-bot:<profile>/<chat> or email:<profile>/<address>; repeat it for more. Not --to, which names who a message is for |  |
 | `--max-cost-per-day` | `<usd>` | number | start no run for the rest of the day once the day's runs cost this much; 0 for no cap | US dollars |

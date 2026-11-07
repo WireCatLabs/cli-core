@@ -7,6 +7,20 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **A run that finds the store damaged stops every later write.** When a command fails with SQLite's "database disk
+  image is malformed", "file is not a database" or an fts5 corruption, the run leaves `<store>.damaged.json` beside
+  the store (when, which command and version, the run's id, SQLite's message). While it is there, every command that
+  opens the store to write refuses with `store.damaged` and names `<cli> store recover`, so scheduled syncs fail at
+  once instead of writing into a damaged file; reads still work. `doctor` and `store recover` show it. A deep check
+  that passes (`doctor --deep`, `store recover`), `store recover run`, `store restore` and `store reset` lift it.
+  `markStoreDamaged` from `@wirecat/cli-core/store` leaves it for a CLI that reports such a failure itself.
+- **Every deep check is recorded beside the store as its last known good.** `doctor --deep`, `store recover` and the
+  check after `store recover run` write `<store>.health.json` (when, the result, the schema, the CLI and its version,
+  and `last_ok_at`, the newest check that passed); `doctor` and `store recover` answer `last_known_good` from it.
+  `storeSummary` takes the CLI's `version` for it.
+
 ### Fixed
 
 - **`scanProjectLinks` spreads from what it finds within one run.** A chat or person that scores the threshold or more
@@ -19,6 +33,26 @@ shape of this file.
   needs 5 in the window.
 - **`member-dialog` (version 2) counts the scanned project in the member's projects** whether the member is confirmed
   or only found, so a found member who is in another project weighs the same as a confirmed one.
+- **A damaged store file is `configuration_error` (`store.damaged`), not a crash.** SQLite's "database disk image is
+  malformed" or "file is not a database", raised anywhere in a command or behind a wrapper's `cause`, was
+  `internal_error` (`command.crashed`), "this is a bug". It now says the store file is damaged and names
+  `<cli> store recover` where the CLI has it, else `<cli> doctor --deep`, else no command, on the CLI, over MCP and in
+  the run kept of it, whose frames stay SQLite's own; a scheduled run's failure banner shows the reason.
+  `storeDamaged(error, next?)` from `@wirecat/cli-core/cli` does the same for a CLI with its own failure handling. A
+  damaged file named for a document or project transfer is `validation_error` (`store.file-damaged`) naming that
+  file, and `store recover run` on a store whose header is damaged says it cannot recover it (`store.unreadable`).
+- **A filesystem error is no longer read as a SQLite one.** `errno` counts as SQLite's code only on bun:sqlite's
+  `SQLiteError`: Windows' EIO (-4070) has SQLITE_NOTADB's low byte, and a busy check took a filesystem errno with
+  BUSY's low byte for a lock.
+- **cli-core accepts cli-base 0.81 and 0.82** (peer range `>=0.80.7 <0.83.0`, developed against 0.82.0). memo moved to
+  cli-base 0.82.0, and the downstream parity check downgraded it to 0.80.7, whose option vocabulary lacks memo's
+  `--from-app` and `tasks --status`, so every cli-core pull request failed parity.
+- **People the owner separated stay apart.** An owner's unlink was checked only for the two identities being joined,
+  but a join moves whole people: a third identity with the same email address, linked to one of them, carried both
+  back together. Now no automatic join — the same email address, an account's own identity joining the owner — merges
+  two people when the owner once moved anyone of one away from anyone of the other. An agent's link of one identity
+  (a confirmed mention, a meeting participant) back over such a separation is refused with the reason
+  `identity.separated`; the owner's own link still goes through. The exact-email join stays automatic otherwise.
 
 ## 0.604.0 — 07.11.2026
 

@@ -24,6 +24,7 @@ import { fileSchemaOf, SPEAKS, writableBy } from "../../store/compatibility.js"
 import { explainDamage } from "../../store/damage.js"
 import type { CacheDatabase } from "../../store/driver.js"
 import { QUICK_HEALTH_CHECKS, storeHealth } from "../../store/health.js"
+import { type DamageMark, readDamageMark, readHealthMark, recordDeepCheck } from "../../store/marks.js"
 import { migrate } from "../../store/migrations.js"
 import { openCache } from "../../store/open.js"
 import { storePath } from "../../store/path.js"
@@ -101,17 +102,38 @@ const readingOnly = async <T>(path: string, read: (database: CacheDatabase) => T
   }
 }
 
+const withoutInode = ({ inode: _, ...mark }: DamageMark) => mark
+
+/** The schema version, or null when the file cannot say. */
+const fileSchema = async (path: string): Promise<number | null> => {
+  try {
+    return await readingOnly(path, (database) => fileSchemaOf(database).version)
+  } catch {
+    return null
+  }
+}
+
 /**
  * `doctor`'s short summary of the store. Must answer for a broken file, so an error is a field. `health` is the quick
- * check unless `deep`; `damage` says in plain words what a failed one means and what to run.
+ * check unless `deep`; `damage` says in plain words what a failed one means, or what a run that found the store
+ * damaged saw, and what to run. A deep check is recorded beside the store as the last known good.
  */
 export const storeSummary = async (
   env: NodeJS.ProcessEnv,
-  { deep = false, command }: { deep?: boolean; command?: string } = {},
+  { deep = false, command, version }: { deep?: boolean; command?: string; version?: string } = {},
 ) => {
   const path = storePath(env)
   if (!existsSync(path)) return { path, exists: false }
   const checked = await storeHealth(path, { deep })
+  const recorded = deep
+    ? recordDeepCheck(path, checked, {
+        cli: command ?? "unknown",
+        ...(version ? { version } : {}),
+        schema: await fileSchema(path),
+      })
+    : null
+  const mark = readDamageMark(path)
+  const lastKnownGood = readHealthMark(path)?.last_ok_at ?? null
   const health = {
     checked: checked.checked,
     covers: deep ? "every page and every search index" : QUICK_HEALTH_CHECKS,
@@ -124,8 +146,14 @@ export const storeSummary = async (
       ? { damagedSearchIndexes: checked.searchIndexes.filter((index) => !index.ok).map((index) => index.name) }
       : {}),
   }
-  const damage = command ? explainDamage(checked, command) : null
-  const healthOf = { health, ...(damage ? { damage } : {}) }
+  const damage = command ? explainDamage(checked, command, mark) : null
+  const healthOf = {
+    health,
+    lastKnownGood,
+    ...(mark ? { damageMark: withoutInode(mark) } : {}),
+    ...(recorded?.cleared ? { damageMarkCleared: withoutInode(recorded.cleared) } : {}),
+    ...(damage ? { damage } : {}),
+  }
   try {
     return await reading(path, (database) => {
       const { version, writable } = schemaOf(database)

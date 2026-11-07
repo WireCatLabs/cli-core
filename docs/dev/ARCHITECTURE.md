@@ -424,6 +424,16 @@ through the normal fill code (`FILLERS` names the recipe of each index outside t
 involvements, checks the result deeply, and swaps it in only if no process holds the store and the file did not
 change meanwhile. A new search index needs a line in `FILLERS` unless it belongs to a corpus.
 
+Two marks sit beside the store, never in it, since the store may be what cannot be read (`src/store/marks.ts`). The
+damage mark `<store>.damaged.json` (`at`, `command`, `cli_version`, `run_id`, SQLite's message, the file's inode) is
+left by the run recorder when a command fails with SQLITE_CORRUPT or SQLITE_NOTADB, and by a CLI that reports such a
+failure itself through `markStoreDamaged`; the first sighting is kept. While it names the file in place, every
+writable `openStoreContext` refuses with `store.damaged`, so timers fail fast instead of writing into a damaged file;
+reads still open. A deep check that passes, a recovery, or a file replaced at that path (restore, reset: another
+inode) lifts it. The health mark `<store>.health.json` (`checked_at`, `ok`, `problems`, `schema`, `cli`, `cli_version`,
+`last_ok_at`) is written by every deep check (`doctor --deep`, `store recover`, the check after `store recover run`);
+`last_ok_at` is the last known good that `store recover` reports.
+
 ### Entities and source records
 
 The rules are in the cli-base handbook, [Data model](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/data-model.md)

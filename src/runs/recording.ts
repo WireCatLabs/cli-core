@@ -1,6 +1,8 @@
 import { processStreams, type RenderFormat, type Streams } from "@wirecat/cli-base"
-import { isCliFailure } from "../errors/failures.js"
+import { isCliFailure, storeDamaged } from "../errors/failures.js"
 import type { AppIdentity } from "../ports/app.js"
+import { markStoreDamaged } from "../store/marks.js"
+import { storePath } from "../store/path.js"
 import { endpointTemplate, errorDetailOf, framesOf } from "./error-detail.js"
 import { type DiagnosticEvent, type EventSink, providerErrorKey, type RequestEvent, renderEvent } from "./events.js"
 import { DIAGNOSTIC_LOG_EVENTS } from "./log-events.js"
@@ -146,7 +148,14 @@ export const startRecording = (options: RecordingOptions): Recording => {
         ...(partial ? { partial } : {}),
       })
     },
-    fail: async (error) => {
+    fail: async (thrown) => {
+      const error = storeDamaged(thrown)
+      markStoreDamaged(thrown, {
+        store: storePath(options.env),
+        command: `${options.app.command} ${options.command}`,
+        version: options.app.version,
+        runId,
+      })
       const failed = run ?? (held ? keep(open({ startedAt })) : undefined)
       if (failed) {
         if (!isCliFailure(error)) failed.logger.error(crashOf(error))
@@ -160,7 +169,7 @@ export const startRecording = (options: RecordingOptions): Recording => {
           ...(run ? {} : { keptBecauseFailed: true }),
         })
       }
-      if (typeof error === "object" && error !== null) settled.add(error)
+      if (typeof thrown === "object" && thrown !== null) settled.add(thrown)
     },
   }
 }

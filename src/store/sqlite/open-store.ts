@@ -2,6 +2,7 @@ import { accessSync, constants, existsSync, mkdirSync, statSync, writeFileSync }
 import { dirname } from "node:path"
 import { CliError } from "@wirecat/cli-base"
 import { DEFAULT_DECISION_POLICY, type DecisionPolicy } from "../decisions.js"
+import { refuseDamagedStore } from "../marks.js"
 import { migrate } from "../migrations.js"
 import { storeCapable } from "../open.js"
 import { refuseOwnerStoreInTests, storePath } from "../path.js"
@@ -101,7 +102,10 @@ export const openStoreContext = async (options: StoreOptions = {}): Promise<Stor
   if (readOnly) {
     if (!statSync(file, { throwIfNoEntry: false })?.isFile())
       throw new CliError("not_found", "The store does not exist as a file; read-only opening does not create it")
-  } else createWritable(file)
+  } else {
+    createWritable(file)
+    refuseDamagedStore(file, command)
+  }
   const opened = readOnly ? await openReadable(file, options) : await openSqlite(file, { readOnly })
   const database = opened.database
   try {

@@ -13,6 +13,7 @@ import { dirname, join } from "node:path"
 import { describe, expect, it } from "vitest"
 import { explainDamage } from "./damage.js"
 import { storeHealth } from "./health.js"
+import { readHealthMark } from "./marks.js"
 import { migrate } from "./migrations.js"
 import { openCache } from "./open.js"
 import { danglingRows, recoverStore, runningRecovery, sqlite3Program, storeHolders, tableRows } from "./recover.js"
@@ -92,6 +93,7 @@ describe("store recovery", () => {
     expect(recovery.lost).toEqual([])
     expect(recovery.dangling).toEqual([])
     expect(existsSync(recovery.keptAt)).toBe(true)
+    expect(readHealthMark(path)).toMatchObject({ ok: true, cli: "chat" })
     await recovered(path)
   })
 
@@ -100,6 +102,14 @@ describe("store recovery", () => {
     expect(sqlite3Program("no-such-sqlite3")).toMatchObject({ usable: false, version: null })
     await expect(recoverStore({ path, command: "chat", sqlite3: "no-such-sqlite3" })).rejects.toMatchObject({
       details: { reason: "store.sqlite3-missing" },
+    })
+  })
+
+  it("says a store whose header is damaged cannot be recovered, not to run store recover", async () => {
+    const { path } = await seeded()
+    writeFileSync(path, "not a database header".repeat(400))
+    await expect(recoverStore({ path, command: "chat", copy: copyOf(path) })).rejects.toMatchObject({
+      details: { reason: "store.unreadable" },
     })
   })
 
