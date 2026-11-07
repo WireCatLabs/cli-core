@@ -2,6 +2,74 @@ import type { CacheDatabase } from "../store/driver.js"
 
 // What a migration created that replaying it would create again; a migration that only updates rows needs nothing.
 const UNDO: Record<number, string> = {
+  57: `DROP TRIGGER payments_refund_bi; DROP TRIGGER payments_refund_bu; DROP TRIGGER payment_allocations_refunded_bd;
+    DROP TRIGGER orders_valid_bi; DROP TRIGGER orders_valid_bu; DROP TRIGGER invoices_valid_bu;
+    DROP TRIGGER payments_confirm_bu; DROP TRIGGER payment_allocations_valid_bi; DROP TRIGGER payment_allocations_valid_bu;
+    DROP TABLE transaction_splits; DROP TABLE financial_transactions; DROP TABLE financial_accounts;
+    DROP TABLE subscription_prices; DROP INDEX invoices_by_subscription_id; DROP INDEX payments_by_subscription_id;
+    ALTER TABLE invoices DROP COLUMN subscription_id; ALTER TABLE payments DROP COLUMN subscription_id;
+    DROP TABLE subscriptions; DROP INDEX invoices_by_contract_id; DROP INDEX orders_by_contract_id;
+    DROP INDEX orders_by_deal_id; ALTER TABLE invoices DROP COLUMN contract_id; ALTER TABLE orders DROP COLUMN contract_id;
+    ALTER TABLE orders DROP COLUMN deal_id; ALTER TABLE orders DROP COLUMN direction; DROP TABLE contracts;
+    DROP TABLE order_lines; DROP INDEX invoice_lines_by_catalog_item_id; ALTER TABLE invoice_lines DROP COLUMN catalog_item_id;
+    DROP TABLE catalog_items; DROP INDEX payments_by_refund_of; ALTER TABLE payments DROP COLUMN refund_of;
+    DROP INDEX records_by_account_id_batch_id; ALTER TABLE records DROP COLUMN created_entity;
+    ALTER TABLE record_relations DROP COLUMN as_role;
+    CREATE TRIGGER orders_valid_bi BEFORE INSERT ON orders
+      WHEN new.customer_type NOT IN ('person', 'organization')
+        OR new.purpose NOT IN ('personal', 'business', 'client', 'other')
+        OR new.status NOT IN ('placed', 'shipped', 'delivered', 'cancelled', 'returned')
+        OR new.review NOT IN ('proposed', 'confirmed', 'rejected')
+        OR (new.total IS NULL) <> (new.currency IS NULL) OR new.total < 0 BEGIN
+      SELECT RAISE(ABORT, 'orders: a person or organization customer, a known purpose, status and review, an amount with its currency');
+    END;
+    CREATE TRIGGER orders_valid_bu BEFORE UPDATE ON orders
+      WHEN new.customer_type NOT IN ('person', 'organization')
+        OR new.purpose NOT IN ('personal', 'business', 'client', 'other')
+        OR new.status NOT IN ('placed', 'shipped', 'delivered', 'cancelled', 'returned')
+        OR new.review NOT IN ('proposed', 'confirmed', 'rejected')
+        OR (new.total IS NULL) <> (new.currency IS NULL) OR new.total < 0 BEGIN
+      SELECT RAISE(ABORT, 'orders: a person or organization customer, a known purpose, status and review, an amount with its currency');
+    END;
+    CREATE TRIGGER invoices_valid_bu BEFORE UPDATE ON invoices
+      WHEN new.direction NOT IN ('receivable', 'payable') OR new.total < 0
+        OR new.status NOT IN ('draft', 'issued', 'partly_paid', 'paid', 'void')
+        OR new.review NOT IN ('proposed', 'confirmed', 'rejected')
+        OR (new.currency IS NOT old.currency AND EXISTS (SELECT 1 FROM payment_allocations WHERE invoice_id = new.id))
+        OR new.total < (SELECT coalesce(sum(a.amount), 0) FROM payment_allocations a JOIN payments p ON p.id = a.payment_id
+          WHERE a.invoice_id = new.id AND p.review = 'confirmed' AND p.deleted_at IS NULL) BEGIN
+      SELECT RAISE(ABORT, 'invoices: the total stays at or above what is allocated to it, in the same currency');
+    END;
+    CREATE TRIGGER payments_confirm_bu BEFORE UPDATE OF review ON payments
+      WHEN new.review = 'confirmed' AND old.review IS NOT 'confirmed' AND EXISTS (
+        SELECT 1 FROM payment_allocations a JOIN invoices i ON i.id = a.invoice_id WHERE a.payment_id = new.id
+          AND a.amount + (SELECT coalesce(sum(o.amount), 0) FROM payment_allocations o JOIN payments p ON p.id = o.payment_id
+            WHERE o.invoice_id = a.invoice_id AND o.payment_id <> new.id AND p.review = 'confirmed' AND p.deleted_at IS NULL)
+          > i.total) BEGIN
+      SELECT RAISE(ABORT, 'payments: confirming it would settle more than an invoice''s total');
+    END;
+    CREATE TRIGGER payment_allocations_valid_bi BEFORE INSERT ON payment_allocations
+      WHEN new.amount <= 0
+        OR (SELECT currency FROM payments WHERE id = new.payment_id)
+          IS NOT (SELECT currency FROM invoices WHERE id = new.invoice_id)
+        OR (SELECT coalesce(sum(amount), 0) FROM payment_allocations WHERE payment_id = new.payment_id) + new.amount
+          > (SELECT amount FROM payments WHERE id = new.payment_id)
+        OR (SELECT coalesce(sum(a.amount), 0) FROM payment_allocations a JOIN payments p ON p.id = a.payment_id
+          WHERE a.invoice_id = new.invoice_id
+            AND ((p.review = 'confirmed' AND p.deleted_at IS NULL) OR a.payment_id = new.payment_id)) + new.amount
+          > (SELECT total FROM invoices WHERE id = new.invoice_id) BEGIN
+      SELECT RAISE(ABORT, 'payment_allocations: above 0, one currency, within the payment and within the invoice');
+    END;
+    CREATE TRIGGER payment_allocations_valid_bu BEFORE UPDATE ON payment_allocations
+      WHEN new.amount <= 0 OR new.payment_id IS NOT old.payment_id OR new.invoice_id IS NOT old.invoice_id
+        OR (SELECT coalesce(sum(amount), 0) FROM payment_allocations WHERE payment_id = new.payment_id AND id <> old.id)
+          + new.amount > (SELECT amount FROM payments WHERE id = new.payment_id)
+        OR (SELECT coalesce(sum(a.amount), 0) FROM payment_allocations a JOIN payments p ON p.id = a.payment_id
+          WHERE a.invoice_id = new.invoice_id AND a.id <> old.id
+            AND ((p.review = 'confirmed' AND p.deleted_at IS NULL) OR a.payment_id = new.payment_id)) + new.amount
+          > (SELECT total FROM invoices WHERE id = new.invoice_id) BEGIN
+      SELECT RAISE(ABORT, 'payment_allocations: above 0, within the payment and within the invoice, sides unchanged');
+    END;`,
   56: `DROP TRIGGER link_revisions_ai; DROP TRIGGER link_revisions_au; DROP TRIGGER link_revisions_ad;
     DROP INDEX links_relationship_key; DROP TABLE link_revisions; ALTER TABLE links DROP COLUMN account_id;
     ALTER TABLE links DROP COLUMN starts_at; ALTER TABLE links DROP COLUMN ends_at; ALTER TABLE links DROP COLUMN deleted_at;`,

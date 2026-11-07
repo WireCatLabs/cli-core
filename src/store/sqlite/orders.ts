@@ -261,7 +261,9 @@ export const orderOperationsOver = (context: StoreContext): OrderOperations => {
         const customer = partyThing(input.customer, "the customer") ?? ownerPerson(database)
         const supplier =
           partyThing(input.supplier, "the supplier") ?? (direction === "sale" ? ownerPerson(database) : undefined)
-        const supplierName = named ?? (partyOf(supplier?.type, supplier?.id)?.name as string)
+        const party = partyOf(supplier?.type, supplier?.id)
+        const supplierName = named ?? party?.name ?? (party?.owner ? "owner" : null)
+        if (supplierName === null) return refuse("an order names its shop or supplier", "order.field")
         if (number !== null && ordersOfShop(database, supplierName, number).length)
           refuse(`order ${number} from ${supplierName} is already stored; change its status instead`, "order.duplicate")
         const invoice = linked(input.invoice, "invoice")
