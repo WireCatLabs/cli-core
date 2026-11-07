@@ -360,7 +360,12 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
       parsed.type === "order" ||
       parsed.type === "deal" ||
       parsed.type === "lead" ||
-      parsed.type === "pipeline"
+      parsed.type === "pipeline" ||
+      parsed.type === "product" ||
+      parsed.type === "contract" ||
+      parsed.type === "subscription" ||
+      parsed.type === "wallet" ||
+      parsed.type === "transaction"
     )
       return undefined
     return { type: parsed.type, id: parsed.id }
