@@ -3,6 +3,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
 import { Command } from "commander"
+import * as v from "valibot"
 import { afterEach, describe, expect, it } from "vitest"
 import { syncCrm } from "../crm/index.js"
 import { exampleDeal, exampleOrganization, examplePerson, fakeCrmSource } from "../crm/testing/index.js"
@@ -365,5 +366,35 @@ describe("what a locked run shows of proposals and evidence", () => {
       out_of_scope: 2,
     })
     expect(await groupGuardOf(store, app, {})).toBeUndefined()
+  })
+
+  it("leaves every value but a dropped reference as it was, so a strict answer schema still reads it", async () => {
+    const env = envOf()
+    const store = await seeded(env)
+    const guard = await lockedGuard(env, store)
+    const at = new Date("2026-11-07T00:00:00.000Z")
+    const kept = { at, nested: { deep: [1, 2] }, evidence: ["msg:telegram/102/5/9"] }
+    const answer = {
+      items: [kept, { at, evidence: ["msg:telegram/101/5/9", "msg:telegram/102/5/9"], nested: { deep: [3] } }],
+      page: { limit: 2 },
+    }
+    const schema = v.strictObject({
+      items: v.array(
+        v.strictObject({
+          at: v.date(),
+          nested: v.strictObject({ deep: v.array(v.number()) }),
+          evidence: v.array(v.string()),
+        }),
+      ),
+      page: v.strictObject({ limit: v.number() }),
+    })
+    const { value, out_of_scope } = await guard.strip(answer)
+    expect(out_of_scope).toBe(1)
+    expect(v.parse(schema, value).items[1]?.evidence).toEqual(["msg:telegram/102/5/9"])
+    expect(value.items[0]).toBe(kept)
+    expect(value.items[1]?.at).toBe(at)
+    expect(value.page).toBe(answer.page)
+    const untouched = { items: [kept] }
+    expect((await guard.strip(untouched)).value).toBe(untouched)
   })
 })

@@ -49,23 +49,39 @@ export const groupGuardOf = async (
   }
   const strip = async <T>(value: T): Promise<{ value: T; out_of_scope: number }> => {
     let dropped = 0
+    // Only plain objects and arrays are rebuilt, and only where something under them was dropped: a Date or any
+    // other value keeps its identity, so a strict answer schema still reads it.
+    const plain = (node: object) => {
+      const prototype = Object.getPrototypeOf(node)
+      return prototype === Object.prototype || prototype === null
+    }
     const walk = async (node: unknown, key?: string): Promise<unknown> => {
       if (Array.isArray(node)) {
         const items = await Promise.all(node.map((one) => walk(one)))
-        if (key !== "evidence" && key !== "sources") return items
-        const shown: unknown[] = []
-        for (const item of items) {
-          const ref = refOf(item)
-          if (typeof ref === "string" && !(await visible(ref))) dropped += 1
-          else shown.push(item)
+        let changed = items.some((one, at) => one !== node[at])
+        let shown: unknown[] = items
+        if (key === "evidence" || key === "sources") {
+          shown = []
+          for (const item of items) {
+            const ref = refOf(item)
+            if (typeof ref === "string" && !(await visible(ref))) {
+              dropped += 1
+              changed = true
+            } else shown.push(item)
+          }
         }
-        return shown
+        return changed ? shown : node
       }
-      if (typeof node !== "object" || node === null) return node
+      if (typeof node !== "object" || node === null || !plain(node)) return node
+      let changed = false
       const entries = await Promise.all(
-        Object.entries(node).map(async ([name, one]) => [name, await walk(one, name)] as const),
+        Object.entries(node).map(async ([name, one]) => {
+          const walkedOne = await walk(one, name)
+          if (walkedOne !== one) changed = true
+          return [name, walkedOne] as const
+        }),
       )
-      return Object.fromEntries(entries)
+      return changed ? { ...node, ...Object.fromEntries(entries) } : node
     }
     const walked = (await walk(value)) as T
     return { value: walked, out_of_scope: dropped }
