@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.599.0 — 07.11.2026
+
 ### Added
 
 - **`store recover`** tells whether the store file is damaged: it reads every page and every search index, names the
