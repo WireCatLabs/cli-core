@@ -5,7 +5,7 @@ import { note } from "../entities/note.js"
 import { addMeetingCommands } from "../meetings/cli/index.js"
 import type { AppIdentity } from "../ports/app.js"
 import { commandsCommand } from "./commands-command.js"
-import { LOCAL_READ, LOCAL_WRITE, NO_EFFECTS, REMOTE_WRITE } from "./effects.js"
+import { LOCAL_READ, LOCAL_WRITE, NO_EFFECTS, REMOTE_WRITE, writesNewFileOnlyWith } from "./effects.js"
 import { unfilteredQuery, withQuery } from "./list-query.js"
 import type { Messenger } from "./messenger/context.js"
 import { doctorCommand } from "./messenger/doctor-command.js"
@@ -44,6 +44,7 @@ export const sharedCommandTemplate = (
         accountId: 0,
         write: unavailable,
         inRun: unavailable,
+        newFileOutput: writesNewFileOnlyWith,
       })
       const meetings = root.commands.find((command) => command.name() === "meetings")
       if (!meetings) return unavailable()
