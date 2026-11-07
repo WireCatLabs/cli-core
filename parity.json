@@ -230,6 +230,9 @@
       "value": "<claim>",
       "meaning": "remove only this ownership claim: manual or auto"
     },
+    "--clear": {
+      "meaning": "take the buttons off the message"
+    },
     "--close-time": {
       "value": "<delay>",
       "meaning": "it closes by itself this long after sending, like 90s or 5m"
@@ -398,6 +401,10 @@
     },
     "--failed": {
       "meaning": "every chat whose newest job failed or died"
+    },
+    "--field": {
+      "value": "<key=value>",
+      "meaning": "an inline button as <text>=<data>; repeat for more in one row"
     },
     "--file": {
       "value": "<file>",
@@ -1885,6 +1892,18 @@
     "bot messages edit": {
       "in": ["max", "tg"],
       "options": {
+        "--clear": {
+          "in": ["max", "tg"],
+          "planned": {
+            "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+          }
+        },
+        "--field": {
+          "in": ["max", "tg"],
+          "planned": {
+            "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+          }
+        },
         "--html": {
           "in": ["max", "tg"],
           "planned": {
@@ -1940,6 +1959,12 @@
           }
         },
         "--as-file": {
+          "in": ["max", "tg"],
+          "planned": {
+            "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+          }
+        },
+        "--field": {
           "in": ["max", "tg"],
           "planned": {
             "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
