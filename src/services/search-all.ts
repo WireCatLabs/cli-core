@@ -56,7 +56,11 @@ export interface SearchedAccount {
 }
 
 /** A resource not read, or a `--source` entry naming no account the search reads. */
-export type Skipped<R extends string> = { code: ErrorCode; reason: string } & (
+/**
+ * `reason` is the sentence for a person; `code` and `why` (a dotted reason such as `query.unknown-value`) are for a
+ * program, and `token` is the part of the query the source refused, when the refusal points at one.
+ */
+export type Skipped<R extends string> = { code: ErrorCode; reason: string; why?: string; token?: string } & (
   | { resource: R; source?: undefined }
   | { source: string; resource?: undefined }
 )
@@ -101,6 +105,16 @@ export interface SearchAllRequest {
   signal?: AbortSignal
   /** The accounts `--source` chose, per kind; a kind left out reads every account of its own. */
   scope?: Partial<Record<SearchedResource, AccountKey[]>>
+}
+
+const refusal = (error: CliError, text: string): { why?: string; token?: string } => {
+  const { reason, span } = (error.details ?? {}) as { reason?: unknown; span?: { start?: unknown; end?: unknown } }
+  const why = typeof reason === "string" ? reason : undefined
+  const token =
+    span && Number.isInteger(span.start) && Number.isInteger(span.end)
+      ? text.slice(span.start as number, span.end as number).trim()
+      : ""
+  return { ...(why ? { why } : {}), ...(token ? { token } : {}) }
 }
 
 /** A query a resource cannot answer is skipped with its reason, never a failure of the whole search. */
@@ -389,7 +403,7 @@ export const searchAll = async (
         searched.push(resource)
       } catch (error) {
         if (!skippable(error)) throw error
-        skipped.push({ resource, code: error.code, reason: error.message })
+        skipped.push({ resource, code: error.code, reason: error.message, ...refusal(error, request.text) })
       }
     }
   } finally {

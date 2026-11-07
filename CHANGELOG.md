@@ -9,6 +9,9 @@ shape of this file.
 
 ### Added
 
+- **A source `search all` skips names why, for a program too.** Each `skipped` entry keeps the sentence in `reason` and
+  now adds `why`, the dotted reason (`query.unknown-value`), and `token`, the part of the query that was refused
+  (`kind:nonsense`). `meta.issues` of `search all` carries `why` as `reason`, as the output standard allows.
 - **`@wirecat/cli-core/crm` exports the field lookup the CRM writes use**, so a CRM CLI drops its copy:
   `foldFieldName`, `fieldNamed`, `optionOf`, `unknownField`, `fieldPairsOf` and the `NamedField` type they read.
   `foldName` is exported from the package root.
