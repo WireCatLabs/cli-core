@@ -13,8 +13,11 @@ import { basename, dirname, join } from "node:path"
 import { Transform } from "node:stream"
 import { CliError } from "@wirecat/cli-base"
 import { holdersOf } from "../background/processes.js"
+import { isStoreDamage } from "../errors/failures.js"
+import { fileSchemaOf } from "./compatibility.js"
 import type { CacheDatabase } from "./driver.js"
 import { fts5Tables, type InvalidJson, invalidJson, type StoreHealth, storeHealth } from "./health.js"
+import { recordDeepCheck } from "./marks.js"
 import { migrate } from "./migrations.js"
 import { resetAttachmentWords } from "./sqlite/attachment-texts.js"
 import { involvementStoreOver } from "./sqlite/involvements.js"
@@ -535,7 +538,18 @@ const recoverLocked = async ({
   }
   try {
     const dataVersion = () => Number(watch.prepare("PRAGMA data_version").get()?.data_version)
-    const rowsBefore = tableRows(watch)
+    let rowsBefore: Record<string, number | null>
+    try {
+      rowsBefore = tableRows(watch)
+    } catch (error) {
+      if (!isStoreDamage(error)) throw error
+      throw new CliError(
+        "configuration_error",
+        "the store file's header or schema is damaged, so its tables cannot be listed and it cannot be recovered; " +
+          "the file was left as it was",
+        { reason: "store.unreadable" },
+      )
+    }
     const before = { data: dataVersion(), inode: statSync(path).ino }
 
     const stamp = new Date(now()).toISOString().replace(/[:.]/g, "-")
@@ -565,6 +579,7 @@ const recoverLocked = async ({
     let dangling: DanglingRows[]
     let json: InvalidJson[]
     let fetch: { account: string; emails: number }[]
+    let schema: number
     try {
       kept = tableRows(opened.database)
       migrate(opened.database, { command, ...(version ? { version } : {}) })
@@ -574,6 +589,7 @@ const recoverLocked = async ({
       note("looking for rows that point at rows that were lost")
       dangling = danglingRows(opened.database)
       fetch = mailToFetch(opened.database)
+      schema = fileSchemaOf(opened.database).version
       opened.database.exec("PRAGMA wal_checkpoint(TRUNCATE)")
     } catch (error) {
       opened.database.close()
@@ -609,6 +625,8 @@ const recoverLocked = async ({
       if (existsSync(`${path}${suffix}`)) renameSync(`${path}${suffix}`, `${keptAt}${suffix}`)
     for (const suffix of STORE_PARTS)
       if (existsSync(`${target}${suffix}`)) renameSync(`${target}${suffix}`, `${path}${suffix}`)
+
+    recordDeepCheck(path, health, { cli: command, ...(version ? { version } : {}), schema, now })
 
     const lost = Object.entries(rowsBefore)
       .map(([table, before]) => ({ table, before, read: read[table] ?? 0, kept: kept[table] ?? 0 }))

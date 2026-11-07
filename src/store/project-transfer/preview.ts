@@ -1,4 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
+import { damagedFile } from "../../errors/failures.js"
 import { openStoreContext } from "../sqlite/open-store.js"
 import { SnapshotBudget } from "../sqlite/project-transfer/budget.js"
 import { previewAnnotationSnapshot } from "../sqlite/project-transfer/preview.js"
@@ -35,16 +36,14 @@ export const previewProjectAnnotationSnapshot = async (
   )
     throw new CliError("validation_error", "project preview project is a project:<safe integer id> reference")
   const budget = new SnapshotBudget(options.maxReadBytes ?? 4 * 1024 * 1024)
-  const context = await openStoreContext({ path: options.target, env: options.env, readOnly: true })
-  try {
-    return previewAnnotationSnapshot(
-      context.database,
-      Number(options.project.slice(8)),
-      snapshot,
-      options.bindings,
-      budget,
-    )
-  } finally {
-    context.database.close()
-  }
+  const target = options.target
+  const project = options.project
+  return damagedFile([target], async () => {
+    const context = await openStoreContext({ path: target, env: options.env, readOnly: true })
+    try {
+      return previewAnnotationSnapshot(context.database, Number(project.slice(8)), snapshot, options.bindings, budget)
+    } finally {
+      context.database.close()
+    }
+  })
 }
