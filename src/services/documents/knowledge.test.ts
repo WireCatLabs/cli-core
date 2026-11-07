@@ -121,6 +121,8 @@ describe("shared document knowledge", () => {
         supersedes: memory.ref,
       })
       expect(replacement.supersedes).toBe(memory.ref)
+      expect((await f.k.memory(f.principal, f.ref, memory.ref)).status).toBe("stale")
+      await f.k.memory(f.principal, f.ref, replacement.ref, "confirm", "owner")
       expect((await f.k.memory(f.principal, f.ref, memory.ref)).status).toBe("superseded")
       await f.k.removeNote(f.principal, f.ref, note.ref)
       await expect(f.k.note(f.principal, f.ref, note.ref)).rejects.toThrow("attached")

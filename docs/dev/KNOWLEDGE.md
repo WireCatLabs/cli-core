@@ -72,8 +72,9 @@ project and scope: an agent's waits as proposed, the owner's is accepted at once
 superseded (accepting one that replaces another ends the older) or reversed; a question's answer is a
 `links` row of kind `answered-by`. `fact:<id>` names one. `memories`
 holds what agents concluded — summary, digest, preference — with author bot and model, confidence,
-status and a scope that has no default: a memory without scope or evidence is refused. Memories have their
-own words index. `proposedActions` keeps what an agent wants done outside the store until the owner
+status and a scope that has no default: a memory without scope or evidence is refused. A memory that `supersedes`
+another retires it when it is confirmed, not when it is proposed, and a memory is superseded once only. Memories have
+their own words index. `proposedActions` keeps what an agent wants done outside the store until the owner
 approves or rejects it; `list` filters by status. `approveAsTask` (`./services`) approves one as a `request`
 task in the account that would act, with source `proposed-action:<id>`, and records `{ task }` as its result;
 a retry finds the same task. A messenger adapter could instead execute an approved one and report `executed`
@@ -98,7 +99,7 @@ task keys); only a findings batch takes part ids (`17080/f2`). A link
 keeps no actor, only provenance text, so an unconfirmed link is the owner's alone to decide, and only the owner
 removes a link or writes a confirmed link of any kind (`notes.addLink`, `relate` with `by: "owner"`); an agent's
 link is written unconfirmed. Only the owner removes, reverses or revokes an accepted fact; an agent withdraws only
-its own proposed fact or memory. `facts.revoke` returns an agent's accepted fact to proposed and keeps the step,
+its own proposed fact or memory. Only the owner confirms a correction that retires a confirmed memory. `facts.revoke` returns an agent's accepted fact to proposed and keeps the step,
 with the decision it took back, in `metadata.history`; it refuses the owner's own fact and an accepted correction,
 whose superseded fact's earlier status is not kept. The policy is set once at `openStore({ decisions })` and read by every check. An agent's
 `relate` returns a `relationship` proposal.

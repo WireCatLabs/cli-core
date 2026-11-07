@@ -56,7 +56,7 @@ export interface MemoryInput {
   project?: string
   confidence?: number
   status?: "proposed" | "confirmed"
-  /** The memory this one replaces; it becomes `superseded`. */
+  /** The memory this one replaces; it becomes `superseded` once this one is confirmed. */
   supersedes?: string
 }
 
@@ -264,14 +264,31 @@ export const memoriesStoreOver = (
     if (row.deleted_at != null) throw new CliError("not_found", `${reference} is a fact now: store.facts holds it`)
     return row
   }
-  const decided = (reference: string, by: Decider) => {
+  const decided = (reference: string, by: Decider, ownerOnly = false) => {
     const row = rowOf(reference)
     assertMayDecide(
-      { id: `memory:${row.id}`, proposedBy: proposerOf(database, row.author_type, row.author_id) },
+      { id: `memory:${row.id}`, proposedBy: proposerOf(database, row.author_type, row.author_id), ownerOnly },
       by,
       context.decisions,
     )
   }
+  const alreadySuperseded = (id: unknown) =>
+    new CliError("validation_error", `memory:${id} is already superseded; correct the one that replaced it`, {
+      reason: "memory.already-superseded",
+    })
+  const replaceable = (reference: string): Row => {
+    const row = rowOf(reference)
+    if (row.status === "superseded") throw alreadySuperseded(row.id)
+    return row
+  }
+  /**
+   * A correction retired the memory if it was ever confirmed. An older store let an agent's proposal retire it at
+   * once, so a memory superseded only by the one being confirmed is not refused.
+   */
+  const retiredByAnother = (replaced: number, by: number): boolean =>
+    database
+      .prepare("SELECT 1 FROM memories WHERE supersedes_id = ? AND id <> ? AND last_verified_at IS NOT NULL LIMIT 1")
+      .get(replaced, by) !== undefined
   const setStatus = (reference: string, status: Memory["status"], verified: boolean) => {
     const row = rowOf(reference)
     const at = now()
@@ -307,7 +324,7 @@ export const memoriesStoreOver = (
       const { actor, model } = authorActor(context, input.author)
       const subject = input.subject === undefined ? undefined : requiredThing(database, input.subject, "the subject")
       const project = input.project === undefined ? null : projectId(database, input.project)
-      const replaced = input.supersedes === undefined ? undefined : Number(rowOf(input.supersedes).id)
+      const replaced = input.supersedes === undefined ? undefined : Number(replaceable(input.supersedes).id)
       const at = now()
       const made = Number(
         database
@@ -336,16 +353,27 @@ export const memoriesStoreOver = (
           )?.id,
       )
       linkEvidence(context, { type: "memory", id: made }, input.evidence, input.author === "owner" ? "owner" : "agent")
-      if (replaced !== undefined)
+      if (replaced !== undefined && status === "confirmed")
         database.prepare("UPDATE memories SET status = 'superseded', updated_at = ? WHERE id = ?").run(at, replaced)
       return made
     })
     return memoryOf(rowOf(`memory:${id}`))
   }
-  const confirmNow = (reference: string, by: Decider): Memory => {
-    decided(reference, by)
-    return setStatus(reference, "confirmed", true)
-  }
+  /** Applies a pending correction; only the owner retires a confirmed memory, whatever `agent_decisions` says. */
+  const confirmNow = (reference: string, by: Decider): Memory =>
+    write(database, () => {
+      const row = rowOf(reference)
+      const replaced =
+        row.status === "confirmed" || row.supersedes_id == null ? undefined : rowOf(`memory:${row.supersedes_id}`)
+      decided(reference, by, replaced?.status === "confirmed")
+      if (replaced !== undefined) {
+        if (retiredByAnother(Number(replaced.id), Number(row.id))) throw alreadySuperseded(replaced.id)
+        database
+          .prepare("UPDATE memories SET status = 'superseded', updated_at = ? WHERE id = ?")
+          .run(now(), Number(replaced.id))
+      }
+      return setStatus(reference, "confirmed", true)
+    })
 
   return {
     addNow,
