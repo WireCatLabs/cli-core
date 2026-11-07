@@ -10,6 +10,7 @@ export const ENTITY_TABLES = {
   bot: "bots",
   calendar_entry: "calendar_entries",
   chat: "chats",
+  contract: "contracts",
   conversation: "conversations",
   deal: "deals",
   document: "documents",
@@ -36,9 +37,13 @@ export const ENTITY_TABLES = {
   person: "persons",
   pipeline: "pipelines",
   place: "places",
+  product: "catalog_items",
   project: "projects",
+  subscription: "subscriptions",
   tag: "canonical_tags",
   task: "tasks",
+  transaction: "financial_transactions",
+  wallet: "financial_accounts",
 } as const
 
 export type EntityType = keyof typeof ENTITY_TABLES
