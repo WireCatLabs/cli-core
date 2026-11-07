@@ -133,8 +133,11 @@ const parseCursor = (cursor: string) => {
 }
 
 /** A bulk email that is not surely a newsletter: the holder gets its subject and first lines only. */
+/** An email as a hit, with its store id: the order a mark counts by. */
+export type MarkedHit = StoredHit & { storeId: number }
+
 export interface BulkExcerpt {
-  email: StoredHit
+  email: MarkedHit
   /** The first lines of its own text, without the subject. */
   excerpt: string
   /** What kept it, or the newsletter signs too few to leave it out. */
@@ -145,7 +148,7 @@ export interface BulkExcerpt {
 
 export interface MarkRead {
   /** The emails for the holder, oldest first; bulk, envelopes, drafts, suspicious senders and partial mail left out. */
-  emails: StoredHit[]
+  emails: MarkedHit[]
   /** Bulk mail past the mark that is not surely a newsletter, oldest first; none when the triage gives no excerpts. */
   excerpts: BulkExcerpt[]
   /** What `acknowledge --cursor` takes once the holder is done with these. */
@@ -176,11 +179,13 @@ export const readPastMark = async (
     const one = sorted.get(id)
     return one ? [{ email: one.email, excerpt: one.excerpt, cues: one.cues, partial: one.partial }] : []
   })
-  const emails = await store.mail.emailHits(wanted.filter((id) => !sorted.has(id)))
+  const emails: MarkedHit[] = []
+  for (const id of wanted.filter((one) => !sorted.has(one)))
+    for (const hit of await store.mail.emailHits([id])) emails.push({ ...hit, storeId: id })
   return { emails, excerpts, ...read }
 }
 
-type Sorted = Map<number, BulkSorted & { email: StoredHit; partial: boolean }>
+type Sorted = Map<number, BulkSorted & { email: MarkedHit; partial: boolean }>
 
 /**
  * The batch's bulk emails a holder might read, sorted by `newsletterSorter`, and where the batch ends so it holds at
@@ -204,7 +209,7 @@ const sortBulk = async (
     const one = sort({ subject, text: mailOwnText(body), from: email.email?.from?.address ?? null })
     if (one.verdict === "excerpt" && excerpts === triage.perRead) return { sorted, end: index }
     if (one.verdict === "excerpt") excerpts += 1
-    sorted.set(marked.id, { ...one, email, partial: marked.partial })
+    sorted.set(marked.id, { ...one, email: { ...email, storeId: marked.id }, partial: marked.partial })
   }
   return { sorted, end: batch.length }
 }

@@ -464,6 +464,27 @@ describe("a holder's processing mark", () => {
     expect(none.skipped.bulk).toBe(1)
   })
 
+  it("gives each email the cursor that ends the batch at it, so a reader that shows part acknowledges only that", async () => {
+    const box = await setUp()
+    await box.synced()
+    await box.ack((await box.read()).cursor)
+    await box.thread("t-1", email("one", 3))
+    await box.thread("t-2", email("two", 2))
+    await box.thread("t-3", email("three", 1))
+    await box.synced()
+    const first = await box.read()
+    expect(texts(first.answer)).toEqual(["text of one", "text of two", "text of three"])
+    const [one, two, three] = first.answer.items.map((item) => item.email)
+    expect(three?.cursor).toBe(first.cursor)
+    expect(two?.findings_key).toMatch(/^triage:\d+$/)
+    expect(new Set([one?.findings_key, two?.findings_key, three?.findings_key]).size).toBe(3)
+
+    await box.ack(two?.cursor as string)
+    const rest = await box.read()
+    expect(texts(rest.answer)).toEqual(["text of three"])
+    expect(rest.answer.items[0]?.email.cursor).toBe(rest.cursor)
+  })
+
   it("never moves back, and two holders keep their own marks", async () => {
     const box = await setUp()
     await box.synced()

@@ -37,7 +37,13 @@ export interface MailReviewOptions {
 
 /** A review of mail: each thread a chat, each email a stored hit with its locator. */
 /** `excerptOnly`: a bulk email a holder gets as its subject and first lines, its `text` cut to them. */
-export type MailHit = StoredHit & { marks?: EmailMarks; excerptOnly?: true; partialExcerpt?: true }
+export type MailHit = StoredHit & {
+  marks?: EmailMarks
+  excerptOnly?: true
+  partialExcerpt?: true
+  /** A holder's read: the cursor and findings key that end the batch at this email. */
+  through?: { cursor: string; findingsKey: string }
+}
 
 export interface MailReview extends Review {
   chats: (Omit<ReviewChat, "messages"> & { messages: MailHit[] })[]

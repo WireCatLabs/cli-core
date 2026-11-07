@@ -9,6 +9,9 @@ shape of this file.
 
 ### Added
 
+- **`review --holder` gives each email the cursor and findings key that end the batch at it** (`email.cursor`,
+  `email.findings_key`). A reader that cuts the batch to fit, such as an agent's input, acknowledges the last email it
+  showed instead of the batch's end, so the mark never moves past mail it did not show.
 - **Store version 55: `decision_requests`, the one-time keys behind buttons that ask the owner to decide a batch.**
   `store.decisionRequests.create` makes one token per button for one message (22 characters, 16 random bytes in
   base64url; only a SHA-256 digest is kept), `take` uses a token once, cancels the message's other open tokens in the
