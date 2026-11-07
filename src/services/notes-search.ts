@@ -701,10 +701,13 @@ export const searchNotes = async (
       const held = ranked.get(ref) ?? { note, at, score: 0, foundBy: [] }
       held.foundBy.push(by)
       ranked.set(ref, held)
+      const vote = 1 / (RRF_K + rank + 1)
       // A question's any-word list holds nearly every note meaning finds; a second vote there buried notes found by
-      // words alone (recall@10 0.55 against 1.00, cli-testing knowledge-graph-memory, MEMO-36).
-      if (by === "meaning" && lookup !== undefined && held.foundBy.includes("words")) return
-      held.score += 1 / (RRF_K + rank + 1)
+      // words alone (recall@10 0.55 against 1.00, cli-testing knowledge-graph-memory, MEMO-36). Keeping only the
+      // words' vote buried a note worded differently, which meaning ranks first and words last: the better rank stands.
+      if (by === "meaning" && lookup !== undefined && held.foundBy.includes("words"))
+        held.score = Math.max(held.score, vote)
+      else held.score += vote
     })
   add(matched.items, "words")
   if (meaning !== undefined) add(meaning, "meaning")

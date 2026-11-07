@@ -36,6 +36,10 @@ shape of this file.
 
 ### Fixed
 
+- **`search all` ranks higher the record a question words differently.** For a question, a mail, message or note
+  that both the words and the meaning found kept only its words rank, so one meaning ranked first and words ranked
+  last stayed at the bottom of the page or off it. It now keeps the better of its two ranks, still with no second vote.
+
 - **`doctor --online` of a CLI built on `appDoctorCommand` runs inside cli-core's run.** It answered outside one, so
   `--record` kept no run of it and its call out was not the command's own. A config that will not load still gets an
   answer, outside a run.
