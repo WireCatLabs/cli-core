@@ -7,6 +7,15 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- **People the owner separated stay apart.** An owner's unlink was checked only for the two identities being joined,
+  but a join moves whole people: a third identity with the same email address, linked to one of them, carried both
+  back together. Now no automatic join — the same email address, an account's own identity joining the owner — merges
+  two people when the owner once moved anyone of one away from anyone of the other. An agent's link of one identity
+  (a confirmed mention, a meeting participant) back over such a separation is refused with the reason
+  `identity.separated`; the owner's own link still goes through. The exact-email join stays automatic otherwise.
+
 ## 0.604.0 — 07.11.2026
 
 ### Added

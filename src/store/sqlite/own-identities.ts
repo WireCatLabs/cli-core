@@ -3,12 +3,13 @@ import type { IdentityRef, PersonRecord } from "../types.js"
 import { ownerPerson } from "./actors.js"
 import type { StoreContext } from "./open.js"
 import { mergePerson, personOf } from "./person-links.js"
+import { separated } from "./person-separation.js"
 import { write } from "./transaction.js"
 
 /**
  * An account's own identity (same provider and id as the account) is the owner. Messengers save it like anyone
  * else's, as a person of its own, so the owner's name counted as a contact's. Links it, and whoever was linked
- * with it, to the owner; nothing to do once done.
+ * with it, to the owner, unless the owner separated that person from themselves; nothing to do once done.
  */
 export const linkOwnIdentities = (context: StoreContext): number => {
   const owner = ownerPerson(context.database).id
@@ -19,10 +20,11 @@ export const linkOwnIdentities = (context: StoreContext): number => {
     )
     .all(owner)
   if (strays.length === 0) return 0
-  write(context.database, () => {
-    for (const { person } of strays) mergePerson(context, Number(person), owner, { method: "account", by: "rules" })
+  return write(context.database, () => {
+    const joining = strays.map(({ person }) => Number(person)).filter((person) => !separated(context, person, owner))
+    for (const person of joining) mergePerson(context, person, owner, { method: "account", by: "rules" })
+    return joining.length
   })
-  return strays.length
 }
 
 /** `contacts link <person> me`: an identity the account id does not name, a Zoom user for one, is the owner. */
