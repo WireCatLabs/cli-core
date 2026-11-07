@@ -7,7 +7,7 @@ import { isCliFailure } from "../errors/failures.js"
 import type { CrmRelationIssue, CrmSaved, CrmSkipped } from "../store/sqlite/crm.js"
 import type { MessageStore } from "../store/store.js"
 import type { AccountKey } from "../store/types.js"
-import type { CrmPage, CrmSource } from "./source.js"
+import type { CrmCallContext, CrmGap, CrmPage, CrmSource } from "./source.js"
 
 const DAY = 86_400_000
 /** A row the CRM changed this close to the id pass's start may be newer than the list, by the two clocks' skew. */
@@ -152,17 +152,6 @@ const CONTINUE = "run sync again to continue"
 
 const fresh = (): CrmCursor => ({ v: 1, token: null, round: null, done: 0, updatedAt: null, pass: null, passAt: 0 })
 
-/**
- * What a CRM account did not report in the last sync, so an answer can name it: a kind it has not, users or departments
- * it does not list, or a list the sign-in's scope refused (`code`). Replaced by each run.
- */
-export interface CrmGap {
-  what: CrmKind | "users" | "departments"
-  reason: "not-listed" | "refused"
-  code?: string
-  message: string
-}
-
 const GAPS = "crm:gaps"
 
 /** The gaps the account's last sync recorded; none before its first. */
@@ -173,6 +162,29 @@ export const crmGapsOf = async (store: MessageStore, account: AccountKey): Promi
   } catch {
     return []
   }
+}
+
+/** Thrown by `CrmCallContext.spend` when the budget is spent; the engine turns it into a `partial` stop. */
+class BudgetSpent extends Error {
+  constructor(readonly why: BudgetStop) {
+    super(`the run's budget is spent: ${why}`)
+  }
+}
+
+/** The scope a refusal names, when the adapter put one in its details. */
+const scopeOf = (error: unknown): string | undefined => {
+  const scope = error instanceof CliError ? (error.details as { scope?: unknown } | undefined)?.scope : undefined
+  return typeof scope === "string" && scope ? scope : undefined
+}
+
+const refusal = (kind: CrmGap["kind"], consequence: string, error: unknown, provider: string): CrmGap => {
+  // The adapter's own text may carry a request; only its failure code and scope are copied.
+  const code = error instanceof CliError ? error.code : "error"
+  const scope = scopeOf(error)
+  const message = scope
+    ? `${scope} scope missing: ${consequence}`
+    : `${provider} did not list ${kind} (${code}): ${consequence}`
+  return { kind, reason: "refused", code, ...(scope ? { scope } : {}), message }
 }
 
 interface Run {
@@ -187,6 +199,7 @@ interface Run {
   pipelinesReread: Set<DealKind>
   moved: () => void
   gaps: CrmGap[]
+  context: CrmCallContext
   unlistedUsers: number
   droppedPending: number
 }
@@ -194,7 +207,7 @@ interface Run {
 const readPipelines = async (run: Run, kind: DealKind): Promise<BudgetStop | null> => {
   const why = run.budget.take()
   if (why) return why
-  const pipelines = await run.source.pipelines(kind)
+  const pipelines = await run.source.pipelines(kind, run.context)
   const { saved, skipped } = await run.store.crm.savePipelines(run.account, kind, pipelines)
   run.report.pipelines += saved
   for (const one of skipped) run.report.issues.push({ kind, ...one })
@@ -215,16 +228,13 @@ const noted = (run: Run, kind: CrmSyncIssue["kind"], saved: CrmSaved) => {
  */
 const readUsers = async (run: Run): Promise<BudgetStop | null> => {
   const { source } = run
-  const gap = (what: "users" | "departments", consequence: string, error?: unknown) => {
-    // The adapter's own text may carry a request; only its failure code is copied.
-    const code = error === undefined ? undefined : error instanceof CliError ? error.code : "error"
-    const message = `${source.provider} did not list ${what}${code ? ` (${code})` : ""}: ${consequence}`
-    run.gaps.push({ what, reason: code ? "refused" : "not-listed", ...(code ? { code } : {}), message })
-    run.report.issues.push({ kind: "user", reason: "crm.not-reported", message })
+  const gap = (one: CrmGap) => {
+    run.gaps.push(one)
+    run.report.issues.push({ kind: "user", reason: "crm.not-reported", message: one.message })
   }
   if (!source.users) {
     run.gaps.push({
-      what: "users",
+      kind: "users",
       reason: "not-listed",
       message: `${source.provider} lists no users: deal owners, employees and reporting lines are unknown`,
     })
@@ -234,22 +244,27 @@ const readUsers = async (run: Run): Promise<BudgetStop | null> => {
   if (why) return why
   let users: Awaited<ReturnType<NonNullable<CrmSource["users"]>>>
   try {
-    users = await source.users()
+    users = await source.users(run.context)
   } catch (error) {
-    if (run.signal?.aborted) throw error
-    gap("users", "nothing stored about them changed", error)
+    if (run.signal?.aborted || error instanceof BudgetSpent) throw error
+    gap(refusal("users", "nothing stored about them changed", error, source.provider))
     return null
   }
   let departments: Awaited<ReturnType<NonNullable<CrmSource["departments"]>>> | undefined
-  if (!source.departments) gap("departments", "who reports to whom is unknown")
+  if (!source.departments)
+    gap({
+      kind: "departments",
+      reason: "not-listed",
+      message: `${source.provider} lists no departments: who reports to whom is unknown`,
+    })
   else {
     const stop = run.budget.take()
     if (stop) return stop
     try {
-      departments = await source.departments()
+      departments = await source.departments(run.context)
     } catch (error) {
-      if (run.signal?.aborted) throw error
-      gap("departments", "who reports to whom is unknown", error)
+      if (run.signal?.aborted || error instanceof BudgetSpent) throw error
+      gap(refusal("departments", "reporting lines unknown", error, source.provider))
     }
   }
   noted(run, "user", await run.store.crm.saveUsers(run.account, users, departments))
@@ -257,10 +272,20 @@ const readUsers = async (run: Run): Promise<BudgetStop | null> => {
   return null
 }
 
+/** Runs a step whose source call may spend the budget mid-way: a spent budget is a stop, not a failure. */
+const stopping = async (step: () => Promise<BudgetStop | null>): Promise<BudgetStop | null> => {
+  try {
+    return await step()
+  } catch (error) {
+    if (error instanceof BudgetSpent) return error.why
+    throw error
+  }
+}
+
 const readFields = async (run: Run, kind: CrmKind): Promise<BudgetStop | null> => {
   const why = run.budget.take()
   if (why) return why
-  const fields = await (run.source.fields as NonNullable<CrmSource["fields"]>).call(run.source, kind)
+  const fields = await (run.source.fields as NonNullable<CrmSource["fields"]>).call(run.source, kind, run.context)
   const { skipped } = await run.store.crm.saveFields(run.account, kind, fields)
   for (const one of skipped) run.report.issues.push({ kind, ...one })
   return null
@@ -330,7 +355,7 @@ const syncKind = async (run: Run, kind: CrmKind, options: CrmSyncOptions, result
   for (;;) {
     const why = budget.take()
     if (why) return why
-    const page = await source.changes(kind, round.from, round.page ?? undefined)
+    const page = await source.changes(kind, round.from, round.page ?? undefined, run.context)
     if (signal?.aborted) return "cancelled" as const
     if ("reset" in page) {
       if (round.page !== null && !restarted) {
@@ -373,7 +398,7 @@ const syncKind = async (run: Run, kind: CrmKind, options: CrmSyncOptions, result
         await save({ pass })
         return why
       }
-      const page = await ids.call(source, kind, pass.page ?? undefined)
+      const page = await ids.call(source, kind, pass.page ?? undefined, run.context)
       if (signal?.aborted) return "cancelled" as const
       pass = { ...pass, seen: [...pass.seen, ...page.ids], page: page.nextPage ?? null }
       run.moved()
@@ -443,10 +468,18 @@ export const syncCrm = async (
       steps += 1
     },
     gaps: CRM_KINDS.filter((kind) => !source.traits.kinds.includes(kind)).map((kind) => ({
-      what: kind,
+      kind,
       reason: "not-listed" as const,
       message: `${source.provider} has no ${kind}s`,
     })),
+    context: {
+      spend: () => {
+        const why = budget.take()
+        if (why) throw new BudgetSpent(why)
+      },
+      gap: ({ kind, message, scope }) =>
+        run.gaps.push({ kind, reason: "partial", message, ...(scope ? { scope } : {}) }),
+    },
     unlistedUsers: 0,
     droppedPending: 0,
   }
@@ -454,20 +487,20 @@ export const syncCrm = async (
   let stopped: BudgetStop | null = null
   for (const kind of DEAL_KINDS)
     if (!stopped && kinds.includes(kind)) {
-      stopped = await readPipelines(run, kind)
+      stopped = await stopping(() => readPipelines(run, kind))
       if (options.signal?.aborted) stopped = "cancelled"
     }
   if (run.source.fields)
     for (const kind of kinds)
       if (!stopped) {
-        stopped = await readFields(run, kind)
+        stopped = await stopping(() => readFields(run, kind))
         if (options.signal?.aborted) stopped = "cancelled"
       }
   let usersRead = false
   for (const kind of kinds) {
     if (!usersRead && isItemKind(kind)) {
       usersRead = true
-      if (!stopped) stopped = await readUsers(run)
+      if (!stopped) stopped = await stopping(() => readUsers(run))
     }
     const result: CrmSyncResult = {
       kind,
@@ -489,6 +522,11 @@ export const syncCrm = async (
         stopped = "cancelled"
         continue
       }
+      if (error instanceof BudgetSpent) {
+        stopped = error.why
+        continue
+      }
+      if (scopeOf(error)) run.gaps.push(refusal(kind, `no ${kind} was read`, error, source.provider))
       // An adapter's own failure says what went wrong; anything else may carry a request URL with a secret in it.
       result.error = isCliFailure(error) ? error.message : `the ${kind} copy could not be synced`
     }

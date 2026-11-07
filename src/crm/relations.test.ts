@@ -3,10 +3,11 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { CliError } from "@wirecat/cli-base"
 import { afterEach, expect, it } from "vitest"
+import { runBudget } from "../background/budget.js"
 import type { CrmDepartment, CrmUser } from "../domain/crm.js"
 import { openCache } from "../store/open.js"
 import { type MessageStore, openStore } from "../store/store.js"
-import { crmGapsOf, syncCrm } from "./index.js"
+import { type CrmCallContext, crmGapsOf, syncCrm } from "./index.js"
 import { fakeCrmSource } from "./testing/index.js"
 
 const stores: MessageStore[] = []
@@ -432,7 +433,7 @@ it("waits for no deal owner when the CRM lists no users, and says so once", asyn
     expect.objectContaining({ kind: "deal", message: expect.stringMatching(/^3 deal owner/) }),
   ])
   expect(await pendingCount(store)).toBe(0)
-  expect(await crmGapsOf(store, PORTAL)).toEqual([expect.objectContaining({ what: "users", reason: "not-listed" })])
+  expect(await crmGapsOf(store, PORTAL)).toEqual([expect.objectContaining({ kind: "users", reason: "not-listed" })])
 })
 
 it("drops what a deleted deal was waiting for, and never writes it", async () => {
@@ -497,9 +498,59 @@ it("records which lists the last sync could not read, replaced by the next", asy
     PORTAL,
   )
   expect(await crmGapsOf(store, PORTAL)).toEqual([
-    expect.objectContaining({ what: "departments", reason: "refused", code: "permission_error" }),
+    expect.objectContaining({ kind: "departments", reason: "refused", code: "permission_error" }),
   ])
   Object.assign(crm, { departments: async () => DEPARTMENTS })
   await sync()
   expect(await crmGapsOf(store, PORTAL)).toEqual([])
+})
+
+it("names the scope a refusal carries, and keeps a gap the source reports without failing", async () => {
+  const { store, crm } = await acme()
+  const scoped = new CliError("permission_error", "denied", { scope: "department" })
+  Object.assign(crm, {
+    users: async (context?: CrmCallContext) => {
+      context?.gap({ kind: "users", message: "user_basic scope missing: no e-mails", scope: "user_basic" })
+      return USERS
+    },
+    departments: async () => Promise.reject(scoped),
+  })
+  const report = await syncCrm(crm, store, PORTAL)
+  expect(report.issues).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        reason: "crm.not-reported",
+        message: "department scope missing: reporting lines unknown",
+      }),
+    ]),
+  )
+  expect(await crmGapsOf(store, PORTAL)).toEqual([
+    { kind: "users", reason: "partial", scope: "user_basic", message: "user_basic scope missing: no e-mails" },
+    {
+      kind: "departments",
+      reason: "refused",
+      code: "permission_error",
+      scope: "department",
+      message: "department scope missing: reporting lines unknown",
+    },
+  ])
+})
+
+it("stops a source that pages its users itself as partial once the budget is spent, saving nothing half-read", async () => {
+  const { store, crm } = await acme()
+  let pages = 0
+  Object.assign(crm, {
+    users: async (context?: CrmCallContext) => {
+      for (const _ of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]) {
+        context?.spend()
+        pages += 1
+      }
+      return USERS
+    },
+  })
+  const report = await syncCrm(crm, store, PORTAL, { budget: runBudget({ requests: 9 }) })
+  expect(report).toMatchObject({ state: "partial", stopped: "requests" })
+  expect(pages).toBeLessThan(10)
+  expect(report.users).toBeUndefined()
+  expect(await store.people.personOf({ provider: "email", id: "emma@northstar.example" })).toBeUndefined()
 })

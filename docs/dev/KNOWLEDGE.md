@@ -212,7 +212,10 @@ next sync. A field the CRM left out (`organizations`, `people`, `assignee`, `typ
 the account's sync state (`crm:pending-relations`, read and written once per page) and is written at the end of a
 later sync; it is dropped when its row is deleted, after 30 days or past 5000, with one issue. A deal owner is not
 waited for when the CRM lists no users. Each sync replaces `crm:gaps`, what it could not read (a kind the CRM has
-not, users or departments not listed or refused with their code), which `crmGapsOf` reads. A contact whose email
+not, users or departments not listed or refused with their code and the `scope` a refusal's details name, and gaps
+a source reports through `context.gap`), which `crmGapsOf` reads. Every source call gets a `CrmCallContext`: a
+source that makes more requests than the one the engine counts takes each with `context.spend()`, which stops the run
+as `partial` once the budget is spent (WC-LIFE-16). A contact whose email
 belongs to two people is named in the sync's issues until the owner separates it.
 
 A mail findings batch (`store.mailFindings`) also takes `invoice`, `payment`, `order` and `order_update` findings.
