@@ -29,6 +29,7 @@ export {
   MARK_BATCH,
   type MailMark,
   type MailWaiting,
+  type MarkedHit,
   type MarkRead,
   type MarkRewind,
   mailWaiting,
