@@ -45,15 +45,16 @@ export const personRefOf = async (store: MessageStore, provider: string, id: Id)
   return person ? `person:${person.uid}` : undefined
 }
 
-/** How many projects a person is a confirmed member of. */
-export const projectsOf = async (store: MessageStore, person: string): Promise<number> =>
-  new Set(
-    (await store.knowledge.relations(null, person))
+/** How many projects a person is a confirmed member of, counting `project` whether confirmed or only found. */
+export const projectsOf = async (store: MessageStore, person: string, project: string): Promise<number> =>
+  new Set([
+    project,
+    ...(await store.knowledge.relations(null, person))
       .filter(
         (one) => one.confirmed && one.kind === "member-of" && one.from === person && one.to.startsWith("project:"),
       )
       .map((one) => one.to),
-  ).size
+  ]).size
 
 /** Each confirmed member's identities in one messenger, by member. */
 export const identitiesIn = async (

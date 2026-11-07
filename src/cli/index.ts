@@ -11,7 +11,7 @@ export {
 } from "../domain/ref-summaries.js"
 export { botTemplate } from "../entities/list-results.js"
 export { syncProgress } from "../entities/store-records.js"
-export { isCliFailure, isCommanderFailure } from "../errors/failures.js"
+export { isCliFailure, isCommanderFailure, storeDamaged } from "../errors/failures.js"
 export { type AppErrors, failureContext } from "../errors/reasons.js"
 export { mailFindingFieldsHelp } from "../mail/findings.js"
 export { botInstructions } from "../mcp/bot/instructions.js"

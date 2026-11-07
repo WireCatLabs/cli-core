@@ -10,6 +10,7 @@ const READ_LIMIT = 500
 export const mailThread: LinkScorer = {
   id: "mail-thread",
   version: 1,
+  spreads: true,
   candidates: async ({ store, project, confirmed, sources, since, owner, signal }) => {
     if (!project) return []
     const names = namesProject(project)

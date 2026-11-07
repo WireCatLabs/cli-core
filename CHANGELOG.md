@@ -20,12 +20,67 @@ shape of this file.
 
 - **A holder's batch of held emails only no longer reuses the findings key of the run that set the mark**, which
   refused its staging (`key-used`): it takes `-h<highest held id>`.
+
+## 0.605.0 — 07.11.2026
+
+### Added
+
+- **A run that finds the store damaged stops every later write.** When a command fails with SQLite's "database disk
+  image is malformed", "file is not a database" or an fts5 corruption, the run leaves `<store>.damaged.json` beside
+  the store (when, which command and version, the run's id, SQLite's message). While it is there, every command that
+  opens the store to write refuses with `store.damaged` and names `<cli> store recover`, so scheduled syncs fail at
+  once instead of writing into a damaged file; reads still work. `doctor` and `store recover` show it. A deep check
+  that passes (`doctor --deep`, `store recover`), `store recover run`, `store restore` and `store reset` lift it.
+  `markStoreDamaged` from `@wirecat/cli-core/store` leaves it for a CLI that reports such a failure itself.
+- **Every deep check is recorded beside the store as its last known good.** `doctor --deep`, `store recover` and the
+  check after `store recover run` write `<store>.health.json` (when, the result, the schema, the CLI and its version,
+  and `last_ok_at`, the newest check that passed); `doctor` and `store recover` answer `last_known_good` from it.
+  `storeSummary` takes the CLI's `version` for it.
+
+### Changed — may break callers
+
+- **`personContext`, `contacts context`, `contacts prepare` and `events prepare` read only accounts of the asked
+  account's scope.** A personal account no longer reads a linked person's mail, messages, calendar events or recorded
+  meetings in work accounts, and a work account none in personal ones. To read both, pass
+  `scopes: ["personal", "work"]` in the options of `personContext`, or of `eventPreparation`. The answer's new
+  `accounts` lists every account read with its scope. The asked account must be in the store: a missing one, or an
+  `AccountKey.scope` that differs from the stored scope, is `not_found`.
+
+### Fixed
+
+- **`scanProjectLinks` spreads from what it finds within one run.** A chat or person that scores the threshold or more
+  is used like a confirmed link for the `spreads` scorers (`member-chats`, `member-dialog`, `chat-senders`,
+  `mail-thread`), up to `MAX_HOPS` (4) times. One scan now reaches a member's dialogs and groups in every messenger
+  their identities name, where before it took one owner confirmation per step and never left the first messenger.
+  On a synthetic project shaped like the PMED run, recall after two rounds rose from 27 % to 93 % (all findable
+  links), precision from 100 % to 74 %, 5 false proposals, none by name only. A rejected pair is never spread from.
+- **`chat-senders` (version 2) counts any message in a dialog or a chat of 10 people or fewer;** a bigger chat still
+  needs 5 in the window.
+- **`member-dialog` (version 2) counts the scanned project in the member's projects** whether the member is confirmed
+  or only found, so a found member who is in another project weighs the same as a confirmed one.
+- **A damaged store file is `configuration_error` (`store.damaged`), not a crash.** SQLite's "database disk image is
+  malformed" or "file is not a database", raised anywhere in a command or behind a wrapper's `cause`, was
+  `internal_error` (`command.crashed`), "this is a bug". It now says the store file is damaged and names
+  `<cli> store recover` where the CLI has it, else `<cli> doctor --deep`, else no command, on the CLI, over MCP and in
+  the run kept of it, whose frames stay SQLite's own; a scheduled run's failure banner shows the reason.
+  `storeDamaged(error, next?)` from `@wirecat/cli-core/cli` does the same for a CLI with its own failure handling. A
+  damaged file named for a document or project transfer is `validation_error` (`store.file-damaged`) naming that
+  file, and `store recover run` on a store whose header is damaged says it cannot recover it (`store.unreadable`).
+- **A filesystem error is no longer read as a SQLite one.** `errno` counts as SQLite's code only on bun:sqlite's
+  `SQLiteError`: Windows' EIO (-4070) has SQLITE_NOTADB's low byte, and a busy check took a filesystem errno with
+  BUSY's low byte for a lock.
+- **cli-core accepts cli-base 0.81 and 0.82** (peer range `>=0.80.7 <0.83.0`, developed against 0.82.0). memo moved to
+  cli-base 0.82.0, and the downstream parity check downgraded it to 0.80.7, whose option vocabulary lacks memo's
+  `--from-app` and `tasks --status`, so every cli-core pull request failed parity.
 - **People the owner separated stay apart.** An owner's unlink was checked only for the two identities being joined,
   but a join moves whole people: a third identity with the same email address, linked to one of them, carried both
   back together. Now no automatic join — the same email address, an account's own identity joining the owner — merges
   two people when the owner once moved anyone of one away from anyone of the other. An agent's link of one identity
   (a confirmed mention, a meeting participant) back over such a separation is refused with the reason
   `identity.separated`; the owner's own link still goes through. The exact-email join stays automatic otherwise.
+- **A personal account's `contacts context` no longer shows a person's work mail.** One exact email address joins a
+  personal and a work contact into one person, and the context then read every account that had seen any of that
+  person's identities. Each linked identity now also lists `seenIn`, its accounts with their scope.
 
 ## 0.604.0 — 07.11.2026
 
@@ -141,7 +196,6 @@ shape of this file.
   the owner's disk to write) and gets the export in the answer, as `events export` does.
 
 ### Fixed
-
 
 - **`doctor --online` of a CLI built on `appDoctorCommand` runs inside cli-core's run.** It answered outside one, so
   `--record` kept no run of it and its call out was not the command's own. A config that will not load still gets an

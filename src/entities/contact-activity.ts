@@ -9,6 +9,7 @@ const linkedIdentity = v.strictObject({
   username: v.nullable(text),
   is_bot: v.nullable(v.boolean()),
   accounts: v.array(id),
+  seen_in: v.array(v.strictObject({ account: id, scope: v.picklist(["personal", "work"]) })),
   method: text,
   linked_by: text,
   linked_at: time,

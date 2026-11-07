@@ -20,6 +20,7 @@ import { refuseLacking } from "../cli/messenger/lacks.js"
 import type { Settings } from "../cli/settings.js"
 import type { WarmEmbedders } from "../embeddings/embed.js"
 import { ENTITIES, type EntityName } from "../entities/index.js"
+import { storeDamaged } from "../errors/failures.js"
 import { type AppErrors, failureContext } from "../errors/reasons.js"
 import type { MessengerAdapter } from "../ports/messenger.js"
 import { startRecording } from "../runs/recording.js"
@@ -545,7 +546,9 @@ export const answered = (
 export const failed = (error: unknown, errors?: AppErrors, effects?: Effects): CallToolResult => {
   const judged = judgedEffects(effects)
   const context = { ...failureContext(errors), ...(judged ? { effects: judged } : {}) }
-  return mcpErrorResult(JSON.parse(agentJson(errorObjectOf(error, context))) as ErrorObject) as CallToolResult
+  return mcpErrorResult(
+    JSON.parse(agentJson(errorObjectOf(storeDamaged(error), context))) as ErrorObject,
+  ) as CallToolResult
 }
 
 /** An option's name as an MCP argument: `beforeId` is `before_id`. */

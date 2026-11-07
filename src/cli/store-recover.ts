@@ -2,8 +2,10 @@ import { existsSync } from "node:fs"
 import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
+import { fileSchemaOf } from "../store/compatibility.js"
 import { type DamageExplanation, explainDamage } from "../store/damage.js"
 import { type InvalidJson, storeHealth } from "../store/health.js"
+import { type DamageMark, readDamageMark, readHealthMark, recordDeepCheck } from "../store/marks.js"
 import { storePath } from "../store/path.js"
 import {
   activeTimers,
@@ -45,6 +47,10 @@ export interface RecoveryCheck {
   invalidJson?: InvalidJson[]
   rows?: Record<string, number | null>
   explanation?: DamageExplanation | null
+  /** What the run that found the store damaged saw; writes are refused while it stands. */
+  damageMark?: Omit<DamageMark, "inode"> | null
+  /** When a deep check of the store last passed, as far as this computer recorded. */
+  lastKnownGood?: string | null
   inUse?: { pid: number; name: string }[] | null
   timers?: string[] | null
   sqlite3?: { version: string | null; usable: boolean }
@@ -54,22 +60,33 @@ export interface RecoveryCheck {
 
 const stopTimers = (timers: string[]) => `systemctl --user stop ${timers.join(" ")}`
 
-/** `store recover`: what is wrong with the store and what to run, reading every page; changes nothing. */
-export const storeRecoveryCheck = async (env: NodeJS.ProcessEnv, command: string): Promise<RecoveryCheck> => {
+/**
+ * `store recover`: what is wrong with the store and what to run, reading every page. Changes nothing in the store; it
+ * records the check beside it, and one that passes lifts the damage mark.
+ */
+export const storeRecoveryCheck = async (
+  env: NodeJS.ProcessEnv,
+  command: string,
+  version?: string,
+): Promise<RecoveryCheck> => {
   const path = storePath(env)
   if (!existsSync(path)) return { path, exists: false, ok: true, next: [] }
   const health = await storeHealth(path, { deep: true })
   let rows: Record<string, number | null> = {}
+  let schema: number | null = null
   try {
     const { database } = await openSqlite(path, { readOnly: true })
     try {
+      schema = fileSchemaOf(database).version
       const all = tableRows(database)
       rows = Object.fromEntries(COUNTED.filter((table) => table in all).map((table) => [table, all[table] ?? null]))
     } finally {
       database.close()
     }
   } catch {}
-  const explanation = explainDamage(health, command)
+  recordDeepCheck(path, health, { cli: command, ...(version ? { version } : {}), schema })
+  const mark = readDamageMark(path)
+  const explanation = explainDamage(health, command, mark)
   const inUse = storeHolders(path) ?? null
   const timers = activeTimers() ?? null
   const sqlite3 = sqlite3Program()
@@ -94,6 +111,8 @@ export const storeRecoveryCheck = async (env: NodeJS.ProcessEnv, command: string
     invalidJson: health.invalidJson ?? [],
     rows,
     explanation,
+    damageMark: mark ? (({ inode: _, ...seen }) => seen)(mark) : null,
+    lastKnownGood: readHealthMark(path)?.last_ok_at ?? null,
     inUse,
     timers,
     sqlite3: { version: sqlite3.version, usable: sqlite3.usable },
@@ -179,6 +198,9 @@ export const recoveryNotes = (answer: RecoveryCheck | RecoveryRun): string[] => 
   const why = answer.explanation
   return [
     ...(why ? [why.what, ...why.impact, why.externalUnaffected] : []),
+    answer.lastKnownGood
+      ? `the store last passed a deep check at ${answer.lastKnownGood}`
+      : "no deep check that passed is on record for this store",
     ...answer.next.map((line) => `next: ${line}`),
   ]
 }
@@ -192,7 +214,7 @@ export const storeRecoverCommand = ({ command, version }: { command: string; ver
     )
     .action(async function (this: Command) {
       const output = outputFor(this)
-      const answer = await storeRecoveryCheck(environmentOf(this).env ?? process.env, command)
+      const answer = await storeRecoveryCheck(environmentOf(this).env ?? process.env, command, version)
       renderAnswer(this, output, itemOf(snakeKeys(answer)))
       if (output.format === "pretty") for (const line of recoveryNotes(answer)) output.renderer.note(line)
     })

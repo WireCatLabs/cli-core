@@ -34,6 +34,7 @@ export interface ScorerInput {
   store: MessageStore
   /** `null` for a scan with no project, which only person ↔ person rules answer. */
   project: ScannedProject | null
+  /** The project's confirmed chats and people, and, within one scan, what the scan already found above threshold. */
   confirmed: { chats: string[]; people: string[] }
   /** Explicit; never a default account. */
   sources: AccountKey[]
@@ -49,6 +50,8 @@ export interface ScorerInput {
 export interface LinkScorer {
   readonly id: string
   readonly version: number
+  /** Reads `confirmed`, so a scan runs it again each time the links it spreads from grow. */
+  readonly spreads?: boolean
   candidates(input: ScorerInput): Promise<LinkCandidate[]>
 }
 

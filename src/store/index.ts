@@ -106,6 +106,17 @@ export {
   type MailFindingsCheck,
   type MailFindingsStore,
 } from "./mail-findings.js"
+export {
+  clearDamageMark,
+  type DamageMark,
+  damageMarkPath,
+  type HealthMark,
+  healthMarkPath,
+  markStoreDamaged,
+  readDamageMark,
+  readHealthMark,
+  recordDeepCheck,
+} from "./marks.js"
 export type { MeetingFindingsBatch, MeetingFindingsStore } from "./meeting-findings.js"
 export { MIGRATIONS, type Migration, migrate } from "./migrations.js"
 export { openCache } from "./open.js"

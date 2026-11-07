@@ -1,4 +1,5 @@
 import type { StoreHealth } from "./health.js"
+import type { DamageMark } from "./marks.js"
 
 /**
  * What a damaged store means, in the owner's words: one structure the CLIs render and the desktop app can show as it
@@ -29,8 +30,15 @@ export const isDerivedTable = (table: string, searchIndexes: readonly string[]):
 
 const WIRECAT_UNITS = ["memo-*", "mail-*", "tg-*", "max-*", "wirecat-*"]
 
-export const explainDamage = (health: StoreHealth, command: string): DamageExplanation | null => {
-  if (health.ok) return null
+const seen = (mark: DamageMark) => `\`${mark.command}\` found the store damaged at ${mark.at} (${mark.error})`
+
+/** `mark`: a run saw the damage; the quick check reads too little to see it, so it alone can make a store damaged. */
+export const explainDamage = (
+  health: StoreHealth,
+  command: string,
+  mark: DamageMark | null = null,
+): DamageExplanation | null => {
+  if (health.ok && !mark) return null
   const indexNames = (health.searchIndexes ?? []).map((index) => index.name)
   const badIndexes = (health.searchIndexes ?? []).filter((index) => !index.ok).map((index) => index.name)
   const tables = (health.damagedTables ?? []).map((one) => one.table).filter((table): table is string => table !== null)
@@ -39,14 +47,17 @@ export const explainDamage = (health: StoreHealth, command: string): DamageExpla
   const unopened = health.error !== undefined
   const json = (health.invalidJson ?? []).map(({ table, column }) => `${table}.${column}`)
 
-  const what = unopened
-    ? `the store file cannot be opened: ${health.error}`
-    : health.checked === "quick"
-      ? "the store file's header or schema is damaged"
-      : `the store file is damaged: ${health.problems ?? 0} problems` +
-        (sources.length ? ` in the data of ${named(sources)}` : "") +
-        (derived.length ? `${sources.length ? ", and" : " in"} the search data of ${named(derived)}` : "") +
-        (json.length ? `; values that are not valid JSON in ${named(json)}` : "")
+  const checked = health.ok
+    ? `${seen(mark as DamageMark)}; the quick check reads too little to see it, and a deep check that passes clears it`
+    : unopened
+      ? `the store file cannot be opened: ${health.error}`
+      : health.checked === "quick"
+        ? "the store file's header or schema is damaged"
+        : `the store file is damaged: ${health.problems ?? 0} problems` +
+          (sources.length ? ` in the data of ${named(sources)}` : "") +
+          (derived.length ? `${sources.length ? ", and" : " in"} the search data of ${named(derived)}` : "") +
+          (json.length ? `; values that are not valid JSON in ${named(json)}` : "")
+  const what = mark && !health.ok ? `${checked}; ${seen(mark)}` : checked
 
   const impact = [
     ...(sources.length
@@ -58,7 +69,9 @@ export const explainDamage = (health: StoreHealth, command: string): DamageExpla
     ...(json.length
       ? [`a read of a row with a broken JSON value fails ("malformed JSON"); a recovery clears those values`]
       : []),
-    "reads that do not touch a damaged page work; a write that touches one fails until the store is recovered",
+    mark
+      ? "reads that do not touch a damaged page work; every command that writes the store refuses until it is recovered"
+      : "reads that do not touch a damaged page work; a write that touches one fails until the store is recovered",
   ]
 
   return {
@@ -72,7 +85,7 @@ export const explainDamage = (health: StoreHealth, command: string): DamageExpla
       `journalctl --user ${WIRECAT_UNITS.map((unit) => `-u '${unit}'`).join(" ")} --since -14d | grep -i -e malformed -e corrupt -e 'disk full'`,
       "journalctl -k --since -14d | grep -i -e 'I/O error' -e nvme -e ata",
       `df -h ${health.path.replace(/\/[^/]*$/, "")}`,
-      ...(health.checked === "quick" ? [`${command} store recover`] : []),
+      ...(health.checked === "quick" || health.ok ? [`${command} store recover`] : []),
     ],
     impact,
     externalUnaffected:

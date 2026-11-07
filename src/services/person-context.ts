@@ -3,7 +3,14 @@ import { formatLocator } from "../domain/locator.js"
 import type { ChatKind, Id, Message, Provider } from "../domain/models.js"
 import type { Event, EventFilter } from "../meetings/index.js"
 import { pickPerson } from "../resolve.js"
-import type { AccountKey, IdentityRef, LinkedIdentity, MessageStore, PersonRecord } from "../store/store.js"
+import type {
+  AccountKey,
+  IdentityRef,
+  LinkedIdentity,
+  MessageStore,
+  PersonRecord,
+  StoredAccount,
+} from "../store/store.js"
 import { messageOfEmail } from "../store/store.js"
 
 export const CONTEXT_MESSAGES = 10
@@ -48,8 +55,12 @@ export interface ContextEvent {
 /** `not_fetched`: nothing of its history was ever read into the store; `partial`: only some of it was. */
 export type NotReadReason = "not_fetched" | "partial"
 
+export type AccountScope = StoredAccount["scope"]
+
 export interface PersonContext {
   person: PersonRecord & { provider: Provider; id: Id }
+  /** Every account read, with its scope: only accounts of the scopes the caller may read. */
+  accounts: (AccountKey & { scope: AccountScope })[]
   shared: SharedChat[]
   /** Each way, the newest in a messenger dialog whatever `limits` says; mail only within them. */
   last: { fromThem: ContextMessage | null; fromMe: ContextMessage | null; fromThemAnywhere: ContextMessage | null }
@@ -72,6 +83,11 @@ export interface ContextOptions {
   since?: number
   /** ms: what splits upcoming events from past ones; the clock when absent. */
   now?: number
+  /**
+   * The account scopes read; the asked account's own scope when absent. One exact email address joins a personal
+   * and a work contact into one person, so a personal account must not read that person's work mail by default.
+   */
+  scopes?: readonly AccountScope[]
 }
 
 export const toContext = (key: AccountKey, message: Message, chatTitle: string | null): ContextMessage => ({
@@ -161,17 +177,42 @@ const eventsOnce = async (
   return { items, cut: true }
 }
 
+const nameOf = ({ provider, account }: AccountKey) => `${provider}:${account}`
+
+/** The stored accounts of `scopes`, or of the asked account's own scope; the asked account must be stored. */
+export const readableAccounts = async (
+  store: MessageStore,
+  asked: AccountKey,
+  scopes?: readonly AccountScope[],
+): Promise<StoredAccount[]> => {
+  const stored = await store.accounts.storedAccounts()
+  const own = stored.find((one) => nameOf(one) === nameOf(asked))
+  if (!own || (asked.scope !== undefined && asked.scope !== own.scope))
+    throw new CliError("not_found", `no ${asked.provider} account ${asked.account} in the store`)
+  const allowed = scopes ?? [own.scope]
+  return stored.filter((one) => allowed.includes(one.scope))
+}
+
 /**
- * The accounts each identity is read in: for the messenger asked, only the account asked about — a
- * second account of the same messenger is somebody else's view; for a linked messenger, every account
- * of this store that saw that identity.
+ * The accounts each identity is read in, among `readable` only: for the messenger asked, only the account asked
+ * about — a second account of the same messenger is somebody else's view; for a linked messenger, every readable
+ * account of this store that saw that identity.
  */
-export const readsOf = (record: PersonRecord, asked: AccountKey): { key: AccountKey; identity: LinkedIdentity }[] =>
-  record.identities.flatMap((identity) =>
-    (identity.provider === asked.provider ? [asked.account] : identity.accounts)
-      .filter((account) => identity.accounts.includes(account))
-      .map((account) => ({ key: { provider: identity.provider, account }, identity })),
+export const readsOf = (
+  record: PersonRecord,
+  asked: AccountKey,
+  readable: readonly StoredAccount[],
+): { key: AccountKey; scope: AccountScope; identity: LinkedIdentity }[] => {
+  const scopeOf = new Map(readable.map((one) => [nameOf(one), one.scope]))
+  return record.identities.flatMap((identity) =>
+    (identity.provider === asked.provider ? [asked.account] : identity.accounts).flatMap((account) => {
+      const scope = scopeOf.get(nameOf({ provider: identity.provider, account }))
+      return identity.accounts.includes(account) && scope !== undefined
+        ? [{ key: { provider: identity.provider, account }, scope, identity }]
+        : []
+    }),
   )
+}
 
 /**
  * What the store knows about one person, across every identity linked to them. Reads the store
@@ -186,17 +227,22 @@ export const personContext = async (
   const found = pickPerson(reference, await store.people.people(asked.provider, { account: asked.account }))
   const record = await store.people.personOf({ provider: asked.provider, id: found.id })
   if (!record) throw new CliError("not_found", `no person ${found.id} in the store`)
+  const readable = await readableAccounts(store, asked, options.scopes)
   return {
     person: { ...record, provider: asked.provider, id: found.id },
-    ...(await recordContext(store, record, readsOf(record, asked), options)),
+    ...(await recordContext(store, record, readsOf(record, asked, readable), readable, options)),
   }
 }
 
-/** `personContext` of a person already found, read in the identities and accounts `reads` names. */
+/**
+ * `personContext` of a person already found, read in the identities and accounts `reads` names; their calendar
+ * events in every calendar account of `readable`.
+ */
 export const recordContext = async (
   store: MessageStore,
   record: PersonRecord,
-  reads: { key: AccountKey; identity: LinkedIdentity }[],
+  reads: { key: AccountKey; scope: AccountScope; identity: LinkedIdentity }[],
+  readable: readonly StoredAccount[],
   { messages = CONTEXT_MESSAGES, bytes = CONTEXT_BYTES, since, now = Date.now() }: ContextOptions = {},
 ): Promise<Omit<PersonContext, "person">> => {
   const recent = (message: ContextMessage) => since === undefined || Date.parse(message.timestamp) >= since
@@ -267,13 +313,19 @@ export const recordContext = async (
   }
 
   const personId = Number(record.uid)
-  const upcoming = await eventsOnce(store, { personId, from: now }, messages)
+  const calendars: StoredAccount[] = []
+  for (const one of readable) if ((await store.calendar.calendars(one.id)).length) calendars.push(one)
+  const accountIds = calendars.map(({ id }) => id)
+  const nothing = { items: [], cut: false }
+  const upcoming = accountIds.length ? await eventsOnce(store, { personId, accountIds, from: now }, messages) : nothing
   const upcomingIds = new Set(upcoming.items.map(({ id }) => id))
-  const past = await eventsOnce(
-    store,
-    { personId, to: now, newest: true, ...(since === undefined ? {} : { from: since }) },
-    messages,
-  )
+  const past = accountIds.length
+    ? await eventsOnce(
+        store,
+        { personId, accountIds, to: now, newest: true, ...(since === undefined ? {} : { from: since }) },
+        messages,
+      )
+    : nothing
   cut ||= upcoming.cut || past.cut
 
   direct.sort(newestFirst)
@@ -295,7 +347,15 @@ export const recordContext = async (
   cut ||= direct.length > messages || groups.length > messages || mentions.length > messages
   const kept = withinBytes(lists, bytes)
 
+  const read = [
+    ...reads.map(({ key, scope }) => ({ ...key, scope })),
+    ...calendars.map(({ provider, account, scope }) => ({ provider, account, scope })),
+  ]
+  const accounts = [...new Map(read.map((one) => [nameOf(one), one])).values()].sort((a, b) =>
+    nameOf(a).localeCompare(nameOf(b)),
+  )
   return {
+    accounts,
     shared: shared.sort((a, b) => Date.parse(b.lastMessageAt ?? "") - Date.parse(a.lastMessageAt ?? "")),
     last: {
       fromThem: each.find((message) => !message.outgoing) ?? null,
