@@ -17,6 +17,22 @@ shape of this file.
   `decision.token-unknown`, `-used`, `-cancelled`, `-expired` or `-mismatch`. `callbackDataOf` and
   `parseCallbackData` give and read the 27-byte `wcr1:<token>` data of a button, strictly. Forward-only,
   `minCompatible` stays 34.
+- **`@wirecat/cli-core/crm` exports the field lookup the CRM writes use**, so a CRM CLI drops its copy:
+  `foldFieldName`, `fieldNamed`, `optionOf`, `unknownField`, `fieldPairsOf` and the `NamedField` type they read.
+  `foldName` is exported from the package root.
+- **`MeetingCommandDeps.newFileOutput`, `writesNewFileOnlyWith` and `writeNewFile`**, so `meetings export` runs under
+  the read-only lock and over MCP's `read` tool. It was refused under `<PREFIX>_READ_ONLY` even when it only printed.
+  A CLI that passes `newFileOutput: writesNewFileOnlyWith` and a `writeFile` that refuses a file that exists, such as
+  `writeNewFile`, gets an export that is a read without `--output` and, with it, only ever adds a file.
+
+### Changed — may break callers
+
+- **`foldName` folds ё into е**, so a chat, a person and a CRM field typed with е find the one named with ё. A name
+  that matched one chat or person exactly may now match two (`Алена` and `Алёна`); that is refused with both
+  candidates, as any other ambiguous name is. й stays apart from и. The CRM field lookup now folds on top of
+  `foldName`, so it also takes composed and decomposed letters as one.
+- **`meetings export --output` is the owner's only**: an MCP tool no longer offers it (an agent would choose where on
+  the owner's disk to write) and gets the export in the answer, as `events export` does.
 
 ### Fixed
 

@@ -30,7 +30,13 @@ export {
   type CrmWritten,
   closeCrmItem,
   createCrmItem,
+  fieldNamed,
+  fieldPairsOf,
+  foldFieldName,
   moveCrmItem,
+  type NamedField,
+  optionOf,
   removeCrmItem,
+  unknownField,
   updateCrmItem,
 } from "./writes.js"

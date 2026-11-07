@@ -29,6 +29,7 @@ import {
   type CrmWrites,
   closeCrmItem,
   createCrmItem,
+  fieldPairsOf,
   moveCrmItem,
   removeCrmItem,
   updateCrmItem,
@@ -187,13 +188,6 @@ const collect = (value: string, previous: string[] = []) => {
   if (value.indexOf("=") < 1) throw new InvalidArgumentError("expected key=value")
   return [...previous, value]
 }
-
-/** `--field` as typed, split at the first `=`. */
-const pairsOf = (typed: readonly string[]): [string, string][] =>
-  typed.map((pair) => {
-    const at = pair.indexOf("=")
-    return [pair.slice(0, at), pair.slice(at + 1)]
-  })
 
 const integer = (most: number) => (value: string) => {
   if (!/^[1-9]\d*$/.test(value) || Number(value) > most) throw new InvalidArgumentError(`expected 1 to ${most}`)
@@ -459,7 +453,7 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
     type Typed = Omit<CrmFieldsInput, "custom"> & { field?: string[]; operationId?: string }
     const inputOf = ({ field, operationId: _id, ...rest }: Typed): CrmFieldsInput => ({
       ...Object.fromEntries(Object.entries(rest).filter(([, value]) => value !== undefined)),
-      ...(field?.length ? { custom: pairsOf(field) } : {}),
+      ...(field?.length ? { custom: fieldPairsOf(field) } : {}),
     })
     const idOf = (opts: { operationId?: string }) =>
       opts.operationId === undefined ? {} : { operationId: opts.operationId }

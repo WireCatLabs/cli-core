@@ -16,14 +16,15 @@ export const isId = (reference: string): boolean => /^-?\d+$/.test(reference.tri
 
 /**
  * A name as matching compares it. A copied emoji often carries a presentation mark (U+FE0F, U+FE0E) or a joiner
- * (U+200D) the typed one lacks, and a letter may come composed or as letter plus accent; none of that is a different
- * name.
+ * (U+200D) the typed one lacks, a letter may come composed or as letter plus accent, and Russian is mostly typed with
+ * е for ё; none of that is a different name. Only ё is folded: stripping every mark would also merge й into и.
  */
 export const foldName = (name: string): string =>
   name
     .normalize("NFC")
     .replace(/[\uFE0E\uFE0F\u200D]/g, "")
     .toLowerCase()
+    .replaceAll("ё", "е")
 
 /**
  * A name matched as a fragment — and **an ambiguous one is an error, not a guess**: sending to the

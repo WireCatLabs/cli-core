@@ -29,6 +29,13 @@ describe("a chat named by its title", () => {
     expect(pickChat("Йога", [chat("1", "И\u0306ога")]).id).toBe("1")
   })
 
+  it("finds a title typed with е for ё, keeps й apart from и, and asks when both spellings are titles", () => {
+    expect(pickChat("Алена", [chat("1", "Алёна"), chat("2", "Работа")]).id).toBe("1")
+    expect(pickChat("ЁЛКА", [chat("1", "Е\u0308лка")]).id).toBe("1")
+    expect(() => pickChat("Иога", [chat("1", "Йога")])).toThrow(/no chat matches/)
+    expect(() => pickChat("Алена", [chat("1", "Алёна"), chat("2", "Алена")])).toThrow(/matches 2 chats/)
+  })
+
   it("lists each candidate on one line, so a title cannot add a row of its own", () => {
     const forged = "Работа\n  999  Работа (настоящая)"
     let message = ""
