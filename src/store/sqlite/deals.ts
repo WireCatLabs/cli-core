@@ -12,6 +12,7 @@ import {
   type StageOutcome,
 } from "../../domain/deals.js"
 import { currencyOf, formatDecimal, minorUnits, scaleOf } from "../../domain/money.js"
+import { notOverriddenSql } from "../../domain/relations.js"
 import { fold } from "../normalize.js"
 import type { AccountKey } from "../types.js"
 import { type ProposedByFilter, proposedBySql } from "./actors.js"
@@ -253,7 +254,7 @@ export const dealOperationsOver = (context: StoreContext) => {
     database
       .prepare(
         `SELECT to_id, role FROM links WHERE from_type = ? AND from_id = ? AND kind = ${linkKind("related-to")} ` +
-          "AND to_type = 'person' AND to_id IS NOT NULL AND deleted_at IS NULL ORDER BY id",
+          `AND to_type = 'person' AND to_id IS NOT NULL AND deleted_at IS NULL AND ${notOverriddenSql("links")} ORDER BY id`,
       )
       .all(kind, id)
       .map((row) => ({ ...(partyOf("person", row.to_id) as Party), role: row.role as DealRole }))

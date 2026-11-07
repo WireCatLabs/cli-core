@@ -555,25 +555,35 @@ it("stops a source that pages its users itself as partial once the budget is spe
   expect(await store.people.personOf({ provider: "email", id: "emma@northstar.example" })).toBeUndefined()
 })
 
-it("takes the owner's role change on a CRM contact as his own link beside the CRM's, with no churn", async () => {
+it("answers the owner's edits of a CRM contact with one override, changed in place, and keeps the CRM's row", async () => {
   const { path, store, sync, person } = await acme()
   await sync()
   const alice = await person("alice@acme.example")
   const acmeRef = `organization:${(await store.knowledge.organizations()).find(({ name }) => name === "Acme Ltd")?.id}`
-  const [reported] = (await store.knowledge.relations(null, alice)).filter(({ to }) => to === acmeRef)
-  const owned = await store.knowledge.updateRelation(null, reported?.id as string, { role: "manager", by: "owner" })
-  expect(owned).toMatchObject({ role: "manager", standing: "confirmed" })
-  expect(owned.id).not.toBe(reported?.id)
+  const toAcme = async () => (await store.knowledge.relations(null, alice)).filter(({ to }) => to === acmeRef)
+  const [reported] = await toAcme()
+  const crm = reported?.id as string
+  const first = await store.knowledge.updateRelation(null, crm, { role: "manager", by: "owner" })
+  const second = await store.knowledge.updateRelation(null, crm, { position: "Head of buying", by: "owner" })
+  const third = await store.knowledge.updateRelation(null, first.id, { startsAt: Date.UTC(2024, 0, 1), by: "owner" })
+  expect(new Set([first.id, second.id, third.id]).size).toBe(1)
+  expect(third).toMatchObject({ role: "manager", position: "Head of buying", standing: "confirmed" })
+  expect((await toAcme()).map(({ id }) => id)).toEqual([first.id])
   await sync()
   const before = await revisions(path)
   await sync()
   await sync()
   expect(await revisions(path)).toBe(before)
-  const roles = (await store.knowledge.relations(null, alice))
-    .filter(({ to }) => to === acmeRef)
-    .map(({ role, standing }) => [role, standing])
-  expect(roles.sort()).toEqual([
-    ["contact", "reported"],
-    ["manager", "confirmed"],
+  expect((await toAcme()).map(({ id }) => id)).toEqual([first.id])
+  expect((await store.knowledge.listRelations({ from: alice, to: acmeRef })).items.map(({ id }) => id)).toEqual([
+    first.id,
   ])
+
+  const ended = await store.knowledge.endRelation(null, crm, Date.UTC(2025, 0, 1), "owner")
+  expect(ended).toMatchObject({ id: first.id, standing: "ended" })
+  expect((await toAcme()).map(({ id, standing }) => [id, standing])).toEqual([[first.id, "ended"]])
+
+  await store.knowledge.removeRelation(null, first.id, "owner")
+  await sync()
+  expect((await toAcme()).map(({ id, role, standing }) => [id, role, standing])).toEqual([[crm, "contact", "reported"]])
 })

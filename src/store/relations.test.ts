@@ -3,6 +3,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, expect, it } from "vitest"
 import { inverseOf, standingOf } from "../domain/relations.js"
+import { openCache } from "./open.js"
 import { type MessageStore, openStore } from "./store.js"
 
 const stores: MessageStore[] = []
@@ -11,13 +12,14 @@ afterEach(async () => {
 })
 
 const fixture = async () => {
-  const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "relations-")), "store.db") })
+  const path = join(mkdtempSync(join(tmpdir(), "relations-")), "store.db")
+  const store = await openStore({ path })
   stores.push(store)
   const acme = await store.knowledge.addOrganization({ kind: "company", name: "Acme Ltd" })
   const northstar = await store.knowledge.addOrganization({ kind: "company", name: "Northstar Consulting" })
   const alice = `person:${(await store.people.add({ name: "Alice" })).uid}`
   const bob = `person:${(await store.people.add({ name: "Bob" })).uid}`
-  return { store, acme: acme.ref, northstar: northstar.ref, alice, bob }
+  return { path, store, acme: acme.ref, northstar: northstar.ref, alice, bob }
 }
 
 const role = { code: "validation_error", details: { reason: "relationship.role-unknown" } }
@@ -190,4 +192,53 @@ it("takes the owner's own roles on a list beside the built-in ones, and keeps th
   await store.knowledge.removeRelation(null, member.id, "owner")
   expect((await store.knowledge.removeRole("organization", "board-member")).some(({ builtIn }) => !builtIn)).toBe(false)
   expect((await store.knowledge.roles("project")).every(({ builtIn }) => builtIn)).toBe(true)
+})
+
+it("checks a proposal's role against the role lists when it is approved, and counts pending ones as uses", async () => {
+  const { store, acme, alice } = await fixture()
+  await store.knowledge.addRole("organization", "board-member")
+  const proposal = await store.knowledge.proposeRelation(
+    null,
+    { from: alice, to: acme, kind: "member-of", role: "board-member" },
+    { bot: "claude" },
+  )
+  await expect(store.knowledge.removeRole("organization", " board-member ")).rejects.toMatchObject({
+    details: { reason: "relationship.role-in-use", count: 1 },
+  })
+  await store.knowledge.decideLinkProposal(proposal.id, { confirm: false, by: "owner" })
+  await store.knowledge.removeRole("organization", " board-member ")
+  const again = await store.knowledge.proposeRelation(
+    null,
+    { from: alice, to: acme, kind: "member-of", role: "employee" },
+    { bot: "claude" },
+  )
+  const stale = await store.knowledge.relate(null, {
+    by: "owner",
+    from: alice,
+    to: acme,
+    kind: "member-of",
+    role: "adviser",
+  })
+  const update = await store.knowledge.updateRelation(null, stale.id, { role: "employee", by: { bot: "claude" } })
+  expect(update).toMatchObject({ kind: "relationship_update" })
+  await store.knowledge.decideLinkProposal(again.id, { confirm: true, by: "owner" })
+  await expect(store.knowledge.decideRelationUpdate(update.id, { confirm: true, by: "owner" })).rejects.toMatchObject({
+    details: { reason: "relationship.exists" },
+  })
+})
+
+it("refuses to approve a proposal whose role left the lists since it was made", async () => {
+  const { path, store, acme, alice } = await fixture()
+  await store.knowledge.addRole("organization", "trustee")
+  const proposal = await store.knowledge.proposeRelation(
+    null,
+    { from: alice, to: acme, kind: "member-of", role: "trustee" },
+    { bot: "claude" },
+  )
+  const database = await openCache(path)
+  database.prepare("DELETE FROM store_settings WHERE key = 'relationships.roles.organization'").run()
+  database.close()
+  await expect(store.knowledge.decideLinkProposal(proposal.id, { confirm: true, by: "owner" })).rejects.toMatchObject({
+    details: { reason: "relationship.role-unknown" },
+  })
 })

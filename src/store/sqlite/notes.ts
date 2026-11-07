@@ -9,7 +9,7 @@ import {
   isDocumentAccountProvider,
 } from "../../domain/providers.js"
 import { parseReference } from "../../domain/references.js"
-import { isRelationKind } from "../../domain/relations.js"
+import { isRelationKind, type RelationshipColumns } from "../../domain/relations.js"
 import { normalizeTag } from "../../domain/tags.js"
 import type { Section } from "../../readers/types.js"
 import { assertMayWithdraw, type Decider } from "../decisions.js"
@@ -73,7 +73,7 @@ export interface Note {
   deletedAt: string | null
 }
 
-export interface Link {
+export interface Link extends RelationshipColumns {
   id: string
   from: string
   /** `null` while the link names nobody the store knows, or more than one. */
@@ -89,15 +89,6 @@ export interface Link {
   provenance: string | null
   confirmed: boolean
   createdAt: string
-  /** A relationship a source account reported: that account's `accounts` row. */
-  accountId?: number
-  /** When a relationship held, epoch ms; `endsAt` exclusive. */
-  startsAt?: number
-  endsAt?: number
-  /** The source stopped reporting the relationship. */
-  deletedAt?: number
-  /** A job title beside a relationship (`metadata.position`), never its role. */
-  position?: string
 }
 
 export interface LinkListFilter {
@@ -278,7 +269,9 @@ const thingRef = (database: CacheDatabase, type: unknown, id: unknown): string |
 
 export const linkOf = (database: CacheDatabase, row: Row): Link => {
   const metadata =
-    row.metadata == null ? {} : (JSON.parse(String(row.metadata)) as { provenance?: string; position?: unknown })
+    row.metadata == null
+      ? {}
+      : (JSON.parse(String(row.metadata)) as { provenance?: string; position?: unknown; overrides?: unknown })
   return {
     id: String(row.id),
     from: thingRef(database, row.from_type, row.from_id) as string,
@@ -298,6 +291,7 @@ export const linkOf = (database: CacheDatabase, row: Row): Link => {
     ...(row.ends_at == null ? {} : { endsAt: Number(row.ends_at) }),
     ...(row.deleted_at == null ? {} : { deletedAt: Number(row.deleted_at) }),
     ...(typeof metadata.position === "string" ? { position: metadata.position } : {}),
+    ...(typeof metadata.overrides === "number" ? { overrides: metadata.overrides } : {}),
   }
 }
 
@@ -404,10 +398,7 @@ export const insertLink = (context: StoreContext, input: LinkInput): Link => {
   const position = input.position === undefined ? undefined : textOf(input.position, "a position", 200)
   if (input.startsAt !== undefined && input.endsAt !== undefined && input.endsAt <= input.startsAt)
     throw new CliError("validation_error", "a relationship ends after it starts")
-  const metadata = {
-    ...(provenance === undefined ? {} : { provenance }),
-    ...(position === undefined ? {} : { position }),
-  }
+  const metadata = provenance === undefined && position === undefined ? null : JSON.stringify({ provenance, position })
   const row = database
     .prepare(
       "INSERT INTO links (from_type, from_id, to_type, to_id, kind, anchor, source, target_text, target_folded, role, evidence, " +
@@ -426,7 +417,7 @@ export const insertLink = (context: StoreContext, input: LinkInput): Link => {
       targetText === null ? null : targetKey(targetText),
       input.role === undefined ? null : textOf(input.role, "a role", 200),
       input.evidence === undefined ? null : textOf(input.evidence, "evidence", 2000),
-      Object.keys(metadata).length ? JSON.stringify(metadata) : null,
+      metadata,
       input.confirmed === false ? 0 : 1,
       at,
       origin === "owner" ? "owner" : null,

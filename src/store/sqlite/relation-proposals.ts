@@ -6,6 +6,7 @@ import type { Author } from "./memories.js"
 import { insertLink, type Link, linkOf, purposeOf } from "./notes.js"
 import type { StoreContext } from "./open.js"
 import { type ProposedAction, proposalOperationsOver, proposerOfAction } from "./proposed-actions.js"
+import { checkStoredRole } from "./relation-roles.js"
 import { type Thing, thingOf } from "./things.js"
 import { write } from "./transaction.js"
 
@@ -104,8 +105,15 @@ export const relationProposalsOver = (context: StoreContext) => {
         at,
       )
   }
+  /** The role lists may have changed since a proposal was made: a role is checked when it is written. */
+  const checkedRole = (link: Link, role: RelationUpdate["role"]) => {
+    if (typeof role !== "string") return
+    const [fromType, , toType] = fromTo(link)
+    checkStoredRole(database, link.kind, fromType, toType, role)
+  }
   const applyUpdate = (link: Link, input: RelationUpdate): Link => {
     const changes = changesOf(input)
+    checkedRole(link, changes.role)
     if ("role" in changes) {
       const taken = database
         .prepare(
@@ -147,31 +155,72 @@ export const relationProposalsOver = (context: StoreContext) => {
     return linkOf(database, database.prepare("SELECT * FROM links WHERE id = ?").get(Number(link.id)) as Row)
   }
   /**
-   * The owner's change. On a link a source reported, the source's row stays for its sync to diff, and the owner's own
-   * confirmed link of the same pair and kind takes the change: several roles per pair are allowed.
+   * The owner's change. On a link a source reported, the source's row stays for its sync to diff, and one owner link
+   * overrides it (`metadata.overrides`): made by the first change, changed in place by every later one. Reads show the
+   * override instead of the source's row.
    */
   const ownerUpdate = (link: Link, input: RelationUpdate): Link => {
     if (link.accountId === undefined || link.confirmed) return applyUpdate(link, input)
+    const held = database
+      .prepare(
+        "SELECT * FROM links WHERE kind = ? AND from_type = ? AND from_id = ? AND to_type = ? AND to_id = ? " +
+          "AND account_id IS NULL AND json_extract(metadata, '$.overrides') = ?",
+      )
+      .get(...endsOf(link), Number(link.id))
+    if (held) return applyUpdate(linkOf(database, held), input)
     const changes = changesOf(input)
-    const pick = <K extends keyof RelationUpdate>(key: K, held: RelationUpdate[K]) =>
-      key in changes ? changes[key] : held
-    const role = pick("role", link.role)
-    const owned = insertLink(context, {
-      from: link.from,
-      to: String(link.to),
-      kind: link.kind,
-      origin: "owner",
-      by: "owner",
-      ...(role == null ? {} : { role }),
+    const pick = <K extends keyof RelationUpdate>(key: K, kept: RelationUpdate[K]) =>
+      key in changes ? changes[key] : kept
+    const role = pick("role", link.role) ?? null
+    const at = now()
+    const metadata = JSON.stringify({
+      overrides: Number(link.id),
+      ...(link.position ? { position: link.position } : {}),
     })
-    const { role: _, ...rest } = {
-      ...changes,
-      position: pick("position", link.position ?? null),
-      startsAt: pick("startsAt", link.startsAt ?? null),
-      endsAt: pick("endsAt", link.endsAt ?? null),
-      purpose: pick("purpose", link.purpose),
-    }
-    return applyUpdate(owned, rest)
+    // An owner link of that role on the pair already (from `relate`) becomes the override rather than a second one.
+    const same = database
+      .prepare(
+        "SELECT id FROM links WHERE kind = ? AND from_type = ? AND from_id = ? AND to_type = ? AND to_id = ? " +
+          "AND account_id IS NULL AND anchor IS NULL AND ifnull(role, '') = ?",
+      )
+      .get(...endsOf(link), role ?? "")
+    const id = same
+      ? Number(same.id)
+      : Number(
+          database
+            .prepare(
+              "INSERT INTO links (from_type, from_id, to_type, to_id, kind, role, purpose, source, metadata, confirmed, " +
+                "starts_at, ends_at, created_at, author, updated_at) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, 'owner', ?, 1, ?, ?, ?, 'owner', ?) RETURNING id",
+            )
+            .get(
+              ...fromTo(link),
+              link.kind,
+              role,
+              link.purpose,
+              metadata,
+              link.startsAt ?? null,
+              link.endsAt ?? null,
+              at,
+              at,
+            )?.id,
+        )
+    if (same)
+      database
+        .prepare("UPDATE links SET metadata = json_set(coalesce(metadata, '{}'), '$.overrides', ?) WHERE id = ?")
+        .run(Number(link.id), id)
+    const { role: _, ...rest } = changes
+    const owned = linkOf(database, database.prepare("SELECT * FROM links WHERE id = ?").get(id) as Row)
+    return Object.keys(rest).length ? applyUpdate(owned, rest) : owned
+  }
+  const fromTo = (link: Link) => {
+    const from = thingOf(database, link.from) as Thing
+    const to = thingOf(database, String(link.to)) as Thing
+    return [from.type, from.id, to.type, to.id] as const
+  }
+  const endsOf = (link: Link) => {
+    const [fromType, fromId, toType, toId] = fromTo(link)
+    return [link.kind, fromType, fromId, toType, toId] as const
   }
   /**
    * A scan's newer score on a pending proposal, in place under the same id. A rule's own row takes the new score,
@@ -298,6 +347,7 @@ export const relationProposalsOver = (context: StoreContext) => {
 
     proposeUpdate: (link: Link, input: RelationUpdate & { reason?: string }, by: Exclude<Author, "owner">) => {
       const changes = changesOf(input)
+      checkedRole(link, changes.role)
       return write(database, () => {
         const from = thingOf(database, link.from)
         const held = database
@@ -382,6 +432,9 @@ export const relationProposalsOver = (context: StoreContext) => {
           endsAt?: number
         }
         const key = proposal.kind === "key_document"
+        const ends = key ? undefined : [thingOf(database, String(payload.from)), thingOf(database, String(payload.to))]
+        if (ends?.[0] && ends[1] && payload.role !== undefined)
+          checkStoredRole(database, payload.kind ?? "member-of", ends[0].type, ends[1].type, payload.role)
         const link = insertLink(context, {
           from: String(key ? payload.ref : payload.from),
           to: String(key ? payload.project : payload.to),

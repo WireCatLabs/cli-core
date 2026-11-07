@@ -1,6 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import {
   inverseOf,
+  notOverriddenSql,
   RELATION_KINDS,
   type RelationKind,
   rolesOf,
@@ -124,7 +125,7 @@ export const relationListOver = (context: StoreContext): RelationList => {
               CASE WHEN ends_at IS NOT NULL AND ends_at <= ? THEN 'ended' WHEN confirmed = 1 THEN 'confirmed'
                 WHEN deleted_at IS NOT NULL THEN 'ended' WHEN account_id IS NOT NULL THEN 'reported'
                 ELSE 'proposed' END AS standing
-            FROM links WHERE kind IN (${KINDS}) AND to_id IS NOT NULL
+            FROM links WHERE kind IN (${KINDS}) AND to_id IS NOT NULL AND ${notOverriddenSql("links")}
             UNION ALL
             SELECT 'proposal', id, target_type, target_id, ${typeOfRef("json_extract(payload, '$.to')")},
               ${idOfRef("json_extract(payload, '$.to')")}, json_extract(payload, '$.kind'),

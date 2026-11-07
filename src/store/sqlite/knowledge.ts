@@ -2,7 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import { type QueryAst, walkQuery } from "@wirecat/cli-base/query"
 import { parseLocator } from "../../domain/locator.js"
 import { formatReference, parseReference, type Reference } from "../../domain/references.js"
-import { checkEnds, isSymmetric } from "../../domain/relations.js"
+import { checkEnds, isSymmetric, notOverriddenSql } from "../../domain/relations.js"
 import { normalizeTag } from "../../domain/tags.js"
 import { normalizeVocabularyName } from "../../domain/vocabulary.js"
 import { formatMeetingReference } from "../../meetings/index.js"
@@ -30,7 +30,7 @@ import {
   relationProposalsOver,
   type Scored,
 } from "./relation-proposals.js"
-import { checkStoredRole, type RelationReads, relationReadsOver } from "./relation-roles.js"
+import { checkStoredRole, type RelationReads, relationReadsOver } from "./relation-reads.js"
 import type { TagCreationOptions } from "./tag-creation.js"
 import {
   addTags as addThingTags,
@@ -840,10 +840,7 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
       input: RelationUpdate & { by: Author; reason?: string },
     ) => {
       checked(key)
-      const row = relation(id)
-      const link = linkOf(database, row)
-      if (typeof input.role === "string")
-        checkStoredRole(database, link.kind, String(row.from_type), String(row.to_type), input.role.trim())
+      const link = linkOf(database, relation(id))
       if (input.by === "owner") return relationOf(proposals.update(link, input))
       return proposals.proposeUpdate(link, input, input.by)
     }) as KnowledgeStore["updateRelation"],
@@ -866,7 +863,7 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
       return database
         .prepare(
           // Live ones first: a long history of withdrawn links never pushes them past the cap.
-          `${RELATIONS} AND (? IS NULL OR (from_type=? AND from_id=?) OR (to_type=? AND to_id=?)) ORDER BY deleted_at IS NOT NULL, created_at, id LIMIT 500`,
+          `${RELATIONS} AND ${notOverriddenSql("links")} AND (? IS NULL OR (from_type=? AND from_id=?) OR (to_type=? AND to_id=?)) ORDER BY deleted_at IS NOT NULL, created_at, id LIMIT 500`,
         )
         .all(thing?.type ?? null, thing?.type ?? null, thing?.id ?? null, thing?.type ?? null, thing?.id ?? null)
         .map((row) => relationOf(linkOf(database, row)))
@@ -877,7 +874,7 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
       const link = linkOf(database, row)
       assertMayDecide({ id: `link:${id}`, proposedBy: UNVERIFIED }, by, context.decisions)
       write(database, () => {
-        proposals.rejected(link, by)
+        if (link.overrides === undefined) proposals.rejected(link, by)
         database.prepare("UPDATE links SET updated_at = ? WHERE id = ?").run(now(), Number(id))
         database.prepare("DELETE FROM links WHERE id = ?").run(Number(id))
       })

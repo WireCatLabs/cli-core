@@ -134,6 +134,21 @@ export interface StandingFields {
   deletedAt?: number | null
 }
 
+/** What a `links` row of a relationship kind holds beyond any link, when set. */
+export interface RelationshipColumns {
+  /** The `accounts` row of the source that reported it. */
+  accountId?: number
+  /** When it held, epoch ms; `endsAt` exclusive. */
+  startsAt?: number
+  endsAt?: number
+  /** The source stopped reporting it. */
+  deletedAt?: number
+  /** A job title beside it (`metadata.position`), never its role. */
+  position?: string
+  /** The source's link this owner link overrides (`metadata.overrides`). */
+  overrides?: number
+}
+
 /** The owner's confirmation outlives a source that stopped reporting it; only its own end date ends it. */
 export const standingOf = (link: StandingFields, now: number): Standing => {
   if (link.endsAt != null && link.endsAt <= now) return "ended"
@@ -146,6 +161,15 @@ export const standingOf = (link: StandingFields, now: number): Standing => {
 export const isUsable = (standing: Standing): boolean => standing === "confirmed" || standing === "reported"
 
 export const usableLink = (link: StandingFields, now: number): boolean => isUsable(standingOf(link, now))
+
+/**
+ * The `links` row aliased `alias` has no owner link overriding it (`metadata.overrides`, an owner's edit of a link a
+ * source reported): where one does, the override is the answer.
+ */
+export const notOverriddenSql = (alias: string): string =>
+  `NOT EXISTS (SELECT 1 FROM links override WHERE override.kind = ${alias}.kind AND override.from_type = ${alias}.from_type ` +
+  `AND override.from_id = ${alias}.from_id AND override.to_type = ${alias}.to_type AND override.to_id = ${alias}.to_id ` +
+  `AND json_extract(override.metadata, '$.overrides') = ${alias}.id)`
 
 /** `usableLink` as SQL over the `links` row aliased `alias`; without `now` an end date is not checked. */
 export const usableLinkSql = (alias: string, now?: number): string =>

@@ -2,7 +2,6 @@ import { CliError } from "@wirecat/cli-base"
 import { checkRole, ROLE_LISTS, type RoleList, roleListOf } from "../../domain/relations.js"
 import type { CacheDatabase } from "../driver.js"
 import type { StoreContext } from "./open.js"
-import { type RelationList, relationListOver } from "./relation-list.js"
 import { write } from "./transaction.js"
 
 export interface RelationRole {
@@ -56,17 +55,26 @@ export const checkStoredRole = (database: CacheDatabase, kind: string, from: str
   checkRole(kind, from, to, role, extraRolesOf(database, kind, from, to))
 
 /** The links whose role comes from this list: a person's on an organization or a project, a deal's or a lead's people. */
-const usedBy = (database: CacheDatabase, list: RoleList, role: string): number =>
-  Number(
+const usedBy = (database: CacheDatabase, list: RoleList, role: string): number => {
+  const links =
+    list === "deal"
+      ? "kind = 'related-to' AND from_type IN ('deal', 'lead')"
+      : `kind = 'member-of' AND from_type = 'person' AND to_type = '${list}'`
+  // A pending proposal would make the role a relationship's once approved: it counts as a use.
+  const proposals =
+    list === "deal"
+      ? "target_type IN ('deal', 'lead') AND json_extract(payload, '$.kind') = 'related-to'"
+      : `target_type = 'person' AND json_extract(payload, '$.kind') = 'member-of' AND json_extract(payload, '$.to') LIKE '${list}:%'`
+  return Number(
     database
       .prepare(
-        "SELECT count(*) AS n FROM links WHERE role = ? AND " +
-          (list === "deal"
-            ? "kind = 'related-to' AND from_type IN ('deal', 'lead')"
-            : `kind = 'member-of' AND from_type = 'person' AND to_type = '${list}'`),
+        `SELECT (SELECT count(*) FROM links WHERE role = ? AND ${links}) + (SELECT count(*) FROM proposed_actions ` +
+          `WHERE status = 'proposed' AND ${proposals} AND ((kind = 'relationship' AND json_extract(payload, '$.role') = ?) ` +
+          "OR (kind = 'relationship_update' AND json_extract(payload, '$.changes.role') = ?))) AS n",
       )
-      .get(role)?.n,
+      .get(role, role, role)?.n,
   )
+}
 
 export const relationRolesOver = ({ database, now }: StoreContext): RelationRoles => {
   const all = (list: RoleList): RelationRole[] => [
@@ -95,9 +103,10 @@ export const relationRolesOver = ({ database, now }: StoreContext): RelationRole
         save(list, [...ownerRolesOf(database, list), { id: role, label: text }])
         return all(list)
       }),
-    removeRole: async (name, id) =>
+    removeRole: async (name, given) =>
       write(database, () => {
         const list = listOf(name)
+        const id = given.trim()
         if ((ROLE_LISTS[list] as readonly string[]).includes(id))
           throw new CliError("validation_error", `${id} is a built-in ${list} role and stays`, {
             reason: "relationship.role-built-in",
@@ -118,11 +127,3 @@ export const relationRolesOver = ({ database, now }: StoreContext): RelationRole
       }),
   }
 }
-
-/** The knowledge store's relationship reads: the filtered list and the role lists. */
-export interface RelationReads extends RelationList, RelationRoles {}
-
-export const relationReadsOver = (context: StoreContext): RelationReads => ({
-  ...relationListOver(context),
-  ...relationRolesOver(context),
-})
