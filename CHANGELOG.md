@@ -7,6 +7,11 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **Accepts `@wirecat/cli-base` 0.81**, which adds the `contracts/wirecat.json` manifest and `--wcat-describe`
+  format 2 for WireCat Desktop. A CLI can now pin cli-base 0.81.0 next to this cli-core.
+
 ### Fixed
 
 - **People the owner separated stay apart.** An owner's unlink was checked only for the two identities being joined,
