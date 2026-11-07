@@ -3963,6 +3963,12 @@
             "wa": "wa backlog: mount the shared schedule command"
           }
         },
+        "--deliver-to": {
+          "in": ["max", "tg"],
+          "planned": {
+            "wa": "wa backlog: mount the shared schedule command"
+          }
+        },
         "--every": {
           "in": ["max", "tg"],
           "planned": {
@@ -3992,12 +3998,6 @@
           "planned": {
             "wa": "wa backlog: mount the shared schedule command"
           }
-        },
-        "--deliver-to": {
-          "in": ["max", "tg"],
-          "planned": {
-            "wa": "wa backlog: mount the shared schedule command"
-          }
         }
       }
     },
@@ -4019,6 +4019,12 @@
             "wa": "wa backlog: mount the shared schedule command"
           }
         },
+        "--deliver-to": {
+          "in": ["max", "tg"],
+          "planned": {
+            "wa": "wa backlog: mount the shared schedule command"
+          }
+        },
         "--every": {
           "in": ["max", "tg"],
           "planned": {
@@ -4026,12 +4032,6 @@
           }
         },
         "--notify-on": {
-          "in": ["max", "tg"],
-          "planned": {
-            "wa": "wa backlog: mount the shared schedule command"
-          }
-        },
-        "--deliver-to": {
           "in": ["max", "tg"],
           "planned": {
             "wa": "wa backlog: mount the shared schedule command"
