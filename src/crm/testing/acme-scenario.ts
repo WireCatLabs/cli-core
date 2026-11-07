@@ -1,4 +1,5 @@
 import type { CrmUser } from "../../domain/crm.js"
+import { CRM_OPENS } from "../../domain/providers.js"
 import type { AccountKey, MessageStore } from "../../store/store.js"
 import { type CrmSyncReport, syncCrm } from "../index.js"
 import { type FakeCrmSource, fakeCrmSource } from "./source.js"
@@ -48,6 +49,7 @@ export interface AcmeScenario {
  * calls; the store is the caller's, and no real account is touched.
  */
 export const acmeScenario = async (store: MessageStore): Promise<AcmeScenario> => {
+  await store.accounts.registerProvider({ name: ACME_PORTAL.provider, kind: "crm", aliases: [], opens: CRM_OPENS })
   const crm = fakeCrmSource({ traits: { removedInChanges: true } })
   crm.put("organization", { externalId: "c1", name: "Acme Ltd" })
   crm.put("organization", { externalId: "my1", name: "Northstar Consulting", own: true })

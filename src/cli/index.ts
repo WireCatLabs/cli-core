@@ -9,6 +9,13 @@ export {
   type RefSummary,
   refLabel,
 } from "../domain/ref-summaries.js"
+/** The shared entities `person_context`, `organization_context`, `deal_context` and `deal_context.brief`. */
+export {
+  dealBrief as dealBriefSchema,
+  dealContext as dealContextSchema,
+  organizationContext as organizationContextSchema,
+  personContext as personContextSchema,
+} from "../entities/business-context.js"
 export { botTemplate } from "../entities/list-results.js"
 export { syncProgress } from "../entities/store-records.js"
 export { isCliFailure, isCommanderFailure, storeDamaged } from "../errors/failures.js"

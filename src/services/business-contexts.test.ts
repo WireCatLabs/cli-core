@@ -5,6 +5,7 @@ import * as v from "valibot"
 import { afterEach, describe, expect, it } from "vitest"
 import { snakeKeys } from "../cli/envelope.js"
 import { ACME_NOW, ACME_OPENED, ACME_TELEGRAM, acmeScenario } from "../crm/testing/index.js"
+import { kindIn } from "../domain/providers.js"
 import { ENTITIES } from "../entities/index.js"
 import { type MessageStore, openStore } from "../store/store.js"
 import { newestFirst, organizationsInCategory } from "./business-context.js"
@@ -31,6 +32,11 @@ const valid = (entity: keyof typeof ENTITIES, answer: unknown) => {
 
 const standings = (one: { roles: { role: string | null; standing: string }[] } | undefined) =>
   one?.roles.map(({ role, standing }) => `${role}:${standing}`)
+
+it("registers the scenario's CRM provider as a CRM", async () => {
+  await scenario()
+  expect(kindIn("example-crm")).toBe("crm")
+})
 
 describe("organization context", () => {
   it("lists Acme's people and deals once each, with each role's standing, and Northstar as its supplier", async () => {
