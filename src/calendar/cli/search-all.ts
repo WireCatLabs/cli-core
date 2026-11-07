@@ -8,6 +8,7 @@ import { historySkipsOf } from "../../cli/messenger/history-gaps.js"
 import { allAnswer, offsetOf, SOURCE_SEARCHED, type SourceSearched } from "../../cli/messenger/search-answers.js"
 import { searchAllLine, searchAllOptions } from "../../cli/messenger/search-command.js"
 import { deniedKinds } from "../../cli/search-left-out.js"
+import { commandAt, rootOf } from "../../cli/steps.js"
 import { SAVE_HELP } from "../../meetings/index.js"
 import type { AppIdentity } from "../../ports/app.js"
 import { meaningLane } from "../../services/messages-meaning.js"
@@ -86,7 +87,7 @@ export const addSearchAll = (searches: Command, { within, app, zone, example }: 
             ...(opts.maxMeetings === undefined ? {} : { maxMeetings: opts.maxMeetings }),
             ...(run.locked ? { scope: { events: [run.account] } } : {}),
           },
-          { app },
+          { app, hintCommand: commandAt(rootOf(leaf), "models download") ? app.command : null },
           undefined,
           meaningLane({ env, messenger: { app }, store: async () => store }),
         )

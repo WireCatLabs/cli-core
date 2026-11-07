@@ -5,6 +5,14 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Fixed
+
+- **`search all` in a CRM or calendar CLI without `models` no longer names a download command it lacks.** Its notes
+  hint said `b24 models download e5-small`; a CLI with no `models download` now names the tools that have it (tg, max
+  or wa), which share the model folder.
+
 ## 0.602.0 — 07.11.2026
 
 ### Fixed

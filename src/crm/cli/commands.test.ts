@@ -228,6 +228,16 @@ describe("CRM commands", () => {
     ])
   })
 
+  it("search all in a CLI without models names the tools that have the download, never its own", async () => {
+    const { cli } = await setup()
+    await cli("sync")
+    const found = await cli("search", "all", "website")
+    const hints = JSON.stringify(found.missing)
+    expect(hints).toContain("e5-small is not downloaded")
+    expect(hints).not.toContain("crm models download")
+    expect(hints).toContain("(tg, max or wa)")
+  })
+
   it("pass the command lint every CLI runs on its tree", async () => {
     const definition = {
       app: APP,
