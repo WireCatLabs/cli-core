@@ -1,5 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import { parseLocator } from "../domain/locator.js"
+import { plainQuery } from "../search/lucene/plain.js"
 import { isQueryLimit } from "../search/lucene/types.js"
 import { TOTAL_CAP, totalOf } from "../search/total.js"
 import type { AccountKey, MessageStore, StoredHit } from "../store/store.js"
@@ -66,6 +67,7 @@ export const searchStore = async (
   meaning?: MeaningLane,
   rerank?: RerankLane,
 ): Promise<SearchFound> => {
+  if (request.text !== undefined) request = { ...request, text: plainQuery(request.text) }
   const offset = request.offset ?? 0
   if (!Number.isInteger(offset) || offset < 0 || offset > MAX_SEARCH_OFFSET)
     throw new CliError("validation_error", `offset takes a whole number from 0 to ${MAX_SEARCH_OFFSET}`)
