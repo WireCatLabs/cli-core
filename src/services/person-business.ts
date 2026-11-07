@@ -1,4 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
+import type { DealKind } from "../domain/deals.js"
 import { isUsable } from "../domain/relations.js"
 import type { AccountKey, MessageStore, PersonRecord } from "../store/store.js"
 import {
@@ -49,6 +50,8 @@ export interface CanonicalContextOptions extends ContextOptions {
   accounts?: AccountKey[]
   /** Items per business section. */
   limit?: number
+  /** The kinds the profile denies: no deal or lead of theirs is named. */
+  deniedKinds?: readonly DealKind[]
 }
 
 export const personBusiness = async (
@@ -120,13 +123,13 @@ export const personBusiness = async (
 export const canonicalPersonContext = async (
   store: MessageStore,
   reference: string,
-  { accounts, limit, ...options }: CanonicalContextOptions = {},
+  { accounts, limit, deniedKinds, ...options }: CanonicalContextOptions = {},
 ): Promise<CanonicalPersonContext> => {
   const uid = /^person:(\d+)$/.exec(reference.trim())?.[1]
   if (uid === undefined) throw new CliError("validation_error", "a person is person:<id>")
   const record = await store.people.personByUid(uid)
   if (!record) throw new CliError("not_found", `no person:${uid} in the store`)
-  const scope = scopeOf(accounts)
+  const scope = scopeOf(accounts, deniedKinds)
   const stored = await store.accounts.storedAccounts()
   const reads = readsIn(stored, record, scope)
   const calendars = (await calendarsOf(store, stored)).filter((one) => scope.has(one))

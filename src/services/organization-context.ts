@@ -1,6 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import { parseLucene } from "@wirecat/cli-base/query"
-import { DEAL_KINDS } from "../domain/deals.js"
+import { DEAL_KINDS, type DealKind } from "../domain/deals.js"
 import { isUsable } from "../domain/relations.js"
 import type { AccountKey, Deal, FinancePayment, Invoice, MessageStore, Organization } from "../store/index.js"
 import { isClosedState } from "../tasks/index.js"
@@ -78,6 +78,8 @@ export interface OrganizationContextOptions {
   accounts?: AccountKey[]
   /** Items per section. */
   limit?: number
+  /** The kinds the profile denies: none of their rows, titles or counts is answered. */
+  deniedKinds?: readonly DealKind[]
 }
 
 export const dealLine = (deal: Deal): DealLine => ({
@@ -135,14 +137,14 @@ const oneKind = <T>(rows: T[], commands: [(row: T) => boolean, string][]): strin
 export const organizationContext = async (
   store: MessageStore,
   reference: string,
-  { accounts, limit = SECTION_LIMIT }: OrganizationContextOptions = {},
+  { accounts, limit = SECTION_LIMIT, deniedKinds = [] }: OrganizationContextOptions = {},
 ): Promise<OrganizationContext> => {
   const id = /^(?:organization:)?(\d+)$/.exec(reference.trim())?.[1]
   if (id === undefined) throw new CliError("validation_error", "an organization is organization:<id>")
   const ref = `organization:${id}`
   const [organization] = await store.knowledge.organizations(parseLucene(`id:${id}`))
   if (!organization) throw new CliError("not_found", `no ${ref} in the store`)
-  const scope = scopeOf(accounts)
+  const scope = scopeOf(accounts, deniedKinds)
   const own = (await store.knowledge.ownOrganizations()).some((one) => one.ref === ref)
   const { edges, full } = await edgesOf(store, ref, scope)
   const names = await namesOf(
@@ -166,7 +168,7 @@ export const organizationContext = async (
 
   const deals: Deal[] = []
   let dealsFull = false
-  for (const kind of DEAL_KINDS) {
+  for (const kind of DEAL_KINDS.filter((one) => !scope.denied.has(one))) {
     const found = await store.deals.list({ kind, organization: ref, status: "open", limit: STORE_PAGE })
     dealsFull ||= found.length >= STORE_PAGE
     for (const deal of found) if (scope.has(deal.account)) deals.push(deal)

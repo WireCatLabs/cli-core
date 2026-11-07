@@ -1,4 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
+import type { DealKind } from "../domain/deals.js"
 import { isUsable, type Standing } from "../domain/relations.js"
 import type { AccountKey, Deal, FinancePayment, Invoice, MessageStore, StageChange } from "../store/index.js"
 import {
@@ -52,6 +53,8 @@ export interface DealContextOptions {
   limit?: number
   /** ms: the end of an open deal's window; the clock when absent. */
   now?: number
+  /** The kinds the profile denies: a deal or lead of one is not answered. */
+  deniedKinds?: readonly DealKind[]
 }
 
 /**
@@ -62,10 +65,16 @@ export interface DealContextOptions {
 export const dealContext = async (
   store: MessageStore,
   reference: string,
-  { accounts, limit = SECTION_LIMIT, now = Date.now() }: DealContextOptions = {},
+  { accounts, limit = SECTION_LIMIT, now = Date.now(), deniedKinds = [] }: DealContextOptions = {},
 ): Promise<DealContext> => {
-  const scope = scopeOf(accounts)
-  const deal = await store.deals.get(reference)
+  const scope = scopeOf(accounts, deniedKinds)
+  const kind = /^lead:/.test(reference.trim()) ? "lead" : "deal"
+  if (scope.denied.has(kind))
+    throw new CliError("permission_error", `the profile denies ${kind}s.list, so no ${kind} is answered`, {
+      reason: "deal.denied",
+    })
+  const row = await store.deals.get(reference)
+  const deal = row.deal !== null && !scope.allows(row.deal) ? { ...row, deal: null } : row
   if (!scope.has(deal.account))
     throw new CliError("not_found", `${deal.ref} is a copy from an account outside the accounts asked for`, {
       reason: "deal.out-of-scope",

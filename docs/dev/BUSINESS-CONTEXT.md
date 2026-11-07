@@ -29,6 +29,10 @@ projects, money and communications — so memo, Desktop and MCP read the same th
   person or people have nothing to read by: no messenger identity, no mail address, no calendar in scope; and each gap a CRM
   account in scope recorded in its last sync (`crmGapsOf`), such as reporting lines with no department list. A gap is
   named, never filled.
+- **Deny levels.** `deniedKinds` (`deal`, `lead`), as the profile's `deals.list` / `leads.list` levels say: no row,
+  title, ref or count of a denied kind appears anywhere, a deal context of one is refused (`deal.denied`), and
+  `coverage.notRead` says `{ source: "deals", reason: "denied" }`. Relationship sections read through
+  `knowledge.listRelations`, which applies the scope and the deny in SQL.
 - **Communications.** One-to-one chats, mail with their address and calendar events they are invited to, in the
   accounts read; a group chat is not read, since what another member wrote there is not theirs. Each message, mail
   and event counts once however many of the people it involves. The owner is never one of the people read, even as a
@@ -75,9 +79,10 @@ confirmed rows per status (payments: direction) and currency; nothing is convert
 from an invoice, nor a payment or a contract from a stage named "Won". In a deal, each row says how it was
 reached, `linkedBy: ["project", "counterparty"]`, and appears once.
 
-## Categories — `organizationCategories(store)`, `organizationsInCategory(store, category)`
+## Categories — `organizationCategories(store, scope)`, `knowledge.organizations(query, { category })`
 
-Derived at read time from usable relationships, never stored (NEED-2377): `client` is `customer-of` an own
+Derived at read time from usable relationships, never stored (NEED-2377); `knowledge.organizations(query, {
+category, accounts })` filters by one in SQL for `organizations list category:<c>`: `client` is `customer-of` an own
 organization, `supplier` one an own organization is `customer-of`, `partner` `partner-of` one, `employer` one the
 owner's person is `member-of` as `employee`, `contractor` or `founder`. Own organizations are
 `organizations.metadata.own`: the owner's mark (`knowledge.setOwnOrganization`, `own_by: "owner"`), which a sync

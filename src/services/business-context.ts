@@ -1,5 +1,6 @@
 import { crmGapsOf } from "../crm/index.js"
 import { CATEGORIES, type Category } from "../domain/categories.js"
+import type { DealKind } from "../domain/deals.js"
 import { isUsable, type Standing } from "../domain/relations.js"
 import type { AccountKey, KnowledgeRelation, MessageStore } from "../store/index.js"
 
@@ -39,20 +40,26 @@ export const keyOf = ({ provider, account }: AccountKey): string => `${provider}
 /**
  * The accounts a context reads, the caller's `--source` or group already resolved; every account when none is
  * given. A row no account reported — the owner's, an agent's — is always in it. `left` collects every account whose
- * rows were kept out, so `coverage` can say so.
+ * rows were kept out, so `coverage` can say so. `denied` holds the kinds the profile denies (`deals.list`,
+ * `leads.list`): no row, title or count of them is answered, and `coverage` says they were denied.
  */
 export interface Scope {
   accounts: AccountKey[] | undefined
   has(account: AccountKey | string | null | undefined): boolean
   left: Set<string>
+  denied: ReadonlySet<DealKind>
+  /** A ref the answer may name: none of a denied kind. */
+  allows(ref: string): boolean
 }
 
-export const scopeOf = (accounts: AccountKey[] | undefined): Scope => {
+export const scopeOf = (accounts: AccountKey[] | undefined, denied: readonly DealKind[] = []): Scope => {
   const asked = accounts && new Set(accounts.map(keyOf))
   const left = new Set<string>()
+  const kinds = new Set(denied)
   return {
     accounts,
     left,
+    denied: kinds,
     has: (account) => {
       if (account == null) return true
       const key = typeof account === "string" ? account : keyOf(account)
@@ -60,6 +67,7 @@ export const scopeOf = (accounts: AccountKey[] | undefined): Scope => {
       left.add(key)
       return false
     },
+    allows: (ref) => !kinds.has(ref.slice(0, ref.indexOf(":")) as DealKind),
   }
 }
 
@@ -110,47 +118,38 @@ const roleOf = (relation: KnowledgeRelation): RelationRole => ({
   role: relation.role,
   standing: relation.standing,
   ...(relation.account === undefined ? {} : { account: relation.account }),
-  ...(relation.position === undefined ? {} : { position: relation.position }),
+  ...(relation.position == null ? {} : { position: relation.position }),
   ...(relation.derived === undefined ? {} : { derived: relation.derived }),
-  ...(relation.startsAt === undefined ? {} : { startsAt: relation.startsAt }),
-  ...(relation.endsAt === undefined ? {} : { endsAt: relation.endsAt }),
+  ...(relation.startsAt == null ? {} : { startsAt: relation.startsAt }),
+  ...(relation.endsAt == null ? {} : { endsAt: relation.endsAt }),
 })
 
 /**
- * Every relationship touching `ref`, both ways, in scope: its links with their standing, and the `relationship`
- * proposals waiting for the owner (plan §2.4). `full` when a store page was full and more may exist.
+ * Every relationship touching `ref`, both ways, in scope and of no denied kind: its links with their standing, ended
+ * ones too, and the `relationship` proposals waiting for the owner (plan §2.4), read through `listRelations`. `full`
+ * when more than a store page holds.
  */
 export const edgesOf = async (
   store: MessageStore,
   ref: string,
   scope: Scope,
 ): Promise<{ edges: Edge[]; full: boolean }> => {
-  const relations = await store.knowledge.relations(null, ref)
-  const proposals = await store.proposedActions.list({
-    kinds: ["relationship"],
-    status: "proposed",
+  const { items, hasMore } = await store.knowledge.listRelations({
     about: ref,
+    includeEnded: true,
+    deniedKinds: [...scope.denied],
     limit: STORE_PAGE,
+    ...(scope.accounts === undefined ? {} : { accounts: scope.accounts }),
   })
-  const edges: Edge[] = relations
-    .filter((relation) => scope.has(relation.account))
-    .map((relation) => ({ from: relation.from, to: relation.to, role: roleOf(relation) }))
-  for (const proposal of proposals) {
-    const payload = proposal.payload as { from?: unknown; to?: unknown; kind?: unknown; role?: unknown }
-    if (typeof payload.from !== "string" || typeof payload.to !== "string" || typeof payload.kind !== "string") continue
-    if (!scope.has(proposal.account)) continue
-    edges.push({
-      from: payload.from,
-      to: payload.to,
-      role: {
-        proposal: proposal.id,
-        kind: payload.kind as KnowledgeRelation["kind"],
-        role: typeof payload.role === "string" ? payload.role : null,
-        standing: "proposed",
-      },
-    })
-  }
-  return { edges, full: relations.length >= STORE_PAGE || proposals.length >= STORE_PAGE }
+  const edges = items.map((relation) => ({
+    from: relation.from,
+    to: relation.to,
+    role:
+      relation.source === "proposal"
+        ? { proposal: relation.id, kind: relation.kind, role: relation.role, standing: relation.standing }
+        : roleOf(relation),
+  }))
+  return { edges, full: hasMore }
 }
 
 /** A title for each ref, read in one batch. */
@@ -221,12 +220,6 @@ export const organizationCategories = async (store: MessageStore, scope: Scope):
   return new Map([...found].map(([ref, categories]) => [ref, CATEGORIES.filter((one) => categories.has(one))]))
 }
 
-/** What `organizations list category:<c>` lists: the organizations of one category, as `organizations` has them. */
-export const organizationsInCategory = async (store: MessageStore, category: Category, accounts?: AccountKey[]) => {
-  const categories = await organizationCategories(store, scopeOf(accounts))
-  return (await store.knowledge.organizations()).filter((one) => categories.get(one.ref)?.includes(category))
-}
-
 /**
  * The answer's `coverage`: what was read, each account kept out by the scope, and what each CRM account in scope
  * said its last sync could not read, such as reporting lines with no department list. Named, never filled in.
@@ -235,6 +228,9 @@ export const coverageFor = async (store: MessageStore, base: Coverage, scope: Sc
   const read = new Set(base.accounts)
   const notRead = [...base.notRead]
   const named = new Set(notRead.map((one) => one.source))
+  for (const kind of scope.denied) notRead.push({ source: `${kind}s`, reason: "denied" })
+  if (scope.accounts !== undefined)
+    for (const key of await store.accounts.accounts()) if (!scope.has(key)) scope.left.add(keyOf(key))
   for (const key of [...scope.left].sort())
     if (!read.has(key) && !named.has(key)) notRead.push({ source: key, reason: "outside the accounts asked for" })
   for (const key of await store.accounts.accounts())

@@ -8,7 +8,7 @@ import { ACME_NOW, ACME_OPENED, ACME_TELEGRAM, acmeScenario } from "../crm/testi
 import { kindIn } from "../domain/providers.js"
 import { ENTITIES } from "../entities/index.js"
 import { type MessageStore, openStore } from "../store/store.js"
-import { newestFirst, organizationsInCategory } from "./business-context.js"
+import { newestFirst } from "./business-context.js"
 import { dealBrief, dealContext } from "./deal-context.js"
 import { organizationContext } from "./organization-context.js"
 import { canonicalPersonContext } from "./person-business.js"
@@ -164,7 +164,7 @@ describe("organization context", () => {
     const { store, refs } = await scenario()
 
     const refsOf = async (category: "client" | "supplier" | "employer") =>
-      (await organizationsInCategory(store, category)).map((one) => one.ref)
+      (await store.knowledge.organizations(undefined, { category })).map((one) => one.ref)
 
     expect(await refsOf("client")).toEqual([refs.acme])
     expect(await refsOf("supplier")).toEqual([])
@@ -192,6 +192,23 @@ it("sorts newest first and an undated item last, in a fixed order", () => {
 })
 
 describe("categories", () => {
+  it("filters organizations by category in the store, from the accounts given only", async () => {
+    const { store, refs } = await scenario()
+    await store.knowledge.relate(null, { from: refs.own, to: refs.acme, kind: "customer-of", by: "owner" })
+
+    expect((await store.knowledge.organizations(undefined, { category: "supplier" })).map((one) => one.ref)).toEqual([
+      refs.acme,
+    ])
+    expect(
+      (await store.knowledge.organizations(undefined, { category: "employer", accounts: [ACME_TELEGRAM] })).map(
+        (one) => one.ref,
+      ),
+    ).toEqual([refs.own])
+    await expect(store.knowledge.organizations(undefined, { category: "vendor" as "client" })).rejects.toMatchObject({
+      code: "validation_error",
+    })
+  })
+
   it("makes an organization both client and supplier, once each, across two own companies", async () => {
     const { store, refs } = await scenario()
     const second = (await store.knowledge.addOrganization({ kind: "company", name: "Northstar Labs" })).ref
@@ -200,8 +217,30 @@ describe("categories", () => {
     await store.knowledge.relate(null, { from: refs.own, to: refs.acme, kind: "customer-of", by: "owner" })
 
     expect((await organizationContext(store, refs.acme)).categories).toEqual(["client", "supplier"])
-    expect((await organizationsInCategory(store, "client")).map((one) => one.ref)).toEqual([refs.acme])
+    expect((await store.knowledge.organizations(undefined, { category: "client" })).map((one) => one.ref)).toEqual([
+      refs.acme,
+    ])
     expect((await canonicalPersonContext(store, refs.alice)).business.categories).toEqual(["client", "supplier"])
+  })
+})
+
+describe("deny levels", () => {
+  it("names no deal or lead anywhere when the profile denies them, and says so", async () => {
+    const { store, refs } = await scenario()
+    const deniedKinds = ["deal", "lead"] as const
+
+    const acme = await organizationContext(store, refs.acme, { deniedKinds })
+    const alice = await canonicalPersonContext(store, refs.alice, { deniedKinds })
+
+    expect(acme.deals).toMatchObject({ items: [], total: 0 })
+    expect(acme.projects.items).toEqual([{ ref: refs.project, name: "Atlas", via: ["organization"] }])
+    expect(alice.business.deals).toMatchObject({ items: [], total: 0 })
+    expect(JSON.stringify([acme, alice])).not.toMatch(/"(deal|lead):\d+"|"Acme renewal( · [^"]*)?"/)
+    expect(acme.coverage.notRead).toEqual(expect.arrayContaining([{ source: "deals", reason: "denied" }]))
+    await expect(dealContext(store, refs.deal, { deniedKinds })).rejects.toMatchObject({
+      code: "permission_error",
+      details: { reason: "deal.denied" },
+    })
   })
 })
 

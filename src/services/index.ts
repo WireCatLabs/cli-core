@@ -199,7 +199,7 @@ export type {
 } from "./attachments.js"
 export { attachmentsService } from "./attachments.js"
 export type { Category, Coverage, Related, RelationRole, Section } from "./business-context.js"
-export { CATEGORIES, organizationCategories, organizationsInCategory, SECTION_LIMIT } from "./business-context.js"
+export { CATEGORIES, organizationCategories, SECTION_LIMIT } from "./business-context.js"
 export type { ChatsService, MarkedRead, PageWindow } from "./chats.js"
 export { chatsService, EVENTS_DAYS } from "./chats.js"
 export type { Communications, Touch } from "./communications.js"
