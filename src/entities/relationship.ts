@@ -18,5 +18,9 @@ export const relationship = v.strictObject({
   confidence_category: v.picklist(["owner-confirmed", "weak"]),
   /** `reported`: a CRM account says so and nobody confirmed it; `ended`: it no longer holds. */
   standing: v.picklist(STANDINGS),
+  /** A job title beside it, never its role. */
+  position: v.nullable(text),
+  starts_at: v.nullable(time),
+  ends_at: v.nullable(time),
   created_at: time,
 })

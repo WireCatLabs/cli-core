@@ -25,6 +25,11 @@ export interface KnowledgeRelation {
   confidenceCategory: "owner-confirmed" | "weak"
   /** Derived from the link: the owner's, a source's nobody confirmed, a suggestion, or one that ended. */
   standing: Standing
+  /** A job title beside the relationship, never its role. */
+  position: string | null
+  /** When it held, as ISO times; `endsAt` exclusive; `null` when nobody said. */
+  startsAt: string | null
+  endsAt: string | null
   createdAt: string
 }
 
@@ -37,7 +42,13 @@ export interface RelateInput {
   evidence?: string
   confirmed?: boolean
   provenance?: string
+  position?: string
+  /** UTC ms; `endsAt` exclusive and after `startsAt`. */
+  startsAt?: number
+  endsAt?: number
 }
+
+const isoOf = (ms: number | undefined) => (ms === undefined ? null : new Date(ms).toISOString())
 
 export const relationOf = (link: Link, now: number): KnowledgeRelation => ({
   id: link.id,
@@ -51,6 +62,9 @@ export const relationOf = (link: Link, now: number): KnowledgeRelation => ({
   provenance: link.provenance,
   confidenceCategory: link.confirmed ? "owner-confirmed" : "weak",
   standing: standingOf(link, now),
+  position: link.position ?? null,
+  startsAt: isoOf(link.startsAt),
+  endsAt: isoOf(link.endsAt),
   createdAt: link.createdAt,
 })
 
@@ -105,16 +119,28 @@ export const relationProposalsOver = (context: StoreContext) => {
           reason: "relationship.exists",
         })
     }
+    const startsAt = "startsAt" in changes ? (changes.startsAt ?? undefined) : link.startsAt
+    const endsAt = "endsAt" in changes ? (changes.endsAt ?? undefined) : link.endsAt
+    spanOf(startsAt, endsAt)
     database
       .prepare(
         "UPDATE links SET role = CASE WHEN ? THEN ? ELSE role END, purpose = CASE WHEN ? THEN ? ELSE purpose END, " +
-          "updated_at = ? WHERE id = ?",
+          "starts_at = CASE WHEN ? THEN ? ELSE starts_at END, ends_at = CASE WHEN ? THEN ? ELSE ends_at END, " +
+          "metadata = CASE WHEN ? THEN (CASE WHEN ? IS NULL THEN json_remove(coalesce(metadata, '{}'), '$.position') " +
+          "ELSE json_set(coalesce(metadata, '{}'), '$.position', ?) END) ELSE metadata END, updated_at = ? WHERE id = ?",
       )
       .run(
         Number("role" in changes),
         changes.role ?? null,
         Number("purpose" in changes),
         changes.purpose ?? null,
+        Number("startsAt" in changes),
+        changes.startsAt ?? null,
+        Number("endsAt" in changes),
+        changes.endsAt ?? null,
+        Number("position" in changes),
+        changes.position ?? null,
+        changes.position ?? null,
         now(),
         Number(link.id),
       )
@@ -193,11 +219,15 @@ export const relationProposalsOver = (context: StoreContext) => {
         kind: string
         role?: string
         purpose?: string
+        position?: string
+        startsAt?: number
+        endsAt?: number
         evidence?: string[]
         reason?: string
       } & Scored,
       by: Exclude<Author, "owner">,
     ): ProposedAction => {
+      spanOf(input.startsAt, input.endsAt)
       const evidence = input.evidence ?? []
       if (!Array.isArray(evidence) || evidence.length > 5 || evidence.some((ref) => typeof ref !== "string"))
         throw new CliError("validation_error", "a relationship proposal cites up to 5 references")
@@ -224,6 +254,9 @@ export const relationProposalsOver = (context: StoreContext) => {
             kind: input.kind,
             ...(input.role === undefined ? {} : { role: input.role }),
             ...(input.purpose === undefined ? {} : { purpose: purposeOf(input.purpose) }),
+            ...(input.position === undefined ? {} : { position: positionOf(input.position) }),
+            ...(input.startsAt === undefined ? {} : { startsAt: input.startsAt }),
+            ...(input.endsAt === undefined ? {} : { endsAt: input.endsAt }),
             evidence,
             ...scored,
           },
@@ -258,7 +291,13 @@ export const relationProposalsOver = (context: StoreContext) => {
             to: link.to,
             kind: link.kind,
             changes,
-            before: { role: link.role, purpose: link.purpose },
+            before: {
+              role: link.role,
+              purpose: link.purpose,
+              position: link.position ?? null,
+              startsAt: link.startsAt ?? null,
+              endsAt: link.endsAt ?? null,
+            },
           },
           ...(input.reason === undefined ? {} : { reason: input.reason }),
         })
@@ -311,6 +350,9 @@ export const relationProposalsOver = (context: StoreContext) => {
           kind?: string
           role?: string
           purpose?: string
+          position?: string
+          startsAt?: number
+          endsAt?: number
         }
         const key = proposal.kind === "key_document"
         const link = insertLink(context, {
@@ -319,6 +361,9 @@ export const relationProposalsOver = (context: StoreContext) => {
           kind: key ? "related-to" : ((payload.kind ?? "member-of") as Link["kind"]),
           ...(key ? { role: "key" } : payload.role === undefined ? {} : { role: payload.role }),
           ...(key || payload.purpose === undefined ? {} : { purpose: payload.purpose }),
+          ...(key || payload.position === undefined ? {} : { position: payload.position }),
+          ...(key || payload.startsAt === undefined ? {} : { startsAt: payload.startsAt }),
+          ...(key || payload.endsAt === undefined ? {} : { endsAt: payload.endsAt }),
           ...(proposal.reason === null ? {} : { evidence: proposal.reason }),
           ...decidedOrigin(decision.by),
         })
@@ -377,10 +422,30 @@ const scoredOf = (input: Scored): Required<Scored> | undefined => {
   return { score, signals: signals.map(({ scorer, weight, why }) => ({ scorer, weight, why })) }
 }
 
-/** A relationship's role and purpose to set; `null` clears one. */
+/** What to set on a relationship; `null` clears one. Times are UTC ms, `endsAt` exclusive. */
 export interface RelationUpdate {
   role?: string | null
   purpose?: string | null
+  position?: string | null
+  startsAt?: number | null
+  endsAt?: number | null
+}
+
+const timeOf = (value: number, what: string): number => {
+  if (!Number.isSafeInteger(value) || value < 0) throw new CliError("validation_error", `${what} is UTC milliseconds`)
+  return value
+}
+
+/** A relationship ends after it starts. */
+export const spanOf = (startsAt: number | null | undefined, endsAt: number | null | undefined): void => {
+  if (startsAt != null && endsAt != null && endsAt <= startsAt)
+    throw new CliError("validation_error", "a relationship ends after it starts")
+}
+
+export const positionOf = (position: string): string => {
+  const value = position.trim()
+  if (!value || value.length > 200) throw new CliError("validation_error", "a position takes 1–200 characters")
+  return value
 }
 
 /** What a relationship update sets, checked; `null` clears a field and an absent one is left alone. */
@@ -388,8 +453,12 @@ const changesOf = (input: RelationUpdate): RelationUpdate => {
   const changes: RelationUpdate = {}
   if (input.role !== undefined) changes.role = input.role === null ? null : roleOf(input.role)
   if (input.purpose !== undefined) changes.purpose = input.purpose === null ? null : purposeOf(input.purpose)
+  if (input.position !== undefined) changes.position = input.position === null ? null : positionOf(input.position)
+  if (input.startsAt !== undefined)
+    changes.startsAt = input.startsAt === null ? null : timeOf(input.startsAt, "a start")
+  if (input.endsAt !== undefined) changes.endsAt = input.endsAt === null ? null : timeOf(input.endsAt, "an end")
   if (!Object.keys(changes).length)
-    throw new CliError("validation_error", "a relationship update sets a role, a purpose or both")
+    throw new CliError("validation_error", "a relationship update sets a role, a purpose, a position or its dates")
   return changes
 }
 

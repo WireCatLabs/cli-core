@@ -39,6 +39,10 @@ shape of this file.
   mark, which no sync changes; `crmGapsOf` reads what the account's last sync could not list (`{ kind, reason, code?, scope?, message }`).
   Every `CrmSource` call takes an optional `CrmCallContext`: `spend()` takes one budget unit per extra request and
   stops the run as `partial` when it is spent; `gap()` reports what a call could not read without failing it.
+- **A relationship keeps a job title and when it held.** `relate` and `updateRelation` take `position`, `startsAt`
+  and `endsAt` (UTC ms, the end after the start); relationships answer `position`, `startsAt` and `endsAt`.
+  `knowledge.endRelation(key, id, at, by)` ends one without removing it (standing `ended` from then); an agent's end
+  is a `relationship_update` proposal.
 
 ### Changed — may break callers
 

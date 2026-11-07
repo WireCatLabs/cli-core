@@ -47,7 +47,9 @@ says which roles it takes:
 | `partner-of` | organization ↔ organization, stored once with the lower id as `from` | none |
 | `related-to` | person, organization, project, task, deal, lead → person, organization, project, task | a deal's or lead's: `owner`, `contact`, `decision-maker`, `influencer`; others free text |
 
-A job title is never a role. Inverses are never stored. Every relationship read carries a derived `standing`:
+A job title is never a role: it is `position` beside the relationship (`metadata.position`), with `startsAt` and
+`endsAt` (when it held, UTC ms, end exclusive). `endRelation` sets the end instead of removing the relationship; an
+agent's end, like any agent's change, is a `relationship_update` proposal. Inverses are never stored. Every relationship read carries a derived `standing`:
 `confirmed` (the owner's), `reported` (a source account's that nobody confirmed), `proposed` (a suggestion waiting
 for review) or `ended` (`ends_at` passed, or the source stopped reporting it: `deleted_at`). Store version 56 gives a
 relationship link the account that reported it (`account_id`), when it held (`starts_at`, `ends_at`) and a history,

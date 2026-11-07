@@ -129,3 +129,29 @@ it("derives a relationship's standing from the link, never from a stored word", 
   expect(standingOf({ confirmed: false, accountId: 3, deletedAt: 5 }, now)).toBe("ended")
   expect(standingOf({ confirmed: true, accountId: 3, deletedAt: 5 }, now)).toBe("confirmed")
 })
+
+it("keeps a job title and the dates beside a relationship, and ends it without removing it", async () => {
+  const { store, acme, alice } = await fixture()
+  const start = Date.UTC(2025, 0, 1)
+  const member = await store.knowledge.relate(null, {
+    by: "owner",
+    from: alice,
+    to: acme,
+    kind: "member-of",
+    role: "employee",
+    position: "Procurement manager",
+    startsAt: start,
+  })
+  expect(member).toMatchObject({ position: "Procurement manager", startsAt: "2025-01-01T00:00:00.000Z", endsAt: null })
+  await expect(
+    store.knowledge.updateRelation(null, member.id, { endsAt: start - 1, by: "owner" }),
+  ).rejects.toMatchObject({ code: "validation_error" })
+  const proposal = await store.knowledge.endRelation(null, member.id, start + 1000, { bot: "claude" })
+  expect(proposal).toMatchObject({ kind: "relationship_update", payload: { changes: { endsAt: start + 1000 } } })
+  const ended = await store.knowledge.endRelation(null, member.id, start + 1000, "owner")
+  expect(ended).toMatchObject({ id: member.id, standing: "ended", endsAt: "2025-01-01T00:00:01.000Z" })
+  expect(await store.knowledge.relations(null, alice)).toEqual([expect.objectContaining({ id: member.id })])
+  expect(
+    await store.knowledge.updateRelation(null, member.id, { position: null, endsAt: null, by: "owner" }),
+  ).toMatchObject({ position: null, endsAt: null, standing: "confirmed" })
+})
