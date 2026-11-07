@@ -19,7 +19,7 @@ const document: RefSummary = {
   ...chat,
   ref: "document:413",
   kind: "document",
-  title: "Задачи SEO Neirox",
+  title: "Задачи SEO Example",
   in: "Google Drive",
   provider: "google-drive",
   account: "owner@example.com",
