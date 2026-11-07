@@ -75,7 +75,13 @@ export {
   type EvidenceFindingsStore,
   validateEvidenceFindings,
 } from "./evidence-findings.js"
-export { QUICK_HEALTH_CHECKS, type StoreHealth, storeHealth } from "./health.js"
+export {
+  type DamagedTable,
+  QUICK_HEALTH_CHECKS,
+  type SearchIndexHealth,
+  type StoreHealth,
+  storeHealth,
+} from "./health.js"
 export {
   ORGANIZATIONS_QUERY,
   organization,
