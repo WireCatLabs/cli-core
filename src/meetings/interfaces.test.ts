@@ -1,4 +1,4 @@
-import { describeProgram, flatten } from "@wirecat/cli-base/commands"
+import { describeProgram, flatten, metaOf } from "@wirecat/cli-base/commands"
 import { itemEnvelopeSchema, listEnvelopeSchema } from "@wirecat/cli-base/standards"
 import { Command } from "commander"
 import * as v from "valibot"
@@ -98,6 +98,28 @@ describe("meeting commands", () => {
     const noClock = await setup({ now: undefined })
     await noClock.run(["meetings", "import", "example-folder"])
   })
+  it("sync is cooperative and partial only with a budget, which it asks before each meeting", async () => {
+    const syncOf = (deps: Partial<MeetingCommandDeps>) => {
+      const program = new Command("meet")
+      addMeetingCommands(program, {
+        store: memoryMeetingStore(),
+        accountId: 1,
+        write() {},
+        inRun: (_c, b) => b(),
+        ...deps,
+      })
+      return program.commands.find((one) => one.name() === "meetings")?.commands.find((one) => one.name() === "sync")
+    }
+    const bounded = syncOf({ budgetOf: () => ({ take: () => null }) })
+    expect(bounded && metaOf(bounded)).toMatchObject({ cooperative: true, partial: true })
+    const plain = syncOf({})
+    expect(plain && metaOf(plain).cooperative).toBeUndefined()
+
+    const { run, outputs } = await setup({ budgetOf: () => ({ take: () => "cancelled" }) })
+    await run(["meetings", "sync", "--since-time", "1970-01-01"])
+    expect(outputs[0]?.value).toMatchObject({ meetings: 0, stopped: "cancelled", remaining: 1 })
+  })
+
   it("rejects invalid options, missing resources and unavailable dependencies", async () => {
     const { run } = await setup()
     for (const args of [

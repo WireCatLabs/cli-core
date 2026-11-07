@@ -7,6 +7,91 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- **People the owner separated stay apart.** An owner's unlink was checked only for the two identities being joined,
+  but a join moves whole people: a third identity with the same email address, linked to one of them, carried both
+  back together. Now no automatic join — the same email address, an account's own identity joining the owner — merges
+  two people when the owner once moved anyone of one away from anyone of the other. An agent's link of one identity
+  (a confirmed mention, a meeting participant) back over such a separation is refused with the reason
+  `identity.separated`; the owner's own link still goes through. The exact-email join stays automatic otherwise.
+
+## 0.604.0 — 07.11.2026
+
+### Added
+
+- **A file note can carry the time its source gives it, and searches read that time.**
+  `store.notes.dateFileNotes(folderId, [{ path, modifiedAt }])` sets it (memo passes the front matter `date` or the
+  file's modification time) without counting as an edit: text, revision and `updatedAt` stay, so nothing is
+  re-embedded. `Note.modifiedAt` holds it (`null` when the source gave none, always for a note written in memo). The
+  column is the one Drive documents already fill, so `date:`, the `at` of a notes hit and `search all`'s `timestamp`
+  show it without a store version. Until now a local note was dated by the moment it was imported.
+- **`models download --json` writes byte progress lines to stderr** while a model downloads:
+  `{"event":"progress","step":"download","done","total","unit":"bytes","label":<model id>}`, at most two a second plus
+  the first and last line, so a desktop app can draw a bar. `installFiles`, `install` and the `download*Model`
+  services take a `bytes(done, total)` callback for the same count.
+
+- **A source `search all` skips names why, for a program too.** Each `skipped` entry keeps the sentence in `reason` and
+  now adds `why`, the dotted reason (`query.unknown-value`), and `token`, the part of the query that was refused
+  (`kind:nonsense`). `meta.issues` of `search all` carries `why` as `reason`, as the output standard allows.
+
+### Changed — may break callers
+
+- **A `?` that ends a bare word is a question mark, not a wildcard.** `invoice?` and `что с бюджетом?` find
+  "invoice" and "бюджет"; before, `?` asked for one more character and `invoice` itself was missed. A `?` inside a
+  word (`inv?ice`) or after a field (`text:invoice?`) is still one character.
+
+### Fixed
+
+- **`search all` ranks higher the record a question words differently.** For a question, a mail, message or note
+  that both the words and the meaning found kept only its words rank, so one meaning ranked first and words ranked
+  last stayed at the bottom of the page or off it. It now keeps the better of its two ranks, still with no second vote.
+
+## 0.603.0 — 07.11.2026
+
+### Changed — may break callers
+
+- **A keyed command that declares no `effects` now counts as a write in a CLI with `commandPermissions`:** a
+  `readonly` profile and the read-only lock refuse it before it runs, where before it ran. Declare `effects` on every
+  keyed command.
+
+### Fixed
+
+- **`search all` in a CRM or calendar CLI without `models` no longer names a download command it lacks.** Its notes
+  hint said `b24 models download e5-small`; a CLI with no `models download` now names the tools that have it (tg, max
+  or wa), which share the model folder.
+
+## 0.602.0 — 07.11.2026
+
+### Fixed
+
+- **`store recover run` refuses while another recovery runs, and no longer fails because a tool only read the store.**
+  A recovery keeps a lock file beside the store (`<store>.recover-lock`, with its process number); a second run is
+  refused with the reason `store.recovering`, and `store recover` and `storeHolders` list the running one. A lock whose
+  process ended is taken over. The check for writes during the recovery now asks SQLite (`PRAGMA data_version` on a
+  connection kept open to the swap, and the file's inode) instead of comparing file times and sizes, which a reader's
+  open and close changed without changing a row (`store.changed-during-recovery` on a store nobody wrote to).
+- **A recovery clears values that are not valid JSON, and `doctor --deep` reports them.** `.recover` copied a damaged
+  value that still read, and a JSON read of its row then failed with "malformed JSON" (`mail sync` on an `emails.headers`
+  value). Every `metadata` column and the other columns the tools read as JSON (`emails.headers`, `accounts.settings`,
+  `messages.mentions`, `messages.reply_to`, …) are checked: an invalid value is set to NULL, or its row is dropped where
+  the column may not be NULL, and the recovery lists each column as `invalidJson`. The deep health check
+  (`storeHealth(path, { deep: true })`, `doctor --deep`, `store recover`) reports them as `invalidJson` and fails.
+
+### Changed — may break callers
+
+- **A search for plain text with a colon, a URL or another special character finds what holds it.** `meeting at 10:30`,
+  `Answer as HH:MM` and `a:b` read the word before the colon as a field, so every source of `search all` refused the
+  query and the answer was empty. Now a `word:` that names no search field, and a word the parser cannot read as
+  syntax (a URL, an unbalanced quote or bracket, `^`, `~home`, `[draft]`, `<tag>`), are searched as words; a lone
+  emoji or punctuation mark beside other words no longer empties the answer. Field queries, Boolean operators,
+  phrases, `word*` and `/regex/` keep their meaning, and `word~1`, `/x/i` and punctuation alone keep their errors.
+  A caller that relied on the refusal of `foo:bar`, an unbalanced quote or `link:click?id=1` now gets hits, and
+  `meetings search` reads `subject:` (a message field) as a word. `plainQuery` in `./services` gives a caller the text
+  as the search reads it (cli-memo#674).
+
+## 0.601.0 — 07.11.2026
+
 ### Added
 
 - **`review --holder` gives each email the cursor and findings key that end the batch at it** (`email.cursor`,
@@ -30,6 +115,16 @@ shape of this file.
   the read-only lock and over MCP's `read` tool. It was refused under `<PREFIX>_READ_ONLY` even when it only printed.
   A CLI that passes `newFileOutput: writesNewFileOnlyWith` and a `writeFile` that refuses a file that exists, such as
   `writeNewFile`, gets an export that is a read without `--output` and, with it, only ever adds a file.
+- **`meetings sync` can stop itself before its deadline and go on next time.** A CLI that passes
+  `MeetingCommandDeps.budgetOf` (`runBudgetOf` from `@wirecat/cli-core/cli`) gets a cooperative, partial sync: it
+  reads meetings oldest first, asks the budget before each, and on a stop keeps what it saved, answers `stopped` and
+  `remaining`, and moves the cursor to the first meeting it did not reach (never past one that failed). Without it the
+  sync keeps the one-shot deadline, as before.
+- **`meetings sync --rescan`** reads the last 30 days again instead of only what came after the last sync.
+- **`MeetingSource.overlapMs`**: a source's own look-back before the cursor, for a provider that lists a meeting late;
+  `--lookback-days` widens it, never narrows it. 0 when absent.
+- **`recognizeLocalPieces` takes a `signal`** and stops between two pieces of speech when it aborts, freeing the
+  engine; a backend gives `piecesUntil` for it. Without a signal nothing changes.
 
 ### Changed — may break callers
 
@@ -48,6 +143,16 @@ shape of this file.
 - **`doctor --online` of a CLI built on `appDoctorCommand` runs inside cli-core's run.** It answered outside one, so
   `--record` kept no run of it and its call out was not the command's own. A config that will not load still gets an
   answer, outside a run.
+- **`apiJson` and `apiPlainJson` refuse a body holding `NaN` or `Infinity`** with `validation_error`, naming the field,
+  before anything is sent. JSON writes them as `null`, so a failed `Number(…)` reached the service as a cleared field:
+  bitrix24-cli's `deals update --owner anna` sent `assignedById: null`.
+- **`search all` in a CRM CLI and in a calendar CLI leaves out every kind whose list the profile denies.**
+  Under `deals: deny` it showed every deal's title, stage and amount, on the command line and over MCP. Each kind is
+  judged by its list key (`deals.list`, `leads.list`, `events.list`, `messages.list`, `notes.list`,
+  `meetings.list`) at the levels the run uses: the profile's, `--permission` and an MCP server's own. Each kind left
+  out is named in `missing` and on stderr; when every kind asked for is denied, the search is refused with
+  `permission_error` (`search.all-denied`). `DealSearch.kinds` and `SearchAllRequest.crmKinds` narrow the CRM kinds
+  read, and `run()` hands a command its CLI's built-in levels as `permissionDefaults`.
 
 ## 0.600.0 — 07.11.2026
 

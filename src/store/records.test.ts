@@ -21,14 +21,14 @@ const fixture = async () => {
   return { store, romashka }
 }
 
-const SOURCE = { provider: "sheet", account: "prokat-med", batch_id: "2026-11-02" }
+const SOURCE = { provider: "sheet", account: "demo-rent", batch_id: "2026-11-02" }
 const envelope = (records: EnvelopeRecord[], batch = SOURCE.batch_id) => ({
   schema_version: 1,
   source: { ...SOURCE, batch_id: batch },
   records,
 })
 const take = (store: Parameters<typeof ingest>[0], value: unknown, dryRun = false) =>
-  ingest(store, value, { account: "prokat-med", dryRun })
+  ingest(store, value, { account: "demo-rent", dryRun })
 
 const payment = (externalId: string, fields: Record<string, unknown>, extra: Partial<EnvelopeRecord> = {}) => ({
   key: `payment-${externalId}`,
@@ -334,4 +334,13 @@ it("takes a 100 000-line JSONL file in one go", async () => {
 it("publishes the envelope's JSON Schema as written in the code", () => {
   const file = new URL("../../schemas/records-envelope.v1.schema.json", import.meta.url)
   expect(JSON.parse(readFileSync(file, "utf8"))).toEqual(RECORDS_ENVELOPE_SCHEMA)
+})
+
+it("refuses an invoice whose fields.payer is not text, though payer is a payment's role", async () => {
+  const { store } = await mapped()
+  const record = invoice("SEO-09", "1000.00")
+  const result = await take(store, envelope([{ ...record, fields: { ...record.fields, payer: 5 } }]))
+  expect(result.errors).toEqual([
+    expect.objectContaining({ pointer: "/records/0/fields", code: "record.invalid", message: "fields.payer is text" }),
+  ])
 })

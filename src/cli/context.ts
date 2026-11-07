@@ -42,6 +42,8 @@ export interface BaseEnvironment {
   app?: AppIdentity
   /** Set by `run()`: the app's own, so a shared command group opens its run with the app's settings. */
   resolveSettings?: (flags: GlobalFlags, options?: ResolveOptions) => Settings
+  /** Set by `run()` for a CLI that declares its keys: its built-in levels, which only tighten the owner's. */
+  permissionDefaults?: Readonly<Record<string, import("../sends/permissions.js").Level>>
   /** Set by `run()` from `process.platform` unless a test hands one in: the OS a command's paths and units are for. */
   platform?: NodeJS.Platform
   /** The local speech recognizer in place of the downloaded model; tests hand one in. */

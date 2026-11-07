@@ -44,7 +44,8 @@ that a payload's types were validated.
 
 Use `modelCatalogueCommand` for a standalone CLI's `models list` and `models download`.
 Choose its supported kinds and inject environment, output, diagnostics and offline policy.
-The factory owns native queries, receipts and verified installation.
+The factory owns native queries, receipts and verified installation. With `--json`, `models download` writes
+`{"event":"progress","step":"download","done","total","unit":"bytes","label"}` lines to stderr as the model's bytes land.
 
 The complete cross-CLI audit checks the exported references separately from ordinary lint
 baselines. Supply the canonical `parity.json` with `--capabilities` to recognize declared

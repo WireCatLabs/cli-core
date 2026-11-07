@@ -52,8 +52,8 @@ export const commandAvailability = (
       ? { permission, level: levelFor(levels, permission).level }
       : {}),
   })
-  // As `refuseByCommandPermissions` judges it before the run: a keyed write to the service.
-  const declaredChange = Boolean(declaredKey) && info.effects?.remote === "write"
+  // As `refuseByCommandPermissions` judges it before the run: a keyed write to the service, or undeclared effects.
+  const declaredChange = Boolean(declaredKey) && (info.effects === undefined || info.effects.remote === "write")
   if (readOnly && (changesMessenger(info) || declaredChange || authority?.(info.path)))
     return blocked("the read-only lock blocks this change")
   if (mcp && authority?.(info.path) && !authorityAllowed(levels))

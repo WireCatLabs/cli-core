@@ -155,6 +155,7 @@ const OTHERS: Entry[] = [
   validation("search.server-options", "search --backend server takes neither --exact, --cursor nor --newest"),
   validation("search.one-backend", "search answers from one backend at a time: archive or server"),
   ["search.server-not-allowed", "permission_error", "the profile does not allow messages.server-search"],
+  ["search.all-denied", "permission_error", "the profile denies every kind search all would read"],
   validation("search.server-no-criteria", "the query has nothing the server can search, so only the store is read"),
   ["search.server-unsupported", "provider_error", "this source's server cannot search"],
   ["search.server-rate-limited", "rate_limited", "the server refused a search as too many requests"],
@@ -175,6 +176,7 @@ const OTHERS: Entry[] = [
     "recovering the store needs the sqlite3 program, 3.43 or newer, with its .recover command",
   ],
   validation("store.recovery-failed", "the recovered store did not pass its check, so the store was left as it was"),
+  validation("store.recovering", "another recovery of the store is running; wait for it to finish"),
   validation("store.changed-during-recovery", "the store was written to during the recovery, so it was left as it was"),
   [
     "store.vector-extension-missing",
@@ -250,6 +252,11 @@ const OTHERS: Entry[] = [
   validation("order.status", "a rejected or deleted order's status does not change"),
   ["model.not-downloaded", "not_found", "the model is not downloaded on this machine"],
   ["person.no-owner", "not_found", "no person is marked as the owner in the store"],
+  [
+    "identity.separated",
+    "conflict",
+    "the owner separated this identity from that person; only the owner links it again",
+  ],
   ["transcription.no-key", "authentication_error", "no OpenAI key is set for transcription"],
   validation("transcription.too-large", "the audio is over the transcription provider's size limit"),
   [

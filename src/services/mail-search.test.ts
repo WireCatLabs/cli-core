@@ -271,7 +271,7 @@ describe("search mail over the mail tables", () => {
     expect(await found(store, 'link:"/click?id=1"')).toEqual(["<news@example.com>"])
     expect(await found(store, 'link:"budget"')).toEqual(["<two@example.com>"])
     expect(await found(store, "domain:example.com")).toHaveLength(2)
-    await expect(found(store, "link:click?id=1")).rejects.toThrow(/invalid-syntax/)
+    expect(await found(store, "link:click?id=1")).toEqual(["<news@example.com>"])
   })
 
   it("refuses messenger-only fields", async () => {

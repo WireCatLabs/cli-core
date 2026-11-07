@@ -159,6 +159,8 @@ export interface DealSearch {
   anyWord?: boolean
   /** Only the copies of these CRM accounts; absent, every account's and the owner's own. */
   accounts?: AccountKey[]
+  /** Only these kinds; absent, deals and leads. */
+  kinds?: readonly DealKind[]
   /** 1–500, 100 by default. */
   limit?: number
 }
@@ -671,13 +673,13 @@ export const dealOperationsOver = (context: StoreContext) => {
         )
         .map(itemOf(kind))
     },
-    find: ({ words, anyWord, accounts, limit }: DealSearch): Deal[] => {
+    find: ({ words, anyWord, accounts, kinds = DEAL_KINDS, limit }: DealSearch): Deal[] => {
       const wanted = [...new Set(words.map((word) => fold(word).trim()).filter(Boolean))]
       if (!wanted.length) return []
       const most = Math.min(Math.max(limit ?? 100, 1), 500)
       const within = accounts?.map(({ provider, account }) => `${provider}\u0000${account}`)
       // Titles are short and a CRM holds thousands, not millions: folding them here is cheaper than a word index.
-      const found = DEAL_KINDS.flatMap((kind) =>
+      const found = kinds.flatMap((kind) =>
         database
           .prepare(
             `SELECT d.id, d.title, d.updated_at, a.provider, a.external_id AS account FROM ${TABLES[kind]} d ` +

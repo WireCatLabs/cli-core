@@ -9,7 +9,7 @@ import { openStore } from "./store.js"
 
 it("adds amounts to the record relations of a version 48 file and keeps the relations it held", async () => {
   const path = join(mkdtempSync(join(tmpdir(), "version-49-")), "wirecat.db")
-  const source = { provider: "sheet", account: "prokat-med", batch_id: "1" }
+  const source = { provider: "sheet", account: "demo-rent", batch_id: "1" }
   const store = await openStore({ path })
   await ingest(
     store,
@@ -27,7 +27,7 @@ it("adds amounts to the record relations of a version 48 file and keeps the rela
         },
       ],
     },
-    { account: "prokat-med" },
+    { account: "demo-rent" },
   )
   await store.close()
 

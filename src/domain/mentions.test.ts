@@ -102,8 +102,8 @@ describe("findMentions: links", () => {
   })
 
   it("finds a site written without a scheme", () => {
-    expect(values("зайди на prokat-med.ru/katalog и www.example.com", "url")).toEqual([
-      "https://prokat-med.ru/katalog",
+    expect(values("зайди на demo-rent.ru/katalog и www.example.com", "url")).toEqual([
+      "https://demo-rent.ru/katalog",
       "https://www.example.com",
     ])
   })

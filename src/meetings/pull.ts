@@ -1,5 +1,6 @@
 import { linkEvent } from "./events.js"
 import { speakerPosition, timestamp, transcriptInput } from "./ingest.js"
+import type { SourceMeeting } from "./model.js"
 import type { MeetingSource, SourceParticipant } from "./source.js"
 import type { MeetingInput, MeetingStore, ParticipantInput } from "./store.js"
 
@@ -11,13 +12,27 @@ export interface RunReport {
   warnings: { externalId: string; message: string }[]
   /** An import whose files all read their start time in one zone names it; files carry no zone of their own. */
   timezone?: string
+  /** A pull stopped by its budget before every meeting it listed: why, and how many it did not reach. */
+  stopped?: MeetingBudgetStop
+  remaining?: number
+}
+
+export type MeetingBudgetStop = "requests" | "deadline" | "cancelled"
+
+/** One meeting more, or why not: `runBudgetOf(command)` from `@wirecat/cli-core/cli` fits. */
+export interface MeetingBudget {
+  take(): MeetingBudgetStop | null
 }
 export interface PullOptions {
   accountId: number
   since?: string
   now?: number
-  /** Revisit recent occurrences; integer milliseconds from 0 through 31 days. Defaults to 0. */
+  /** Revisit recent occurrences; integer milliseconds from 0 through 31 days. Defaults to the source's `overlapMs`. */
   lookbackMs?: number
+  /** Start from 30 days back, not from the cursor. */
+  rescan?: boolean
+  /** Asked before each meeting; a stop keeps what is saved and moves the cursor to the first meeting not reached. */
+  budget?: MeetingBudget
 }
 const participantInput = (
   p: SourceParticipant,
@@ -43,24 +58,53 @@ const participantInput = (
   }
 }
 
+/** A start that does not parse sorts last; its own save reports it. */
+const startOf = (m: SourceMeeting): number => {
+  const at = Date.parse(m.occurrence.startedAt)
+  return Number.isFinite(at) ? at : Number.POSITIVE_INFINITY
+}
+
 export const pull = async (source: MeetingSource, store: MeetingStore, options: PullOptions): Promise<RunReport> => {
   const now = options.now ?? Date.now()
-  const lookbackMs = options.lookbackMs ?? 0
-  if (!Number.isSafeInteger(lookbackMs) || lookbackMs < 0 || lookbackMs > 31 * 86400000)
-    throw new Error("lookbackMs must be an integer from 0 through 31 days")
-  const since = options.since ?? (await store.cursor(options.accountId)) ?? new Date(now - 30 * 86400000).toISOString()
+  for (const [name, ms] of [
+    ["lookbackMs", options.lookbackMs ?? 0],
+    ["overlapMs", source.overlapMs ?? 0],
+  ] as const)
+    if (!Number.isSafeInteger(ms) || ms < 0 || ms > 31 * 86400000)
+      throw new Error(`${name} must be an integer from 0 through 31 days`)
+  const lookbackMs = Math.max(options.lookbackMs ?? 0, source.overlapMs ?? 0)
+  const cursor = options.rescan ? undefined : await store.cursor(options.accountId)
+  const since = options.since ?? cursor ?? new Date(now - 30 * 86400000).toISOString()
   timestamp(since)
   const report: RunReport = { meetings: 0, participants: 0, transcriptRows: 0, summaries: 0, warnings: [] }
   let failed = false
+  /** The start of the first meeting that failed: the cursor of a stopped pull goes no further. */
+  let firstFailed: number | undefined
   const from = timestamp(since) - lookbackMs
-  const meetings = await source.meetings(lookbackMs === 0 ? since : new Date(from).toISOString())
-  for (const m of meetings) {
+  // Oldest first, so a stopped pull leaves everything before its cursor done.
+  const meetings = (await source.meetings(lookbackMs === 0 ? since : new Date(from).toISOString())).toSorted(
+    (a, b) => startOf(a) - startOf(b),
+  )
+  for (const [index, m] of meetings.entries()) {
+    const stop = options.budget?.take() ?? null
+    if (stop) {
+      report.stopped = stop
+      report.remaining = meetings.length - index
+      const reached = Math.min(startOf(m), firstFailed ?? Number.POSITIVE_INFINITY)
+      if (Number.isFinite(reached) && reached > timestamp(since))
+        await store.setCursor(options.accountId, new Date(reached).toISOString(), now)
+      return report
+    }
     const id = m.occurrence.id
+    const failedHere = () => {
+      failed = true
+      firstFailed ??= startOf(m)
+    }
     const read = async <T>(part: string, call: () => Promise<T | null>): Promise<T | null | undefined> => {
       try {
         return await call()
       } catch (error) {
-        failed = true
+        failedHere()
         const message = error instanceof Error ? error.message : "could not be read"
         report.warnings.push({ externalId: id, message: `${part}: ${message}` })
         return undefined
@@ -167,7 +211,7 @@ export const pull = async (source: MeetingSource, store: MeetingStore, options: 
       report.transcriptRows += lines?.length ?? 0
       report.summaries += summary ? 1 : 0
     } catch (error) {
-      failed = true
+      failedHere()
       report.warnings.push({ externalId: id, message: error instanceof Error ? error.message : "Meeting pull failed" })
     }
   }

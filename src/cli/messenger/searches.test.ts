@@ -139,7 +139,7 @@ describe("searches", () => {
   it("keeps no history with --no-record, and none of a refused query", async () => {
     const call = await setup()
     expect((await call("search", "messages", "invoice", "--no-record", "--json")).code).toBe(0)
-    expect((await call("search", "messages", "foo:bar", "--json")).code).toBe(2)
+    expect((await call("search", "messages", "kind:person", "--json")).code).toBe(2)
     expect(json(await call("searches", "history", "--json")).items).toEqual([])
   })
 

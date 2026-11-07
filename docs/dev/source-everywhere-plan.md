@@ -172,7 +172,7 @@ still a valid entry.
 |---|---|---|
 | `kind` | `document` | `note` |
 | `provider`, `account` | `drive` and the profile; `notes` and the folder id when no profile is recorded | `notes`, and `internal` or the folder id |
-| `timestamp` (`search all`), `modifiedAt` (`search notes`) | front matter `modifiedAt`, the last edit in Google; the row's `updatedAt` when missing | the row's `updatedAt` |
+| `timestamp` (`search all`), `modifiedAt` (`search notes`) | front matter `modifiedAt`, the last edit in Google; the row's `updatedAt` when missing | `modifiedAt` (front matter `date`, else the file's time); the row's `updatedAt` when missing |
 | `url` (new) | front matter `sourceUrl` | absent |
 
 `url` is the key meetings and attachments already use (`src/meetings/model.ts:154`,

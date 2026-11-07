@@ -7,7 +7,7 @@ import { exportMeeting, type MeetingExportFormat } from "../export.js"
 import { type ImportFile, importFiles } from "../import.js"
 import { MEETING_QUERY } from "../item.js"
 import type { MeetingParticipantSearchOptions } from "../participant-search.js"
-import { pull } from "../pull.js"
+import { type MeetingBudget, pull } from "../pull.js"
 import { eventItem } from "../read-answers.js"
 import {
   listed,
@@ -46,6 +46,12 @@ export interface MeetingCommandDeps {
    * `inCommandRun` from `@wirecat/cli-core/cli`. Required, since this module cannot reach the run itself.
    */
   inRun: <T>(command: Command, body: () => Promise<T>) => Promise<T>
+  /**
+   * The sync's budget from the run's deadline and stop signal: `runBudgetOf` from `@wirecat/cli-core/cli`. Given, the
+   * sync is cooperative: it stops between meetings, keeps what it saved and answers `stopped`. Without it the sync
+   * keeps the one-shot deadline.
+   */
+  budgetOf?: (command: Command) => MeetingBudget
   now?: () => number
 }
 const integer = (text: string) => {
@@ -187,11 +193,17 @@ const addMeetingCommandsDefinition = (program: Command, deps: MeetingCommandDeps
       effects: FETCH,
       offline: false,
       output: { entity: "meeting_ingestion" },
-    }).description("bring the stored meetings up to date from the connected account"),
+      // Only a sync that stops itself at its budget may outlive the one-shot deadline.
+      ...(deps.budgetOf ? { cooperative: true, partial: true } : {}),
+    }).description(
+      "bring the stored meetings up to date from the connected account, oldest first; a run that stops before its " +
+        "deadline keeps what it saved and the next one goes on from there",
+    ),
   )
     .option("--since-time <time>", "fetch meetings starting at or after this ISO 8601 date or time", date)
-    .option("--lookback-days <days>", "revisit recent occurrences for late transcripts (0–31)", lookbackDays, 0)
-    .action(async (opts: { sinceTime?: number; lookbackDays: number }, command: Command) => {
+    .option("--lookback-days <days>", "revisit recent occurrences for late transcripts (0–31)", lookbackDays)
+    .option("--rescan", "read the last 30 days again, not only what came after the last sync")
+    .action(async (opts: { sinceTime?: number; lookbackDays?: number; rescan?: boolean }, command: Command) => {
       const source = deps.source
       if (!source) throw new MeetingError("configuration_error", "meeting source is unavailable")
       await deps.inRun(command, async () =>
@@ -200,7 +212,9 @@ const addMeetingCommandsDefinition = (program: Command, deps: MeetingCommandDeps
             accountId: deps.accountId,
             since: opts.sinceTime === undefined ? undefined : new Date(opts.sinceTime).toISOString(),
             now: deps.now?.(),
-            lookbackMs: opts.lookbackDays * 86400000,
+            ...(opts.lookbackDays === undefined ? {} : { lookbackMs: opts.lookbackDays * 86400000 }),
+            ...(opts.rescan ? { rescan: true } : {}),
+            ...(deps.budgetOf ? { budget: deps.budgetOf(command) } : {}),
           }),
           command,
         ),

@@ -119,6 +119,7 @@ export const storeSummary = async (
     ms: checked.ms,
     ...(checked.problems ? { problems: checked.problems } : {}),
     ...(checked.damagedTables?.length ? { damagedTables: checked.damagedTables } : {}),
+    ...(checked.invalidJson?.length ? { invalidJson: checked.invalidJson } : {}),
     ...(checked.searchIndexes?.some((index) => !index.ok)
       ? { damagedSearchIndexes: checked.searchIndexes.filter((index) => !index.ok).map((index) => index.name) }
       : {}),

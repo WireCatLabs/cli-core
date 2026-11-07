@@ -343,6 +343,7 @@ export const servicesFor = (deps: ServiceDeps): Services => {
 }
 
 export { entriesOfList, type ListContext, type ListedEntry } from "../search/account-list.js"
+export { plainQuery } from "../search/lucene/plain.js"
 export { FIELD_VERSION, QUERY_FIELDS, QUERY_OPERATORS, validateAst } from "../search/lucene/registry.js"
 export { QUERY_LIMITS, QUERY_VERSION } from "../search/lucene/types.js"
 export { questionLookup } from "../search/question-plan.js"

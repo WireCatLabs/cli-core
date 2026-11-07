@@ -11,8 +11,9 @@ export interface CrmWriteCapabilities {
   kinds: readonly DealKind[]
   verbs: readonly CrmVerb[]
   /**
-   * The CRM answers a repeat of an `operationId` from its record instead of doing the write again (Bitrix24 REST
-   * 3.0's `Idempotency-Key`). Only then may the owner repeat a write whose answer was lost with the same id.
+   * The CRM answers a repeat of an `operationId` from its record instead of doing the write again. Only then may the
+   * owner repeat a write whose answer was lost with the same id. Bitrix24 is not: a live portal (2026-11-07) made a
+   * create repeated with one REST 3.0 `Idempotency-Key` a second time.
    */
   idempotent: boolean
 }

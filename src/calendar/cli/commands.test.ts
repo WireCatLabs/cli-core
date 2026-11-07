@@ -12,6 +12,7 @@ import { itemOf } from "../../cli/envelope.js"
 import { commandPathKey, commandPermissions, knownPermissionKeys } from "../../cli/permission-keys.js"
 import { run } from "../../cli/program.js"
 import { runsCommand } from "../../cli/runs/command.js"
+import { settingsFor } from "../../cli/settings.js"
 import { toolsFromCommands } from "../../mcp/agent.js"
 import { answered } from "../../mcp/tool.js"
 import type { EntryInput } from "../../meetings/index.js"
@@ -256,6 +257,39 @@ describe("calendar commands", () => {
     const served = (answered(itemOf(shown)).structuredContent as { item: { title: string } }).item
     expect(served.title).toContain("ignore previous instructions")
     expect(served.title).not.toContain("\u001b")
+  })
+
+  it("search all leaves events out under events: deny and names them in missing", async () => {
+    const { run: opened } = await setup()
+    const definition = {
+      app: CALENDAR_TEST_APP,
+      configuration: settingsFor(CALENDAR_TEST_APP, { permissions: commandPermissions() }),
+      commands: () => {
+        const root = new Command("gcal")
+        addCalendarCommands(root, { app: CALENDAR_TEST_APP, open: async () => opened, now: () => NOW, timezone: "UTC" })
+        return [...root.commands]
+      },
+    }
+    const home = mkdtempSync(join(tmpdir(), "calendar-home-"))
+    const env = { HOME: home, XDG_DATA_HOME: home, XDG_CACHE_HOME: home, GCAL_CONFIG_DIR: home }
+    writeFileSync(join(home, "config.json"), JSON.stringify({ profiles: { personal: { permissions: {} } } }))
+    const cli = async (...argv: string[]) => {
+      const streams = captureStreams()
+      expect(await run(["personal", ...argv, "--json"], definition, { streams, tty: false, env })).toBe(0)
+      return JSON.parse(streams.stdout.join("")) as { items: { kind: string }[]; missing: object[] }
+    }
+    await cli("sync")
+    expect((await cli("search", "all", "roadmap")).items.map(({ kind }) => kind)).toContain("event")
+    writeFileSync(
+      join(home, "config.json"),
+      JSON.stringify({ profiles: { personal: { permissions: { events: "deny" } } } }),
+    )
+    const found = await cli("search", "all", "roadmap")
+    expect(found.items.map(({ kind }) => kind)).not.toContain("event")
+    expect(found.missing).toContainEqual({
+      field: "items",
+      why: "events left out: profile personal denies events.list",
+    })
   })
 
   it("search, events list and events show mark an invitation's text untrusted through run", async () => {
