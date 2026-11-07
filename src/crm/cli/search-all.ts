@@ -8,6 +8,7 @@ import { historySkipsOf } from "../../cli/messenger/history-gaps.js"
 import { allAnswer, offsetOf, SOURCE_SEARCHED } from "../../cli/messenger/search-answers.js"
 import { searchAllOptions } from "../../cli/messenger/search-command.js"
 import { deniedKinds } from "../../cli/search-left-out.js"
+import { commandAt, rootOf } from "../../cli/steps.js"
 import { DEAL_KINDS } from "../../domain/deals.js"
 import { SAVE_HELP } from "../../meetings/index.js"
 import type { AppIdentity } from "../../ports/app.js"
@@ -91,7 +92,7 @@ export const addCrmSearchAll = (
           ...(opts.maxMeetings === undefined ? {} : { maxMeetings: opts.maxMeetings }),
           ...(run.locked ? { scope: { crm: [run.account] } } : {}),
         },
-        { app },
+        { app, hintCommand: commandAt(rootOf(leaf), "models download") ? app.command : null },
         undefined,
         meaningLane({ env, messenger: { app }, store: async () => run.store }),
       )
