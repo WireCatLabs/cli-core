@@ -8,7 +8,7 @@ import { SendJournal, sendsPathFor } from "../sends/journal.js"
 import { CEILING_KEY, keyForCommand, levelFor, writeOfKey } from "../sends/permissions.js"
 import { newOperationId } from "../sends/send-id.js"
 import { commandPathOf } from "./command-contract.js"
-import { environmentOf } from "./context.js"
+import { withAgentLevels } from "./context.js"
 import { changesMessenger } from "./effects.js"
 import { type CommandPermissions, refuseUnknownPermissionKeys } from "./permission-keys.js"
 import { NONE_NAMED, type Settings, settingsFor } from "./settings.js"
@@ -36,7 +36,7 @@ export const refuseWriteBeforeConnecting = (
   if (!lock && dryRun) return
   const key = keyForCommand(path)
   if (!key) return
-  const settings = (resolve ?? settingsFor(app).resolveSettings)(action.optsWithGlobals(), {
+  const settings = (resolve ?? settingsFor(app).resolveSettings)(withAgentLevels(action, action.optsWithGlobals()), {
     env,
     needsProfile: false,
     readOnly: true,
@@ -96,12 +96,11 @@ export const refuseByCommandPermissions = (
   const preview = dryRun && app.messenger === false
   if (lock && effects?.remote === "write" && !preview)
     throw readOnlyRefusal(lock, `run ${commandPathOf(action).join(" ")}`)
-  const flags = action.optsWithGlobals<{ permission?: string[] }>()
-  const overrides = environmentOf(action).agent?.overrides ?? []
-  const settings = resolve(
-    overrides.length > 0 ? { ...flags, permission: [...overrides, ...(flags.permission ?? [])] } : flags,
-    { env, needsProfile: false, readOnly: true },
-  ) as Pick<Settings, "profile" | "permissions" | "permissionSources" | "configPath"> &
+  const settings = resolve(withAgentLevels(action, action.optsWithGlobals<{ permission?: string[] }>()), {
+    env,
+    needsProfile: false,
+    readOnly: true,
+  }) as Pick<Settings, "profile" | "permissions" | "permissionSources" | "configPath"> &
     Partial<Pick<Settings, "savedPermissions" | "sources">>
   refuseUnknownPermissionKeys(action, settings, app.command, permissions)
   if (dryRun || settings.sources?.profile === NONE_NAMED) return

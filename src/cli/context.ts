@@ -146,6 +146,12 @@ export const provide = (program: Command, environment: BaseEnvironment): void =>
 export const environmentOf = <E extends BaseEnvironment = BaseEnvironment>(command: Command): E =>
   (environments.get(rootOf(command)) ?? {}) as E
 
+/** The command's flags with an MCP server's `--permission` levels first: they reach a run on its agent, never in argv. */
+export const withAgentLevels = <F extends { permission?: string[] }>(command: Command, flags: F): F => {
+  const overrides = environmentOf(command).agent?.overrides ?? []
+  return overrides.length > 0 ? { ...flags, permission: [...overrides, ...(flags.permission ?? [])] } : flags
+}
+
 /**
  * The input and output `readSecret` uses for this command: the run's own, so a prompt goes where the run's other
  * output goes and a test that captures it sees it. `readSecret(prompt, { ...secretInputOf(this), echo: true })`.
@@ -210,12 +216,7 @@ type Resolve = (flags: GlobalFlags, options?: ResolveOptions) => Settings
 export const baseContext = (command: Command, resolveSettings: Resolve): BaseContext => {
   const environment = environmentOf(command)
   const env = environment.env ?? process.env
-  const flags = command.optsWithGlobals<GlobalFlags>()
-  const overrides = environment.agent?.overrides ?? []
-  const settings = resolveSettings(
-    overrides.length > 0 ? { ...flags, permission: [...overrides, ...(flags.permission ?? [])] } : flags,
-    { env },
-  )
+  const settings = resolveSettings(withAgentLevels(command, command.optsWithGlobals<GlobalFlags>()), { env })
   const { renderer, format, color, streams, compact, full } = resolveOutput({
     ...settings,
     env,
