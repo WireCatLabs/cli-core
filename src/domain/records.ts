@@ -1,13 +1,12 @@
 import { createHash } from "node:crypto"
 import { holdsCredential, secretNamed } from "../runs/secrets.js"
+import { AMOUNT_ROLES, TYPE_PATTERN, TYPE_RULE, WORD_BODY } from "./record-types.js"
+
+export { RECORD_ENTITY_TYPES, type RecordEntityType } from "./record-types.js"
 
 export const RECORDS_SCHEMA_VERSION = 1
 export const RECORD_OPERATIONS = ["upsert", "delete"] as const
-/** Types with a table of their own; anything else a source sends is `custom:<name>` and stays a record only. */
-export const RECORD_ENTITY_TYPES = ["invoice", "payment", "person", "organization", "project"] as const
-
 export type RecordOperation = (typeof RECORD_OPERATIONS)[number]
-export type RecordEntityType = (typeof RECORD_ENTITY_TYPES)[number]
 
 export interface RecordRelation {
   /** What the target is to this record: `counterparty`, `payer`, `settles`, or a source's own word. */
@@ -50,8 +49,7 @@ export interface IngestError {
   key?: string
 }
 
-const WORD = "^[a-z0-9][a-z0-9_-]{0,62}$"
-const TYPE = "^(invoice|payment|person|organization|project|custom:[a-z0-9][a-z0-9_-]{0,62})$"
+const WORD = `^${WORD_BODY}$`
 const MAX_ID = 512
 const MAX_FIELDS_BYTES = 65_536
 const MAX_RELATIONS = 100
@@ -89,7 +87,7 @@ export const RECORDS_ENVELOPE_SCHEMA = {
       additionalProperties: false,
       properties: {
         key: { type: "string", minLength: 1, maxLength: MAX_ID },
-        type: { type: "string", pattern: TYPE },
+        type: { type: "string", pattern: TYPE_PATTERN },
         external_id: { type: "string", minLength: 1, maxLength: MAX_ID },
         operation: { enum: [...RECORD_OPERATIONS] },
         fields: {
@@ -106,7 +104,7 @@ export const RECORDS_ENVELOPE_SCHEMA = {
       additionalProperties: false,
       properties: {
         role: { type: "string", pattern: WORD },
-        type: { type: "string", pattern: TYPE },
+        type: { type: "string", pattern: TYPE_PATTERN },
         external_id: { type: "string", minLength: 1, maxLength: MAX_ID },
         amount: {
           type: "string",
@@ -119,7 +117,7 @@ export const RECORDS_ENVELOPE_SCHEMA = {
 } as const
 
 const wordPattern = new RegExp(WORD)
-const typePattern = new RegExp(TYPE)
+const typePattern = new RegExp(TYPE_PATTERN)
 const decimalPattern = new RegExp(DECIMAL)
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
@@ -166,13 +164,13 @@ const relationErrors = (relations: unknown, at: (string | number)[]): IngestErro
     if (typeof relation.role !== "string" || !wordPattern.test(relation.role))
       return [invalid([...here, "role"], "a role is lowercase letters, digits, - and _")]
     if (typeof relation.type !== "string" || !typePattern.test(relation.type))
-      return [invalid([...here, "type"], `a type is one of ${RECORD_ENTITY_TYPES.join(", ")} or custom:<name>`)]
+      return [invalid([...here, "type"], TYPE_RULE)]
     if (!idText(relation.external_id))
       return [invalid([...here, "external_id"], `an external id takes 1–${MAX_ID} characters`)]
     if (relation.amount !== undefined && (typeof relation.amount !== "string" || !decimalPattern.test(relation.amount)))
       return [invalid([...here, "amount"], 'an amount is a decimal string, such as "13000.00"')]
-    if (relation.amount !== undefined && relation.role !== "settles")
-      return [invalid([...here, "amount"], "only a settles relation carries an amount")]
+    if (relation.amount !== undefined && !AMOUNT_ROLES.includes(relation.role))
+      return [invalid([...here, "amount"], `only a ${AMOUNT_ROLES.join(" or ")} relation carries an amount`)]
     return []
   })
 }
@@ -193,9 +191,7 @@ export const recordErrors = (record: unknown, index: number): IngestError[] => {
   if (extra.length > 0) return withKey([invalid([...at, extra[0] as string], `a record has no ${extra[0]}`)])
   if (!idText(record.key)) return [invalid([...at, "key"], `a key takes 1–${MAX_ID} characters`)]
   if (typeof record.type !== "string" || !typePattern.test(record.type))
-    return withKey([
-      invalid([...at, "type"], `a type is one of ${RECORD_ENTITY_TYPES.join(", ")} or custom:<name>`, "record.type"),
-    ])
+    return withKey([invalid([...at, "type"], TYPE_RULE, "record.type")])
   if (!idText(record.external_id))
     return withKey([invalid([...at, "external_id"], `an external id takes 1–${MAX_ID} characters`)])
   if (!RECORD_OPERATIONS.includes(record.operation as RecordOperation))

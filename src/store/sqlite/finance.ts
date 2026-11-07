@@ -23,6 +23,7 @@ import {
   quantityOf,
   scaleOf,
 } from "../../domain/money.js"
+import { isProposalType, PROPOSAL_TYPES, type ProposalTable, RECORD_TYPES } from "../../domain/record-types.js"
 import { assertMayDecide, botKey, type Decider, deciderAuthor } from "../decisions.js"
 import { type Actor, type ProposedByFilter, proposedBySql, proposerOf } from "./actors.js"
 import {
@@ -351,12 +352,7 @@ export const reviewedRowsOver = (context: StoreContext) => {
     if (by !== "owner") refuse(`only the owner ${what}`, "finance.owner-only", "permission_error")
   }
 
-  const keepDecision = (
-    table: "invoices" | "payments" | "orders" | "opportunities",
-    id: number,
-    by: Decider,
-    reason?: string,
-  ) => {
+  const keepDecision = (table: ProposalTable | "orders", id: number, by: Decider, reason?: string) => {
     const why = [by === "owner" ? undefined : by.reason.trim(), reason?.trim() || undefined].filter(Boolean).join(": ")
     if (by === "owner" && !why) return
     const decision = by === "owner" ? { by: "owner", reason: why } : { by: "agent", bot: by.bot, reason: why }
@@ -567,10 +563,10 @@ export const financeOperationsOver = (context: StoreContext): FinanceOperations 
 
   const decide = (reference: string, by: Decider, reason: string | undefined, confirm: boolean) => {
     const thing = requiredThing(database, reference, "the proposal")
-    if (thing.type !== "invoice" && thing.type !== "payment")
-      return refuse(`${reference} is not an invoice: or payment:`, "finance.ref")
+    if (!isProposalType(thing.type))
+      return refuse(`${reference} is not an ${PROPOSAL_TYPES.map((type) => `${type}:`).join(" or ")}`, "finance.ref")
     const type = thing.type
-    const table = type === "invoice" ? "invoices" : "payments"
+    const table = RECORD_TYPES[type].table
     const row = rowOf(reference, type)
     const ref = `${type}:${row.id}`
     assertMayDecide(
