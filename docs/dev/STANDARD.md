@@ -1139,6 +1139,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--page-size` | `<n>` | how many items one request to the messenger asks for; the messenger's own if not given. **the default is each messenger's own page: 30 on MAX, 100 on Telegram** |  | `bot messages sync` (max, tg only), `messages sync`, `store gaps repair` |
 | `--parent` | `<id>` | parent task in the same project; none clears it |  | `tasks update` |
 | `--pause` | `<duration>` | the least wait between pages, 5s or 500ms; each is up to twice that. **max's own copy is worded differently until T6 moves the command onto the shared one (e13)** | `5s` | `attachments download`, `bot messages sync` (max, tg only), `messages download`, `messages sync`, `store gaps repair` |
+| `--payload` | `<json>` | the data of what to do, as JSON |  | `models add` |
 | `--per-chat` | `<limit>` | at most this many per chat, such as 1/12h |  | `replies edit` |
 | `--per-person` | `<limit>` | at most this many per person, such as 1/1d |  | `replies edit` |
 | `--permission` | `<key=level>` | make a permission stricter for this MCP server only, like messages.send=deny; it never loosens the profile; repeat for more keys |  | `mcp add`, `mcp check`, `mcp config`, `mcp serve`, `mcp server start` |

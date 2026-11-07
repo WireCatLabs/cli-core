@@ -796,6 +796,10 @@
       "default": "5s",
       "note": "max's own copy is worded differently until T6 moves the command onto the shared one (e13)"
     },
+    "--payload": {
+      "value": "<json>",
+      "meaning": "the data of what to do, as JSON"
+    },
     "--per-chat": {
       "meaning": "at most this many per chat, such as 1/12h",
       "value": "<limit>"
@@ -3633,6 +3637,12 @@
     "models": {
       "in": "all"
     },
+    "models add": {
+      "in": "all",
+      "options": {
+        "--payload": "all"
+      }
+    },
     "models download": {
       "in": "all",
       "options": {
@@ -3649,6 +3659,9 @@
       "in": "all"
     },
     "models list": {
+      "in": "all"
+    },
+    "models set": {
       "in": "all"
     },
     "polls": {
