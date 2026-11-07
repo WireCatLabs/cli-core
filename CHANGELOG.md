@@ -23,37 +23,6 @@ shape of this file.
   damaged store is explained in the answer's `store.damage` (`explainDamage`: what, causes, investigate, impact,
   external_unaffected, steps) and points at `store recover`, the whole-file check. `storeSummary` takes
   `{ deep, command }`, and `DOCTOR_DEEP_OPTION` words a CLI's own `--deep`.
-- **`--field` by label.** CRM `create` and `update` resolve `--field <key>=<value>` by the synced field definitions:
-  a field by its code or whole label (a label two fields share is refused as `field.ambiguous` with both codes, an
-  unknown one as `field.unknown` with close candidates), a list field's option by its id or label
-  (`field.unknown-option`), and a multiple field's repeats into a list; a single field given twice is refused. A CRM
-  whose definitions are not stored takes codes as typed.
-- **`CrmWrites.alsoChecks(kind, verb)`**: a CLI's own keys a write also checks, such as `api.crm.deal.update`.
-  `crmAlsoChecks(also)` gives `commandPermissions({ alsoChecks })` every key a CRM write may check, so `--dry-run`
-  names the implied move, close and `crm.assign-others` keys and the CLI's own. A key an argument implies is a
-  `ConditionalKey` `{ key, when }`: `commandPermissions({ alsoChecks })` may return one, and the preview shows its level
-  and `when` but never refuses on it.
-- **A deal's and lead's `provider_metadata` and `assignee`.** The CRM's own field values, by code as
-  `{ label, value, option_id? }` (`CrmValue`), kept as stored in `metadata`, codes never renamed; `CrmItem.assignee`, the
-  CRM user it is assigned to, answered as the identity `<account>/user/<id>`.
-- **CRM field definitions (store version 54).** `CrmSource.fields?(kind)` lists a CRM's own fields on deals, leads,
-  contacts or companies: `CrmField` `{ code, label, type, multiple, filterable, options? }`. `syncCrm` reads them every
-  run, after the pipelines, and `store.crm.saveFields` keeps each kind's whole list in `crm_fields`: one the CRM no
-  longer lists is marked deleted, and an empty list marks them all. `store.crm.fields(account, kind)` reads them in
-  the CRM's order. Values stay in `metadata`, keyed by code. The migration adds one table; `minCompatible` stays 34.
-- **`fields list <deals|leads|people|organizations>`** in `addCrmCommands`: the synced fields of one kind, with
-  `--limit`, `--page` and `--all`, in bitrix24-cli's `fields list` shape plus `untrusted`. An unknown kind is refused
-  as `field.unknown-kind` with the allowed words.
-- **`crmSourceContract` checks `fields()`** when an adapter has it, and `crmSyncContract` checks they are stored. The
-  fake CRM has `setFields`, `calls.fields` and `SOURCE_FIELD` on its deals.
-
-### Changed — may break callers
-
-- **`CrmFieldsInput.custom` is the `--field` pairs as typed** (`[name, value][]`), and `CrmFields.custom` values may be
-  a list for a multiple field.
-- **A write the CRM made whose item could not be read back is journaled as sent.** A `CrmWriter` throws it with
-  `sent: true` in the details; the error is answered with the write's `operation_id`, no longer journaled as failed.
-- **A CRM sync with `fields()` makes one more request per kind**, so a `--max-pages` budget reaches the items later.
 
 ### Fixed
 
