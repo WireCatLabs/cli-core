@@ -7,6 +7,11 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- **An app's `mcp serve` over stdio ends when it was stopped before it listened.** `serveAppOverStdio` waited only
+  for an abort event, which a signal that had already fired never sends, so the server hung with stdin open.
+
 ## 0.597.0 — 07.11.2026
 
 ### Added

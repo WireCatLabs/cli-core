@@ -163,8 +163,11 @@ export const serveAppOverStdio = async (
   })
   const ended = await new Promise<"input" | "stopped">((resolve) => {
     wire.ended.then(() => resolve("input"))
-    if (own) signal?.addEventListener("abort", () => resolve("stopped"), { once: true })
-    else {
+    if (own) {
+      // A stop that came before this line fires no abort event.
+      if (signal?.aborted) resolve("stopped")
+      else signal?.addEventListener("abort", () => resolve("stopped"), { once: true })
+    } else {
       process.once("SIGINT", () => resolve("stopped"))
       process.once("SIGTERM", () => resolve("stopped"))
     }

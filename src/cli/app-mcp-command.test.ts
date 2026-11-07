@@ -176,6 +176,20 @@ describe("appMcpCommand", () => {
     expect(stderr.join("")).toContain("personal, work")
   })
 
+  it("**ends at once when it is stopped before it listens**, with stdin still open", async () => {
+    const stdin = new PassThrough()
+    const stdout = new PassThrough()
+    const code = await run(["work", "mcp", "serve"], definition(), {
+      streams: captureStreams(),
+      tty: false,
+      env: home(),
+      stdin,
+      stdout,
+      signal: AbortSignal.abort(),
+    })
+    expect(code).toBe(0)
+  })
+
   it("refuses a --permission key no command checks", async () => {
     const { code, stderr } = await serve(["work", "mcp", "serve", "--permission", "evnts.delete=deny"], [])
     expect(code).not.toBe(0)
