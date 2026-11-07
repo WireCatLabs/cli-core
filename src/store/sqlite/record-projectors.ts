@@ -1,5 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
-import type { ProposalType, RecordEntityType } from "../../domain/record-types.js"
+import { RECORD_ENTITY_TYPES, type RecordEntityType, roleNames } from "../../domain/record-types.js"
 import type { EnvelopeSource } from "../../domain/records.js"
 import type { financeOperationsOver, InvoiceInput, PaymentDetail, PaymentInput } from "./finance.js"
 import type { Author } from "./memories.js"
@@ -86,11 +86,28 @@ const paymentOf = (fields: Row, related: Map<string, string[]>, source: Envelope
 }
 
 /** `null` for a type whose entity only the owner's `map` gives. */
-export const RECORD_PROJECTORS: { [K in RecordEntityType]: K extends ProposalType ? Projector : null } = {
+export const RECORD_PROJECTORS = {
   invoice: (fields, { related }, source, { finance }) => finance.addInvoice(invoiceOf(fields, related, source)).ref,
   payment: (fields, { related, shares }, source, { finance, settle }) =>
     settle(finance.addPayment(paymentOf(fields, related, source)), shares),
   person: null,
   organization: null,
   project: null,
-}
+} as const satisfies Record<RecordEntityType, Projector | null>
+
+export type ProjectedType = {
+  [K in RecordEntityType]: (typeof RECORD_PROJECTORS)[K] extends null ? never : K
+}[RecordEntityType]
+
+export const PROJECTED_TYPES = RECORD_ENTITY_TYPES.filter(
+  (type): type is ProjectedType => RECORD_PROJECTORS[type] !== null,
+)
+
+export const isProjected = (type: unknown): type is ProjectedType =>
+  (PROJECTED_TYPES as readonly unknown[]).includes(type)
+
+/**
+ * Single roles a record may also name in `fields.<role>`. Pooled across the projected types on purpose: an invoice
+ * whose `fields.payer` is not text is refused, as before the registry.
+ */
+export const FIELD_REFERENCE_ROLES = roleNames(PROJECTED_TYPES, (role) => !role.many)

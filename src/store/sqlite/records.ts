@@ -1,12 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import { formatDecimal, minorUnits, scaleOf } from "../../domain/money.js"
-import {
-  FIELD_REFERENCE_ROLES,
-  isProposalType,
-  PROPOSAL_TYPES,
-  type ProposalType,
-  rolesOf,
-} from "../../domain/record-types.js"
+import { rolesOf } from "../../domain/record-types.js"
 import {
   type EnvelopeRecord,
   type EnvelopeSource,
@@ -21,7 +15,18 @@ import { financeOperationsOver, type PaymentDetail } from "./finance.js"
 import type { Author } from "./memories.js"
 import { requiredThing } from "./notes.js"
 import type { StoreContext } from "./open.js"
-import { IMPORTER, RECORD_PROJECTORS, type Row, refusal, type Share, stringField } from "./record-projectors.js"
+import {
+  FIELD_REFERENCE_ROLES,
+  IMPORTER,
+  isProjected,
+  PROJECTED_TYPES,
+  type ProjectedType,
+  RECORD_PROJECTORS,
+  type Row,
+  refusal,
+  type Share,
+  stringField,
+} from "./record-projectors.js"
 import { referenceOfThing, storedThing } from "./things.js"
 import { read, write } from "./transaction.js"
 
@@ -92,7 +97,7 @@ export interface RecordStore {
   map(key: RecordKey, entity: string, by: Author): Promise<SourceRecord>
 }
 
-const PROPOSAL_TYPES_SQL = PROPOSAL_TYPES.map((type) => `'${type}'`).join(", ")
+const PROJECTED_TYPES_SQL = PROJECTED_TYPES.map((type) => `'${type}'`).join(", ")
 
 const codeOf = (error: CliError): string => {
   const reason = (error.details as { reason?: unknown } | undefined)?.reason
@@ -126,7 +131,7 @@ export const recordStoreOver = (context: StoreContext): RecordStore => {
     type == null ? null : (referenceOfThing(database, storedThing(type, id)) ?? `${String(type)}:${String(id)}`)
 
   /** Roles a projection needs whose target has no entity yet, the entities of the rest, and what each invoice gets. */
-  const relatedOf = (recordId: number, type: ProposalType) => {
+  const relatedOf = (recordId: number, type: ProjectedType) => {
     const roles = rolesOf(type)
     const known = roles.map(([name]) => name)
     const many = roles.flatMap(([name, role]) => (role.many ? [name] : []))
@@ -153,7 +158,7 @@ export const recordStoreOver = (context: StoreContext): RecordStore => {
 
   /** Makes the proposal a waiting record stands for, once every reference it names has an entity. */
   const project = (row: Row, source: EnvelopeSource): { proposed?: string; missing: string[] } => {
-    const type = row.type as ProposalType
+    const type = row.type as ProjectedType
     const { related, shares, missing } = relatedOf(Number(row.id), type)
     if (missing.length > 0) return { missing }
     const fields = JSON.parse(String(row.fields)) as Row
@@ -256,7 +261,7 @@ export const recordStoreOver = (context: StoreContext): RecordStore => {
     while (queue.length > 0) {
       const rows = sql(
         "SELECT DISTINCT r.* FROM record_relations rr JOIN records r ON r.id = rr.record_id WHERE rr.target_id = ? " +
-          `AND r.entity_id IS NULL AND r.deleted_at IS NULL AND r.type IN (${PROPOSAL_TYPES_SQL})`,
+          `AND r.entity_id IS NULL AND r.deleted_at IS NULL AND r.type IN (${PROJECTED_TYPES_SQL})`,
       ).all(queue.shift() as number)
       for (const row of rows) {
         try {
@@ -374,7 +379,7 @@ export const recordStoreOver = (context: StoreContext): RecordStore => {
     relate(id, accountId, relations, time)
     let projected = false
     let flagged = stored?.entity_id != null && stored.projected_fingerprint !== fingerprint
-    if (isProposalType(record.type) && stored?.entity_id == null) {
+    if (isProjected(record.type) && stored?.entity_id == null) {
       const done = project({ id, type: record.type, fields, account_id: accountId }, source)
       if (done.proposed) proposed.push(done.proposed)
       projected = done.proposed !== undefined
@@ -399,7 +404,7 @@ export const recordStoreOver = (context: StoreContext): RecordStore => {
 
   const missingOf = (id: number): string[] | null => {
     const row = sql("SELECT type, entity_id, deleted_at FROM records WHERE id = ?").get(id)
-    if (!row || row.entity_id != null || row.deleted_at != null || !isProposalType(row.type)) return null
+    if (!row || row.entity_id != null || row.deleted_at != null || !isProjected(row.type)) return null
     const { missing } = relatedOf(id, row.type)
     return missing.length > 0 ? missing : null
   }
@@ -420,7 +425,7 @@ export const recordStoreOver = (context: StoreContext): RecordStore => {
         const complete: number[] = []
         for (const item of records.slice(start, start + chunk)) {
           try {
-            const done = isProposalType(item.record.type)
+            const done = isProjected(item.record.type)
               ? write(database, () => writeOne(accountId, source, item, proposed))
               : writeOne(accountId, source, item, proposed)
             outcomes.push({ index: item.index, key: item.record.key, status: done.status })
@@ -526,7 +531,7 @@ export const recordStoreOver = (context: StoreContext): RecordStore => {
         const rows = database
           .prepare(
             `${SELECT}WHERE a.provider = ? AND a.external_id = ? AND (? IS NULL OR r.type = ?) ` +
-              `AND (? IS NULL OR (r.entity_id IS NULL AND r.deleted_at IS NULL AND r.type IN (${PROPOSAL_TYPES_SQL}))) ` +
+              `AND (? IS NULL OR (r.entity_id IS NULL AND r.deleted_at IS NULL AND r.type IN (${PROJECTED_TYPES_SQL}))) ` +
               "AND (? IS NULL OR (r.entity_id IS NOT NULL AND (r.deleted_at IS NOT NULL " +
               "OR r.projected_fingerprint IS NOT r.fingerprint))) ORDER BY r.updated_at DESC, r.id DESC LIMIT ?",
           )
