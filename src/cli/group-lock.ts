@@ -37,8 +37,8 @@ const declared = new WeakMap<Command, Readonly<Record<string, SimpleReference>>>
  * The kind of thing a bare id names, per argument (by its name) or option (by its long flag):
  * `refKinds(show, { organization: "organization", "--note": "note" })`. An argument or a `--<kind>` option named
  * after a kind needs no entry. Under the lock a bare value there is checked as `<kind>:<value>`; a command that
- * declares nothing has a bare number in an argument refused, since what it names is unknown. `{}` says no argument
- * takes an id.
+ * declares nothing has any other argument value refused, since what it names is unknown (`1e0`, `+1`, `link:1`).
+ * `{}` says no argument takes an id, so free text passes.
  */
 export const refKinds = <T extends Command>(command: T, kinds: Readonly<Record<string, SimpleReference>>): T => {
   declared.set(command, kinds)
@@ -51,12 +51,10 @@ const isSimpleReference = (name: string): name is SimpleReference =>
 const kindAt = (command: Command, name: string, implicit: string): SimpleReference | undefined =>
   declared.get(command)?.[name] ?? (isSimpleReference(implicit) ? implicit : undefined)
 
-const BARE_NUMBER = /^\d+$/
-
 /**
  * Every reference typed into the run: each word of each argument and option value that is a reference, and each bare
- * id in a position whose kind is known, as `<kind>:<id>`. `unknown` holds the arguments with a bare number of a
- * command that declares no kinds.
+ * id in a position whose kind is known, as `<kind>:<id>`. `unknown` holds every other argument value of a command
+ * that declares no kinds.
  */
 export const referencesIn = (command: Command): { references: string[]; unknown: string[] } => {
   const references = new Set<string>()
@@ -65,14 +63,14 @@ export const referencesIn = (command: Command): { references: string[]; unknown:
     for (const word of value.split(/[\s,]+/).filter(Boolean)) {
       if (looksLikeReference(word)) references.add(word)
       else if (kind !== undefined && !word.includes(":")) references.add(`${kind}:${word}`)
-      else if (BARE_NUMBER.test(word)) onBare?.()
+      else onBare?.()
     }
   }
   command.registeredArguments.forEach((argument, at) => {
     const name = argument.name()
     for (const value of valuesOf(command.processedArgs[at] ?? command.args[at]))
       typed(value, kindAt(command, name, name), () => {
-        if (!declared.has(command)) unknown.push(`<${name}> ${value}`)
+        if (!declared.has(command) && !unknown.includes(`<${name}> ${value}`)) unknown.push(`<${name}> ${value}`)
       })
   })
   for (const option of command.options) {

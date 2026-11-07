@@ -78,17 +78,18 @@ const parsed = (argv: string[]) => {
   const program = new Command().exitOverride()
   const noop = () => undefined
   const tags = groupAware(new Command("tags"))
-  tags.command("add").argument("<tag>").option("--message <ref>").option("--note <id>").action(noop)
+  refKinds(tags.command("add").argument("<tag>").option("--message <ref>").option("--note <id>"), {}).action(noop)
   const deals = groupAware(new Command("deals"))
   deals.command("update").argument("<deal>").option("--project <ref>").action(noop)
   const organizations = groupAware(new Command("organizations"))
   organizations.command("show").argument("<ref>").action(noop)
-  organizations.command("rename").argument("<organization>").argument("<name>").action(noop)
+  refKinds(organizations.command("rename").argument("<organization>").argument("<name>"), {}).action(noop)
   refKinds(organizations.command("open").argument("<id>"), { id: "organization" }).action(noop)
   const events = groupAware(new Command("events"))
   events.command("show").argument("<event>").action(noop)
   program.addCommand(tags).addCommand(deals).addCommand(organizations).addCommand(events)
   program.command("show").argument("<ref>").action(noop)
+  program.addCommand(groupAware(refKinds(new Command("search").argument("<words>").action(noop), {})))
   let leaf: Command | undefined
   program.hook("preAction", (_root, action) => {
     leaf = action
@@ -117,6 +118,11 @@ describe("the group lock fails closed", () => {
     await expect(
       refuseOutsideGroup(parsed(["organizations", "show", String(own)]), { app, env, store }),
     ).rejects.toThrow(new RegExp(`takes <ref> ${own} as an id of a kind it does not declare`))
+    for (const typed of ["link:1", "1e0", "+1", "01"])
+      await expect(refuseOutsideGroup(parsed(["organizations", "show", typed]), { app, env, store })).rejects.toThrow(
+        expect.objectContaining({ code: "permission_error", message: expect.stringContaining(`<ref> ${typed}`) }),
+      )
+    await allowed(env, store, ["search", "1e0 link:1 +1"])
     const note = await store.notes.addNote({ text: "the owner's own" })
     await refused(env, store, ["tags", "add", "x", "--note", note.id])
     await allowed({ ...env, MEMO_GROUP_LOCK: "personal" }, store, ["tags", "add", "x", "--note", note.id])

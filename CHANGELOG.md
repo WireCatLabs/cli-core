@@ -165,12 +165,13 @@ shape of this file.
   or an option value (`msg:`, `chat:`, `deal:`, `person:`, `organization:`, `note:`, …), is checked by
   `refuseOutsideGroup(command, { app, env, store? })`: a thing that belongs only to accounts outside the group is
   refused, one the owner made passes, a note written in memo belongs to `personal`, and a person passes when one of
-  their identities is in the group. A bare id counts too, as `<kind>:<id>`, where the command says its kind: `refKinds(command, { id:
-  "organization", "--note": "note" })`, or an argument or `--<kind>` option named after a kind (`<organization>`,
-  `--project`). A command that declares no kinds has a bare number in an argument refused. `store.refs.accounts(ref)`
-  says which accounts a reference's thing belongs to; an event is its calendars' and meetings' accounts.
-  `inGroupOf(context, group)` (services) is the membership test the lock uses.
-  Group edits are refused under the lock, and `listAccountGroups` lists only the locked group.
+  their identities is in the group. A bare id counts too, as `<kind>:<id>`, where the command says its kind:
+  `refKinds(command, { id: "organization", "--note": "note" })`, or an argument or `--<kind>` option named after a
+  kind (`<organization>`, `--project`). A command that declares no kinds has any other argument value refused;
+  `refKinds(command, {})` lets free text through. `store.refs.accounts(ref)` says which accounts a reference's thing
+  belongs to; an event is its calendars' and meetings' accounts. `inGroupOf(context, group)` (services) is the
+  membership test the lock uses. Group edits are refused under the lock, and `listAccountGroups` lists only the
+  locked group.
 - **Under `<PREFIX>_GROUP_LOCK`, `listContextOf` holds only the group's accounts**, so every `--source` reader fails
   closed: a list, a bare provider or `all` resolves inside the group, and `search messages`, `search mail` and
   `search notes` without `--source` read the group. A lock naming no group is `permission_error`. The lock is read
