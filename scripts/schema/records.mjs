@@ -26,8 +26,12 @@ export const recordTables = [
       c("batch_id", "text", { notnull: true, note: "the import that wrote it last" }),
       ...ts(),
       del(),
+      c("created_entity", "integer", {
+        notnull: true,
+        note: "1 when this record created its entity: made by the import",
+      }),
     ],
-    keys: ["UNIQUE (account_id, type, external_id)"],
+    keys: ["UNIQUE (account_id, type, external_id)", "INDEX (account_id, batch_id)"],
   },
   {
     name: "record_relations",
@@ -43,6 +47,7 @@ export const recordTables = [
       c("amount", "text", {
         note: "the share of a payment a settles relation names, a decimal in its currency; null: as far as both allow",
       }),
+      c("as_role", "text", { note: "the role inside a relationship, such as decision-maker or customer" }),
     ],
     keys: ["UNIQUE (record_id, role, target_type, target_external_id)", "INDEX (target_type, target_external_id)"],
   },
