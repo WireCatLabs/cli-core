@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.600.0 — 07.11.2026
+
 ### Changed — may break callers
 
 - **`schedule agent` and `schedule command` take `--deliver-to <route>`, no longer `--to <route>`.** `--to` names who a
