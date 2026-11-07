@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.602.0 — 07.11.2026
+
 ### Changed — may break callers
 
 - **A search for plain text with a colon, a URL or another special character finds what holds it.** `meeting at 10:30`,
