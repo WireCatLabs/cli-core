@@ -52,6 +52,13 @@ shape of this file.
 - **`apiJson` and `apiPlainJson` refuse a body holding `NaN` or `Infinity`** with `validation_error`, naming the field,
   before anything is sent. JSON writes them as `null`, so a failed `Number(…)` reached the service as a cleared field:
   bitrix24-cli's `deals update --owner anna` sent `assignedById: null`.
+- **`search all` in a CRM CLI and in a calendar CLI leaves out every kind whose list the profile denies.**
+  Under `deals: deny` it showed every deal's title, stage and amount, on the command line and over MCP. Each kind is
+  judged by its list key (`deals.list`, `leads.list`, `events.list`, `messages.list`, `notes.list`,
+  `meetings.list`) at the levels the run uses: the profile's, `--permission` and an MCP server's own. Each kind left
+  out is named in `missing` and on stderr; when every kind asked for is denied, the search is refused with
+  `permission_error` (`search.all-denied`). `DealSearch.kinds` and `SearchAllRequest.crmKinds` narrow the CRM kinds
+  read, and `run()` hands a command its CLI's built-in levels as `permissionDefaults`.
 
 ## 0.600.0 — 07.11.2026
 

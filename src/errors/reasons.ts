@@ -155,6 +155,7 @@ const OTHERS: Entry[] = [
   validation("search.server-options", "search --backend server takes neither --exact, --cursor nor --newest"),
   validation("search.one-backend", "search answers from one backend at a time: archive or server"),
   ["search.server-not-allowed", "permission_error", "the profile does not allow messages.server-search"],
+  ["search.all-denied", "permission_error", "the profile denies every kind search all would read"],
   validation("search.server-no-criteria", "the query has nothing the server can search, so only the store is read"),
   ["search.server-unsupported", "provider_error", "this source's server cannot search"],
   ["search.server-rate-limited", "rate_limited", "the server refused a search as too many requests"],

@@ -1,6 +1,7 @@
 import { CliError, type ErrorCode } from "@wirecat/cli-base"
 import { parseLucene, type QueryNode } from "@wirecat/cli-base/query"
 import { type HitFile, hitFiles } from "../domain/attachments.js"
+import type { DealKind } from "../domain/deals.js"
 import { parseLocator } from "../domain/locator.js"
 import { type MailFields, senderIsMe } from "../domain/models.js"
 import { INTERNAL_NOTES, kindIn } from "../domain/providers.js"
@@ -100,6 +101,8 @@ export interface SearchAllRequest {
   signal?: AbortSignal
   /** The accounts `--source` chose, per kind; a kind left out reads every account of its own. */
   scope?: Partial<Record<SearchedResource, AccountKey[]>>
+  /** The CRM kinds `crm` reads; absent, deals and leads. */
+  crmKinds?: readonly DealKind[]
 }
 
 /** A query a resource cannot answer is skipped with its reason, never a failure of the whole search. */
@@ -364,6 +367,7 @@ export const searchAll = async (
           const found = await store.deals.find({
             words,
             anyWord: anyWord || discover,
+            ...(request.crmKinds === undefined ? {} : { kinds: request.crmKinds }),
             limit: Math.min(window + 1, 500),
             ...(chosen === undefined ? {} : { accounts: chosen }),
           })
