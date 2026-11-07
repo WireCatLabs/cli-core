@@ -284,8 +284,10 @@ const changeCrm = async (env: NodeJS.ProcessEnv, setting: string, value: string 
     result: { store: storePath(env), scope: "store", setting, value: crmValueText(now) },
     note:
       name === "links"
-        ? `store-wide — the next sync of that account writes what it reports as ${now === "review" ? "proposals for the owner to review" : "reported relationships"}; relationships already stored stay`
-        : "store-wide — a company of a mapped type becomes a customer, supplier or partner of the account's own company",
+        ? `store-wide — the next sync of that account writes what it reports as ${
+            now === "review" ? "proposals for the owner to review" : "reported relationships"
+          }; relationships already stored stay`
+        : "store-wide — a company of a mapped type becomes a customer, supplier or partner of the own company",
   }
 }
 

@@ -19,20 +19,23 @@ shape of this file.
 
 - **Relationship links know the account that reported them, when they held, and their history (store version 56).**
   `links` gains `account_id`, `starts_at`, `ends_at` and `deleted_at`; `link_revisions` keeps one row per change of a
-  relationship link (`added`, `changed`, `ended`, `confirmed`, `withdrawn`, `restored`, `removed`), written by
-  triggers, never for a change of `updated_at` alone and never for links of other kinds. A unique key on relationship
-  links (kind, ends, anchor, role, account) lets one pair hold several roles and keeps a CRM's claim apart from the owner's;
-  the migration folds duplicates, keeping the owner's row. Forward-only; `minCompatible` stays 34.
+  relationship link (`added`, `changed`, `ended`, `confirmed`, `withdrawn`, `restored`, `rejected`, `removed`),
+  written by triggers, never for a change of `updated_at` alone and never for links of other kinds. A unique key on
+  relationship links (kind, ends, anchor, role, account) lets one pair hold several roles and keeps a source's claim
+  apart from the owner's; the migration folds duplicates onto the owner's row, keeps their metadata and re-points the
+  proposals that named a dropped row.
 
-- **A CRM sync keeps the relationships the CRM reports, as a diff, and never overrides the owner's.** Contacts become
-  `member-of` their companies (role `contact`, the job title beside it), a deal's `assignee` its `owner`, the
-  account's users `member-of` its own companies as `employee` and, from the departments, `reports-to` their head.
-  What the CRM stops reporting is withdrawn, not deleted; a role against the owner's is a `relationship_update`
-  proposal; a contact or user never synced is a sync `issues` entry. `CrmPerson.organizations`/`position`,
-  `CrmItem.people[].primary`, `CrmOrganization.own`/`type`, `CrmUser`, `CrmDepartment` and the optional
-  `CrmSource.users()`/`departments()` carry them; every one is optional. The same diff is `store.relations.syncReported`
-  for any source. The store settings `crm.<provider>:<account>.links` (`reported` or `review`) and
-  `crm.<provider>:<account>.company-types` are offered by every CLI's `config`.
+- **A CRM sync keeps the relationships the CRM reports, as a diff.** Contacts become `member-of` their companies (role
+  `contact`, the job title beside it), a deal's contacts keep their deal roles and its `assignee` is its `owner`, the
+  account's users are `member-of` its own companies as `employee` and, from the departments, `reports-to` their head.
+  What the CRM stops reporting is withdrawn, not deleted; a link the owner confirmed is never withdrawn, and one the
+  owner removed or rejected, role included, is not written again (`skipped_owner_rejected`). A deal that names a
+  contact not synced yet gets it on a later run. `CrmPerson.organizations`/`position`, `CrmItem.people[].primary`,
+  `CrmOrganization.own`/`type`, `CrmUser`, `CrmDepartment` and `CrmSource.users()`/`departments()` carry them, all
+  optional. The same diff is `store.relations.syncReported` for any source. The store settings
+  `crm.<provider>:<account>.links` (`reported` or `review`: new relationships wait as proposals) and
+  `crm.<provider>:<account>.company-types` (a company type means `customer-of`, `supplier` or `partner-of` the own
+  company) are offered by every CLI's `config`.
 
 ### Changed — may break callers
 
@@ -43,6 +46,20 @@ shape of this file.
   `metadata.position`, never in the role); memo's `author`, `lead` and `cto` examples and tests need it.
 - **`KnowledgeRelation.standing` and the `relationship` entity's `standing` are required.** A caller that builds one
   by hand adds it; `standingOf` derives it from the link.
+- **A CRM's deal and lead people are `confirmed: false`, `standing: reported` (store version 56).** They were stored
+  confirmed, as if the owner had said so. They still count wherever confirmed relationships count (`usableLink`), and
+  a deal still lists them; a view that reads `confirmed: false` as "proposed" (memo's relationships list) should read
+  `standing` instead.
+- **`relate` with a role the pair does not hold yet makes a second relationship**, since one pair may hold several
+  roles; without a role it answers the pair's link as before. `updateRelation` to a role the pair already holds is
+  refused with `relationship.exists`.
+- **Removing any relationship leaves a rejected proposal**, so neither a scan nor a source's sync brings it back; it
+  was so only for a link to a project or a suggestion.
+
+### Fixed
+
+- **The person a CRM contact or user makes takes its name.** Joined to the mail contact of its address first, it was
+  left with no name.
 
 ## 0.605.0 — 07.11.2026
 
@@ -154,15 +171,6 @@ shape of this file.
   keyed command.
 
 ### Fixed
-
-- **The person a CRM contact or user makes takes its name.** Joined to the mail contact of its address first, it was
-  left with no name.
-- **Removing any relationship leaves a rejected proposal**, so neither a scan nor a source's sync brings it back; it
-  was so only for a link to a project or a suggestion.
-
-- **A CRM's deal and lead people are the CRM's report, not the owner's word.** They were stored confirmed, as if the
-  owner had said so; store version 56 marks them unconfirmed with the CRM account, and `standing` answers `reported`.
-  They still count wherever confirmed relationships count (`usableLink`), and a deal still lists them.
 
 - **`search all` in a CRM or calendar CLI without `models` no longer names a download command it lacks.** Its notes
   hint said `b24 models download e5-small`; a CLI with no `models download` now names the tools that have it (tg, max

@@ -65,6 +65,9 @@ export const projectAnnotationsSchema = v.strictObject({
       created_at: timestamp,
       updated_at: timestamp,
       author: v.nullable(text(200)),
+      /** When a relationship held, if known; left out otherwise, so an older reader still reads the snapshot. */
+      starts_at: v.optional(timestamp),
+      ends_at: v.optional(timestamp),
     }),
   ),
   external: bounded(

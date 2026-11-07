@@ -881,6 +881,8 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
       assertMayDecide({ id: `link:${id}`, proposedBy: UNVERIFIED }, by, context.decisions)
       write(database, () => {
         proposals.rejected(link, by)
+        // The history row of a removal takes its time from the row: set it to now before the row goes.
+        database.prepare("UPDATE links SET updated_at = ? WHERE id = ?").run(now(), Number(id))
         database.prepare("DELETE FROM links WHERE id = ?").run(Number(id))
       })
       return { id, removed: true }

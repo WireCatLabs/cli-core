@@ -1,6 +1,5 @@
 import { index, integer, sqliteTable, text } from "../drizzle/core.js"
 
-/** One row per change of a relationship link, written by triggers on `links`. */
 export const linkRevisions = sqliteTable(
   "link_revisions",
   {

@@ -2,7 +2,7 @@ import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, expect, it } from "vitest"
-import { usableLinkSql } from "../domain/relations.js"
+import { isUsable, usableLinkSql } from "../domain/relations.js"
 import { openCache } from "./open.js"
 import { crmSettingKey, parseCrmSetting, parseCrmSettingValue } from "./sqlite/crm-settings.js"
 import { type MessageStore, openStore } from "./store.js"
@@ -73,22 +73,57 @@ it("reads a CRM account's settings by its key, whatever dots its account holds",
   expect(() => parseCrmSettingValue("company-types", "CUSTOMER=client")).toThrow(/TYPE=meaning/)
 })
 
-it("counts what an account reports until the owner sets that account to review", async () => {
-  const { path, store, acme, alice } = await fixture()
-  await store.relations.syncReported(SOURCE, [{ from: alice, to: acme, kind: "member-of", role: "contact" }], {
-    from: [alice],
-    kinds: ["member-of"],
-  })
+it("keeps counting what an account reported after the owner sets it to review, and proposes what it reports next", async () => {
+  const { path, store, acme, northstar, alice } = await fixture()
+  const scope = { from: [alice], kinds: ["member-of" as const] }
+  const contact = { from: alice, to: acme, kind: "member-of" as const, role: "contact" }
+  await store.relations.syncReported(SOURCE, [contact], scope)
   const database = await openCache(path)
   try {
-    const usable = () =>
-      Number(database.prepare(`SELECT count(*) AS n FROM links l WHERE ${usableLinkSql("l", Date.now())}`).get()?.n)
-    expect(usable()).toBe(1)
     database
       .prepare("INSERT INTO store_settings (key, value, at) VALUES (?, ?, 1)")
       .run(crmSettingKey(SOURCE, "links"), JSON.stringify("review"))
-    expect(usable()).toBe(0)
+    const adviser = { from: alice, to: northstar, kind: "member-of" as const, role: "adviser" }
+    const done = await store.relations.syncReported(SOURCE, [contact, adviser, { ...adviser, role: "owner" }], scope)
+    expect(done).toMatchObject({ kept: 1, proposed: 2 })
+    expect(await store.proposedActions.list({ kinds: ["relationship"], status: "proposed" })).toHaveLength(2)
   } finally {
     database.close()
   }
+})
+
+it("says the same through usableLinkSql and usableLink about the same rows", async () => {
+  const { path, store, acme, northstar, alice } = await fixture()
+  const scope = { from: [alice], kinds: ["member-of" as const] }
+  await store.knowledge.relate(null, { by: "owner", from: alice, to: northstar, kind: "member-of", role: "adviser" })
+  await store.relations.syncReported(SOURCE, [{ from: alice, to: acme, kind: "member-of", role: "contact" }], scope)
+  await store.relations.syncReported(SOURCE, [{ from: alice, to: acme, kind: "member-of", role: "owner" }], scope)
+  const now = Date.now()
+  const database = await openCache(path)
+  try {
+    const rows = database.prepare(`SELECT id, ${usableLinkSql("l", now)} AS usable FROM links l ORDER BY id`).all()
+    const relations = await store.knowledge.relations(null, alice)
+    expect(relations).toHaveLength(3)
+    for (const relation of relations)
+      expect(Boolean(rows.find((row) => String(row.id) === relation.id)?.usable)).toBe(isUsable(relation.standing))
+  } finally {
+    database.close()
+  }
+})
+
+it("refuses a role change to a role the pair already holds, with a reason", async () => {
+  const { store, acme, alice } = await fixture()
+  await store.knowledge.relate(null, { by: "owner", from: alice, to: acme, kind: "member-of", role: "adviser" })
+  const second = await store.knowledge.relate(null, {
+    by: "owner",
+    from: alice,
+    to: acme,
+    kind: "member-of",
+    role: "owner",
+  })
+  await expect(store.knowledge.updateRelation(null, second.id, { role: "adviser", by: "owner" })).rejects.toMatchObject(
+    {
+      details: { reason: "relationship.exists" },
+    },
+  )
 })

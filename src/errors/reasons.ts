@@ -267,10 +267,6 @@ const OTHERS: Entry[] = [
   validation("crm.own-unknown", "no own company of the CRM account is stored, so its users are no one's employees yet"),
   validation("relationship.reference-unknown", "a reported relationship names something the store does not hold"),
   validation("relationship.invalid", "a reported relationship joins ends or takes a role the registry refuses"),
-  validation(
-    "relationship.owner-rejected",
-    "the owner removed or rejected this relationship; a source does not bring it back",
-  ),
   validation("order.duplicate", "the shop's order with this number is already stored; change its status instead"),
   validation("order.proposed", "the shop's order with this number already waits for the owner in a findings batch"),
   validation("order.field", "a field of the order is not valid"),

@@ -188,21 +188,27 @@ the next. The migration seeds the lead pipeline `Leads` (`new`, `contacted`, `qu
 
 `store.relations.syncReported(account, relationships, scope)` writes what a source account says as a diff keyed by the
 relationship's unique key: one it newly reports is a `reported` link with the account (`confirmed = 0`,
-`account_id`), or a `relationship` proposal when the account's setting `crm.<provider>:<account>.links` is `review`;
-one it still reports is kept (no history row); one inside `scope` it no longer reports is withdrawn (`deleted_at`),
-never deleted. The owner's link always wins: a pair the owner confirmed with another role is one
-`relationship_update` proposal, never an overwrite, and a pair the owner removed or rejected stays out (every removal
-leaves a rejected `relationship` proposal). A ref the store does not hold is an issue in the answer, not an error.
+`account_id`), or a `relationship` proposal when the account's setting `crm.<provider>:<account>.links` is `review`
+(that setting governs new relationships only; links already stored stay usable); one it still reports is kept (no
+history row); one inside `scope` it no longer reports is withdrawn (`deleted_at`), never deleted. A link the owner
+confirmed is never withdrawn and stays `confirmed`, and once confirmed the sync takes it as present. Another role on
+a pair is another relationship, never a conflict. The only case where the owner's word stops the source: the owner
+removed or rejected that very relationship, role included (every removal leaves a rejected `relationship`
+proposal); the answer counts those in `skippedOwnerRejected`. A ref the store does not hold is an issue in the
+answer, not an error.
 
 The CRM sync uses it for every relationship a CRM reports: a contact `member-of` its companies with role `contact`
 (the job title in `metadata.position`), a deal's or lead's contacts with their deal role, the deal's `assignee` as
 `owner`, each active user `member-of` the account's own companies (`organizations.metadata.own`, from
-`CrmOrganization.own`) as `employee` (an inactive user's withdrawn), and, when the CRM lists departments, `reports-to` the head of the user's
-department, a head the head of the parent one (`metadata.derived = "department-head"`; no head, no link). A CRM user
-is an identity `<account>/user/<id>`, joined to a person by exact email as a contact is. A field the CRM left out
-(`organizations`, `people`, `assignee`, `users()`, `departments()`) withdraws nothing. A contact whose email belongs to
-two people is named in the sync's issues. `usableLink` leaves out what an account set to `review` reports. `crm.<provider>:<account>.company-types`
-maps a CRM company type to `customer-of`, `supplier` or `partner-of`; it is empty by default and no sync reads it yet.
+`CrmOrganization.own`; cleared when the CRM drops it) as `employee` (an inactive user's withdrawn), and, when the CRM
+lists departments, `reports-to` the head of the user's department, a head the head of the parent one
+(`metadata.derived = "department-head"`; no head, no link). A CRM user is an identity `<account>/user/<id>`, joined
+to a person by exact email as a contact is. With `crm.<provider>:<account>.company-types` mapping a company type to
+`customer-of`, `supplier` or `partner-of`, a company of that type becomes a customer of, a supplier to or a partner
+of the own company. A field the CRM left out (`organizations`, `people`, `assignee`, `type`, `users()`,
+`departments()`, a user's `departments`) withdraws nothing. A relationship whose other end is not stored yet waits in
+the account's sync state (`crm:pending-relations`) and is written at the end of a later sync. A contact whose email
+belongs to two people is named in the sync's issues until the owner separates it.
 
 A mail findings batch (`store.mailFindings`) also takes `invoice`, `payment`, `order` and `order_update` findings.
 Staging runs what accepting would write through `store.finance` or `store.orders` and rolls it back, so a batch the

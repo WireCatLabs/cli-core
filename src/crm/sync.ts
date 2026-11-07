@@ -125,8 +125,8 @@ export interface CrmSyncReport {
   pipelines: number
   /** Users read this run; absent when the CRM cannot list them. */
   users?: number
-  /** Relationships the CRM reported against the owner's, each waiting as a `relationship_update` proposal. */
-  conflicts: number
+  /** Relationships left out because the owner removed or rejected that very one, role included. */
+  skippedOwnerRejected: number
   synced: CrmSyncResult[]
   issues: CrmSyncIssue[]
   /** Every kind finished its round and none failed. */
@@ -173,7 +173,7 @@ const readPipelines = async (run: Run, kind: DealKind): Promise<BudgetStop | nul
 const noted = (run: Run, kind: CrmSyncIssue["kind"], saved: CrmSaved) => {
   for (const { externalId, ...one } of saved.issues ?? [])
     run.report.issues.push({ kind, ...one, ...(externalId ? { externalId } : {}) })
-  run.report.conflicts += saved.conflicts ?? 0
+  run.report.skippedOwnerRejected += saved.skippedOwnerRejected ?? 0
 }
 
 /**
@@ -185,31 +185,33 @@ const readUsers = async (run: Run): Promise<BudgetStop | null> => {
   if (!source.users) return null
   const why = run.budget.take()
   if (why) return why
+  const gap = (what: string, error?: unknown) =>
+    run.report.issues.push({
+      kind: "user",
+      reason: "crm.not-reported",
+      // The adapter's own text may carry a request; only its failure code is copied.
+      message: `${source.provider} did not list ${what}${error instanceof CliError ? ` (${error.code})` : ""}`,
+    })
   let users: Awaited<ReturnType<NonNullable<CrmSource["users"]>>>
-  let departments: Awaited<ReturnType<NonNullable<CrmSource["departments"]>>> | undefined
   try {
     users = await source.users()
-    if (source.departments) {
-      const stop = run.budget.take()
-      if (stop) return stop
-      departments = await source.departments()
-    }
   } catch (error) {
     if (run.signal?.aborted) throw error
-    // A sign-in without the users' scope still syncs the rest; nothing stored about users is withdrawn.
-    run.report.issues.push({
-      kind: "user",
-      reason: "crm.not-reported",
-      message: isCliFailure(error) ? error.message : `${source.provider} users could not be read`,
-    })
+    gap("its users, so nothing stored about them changed", error)
     return null
   }
-  if (!source.departments)
-    run.report.issues.push({
-      kind: "user",
-      reason: "crm.not-reported",
-      message: `${source.provider} lists no departments: who reports to whom is unknown`,
-    })
+  let departments: Awaited<ReturnType<NonNullable<CrmSource["departments"]>>> | undefined
+  if (!source.departments) gap("departments: who reports to whom is unknown")
+  else {
+    const stop = run.budget.take()
+    if (stop) return stop
+    try {
+      departments = await source.departments()
+    } catch (error) {
+      if (run.signal?.aborted) throw error
+      gap("departments: who reports to whom is unknown", error)
+    }
+  }
   noted(run, "user", await run.store.crm.saveUsers(run.account, users, departments))
   run.report.users = users.length
   return null
@@ -360,8 +362,9 @@ const syncKind = async (run: Run, kind: CrmKind, options: CrmSyncOptions, result
 
 /**
  * Brings one CRM account's copy up to date: both kinds' pipelines and each kind's fields, then companies, contacts,
- * the account's users and departments, deals and leads, each from its cursor or listed in full, a page at a time, each page saved with the round's place in
- * the cursor, so a run the budget stops, or one that fails, goes on from there. Deletions come from `changes()`, or
+ * the account's users and departments, deals and leads, each from its cursor or listed in full, a page at a time,
+ * each page saved with the round's place in the cursor, so a run the budget stops, or one that fails, goes on from
+ * there. Relationships held back for an end not stored yet are written at the end of the run. Deletions come from `changes()`, or
  * from a list of every id that marks only after its last page arrived, and never more than half of a kind without
  * `--rescan`.
  */
@@ -377,7 +380,7 @@ export const syncCrm = async (
     provider: source.provider,
     account: account.account,
     pipelines: 0,
-    conflicts: 0,
+    skippedOwnerRejected: 0,
     synced: [],
     issues: [],
     complete: true,
@@ -439,6 +442,8 @@ export const syncCrm = async (
       result.error = isCliFailure(error) ? error.message : `the ${kind} copy could not be synced`
     }
   }
+  // A relationship held back for an end a later page or kind brought is written now; it costs no request.
+  await store.crm.retryPending(account)
   report.progress = {
     requests: budget.used,
     saved: report.synced.reduce((sum, one) => sum + one.saved, 0),

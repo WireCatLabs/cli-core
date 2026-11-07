@@ -2,7 +2,9 @@ import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { expect, it } from "vitest"
+import { RELATION_KINDS } from "../domain/relations.js"
 import { rollBackTo } from "../testing/older-store.js"
+import { MIGRATIONS } from "./migrations.js"
 import { openCache } from "./open.js"
 import { openStore } from "./store.js"
 
@@ -129,6 +131,87 @@ it("writes a relationship's history in the same statement, and never an evidence
         { link_id: Number(founder.id), change: "added", role: "founder" },
         { link_id: Number(member.id), change: "changed", role: "manager" },
         { link_id: Number(founder.id), change: "removed", role: null },
+      ])
+    } finally {
+      db.close()
+    }
+  } finally {
+    await store.close()
+  }
+})
+
+it("folds a relationship stored twice, NULL and empty alike, onto the owner's row with both rows' metadata", async () => {
+  const { path, acme, bob } = await seeded()
+  const store = await openStore({ path })
+  const held = await store.knowledge.relate(null, { by: "owner", from: bob, to: acme, kind: "related-to" })
+  const proposal = await store.knowledge.updateRelation(null, held.id, { role: "vendor", by: { bot: "claude" } })
+  await store.close()
+  const old = await openCache(path)
+  rollBackTo(old, 56)
+  old.prepare("UPDATE links SET source = 'suggested', metadata = '{\"a\":1}' WHERE id = ?").run(Number(held.id))
+  const owner = old
+    .prepare(
+      "INSERT INTO links (from_type, from_id, to_type, to_id, kind, role, anchor, source, metadata, confirmed, " +
+        "created_at, author, updated_at) VALUES ('person', ?, 'organization', ?, 'related-to', '', '', 'owner', " +
+        "'{\"b\":2}', 1, 2, 'owner', 2) RETURNING id",
+    )
+    .get(Number(bob.slice("person:".length)), Number(acme.slice("organization:".length)))
+  old.close()
+
+  const upgraded = await openStore({ path })
+  try {
+    const db = await openCache(path)
+    try {
+      const rows = db
+        .prepare("SELECT id, metadata FROM links WHERE kind = 'related-to' AND from_type = 'person' ORDER BY id")
+        .all()
+      expect(rows).toEqual([{ id: owner?.id, metadata: '{"a":1,"b":2}' }])
+    } finally {
+      db.close()
+    }
+    expect((await upgraded.proposedActions.get(proposal.id)).payload).toMatchObject({
+      relationship: String(owner?.id),
+    })
+  } finally {
+    await upgraded.close()
+  }
+})
+
+it("names in triggers, the unique key and the fold exactly the relationship kinds of the registry", () => {
+  const sql = MIGRATIONS.find(({ version }) => version === 56)?.statements.join("\n") ?? ""
+  const lists = [...sql.matchAll(/kind IN \(([^)]*)\)/g)].map((match) =>
+    (match[1] as string)
+      .split(",")
+      .map((one) => one.trim().replaceAll("'", ""))
+      .sort(),
+  )
+  // The fold four times, the three triggers and the unique key.
+  expect(lists.length).toBe(8)
+  for (const list of lists) expect(list).toEqual([...RELATION_KINDS].sort())
+})
+
+it("records a suggestion the owner rejected as rejected, at the store's time", async () => {
+  const { path, acme, bob } = await seeded()
+  const store = await openStore({ path, now: () => 5_000 })
+  try {
+    const suggestion = await store.knowledge.relate(null, {
+      by: "owner",
+      from: bob,
+      to: acme,
+      kind: "member-of",
+      role: "adviser",
+      confirmed: false,
+    })
+    await store.knowledge.removeRelation(null, suggestion.id, "owner")
+    const db = await openCache(path)
+    try {
+      expect(
+        db
+          .prepare("SELECT change, created_at FROM link_revisions WHERE link_id = ? ORDER BY id")
+          .all(Number(suggestion.id)),
+      ).toEqual([
+        { change: "added", created_at: 5_000 },
+        { change: "rejected", created_at: 5_000 },
       ])
     } finally {
       db.close()

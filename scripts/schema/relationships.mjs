@@ -28,7 +28,7 @@ export const linkRevisionsTable = {
     c("link_id", "integer", { notnull: true, note: "the `links` row" }),
     c("change", "text", {
       notnull: true,
-      note: "`added`, `changed` (role, dates or account), `ended` (`ends_at` set), `confirmed`, `withdrawn` (`deleted_at` set: the source stopped reporting it), `restored` (reported again) or `removed` (deleted)",
+      note: "`added`, `changed` (role, dates or account), `ended` (`ends_at` set), `confirmed`, `withdrawn` (`deleted_at` set: the source stopped reporting it), `restored` (reported again), `rejected` (a suggestion the owner rejected) or `removed` (deleted)",
     }),
     c("before", "text", {
       note: "JSON of role, confirmed, account_id, starts_at, ends_at and deleted_at before; null when added",

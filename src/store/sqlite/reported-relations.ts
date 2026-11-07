@@ -4,7 +4,7 @@ import type { AccountKey } from "../types.js"
 import { accountPk } from "./accounts.js"
 import { crmLinkMode } from "./crm-settings.js"
 import { linkKind } from "./link-kinds.js"
-import { linkOf } from "./notes.js"
+import type { Author } from "./memories.js"
 import type { StoreContext } from "./open.js"
 import { relationProposalsOver } from "./relation-proposals.js"
 import { referenceOfThing, type Thing, thingOf } from "./things.js"
@@ -24,17 +24,18 @@ export interface ReportedRelation {
 }
 
 /**
- * Which of the account's relationships a call reports completely: those from these refs, of these kinds and, when
- * given, these roles. One it holds there and the call lacks is withdrawn; nothing outside it is touched.
+ * Which of the account's relationships a call reports completely: those from the `from` refs or to the `to` refs, of
+ * these kinds and, when given, these roles. One it holds there and the call lacks is withdrawn; nothing else is touched.
  */
 export interface ReportedScope {
   from: string[]
+  to?: string[]
   kinds: RelationKind[]
   roles?: string[]
 }
 
 export interface ReportedIssue {
-  reason: "relationship.reference-unknown" | "relationship.invalid" | "relationship.owner-rejected"
+  reason: "relationship.reference-unknown" | "relationship.invalid"
   message: string
   from: string
   to: string
@@ -48,24 +49,31 @@ export interface ReportedSync {
   withdrawn: number
   /** New relationships waiting as `relationship` proposals: the account's setting is `review`. */
   proposed: number
-  /** Relationships that contradict the owner's: one `relationship_update` proposal each, the owner's link unchanged. */
-  conflicts: number
+  /** Left out: the owner removed or rejected that very relationship, role included. */
+  skippedOwnerRejected: number
   issues: ReportedIssue[]
+}
+
+export interface ReportedOptions {
+  /** `links.source` of a link it writes; `import` when absent. */
+  source?: string
+  /** Who proposes in `review` mode; the source's provider, as a rule, when absent. */
+  by?: Exclude<Author, "owner">
 }
 
 export interface RelationsStore {
   /**
-   * Writes what a source account reports as a diff keyed by the relationship's unique key: a new one is added as
-   * `reported` (a proposal when the account's `crm.<account>.links` setting is `review`), one held is kept, one it no
-   * longer reports is withdrawn (`deleted_at`), never deleted, unless the owner confirmed it. The owner's link always wins: a different role reported
-   * on a pair the owner confirmed is a `relationship_update` proposal, and a pair the owner removed or rejected is
-   * left out. A ref the store does not hold is an issue, not an error.
+   * Writes what a source account reports as a diff keyed by the relationship's unique key. A new one is a `reported`
+   * link (a `relationship` proposal when the account's `crm.<provider>:<account>.links` is `review`); one held is
+   * kept; one inside `scope` it no longer reports is withdrawn (`deleted_at`), never deleted. A link the owner
+   * confirmed is never withdrawn, and one the owner removed or rejected, with the same role, is never written again.
+   * Another role on a pair is another relationship. A ref the store does not hold is an issue, not an error.
    */
   syncReported(
     key: AccountKey,
     relationships: ReportedRelation[],
     scope: ReportedScope,
-    options?: { source?: string },
+    options?: ReportedOptions,
   ): Promise<ReportedSync>
 }
 
@@ -80,19 +88,27 @@ export const syncReportedIn = (
   key: AccountKey,
   relationships: ReportedRelation[],
   scope: ReportedScope,
-  { source = "import" }: { source?: string } = {},
+  { source = "import", by = { bot: key.provider, kind: "rule" } }: ReportedOptions = {},
 ): ReportedSync => {
   const { database, now } = context
   const proposals = relationProposalsOver(context)
-  const by = { bot: key.provider, kind: "rule" as const }
   const accountId = accountPk(context, key)
   const review = crmLinkMode(database, key) === "review"
   const at = now()
-  const result: ReportedSync = { added: 0, kept: 0, restored: 0, withdrawn: 0, proposed: 0, conflicts: 0, issues: [] }
+  const result: ReportedSync = {
+    added: 0,
+    kept: 0,
+    restored: 0,
+    withdrawn: 0,
+    proposed: 0,
+    skippedOwnerRejected: 0,
+    issues: [],
+  }
   const seen = new Set<number>()
   const issue = (relation: ReportedRelation, reason: ReportedIssue["reason"], message: string) =>
     result.issues.push({ reason, message, from: relation.from, to: relation.to, kind: relation.kind })
-  const pairOf = "kind = ? AND from_type = ? AND from_id = ? AND to_type = ? AND to_id = ? AND anchor IS NULL"
+  const sameKey =
+    "kind = ? AND from_type = ? AND from_id = ? AND to_type = ? AND to_id = ? AND anchor IS NULL AND ifnull(role, '') = ?"
 
   for (const relation of relationships) {
     let from = thingOf(database, relation.from)
@@ -113,30 +129,15 @@ export const syncReportedIn = (
       continue
     }
     if (isSymmetric(relation.kind) && to.id < from.id) [from, to] = [to, from]
-    const ends = [relation.kind, from.type, from.id, to.type, to.id] as const
-    const owners = database
-      .prepare(`SELECT * FROM links WHERE ${pairOf} AND confirmed = 1 AND deleted_at IS NULL ORDER BY id`)
-      .all(...ends)
-    if (owners.some((row) => (row.role ?? null) === role)) continue
-    const fromRef = referenceOfThing(database, from) as string
+    const wanted = [relation.kind, from.type, from.id, to.type, to.id, role ?? ""] as const
+    // The owner's link of the same role answers for the source too, and a confirmed one is never withdrawn.
+    if (database.prepare(`SELECT 1 FROM links WHERE ${sameKey} AND confirmed = 1 LIMIT 1`).get(...wanted)) continue
     const toRef = referenceOfThing(database, to) as string
-    const other = owners.find((row) => row.role != null)
-    if (other && role !== null) {
-      proposals.proposeUpdate(
-        linkOf(database, other),
-        { role, reason: `${key.provider}:${key.account} reports the role ${role}` },
-        by,
-      )
-      result.conflicts += 1
+    if (rejected(context, from, toRef, relation.kind, role)) {
+      result.skippedOwnerRejected += 1
       continue
     }
-    if (owners.length === 0 && rejectedPair(context, from, toRef, relation.kind)) {
-      issue(relation, "relationship.owner-rejected", "the owner removed or rejected this relationship; it stays out")
-      continue
-    }
-    const held = database
-      .prepare(`SELECT * FROM links WHERE ${pairOf} AND ifnull(role, '') = ? AND account_id = ?`)
-      .get(...ends, role ?? "", accountId)
+    const held = database.prepare(`SELECT * FROM links WHERE ${sameKey} AND account_id = ?`).get(...wanted, accountId)
     const startsAt = relation.startsAt ?? null
     const endsAt = relation.endsAt ?? null
     const metadata = metadataOf(relation)
@@ -155,7 +156,7 @@ export const syncReportedIn = (
       proposals.propose(
         from,
         {
-          from: fromRef,
+          from: referenceOfThing(database, from) as string,
           to: toRef,
           kind: relation.kind,
           ...(role === null ? {} : { role }),
@@ -194,18 +195,27 @@ export const syncReportedIn = (
   const withdraw = database.prepare("UPDATE links SET deleted_at = ?, updated_at = ? WHERE id = ?")
   const kinds = scope.kinds.map(linkKind).join(", ")
   const roles = scope.roles?.map(() => "?").join(", ")
-  for (const ref of new Set(scope.from)) {
+  const ends = [
+    ...[...new Set(scope.from)].map((ref) => ["from", ref] as const),
+    ...[...new Set(scope.to ?? [])].map((ref) => ["to", ref] as const),
+  ]
+  for (const [end, ref] of kinds ? ends : []) {
     const thing = thingOf(database, ref)
-    if (!thing || !kinds) continue
+    if (!thing) continue
+    // A partnership is stored once, either way round, so either end covers it.
+    const match =
+      end === "from"
+        ? `((from_type = ? AND from_id = ?) OR (kind = ${linkKind("partner-of")} AND to_type = ? AND to_id = ?))`
+        : `((to_type = ? AND to_id = ?) OR (kind = ${linkKind("partner-of")} AND from_type = ? AND from_id = ?))`
     const rows: Row[] = database
       .prepare(
-        `SELECT id FROM links WHERE account_id = ? AND confirmed = 0 AND deleted_at IS NULL AND kind IN (${kinds}) AND ` +
-          `((from_type = ? AND from_id = ?) OR (kind = ${linkKind("partner-of")} AND to_type = ? AND to_id = ?))` +
-          (roles ? ` AND ifnull(role, '') IN (${roles})` : ""),
+        `SELECT id FROM links WHERE account_id = ? AND confirmed = 0 AND deleted_at IS NULL AND kind IN (${kinds}) ` +
+          `AND ${match}${roles ? ` AND ifnull(role, '') IN (${roles})` : ""}`,
       )
       .all(accountId, thing.type, thing.id, thing.type, thing.id, ...(scope.roles ?? []))
     for (const row of rows)
       if (!seen.has(Number(row.id))) {
+        seen.add(Number(row.id))
         withdraw.run(at, at, Number(row.id))
         result.withdrawn += 1
       }
@@ -213,14 +223,15 @@ export const syncReportedIn = (
   return result
 }
 
-/** A `relationship` proposal for the pair the owner rejected, or the rejection a removed link left behind. */
-const rejectedPair = ({ database }: StoreContext, from: Thing, to: string, kind: string): boolean =>
+/** The owner rejected or removed exactly this relationship: its pair, kind and role, whoever reported it. */
+const rejected = ({ database }: StoreContext, from: Thing, to: string, kind: string, role: string | null): boolean =>
   database
     .prepare(
       "SELECT 1 FROM proposed_actions WHERE kind = 'relationship' AND status = 'rejected' AND target_type = ? " +
-        "AND target_id = ? AND json_extract(payload, '$.to') = ? AND json_extract(payload, '$.kind') = ? LIMIT 1",
+        "AND target_id = ? AND json_extract(payload, '$.to') = ? AND json_extract(payload, '$.kind') = ? " +
+        "AND json_extract(payload, '$.role') IS ? LIMIT 1",
     )
-    .get(from.type, from.id, to, kind) !== undefined
+    .get(from.type, from.id, to, kind, role) !== undefined
 
 export const relationsStoreOver = (context: StoreContext): RelationsStore => ({
   syncReported: async (key, relationships, scope, options) =>

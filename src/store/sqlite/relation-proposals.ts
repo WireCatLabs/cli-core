@@ -92,6 +92,19 @@ export const relationProposalsOver = (context: StoreContext) => {
   }
   const applyUpdate = (link: Link, input: RelationUpdate): Link => {
     const changes = changesOf(input)
+    if ("role" in changes) {
+      const taken = database
+        .prepare(
+          "SELECT b.id FROM links a JOIN links b ON b.kind = a.kind AND b.from_type = a.from_type AND b.from_id = a.from_id " +
+            "AND b.to_type = a.to_type AND b.to_id = a.to_id AND b.anchor IS a.anchor AND b.account_id IS a.account_id " +
+            "AND ifnull(b.role, '') = ifnull(?, '') AND b.id <> a.id WHERE a.id = ?",
+        )
+        .get(changes.role ?? null, Number(link.id))
+      if (taken)
+        throw new CliError("validation_error", `relationship ${String(taken.id)} already holds that role`, {
+          reason: "relationship.exists",
+        })
+    }
     database
       .prepare(
         "UPDATE links SET role = CASE WHEN ? THEN ? ELSE role END, purpose = CASE WHEN ? THEN ? ELSE purpose END, " +
@@ -193,9 +206,10 @@ export const relationProposalsOver = (context: StoreContext) => {
         const held = database
           .prepare(
             "SELECT id FROM proposed_actions WHERE kind='relationship' AND status='proposed' AND target_type=? AND target_id=? " +
-              "AND json_extract(payload,'$.to')=? AND json_extract(payload,'$.kind')=? ORDER BY id LIMIT 1",
+              "AND json_extract(payload,'$.to')=? AND json_extract(payload,'$.kind')=? " +
+              "AND (? IS NULL OR json_extract(payload,'$.role') IS ?) ORDER BY id LIMIT 1",
           )
-          .get(from.type, from.id, input.to, input.kind)
+          .get(from.type, from.id, input.to, input.kind, input.role ?? null, input.role ?? null)
         if (held) {
           const action = operations.get(String(held.id))
           return scored ? rescored(action, input, scored, by) : action
@@ -325,6 +339,7 @@ export const relationProposalsOver = (context: StoreContext) => {
         const link = linkOf(database, row)
         if (!decision.confirm) {
           rejected(link, decision.by, decision.reason)
+          database.prepare("UPDATE links SET updated_at = ? WHERE id = ?").run(now(), Number(id))
           database.prepare("DELETE FROM links WHERE id = ?").run(Number(id))
           return null
         }

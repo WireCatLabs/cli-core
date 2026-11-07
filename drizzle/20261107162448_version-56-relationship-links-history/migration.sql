@@ -5,16 +5,62 @@ UPDATE links SET confirmed = 0, account_id = (SELECT d.account_id FROM deals d W
 UPDATE links SET confirmed = 0, account_id = (SELECT l.account_id FROM leads l WHERE l.id = links.from_id)
   WHERE source = 'crm' AND kind = 'related-to' AND from_type = 'lead';
 --> statement-breakpoint
--- The unique key below needs one row per relationship; of duplicates the owner's row stays, then the oldest.
-DELETE FROM links WHERE id IN (
-  SELECT id FROM (
-    SELECT id, row_number() OVER (
+-- The unique key below needs one row per relationship. Of duplicates the owner's row stays, then a confirmed one,
+-- then the oldest; it takes the others' metadata where its own has none, and proposals naming a dropped row name it.
+WITH link_fold AS (
+  SELECT keep_id, id AS drop_id FROM (
+    SELECT id, first_value(id) OVER (
       PARTITION BY kind, from_type, from_id, to_type, to_id, ifnull(anchor, ''), ifnull(role, ''), ifnull(account_id, 0)
-      ORDER BY confirmed DESC, id
-    ) AS n
+      ORDER BY source = 'owner' DESC, confirmed DESC, id
+    ) AS keep_id
     FROM links WHERE kind IN ('member-of', 'related-to', 'reports-to', 'customer-of', 'partner-of') AND to_id IS NOT NULL
-  ) WHERE n > 1
-);
+  ) WHERE id <> keep_id
+)
+UPDATE links SET metadata = json_patch(
+    (SELECT json_group_object(j.key, CASE WHEN j.type IN ('object', 'array') THEN json(j.value) ELSE j.value END)
+      FROM link_fold f JOIN links d ON d.id = f.drop_id, json_each(d.metadata) j
+      WHERE f.keep_id = links.id AND json_valid(d.metadata)),
+    coalesce(links.metadata, '{}'))
+  WHERE id IN (SELECT f.keep_id FROM link_fold f JOIN links d ON d.id = f.drop_id
+    WHERE d.metadata IS NOT NULL AND json_valid(d.metadata));
+--> statement-breakpoint
+WITH link_fold AS (
+  SELECT keep_id, id AS drop_id FROM (
+    SELECT id, first_value(id) OVER (
+      PARTITION BY kind, from_type, from_id, to_type, to_id, ifnull(anchor, ''), ifnull(role, ''), ifnull(account_id, 0)
+      ORDER BY source = 'owner' DESC, confirmed DESC, id
+    ) AS keep_id
+    FROM links WHERE kind IN ('member-of', 'related-to', 'reports-to', 'customer-of', 'partner-of') AND to_id IS NOT NULL
+  ) WHERE id <> keep_id
+)
+UPDATE proposed_actions SET payload = json_set(payload, '$.relationship',
+    (SELECT CAST(f.keep_id AS TEXT) FROM link_fold f WHERE CAST(f.drop_id AS TEXT) = json_extract(payload, '$.relationship')))
+  WHERE kind = 'relationship_update'
+    AND json_extract(payload, '$.relationship') IN (SELECT CAST(drop_id AS TEXT) FROM link_fold);
+--> statement-breakpoint
+WITH link_fold AS (
+  SELECT keep_id, id AS drop_id FROM (
+    SELECT id, first_value(id) OVER (
+      PARTITION BY kind, from_type, from_id, to_type, to_id, ifnull(anchor, ''), ifnull(role, ''), ifnull(account_id, 0)
+      ORDER BY source = 'owner' DESC, confirmed DESC, id
+    ) AS keep_id
+    FROM links WHERE kind IN ('member-of', 'related-to', 'reports-to', 'customer-of', 'partner-of') AND to_id IS NOT NULL
+  ) WHERE id <> keep_id
+)
+UPDATE proposed_actions SET result = json_set(result, '$.link',
+    (SELECT CAST(f.keep_id AS TEXT) FROM link_fold f WHERE CAST(f.drop_id AS TEXT) = json_extract(result, '$.link')))
+  WHERE json_valid(result) AND json_extract(result, '$.link') IN (SELECT CAST(drop_id AS TEXT) FROM link_fold);
+--> statement-breakpoint
+WITH link_fold AS (
+  SELECT keep_id, id AS drop_id FROM (
+    SELECT id, first_value(id) OVER (
+      PARTITION BY kind, from_type, from_id, to_type, to_id, ifnull(anchor, ''), ifnull(role, ''), ifnull(account_id, 0)
+      ORDER BY source = 'owner' DESC, confirmed DESC, id
+    ) AS keep_id
+    FROM links WHERE kind IN ('member-of', 'related-to', 'reports-to', 'customer-of', 'partner-of') AND to_id IS NOT NULL
+  ) WHERE id <> keep_id
+)
+DELETE FROM links WHERE id IN (SELECT drop_id FROM link_fold);
 --> statement-breakpoint
 CREATE TRIGGER link_revisions_ai AFTER INSERT ON links
   WHEN new.kind IN ('member-of', 'related-to', 'reports-to', 'customer-of', 'partner-of') AND new.to_id IS NOT NULL BEGIN
@@ -49,8 +95,12 @@ END;
 CREATE TRIGGER link_revisions_ad AFTER DELETE ON links
   WHEN old.kind IN ('member-of', 'related-to', 'reports-to', 'customer-of', 'partner-of') AND old.to_id IS NOT NULL BEGIN
   INSERT INTO link_revisions (link_id, change, before, after, author, account_id, created_at)
-  VALUES (old.id, 'removed',
+  VALUES (old.id,
+    -- The store records the rejection before it deletes the suggestion; a confirmed link the owner removes is removed.
+    CASE WHEN old.confirmed = 0 AND EXISTS (SELECT 1 FROM proposed_actions p WHERE p.kind = 'relationship'
+      AND p.status = 'rejected' AND json_valid(p.result) AND json_extract(p.result, '$.link') = CAST(old.id AS TEXT))
+      THEN 'rejected' ELSE 'removed' END,
     json_object('role', old.role, 'confirmed', old.confirmed, 'account_id', old.account_id, 'starts_at', old.starts_at,
       'ends_at', old.ends_at, 'deleted_at', old.deleted_at),
-    NULL, old.author, old.account_id, CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER));
+    NULL, old.author, old.account_id, old.updated_at);
 END;

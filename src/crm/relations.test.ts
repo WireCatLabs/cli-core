@@ -1,6 +1,7 @@
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { CliError } from "@wirecat/cli-base"
 import { afterEach, expect, it } from "vitest"
 import type { CrmDepartment, CrmUser } from "../domain/crm.js"
 import { openCache } from "../store/open.js"
@@ -169,13 +170,21 @@ it("makes Bob Alice's manager only when the owner or a source says so", async ()
   ])
 })
 
-it("never overwrites the owner's role: a different role from the CRM waits as one relationship_update proposal", async () => {
-  const { store, crm, sync, person } = await acme()
+it("takes a CRM role beside the owner's confirmed one as another relationship, and proposes nothing", async () => {
+  const { path, store, crm, sync, person } = await acme()
   await sync()
   const deal = (await store.crm.refOf(PORTAL, "deal", "d1")) as string
   const alice = await person("alice@acme.example")
   const [reported] = (await store.knowledge.relations(null, deal)).filter(({ to }) => to === alice)
-  await store.knowledge.confirmRelation(null, reported?.id as string, "owner")
+  expect(await store.knowledge.confirmRelation(null, reported?.id as string, "owner")).toMatchObject({
+    standing: "confirmed",
+  })
+  const before = await revisions(path)
+  for (const _ of [1, 2, 3]) await sync()
+  expect(await revisions(path)).toBe(before)
+  expect((await store.knowledge.relations(null, deal)).filter(({ to }) => to === alice)).toEqual([
+    expect.objectContaining({ id: reported?.id, role: "contact", standing: "confirmed" }),
+  ])
   crm.put("deal", {
     externalId: "d1",
     title: "Acme renewal",
@@ -184,16 +193,15 @@ it("never overwrites the owner's role: a different role from the CRM waits as on
     people: [{ externalId: "7", role: "decision-maker" }],
     assignee: "u1",
   })
-  const again = await sync()
   await sync()
-  expect(again.conflicts).toBe(1)
-  expect((await store.deals.get(deal)).people.filter(({ ref }) => ref === alice)).toEqual([
-    expect.objectContaining({ role: "contact" }),
+  const roles = (await store.knowledge.relations(null, deal))
+    .filter(({ to }) => to === alice)
+    .map(({ role, standing }) => [role, standing])
+  expect(roles.sort()).toEqual([
+    ["contact", "confirmed"],
+    ["decision-maker", "reported"],
   ])
-  const pending = await store.proposedActions.list({ kinds: ["relationship_update"], status: "proposed" })
-  expect(pending).toEqual([
-    expect.objectContaining({ payload: expect.objectContaining({ changes: { role: "decision-maker" } }) }),
-  ])
+  expect(await store.proposedActions.list({ kinds: ["relationship_update"] })).toEqual([])
 })
 
 it("keeps a contact the owner separated apart through every sync, and names the person after the contact", async () => {
@@ -207,15 +215,13 @@ it("keeps a contact the owner separated apart through every sync, and names the 
   expect(joined).toMatchObject({ name: "Alice" })
   expect(joined?.identities.map(({ provider }) => provider).sort()).toEqual(["email", "example-crm"])
   const apart = await store.people.unlinkIdentity(contact, { method: "manual", by: "owner" })
-  expect((await sync()).issues).toEqual([
-    expect.objectContaining({ kind: "person", externalId: "7", reason: "crm.email-ambiguous" }),
-  ])
+  expect((await sync()).issues).toEqual([])
   await sync()
   expect((await store.people.personOf(contact))?.uid).toBe(apart.uid)
   expect((await store.people.personOf({ provider: "email", id: "alice@acme.example" }))?.uid).not.toBe(apart.uid)
 })
 
-it("with the account set to review, writes what the CRM reports as proposals, and a removed one stays out", async () => {
+it("with the account set to review, writes what the CRM reports as proposals, once each", async () => {
   const { path, store, sync, person } = await acme()
   const database = await openCache(path)
   database
@@ -266,7 +272,7 @@ it("withdraws what the CRM stops reporting and leaves out a pair the owner remov
   const owner = relations.find(({ to }) => to === emma)
   await store.knowledge.removeRelation(null, owner?.id as string, "owner")
   const report = await sync()
-  expect(report.issues).toEqual([expect.objectContaining({ kind: "deal", reason: "relationship.owner-rejected" })])
+  expect(report).toMatchObject({ issues: [], skippedOwnerRejected: 1 })
   expect((await store.deals.get(deal)).people).toEqual([])
 })
 
@@ -284,4 +290,106 @@ it("names a deal's contact the CRM never synced instead of dropping it silently"
     expect.objectContaining({ kind: "deal", externalId: "d2", reason: "crm.reference-unknown" }),
   ])
   expect(await store.crm.count(PORTAL, "deal")).toBe(2)
+})
+
+it("gives a deal the contact it named before the contact was synced, on a later run of changes only", async () => {
+  const { store, crm } = await acme()
+  const changes = () => syncCrm(crm, store, PORTAL)
+  crm.put("deal", {
+    externalId: "d2",
+    title: "Acme pilot",
+    pipeline: "deal-1",
+    stage: "new",
+    people: [{ externalId: "9", role: "contact" }],
+  })
+  await changes()
+  const deal = (await store.crm.refOf(PORTAL, "deal", "d2")) as string
+  expect((await store.deals.get(deal)).people).toEqual([])
+  crm.put("person", { externalId: "9", name: "Dana", email: "dana@acme.example" })
+  expect((await changes()).issues).toEqual([])
+  expect((await store.deals.get(deal)).people).toEqual([expect.objectContaining({ name: "Dana", role: "contact" })])
+})
+
+it("keeps users and their employment when departments cannot be read, and withdraws an inactive user's", async () => {
+  const { store, crm, person } = await acme()
+  const refused = {
+    departments: async () => Promise.reject(new CliError("permission_error", "https://x/?auth=s3cret")),
+  }
+  const first = await syncCrm(Object.assign(crm, { users: async () => USERS, ...refused }), store, PORTAL)
+  expect(first.issues).toEqual([expect.objectContaining({ kind: "user", reason: "crm.not-reported" })])
+  expect(JSON.stringify(first.issues)).not.toContain("s3cret")
+  const sam = await person("sam@northstar.example")
+  const employed = async () =>
+    (await store.knowledge.relations(null, sam)).filter(
+      ({ kind, standing }) => kind === "member-of" && standing === "reported",
+    )
+  expect(await employed()).toHaveLength(1)
+  const gone = USERS.map((user) => (user.externalId === "u3" ? { ...user, active: false } : user))
+  await syncCrm(Object.assign(crm, { users: async () => gone, departments: async () => DEPARTMENTS }), store, PORTAL)
+  expect(await employed()).toEqual([])
+})
+
+it("keeps reporting lines of a user whose departments the CRM did not give", async () => {
+  const { store, crm, sync, person } = await acme()
+  await sync()
+  const sam = await person("sam@northstar.example")
+  const lines = async () =>
+    (await store.knowledge.relations(null, sam)).filter(
+      ({ kind, from, standing }) => kind === "reports-to" && from === sam && standing === "reported",
+    )
+  expect(await lines()).toHaveLength(1)
+  const unknown = USERS.map(({ departments: _, ...user }) => user)
+  await syncCrm(Object.assign(crm, { users: async () => unknown }), store, PORTAL, { rescan: true })
+  expect(await lines()).toHaveLength(1)
+})
+
+it("makes a company of a mapped type a customer, a supplier or a partner of the own company", async () => {
+  const { path, store, crm, sync } = await acme()
+  const database = await openCache(path)
+  database
+    .prepare("INSERT INTO store_settings (key, value, at) VALUES (?, ?, 1)")
+    .run(
+      `crm.${PORTAL.provider}:${PORTAL.account}.company-types`,
+      JSON.stringify({ CUSTOMER: "customer-of", SUPPLIER: "supplier", PARTNER: "partner-of" }),
+    )
+  database.close()
+  await sync()
+  crm.put("organization", { externalId: "c1", name: "Acme Ltd", type: "CUSTOMER" })
+  crm.put("organization", { externalId: "c2", name: "Paperco", type: "SUPPLIER" })
+  crm.put("organization", { externalId: "c3", name: "Allied", type: "PARTNER" })
+  await sync()
+  const named = new Map((await store.knowledge.organizations()).map(({ name, ref }) => [name, ref]))
+  const own = named.get("Northstar Consulting")
+  const links = async () =>
+    (await store.knowledge.relations(null, own))
+      .filter(({ kind, standing }) => kind !== "member-of" && standing === "reported")
+      .map(({ from, to, kind }) => [from, kind, to])
+  // Allied is stored after Northstar, so the partnership's lower id is Northstar's.
+  expect((await links()).sort()).toEqual(
+    [
+      [named.get("Acme Ltd"), "customer-of", own],
+      [own, "customer-of", named.get("Paperco")],
+      [own, "partner-of", named.get("Allied")],
+    ].sort(),
+  )
+  crm.put("organization", { externalId: "c2", name: "Paperco", type: null })
+  await sync()
+  expect((await links()).some(([, , to]) => to === named.get("Paperco"))).toBe(false)
+})
+
+it("never withdraws what another account of the same CRM reports", async () => {
+  const { store, sync, person } = await acme()
+  await sync()
+  const alice = await person("alice@acme.example")
+  const acmeRef = `organization:${(await store.knowledge.organizations()).find(({ name }) => name === "Acme Ltd")?.id}`
+  const other = { provider: PORTAL.provider, account: "other.example" }
+  const scope = { from: [alice], kinds: ["member-of" as const], roles: ["contact"] }
+  await store.relations.syncReported(other, [{ from: alice, to: acmeRef, kind: "member-of", role: "contact" }], scope)
+  await store.relations.syncReported(other, [], scope)
+  await sync()
+  expect(
+    (await store.knowledge.relations(null, alice)).filter(
+      ({ to, standing }) => to === acmeRef && standing === "reported",
+    ),
+  ).toHaveLength(1)
 })

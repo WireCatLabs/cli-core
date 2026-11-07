@@ -112,7 +112,7 @@ const crmSync = v.strictObject({
   account: text,
   pipelines: count,
   users: v.optional(count),
-  conflicts: count,
+  skipped_owner_rejected: count,
   synced: v.array(
     v.strictObject({
       kind: v.picklist(CRM_KINDS),

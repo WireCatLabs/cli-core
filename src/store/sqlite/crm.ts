@@ -12,13 +12,16 @@ import type {
 import { DEAL_ROLES, type DealKind, STAGE_OUTCOMES } from "../../domain/deals.js"
 import { currencyOf, minorUnits } from "../../domain/money.js"
 import { recordFingerprint } from "../../domain/records.js"
+import type { RelationKind } from "../../domain/relations.js"
 import { fold } from "../normalize.js"
 import type { AccountPeople } from "../people.js"
 import type { AccountKey } from "../types.js"
 import { accountPk, findAccountPk } from "./accounts.js"
+import { crmCompanyTypes } from "./crm-settings.js"
 import { authorActor } from "./memories.js"
 import type { StoreContext } from "./open.js"
 import { type ReportedRelation, type ReportedScope, syncReportedIn } from "./reported-relations.js"
+import { clearState, syncStateOf, writeState } from "./sync.js"
 import { write } from "./transaction.js"
 
 /** What the store could not keep, and why: an item whose stage is not stored or whose field it refuses, or a pipeline. */
@@ -29,18 +32,19 @@ export interface CrmSkipped {
 }
 
 /**
- * A relationship the CRM reported that the store did not write: a contact, company or user it never synced, ends the
- * registry refuses, a pair the owner rejected, or an own company it does not know yet.
+ * A relationship the CRM reported that the store did not write: a contact, company or user not synced yet (tried
+ * again on the next sync), ends the registry refuses, an own company it does not know yet, or an email two people
+ * share.
  */
 export interface CrmRelationIssue {
-  externalId: string
+  /** The CRM row it came from; absent for the account as a whole. */
+  externalId?: string
   reason:
     | "crm.reference-unknown"
     | "crm.own-unknown"
     | "crm.email-ambiguous"
     | "relationship.reference-unknown"
     | "relationship.invalid"
-    | "relationship.owner-rejected"
   message: string
 }
 
@@ -49,9 +53,33 @@ export interface CrmSaved {
   skipped: CrmSkipped[]
   /** Relationships left out; the rows themselves were kept. */
   issues?: CrmRelationIssue[]
-  /** Relationships that contradict the owner's and wait as `relationship_update` proposals. */
-  conflicts?: number
+  /** Relationships left out because the owner removed or rejected that very one. */
+  skippedOwnerRejected?: number
 }
+
+/** A CRM row as an end of a relationship, by the CRM's own id. */
+interface CrmRef {
+  type: DealKind | "contact" | "user" | "company"
+  id: string
+}
+
+/** A relationship a CRM row reported whose other end is not stored yet; kept in the account's sync state. */
+interface PendingRelation {
+  /** The row that reported it, `<type>:<id>`: saving that row again replaces its pending ones. */
+  owner: string
+  from: CrmRef
+  to: CrmRef
+  kind: RelationKind
+  role: string | null
+  metadata?: Record<string, unknown>
+}
+
+interface Tally {
+  issues: CrmRelationIssue[]
+  skippedOwnerRejected: number
+}
+
+const PENDING = "crm:pending-relations"
 
 /**
  * A CRM account's copies in the store, written as the CRM has them: nothing waits for review (NEED-2271 A), and
@@ -75,6 +103,8 @@ export interface CrmCopies {
    * Without `departments` no reporting line is touched.
    */
   saveUsers(key: AccountKey, users: CrmUser[], departments?: CrmDepartment[]): Promise<CrmSaved>
+  /** Writes the relationships earlier syncs held back for an end not stored then; answers how many it wrote. */
+  retryPending(key: AccountKey): Promise<number>
   /** One kind's whole list of the CRM's own fields: one it lacks is marked deleted, one listed again comes back. */
   saveFields(key: AccountKey, kind: CrmKind, fields: CrmField[]): Promise<CrmSaved>
   /** The kind's fields as last synced, in the CRM's order; none before the first sync. */
@@ -112,9 +142,10 @@ const SOURCE = "crm"
 export const crmIdentityId = (key: AccountKey, externalId: string, type: "contact" | "user" = "contact"): string =>
   `${key.account}/${type}/${externalId}`
 
-const relationNotes = (issues: CrmRelationIssue[], conflicts: number) => ({
+const tallied = (): Tally => ({ issues: [], skippedOwnerRejected: 0 })
+const relationNotes = ({ issues, skippedOwnerRejected }: Tally) => ({
   ...(issues.length ? { issues } : {}),
-  ...(conflicts ? { conflicts } : {}),
+  ...(skippedOwnerRejected ? { skippedOwnerRejected } : {}),
 })
 
 const day = (value: unknown, what: string): string | null => {
@@ -302,17 +333,25 @@ export const crmCopiesOver = (context: StoreContext, people: AccountPeople): Crm
     return row ? Number(row.person_id) : null
   }
 
-  /** Writes what the CRM reported as a diff (`relations.syncReported`), its issues named by the CRM row they came from. */
-  const report = (
-    key: AccountKey,
-    externalId: string,
-    relationships: ReportedRelation[],
-    scope: ReportedScope,
-    issues: CrmRelationIssue[],
-  ): number => {
-    const done = syncReportedIn(context, key, relationships, scope, { source: SOURCE })
-    for (const one of done.issues) issues.push({ externalId, reason: one.reason, message: one.message })
-    return done.conflicts
+  /**
+   * How many people the contact's email belongs to; none once the owner separated this contact, who already decided.
+   */
+  const peopleSharing = (key: AccountKey, externalId: string, email: string): number => {
+    const decided = database
+      .prepare(
+        "SELECT 1 FROM identity_link_events e JOIN identities i ON i.id = e.identity_id WHERE i.provider = ? " +
+          "AND i.external_id = ? AND e.author = 'owner' LIMIT 1",
+      )
+      .get(key.provider, crmIdentityId(key, externalId))
+    if (decided) return 0
+    return Number(
+      database
+        .prepare(
+          "SELECT count(DISTINCT l.person_id) AS n FROM identities i JOIN identity_links l ON l.identity_id = i.id " +
+            "WHERE i.email = ?",
+        )
+        .get(email)?.n,
+    )
   }
 
   /** A person a CRM contact or user made has no name when it joined the mail contact of its address first. */
@@ -334,16 +373,111 @@ export const crmCopiesOver = (context: StoreContext, people: AccountPeople): Crm
       .get(accountId, externalId)
     return row?.entity_id == null ? null : Number(row.entity_id)
   }
+  const refOf = (key: AccountKey, accountId: number, ref: CrmRef): string | null => {
+    if (ref.type === "contact" || ref.type === "user") {
+      const person = personIdOf(key, ref.id, ref.type)
+      return person === null ? null : `person:${person}`
+    }
+    if (ref.type === "company") {
+      const organization = organizationIdOf(accountId, ref.id)
+      return organization === null ? null : `organization:${organization}`
+    }
+    const row = database
+      .prepare(`SELECT id FROM ${TABLES[ref.type]} WHERE account_id = ? AND external_id = ?`)
+      .get(accountId, ref.id)
+    return row ? `${ref.type}:${row.id}` : null
+  }
 
-  const saveItem = (
+  const pendingOf = (accountId: number): PendingRelation[] => {
+    try {
+      const value = JSON.parse(syncStateOf(context, accountId, PENDING)?.value ?? "[]") as unknown
+      return Array.isArray(value) ? (value as PendingRelation[]) : []
+    } catch {
+      return []
+    }
+  }
+  const savePending = (accountId: number, list: PendingRelation[]) =>
+    list.length
+      ? writeState(context, accountId, PENDING, JSON.stringify(list))
+      : clearState(context, accountId, PENDING)
+
+  /**
+   * Reports one CRM row's relationships as a diff (`relations.syncReported`) inside `scope`. One whose other end is not
+   * stored yet waits in the account's sync state and is tried again after the next sync, so a deal read before its
+   * contact still gets the contact.
+   */
+  const reportFrom = (
     key: AccountKey,
     accountId: number,
-    kind: DealKind,
-    item: CrmItem,
-    at: number,
-    issues: CrmRelationIssue[],
-    tally: { conflicts: number },
+    owner: CrmRef,
+    wanted: Omit<PendingRelation, "owner">[],
+    scope: ReportedScope,
+    tally: Tally,
   ) => {
+    const name = `${owner.type}:${owner.id}`
+    const relationships: ReportedRelation[] = []
+    const waiting: PendingRelation[] = []
+    for (const one of wanted) {
+      const from = refOf(key, accountId, one.from)
+      const to = refOf(key, accountId, one.to)
+      if (from === null || to === null) {
+        const missing = from === null ? one.from : one.to
+        waiting.push({ owner: name, ...one })
+        tally.issues.push({
+          externalId: owner.id,
+          reason: "crm.reference-unknown",
+          message:
+            `${owner.type} ${owner.id} names ${missing.type} ${missing.id}, which is not stored yet; ` +
+            "the next sync tries again",
+        })
+        continue
+      }
+      relationships.push({
+        from,
+        to,
+        kind: one.kind,
+        role: one.role,
+        ...(one.metadata ? { metadata: one.metadata } : {}),
+      })
+    }
+    const held = pendingOf(accountId)
+    if (waiting.length || held.some((one) => one.owner === name))
+      savePending(accountId, [...held.filter((one) => one.owner !== name), ...waiting])
+    const done = syncReportedIn(context, key, relationships, scope, { source: SOURCE })
+    tally.skippedOwnerRejected += done.skippedOwnerRejected
+    for (const one of done.issues) tally.issues.push({ externalId: owner.id, reason: one.reason, message: one.message })
+  }
+
+  /** The pending relationships whose ends are stored now, written without withdrawing anything. */
+  const retryPending = (key: AccountKey): number =>
+    write(database, () => {
+      const accountId = findAccountPk(context, key)
+      if (accountId === undefined) return 0
+      const held = pendingOf(accountId)
+      const kept: PendingRelation[] = []
+      let written = 0
+      for (const one of held) {
+        const from = refOf(key, accountId, one.from)
+        const to = refOf(key, accountId, one.to)
+        if (from === null || to === null) {
+          kept.push(one)
+          continue
+        }
+        const relation = {
+          from,
+          to,
+          kind: one.kind,
+          role: one.role,
+          ...(one.metadata ? { metadata: one.metadata } : {}),
+        }
+        syncReportedIn(context, key, [relation], { from: [], kinds: [] }, { source: SOURCE })
+        written += 1
+      }
+      if (kept.length !== held.length) savePending(accountId, kept)
+      return written
+    })
+
+  const saveItem = (key: AccountKey, accountId: number, kind: DealKind, item: CrmItem, at: number, tally: Tally) => {
     const pipeline = pipelineOf(accountId, kind, item.pipeline)
     const stage =
       pipeline &&
@@ -452,40 +586,22 @@ export const crmCopiesOver = (context: StoreContext, people: AccountPeople): Crm
       )
     }
     if (item.people === undefined && item.assignee === undefined) return null
-    const unknown = (what: string) =>
-      issues.push({
-        externalId: item.externalId,
-        reason: "crm.reference-unknown",
-        message: `${kind} ${item.externalId} names ${what}, which is not stored`,
-      })
-    const relationships: ReportedRelation[] = []
-    for (const person of item.people ?? []) {
-      const personId = personIdOf(key, person.externalId)
-      if (personId === null) {
-        unknown(`contact ${person.externalId}`)
-        continue
-      }
-      const role = (DEAL_ROLES as readonly string[]).includes(person.role) ? person.role : "contact"
-      relationships.push({
-        from: `${kind}:${id}`,
-        to: `person:${personId}`,
-        kind: "related-to",
-        role,
-        ...(person.primary ? { metadata: { primary: true } } : {}),
-      })
-    }
-    if (item.assignee) {
-      const owner = personIdOf(key, item.assignee, "user")
-      if (owner === null) unknown(`user ${item.assignee}`)
-      else relationships.push({ from: `${kind}:${id}`, to: `person:${owner}`, kind: "related-to", role: "owner" })
-    }
+    const self: CrmRef = { type: kind, id: item.externalId }
+    const wanted: Omit<PendingRelation, "owner">[] = (item.people ?? []).map((person) => ({
+      from: self,
+      to: { type: "contact", id: person.externalId },
+      kind: "related-to",
+      role: (DEAL_ROLES as readonly string[]).includes(person.role) ? person.role : "contact",
+      ...(person.primary ? { metadata: { primary: true } } : {}),
+    }))
+    if (item.assignee)
+      wanted.push({ from: self, to: { type: "user", id: item.assignee }, kind: "related-to", role: "owner" })
     // Only what the CRM said: its contacts cover the client's roles, its assignee the owner.
     const roles = [
       ...(item.people === undefined ? [] : DEAL_ROLES.filter((role) => role !== "owner")),
       ...(item.assignee === undefined ? [] : ["owner"]),
     ]
-    const scope = { from: [`${kind}:${id}`], kinds: ["related-to" as const], roles }
-    tally.conflicts += report(key, item.externalId, relationships, scope, issues)
+    reportFrom(key, accountId, self, wanted, { from: [`${kind}:${id}`], kinds: ["related-to"], roles }, tally)
     return null
   }
 
@@ -494,17 +610,16 @@ export const crmCopiesOver = (context: StoreContext, people: AccountPeople): Crm
       const accountId = account(key)
       const at = now()
       const skipped: CrmSkipped[] = []
-      const issues: CrmRelationIssue[] = []
-      const tally = { conflicts: 0 }
+      const tally = tallied()
       for (const item of items)
         try {
-          const missing = saveItem(key, accountId, kind, item, at, issues, tally)
+          const missing = saveItem(key, accountId, kind, item, at, tally)
           if (missing) skipped.push(missing)
         } catch (error) {
           if (!(error instanceof CliError) || error.code !== "validation_error") throw error
           skipped.push({ externalId: item.externalId, reason: "crm.item-invalid", message: error.message })
         }
-      return { saved: items.length - skipped.length, skipped, ...relationNotes(issues, tally.conflicts) }
+      return { saved: items.length - skipped.length, skipped, ...relationNotes(tally) }
     })
 
   const saveOrganizations = (key: AccountKey, organizations: CrmOrganization[]): CrmSaved =>
@@ -524,7 +639,8 @@ export const crmCopiesOver = (context: StoreContext, people: AccountPeople): Crm
         const held = database
           .prepare("SELECT * FROM records WHERE account_id = ? AND type = 'organization' AND external_id = ?")
           .get(accountId, organization.externalId)
-        const before = held ? (JSON.parse(String(held.fields)) as { name?: unknown }).name : undefined
+        const previous = held ? (JSON.parse(String(held.fields)) as { name?: unknown; own?: unknown }) : {}
+        const before = previous.name
         let entity = held?.entity_type === "organization" && held.entity_id != null ? Number(held.entity_id) : null
         if (entity === null)
           entity = Number(
@@ -546,6 +662,11 @@ export const crmCopiesOver = (context: StoreContext, people: AccountPeople): Crm
               "UPDATE organizations SET metadata = json_set(coalesce(metadata, '{}'), '$.own', json('true')), " +
                 "updated_at = ? WHERE id = ? AND json_extract(coalesce(metadata, '{}'), '$.own') IS NOT 1",
             )
+            .run(at, entity)
+        // Only a flag the CRM set goes when the CRM drops it: one the owner set stays.
+        else if (previous.own === true)
+          database
+            .prepare("UPDATE organizations SET metadata = json_remove(metadata, '$.own'), updated_at = ? WHERE id = ?")
             .run(at, entity)
         if (held)
           database
@@ -573,81 +694,88 @@ export const crmCopiesOver = (context: StoreContext, people: AccountPeople): Crm
               at,
             )
       }
-      return { saved: organizations.length, skipped: [] }
+      const tally = tallied()
+      const types = crmCompanyTypes(database, key)
+      const own = ownCompanies(accountId)
+      if (Object.keys(types).length)
+        for (const organization of organizations) {
+          if (organization.type === undefined || organization.own || own.includes(organization.externalId)) continue
+          const company: CrmRef = { type: "company", id: organization.externalId }
+          const meaning = organization.type === null ? undefined : types[organization.type]
+          const wanted = own.flatMap((id): Omit<PendingRelation, "owner">[] => {
+            const mine: CrmRef = { type: "company", id }
+            if (meaning === "customer-of") return [{ from: company, to: mine, kind: "customer-of", role: null }]
+            if (meaning === "supplier") return [{ from: mine, to: company, kind: "customer-of", role: null }]
+            if (meaning === "partner-of") return [{ from: company, to: mine, kind: "partner-of", role: null }]
+            return []
+          })
+          const ref = refOf(key, accountId, company) as string
+          const scope = { from: [ref], to: [ref], kinds: ["customer-of" as const, "partner-of" as const] }
+          reportFrom(key, accountId, company, wanted, scope, tally)
+        }
+      return { saved: organizations.length, skipped: [], ...relationNotes(tally) }
     })
 
-  const ownOrganizations = (accountId: number): number[] =>
+  /** The account's own companies, by the CRM's ids. */
+  const ownCompanies = (accountId: number): string[] =>
     database
       .prepare(
-        "SELECT o.id FROM records r JOIN organizations o ON o.id = r.entity_id WHERE r.account_id = ? " +
+        "SELECT r.external_id FROM records r JOIN organizations o ON o.id = r.entity_id WHERE r.account_id = ? " +
           "AND r.type = 'organization' AND r.entity_type = 'organization' AND r.deleted_at IS NULL " +
           "AND json_extract(o.metadata, '$.own') = 1 ORDER BY o.id",
       )
       .all(accountId)
-      .map((row) => Number(row.id))
+      .map((row) => String(row.external_id))
 
   const saveUsers = (key: AccountKey, users: CrmUser[], departments: CrmDepartment[] | undefined): CrmSaved => {
     const accountId = account(key)
-    const issues: CrmRelationIssue[] = []
-    const persons = new Map<string, number>()
-    for (const user of users) {
-      const person = nameUnnamed(key, user.externalId, "user", textOf(user.name, 200))
-      if (person !== null) persons.set(user.externalId, person)
-    }
+    const tally = tallied()
+    for (const user of users) nameUnnamed(key, user.externalId, "user", textOf(user.name, 200))
     const active = new Map(users.filter((user) => user.active !== false).map((user) => [user.externalId, user]))
-    const refs = [...persons.values()].map((person) => `person:${person}`)
-    let conflicts = 0
-    const own = ownOrganizations(accountId)
+    const own = ownCompanies(accountId)
     if (own.length === 0)
-      issues.push({
-        externalId: "",
+      tally.issues.push({
         reason: "crm.own-unknown",
         message: "no own company of this account is stored, so no user is its employee yet",
       })
-    else {
-      const employees: ReportedRelation[] = []
-      for (const [id, user] of active) {
-        const person = persons.get(id)
-        const position = textOf(user.position, 200)
-        if (person !== undefined)
-          for (const organization of own)
-            employees.push({
-              from: `person:${person}`,
-              to: `organization:${organization}`,
-              kind: "member-of",
+    const byId = new Map((departments ?? []).map((department) => [department.externalId, department]))
+    for (const user of users) {
+      const self: CrmRef = { type: "user", id: user.externalId }
+      const ref = refOf(key, accountId, self)
+      if (ref === null) continue
+      const working = active.has(user.externalId)
+      const position = textOf(user.position, 200)
+      if (own.length) {
+        const wanted = working
+          ? own.map((id) => ({
+              from: self,
+              to: { type: "company" as const, id },
+              kind: "member-of" as const,
               role: "employee",
               ...(position ? { metadata: { position } } : {}),
-            })
+            }))
+          : []
+        reportFrom(key, accountId, self, wanted, { from: [ref], kinds: ["member-of"], roles: ["employee"] }, tally)
       }
-      conflicts += report(key, "", employees, { from: refs, kinds: ["member-of"], roles: ["employee"] }, issues)
-    }
-    if (departments) {
-      const byId = new Map(departments.map((department) => [department.externalId, department]))
-      const lines: ReportedRelation[] = []
-      for (const [id, user] of active) {
-        const person = persons.get(id)
-        if (person === undefined) continue
-        const heads = new Set<string>()
-        for (const departmentId of user.departments ?? []) {
-          const department = byId.get(departmentId)
-          const head =
-            department?.head === id ? byId.get(department.parent ?? "")?.head : (department?.head ?? undefined)
-          if (head && head !== id && active.has(head)) heads.add(head)
-        }
-        for (const head of heads) {
-          const manager = persons.get(head)
-          if (manager !== undefined)
-            lines.push({
-              from: `person:${person}`,
-              to: `person:${manager}`,
-              kind: "reports-to",
-              metadata: { derived: "department-head" },
-            })
-        }
+      // Without departments, or without a user's own list of them, who it reports to is unknown, not none.
+      if (departments === undefined || user.departments === undefined) continue
+      const heads = new Set<string>()
+      for (const id of working ? user.departments : []) {
+        const department = byId.get(id)
+        const head = department?.head === user.externalId ? byId.get(department.parent ?? "")?.head : department?.head
+        if (head && head !== user.externalId && active.has(head)) heads.add(head)
       }
-      conflicts += report(key, "", lines, { from: refs, kinds: ["reports-to"] }, issues)
+      const lines = [...heads].map((head) => ({
+        from: self,
+        to: { type: "user" as const, id: head },
+        kind: "reports-to" as const,
+        role: null,
+        metadata: { derived: "department-head" },
+      }))
+      const owner = { type: "user" as const, id: `${user.externalId}/reports-to` }
+      reportFrom(key, accountId, owner, lines, { from: [ref], kinds: ["reports-to"] }, tally)
     }
-    return { saved: users.length, skipped: [], ...relationNotes(issues, conflicts) }
+    return { saved: users.length, skipped: [], ...relationNotes(tally) }
   }
 
   const stored = (key: AccountKey, kind: CrmKind): Row[] => {
@@ -690,60 +818,42 @@ export const crmCopiesOver = (context: StoreContext, people: AccountPeople): Crm
       )
       return write(database, () => {
         const accountId = account(key)
-        const issues: CrmRelationIssue[] = []
-        let conflicts = 0
+        const tally = tallied()
         for (const contact of contacts) {
           const person = nameUnnamed(key, contact.externalId, "contact", textOf(contact.name, 200))
           const email = textOf(contact.email, 320)?.toLowerCase()
-          const sharing = email
-            ? Number(
-                database
-                  .prepare(
-                    "SELECT count(DISTINCT l.person_id) AS n FROM identities i JOIN identity_links l ON l.identity_id = i.id " +
-                      "WHERE i.email = ?",
-                  )
-                  .get(email)?.n,
-              )
-            : 0
+          const sharing = email ? peopleSharing(key, contact.externalId, email) : 0
           if (sharing > 1)
-            issues.push({
+            tally.issues.push({
               externalId: contact.externalId,
               reason: "crm.email-ambiguous",
               message: `contact ${contact.externalId}'s email belongs to ${sharing} people: say which one it is`,
             })
           if (person === null || contact.organizations === undefined) continue
+          const self: CrmRef = { type: "contact", id: contact.externalId }
           const position = textOf(contact.position, 200)
-          const relationships: ReportedRelation[] = []
-          for (const company of contact.organizations) {
-            const organization = organizationIdOf(accountId, company.externalId)
-            if (organization === null) {
-              issues.push({
-                externalId: contact.externalId,
-                reason: "crm.reference-unknown",
-                message: `contact ${contact.externalId} names company ${company.externalId}, which is not stored`,
-              })
-              continue
-            }
+          const wanted = contact.organizations.map((company) => {
             const sourceRole = textOf(company.sourceRole, 200)
             const metadata = {
               ...(position ? { position } : {}),
               ...(sourceRole ? { source_role: sourceRole } : {}),
               ...(company.primary ? { primary: true } : {}),
             }
-            relationships.push({
-              from: `person:${person}`,
-              to: `organization:${organization}`,
-              kind: "member-of",
+            return {
+              from: self,
+              to: { type: "company" as const, id: company.externalId },
+              kind: "member-of" as const,
               role: "contact",
               ...(Object.keys(metadata).length ? { metadata } : {}),
-            })
-          }
+            }
+          })
           const scope = { from: [`person:${person}`], kinds: ["member-of" as const], roles: ["contact"] }
-          conflicts += report(key, contact.externalId, relationships, scope, issues)
+          reportFrom(key, accountId, self, wanted, scope, tally)
         }
-        return { saved: contacts.length, skipped: [], ...relationNotes(issues, conflicts) }
+        return { saved: contacts.length, skipped: [], ...relationNotes(tally) }
       })
     },
+    retryPending: async (key) => retryPending(key),
     saveUsers: async (key, users, departments) => {
       await people.savePeople(
         key,

@@ -560,7 +560,7 @@ One row per change of a relationship link (the kinds of `RELATIONS`: `member-of`
 |---|---|---|---|---|
 | `id` | integer | PK |  |  |
 | `link_id` | integer | not null |  | the `links` row |
-| `change` | text | not null |  | `added`, `changed` (role, dates or account), `ended` (`ends_at` set), `confirmed`, `withdrawn` (`deleted_at` set: the source stopped reporting it), `restored` (reported again) or `removed` (deleted) |
+| `change` | text | not null |  | `added`, `changed` (role, dates or account), `ended` (`ends_at` set), `confirmed`, `withdrawn` (`deleted_at` set: the source stopped reporting it), `restored` (reported again), `rejected` (a suggestion the owner rejected) or `removed` (deleted) |
 | `before` | text |  |  | JSON of role, confirmed, account_id, starts_at, ends_at and deleted_at before; null when added |
 | `after` | text |  |  | the same after; null when removed |
 | `author` | text |  |  | the link's `author` after the change, or before a removal |
