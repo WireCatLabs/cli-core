@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.601.0 — 07.11.2026
+
 ### Added
 
 - **Store version 55: `decision_requests`, the one-time keys behind buttons that ask the owner to decide a batch.**
