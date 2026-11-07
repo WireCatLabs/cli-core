@@ -275,12 +275,10 @@ export const searchAll = async (
       cosines.set(hit.locator, hit.cosine)
       const held = fused.get(hit.locator)
       if (held) held.item.foundBy = ["words", "meaning"]
-      // As in notes: a question's any-word list already holds what meaning finds, and a second vote buries the rest.
-      if (held && discovers) return
-      fused.set(hit.locator, {
-        item: held?.item ?? itemOf(hit, ["meaning"]),
-        score: (held?.score ?? 0) + 1 / (RRF_K + rank + 1),
-      })
+      const vote = 1 / (RRF_K + rank + 1)
+      // As in notes: a question's any-word list holds most of what meaning finds, so a second vote would bury the rest.
+      if (held && discovers) held.score = Math.max(held.score, vote)
+      else fused.set(hit.locator, { item: held?.item ?? itemOf(hit, ["meaning"]), score: (held?.score ?? 0) + vote })
     })
     return [...fused.values()].sort((a, b) => b.score - a.score).map(({ item }) => item)
   }

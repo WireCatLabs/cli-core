@@ -242,3 +242,23 @@ describe("the parts of a query the meaning half reads", () => {
     expect(meaningWords(root(query))).toBe(words)
   })
 })
+
+describe("a question worded differently from its note", () => {
+  it("brings the note meaning ranks first onto the first page, though words rank it last", async () => {
+    const store = await seeded([
+      ...["one", "two", "three", "four"].map((n) => ({
+        title: `Memo ${n}`,
+        text: `the harbour offsite advance is planned, part ${n}`,
+      })),
+      { title: "Memo five", text: "Tess paid the harbour retreat deposit" },
+    ])
+    await vectors(store, (text) => text.includes("Tess"))
+
+    const found = await search(store, "Who put down the money for the harbour offsite advance?", {
+      discover: true,
+      limit: 2,
+    })
+
+    expect(found.titles).toContain("Memo five")
+  })
+})
