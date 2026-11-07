@@ -14,6 +14,8 @@ export interface Recognizer {
   recognize(pcm: Float32Array): string
   /** Each stretch of speech the voice detector cut, with where it lies; the same input as `recognize`. */
   pieces?(pcm: Float32Array): TimedText[]
+  /** `pieces`, giving the event loop a turn between pieces, so `signal` can stop a long recording between two. */
+  piecesUntil?(pcm: Float32Array, signal: AbortSignal): Promise<TimedText[]>
   free(): void
 }
 
@@ -211,12 +213,27 @@ export const openRecognizer = (model: SpeechModel, path: (name: string) => strin
     return heard
   }
 
+  // Decoding is synchronous: without a turn of the event loop between pieces no abort could ever be seen.
+  const piecesUntil = async (pcm: Float32Array, signal: AbortSignal): Promise<TimedText[]> => {
+    const spans: SpeechSpan[] = []
+    cut(vad, pcm, (span) => spans.push(span))
+    const heard: TimedText[] = []
+    for (const { start, end, samples } of spans) {
+      await new Promise((resolve) => setImmediate(resolve))
+      signal.throwIfAborted()
+      const text = piece(samples)
+      if (text) heard.push({ start, end, text })
+    }
+    return heard
+  }
+
   return {
     recognize: (pcm) =>
       pieces(pcm)
         .map(({ text }) => text)
         .join(" "),
     pieces,
+    piecesUntil,
     free: () => {
       vad.free()
       engine.free()
