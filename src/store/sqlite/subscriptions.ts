@@ -11,31 +11,39 @@ import { FINANCE_REVIEWS, type FinanceReview, INVOICE_DIRECTIONS, type InvoiceDi
 import { currencyOf, formatDecimal, type Money, minorUnits, scaleOf } from "../../domain/money.js"
 import type { Decider } from "../decisions.js"
 import { ownerPerson, type ProposedByFilter, proposedBySql } from "./actors.js"
+import { type Author, authorOf, projectId } from "./memories.js"
+import { requiredThing } from "./notes.js"
+import type { StoreContext } from "./open.js"
 import {
+  type AuthorInfo,
   iso,
   isoDate,
+  limitOf,
   oneOf,
   type Party,
   type Reviewed,
+  reasonOf,
   refuse,
   reviewedRowsOver,
   text,
   type Written,
-} from "./finance.js"
-import { type Author, authorOf, projectId } from "./memories.js"
-import { requiredThing } from "./notes.js"
-import type { StoreContext } from "./open.js"
+} from "./reviewed.js"
 import { write } from "./transaction.js"
 
 export interface SubscriptionPrice extends Money {
-  /** `subscription_price:<id>`: its own proposal, never changed once written. */
   id: string
+  /** `subscription_price:<id>`: its own proposal, never changed once written. */
+  ref: string
+  /** One line, as the review inbox prints it. */
+  title: string
   subscription: string
   /** `YYYY-MM-DD`: the first day it is billed. */
   effectiveFrom: string
   review: FinanceReview
-  author: { type: "person" | "bot"; id: string; name: string | null; kind: "agent" | "rule" | null }
+  author: AuthorInfo
   reason: string | null
+  /** Always `null`: a price belongs to its subscription's project. */
+  project: null
   createdAt: string
 }
 
@@ -76,37 +84,38 @@ export interface PriceInput {
   effectiveFrom?: string
 }
 
-export interface SubscriptionInput extends Written {
-  /** The product's name when left out. */
+export interface SubscriptionFields {
   name?: string
-  direction: InvoiceDirection
+  direction?: InvoiceDirection
   /** The owner's own person when left out of a receivable one. */
   supplier?: string
   /** The owner's own person when left out of a payable one. */
   customer?: string
-  product?: string
-  contract?: string
+  /** `null` takes it off. */
+  product?: string | null
+  contract?: string | null
   /** `trial` when a trial end is given, else `active`. */
   status?: SubscriptionStatus
   /** A count and a unit, such as 1-month, as `--every` takes it. */
-  every: string
-  startDate: string
-  trialEndDate?: string
-  nextRenewalDate?: string
-  cancelledDate?: string
-  endDate?: string
-  /** Its first price, proposed or confirmed with the subscription. */
-  price?: PriceInput
-}
-
-export interface SubscriptionUpdate {
-  by: Author
-  name?: string
-  status?: SubscriptionStatus
+  every?: string
+  startDate?: string
+  trialEndDate?: string | null
   nextRenewalDate?: string | null
   /** Today when it is cancelled and no day is given. */
   cancelledDate?: string | null
   endDate?: string | null
+}
+
+export interface SubscriptionInput extends Written, SubscriptionFields {
+  direction: InvoiceDirection
+  every: string
+  startDate: string
+  /** Its prices, proposed or confirmed with the subscription. */
+  prices?: PriceInput[]
+}
+
+export interface SubscriptionUpdate extends SubscriptionFields {
+  by: Author
 }
 
 export interface SubscriptionFilter {
@@ -123,26 +132,32 @@ export interface SubscriptionFilter {
   limit?: number
 }
 
+export interface PriceFilter {
+  review?: FinanceReview
+  proposedBy?: ProposedByFilter
+  /** 1–500, 100 by default; newest written first. */
+  limit?: number
+}
+
 /**
- * Subscriptions the owner bills or pays, and their prices. A price is a row of its own and never changes: a new price
- * from an agent on a confirmed subscription is a proposal of its own, and the subscription stays confirmed.
+ * Subscriptions the owner bills or pays, and their prices. A price is a row of its own and never changes. Confirming a
+ * subscription confirms the prices proposed with it; a later price is a proposal of its own, and the subscription
+ * stays confirmed.
  */
 export interface SubscriptionsStore {
   add(input: SubscriptionInput): Promise<SubscriptionDetail>
   get(reference: string): Promise<SubscriptionDetail>
   list(filter?: SubscriptionFilter): Promise<Subscription[]>
+  /** The owner changes any; a bot only one it proposed that is still proposed. */
   update(reference: string, input: SubscriptionUpdate): Promise<SubscriptionDetail>
   addPrice(reference: string, input: PriceInput & Omit<Written, "project" | "evidence">): Promise<SubscriptionPrice>
   /** `subscription:<id>` or `subscription_price:<id>`. */
   confirm(reference: string, by: Decider, reason?: string): Promise<SubscriptionDetail>
   reject(reference: string, by: Decider, reason?: string): Promise<SubscriptionDetail>
-  price(id: string): Promise<SubscriptionPrice>
+  /** `subscription_price:<id>`. */
+  price(reference: string): Promise<SubscriptionPrice>
   /** Proposed or decided prices, newest written first, as the review inbox lists them. */
-  prices(filter?: {
-    review?: FinanceReview
-    proposedBy?: ProposedByFilter
-    limit?: number
-  }): Promise<SubscriptionPrice[]>
+  prices(filter?: PriceFilter): Promise<SubscriptionPrice[]>
 }
 
 type Row = Record<string, unknown>
@@ -153,16 +168,7 @@ const SUBSCRIPTIONS =
 const PRICES =
   "SELECT p.*, b.name AS author_name, b.kind AS author_kind FROM subscription_prices p " +
   "LEFT JOIN bots b ON p.author_type = 'bot' AND b.id = p.author_id"
-const PRICE_ID = /^subscription_price:([1-9]\d{0,15})$/
-
-const reasonOf = (metadata: unknown): string | null => {
-  try {
-    const { reason } = JSON.parse(String(metadata ?? "{}")) as { reason?: unknown }
-    return typeof reason === "string" ? reason : null
-  } catch {
-    return null
-  }
-}
+const PRICE_REF = /^subscription_price:([1-9]\d{0,15})$/
 
 type SubscriptionOperations = {
   [K in keyof SubscriptionsStore]: SubscriptionsStore[K] extends (...args: infer A) => Promise<infer R>
@@ -178,15 +184,20 @@ export const subscriptionOperationsOver = (context: StoreContext): SubscriptionO
 
   const priceOf = (row: Row): SubscriptionPrice => {
     const currency = String(row.currency)
+    const amount = formatDecimal(Number(row.amount), scaleOf(currency))
+    const subscription = `subscription:${row.subscription_id}`
     return {
-      id: `subscription_price:${row.id}`,
-      subscription: `subscription:${row.subscription_id}`,
-      amount: formatDecimal(Number(row.amount), scaleOf(currency)),
+      id: String(row.id),
+      ref: `subscription_price:${row.id}`,
+      title: `Price of ${subscription}: ${amount} ${currency} from ${row.effective_from}`,
+      subscription,
+      amount,
       currency,
       effectiveFrom: String(row.effective_from),
       review: row.review as FinanceReview,
       author: authorOf(row),
       reason: reasonOf(row.metadata),
+      project: null,
       createdAt: iso(row.created_at),
     }
   }
@@ -243,10 +254,10 @@ export const subscriptionOperationsOver = (context: StoreContext): SubscriptionO
     return database.prepare(`${SUBSCRIPTIONS} WHERE s.id = ?`).get(thing.id) as Row
   }
 
-  const priceRowOf = (id: string): Row => {
-    const match = PRICE_ID.exec(id.trim())
+  const priceRowOf = (reference: string): Row => {
+    const match = PRICE_REF.exec(reference.trim())
     const row = match ? database.prepare(`${PRICES} WHERE p.id = ?`).get(Number(match[1])) : undefined
-    if (!row) throw new CliError("not_found", `no subscription price ${id}`, { reason: "subscription.no-price" })
+    if (!row) throw new CliError("not_found", `no subscription price ${reference}`, { reason: "subscription.no-price" })
     return row
   }
 
@@ -255,15 +266,85 @@ export const subscriptionOperationsOver = (context: StoreContext): SubscriptionO
     return { ...subscriptionOf(row), prices: pricesOf(Number(row.id)) }
   }
 
-  const datesValid = (start: string, dates: { trial: unknown; cancelled: unknown; end: unknown }, status: string) => {
-    if (dates.trial != null && String(dates.trial) < start)
+  /** The columns a subscription's fields set, checked; a field left out keeps `base`'s value. Runs in a write. */
+  const columnsOf = (fields: SubscriptionFields, base: Row) => {
+    const kept = <T>(given: T | undefined, column: string, read: (value: T) => unknown) =>
+      given === undefined ? (base[column] ?? null) : read(given)
+    const day = (given: string | null | undefined, column: string, what: string) =>
+      kept(given, column, (value) => isoDate(value, what)) as string | null
+    const direction = kept(fields.direction, "direction", (value) =>
+      oneOf(value, INVOICE_DIRECTIONS, "a subscription's direction"),
+    ) as InvoiceDirection
+    const interval =
+      fields.every === undefined
+        ? { count: Number(base.interval_count), unit: base.interval_unit as PeriodUnit }
+        : intervalOf(fields.every)
+    const start =
+      day(fields.startDate, "start_date", "a subscription's start") ??
+      refuse("a subscription starts on a day", "subscription.field")
+    const trial = day(fields.trialEndDate, "trial_end_date", "a trial's end")
+    const status = kept(fields.status, "status", (value) =>
+      oneOf(value, SUBSCRIPTION_STATUSES, "a subscription's status"),
+    ) as SubscriptionStatus | null
+    const settled = status ?? (trial === null ? "active" : "trial")
+    const cancelled =
+      fields.cancelledDate === undefined && settled === "cancelled" && base.cancelled_date == null
+        ? today()
+        : day(fields.cancelledDate, "cancelled_date", "the day it was cancelled")
+    const end = day(fields.endDate, "end_date", "a subscription's end")
+    if (trial !== null && trial < start)
       refuse("a trial ends on or after the subscription starts", "subscription.field")
-    if (dates.end != null && String(dates.end) < start)
-      refuse("a subscription ends on or after it starts", "subscription.field")
-    if (status === "trial" && dates.trial == null)
-      refuse("a subscription in trial has a trial end", "subscription.field")
-    if (status === "cancelled" && dates.cancelled == null)
+    if (end !== null && end < start) refuse("a subscription ends on or after it starts", "subscription.field")
+    if (settled === "trial" && trial === null) refuse("a subscription in trial has a trial end", "subscription.field")
+    if (settled === "cancelled" && cancelled === null)
       refuse("a cancelled subscription has the day it was cancelled", "subscription.field")
+    const owner = ownerPerson(database)
+    const party = (given: string | undefined, type: string, id: string, ownerSide: boolean, what: string) =>
+      given !== undefined
+        ? (partyThing(given, what) as { type: string; id: number })
+        : base[type] != null
+          ? { type: String(base[type]), id: Number(base[id]) }
+          : ownerSide
+            ? owner
+            : refuse(
+                "a subscription names its supplier and its customer, a person: or organization:",
+                "subscription.field",
+              )
+    const supplier = party(fields.supplier, "supplier_type", "supplier_id", direction === "receivable", "the supplier")
+    const customer = party(fields.customer, "customer_type", "customer_id", direction === "payable", "the customer")
+    const linked = (given: string | null | undefined, type: "product" | "contract", column: string) =>
+      given === undefined
+        ? ((base[column] as number | null | undefined) ?? null)
+        : given === null
+          ? null
+          : linkedId(given, type, "subscription.ref")
+    const product = linked(fields.product, "product", "catalog_item_id")
+    const productName =
+      product === null
+        ? null
+        : String(database.prepare("SELECT name FROM catalog_items WHERE id = ?").get(product)?.name)
+    const name =
+      kept(fields.name, "name", (value) => text(value, "a subscription's name", 200)) ??
+      productName ??
+      refuse("a subscription needs a name, or a product to take it from", "subscription.field")
+    return {
+      name: String(name),
+      direction,
+      supplier_type: supplier.type,
+      supplier_id: supplier.id,
+      customer_type: customer.type,
+      customer_id: customer.id,
+      catalog_item_id: product,
+      contract_id: linked(fields.contract, "contract", "contract_id"),
+      status: settled,
+      interval_count: interval.count,
+      interval_unit: interval.unit,
+      start_date: start,
+      trial_end_date: trial,
+      next_renewal_date: day(fields.nextRenewalDate, "next_renewal_date", "the next renewal"),
+      cancelled_date: cancelled,
+      end_date: end,
+    }
   }
 
   const insertPrice = (subscriptionId: number, price: PriceInput, start: string, by: ReturnType<typeof written>) => {
@@ -308,74 +389,70 @@ export const subscriptionOperationsOver = (context: StoreContext): SubscriptionO
     )
   }
 
+  const decidePrice = (reference: string, by: Decider, reason: string | undefined, confirm: boolean) => {
+    const price = priceRowOf(reference)
+    const parent = rowOf(`subscription:${price.subscription_id}`)
+    decideRow(
+      "subscription_price",
+      price,
+      { by, reason, confirm },
+      {
+        before: () => {
+          if (confirm && parent.review !== "confirmed")
+            refuse(
+              `subscription:${parent.id} is ${String(parent.review)}; confirm the subscription before its price`,
+              "subscription.price",
+            )
+        },
+      },
+    )
+    return detailOf(`subscription:${parent.id}`)
+  }
+
   const decide = (reference: string, by: Decider, reason: string | undefined, confirm: boolean) => {
-    if (PRICE_ID.test(reference.trim())) {
-      const price = priceRowOf(reference)
-      const parent = rowOf(`subscription:${price.subscription_id}`)
-      if (confirm && parent.review !== "confirmed")
-        refuse(
-          `subscription:${parent.id} is ${String(parent.review)}; confirm the subscription before its price`,
-          "subscription.price",
-        )
-      decideRow("subscription_price", price, { by, reason, confirm })
-      return detailOf(`subscription:${parent.id}`)
-    }
+    if (PRICE_REF.test(reference.trim())) return decidePrice(reference, by, reason, confirm)
     const row = rowOf(reference)
     decideRow(
       "subscription",
       row,
       { by, reason, confirm },
       {
-        // A price of a rejected subscription would bill nothing; it goes with it.
-        after: () => {
-          if (!confirm)
-            database
-              .prepare(
-                "UPDATE subscription_prices SET review = 'rejected', updated_at = ? WHERE subscription_id = ? AND review = 'proposed'",
-              )
-              .run(now(), Number(row.id))
-        },
+        // The prices still proposed came with the subscription: they go with its decision.
+        after: (confirmer) =>
+          database
+            .prepare(
+              "UPDATE subscription_prices SET review = ?, confirmed_by_type = ?, confirmed_by_id = ?, updated_at = ? " +
+                "WHERE subscription_id = ? AND review = 'proposed'",
+            )
+            .run(
+              confirmer ? "confirmed" : "rejected",
+              confirmer?.type ?? null,
+              confirmer?.id ?? null,
+              now(),
+              Number(row.id),
+            ),
       },
     )
     return detailOf(`subscription:${row.id}`)
   }
 
+  const writable = (row: Row, by: Author) => {
+    const ref = `subscription:${row.id}`
+    if (row.review === "rejected" || row.deleted_at != null)
+      refuse(`${ref} is ${row.deleted_at != null ? "deleted" : "rejected"}`, "subscription.ref")
+    mayChangeParts(
+      row,
+      by,
+      `only the owner changes ${ref}; a bot changes only a subscription it proposed that is still proposed`,
+    )
+  }
+
   return {
     add: (input) => {
-      const direction = oneOf(input.direction, INVOICE_DIRECTIONS, "a subscription's direction")
-      const interval = intervalOf(input.every)
-      const start =
-        isoDate(input.startDate, "a subscription's start") ??
-        refuse("a subscription starts on a day", "subscription.field")
-      const dates = {
-        trial: isoDate(input.trialEndDate, "a trial's end"),
-        renewal: isoDate(input.nextRenewalDate, "the next renewal"),
-        cancelled: isoDate(input.cancelledDate, "the day it was cancelled"),
-        end: isoDate(input.endDate, "a subscription's end"),
-      }
-      const status =
-        input.status === undefined
-          ? dates.trial === null
-            ? "active"
-            : "trial"
-          : oneOf(input.status, SUBSCRIPTION_STATUSES, "a subscription's status")
-      datesValid(start, dates, status)
+      if (input.prices !== undefined && (!Array.isArray(input.prices) || input.prices.length > 100))
+        refuse("a subscription takes at most 100 prices", "subscription.field")
       const id = write(database, () => {
-        const owner = ownerPerson(database)
-        const supplier = partyThing(input.supplier, "the supplier") ?? (direction === "receivable" ? owner : undefined)
-        const customer = partyThing(input.customer, "the customer") ?? (direction === "payable" ? owner : undefined)
-        if (!supplier || !customer)
-          refuse("a subscription names its supplier and its customer, a person: or organization:", "subscription.field")
-        const product = linkedId(input.product, "product", "subscription.ref")
-        const contract = linkedId(input.contract, "contract", "subscription.ref")
-        const productName =
-          product === null
-            ? null
-            : String(database.prepare("SELECT name FROM catalog_items WHERE id = ?").get(product)?.name)
-        const name =
-          text(input.name, "a subscription's name", 200) ??
-          productName ??
-          refuse("a subscription needs a name, or a product to take it from", "subscription.field")
+        const columns = columnsOf(input, {})
         const by = written(input)
         const at = now()
         const made = Number(
@@ -388,23 +465,23 @@ export const subscriptionOperationsOver = (context: StoreContext): SubscriptionO
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
             )
             .get(
-              name,
-              direction,
-              supplier?.type ?? null,
-              supplier?.id ?? null,
-              customer?.type ?? null,
-              customer?.id ?? null,
-              product,
-              contract,
+              columns.name,
+              columns.direction,
+              columns.supplier_type,
+              columns.supplier_id,
+              columns.customer_type,
+              columns.customer_id,
+              columns.catalog_item_id,
+              columns.contract_id,
               by.project,
-              status,
-              interval.count,
-              interval.unit,
-              start,
-              dates.trial,
-              dates.renewal,
-              dates.cancelled,
-              dates.end,
+              columns.status,
+              columns.interval_count,
+              columns.interval_unit,
+              columns.start_date,
+              columns.trial_end_date,
+              columns.next_renewal_date,
+              columns.cancelled_date,
+              columns.end_date,
               by.review,
               by.actor.type,
               by.actor.id,
@@ -417,7 +494,7 @@ export const subscriptionOperationsOver = (context: StoreContext): SubscriptionO
               at,
             )?.id,
         )
-        if (input.price !== undefined) insertPrice(made, input.price, start, by)
+        for (const price of input.prices ?? []) insertPrice(made, price, columns.start_date, by)
         keepEvidence("subscription", made, by)
         return made
       })
@@ -460,65 +537,57 @@ export const subscriptionOperationsOver = (context: StoreContext): SubscriptionO
           renews,
           renews,
           ...by.params,
-          Math.min(Math.max(filter.limit ?? 100, 1), 500),
+          limitOf(filter.limit),
         )
         .map(subscriptionOf)
     },
-    update: (reference, input) => {
+    update: (reference, { by, ...fields }) => {
       const row = rowOf(reference)
-      const ref = `subscription:${row.id}`
-      if (row.review === "rejected" || row.deleted_at != null)
-        refuse(`${ref} is ${row.deleted_at != null ? "deleted" : "rejected"}`, "subscription.ref")
-      mayChangeParts(
-        row,
-        input.by,
-        `only the owner changes ${ref}; a bot changes only a subscription it proposed that is still proposed`,
-      )
-      const status =
-        input.status === undefined ? String(row.status) : oneOf(input.status, SUBSCRIPTION_STATUSES, "a status")
-      const day = (given: string | null | undefined, column: string, what: string) =>
-        given === undefined ? (row[column] ?? null) : isoDate(given, what)
-      const cancelled =
-        input.cancelledDate === undefined && status === "cancelled" && row.cancelled_date == null
-          ? today()
-          : day(input.cancelledDate, "cancelled_date", "the day it was cancelled")
-      const dates = {
-        trial: row.trial_end_date,
-        renewal: day(input.nextRenewalDate, "next_renewal_date", "the next renewal"),
-        cancelled,
-        end: day(input.endDate, "end_date", "a subscription's end"),
-      }
-      datesValid(String(row.start_date), dates, status)
-      const name =
-        input.name === undefined ? String(row.name) : (text(input.name, "a subscription's name", 200) as string)
+      writable(row, by)
       write(database, () => {
+        const columns = columnsOf(fields, row)
         database
           .prepare(
-            "UPDATE subscriptions SET name = ?, status = ?, next_renewal_date = ?, cancelled_date = ?, end_date = ?, " +
-              "updated_at = ? WHERE id = ?",
+            "UPDATE subscriptions SET name = ?, direction = ?, supplier_type = ?, supplier_id = ?, customer_type = ?, " +
+              "customer_id = ?, catalog_item_id = ?, contract_id = ?, status = ?, interval_count = ?, interval_unit = ?, " +
+              "start_date = ?, trial_end_date = ?, next_renewal_date = ?, cancelled_date = ?, end_date = ?, updated_at = ? " +
+              "WHERE id = ?",
           )
           .run(
-            name,
-            status,
-            dates.renewal as string | null,
-            dates.cancelled as string | null,
-            dates.end as string | null,
+            columns.name,
+            columns.direction,
+            columns.supplier_type,
+            columns.supplier_id,
+            columns.customer_type,
+            columns.customer_id,
+            columns.catalog_item_id,
+            columns.contract_id,
+            columns.status,
+            columns.interval_count,
+            columns.interval_unit,
+            columns.start_date,
+            columns.trial_end_date,
+            columns.next_renewal_date,
+            columns.cancelled_date,
+            columns.end_date,
             now(),
             Number(row.id),
           )
       })
-      return detailOf(ref)
+      return detailOf(`subscription:${row.id}`)
     },
     addPrice: (reference, input) => {
       const row = rowOf(reference)
       if (row.review === "rejected" || row.deleted_at != null)
         refuse(`subscription:${row.id} is ${row.deleted_at != null ? "deleted" : "rejected"}`, "subscription.ref")
+      // A price on a proposed subscription is part of that proposal, so only its author or the owner adds one.
+      if (row.review === "proposed") writable(row, input.by)
       const id = write(database, () => insertPrice(Number(row.id), input, String(row.start_date), written(input)))
       return priceOf(database.prepare(`${PRICES} WHERE p.id = ?`).get(id) as Row)
     },
     confirm: (reference, by, reason) => decide(reference, by, reason, true),
     reject: (reference, by, reason) => decide(reference, by, reason, false),
-    price: (id) => priceOf(priceRowOf(id)),
+    price: (reference) => priceOf(priceRowOf(reference)),
     prices: (filter = {}) => {
       const review = filter.review === undefined ? null : oneOf(filter.review, FINANCE_REVIEWS, "a review")
       const by = proposedBySql("p.author_type", "p.author_id", filter.proposedBy)
@@ -526,7 +595,7 @@ export const subscriptionOperationsOver = (context: StoreContext): SubscriptionO
         .prepare(
           `${PRICES} WHERE (? IS NULL OR p.review = ?) AND ${by.sql} ORDER BY p.created_at DESC, p.id DESC LIMIT ?`,
         )
-        .all(review, review, ...by.params, Math.min(Math.max(filter.limit ?? 100, 1), 500))
+        .all(review, review, ...by.params, limitOf(filter.limit))
         .map(priceOf)
     },
   }
@@ -542,7 +611,7 @@ export const subscriptionsStoreOver = (context: StoreContext): SubscriptionsStor
     addPrice: async (reference, input) => operations.addPrice(reference, input),
     confirm: async (reference, by, reason) => operations.confirm(reference, by, reason),
     reject: async (reference, by, reason) => operations.reject(reference, by, reason),
-    price: async (id) => operations.price(id),
+    price: async (reference) => operations.price(reference),
     prices: async (filter) => operations.prices(filter),
   }
 }

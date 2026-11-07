@@ -106,8 +106,13 @@ CREATE TRIGGER subscription_prices_fixed_bu BEFORE UPDATE ON subscription_prices
   WHEN new.amount IS NOT old.amount OR new.currency IS NOT old.currency
     OR new.effective_from IS NOT old.effective_from OR new.subscription_id IS NOT old.subscription_id
     OR new.author_type IS NOT old.author_type OR new.author_id IS NOT old.author_id
-    OR new.review NOT IN ('proposed', 'confirmed', 'rejected') BEGIN
+    OR new.review NOT IN ('proposed', 'confirmed', 'rejected')
+    OR (old.review = 'confirmed' AND new.review <> 'confirmed') BEGIN
   SELECT RAISE(ABORT, 'subscription_prices: a price is never changed; reject it and add a new one');
+END;
+--> statement-breakpoint
+CREATE TRIGGER subscription_prices_kept_bd BEFORE DELETE ON subscription_prices BEGIN
+  SELECT RAISE(ABORT, 'subscription_prices: a price is history and is never deleted');
 END;
 --> statement-breakpoint
 CREATE TRIGGER financial_accounts_valid_bi BEFORE INSERT ON financial_accounts
@@ -180,8 +185,26 @@ CREATE TRIGGER payments_refund_bu BEFORE UPDATE ON payments
         AND r.review = 'confirmed' AND r.deleted_at IS NULL) + new.amount
         > (SELECT amount FROM payments WHERE id = new.refund_of)))
     OR ((new.review = 'rejected' OR new.deleted_at IS NOT NULL) AND old.review <> 'rejected' AND old.deleted_at IS NULL
-      AND EXISTS (SELECT 1 FROM payments r WHERE r.refund_of = new.id AND r.review <> 'rejected' AND r.deleted_at IS NULL)) BEGIN
+      AND EXISTS (SELECT 1 FROM payments r WHERE r.refund_of = new.id AND r.review <> 'rejected' AND r.deleted_at IS NULL))
+    OR (new.refund_of IS NULL AND new.amount < (SELECT coalesce(sum(r.amount), 0) FROM payments r
+      WHERE r.refund_of = new.id AND r.review = 'confirmed' AND r.deleted_at IS NULL)) BEGIN
   SELECT RAISE(ABORT, 'payments: a refund keeps its payment, goes the other way and stays within it; a refunded payment is not rejected or deleted');
+END;
+--> statement-breakpoint
+-- A confirmed refund that stops counting gives its shares back to their invoices: never beyond a total.
+CREATE TRIGGER payments_refund_leaves_bu BEFORE UPDATE ON payments
+  WHEN new.refund_of IS NOT NULL AND old.review = 'confirmed' AND old.deleted_at IS NULL
+    AND (new.review <> 'confirmed' OR new.deleted_at IS NOT NULL)
+    AND EXISTS (SELECT 1 FROM payment_allocations a JOIN invoices i ON i.id = a.invoice_id WHERE a.payment_id = new.id
+      AND (SELECT coalesce(sum(CASE WHEN np.refund_of IS NULL THEN na.amount ELSE -na.amount END), 0) FROM payment_allocations na JOIN payments np ON np.id = na.payment_id WHERE na.invoice_id = i.id AND np.review = 'confirmed' AND np.deleted_at IS NULL) + a.amount > i.total) BEGIN
+  SELECT RAISE(ABORT, 'payments: a refund leaving the confirmed ones would pay an invoice beyond its total');
+END;
+--> statement-breakpoint
+CREATE TRIGGER payments_linked_bu BEFORE UPDATE ON payments
+  WHEN (new.amount IS NOT old.amount OR new.currency IS NOT old.currency OR new.direction IS NOT old.direction
+      OR (new.review = 'rejected' AND old.review <> 'rejected') OR (new.deleted_at IS NOT NULL AND old.deleted_at IS NULL))
+    AND EXISTS (SELECT 1 FROM financial_transactions WHERE payment_id = new.id AND deleted_at IS NULL) BEGIN
+  SELECT RAISE(ABORT, 'payments: a transaction records this payment; take the link back first');
 END;
 --> statement-breakpoint
 DROP TRIGGER invoices_valid_bu;
@@ -208,8 +231,14 @@ CREATE TRIGGER payments_confirm_bu BEFORE UPDATE OF review ON payments
           WHERE o.invoice_id = a.invoice_id AND o.payment_id <> new.id AND p.review = 'confirmed' AND p.deleted_at IS NULL)
         > i.total))
     OR (new.refund_of IS NOT NULL AND NOT EXISTS (
-      SELECT 1 FROM payments o WHERE o.id = new.refund_of AND o.review = 'confirmed' AND o.deleted_at IS NULL))) BEGIN
-  SELECT RAISE(ABORT, 'payments: confirming it would settle more than an invoice''s total, or a refund before its payment');
+      SELECT 1 FROM payments o WHERE o.id = new.refund_of AND o.review = 'confirmed' AND o.deleted_at IS NULL))
+    OR (new.refund_of IS NOT NULL AND EXISTS (
+      SELECT 1 FROM payment_allocations a WHERE a.payment_id = new.id
+        AND a.amount + (SELECT coalesce(sum(o.amount), 0) FROM payment_allocations o JOIN payments r ON r.id = o.payment_id
+          WHERE o.invoice_id = a.invoice_id AND r.refund_of = new.refund_of AND r.id <> new.id
+            AND r.review = 'confirmed' AND r.deleted_at IS NULL)
+        > coalesce((SELECT amount FROM payment_allocations WHERE payment_id = new.refund_of AND invoice_id = a.invoice_id), 0)))) BEGIN
+  SELECT RAISE(ABORT, 'payments: confirming it would settle more than an invoice''s total, or take back more than its payment gave, or come before its payment');
 END;
 --> statement-breakpoint
 DROP TRIGGER payment_allocations_valid_bi;
@@ -253,12 +282,22 @@ CREATE TRIGGER payment_allocations_valid_bu BEFORE UPDATE ON payment_allocations
           AND r.refund_of = (SELECT refund_of FROM payments WHERE id = new.payment_id)
           AND ((r.review = 'confirmed' AND r.deleted_at IS NULL) OR a.payment_id = new.payment_id)) + new.amount
         > coalesce((SELECT amount FROM payment_allocations WHERE invoice_id = new.invoice_id
-          AND payment_id = (SELECT refund_of FROM payments WHERE id = new.payment_id)), 0)) BEGIN
-  SELECT RAISE(ABORT, 'payment_allocations: above 0, within the payment and within the invoice or the refunded share, sides unchanged');
+          AND payment_id = (SELECT refund_of FROM payments WHERE id = new.payment_id)), 0))
+    OR ((SELECT refund_of FROM payments WHERE id = new.payment_id) IS NULL
+      AND new.amount < (SELECT coalesce(sum(a.amount), 0) FROM payment_allocations a JOIN payments r ON r.id = a.payment_id
+        WHERE r.refund_of = new.payment_id AND a.invoice_id = new.invoice_id)) BEGIN
+  SELECT RAISE(ABORT, 'payment_allocations: above 0, within the payment, the invoice or the refunded share, at or above its refunds, sides unchanged');
 END;
 --> statement-breakpoint
 CREATE TRIGGER payment_allocations_refunded_bd BEFORE DELETE ON payment_allocations
   WHEN EXISTS (SELECT 1 FROM payment_allocations a JOIN payments r ON r.id = a.payment_id
     WHERE r.refund_of = old.payment_id AND a.invoice_id = old.invoice_id) BEGIN
   SELECT RAISE(ABORT, 'payment_allocations: a refund of this payment is allocated to the invoice; take it back first');
+END;
+--> statement-breakpoint
+CREATE TRIGGER payment_allocations_refund_bd BEFORE DELETE ON payment_allocations
+  WHEN (SELECT refund_of IS NOT NULL AND review = 'confirmed' AND deleted_at IS NULL FROM payments WHERE id = old.payment_id)
+    AND (SELECT coalesce(sum(CASE WHEN np.refund_of IS NULL THEN na.amount ELSE -na.amount END), 0) FROM payment_allocations na JOIN payments np ON np.id = na.payment_id WHERE na.invoice_id = old.invoice_id AND np.review = 'confirmed' AND np.deleted_at IS NULL) + old.amount
+      > (SELECT total FROM invoices WHERE id = old.invoice_id) BEGIN
+  SELECT RAISE(ABORT, 'payment_allocations: taking a refund''s share back would pay the invoice beyond its total');
 END;

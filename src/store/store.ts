@@ -265,7 +265,7 @@ const storeOver = (context: StoreContext): MessageStore => {
   const evidenceFindings = once(() => evidenceFindingsStoreOver(context))
   const mailFindings = once(() => mailFindingsStoreOver(context))
   const refs: RefsStore = {
-    summaries: async (texts, options) => refSummariesOf(context.database, texts, options),
+    summaries: async (texts, options) => refSummariesOf(context.database, texts, { ...options, now: context.now() }),
   }
   const facts = once(() => factsStoreOver(context))
   const finance = once(() => financeStoreOver(context))

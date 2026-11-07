@@ -181,7 +181,7 @@ export const recordStoreOver = (context: StoreContext): RecordStore => {
   const freeOn = (invoice: string, payment: string): number => {
     const [target, own] = [requiredThing(database, invoice), requiredThing(database, payment)]
     const row = sql(
-      `SELECT i.total - ${netPaidSql("i.id", { counted: "live", excluding: "?" })} AS free FROM invoices i WHERE i.id = ?`,
+      `SELECT i.total - ${netPaidSql("i.id", { counted: "pending", excluding: "?" })} AS free FROM invoices i WHERE i.id = ?`,
     ).get(own.id, target.id)
     return Number(row?.free ?? 0)
   }

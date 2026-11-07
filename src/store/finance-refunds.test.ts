@@ -231,7 +231,7 @@ it("refuses at confirm a stray proposed refund whose payment is still proposed",
   })
   const database = await f.raw()
   expect(() => database.prepare("UPDATE payments SET review = 'confirmed' WHERE id = ?").run(Number(back.id))).toThrow(
-    /a refund before its payment/,
+    /come before its payment/,
   )
 })
 

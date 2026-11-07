@@ -1,18 +1,20 @@
-import { CliError } from "@wirecat/cli-base"
 import { moneyLabel } from "../../domain/money.js"
 import type { StoreContext } from "./open.js"
+import { refuse } from "./reviewed.js"
 
 type Row = Record<string, unknown>
 
 const COUNTED = {
   confirmed: "np.review = 'confirmed' AND np.deleted_at IS NULL",
-  live: "np.review <> 'rejected' AND np.deleted_at IS NULL",
+  // A proposed refund promises nothing back yet, so it must not free room an import could then fill.
+  pending: "np.deleted_at IS NULL AND (np.review = 'confirmed' OR (np.review = 'proposed' AND np.refund_of IS NULL))",
 } as const
 
 /**
- * What is paid on `invoice`, net: ordinary payments' allocations minus their refunds'. Every sum of paid money reads
- * this one fragment, so the code and the triggers agree. `including` also counts one payment whatever its review;
- * `excluding` leaves one out. Each is an SQL expression, such as `?` or a column of the outer query.
+ * What is paid on `invoice`, net: payments' allocations minus their refunds'. Every sum of paid money in code reads
+ * this one fragment; the triggers repeat it for `confirmed`. `pending` also counts proposed payments, not proposed
+ * refunds. `including` counts one payment whatever its review, `excluding` leaves one out; each is an SQL expression,
+ * such as `?` or a column of the outer query.
  */
 export const netPaidSql = (
   invoice: string,
@@ -28,10 +30,6 @@ export const netPaidSql = (
     "FROM payment_allocations na JOIN payments np ON np.id = na.payment_id " +
     `WHERE na.invoice_id = ${invoice} AND ${which}${excluding === undefined ? "" : ` AND na.payment_id <> ${excluding}`})`
   )
-}
-
-const refuse = (message: string, reason: string): never => {
-  throw new CliError("validation_error", message, { reason })
 }
 
 /** A refund is a payment the other way with `refund_of`; these rules keep net paid at 0 or more for every payment. */
@@ -121,6 +119,28 @@ export const refundRulesOver = (context: StoreContext) => {
       refundShare(refund, Number(share.invoice_id), 0)
   }
 
+  /**
+   * Taking a confirmed refund's share back gives that money to the invoice again: never beyond its total, given what
+   * the confirmed payments pay on it by then.
+   */
+  const keepsInvoice = (refund: Row, invoiceId: number) => {
+    if (refund.review !== "confirmed" || refund.deleted_at != null) return
+    const row = database
+      .prepare(
+        `SELECT i.total, i.currency, ${netPaidSql("i.id")} AS paid, a.amount FROM invoices i ` +
+          "JOIN payment_allocations a ON a.invoice_id = i.id AND a.payment_id = ? WHERE i.id = ?",
+      )
+      .get(Number(refund.id), invoiceId)
+    if (!row) return
+    const currency = String(row.currency)
+    if (Number(row.paid) + Number(row.amount) > Number(row.total))
+      refuse(
+        `invoice:${invoiceId} totals ${moneyLabel(Number(row.total), currency)} and ${moneyLabel(Number(row.paid), currency)} ` +
+          `is paid on it; taking back payment:${refund.id}'s ${moneyLabel(Number(row.amount), currency)} would pay too much`,
+        "finance.over-invoice",
+      )
+  }
+
   /** A payment with a live refund stays: rejecting it would leave the refund taking back money never paid. */
   const keepsRefunded = (payment: Row) => {
     const refund = database
@@ -145,5 +165,5 @@ export const refundRulesOver = (context: StoreContext) => {
       )
   }
 
-  return { originalFor, refundShare, confirmable, keepsRefunded, keepsShare }
+  return { originalFor, refundShare, confirmable, keepsRefunded, keepsShare, keepsInvoice }
 }

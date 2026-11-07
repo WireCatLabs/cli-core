@@ -163,6 +163,7 @@ export type {
   ContractFilter,
   ContractInput,
   ContractsStore,
+  ContractUpdate,
 } from "./sqlite/business-contracts.js"
 export type { CatalogActor, CatalogEntry, CatalogInput, CatalogQuery, CatalogStore } from "./sqlite/catalog.js"
 export { CATALOG_QUERY } from "./sqlite/catalog.js"
@@ -240,7 +241,6 @@ export type {
   InvoiceLine,
   InvoiceLineInput,
   OpenTotal,
-  Party,
   Payment as FinancePayment,
   PaymentDetail as FinancePaymentDetail,
   PaymentInput as FinancePaymentInput,
@@ -332,6 +332,7 @@ export type {
   ReportedScope,
   ReportedSync,
 } from "./sqlite/reported-relations.js"
+export type { AuthorInfo, Party, Reviewed, Written } from "./sqlite/reviewed.js"
 export {
   fillSearchIndex,
   resetSearchIndex,
@@ -340,9 +341,11 @@ export {
   searchIndexState,
 } from "./sqlite/search-index.js"
 export type {
+  PriceFilter,
   PriceInput,
   Subscription,
   SubscriptionDetail,
+  SubscriptionFields,
   SubscriptionFilter,
   SubscriptionInput,
   SubscriptionPrice,
@@ -377,7 +380,7 @@ export type {
   VocabularyStore,
   VocabularyTarget,
 } from "./sqlite/vocabulary.js"
-export type { Wallet, WalletInput, WalletsStore, WalletUpdate } from "./sqlite/wallets.js"
+export type { Wallet, WalletFilter, WalletInput, WalletsStore, WalletUpdate } from "./sqlite/wallets.js"
 export type {
   BoardCounts,
   BoardOptions,
