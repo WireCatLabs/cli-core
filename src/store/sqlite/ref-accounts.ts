@@ -1,4 +1,4 @@
-import { INTERNAL_NOTES } from "../../domain/providers.js"
+import { INTERNAL_NOTES, isDocumentAccountProvider, isFolderProvider } from "../../domain/providers.js"
 import { parseReference, type Reference } from "../../domain/references.js"
 import type { CacheDatabase } from "../driver.js"
 import type { AccountKey } from "../types.js"
@@ -15,9 +15,14 @@ const accountKeys = (database: CacheDatabase, ids: readonly number[]): AccountKe
   const unique = [...new Set(ids)]
   if (unique.length === 0) return []
   return database
-    .prepare(`SELECT provider, external_id FROM accounts WHERE id IN (${unique.map(() => "?").join(",")})`)
+    .prepare(`SELECT id, provider, external_id FROM accounts WHERE id IN (${unique.map(() => "?").join(",")})`)
     .all(...unique)
-    .map((row) => ({ provider: String(row.provider), account: String(row.external_id) }))
+    .map(({ id, provider, external_id }) =>
+      // A notes folder or a documents account is `notes:<its store id>`, as source lists and groups name it.
+      isFolderProvider(String(provider)) || isDocumentAccountProvider(String(provider))
+        ? { provider: "notes", account: String(id) }
+        : { provider: String(provider), account: String(external_id) },
+    )
 }
 
 const hasAccountColumn = new Map<string, boolean>()
@@ -63,7 +68,7 @@ export const refAccountsOf = (database: CacheDatabase, text: string): RefAccount
   if (!thing) return undefined
   if (reference.type === "meeting") return accountKeys(database, [reference.accountId])
   switch (thing.type) {
-    // A note written in memo belongs to no account but memo's own notes.
+    // A note written in memo, never a file of a folder (`document:`), belongs to memo's own notes.
     case "note":
       return [{ provider: "notes", account: INTERNAL_NOTES }]
     case "account":

@@ -160,6 +160,23 @@ describe("the group lock fails closed", () => {
     await allowed(env, store, ["tags", "add", "x", "--message", `person:${await personOf(env, crmWork)}`])
   })
 
+  it("maps a file of a notes folder to its folder, in work or personal as the owner put it", async () => {
+    const env = envOf()
+    const store = await seeded(env)
+    const inWork = await store.notes.addFolder({ name: "work notes" })
+    const unsorted = await store.notes.addFolder({ name: "home notes" })
+    await store.accounts.saveAccountGroup("work", ["telegram:102", "example-crm:work-portal", `notes:${inWork.id}`])
+    const fileIn = async (folderId: string) =>
+      (await store.notes.saveFileNote({ folderId, path: "a.md", title: null, text: "x" })).note.ref
+    const workFile = await fileIn(inWork.id)
+    const homeFile = await fileIn(unsorted.id)
+    const personal = { ...env, MEMO_GROUP_LOCK: "personal" }
+    await allowed(env, store, ["tags", "add", "x", "--message", workFile])
+    await refused(env, store, ["tags", "add", "x", "--message", homeFile])
+    await refused(personal, store, ["tags", "add", "x", "--message", workFile])
+    await allowed(personal, store, ["tags", "add", "x", "--message", homeFile])
+  })
+
   it("passes a thing the owner made, and keeps memo's own notes in personal", async () => {
     const env = envOf()
     const store = await seeded(env)
