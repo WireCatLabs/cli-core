@@ -230,6 +230,12 @@ export const STEPS = defineSteps([
     why: "once the tasks these {shown} messages hold are opened, updated or closed, so the next review starts after them",
   },
   {
+    id: "store.recover",
+    command: "store recover",
+    args: [],
+    why: "the store file is damaged; this says what is lost and the commands that recover it",
+  },
+  {
     id: "search.meetings",
     command: "*",
     args: [{ name: "max_meetings", required: true }],
@@ -298,7 +304,9 @@ export const failureSteps = (
             args: { model },
           }),
         ]
-      : []
+      : error.reason === "store.damaged"
+        ? [nextStep("store.recover", {})]
+        : []
   return runnable(root, [...(error.next ?? []), ...own])
 }
 

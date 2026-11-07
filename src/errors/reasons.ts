@@ -169,6 +169,11 @@ const OTHERS: Entry[] = [
   ],
   validation("store.refused", "the local store refused the document text"),
   ["store.not-writable", "permission_error", "the message store cannot be written from this process"],
+  [
+    "store.damaged",
+    "configuration_error",
+    "the store file is damaged; store recover says what is lost and recovers it",
+  ],
   validation("store.in-use", "a process or a scheduled timer has the store open; stop it, then recover the store"),
   [
     "store.sqlite3-missing",
