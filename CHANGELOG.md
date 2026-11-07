@@ -7,6 +7,12 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`appMcpCommand`'s `signedIn` hook gets the run's keyring** as a third argument, so `mcp check` reads a test's
+  `memoryKeyring()` and the CLI no longer captures it in a `preAction` hook of its own. A hook that throws, such as
+  on a locked keyring, counts as not signed in. A two-argument hook still works.
+
 ## 0.601.0 — 07.11.2026
 
 ### Added
