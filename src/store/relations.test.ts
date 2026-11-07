@@ -76,6 +76,27 @@ it("stores a partnership once, the lower id first, whichever way it is named", a
   expect(await store.knowledge.relationState(null, { from: northstar, to: acme, kind: "partner-of" })).toMatchObject({
     linked: true,
   })
+  expect(await store.knowledge.updateRelation(null, partners.id, { role: "reseller", by: "owner" })).toMatchObject({
+    from: acme,
+    to: northstar,
+    role: "reseller",
+  })
+})
+
+it("confirms a suggested partnership in its stored order", async () => {
+  const { store, acme, northstar } = await fixture()
+  const suggested = await store.knowledge.relate(null, {
+    by: "owner",
+    from: northstar,
+    to: acme,
+    kind: "partner-of",
+    confirmed: false,
+  })
+  expect(suggested).toMatchObject({ from: acme, to: northstar, standing: "proposed" })
+  expect(await store.knowledge.confirmRelation(null, suggested.id, "owner")).toMatchObject({
+    from: acme,
+    standing: "confirmed",
+  })
 })
 
 it("puts people on a deal by the deal's roles, an influencer among them", async () => {
@@ -106,4 +127,5 @@ it("derives a relationship's standing from the link, never from a stored word", 
   expect(standingOf({ confirmed: false, accountId: 3 }, now)).toBe("reported")
   expect(standingOf({ confirmed: true, endsAt: now }, now)).toBe("ended")
   expect(standingOf({ confirmed: false, accountId: 3, deletedAt: 5 }, now)).toBe("ended")
+  expect(standingOf({ confirmed: true, accountId: 3, deletedAt: 5 }, now)).toBe("confirmed")
 })

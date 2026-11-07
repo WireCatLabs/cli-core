@@ -298,7 +298,7 @@ export const linkedChatsOf = async (
   if (!project) return []
   const chats: LinkedChat[] = []
   for (const relation of await store.knowledge.relations(null, project)) {
-    if (!relation.confirmed || relation.kind !== "member-of" || relation.to !== project) continue
+    if (!isUsable(relation.standing) || relation.kind !== "member-of" || relation.to !== project) continue
     const reference = chatOf(relation.from)
     if (reference)
       chats.push({

@@ -57,7 +57,6 @@ export const isRelationKind = (kind: string): kind is RelationKind => specOf(kin
 /** A chat or a mail thread is only ever a project's member: its reference names one account. */
 const memberOnly = (type: string) => type === "chat" || type === "email_thread"
 
-/** Refuses ends the kind does not join. */
 export const checkEnds = (kind: string, from: string, to: string): RelationSpec => {
   const spec = specOf(kind)
   if (!spec) throw new CliError("validation_error", `a relationship's kind is one of ${RELATION_KINDS.join(", ")}`)
@@ -117,9 +116,11 @@ export interface StandingFields {
   deletedAt?: number | null
 }
 
+/** The owner's confirmation outlives a source that stopped reporting it; only its own end date ends it. */
 export const standingOf = (link: StandingFields, now: number): Standing => {
-  if (link.deletedAt != null || (link.endsAt != null && link.endsAt <= now)) return "ended"
+  if (link.endsAt != null && link.endsAt <= now) return "ended"
   if (link.confirmed) return "confirmed"
+  if (link.deletedAt != null) return "ended"
   return link.accountId != null ? "reported" : "proposed"
 }
 
@@ -128,5 +129,5 @@ export const isUsable = (standing: Standing): boolean => standing === "confirmed
 
 export const usableLink = (link: StandingFields, now: number): boolean => isUsable(standingOf(link, now))
 
-/** `usableLink` as SQL over the `links` row aliased `alias`. */
-export const usableLinkSql = (alias: string): string => `${alias}.confirmed = 1`
+/** `usableLink` as SQL over the `links` row aliased `alias`; without `now` an end date is not checked. */
+export const usableLinkSql = (alias: string, _now?: number): string => `${alias}.confirmed = 1`
