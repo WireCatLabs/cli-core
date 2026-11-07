@@ -109,6 +109,27 @@ describe("the notes store", () => {
     await expect(store.notes.removeNote(note.ref)).rejects.toMatchObject({ code: "validation_error" })
   })
 
+  it("dates a file note by its source without counting it as an edit, and search reads that date", async () => {
+    const store = await open(fresh())
+    const folder = await store.notes.addFolder({ name: "Vault", format: "markdown" })
+    const input = { folderId: folder.id, path: "a.md", title: "a", text: "design critique", contentHash: "h1" }
+    const { note } = await store.notes.saveFileNote(input)
+    expect(note.modifiedAt).toBeNull()
+    const dates = [{ path: "a.md", modifiedAt: "2026-08-14T09:47:00.000Z" }]
+    expect(await store.notes.dateFileNotes(folder.id, dates)).toBe(1)
+    expect(await store.notes.dateFileNotes(folder.id, dates)).toBe(0)
+    const [listed] = (await store.notes.notes({ folderId: folder.id })).items
+    expect(listed).toMatchObject({ modifiedAt: "2026-08-14T09:47:00.000Z", revision: 1, updatedAt: note.updatedAt })
+    const [hit] = (await searchNotesQuery(store, { text: "critique", limit: 5 })).items
+    expect(hit?.at).toBe("2026-08-14T09:47:00.000Z")
+    expect((await store.notes.saveFileNote({ ...input, text: "design critique moved" })).note.modifiedAt).toBe(
+      "2026-08-14T09:47:00.000Z",
+    )
+    await expect(store.notes.dateFileNotes(folder.id, [{ path: "a.md", modifiedAt: "soon" }])).rejects.toMatchObject({
+      code: "validation_error",
+    })
+  })
+
   it("writes internal notes about anything, guards stale edits, and keeps the owner's links on re-import", async () => {
     const store = await open(fresh())
     const project = await store.knowledge.addProject({ name: "Lighthouse" })

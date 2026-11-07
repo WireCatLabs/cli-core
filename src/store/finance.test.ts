@@ -388,3 +388,11 @@ it("never lets an agent's pending payment block the owner, and refuses to confir
   ).toThrow(/payments/)
   database.close()
 })
+
+it("decides only an invoice: or payment:, and says so for any other ref", async () => {
+  const f = await fixture()
+  await expect(f.store.finance.confirm(f.romashka.ref, "owner")).rejects.toMatchObject({
+    message: `${f.romashka.ref} is not an invoice: or payment:`,
+    details: { reason: "finance.ref" },
+  })
+})

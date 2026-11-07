@@ -37,7 +37,9 @@ const CASES: [label: string, query: string, record: string | null][] = [
   ["apostrophe", "don't O'Brien", "don't tell O'Brien"],
   ["Boolean words in lower case", "black and white", "black and white photos"],
   ["emoji", "party 🎉", "the party 🎉 starts"],
-  ["question mark", "ready?", null],
+  ["question mark ending a word", "invoice?", "the invoice is paid"],
+  ["question in Cyrillic", "что с бюджетом?", "Что с бюджетом на март"],
+  ["question mark inside a word", "inv?ice", null],
   ["leading minus", "-budget", null],
   ["leading plus", "+budget", null],
   ["asterisk", "budg*", null],
@@ -142,5 +144,18 @@ describe("free text with special characters", () => {
     await expect(
       searchStore(store, ME, { text: "kind:nonsense", kind: "messages", source: "all", limit: 50 }),
     ).rejects.toMatchObject({ code: "validation_error" })
+  })
+
+  it("names the reason and the refused part of the query when a source skips it", async () => {
+    const found = await searchAll(store, ME, { text: "draft kind:nonsense", limit: 50, only: ["messages"] })
+    expect(found.skipped).toEqual([
+      {
+        resource: "messages",
+        code: "validation_error",
+        reason: expect.stringContaining("kind"),
+        why: "query.unknown-value",
+        token: "kind:nonsense",
+      },
+    ])
   })
 })
