@@ -64,6 +64,9 @@ shape of this file.
   A caller that relied on the refusal of `foo:bar`, an unbalanced quote or `link:click?id=1` now gets hits, and
   `meetings search` reads `subject:` (a message field) as a word. `plainQuery` in `./services` gives a caller the text
   as the search reads it (cli-memo#674).
+- **A `?` that ends a bare word is a question mark, not a wildcard.** `invoice?` and `что с бюджетом?` find
+  "invoice" and "бюджет"; before, `?` asked for one more character and `invoice` itself was missed. A `?` inside a
+  word (`inv?ice`) or after a field (`text:invoice?`) is still one character.
 
 ## 0.601.0 — 07.11.2026
 
