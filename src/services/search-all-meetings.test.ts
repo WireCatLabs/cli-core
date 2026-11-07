@@ -394,6 +394,40 @@ describe("meetings in search all", () => {
     ])
   })
 
+  it("ranks a title hit with the passages, so a newer passage comes before older titles", async () => {
+    const { store, save } = await fixture()
+    for (let at = 0; at < 25; at++)
+      await save(alice, `weekly-${at}`, ["nothing to see"], 1000 + at, { title: "Weekly needle" })
+    await save(alice, "fresh", ["the needle decision"], 9000, { title: "Planning" })
+    const [first] = meetingHits((await searchAll(store, caller, meetingsOnly({ limit: 5 }))).items)
+    expect(first).toMatchObject({ scope: "transcript", text: "the needle decision" })
+  })
+
+  it("matches a title for a question only when it holds every word, so titles do not bury the answer", async () => {
+    const { store, save } = await fixture()
+    for (let at = 0; at < 25; at++)
+      await save(alice, `weekly-${at}`, ["nothing to see"], 5000 + at, { title: "Weekly meeting" })
+    await save(alice, "budget", ["we agreed the budget at the weekly meeting"], 1000, { title: "Planning" })
+    await save(alice, "titled", ["nothing to see"], 900, { title: "Weekly budget meeting" })
+    const hits = meetingHits(
+      (await searchAll(store, caller, meetingsOnly({ text: "when is the weekly budget meeting?", limit: 5 }))).items,
+    )
+    expect(hits.map(({ scope, text }) => [scope, text])).toEqual([
+      ["transcript", "we agreed the budget at the weekly meeting"],
+      ["title", "Weekly budget meeting"],
+    ])
+  })
+
+  it("matches a title's whole words with --exact", async () => {
+    const { store, save } = await fixture()
+    await save(alice, "titled", ["nothing to see"], 1000, { title: "Needle review" })
+    const titles = async (text: string) =>
+      meetingHits((await searchAll(store, caller, meetingsOnly({ text, exact: true }))).items).map(({ title }) => title)
+    expect(await titles("needle")).toEqual(["Needle review"])
+    expect(await titles("need")).toEqual([])
+    expect(await titles('"needle review"')).toEqual(["Needle review"])
+  })
+
   it("matches no title when the query names a speaker", async () => {
     const { store, save } = await fixture()
     await save(alice, "both", [{ speaker: "Dana Example", text: "the needle again" }], 1000, {
