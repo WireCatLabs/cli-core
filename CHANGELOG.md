@@ -16,7 +16,6 @@ shape of this file.
   (a confirmed mention, a meeting participant) back over such a separation is refused with the reason
   `identity.separated`; the owner's own link still goes through. The exact-email join stays automatic otherwise.
 
-
 ## 0.604.0 — 07.11.2026
 
 ### Added
