@@ -1,4 +1,4 @@
-import { annotate, sharedCommand } from "@wirecat/cli-base/commands"
+import { annotate, annotateOption, sharedCommand } from "@wirecat/cli-base/commands"
 import { defineQuery, fieldsHelp, parseLucene, timezoneOf, validateQuery, zonedMoment } from "@wirecat/cli-base/query"
 import type { Effects } from "@wirecat/cli-base/standards"
 import { type Command, InvalidArgumentError, Option } from "commander"
@@ -7,7 +7,7 @@ import { exportMeeting, type MeetingExportFormat } from "../export.js"
 import { type ImportFile, importFiles } from "../import.js"
 import { MEETING_QUERY } from "../item.js"
 import type { MeetingParticipantSearchOptions } from "../participant-search.js"
-import { pull } from "../pull.js"
+import { type MeetingBudget, pull } from "../pull.js"
 import { eventItem } from "../read-answers.js"
 import {
   listed,
@@ -32,13 +32,26 @@ export interface MeetingCommandDeps {
   readFiles?: (folder: string) => Promise<ImportFile[]>
   /** The host's file names and how it reads their time, shown in `meetings import --help`. */
   importHelp?: string
+  /** Writes `meetings export --output`; one that refuses a file that exists, such as `writeNewFile`. */
   writeFile?: (path: string, content: string) => Promise<void>
+  /**
+   * Marks `meetings export`, whose only write is the new file `--output` names: a read without it, over MCP, and
+   * under the read-only lock. `writesNewFileOnlyWith` from `@wirecat/cli-core/cli`; pass it with a `writeFile` that
+   * never writes over a file.
+   */
+  newFileOutput?: (command: Command, option: string) => void
   write: (value: unknown, format: "json" | "jsonl" | "text") => void
   /**
    * Runs a command that reaches the account inside cli-core's run, so it is recorded and ended by `--timeout`:
    * `inCommandRun` from `@wirecat/cli-core/cli`. Required, since this module cannot reach the run itself.
    */
   inRun: <T>(command: Command, body: () => Promise<T>) => Promise<T>
+  /**
+   * The sync's budget from the run's deadline and stop signal: `runBudgetOf` from `@wirecat/cli-core/cli`. Given, the
+   * sync is cooperative: it stops between meetings, keeps what it saved and answers `stopped`. Without it the sync
+   * keeps the one-shot deadline.
+   */
+  budgetOf?: (command: Command) => MeetingBudget
   now?: () => number
 }
 const integer = (text: string) => {
@@ -120,14 +133,21 @@ const addMeetingCommandsDefinition = (program: Command, deps: MeetingCommandDeps
   ).action(async (id: number, _opts: unknown, command: Command) => {
     print(await meetingSummaryAnswer(deps.store, id, deps.accountId), command)
   })
-  output(
+  const exporter = output(
     annotate(group.command("export"), { effects: LOCAL_WRITE, output: { entity: "meeting_export" } })
       .description("export a meeting as Markdown or one transcript as WebVTT")
       .argument("<meeting>", "stored meeting id", integer)
       .addOption(new Option("--format <format>", "export format").choices(["markdown", "vtt"]).default("markdown"))
       .option("--transcript-id <id>", "export a specific transcript version", integer)
-      .option("--output <file>", "write content to a file through the host's writer"),
-  ).action(
+      .addOption(
+        // Not over MCP: an agent would choose where on the owner's disk to write; it gets the content in the answer.
+        annotateOption(new Option("--output <file>", "write content to a new file through the host's writer"), {
+          mcp: false,
+        }),
+      ),
+  )
+  deps.newFileOutput?.(exporter, "output")
+  exporter.action(
     async (
       id: number,
       opts: { format: MeetingExportFormat; transcriptId?: number; output?: string },
@@ -173,11 +193,17 @@ const addMeetingCommandsDefinition = (program: Command, deps: MeetingCommandDeps
       effects: FETCH,
       offline: false,
       output: { entity: "meeting_ingestion" },
-    }).description("bring the stored meetings up to date from the connected account"),
+      // Only a sync that stops itself at its budget may outlive the one-shot deadline.
+      ...(deps.budgetOf ? { cooperative: true, partial: true } : {}),
+    }).description(
+      "bring the stored meetings up to date from the connected account, oldest first; a run that stops before its " +
+        "deadline keeps what it saved and the next one goes on from there",
+    ),
   )
     .option("--since-time <time>", "fetch meetings starting at or after this ISO 8601 date or time", date)
-    .option("--lookback-days <days>", "revisit recent occurrences for late transcripts (0–31)", lookbackDays, 0)
-    .action(async (opts: { sinceTime?: number; lookbackDays: number }, command: Command) => {
+    .option("--lookback-days <days>", "revisit recent occurrences for late transcripts (0–31)", lookbackDays)
+    .option("--rescan", "read the last 30 days again, not only what came after the last sync")
+    .action(async (opts: { sinceTime?: number; lookbackDays?: number; rescan?: boolean }, command: Command) => {
       const source = deps.source
       if (!source) throw new MeetingError("configuration_error", "meeting source is unavailable")
       await deps.inRun(command, async () =>
@@ -186,7 +212,9 @@ const addMeetingCommandsDefinition = (program: Command, deps: MeetingCommandDeps
             accountId: deps.accountId,
             since: opts.sinceTime === undefined ? undefined : new Date(opts.sinceTime).toISOString(),
             now: deps.now?.(),
-            lookbackMs: opts.lookbackDays * 86400000,
+            ...(opts.lookbackDays === undefined ? {} : { lookbackMs: opts.lookbackDays * 86400000 }),
+            ...(opts.rescan ? { rescan: true } : {}),
+            ...(deps.budgetOf ? { budget: deps.budgetOf(command) } : {}),
           }),
           command,
         ),

@@ -84,6 +84,8 @@ const MEETING_FIELDS = defineQuery({
   ],
 })
 const LIFTED = new Set(["date", "project", "tag", "topic"])
+/** Every name a meeting search reads as a field, lifted or not; another `word:` there is words. */
+export const MEETING_FIELD_NAMES: ReadonlySet<string> = new Set(MEETING_FIELDS.fields.map(({ name }) => name))
 
 /**
  * `budget project:RES date>=30d` → the words, and the meetings to look in as filters. A meeting field must be

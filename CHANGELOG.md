@@ -7,11 +7,74 @@ shape of this file.
 
 ## Unreleased
 
+## 0.602.0 — 07.11.2026
+
+### Changed — may break callers
+
+- **A search for plain text with a colon, a URL or another special character finds what holds it.** `meeting at 10:30`,
+  `Answer as HH:MM` and `a:b` read the word before the colon as a field, so every source of `search all` refused the
+  query and the answer was empty. Now a `word:` that names no search field, and a word the parser cannot read as
+  syntax (a URL, an unbalanced quote or bracket, `^`, `~home`, `[draft]`, `<tag>`), are searched as words; a lone
+  emoji or punctuation mark beside other words no longer empties the answer. Field queries, Boolean operators,
+  phrases, `word*` and `/regex/` keep their meaning, and `word~1`, `/x/i` and punctuation alone keep their errors.
+  A caller that relied on the refusal of `foo:bar`, an unbalanced quote or `link:click?id=1` now gets hits, and
+  `meetings search` reads `subject:` (a message field) as a word. `plainQuery` in `./services` gives a caller the text
+  as the search reads it (cli-memo#674).
+
+## 0.601.0 — 07.11.2026
+
+### Added
+
+- **Store version 55: `decision_requests`, the one-time keys behind buttons that ask the owner to decide a batch.**
+  `store.decisionRequests.create` makes one token per button for one message (22 characters, 16 random bytes in
+  base64url; only a SHA-256 digest is kept), `take` uses a token once, cancels the message's other open tokens in the
+  same transaction and first checks the bot, chat, message and owner (a mismatch reveals nothing of the token's state), `cancelOpen` voids every open token (of one bot, if
+  given) and `open` lists a message's live buttons, `prune` drops rows 30 days past their expiry, use or cancel. Tokens last 72 hours. A refusal carries a reason:
+  `decision.token-unknown`, `-used`, `-cancelled`, `-expired` or `-mismatch`. `callbackDataOf` and
+  `parseCallbackData` give and read the 27-byte `wcr1:<token>` data of a button, strictly. Forward-only,
+  `minCompatible` stays 34.
+- **`@wirecat/cli-core/crm` exports the field lookup the CRM writes use**, so a CRM CLI drops its copy:
+  `foldFieldName`, `fieldNamed`, `optionOf`, `unknownField`, `fieldPairsOf` and the `NamedField` type they read.
+  `foldName` is exported from the package root.
+- **`MeetingCommandDeps.newFileOutput`, `writesNewFileOnlyWith` and `writeNewFile`**, so `meetings export` runs under
+  the read-only lock and over MCP's `read` tool. It was refused under `<PREFIX>_READ_ONLY` even when it only printed.
+  A CLI that passes `newFileOutput: writesNewFileOnlyWith` and a `writeFile` that refuses a file that exists, such as
+  `writeNewFile`, gets an export that is a read without `--output` and, with it, only ever adds a file.
+- **`meetings sync` can stop itself before its deadline and go on next time.** A CLI that passes
+  `MeetingCommandDeps.budgetOf` (`runBudgetOf` from `@wirecat/cli-core/cli`) gets a cooperative, partial sync: it
+  reads meetings oldest first, asks the budget before each, and on a stop keeps what it saved, answers `stopped` and
+  `remaining`, and moves the cursor to the first meeting it did not reach (never past one that failed). Without it the
+  sync keeps the one-shot deadline, as before.
+- **`meetings sync --rescan`** reads the last 30 days again instead of only what came after the last sync.
+- **`MeetingSource.overlapMs`**: a source's own look-back before the cursor, for a provider that lists a meeting late;
+  `--lookback-days` widens it, never narrows it. 0 when absent.
+- **`recognizeLocalPieces` takes a `signal`** and stops between two pieces of speech when it aborts, freeing the
+  engine; a backend gives `piecesUntil` for it. Without a signal nothing changes.
+
+### Changed — may break callers
+
+- **`foldName` folds ё into е**, so a chat, a person and a CRM field typed with е find the one named with ё. A name
+  that matched one chat or person exactly may now match two (`Алена` and `Алёна`); that is refused with both
+  candidates, as any other ambiguous name is. й stays apart from и. The CRM field lookup now folds on top of
+  `foldName`, so it also takes composed and decomposed letters as one.
+- **`meetings export --output` is the owner's only**: an MCP tool no longer offers it (an agent would choose where on
+  the owner's disk to write) and gets the export in the answer, as `events export` does.
+
 ### Fixed
 
 - **`doctor --online` of a CLI built on `appDoctorCommand` runs inside cli-core's run.** It answered outside one, so
   `--record` kept no run of it and its call out was not the command's own. A config that will not load still gets an
   answer, outside a run.
+- **`apiJson` and `apiPlainJson` refuse a body holding `NaN` or `Infinity`** with `validation_error`, naming the field,
+  before anything is sent. JSON writes them as `null`, so a failed `Number(…)` reached the service as a cleared field:
+  bitrix24-cli's `deals update --owner anna` sent `assignedById: null`.
+- **`search all` in a CRM CLI and in a calendar CLI leaves out every kind whose list the profile denies.**
+  Under `deals: deny` it showed every deal's title, stage and amount, on the command line and over MCP. Each kind is
+  judged by its list key (`deals.list`, `leads.list`, `events.list`, `messages.list`, `notes.list`,
+  `meetings.list`) at the levels the run uses: the profile's, `--permission` and an MCP server's own. Each kind left
+  out is named in `missing` and on stderr; when every kind asked for is denied, the search is refused with
+  `permission_error` (`search.all-denied`). `DealSearch.kinds` and `SearchAllRequest.crmKinds` narrow the CRM kinds
+  read, and `run()` hands a command its CLI's built-in levels as `permissionDefaults`.
 
 ## 0.600.0 — 07.11.2026
 

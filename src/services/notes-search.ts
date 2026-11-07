@@ -16,6 +16,7 @@ import { DEFAULT_IMAGE_MODEL, imageModel } from "../images/picture/models.js"
 import type { AppIdentity } from "../ports/app.js"
 import { entriesOfList, fitting, type SkippedSource } from "../search/account-list.js"
 import { fieldsOfQuery as fieldsOf, meaningWords } from "../search/lucene/meaning-parts.js"
+import { plainQuery } from "../search/lucene/plain.js"
 import { validateFields } from "../search/lucene/registry.js"
 import { hasStems, type ResolvedNode } from "../search/lucene/resolved.js"
 import { isQueryLimit, SEARCH_QUERY } from "../search/lucene/types.js"
@@ -607,6 +608,7 @@ export const searchNotes = async (
     pictureEmbedder,
   }: NotesQuery = {},
 ): Promise<NotesFound> => {
+  query = plainQuery(query)
   const typed = noteSourceOfQuery(query)
   const source = given ?? typed.source
   const rest = typed.source !== undefined && typed.source === source ? typed.rest : query
@@ -836,6 +838,7 @@ export const searchNotesOf = async (
     ...query
   }: Omit<NotesQuery, "folderIds" | "withInternal"> & { accounts?: string; app?: AppIdentity },
 ): Promise<NotesFoundOf> => {
+  text = plainQuery(text)
   const own = app?.command ?? query.command
   const what = `${own === undefined ? "" : `${own} `}search notes`
   const held = [

@@ -2122,6 +2122,8 @@ export const crmFields = sqliteTable(
   (table) => [unique().on(table.accountId, table.kind, table.code)],
 )
 
+export { decisionRequests } from "./schema/decision-requests.js"
+
 /** What a source said about one of its records, as it said it: the layer under the entity an import makes. */
 export const records = sqliteTable(
   "records",

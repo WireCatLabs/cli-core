@@ -50,6 +50,15 @@ export {
 export type { AccountMail, AccountMeetings, AccountStore } from "./account-store.js"
 export { type DamageExplanation, explainDamage } from "./damage.js"
 export {
+  CALLBACK_PREFIX,
+  callbackDataOf,
+  DECISION_ACTIONS,
+  DECISION_TTL_MS,
+  type DecisionAction,
+  isDecisionToken,
+  parseCallbackData,
+} from "./decision-requests.js"
+export {
   assertMayDecide,
   DEFAULT_DECISION_POLICY,
   type Decider,
@@ -153,6 +162,15 @@ export type {
   PipelineReport,
   PipelineStage,
 } from "./sqlite/deals.js"
+export type {
+  DecisionMessage,
+  DecisionPress,
+  DecisionRefusal,
+  DecisionRequest,
+  DecisionRequestInput,
+  DecisionRequestStore,
+  TakeResult,
+} from "./sqlite/decision-requests.js"
 export type {
   Email,
   EmailAddress,

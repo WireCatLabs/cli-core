@@ -33,6 +33,7 @@ import { type CatalogStore, catalogStoreOver } from "./sqlite/catalog.js"
 import { contextEvidenceOver, contextIndexOver, contextRecordsOver } from "./sqlite/context-evidence.js"
 import { type CrmCopies, crmCopiesOver } from "./sqlite/crm.js"
 import { type DealsStore, dealsStoreOver } from "./sqlite/deals.js"
+import { type DecisionRequestStore, decisionRequestStoreOver } from "./sqlite/decision-requests.js"
 import { type MailStore, mailStoreOver } from "./sqlite/emails.js"
 import { type EventSearch, eventSearchOver } from "./sqlite/event-search.js"
 import { evidenceFindingsStoreOver } from "./sqlite/evidence-findings.js"
@@ -130,6 +131,8 @@ export interface MessageStore {
   readonly deals: DealsStore
   /** A CRM account's pipelines, deals, leads, contacts and companies, written as the CRM has them. */
   readonly crm: CrmCopies
+  /** The one-time keys behind the buttons of a message that asks the owner to decide a batch. */
+  readonly decisionRequests: DecisionRequestStore
   /** What each import said, by the source's identity; `ingest` (services) is the way in. */
   readonly records: RecordStore
   /** What agents concluded: summaries, digests, facts, preferences, each with evidence and a scope. */
@@ -251,6 +254,7 @@ const storeOver = (context: StoreContext): MessageStore => {
   const orders = once(() => ordersStoreOver(context))
   const deals = once(() => dealsStoreOver(context))
   const crm = once(() => crmCopiesOver(context, accountPeopleOver(context)))
+  const decisionRequests = once(() => decisionRequestStoreOver(context))
   const records = once(() => recordStoreOver(context))
   const memories = once(() => memoriesStoreOver(context))
   const proposedActions = once(() => proposedActionsStoreOver(context))
@@ -367,6 +371,9 @@ const storeOver = (context: StoreContext): MessageStore => {
     },
     get crm() {
       return crm()
+    },
+    get decisionRequests() {
+      return decisionRequests()
     },
     get records() {
       return records()
