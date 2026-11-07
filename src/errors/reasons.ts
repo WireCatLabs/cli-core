@@ -174,6 +174,12 @@ const OTHERS: Entry[] = [
     "configuration_error",
     "the store file is damaged; store recover says what is lost and recovers it",
   ],
+  validation("store.file-damaged", "the named store file is damaged or not a database"),
+  [
+    "store.unreadable",
+    "configuration_error",
+    "the store file's header or schema is damaged, so it cannot be recovered",
+  ],
   validation("store.in-use", "a process or a scheduled timer has the store open; stop it, then recover the store"),
   [
     "store.sqlite3-missing",

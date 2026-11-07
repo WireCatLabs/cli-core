@@ -885,6 +885,13 @@ const budgetSteps = (program: Command, path: string, failure: unknown) => {
     : []
 }
 
+/** What a damaged store's message names: `store recover` where the CLI has it, else `doctor --deep`, else nothing. */
+const damageStep = (program: Command, cli: string): string | undefined => {
+  if (commandAt(program, "store recover")) return `${cli} store recover`
+  const doctor = commandAt(program, "doctor")
+  return doctor?.options.some((option) => option.long === "--deep") ? `${cli} doctor --deep` : undefined
+}
+
 interface Failure {
   object: ReturnType<typeof errorObjectOf>
   record?: ReturnType<typeof errorRecordOf>
@@ -904,7 +911,7 @@ const failed = (
   const told =
     error instanceof NoProfileHere && !commandAt(program, "setup")
       ? error.withoutSetup(path)
-      : storeDamaged(error, app.command)
+      : storeDamaged(error, damageStep(program, app.command))
   const failure =
     settled.settlementFailed && isCliFailure(told)
       ? new CliError(told.code, told.message, { ...told.details, settlement_failed: true })

@@ -1,6 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import type { WarmEmbedders } from "../embeddings/embed.js"
-import { isCliFailure } from "../errors/failures.js"
+import { isCliFailure, sqliteCode } from "../errors/failures.js"
 import type { AppIdentity } from "../ports/app.js"
 import type { MessengerAdapter } from "../ports/messenger.js"
 import type { MessengerTraits } from "../ports/traits.js"
@@ -69,16 +69,14 @@ export const crossAccount = (deps: Pick<ServiceDeps, "store">, _reason: string):
 const NO_LOCAL_STORE = "this answer comes from the messenger, not from the local store"
 
 /**
- * Busy: another process (`serve`) held the write lock past `busy_timeout`. Node's `node:sqlite` sets `errcode`,
- * Bun's `bun:sqlite` sets `errno`; the low byte is the primary code, so the extended BUSY codes match too.
+ * Busy: another process (`serve`) held the write lock past `busy_timeout`; `sqliteCode` is the primary code, so the
+ * extended BUSY codes match too.
  */
 const SQLITE_BUSY = 5
 
 const storeAbsent = (error: unknown): boolean => {
   if (isCliFailure(error)) return error.code === "validation_error" && error.message === NO_LOCAL_STORE
-  const { errcode, errno } = (error ?? {}) as { errcode?: unknown; errno?: unknown }
-  const code = errcode ?? errno
-  return error instanceof Error && typeof code === "number" && (code & 0xff) === SQLITE_BUSY
+  return error instanceof Error && sqliteCode(error) === SQLITE_BUSY
 }
 
 /** `not_found`: nothing has recorded whose account this profile is; `authentication_error`: the connection has no self. */

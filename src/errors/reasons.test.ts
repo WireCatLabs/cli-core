@@ -10,6 +10,8 @@ import { run } from "../cli/program.js"
 import { storeRecoverCommand } from "../cli/store-recover.js"
 import { CORE_DETAILS, CORE_REASONS } from "../index.js"
 import { failed } from "../mcp/tool.js"
+import { framesOf } from "../runs/error-detail.js"
+import { damagedFile, storeDamaged } from "./failures.js"
 import { DETAILS, failureContext, REASONS } from "./reasons.js"
 
 const sources = (dir: string): string[] =>
@@ -165,15 +167,42 @@ describe("a damaged store file", () => {
     const code = await run(["item", "--json", "--no-record"], program, { streams, tty: false, env: process.env })
     const { error: object } = JSON.parse(streams.stderr[0] ?? "")
     expect(object).toMatchObject({ code: "configuration_error", reason: "store.damaged" })
-    expect(object.message).toContain("app store recover")
+    expect(object.message).toContain("`app store recover`")
     expect(object.next).toEqual([expect.objectContaining({ command: "store recover" })])
     expect(code).not.toBe(1)
     expect(failed(error).structuredContent).toMatchObject({ error: { reason: "store.damaged" } })
   })
 
-  it("leaves another SQLite failure a crash", () => {
+  it("names no command a CLI without store recover or doctor --deep does not have", async () => {
+    const streams = captureStreams()
+    await run(["item", "--json", "--no-record"], failing(malformed), { streams, tty: false, env: process.env })
+    const { error: object } = JSON.parse(streams.stderr[0] ?? "")
+    expect(object).toMatchObject({ reason: "store.damaged", message: "the store file is damaged" })
+    expect(object.next).toBeUndefined()
+  })
+
+  it("keeps SQLite's own frames for the run record", () => {
+    const damaged = storeDamaged(malformed) as Error
+    expect(damaged.cause).toBe(malformed)
+    expect(framesOf(damaged)).toEqual(framesOf(malformed))
+  })
+
+  it("names a file the owner chose instead of taking it for the CLI's store", async () => {
+    const failure = damagedFile(["other.db"], async () => {
+      throw notADatabase()
+    })
+    await expect(failure).rejects.toMatchObject({
+      code: "validation_error",
+      message: "other.db is damaged or not a database",
+      details: { reason: "store.file-damaged" },
+    })
+  })
+
+  it("leaves another SQLite failure, or a filesystem errno that looks like one, a crash", () => {
     const locked = Object.assign(new Error("database is locked"), { code: "ERR_SQLITE_ERROR", errcode: 5 })
-    expect(failed(locked).structuredContent).toMatchObject({ error: { reason: "command.crashed" } })
+    const windowsEio = Object.assign(new Error("EIO: i/o error, read"), { code: "EIO", errno: -4070 })
+    for (const error of [locked, windowsEio])
+      expect(failed(error).structuredContent).toMatchObject({ error: { reason: "command.crashed" } })
   })
 })
 

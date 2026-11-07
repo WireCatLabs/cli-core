@@ -103,6 +103,14 @@ describe("store recovery", () => {
     })
   })
 
+  it("says a store whose header is damaged cannot be recovered, not to run store recover", async () => {
+    const { path } = await seeded()
+    writeFileSync(path, "not a database header".repeat(400))
+    await expect(recoverStore({ path, command: "chat", copy: copyOf(path) })).rejects.toMatchObject({
+      details: { reason: "store.unreadable" },
+    })
+  })
+
   it("leaves the store as it was, and its own file gone, when the copy fails", async () => {
     const { path } = await seeded()
     const failing = async () => {
