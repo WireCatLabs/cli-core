@@ -2,6 +2,7 @@ import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, expect, it } from "vitest"
+import { ingest } from "../services/ingest.js"
 import { openCache } from "./open.js"
 import { openStore } from "./store.js"
 
@@ -232,4 +233,44 @@ it("refuses at confirm a stray proposed refund whose payment is still proposed",
   expect(() => database.prepare("UPDATE payments SET review = 'confirmed' WHERE id = ?").run(Number(back.id))).toThrow(
     /a refund before its payment/,
   )
+})
+
+it("gives an imported payment the room a confirmed refund freed on an invoice", async () => {
+  const f = await fixture()
+  const source = { provider: "sheet", account: "demo-rent", batch_id: "2026-11-12" }
+  const take = (records: unknown[]) => ingest(f.store, { schema_version: 1, source, records }, { account: "demo-rent" })
+  const client = {
+    key: "client",
+    type: "organization",
+    external_id: "client",
+    operation: "upsert",
+    fields: { name: "ООО Ромашка" },
+  }
+  await take([client])
+  await f.store.records.map({ ...source, type: "organization", externalId: "client" }, f.romashka.ref, "owner")
+  const imported = await take([
+    {
+      key: "inv",
+      type: "invoice",
+      external_id: "INV-1",
+      operation: "upsert",
+      fields: { direction: "receivable", currency: "RUB", lines: [{ description: "Аренда", amount: "10000.00" }] },
+      relations: [{ role: "counterparty", type: "organization", external_id: "client" }],
+    },
+  ])
+  const invoice = imported.proposed[0] as string
+  const paid = await f.payment("10000.00", { allocations: [{ invoice, amount: "10000.00" }] })
+  await f.refund(paid.ref, "10000.00", { allocations: [{ invoice, amount: "10000.00" }] })
+  const again = await take([
+    {
+      key: "pay",
+      type: "payment",
+      external_id: "PA-1",
+      operation: "upsert",
+      fields: { direction: "in", amount: "10000.00", currency: "RUB", date: "2026-11-12" },
+      relations: [{ role: "settles", type: "invoice", external_id: "INV-1" }],
+    },
+  ])
+  const payment = await f.store.finance.payment(again.proposed[0] as string)
+  expect(payment.allocations).toEqual([expect.objectContaining({ invoice, amount: "10000.00" })])
 })
