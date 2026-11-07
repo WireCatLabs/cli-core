@@ -19,6 +19,7 @@ export interface LocalSpeechRecognitionModel {
 export interface LocalSpeechBackend {
   recognize(pcm: Float32Array): string
   pieces?(pcm: Float32Array): TimedText[]
+  piecesUntil?(pcm: Float32Array, signal: AbortSignal): Promise<TimedText[]>
   free(): void
 }
 export interface LocalSpeechRecognizer extends LocalSpeechRecognitionModel {
@@ -74,7 +75,7 @@ const notInstalled = (id: string) =>
 export const recognizeLocalPieces = async (
   id: string,
   audio: Pcm,
-  options: Pick<LocalSpeechRecognizerOptions, "directory" | "env" | "open"> = {},
+  options: Pick<LocalSpeechRecognizerOptions, "directory" | "env" | "open" | "signal"> = {},
 ): Promise<TimedText[]> => {
   const model = speechModel(id)
   const directory = options.directory ?? modelsDirectory(options.env)
@@ -83,7 +84,16 @@ export const recognizeLocalPieces = async (
   const engine = (options.open ?? openRecognizer)(model, modelPath(directory, model), vadPath(directory))
   try {
     if (!engine.pieces) throw new CliError("configuration_error", "this speech backend gives no timed pieces")
-    return engine.pieces(toModelRate(audio.samples, audio.rate))
+    const pcm = toModelRate(audio.samples, audio.rate)
+    const { signal } = options
+    if (!signal) return engine.pieces(pcm)
+    cancelled(signal)
+    try {
+      return engine.piecesUntil ? await engine.piecesUntil(pcm, signal) : engine.pieces(pcm)
+    } catch (error) {
+      cancelled(signal)
+      throw error
+    }
   } finally {
     engine.free()
   }

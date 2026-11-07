@@ -5,7 +5,7 @@ Every table of the shared store (tg, max, memo, zm) as its migrations create it.
 `drizzle/` must agree with it. `pnpm schema:check` fails when they do not, and `src/store/sqlite/schema.test.ts`
 checks every table and column of a new store against this page.
 
-121 tables, 25 full-text indexes.
+122 tables, 25 full-text indexes.
 
 ## Conventions
 
@@ -2090,6 +2090,33 @@ A CRM account's own fields on its deals, leads, contacts or companies, as its sy
 | `deleted_at` | integer |  |  | the CRM no longer lists it; values under its code may still stand |
 
 *Keys and indexes:* `UNIQUE (account_id, kind, code)`
+
+## Decisions from a message
+
+The buttons of a message that asks the owner to decide a batch. A press is the owner's proof; the table only keeps the one-time keys.
+
+### `decision_requests`
+
+One button of a message that asks the owner to decide a batch. The button carries a random token; only its digest is kept. Using one token cancels the others of its message.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | PK |  |  |
+| `token_digest` | text | not null, unique |  | SHA-256 of the token, hex; the token itself is never stored |
+| `proposal_id` | text | not null |  | the batch the message is about, as its owner names it |
+| `action` | text | not null |  | confirm, reject, ask-confirm, ask-reject, back or later |
+| `batch_digest` | text | not null |  | digest of the batch when the message was sent |
+| `channel` | text | not null |  | the messenger, such as `telegram` |
+| `bot_profile` | text | not null |  | the bot that sent the message |
+| `chat_id` | text | not null |  | the chat the message is in |
+| `message_id` | text | not null |  | the message the button is on |
+| `owner_user_id` | text | not null |  | the one user whose press counts |
+| `created_at` | integer | not null |  | when this row was saved here |
+| `expires_at` | integer | not null |  | 72 hours after creation |
+| `used_at` | integer |  |  | set once, by the press that took the token |
+| `cancelled_at` | integer |  |  | a sibling was used, or the owner turned the feature off |
+
+*Keys and indexes:* `INDEX (channel, bot_profile, chat_id, message_id)`
 
 ## Source records
 

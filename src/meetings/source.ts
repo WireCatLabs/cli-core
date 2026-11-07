@@ -19,6 +19,11 @@ export interface MeetingSource {
   readonly provider: string
   readonly name: string
   readonly transcriptFormat?: string
+  /**
+   * How far back each sync looks before its cursor, in integer milliseconds up to 31 days: a provider that lists a
+   * meeting only once it has ended, or adds its recording later, sets it. 0 when absent; `--lookback-days` widens it.
+   */
+  readonly overlapMs?: number
   meetings(since: string): Promise<SourceMeeting[]>
   participants(occurrenceId: string): Promise<SourceParticipant[] | null>
   transcript(occurrenceId: string): Promise<TranscriptLine[] | null>

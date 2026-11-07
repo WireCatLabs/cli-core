@@ -58,8 +58,8 @@ const result = await gatherProjectEvidence(
   message hit: the person wrote it, it need not name the project.
 - **Window.** `lookbackDays` (default 60, at most 730) before `asOf` (default now), or an explicit
   half-open `after`/`before`; `before` left out is `asOf`, frozen with the run. Windows longer than 90 days are read in 90-day chunks, newest first. Each
-  item keeps its `timeKind`: an imported document's `stored-update` time is when it was stored, not when
-  its content happened.
+  item keeps its `timeKind`: `source-modified` is the time the source gives (a Drive edit, a local note's front
+  matter date or file time); `stored-update` is when the store last wrote a document that has none.
 - **Fetch.** `fetch: "before-read"` needs the host's `coverage` and `fetcher` (`ProjectChatFetcher`). Before the
   first read of a run (never on a resume) it asks `coverage` what the store holds of each linked chat in `sources`,
   and calls `fetcher.fetch({ account, chatId, after, before, until, signal, onProgress })` for each chat it does not hold for

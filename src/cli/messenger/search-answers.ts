@@ -122,13 +122,20 @@ const accountName = ({ provider, account }: { provider: string; account: string 
 /** A source left out is an issue by its code; the sentence saying why goes to a person as a note, never here. */
 const metaOf = (
   accounts: readonly { provider: string; account: string }[],
-  skipped: readonly { source?: string; resource?: string; code: ErrorCode }[] = [],
+  skipped: readonly { source?: string; resource?: string; code: ErrorCode; why?: string }[] = [],
   heldInPart = false,
 ): Partial<Meta> => ({
   accounts: accounts.map(accountName),
   complete: skipped.length === 0 && !heldInPart,
   ...(skipped.length
-    ? { issues: skipped.map(({ source, resource, code }) => ({ code, source: source ?? resource ?? "" })) }
+    ? {
+        issues: skipped.map(({ source, resource, code, why }) => ({
+          code,
+          // The output standard takes a dotted reason only; the sentence goes to a person as a note.
+          ...(why && /^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)+$/u.test(why) ? { reason: why } : {}),
+          source: source ?? resource ?? "",
+        })),
+      }
     : {}),
 })
 
@@ -412,6 +419,8 @@ export const allAnswer = (
   { limit, page, again }: Paging,
   exact = false,
   skips: StoredHistorySkip[] = [],
+  /** Kinds the profile's levels kept out of the search, each with why. */
+  leftOut: readonly { why: string }[] = [],
 ): ListBody<HitItem> => {
   const limited = historyLimitGaps(skips)
   const scan = found.meetings?.complete === false ? found.meetings : undefined
@@ -453,6 +462,7 @@ export const allAnswer = (
       ...messages.missing,
       ...archive.missing,
       ...limited.missing,
+      ...leftOut.map(({ why }) => ({ field: "items", why })),
     ],
     meta: metaOf(found.accounts, found.skipped, archive.missing.length > 0 || skips.length > 0),
   })

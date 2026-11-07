@@ -37,6 +37,7 @@ export const explainDamage = (health: StoreHealth, command: string): DamageExpla
   const sources = tables.filter((table) => !isDerivedTable(table, indexNames))
   const derived = [...new Set([...tables.filter((table) => isDerivedTable(table, indexNames)), ...badIndexes])]
   const unopened = health.error !== undefined
+  const json = (health.invalidJson ?? []).map(({ table, column }) => `${table}.${column}`)
 
   const what = unopened
     ? `the store file cannot be opened: ${health.error}`
@@ -44,7 +45,8 @@ export const explainDamage = (health: StoreHealth, command: string): DamageExpla
       ? "the store file's header or schema is damaged"
       : `the store file is damaged: ${health.problems ?? 0} problems` +
         (sources.length ? ` in the data of ${named(sources)}` : "") +
-        (derived.length ? `${sources.length ? ", and" : " in"} the search data of ${named(derived)}` : "")
+        (derived.length ? `${sources.length ? ", and" : " in"} the search data of ${named(derived)}` : "") +
+        (json.length ? `; values that are not valid JSON in ${named(json)}` : "")
 
   const impact = [
     ...(sources.length
@@ -52,6 +54,9 @@ export const explainDamage = (health: StoreHealth, command: string): DamageExpla
       : []),
     ...(derived.length
       ? [`searches may miss results or fail; ${named(derived)} hold nothing that is not elsewhere, and are rebuilt`]
+      : []),
+    ...(json.length
+      ? [`a read of a row with a broken JSON value fails ("malformed JSON"); a recovery clears those values`]
       : []),
     "reads that do not touch a damaged page work; a write that touches one fails until the store is recovered",
   ]

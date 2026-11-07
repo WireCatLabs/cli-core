@@ -15,7 +15,8 @@ import { explainDamage } from "./damage.js"
 import { storeHealth } from "./health.js"
 import { migrate } from "./migrations.js"
 import { openCache } from "./open.js"
-import { danglingRows, recoverStore, sqlite3Program, tableRows } from "./recover.js"
+import { danglingRows, recoverStore, runningRecovery, sqlite3Program, storeHolders, tableRows } from "./recover.js"
+import { openSqlite } from "./sqlite/open.js"
 
 const seeded = async () => {
   const path = join(mkdtempSync(join(tmpdir(), "store-recover-")), "m.db")
@@ -118,6 +119,92 @@ describe("store recovery", () => {
     await expect(recoverStore({ path, command: "chat", copy: failing })).rejects.toThrow("copy failed")
     expect(readdirSync(dirname(path)).filter((file) => file.includes("recovering"))).toEqual([])
     expect((await storeHealth(path, { deep: true })).ok).toBe(true)
+  })
+
+  it("swaps the file when another tool only reads the store during the recovery", async () => {
+    const { path } = await seeded()
+    const reading = async (from: string, target: string) => {
+      for (const readOnly of [true, false]) {
+        const database = readOnly ? (await openSqlite(from, { readOnly })).database : await openCache(from)
+        database.prepare("SELECT count(*) FROM chats").get()
+        database.close()
+      }
+      copyFileSync(from, target)
+      return { errors: [], read: {} }
+    }
+    const recovery = await recoverStore({ path, command: "chat", copy: reading })
+    expect(existsSync(recovery.keptAt)).toBe(true)
+  })
+
+  it("leaves the store as it was when another tool writes to it during the recovery", async () => {
+    const { path } = await seeded()
+    const writing = async (from: string, target: string) => {
+      copyFileSync(from, target)
+      const database = await openCache(from)
+      database.exec("UPDATE chats SET title = 'Poetry club' WHERE id = 1")
+      database.close()
+      return { errors: [], read: {} }
+    }
+    await expect(recoverStore({ path, command: "chat", copy: writing })).rejects.toMatchObject({
+      details: { reason: "store.changed-during-recovery" },
+    })
+    expect(readdirSync(dirname(path)).filter((file) => file.includes("before-recover"))).toEqual([])
+  })
+
+  it("refuses a second recovery while one runs, and shows the running one as holding the store", async () => {
+    const { path } = await seeded()
+    let second: Promise<unknown> | undefined
+    const racing = async (from: string, target: string) => {
+      expect(runningRecovery(from)).toBe(process.pid)
+      second = recoverStore({ path, command: "chat", copy: copyOf(from) })
+      await second.catch(() => {})
+      copyFileSync(from, target)
+      return { errors: [], read: {} }
+    }
+    await recoverStore({ path, command: "chat", copy: racing })
+    await expect(second).rejects.toMatchObject({ details: { reason: "store.recovering" } })
+    expect(runningRecovery(path)).toBeNull()
+  })
+
+  it("takes over a lock left by a recovery that ended", async () => {
+    const { path } = await seeded()
+    writeFileSync(`${path}.recover-lock`, "999999999")
+    expect(storeHolders(path)?.map(({ pid }) => pid)).not.toContain(999999999)
+    const clean = `${path}.clean`
+    copyFileSync(path, clean)
+    await recoverStore({ path, command: "chat", copy: copyOf(clean) })
+    expect(existsSync(`${path}.recover-lock`)).toBe(false)
+  })
+
+  it("clears values that are not valid JSON, drops rows whose JSON is required, and counts both", async () => {
+    const { path } = await seeded()
+    const database = await openCache(path)
+    database.exec("UPDATE chats SET metadata = '{\"broken\": ' WHERE id = 1")
+    database.exec(
+      "INSERT INTO searches (name, command, params, language, version, fields_version, created_at, updated_at) " +
+        "VALUES ('saved', 'search', '{not json', 'lucene', 1, 1, 0, 0)",
+    )
+    const health = await storeHealth(path, { deep: true })
+    database.close()
+    expect(health.ok).toBe(false)
+    expect(health.invalidJson).toEqual([
+      { table: "chats", column: "metadata", rows: 1, required: false },
+      { table: "searches", column: "params", rows: 1, required: true },
+    ])
+    expect(explainDamage(health, "chat")?.what).toContain("chats.metadata")
+    const copying = async (from: string, target: string) => {
+      copyFileSync(from, target)
+      return { errors: [], read: {} }
+    }
+    const recovery = await recoverStore({ path, command: "chat", copy: copying })
+    expect(recovery.invalidJson.map(({ table, rows }) => [table, rows])).toEqual([
+      ["chats", 1],
+      ["searches", 1],
+    ])
+    const after = await openCache(path)
+    expect(after.prepare("SELECT metadata FROM chats WHERE id = 1").get()?.metadata).toBeNull()
+    expect(after.prepare("SELECT count(*) AS n FROM searches").get()?.n).toBe(0)
+    after.close()
   })
 
   it("counts the rows of every data table, leaving search shadow tables out", async () => {

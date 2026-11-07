@@ -15,7 +15,7 @@ import { CliError } from "@wirecat/cli-base"
 import { holdersOf } from "../background/processes.js"
 import { isStoreDamage } from "../errors/failures.js"
 import type { CacheDatabase } from "./driver.js"
-import { fts5Tables, type StoreHealth, storeHealth } from "./health.js"
+import { fts5Tables, type InvalidJson, invalidJson, type StoreHealth, storeHealth } from "./health.js"
 import { migrate } from "./migrations.js"
 import { resetAttachmentWords } from "./sqlite/attachment-texts.js"
 import { involvementStoreOver } from "./sqlite/involvements.js"
@@ -32,6 +32,7 @@ import { fillVectorIndexes } from "./sqlite/vector-index.js"
 export const SQLITE3_MINIMUM = [3, 43, 0] as const
 
 const STORE_PARTS = ["", "-wal", "-shm"]
+const RECOVER_LOCK = ".recover-lock"
 /** The start of a row `.recover` writes; a value's own lines cannot start a line with it, its quotes are doubled. */
 const INSERTED = /^INSERT OR IGNORE INTO '([^']+)'/
 const LOST_AND_FOUND = "recover_lost_and_found"
@@ -78,14 +79,64 @@ export const activeTimers = (): string[] | undefined => {
   }
 }
 
-/** Processes that have any of the store's files open, by PID and program name, never their arguments. */
+const alive = (pid: number) => {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === "EPERM"
+  }
+}
+
+/** The process recovering the store now, from the lock file it keeps beside it; a lock whose process ended is none. */
+export const runningRecovery = (path: string): number | null => {
+  let pid: number
+  try {
+    pid = Number(readFileSync(`${path}${RECOVER_LOCK}`, "utf8").trim())
+  } catch {
+    return null
+  }
+  return Number.isInteger(pid) && pid > 0 && alive(pid) ? pid : null
+}
+
+/** Between its copy and its swap a recovery holds none of the store's files, so only its lock shows it. */
+const takeRecoverLock = (path: string): (() => void) => {
+  const lock = `${path}${RECOVER_LOCK}`
+  const take = () => writeFileSync(lock, String(process.pid), { flag: "wx", mode: 0o600 })
+  try {
+    take()
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error
+    const pid = runningRecovery(path)
+    if (pid === null) {
+      rmSync(lock, { force: true })
+      take()
+    } else {
+      throw new CliError("validation_error", `the store is being recovered by process ${pid} — wait for it to finish`, {
+        reason: "store.recovering",
+      })
+    }
+  }
+  return () => rmSync(lock, { force: true })
+}
+
+/**
+ * Processes that have any of the store's files open, by PID and program name, never their arguments, and the one
+ * recovering it.
+ */
 export const storeHolders = (path: string): { pid: number; name: string }[] | undefined => {
   const folder = realpathSync(dirname(path))
   const files = STORE_PARTS.map((suffix) => join(folder, `${basename(path)}${suffix}`))
   // A process that kept writing after its log was deleted holds it as "<path> (deleted)" (BUG-557).
   const wanted =
     process.platform === "linux" ? files.flatMap((file) => [file, `${file} (deleted)`]) : files.filter(existsSync)
-  return holdersOf(wanted)?.map((pid) => {
+  const recovering = runningRecovery(path)
+  const pids = holdersOf(wanted)
+  if (pids === undefined && recovering === null) return undefined
+  const all = [
+    ...new Set([...(pids ?? []), ...(recovering !== null && recovering !== process.pid ? [recovering] : [])]),
+  ]
+  return all.map((pid) => {
     let name = "?"
     try {
       name = readFileSync(`/proc/${pid}/comm`, "utf8").trim()
@@ -349,14 +400,22 @@ const mailToFetch = (database: CacheDatabase): { account: string; emails: number
   }
 }
 
-/** The file and its log; the shared-memory file changes on every read, so it says nothing. */
-const fingerprint = (path: string) =>
-  ["", "-wal"]
-    .map((suffix) => {
-      const stat = statSync(`${path}${suffix}`, { throwIfNoEntry: false })
-      return stat ? `${stat.size}:${stat.mtimeMs}` : "-"
-    })
-    .join("|")
+/**
+ * Sets each value the tools read as JSON that SQLite's JSON functions refuse to NULL, or drops its row where the
+ * column may not be NULL: `.recover` copies a damaged value that still reads, and a JSON read of it fails.
+ */
+export const clearInvalidJson = (database: CacheDatabase): InvalidJson[] => {
+  const found = invalidJson(database)
+  for (const { table, column, required } of found) {
+    const invalid = `"${column}" IS NOT NULL AND NOT json_valid("${column}")`
+    database.exec(
+      required
+        ? `DELETE FROM "${table}" WHERE ${invalid}`
+        : `UPDATE "${table}" SET "${column}" = NULL WHERE ${invalid}`,
+    )
+  }
+  return found
+}
 
 export interface LostRows {
   table: string
@@ -375,6 +434,8 @@ export interface Recovery {
    */
   lost: LostRows[]
   dangling: DanglingRows[]
+  /** Values that were not valid JSON: set to NULL, or the row dropped where `required`. */
+  invalidJson: InvalidJson[]
   mailToFetch: { account: string; emails: number }[]
   rebuilt: DerivedRebuild
   copyErrors: string[]
@@ -431,120 +492,164 @@ export const recoverStore = async ({
       { reason: "store.sqlite3-missing" },
     )
   }
-  refuseInUse(path)
-  const bytes = STORE_PARTS.reduce(
-    (sum, suffix) => sum + (statSync(`${path}${suffix}`, { throwIfNoEntry: false })?.size ?? 0),
-    0,
+  const releaseLock = takeRecoverLock(path)
+  try {
+    refuseInUse(path)
+    const bytes = STORE_PARTS.reduce(
+      (sum, suffix) => sum + (statSync(`${path}${suffix}`, { throwIfNoEntry: false })?.size ?? 0),
+      0,
+    )
+    const { bavail, bsize } = statfsSync(dirname(path))
+    if (Number(bavail) * Number(bsize) < bytes * 1.2)
+      throw new CliError(
+        "validation_error",
+        `the recovery needs about ${Math.ceil((bytes * 1.2) / 1e9)} GB free beside the store`,
+      )
+    return await recoverLocked({ path, command, version, sqlite3, now, note, copy, started, program })
+  } finally {
+    releaseLock()
+  }
+}
+
+const unreadable = (error: unknown): never => {
+  if (!isStoreDamage(error)) throw error
+  throw new CliError(
+    "configuration_error",
+    "the store file's header or schema is damaged, so its tables cannot be listed and it cannot be recovered; " +
+      "the file was left as it was",
+    { reason: "store.unreadable" },
   )
-  const { bavail, bsize } = statfsSync(dirname(path))
-  if (Number(bavail) * Number(bsize) < bytes * 1.2)
-    throw new CliError(
-      "validation_error",
-      `the recovery needs about ${Math.ceil((bytes * 1.2) / 1e9)} GB free beside the store`,
-    )
+}
 
-  let rowsBefore: Record<string, number | null>
+const recoverLocked = async ({
+  path,
+  command,
+  version,
+  sqlite3,
+  now,
+  note,
+  copy,
+  started,
+  program,
+}: Required<Pick<RecoverOptions, "path" | "command" | "sqlite3" | "now" | "note">> &
+  Pick<RecoverOptions, "version" | "copy"> & {
+    started: number
+    program: { version: string | null }
+  }): Promise<Recovery> => {
+  // Kept open to the swap: data_version moves only when another connection commits, never for a reader's
+  // checkpoint or a log reset, which change the files' times and sizes but not one row.
+  const watch = (await openSqlite(path, { readOnly: true }).catch(unreadable)).database
+  let watching = true
+  const stopWatching = () => {
+    if (watching) watch.close()
+    watching = false
+  }
   try {
-    const old = await openSqlite(path, { readOnly: true })
-    try {
-      rowsBefore = tableRows(old.database)
-    } finally {
-      old.database.close()
+    const dataVersion = () => Number(watch.prepare("PRAGMA data_version").get()?.data_version)
+    const rowsBefore = (() => {
+      try {
+        return tableRows(watch)
+      } catch (error) {
+        return unreadable(error)
+      }
+    })()
+    const before = { data: dataVersion(), inode: statSync(path).ino }
+
+    const stamp = new Date(now()).toISOString().replace(/[:.]/g, "-")
+    const target = `${path}.recovering-${stamp}`
+    writeFileSync(target, "", { flag: "wx", mode: 0o600 })
+    const dropTarget = () => {
+      for (const suffix of [...STORE_PARTS, "-journal"]) rmSync(`${target}${suffix}`, { force: true })
     }
-  } catch (error) {
-    if (!isStoreDamage(error)) throw error
-    throw new CliError(
-      "configuration_error",
-      "the store file's header or schema is damaged, so its tables cannot be listed and it cannot be recovered; " +
-        "the file was left as it was",
-      { reason: "store.unreadable" },
-    )
-  }
-  const before = fingerprint(path)
-
-  const stamp = new Date(now()).toISOString().replace(/[:.]/g, "-")
-  const target = `${path}.recovering-${stamp}`
-  writeFileSync(target, "", { flag: "wx", mode: 0o600 })
-  const dropTarget = () => {
-    for (const suffix of [...STORE_PARTS, "-journal"]) rmSync(`${target}${suffix}`, { force: true })
-  }
-  note(`copying the readable rows into ${target}`)
-  let copied: number
-  let copyErrors: string[]
-  let read: Record<string, number>
-  let opened: Awaited<ReturnType<typeof openSqlite>>
-  try {
-    ;({ errors: copyErrors, read } = await (copy ?? ((from, to) => copyReadableRows(from, to, sqlite3)))(path, target))
-    copied = Date.now()
-    opened = await openSqlite(target)
-  } catch (error) {
-    dropTarget()
-    throw error
-  }
-  let rebuilt: DerivedRebuild
-  let kept: Record<string, number | null>
-  let dangling: DanglingRows[]
-  let fetch: { account: string; emails: number }[]
-  try {
-    kept = tableRows(opened.database)
-    migrate(opened.database, { command, ...(version ? { version } : {}) })
-    rebuilt = rebuildDerived(opened.database, { now, note })
-    note("looking for rows that point at rows that were lost")
-    dangling = danglingRows(opened.database)
-    fetch = mailToFetch(opened.database)
-    opened.database.exec("PRAGMA wal_checkpoint(TRUNCATE)")
-  } catch (error) {
+    note(`copying the readable rows into ${target}`)
+    let copied: number
+    let copyErrors: string[]
+    let read: Record<string, number>
+    let opened: Awaited<ReturnType<typeof openSqlite>>
+    try {
+      ;({ errors: copyErrors, read } = await (copy ?? ((from, to) => copyReadableRows(from, to, sqlite3)))(
+        path,
+        target,
+      ))
+      copied = Date.now()
+      opened = await openSqlite(target)
+    } catch (error) {
+      dropTarget()
+      throw error
+    }
+    let rebuilt: DerivedRebuild
+    let kept: Record<string, number | null>
+    let dangling: DanglingRows[]
+    let json: InvalidJson[]
+    let fetch: { account: string; emails: number }[]
+    try {
+      kept = tableRows(opened.database)
+      migrate(opened.database, { command, ...(version ? { version } : {}) })
+      note("clearing values that are not valid JSON")
+      json = clearInvalidJson(opened.database)
+      rebuilt = rebuildDerived(opened.database, { now, note })
+      note("looking for rows that point at rows that were lost")
+      dangling = danglingRows(opened.database)
+      fetch = mailToFetch(opened.database)
+      opened.database.exec("PRAGMA wal_checkpoint(TRUNCATE)")
+    } catch (error) {
+      opened.database.close()
+      dropTarget()
+      throw error
+    }
     opened.database.close()
-    dropTarget()
-    throw error
-  }
-  opened.database.close()
-  const rebuiltAt = Date.now()
+    const rebuiltAt = Date.now()
 
-  note("checking the recovered file")
-  const health = await storeHealth(target, { deep: true })
-  const checkedAt = Date.now()
-  if (!health.ok) {
-    throw new CliError(
-      "validation_error",
-      `the recovered file did not pass its check, so the store was left as it was; the file is kept at ${target}`,
-      { reason: "store.recovery-failed" },
-    )
-  }
+    note("checking the recovered file")
+    const health = await storeHealth(target, { deep: true })
+    const checkedAt = Date.now()
+    if (!health.ok) {
+      throw new CliError(
+        "validation_error",
+        `the recovered file did not pass its check, so the store was left as it was; the file is kept at ${target}`,
+        { reason: "store.recovery-failed" },
+      )
+    }
 
-  refuseInUse(path)
-  if (fingerprint(path) !== before) {
-    throw new CliError(
-      "validation_error",
-      `the store was written to during the recovery, so it was left as it was — stop every timer and run it again; ${target} can be deleted`,
-      { reason: "store.changed-during-recovery" },
-    )
-  }
-  const keptAt = `${path}.before-recover-${stamp}`
-  for (const suffix of STORE_PARTS)
-    if (existsSync(`${path}${suffix}`)) renameSync(`${path}${suffix}`, `${keptAt}${suffix}`)
-  for (const suffix of STORE_PARTS)
-    if (existsSync(`${target}${suffix}`)) renameSync(`${target}${suffix}`, `${path}${suffix}`)
+    refuseInUse(path)
+    const changed = dataVersion() !== before.data || statSync(path, { throwIfNoEntry: false })?.ino !== before.inode
+    stopWatching()
+    if (changed) {
+      throw new CliError(
+        "validation_error",
+        `the store was written to during the recovery, so it was left as it was — stop every timer and run it again; ${target} can be deleted`,
+        { reason: "store.changed-during-recovery" },
+      )
+    }
+    const keptAt = `${path}.before-recover-${stamp}`
+    for (const suffix of STORE_PARTS)
+      if (existsSync(`${path}${suffix}`)) renameSync(`${path}${suffix}`, `${keptAt}${suffix}`)
+    for (const suffix of STORE_PARTS)
+      if (existsSync(`${target}${suffix}`)) renameSync(`${target}${suffix}`, `${path}${suffix}`)
 
-  const lost = Object.entries(rowsBefore)
-    .map(([table, before]) => ({ table, before, read: read[table] ?? 0, kept: kept[table] ?? 0 }))
-    .filter(({ before, read, kept }) => before === null || before > kept || read > kept)
-  const seconds = (from: number, to: number) => Math.round((to - from) / 100) / 10
-  return {
-    path,
-    keptAt,
-    sqlite3: program.version as string,
-    lost,
-    dangling,
-    mailToFetch: fetch,
-    rebuilt,
-    copyErrors,
-    health,
-    seconds: {
-      copy: seconds(started, copied),
-      rebuild: seconds(copied, rebuiltAt),
-      check: seconds(rebuiltAt, checkedAt),
-      total: seconds(started, Date.now()),
-    },
+    const lost = Object.entries(rowsBefore)
+      .map(([table, before]) => ({ table, before, read: read[table] ?? 0, kept: kept[table] ?? 0 }))
+      .filter(({ before, read, kept }) => before === null || before > kept || read > kept)
+    const seconds = (from: number, to: number) => Math.round((to - from) / 100) / 10
+    return {
+      path,
+      keptAt,
+      sqlite3: program.version as string,
+      lost,
+      dangling,
+      invalidJson: json,
+      mailToFetch: fetch,
+      rebuilt,
+      copyErrors,
+      health,
+      seconds: {
+        copy: seconds(started, copied),
+        rebuild: seconds(copied, rebuiltAt),
+        check: seconds(rebuiltAt, checkedAt),
+        total: seconds(started, Date.now()),
+      },
+    }
+  } finally {
+    stopWatching()
   }
 }

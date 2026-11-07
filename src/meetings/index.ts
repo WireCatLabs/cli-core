@@ -91,7 +91,13 @@ export {
   validateFindings,
   validEvidence,
 } from "./findings-rules.js"
-export { liftMeetingFields, MEETING_HIT_QUERY, meetingWordsQuery, parseMeetingQuery } from "./hit-query.js"
+export {
+  liftMeetingFields,
+  MEETING_FIELD_NAMES,
+  MEETING_HIT_QUERY,
+  meetingWordsQuery,
+  parseMeetingQuery,
+} from "./hit-query.js"
 export { type ImportFile, importFiles } from "./import.js"
 export {
   MEETING_ISSUES,
@@ -225,7 +231,7 @@ export {
   prepareMeetingProjectEvidence,
 } from "./project-evidence-query.js"
 export { type MeetingProviderScope, snapshotMeetingScope } from "./provider.js"
-export { type PullOptions, pull, type RunReport } from "./pull.js"
+export { type MeetingBudget, type MeetingBudgetStop, type PullOptions, pull, type RunReport } from "./pull.js"
 export {
   event,
   eventItem,

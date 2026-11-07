@@ -28,13 +28,13 @@ const SEED = [
     `created_at, updated_at) VALUES (52, 12, 51, 'e1', 'Invoice March', 'Bob Sample', ${AT}, 'mail body', 0, 0)`,
   "INSERT INTO persons (id, name, owner, created_at, updated_at) VALUES (61, 'Lena Example', 0, 0, 0)",
   "INSERT INTO organizations (id, kind, name, created_at, updated_at) VALUES (62, 'company', 'Example Ltd', 0, 0)",
-  "INSERT INTO projects (id, key, name, type, created_at, updated_at) VALUES (63, 'PMED', 'ProkatMed', 'work', 0, 0)",
+  "INSERT INTO projects (id, key, name, type, created_at, updated_at) VALUES (63, 'DEMO', 'DemoRent', 'work', 0, 0)",
   "INSERT INTO tasks (id, project_id, number, key, title, type, status, author_type, author_id, source, due_at, " +
-    `created_at, updated_at) VALUES (64, 63, 1, 'PMED-1', 'Ship the catalog', 'task', 'open', 'bot', 1, 'cli', ${AT}, 0, 0)`,
+    `created_at, updated_at) VALUES (64, 63, 1, 'DEMO-1', 'Ship the catalog', 'task', 'open', 'bot', 1, 'cli', ${AT}, 0, 0)`,
   "INSERT INTO notes (id, notable_type, notable_id, title, body, created_at, updated_at, deleted_at) VALUES " +
     `(71, 'project', 63, 'Call notes', 'note body', 0, ${AT}, NULL), (72, 'project', 63, 'Old', 'x', 0, 0, 9)`,
   "INSERT INTO documents (id, account_id, external_id, kind, title, body, external_updated_at, created_at, " +
-    `updated_at) VALUES (81, 13, 'g1', 'document', 'Задачи SEO Neirox', 'document body', ${AT}, 0, 0)`,
+    `updated_at) VALUES (81, 13, 'g1', 'document', 'Задачи SEO Example', 'document body', ${AT}, 0, 0)`,
   "INSERT INTO memories (id, kind, body, subject_type, subject_id, author_type, author_id, status, scope, " +
     `created_at, updated_at) VALUES (91, 'summary', '${"Lena prefers Friday calls. ".repeat(10)}', 'person', 61, ` +
     `'bot', 1, 'active', 'work', ${AT}, 0)`,
@@ -92,7 +92,7 @@ describe("store.refs.summaries", () => {
       "person:61",
       "organization:62",
       "project:63",
-      "task:PMED-1",
+      "task:DEMO-1",
       "note:71",
       "document:81",
       "memory:91",
@@ -118,10 +118,10 @@ describe("store.refs.summaries", () => {
       ["email", "Invoice March", "Bob Sample", iso, "email", null, "available"],
       ["person", "Lena Example", null, null, null, null, "available"],
       ["organization", "Example Ltd", null, null, null, null, "available"],
-      ["project", "PMED · ProkatMed", null, null, null, null, "available"],
-      ["task", "PMED-1 · Ship the catalog", "ProkatMed", iso, null, null, "available"],
-      ["note", "Call notes", "ProkatMed", iso, "notes", null, "available"],
-      ["document", "Задачи SEO Neirox", "Google Drive", iso, "google-drive", null, "available"],
+      ["project", "DEMO · DemoRent", null, null, null, null, "available"],
+      ["task", "DEMO-1 · Ship the catalog", "DemoRent", iso, null, null, "available"],
+      ["note", "Call notes", "DemoRent", iso, "notes", null, "available"],
+      ["document", "Задачи SEO Example", "Google Drive", iso, "google-drive", null, "available"],
       [
         "memory",
         expect.stringMatching(/^Lena prefers Friday calls\. .{40,}…$/),
@@ -131,7 +131,7 @@ describe("store.refs.summaries", () => {
         null,
         "available",
       ],
-      ["fact", "The launch is in March", "ProkatMed", iso, null, null, "available"],
+      ["fact", "The launch is in March", "DemoRent", iso, null, null, "available"],
       ["meeting", "Weekly sync", "Zoom work", iso, "zoom", null, "available"],
       ["meeting", "Weekly sync", "Zoom work", new Date(AT + 60000).toISOString(), "zoom", null, "available"],
       ["event", "Launch call", "Work calendar", iso, "google-calendar", null, "available"],

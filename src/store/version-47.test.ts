@@ -24,12 +24,12 @@ it("adds the records tables to a version 46 file and keeps what it held", async 
       upgraded,
       {
         schema_version: 1,
-        source: { provider: "sheet", account: "prokat-med", batch_id: "1" },
+        source: { provider: "sheet", account: "demo-rent", batch_id: "1" },
         records: [
           { key: "c", type: "custom:note", external_id: "1", operation: "upsert", fields: { client: client.ref } },
         ],
       },
-      { account: "prokat-med" },
+      { account: "demo-rent" },
     )
     expect(receipt).toMatchObject({ created: 1, errors: [] })
   } finally {

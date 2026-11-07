@@ -107,6 +107,21 @@ describe("installing a speech model", () => {
     expect(isInstalled(tiny, directory)).toBe(true)
     expect(fetched).toBe(1)
   })
+
+  it("reports the bytes in place as they land, and a file already there whole", async () => {
+    const directory = directoryWithVad()
+    const seen: [number, number][] = []
+    const bytes = (done: number, total: number) => seen.push([done, total])
+
+    await install(tiny, directory, { fetch: serving("weights"), bytes })
+    const total = VAD.bytes + 7
+    expect(seen[0]).toEqual([VAD.bytes, total])
+    expect(seen.at(-1)).toEqual([total, total])
+
+    seen.length = 0
+    await install(tiny, directory, { fetch: serving("weights"), bytes })
+    expect(seen).toEqual([[total, total]])
+  })
 })
 
 describe("audio for the model", () => {

@@ -325,6 +325,9 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
     // `settingsFor`'s, which every CLI passes; the definition's type is looser only so a test can stub it.
     resolveSettings: (definition.configuration ?? settingsFor(definition.app))
       .resolveSettings as BaseEnvironment["resolveSettings"],
+    ...(definition.configuration?.permissions
+      ? { permissionDefaults: definition.configuration.permissions.defaults }
+      : {}),
     ...(definition.rows ? { rows: definition.rows } : {}),
     platform: options.platform ?? process.platform,
     exit,

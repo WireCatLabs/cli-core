@@ -7,6 +7,8 @@ import type { Body } from "../../cli/envelope.js"
 import { historySkipsOf } from "../../cli/messenger/history-gaps.js"
 import { allAnswer, offsetOf, SOURCE_SEARCHED, type SourceSearched } from "../../cli/messenger/search-answers.js"
 import { searchAllLine, searchAllOptions } from "../../cli/messenger/search-command.js"
+import { deniedKinds } from "../../cli/search-left-out.js"
+import { commandAt, rootOf } from "../../cli/steps.js"
 import { SAVE_HELP } from "../../meetings/index.js"
 import type { AppIdentity } from "../../ports/app.js"
 import { meaningLane } from "../../services/messages-meaning.js"
@@ -58,6 +60,14 @@ export const addSearchAll = (searches: Command, { within, app, zone, example }: 
             "this process is locked to one profile; search all reads its own calendar only, without --source",
             { reason: "profile.locked" },
           )
+        const denied = deniedKinds(leaf, app, opts.only ?? SOURCE_SEARCHED)
+        const only = (opts.only ?? SOURCE_SEARCHED).filter((one) => !denied.some(({ kind }) => kind === one))
+        if (!only.length)
+          throw new CliError(
+            "permission_error",
+            `search all has nothing it may read: ${denied.map(({ why }) => why).join("; ")}`,
+            { reason: "search.all-denied" },
+          )
         const store = messagesOf(run, "search all")
         const limit = opts.limit ?? DEFAULT_LIMIT
         const offset = offsetOf(opts.page, limit)
@@ -72,16 +82,17 @@ export const addSearchAll = (searches: Command, { within, app, zone, example }: 
             ...(opts.exact ? { exact: true } : {}),
             timezone: opts.timezone ?? zone(),
             env,
-            only: opts.only ?? SOURCE_SEARCHED,
+            only,
             ...(opts.source === undefined ? {} : { source: opts.source }),
             ...(opts.maxMeetings === undefined ? {} : { maxMeetings: opts.maxMeetings }),
             ...(run.locked ? { scope: { events: [run.account] } } : {}),
           },
-          { app },
+          { app, hintCommand: commandAt(rootOf(leaf), "models download") ? app.command : null },
           undefined,
           meaningLane({ env, messenger: { app }, store: async () => store }),
         )
         const note = (text: string) => outputFor(leaf).renderer.note(text)
+        for (const { why } of denied) note(why)
         const globals = leaf.optsWithGlobals()
         if (!globals.json && !globals.jsonl)
           note(
@@ -107,6 +118,7 @@ export const addSearchAll = (searches: Command, { within, app, zone, example }: 
           { limit, page: opts.page ?? 1, again },
           opts.exact === true,
           skips,
+          denied,
         ) as Body
       },
       () => lines,

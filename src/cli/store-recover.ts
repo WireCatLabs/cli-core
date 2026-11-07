@@ -3,7 +3,7 @@ import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { type DamageExplanation, explainDamage } from "../store/damage.js"
-import { storeHealth } from "../store/health.js"
+import { type InvalidJson, storeHealth } from "../store/health.js"
 import { storePath } from "../store/path.js"
 import {
   activeTimers,
@@ -42,6 +42,7 @@ export interface RecoveryCheck {
   problems?: number
   damagedTables?: { table: string | null; problems: number; sample: string }[]
   damagedSearchIndexes?: { name: string; error?: string }[]
+  invalidJson?: InvalidJson[]
   rows?: Record<string, number | null>
   explanation?: DamageExplanation | null
   inUse?: { pid: number; name: string }[] | null
@@ -90,6 +91,7 @@ export const storeRecoveryCheck = async (env: NodeJS.ProcessEnv, command: string
     damagedSearchIndexes: (health.searchIndexes ?? [])
       .filter((index) => !index.ok)
       .map(({ name, error }) => ({ name, ...(error ? { error } : {}) })),
+    invalidJson: health.invalidJson ?? [],
     rows,
     explanation,
     inUse,
@@ -164,6 +166,10 @@ export const recoveryNotes = (answer: RecoveryCheck | RecoveryRun): string[] => 
       ...(lost.length ? lost : ["no table lost a row"]),
       ...answer.dangling.map(
         ({ table, parent, rows }) => `${rows} rows of ${table} point at ${parent} rows the store does not hold`,
+      ),
+      ...answer.invalidJson.map(
+        ({ table, column, rows, required }) =>
+          `${table}.${column}: ${rows} values were not valid JSON — ${required ? "those rows were dropped" : "set to empty"}`,
       ),
       ...answer.next.map((line) => `next: ${line}`),
     ]

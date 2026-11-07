@@ -196,6 +196,14 @@ describe("RPC wire preparation", () => {
     expect(apiJson(prepared.value)).toBe(prepared.text)
   })
 
+  it("refuses a body holding NaN or Infinity rather than send it as null", () => {
+    expect(() => apiJson({ fields: { assignedById: Number("anna") } })).toThrow(
+      expect.objectContaining({ code: "validation_error", message: expect.stringMatching(/^assignedById is NaN/) }),
+    )
+    expect(() => apiJson([1, Number.POSITIVE_INFINITY])).toThrow(/1 is Infinity/)
+    expect(apiJson({ id: 7, amount: 0.5, none: null })).toBe('{"id":7,"amount":0.5,"none":null}')
+  })
+
   it("refuses duplicate values, dangling multipart references, missing schema metadata and credentials in argv", () => {
     expect(() =>
       prepareRpcApiBody(rpc, input({ body: '{"chat_id":1}', fields: { chat_id: "1" } }), definitions),
