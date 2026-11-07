@@ -97,7 +97,10 @@ export function planQuestion(text: string, strict = false) {
     strict ||
     !natural ||
     implicitTextTerms(cleaned).size === 0 ||
-    textual.some((p) => p.operator !== "term" || p.field === "exact")
+    // A quoted single word is how `plainQuery` keeps `10:30` or `HH:MM` literal; it is no phrase the asker wrote.
+    textual.some(
+      (p) => !(p.operator === "term" || (p.operator === "phrase" && !/\s/u.test(p.value))) || p.field === "exact",
+    )
   if (bypass)
     return {
       changed: false,

@@ -1,4 +1,4 @@
-import { isCliError } from "@wirecat/cli-base"
+import { CliError, isCliError } from "@wirecat/cli-base"
 import { type Predicate, parseLucene, walkQuery } from "@wirecat/cli-base/query"
 import { QUERY_FIELDS } from "./registry.js"
 import { MESSAGE_PARSING } from "./types.js"
@@ -97,6 +97,12 @@ const without = (text: string, leaves: Predicate[]): string =>
  * search to report. `fields` are the names a list of its own (memories: `text`, `scope`) reads as fields.
  */
 export const plainQuery = (text: string, fields: ReadonlySet<string> = SEARCH_FIELDS): string => {
+  // `""`, a lone `?` or an emoji holds nothing the word index keeps, so it would find nothing and say nothing.
+  if (text.trim() && !/[\p{L}\p{N}*]/u.test(text))
+    throw new CliError(
+      "validation_error",
+      `search needs a letter or a digit to look for; ${JSON.stringify(text)} has none`,
+    )
   let current = text
   let whole = false
   for (let tries = 0; tries <= 64; tries++) {
