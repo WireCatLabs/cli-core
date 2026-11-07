@@ -260,6 +260,8 @@ export interface Button {
   kind: ButtonKind
   text: string
   url?: string
+  /** What a `callback` button sends the bot, where the adapter can read it; used to refuse owner-only buttons, never printed. */
+  data?: string
 }
 
 /** Where one attachment's bytes can be fetched. */

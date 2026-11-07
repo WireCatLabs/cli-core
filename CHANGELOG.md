@@ -7,6 +7,21 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`bot messages send` and `bot messages edit` take inline buttons.** `--field <text>=<data>`, repeated, puts the
+  buttons in one row (up to 8; the data is 1 to 64 bytes, checked before anything is sent). `edit` replaces the
+  message's buttons with `--field`, takes them all off with `--clear`, and leaves the choice to the messenger
+  when neither is given. A bot adapter gets `buttons` (`BotButton[][]`; `[]` means none) in the options of `send` and
+  `edit`; one that cannot draw buttons must refuse them.
+- **`Button.data`**, what a callback button sends the bot, for an adapter that can read it. It is never printed.
+
+### Security
+
+- **`messages press` refuses a callback button whose data starts with `wcr`**, the prefix of review decisions, with
+  `permission_error` and reason `press.owner-hand-only`, so an agent with the owner's account cannot press a decision
+  button. It needs the adapter to fill `Button.data`; a button without data is pressed as before.
+
 ### Fixed
 
 - **A mail's vector names its sender at the end, not first.** Every mail piece began "Name: Subject", so search by
