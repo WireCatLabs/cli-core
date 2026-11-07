@@ -21,6 +21,7 @@ import { PREFERRED_FILE, syncFile } from "./files.js"
 import { type ImportedDocuments, importedDocumentWhere } from "./imported-documents.js"
 import { LINK_KINDS, LINK_ORIGINS, type LINK_SOURCES, linkKind } from "./link-kinds.js"
 import { reviewLink } from "./link-reviews.js"
+import { dateFileNotes } from "./note-dates.js"
 import { holdingText } from "./note-index.js"
 import type { NoteSearch } from "./note-search.js"
 import type { StoreContext } from "./open.js"
@@ -61,6 +62,11 @@ export interface Note {
   contentHash: string | null
   revision: number
   exportPath: string | null
+  /**
+   * When the source dates the note: a local file's front matter date or modification time, a Drive file's last
+   * edit; `null` when the source gave none. `createdAt` and `updatedAt` are the store's own times.
+   */
+  modifiedAt: string | null
   createdAt: string
   updatedAt: string
   deletedAt: string | null
@@ -144,6 +150,11 @@ export interface NotesStore extends NoteSearch, ImportedDocuments {
   saveFileNote(input: FileNoteInput): Promise<{ note: Note; changed: boolean }>
   /** Moves a file note to a new path in its folder, keeping its id, links and tags; a gone note at `to` is dropped. */
   renameFileNote(folderId: string, from: string, to: string): Promise<Note>
+  /**
+   * Sets the time the source dates each note at these paths (ISO 8601), the note's `modifiedAt`, without counting
+   * as an edit: text, revision and `updatedAt` stay. Answers how many notes it changed.
+   */
+  dateFileNotes(folderId: string, dates: { path: string; modifiedAt: string }[]): Promise<number>
   /** Marks the folder's notes at these paths deleted; answers how many were live. */
   deleteFileNotes(folderId: string, paths: string[]): Promise<number>
   /** A note about the things named, the first of them its subject; about nothing, a note to self. */
@@ -215,6 +226,7 @@ export const documentOf = (row: Row): Note => ({
   contentHash: row.content_hash == null ? null : String(row.content_hash),
   revision: Number(row.revision),
   exportPath: row.export_path == null ? null : String(row.export_path),
+  modifiedAt: optionalIso(row.external_updated_at),
   createdAt: iso(row.created_at),
   updatedAt: iso(row.updated_at),
   deletedAt: optionalIso(row.deleted_at),
@@ -232,6 +244,7 @@ export const noteOf = (row: Row): Note => ({
   contentHash: null,
   revision: Number(row.revision),
   exportPath: null,
+  modifiedAt: null,
   createdAt: iso(row.created_at),
   updatedAt: iso(row.updated_at),
   deletedAt: optionalIso(row.deleted_at),
@@ -727,6 +740,8 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
           })
         return noteAt(id, folder, target)
       }),
+    dateFileNotes: async (folderId, dates) =>
+      write(database, () => dateFileNotes(database, Number(folderRow(folderId).id), dates)),
     deleteFileNotes: async (folderId, paths) =>
       write(database, () => {
         const folder = Number(folderRow(folderId).id)
@@ -811,7 +826,8 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
                 (folder === null
                   ? "SELECT d.* FROM documents d WHERE d.deleted_at IS NULL AND ? IS NULL AND ? IS NULL "
                   : "SELECT d.*, f.account_id AS account_id, CASE WHEN a.provider IN ('local', 'obsidian') " +
-                    "THEN f.external_id ELSE d.external_id END AS external_id FROM files f " +
+                    "THEN f.external_id ELSE d.external_id END AS external_id, " +
+                    "coalesce(f.external_updated_at, d.external_updated_at) AS external_updated_at FROM files f " +
                     "JOIN documents d ON d.id = f.document_id JOIN accounts a ON a.id = f.account_id " +
                     "WHERE f.deleted_at IS NULL AND d.deleted_at IS NULL AND f.account_id = ? AND ? IS NOT NULL ") +
                   "AND coalesce(json_extract(d.metadata, '$.catalog.active'), 1)=1 " +
