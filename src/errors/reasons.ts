@@ -266,6 +266,23 @@ const OTHERS: Entry[] = [
   validation("period.ambiguous", "the period can be read more than one way"),
   validation("proposal.wrong-state", "the proposal is not in a state that allows this"),
   validation("proposal.reason-required", "an agent deciding for the owner gives a reason"),
+  validation(
+    "decision.request-invalid",
+    "a decision request needs its batch, message, owner and distinct known actions",
+  ),
+  ["decision.token-unknown", "not_found", "no button has this token"],
+  ["decision.token-used", "permission_error", "this button was already pressed"],
+  [
+    "decision.token-cancelled",
+    "permission_error",
+    "another button of the message was pressed, or the feature was turned off",
+  ],
+  ["decision.token-expired", "permission_error", "this button is older than 72 hours"],
+  [
+    "decision.token-mismatch",
+    "permission_error",
+    "the press came from another chat, message or user than the button was sent to",
+  ],
   validation("proposal.decider-required", "a decision names who decides: the owner or an agent with a reason"),
   validation("proposal.ids", "the proposal ids cannot be read"),
   ["proposal.own", "permission_error", "an agent never decides its own proposal"],

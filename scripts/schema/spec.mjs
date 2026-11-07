@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs"
 import { calendarTables } from "./calendar.mjs"
 import { actor, c, del, fk, fts, id, meta, poly, queue, ts } from "./columns.mjs"
 import { crmTables } from "./crm.mjs"
+import { decisionRequestTables } from "./decision-requests.mjs"
 import { annotationTransferTable, documentRevisionsTable } from "./document-transfers.mjs"
 import { financeTables } from "./finance.mjs"
 import { recordTables } from "./records.mjs"
@@ -1703,6 +1704,13 @@ const GROUPS = [
     "The owner's sales pipelines and the deals in them, with the expected amount in exact minor units. A deal's stage and its status (open, won, lost) are kept apart.",
     [],
     crmTables,
+  ],
+  [
+    "decision-requests",
+    "Decisions from a message",
+    "The buttons of a message that asks the owner to decide a batch. A press is the owner's proof; the table only keeps the one-time keys.",
+    [],
+    decisionRequestTables,
   ],
   [
     "records",

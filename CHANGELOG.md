@@ -7,6 +7,17 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **Store version 55: `decision_requests`, the one-time keys behind buttons that ask the owner to decide a batch.**
+  `store.decisionRequests.create` makes one token per button for one message (22 characters, 16 random bytes in
+  base64url; only a SHA-256 digest is kept), `take` uses a token once, cancels the message's other open tokens in the
+  same transaction and can check the chat, message and owner first, `cancelOpen` voids every open token (of one bot, if
+  given) and `open` lists a message's live buttons. Tokens last 72 hours. A refusal carries a reason:
+  `decision.token-unknown`, `-used`, `-cancelled`, `-expired` or `-mismatch`. `callbackDataOf` and
+  `parseCallbackData` give and read the 27-byte `wcr1:<token>` data of a button, strictly. Forward-only,
+  `minCompatible` stays 34.
+
 ### Fixed
 
 - **`doctor --online` of a CLI built on `appDoctorCommand` runs inside cli-core's run.** It answered outside one, so
