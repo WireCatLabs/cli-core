@@ -12,6 +12,12 @@ shape of this file.
 - **`appMcpCommand`'s `signedIn` hook gets the run's keyring** as a third argument, so `mcp check` reads a test's
   `memoryKeyring()` and the CLI no longer captures it in a `preAction` hook of its own. A hook that throws, such as
   on a locked keyring, counts as not signed in. A two-argument hook still works.
+- **`ProfileTokenStore` in `@wirecat/cli-core/cli`: one API token per profile for a CLI that is not a messenger**,
+  so b24, beeline and cli-template drop their copies of `src/token.ts`. `<PREFIX>_TOKEN`, then the keyring entry
+  `token:<profile>` under the app's service, then a 0600 file; a moved run writes only a temporary
+  `<app>:<config folder>` entry. `write(profile, token, "file")` also forgets the keyring copy. `need(profile)`
+  throws the new reason `session.missing` (`authentication_error`, naming `session start`), the one "not signed in"
+  every token CLI gives; `signedIn(profile)` is `appMcpCommand`'s hook.
 
 ### Fixed
 
