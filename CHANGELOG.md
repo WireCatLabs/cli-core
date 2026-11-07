@@ -23,6 +23,16 @@ shape of this file.
 
 ### Fixed
 
+- **`scanProjectLinks` spreads from what it finds within one run.** A chat or person that scores the threshold or more
+  is used like a confirmed link for the `spreads` scorers (`member-chats`, `member-dialog`, `chat-senders`,
+  `mail-thread`), up to `MAX_HOPS` (4) times. One scan now reaches a member's dialogs and groups in every messenger
+  their identities name, where before it took one owner confirmation per step and never left the first messenger.
+  On a synthetic project shaped like the PMED run, recall after two rounds rose from 27 % to 93 % (all findable
+  links), precision from 100 % to 74 %, 5 false proposals, none by name only. A rejected pair is never spread from.
+- **`chat-senders` (version 2) counts any message in a dialog or a chat of 10 people or fewer;** a bigger chat still
+  needs 5 in the window.
+- **`member-dialog` (version 2) counts the scanned project in the member's projects** whether the member is confirmed
+  or only found, so a found member who is in another project weighs the same as a confirmed one.
 - **A damaged store file is `configuration_error` (`store.damaged`), not a crash.** SQLite's "database disk image is
   malformed" or "file is not a database", raised anywhere in a command or behind a wrapper's `cause`, was
   `internal_error` (`command.crashed`), "this is a bug". It now says the store file is damaged and names

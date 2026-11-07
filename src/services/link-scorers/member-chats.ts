@@ -7,6 +7,7 @@ const WEIGHT = 0.5
 export const memberChats: LinkScorer = {
   id: "member-chats",
   version: 1,
+  spreads: true,
   candidates: async ({ store, project, confirmed, sources, owner, signal }) => {
     if (!project) return []
     const people = confirmed.people.filter((person) => person !== owner)

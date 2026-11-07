@@ -194,12 +194,24 @@ describe("link scorers", () => {
     expect(froms(found)).not.toContain("chat:telegram/2/78")
   })
 
-  it("chat-senders: 5 messages in a project chat by identity; a namesake stays a different person", async () => {
+  it("chat-senders: by identity, any message in a chat of 10 or fewer; a namesake stays a different person", async () => {
     const f = await fixture()
     const namesake = await personOf(f.store, "telegram", "78")
     expect(namesake).not.toBe(f.dana)
     const found = await chatSenders.candidates(await inputOf(f))
-    expect(found).toEqual([expect.objectContaining({ from: namesake, weight: 0.5, identity: "contact:telegram/78" })])
+    expect(froms(found)).toEqual([namesake, f.lee, await personOf(f.store, "telegram", "80")].sort())
+    expect(found.find((one) => one.from === namesake)).toMatchObject({ weight: 0.5, identity: "contact:telegram/78" })
+  })
+
+  it("chat-senders: 5 messages in a group of more than 10", async () => {
+    const f = await fixture()
+    await f.store.roster.saveMembers(
+      TG,
+      "-900",
+      Array.from({ length: 11 }, (_, index) => String(1000 + index)),
+    )
+    const found = await chatSenders.candidates(await inputOf(f))
+    expect(froms(found)).toEqual([await personOf(f.store, "telegram", "78")])
   })
 
   it("chat-senders: a group of more than 30 counts less", async () => {
@@ -292,10 +304,19 @@ describe("scanProjectLinks", () => {
     const result = await scanProjectLinks(f.store, { project: "HRB", sources: [TG, MAX], since: SINCE, write: true })
     const namesake = await personOf(f.store, "telegram", "78")
     expect(froms(result.proposals)).toEqual(
-      ["chat:max/1/-100", "chat:telegram/2/-500", "chat:telegram/2/-510", "chat:telegram/2/-600", namesake].sort(),
+      [
+        "chat:max/1/-100",
+        "chat:telegram/2/-500",
+        "chat:telegram/2/-510",
+        "chat:telegram/2/-600",
+        "chat:telegram/2/-610",
+        "chat:telegram/2/78",
+        namesake,
+        await personOf(f.store, "telegram", "80"),
+      ].sort(),
     )
     expect(result.proposals.every((one) => one.state === "new" && one.id !== null)).toBe(true)
-    expect(result.skipped).toMatchObject({ confirmed: 0, rejected: 0, nameOnly: 0, overLimit: 0 })
+    expect(result.skipped).toMatchObject({ confirmed: 1, rejected: 0, nameOnly: 0, overLimit: 0 })
     expect(result.skipped.belowThreshold).toBe(2)
     const sales = result.proposals.find((one) => one.from === "chat:telegram/2/-510")
     const row = await proposalRegistry(f.store).get(String(sales?.id))
@@ -394,7 +415,7 @@ describe("scanProjectLinks", () => {
     })
     expect(result.proposals).toHaveLength(2)
     expect(result.proposals.every((one) => one.score === 0.7)).toBe(true)
-    expect(result.skipped.overLimit).toBe(3)
+    expect(result.skipped.overLimit).toBe(6)
   })
 
   it("refuses a person candidate found by name only, or by someone else's identity, and never proposes the owner", async () => {
