@@ -72,8 +72,21 @@ land() {
     [ "$(gh pr checks "$pr" --required --json name --jq length 2>/dev/null || echo 0)" -gt 0 ] && break
     sleep 2
   done
-  gh pr checks "$pr" --watch --required --fail-fast >/dev/null ||
-    { echo "checks failed on $pr — nothing is published" >&2; exit 1; }
+  # `--watch --required` ends once the required checks registered so far are done, but some register only after
+  # others finish (`validation / ci / coverage` after the test shards), and the ruleset then refuses the merge.
+  required=$(gh api "repos/{owner}/{repo}/rules/branches/main" \
+    --jq '.[] | select(.type == "required_status_checks") | .parameters.required_status_checks[].context')
+  missing=$required
+  for _ in $(seq 60); do
+    gh pr checks "$pr" --watch --required --fail-fast >/dev/null ||
+      { echo "checks failed on $pr — nothing is published" >&2; exit 1; }
+    passed=$(gh pr checks "$pr" --required --json name,bucket \
+      --jq '.[] | select(.bucket == "pass" or .bucket == "skipping") | .name') || true
+    missing=$(printf '%s\n' "$required" | grep -vxF "${passed:-//none//}" || true)
+    [ -n "$missing" ] || break
+    sleep 10
+  done
+  [ -z "$missing" ] || { printf 'required checks never passed on %s — nothing is published:\n%s\n' "$pr" "$missing" >&2; exit 1; }
   gh pr merge "$pr" --squash --delete-branch --subject "$title (#${pr##*/})"
   git fetch -q origin
   git merge -q --ff-only origin/main
