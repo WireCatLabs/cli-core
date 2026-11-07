@@ -15,6 +15,7 @@ import { wholeList } from "../messenger/chat-answers.js"
 import { messageItem } from "../messenger/message-items.js"
 import { readAll } from "../messenger/stdin.js"
 import { positiveCount } from "../paging.js"
+import { parseButtons } from "./buttons.js"
 import { type BotContext, botContext } from "./context.js"
 import { botExamples } from "./examples.js"
 import { BOT_MESSAGES_QUERY, botMessageWindow } from "./list-queries.js"
@@ -84,6 +85,8 @@ const nothingKept = (context: BotContext) =>
     `this bot has kept nothing on this machine yet — run \`${context.words} messages list <chat>\` once without --offline`,
   )
 
+const collectButton = (value: string, previous: string[] = []) => [...previous, value]
+
 const marks = (md: boolean | undefined, html: boolean | undefined) => {
   if (md && html) throw new CliError("validation_error", "--md and --html mark up the text two ways; use one")
 }
@@ -110,6 +113,11 @@ const sendCommand = (bot: BotMessenger): Command =>
     .option("--silent", "deliver without a notification")
     .option("--md", "read this messenger's Markdown; see its formatting guide for supported syntax")
     .option("--html", "the text is HTML: <b>, <i>, <a href>, <code>")
+    .option(
+      "--field <key=value>",
+      "an inline button, as <text>=<data>, the key being the button text; repeat for more in one row; the data (1 to 64 bytes) goes back to the bot",
+      collectButton,
+    )
     .addOption(ownerOnlyOption("--file <file>", "attach a file; the text becomes its caption"))
     .addOption(
       ownerOnlyOption("--photo <file>", "attach a .jpg, .png or .webp as a photo; the text becomes its caption"),
@@ -131,8 +139,10 @@ const sendCommand = (bot: BotMessenger): Command =>
         asFile?: boolean
         voice?: string
         allowAnyFile?: boolean
+        field?: string[]
       }>()
       marks(options.md, options.html)
+      const buttons = parseButtons(options.field ?? [])
       const ref = context.chatRef(chat)
       const attachments = await readAttachments(
         {
@@ -175,6 +185,7 @@ const sendCommand = (bot: BotMessenger): Command =>
               ...(spans.length > 0 ? { formatting: spans } : {}),
               ...(options.html ? { html: true } : {}),
               ...(attachments.length > 0 ? { attachments } : {}),
+              ...(buttons.length > 0 ? { buttons } : {}),
             }),
           (sent) => ({ messageId: sent.id }),
         )
@@ -276,16 +287,27 @@ const editCommand = (bot: BotMessenger): Command =>
     effects: REMOTE_WRITE,
     examples: botExamples(bot, 'messages edit Team 101 "Doors open at 10"'),
   })
-    .description("replace the text of a message the bot sent")
+    .description("replace the text of a message the bot sent; --field replaces its buttons, --clear takes them off")
+    .summary("replace the text or buttons of a message the bot sent")
     .argument("<chat>", "a chat id, user:<id> for a person, or the title of a chat this bot has seen")
     .argument("<message>", "message id")
     .argument("<text>", "the new text")
     .option("--md", "read this messenger's Markdown; see its formatting guide for supported syntax")
     .option("--html", "the text is HTML: <b>, <i>, <a href>, <code>")
+    .option(
+      "--field <key=value>",
+      "a button under the message, as <text>=<data>, the key being the button text; replaces its buttons; repeat for more in one row",
+      collectButton,
+    )
+    .option("--clear", "take the buttons off the message")
     .action(async function (this: Command, chat: string, messageId: string, text: string) {
       const context = botContext(this, bot)
-      const options = this.opts<{ md?: boolean; html?: boolean }>()
+      const options = this.opts<{ md?: boolean; html?: boolean; field?: string[]; clear?: boolean }>()
       marks(options.md, options.html)
+      if (options.clear && options.field?.length) {
+        throw new CliError("validation_error", "--field and --clear set the buttons two ways; use one")
+      }
+      const buttons = options.clear ? [] : options.field ? parseButtons(options.field) : undefined
       const ref = context.chatRef(chat)
       await context.run(async (events) => {
         const adapter = await context.authenticated({ events })
@@ -302,6 +324,7 @@ const editCommand = (bot: BotMessenger): Command =>
             edit(ref, messageId, plain, {
               ...(spans.length > 0 ? { formatting: spans } : {}),
               ...(options.html ? { html: true } : {}),
+              ...(buttons ? { buttons } : {}),
             }),
         )
         const botId = await botIdOf(context, adapter)

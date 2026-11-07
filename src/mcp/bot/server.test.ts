@@ -580,6 +580,8 @@ describe("the generated bot catalogue", () => {
       "chats rules show": ["chat"],
       "chats rules set": ["chat", "key", "value"],
       "chats rules unset": ["chat", "key"],
+      "messages edit": ["clear", "field"],
+      "messages send": ["field"],
       "recipients add": ["chat"],
       "recipients clear": [],
       "recipients remove": ["chat"],
