@@ -119,11 +119,12 @@ export const cursorOf = (throughId: number, readAt: number) => `${throughId}.${r
 
 /**
  * The findings key of one run: `<holder>:<through_id>`, and `-r<resets>` once the owner moved the mark back, so the
- * runs after a reset never reach a key a batch staged before it holds. The same review gives the same key: a retry
- * of one run stages nothing twice.
+ * runs after a reset never reach a key a batch staged before it holds. A batch that ends at the mark itself, held
+ * emails only, adds `-h<highest held id>`: the run that set the mark already holds the plain key. The same review
+ * gives the same key: a retry of one run stages nothing twice.
  */
-export const findingsKeyOf = (holder: string, throughId: number, resets: number) =>
-  `${holder}:${throughId}${resets > 0 ? `-r${resets}` : ""}`
+export const findingsKeyOf = (holder: string, throughId: number, resets: number, heldThrough?: number) =>
+  `${holder}:${throughId}${heldThrough === undefined ? "" : `-h${heldThrough}`}${resets > 0 ? `-r${resets}` : ""}`
 
 const parseCursor = (cursor: string) => {
   const match = /^(\d+)\.(\d+)$/.exec(cursor.trim())
@@ -179,9 +180,13 @@ export const readPastMark = async (
     const one = sorted.get(id)
     return one ? [{ email: one.email, excerpt: one.excerpt, cues: one.cues, partial: one.partial }] : []
   })
-  const emails: MarkedHit[] = []
-  for (const id of wanted.filter((one) => !sorted.has(one)))
-    for (const hit of await store.mail.emailHits([id])) emails.push({ ...hit, storeId: id })
+  const ids = wanted.filter((one) => !sorted.has(one))
+  const hits = await store.mail.emailHits(ids)
+  // emailHits keeps the ids' order and drops an email deleted since; only then is each one asked for alone.
+  const emails: MarkedHit[] =
+    hits.length === ids.length ? hits.map((hit, index) => ({ ...hit, storeId: ids[index] as number })) : []
+  if (hits.length !== ids.length)
+    for (const id of ids) for (const hit of await store.mail.emailHits([id])) emails.push({ ...hit, storeId: id })
   return { emails, excerpts, ...read }
 }
 
@@ -239,9 +244,9 @@ const examine = async (
     skipped: noneSkipped(),
     mark: saved,
   }
-  const keyed = (throughId: number) => ({
+  const keyed = (throughId: number, heldThrough?: number) => ({
     cursor: cursorOf(throughId, now),
-    findingsKey: throughId > 0 ? findingsKeyOf(holder, throughId, saved?.resets ?? 0) : undefined,
+    findingsKey: throughId > 0 ? findingsKeyOf(holder, throughId, saved?.resets ?? 0, heldThrough) : undefined,
   })
   if (!account) return { ...empty, ...keyed(0) }
   if (!saved) return { ...empty, ...keyed(await store.mail.newestEmailId(account.id)) }
@@ -275,7 +280,7 @@ const examine = async (
     wanted: wanted.sort((a, b) => a - b),
     sorted: new Map([...sorted].filter(([, one]) => one.verdict === "excerpt")),
     oldestStoredAt,
-    ...keyed(batch.at(-1)?.id ?? mark.throughId),
+    ...(batch.length > 0 ? keyed(batch.at(-1)?.id ?? mark.throughId) : keyed(mark.throughId, wanted.at(-1))),
     more: newer.length > batch.length,
     held,
     skipped,

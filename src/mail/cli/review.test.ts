@@ -556,6 +556,33 @@ describe("a holder's processing mark", () => {
     expect((await reset(["--last", "1"])).code).toBe(0)
   })
 
+  it("keys a batch cut after its held emails apart from the run that set the mark", async () => {
+    const box = await setUp()
+    await box.synced()
+    await box.ack((await box.read()).cursor)
+    await box.thread("t-big", email("big", 2, { metadata: PARTIAL }))
+    await box.synced()
+    const setting = await box.withStore((store) => readPastMark(store, MINE, "triage"))
+    await box.ack(setting.cursor)
+
+    await box.thread("t-big", email("big", 2, { metadata: { partial: null } }))
+    await box.synced()
+    const heldOnly = await box.withStore((store) => readPastMark(store, MINE, "triage"))
+    expect(heldOnly.findingsKey).toMatch(/^triage:\d+-h\d+$/)
+    expect(heldOnly.findingsKey).not.toBe(setting.findingsKey)
+
+    await box.thread("t-new", email("new", 1))
+    await box.synced()
+    const { answer } = await box.read()
+    const [big, fresh] = answer.items.map((item) => item.email)
+    expect(texts(answer)).toEqual(["text of big", "text of new"])
+    expect(String(big?.cursor).split(".")[0]).toBe(setting.cursor.split(".")[0])
+    expect(big?.findings_key).toBe(heldOnly.findingsKey)
+    expect(new Set([setting.findingsKey, big?.findings_key, fresh?.findings_key]).size).toBe(3)
+    await box.ack(big?.cursor as string)
+    expect(texts((await box.read()).answer)).toEqual(["text of new"])
+  })
+
   it("holds a partial email until it is whole, then gives it once", async () => {
     const box = await setUp()
     await box.synced()

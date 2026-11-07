@@ -211,10 +211,20 @@ const holderReview = async (command: Command, mail: MailReads, holder: string, q
     return { read, mailbox, marks }
   })
   const markedThrough = read.mark?.throughId ?? 0
+  const heldThrough = Math.max(
+    0,
+    ...[...read.emails, ...read.excerpts.map(({ email }) => email)]
+      .map((one) => one.storeId)
+      .filter((id) => id <= markedThrough),
+  )
   // A held email is older than the mark, and a cursor never moves the mark back.
   const through = (id: number) => {
-    const at = Math.max(id, markedThrough)
-    return { cursor: cursorOf(at, now), findingsKey: findingsKeyOf(holder, at, read.mark?.resets ?? 0) }
+    const held = id <= markedThrough
+    const at = held ? markedThrough : id
+    return {
+      cursor: cursorOf(at, now),
+      findingsKey: findingsKeyOf(holder, at, read.mark?.resets ?? 0, held ? heldThrough : undefined),
+    }
   }
   // An agent reads this: earlier mail and signatures stay out of its text; the fingerprint is over the stored body.
   const listed: (MailHit & { storeId: number })[] = [
