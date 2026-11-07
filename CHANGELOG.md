@@ -4662,6 +4662,7 @@ shape of this file.
 - **Provider model catalogues share `modelCatalogueCommand`.** Providers choose supported kinds and bind output,
   environment and offline policy; native query filtering, model receipts and verified downloads stay in core.
 
+
 ### Changed — may break callers
 
 - **Contact activity and diagnostic run times filter through native queries.** Use `contacts events <person> scope:work 'at:[2026-10-01 TO 2026-10-31]'` and `search runs 'started_at>=7d'` instead of their time/scope flags. Time bounds reach the native readers before pagination, and continuations preserve the query.
@@ -6253,6 +6254,7 @@ shape of this file.
 - **An MCP client that closes stdin right after its calls gets their answers**: the personal server waits
   for the last answer before it exits.
 
+
 ## 0.340.0 — 18.10.2026
 
 ### Added
@@ -6600,6 +6602,7 @@ shape of this file.
   shown as possible duplicates because one task's message replies to the other's were wrong 11 times in 13. At +2,
   shown-pair precision rose on both labelled sets (52% → 57%, 43% → 47%) for one lost true pair each; a reply that
   asks for something new now stays "different".
+
 
 ## 0.330.0 — 18.10.2026
 
@@ -7499,6 +7502,7 @@ shape of this file.
 
 ## 0.294.0 — 15.10.2026
 
+
 ### Added
 
 - **A message draws the poll it carries**: `Attachment.poll` holds it, and `renderMessages` shows the question, each
@@ -7872,6 +7876,7 @@ shape of this file.
   naming each model makes it 0.2 ms and 1.5 ms. A memo `rules apply` that cut 44,000 emails had left a queue the
   scheduled sync worked through for hours.
 
+
 ## 0.282.0 — 15.10.2026
 
 ### Added
@@ -8220,6 +8225,7 @@ shape of this file.
   lists.
 - **`mentions:"person:<uid>"` in message search** finds the messages that mention someone by a linked name, phone
   or address; `organization:<id>` and `document:<id>` too. Mentions now carry `target`.
+
 
 ## 0.270.0 — 14.10.2026
 
