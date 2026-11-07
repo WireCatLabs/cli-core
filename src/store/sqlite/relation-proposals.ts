@@ -1,7 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
+import { type RelationKind, type Standing, standingOf } from "../../domain/relations.js"
 import { assertMayDecide, botKey, type Decider, deciderAuthor } from "../decisions.js"
 import { actorOfOrigin, botNamed, ownerPerson } from "./actors.js"
-import type { RELATION_KINDS } from "./link-kinds.js"
 import type { Author } from "./memories.js"
 import { insertLink, type Link, linkOf, purposeOf } from "./notes.js"
 import type { StoreContext } from "./open.js"
@@ -15,7 +15,7 @@ export interface KnowledgeRelation {
   id: string
   from: string
   to: string
-  kind: (typeof RELATION_KINDS)[number]
+  kind: RelationKind
   role: string | null
   /** What a chat is for in the project, from the purposes memo's config lists; `null` means `work`. */
   purpose: string | null
@@ -23,6 +23,8 @@ export interface KnowledgeRelation {
   confirmed: boolean
   provenance: string | null
   confidenceCategory: "owner-confirmed" | "weak"
+  /** Derived from the link: the owner's, a source's nobody confirmed, a suggestion, or one that ended. */
+  standing: Standing
   createdAt: string
 }
 
@@ -37,7 +39,7 @@ export interface RelateInput {
   provenance?: string
 }
 
-export const relationOf = (link: Link): KnowledgeRelation => ({
+export const relationOf = (link: Link, now: number): KnowledgeRelation => ({
   id: link.id,
   from: link.from,
   to: String(link.to),
@@ -48,6 +50,7 @@ export const relationOf = (link: Link): KnowledgeRelation => ({
   confirmed: link.confirmed,
   provenance: link.provenance,
   confidenceCategory: link.confirmed ? "owner-confirmed" : "weak",
+  standing: standingOf(link, now),
   createdAt: link.createdAt,
 })
 
@@ -140,10 +143,10 @@ export const relationProposalsOver = (context: StoreContext) => {
      * or one is pending. A rejection is matched by the pair alone, whoever proposed it and with whatever scorer.
      */
     state: (
-      paired: () => { from: Thing; existing: Row | undefined },
-      { to, kind }: { to: string; kind: string },
+      paired: () => { from: Thing; existing: Row | undefined; ends: { to: string } },
+      { kind }: { kind: string },
     ): { linked: boolean; confirmed: boolean; rejected: boolean; pending: ProposedAction | null } | undefined => {
-      let found: { from: Thing; existing: Row | undefined }
+      let found: ReturnType<typeof paired>
       try {
         found = paired()
       } catch (error) {
@@ -151,6 +154,7 @@ export const relationProposalsOver = (context: StoreContext) => {
         throw error
       }
       const { from, existing } = found
+      const { to } = found.ends
       const rows = database
         .prepare(
           "SELECT id, status FROM proposed_actions WHERE kind='relationship' AND status IN ('proposed','rejected') " +

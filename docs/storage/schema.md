@@ -1994,7 +1994,7 @@ One stage of a pipeline, such as a first call or a sent quote.
 
 ### `deals`
 
-A deal (`deal:<id>`): what the owner hopes to sell, to whom, where it stands in its pipeline and whether it ended. The people on it are `links` (kind `related-to`, `role` owner, contact or decision-maker). A deal is not a project.
+A deal (`deal:<id>`): what the owner hopes to sell, to whom, where it stands in its pipeline and whether it ended. The people on it are `links` (kind `related-to`, `role` owner, contact, decision-maker or influencer). A deal is not a project.
 
 | Column | Type | Constraints | References | Meaning |
 |---|---|---|---|---|
@@ -2247,7 +2247,7 @@ A tag's name, stored once. Which things carry it is `taggings`.
 
 ### `links`
 
-Every connection between two things that no column holds. Kinds: `blocked-by` (a task needs another task to finish first), `follow-up-of` (a task continues an earlier task), `links-to` (a document, note or message links to something, as written in it), `about` (a note or document is about a person, project, …), `member-of` (a chat or person belongs to a project or organization), `labelled` (a folder account → a tag, the subfolder's path in `anchor`, so every document under it carries the tag), `answered-by` (a question task → the message that answered it), `evidence` (a fact or memory → its source), `created-from` (a thing → what it was made from), `attached` (a calendar entry → the document of a Drive file attached to it; `target_text` names the file as `google-drive:<file id>` while Drive has not stored it). Kinds the store does not write yet: `duplicate-of` (the same question asked again), `related-to`, `assigned-to`.
+Every connection between two things that no column holds. Kinds: `blocked-by` (a task needs another task to finish first), `follow-up-of` (a task continues an earlier task), `links-to` (a document, note or message links to something, as written in it), `about` (a note or document is about a person, project, …), `member-of` (a person, chat, mail thread, organization or project belongs to a project or organization; a person's `role` from a fixed list: employee, contractor, founder, owner, manager, adviser or contact on an organization, owner, manager, contributor, client-contact or approver on a project), `related-to` (a deal or lead → a person on it, `role` owner, contact, decision-maker or influencer; a task → a task; a document → a project, `role` key; otherwise between people, organizations, projects and tasks, free-text `role`), `reports-to` (a person → the person they report to; read backwards, `manages`), `customer-of` (a person or organization → the organization it buys from; read backwards, `supplier of`), `partner-of` (an organization ↔ another, stored once with the lower id as `from`), `labelled` (a folder account → a tag, the subfolder's path in `anchor`, so every document under it carries the tag), `answered-by` (a question task → the message that answered it), `evidence` (a fact or memory → its source), `created-from` (a thing → what it was made from), `attached` (a calendar entry → the document of a Drive file attached to it; `target_text` names the file as `google-drive:<file id>` while Drive has not stored it). Kinds the store does not write yet: `duplicate-of` (the same question asked again), `assigned-to`. The relationship kinds and their ends are `RELATIONS` in `src/domain/relations.ts`.
 
 | Column | Type | Constraints | References | Meaning |
 |---|---|---|---|---|

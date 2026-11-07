@@ -1,8 +1,8 @@
 import * as v from "valibot"
-import { RELATION_KINDS } from "../store/sqlite/link-kinds.js"
+import { RELATION_KINDS, STANDINGS } from "../domain/relations.js"
 import { id, reference, text, time } from "./fields.js"
 
-/** A link the owner or an agent drew between two people, organizations, projects or tasks. */
+/** A link the owner, an agent or a source drew between people, organizations, projects, tasks and deals. */
 export const relationship = v.strictObject({
   id,
   from: reference,
@@ -16,5 +16,7 @@ export const relationship = v.strictObject({
   confirmed: v.boolean(),
   provenance: v.nullable(text),
   confidence_category: v.picklist(["owner-confirmed", "weak"]),
+  /** `reported`: a CRM account says so and nobody confirmed it; `ended`: it no longer holds. */
+  standing: v.picklist(STANDINGS),
   created_at: time,
 })

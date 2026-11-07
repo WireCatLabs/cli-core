@@ -100,6 +100,24 @@ shape of this file.
   "invoice" and "бюджет"; before, `?` asked for one more character and `invoice` itself was missed. A `?` inside a
   word (`inv?ice`) or after a field (`text:invoice?`) is still one character.
 
+### Added
+
+- **Business relationships: `reports-to`, `customer-of` and `partner-of`, role lists, and a `standing` on every
+  relationship.** `knowledge.relate` takes a person reporting to a person, a person or organization buying from an
+  organization, and two partner organizations (stored once, the lower id first, whichever way they are named). A deal
+  or a lead may be a relationship's `from`, so its people are relationships too, and `influencer` joins the deal roles.
+  Each relationship answers `standing`: `confirmed`, `reported` (a source's, nobody confirmed it), `proposed` or
+  `ended`. The kinds, their ends and roles are one registry, `RELATIONS` (`src/domain/relations.ts`), exported with
+  `ORGANIZATION_ROLES`, `PROJECT_ROLES`, `standingOf` and `usableLink`.
+
+### Changed — may break callers
+
+- **A person's role on an organization, a project, a deal or a lead must be one of that relationship's roles.**
+  `relate` and `updateRelation` refuse any other with `relationship.role-unknown`, naming the roles it takes; a role
+  between other ends stays free text, and roles already stored are read as they are. `member-of` now joins only to an
+  organization or a project. What to do: map a free-text role to the closest listed one (a job title goes in
+  `metadata.position`, never in the role).
+
 ### Fixed
 
 - **`search all` ranks higher the record a question words differently.** For a question, a mail, message or note

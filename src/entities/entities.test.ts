@@ -1374,6 +1374,7 @@ const samples: Record<EntityName, unknown> = {
     confirmed: false,
     provenance: "agent",
     confidence_category: "weak",
+    standing: "proposed",
     created_at: at,
   },
   tag_change: { target: { type: "chat", chat_id: "7" }, added: ["reading"], unchanged: [] },
