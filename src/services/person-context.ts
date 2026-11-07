@@ -236,7 +236,7 @@ export const personContext = async (
 
 /**
  * `personContext` of a person already found, read in the identities and accounts `reads` names; their calendar
- * events only in the `readable` accounts.
+ * events in every calendar account of `readable`.
  */
 export const recordContext = async (
   store: MessageStore,
@@ -313,7 +313,9 @@ export const recordContext = async (
   }
 
   const personId = Number(record.uid)
-  const accountIds = readable.map(({ id }) => id)
+  const calendars: StoredAccount[] = []
+  for (const one of readable) if ((await store.calendar.calendars(one.id)).length) calendars.push(one)
+  const accountIds = calendars.map(({ id }) => id)
   const nothing = { items: [], cut: false }
   const upcoming = accountIds.length ? await eventsOnce(store, { personId, accountIds, from: now }, messages) : nothing
   const upcomingIds = new Set(upcoming.items.map(({ id }) => id))
@@ -345,7 +347,11 @@ export const recordContext = async (
   cut ||= direct.length > messages || groups.length > messages || mentions.length > messages
   const kept = withinBytes(lists, bytes)
 
-  const accounts = [...new Map(reads.map(({ key, scope }) => [nameOf(key), { ...key, scope }])).values()].sort((a, b) =>
+  const read = [
+    ...reads.map(({ key, scope }) => ({ ...key, scope })),
+    ...calendars.map(({ provider, account, scope }) => ({ provider, account, scope })),
+  ]
+  const accounts = [...new Map(read.map((one) => [nameOf(one), one])).values()].sort((a, b) =>
     nameOf(a).localeCompare(nameOf(b)),
   )
   return {

@@ -341,6 +341,7 @@ describe("contacts context of a person merged across personal and work accounts"
     expect(found.events.upcoming.map(({ title }) => title)).toEqual(["Budget review"])
     expect(found.accounts).toEqual([
       { provider: "email", account: "me@work.example", scope: "work" },
+      { provider: "google-calendar", account: "work-1", scope: "work" },
       { provider: "telegram", account: "500", scope: "personal" },
     ])
   })
