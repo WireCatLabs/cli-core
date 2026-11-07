@@ -3,8 +3,8 @@
 For the developer and agent who build it. The user-facing pages come later (§ Docs). This file is the design and the
 build order; it is deleted when the work is merged.
 
-Status: **proposed 2026-11-07.** Owner rulings of 2026-11-07 are binding and are listed in § Rulings. Three questions
-remain (§ Open questions). Code comments in this work follow the repository rule: sparse, and only *why*.
+Status: **proposed 2026-11-07.** Owner rulings of 2026-11-07 are binding and are listed in § Rulings, including the
+answers to the three questions this plan raised. Code comments in this work follow the repository rule: sparse, and only *why*.
 
 ## Why
 
@@ -21,8 +21,8 @@ refs and without guessing.
 1. Financial accounts, transactions and splits are built now, in full.
 2. A person, organization or project record with no mapping **creates** an entity, marked as made by the import.
    Nothing is matched by name. A strong identifier that matches exactly one entity links to it; for a person that is
-   an exact e-mail, and a phone-only match counts as ambiguous (§ Open questions 1). Two or more matches: nothing is
-   created; the record waits for the owner. Remapping stays the owner's (`records link`); an agent may only propose.
+   an exact e-mail or an exact phone number (owner, 2026-11-07). Two or more matches: nothing is created; the record
+   waits for the owner. This applies to every file, v1 files included (owner, 2026-11-07): no opt-in option. Remapping stays the owner's (`records link`); an agent may only propose.
 3. Anything an import or an agent writes that feeds money totals is a **proposal**: invoices, payments, orders with
    lines, contracts with a value, subscriptions and their prices, financial transactions and their splits. Written
    directly: catalog items, deals, leads, pipelines, `custom:*` records, financial accounts. The owner's own CLI entry
@@ -46,7 +46,10 @@ refs and without guessing.
     through `store.relations.syncReported` (§ Dependencies).
 11. Money: integer minor units with `CURRENCY_SCALES`, decimal strings in and out, explicit currency, totals per
     currency.
-12. The envelope v1 is extended compatibly: every v1 file stays valid and behaves the same. JSONL streams.
+12. The envelope v1 is extended compatibly: every v1 file stays valid and behaves the same, except ruling 2: a person,
+    organization or project record that waited for `records link` is now matched or created on its next import. That
+    goes under "Changed — may break callers". JSONL streams.
+13. Financial accounts are `wallets` in commands and `wallet:<id>` as refs.
 
 ## Current state
 
@@ -121,7 +124,7 @@ rest (tables, money rules, envelope, streaming) does not, and is built first.
 | `contracts` | `contract` | `contract` | `contracts` | module `business-contracts.ts`: `src/cli/command-contract.ts` owns the word |
 | `subscriptions`, `subscription_prices` | `subscription` | `subscription` | `subscriptions` | — |
 | `order_lines` | no ref (part of its order) | nested in `order` | `orders lines` | — |
-| `financial_accounts` | `wallet`, `wallet:<id>` | `wallet` | `wallets` | `account` is integration accounts (table, ref, cli-base singular, `--account` scope flag). Open question 2 |
+| `financial_accounts` | `wallet`, `wallet:<id>` | `wallet` | `wallets` | `account` is integration accounts (table, ref, cli-base singular, `--account` scope flag). Owner chose `wallets` |
 | `financial_transactions`, `transaction_splits` | `transaction`, `transaction:<id>` | `transaction` | `transactions`, `transactions splits` | module `money-transactions.ts`: `src/store/sqlite/transaction.ts` is the SQLite helper |
 
 ### Changed existing tables (additive columns)
@@ -449,12 +452,12 @@ recorded in § Risks.
 
 ### Matching person, organization, project
 
-Applied only when the envelope says `"options": { "match": "identifiers" }` (§ Open questions 3). Without it, v1's
-rule holds: these records wait for `records link`.
+Applied to every file (ruling 2). Records stored by an earlier version that still wait are matched or created on the
+first import that touches them, or by `records match --account <a>` for the whole account at once.
 
 | Type | Strong identifier | Lookup |
 | --- | --- | --- |
-| person | `fields.email` (one or a list), exact after trim and lower-case | `SELECT DISTINCT l.person_id FROM identities i JOIN identity_links l ON l.identity_id = i.id WHERE (i.provider = 'email' AND lower(i.external_id) = ?) OR lower(i.email) = ?` |
+| person | `fields.email` (one or a list), exact after trim and lower-case; `fields.phone` (one or a list), exact after normalizing to E.164 with the existing phone parser (`src/domain/phones.ts`) | `SELECT DISTINCT l.person_id FROM identities i JOIN identity_links l ON l.identity_id = i.id WHERE (i.provider = 'email' AND lower(i.external_id) = ?) OR lower(i.email) = ?` |
 | organization | `fields.identifiers`: `{scheme, value}` with scheme `email`, `domain`, `tax-id:<cc>`, `registration:<cc>` | `organizations` live, joined through `organization_identities` to `identities` with `provider = scheme`, `external_id = value` |
 | project | `fields.key` | `projects.key`, live |
 
@@ -464,12 +467,12 @@ Outcome per record, in this order:
 2. Exactly one entity matches every identifier the record gives → link (`entity_id` set, `created_entity` 0).
 3. Two or more entities match, or the identifiers point at different entities → **ambiguous**: no entity, the record
    waits, the receipt lists it under `unmatched` with `candidates`.
-4. Only a phone matches (person) → **ambiguous** too, same receipt entry with reason `phone-only`. No link, no new
-   person. (Later an `identity` proposal of the memory workstream.)
+4. Phone counts as a strong identifier, like e-mail (ruling 2). The Memory workstream treats a phone-only match as a
+   proposal in its own linker; the two rules differ by the owner's choice, and the docs say so.
 5. Nothing matches → **create** the entity, set `created_entity = 1`, and add the record's identifiers to it:
    - person: an identity `<account>/contact/<external_id>` under the source's provider (the shape `crmIdentityId`
-     writes, so a deal from CRM sync and one from an envelope find the same person), and an `email` identity per
-     address, each linked with method `import`. A phone goes on the contact identity's `phone` column only.
+     writes, so a deal from CRM sync and one from an envelope find the same person), and an `email` and `phone`
+     identity per value, each linked with method `import`.
    - organization: an identity per identifier, joined through `organization_identities` with method `import`. A
      free-mail domain (the `FREE_MAIL` list) is refused as an organization's `domain` (`record.identifier`).
    - project: `key` taken when given and free; else the store's next key from the name.
@@ -520,7 +523,7 @@ All additive; every v1 file stays valid and is processed as before.
 | Relationship role | `"as": "decision-maker"` on a relation whose role the registry marks as a relationship; stored in `record_relations.as_role`. One `as` per (role, target): the unique key `(record_id, role, target_type, target_external_id)` stays, so a party that is both customer and signatory is sent with one role |
 | `refund_of` | a relation role on `payment` |
 | Nested items | `fields.lines[]`, `fields.stages[]`, `fields.prices[]`, `fields.splits[]`; a line names its item by `product` (the product record's external id in this account) or `product_ref` (`product:4`) |
-| Options | optional top-level `"options": { "match": "owner" \| "identifiers", "lines": "text" \| "products" }`, defaults `owner` and `text`. With `text`, an invoice line's `product` key is kept as data, as v1 does |
+| Options | optional top-level `"options": { "lines": "text" \| "products" }`, default `text`. With `text`, an invoice line's `product` key is kept as data, as v1 does |
 | Receipt | adds `unmatched[{key, pointer, reason, candidates}]` and `truncated` (§ Streaming); existing members unchanged |
 
 Fingerprints: `recordFingerprint` adds `ref` and `as` to a relation only when present, so every stored v1
@@ -540,7 +543,7 @@ Synthetic. A developer's ERP sends this JSONL (`example-erp`, account `demo`). S
 ```json
 {
   "schema_version": 1,
-  "options": { "match": "identifiers", "lines": "products" },
+  "options": { "lines": "products" },
   "source": { "provider": "example-erp", "account": "demo", "batch_id": "2026-11-07" },
   "records": [
     { "key": "org", "type": "organization", "external_id": "C-1", "operation": "upsert", "revision": 1,
@@ -693,7 +696,7 @@ Also:
 
 | Kind | Words |
 | --- | --- |
-| nouns, collection | `contracts`, `subscriptions`, `prices`, `wallets` (open question 2), `transactions`, `splits`, `lines` |
+| nouns, collection | `contracts`, `subscriptions`, `prices`, `wallets`, `transactions`, `splits`, `lines` |
 | noun meaning change | `products`: "goods and services the owner sells or buys, with their prices" |
 | verbs | none new. `cancel` meaning widens to "stop a job, a pending thing or a subscription". `pause`/`resume` are process words, so a subscription pauses by `update --status paused` |
 | flags, value | `--refund-of <payment>`, `--payment <payment>`, `--product <product>`, `--contract <contract>`, `--supplier <party>`, `--customer <party>`, `--wallet <wallet>`, `--status <status>`, `--interval <count-unit>` (`1-month`), `--trial-end <date>`, `--notice-days <n>`, `--auto-renew <on\|off>`, `--opening-balance <decimal>`, `--opening-date <date>`, `--institution <text>`, `--unit <text>`, `--sku <code>`, `--archived <on\|off>` |
@@ -742,7 +745,7 @@ Synthetic data only. "core" = `src/store/*.test.ts` unless named; "memo" = cli-m
 | source deletion: entity kept, flagged, relationships withdrawn | `records-delete.test.ts` (withdrawal part after #2628) | core |
 | unresolved refs wait across batches, then project | `records-waiting.test.ts` | core |
 | cross-account isolation | two accounts, same external ids, nothing crosses | core |
-| identifier auto-link (one email), ambiguous (two), phone-only, create | `records-matching.test.ts` | core |
+| identifier auto-link (one email, one phone), ambiguous (two), create, a waiting v1 record matched on re-import | `records-matching.test.ts` | core |
 | owner remap of an import-made entity; agent refused; agent sees `candidates` | `records-link.test.ts` | memo |
 | deal from envelope = CRM sync row | sync then import same account → one row | core |
 | CLI retrieval of each type | one `command.test.ts` per new group | memo |
@@ -760,7 +763,7 @@ Synthetic data only. "core" = `src/store/*.test.ts` unless named; "memo" = cli-m
 | 1 | cli-core | XS | COORDINATION.md: version 57 for business entities; announce in issue #849 | #2628 merged | — |
 | 2 | cli-core | M | Type registry and projector registry for today's five types; generated envelope schema equals the shipped file; no behavior change, existing tests unchanged | — | — |
 | 3 | cli-core | L | Migration 57 (tables, columns, triggers, `--custom` rules; manifest rows, `pnpm db:bundle`, `scripts/schema/*.mjs`, `wirecat.store.speaks` → 57, `version-57.test.ts`), stores (`store.products`, `store.contracts`, `store.subscriptions`, `store.wallets`, `store.transactions`), refs and titles, `ENTITY_TABLES`, `REFERABLE`, ref summaries, refunds and net paid, proposal kinds, `decide` generalized | 1, #2628's v56 migration | — |
-| 4 | cli-core | L | Envelope: new types, field schemas, typed ref relations, nested items, `options.match`, matching, re-propose; `ingestLines` and streaming | 2, 3 | — |
+| 4 | cli-core | L | Envelope: new types, field schemas, typed ref relations, nested items, matching (`records match`), re-propose; `ingestLines` and streaming | 2, 3 | — |
 | 5 | cli-core | S | Relationships through `syncReported`; contract roles in `relations.ts` | 4, #2628 follow-up | — |
 | 6 | cli-core | S | Search lane `business`; docs, schema.md, CHANGELOG | 4 | **core release** (5 may follow in a later release) |
 | 7 | cli-base | S | Nouns, meaning changes, flags | owner approves wording | **cli-base release** |
@@ -798,20 +801,14 @@ Synthetic data only. "core" = `src/store/*.test.ts` unless named; "memo" = cli-m
 - **Any provider/account pair is accepted** (`accountPk` upserts, `src/store/sqlite/accounts.ts:36`). An envelope that
   names a CRM's provider and account updates the CRM's deals; the next sync writes them back. Documented, not refused.
 - **Streamed dry run holds the write lock** for its whole run.
+- **Re-importing an old v1 file creates entities** for records that waited for `records link` (ruling 2). A dry run
+  lists them under `created` first; the owner's real payment sheet should be dry-run before its next import.
+- **Phone links differ from the Memory linker**, which proposes on a phone-only match. Owner's choice; documented.
 - **#2628's shape may still change**; PR 5 waits for it, PRs 2–4 do not touch `links`.
 
-## Open questions for the owner
+## Owner answers (2026-11-07)
 
-1. **Should an import link a person to an existing one when only the phone number matches exactly?**
-   Now: by your amendment, a phone-only match is treated as ambiguous; the record waits and the receipt lists the
-   candidate. Options: **A** keep it so (no link); **B** link on an exact phone match too. Recommendation: **A** —
-   numbers are shared in families and offices, and reused by carriers.
-2. **What do we call financial accounts in commands and refs: `wallets` / `wallet:`, or another word?**
-   Now: `account` already means a messenger or mail account everywhere, and a ref prefix is one word with no hyphen.
-   Options: **A** `memo wallets`, `wallet:3`; **B** `memo bank-accounts`, ref `bank:3`; **C** `memo funds`,
-   `fund:3`. Recommendation: **A** — it covers bank, card and cash, and personal-finance apps use it that way.
-3. **Should a v1 file create people and organizations only when it asks for it (`"options": {"match":
-   "identifiers"}`), or always?** Now: ruling 2 says an import creates; ruling 12 says every v1 file behaves the same,
-   and today's v1 files rely on records waiting for `records link`. Options: **A** opt-in per file, default as today;
-   **B** always, and the two existing tests change. Recommendation: **A** — no existing import changes meaning, and
-   cli-template and the docs write the option in every new file.
+1. Phone-only exact match: **links, as e-mail does.**
+2. Financial accounts: **`memo wallets`, `wallet:<id>`.**
+3. Matching and creation: **always**, every file; no `options.match`. The two existing tests that expect a waiting
+   person or organization change with PR 4.
