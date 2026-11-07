@@ -1,4 +1,4 @@
-import { annotate, sharedCommand } from "@wirecat/cli-base/commands"
+import { annotate, annotateOption, sharedCommand } from "@wirecat/cli-base/commands"
 import { defineQuery, fieldsHelp, parseLucene, timezoneOf, validateQuery, zonedMoment } from "@wirecat/cli-base/query"
 import type { Effects } from "@wirecat/cli-base/standards"
 import { type Command, InvalidArgumentError, Option } from "commander"
@@ -32,7 +32,14 @@ export interface MeetingCommandDeps {
   readFiles?: (folder: string) => Promise<ImportFile[]>
   /** The host's file names and how it reads their time, shown in `meetings import --help`. */
   importHelp?: string
+  /** Writes `meetings export --output`; one that refuses a file that exists, such as `writeNewFile`. */
   writeFile?: (path: string, content: string) => Promise<void>
+  /**
+   * Marks `meetings export`, whose only write is the new file `--output` names: a read without it, over MCP, and
+   * under the read-only lock. `writesNewFileOnlyWith` from `@wirecat/cli-core/cli`; pass it with a `writeFile` that
+   * never writes over a file.
+   */
+  newFileOutput?: (command: Command, option: string) => void
   write: (value: unknown, format: "json" | "jsonl" | "text") => void
   /**
    * Runs a command that reaches the account inside cli-core's run, so it is recorded and ended by `--timeout`:
@@ -120,14 +127,21 @@ const addMeetingCommandsDefinition = (program: Command, deps: MeetingCommandDeps
   ).action(async (id: number, _opts: unknown, command: Command) => {
     print(await meetingSummaryAnswer(deps.store, id, deps.accountId), command)
   })
-  output(
+  const exporter = output(
     annotate(group.command("export"), { effects: LOCAL_WRITE, output: { entity: "meeting_export" } })
       .description("export a meeting as Markdown or one transcript as WebVTT")
       .argument("<meeting>", "stored meeting id", integer)
       .addOption(new Option("--format <format>", "export format").choices(["markdown", "vtt"]).default("markdown"))
       .option("--transcript-id <id>", "export a specific transcript version", integer)
-      .option("--output <file>", "write content to a file through the host's writer"),
-  ).action(
+      .addOption(
+        // Not over MCP: an agent would choose where on the owner's disk to write; it gets the content in the answer.
+        annotateOption(new Option("--output <file>", "write content to a new file through the host's writer"), {
+          mcp: false,
+        }),
+      ),
+  )
+  deps.newFileOutput?.(exporter, "output")
+  exporter.action(
     async (
       id: number,
       opts: { format: MeetingExportFormat; transcriptId?: number; output?: string },

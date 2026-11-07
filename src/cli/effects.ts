@@ -182,6 +182,13 @@ export const writesFileOnlyWith = <T extends Command>(command: T, option: string
   return command
 }
 
+/**
+ * `writesFileOnlyWith` for a command whose file is always a new one, its writer refusing a file that exists: then it
+ * destroys nothing, and the read-only lock lets it through (`meetings export --output`).
+ */
+export const writesNewFileOnlyWith = <T extends Command>(command: T, option: string): T =>
+  destroysNothing(writesFileOnlyWith(command, option))
+
 const writesFileNow = (command: Command): boolean => {
   const option = FILE_OPTION.get(command)
   return option === undefined || command.opts()[option] !== undefined
