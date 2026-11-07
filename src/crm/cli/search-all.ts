@@ -7,6 +7,8 @@ import type { Body } from "../../cli/envelope.js"
 import { historySkipsOf } from "../../cli/messenger/history-gaps.js"
 import { allAnswer, offsetOf, SOURCE_SEARCHED } from "../../cli/messenger/search-answers.js"
 import { searchAllOptions } from "../../cli/messenger/search-command.js"
+import { deniedKinds } from "../../cli/search-left-out.js"
+import { DEAL_KINDS } from "../../domain/deals.js"
 import { SAVE_HELP } from "../../meetings/index.js"
 import type { AppIdentity } from "../../ports/app.js"
 import { meaningLane } from "../../services/messages-meaning.js"
@@ -56,6 +58,20 @@ export const addCrmSearchAll = (
           "this process is locked to one profile; search all reads its own CRM account only, without --source",
           { reason: "profile.locked" },
         )
+      const asked = opts.only ?? SEARCHED
+      const denied = deniedKinds(leaf, app, [
+        ...(asked.includes("crm") ? DEAL_KINDS : []),
+        ...asked.filter((one): one is Exclude<typeof one, "crm" | "mail"> => one !== "crm" && one !== "mail"),
+      ])
+      const out = new Set<string>(denied.map(({ kind }) => kind))
+      const crmKinds = DEAL_KINDS.filter((kind) => !out.has(kind))
+      const only = asked.filter((one) => (one === "crm" ? crmKinds.length > 0 : !out.has(one)))
+      if (!only.length)
+        throw new CliError(
+          "permission_error",
+          `search all has nothing it may read: ${denied.map(({ why }) => why).join("; ")}`,
+          { reason: "search.all-denied" },
+        )
       const limit = opts.limit ?? DEFAULT_LIMIT
       const offset = offsetOf(opts.page, limit)
       const env = run.env ?? process.env
@@ -69,7 +85,8 @@ export const addCrmSearchAll = (
           ...(opts.exact ? { exact: true } : {}),
           ...(opts.timezone === undefined ? {} : { timezone: opts.timezone }),
           env,
-          only: opts.only ?? SEARCHED,
+          only,
+          ...(crmKinds.length < DEAL_KINDS.length ? { crmKinds } : {}),
           ...(opts.source === undefined ? {} : { source: opts.source }),
           ...(opts.maxMeetings === undefined ? {} : { maxMeetings: opts.maxMeetings }),
           ...(run.locked ? { scope: { crm: [run.account] } } : {}),
@@ -79,6 +96,7 @@ export const addCrmSearchAll = (
         meaningLane({ env, messenger: { app }, store: async () => run.store }),
       )
       const note = (text: string) => outputFor(leaf).renderer.note(text)
+      for (const { why } of denied) note(why)
       for (const { resource, source, reason } of found.skipped) note(`${resource ?? source} not searched: ${reason}`)
       if (!found.items.length) note("nothing found in what the local store holds")
       const skips = await historySkipsOf(run.store, found.accounts).catch(() => [])
@@ -88,7 +106,14 @@ export const addCrmSearchAll = (
         ...(opts.source === undefined ? {} : { source: opts.source }),
         ...(opts.exact ? { exact: true } : {}),
       }
-      return allAnswer("search all", found, { limit, page: opts.page ?? 1, again }, opts.exact === true, skips) as Body
+      return allAnswer(
+        "search all",
+        found,
+        { limit, page: opts.page ?? 1, again },
+        opts.exact === true,
+        skips,
+        denied,
+      ) as Body
     })
   })
 }
