@@ -224,7 +224,7 @@ export const contractOperationsOver = (context: StoreContext): ContractOperation
 
   return {
     add: (input) => {
-      const columns = columnsOf({ status: "active", autoRenew: false, ...input }, {})
+      const columns = columnsOf({ ...input, status: input.status ?? "active", autoRenew: input.autoRenew ?? false }, {})
       const id = write(database, () => {
         const deal = linkedId(input.deal, "deal", "contract.ref")
         const by = written(input)
