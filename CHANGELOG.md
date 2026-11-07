@@ -5,7 +5,6 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
-<<<<<<< HEAD
 ## Unreleased
 
 ### Added
@@ -22,11 +21,6 @@ shape of this file.
 - **A holder's batch of held emails only no longer reuses the findings key of the run that set the mark**, which
   refused its staging (`key-used`): it takes `-h<highest held id>`.
 
-||||||| 938f397f
-## Unreleased
-
-=======
->>>>>>> origin/main
 ## 0.605.0 — 07.11.2026
 
 ### Changed — may break callers
