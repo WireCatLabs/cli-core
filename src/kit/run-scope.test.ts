@@ -1,6 +1,7 @@
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { describe, expect, it } from "vitest"
+import { appDoctorCommand } from "../cli/app-doctor-command.js"
 import { baseContext, environmentOf, outputFor } from "../cli/context.js"
 import { REMOTE_READ, REMOTE_WRITE } from "../cli/effects.js"
 import { itemOf, renderAnswer } from "../cli/envelope.js"
@@ -71,4 +72,18 @@ describe("the run-scope cases catch a command that runs beside cli-core's run", 
     const partial = runScopeCases({ ...options(true), commands: { "notes show": ["work", "notes", "show", "n1"] } })
     await expect(named(partial, "every remote command").run()).rejects.toThrow(/no words/)
   })
+})
+
+describe("doctor --online runs inside cli-core's run", () => {
+  const doctor = runScopeCases({
+    definition: {
+      app,
+      configuration,
+      commands: () => [appDoctorCommand(app, configuration, { packageName: "@wirecat/scope-cli" })],
+    },
+    commands: { doctor: ["doctor", "--online"] },
+    answering: (): RunOptions => ({ fetch: answers }),
+    silent: (): RunOptions => ({ fetch: neverAnswers }),
+  })
+  for (const one of doctor) it(one.name, () => one.run())
 })

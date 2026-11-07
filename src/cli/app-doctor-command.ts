@@ -10,7 +10,7 @@ import { Command } from "commander"
 import type { OAuthClientReport } from "../constants/index.js"
 import { type AppIdentity, envName, readOnlyLockOf } from "../ports/app.js"
 import { storePath } from "../store/path.js"
-import { type BaseEnvironment, environmentOf, outputFor } from "./context.js"
+import { type BaseEnvironment, environmentOf, inCommandRun, outputFor } from "./context.js"
 import { DOCTOR_ONLINE_OPTION, DOCTOR_SUMMARY } from "./doctor-text.js"
 import { REMOTE_READ } from "./effects.js"
 import { itemOf, renderAnswer } from "./envelope.js"
@@ -179,18 +179,24 @@ export const appDoctorCommand = (app: AppIdentity, configuration: Configuration,
       const env = environment.env ?? process.env
       const { report, fixes } = appDoctorReport(app, configuration, env, this, options)
       const local = localCheck(env, options)
-      const online = this.opts<{ online?: boolean }>().online
-        ? await onlineCheck(app, env, environment.fetch ?? fetch, options)
-        : undefined
-      const output = outputFor(this)
-      renderAnswer(
-        this,
-        output,
-        itemOf(
-          { ...report, ...local.fields, ...(online ? { online } : {}) },
-          { meta: clockMeta(Date.now(), timezoneOf()) },
-        ),
-      )
-      for (const fix of fixes) output.renderer.note(`to make it private: ${fix}`)
-      for (const note of local.notes) output.renderer.note(note)
+      const answer = async () => {
+        const online = this.opts<{ online?: boolean }>().online
+          ? await onlineCheck(app, env, environment.fetch ?? fetch, options)
+          : undefined
+        const output = outputFor(this)
+        renderAnswer(
+          this,
+          output,
+          itemOf(
+            { ...report, ...local.fields, ...(online ? { online } : {}) },
+            { meta: clockMeta(Date.now(), timezoneOf()) },
+          ),
+        )
+        for (const fix of fixes) output.renderer.note(`to make it private: ${fix}`)
+        for (const note of local.notes) output.renderer.note(note)
+      }
+      // A call out is recorded and ended by `--timeout` as any other command's; a config that will not load opens no
+      // run, and doctor still answers.
+      if (this.opts<{ online?: boolean }>().online && !("settings" in report)) await inCommandRun(this, answer)
+      else await answer()
     })
