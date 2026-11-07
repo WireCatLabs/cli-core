@@ -6,6 +6,8 @@ import { Command } from "commander"
 import { afterEach, describe, expect, it } from "vitest"
 import { syncCrm } from "../crm/index.js"
 import { exampleDeal, exampleOrganization, examplePerson, fakeCrmSource } from "../crm/testing/index.js"
+import { type GroupGuard, groupGuardOf, lockedRegistry } from "../services/group-guard.js"
+import type { ProposalRegistry, ProposalRow } from "../services/proposals/types.js"
 import { openCache } from "../store/open.js"
 import { storePath } from "../store/path.js"
 import { type AccountKey, type MessageStore, openStore } from "../store/store.js"
@@ -85,9 +87,19 @@ const parsed = (argv: string[]) => {
   organizations.command("show").argument("<ref>").action(noop)
   refKinds(organizations.command("rename").argument("<organization>").argument("<name>"), {}).action(noop)
   refKinds(organizations.command("open").argument("<id>"), { id: "organization" }).action(noop)
+  const actions = groupAware(new Command("actions"))
+  refKinds(actions.command("confirm").argument("<id>"), { id: "action" }).action(noop)
+  const review = groupAware(new Command("review"))
+  refKinds(review.command("confirm").argument("<ids...>"), { ids: "proposal" }).action(noop)
   const events = groupAware(new Command("events"))
   events.command("show").argument("<event>").action(noop)
-  program.addCommand(tags).addCommand(deals).addCommand(organizations).addCommand(events)
+  program
+    .addCommand(tags)
+    .addCommand(deals)
+    .addCommand(organizations)
+    .addCommand(events)
+    .addCommand(actions)
+    .addCommand(review)
   program.command("show").argument("<ref>").action(noop)
   program.addCommand(groupAware(refKinds(new Command("search").argument("<words>").action(noop), {})))
   let leaf: Command | undefined
@@ -245,5 +257,97 @@ describe("the group lock fails closed", () => {
       "--message",
       "msg:telegram/102/5/9",
     ])
+  })
+})
+
+describe("what a locked run shows of proposals and evidence", () => {
+  const lockedGuard = async (env: NodeJS.ProcessEnv, store: MessageStore) =>
+    (await groupGuardOf(store, app, env)) as GroupGuard
+
+  it("refuses a proposed action of an outside account, by the id actions confirm takes", async () => {
+    const env = envOf()
+    const store = await seeded(env)
+    const home = await store.proposedActions.propose({ kind: "reply", by: "owner", account: tgPersonal })
+    const work = await store.proposedActions.propose({ kind: "reply", by: "owner", account: tgWork })
+    const aimed = await store.proposedActions.propose({
+      kind: "reply",
+      by: "owner",
+      account: tgWork,
+      target: `organization:${await organizationOf(env, crmOther)}`,
+    })
+    const confirm = (id: string) => ["actions", "confirm", id]
+    await refused(env, store, confirm(home.id))
+    await allowed(env, store, confirm(work.id))
+    await refused(env, store, confirm(aimed.id))
+    await refused(env, store, ["review", "confirm", `${home.id},fact:1,close:Q-1`])
+    await allowed(env, store, ["review", "confirm", "fact:1,close:Q-1"])
+  })
+
+  it("hides a proposal whose subject or object is outside, and refuses showing or deciding it", async () => {
+    const env = envOf()
+    const store = await seeded(env)
+    const guard = await lockedGuard(env, store)
+    const row = (id: string, subject: string, object: string | null): ProposalRow => ({
+      id,
+      kind: "relationship",
+      status: "proposed",
+      project: null,
+      subject,
+      object,
+      summary: null,
+      proposedBy: "agent",
+      reason: null,
+      evidence: ["msg:telegram/102/1/1", "msg:telegram/101/1/1"],
+      score: null,
+      signals: null,
+      parts: null,
+      createdAt: "2026-11-07T00:00:00.000Z",
+    })
+    const rows = [
+      row("link:900", `person:${await personOf(env, crmOther)}`, `organization:${await organizationOf(env, crmWork)}`),
+      row("link:901", `person:${await personOf(env, crmWork)}`, `organization:${await organizationOf(env, crmWork)}`),
+    ]
+    const decided: string[] = []
+    const registry: ProposalRegistry = {
+      register: () => undefined,
+      list: async () => ({ items: rows, hasMore: false }),
+      get: async (id) => rows.find((one) => one.id === id) as ProposalRow,
+      decide: async (ids) => {
+        decided.push(...ids)
+        return { decided: [], refused: [] }
+      },
+    }
+    const locked = lockedRegistry(registry, guard)
+    const { items } = await locked.list({ limit: 10, offset: 0 })
+    expect(items.map(({ id }) => id)).toEqual(["link:901"])
+    expect(items[0]?.evidence).toEqual(["msg:telegram/102/1/1"])
+    await expect(locked.get("link:900")).rejects.toThrow(expect.objectContaining({ code: "permission_error" }))
+    const result = await locked.decide(["link:900", "link:901"], { confirm: true, by: "owner" })
+    expect(result.refused.map(({ id }) => id)).toEqual(["link:900"])
+    expect(decided).toEqual(["link:901"])
+  })
+
+  it("drops outside evidence and sources, at any depth, and counts them; owner text stays", async () => {
+    const env = envOf()
+    const store = await seeded(env)
+    const guard = await lockedGuard(env, store)
+    expect(await guard.keep(["msg:telegram/101/5/9", "msg:telegram/102/5/9", null])).toEqual({
+      kept: ["msg:telegram/102/5/9", null],
+      out_of_scope: 1,
+    })
+    const answer = {
+      statement: "Kin said Lockcase",
+      sources: [{ ref: "msg:telegram/101/5/9", excerpt: "home" }, { ref: "msg:telegram/102/5/9" }],
+      items: [{ evidence: ["chat:telegram/101/5", "chat:telegram/102/5"] }],
+    }
+    expect(await guard.strip(answer)).toEqual({
+      value: {
+        statement: "Kin said Lockcase",
+        sources: [{ ref: "msg:telegram/102/5/9" }],
+        items: [{ evidence: ["chat:telegram/102/5"] }],
+      },
+      out_of_scope: 2,
+    })
+    expect(await groupGuardOf(store, app, {})).toBeUndefined()
   })
 })

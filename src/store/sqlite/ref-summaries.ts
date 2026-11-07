@@ -13,7 +13,7 @@ import {
 import { formatReference, parseReference, type Reference } from "../../domain/references.js"
 import type { CacheDatabase, SqlValue } from "../driver.js"
 import type { StoreContext } from "./open.js"
-import { refAccountsOf } from "./ref-accounts.js"
+import { refAccountsOf, refEndsOf } from "./ref-accounts.js"
 
 /** A summary plus what an evidence reader shows beside it; `summaries` drops the extra fields. */
 export interface RefRead extends RefSummary {
@@ -618,4 +618,5 @@ export const refSummariesOf = (
 export const refsStoreOver = (context: StoreContext): RefsStore => ({
   summaries: async (texts, options) => refSummariesOf(context.database, texts, { ...options, now: context.now() }),
   accounts: async (text) => refAccountsOf(context.database, text),
+  ends: async (text) => refEndsOf(context.database, text),
 })

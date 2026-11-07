@@ -31,7 +31,13 @@ export const isGroupAware = (command: Command): boolean => {
 const valuesOf = (value: unknown): string[] =>
   typeof value === "string" ? [value] : Array.isArray(value) ? value.flatMap(valuesOf) : []
 
-const declared = new WeakMap<Command, Readonly<Record<string, SimpleReference>>>()
+/**
+ * What a bare id names: a referenced thing's kind, a proposed action (`action`, as `actions confirm 17` takes it), or
+ * a proposal id of the review registry (`proposal`: `17070`, `17080/f1`, `link:17`, `fact:512`).
+ */
+export type RefKind = SimpleReference | "action" | "proposal"
+
+const declared = new WeakMap<Command, Readonly<Record<string, RefKind>>>()
 
 /**
  * The kind of thing a bare id names, per argument (by its name) or option (by its long flag):
@@ -40,7 +46,7 @@ const declared = new WeakMap<Command, Readonly<Record<string, SimpleReference>>>
  * declares nothing has any other argument value refused, since what it names is unknown (`1e0`, `+1`, `link:1`).
  * `{}` says no argument takes an id, so free text passes.
  */
-export const refKinds = <T extends Command>(command: T, kinds: Readonly<Record<string, SimpleReference>>): T => {
+export const refKinds = <T extends Command>(command: T, kinds: Readonly<Record<string, RefKind>>): T => {
   declared.set(command, kinds)
   return command
 }
@@ -48,7 +54,7 @@ export const refKinds = <T extends Command>(command: T, kinds: Readonly<Record<s
 const isSimpleReference = (name: string): name is SimpleReference =>
   (SIMPLE_REFERENCES as readonly string[]).includes(name)
 
-const kindAt = (command: Command, name: string, implicit: string): SimpleReference | undefined =>
+const kindAt = (command: Command, name: string, implicit: string): RefKind | undefined =>
   declared.get(command)?.[name] ?? (isSimpleReference(implicit) ? implicit : undefined)
 
 /**
@@ -59,10 +65,15 @@ const kindAt = (command: Command, name: string, implicit: string): SimpleReferen
 export const referencesIn = (command: Command): { references: string[]; unknown: string[] } => {
   const references = new Set<string>()
   const unknown: string[] = []
-  const typed = (value: string, kind: SimpleReference | undefined, onBare?: () => void) => {
+  const typed = (value: string, kind: RefKind | undefined, onBare?: () => void) => {
     for (const word of value.split(/[\s,]+/).filter(Boolean)) {
-      if (looksLikeReference(word)) references.add(word)
-      else if (kind !== undefined && !word.includes(":")) references.add(`${kind}:${word}`)
+      const stored = /^([1-9]\d*)(?:\/[\w-]+)?$/.exec(word)?.[1]
+      const proposalKind = kind === "action" || kind === "proposal"
+      if (looksLikeReference(word) || (proposalKind && PROPOSAL_REF.test(word))) references.add(word)
+      else if (proposalKind && stored) references.add(`action:${stored}`)
+      // A proposal kept beside its thing (`close:Q-15`, `key:9`) is the owner's own, as its task or project is.
+      else if (kind === "proposal" && /^[a-z][a-z_]*:/.test(word)) continue
+      else if (kind !== undefined && kind !== "proposal" && !word.includes(":")) references.add(`${kind}:${word}`)
       else onBare?.()
     }
   }
@@ -80,6 +91,8 @@ export const referencesIn = (command: Command): { references: string[]; unknown:
   }
   return { references: [...references], unknown }
 }
+
+const PROPOSAL_REF = /^(action|link):[1-9]\d*$/
 
 const pathOf = (command: Command): string => {
   const words: string[] = []
@@ -119,8 +132,8 @@ export const refuseOutsideGroup = async (
     const context = await listContextOf(opened, { provider: "notes", account: INTERNAL_NOTES }, app, undefined, env)
     const inGroup = inGroupOf(context, lock)
     for (const reference of references) {
-      const accounts = await opened.refs.accounts(reference)
-      if (accounts?.length && !accounts.some(inGroup))
+      const ends = await opened.refs.ends(reference)
+      if (ends?.some((end) => end.length > 0 && !end.some(inGroup)))
         throw new CliError("permission_error", `${locked} — ${reference} belongs to an account outside it`, {
           group: lock,
           reference,

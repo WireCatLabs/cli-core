@@ -1,5 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
-import { holdsKindOf, isKind, providerNamed } from "../domain/providers.js"
+import { holdsKindOf, isDocumentAccountProvider, isFolderProvider, isKind, providerNamed } from "../domain/providers.js"
 import { type AppIdentity, envName } from "../ports/app.js"
 import {
   entriesOfList,
@@ -57,8 +57,14 @@ export const listContextOf = async (
       `this process is locked to group ${lock} (${envName(app as AppIdentity, "GROUP_LOCK")}), which does not exist`,
     )
   const only = new Set([...members, OWNER_NOTES].map(keyOf))
+  // A notes folder or a documents account is held under its own key but listed as `notes:<store id>`.
+  const listedAs = (one: StoredAccount) =>
+    isFolderProvider(one.provider) || isDocumentAccountProvider(one.provider)
+      ? { provider: "notes", account: String(one.id) }
+      : one
   return {
     ...context,
+    held: held.filter((one) => only.has(keyOf(listedAs(one)))),
     groups: { [lock]: groups[lock] ?? [] },
     membership: {
       groups: { [lock]: members },

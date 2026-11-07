@@ -435,6 +435,7 @@ export {
   foundEvent,
   searchEvents,
 } from "./events-search.js"
+export { type GroupGuard, groupGuardOf, lockedRegistry } from "./group-guard.js"
 export { createMeetingBatchReader } from "./meeting-batch.js"
 export {
   type MeetingCombinedHit,

@@ -282,6 +282,9 @@ describe("memo's own notes", () => {
         .map(({ account }) => account)
         .sort()
     expect(await read(LOCKED)).toEqual([folder.id, "internal"].sort())
+    const held = (await contextOf(store, LOCKED)).held
+    expect(held.map(({ id }) => String(id))).toContain(folder.id)
+    expect(held.some(sameAs(tgPersonal))).toBe(false)
     expect(await read({}, "group:work")).toEqual([folder.id, "internal"].sort())
     const { membership } = await contextOf(store)
     expect(membership.groups.work?.map(sourceOf)).toEqual(["telegram:102", `notes:${folder.id}`])
