@@ -9,6 +9,10 @@ shape of this file.
 
 ### Fixed
 
+- **An MCP server's `--permission` levels refuse a messenger write before it connects.** The early refusal of a change
+  on the messenger read the command's flags only, so `mcp serve --permission messages.send=deny` let the command
+  connect and left the refusal to the send guard. It now merges the server's levels as `baseContext` does.
+  `withAgentLevels(command, flags)` (`@wirecat/cli-core/cli`) is that merge, for a CLI's own resolver.
 - **An app's `mcp serve` over stdio ends when it was stopped before it listened.** `serveAppOverStdio` waited only
   for an abort event, which a signal that had already fired never sends, so the server hung with stdin open.
 
