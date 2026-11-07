@@ -68,27 +68,27 @@ export const installedBytes = (model: SpeechModel): number => model.files.reduce
 
 export type Fetch = (url: string, init?: { signal?: AbortSignal }) => Promise<Response>
 
+export interface InstallOptions {
+  fetch?: Fetch
+  progress?: (line: string) => void
+  /** Bytes in place so far, of all the files', a file already there counted whole; called as each chunk lands. */
+  bytes?: (done: number, total: number) => void
+  verifyExisting?: boolean
+}
+
 export const install = async (
   model: SpeechModel,
   directory: string,
-  {
-    fetch: get = fetch,
-    progress,
-    verifyExisting,
-  }: { fetch?: Fetch; progress?: (line: string) => void; verifyExisting?: boolean } = {},
+  { fetch: get = fetch, progress, bytes, verifyExisting }: InstallOptions = {},
 ): Promise<void> => {
   mkdirSync(join(directory, model.id), { recursive: true, mode: 0o700 })
-  await installFiles(placed(model, directory), { fetch: get, progress, verifyExisting })
+  await installFiles(placed(model, directory), { fetch: get, progress, bytes, verifyExisting })
 }
 
 /** Each file not already in place, downloaded and checked against its sha256 before it takes its name. */
 export const installFiles = async (
   files: [ModelFile, string][],
-  {
-    fetch: get = fetch,
-    progress,
-    verifyExisting,
-  }: { fetch?: Fetch; progress?: (line: string) => void; verifyExisting?: boolean } = {},
+  { fetch: get = fetch, progress, bytes = () => {}, verifyExisting }: InstallOptions = {},
 ): Promise<void> => {
   if (verifyExisting)
     for (const [file, path] of files) {
@@ -101,18 +101,30 @@ export const installFiles = async (
         }
       }
     }
-  for (const [file, path] of files) {
-    if (sizeOf(path) === file.bytes) continue
+  const total = files.reduce((sum, [file]) => sum + file.bytes, 0)
+  const missing = files.filter(([file, path]) => sizeOf(path) !== file.bytes)
+  let done = total - missing.reduce((sum, [file]) => sum + file.bytes, 0)
+  bytes(done, total)
+  for (const [file, path] of missing) {
     mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
     progress?.(`downloading ${file.name} (${megabytes(file.bytes)})`)
-    await fetchVerified(file, path, get)
+    const before = done
+    await fetchVerified(file, path, get, (received) => {
+      done = before + received
+      bytes(done, total)
+    })
   }
 }
 
-const fetchVerified = async (file: ModelFile, path: string, get: Fetch): Promise<void> => {
+const fetchVerified = async (
+  file: ModelFile,
+  path: string,
+  get: Fetch,
+  received: (bytes: number) => void,
+): Promise<void> => {
   const stalled = watchdog(STALL_MS)
   try {
-    await fetchInto(file, path, get, stalled)
+    await fetchInto(file, path, get, stalled, received)
   } catch (error) {
     if (stalled.signal.aborted) {
       throw new CliError("timeout", `${file.name} stopped downloading for ${STALL_MS / 1000} s — nothing was installed`)
@@ -123,7 +135,13 @@ const fetchVerified = async (file: ModelFile, path: string, get: Fetch): Promise
   }
 }
 
-const fetchInto = async (file: ModelFile, path: string, get: Fetch, stalled: Watchdog): Promise<void> => {
+const fetchInto = async (
+  file: ModelFile,
+  path: string,
+  get: Fetch,
+  stalled: Watchdog,
+  received: (bytes: number) => void,
+): Promise<void> => {
   const response = await get(file.url, { signal: stalled.signal })
   if (!response.ok || !response.body) {
     await response.body?.cancel()
@@ -144,6 +162,7 @@ const fetchInto = async (file: ModelFile, path: string, get: Fetch, stalled: Wat
         return
       }
       hash.update(chunk)
+      received(bytes)
       done(null, chunk)
     },
   })
