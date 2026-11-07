@@ -7,6 +7,21 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- **`store recover run` refuses while another recovery runs, and no longer fails because a tool only read the store.**
+  A recovery keeps a lock file beside the store (`<store>.recover-lock`, with its process number); a second run is
+  refused with the reason `store.recovering`, and `store recover` and `storeHolders` list the running one. A lock whose
+  process ended is taken over. The check for writes during the recovery now asks SQLite (`PRAGMA data_version` on a
+  connection kept open to the swap, and the file's inode) instead of comparing file times and sizes, which a reader's
+  open and close changed without changing a row (`store.changed-during-recovery` on a store nobody wrote to).
+- **A recovery clears values that are not valid JSON, and `doctor --deep` reports them.** `.recover` copied a damaged
+  value that still read, and a JSON read of its row then failed with "malformed JSON" (`mail sync` on an `emails.headers`
+  value). Every `metadata` column and the other columns the tools read as JSON (`emails.headers`, `accounts.settings`,
+  `messages.mentions`, `messages.reply_to`, …) are checked: an invalid value is set to NULL, or its row is dropped where
+  the column may not be NULL, and the recovery lists each column as `invalidJson`. The deep health check
+  (`storeHealth(path, { deep: true })`, `doctor --deep`, `store recover`) reports them as `invalidJson` and fails.
+
 ## 0.602.0 — 07.11.2026
 
 ### Changed — may break callers
