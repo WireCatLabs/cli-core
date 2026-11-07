@@ -71,17 +71,22 @@ export const referencesIn = (command: Command): { references: string[]; unknown:
       const proposalKind = kind === "action" || kind === "proposal"
       if (looksLikeReference(word) || (proposalKind && PROPOSAL_REF.test(word))) references.add(word)
       else if (proposalKind && stored) references.add(`action:${stored}`)
-      // A proposal kept beside its thing (`close:Q-15`, `key:9`) is the owner's own, as its task or project is.
-      else if (kind === "proposal" && /^[a-z][a-z_]*:/.test(word)) continue
+      // A key-document suggestion is a link between the document and its project, so both ends are checked.
+      else if (kind === "proposal" && /^key:[1-9]\d*$/.test(word)) references.add(`link:${word.slice(4)}`)
+      // A close suggestion is its task's, which the owner made; the task's evidence is stripped where it is shown.
+      else if (kind === "proposal" && word.startsWith("close:")) references.add(`task:${word.slice(6)}`)
       else if (kind !== undefined && kind !== "proposal" && !word.includes(":")) references.add(`${kind}:${word}`)
       else onBare?.()
     }
   }
   command.registeredArguments.forEach((argument, at) => {
     const name = argument.name()
+    const kind = kindAt(command, name, name)
     for (const value of valuesOf(command.processedArgs[at] ?? command.args[at]))
-      typed(value, kindAt(command, name, name), () => {
-        if (!declared.has(command) && !unknown.includes(`<${name}> ${value}`)) unknown.push(`<${name}> ${value}`)
+      typed(value, kind, () => {
+        // A proposal id of no kind the lock knows cannot be checked, so it is refused even where kinds are declared.
+        const named = `<${name}> ${value}`
+        if ((!declared.has(command) || kind === "proposal") && !unknown.includes(named)) unknown.push(named)
       })
   })
   for (const option of command.options) {

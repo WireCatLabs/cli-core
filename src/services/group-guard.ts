@@ -75,7 +75,13 @@ export const groupGuardOf = async (
     const parts = [
       row.subject,
       ...(row.object === null ? [] : [row.object]),
-      ...(stored ? [`action:${stored}`] : row.id.startsWith("link:") ? [row.id] : []),
+      ...(stored
+        ? [`action:${stored}`]
+        : row.id.startsWith("link:")
+          ? [row.id]
+          : row.id.startsWith("key:")
+            ? [`link:${row.id.slice(4)}`]
+            : []),
     ]
     for (const part of parts) if (!(await visible(part))) return false
     return true

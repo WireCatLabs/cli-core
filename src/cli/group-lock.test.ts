@@ -281,6 +281,22 @@ describe("what a locked run shows of proposals and evidence", () => {
     await refused(env, store, confirm(aimed.id))
     await refused(env, store, ["review", "confirm", `${home.id},fact:1,close:Q-1`])
     await allowed(env, store, ["review", "confirm", "fact:1,close:Q-1"])
+    await expect(refuseOutsideGroup(parsed(["review", "confirm", "zap:1"]), { app, env, store })).rejects.toThrow(
+      /as an id of a kind it does not declare/,
+    )
+    const otherOrganization = `organization:${await organizationOf(env, crmOther)}`
+    const ownOrganization = `organization:${await organizationOf(env, crmWork)}`
+    // A key-document suggestion is a link from the document to what it is key to; both ends must be in the group.
+    const keyTo = async (to: string) => {
+      await store.notes.addNote({ text: "a key document", about: [ownOrganization, to] })
+      return rowOf(
+        env,
+        "SELECT id FROM links WHERE to_type = 'organization' AND to_id = ? ORDER BY id DESC LIMIT 1",
+        Number(to.split(":")[1]),
+      )
+    }
+    await refused(env, store, ["review", "confirm", `key:${await keyTo(otherOrganization)}`])
+    await allowed(env, store, ["review", "confirm", `key:${await keyTo(ownOrganization)}`])
   })
 
   it("hides a proposal whose subject or object is outside, and refuses showing or deciding it", async () => {
