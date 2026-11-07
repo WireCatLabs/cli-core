@@ -85,7 +85,12 @@ describe("meeting MCP reads", () => {
     const { store, saved } = await hostileMeeting()
     const values: unknown[] = []
     const program = new Command().exitOverride().configureOutput({ writeErr() {}, writeOut() {} })
-    addMeetingCommands(program, { store, accountId: 1, write: (value) => void values.push(value) })
+    addMeetingCommands(program, {
+      store,
+      accountId: 1,
+      write: (value) => void values.push(value),
+      inRun: (_command, body) => body(),
+    })
     await program.parseAsync(["meetings", "transcript", String(saved.meeting.id)], { from: "user" })
     expect(JSON.stringify(values.at(-1))).toContain(JSON.stringify(`${HOSTILE} ${ORDINARY}`).slice(1, -1))
   })

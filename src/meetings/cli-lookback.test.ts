@@ -19,7 +19,14 @@ it("CLI lookback revisits the cursor window for late transcripts and subtracts f
   })
   const run = async (...args: string[]) => {
     const program = new Command().exitOverride().configureOutput({ writeOut() {}, writeErr() {} })
-    addMeetingCommands(program, { store, source, accountId: 1, write() {}, now: () => now })
+    addMeetingCommands(program, {
+      store,
+      source,
+      accountId: 1,
+      write() {},
+      inRun: (_command, body) => body(),
+      now: () => now,
+    })
     await program.parseAsync(["meetings", "sync", ...args], { from: "user" })
   }
   await run("--since-time", "1970-01-01T00:00:00Z")
@@ -52,7 +59,13 @@ it("CLI rejects invalid lookback bounds before requesting provider records", asy
   })
   for (const days of ["-1", "32", "1.5", "NaN", "9007199254740992"]) {
     const program = new Command().exitOverride().configureOutput({ writeOut() {}, writeErr() {} })
-    addMeetingCommands(program, { store: memoryMeetingStore(), source, accountId: 1, write() {} })
+    addMeetingCommands(program, {
+      store: memoryMeetingStore(),
+      source,
+      accountId: 1,
+      write() {},
+      inRun: (_command, body) => body(),
+    })
     await expect(
       program.parseAsync(["meetings", "sync", "--lookback-days", days], { from: "user" }),
     ).rejects.toMatchObject({ code: "commander.invalidArgument" })

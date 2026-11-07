@@ -12,7 +12,7 @@ contract. This page is the order to read them in, and the rules that are not in 
 | Entry point | What a connector takes from it |
 |---|---|
 | `@wirecat/cli-core/cli` | `Messenger`, `MessengerAdapter`, `MessengerCore` and the optional groups |
-| `@wirecat/cli-core/testing` | the messenger contract kit: `contractSeed`, `contractCases`, `fakeAdapter`; `mcpOverStdio` for MCP tests |
+| `@wirecat/cli-core/testing` | the messenger contract kit: `contractSeed`, `contractCases`, `fakeAdapter`; `mcpOverStdio` for MCP tests; `runScopeCases` for the run scope |
 | `@wirecat/cli-core/meetings` | `MeetingSource` and `MeetingStore`, for a meeting provider ([MEETING-PROVIDERS.md](MEETING-PROVIDERS.md)) |
 | `@wirecat/cli-core/meetings/testing` | the meeting contract kit: `meetingStoreContract`, `fakeMeetingSource`, `memoryMeetingStore` |
 | `@wirecat/cli-core/calendar` | `CalendarSource` and `syncCalendars`, for a calendar provider ([CALENDARS.md](CALENDARS.md)) |
@@ -428,3 +428,25 @@ expect(await mcp.close()).toBe(0)
 
 `mcp.request(method, params)` sends any other request; `mcp.tools()` lists the tool names. When
 `run()` ends before an answer, the waiting call fails at once.
+
+### Testing that each remote command runs inside cli-core's run
+
+`runScopeCases` runs every remote command of your program (each leaf whose `effects.remote` is not `none`) through
+cli-core's `run()` twice: once with `--record` against a fake that answers, which must exit 0 with a `meta.run_id`
+that `--record` kept under the command's own name; once with `--timeout` against a fake that never answers, which must
+end in `timeout` (`outcome_unknown` for a write; a `partial` command may answer `meta.complete: false` instead). A
+command that resolves its own settings beside `baseContext(command, resolveSettings).run(body)` answers under the
+process run and fails the first. A remote command with neither words nor a reason to skip fails the coverage case.
+
+```ts
+import { neverAnswers, runScopeCases } from "@wirecat/cli-core/testing"
+
+for (const one of runScopeCases({
+  definition: definition(),
+  commands: { "comments list": ["personal", "comments", "list"], "comments show": ["personal", "comments", "show", "c1"] },
+  skip: { "mcp serve": "listens until stopped" },
+  answering: () => ({ keyring: signedIn(), fetch: fakeComments().fetch }),
+  silent: () => ({ keyring: signedIn(), fetch: neverAnswers }),
+}))
+  it(one.name, () => one.run())
+```

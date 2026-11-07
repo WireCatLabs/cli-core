@@ -151,7 +151,12 @@ it("exposes equivalent bounded CLI and MCP reads while retaining older adapter c
   await f.add("Alice Example")
   const output = vi.fn()
   const program = new Command("example")
-  addMeetingCommands(program, { store: f.store.meetings, accountId: f.accountId, write: output })
+  addMeetingCommands(program, {
+    store: f.store.meetings,
+    accountId: f.accountId,
+    write: output,
+    inRun: (_command, body) => body(),
+  })
   await program.parseAsync(
     ["meetings", "people", "Alice", "--limit", "1", "--scan-limit", "2", "--max-read-bytes", "100", "--json"],
     { from: "user" },
