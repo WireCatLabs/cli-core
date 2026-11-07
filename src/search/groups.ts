@@ -14,6 +14,9 @@ import {
 /** The default group: every account, never saved. Reading without a group reads it. */
 export const ALL = "all"
 
+/** memo's own notes: the owner's, so `search notes` reads them in every group, though no group lists them. */
+export const OWNER_NOTES: AccountKey = { provider: "notes", account: INTERNAL_NOTES }
+
 /** Words a source list already gives a meaning of its own, so no group may be saved under them. */
 export const NOT_GROUP_NAMES: ReadonlySet<string> = new Set([ALL, "bots"])
 
@@ -91,9 +94,7 @@ export const groupMembership = (context: ListContext): GroupMembership => {
   for (const [name, entries] of Object.entries(context.groups))
     if (name !== ALL) groups[name] = membersOf(entries, plain, unresolved)
   // Not accounts of anyone's: memo's own notes, and the row a fresh store lacks for the account running (id 0).
-  const system = [{ provider: "notes", account: INTERNAL_NOTES }, ...context.held.filter(({ id }) => id === 0)].map(
-    keyOf,
-  )
+  const system = [OWNER_NOTES, ...context.held.filter(({ id }) => id === 0)].map(keyOf)
   const every = accountsOfList(ALL, plain)
     .filter((one) => !system.includes(keyOf(one)))
     .map(
@@ -195,8 +196,8 @@ export const scopeToGroup = (run: RunGroup, request: GroupRequest, context: Grou
   const why = run.locked
     ? `this process is locked to group ${run.name} (${run.from})`
     : `this run is in group ${run.name}`
+  if (!context.membership.groups[run.name]?.length) fail("validation_error", `group ${run.name} is empty`)
   const inGroup = new Set(accountsOfList(`group:${run.name}`, context).map(keyOf))
-  if (inGroup.size === 0) fail("validation_error", `group ${run.name} is empty`)
   const outside = (accounts: readonly AccountKey[]) => accounts.filter((one) => !inGroup.has(keyOf(one)))
   // Under a lock the context holds only the group, so a name outside it fails to resolve: that is the refusal.
   const namedBy = (item: string): AccountKey[] => {

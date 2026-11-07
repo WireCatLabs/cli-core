@@ -395,6 +395,7 @@ export {
   groupMembership,
   inGroupOf,
   NOT_GROUP_NAMES,
+  OWNER_NOTES,
   type RunGroup,
   scopeToGroup,
 } from "../search/groups.js"

@@ -14,7 +14,8 @@ import { chosenTextModel, meaningFloor, type TextModel, textModel, vectorModelKe
 import type { PictureEmbedder } from "../images/picture/embedder.js"
 import { DEFAULT_IMAGE_MODEL, imageModel } from "../images/picture/models.js"
 import type { AppIdentity } from "../ports/app.js"
-import { entriesOfList, fitting, type SkippedSource } from "../search/account-list.js"
+import { entriesOfList, fitting, type SkippedSource, sourceOf } from "../search/account-list.js"
+import { OWNER_NOTES } from "../search/groups.js"
 import { fieldsOfQuery as fieldsOf, meaningWords } from "../search/lucene/meaning-parts.js"
 import { plainQuery } from "../search/lucene/plain.js"
 import { validateFields } from "../search/lucene/registry.js"
@@ -896,11 +897,17 @@ export const searchNotesOf = async (
     ...[await store.notes.addedAccount()].flatMap((added) => (added ? [{ provider: "notes", account: added.id }] : [])),
   ]
   const lock = groupLockOf(app, env)
+  const typedScope = list ?? (lock === undefined ? undefined : `group:${lock}`)
+  // memo's own notes are the owner's, so a group reads them beside its folders (WC-ACCT-13).
+  const notesScope =
+    typedScope !== undefined && /(^|,)\s*group:/i.test(typedScope)
+      ? `${typedScope},${sourceOf(OWNER_NOTES)}`
+      : typedScope
   const named =
-    list === undefined && lock === undefined
+    notesScope === undefined
       ? { accounts: held, skipped: [] }
       : fitting(
-          entriesOfList(list ?? `group:${lock}`, await listContextOf(store, account, app, undefined, env)),
+          entriesOfList(notesScope, await listContextOf(store, account, app, undefined, env)),
           ["notes", "documents"],
           what,
         )

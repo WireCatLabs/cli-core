@@ -9,7 +9,7 @@ import {
   type ListContext,
   type SkippedSource,
 } from "../search/account-list.js"
-import { ALL, type GroupContext, groupEntries, groupMembership, hasGroup } from "../search/groups.js"
+import { ALL, type GroupContext, groupEntries, groupMembership, hasGroup, OWNER_NOTES } from "../search/groups.js"
 import type { AccountKey, MessageStore, StoredAccount } from "../store/store.js"
 
 export type SearchKind = "messages" | "mail"
@@ -56,10 +56,9 @@ export const listContextOf = async (
       "permission_error",
       `this process is locked to group ${lock} (${envName(app as AppIdentity, "GROUP_LOCK")}), which does not exist`,
     )
-  const only = new Set(members.map(keyOf))
+  const only = new Set([...members, OWNER_NOTES].map(keyOf))
   return {
     ...context,
-    held: held.filter((one) => only.has(keyOf(one))),
     groups: { [lock]: groups[lock] ?? [] },
     membership: {
       groups: { [lock]: members },

@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import { liftProfile, runGroup } from "../cli/profile.js"
 import { addGroupMember, listAccountGroups, moveGroupMember, removeGroupMember } from "../services/account-groups.js"
 import { prepareLucene } from "../services/messages-search.js"
+import { searchNotesOf } from "../services/notes-search.js"
 import { listContextOf, listedAccounts } from "../services/search-kind.js"
 import { type AccountKey, type MessageStore, openStore } from "../store/store.js"
 import { accountsOfList, sameAs, sourceOf } from "./account-list.js"
@@ -234,7 +235,9 @@ describe("the group word and the lock", () => {
     const store = await withWork()
     const context = await contextOf(store, LOCKED)
     expect(Object.keys(context.groups)).toEqual(["work"])
-    expect(sorted(accountsOfList("all", context))).toEqual(sorted([tgWork, b24Work]))
+    expect(sorted(accountsOfList("all", context))).toEqual(
+      sorted([tgWork, b24Work, { provider: "notes", account: "internal" }]),
+    )
     expect(sorted(accountsOfList("telegram", context))).toEqual(["telegram:102"])
     await expect(contextOf(store, { MEMO_GROUP_LOCK: "constructor" })).rejects.toThrow(
       expect.objectContaining({ code: "permission_error" }),
@@ -265,6 +268,23 @@ describe("the group word and the lock", () => {
     expect(sorted(accountsOfList("all", context))).toEqual(
       sorted([tgPersonal, tgWork, b24Work, home, office, { provider: "notes", account: "internal" }]),
     )
+  })
+})
+
+describe("memo's own notes", () => {
+  it("are read by search notes in every group, beside the group's folders, and listed in none", async () => {
+    const store = await withWork()
+    const folder = await store.notes.addFolder({ name: "work notes" })
+    await store.notes.addFolder({ name: "home notes" })
+    await store.accounts.saveAccountGroup("work", ["telegram:102", `notes:${folder.id}`])
+    const read = async (env: NodeJS.ProcessEnv, accounts?: string) =>
+      (await searchNotesOf(store, home, "x", { limit: 10, app, env, ...(accounts ? { accounts } : {}) })).accounts
+        .map(({ account }) => account)
+        .sort()
+    expect(await read(LOCKED)).toEqual([folder.id, "internal"].sort())
+    expect(await read({}, "group:work")).toEqual([folder.id, "internal"].sort())
+    const { membership } = await contextOf(store)
+    expect(membership.groups.work?.map(sourceOf)).toEqual(["telegram:102", `notes:${folder.id}`])
   })
 })
 
