@@ -21,6 +21,13 @@ Node, the SQLite restart and parity, which builds tg-cli, max-cli, whatsapp-cli 
 On a pull request parity builds each CLI at the branch with the same name as the pull request's branch when
 that CLI has one, and at its `main` otherwise, so a change paired with adoption branches in the CLIs can pass
 before they merge ([`scripts/parity/app-ref.sh`](../../scripts/parity/app-ref.sh)).
+Parity's `downstream` job builds every CLI listed in
+[`scripts/parity/downstream.json`](../../scripts/parity/downstream.json) against the branch, in parallel, and runs what
+that CLI's own pull request runs first: `pnpm typecheck`, `pnpm lint:commands`, and `pnpm generate && pnpm docs:check`
+(the pages are regenerated first: that they differ from the pinned release's is not a break). A release also runs
+each CLI's `pnpm test` there, and publishes nothing when one fails. One check, `validation / parity / downstream`,
+sums the matrix. A new CLI on cli-core is one line in that file; a private repository cannot be listed (the job
+checks out without a token).
 A pull request that changes only `CHANGELOG.md` and `package.json`'s version against a `main` whose pull request
 passed every required check on the same tree (bin/release's fold and version pull requests) runs `pnpm docs:check`
 and the changelog shape test instead, and reports the other required checks as passed, saying why

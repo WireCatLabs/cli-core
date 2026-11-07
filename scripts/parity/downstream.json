@@ -1,0 +1,11 @@
+[
+  { "cli": "mail", "repo": "mail-cli" },
+  { "cli": "memo", "repo": "cli-memo" },
+  { "cli": "tg", "repo": "tg-cli" },
+  { "cli": "max", "repo": "max-cli" },
+  { "cli": "wa", "repo": "whatsapp-cli" },
+  { "cli": "drive", "repo": "drive-cli" },
+  { "cli": "gcal", "repo": "gcal-cli" },
+  { "cli": "zm", "repo": "zoom-cli" },
+  { "cli": "b24", "repo": "bitrix24-cli" }
+]

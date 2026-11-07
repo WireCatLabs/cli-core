@@ -87,6 +87,7 @@ jobs:
     with:
       pack: true
       app_ref: ${{ inputs.app_ref }}
+      downstream_tests: true
 
   checks:
     needs: [checked-commit, reuse]
@@ -135,6 +136,7 @@ jobs:
     uses: ./.github/workflows/parity.yml
     with:
       app_ref: ${{ inputs.app_ref }}
+      tests: true
 
   # What node-ci.yml's pack step does for the full path: build once, pack once, hand `build` the digest.
   pack:
