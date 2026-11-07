@@ -142,7 +142,8 @@ export interface PriceFilter {
 /**
  * Subscriptions the owner bills or pays, and their prices. A price is a row of its own and never changes. Confirming a
  * subscription confirms the prices proposed with it; a later price is a proposal of its own, and the subscription
- * stays confirmed.
+ * stays confirmed. A confirmed price is never rejected, and a day holds one live price, so a wrong confirmed price is
+ * corrected by a new price from a later day.
  */
 export interface SubscriptionsStore {
   add(input: SubscriptionInput): Promise<SubscriptionDetail>
