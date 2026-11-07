@@ -157,6 +157,10 @@
     "--brief": {
       "meaning": "found messages as reference, title, time, sender and excerpt only"
     },
+    "--button": {
+      "value": "<text=data>",
+      "meaning": "an inline button as <text>=<data>; repeat for more in one row"
+    },
     "--by": {
       "value": "<grouping>",
       "meaning": "what to count by",
@@ -229,9 +233,6 @@
     "--claim": {
       "value": "<claim>",
       "meaning": "remove only this ownership claim: manual or auto"
-    },
-    "--clear": {
-      "meaning": "take the buttons off the message"
     },
     "--close-time": {
       "value": "<delay>",
@@ -398,10 +399,6 @@
     },
     "--failed": {
       "meaning": "every chat whose newest job failed or died"
-    },
-    "--field": {
-      "value": "<key=value>",
-      "meaning": "an inline button as <text>=<data>; repeat for more in one row"
     },
     "--file": {
       "value": "<file>",
@@ -669,6 +666,9 @@
     },
     "--no-block": {
       "meaning": "remove without banning; by default a removed person cannot come back by the link"
+    },
+    "--no-buttons": {
+      "meaning": "take the buttons off the message"
     },
     "--no-catch-up": {
       "meaning": "skip local preparation after this run"
@@ -1869,13 +1869,7 @@
     "bot messages edit": {
       "in": ["max", "tg"],
       "options": {
-        "--clear": {
-          "in": ["max", "tg"],
-          "planned": {
-            "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
-          }
-        },
-        "--field": {
+        "--button": {
           "in": ["max", "tg"],
           "planned": {
             "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
@@ -1888,6 +1882,12 @@
           }
         },
         "--md": {
+          "in": ["max", "tg"],
+          "planned": {
+            "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
+          }
+        },
+        "--no-buttons": {
           "in": ["max", "tg"],
           "planned": {
             "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
@@ -1941,7 +1941,7 @@
             "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"
           }
         },
-        "--field": {
+        "--button": {
           "in": ["max", "tg"],
           "planned": {
             "wa": "whatsapp-cli: wa bot API, plans/2026-10-22-wa-bot-api"

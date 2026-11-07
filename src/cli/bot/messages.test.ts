@@ -177,7 +177,7 @@ describe("bot messages send", () => {
   })
 
   it("**sends inline buttons in one row**, and refuses data over 64 bytes or a malformed button before anything goes", async () => {
-    await call(["sales", "bot", "messages", "send", "Team", "Pick", "--field", "Yes=wcr1:a=b", "--field", "No=n"])
+    await call(["sales", "bot", "messages", "send", "Team", "Pick", "--button", "Yes=wcr1:a=b", "--button", "No=n"])
     expect(sent[0]?.options.buttons).toEqual([
       [
         { text: "Yes", data: "wcr1:a=b" },
@@ -185,8 +185,8 @@ describe("bot messages send", () => {
       ],
     ])
 
-    const long = await call(["sales", "bot", "messages", "send", "Team", "x", "--field", `Go=${"é".repeat(33)}`])
-    const bare = await call(["sales", "bot", "messages", "send", "Team", "x", "--field", "Go"])
+    const long = await call(["sales", "bot", "messages", "send", "Team", "x", "--button", `Go=${"é".repeat(33)}`])
+    const bare = await call(["sales", "bot", "messages", "send", "Team", "x", "--button", "Go"])
     expect([long.code, bare.code]).toEqual([2, 2])
     expect(long.stderr).toContain("1 to 64 bytes, got 66")
     expect(sent).toHaveLength(1)
@@ -271,12 +271,12 @@ describe("bot messages edit, delete, pin", () => {
 
 describe("bot messages edit buttons", () => {
   it("**replaces the buttons, takes them off, or leaves them to the messenger**", async () => {
-    await call(["sales", "bot", "messages", "edit", "Team", "5", "a", "--field", "Yes=y"])
-    await call(["sales", "bot", "messages", "edit", "Team", "5", "b", "--clear"])
+    await call(["sales", "bot", "messages", "edit", "Team", "5", "a", "--button", "Yes=y"])
+    await call(["sales", "bot", "messages", "edit", "Team", "5", "b", "--no-buttons"])
     await call(["sales", "bot", "messages", "edit", "Team", "5", "c"])
 
     expect(edits.map((edit) => edit.options.buttons)).toEqual([[[{ text: "Yes", data: "y" }]], [], undefined])
-    const both = await call(["sales", "bot", "messages", "edit", "Team", "5", "d", "--field", "A=a", "--clear"])
+    const both = await call(["sales", "bot", "messages", "edit", "Team", "5", "d", "--button", "A=a", "--no-buttons"])
     expect(both.code).toBe(2)
     expect(edits).toHaveLength(3)
   })
