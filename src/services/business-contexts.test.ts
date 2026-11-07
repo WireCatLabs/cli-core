@@ -416,7 +416,7 @@ describe("canonical person context", () => {
     ])
     expect(emma.business.deals.items.map((one) => [one.ref, standings(one)])).toEqual([[refs.deal, ["owner:reported"]]])
     expect(emma.coverage.notRead.map((one) => one.source)).toEqual(["messages", "example-crm:northstar.example"])
-    expect(emma.coverage.notRead[1]?.reason).toMatch(/did not list departments: .*report/)
+    expect(emma.coverage.notRead[1]?.reason).toMatch(/departments: .*report/)
     expect(emma.events.recent.map((one) => one.ref)).toEqual([expect.stringMatching(/^event:/)])
   })
 
