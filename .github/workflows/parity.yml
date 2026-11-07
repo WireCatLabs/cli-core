@@ -157,9 +157,9 @@ jobs:
       - id: read
         run: echo "clis=$(jq -c . scripts/parity/downstream.json)" >> "$GITHUB_OUTPUT"
 
-  # Each CLI that depends on cli-core, built against this checkout: what its own pull request would run first, so a
-  # shared command that breaks a CLI's types, command lint or docs fails here and not on that CLI's next bump. A
-  # release (`tests`) also runs each CLI's tests.
+  # Each CLI that depends on cli-core, built against this checkout: what its own pull request would run first. A build,
+  # typecheck or start that fails is a break and fails `downstream`; command lint and docs only warn: they flag cleanup
+  # the CLI owes, not a CLI that stopped working. A release (`tests`) also runs each CLI's tests, which block.
   downstream:
     needs: [pack, downstream-list]
     runs-on: ubuntu-latest
@@ -199,42 +199,98 @@ jobs:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: parity-cli-core
-      - name: Build ${{ matrix.repo }} ${{ steps.app.outputs.ref }} against this cli-core
+      - id: build
+        name: Build ${{ matrix.repo }} ${{ steps.app.outputs.ref }} against this cli-core
         run: shared/scripts/parity/build-app.sh "$CLI" cli cli-core.tgz "$APP_REF"
         env:
           CLI: ${{ matrix.cli }}
           APP_REF: ${{ steps.app.outputs.ref }}
-      - name: Typecheck
+      - id: typecheck
+        name: Typecheck
         run: pnpm typecheck
         working-directory: cli
+      # A throwaway home and no D-Bus: the start must not reach a real profile or the keyring.
+      - id: start
+        name: Starts (--help)
+        run: |
+          home=$(mktemp -d)
+          HOME=$home XDG_CONFIG_HOME=$home/.config XDG_STATE_HOME=$home/.local/state XDG_CACHE_HOME=$home/.cache \
+            XDG_DATA_HOME=$home/.local/share DBUS_SESSION_BUS_ADDRESS=disabled: \
+            timeout 60 node "dist/bin/$CLI.js" --help </dev/null >/dev/null
+        working-directory: cli
+        env:
+          CLI: ${{ matrix.cli }}
       # A word this branch adds to the vocabulary makes the CLI's entry for it stale: its cleanup, not a break.
-      - name: Command lint
+      - id: lint
+        name: Command lint (warns)
+        continue-on-error: true
         run: pnpm lint:commands --allow-stale
         working-directory: cli
       # Regenerated first: the pages always differ from the ones generated with the pinned release, and that alone
       # is not a break. What must hold is that they still generate and pass the CLI's own docs check.
-      - name: Generated docs
+      - id: docs
+        name: Generated docs (warns)
+        continue-on-error: true
         run: pnpm generate && pnpm docs:check
         working-directory: cli
-      - name: Tests
+      - id: tests
+        name: Tests
         if: inputs.tests
         run: pnpm test
         working-directory: cli
         env:
           VITEST_MAX_WORKERS: 4
+      - name: Record the outcome
+        if: always()
+        env:
+          REPO: ${{ matrix.repo }}
+          REF: ${{ steps.app.outputs.ref }}
+          BUILD: ${{ steps.build.outcome }}
+          TYPECHECK: ${{ steps.typecheck.outcome }}
+          START: ${{ steps.start.outcome }}
+          LINT: ${{ steps.lint.outcome }}
+          DOCS: ${{ steps.docs.outcome }}
+          TESTS: ${{ steps.tests.outcome }}
+        run: |
+          mkdir -p downstream-outcome
+          jq -n '{repo: env.REPO, ref: env.REF, build: env.BUILD, typecheck: env.TYPECHECK, start: env.START,
+            lint: env.LINT, docs: env.DOCS, tests: env.TESTS}' > "downstream-outcome/$REPO.json"
+          for step in lint docs; do
+            [ "$(jq -r ".$step" "downstream-outcome/$REPO.json")" != failure ] ||
+              echo "::warning title=$REPO::$step fails against this cli-core (a warning, not a break)"
+          done
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: downstream-${{ matrix.repo }}
+          path: downstream-outcome
+          overwrite: true
+          retention-days: 1
 
-  # One check to require, whatever the list holds: a matrix job's name changes with each CLI added.
+  # One check to require, whatever the list holds: a matrix job's name changes with each CLI added. A pull request
+  # labelled `breaks-downstream` passes it with the broken CLIs named: a break made on purpose, said so in its body.
+  # The label is read when the job runs, not from the event, so adding it and re-running this job is enough.
   downstream-result:
     needs: downstream
     if: always()
     runs-on: ubuntu-latest
     name: downstream
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: scripts/parity
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: downstream-*
+          path: outcomes
+          merge-multiple: true
       - env:
           RESULT: ${{ needs.downstream.result }}
-        run: |
-          [ "$RESULT" = success ] || { echo "::error::a CLI fails against this cli-core: see the downstream jobs"; exit 1; }
-
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          LABEL: breaks-downstream
+        run: bash scripts/parity/downstream-result.sh outcomes
   wording:
     needs: pack
     runs-on: ubuntu-latest
