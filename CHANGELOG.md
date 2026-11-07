@@ -21,6 +21,15 @@ shape of this file.
   and `last_ok_at`, the newest check that passed); `doctor` and `store recover` answer `last_known_good` from it.
   `storeSummary` takes the CLI's `version` for it.
 
+### Changed — may break callers
+
+- **`personContext`, `contacts context`, `contacts prepare` and `events prepare` read only accounts of the asked
+  account's scope.** A personal account no longer reads a linked person's mail, messages, calendar events or recorded
+  meetings in work accounts, and a work account none in personal ones. To read both, pass
+  `scopes: ["personal", "work"]` in the options of `personContext`, or of `eventPreparation`. The answer's new
+  `accounts` lists every account read with its scope. The asked account must be in the store: a missing one, or an
+  `AccountKey.scope` that differs from the stored scope, is `not_found`.
+
 ### Fixed
 
 - **A damaged store file is `configuration_error` (`store.damaged`), not a crash.** SQLite's "database disk image is
@@ -43,6 +52,10 @@ shape of this file.
   two people when the owner once moved anyone of one away from anyone of the other. An agent's link of one identity
   (a confirmed mention, a meeting participant) back over such a separation is refused with the reason
   `identity.separated`; the owner's own link still goes through. The exact-email join stays automatic otherwise.
+
+- **A personal account's `contacts context` no longer shows a person's work mail.** One exact email address joins a
+  personal and a work contact into one person, and the context then read every account that had seen any of that
+  person's identities. Each linked identity now also lists `seenIn`, its accounts with their scope.
 
 ## 0.604.0 — 07.11.2026
 
@@ -4649,7 +4662,6 @@ shape of this file.
 - **Provider model catalogues share `modelCatalogueCommand`.** Providers choose supported kinds and bind output,
   environment and offline policy; native query filtering, model receipts and verified downloads stay in core.
 
-
 ### Changed — may break callers
 
 - **Contact activity and diagnostic run times filter through native queries.** Use `contacts events <person> scope:work 'at:[2026-10-01 TO 2026-10-31]'` and `search runs 'started_at>=7d'` instead of their time/scope flags. Time bounds reach the native readers before pagination, and continuations preserve the query.
@@ -6241,7 +6253,6 @@ shape of this file.
 - **An MCP client that closes stdin right after its calls gets their answers**: the personal server waits
   for the last answer before it exits.
 
-
 ## 0.340.0 — 18.10.2026
 
 ### Added
@@ -6589,7 +6600,6 @@ shape of this file.
   shown as possible duplicates because one task's message replies to the other's were wrong 11 times in 13. At +2,
   shown-pair precision rose on both labelled sets (52% → 57%, 43% → 47%) for one lost true pair each; a reply that
   asks for something new now stays "different".
-
 
 ## 0.330.0 — 18.10.2026
 
@@ -7489,7 +7499,6 @@ shape of this file.
 
 ## 0.294.0 — 15.10.2026
 
-
 ### Added
 
 - **A message draws the poll it carries**: `Attachment.poll` holds it, and `renderMessages` shows the question, each
@@ -7863,7 +7872,6 @@ shape of this file.
   naming each model makes it 0.2 ms and 1.5 ms. A memo `rules apply` that cut 44,000 emails had left a queue the
   scheduled sync worked through for hours.
 
-
 ## 0.282.0 — 15.10.2026
 
 ### Added
@@ -8212,7 +8220,6 @@ shape of this file.
   lists.
 - **`mentions:"person:<uid>"` in message search** finds the messages that mention someone by a linked name, phone
   or address; `organization:<id>` and `document:<id>` too. Mentions now carry `target`.
-
 
 ## 0.270.0 — 14.10.2026
 

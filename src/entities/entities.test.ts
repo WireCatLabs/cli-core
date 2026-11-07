@@ -28,6 +28,7 @@ const author = { type: "person", id: "1", name: null }
 
 const contactContextSample = {
   person: { uid: "1", provider: "telegram", id: "9", name: null, identities: [] },
+  accounts: [{ provider: "telegram", account: "5", scope: "personal" }],
   shared: [],
   last: { from_them: null, from_me: null, from_them_anywhere: null },
   recent: { direct: [], groups: [] },
@@ -407,6 +408,7 @@ const samples: Record<EntityName, unknown> = {
         username: null,
         is_bot: null,
         accounts: ["1"],
+        seen_in: [{ account: "1", scope: "personal" }],
         method: "manual",
         linked_by: "owner",
         linked_at: at,

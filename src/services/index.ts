@@ -235,6 +235,7 @@ export { moderationService } from "./moderation.js"
 export type { ContactSync, PeopleService } from "./people.js"
 export { linkPeople, peopleService, phoneOf } from "./people.js"
 export type {
+  AccountScope,
   ContextEvent,
   ContextMessage,
   ContextOptions,

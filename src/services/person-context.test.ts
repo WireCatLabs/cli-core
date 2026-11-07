@@ -272,6 +272,80 @@ describe("contacts context", () => {
   })
 })
 
+describe("contacts context of a person merged across personal and work accounts", () => {
+  const now = Date.UTC(2026, 9, 26, 12)
+  const mail = { provider: "email", account: "me@work.example", scope: "work" as const }
+  const workCalendar = { provider: "google-calendar", account: "work-1", scope: "work" as const }
+
+  beforeEach(async () => {
+    const mailbox = await store.accounts.saveAccount(mail, { name: null })
+    await store.mail.saveThread({
+      accountId: mailbox,
+      externalId: "thread-1",
+      now: now - 1000,
+      emails: [
+        {
+          externalId: "<budget@work.example>",
+          subject: "Budget",
+          from: { address: "ana@x.com", name: "Ana" },
+          sentAt: now - 2000,
+          bodyText: "The work budget",
+        },
+      ],
+    })
+    const [calendar] = await store.calendar.saveCalendars(
+      await store.accounts.saveAccount(workCalendar, { name: null }),
+      [
+        {
+          externalId: "primary",
+          title: "Work",
+          timezone: "UTC",
+          accessRole: "owner",
+          primary: true,
+          syncByDefault: true,
+        },
+      ],
+      1,
+    )
+    await store.calendar.saveEntries(
+      calendar?.id as number,
+      [
+        {
+          externalId: "review",
+          kind: "single",
+          status: "confirmed",
+          title: "Budget review",
+          startsAt: now + 86_400_000,
+          endsAt: now + 90_000_000,
+          participants: [{ email: "ana@x.com", name: "Ana" }],
+        },
+      ],
+      1,
+    )
+    await store.people.savePeople(tg, [{ id: "11", name: "Ana", username: "ana_a", email: "ana@x.com" }])
+  })
+
+  it("reads none of their work mail or work events from a personal account", async () => {
+    const found = await personContext(store, tg, "11", { now })
+
+    expect(found.person.identities.map(({ provider, id }) => `${provider}:${id}`)).toContain("email:ana@x.com")
+    expect(found.recent.direct.map(({ id }) => id)).not.toContain("<budget@work.example>")
+    expect(found.events.upcoming).toEqual([])
+    expect(found.accounts).toEqual([{ provider: "telegram", account: "500", scope: "personal" }])
+  })
+
+  it("reads both and names every account read when the caller allows both scopes", async () => {
+    const found = await personContext(store, tg, "11", { now, scopes: ["personal", "work"] })
+
+    expect(found.recent.direct.map(({ id }) => id)).toContain("<budget@work.example>")
+    expect(found.events.upcoming.map(({ title }) => title)).toEqual(["Budget review"])
+    expect(found.accounts).toEqual([
+      { provider: "email", account: "me@work.example", scope: "work" },
+      { provider: "telegram", account: "500", scope: "personal" },
+    ])
+  })
+})
+
 describe("contacts context in named chats", () => {
   beforeEach(async () => {
     await store.messages.saveMessages(
