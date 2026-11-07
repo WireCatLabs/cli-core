@@ -274,3 +274,27 @@ it("hears a whole channel as timed pieces from an installed model, and frees the
   const directory = await mkdtemp(join(tmpdir(), "messaging-test-missing-speech-"))
   await expect(recognizeLocalPieces("tiny-example", audio, { directory })).rejects.toMatchObject({ code: "not_found" })
 })
+it("stops hearing a channel between pieces when the signal aborts, and still frees the engine", async () => {
+  const controller = new AbortController()
+  const native = {
+    ...backend(),
+    pieces: vi.fn((_pcm: Float32Array) => []),
+    piecesUntil: vi.fn(async (_pcm: Float32Array, signal: AbortSignal) => {
+      controller.abort()
+      await new Promise((resolve) => setImmediate(resolve))
+      signal.throwIfAborted()
+      return []
+    }),
+  }
+  const audio = { samples: new Float32Array(16000), rate: 16000 }
+  const directory = await installed()
+
+  await expect(
+    recognizeLocalPieces("tiny-example", audio, { directory, open: () => native, signal: controller.signal }),
+  ).rejects.toMatchObject({ code: "cancelled" })
+  expect(native.pieces).not.toHaveBeenCalled()
+  expect(native.free).toHaveBeenCalledOnce()
+  await expect(
+    recognizeLocalPieces("tiny-example", audio, { directory, open: () => native, signal: controller.signal }),
+  ).rejects.toMatchObject({ code: "cancelled" })
+})

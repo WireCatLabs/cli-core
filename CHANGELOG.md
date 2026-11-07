@@ -24,6 +24,16 @@ shape of this file.
   the read-only lock and over MCP's `read` tool. It was refused under `<PREFIX>_READ_ONLY` even when it only printed.
   A CLI that passes `newFileOutput: writesNewFileOnlyWith` and a `writeFile` that refuses a file that exists, such as
   `writeNewFile`, gets an export that is a read without `--output` and, with it, only ever adds a file.
+- **`meetings sync` can stop itself before its deadline and go on next time.** A CLI that passes
+  `MeetingCommandDeps.budgetOf` (`runBudgetOf` from `@wirecat/cli-core/cli`) gets a cooperative, partial sync: it
+  reads meetings oldest first, asks the budget before each, and on a stop keeps what it saved, answers `stopped` and
+  `remaining`, and moves the cursor to the first meeting it did not reach (never past one that failed). Without it the
+  sync keeps the one-shot deadline, as before.
+- **`meetings sync --rescan`** reads the last 30 days again instead of only what came after the last sync.
+- **`MeetingSource.overlapMs`**: a source's own look-back before the cursor, for a provider that lists a meeting late;
+  `--lookback-days` widens it, never narrows it. 0 when absent.
+- **`recognizeLocalPieces` takes a `signal`** and stops between two pieces of speech when it aborts, freeing the
+  engine; a backend gives `piecesUntil` for it. Without a signal nothing changes.
 
 ### Changed — may break callers
 
