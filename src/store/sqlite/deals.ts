@@ -60,6 +60,15 @@ export interface PipelineReport extends Omit<Pipeline, "stages"> {
   since: string | null
 }
 
+/** One stage a deal or a lead entered, as the store saw it: a CRM copy's change is dated by the sync that saw it. */
+export interface StageChange {
+  /** `null` for the stage it started in. */
+  from: string | null
+  to: string
+  pipeline: string
+  at: string
+}
+
 export interface DealPerson extends Party {
   role: DealRole
 }
@@ -192,6 +201,8 @@ export interface DealsStore {
   add(input: DealInput): Promise<Deal>
   /** `deal:<id>` or `lead:<id>`; a bare id is a deal. */
   get(reference: string): Promise<Deal>
+  /** Every stage it entered, in the order it entered them: a CRM's own stamps may run out of order. */
+  stages(reference: string): Promise<StageChange[]>
   list(filter?: DealFilter): Promise<Deal[]>
   /** Deals and leads together, by the words of their title: the most words matched first, then the latest changed. */
   find(search: DealSearch): Promise<Deal[]>
@@ -638,6 +649,22 @@ export const dealOperationsOver = (context: StoreContext) => {
       return read(`${kind}:${id}`)
     },
     get: (reference: string): Deal => read(reference),
+    stages: (reference: string): StageChange[] => {
+      const { kind, row } = rowOf(reference)
+      return database
+        .prepare(
+          "SELECT c.pipeline_id, c.changed_at, f.name AS from_name, t.name AS to_name FROM pipeline_stage_changes c " +
+            "LEFT JOIN pipeline_stages f ON f.id = c.from_stage_id JOIN pipeline_stages t ON t.id = c.to_stage_id " +
+            "WHERE c.item_type = ? AND c.item_id = ? ORDER BY c.id",
+        )
+        .all(kind, Number(row.id))
+        .map((change) => ({
+          from: change.from_name == null ? null : String(change.from_name),
+          to: String(change.to_name),
+          pipeline: `pipeline:${change.pipeline_id}`,
+          at: iso(change.changed_at),
+        }))
+    },
     list: (filter: DealFilter = {}): Deal[] => {
       const kind = kindOf(filter.kind)
       const project = filter.project === undefined ? null : projectId(database, filter.project)
@@ -755,6 +782,7 @@ export const dealsStoreOver = (context: StoreContext): DealsStore => {
     pipeline: async (reference, options) => operations.pipeline(reference, options),
     add: async (input) => operations.add(input),
     get: async (reference) => operations.get(reference),
+    stages: async (reference) => operations.stages(reference),
     list: async (filter) => operations.list(filter),
     find: async (search) => operations.find(search),
     move: async (reference, input) => operations.move(reference, input),

@@ -198,10 +198,15 @@ export type {
   ExtractStatus,
 } from "./attachments.js"
 export { attachmentsService } from "./attachments.js"
+export type { Category, Coverage, Related, RelationRole, Section } from "./business-context.js"
+export { CATEGORIES, organizationCategories, organizationsInCategory, SECTION_LIMIT } from "./business-context.js"
 export type { ChatsService, MarkedRead, PageWindow } from "./chats.js"
 export { chatsService, EVENTS_DAYS } from "./chats.js"
+export type { Communications, Touch } from "./communications.js"
 export type { BatchStatus, Built, ConversationsService, MessageLinks } from "./conversations.js"
 export { BATCH_SIZE, conversationsService } from "./conversations.js"
+export type { DealBrief, DealContext, DealContextOptions, DealTouch } from "./deal-context.js"
+export { dealBrief, dealContext } from "./deal-context.js"
 export type { ServiceDeps, ServiceMessenger } from "./deps.js"
 export { accountStore, crossAccount, OFFLINE, onlineDeps, storedDeps, storeOnlyDeps } from "./deps.js"
 export type { Embedded, EmbeddingsService, EmbedStatus, FoundConversation } from "./embeddings.js"
@@ -264,8 +269,19 @@ export { DELETE_AT_ONCE, messagesService } from "./messages.js"
 export { searchStore } from "./messages-archive-search.js"
 export type { ModerateOptions, ModerationService, ShownRules } from "./moderation.js"
 export { moderationService } from "./moderation.js"
+export type { FinanceTotal, InvoiceLine, LinkedBy, MoneySection, OrderLine, PaymentLine } from "./money-context.js"
+export type {
+  DealLine,
+  OrganizationContext,
+  OrganizationContextOptions,
+  ProjectLine,
+  TaskLine,
+} from "./organization-context.js"
+export { organizationContext } from "./organization-context.js"
 export type { ContactSync, PeopleService } from "./people.js"
 export { linkPeople, peopleService, phoneOf } from "./people.js"
+export type { CanonicalContextOptions, CanonicalPersonContext, PersonBusiness } from "./person-business.js"
+export { canonicalPersonContext, personBusiness } from "./person-business.js"
 export type {
   AccountScope,
   ContextEvent,

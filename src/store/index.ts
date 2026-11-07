@@ -208,6 +208,7 @@ export type {
   PipelineInput,
   PipelineReport,
   PipelineStage,
+  StageChange,
 } from "./sqlite/deals.js"
 export type {
   DecisionMessage,

@@ -27,6 +27,8 @@ export interface OrganizationsStore {
    * to the CRM's own-company flag.
    */
   setOwnOrganization(organization: string, own: boolean | null): Promise<{ ref: string; own: boolean }>
+  /** The owner's own companies: the owner's mark, else a CRM's own-company flag (`metadata.own`). */
+  ownOrganizations(): Promise<Organization[]>
 }
 
 export const organizationsStoreOver = ({ database, now }: StoreContext): OrganizationsStore => ({
@@ -52,6 +54,13 @@ export const organizationsStoreOver = ({ database, now }: StoreContext): Organiz
       .all(...(where?.params ?? []))
       .map(organizationOf)
   },
+  ownOrganizations: async () =>
+    database
+      .prepare(
+        "SELECT * FROM organizations WHERE deleted_at IS NULL AND json_extract(metadata, '$.own') = 1 ORDER BY name, id",
+      )
+      .all()
+      .map(organizationOf),
   updateOrganization: async (organization, { name }) =>
     write(database, () => {
       const title = name.trim()

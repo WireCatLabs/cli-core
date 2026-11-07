@@ -94,6 +94,10 @@ export interface Link extends RelationshipColumns {
   provenance: string | null
   confirmed: boolean
   createdAt: string
+  /** The source account that reported it, `<provider>:<account>`. */
+  account?: string
+  /** How a source made the relationship when it stated none, such as `department-head`. */
+  derived?: string
 }
 
 export interface LinkListFilter {
@@ -260,7 +264,16 @@ export const linkOf = (database: CacheDatabase, row: Row): Link => {
   const metadata =
     row.metadata == null
       ? {}
-      : (JSON.parse(String(row.metadata)) as { provenance?: string; position?: unknown; overrides?: unknown })
+      : (JSON.parse(String(row.metadata)) as {
+          provenance?: string
+          position?: unknown
+          overrides?: unknown
+          derived?: unknown
+        })
+  const reporter =
+    row.account_id == null
+      ? undefined
+      : database.prepare("SELECT provider, external_id FROM accounts WHERE id = ?").get(Number(row.account_id))
   return {
     id: String(row.id),
     from: thingRef(database, row.from_type, row.from_id) as string,
@@ -281,6 +294,8 @@ export const linkOf = (database: CacheDatabase, row: Row): Link => {
     ...(row.deleted_at == null ? {} : { deletedAt: Number(row.deleted_at) }),
     ...(typeof metadata.position === "string" ? { position: metadata.position } : {}),
     ...(typeof metadata.overrides === "number" ? { overrides: metadata.overrides } : {}),
+    ...(reporter ? { account: `${reporter.provider}:${reporter.external_id}` } : {}),
+    ...(typeof metadata.derived === "string" ? { derived: metadata.derived } : {}),
   }
 }
 

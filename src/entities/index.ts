@@ -16,6 +16,7 @@ import { agenda } from "./agenda.js"
 import { analysisConsent, analysisConsentRevocation } from "./analysis-consent.js"
 import { attachment, hitFile } from "./attachment.js"
 import { attachmentBytes, attachmentExtraction, attachmentTextChange } from "./attachment-results.js"
+import { dealBrief, dealContext, organizationContext, personContext } from "./business-context.js"
 import { chart } from "./chart.js"
 import { chat } from "./chat.js"
 import {
@@ -465,6 +466,10 @@ export const ENTITIES = {
   identity,
   contact_context: contactContext,
   contact_preparation: contactPreparation,
+  person_context: personContext,
+  organization_context: organizationContext,
+  deal_context: dealContext,
+  "deal_context.brief": dealBrief,
   contact_activity: contactActivity,
   contact_check: contactCheck,
   linked_person: linkedPerson,
