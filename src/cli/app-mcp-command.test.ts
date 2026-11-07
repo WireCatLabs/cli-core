@@ -2,8 +2,9 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { PassThrough } from "node:stream"
-import { captureStreams } from "@wirecat/cli-base"
+import { captureStreams, type KeyringStore } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
+import { memoryKeyring } from "@wirecat/cli-base/testing"
 import { Command } from "commander"
 import { describe, expect, it, vi } from "vitest"
 import { appDoctorCommand } from "./app-doctor-command.js"
@@ -291,6 +292,57 @@ describe("appDoctorCommand", () => {
       const broken = await answer({ online: async () => Promise.reject(new Error("login refused")) }, ["--online"])
       expect(broken.code).toBe(0)
       expect(broken.item.online).toMatchObject({ ok: false, error_code: "generic_failure", error: "login refused" })
+    })
+  })
+
+  describe("mcp check", () => {
+    const FAKE_SERVER = [
+      "import { createInterface } from 'node:readline'",
+      "const answer = (id, result) => process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id, result }) + '\\n')",
+      "createInterface({ input: process.stdin }).on('line', (line) => {",
+      "  const { id, method } = JSON.parse(line)",
+      "  if (method === 'initialize') answer(id, { protocolVersion: '2025-06-18', capabilities: { tools: {} }, serverInfo: { name: 'fake', version: '1' } })",
+      "  else if (method === 'tools/list') answer(id, { tools: [] })",
+      "  else if (id !== undefined) answer(id, {})",
+      "})",
+    ].join("\n")
+
+    const check = async (signedIn: NonNullable<AppMcpOptions["signedIn"]>, keyring: KeyringStore) => {
+      const env = home()
+      const scriptPath = join(env.CAL_STATE_DIR, "..", "server.mjs")
+      writeFileSync(scriptPath, FAKE_SERVER)
+      const streams = captureStreams()
+      const mcp = appMcpCommand(app, configuration, {
+        name: "Calendar",
+        untrusted: ["event titles"],
+        permissionExample: "events.delete=deny",
+        signedIn,
+      })
+      const code = await run(["work", "mcp", "check", "--json"], { app, configuration, commands: () => [mcp] }, {
+        streams,
+        tty: false,
+        env,
+        keyring,
+        mcp: { execPath: process.execPath, scriptPath },
+      } as Parameters<typeof run>[2])
+      return { code, item: JSON.parse(streams.stdout.join("\n")).item }
+    }
+
+    it("asks signedIn with the run's own keyring", async () => {
+      const keyring = memoryKeyring()
+      const signedIn = vi.fn(() => true)
+      const { code, item } = await check(signedIn, keyring)
+      expect(code).toBe(0)
+      expect(signedIn).toHaveBeenCalledWith("work", expect.any(Object), keyring)
+      expect(item).toMatchObject({ healthy: true, signed_in: true })
+    })
+
+    it("counts a signedIn that throws, such as a locked keyring, as not signed in", async () => {
+      const { code, item } = await check(() => {
+        throw new Error("the keyring is locked")
+      }, memoryKeyring())
+      expect(code).toBe(0)
+      expect(item).toMatchObject({ healthy: false, signed_in: false })
     })
   })
 })
