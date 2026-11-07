@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.605.0 — 07.11.2026
+
 ### Added
 
 - **A run that finds the store damaged stops every later write.** When a command fails with SQLite's "database disk
