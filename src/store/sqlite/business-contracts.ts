@@ -12,10 +12,10 @@ import { FINANCE_REVIEWS, type FinanceReview } from "../../domain/finance.js"
 import { currencyOf, formatDecimal, minorUnits, scaleOf } from "../../domain/money.js"
 import type { Decider } from "../decisions.js"
 import { type ProposedByFilter, proposedBySql } from "./actors.js"
-import { isoDate, oneOf, type Reviewed, refuse, reviewedRowsOver, text, type Written } from "./finance.js"
 import { type Author, projectId } from "./memories.js"
 import { requiredThing } from "./notes.js"
 import type { StoreContext } from "./open.js"
+import { isoDate, limitOf, oneOf, type Reviewed, refuse, reviewedRowsOver, text, type Written } from "./reviewed.js"
 import { write } from "./transaction.js"
 
 export interface Contract extends Reviewed {
@@ -70,6 +70,10 @@ export interface ContractInput extends Written, ContractFields {
   kind: ContractKind
 }
 
+export interface ContractUpdate extends ContractFields {
+  by: Author
+}
+
 export interface ContractFilter {
   status?: ContractStatus
   kind?: ContractKind
@@ -83,14 +87,16 @@ export interface ContractFilter {
 }
 
 /**
- * The contracts the owner works under. One without a value is written confirmed by anyone, as it feeds no total;
- * with a value an agent's waits as proposed, and only the owner sets or changes the value of a confirmed one.
+ * The contracts the owner works under. One without a value is written confirmed by anyone, as it feeds no total: its
+ * `confirmedBy` stays `null` and `author` says who wrote it. With a value an agent's waits as proposed. A confirmed
+ * contract is the owner's to change.
  */
 export interface ContractsStore {
   add(input: ContractInput): Promise<Contract>
   get(reference: string): Promise<Contract>
   list(filter?: ContractFilter): Promise<Contract[]>
-  update(reference: string, input: ContractFields & { by: Author }): Promise<Contract>
+  /** The owner changes any; a bot only one it proposed that is still proposed. */
+  update(reference: string, input: ContractUpdate): Promise<Contract>
   confirm(reference: string, by: Decider, reason?: string): Promise<Contract>
   reject(reference: string, by: Decider, reason?: string): Promise<Contract>
 }
@@ -299,7 +305,7 @@ export const contractOperationsOver = (context: StoreContext): ContractOperation
           expires,
           expires,
           ...by.params,
-          Math.min(Math.max(filter.limit ?? 100, 1), 500),
+          limitOf(filter.limit),
         )
         .map((row) => contractOf(row))
     },
@@ -308,19 +314,12 @@ export const contractOperationsOver = (context: StoreContext): ContractOperation
       const ref = `contract:${row.id}`
       if (row.review === "rejected" || row.deleted_at != null)
         refuse(`${ref} is ${row.deleted_at != null ? "deleted" : "rejected"}`, "contract.ref")
-      if (row.review === "proposed")
-        mayChangeParts(row, by, `only the owner changes ${ref}; a bot changes only a contract it proposed`)
-      const columns = columnsOf(fields, row)
-      if (
-        by !== "owner" &&
-        row.review === "confirmed" &&
-        (columns.value !== row.value || columns.currency !== row.currency)
+      mayChangeParts(
+        row,
+        by,
+        `only the owner changes ${ref}; a bot changes only a contract it proposed that is still proposed`,
       )
-        refuse(
-          `only the owner sets the value of ${ref}, a confirmed contract`,
-          "finance.owner-only",
-          "permission_error",
-        )
+      const columns = columnsOf(fields, row)
       write(database, () => {
         const deal = fields.deal === undefined ? row.deal_id : linkedId(fields.deal, "deal", "contract.ref")
         database

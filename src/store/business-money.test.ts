@@ -45,7 +45,13 @@ it("keeps yen without decimals and dinars with three on every new table, and nev
   const manama = await store.wallets.add({ by: "owner", name: "NBB", currency: "BHD" })
   expect(
     await reasonOf(
-      store.transactions.add({ by: "owner", wallet: tokyo.ref, direction: "in", amount: "1.5", date: "2026-11-01" }),
+      store.transactions.add({
+        by: "owner",
+        wallet: tokyo.ref,
+        direction: "in",
+        amount: "1.5",
+        statementDate: "2026-11-01",
+      }),
     ),
   ).toBe("money.amount")
   await store.transactions.add({
@@ -53,7 +59,7 @@ it("keeps yen without decimals and dinars with three on every new table, and nev
     wallet: tokyo.ref,
     direction: "in",
     amount: "12000",
-    date: "2026-11-01",
+    statementDate: "2026-11-01",
     splits: [{ amount: "2000", category: "Food" }],
   })
   await store.transactions.add({
@@ -61,7 +67,7 @@ it("keeps yen without decimals and dinars with three on every new table, and nev
     wallet: manama.ref,
     direction: "out",
     amount: "1.250",
-    date: "2026-11-02",
+    statementDate: "2026-11-02",
     splits: [{ amount: "0.125", category: "food" }],
   })
   expect((await store.wallets.get(tokyo.ref)).balance).toEqual({ amount: "7000", currency: "JPY" })
@@ -94,7 +100,7 @@ it("keeps yen without decimals and dinars with three on every new table, and nev
     customer: client.ref,
     every: "1-year",
     startDate: "2026-01-01",
-    price: { amount: "98000", currency: "JPY" },
+    prices: [{ amount: "98000", currency: "JPY" }],
   })
   expect(subscription.currentPrice).toMatchObject({ amount: "98000", currency: "JPY" })
 })

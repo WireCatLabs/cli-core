@@ -1,10 +1,20 @@
 import { WALLET_KINDS, type WalletKind, walletLine } from "../../domain/business.js"
 import { currencyOf, formatDecimal, type Money, moneyOf, scaleOf, signedMinorUnits } from "../../domain/money.js"
 import { fold } from "../normalize.js"
-import { iso, isoDate, oneOf, type Party, refuse, reviewedRowsOver, text } from "./finance.js"
 import { type Author, authorActor, authorOf } from "./memories.js"
 import { requiredThing } from "./notes.js"
 import type { StoreContext } from "./open.js"
+import {
+  type AuthorInfo,
+  iso,
+  isoDate,
+  limitOf,
+  oneOf,
+  type Party,
+  refuse,
+  reviewedRowsOver,
+  text,
+} from "./reviewed.js"
 import { write } from "./transaction.js"
 
 export interface Wallet {
@@ -33,7 +43,7 @@ export interface Wallet {
   until: string
   /** Pending or proposed transactions up to `until`, signed: shown beside the balance, never in it. */
   pending: Money
-  author: { type: "person" | "bot"; id: string; name: string | null; kind: "agent" | "rule" | null }
+  author: AuthorInfo
   model: string | null
   source: string
   createdAt: string
@@ -69,12 +79,21 @@ export interface WalletUpdate {
   openingDate?: string | null
 }
 
+export interface WalletFilter {
+  kind?: WalletKind
+  currency?: string
+  /** `true` only closed ones, `false` only open ones; both when left out. */
+  closed?: boolean
+  /** 1–500, 100 by default; by name. */
+  limit?: number
+}
+
 /** Bank accounts, cards, cash and wallets (`wallet:<id>`), written directly; their balances are computed. */
 export interface WalletsStore {
   add(input: WalletInput): Promise<Wallet>
   /** `until` is `YYYY-MM-DD`, today when left out. */
   get(reference: string, options?: { until?: string }): Promise<Wallet>
-  list(filter?: { kind?: WalletKind; currency?: string; closed?: boolean; limit?: number }): Promise<Wallet[]>
+  list(filter?: WalletFilter): Promise<Wallet[]>
   update(reference: string, input: WalletUpdate): Promise<Wallet>
 }
 
@@ -235,7 +254,7 @@ export const walletOperationsOver = (context: StoreContext): WalletOperations =>
           `${WALLETS} WHERE w.deleted_at IS NULL AND (? IS NULL OR w.kind = ?) AND (? IS NULL OR w.currency = ?) ` +
             "AND (? IS NULL OR (w.closed_date IS NOT NULL) = ?) ORDER BY w.name_folded, w.id LIMIT ?",
         )
-        .all(kind, kind, currency, currency, closed, closed, Math.min(Math.max(filter.limit ?? 100, 1), 500))
+        .all(kind, kind, currency, currency, closed, closed, limitOf(filter.limit))
         .map((row) => walletOf(row, today()))
     },
     update: (reference, input) => {

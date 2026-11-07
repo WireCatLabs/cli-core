@@ -65,7 +65,15 @@ it("writes a contract without a value confirmed by anyone, and proposes an agent
   expect(await reasonOf(f.store.contracts.update(plain.ref, { by: claude, value: "1.00", currency: "RUB" }))).toBe(
     "finance.owner-only",
   )
-  expect(await f.store.contracts.update(plain.ref, { by: claude, status: "ended" })).toMatchObject({ status: "ended" })
+  expect(await reasonOf(f.store.contracts.update(plain.ref, { by: claude, status: "ended" }))).toBe(
+    "finance.owner-only",
+  )
+  expect(await f.store.contracts.update(valued.ref, { by: claude, value: "100000.00", currency: "RUB" })).toMatchObject(
+    {
+      review: "proposed",
+      value: "100000.00",
+    },
+  )
   expect(await f.store.contracts.update(plain.ref, { by: "owner", value: "1.00", currency: "RUB" })).toMatchObject({
     value: "1.00",
   })
@@ -90,7 +98,7 @@ it("lists every business proposal in the inbox and lets only the owner decide th
     wallet: wallet.ref,
     direction: "in",
     amount: "10000.00",
-    date: "2026-11-05",
+    statementDate: "2026-11-05",
     counterpartyName: "ООО Пример",
   })
   const order = await f.store.orders.add({

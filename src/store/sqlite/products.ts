@@ -1,10 +1,20 @@
 import { CATALOG_KINDS, type CatalogKind, productLine } from "../../domain/business.js"
 import { currencyOf, formatDecimal, minorUnits, scaleOf } from "../../domain/money.js"
 import { fold } from "../normalize.js"
-import { iso, isoDate, oneOf, type Party, refuse, reviewedRowsOver, text } from "./finance.js"
 import { type Author, authorActor, authorOf } from "./memories.js"
 import { requiredThing } from "./notes.js"
 import type { StoreContext } from "./open.js"
+import {
+  type AuthorInfo,
+  iso,
+  isoDate,
+  limitOf,
+  oneOf,
+  type Party,
+  refuse,
+  reviewedRowsOver,
+  text,
+} from "./reviewed.js"
 import { write } from "./transaction.js"
 
 export interface Product {
@@ -24,7 +34,7 @@ export interface Product {
   description: string | null
   /** `YYYY-MM-DD`: no longer sold; its lines and subscriptions keep pointing at it. */
   archivedDate: string | null
-  author: { type: "person" | "bot"; id: string; name: string | null; kind: "agent" | "rule" | null }
+  author: AuthorInfo
   model: string | null
   source: string
   createdAt: string
@@ -200,7 +210,7 @@ export const productOperationsOver = (context: StoreContext): ProductOperations 
       const supplier = partyThing(filter.supplier, "the supplier")
       const archived = filter.archived === undefined ? null : filter.archived ? 1 : 0
       const words = filter.name === undefined ? [] : fold(filter.name).split(/\s+/).filter(Boolean)
-      const limit = Math.min(Math.max(filter.limit ?? 100, 1), 500)
+      const limit = limitOf(filter.limit)
       return database
         .prepare(
           `${PRODUCTS} WHERE c.deleted_at IS NULL AND (? IS NULL OR c.kind = ?) ` +

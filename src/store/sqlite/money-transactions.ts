@@ -5,10 +5,20 @@ import { formatDecimal, type Money, minorUnits, moneyLabel, moneyOf, scaleOf } f
 import type { Decider } from "../decisions.js"
 import { fold } from "../normalize.js"
 import { type ProposedByFilter, proposedBySql } from "./actors.js"
-import { isoDate, oneOf, type Party, type Reviewed, refuse, reviewedRowsOver, text, type Written } from "./finance.js"
 import { type Author, projectId } from "./memories.js"
 import { requiredThing } from "./notes.js"
 import type { StoreContext } from "./open.js"
+import {
+  isoDate,
+  limitOf,
+  oneOf,
+  type Party,
+  type Reviewed,
+  refuse,
+  reviewedRowsOver,
+  text,
+  type Written,
+} from "./reviewed.js"
 import { write } from "./transaction.js"
 
 export interface TransactionSplit {
@@ -31,7 +41,7 @@ export interface MoneyTransaction extends Reviewed {
   currency: string
   status: TransactionStatus
   /** `YYYY-MM-DD`: the day the statement shows. */
-  date: string
+  statementDate: string
   /** Set once booked. */
   bookedDate: string | null
   description: string | null
@@ -63,8 +73,8 @@ export interface TransactionInput extends Written {
   currency?: string
   /** `booked` when left out. */
   status?: TransactionStatus
-  date: string
-  /** A booked transaction's day; its `date` when left out. */
+  statementDate: string
+  /** A booked transaction's day; its `statementDate` when left out. */
   bookedDate?: string
   description?: string
   counterpartyName?: string
@@ -74,13 +84,21 @@ export interface TransactionInput extends Written {
   splits?: SplitInput[]
 }
 
+/** The owner changes any transaction; a bot only one it proposed that is still proposed. */
 export interface TransactionUpdate {
   by: Author
+  direction?: MoneyDirection
+  /** Refused below its splits, or when a linked payment no longer matches. */
+  amount?: string
   status?: TransactionStatus
+  statementDate?: string
   bookedDate?: string
+  description?: string | null
+  counterpartyName?: string | null
   /** `null` takes the link back. */
   payment?: string | null
   counterparty?: string | null
+  reference?: string | null
 }
 
 export interface TransactionFilter {
@@ -176,7 +194,7 @@ export const transactionOperationsOver = (context: StoreContext): TransactionOpe
       amount: formatDecimal(amount, scale),
       currency,
       status: fields.status,
-      date: fields.date,
+      statementDate: fields.date,
       bookedDate: row.booked_date == null ? null : String(row.booked_date),
       description: row.description == null ? null : String(row.description),
       counterpartyName: row.counterparty_name == null ? null : String(row.counterparty_name),
@@ -288,7 +306,8 @@ export const transactionOperationsOver = (context: StoreContext): TransactionOpe
     add: (input) => {
       const direction = oneOf(input.direction, MONEY_DIRECTIONS, "a transaction's direction")
       const status = input.status === undefined ? "booked" : oneOf(input.status, TRANSACTION_STATUSES, "a status")
-      const date = isoDate(input.date, "a transaction's day") ?? refuse("a transaction has a day", "transaction.field")
+      const date =
+        isoDate(input.statementDate, "a transaction's day") ?? refuse("a transaction has a day", "transaction.field")
       const bookedDate = bookingOf(status, input.bookedDate, date)
       const id = write(database, () => {
         const walletId = linkedId(input.wallet, "wallet", "transaction.ref") as number
@@ -380,7 +399,7 @@ export const transactionOperationsOver = (context: StoreContext): TransactionOpe
           category,
           category,
           ...by.params,
-          Math.min(Math.max(filter.limit ?? 100, 1), 500),
+          limitOf(filter.limit),
         )
         .map(transactionOf)
     },
@@ -388,20 +407,36 @@ export const transactionOperationsOver = (context: StoreContext): TransactionOpe
       const row = rowOf(reference)
       const ref = `transaction:${row.id}`
       mayChange(row, input.by)
+      const currency = String(row.currency)
+      const direction =
+        input.direction === undefined ? String(row.direction) : oneOf(input.direction, MONEY_DIRECTIONS, "a direction")
+      const amount =
+        input.amount === undefined ? Number(row.amount) : minorUnits(input.amount, currency, "a transaction's amount")
+      if (amount <= 0) refuse("a transaction's amount is more than 0", "money.amount")
+      if (amount < Number(row.split))
+        refuse(
+          `the splits of ${ref} come to ${moneyLabel(Number(row.split), currency)}, more than ${moneyLabel(amount, currency)}`,
+          "transaction.split",
+        )
       const status =
         input.status === undefined
           ? (row.status as TransactionStatus)
           : oneOf(input.status, TRANSACTION_STATUSES, "a status")
+      const date =
+        input.statementDate === undefined
+          ? String(row.statement_date)
+          : (isoDate(input.statementDate, "a transaction's day") as string)
       const bookedDate =
         input.status === undefined && input.bookedDate === undefined
           ? (row.booked_date as string | null)
-          : bookingOf(status, input.bookedDate, String(row.statement_date))
+          : bookingOf(status, input.bookedDate, date)
+      const kept = (given: string | null | undefined, column: string, what: string, limit: number) =>
+        given === undefined ? ((row[column] as string | null) ?? null) : text(given, what, limit)
       write(database, () => {
-        const moved = { direction: String(row.direction), amount: Number(row.amount), currency: String(row.currency) }
-        const payment =
-          input.payment === undefined
-            ? (row.payment_id as number | null)
-            : paymentFor(input.payment, moved, Number(row.id))
+        const moved = { direction, amount, currency }
+        const linked =
+          input.payment === undefined ? (row.payment_id == null ? null : `payment:${row.payment_id}`) : input.payment
+        const payment = paymentFor(linked, moved, Number(row.id))
         const counterparty =
           input.counterparty === undefined
             ? { type: row.counterparty_type as string | null, id: row.counterparty_id as number | null }
@@ -410,10 +445,25 @@ export const transactionOperationsOver = (context: StoreContext): TransactionOpe
               : (partyThing(input.counterparty, "the counterparty") as { type: string; id: number })
         database
           .prepare(
-            "UPDATE financial_transactions SET status = ?, booked_date = ?, payment_id = ?, counterparty_type = ?, " +
-              "counterparty_id = ?, updated_at = ? WHERE id = ?",
+            "UPDATE financial_transactions SET direction = ?, amount = ?, status = ?, statement_date = ?, booked_date = ?, " +
+              "description = ?, counterparty_name = ?, counterparty_type = ?, counterparty_id = ?, reference = ?, " +
+              "payment_id = ?, updated_at = ? WHERE id = ?",
           )
-          .run(status, bookedDate, payment, counterparty.type, counterparty.id, now(), Number(row.id))
+          .run(
+            direction,
+            amount,
+            status,
+            date,
+            bookedDate,
+            kept(input.description, "description", "a transaction's description", 2000),
+            kept(input.counterpartyName, "counterparty_name", "the counterparty's name", 200),
+            counterparty.type,
+            counterparty.id,
+            kept(input.reference, "reference", "a transaction's reference", 500),
+            payment,
+            now(),
+            Number(row.id),
+          )
       })
       return transactionOf(rowOf(ref))
     },

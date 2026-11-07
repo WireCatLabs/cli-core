@@ -35,7 +35,7 @@ const fixture = async () => {
       product: hosting.ref,
       every: "1-month",
       startDate: "2026-09-01",
-      price: { amount: "990.00", currency: "RUB" },
+      prices: [{ amount: "990.00", currency: "RUB" }],
     })
   return { store, path, client, hosting, subscription }
 }
@@ -111,20 +111,37 @@ it("proposes an agent's new price on its own while the subscription stays confir
 
   const registry = proposalRegistry(f.store)
   const page = await registry.list({ limit: 10, offset: 0, kinds: ["subscription_price"] })
-  expect(page.items.map((row) => row.id)).toEqual([price.id])
-  const { decided } = await registry.decide([price.id], { confirm: true, by: "owner" })
-  expect(decided).toEqual([{ id: price.id, kind: "subscription_price", status: "confirmed", made: [price.id] }])
+  expect(page.items.map((row) => row.id)).toEqual([price.ref])
+  const { decided } = await registry.decide([price.ref], { confirm: true, by: "owner" })
+  expect(decided).toEqual([{ id: price.ref, kind: "subscription_price", status: "confirmed", made: [price.ref] }])
   expect((await f.store.subscriptions.get(made.ref)).currentPrice?.amount).toBe("1290.00")
 })
 
-it("proposes an agent's subscription with its price, and rejecting it rejects the price too", async () => {
+it("decides an agent's subscription together with the prices it came with", async () => {
   const f = await fixture()
   const made = await f.subscription(claude)
   expect(made).toMatchObject({ review: "proposed", currentPrice: null, prices: [{ review: "proposed" }] })
-  expect(await reasonOf(f.store.subscriptions.confirm(made.prices[0]?.id as string, "owner"))).toBe(
-    "subscription.price",
+  const first = made.prices[0]?.ref as string
+  expect(await reasonOf(f.store.subscriptions.confirm(first, { bot: "codex", reason: "x" }))).toBe(
+    "proposal.owner-only",
   )
-  const rejected = await f.store.subscriptions.reject(made.ref, "owner", "a duplicate")
+  expect(await reasonOf(f.store.subscriptions.confirm(first, "owner"))).toBe("subscription.price")
+  const confirmed = await f.store.subscriptions.confirm(made.ref, "owner")
+  expect(confirmed).toMatchObject({
+    review: "confirmed",
+    prices: [{ review: "confirmed" }],
+    currentPrice: { amount: "990.00" },
+  })
+  const later = await f.store.subscriptions.addPrice(made.ref, {
+    by: claude,
+    amount: "1.00",
+    currency: "RUB",
+    effectiveFrom: "2026-12-01",
+  })
+  expect(later.review).toBe("proposed")
+
+  const other = await f.subscription(claude)
+  const rejected = await f.store.subscriptions.reject(other.ref, "owner", "a duplicate")
   expect(rejected).toMatchObject({ review: "rejected", prices: [{ review: "rejected" }] })
 })
 

@@ -28,6 +28,8 @@ interface Reader {
   kind: RefSummaryKind
   /** Selects `n` and the `Found` columns from `w(n, k1…)`, the wanted refs; one row per ref the store holds. */
   sql(body: boolean): string
+  /** How many `?` its SQL holds for today's date, bound after the wanted refs. */
+  dated?: number
 }
 
 interface Wanted {
@@ -86,7 +88,9 @@ const byId = (
 /** The confirmed price in force today: the latest one already effective. */
 const CURRENT_PRICE = (column: "amount" | "currency") =>
   `SELECT ${column} FROM subscription_prices WHERE subscription_id = x.id AND review = 'confirmed' ` +
-  "AND effective_from <= date('now') ORDER BY effective_from DESC LIMIT 1"
+  "AND effective_from <= ? ORDER BY effective_from DESC LIMIT 1"
+
+const dated = (count: number, reader: Reader): Reader => ({ ...reader, dated: count })
 
 const crmColumns = () => ({
   title:
@@ -302,15 +306,18 @@ const READERS = {
     at: "x.created_at",
     deleted: "x.deleted_at",
   })),
-  subscription: byId("subscription", "subscriptions", () => ({
-    title:
-      "json_object('name', x.name, 'interval', json_object('count', x.interval_count, 'unit', x.interval_unit), " +
-      `'price', (${CURRENT_PRICE("amount")}), 'currency', (${CURRENT_PRICE("currency")}), 'status', x.status, ` +
-      "'review', x.review)",
-    holder: "(SELECT name FROM projects WHERE id = x.project_id)",
-    at: "x.created_at",
-    deleted: "x.deleted_at",
-  })),
+  subscription: dated(
+    2,
+    byId("subscription", "subscriptions", () => ({
+      title:
+        "json_object('name', x.name, 'interval', json_object('count', x.interval_count, 'unit', x.interval_unit), " +
+        `'price', (${CURRENT_PRICE("amount")}), 'currency', (${CURRENT_PRICE("currency")}), 'status', x.status, ` +
+        "'review', x.review)",
+      holder: "(SELECT name FROM projects WHERE id = x.project_id)",
+      at: "x.created_at",
+      deleted: "x.deleted_at",
+    })),
+  ),
   wallet: byId("wallet", "financial_accounts", () => ({
     title:
       "json_object('name', x.name, 'kind', x.kind, 'currency', x.currency, 'numberHint', x.number_hint, " +
@@ -388,6 +395,7 @@ const runReader = (
   reader: Reader,
   wanted: readonly Wanted[],
   body: boolean,
+  today: string,
 ): Map<number, Found> => {
   const found = new Map<number, Found>()
   const width = wanted[0]?.keys.length ?? 0
@@ -396,7 +404,10 @@ const runReader = (
     const slice = wanted.slice(start, start + SLICE)
     const values = slice.map(() => `(${["?", ...names.map(() => "?")].join(", ")})`).join(", ")
     const sql = `WITH w(n, ${names.join(", ")}) AS (VALUES ${values}) ${reader.sql(body)}`
-    const parameters = slice.flatMap((one, at) => [start + at, ...one.keys])
+    const parameters = [
+      ...slice.flatMap((one, at) => [start + at, ...one.keys]),
+      ...Array.from({ length: reader.dated ?? 0 }, () => today),
+    ]
     for (const row of database.prepare(sql).all(...parameters)) {
       const n = Number(row.n)
       if (found.has(n)) continue
@@ -537,11 +548,18 @@ const parsed = (text: string): Reference | undefined => {
  * Every ref read back in one statement per kind present, keyed by the text passed and in its order. A bad ref is
  * `unknown` and a ref the store lacks is `unavailable`: one bad row must not fail a page of them.
  */
+export interface RefReadOptions {
+  excerpt?: boolean
+  /** The store's clock, for a title that shows what is in force today. */
+  now?: number
+}
+
 export const refReadsOf = (
   database: CacheDatabase,
   texts: readonly string[],
-  { excerpt = false }: { excerpt?: boolean } = {},
+  { excerpt = false, now = Date.now() }: RefReadOptions = {},
 ): Map<string, RefRead> => {
+  const today = new Date(now).toISOString().slice(0, 10)
   const reads = new Map<string, RefRead>()
   const groups = new Map<ReaderName, Wanted[]>()
   for (const text of new Set(texts)) {
@@ -563,7 +581,7 @@ export const refReadsOf = (
   while (pending.length > 0) {
     const [name, wanted] = pending.shift() as [ReaderName, Wanted[]]
     const reader = READERS[name]
-    const found = runReader(database, reader, wanted, excerpt)
+    const found = runReader(database, reader, wanted, excerpt, today)
     const fallback = FALLBACK[name]
     const missed: Wanted[] = []
     for (const [n, one] of wanted.entries()) {
@@ -583,7 +601,7 @@ const summaryOf = ({ sender, excerpt, ...summary }: RefRead, withExcerpt: boolea
 export const refSummariesOf = (
   database: CacheDatabase,
   texts: readonly string[],
-  options: { excerpt?: boolean } = {},
+  options: RefReadOptions = {},
 ): Map<string, RefSummary> =>
   new Map(
     [...refReadsOf(database, texts, options)].map(([text, read]) => [text, summaryOf(read, options.excerpt === true)]),

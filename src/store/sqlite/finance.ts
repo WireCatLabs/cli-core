@@ -13,50 +13,27 @@ import {
   settledStatus,
 } from "../../domain/finance.js"
 import { currencyOf, formatDecimal, type Money, minorUnits, moneyLabel, moneyOf, scaleOf } from "../../domain/money.js"
-import type { DecidedType } from "../../domain/record-types.js"
 import type { Decider } from "../decisions.js"
 import { type Actor, type ProposedByFilter, proposedBySql } from "./actors.js"
-import { decisionsOver } from "./decide.js"
-import {
-  type Author,
-  authorActor,
-  authorOf,
-  evidenceOf,
-  linkEvidence,
-  projectId,
-  projectOf,
-  subjectOf,
-} from "./memories.js"
+import { type Author, authorActor, projectId } from "./memories.js"
 import { type MoneyLine, type MoneyLineInput, moneyLinesOver } from "./money-lines.js"
 import { requiredThing } from "./notes.js"
 import type { StoreContext } from "./open.js"
 import { netPaidSql, refundRulesOver } from "./refunds.js"
+import {
+  iso,
+  isoDate,
+  limitOf,
+  oneOf,
+  type Party,
+  prefixesText,
+  type Reviewed,
+  refuse,
+  reviewedRowsOver,
+  text,
+  type Written,
+} from "./reviewed.js"
 import { write } from "./transaction.js"
-
-/** A `person:` or `organization:` on an invoice or a payment, with its name so a list needs no lookup. */
-export interface Party {
-  ref: string
-  name: string | null
-  /** The owner's own person row. */
-  owner: boolean
-}
-
-export interface Reviewed {
-  review: FinanceReview
-  /** `name` is a bot's handle and `kind` whether it is an agent or a rule; both `null` for a person. */
-  author: { type: Actor["type"]; id: string; name: string | null; kind: "agent" | "rule" | null }
-  model: string | null
-  confirmedBy: { type: Actor["type"]; id: string } | null
-  source: string
-  /** Why an agent or an import proposed it. */
-  reason: string | null
-  /** What it was read from: the messages, documents or notes an agent or the owner cited. */
-  evidence: string[]
-  project: string | null
-  projectName: string | null
-  createdAt: string
-  updatedAt: string
-}
 
 export interface Invoice extends Reviewed {
   id: string
@@ -117,18 +94,6 @@ export interface Payment extends Reviewed {
 
 export interface PaymentDetail extends Payment {
   allocations: Allocation[]
-}
-
-export interface Written {
-  /** The owner's entry is confirmed at once; a bot's waits as proposed for the owner. */
-  by: Author
-  project?: string
-  /** Where a bot's row came from, such as `agent` or an importer's name; the owner's is always `owner`. */
-  source?: string
-  /** Why a bot proposes it, kept for the reviewer. */
-  reason?: string
-  /** References it was read from, linked as `evidence`. */
-  evidence?: string[]
 }
 
 export type InvoiceLineInput = MoneyLineInput
@@ -229,59 +194,7 @@ const FINANCE_TYPES = ["invoice", "payment"] as const
 type FinanceType = (typeof FINANCE_TYPES)[number]
 const isFinanceType = (type: string): type is FinanceType => (FINANCE_TYPES as readonly string[]).includes(type)
 
-const article = (word: string) => (/^[aeiou]/.test(word) ? "an" : "a")
-/** One article, for the first prefix only: `an invoice: or payment:`. */
-export const prefixesText = (types: readonly string[]) =>
-  `${article(types[0] ?? "")} ${types.map((type) => `${type}:`).join(" or ")}`
-
-export const refuse = (
-  message: string,
-  reason: string,
-  code: "validation_error" | "permission_error" = "validation_error",
-) => {
-  throw new CliError(code, message, { reason })
-}
-
-export const oneOf = <T extends string>(value: unknown, allowed: readonly T[], what: string): T => {
-  if (typeof value !== "string" || !allowed.includes(value as T))
-    return refuse(`${what} is one of ${allowed.join(", ")}`, "finance.field")
-  return value as T
-}
-
-export const text = (value: unknown, what: string, limit: number): string | null => {
-  if (value === undefined || value === null) return null
-  if (typeof value !== "string" || !value.trim() || value.length > limit || value.includes("\0"))
-    return refuse(`${what} takes 1–${limit} characters`, "finance.field")
-  return value.trim()
-}
-
-export const isoDate = (value: unknown, what: string): string | null => {
-  if (value === undefined || value === null) return null
-  const date = typeof value === "string" ? value.trim() : ""
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || new Date(`${date}T00:00:00Z`).toISOString().slice(0, 10) !== date)
-    return refuse(`${what} is a date such as 2026-11-15`, "finance.field")
-  return date
-}
-
-export const iso = (value: unknown) => new Date(Number(value)).toISOString()
-
-const evidenceList = (value: unknown): string[] => {
-  if (value === undefined) return []
-  if (!Array.isArray(value) || value.length > 8 || value.some((one) => typeof one !== "string" || !one.trim()))
-    return refuse("evidence is a list of at most 8 references", "finance.field")
-  return [...new Set(value.map((one: string) => one.trim()))]
-}
 const MAX_LINES = 500
-
-const reasonOf = (metadata: unknown): string | null => {
-  if (metadata == null) return null
-  try {
-    const { reason } = JSON.parse(String(metadata)) as { reason?: unknown }
-    return typeof reason === "string" ? reason : null
-  } catch {
-    return null
-  }
-}
 
 /** Money settled by confirmed payments only: a proposed payment promises nothing yet. */
 const PAID = netPaidSql("i.id")
@@ -291,76 +204,6 @@ const INVOICES =
 const PAYMENTS =
   "SELECT p.*, (SELECT coalesce(sum(amount), 0) FROM payment_allocations WHERE payment_id = p.id) AS allocated, " +
   "b.name AS author_name, b.kind AS author_kind FROM payments p LEFT JOIN bots b ON p.author_type = 'bot' AND b.id = p.author_id"
-
-/** What invoices, payments and orders share: their parties, who wrote them, and how the owner decides them. */
-export const reviewedRowsOver = (context: StoreContext) => {
-  const { database } = context
-
-  const partyOf = (type: unknown, id: unknown): Party | null => {
-    if (type == null) return null
-    const { subject, subjectName, subjectIsOwner } = subjectOf(database, { subject_type: type, subject_id: id })
-    return subject === null ? null : { ref: subject, name: subjectName, owner: subjectIsOwner }
-  }
-  const partyThing = (reference: string | undefined, what: string) => {
-    if (reference === undefined) return undefined
-    const thing = requiredThing(database, reference, what)
-    if (thing.type !== "person" && thing.type !== "organization")
-      return refuse(`${what} is a person: or organization: reference, not ${reference}`, "finance.party")
-    return thing
-  }
-  const reviewedOf = (row: Row, type: DecidedType | "deal"): Reviewed => ({
-    review: row.review as FinanceReview,
-    author: authorOf(row),
-    model: row.model == null ? null : String(row.model),
-    confirmedBy:
-      row.confirmed_by_type == null
-        ? null
-        : { type: row.confirmed_by_type as Actor["type"], id: String(row.confirmed_by_id) },
-    source: String(row.source),
-    reason: reasonOf(row.metadata),
-    evidence: evidenceOf(context, { type, id: Number(row.id) }),
-    ...projectOf(database, row),
-    createdAt: iso(row.created_at),
-    updatedAt: iso(row.updated_at),
-  })
-
-  const written = (input: Written) => {
-    const owner = input.by === "owner"
-    const { actor, model } = authorActor(context, input.by)
-    const source = owner ? "owner" : (text(input.source, "a source", 80) ?? "agent")
-    const reason = owner ? null : text(input.reason, "a reason", 2000)
-    return {
-      owner,
-      actor,
-      model,
-      source,
-      review: owner ? "confirmed" : "proposed",
-      confirmedType: owner ? actor.type : null,
-      confirmedId: owner ? actor.id : null,
-      metadata: reason === null ? null : JSON.stringify({ reason }),
-      project: input.project === undefined ? null : projectId(database, input.project),
-      evidence: evidenceList(input.evidence),
-    }
-  }
-
-  const keepEvidence = (type: DecidedType | "deal", id: number, by: ReturnType<typeof written>) => {
-    if (by.evidence.length) linkEvidence(context, { type, id }, by.evidence, by.owner ? "owner" : "agent")
-  }
-
-  const ownerOnly = (by: Author, what: string) => {
-    if (by !== "owner") refuse(`only the owner ${what}`, "finance.owner-only", "permission_error")
-  }
-
-  /** A typed ref of one kind, as its row id; `undefined` passes through. */
-  const linkedId = <T extends string>(reference: string | undefined, type: T, reason: string): number | null => {
-    if (reference === undefined) return null
-    const thing = requiredThing(database, reference, `the ${type}`)
-    if (thing.type !== type) return refuse(`${reference} is not ${prefixesText([type])} reference`, reason)
-    return thing.id
-  }
-
-  return { partyOf, partyThing, reviewedOf, written, keepEvidence, ownerOnly, linkedId, ...decisionsOver(context) }
-}
 
 type FinanceOperations = {
   [K in keyof FinanceStore]: FinanceStore[K] extends (...args: infer A) => Promise<infer R> ? (...args: A) => R : never
@@ -470,7 +313,7 @@ export const financeOperationsOver = (context: StoreContext): FinanceOperations 
     const row = rowOf(reference, "invoice")
     return {
       ...invoiceOf(row),
-      lines: lines.shownLines("invoice_lines", "invoice_id", Number(row.id), String(row.currency)),
+      lines: lines.shownLines("invoice", Number(row.id), String(row.currency)),
       allocations: allocationsWhere("invoice_id", Number(row.id)),
     }
   }
@@ -575,7 +418,10 @@ export const financeOperationsOver = (context: StoreContext): FinanceOperations 
         before: () => {
           if (payment && confirm && row.refund_of != null) refunds.confirmable(row)
           else if (payment && confirm) coveredElsewhere(id)
-          if (payment && !confirm) refunds.keepsRefunded(row)
+          if (payment && !confirm) {
+            refunds.keepsRefunded(row)
+            keepsTransaction(id)
+          }
         },
         after: () => {
           const touched = payment
@@ -591,6 +437,18 @@ export const financeOperationsOver = (context: StoreContext): FinanceOperations 
       },
     )
     return payment ? paymentDetail(ref) : invoiceDetail(ref)
+  }
+
+  /** A statement line records this payment: it stays until the link is taken back on the transaction. */
+  const keepsTransaction = (paymentId: number) => {
+    const linked = database
+      .prepare("SELECT id FROM financial_transactions WHERE payment_id = ? AND deleted_at IS NULL LIMIT 1")
+      .get(paymentId)
+    if (linked)
+      refuse(
+        `payment:${paymentId} is the payment of transaction:${linked.id}; take the link back there first`,
+        "transaction.payment",
+      )
   }
 
   /** Refunds' shares go first: a payment's share stays while a refund of it takes part of it back. */
@@ -611,15 +469,13 @@ export const financeOperationsOver = (context: StoreContext): FinanceOperations 
       `only the owner allocates payment:${row.id}; a bot allocates only from a payment it proposed that is still proposed`,
     )
 
-  const limitOf = (limit: number | undefined) => Math.min(Math.max(limit ?? 100, 1), 500)
-
   return {
     addInvoice: (input) => {
       const direction = oneOf(input.direction, INVOICE_DIRECTIONS, "an invoice's direction")
       const currency = currencyOf(input.currency)
       if (!Array.isArray(input.lines) || input.lines.length === 0 || input.lines.length > MAX_LINES)
         refuse(`an invoice has 1–${MAX_LINES} lines`, "finance.lines")
-      const priced = lines.linesOf(input.lines, currency)
+      const priced = lines.linesOf("invoice", input.lines, currency)
       const total = priced.reduce((sum, line) => sum + line.amount, 0)
       if (!Number.isSafeInteger(total)) refuse("an invoice's total is too large", "finance.total")
       if (total <= 0) refuse("an invoice totals more than 0", "finance.total")
@@ -678,22 +534,7 @@ export const financeOperationsOver = (context: StoreContext): FinanceOperations 
               subscription,
             )?.id,
         )
-        const insert = database.prepare(
-          "INSERT INTO invoice_lines (invoice_id, position, description, quantity, unit_price, amount, created_at, " +
-            "updated_at, catalog_item_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        )
-        for (const [index, line] of priced.entries())
-          insert.run(
-            made,
-            index + 1,
-            line.description,
-            line.quantity,
-            line.unitPrice,
-            line.amount,
-            at,
-            at,
-            line.productId,
-          )
+        lines.insertLines("invoice", made, priced, 1, at)
         keepEvidence("invoice", made, by)
         return made
       })
@@ -873,7 +714,10 @@ export const financeOperationsOver = (context: StoreContext): FinanceOperations 
           "finance.unallocate",
         )
       const target = rowOf(invoice, "invoice")
+      if (target.status === "void")
+        refuse(`invoice:${target.id} is void; its allocations stay as they were`, "finance.unallocate")
       if (row.refund_of == null) refunds.keepsShare(Number(row.id), Number(target.id))
+      else refunds.keepsInvoice(row, Number(target.id))
       write(database, () => {
         const gone = database
           .prepare("DELETE FROM payment_allocations WHERE payment_id = ? AND invoice_id = ?")

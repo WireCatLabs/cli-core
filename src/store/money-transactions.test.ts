@@ -28,7 +28,14 @@ const fixture = async () => {
     openingDate: "2026-10-31",
   })
   const add = (amount: string, extra: Record<string, unknown> = {}) =>
-    store.transactions.add({ by: "owner", wallet: wallet.ref, direction: "in", amount, date: "2026-11-05", ...extra })
+    store.transactions.add({
+      by: "owner",
+      wallet: wallet.ref,
+      direction: "in",
+      amount,
+      statementDate: "2026-11-05",
+      ...extra,
+    })
   return { store, path, wallet, add }
 }
 
@@ -41,15 +48,15 @@ const reasonOf = async (promise: Promise<unknown>) =>
 it("computes a wallet's balance from its opening and its confirmed, booked transactions, pending ones beside it", async () => {
   const f = await fixture()
   await f.add("500.00")
-  await f.add("200.00", { direction: "out", date: "2026-11-06" })
-  await f.add("50.00", { status: "pending", date: "2026-11-07" })
-  await f.add("900.00", { date: "2026-10-30" })
+  await f.add("200.00", { direction: "out", statementDate: "2026-11-06" })
+  await f.add("50.00", { status: "pending", statementDate: "2026-11-07" })
+  await f.add("900.00", { statementDate: "2026-10-30" })
   await f.store.transactions.add({
     by: claude,
     wallet: f.wallet.ref,
     direction: "in",
     amount: "70.00",
-    date: "2026-11-08",
+    statementDate: "2026-11-08",
   })
 
   expect(await f.store.wallets.get(f.wallet.ref)).toMatchObject({
@@ -140,7 +147,7 @@ it("lets an agent change only its own proposed transaction, and only the owner d
     wallet: f.wallet.ref,
     direction: "out",
     amount: "99.00",
-    date: "2026-11-09",
+    statementDate: "2026-11-09",
     status: "pending",
   })
   expect(proposed.review).toBe("proposed")

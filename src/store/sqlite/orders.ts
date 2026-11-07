@@ -7,11 +7,21 @@ import { ORDER_PURPOSES, ORDER_STATUSES, type OrderPurpose, type OrderStatus, or
 import type { Decider } from "../decisions.js"
 import { fold } from "../normalize.js"
 import { ownerPerson, type ProposedByFilter, proposedBySql } from "./actors.js"
-import { isoDate, oneOf, type Party, type Reviewed, refuse, reviewedRowsOver, text, type Written } from "./finance.js"
 import { type Author, projectId } from "./memories.js"
 import { type MoneyLine, type MoneyLineInput, moneyLinesOver, type PricedLine } from "./money-lines.js"
 import { requiredThing } from "./notes.js"
 import type { StoreContext } from "./open.js"
+import {
+  isoDate,
+  limitOf,
+  oneOf,
+  type Party,
+  type Reviewed,
+  refuse,
+  reviewedRowsOver,
+  text,
+  type Written,
+} from "./reviewed.js"
 import { write } from "./transaction.js"
 
 export interface Order extends Reviewed {
@@ -162,30 +172,8 @@ export const orderOperationsOver = (context: StoreContext): OrderOperations => {
 
   const detailOf = (row: Row): OrderDetail => ({
     ...orderOf(row),
-    lines:
-      row.currency == null
-        ? []
-        : moneyLines.shownLines("order_lines", "order_id", Number(row.id), String(row.currency)),
+    lines: row.currency == null ? [] : moneyLines.shownLines("order", Number(row.id), String(row.currency)),
   })
-
-  const insertLines = (orderId: number, lines: PricedLine[], from: number, at: number) => {
-    const insert = database.prepare(
-      "INSERT INTO order_lines (order_id, position, description, quantity, unit_price, amount, catalog_item_id, " +
-        "created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-    )
-    for (const [index, line] of lines.entries())
-      insert.run(
-        orderId,
-        from + index,
-        line.description,
-        line.quantity,
-        line.unitPrice,
-        line.amount,
-        line.productId,
-        at,
-        at,
-      )
-  }
 
   /** The order's total follows its lines in the same write: the trigger checks the sum when the order changes. */
   const retotal = (orderId: number) => {
@@ -202,6 +190,7 @@ export const orderOperationsOver = (context: StoreContext): OrderOperations => {
       row,
       by,
       `only the owner changes the lines of order:${row.id}; a bot changes only an order it proposed that is still proposed`,
+      "order.owner-only",
     )
     if (row.review === "rejected" || row.deleted_at != null)
       refuse(`order:${row.id} is ${row.deleted_at != null ? "deleted" : "rejected"}`, "order.status")
@@ -242,7 +231,7 @@ export const orderOperationsOver = (context: StoreContext): OrderOperations => {
       if (!lines.length && (input.total === undefined) !== (input.currency === undefined))
         refuse("an order's amount and currency come together", "order.field")
       const currency = input.currency === undefined ? null : currencyOf(input.currency)
-      const priced = currency === null ? [] : moneyLines.linesOf(lines, currency)
+      const priced = currency === null ? [] : moneyLines.linesOf("order", lines, currency)
       const sum = priced.reduce((all, line) => all + line.amount, 0)
       const given =
         currency === null || input.total === undefined ? null : minorUnits(input.total, currency, "an order's amount")
@@ -313,7 +302,7 @@ export const orderOperationsOver = (context: StoreContext): OrderOperations => {
               deal,
             )?.id,
         )
-        insertLines(made, priced, 1, at)
+        moneyLines.insertLines("order", made, priced, 1, at)
         keepEvidence("order", made, by)
         return made
       })
@@ -329,7 +318,7 @@ export const orderOperationsOver = (context: StoreContext): OrderOperations => {
       const review = filter.review === undefined ? null : oneOf(filter.review, FINANCE_REVIEWS, "a review")
       const number = filter.number === undefined ? null : filter.number.trim()
       const shop = filter.supplierName === undefined ? null : fold(filter.supplierName)
-      const limit = Math.min(Math.max(filter.limit ?? 100, 1), 500)
+      const limit = limitOf(filter.limit)
       const rows = database
         .prepare(
           `${ORDERS} WHERE o.deleted_at IS NULL AND (? IS NULL OR o.status = ?) AND (? IS NULL OR o.purpose = ?) ` +
@@ -380,7 +369,7 @@ export const orderOperationsOver = (context: StoreContext): OrderOperations => {
       const row = rowOf(reference)
       mayChangeLines(row, by)
       if (row.currency == null) refuse(`order:${row.id} has no currency; a line needs one`, "order.total")
-      const [priced] = moneyLines.linesOf([line], String(row.currency)) as [PricedLine]
+      const [priced] = moneyLines.linesOf("order", [line], String(row.currency)) as [PricedLine]
       write(database, () => {
         const last = Number(
           database
@@ -388,7 +377,7 @@ export const orderOperationsOver = (context: StoreContext): OrderOperations => {
             .get(Number(row.id))?.n,
         )
         if (last >= MAX_LINES) refuse(`an order has at most ${MAX_LINES} lines`, "order.field")
-        insertLines(Number(row.id), [priced], last + 1, now())
+        moneyLines.insertLines("order", Number(row.id), [priced], last + 1, now())
         retotal(Number(row.id))
       })
       return detailOf(rowOf(`order:${row.id}`))
@@ -397,11 +386,16 @@ export const orderOperationsOver = (context: StoreContext): OrderOperations => {
       const row = rowOf(reference)
       mayChangeLines(row, by)
       write(database, () => {
+        const lines = Number(
+          database.prepare("SELECT count(*) AS n FROM order_lines WHERE order_id = ?").get(Number(row.id))?.n,
+        )
         const gone = database
           .prepare("DELETE FROM order_lines WHERE order_id = ? AND position = ?")
           .run(Number(row.id), position)
         if (gone.changes === 0)
-          throw new CliError("not_found", `order:${row.id} has no line ${position}`, { reason: "order.line" })
+          throw new CliError("not_found", `order:${row.id} has no line ${position}`, { reason: "order.no-line" })
+        if (lines === 1)
+          refuse(`line ${position} is the last of order:${row.id}; reject or cancel the order instead`, "order.line")
         retotal(Number(row.id))
       })
       return detailOf(rowOf(`order:${row.id}`))

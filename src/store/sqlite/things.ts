@@ -1,5 +1,6 @@
 import { formatLocator } from "../../domain/locator.js"
 import { filesAccountSql } from "../../domain/providers.js"
+import { RECORD_TYPES } from "../../domain/record-types.js"
 import { formatReference, parseReference, type Reference } from "../../domain/references.js"
 import { formatMeetingReference, type MeetingReference } from "../../meetings/index.js"
 import type { CacheDatabase } from "../driver.js"
@@ -18,27 +19,14 @@ export type ThingState = "available" | "deleted" | "unavailable"
 
 /** Types a simple reference names by id, and whether a row can be marked gone. */
 const REFERABLE: Partial<Record<EntityType, { tombstone: boolean }>> = {
+  ...Object.fromEntries(Object.entries(RECORD_TYPES).map(([type, { tombstone }]) => [type, { tombstone }])),
   note: { tombstone: true },
   document: { tombstone: true },
-  person: { tombstone: false },
-  organization: { tombstone: true },
-  project: { tombstone: true },
   task: { tombstone: true },
   memory: { tombstone: true },
   fact: { tombstone: true },
   bot: { tombstone: false },
   event: { tombstone: true },
-  invoice: { tombstone: true },
-  payment: { tombstone: true },
-  order: { tombstone: true },
-  deal: { tombstone: true },
-  lead: { tombstone: true },
-  pipeline: { tombstone: false },
-  product: { tombstone: true },
-  contract: { tombstone: true },
-  subscription: { tombstone: true },
-  wallet: { tombstone: true },
-  transaction: { tombstone: true },
   message: { tombstone: true },
   email: { tombstone: true },
   email_thread: { tombstone: true },

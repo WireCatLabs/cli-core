@@ -1,6 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import { type QueryAst, walkQuery } from "@wirecat/cli-base/query"
 import { parseLocator } from "../../domain/locator.js"
+import { isBusinessType } from "../../domain/record-types.js"
 import { formatReference, parseReference, type Reference } from "../../domain/references.js"
 import { checkEnds, isSymmetric, notOverriddenSql } from "../../domain/relations.js"
 import { normalizeTag } from "../../domain/tags.js"
@@ -355,17 +356,7 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
       parsed.type === "bot" ||
       parsed.type === "event" ||
       parsed.type === "meeting" ||
-      parsed.type === "invoice" ||
-      parsed.type === "payment" ||
-      parsed.type === "order" ||
-      parsed.type === "deal" ||
-      parsed.type === "lead" ||
-      parsed.type === "pipeline" ||
-      parsed.type === "product" ||
-      parsed.type === "contract" ||
-      parsed.type === "subscription" ||
-      parsed.type === "wallet" ||
-      parsed.type === "transaction"
+      isBusinessType(parsed.type)
     )
       return undefined
     return { type: parsed.type, id: parsed.id }

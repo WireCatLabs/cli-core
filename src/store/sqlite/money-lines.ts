@@ -1,7 +1,7 @@
-import { CliError } from "@wirecat/cli-base"
 import { formatDecimal, lineUnits, minorUnits, moneyLabel, quantityOf, scaleOf } from "../../domain/money.js"
 import { requiredThing } from "./notes.js"
 import type { StoreContext } from "./open.js"
+import { refuse, text } from "./reviewed.js"
 
 export interface MoneyLineInput {
   /** Taken from the product when left out. */
@@ -32,30 +32,35 @@ export interface PricedLine {
   productId: number | null
 }
 
-const refuse = (message: string, reason: string): never => {
-  throw new CliError("validation_error", message, { reason })
-}
+/** Where each parent keeps its lines, and the prefix of the reasons its line errors carry. */
+const PARENTS = {
+  invoice: { table: "invoice_lines", column: "invoice_id", reasons: "finance" },
+  order: { table: "order_lines", column: "order_id", reasons: "order" },
+} as const
+
+export type LineParent = keyof typeof PARENTS
 
 /** Invoice and order lines: quantity × unit price, in the parent's currency, a product's name and price copied. */
 export const moneyLinesOver = ({ database }: StoreContext) => {
-  const productOf = (reference: string, what: string): Record<string, unknown> => {
+  const productOf = (reference: string, what: string, code: (name: string) => string): Record<string, unknown> => {
     const thing = requiredThing(database, reference, `${what}'s product`)
     if (thing.type !== "product")
-      return refuse(`${what}'s product is a product: reference, not ${reference}`, "finance.lines")
+      return refuse(`${what}'s product is a product: reference, not ${reference}`, code("lines"))
     const row = database.prepare("SELECT * FROM catalog_items WHERE id = ?").get(thing.id) as Record<string, unknown>
-    if (row.deleted_at != null) refuse(`product:${row.id} is deleted`, "finance.lines")
+    if (row.deleted_at != null) refuse(`product:${row.id} is deleted`, code("lines"))
     return row
   }
 
-  const priced = (line: MoneyLineInput, at: number, currency: string): PricedLine => {
+  const priced = (parent: LineParent, line: MoneyLineInput, at: number, currency: string): PricedLine => {
+    const code = (name: string) => `${PARENTS[parent].reasons}.${name}`
     const what = `line ${at + 1}`
-    const product = line.product === undefined ? null : productOf(line.product, what)
+    const product = line.product === undefined ? null : productOf(line.product, what, code)
     const quantity = quantityOf(line.quantity ?? "1")
     const copied = product !== null && line.unitPrice === undefined && line.amount === undefined
     if (copied && product.unit_price != null && product.currency !== currency)
       refuse(
         `product:${product.id} is priced in ${String(product.currency)}; give ${what}'s price in ${currency}`,
-        "finance.currency",
+        code("currency"),
       )
     const unitPrice = copied
       ? product.unit_price == null
@@ -66,21 +71,22 @@ export const moneyLinesOver = ({ database }: StoreContext) => {
         : minorUnits(line.unitPrice, currency, `${what}'s unit price`)
     const computed = unitPrice === null ? null : lineUnits(quantity.thousandths, unitPrice)
     const amount = line.amount === undefined ? computed : minorUnits(line.amount, currency, `${what}'s amount`)
-    if (amount === null) return refuse(`${what} takes a unit price, an amount or both`, "finance.lines")
+    if (amount === null) return refuse(`${what} takes a unit price, an amount or both`, code("lines"))
     if (computed !== null && computed !== amount)
       refuse(
         `${what}: ${quantity.text} × ${moneyLabel(unitPrice as number, currency)} is ` +
           `${moneyLabel(computed, currency)}, not ${moneyLabel(amount, currency)}`,
-        "finance.line-amount",
+        code("line-amount"),
       )
-    const description = line.description ?? (product === null ? undefined : String(product.name))
-    if (
-      description !== undefined &&
-      (typeof description !== "string" || !description.trim() || description.length > 500 || description.includes("\0"))
-    )
-      refuse(`${what}'s description takes 1–500 characters`, "finance.field")
+    const description =
+      text(
+        line.description ?? (product === null ? undefined : String(product.name)),
+        `${what}'s description`,
+        500,
+        code("field"),
+      ) ?? refuse(`${what} needs a description`, code("lines"))
     return {
-      description: description?.trim() ?? refuse(`${what} needs a description`, "finance.lines"),
+      description,
       quantity: quantity.text,
       unitPrice: unitPrice ?? (quantity.thousandths === 1000n ? amount : null),
       amount,
@@ -88,15 +94,22 @@ export const moneyLinesOver = ({ database }: StoreContext) => {
     }
   }
 
-  const linesOf = (lines: MoneyLineInput[], currency: string): PricedLine[] =>
-    lines.map((line, at) => priced(line, at, currency))
+  const linesOf = (parent: LineParent, lines: MoneyLineInput[], currency: string): PricedLine[] =>
+    lines.map((line, at) => priced(parent, line, at, currency))
 
-  const shownLines = (
-    table: "invoice_lines" | "order_lines",
-    column: "invoice_id" | "order_id",
-    id: number,
-    currency: string,
-  ) => {
+  /** Writes lines from position `from` on. */
+  const insertLines = (parent: LineParent, id: number, lines: PricedLine[], from: number, at: number) => {
+    const { table, column } = PARENTS[parent]
+    const insert = database.prepare(
+      `INSERT INTO ${table} (${column}, position, description, quantity, unit_price, amount, catalog_item_id, ` +
+        "created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    )
+    for (const [index, line] of lines.entries())
+      insert.run(id, from + index, line.description, line.quantity, line.unitPrice, line.amount, line.productId, at, at)
+  }
+
+  const shownLines = (parent: LineParent, id: number, currency: string) => {
+    const { table, column } = PARENTS[parent]
     const scale = scaleOf(currency)
     return database
       .prepare(`SELECT * FROM ${table} WHERE ${column} = ? ORDER BY position`)
@@ -113,5 +126,5 @@ export const moneyLinesOver = ({ database }: StoreContext) => {
       )
   }
 
-  return { linesOf, priced, shownLines }
+  return { linesOf, insertLines, shownLines }
 }

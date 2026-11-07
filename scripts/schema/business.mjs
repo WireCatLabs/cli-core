@@ -57,7 +57,7 @@ export const businessTables = [
   },
   {
     name: "contracts",
-    doc: "A contract the owner works under. Its parties are relationships with a role and its document an `attached` link. One with a value from an agent or an import is a proposal; one without a value is written confirmed.",
+    doc: "A contract the owner works under. Its parties are relationships with a role and its document an `attached` link. One with a value from an agent or an import is a proposal; one without a value is written confirmed, with `confirmed_by` null: nobody decided it, and `author` says who wrote it.",
     cols: [
       id(),
       c("name", "text", { notnull: true }),

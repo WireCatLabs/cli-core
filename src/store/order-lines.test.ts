@@ -136,7 +136,7 @@ it("lets the owner change any order's lines and an agent only its own proposed o
   const grown = await f.store.orders.addLine(mine.ref, { by: "owner", description: "Чехол", amount: "700.00" })
   expect(grown).toMatchObject({ total: "700.00", lines: [{ position: 1 }] })
   expect(await reasonOf(f.store.orders.addLine(mine.ref, { by: claude, description: "x", amount: "1.00" }))).toBe(
-    "finance.owner-only",
+    "order.owner-only",
   )
   const proposed = await f.store.orders.add({
     by: claude,
@@ -152,9 +152,10 @@ it("lets the owner change any order's lines and an agent only its own proposed o
     lines: [{ position: 2, amount: "5000.00" }],
   })
   await f.store.orders.confirm(proposed.ref, "owner")
-  expect(await reasonOf(f.store.orders.removeLine(proposed.ref, { by: claude, position: 2 }))).toBe(
-    "finance.owner-only",
-  )
+  expect(await reasonOf(f.store.orders.removeLine(proposed.ref, { by: claude, position: 2 }))).toBe("order.owner-only")
+  expect(await reasonOf(f.store.orders.removeLine(proposed.ref, { by: "owner", position: 2 }))).toBe("order.line")
+  expect(await reasonOf(f.store.orders.removeLine(proposed.ref, { by: "owner", position: 9 }))).toBe("order.no-line")
+  expect((await f.store.orders.get(proposed.ref)).lines).toHaveLength(1)
 
   const database = await openCache(f.path)
   handles.push(database)
