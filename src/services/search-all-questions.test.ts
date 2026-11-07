@@ -97,7 +97,7 @@ describe("search all with a question the answer words differently", () => {
     return store
   }
 
-  it("puts first the mail meaning ranks first, though words rank it last", async () => {
+  it("brings into the first two the mail meaning ranks first, though words rank it last", async () => {
     const store = await mailbox()
     const near = [5, 0, 1, 2, 3, 4].map((n, rank) => ({
       ...MAIL,

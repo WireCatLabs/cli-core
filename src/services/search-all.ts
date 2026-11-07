@@ -273,7 +273,7 @@ export const searchAll = async (
       const held = fused.get(hit.locator)
       if (held) held.item.foundBy = ["words", "meaning"]
       const vote = 1 / (RRF_K + rank + 1)
-      // As in notes: for a question, a hit both found keeps its better rank, not a second vote.
+      // As in notes: a question's any-word list holds most of what meaning finds, so a second vote would bury the rest.
       if (held && discovers) held.score = Math.max(held.score, vote)
       else fused.set(hit.locator, { item: held?.item ?? itemOf(hit, ["meaning"]), score: (held?.score ?? 0) + vote })
     })
