@@ -7,6 +7,19 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`@wirecat/cli-core/crm` exports the field lookup the CRM writes use**, so a CRM CLI drops its copy:
+  `foldFieldName`, `fieldNamed`, `optionOf`, `unknownField`, `fieldPairsOf` and the `NamedField` type they read.
+  `foldName` is exported from the package root.
+
+### Changed — may break callers
+
+- **`foldName` folds ё into е**, so a chat, a person and a CRM field typed with е find the one named with ё. A name
+  that matched one chat or person exactly may now match two (`Алена` and `Алёна`); that is refused with both
+  candidates, as any other ambiguous name is. й stays apart from и. The CRM field lookup now folds on top of
+  `foldName`, so it also takes composed and decomposed letters as one.
+
 ### Fixed
 
 - **`doctor --online` of a CLI built on `appDoctorCommand` runs inside cli-core's run.** It answered outside one, so

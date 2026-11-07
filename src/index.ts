@@ -126,7 +126,7 @@ export type { GroupRules } from "./moderation/rules.js"
 export { defaultRules, ModerationRules, moderationPathFor } from "./moderation/rules.js"
 export { type OutputOptions, resolveOutput } from "./output.js"
 export { pollLines, type RenderOptions, renderMessage, renderMessages } from "./render/messages.js"
-export { isId, type PeopleLookup, pickChat, pickPerson } from "./resolve.js"
+export { foldName, isId, type PeopleLookup, pickChat, pickPerson } from "./resolve.js"
 export {
   atTerminal,
   type LoginQr,

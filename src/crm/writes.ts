@@ -2,6 +2,7 @@ import { CliError, isCliError } from "@wirecat/cli-base"
 import type { CrmField, CrmItem } from "../domain/crm.js"
 import type { DealKind } from "../domain/deals.js"
 import type { AppIdentity } from "../ports/app.js"
+import { foldName } from "../resolve.js"
 import type { Warn } from "../runs/events.js"
 import { type Asker, type GuardSettings, guardFor, type SendGuard } from "../sends/guard.js"
 import { guardedWrite } from "../sends/guarded.js"
@@ -191,22 +192,40 @@ const fieldsOf = (input: CrmFieldsInput, pipeline: Pipeline | undefined, currenc
   return { fields, stage }
 }
 
-/** Case, spaces and underscores aside: `lead_source` and `Lead source` are one name, as bitrix24-cli folds them. */
-const folded = (name: string) =>
-  name
-    .trim()
-    .toLocaleLowerCase()
-    .replace(/[\s_]+/gu, " ")
+/** What the field lookup reads of a field definition: a CRM CLI's own type fits. */
+export type NamedField = Pick<CrmField, "code" | "label" | "options">
 
-const named = ({ code, label }: CrmField) => ({ code, label })
+/**
+ * A field's code, label or option as the lookup compares them: `foldName` (letter case, composed letters, ё as е),
+ * with spaces and underscores aside, so `lead_source` and `Lead source` are one name.
+ */
+export const foldFieldName = (name: string): string => foldName(name.trim()).replace(/[\s_]+/gu, " ")
+
+const named = ({ code, label }: NamedField) => ({ code, label })
+
+/** No field by that name: the fields whose code or label holds it, or is held in it, are its candidates. */
+export const unknownField = (fields: readonly NamedField[], name: string): CliError => {
+  const want = foldFieldName(name)
+  const close = fields.filter((field) =>
+    [field.code, field.label ?? ""].some((one) => {
+      const other = foldFieldName(one)
+      return other !== "" && (other.includes(want) || want.includes(other))
+    }),
+  )
+  return new CliError(
+    "validation_error",
+    `no custom field is named ${name}${close.length ? "; close ones are in candidates" : ""} — \`fields list\` lists them`,
+    { reason: "field.unknown", param: "--field", candidates: close.map(named) },
+  )
+}
 
 /** A field by its code or its whole label; two with that label are refused with both, never guessed. */
-const fieldNamed = (fields: readonly CrmField[], name: string): CrmField => {
-  const want = folded(name)
-  const byCode = fields.find((field) => folded(field.code) === want)
+export const fieldNamed = <F extends NamedField>(fields: readonly F[], name: string): F => {
+  const want = foldFieldName(name)
+  const byCode = fields.find((field) => foldFieldName(field.code) === want)
   if (byCode) return byCode
-  const labelled = fields.filter((field) => field.label !== null && folded(field.label) === want)
-  if (labelled.length === 1) return labelled[0] as CrmField
+  const labelled = fields.filter((field) => field.label !== null && foldFieldName(field.label) === want)
+  if (labelled.length === 1) return labelled[0] as F
   if (labelled.length > 1)
     throw new CliError(
       "validation_error",
@@ -217,24 +236,16 @@ const fieldNamed = (fields: readonly CrmField[], name: string): CrmField => {
         candidates: labelled.map(named),
       },
     )
-  const close = fields.filter((field) =>
-    [field.code, field.label ?? ""].some((one) => {
-      const other = folded(one)
-      return other !== "" && (other.includes(want) || want.includes(other))
-    }),
-  )
-  throw new CliError(
-    "validation_error",
-    `no custom field is named ${name}${close.length ? "; close ones are in candidates" : ""} — \`fields list\` lists them`,
-    { reason: "field.unknown", param: "--field", candidates: close.map(named) },
-  )
+  throw unknownField(fields, name)
 }
 
-const optionOf = (field: CrmField, value: string): string => {
+/** A list field's option id, by its id or its whole label; a field with no options takes the value as typed. */
+export const optionOf = (field: NamedField, value: string): string => {
   if (!field.options) return value
+  const want = foldFieldName(value)
   const found =
     field.options.find((option) => option.id === value.trim()) ??
-    field.options.find((option) => folded(option.label) === folded(value))
+    field.options.find((option) => foldFieldName(option.label) === want)
   if (!found)
     throw new CliError("validation_error", `${field.label ?? field.code} has no option ${value}`, {
       reason: "field.unknown-option",
@@ -244,6 +255,15 @@ const optionOf = (field: CrmField, value: string): string => {
     })
   return found.id
 }
+
+/** `--field` pairs as typed, split at the first `=`; a pair with no key before it is refused. */
+export const fieldPairsOf = (typed: readonly string[]): [string, string][] =>
+  typed.map((one) => {
+    const at = one.indexOf("=")
+    if (at <= 0 || one.slice(0, at).trim() === "")
+      throw new CliError("validation_error", `--field takes <key>=<value>; got ${one}`, { param: "--field" })
+    return [one.slice(0, at), one.slice(at + 1)]
+  })
 
 /**
  * `--field` pairs by the synced field definitions: a label to its code, an option to its id, a multiple field's
