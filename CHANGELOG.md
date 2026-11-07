@@ -19,16 +19,17 @@ shape of this file.
   that matched one chat or person exactly may now match two (`Алена` and `Алёна`); that is refused with both
   candidates, as any other ambiguous name is. й stays apart from и. The CRM field lookup now folds on top of
   `foldName`, so it also takes composed and decomposed letters as one.
-
-### Fixed
-
 - **A search for plain text with a colon, a URL or another special character finds what holds it.** `meeting at 10:30`,
   `Answer as HH:MM` and `a:b` read the word before the colon as a field, so every source of `search all` refused the
   query and the answer was empty. Now a `word:` that names no search field, and a word the parser cannot read as
   syntax (a URL, an unbalanced quote or bracket, `^`, `~home`, `[draft]`, `<tag>`), are searched as words; a lone
   emoji or punctuation mark beside other words no longer empties the answer. Field queries, Boolean operators,
-  phrases, `word*` and `/regex/` keep their meaning, and `word~1` keeps its hint. `plainQuery` in `./services` gives a
-  caller the text as the search reads it (cli-memo#674).
+  phrases, `word*` and `/regex/` keep their meaning, and `word~1`, `/x/i` and punctuation alone keep their errors.
+  A caller that relied on the refusal of `foo:bar`, an unbalanced quote or `link:click?id=1` now gets hits, and
+  `meetings search` reads `subject:` (a message field) as a word. `plainQuery` in `./services` gives a caller the text
+  as the search reads it (cli-memo#674).
+
+### Fixed
 
 - **`doctor --online` of a CLI built on `appDoctorCommand` runs inside cli-core's run.** It answered outside one, so
   `--record` kept no run of it and its call out was not the command's own. A config that will not load still gets an

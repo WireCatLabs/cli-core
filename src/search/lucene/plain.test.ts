@@ -79,6 +79,7 @@ describe("plainQuery", () => {
 
   it("leaves fuzzy search and a field's own mistakes to the search to report", () => {
     expect(plainQuery("alpha~1")).toBe("alpha~1")
+    expect(plainQuery("!!!")).toBe("!!!")
     expect(plainQuery("body:/alpha/i")).toBe("body:/alpha/i")
     expect(plainQuery("after:2026-01-01")).toBe("after:2026-01-01")
     expect(plainQuery("kind:nonsense")).toBe("kind:nonsense")
