@@ -13,6 +13,7 @@ import { basename, dirname, join } from "node:path"
 import { Transform } from "node:stream"
 import { CliError } from "@wirecat/cli-base"
 import { holdersOf } from "../background/processes.js"
+import { isStoreDamage } from "../errors/failures.js"
 import type { CacheDatabase } from "./driver.js"
 import { fts5Tables, type StoreHealth, storeHealth } from "./health.js"
 import { migrate } from "./migrations.js"
@@ -442,12 +443,22 @@ export const recoverStore = async ({
       `the recovery needs about ${Math.ceil((bytes * 1.2) / 1e9)} GB free beside the store`,
     )
 
-  const old = await openSqlite(path, { readOnly: true })
   let rowsBefore: Record<string, number | null>
   try {
-    rowsBefore = tableRows(old.database)
-  } finally {
-    old.database.close()
+    const old = await openSqlite(path, { readOnly: true })
+    try {
+      rowsBefore = tableRows(old.database)
+    } finally {
+      old.database.close()
+    }
+  } catch (error) {
+    if (!isStoreDamage(error)) throw error
+    throw new CliError(
+      "configuration_error",
+      "the store file's header or schema is damaged, so its tables cannot be listed and it cannot be recovered; " +
+        "the file was left as it was",
+      { reason: "store.unreadable" },
+    )
   }
   const before = fingerprint(path)
 
