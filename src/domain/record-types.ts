@@ -6,7 +6,6 @@ export type RecordEntityType = (typeof RECORD_ENTITY_TYPES)[number]
 export interface RecordRoleSpec {
   /** Several relations may carry it; a single role may also be named in `fields.<role>`. */
   many?: boolean
-  /** Its relation may carry an amount. */
   amount?: boolean
 }
 
@@ -61,5 +60,8 @@ const roleNames = (types: readonly RecordEntityType[], keep: (role: RecordRoleSp
 
 export const AMOUNT_ROLES = roleNames(RECORD_ENTITY_TYPES, (role) => role.amount)
 
-/** Single roles of every proposal type, which a record may also name in `fields.<role>`. */
+/**
+ * Single roles a record may also name in `fields.<role>`. Checked across all proposal types on purpose: an invoice
+ * whose `fields.payer` is not text is refused, as before the registry.
+ */
 export const FIELD_REFERENCE_ROLES = roleNames(PROPOSAL_TYPES, (role) => !role.many)
