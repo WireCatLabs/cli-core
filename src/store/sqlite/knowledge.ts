@@ -21,6 +21,7 @@ import type { StoreContext } from "./open.js"
 import { type OrganizationsStore, organizationOf, organizationsStoreOver } from "./organizations.js"
 import type { ProposedAction } from "./proposed-actions.js"
 import { queryFilter } from "./query-filter.js"
+import { type RelationList, relationListOver } from "./relation-list.js"
 import {
   type KnowledgeRelation,
   type LinkDecision,
@@ -125,7 +126,7 @@ export interface Reminder {
 
 export type LabelledType = "note" | "document" | "person" | "organization" | "project" | "task" | "meeting" | "folder"
 
-export interface KnowledgeStore extends VocabularyStore, MeetingProjectsStore, OrganizationsStore {
+export interface KnowledgeStore extends VocabularyStore, MeetingProjectsStore, OrganizationsStore, RelationList {
   taskIds(
     key: AccountKey,
     options?: { state?: "open" | "done" | "dismissed"; limit?: number; offset?: number; sources?: string[] },
@@ -524,6 +525,7 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
     ...vocabularyStoreOver(context),
     ...organizationsStoreOver(context),
     ...meetingProjectsStoreOver(context),
+    ...relationListOver(context),
     taskIds: async (key, options = {}) => {
       const { limit, offset } = bounded(options.limit, options.offset)
       if (options.state !== undefined && !["open", "done", "dismissed"].includes(options.state))
