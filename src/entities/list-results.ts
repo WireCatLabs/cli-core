@@ -40,7 +40,7 @@ export const scheduledJob = v.strictObject({
   /** When a finished run shows a desktop notice: `always`, `failures` or `never`; the default is shown, not left out. */
   notify: v.optional(v.picklist(["always", "failures", "never"])),
   /** Where a run's result is sent after it: `telegram-bot:<profile>/<chat>` or `email:<profile>/<address>`. */
-  to: v.optional(v.array(text)),
+  deliver_to: v.optional(v.array(text)),
   last: v.nullable(
     v.strictObject({
       at: time,

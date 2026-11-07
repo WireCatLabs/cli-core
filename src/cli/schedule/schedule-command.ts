@@ -64,7 +64,7 @@ interface WhenOptions {
   at?: string
   atTime?: string
   notifyOn?: Notify
-  to?: string[]
+  deliverTo?: string[]
 }
 
 const whenOf = ({ every, at, atTime }: WhenOptions, minimum: number): When => {
@@ -110,8 +110,10 @@ const untilChildEnds = async <T>(command: Command, wait: (signal: AbortSignal | 
   }
 }
 
-const scheduleAnswer = ({ environment, createdAt, ...schedule }: Schedule, extra: object) => ({
+// The file keeps `to`, as schedules saved before the flag was renamed have it; the answer names it as the flag does.
+const scheduleAnswer = ({ environment, createdAt, to, ...schedule }: Schedule, extra: object) => ({
   ...(snakeKeys(schedule) as object),
+  ...(to?.length ? { deliver_to: to } : {}),
   environment,
   created_at: createdAt,
   ...(snakeKeys(extra) as object),
@@ -129,15 +131,15 @@ const withWhen = (command: Command) =>
       ).choices(NOTIFY_WHEN),
     )
     .option(
-      "--to <route>",
+      "--deliver-to <route>",
       `also send the result, when --notify-on says so, by the owner's own tg or mail: ${ROUTE_HELP}; repeat it for more`,
       (route: string, routes: string[] = []) => [...routes, routeText(parseRoute(route))],
     )
 
-/** What a schedule keeps of `--notify-on` and `--to`. */
-const deliveryOf = ({ notifyOn, to }: WhenOptions): Pick<Schedule, "notify" | "to"> => ({
+/** What a schedule keeps of `--notify-on` and `--deliver-to`. */
+const deliveryOf = ({ notifyOn, deliverTo }: WhenOptions): Pick<Schedule, "notify" | "to"> => ({
   ...(notifyOn ? { notify: notifyOn } : {}),
-  ...(to?.length ? { to } : {}),
+  ...(deliverTo?.length ? { to: deliverTo } : {}),
 })
 
 /** What the schedule command needs of a CLI: who it is and, per command, where it prints and which profile runs. */
@@ -532,7 +534,7 @@ export const scheduleCommandFor = ({
         kind: schedule.kind,
         when: describeWhen(schedule.when),
         notify: notifyOf(schedule),
-        ...(schedule.to?.length ? { to: schedule.to } : {}),
+        ...(schedule.to?.length ? { deliverTo: schedule.to } : {}),
         last: lastRun(scheduleFile(state, schedule.name)) ?? null,
         ...(schedule.kind === "agent"
           ? {
@@ -553,13 +555,13 @@ export const scheduleCommandFor = ({
           return ""
         }
         return rows
-          .map(({ name, kind, when, notify, to, last, spentTodayUsd, maxCostPerDayUsd }) =>
+          .map(({ name, kind, when, notify, deliverTo, last, spentTodayUsd, maxCostPerDayUsd }) =>
             [
               name,
               kind,
               when,
               `notify ${notify}`,
-              ...(to ? [`to ${to.join(", ")}`] : []),
+              ...(deliverTo ? [`to ${deliverTo.join(", ")}`] : []),
               last
                 ? `last ${last.at.slice(0, 16).replace("T", " ")} exit ${last.exitCode}` +
                   (last.failures

@@ -29,7 +29,7 @@ export interface Schedule {
   maxCostPerDay?: number
   /** When a finished run shows a desktop notice and goes along `to`; absent means `notifyOf`'s default. */
   notify?: Notify
-  /** Delivery routes (`telegram-bot:<profile>/<chat>`, `email:<profile>/<address>`) the result goes along after the run. */
+  /** `--deliver-to`'s routes (`telegram-bot:<profile>/<chat>`, `email:<profile>/<address>`), answered as `deliver_to`. */
   to?: string[]
 }
 

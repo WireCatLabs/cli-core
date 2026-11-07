@@ -29,7 +29,7 @@ export const ROUTE_HELP = "telegram-bot:<profile>/<chat id or user:id>, or email
 
 export const parseRoute = (text: string): Route => {
   const [, kind = "", profile = "", target = ""] = /^([a-z-]+):([^/]+)\/(.+)$/.exec(text.trim()) ?? []
-  const refuse = (why: string) => new CliError("validation_error", `--to ${text}: ${why} — ${ROUTE_HELP}`)
+  const refuse = (why: string) => new CliError("validation_error", `--deliver-to ${text}: ${why} — ${ROUTE_HELP}`)
   if (!(kind in PROGRAMS)) throw refuse(kind ? `${kind} is not a route` : "a route is <kind>:<profile>/<where>")
   if (!PROFILE.test(profile)) throw refuse(`"${profile}" is not a profile name`)
   if (kind === "telegram-bot") {
