@@ -20,6 +20,10 @@ shape of this file.
   the first and last line, so a desktop app can draw a bar. `installFiles`, `install` and the `download*Model`
   services take a `bytes(done, total)` callback for the same count.
 
+- **A source `search all` skips names why, for a program too.** Each `skipped` entry keeps the sentence in `reason` and
+  now adds `why`, the dotted reason (`query.unknown-value`), and `token`, the part of the query that was refused
+  (`kind:nonsense`). `meta.issues` of `search all` carries `why` as `reason`, as the output standard allows.
+
 ### Changed — may break callers
 
 - **A `?` that ends a bare word is a question mark, not a wildcard.** `invoice?` and `что с бюджетом?` find

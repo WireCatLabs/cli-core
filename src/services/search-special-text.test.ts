@@ -145,4 +145,17 @@ describe("free text with special characters", () => {
       searchStore(store, ME, { text: "kind:nonsense", kind: "messages", source: "all", limit: 50 }),
     ).rejects.toMatchObject({ code: "validation_error" })
   })
+
+  it("names the reason and the refused part of the query when a source skips it", async () => {
+    const found = await searchAll(store, ME, { text: "draft kind:nonsense", limit: 50, only: ["messages"] })
+    expect(found.skipped).toEqual([
+      {
+        resource: "messages",
+        code: "validation_error",
+        reason: expect.stringContaining("kind"),
+        why: "query.unknown-value",
+        token: "kind:nonsense",
+      },
+    ])
+  })
 })
