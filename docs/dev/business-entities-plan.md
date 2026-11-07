@@ -97,6 +97,8 @@ Anchors on `origin/main` 9386f1765, package 0.602.0, store version 55.
 | cli-core #2628, store version 56 | reservation PR open | `links.account_id` (`<provider>:<account>`), `starts_at`/`ends_at`, `deleted_at` (source stopped reporting), `link_revisions`, unique (from, to, kind, role, account_id) on relationship links |
 | `src/domain/relations.ts` (kinds, endpoints, roles) | comes with #2628's build | contract parties, people on deals, member-of from an import |
 | `store.relations.syncReported(accountKey, relationships[])` | working name, signature later | every relationship an import reports |
+| Memory workstream D1: person separation guard in `joinByAddress`/`linkOwnIdentities` | PR in progress, function name later | identifier matching must not rejoin two people the owner separated |
+| Memory workstream D5: one shared identity matcher | last in their order | the import's lookup lives in one self-contained function so D5 can move it unchanged |
 
 Everything in this plan that writes `links` **depends on #2628 and its follow-up, to confirm with its author.** The
 rest (tables, money rules, envelope, streaming) does not, and is built first.
