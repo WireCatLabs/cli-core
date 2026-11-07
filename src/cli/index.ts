@@ -1,5 +1,5 @@
 export { AI_ENTRIES, AI_SETTING_KEYS, type AISettings, resolveAISettings } from "../analysis/settings.js"
-export type { AgentCli, AgentInput } from "../background/schedules.js"
+export { AGENT_INPUT_MAX_CHARS, type AgentCli, type AgentInput } from "../background/schedules.js"
 export { parseDuration } from "../domain/duration.js"
 export {
   openOf,
