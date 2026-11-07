@@ -7,6 +7,12 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- **A CRM field lookup's refusal names the option the name came from.** `fieldNamed`, `unknownField` and `optionOf`
+  take that option as a last argument, `--field` when left out. They always answered `param: "--field"`, so a CRM
+  CLI that looked up a field named in `--query` or `--json` pointed the caller at the wrong option.
+
 ## 0.606.0 — 08.11.2026
 
 ### Added
