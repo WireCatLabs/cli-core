@@ -7,6 +7,15 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **A file note can carry the time its source gives it, and searches read that time.**
+  `store.notes.dateFileNotes(folderId, [{ path, modifiedAt }])` sets it (memo passes the front matter `date` or the
+  file's modification time) without counting as an edit: text, revision and `updatedAt` stay, so nothing is
+  re-embedded. `Note.modifiedAt` holds it (`null` when the source gave none, always for a note written in memo). The
+  column is the one Drive documents already fill, so `date:`, the `at` of a notes hit and `search all`'s `timestamp`
+  show it without a store version. Until now a local note was dated by the moment it was imported.
+
 ### Fixed
 
 - **`search all` ranks higher the record a question words differently.** For a question, a mail, message or note
