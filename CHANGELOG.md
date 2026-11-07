@@ -7,8 +7,19 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`review --holder` gives each email the cursor and findings key that end the batch at it** (`email.cursor`,
+  `email.findings_key`). A reader that cuts the batch to fit, such as an agent's input, acknowledges the last email it
+  showed instead of the batch's end, so the mark never moves past mail it did not show. Held emails, older than
+  the mark, end the batch at the mark with a key of their own (`<holder>:<mark>-h<highest held id>`).
+- **`@wirecat/cli-core/cli` exports `AGENT_INPUT_MAX_CHARS`**, the 60,000-character cut of an agent's input, so a
+  host that builds the input can stay under it and cut at its own boundaries.
+
 ### Fixed
 
+- **A holder's batch of held emails only no longer reuses the findings key of the run that set the mark**, which
+  refused its staging (`key-used`): it takes `-h<highest held id>`.
 - **People the owner separated stay apart.** An owner's unlink was checked only for the two identities being joined,
   but a join moves whole people: a third identity with the same email address, linked to one of them, carried both
   back together. Now no automatic join — the same email address, an account's own identity joining the owner — merges
@@ -94,12 +105,6 @@ shape of this file.
 
 ### Added
 
-- **`review --holder` gives each email the cursor and findings key that end the batch at it** (`email.cursor`,
-  `email.findings_key`). A reader that cuts the batch to fit, such as an agent's input, acknowledges the last email it
-  showed instead of the batch's end, so the mark never moves past mail it did not show. Held emails, older than
-  the mark, end the batch at the mark with a key of their own (`<holder>:<mark>-h<highest held id>`).
-- **`@wirecat/cli-core/cli` exports `AGENT_INPUT_MAX_CHARS`**, the 60,000-character cut of an agent's input, so a
-  host that builds the input can stay under it and cut at its own boundaries.
 - **Store version 55: `decision_requests`, the one-time keys behind buttons that ask the owner to decide a batch.**
   `store.decisionRequests.create` makes one token per button for one message (22 characters, 16 random bytes in
   base64url; only a SHA-256 digest is kept), `take` uses a token once, cancels the message's other open tokens in the
@@ -137,8 +142,6 @@ shape of this file.
 
 ### Fixed
 
-- **A holder's batch of held emails only no longer reuses the findings key of the run that set the mark**, which
-  refused its staging (`key-used`): it takes `-h<highest held id>`.
 
 - **`doctor --online` of a CLI built on `appDoctorCommand` runs inside cli-core's run.** It answered outside one, so
   `--record` kept no run of it and its call out was not the command's own. A config that will not load still gets an
