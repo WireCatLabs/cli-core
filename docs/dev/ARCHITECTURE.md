@@ -376,7 +376,8 @@ reads neither lane; a CRM CLI's reads `crm`.
 
 Meetings are one resource of `searchAll`. `meetingLane` (`src/services/search-all-meetings.ts`) parses the query once
 with the meeting query language, so a field meetings lack skips the whole resource, then pages
-`store.meetings.searchHits` for each meeting account in scope and keeps at most three passages of a meeting. A failure
+`store.meetings.searchHits` for each meeting account in scope and keeps at most three hits of a meeting. Titles match
+through `title_folded` with a `meetings list` query (`store.meetings.meetings`), so they need no index. A failure
 of one account is that account's skip. The lane never refreshes the index, since search all only reads; each account
 reports `indexing` and `hasMore`. `oneList` keeps one hit per passage (`hitKey`: meeting, scope, row), since every
 passage of a meeting shares its `ref`. `--source` is resolved inside `searchAll` (`sourceScope`) into the accounts

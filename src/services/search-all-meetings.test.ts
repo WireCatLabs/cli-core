@@ -41,7 +41,7 @@ const fixture = async () => {
     const accountId = await store.accounts.saveAccount(account, { name: "Invented" })
     const sample = sampleMeeting()
     const saved = await store.meetings.saveMeeting({
-      meeting: { ...sample.meeting, accountId, externalId, startedAt, ...extra },
+      meeting: { ...sample.meeting, accountId, externalId, startedAt, title: "Invented call", ...extra },
       transcripts: [
         {
           ...sample.transcripts[0],
@@ -190,7 +190,7 @@ describe("meetings in search all", () => {
       ref: `meeting:${saved.accountId}/${saved.meeting.id}`,
       cueRef: `meeting:${saved.accountId}/${saved.meeting.id}/${transcript}/2`,
       speakerName: "Alice Example",
-      title: "Example planning",
+      title: "Invented call",
       timestamp: new Date(1000).toISOString(),
       foundBy: ["words"],
     })
@@ -356,6 +356,51 @@ describe("meetings in search all", () => {
     const found = await searchAll(store, caller, meetingsOnly())
     expect(found.items).toEqual([])
     expect(found.hasMore).toBe(false)
+  })
+
+  it("finds a meeting by its title alone", async () => {
+    const { store, save } = await fixture()
+    const saved = await save(alice, "titled", ["nothing to see"], 1000, { title: "Needle review" })
+    const [hit, ...rest] = meetingHits((await searchAll(store, caller, meetingsOnly())).items)
+    expect(rest).toEqual([])
+    expect(hit).toMatchObject({
+      ref: `meeting:${saved.accountId}/${saved.meeting.id}`,
+      scope: "title",
+      id: saved.meeting.id,
+      title: "Needle review",
+      text: "Needle review",
+      foundBy: ["title"],
+    })
+    expect(hit).not.toHaveProperty("cueRef")
+  })
+
+  it("matches a title's words from their start, as passages are matched", async () => {
+    const { store, save } = await fixture()
+    await save(alice, "titled", ["nothing to see"], 1000, { title: "Monday planning" })
+    const titles = async (text: string) =>
+      meetingHits((await searchAll(store, caller, meetingsOnly({ text }))).items).map(({ title }) => title)
+    expect(await titles("plan")).toEqual(["Monday planning"])
+    expect(await titles("monday")).toEqual(["Monday planning"])
+    expect(await titles("anning")).toEqual([])
+  })
+
+  it("gives a title and a passage of one meeting as two hits", async () => {
+    const { store, save } = await fixture()
+    await save(alice, "both", ["the needle again"], 1000, { title: "Needle review" })
+    const hits = meetingHits((await searchAll(store, caller, meetingsOnly())).items)
+    expect(hits.map(({ scope, text }) => [scope, text])).toEqual([
+      ["title", "Needle review"],
+      ["transcript", "the needle again"],
+    ])
+  })
+
+  it("matches no title when the query names a speaker", async () => {
+    const { store, save } = await fixture()
+    await save(alice, "both", [{ speaker: "Dana Example", text: "the needle again" }], 1000, {
+      title: "Needle review",
+    })
+    const hits = meetingHits((await searchAll(store, caller, meetingsOnly({ text: "needle from:dana" }))).items)
+    expect(hits.map(({ scope }) => scope)).toEqual(["transcript"])
   })
 
   it("says no meeting account is stored when the store holds none", async () => {

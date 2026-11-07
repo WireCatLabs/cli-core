@@ -4,6 +4,7 @@ import { holdsKind } from "../domain/providers.js"
 import {
   formatMeetingReference,
   liftMeetingFields,
+  type Meeting,
   type MeetingHitSearchRequest,
   parseMeetingQuery,
   READ_BUDGET_EXCEEDED,
@@ -26,7 +27,8 @@ export interface MeetingSearchItem {
   /** About 240 characters around the match. */
   text: string
   meetingId: number
-  scope: SearchHit["scope"]
+  /** `title`: the meeting's title holds the words; `id` is then the meeting's. */
+  scope: SearchHit["scope"] | "title"
   id: number
   startMs: number | null
   /** A transcript hit's cue, `meeting:<account>/<meeting>/<transcript>/<cue>`, which `meetings passage` opens. */
@@ -35,7 +37,7 @@ export interface MeetingSearchItem {
   language?: string | null
   line?: number
   linesTotal?: number
-  foundBy: "words"[]
+  foundBy: ("title" | "words")[]
   /** `corrected`: a query word matched only a spelling speech recognition may have garbled, listed in `corrections`. */
   match?: "corrected"
   corrections?: { from: string; to: string[] }[]
@@ -86,6 +88,39 @@ const exactly = (node: QueryNode): QueryNode =>
     : node.field === "text"
       ? { ...node, field: "exact" }
       : node
+
+const positive = (node: QueryNode): boolean =>
+  node.kind === "predicate" || node.clauses.some(({ occur, node }) => occur !== "must_not" && positive(node))
+
+/** A word or phrase as the start of a title's word, as the passage index matches word starts. */
+const titleNode = (node: QueryNode): QueryNode | undefined => {
+  if (node.kind === "boolean") {
+    const clauses = node.clauses.map((clause) => ({ ...clause, node: titleNode(clause.node) }))
+    return clauses.every((clause) => clause.node) ? { ...node, clauses: clauses as typeof node.clauses } : undefined
+  }
+  if (node.field !== "text" || (node.operator !== "term" && node.operator !== "phrase") || node.slop !== undefined)
+    return undefined
+  const word = node.value.replace(/[\\*?[]/gu, "\\$&")
+  const starting = (value: string): QueryNode => ({ ...node, field: "title", operator: "wildcard", value })
+  return {
+    kind: "boolean",
+    span: node.span,
+    clauses: [
+      { occur: "should", node: starting(`${word}*`) },
+      { occur: "should", node: starting(`* ${word}*`) },
+    ],
+  }
+}
+
+/**
+ * The query's words as a `meetings list` query over the folded title, or `undefined` when a title cannot answer it:
+ * a speaker, an exact form or nearness is about what was said, and project and tag are not title filters.
+ */
+const titleQuery = (query: QueryAst, input: MeetingHitSearchRequest): QueryAst | undefined => {
+  if (input.projectId !== undefined || input.tagId !== undefined || !positive(query.root)) return undefined
+  const root = titleNode(query.root)
+  return root && { ...query, root }
+}
 
 const sameAccount = (one: AccountKey, other: AccountKey) =>
   one.provider === other.provider && one.account === other.account
@@ -220,6 +255,16 @@ const accountHits = async (
   }
   let indexing: MeetingAccountCoverage["indexing"] = "ready"
   let hasMore = false
+  const titles = titleQuery(query, input)
+  if (titles)
+    for (const meeting of await store.meetings.meetings({
+      accountId: account.id,
+      query: titles,
+      ...(input.since === undefined ? {} : { since: input.since }),
+      ...(input.until === undefined ? {} : { until: input.until }),
+      limit: window + 1,
+    }))
+      keep({ item: titleItem(account, meeting, text), tier: 0, started: meeting.startedAt ?? 0 })
   let after: string | undefined
   let rows = Math.min(PAGE_ROWS, window + 1)
   for (let page = 1; ; page++) {
@@ -284,4 +329,20 @@ const meetingItem = (account: StoredAccount, hit: SearchHit & { ref: string }, q
         ...(hit.line === undefined ? {} : { line: hit.line, linesTotal: hit.linesTotal }),
       }
     : {}),
+})
+
+const titleItem = (account: StoredAccount, meeting: Meeting, query: string): MeetingSearchItem => ({
+  kind: "meeting",
+  ref: formatMeetingReference({ type: "meeting", accountId: account.id, meetingId: meeting.id }),
+  provider: account.provider,
+  account: account.account,
+  accountId: account.id,
+  title: meeting.title,
+  timestamp: meeting.startedAt === null ? null : new Date(meeting.startedAt).toISOString(),
+  text: excerpt(meeting.title ?? "", query),
+  meetingId: meeting.id,
+  scope: "title",
+  id: meeting.id,
+  startMs: null,
+  foundBy: ["title"],
 })

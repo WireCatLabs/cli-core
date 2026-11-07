@@ -211,8 +211,10 @@ skips meetings with the reason. Meeting hits have `kind: "meeting"`, `ref` (the 
 only through a spelling speech recognition may have garbled has `match: "corrected"` and `corrections`, the stored
 words each query word matched. `text` is an excerpt of about 240 characters around the words the index matched
 (`searchHits` gives them as `matchedWords`: another form, a garbled spelling, never a word only under NOT), and the
-meeting's timestamp can be null. One meeting gives at most `MOST_HITS_PER_MEETING` (3) hits; inside one account they come best
-match first, then newest meeting first.
+meeting's timestamp can be null. A meeting whose title holds the words (each as the start of a word of the title) is
+a hit with `scope: "title"`, `id` the meeting's and `foundBy: ["title"]`; a query with `from:`, an exact form,
+nearness, `project:` or `tag:` matches no title, since a title cannot answer it. One meeting gives at most
+`MOST_HITS_PER_MEETING` (3) hits; inside one account they come best match first, then newest meeting first.
 
 Search all only reads: it never builds a meeting index. `meetings` in the answer has one entry per meeting account
 read, with `indexing: "ready" | "pending"` and `hasMore`. `pending` means passages saved since the index was last built

@@ -7,6 +7,13 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`search all` finds a meeting by its title.** A meeting whose title holds the words, each as the start of a word
+  as passages are matched, is a hit of its own (`scope: "title"`, `found_by: ["title"]`), before its passages and
+  within the 3 hits a meeting gives. The title is matched through the folded title the store already keeps, so no
+  store version is needed. A query with `from:`, an exact form, `"a b"~N`, `project:` or `tag:` matches no title.
+
 ### Changed — may break callers
 
 - **`search all` reads meetings from every meeting account, through their search index, ranked with the other
