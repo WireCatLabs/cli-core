@@ -126,11 +126,22 @@ export const parseApiJson = (text: string): unknown => {
   }
 }
 
-export const apiJson = (value: unknown): string => stringify(value) ?? "null"
+/** JSON writes NaN and Infinity as `null`: a bad `Number(…)` would reach the service as a cleared field. */
+const finite = (key: string, value: unknown): unknown => {
+  if (typeof value === "number" && !Number.isFinite(value))
+    throw new CliError(
+      "validation_error",
+      `${key === "" ? "the body" : key} is ${value}, which a request cannot carry; nothing was sent`,
+      { sent: false },
+    )
+  return value
+}
+
+export const apiJson = (value: unknown): string => stringify(value, finite) ?? "null"
 
 export const apiPlainJson = (value: unknown): unknown =>
   JSON.parse(
-    stringify(value, (_, inner) =>
-      isLosslessNumber(inner) && !isSafeNumber(inner.value) ? inner.toString() : inner,
+    stringify(value, (key, inner) =>
+      isLosslessNumber(inner) && !isSafeNumber(inner.value) ? inner.toString() : finite(key, inner),
     ) ?? "null",
   )
