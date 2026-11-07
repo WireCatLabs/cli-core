@@ -231,6 +231,7 @@ const OTHERS: Entry[] = [
   validation("record.reference-not-found", "a reference in the record's fields is not in the store"),
   validation("record.relation-ambiguous", "the record names more than one target for a role that takes one"),
   validation("record.stale-revision", "the store holds a newer revision of the record"),
+  validation("memory.already-superseded", "the memory was already replaced by another"),
   validation("memory.evidence-required", "a memory needs its evidence"),
   validation("memory.scope-required", "a memory needs its scope"),
   validation("money.amount", "the amount is not a decimal string in the currency's scale"),

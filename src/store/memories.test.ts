@@ -152,6 +152,84 @@ describe("a memory's project", () => {
   })
 })
 
+describe("correcting a memory", () => {
+  const corrected = async () => {
+    const store = await open()
+    const note = await store.notes.addNote({ text: "Kai Sample moved the call to Thursdays" })
+    const input = { kind: "preference" as const, scope: "work" as const, evidence: [note.ref] }
+    const old = await store.memories.add({
+      ...input,
+      body: "Kai Sample prefers Friday calls",
+      author: "owner",
+      status: "confirmed",
+    })
+    const proposal = await store.memories.add({
+      ...input,
+      body: "Kai Sample prefers Thursday calls",
+      author: agent,
+      supersedes: old.ref,
+    })
+    return { store, input, old, proposal }
+  }
+
+  it("by an agent waits as proposed and leaves the old memory confirmed", async () => {
+    const { store, old, proposal } = await corrected()
+    expect(proposal).toMatchObject({ status: "proposed", supersedes: old.ref })
+    expect(await store.memories.get(old.ref)).toMatchObject({ status: "confirmed" })
+  })
+
+  it("retires the old one when the owner confirms it, and a second confirm changes nothing", async () => {
+    const { store, old, proposal } = await corrected()
+    expect(await store.memories.confirm(proposal.ref, "owner")).toMatchObject({ status: "confirmed" })
+    expect(await store.memories.get(old.ref)).toMatchObject({ status: "superseded" })
+    expect(await store.memories.confirm(proposal.ref, "owner")).toMatchObject({ status: "confirmed" })
+  })
+
+  it("leaves the old memory confirmed when the correction is rejected or removed", async () => {
+    const { store, input, old, proposal } = await corrected()
+    await store.memories.markStale(proposal.ref, "owner")
+    expect(await store.memories.get(old.ref)).toMatchObject({ status: "confirmed" })
+    const another = await store.memories.add({
+      ...input,
+      body: "Kai Sample prefers calls",
+      author: agent,
+      supersedes: old.ref,
+    })
+    await store.memories.remove(another.ref, { bot: agent.bot, reason: "wrong day" })
+    expect(await store.memories.get(old.ref)).toMatchObject({ status: "confirmed" })
+  })
+
+  it("refuses superseding a memory twice, at add and at confirm", async () => {
+    const { store, input, old, proposal } = await corrected()
+    const rival = await store.memories.add({
+      ...input,
+      body: "Kai Sample prefers calls",
+      author: agent,
+      supersedes: old.ref,
+    })
+    await store.memories.confirm(proposal.ref, "owner")
+    const twice = { code: "validation_error", details: { reason: "memory.already-superseded" } }
+    await expect(store.memories.confirm(rival.ref, "owner")).rejects.toMatchObject(twice)
+    expect(await store.memories.get(rival.ref)).toMatchObject({ status: "proposed" })
+    await expect(
+      store.memories.add({ ...input, body: "x", author: "owner", status: "confirmed", supersedes: old.ref }),
+    ).rejects.toMatchObject(twice)
+  })
+
+  it("by the owner directly retires the old memory at once", async () => {
+    const { store, input, old } = await corrected()
+    const fixed = await store.memories.add({
+      ...input,
+      body: "Kai Sample prefers Monday calls",
+      author: "owner",
+      status: "confirmed",
+      supersedes: old.ref,
+    })
+    expect(fixed).toMatchObject({ status: "confirmed", supersedes: old.ref })
+    expect(await store.memories.get(old.ref)).toMatchObject({ status: "superseded" })
+  })
+})
+
 describe("forgetting a memory", () => {
   it("erases its row, words, pieces, vector and links, and the text from the file; the rest stays", async () => {
     const path = join(mkdtempSync(join(tmpdir(), "memories-")), "store.db")
