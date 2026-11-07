@@ -1,7 +1,8 @@
+import type { KeyringStore } from "@wirecat/cli-base"
 import type { Command } from "commander"
 import type { AppServerOptions } from "../mcp/app-server.js"
 import type { AppIdentity } from "../ports/app.js"
-import { baseContext } from "./context.js"
+import { baseContext, environmentOf } from "./context.js"
 import { type McpHost, mcpGroup } from "./messenger/mcp-command.js"
 import { refuseUnknownPermissionKeys } from "./permission-keys.js"
 import type { Configuration } from "./settings.js"
@@ -16,8 +17,11 @@ export interface AppMcpOptions {
   skill?: URL
   /** What the CLI alone knows stops a command for a profile, such as an OAuth grant without the scope. */
   availability?: AppServerOptions["availability"]
-  /** Whether the profile can reach the service, read from disk; left out, `mcp check` does not say. */
-  signedIn?: (profile: string, env: NodeJS.ProcessEnv) => boolean
+  /**
+   * Whether the profile can reach the service, read from disk with the run's keyring (a test's `memoryKeyring()`);
+   * left out, `mcp check` does not say. A throw, such as a locked keyring, counts as not signed in.
+   */
+  signedIn?: (profile: string, env: NodeJS.ProcessEnv, keyring: KeyringStore | undefined) => boolean
 }
 
 /**
@@ -66,7 +70,14 @@ export const appMcpCommand = (app: AppIdentity, configuration: Configuration, op
         untrusted: options.untrusted,
       })
     },
-    signedIn: (_self, profile, env) => options.signedIn?.(profile, env),
+    signedIn: (self, profile, env) => {
+      if (!options.signedIn) return undefined
+      try {
+        return options.signedIn(profile, env, environmentOf(self).keyring)
+      } catch {
+        return false
+      }
+    },
   }
   return mcpGroup(host)
 }
