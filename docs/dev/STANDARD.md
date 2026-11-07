@@ -364,6 +364,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `serve` | the long-running process |
 | `setup` | the guided first run: log in or link the account, then install the agent skill |
 | `doctor` | check this machine's setup |
+| `recover` | repair a damaged store: what it would do, then its run subcommand does it |
 | `upgrade` | install a newer version of this tool |
 | `commands` | the command tree as data |
 | `guide` | scenarios: the commands for a common task, in order, and why each |

@@ -32,8 +32,8 @@ shape of this file.
   still keeps them as `to`, so a schedule saved with `--to` goes on delivering; `deliveries[].to` in `last.json` is
   unchanged.
 - **The shared commands pass `cli-dev lint` with no overrides.** `lint/overrides.json` is gone: an override here never
-  reached a CLI that mounts the commands, so each CLI failed on its bump or copied it. Needs cli-base 0.80.5, whose
-  vocabulary has `--notify-on`, `--deliver-to`, `--max-cost-per-day`, `--who`, `--open-new` and `waiting`. A CLI that
+  reached a CLI that mounts the commands, so each CLI failed on its bump or copied it. Needs cli-base 0.80.7, whose
+  vocabulary has `--notify-on`, `--deliver-to`, `--max-cost-per-day`, `--who`, `--open-new`, `waiting` and `recover`. A CLI that
   copied those overrides removes them when it bumps (`cli-dev lint` reports them as stale). `stats tasks show
   --chat` moved to the baseline.
 
