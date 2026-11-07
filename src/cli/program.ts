@@ -30,7 +30,7 @@ import { commandAvailability } from "./command-availability.js"
 import { commandPathOf } from "./command-contract.js"
 import { entityRows, type RowTable } from "./compact.js"
 import { type BaseEnvironment, outputFor, provide } from "./context.js"
-import { refuseByCommandPermissions, refuseWriteBeforeConnecting } from "./early-refusal.js"
+import { refuseByCommandPermissions, refuseOfflineCommand, refuseWriteBeforeConnecting } from "./early-refusal.js"
 import {
   admittedUnderLock,
   changesAuthorityAt,
@@ -422,6 +422,7 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
     if (flags.input === false || (headless && !options.answer)) environment.answer = () => null
     const localPreview = action.options.some((option) => option.long === "--dry-run")
     if (flags.dryRun && localPreview) action.setOptionValue("dryRun", true)
+    refuseOfflineCommand(action, definition.app, flags.offline === true, flags.dryRun === true && localPreview)
     const path = commandPathOf(action)
     const lock = readOnlyLockOf(definition.app, commandEnv)
     const input = options.stdin ?? process.stdin
