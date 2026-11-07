@@ -102,7 +102,7 @@ export interface LinkListFilter {
   confirmed?: boolean
 }
 
-export interface LinkInput {
+export interface LinkInput extends Pick<RelationshipColumns, "position" | "startsAt" | "endsAt"> {
   from: string
   to?: string
   targetText?: string
@@ -114,10 +114,6 @@ export interface LinkInput {
   evidence?: string
   provenance?: string
   confirmed?: boolean
-  /** A relationship's: a job title beside it, and when it held (UTC ms, `endsAt` exclusive). */
-  position?: string
-  startsAt?: number
-  endsAt?: number
   /** Who writes it: a confirmed link needs the owner. */
   by?: Decider
 }
