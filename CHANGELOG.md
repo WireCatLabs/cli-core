@@ -35,7 +35,8 @@ shape of this file.
   optional. The same diff is `store.relations.syncReported` for any source. The store settings
   `crm.<provider>:<account>.links` (`reported` or `review`: new relationships wait as proposals) and
   `crm.<provider>:<account>.company-types` (a company type means `customer-of`, `supplier` or `partner-of` the own
-  company) are offered by every CLI's `config`.
+  company) are offered by every CLI's `config`. `knowledge.setOwnOrganization` records the owner's own-company
+  mark, which no sync changes; `crmGapsOf` reads what the account's last sync could not list.
 
 ### Changed — may break callers
 

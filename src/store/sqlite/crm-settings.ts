@@ -84,7 +84,6 @@ export const saveCrmSetting = (database: CacheDatabase, setting: string, value: 
       .run(setting, JSON.stringify(value), now)
 }
 
-/** Every CRM setting the store holds, for `config show`. */
 export const crmSettingsOf = (database: CacheDatabase): { setting: string; value: unknown }[] =>
   database
     .prepare("SELECT key, value FROM store_settings WHERE key LIKE 'crm.%' ORDER BY key")

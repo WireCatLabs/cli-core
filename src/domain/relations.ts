@@ -112,7 +112,6 @@ export interface StandingFields {
   accountId?: number | null
   /** Epoch ms, exclusive. */
   endsAt?: number | null
-  /** The source stopped reporting it. */
   deletedAt?: number | null
 }
 

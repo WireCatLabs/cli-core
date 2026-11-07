@@ -263,6 +263,7 @@ const OTHERS: Entry[] = [
     "crm.reference-unknown",
     "a CRM row names a contact, company or user the store does not hold; that link was not made",
   ),
+  validation("crm.pending-dropped", "relationships waited too long for an end that never came; they were dropped"),
   validation("crm.email-ambiguous", "a CRM contact's email belongs to more than one person; the owner decides"),
   validation("crm.own-unknown", "no own company of the CRM account is stored, so its users are no one's employees yet"),
   validation("relationship.reference-unknown", "a reported relationship names something the store does not hold"),

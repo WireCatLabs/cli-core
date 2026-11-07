@@ -112,7 +112,6 @@ export interface CrmUser {
   name: string | null
   email?: string | null
   position?: string | null
-  /** The departments it belongs to, by their id. */
   departments?: string[]
   active?: boolean
 }
@@ -122,7 +121,6 @@ export interface CrmDepartment {
   externalId: string
   name: string
   parent?: string | null
-  /** The user who heads it, by the user's id. */
   head?: string | null
 }
 

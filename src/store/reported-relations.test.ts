@@ -127,3 +127,18 @@ it("refuses a role change to a role the pair already holds, with a reason", asyn
     },
   )
 })
+
+it("lists live relationships before withdrawn ones", async () => {
+  const { store, acme, northstar, alice } = await fixture()
+  const scope = { from: [alice], kinds: ["member-of" as const] }
+  await store.relations.syncReported(SOURCE, [{ from: alice, to: acme, kind: "member-of", role: "contact" }], scope)
+  await store.relations.syncReported(
+    SOURCE,
+    [{ from: alice, to: northstar, kind: "member-of", role: "contact" }],
+    scope,
+  )
+  expect((await store.knowledge.relations(null, alice)).map(({ to, standing }) => [to, standing])).toEqual([
+    [northstar, "reported"],
+    [acme, "ended"],
+  ])
+})

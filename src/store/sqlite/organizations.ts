@@ -22,6 +22,11 @@ export interface OrganizationsStore {
   organizations(query?: QueryAst): Promise<Organization[]>
   /** Renames an organization given as `organization:<id>` or by its id; its kind and scope stay. */
   updateOrganization(organization: string, input: { name: string }): Promise<Organization>
+  /**
+   * The owner says whether an organization is one of his own; a CRM sync never changes his word. `null` hands it back
+   * to the CRM's own-company flag.
+   */
+  setOwnOrganization(organization: string, own: boolean | null): Promise<{ ref: string; own: boolean }>
 }
 
 export const organizationsStoreOver = ({ database, now }: StoreContext): OrganizationsStore => ({
@@ -59,5 +64,23 @@ export const organizationsStoreOver = ({ database, now }: StoreContext): Organiz
           .get(title, now(), thing.id)
       if (!row) throw new CliError("not_found", `no organization ${organization}`)
       return organizationOf(row)
+    }),
+  setOwnOrganization: async (organization, own) =>
+    write(database, () => {
+      const thing = thingOf(database, organization.includes(":") ? organization : `organization:${organization}`)
+      const set =
+        own === null
+          ? "json_remove(coalesce(metadata, '{}'), '$.own', '$.own_by')"
+          : `json_set(coalesce(metadata, '{}'), '$.own', json('${own}'), '$.own_by', 'owner')`
+      const row =
+        thing?.type === "organization" &&
+        database
+          .prepare(
+            `UPDATE organizations SET metadata = ${set}, updated_at = ? WHERE id = ? AND deleted_at IS NULL RETURNING id, metadata`,
+          )
+          .get(now(), thing.id)
+      if (!row) throw new CliError("not_found", `no organization ${organization}`)
+      const metadata = JSON.parse(String(row.metadata ?? "{}")) as { own?: unknown }
+      return { ref: `organization:${row.id}`, own: metadata.own === true }
     }),
 })

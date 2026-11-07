@@ -220,3 +220,28 @@ it("records a suggestion the owner rejected as rejected, at the store's time", a
     await store.close()
   }
 })
+
+it("calls a removal removed when the only rejection of the link is older than its last change", async () => {
+  const { path, acme, bob } = await seeded()
+  const db = await openCache(path)
+  try {
+    const link = Number(
+      db
+        .prepare(
+          "INSERT INTO links (from_type, from_id, to_type, to_id, kind, source, confirmed, created_at, updated_at) " +
+            "VALUES ('person', ?, 'organization', ?, 'related-to', 'suggested', 0, 1, 10) RETURNING id",
+        )
+        .get(Number(bob.slice("person:".length)), Number(acme.slice("organization:".length)))?.id,
+    )
+    db.prepare(
+      "INSERT INTO proposed_actions (kind, payload, status, proposed_by_type, proposed_by_id, decided_at, result, " +
+        "created_at, updated_at) VALUES ('relationship', '{}', 'rejected', 'person', 1, 5, ?, 5, 5)",
+    ).run(JSON.stringify({ link: String(link) }))
+    db.prepare("DELETE FROM links WHERE id = ?").run(link)
+    expect(db.prepare("SELECT change FROM link_revisions WHERE link_id = ? ORDER BY id DESC").get(link)).toEqual({
+      change: "removed",
+    })
+  } finally {
+    db.close()
+  }
+})

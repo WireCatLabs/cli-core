@@ -869,7 +869,8 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
       if (reference !== undefined && !thing) return []
       return database
         .prepare(
-          `${RELATIONS} AND (? IS NULL OR (from_type=? AND from_id=?) OR (to_type=? AND to_id=?)) ORDER BY created_at, id LIMIT 500`,
+          // Live ones first: a long history of withdrawn links never pushes them past the cap.
+          `${RELATIONS} AND (? IS NULL OR (from_type=? AND from_id=?) OR (to_type=? AND to_id=?)) ORDER BY deleted_at IS NOT NULL, created_at, id LIMIT 500`,
         )
         .all(thing?.type ?? null, thing?.type ?? null, thing?.id ?? null, thing?.type ?? null, thing?.id ?? null)
         .map((row) => relationOf(linkOf(database, row)))

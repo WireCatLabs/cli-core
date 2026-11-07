@@ -95,7 +95,12 @@ export interface CrmSyncOptions {
 export interface CrmSyncIssue {
   /** `user`: the account's users and departments. */
   kind: CrmKind | "user"
-  reason: CrmSkipped["reason"] | CrmRelationIssue["reason"] | "crm.unlisted-held" | "crm.not-reported"
+  reason:
+    | CrmSkipped["reason"]
+    | CrmRelationIssue["reason"]
+    | "crm.unlisted-held"
+    | "crm.not-reported"
+    | "crm.pending-dropped"
   message: string
   externalId?: string
 }
@@ -147,6 +152,29 @@ const CONTINUE = "run sync again to continue"
 
 const fresh = (): CrmCursor => ({ v: 1, token: null, round: null, done: 0, updatedAt: null, pass: null, passAt: 0 })
 
+/**
+ * What a CRM account did not report in the last sync, so an answer can name it: a kind it has not, users or departments
+ * it does not list, or a list the sign-in's scope refused (`code`). Replaced by each run.
+ */
+export interface CrmGap {
+  what: CrmKind | "users" | "departments"
+  reason: "not-listed" | "refused"
+  code?: string
+  message: string
+}
+
+const GAPS = "crm:gaps"
+
+/** The gaps the account's last sync recorded; none before its first. */
+export const crmGapsOf = async (store: MessageStore, account: AccountKey): Promise<CrmGap[]> => {
+  try {
+    const value = JSON.parse((await store.sync.syncState(account, GAPS))?.value ?? "[]") as unknown
+    return Array.isArray(value) ? (value as CrmGap[]) : []
+  } catch {
+    return []
+  }
+}
+
 interface Run {
   source: CrmSource
   store: MessageStore
@@ -158,6 +186,9 @@ interface Run {
   /** Pipelines are read again at most once a run, for an item whose stage arrived after they were read. */
   pipelinesReread: Set<DealKind>
   moved: () => void
+  gaps: CrmGap[]
+  unlistedUsers: number
+  droppedPending: number
 }
 
 const readPipelines = async (run: Run, kind: DealKind): Promise<BudgetStop | null> => {
@@ -174,6 +205,8 @@ const noted = (run: Run, kind: CrmSyncIssue["kind"], saved: CrmSaved) => {
   for (const { externalId, ...one } of saved.issues ?? [])
     run.report.issues.push({ kind, ...one, ...(externalId ? { externalId } : {}) })
   run.report.skippedOwnerRejected += saved.skippedOwnerRejected ?? 0
+  run.unlistedUsers += saved.unlistedUsers ?? 0
+  run.droppedPending += saved.droppedPending ?? 0
 }
 
 /**
@@ -182,26 +215,33 @@ const noted = (run: Run, kind: CrmSyncIssue["kind"], saved: CrmSaved) => {
  */
 const readUsers = async (run: Run): Promise<BudgetStop | null> => {
   const { source } = run
-  if (!source.users) return null
+  const gap = (what: "users" | "departments", consequence: string, error?: unknown) => {
+    // The adapter's own text may carry a request; only its failure code is copied.
+    const code = error === undefined ? undefined : error instanceof CliError ? error.code : "error"
+    const message = `${source.provider} did not list ${what}${code ? ` (${code})` : ""}: ${consequence}`
+    run.gaps.push({ what, reason: code ? "refused" : "not-listed", ...(code ? { code } : {}), message })
+    run.report.issues.push({ kind: "user", reason: "crm.not-reported", message })
+  }
+  if (!source.users) {
+    run.gaps.push({
+      what: "users",
+      reason: "not-listed",
+      message: `${source.provider} lists no users: deal owners, employees and reporting lines are unknown`,
+    })
+    return null
+  }
   const why = run.budget.take()
   if (why) return why
-  const gap = (what: string, error?: unknown) =>
-    run.report.issues.push({
-      kind: "user",
-      reason: "crm.not-reported",
-      // The adapter's own text may carry a request; only its failure code is copied.
-      message: `${source.provider} did not list ${what}${error instanceof CliError ? ` (${error.code})` : ""}`,
-    })
   let users: Awaited<ReturnType<NonNullable<CrmSource["users"]>>>
   try {
     users = await source.users()
   } catch (error) {
     if (run.signal?.aborted) throw error
-    gap("its users, so nothing stored about them changed", error)
+    gap("users", "nothing stored about them changed", error)
     return null
   }
   let departments: Awaited<ReturnType<NonNullable<CrmSource["departments"]>>> | undefined
-  if (!source.departments) gap("departments: who reports to whom is unknown")
+  if (!source.departments) gap("departments", "who reports to whom is unknown")
   else {
     const stop = run.budget.take()
     if (stop) return stop
@@ -209,7 +249,7 @@ const readUsers = async (run: Run): Promise<BudgetStop | null> => {
       departments = await source.departments()
     } catch (error) {
       if (run.signal?.aborted) throw error
-      gap("departments: who reports to whom is unknown", error)
+      gap("departments", "who reports to whom is unknown", error)
     }
   }
   noted(run, "user", await run.store.crm.saveUsers(run.account, users, departments))
@@ -242,7 +282,8 @@ const savePage = async (
     return { saved: saved.saved, stop: null }
   }
   const items = page.items as CrmItem[]
-  const first = await store.crm.saveItems(account, kind, items)
+  const users = { users: run.source.users !== undefined }
+  const first = await store.crm.saveItems(account, kind, items, users)
   noted(run, kind, first)
   let { saved, skipped } = first
   let stop: BudgetStop | null = null
@@ -257,6 +298,7 @@ const savePage = async (
         account,
         kind,
         items.filter(({ externalId }) => again.has(externalId)),
+        users,
       )
       noted(run, kind, retried)
       saved += retried.saved
@@ -400,6 +442,13 @@ export const syncCrm = async (
     moved: () => {
       steps += 1
     },
+    gaps: CRM_KINDS.filter((kind) => !source.traits.kinds.includes(kind)).map((kind) => ({
+      what: kind,
+      reason: "not-listed" as const,
+      message: `${source.provider} has no ${kind}s`,
+    })),
+    unlistedUsers: 0,
+    droppedPending: 0,
   }
   const kinds = CRM_KINDS.filter((kind) => source.traits.kinds.includes(kind))
   let stopped: BudgetStop | null = null
@@ -433,6 +482,8 @@ export const syncCrm = async (
     if (stopped) continue
     try {
       stopped = await syncKind(run, kind, options, result)
+      // After every company of the run is stored, so one listed before the own company still gets its meaning.
+      if (kind === "organization") noted(run, kind, await store.crm.saveCompanyTypes(account))
     } catch (error) {
       if (options.signal?.aborted) {
         stopped = "cancelled"
@@ -443,7 +494,20 @@ export const syncCrm = async (
     }
   }
   // A relationship held back for an end a later page or kind brought is written now; it costs no request.
-  await store.crm.retryPending(account)
+  run.droppedPending += (await store.crm.retryPending(account)).dropped
+  if (run.unlistedUsers)
+    report.issues.push({
+      kind: "deal",
+      reason: "crm.not-reported",
+      message: `${run.unlistedUsers} deal owner(s) are ${source.provider} users this CRM does not list; no owner was stored for them`,
+    })
+  if (run.droppedPending)
+    report.issues.push({
+      kind: "deal",
+      reason: "crm.pending-dropped",
+      message: `${run.droppedPending} relationship(s) waited too long for a contact, user or company that never came and were dropped`,
+    })
+  await store.sync.setSyncState(account, GAPS, JSON.stringify(run.gaps))
   report.progress = {
     requests: budget.used,
     saved: report.synced.reduce((sum, one) => sum + one.saved, 0),

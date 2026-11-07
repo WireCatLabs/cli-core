@@ -199,15 +199,20 @@ answer, not an error.
 
 The CRM sync uses it for every relationship a CRM reports: a contact `member-of` its companies with role `contact`
 (the job title in `metadata.position`), a deal's or lead's contacts with their deal role, the deal's `assignee` as
-`owner`, each active user `member-of` the account's own companies (`organizations.metadata.own`, from
-`CrmOrganization.own`; cleared when the CRM drops it) as `employee` (an inactive user's withdrawn), and, when the CRM
+`owner`, each active user `member-of` the account's own companies (`organizations.metadata.own` with
+`own_by`: the CRM sets and clears only its own mark, `knowledge.setOwnOrganization` sets the owner's, which no sync
+changes) as `employee` (an inactive user's withdrawn), and, when the CRM
 lists departments, `reports-to` the head of the user's department, a head the head of the parent one
 (`metadata.derived = "department-head"`; no head, no link). A CRM user is an identity `<account>/user/<id>`, joined
 to a person by exact email as a contact is. With `crm.<provider>:<account>.company-types` mapping a company type to
 `customer-of`, `supplier` or `partner-of`, a company of that type becomes a customer of, a supplier to or a partner
-of the own company. A field the CRM left out (`organizations`, `people`, `assignee`, `type`, `users()`,
+of the own company; every stored company is checked once the run read the companies, so a new setting applies on the
+next sync. A field the CRM left out (`organizations`, `people`, `assignee`, `type`, `users()`,
 `departments()`, a user's `departments`) withdraws nothing. A relationship whose other end is not stored yet waits in
-the account's sync state (`crm:pending-relations`) and is written at the end of a later sync. A contact whose email
+the account's sync state (`crm:pending-relations`, read and written once per page) and is written at the end of a
+later sync; it is dropped when its row is deleted, after 30 days or past 5000, with one issue. A deal owner is not
+waited for when the CRM lists no users. Each sync replaces `crm:gaps`, what it could not read (a kind the CRM has
+not, users or departments not listed or refused with their code), which `crmGapsOf` reads. A contact whose email
 belongs to two people is named in the sync's issues until the owner separates it.
 
 A mail findings batch (`store.mailFindings`) also takes `invoice`, `payment`, `order` and `order_update` findings.

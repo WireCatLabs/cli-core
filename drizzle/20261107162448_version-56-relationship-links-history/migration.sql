@@ -96,9 +96,10 @@ CREATE TRIGGER link_revisions_ad AFTER DELETE ON links
   WHEN old.kind IN ('member-of', 'related-to', 'reports-to', 'customer-of', 'partner-of') AND old.to_id IS NOT NULL BEGIN
   INSERT INTO link_revisions (link_id, change, before, after, author, account_id, created_at)
   VALUES (old.id,
-    -- The store records the rejection before it deletes the suggestion; a confirmed link the owner removes is removed.
+    -- The store records the rejection, then sets updated_at, then deletes: an older rejection the fold re-pointed is not this one.
     CASE WHEN old.confirmed = 0 AND EXISTS (SELECT 1 FROM proposed_actions p WHERE p.kind = 'relationship'
-      AND p.status = 'rejected' AND json_valid(p.result) AND json_extract(p.result, '$.link') = CAST(old.id AS TEXT))
+      AND p.status = 'rejected' AND p.decided_at >= old.updated_at AND json_valid(p.result)
+      AND json_extract(p.result, '$.link') = CAST(old.id AS TEXT))
       THEN 'rejected' ELSE 'removed' END,
     json_object('role', old.role, 'confirmed', old.confirmed, 'account_id', old.account_id, 'starts_at', old.starts_at,
       'ends_at', old.ends_at, 'deleted_at', old.deleted_at),

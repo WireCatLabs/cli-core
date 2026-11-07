@@ -6,7 +6,7 @@ import { afterEach, expect, it } from "vitest"
 import type { CrmDepartment, CrmUser } from "../domain/crm.js"
 import { openCache } from "../store/open.js"
 import { type MessageStore, openStore } from "../store/store.js"
-import { syncCrm } from "./index.js"
+import { crmGapsOf, syncCrm } from "./index.js"
 import { fakeCrmSource } from "./testing/index.js"
 
 const stores: MessageStore[] = []
@@ -27,9 +27,9 @@ const DEPARTMENTS: CrmDepartment[] = [
 ]
 
 /** Acme is the client, Northstar the own company; Emma owns the Acme renewal, Alice is Acme's contact on it. */
-const acme = async () => {
+const acme = async ({ now }: { now?: () => number } = {}) => {
   const path = join(mkdtempSync(join(tmpdir(), "crm-relations-")), "store.db")
-  const store = await openStore({ path })
+  const store = await openStore({ path, ...(now ? { now } : {}) })
   stores.push(store)
   const crm = fakeCrmSource({ traits: { removedInChanges: true } })
   crm.put("organization", { externalId: "c1", name: "Acme Ltd" })
@@ -392,4 +392,114 @@ it("never withdraws what another account of the same CRM reports", async () => {
       ({ to, standing }) => to === acmeRef && standing === "reported",
     ),
   ).toHaveLength(1)
+})
+
+const setting = async (path: string, name: string, value: unknown) => {
+  const database = await openCache(path)
+  database
+    .prepare("INSERT OR REPLACE INTO store_settings (key, value, at) VALUES (?, ?, 1)")
+    .run(`crm.${PORTAL.provider}:${PORTAL.account}.${name}`, JSON.stringify(value))
+  database.close()
+}
+
+const pendingCount = async (store: MessageStore) =>
+  (JSON.parse((await store.sync.syncState(PORTAL, "crm:pending-relations"))?.value ?? "[]") as unknown[]).length
+
+it("gives a customer listed before the own company its meaning, and a setting made later applies on the next sync", async () => {
+  const { path, store, crm } = await acme()
+  const changes = () => syncCrm(crm, store, PORTAL)
+  crm.put("organization", { externalId: "c1", name: "Acme Ltd", type: "CUSTOMER" })
+  await changes()
+  const named = new Map((await store.knowledge.organizations()).map(({ name, ref }) => [name, ref]))
+  const customers = async () =>
+    (await store.knowledge.relations(null, named.get("Acme Ltd"))).filter(({ kind }) => kind === "customer-of")
+  expect(await customers()).toEqual([])
+  await setting(path, "company-types", { CUSTOMER: "customer-of" })
+  await changes()
+  expect(await customers()).toEqual([
+    expect.objectContaining({ to: named.get("Northstar Consulting"), standing: "reported" }),
+  ])
+})
+
+it("waits for no deal owner when the CRM lists no users, and says so once", async () => {
+  const { store, crm } = await acme()
+  delete (crm as { users?: unknown }).users
+  delete (crm as { departments?: unknown }).departments
+  for (const id of ["d2", "d3"])
+    crm.put("deal", { externalId: id, title: id, pipeline: "deal-1", stage: "new", people: [], assignee: "u9" })
+  const report = await syncCrm(crm, store, PORTAL)
+  expect(report.issues.filter(({ reason }) => reason === "crm.not-reported")).toEqual([
+    expect.objectContaining({ kind: "deal", message: expect.stringMatching(/^3 deal owner/) }),
+  ])
+  expect(await pendingCount(store)).toBe(0)
+  expect(await crmGapsOf(store, PORTAL)).toEqual([expect.objectContaining({ what: "users", reason: "not-listed" })])
+})
+
+it("drops what a deleted deal was waiting for, and never writes it", async () => {
+  const { store, crm, sync } = await acme()
+  crm.put("deal", {
+    externalId: "d2",
+    title: "Pilot",
+    pipeline: "deal-1",
+    stage: "new",
+    people: [{ externalId: "9", role: "contact" }],
+  })
+  await sync()
+  expect(await pendingCount(store)).toBe(1)
+  const deal = (await store.crm.refOf(PORTAL, "deal", "d2")) as string
+  crm.delete("deal", "d2")
+  crm.put("person", { externalId: "9", name: "Dana", email: "dana@acme.example" })
+  await syncCrm(crm, store, PORTAL)
+  expect(await pendingCount(store)).toBe(0)
+  expect(await store.knowledge.relations(null, deal)).toEqual([])
+})
+
+it("drops a relationship that waited past its time, with one issue", async () => {
+  let clock = Date.UTC(2026, 10, 1)
+  const { store, crm, sync } = await acme({ now: () => clock })
+  crm.put("deal", {
+    externalId: "d2",
+    title: "Pilot",
+    pipeline: "deal-1",
+    stage: "new",
+    people: [{ externalId: "9", role: "contact" }],
+  })
+  await sync()
+  expect(await pendingCount(store)).toBe(1)
+  clock += 31 * 86_400_000
+  crm.put("person", { externalId: "8", name: "Bob", email: "bob@acme.example" })
+  const report = await syncCrm(crm, store, PORTAL)
+  expect(report.issues).toEqual(expect.arrayContaining([expect.objectContaining({ reason: "crm.pending-dropped" })]))
+  expect(await pendingCount(store)).toBe(0)
+})
+
+it("keeps the owner's word on an own company through every sync", async () => {
+  const { store, sync } = await acme()
+  await sync()
+  const named = new Map((await store.knowledge.organizations()).map(({ name, ref }) => [name, ref]))
+  const northstar = named.get("Northstar Consulting") as string
+  const acmeRef = named.get("Acme Ltd") as string
+  expect(await store.knowledge.setOwnOrganization(northstar, false)).toEqual({ ref: northstar, own: false })
+  expect(await store.knowledge.setOwnOrganization(acmeRef, true)).toEqual({ ref: acmeRef, own: true })
+  await sync()
+  const emma = await store.people.personOf({ provider: "email", id: "emma@northstar.example" })
+  const employers = (await store.knowledge.relations(null, `person:${emma?.uid}`))
+    .filter(({ kind, standing }) => kind === "member-of" && standing === "reported")
+    .map(({ to }) => to)
+  expect(employers).toEqual([acmeRef])
+})
+
+it("records which lists the last sync could not read, replaced by the next", async () => {
+  const { store, crm, sync } = await acme()
+  await syncCrm(
+    Object.assign(crm, { departments: async () => Promise.reject(new CliError("permission_error", "no scope")) }),
+    store,
+    PORTAL,
+  )
+  expect(await crmGapsOf(store, PORTAL)).toEqual([
+    expect.objectContaining({ what: "departments", reason: "refused", code: "permission_error" }),
+  ])
+  Object.assign(crm, { departments: async () => DEPARTMENTS })
+  await sync()
+  expect(await crmGapsOf(store, PORTAL)).toEqual([])
 })

@@ -129,6 +129,7 @@ export const projectAnnotationSnapshot = (database: CacheDatabase, projectId: nu
         "updated_at",
         "starts_at",
         "ends_at",
+        "deleted_at",
       ],
       [projectId, projectId, projectId, projectId],
     )
@@ -202,6 +203,7 @@ export const projectAnnotationSnapshot = (database: CacheDatabase, projectId: nu
         author: nullableText(row.author),
         ...(row.starts_at == null ? {} : { starts_at: row.starts_at }),
         ...(row.ends_at == null ? {} : { ends_at: row.ends_at }),
+        ...(row.deleted_at == null ? {} : { deleted_at: row.deleted_at }),
       })),
     }
     const snapshot = decodeProjectAnnotationSnapshot(JSON.stringify({ ...data, external: sources.external(owned) }))
