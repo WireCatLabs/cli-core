@@ -269,10 +269,12 @@ export {
   type BaseEnvironment,
   baseContext,
   environmentOf,
+  inCommandRun,
   outputFor,
   provide,
   runBudgetOf,
   secretInputOf,
+  withAgentLevels,
 } from "./context.js"
 export { addContractInfo, type ContractEvidenceOptions, contractEvidence } from "./contract-evidence.js"
 export { sharedCommandTemplate } from "./contract-templates.js"

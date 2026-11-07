@@ -5,7 +5,7 @@ import type { NextStep } from "@wirecat/cli-base/standards"
 import { Argument, type Command, InvalidArgumentError } from "commander"
 import * as v from "valibot"
 import { answerEntity } from "../../cli/answer-entity.js"
-import { environmentOf, outputFor, runBudgetOf } from "../../cli/context.js"
+import { environmentOf, inCommandRun, outputFor, runBudgetOf } from "../../cli/context.js"
 import { honoursDryRun } from "../../cli/dry-run-guard.js"
 import { FETCH, LOCAL_READ, NO_EFFECTS, REMOTE_WRITE } from "../../cli/effects.js"
 import { type Body, itemOf, listOf, renderAnswer, snakeKeys, snakeKeysKeeping } from "../../cli/envelope.js"
@@ -214,16 +214,17 @@ export type CrmWithin = (command: Command, work: (run: CrmRun) => Promise<Body>)
 
 const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions): void => {
   const now = () => options.now?.() ?? Date.now()
-  const within: CrmWithin = async (command, work) => {
-    const run = await options.open(command, { readOnly: metaOf(command).effects?.local !== "write" })
-    let body: Body
-    try {
-      body = await work(run)
-    } finally {
-      await run.close?.()
-    }
-    renderAnswer(command, outputFor(command), body)
-  }
+  const within: CrmWithin = (command, work) =>
+    inCommandRun(command, async () => {
+      const run = await options.open(command, { readOnly: metaOf(command).effects?.local !== "write" })
+      let body: Body
+      try {
+        body = await work(run)
+      } finally {
+        await run.close?.()
+      }
+      renderAnswer(command, outputFor(command), body)
+    })
   const example = (command: Command, ...lines: string[]) =>
     annotate(command, { examples: lines.map((line) => `${options.app.command} work ${line}`) })
 
@@ -644,14 +645,15 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
         .description("the CRM's custom fields of one kind, in its order, with a list field's options")
         .argument("<kind>", fieldKinds.join(", "))
         .option("--limit <n>", `fields per page, 1–${MOST}`, integer(MOST), 50)
-        .option("--page <n>", "which page, starting at 1", integer(1_000_000), 1)
+        // No default: the run's settings refuse --all beside a --page, given or defaulted.
+        .option("--page <n>", "which page, starting at 1", integer(1_000_000))
         .option("--all", "every field, no paging"),
       FIELDS_QUERY,
     ),
     "fields list deals",
     "fields list people --json",
   ).action(
-    async (kind: string, words: string[], opts: { limit: number; page: number; all?: boolean }, command: Command) => {
+    async (kind: string, words: string[], opts: { limit: number; page?: number; all?: boolean }, command: Command) => {
       if (!fieldKinds.includes(kind))
         throw new CliError("validation_error", `fields are listed for ${fieldKinds.join(", ")}; got ${kind}`, {
           reason: "field.unknown-kind",
@@ -660,12 +662,13 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
       queryTerms(words, FIELDS_QUERY, "fields list")
       await within(command, async (run) => {
         const found = await run.store.crm.fields(run.account, FIELD_KINDS[kind] as CrmKind)
-        const offset = opts.all ? 0 : (opts.page - 1) * opts.limit
+        const page = opts.page ?? 1
+        const offset = opts.all ? 0 : (page - 1) * opts.limit
         const end = opts.all ? found.length : offset + opts.limit
         return listOf(pathOf(command).join(" "), {
           items: found.slice(offset, end).map((field) => ({ ...field, untrusted: FIELD_UNTRUSTED })),
           limit: opts.all ? Math.max(1, found.length) : opts.limit,
-          page: opts.page,
+          page,
           has_more: found.length > end,
           ...(words.length ? { args: { query: words } } : {}),
         })

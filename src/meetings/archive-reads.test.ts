@@ -198,6 +198,7 @@ it("shares summary/history/export between CLI and MCP and writes files only thro
     addMeetingCommands(program, {
       store,
       accountId: 1,
+      inRun: (_command, body) => body(),
       write: (value) => {
         values.push(value)
       },

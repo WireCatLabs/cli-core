@@ -31,6 +31,35 @@ shape of this file.
   every lock the process holds on it, so another process could checkpoint and delete the write-ahead log under a
   writer that went on writing into it. That can damage the store. The file is now created only when it is missing.
 
+## 0.598.0 — 07.11.2026
+
+### Added
+
+- **`runScopeCases`** (`@wirecat/cli-core/testing`): cases that each remote command of a program runs inside
+  cli-core's run, so `--record` keeps a run named after it, and that `--timeout` ends it when the service never
+  answers. A command beside the run answers under the process run and fails. `neverAnswers` is the `fetch` for the
+  silent run.
+- **`inCommandRun(command, body)`** (`@wirecat/cli-core/cli`): runs `body` inside cli-core's run with the settings of
+  the app `run()` was given, which `run()` now hands every command (`environment.resolveSettings`).
+
+### Changed — may break callers
+
+- **`addMeetingCommands` takes `inRun`**, which `meetings sync` runs inside: pass `inCommandRun` from
+  `@wirecat/cli-core/cli`. The meetings module cannot reach cli-core's run itself.
+
+### Fixed
+
+- **The shared CRM, calendar and meetings commands run inside cli-core's run.** `sync` and the deal and lead writes
+  from `addCrmCommands`, every command from `addCalendarCommands`, and `meetings sync` answered under the process
+  run: `--record` kept no run, and `runs show` could not find the id they answered. A CLI that wrapped them in a run
+  of its own can drop that.
+- **An MCP server's `--permission` levels refuse a messenger write before it connects.** The early refusal of a change
+  on the messenger read the command's flags only, so `mcp serve --permission messages.send=deny` let the command
+  connect and left the refusal to the send guard. It now merges the server's levels as `baseContext` does.
+  `withAgentLevels(command, flags)` (`@wirecat/cli-core/cli`) is that merge, for a CLI's own resolver.
+- **An app's `mcp serve` over stdio ends when it was stopped before it listened.** `serveAppOverStdio` waited only
+  for an abort event, which a signal that had already fired never sends, so the server hung with stdin open.
+
 ## 0.597.0 — 07.11.2026
 
 ### Added

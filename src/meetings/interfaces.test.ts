@@ -22,6 +22,7 @@ const setup = async (overrides: Partial<MeetingCommandDeps> = {}) => {
     source: fakeMeetingSource(),
     readFiles: async () => [],
     now: () => 4000,
+    inRun: (_command, body) => body(),
     write: (value, format) => outputs.push({ value, format }),
     ...overrides,
   }
@@ -35,7 +36,12 @@ const setup = async (overrides: Partial<MeetingCommandDeps> = {}) => {
 describe("meeting commands", () => {
   it("declares effects on every command and no effects for groups that only hold commands", () => {
     const program = new Command("meet")
-    addMeetingCommands(program, { store: memoryMeetingStore(), accountId: 1, write() {} })
+    addMeetingCommands(program, {
+      store: memoryMeetingStore(),
+      accountId: 1,
+      write() {},
+      inRun: (_command, body) => body(),
+    })
     addMeetingProjectEvidenceCommand(program, { read: async () => ({}) as never, signal: () => undefined, output() {} })
     const effects = Object.fromEntries(
       flatten(describeProgram(program)).map((info) => [info.path.join(" "), info.effects ?? null]),

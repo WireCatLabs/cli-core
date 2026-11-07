@@ -43,6 +43,7 @@ export const sharedCommandTemplate = (
         },
         accountId: 0,
         write: unavailable,
+        inRun: unavailable,
       })
       const meetings = root.commands.find((command) => command.name() === "meetings")
       if (!meetings) return unavailable()
