@@ -1,5 +1,5 @@
 import type { Embedder } from "../embeddings/embed.js"
-import { DEFAULT_TEXT_MODEL } from "../embeddings/models.js"
+import { chosenTextModel } from "../embeddings/models.js"
 import type { AccountKey } from "../store/store.js"
 import type { ServiceDeps } from "./deps.js"
 import { embeddingTarget, type ModelDeps, withEmbedder } from "./embeddings-maintenance.js"
@@ -13,7 +13,8 @@ import { plainWords } from "./pictures.js"
 export const meaningLane =
   (deps: ModelDeps & Pick<ServiceDeps, "store">): MeaningLane =>
   async (question, accounts, shared, within) => {
-    const target = embeddingTarget(deps, DEFAULT_TEXT_MODEL)
+    const model = chosenTextModel(deps.env).id
+    const target = embeddingTarget(deps, model)
     const skipped = (reason: string, step?: "models.download" | "conversations.rebuild") => ({
       skipped: { reason, model: target.id, ...(step ? { step } : {}) },
     })
@@ -61,7 +62,7 @@ export const meaningLane =
           }
         }
         if (shared && !deps.embedders) await lookUp(await shared.get(target.key, () => target.open()))
-        else await withEmbedder(deps, target, DEFAULT_TEXT_MODEL, {}, lookUp)
+        else await withEmbedder(deps, target, model, {}, lookUp)
       }
       if (ranked.length === 0 && without.length === accounts.length)
         return skipped("no message has a vector yet", "conversations.rebuild")

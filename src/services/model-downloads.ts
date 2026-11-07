@@ -47,7 +47,7 @@ export const downloadTextModel = async (
   id: string,
   { env, progress = () => {}, acceptTerms = false }: ModelDownloadOptions & { acceptTerms?: boolean },
 ): Promise<DownloadedModel<TextModel>> => {
-  const model = textModel(id)
+  const model = textModel(id, env)
   if (model.terms && !acceptTerms) {
     throw new CliError(
       "validation_error",

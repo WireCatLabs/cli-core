@@ -157,6 +157,15 @@ import { type TagsService, tagsService } from "./tags.js"
 import { type TasksService, tasksService } from "./tasks.js"
 import { type TopicsService, topicsService } from "./topics.js"
 
+export {
+  chosenTextModel,
+  DEFAULT_TEXT_MODEL,
+  type TextModel,
+  textModel,
+  textModels,
+  textModelsFile,
+  vectorModelKey,
+} from "../embeddings/models.js"
 export type {
   MeetingProjectCandidateInput,
   MeetingProjectCandidateMatch,
@@ -265,6 +274,7 @@ export type {
   TaskView,
 } from "./tasks.js"
 export { closedStateOf, taskStateOf, tasksService, taskTypeOf, taskView } from "./tasks.js"
+export { addCustomTextModel, type TextModelSwitch, useTextModel } from "./text-model-choice.js"
 export { type TopicsService, topicsService } from "./topics.js"
 
 export interface Services {
