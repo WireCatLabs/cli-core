@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs"
+import { businessTables } from "./business.mjs"
 import { calendarTables } from "./calendar.mjs"
 import { actor, c, del, fk, fts, id, meta, poly, queue, ts } from "./columns.mjs"
 import { crmTables } from "./crm.mjs"
@@ -1707,6 +1708,13 @@ const GROUPS = [
     "The owner's sales pipelines and the deals in them, with the expected amount in exact minor units. A deal's stage and its status (open, won, lost) are kept apart.",
     [],
     crmTables,
+  ],
+  [
+    "business",
+    "Business",
+    "What the owner sells, the contracts and subscriptions he works under, and the bank accounts the money moves through. A balance is computed from its transactions; nothing is converted between currencies.",
+    [],
+    businessTables,
   ],
   [
     "decision-requests",
