@@ -2170,7 +2170,7 @@ One line of an order, in its currency. An order with lines totals their sum; lin
 
 ### `contracts`
 
-A contract the owner works under. Its parties are relationships with a role and its document an `attached` link. One with a value from an agent or an import is a proposal; one without a value is written confirmed.
+A contract the owner works under. Its parties are relationships with a role and its document an `attached` link. One with a value from an agent or an import is a proposal; one without a value is written confirmed, with `confirmed_by` null: nobody decided it, and `author` says who wrote it.
 
 | Column | Type | Constraints | References | Meaning |
 |---|---|---|---|---|

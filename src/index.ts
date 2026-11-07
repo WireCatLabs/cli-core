@@ -72,10 +72,12 @@ export type * from "./domain/models.js"
 export {
   CURRENCY_SCALES,
   currencyOf,
+  formatDecimal,
   type Money,
   minorUnits,
   moneyLabel,
   moneyOf,
+  signedMinorUnits,
 } from "./domain/money.js"
 export {
   ORDER_PURPOSES,
