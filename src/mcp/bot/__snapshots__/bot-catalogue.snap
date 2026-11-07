@@ -387,11 +387,11 @@
         "type": "boolean",
         "description": "the text is HTML: <b>, <i>, <a href>, <code>"
       },
-      "field": {
+      "button": {
         "type": "string",
         "minLength": 1,
         "pattern": "^(?!-$)[\\s\\S]+$",
-        "description": "an inline button, as <text>=<data>, the key being the button text; repeat for more in one row; the data (1 to 64 bytes) goes back to the bot"
+        "description": "an inline button, as <text>=<data>; repeat for more in one row; the data (1 to 64 bytes) goes back to the bot"
       }
     },
     "required": [
@@ -498,13 +498,13 @@
         "type": "boolean",
         "description": "the text is HTML: <b>, <i>, <a href>, <code>"
       },
-      "field": {
+      "button": {
         "type": "string",
         "minLength": 1,
         "pattern": "^(?!-$)[\\s\\S]+$",
-        "description": "a button under the message, as <text>=<data>, the key being the button text; replaces its buttons; repeat for more in one row"
+        "description": "a button under the message, as <text>=<data>; replaces its buttons; repeat for more in one row"
       },
-      "clear": {
+      "no_buttons": {
         "type": "boolean",
         "description": "take the buttons off the message"
       }

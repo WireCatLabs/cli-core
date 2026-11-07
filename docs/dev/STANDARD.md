@@ -993,6 +993,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--bot` |  | the bot section of the profile's settings, rather than the personal account's |  | `config set`, `config show`, `config unset` |
 | `--bots` | `<profiles>` | also read these bots' copies, comma separated — each allowed by read_other_bots |  | `bot contacts show` (planned), `bot messages between` (planned), `bot search messages` (planned) |
 | `--brief` |  | found messages as reference, title, time, sender and excerpt only |  | every command |
+| `--button` | `<text=data>` | an inline button as <text>=<data>; repeat for more in one row |  | `bot messages edit` (planned), `bot messages send` (planned) |
 | `--by` | `<grouping>` | what to count by. **each command names its own groupings — stats messages show chat, sender, day or hour, and searches create the same for stats messages show --saved; stats chats show day or week, as a series beside its totals; stats tasks show chat, meeting or project — so it differs on purpose (Help text rule 4)** |  | `searches create`, `stats charts`, `stats chats retention`, `stats chats show`, `stats messages responses`, `stats messages show`, `stats tasks show` |
 | `--calls` | `<who>` | whose calls ring: everyone, contacts or nobody |  | `account privacy set` (planned) |
 | `--can` | `<rights>` | what they may do, comma-separated: read, members, admins, info, pin, link, post, edit, delete. **lists the rights each messenger has — MAX has `read`, Telegram does not — so it differs on purpose (Help text rule 4)** |  | `bot chats admins add` (planned), `chats admins add` (planned) |
@@ -1011,7 +1012,6 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--checkpoints` | `<durations>` | elapsed joining ages to inspect, such as 1d,7d,30d |  | `stats chats retention` |
 | `--chunk-bytes` | `<n>` | maximum source bytes returned from a retained attachment; 1–1048576 | `524288` | `attachments show` |
 | `--claim` | `<claim>` | remove only this ownership claim: manual or auto |  | `tags remove` |
-| `--clear` |  | take the buttons off the message |  | `bot messages edit` (planned) |
 | `--close-time` | `<delay>` | it closes by itself this long after sending, like 90s or 5m |  | `polls create` (tg-only) |
 | `--closed` | `<on\|off>` | on closes a forum topic to new messages, off reopens it |  | `topics edit` (tg-only) |
 | `--comment-to` | `<post>` | comment on this channel post; the comment goes to the post's discussion group |  | `messages send` (tg-only) |
@@ -1056,7 +1056,6 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--expire-time` | `<time>` | it stops working then: 2026-09-25T09:00 (local time), or 30m, 2h, 7d from now. **messages pin takes only the lengths its messenger offers, and says how long a pin lasts without it — so it differs on purpose (Help text rule 4)** |  | `chats links create` (tg-only), `chats links update` (tg-only), `messages pin` (wa-only) |
 | `--extract` |  | extract text from files mapped by this download |  | `messages download` |
 | `--failed` |  | every chat whose newest job failed or died |  | `store jobs retry` |
-| `--field` | `<key=value>` | an inline button as <text>=<data>; repeat for more in one row |  | `bot messages edit` (planned), `bot messages send` (planned) |
 | `--file` | `<file>` | attach a file; images go as a photo, videos as a video. Repeat it for more |  | `bot messages send` (planned), `messages send` |
 | `--filename` | `<name>` | the name others see for the --file, instead of its name on disk |  | `messages send` (tg, wa only) |
 | `--filter` | `query` | Strict Lucene filter: any message in the conversation must match; the meaning query stays unchanged. **search notes uses it for a query every note must also match, found by words or by meaning** |  | `search conversations`, `search notes` |
@@ -1126,6 +1125,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--no-as-reply` |  | send without linking to the matched message |  | `replies edit` |
 | `--no-backup` |  | delete the store without backing it up first |  | `store reset` |
 | `--no-block` |  | remove without banning; by default a removed person cannot come back by the link |  | `bot chats moderate` (planned) |
+| `--no-buttons` |  | take the buttons off the message |  | `bot messages edit` (planned) |
 | `--no-catch-up` |  | skip local preparation after this run |  | `messages sync`, `projects evidence`, `store gaps repair` |
 | `--no-contacts-only` |  | do not require a contact |  | `replies edit` |
 | `--no-hours` |  | clear the working window |  | `replies edit` |

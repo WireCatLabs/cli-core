@@ -114,8 +114,8 @@ const sendCommand = (bot: BotMessenger): Command =>
     .option("--md", "read this messenger's Markdown; see its formatting guide for supported syntax")
     .option("--html", "the text is HTML: <b>, <i>, <a href>, <code>")
     .option(
-      "--field <key=value>",
-      "an inline button, as <text>=<data>, the key being the button text; repeat for more in one row; the data (1 to 64 bytes) goes back to the bot",
+      "--button <text=data>",
+      "an inline button, as <text>=<data>; repeat for more in one row; the data (1 to 64 bytes) goes back to the bot",
       collectButton,
     )
     .addOption(ownerOnlyOption("--file <file>", "attach a file; the text becomes its caption"))
@@ -139,10 +139,10 @@ const sendCommand = (bot: BotMessenger): Command =>
         asFile?: boolean
         voice?: string
         allowAnyFile?: boolean
-        field?: string[]
+        button?: string[]
       }>()
       marks(options.md, options.html)
-      const buttons = parseButtons(options.field ?? [])
+      const buttons = parseButtons(options.button ?? [])
       const ref = context.chatRef(chat)
       const attachments = await readAttachments(
         {
@@ -287,7 +287,9 @@ const editCommand = (bot: BotMessenger): Command =>
     effects: REMOTE_WRITE,
     examples: botExamples(bot, 'messages edit Team 101 "Doors open at 10"'),
   })
-    .description("replace the text of a message the bot sent; --field replaces its buttons, --clear takes them off")
+    .description(
+      "replace the text of a message the bot sent; --button replaces its buttons, --no-buttons takes them off",
+    )
     .summary("replace the text or buttons of a message the bot sent")
     .argument("<chat>", "a chat id, user:<id> for a person, or the title of a chat this bot has seen")
     .argument("<message>", "message id")
@@ -295,19 +297,19 @@ const editCommand = (bot: BotMessenger): Command =>
     .option("--md", "read this messenger's Markdown; see its formatting guide for supported syntax")
     .option("--html", "the text is HTML: <b>, <i>, <a href>, <code>")
     .option(
-      "--field <key=value>",
-      "a button under the message, as <text>=<data>, the key being the button text; replaces its buttons; repeat for more in one row",
+      "--button <text=data>",
+      "a button under the message, as <text>=<data>; replaces its buttons; repeat for more in one row",
       collectButton,
     )
-    .option("--clear", "take the buttons off the message")
+    .option("--no-buttons", "take the buttons off the message")
     .action(async function (this: Command, chat: string, messageId: string, text: string) {
       const context = botContext(this, bot)
-      const options = this.opts<{ md?: boolean; html?: boolean; field?: string[]; clear?: boolean }>()
+      const options = this.opts<{ md?: boolean; html?: boolean; button?: string[]; buttons?: boolean }>()
       marks(options.md, options.html)
-      if (options.clear && options.field?.length) {
-        throw new CliError("validation_error", "--field and --clear set the buttons two ways; use one")
+      if (options.buttons === false && options.button?.length) {
+        throw new CliError("validation_error", "--button and --no-buttons set the buttons two ways; use one")
       }
-      const buttons = options.clear ? [] : options.field ? parseButtons(options.field) : undefined
+      const buttons = options.buttons === false ? [] : options.button ? parseButtons(options.button) : undefined
       const ref = context.chatRef(chat)
       await context.run(async (events) => {
         const adapter = await context.authenticated({ events })
