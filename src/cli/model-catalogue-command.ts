@@ -10,7 +10,7 @@ import { downloadTextModel } from "../services/model-downloads.js"
 import { addCustomTextModel, type TextModelSwitch, useTextModel } from "../services/text-model-choice.js"
 import { install, installedBytes, isInstalled, modelsDirectory } from "../speech/install.js"
 import { DEFAULT_ORDER, orderedModels, speechModel } from "../speech/models.js"
-import { FETCH, LOCAL_READ, LOCAL_WRITE, NO_EFFECTS } from "./effects.js"
+import { FETCH, grantsAuthority, LOCAL_READ, LOCAL_WRITE, NO_EFFECTS } from "./effects.js"
 import { type Body, itemOf, listOf } from "./envelope.js"
 import { listQuery, nativeTerms, termField, typedQuery, withQuery } from "./list-query.js"
 
@@ -108,7 +108,7 @@ export const modelCatalogueCommand = (app: AppIdentity, options: ModelCatalogueO
   if (options.kinds.includes("text")) {
     annotate(models.command("set"), {
       effects: LOCAL_WRITE,
-      output: { entity: "model" },
+      output: { entity: "model", view: "chosen" },
       examples: [`${app.command} models set e5-large`],
     })
       .summary(SET_SUMMARY)
@@ -120,11 +120,14 @@ export const modelCatalogueCommand = (app: AppIdentity, options: ModelCatalogueO
         for (const line of switchNotes(done)) options.diagnostic(line)
         options.output(itemOf({ ...textModelItem(done.model, env), ...switchFields(done) }), this)
       })
-    annotate(models.command("add"), {
-      effects: FETCH,
-      output: { entity: "model" },
-      examples: [addExample(app.command)],
-    })
+    // A model added here is loaded by every CLI once chosen: an agent needs the owner's mcp.authority for it.
+    grantsAuthority(
+      annotate(models.command("add"), {
+        effects: FETCH,
+        output: { entity: "model" },
+        examples: [addExample(app.command)],
+      }),
+    )
       .description(ADD_DESCRIPTION)
       .argument("<id>", "the id to give it: a-z, 0-9, . _ -")
       .requiredOption("--payload <json>", "where the model is and how to run it, as JSON (below)")
@@ -180,15 +183,15 @@ export const switchFields = ({ previous, toEmbed, estimateSeconds }: TextModelSw
 
 export const switchNotes = ({ model, previous, toEmbed, estimateSeconds }: TextModelSwitch): string[] => {
   if (previous === model.id) return [`${model.id} is already the model in use`]
-  const time =
+  const work =
     estimateSeconds === null
       ? ""
-      : `, about ${estimateSeconds < 120 ? `${estimateSeconds} s` : `${Math.ceil(estimateSeconds / 60)} min`} here`
+      : `, about ${estimateSeconds < 120 ? `${estimateSeconds} s` : `${Math.ceil(estimateSeconds / 60)} min`} of embedding`
+  const left = toEmbed === null ? "everything" : `about ${toEmbed} chunk${toEmbed === 1 ? "" : "s"}`
   return [
     `${model.id} is now in use instead of ${previous}; ${previous}'s vectors stay, so switching back is instant`,
-    toEmbed === null
-      ? "the next syncs embed everything again with it; until then search by meaning finds only what it has embedded, words find the rest"
-      : `the next syncs embed about ${toEmbed} chunk${toEmbed === 1 ? "" : "s"} with it${time}; until then search by meaning finds only what it has embedded, words find the rest`,
+    `the syncs embed ${left} with it${work}, a part each sync; until then search by meaning finds only what ` +
+      "it has embedded, and words find the rest",
   ]
 }
 

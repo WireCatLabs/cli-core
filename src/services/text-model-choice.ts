@@ -22,7 +22,7 @@ export interface TextModelSwitch {
   previous: string
   /** Chunk texts the previous model has vectors for and this one has not: what the next syncs embed. */
   toEmbed: number | null
-  /** At the model's measured speed; `null` when its speed or the store is unknown. */
+  /** Embedding time alone at the model's measured speed, done a part per sync; `null` when the speed or the count is unknown. */
   estimateSeconds: number | null
 }
 
@@ -43,9 +43,9 @@ export const useTextModel = async (
       { reason: "model.not-downloaded", model: model.id },
     )
   const previous = chosenTextModel(env).id
-  writeTextModelsSection({ ...readTextModelsSection(env), use: model.id }, env)
   const before = textModels(env).find((one) => one.id === previous)
   const toEmbed = previous === model.id ? 0 : before ? await missingVectors(before, model, env) : null
+  writeTextModelsSection({ ...readTextModelsSection(env), use: model.id }, env)
   return {
     model,
     previous,
@@ -57,12 +57,17 @@ export const useTextModel = async (
 
 const missingVectors = async (from: TextModel, to: TextModel, env: NodeJS.ProcessEnv): Promise<number | null> => {
   if (!existsSync(storePath(env))) return null
-  const store = await openStore({ env })
+  // Only an estimate: a store that is busy, damaged or older than this build must not stop the switch.
   try {
-    const counts = await store.vectors.vectorCounts([vectorModelKey(from), vectorModelKey(to)])
-    return Math.max(0, (counts.get(vectorModelKey(from)) ?? 0) - (counts.get(vectorModelKey(to)) ?? 0))
-  } finally {
-    await store.close()
+    const store = await openStore({ env })
+    try {
+      const counts = await store.vectors.vectorCounts([vectorModelKey(from), vectorModelKey(to)])
+      return Math.max(0, (counts.get(vectorModelKey(from)) ?? 0) - (counts.get(vectorModelKey(to)) ?? 0))
+    } finally {
+      await store.close()
+    }
+  } catch {
+    return null
   }
 }
 
