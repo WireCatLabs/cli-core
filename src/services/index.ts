@@ -385,6 +385,7 @@ export {
   sourceOf,
 } from "../search/account-list.js"
 export {
+  ALL,
   type GroupContext,
   type GroupMember,
   type GroupMembership,
@@ -394,7 +395,6 @@ export {
   groupMembership,
   inGroupOf,
   NOT_GROUP_NAMES,
-  PERSONAL,
   type RunGroup,
   scopeToGroup,
 } from "../search/groups.js"

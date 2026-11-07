@@ -148,7 +148,7 @@ export interface CrmSyncReport {
   }
   hint?: string
   /**
-   * On the first sync of an account only in `personal`: how to add it to a work group. Not `next`, which in an answer
+   * On the first sync of an account no saved group lists: how to add it to a work group. Not `next`, which in an answer
    * is the list of steps to run.
    */
   groupHint?: string

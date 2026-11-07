@@ -104,8 +104,8 @@ together stay an error.
   tg:work,max:work,email:me@work.example,drive:work,notes:4`.
 - **Linking is explicit**, never inferred from two profiles having the same name — the rule for
   `contacts link` (the `link` verb in [STANDARD.md](STANDARD.md#verbs)). A profile named like a group is only
-  `suggested` in a groups list (WC-ACCT-13, NEED-2389). `group:personal` always exists: every account in no other
-  saved group, plus what `account_groups.personal` lists. `groupMembership` in `src/search/groups.ts` resolves the
+  `suggested` in a groups list (WC-ACCT-13, NEED-2389). The default group `all` is every account and is never
+  saved; any other group is exactly its saved list. `groupMembership` in `src/search/groups.ts` resolves the
   groups, and `listContextOf` hands them to every `--source` reader.
 - **Each CLI's login or profile-create step offers to add the profile to a group**: "Add this profile
   to an account group? [none / work / new…]". A yes runs the same write as `config set`. Built per CLI

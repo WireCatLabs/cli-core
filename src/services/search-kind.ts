@@ -9,7 +9,7 @@ import {
   type ListContext,
   type SkippedSource,
 } from "../search/account-list.js"
-import { type GroupContext, groupEntries, groupMembership, hasGroup } from "../search/groups.js"
+import { ALL, type GroupContext, groupEntries, groupMembership, hasGroup } from "../search/groups.js"
 import type { AccountKey, MessageStore, StoredAccount } from "../store/store.js"
 
 export type SearchKind = "messages" | "mail"
@@ -17,13 +17,15 @@ export type SearchKind = "messages" | "mail"
 export const NO_MAIL = "no_mail"
 
 export const MAIL = "email"
-/** The group `<PREFIX>_GROUP_LOCK` pins this process to, if any. */
-export const groupLockOf = (app: AppIdentity | undefined, env: NodeJS.ProcessEnv | undefined): string | undefined =>
-  app === undefined || env === undefined ? undefined : env[envName(app, "GROUP_LOCK")]?.trim() || undefined
+/** The group `<PREFIX>_GROUP_LOCK` pins this process to; `all`, every account, locks nothing. */
+export const groupLockOf = (app: AppIdentity | undefined, env: NodeJS.ProcessEnv | undefined): string | undefined => {
+  const lock = app === undefined || env === undefined ? undefined : env[envName(app, "GROUP_LOCK")]?.trim()
+  return lock && lock.toLowerCase() !== ALL ? lock : undefined
+}
 
 /**
- * What a `--source` list is resolved against: the store's accounts, profiles and groups — the saved ones and
- * `personal` (WC-ACCT-13) — and the app running. Under a group lock in the run's `env` it holds only that group's
+ * What a `--source` list is resolved against: the store's accounts, profiles and groups — the saved ones and `all`
+ * (WC-ACCT-13) — and the app running. Under a group lock in the run's `env` it holds only that group's
  * accounts, so a reader that never scoped its run to the group still cannot name an account outside it.
  */
 export const listContextOf = async (
@@ -45,7 +47,7 @@ export const listContextOf = async (
     running: { provider: account.provider, ...(app ? { command: app.command } : {}) },
   }
   const membership = groupMembership(context)
-  const groups = groupEntries(context.groups, membership)
+  const groups = groupEntries(context.groups)
   const lock = groupLockOf(app, env)
   if (lock === undefined) return { ...context, groups, membership }
   const members = hasGroup(membership.groups, lock) ? membership.groups[lock] : undefined

@@ -11,21 +11,22 @@ import {
   sourceOf,
 } from "./account-list.js"
 
-export const PERSONAL = "personal"
+/** The default group: every account, never saved. Reading without a group reads it. */
+export const ALL = "all"
 
-/** Words a source list already gives a meaning of its own, so no group may take them. */
-export const NOT_GROUP_NAMES: ReadonlySet<string> = new Set(["all", "bots"])
+/** Words a source list already gives a meaning of its own, so no group may be saved under them. */
+export const NOT_GROUP_NAMES: ReadonlySet<string> = new Set([ALL, "bots"])
 
-/** `setting`: a saved group lists it; `in no other group`: `personal` holds it as the rest. */
-export type GroupReason = "setting" | "in no other group"
+/** `setting`: a saved group lists it; `all`: the default group, which holds every account. */
+export type GroupReason = "setting" | "all"
 
 export interface GroupMember extends AccountKey {
-  /** Every saved entry that names it, or its `provider:account` when `personal` holds it as the rest. */
+  /** Every saved entry that names it; its `provider:account` in `all`. */
   entries: string[]
   reason: GroupReason
   /** Every profile recorded for the account, as `<app> <profile>`. */
   profiles: string[]
-  /** The other groups that hold it too: allowed, and shown so the owner sees it. */
+  /** The other saved groups that hold it too: allowed, and shown so the owner sees it. */
   also_in: string[]
 }
 
@@ -37,15 +38,16 @@ export interface GroupSuggestion {
 }
 
 export interface GroupMembership {
+  /** The saved groups, then `all`. */
   groups: Record<string, GroupMember[]>
-  /** Each account in more than one group, with those groups. */
+  /** Each account in more than one saved group, with those groups. */
   duplicates: { member: string; groups: string[] }[]
   suggested: GroupSuggestion[]
-  /** Saved entries that name no account: `personal`, the rest, may then hold what they meant. */
+  /** Saved entries that name no account. */
   unresolved: string[]
 }
 
-/** A source-list context whose `groups` include `personal`, with who is in each group and why. */
+/** A source-list context with who is in each group and why. */
 export interface GroupContext extends ListContext {
   membership: GroupMembership
 }
@@ -78,43 +80,39 @@ const membersOf = (entries: readonly string[], context: ListContext, unresolved:
 }
 
 /**
- * Who is in each group (WC-ACCT-13): a saved `account_groups.<name>` is its whole list, and `personal` is every
- * account in no other saved group plus any `account_groups.personal` lists — with nothing saved, every account but
- * memo's own notes and an unsaved running account. One
- * account may be in several groups. A profile's name never puts an account in a group; it is only `suggested`.
+ * Who is in each group (WC-ACCT-13): a saved `account_groups.<name>` is its whole list, and `all`, never saved, is
+ * every account. One account may be in several groups. A profile's name never puts an account in a group; it is
+ * only `suggested`.
  */
 export const groupMembership = (context: ListContext): GroupMembership => {
   const plain = { ...context, groups: {} }
   const unresolved: string[] = []
   const groups: Record<string, GroupMember[]> = {}
   for (const [name, entries] of Object.entries(context.groups))
-    if (name !== PERSONAL) groups[name] = membersOf(entries, plain, unresolved)
-  const own = membersOf(context.groups[PERSONAL] ?? [], plain, unresolved)
-  const taken = new Set([...Object.values(groups).flat(), ...own].map(keyOf))
+    if (name !== ALL) groups[name] = membersOf(entries, plain, unresolved)
   // Not accounts of anyone's: memo's own notes, and the row a fresh store lacks for the account running (id 0).
   const system = [{ provider: "notes", account: INTERNAL_NOTES }, ...context.held.filter(({ id }) => id === 0)].map(
     keyOf,
   )
-  const rest = accountsOfList("all", plain)
-    .filter((one) => !taken.has(keyOf(one)) && !system.includes(keyOf(one)))
+  const every = accountsOfList(ALL, plain)
+    .filter((one) => !system.includes(keyOf(one)))
     .map(
       ({ provider, account }): GroupMember => ({
         provider,
         account,
         entries: [sourceOf({ provider, account })],
-        reason: "in no other group",
+        reason: "all",
         profiles: [],
         also_in: [],
       }),
     )
-  groups[PERSONAL] = [...own, ...rest]
   const recorded = Object.entries(context.profiles).flatMap(([app, named]) =>
     Object.entries(named).map(([profile, key]) => ({ app, profile, key })),
   )
   const holding = new Map<string, string[]>()
   for (const [name, members] of Object.entries(groups))
     for (const one of members) holding.set(keyOf(one), [...(holding.get(keyOf(one)) ?? []), name])
-  for (const [name, members] of Object.entries(groups))
+  for (const [name, members] of [...Object.entries(groups), [ALL, every] as const])
     for (const one of members) {
       one.profiles = recorded.filter(({ key }) => sameAs(key)(one)).map(({ app, profile }) => `${app} ${profile}`)
       one.also_in = (holding.get(keyOf(one)) ?? []).filter((other) => other !== name)
@@ -129,7 +127,6 @@ export const groupMembership = (context: ListContext): GroupMembership => {
     .filter(
       ({ app, profile, key }) =>
         isGroupName(profile) &&
-        profile !== PERSONAL &&
         !NOT_GROUP_NAMES.has(profile.toLowerCase()) &&
         shared(app, profile) &&
         !holding.get(keyOf(key))?.includes(profile),
@@ -139,26 +136,20 @@ export const groupMembership = (context: ListContext): GroupMembership => {
       member: sourceOf(key),
       because: `profile named ${profile} (${app} ${profile})`,
     }))
-  return { groups, duplicates, suggested, unresolved }
+  return { groups: { ...groups, [ALL]: every }, duplicates, suggested, unresolved }
 }
 
-/**
- * Whether an account is in `group`: a member, or memo's own notes for `personal`, the one group that holds them.
- * `context` is a `listContextOf`.
- */
+/** Whether an account is in `group`; every account is in `all`. `context` is a `listContextOf`. */
 export const inGroupOf =
   (context: GroupContext, group: string) =>
   (key: AccountKey): boolean =>
-    (hasGroup(context.membership.groups, group) ? (context.membership.groups[group] ?? []) : []).some(sameAs(key)) ||
-    (group === PERSONAL && sameAs({ provider: "notes", account: INTERNAL_NOTES })(key))
+    group === ALL ||
+    (hasGroup(context.membership.groups, group) ? (context.membership.groups[group] ?? []) : []).some(sameAs(key))
 
-/** The groups as a source list reads them: saved entries as written, `personal` with the rest added. */
-export const groupEntries = (saved: AccountGroups, { groups }: GroupMembership): AccountGroups => ({
-  ...saved,
-  [PERSONAL]: [
-    ...(saved[PERSONAL] ?? []),
-    ...(groups[PERSONAL] ?? []).filter(({ reason }) => reason === "in no other group").map(sourceOf),
-  ],
+/** The groups as a source list reads them: the saved entries as written, and `group:all` as every account. */
+export const groupEntries = (saved: AccountGroups): AccountGroups => ({
+  ...Object.fromEntries(Object.entries(saved).filter(([name]) => name !== ALL)),
+  [ALL]: [ALL],
 })
 
 /** The group a run is scoped to, where it was named, and whether a lock pins it. */
@@ -204,13 +195,6 @@ export const scopeToGroup = (run: RunGroup, request: GroupRequest, context: Grou
   const why = run.locked
     ? `this process is locked to group ${run.name} (${run.from})`
     : `this run is in group ${run.name}`
-  const { unresolved } = context.membership
-  if (run.locked && run.name === PERSONAL && unresolved.length)
-    fail(
-      "permission_error",
-      `${why}, and ${unresolved.join(", ")} name no account, so personal may hold what they meant — fix the ` +
-        "group or the profile first",
-    )
   const inGroup = new Set(accountsOfList(`group:${run.name}`, context).map(keyOf))
   if (inGroup.size === 0) fail("validation_error", `group ${run.name} is empty`)
   const outside = (accounts: readonly AccountKey[]) => accounts.filter((one) => !inGroup.has(keyOf(one)))

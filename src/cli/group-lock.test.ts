@@ -124,8 +124,7 @@ describe("the group lock fails closed", () => {
       )
     await allowed(env, store, ["search", "1e0 link:1 +1"])
     const note = await store.notes.addNote({ text: "the owner's own" })
-    await refused(env, store, ["tags", "add", "x", "--note", note.id])
-    await allowed({ ...env, MEMO_GROUP_LOCK: "personal" }, store, ["tags", "add", "x", "--note", note.id])
+    await allowed(env, store, ["tags", "add", "x", "--note", note.id])
   })
 
   it("puts an event in its calendar's account, so a personal event is refused under work", async () => {
@@ -133,6 +132,7 @@ describe("the group lock fails closed", () => {
     const store = await seeded(env)
     const calendarAccount = { provider: "google-calendar", account: "home" }
     const accountId = await store.accounts.saveAccount(calendarAccount, { name: null })
+    await store.accounts.saveAccountGroup("personal", ["google-calendar:home"])
     const [calendar] = await store.calendar.saveCalendars(
       accountId,
       [{ externalId: "c", title: "Home", timezone: null, accessRole: "owner", primary: true, syncByDefault: true }],
@@ -215,6 +215,7 @@ describe("the group lock fails closed", () => {
     const inWork = await store.notes.addFolder({ name: "work notes" })
     const unsorted = await store.notes.addFolder({ name: "home notes" })
     await store.accounts.saveAccountGroup("work", ["telegram:102", "example-crm:work-portal", `notes:${inWork.id}`])
+    await store.accounts.saveAccountGroup("personal", [`notes:${unsorted.id}`])
     const fileIn = async (folderId: string) =>
       (await store.notes.saveFileNote({ folderId, path: "a.md", title: null, text: "x" })).note.ref
     const workFile = await fileIn(inWork.id)
@@ -226,13 +227,23 @@ describe("the group lock fails closed", () => {
     await allowed(personal, store, ["tags", "add", "x", "--message", homeFile])
   })
 
-  it("passes a thing the owner made, and keeps memo's own notes in personal", async () => {
+  it("passes a thing the owner made, memo's own notes included, in every group", async () => {
     const env = envOf()
     const store = await seeded(env)
     const owned = await store.people.add({ name: "Ана" })
     await allowed(env, store, ["tags", "add", "x", "--message", `person:${owned.id}`])
     const note = await store.notes.addNote({ text: "the owner's own" })
-    await refused(env, store, ["tags", "add", "x", "--message", `note:${note.id}`])
-    await allowed({ ...env, MEMO_GROUP_LOCK: "personal" }, store, ["tags", "add", "x", "--message", `note:${note.id}`])
+    await store.accounts.saveAccountGroup("personal", ["telegram:101"])
+    for (const group of ["work", "personal"]) {
+      await allowed({ ...env, MEMO_GROUP_LOCK: group }, store, ["tags", "add", "x", "--message", `note:${note.id}`])
+      await allowed({ ...env, MEMO_GROUP_LOCK: group }, store, ["tags", "add", "x", "--message", `person:${owned.id}`])
+    }
+    await refused({ ...env, MEMO_GROUP_LOCK: "personal" }, store, [
+      "tags",
+      "add",
+      "x",
+      "--message",
+      "msg:telegram/102/5/9",
+    ])
   })
 })

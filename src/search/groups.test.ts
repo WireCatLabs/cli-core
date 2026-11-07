@@ -54,33 +54,34 @@ const inGroup = (name: string, locked = false, from = "first word"): RunGroup =>
 const lockedRun = runGroup(app, LOCKED) as RunGroup
 
 describe("who is in a group", () => {
-  it("leaves memo's own notes and an unsaved running account out of every group", async () => {
+  it("lists all, every account but memo's own notes and an unsaved running account, and no group never saved", async () => {
     const store = await owner()
     const { membership } = await listContextOf(store, { provider: "telegram", account: "999" }, app, undefined, {})
-    expect(membership.groups.personal?.map(sourceOf)).not.toContain("notes:internal")
-    expect(membership.groups.personal?.map(sourceOf)).not.toContain("telegram:999")
+    expect(Object.keys(membership.groups)).toEqual(["all"])
+    expect(sorted(membership.groups.all ?? [])).toEqual(sorted([tgPersonal, tgWork, b24Work, home, office]))
+    expect(membership.groups.all?.every(({ reason }) => reason === "all")).toBe(true)
   })
 
-  it("is everyone in personal when nothing is saved, with work refused and its profiles suggested", async () => {
-    const store = await owner()
-    const context = await contextOf(store)
-    expect(await members(store, "personal")).toEqual(sorted([tgPersonal, tgWork, b24Work, home, office]))
+  it("refuses an unsaved group, personal too, with the groups listed and the profiles that suggest it", async () => {
+    const context = await contextOf(await owner())
     expect(() => scopeToGroup(inGroup("work"), {}, context)).toThrow(
       expect.objectContaining({
         code: "validation_error",
-        message: expect.stringMatching(/groups here: personal; profiles named work suggest telegram:102, bitrix24:/),
+        message: expect.stringMatching(/groups here: all; profiles named work suggest telegram:102, bitrix24:/),
       }),
     )
+    expect(() => scopeToGroup(inGroup("personal"), {}, context)).toThrow(/"personal" is neither a command nor a group/)
     expect(context.membership.suggested).toEqual([
       { group: "work", member: "telegram:102", because: "profile named work (tg work)" },
       { group: "work", member: "bitrix24:acme.bitrix24.ru", because: "profile named work (b24 work)" },
     ])
   })
 
-  it("is exactly the saved list, and personal is every account in no other group", async () => {
+  it("is exactly the saved list, personal like any other", async () => {
     const store = await withWork()
+    await store.accounts.saveAccountGroup("personal", ["tg:personal", sourceOf(home)])
     expect(await members(store, "work")).toEqual(sorted([tgWork, b24Work]))
-    expect(await members(store, "personal")).toEqual(sorted([tgPersonal, home, office]))
+    expect(await members(store, "personal")).toEqual(sorted([tgPersonal, home]))
     const { membership } = await contextOf(store)
     expect(membership.groups.work?.[0]).toEqual({
       ...tgWork,
@@ -89,19 +90,17 @@ describe("who is in a group", () => {
       profiles: ["tg work"],
       also_in: [],
     })
-    expect(membership.groups.personal?.every(({ reason }) => reason === "in no other group")).toBe(true)
-    expect(membership.suggested).toEqual([])
+    expect(Object.keys(membership.groups)).toEqual(["work", "personal", "all"])
+    expect(membership.groups.all?.find(sameAs(tgWork))?.also_in).toEqual(["work"])
     expect(membership.duplicates).toEqual([])
   })
 
-  it("allows an account in personal too when personal lists it, and reports the duplicate", async () => {
+  it("allows an account in two groups, and reports the duplicate", async () => {
     const store = await withWork()
     await store.accounts.saveAccountGroup("personal", ["tg:work"])
-    expect(await members(store, "personal")).toEqual(sorted([tgPersonal, tgWork, home, office]))
     const { membership } = await contextOf(store)
     expect(membership.groups.work?.[0]?.also_in).toEqual(["personal"])
     expect(membership.groups.personal?.[0]).toMatchObject({ ...tgWork, reason: "setting", also_in: ["work"] })
-    expect(membership.groups.personal?.slice(1).every(({ reason }) => reason === "in no other group")).toBe(true)
     expect(membership.duplicates).toEqual([{ member: "telegram:102", groups: ["work", "personal"] }])
   })
 
@@ -111,27 +110,24 @@ describe("who is in a group", () => {
     expect((await contextOf(store)).membership.groups.work?.[0]?.entries).toEqual(["telegram:102", "tg:work"])
   })
 
-  it("suggests only a profile name another app or a saved group shares, never all, bots or personal", async () => {
+  it("suggests only a profile name another app or a saved group shares, never all or bots", async () => {
     const store = await owner()
     await store.accounts.saveProfile("max", "bots", { provider: "max", account: "9" })
     await store.accounts.saveProfile("max", "default", { provider: "max", account: "8" })
     await store.accounts.saveProfile("gcal", "personal", home)
     const { membership } = await contextOf(store)
-    expect(membership.suggested.map(({ group }) => group)).toEqual(["work", "work"])
-    expect(Object.keys(membership.groups)).toEqual(["personal"])
+    expect(membership.suggested.map(({ group }) => group).sort()).toEqual(["personal", "personal", "work", "work"])
     await store.accounts.saveAccountGroup("default", [sourceOf(office)])
     expect((await contextOf(store)).membership.suggested.map(({ member }) => member)).toContain("max:8")
   })
 })
 
 describe("inGroupOf", () => {
-  it("holds a group's members, memo's own notes for personal only, and no group that does not exist", async () => {
+  it("holds a group's members, every account for all, and nothing for a group that does not exist", async () => {
     const context = await contextOf(await withWork())
-    const notes = { provider: "notes", account: "internal" }
     expect(inGroupOf(context, "work")(tgWork)).toBe(true)
     expect(inGroupOf(context, "work")(tgPersonal)).toBe(false)
-    expect(inGroupOf(context, "work")(notes)).toBe(false)
-    expect(inGroupOf(context, "personal")(notes)).toBe(true)
+    expect(inGroupOf(context, "all")(tgPersonal)).toBe(true)
     expect(inGroupOf(context, "toString")(tgWork)).toBe(false)
   })
 })
@@ -146,7 +142,7 @@ describe("a run in a group", () => {
 
   it("refuses an account outside the group by what was typed, for a read and for a write's --account", async () => {
     const context = await contextOf(await withWork())
-    for (const source of ["telegram:101", "telegram:102,group:personal"])
+    for (const source of ["telegram:101", "telegram:102,group:all"])
       expect(() => scopeToGroup(inGroup("work"), { source }, context)).toThrow(
         expect.objectContaining({
           code: "validation_error",
@@ -178,7 +174,7 @@ describe("a run in a group", () => {
     const context = await contextOf(await withWork())
     for (const word of ["serch", "toString", "constructor"])
       expect(() => scopeToGroup(inGroup(word), {}, context)).toThrow(
-        new RegExp(`"${word}" is neither a command nor a group — groups here: work, personal`),
+        new RegExp(`"${word}" is neither a command nor a group — groups here: work, all`),
       )
   })
 
@@ -225,7 +221,7 @@ describe("the group word and the lock", () => {
 
   it("refuses --source all and an outside source as permission_error under the lock", async () => {
     const context = await contextOf(await withWork(), LOCKED)
-    for (const source of ["all", "telegram:101", "group:personal"])
+    for (const source of ["all", "telegram:101", "group:all"])
       expect(() => scopeToGroup(lockedRun, { source }, context)).toThrow(
         expect.objectContaining({ code: "permission_error" }),
       )
@@ -257,13 +253,17 @@ describe("the group word and the lock", () => {
     expect((await prepareLucene(store, home, { limit: 10 }, { app })).scopeAccounts).toEqual([home])
   })
 
-  it("refuses a run locked to personal while a group entry names no account", async () => {
-    const store = await owner()
-    await store.accounts.saveAccountGroup("work", ["telegram:102", "email:gone@example.com"])
-    const locked = runGroup(app, { MEMO_GROUP_LOCK: "personal" }) as RunGroup
-    const context = await contextOf(store, { MEMO_GROUP_LOCK: "personal" })
-    expect(() => scopeToGroup(locked, {}, context)).toThrow(
-      expect.objectContaining({ code: "permission_error", message: expect.stringMatching(/email:gone@example.com/) }),
+  it("takes all, as a word, MEMO_GROUP or MEMO_GROUP_LOCK, as no restriction", async () => {
+    expect(runGroup(app, {}, "all")).toBeUndefined()
+    expect(runGroup(app, { MEMO_GROUP: "all" })).toBeUndefined()
+    expect(runGroup(app, { MEMO_GROUP_LOCK: "all" }, "work")).toEqual({
+      name: "work",
+      from: "first word",
+      locked: false,
+    })
+    const context = await contextOf(await withWork(), { MEMO_GROUP_LOCK: "all" })
+    expect(sorted(accountsOfList("all", context))).toEqual(
+      sorted([tgPersonal, tgWork, b24Work, home, office, { provider: "notes", account: "internal" }]),
     )
   })
 })
@@ -299,15 +299,14 @@ describe("changing a group, as a settings page does", () => {
     expect(await where.store.accounts.accountGroups()).toMatchObject({ work: [`bitrix24:${b24Work.account}`] })
   })
 
-  it("refuses to remove an entry that names other accounts too, and says personal's rest leaves by joining", async () => {
+  it("refuses to remove an entry that names other accounts too, or anything from all", async () => {
     const where = await at()
     await where.store.accounts.saveAccountGroup("mail", ["email"])
     await expect(removeGroupMember(where, { group: "mail", member: sourceOf(home) })).rejects.toThrow(
       /email names more than this account/,
     )
-    await where.store.accounts.saveAccountGroup("mail", undefined)
-    await expect(removeGroupMember(where, { group: "personal", member: sourceOf(home) })).rejects.toThrow(
-      /no other group/,
+    await expect(removeGroupMember(where, { group: "all", member: sourceOf(home) })).rejects.toThrow(
+      /cannot name a group/,
     )
     await expect(removeGroupMember(where, { group: "work", member: sourceOf(home) })).rejects.toThrow(
       expect.objectContaining({ code: "not_found" }),
@@ -317,15 +316,15 @@ describe("changing a group, as a settings page does", () => {
     )
   })
 
-  it("moves a member from one group to another in one write, every entry and personal's rest included", async () => {
+  it("moves a member from one group to another in one write, every entry included, and from all as an add", async () => {
     const where = await at()
     await where.store.accounts.saveAccountGroup("work", ["telegram:102", "tg:work", `bitrix24:${b24Work.account}`])
     const moved = await moveGroupMember(where, { member: "telegram:102", from: "work", to: "personal" })
     expect(moved.groups.work?.map(sourceOf)).toEqual([`bitrix24:${b24Work.account}`])
     expect(moved.groups.personal?.[0]).toMatchObject({ ...tgWork, reason: "setting", also_in: [] })
     expect(moved.duplicates).toEqual([])
-    const back = await moveGroupMember(where, { member: sourceOf(home), from: "personal", to: "work" })
+    const back = await moveGroupMember(where, { member: sourceOf(home), from: "all", to: "work" })
     expect(back.groups.work?.map(sourceOf)).toEqual([`bitrix24:${b24Work.account}`, sourceOf(home)])
-    expect(back.groups.personal?.some(sameAs(home))).toBe(false)
+    expect(back.groups.all?.some(sameAs(home))).toBe(true)
   })
 })

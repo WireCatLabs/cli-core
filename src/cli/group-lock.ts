@@ -89,8 +89,8 @@ const pathOf = (command: Command): string => {
 
 /**
  * Under `<PREFIX>_GROUP_LOCK`, refuses a command that does not keep to a group, and a reference whose thing belongs
- * only to accounts outside the group. A thing no account brought is the owner's and passes; a note written in memo
- * belongs to `personal`; a person passes when one of their identities is in the group.
+ * only to accounts outside the group. A thing no account brought is the owner's and passes in every group, a note
+ * written in memo included; a person passes when one of their identities is in the group.
  */
 export const refuseOutsideGroup = async (
   command: Command,

@@ -57,12 +57,11 @@ it("gives no work group hint for a CRM account a saved group other than personal
   expect((await syncCrm(source, store, PORTAL)).groupHint).toBeUndefined()
 })
 
-it("still hints for a CRM account whose profile is named work but no group lists, or only personal does", async () => {
+it("still hints for a CRM account whose profile is named work but no saved group lists", async () => {
   const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "crm-hint-")), "store.db") })
   stores.push(store)
   await store.accounts.saveAccount(PORTAL, { name: null })
   await store.accounts.saveProfile("crm", "work", PORTAL)
-  await store.accounts.saveAccountGroup("personal", ["example-crm:portal"])
   const source = fakeCrmSource()
   source.put("deal", exampleDeal("d1"))
   expect((await syncCrm(source, store, PORTAL)).groupHint).toMatch(/memo groups add work example-crm:portal/)

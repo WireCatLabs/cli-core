@@ -1,4 +1,4 @@
-import { INTERNAL_NOTES, isDocumentAccountProvider, isFolderProvider } from "../../domain/providers.js"
+import { isDocumentAccountProvider, isFolderProvider } from "../../domain/providers.js"
 import { parseReference, type Reference } from "../../domain/references.js"
 import type { CacheDatabase } from "../driver.js"
 import type { AccountKey } from "../types.js"
@@ -68,9 +68,9 @@ export const refAccountsOf = (database: CacheDatabase, text: string): RefAccount
   if (!thing) return undefined
   if (reference.type === "meeting") return accountKeys(database, [reference.accountId])
   switch (thing.type) {
-    // A note written in memo, never a file of a folder (`document:`), belongs to memo's own notes.
+    // A note written in memo, never a file of a folder (`document:`), is the owner's: no account brought it.
     case "note":
-      return [{ provider: "notes", account: INTERNAL_NOTES }]
+      return []
     case "account":
       return accountKeys(database, [thing.id])
     // An event is its copies' calendars' and its meetings' accounts; one with no copy is the owner's own.

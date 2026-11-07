@@ -78,9 +78,9 @@ export const liftProfile = (
 }
 
 /**
- * The group a run reads, from the first word (`liftProfile` lifts it) or `<PREFIX>_GROUP`; `all` is no group. Under
- * `<PREFIX>_GROUP_LOCK` any other group, `all` included, is refused, as the profile lock refuses another profile
- * (WC-ACCT-5).
+ * The group a run reads, from the first word (`liftProfile` lifts it) or `<PREFIX>_GROUP`; `all`, the default, is
+ * every account, so no restriction. Under `<PREFIX>_GROUP_LOCK` any other group, `all` included, is refused, as the
+ * profile lock refuses another profile (WC-ACCT-5); a lock of `all` locks nothing.
  */
 export const runGroup = (app: AppIdentity, env: NodeJS.ProcessEnv, word?: string): RunGroup | undefined => {
   const GROUP = envName(app, "GROUP")
@@ -97,10 +97,8 @@ export const runGroup = (app: AppIdentity, env: NodeJS.ProcessEnv, word?: string
         "validation_error",
         `"${name}" (${origin}) is not a group name — letters, digits, - and _, starting with a letter or a digit`,
       )
-  if (lock === undefined)
+  if (lock === undefined || lock.toLowerCase() === "all")
     return named === undefined || named.toLowerCase() === "all" ? undefined : { name: named, from, locked: false }
-  if (lock.toLowerCase() === "all")
-    throw new CliError("validation_error", `${LOCK} names one group — all is every account, which is no lock`)
   if (named !== undefined && named !== lock)
     throw new CliError(
       "permission_error",

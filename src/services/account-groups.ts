@@ -1,7 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import type { AppIdentity } from "../ports/app.js"
 import { accountsOfList, groupName, sameAs, sourceOf } from "../search/account-list.js"
-import { type GroupContext, type GroupMembership, hasGroup, NOT_GROUP_NAMES, PERSONAL } from "../search/groups.js"
+import { ALL, type GroupContext, type GroupMembership, hasGroup, NOT_GROUP_NAMES } from "../search/groups.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
 import { groupLockOf, listContextOf } from "./search-kind.js"
 
@@ -98,19 +98,14 @@ export const addGroupMember = async (at: GroupStore, change: GroupMemberChange):
 
 export const removeGroupMember = async (at: GroupStore, change: GroupMemberChange): Promise<GroupMembership> => {
   unlocked(at)
+  const group = usableGroup(change.group)
   const context = await contextOf(at)
   const key = accountOf(context, change.member)
-  const member = isIn(context, change.group, key)
+  isIn(context, group, key)
   const { removed } = await at.store.accounts.changeAccountGroups({
-    remove: { group: change.group, drop: namesOnly(context, key) },
+    remove: { group, drop: namesOnly(context, key) },
   })
-  if (removed.length === 0)
-    fail(
-      member ? "validation_error" : "not_found",
-      member
-        ? `${change.member} is in ${PERSONAL} because it is in no other group — add it to one to take it out`
-        : `${change.member} is not in group ${change.group}`,
-    )
+  if (removed.length === 0) fail("not_found", `${change.member} is not in group ${group}`)
   return listAccountGroups(at)
 }
 
@@ -121,8 +116,9 @@ export const moveGroupMember = async (at: GroupStore, move: GroupMemberMove): Pr
   const context = await contextOf(at)
   const key = accountOf(context, move.member)
   if (!isIn(context, move.from, key)) fail("not_found", `${move.member} is not in group ${move.from}`)
+  // Out of `all` nothing can go: a move from it puts the account in `to` and leaves it in every account.
   await at.store.accounts.changeAccountGroups({
-    remove: { group: move.from, drop: namesOnly(context, key) },
+    ...(move.from === ALL ? {} : { remove: { group: move.from, drop: namesOnly(context, key) } }),
     add: { group: to, entry: sourceOf(key) },
   })
   return listAccountGroups(at)
