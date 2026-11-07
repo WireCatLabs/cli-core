@@ -210,9 +210,11 @@ write messages sync
 write messages unpin
 write messages unstar
 write metadata sync
+write models add
 write models download
 write models keys remove
 write models keys set
+write models set
 write polls close
 write polls create
 write polls vote

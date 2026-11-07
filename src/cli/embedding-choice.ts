@@ -1,7 +1,7 @@
 import { CliError, type KeyringStore } from "@wirecat/cli-base"
 import { type AISettings, endpoint } from "../analysis/settings.js"
 import { embeddingKeys, endpointKeyName } from "../embeddings/keys.js"
-import { DEFAULT_TEXT_MODEL } from "../embeddings/models.js"
+import { chosenTextModel } from "../embeddings/models.js"
 import { isLocal, remoteModel } from "../embeddings/remote.js"
 import { type AppIdentity, readOnlyLockOf, readOnlyRefusal } from "../ports/app.js"
 import { typedCommand } from "../runs/scope.js"
@@ -15,7 +15,10 @@ export interface ModelOptions {
   concurrency?: number
 }
 
-/** A local model id, or a remote model with its key from `models keys set`. */
+/**
+ * A local model id, or a remote model with its key from `models keys set`. A flag wins, then this CLI's own
+ * `embedding_model`, then the shared choice of `models use`.
+ */
 export const embeddingChoice = (
   { model, embeddingProvider, baseUrl, dims, concurrency }: ModelOptions,
   app: AppIdentity,
@@ -34,7 +37,7 @@ export const embeddingChoice = (
   if (provider === "local") {
     if (baseUrl !== undefined || dims !== undefined)
       throw new CliError("validation_error", "local embeddings do not take --base-url or --dims")
-    return model ?? DEFAULT_TEXT_MODEL
+    return model ?? chosenTextModel(env).id
   }
   if (baseUrl !== undefined && !endpoint(baseUrl))
     throw new CliError("validation_error", "use an HTTP/S --base-url without credentials, query or fragment")

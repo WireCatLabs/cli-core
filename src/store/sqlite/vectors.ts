@@ -489,3 +489,12 @@ export const readiness = ({ orm }: StoreContext, chatKey: number, model: string)
     vectors: { chunks, embedded: Number(vectors?.embedded ?? 0), current, stale, missing: chunks - current - stale },
   }
 }
+
+/** The primary key starts with `model`, so each count reads only that model's rows. */
+export const vectorCounts = ({ orm }: StoreContext, models: string[]): Map<string, number> =>
+  new Map(
+    models.map((model) => [
+      model,
+      Number(orm.get<{ n: number }>(sql`SELECT count(*) AS n FROM embeddings WHERE model = ${model}`)?.n ?? 0),
+    ]),
+  )

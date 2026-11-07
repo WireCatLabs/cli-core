@@ -9,7 +9,7 @@ import {
   openEmbedder,
   textModelsDirectory,
 } from "../embeddings/embed.js"
-import { DEFAULT_TEXT_MODEL, textModel, vectorModelKey } from "../embeddings/models.js"
+import { chosenTextModel, textModel, vectorModelKey } from "../embeddings/models.js"
 import { remoteKey } from "../embeddings/remote.js"
 import { CONTEXT_MESSAGES, CONTEXT_MINUTES } from "../images/context/index.js"
 import { registeredImageProviders } from "../images/registry.js"
@@ -53,7 +53,7 @@ export const notBuiltError = (deps: ServiceDeps, chatId: Id) =>
     `chat ${chatId} has no conversations yet — \`${typedCommand(deps.messenger.app.command, `conversations links rebuild --chat ${chatId}`)}\``,
   )
 
-export const embeddingTarget = (deps: ModelDeps, choice: ModelChoice = DEFAULT_TEXT_MODEL) => {
+export const embeddingTarget = (deps: ModelDeps, choice: ModelChoice = chosenTextModel(deps.env).id) => {
   if (typeof choice !== "string") {
     const { remote, apiKey, concurrency = 4 } = choice
     return {
@@ -68,13 +68,13 @@ export const embeddingTarget = (deps: ModelDeps, choice: ModelChoice = DEFAULT_T
         (await import("../embeddings/remote.js")).openRemote(remote, apiKey, { concurrency }),
     }
   }
-  const model = textModel(choice)
+  const model = textModel(choice, deps.env)
   const directory = textModelsDirectory(deps.env)
   return {
     id: model.id,
     key: vectorModelKey(model),
     dims: model.dims,
-    speed: model.chunksPerSecond,
+    speed: model.chunksPerSecond ?? null,
     price: undefined,
     installed: isTextModelInstalled(model, directory),
     perBatch: PER_SESSION,
@@ -373,7 +373,7 @@ export const embeddingsMaintenance = (
 
     refresh: async ({
       chat,
-      model: choice = DEFAULT_TEXT_MODEL,
+      model: choice = chosenTextModel(deps.env).id,
       build = true,
       embed = true,
       maxChats = REFRESH_BOUNDS.maxChats,
@@ -415,7 +415,7 @@ export const embeddingsMaintenance = (
       }
 
       const embedded: Embedded[] = []
-      const wantsMessages = embed && messages && target.installed && choice === DEFAULT_TEXT_MODEL
+      const wantsMessages = embed && messages && target.installed && choice === chosenTextModel(deps.env).id
       const toEmbed = wantsMessages ? await messagesToEmbed(chatId, target.key, maxChunks, check) : undefined
       let messagesEmbedded = 0
       if (embed && target.installed) {

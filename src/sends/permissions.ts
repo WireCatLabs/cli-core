@@ -42,6 +42,8 @@ export const DEFAULT_PERMISSIONS: Readonly<Record<PermissionKey, Level>> = {
   "server.stop": "ask",
   "server.restart": "ask",
   "models.download": "ask",
+  "models.set": "ask",
+  "models.add": "ask",
   "images.models.download": "ask",
   "schedule.run": "ask",
   "schedule.exec": "ask",

@@ -4,7 +4,7 @@ import type { InferOutput } from "valibot"
 import { hitFiles } from "../../domain/attachments.js"
 import { formatLocator, parseLocator } from "../../domain/locator.js"
 import { senderIsMe } from "../../domain/models.js"
-import { DEFAULT_TEXT_MODEL } from "../../embeddings/models.js"
+import { chosenTextModel } from "../../embeddings/models.js"
 import type { ENTITIES } from "../../entities/index.js"
 import type { SearchTotal } from "../../search/total.js"
 import type { ChatCoverage } from "../../services/chat-coverage.js"
@@ -390,7 +390,7 @@ const meaningGap = (skipped: string | undefined, exact: boolean) =>
   skipped === undefined || exact
     ? { next: [], missing: [] }
     : {
-        next: [nextStep("models.download", { args: { model: DEFAULT_TEXT_MODEL } })],
+        next: [nextStep("models.download", { args: { model: chosenTextModel().id } })],
         missing: [{ field: "found_by", why: skipped, step: "models.download" }],
       }
 

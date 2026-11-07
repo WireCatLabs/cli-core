@@ -122,6 +122,8 @@ export interface VectorsStore extends AccountVectors {
   saveVectors(model: string, dims: number, vectors: { hash: string; vector: Float32Array }[]): Promise<void>
   /** Which of these chunk hashes already have a vector of `model`. */
   embeddedHashes(model: string, hashes: string[]): Promise<Set<string>>
+  /** How many chunk texts have a vector of each of these models. */
+  vectorCounts(models: string[]): Promise<Map<string, number>>
 }
 
 export const accountVectorsOver = (context: StoreContext, mail: () => MailStore): AccountVectors => {
@@ -422,4 +424,5 @@ export const vectorsStoreOver = (context: StoreContext, keyed: AccountVectors): 
     write(context.database, () => vectors.saveVectors(context, model, dims, rows))
   },
   embeddedHashes: async (model, hashes) => imageChunks.embeddedHashes(context, model, hashes),
+  vectorCounts: async (models) => vectors.vectorCounts(context, models),
 })

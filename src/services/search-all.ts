@@ -6,7 +6,7 @@ import { parseLocator } from "../domain/locator.js"
 import { type MailFields, senderIsMe } from "../domain/models.js"
 import { holdsKind, INTERNAL_NOTES } from "../domain/providers.js"
 import { runEmbedders } from "../embeddings/embed.js"
-import { DEFAULT_TEXT_MODEL } from "../embeddings/models.js"
+import { chosenTextModel } from "../embeddings/models.js"
 import type { MessengerTraits } from "../ports/traits.js"
 import { plainQuery } from "../search/lucene/plain.js"
 import { MESSAGE_PARSING, SEARCH_QUERY } from "../search/lucene/types.js"
@@ -273,7 +273,7 @@ export const searchAll = async (
         ? {
             skipped: {
               reason: "the query uses NOT, or a filter under OR or in a group, which meaning cannot follow",
-              model: DEFAULT_TEXT_MODEL,
+              model: chosenTextModel(request.env).id,
             },
           }
         : await meaning(request.text, read, embedders)
