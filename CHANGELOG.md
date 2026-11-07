@@ -25,6 +25,13 @@ shape of this file.
   A CLI that passes `newFileOutput: writesNewFileOnlyWith` and a `writeFile` that refuses a file that exists, such as
   `writeNewFile`, gets an export that is a read without `--output` and, with it, only ever adds a file.
 
+- **`ProfileTokenStore` in `@wirecat/cli-core/cli`: one API token per profile for a CLI that is not a messenger**,
+  so b24, beeline and cli-template drop their copies of `src/token.ts`. `<PREFIX>_TOKEN`, then the keyring entry
+  `token:<profile>` under the app's service, then a 0600 file; a moved run writes only a temporary
+  `<app>:<config folder>` entry. `write(profile, token, "file")` also forgets the keyring copy. `need(profile)`
+  throws the new reason `session.missing` (`authentication_error`, naming `session start`), the one "not signed in"
+  every token CLI gives; `signedIn(profile)` is `appMcpCommand`'s hook.
+
 ### Changed — may break callers
 
 - **`foldName` folds ё into е**, so a chat, a person and a CRM field typed with е find the one named with ё. A name

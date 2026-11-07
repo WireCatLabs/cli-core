@@ -27,6 +27,7 @@ const SIGN_IN: Entry[] = [
   ["oauth.timeout", "timeout", "the sign-in was not finished in time"],
   ["oauth.mismatch", "authentication_error", "the pasted sign-in result belongs to another sign-in"],
   ["oauth.missing", "authentication_error", "this profile is not signed in"],
+  ["session.missing", "authentication_error", "this profile is not signed in"],
   ["oauth.locked", "provider_unavailable", "another process holds this sign-in's lock"],
   ["oauth.no-response", "outcome_unknown", "the token request did not finish"],
   ["oauth.unavailable", "provider_unavailable", "the provider's token endpoint is unavailable"],
