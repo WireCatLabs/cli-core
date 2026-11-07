@@ -3,7 +3,7 @@ import { CHUNK_CHARS, chunkHash, splitSections, splitText } from "../../conversa
 import type { EntryEventType } from "../../meetings/index.js"
 import { analyzerIdentity, DEFAULT_STEMMERS, type Stemmer, type Stemmers } from "../../search/stem.js"
 import { taskStemsOf, taskWordsOf } from "../../search/task-similarity.js"
-import type { CacheDatabase } from "../driver.js"
+import { type CacheDatabase, isQueryOnly } from "../driver.js"
 import { normalize } from "../normalize.js"
 import { dropDocumentPicture } from "./document-pictures.js"
 import { int } from "./events.js"
@@ -319,6 +319,7 @@ export const drainCorpus = (
   stemmerFor: (stemmers: Stemmers) => Stemmer,
   { batch = 200, until = () => false }: { batch?: number; until?: () => boolean } = {},
 ): number => {
+  if (isQueryOnly(database)) return 0
   // Pieces written before they carried their account get it, once: purge and vector search filter by it.
   if (corpus.type === "email" || corpus.type === "document")
     database
