@@ -240,6 +240,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `newcomers` | members observed joining during the selected time window |
 | `retention` | whether members of a selected cohort remain or return over time |
 | `responses` | observed replies between participants and the time taken to answer |
+| `waiting` | chats whose newest message waits on the owner's reply |
 | `discussion` | source posts compared by known views and observed discussion replies |
 | `unanswered` | questions without an observed qualifying answer |
 | `me` | the account a profile's token belongs to |
@@ -363,6 +364,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `serve` | the long-running process |
 | `setup` | the guided first run: log in or link the account, then install the agent skill |
 | `doctor` | check this machine's setup |
+| `recover` | repair a damaged store: what it would do, then its run subcommand does it |
 | `upgrade` | install a newer version of this tool |
 | `commands` | the command tree as data |
 | `guide` | scenarios: the commands for a common task, in order, and why each |
@@ -454,6 +456,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--no-registries` |  | switch | do not ask the public ban lists |  |
 | `--notify` |  | switch | tell the people it concerns about it: the chat's members, or an event's attendees |  |
 | `--no-notify` |  | switch | tell nobody about it |  |
+| `--open-new` |  | switch | a read again for tasks also opens new tasks |  |
 | `--offline` |  | switch | answer from what was recorded and never connect |  |
 | `--operation-id` | `<id>` | id | the write attempt this repeats, from an unknown outcome; a retry with it cannot write twice |  |
 | `--port` | `<port>` | number | the local port for --http |  |
@@ -640,6 +643,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--project` | `<project>` | string | a project: its key or project:<id> |  |
 | `--recheck-since-time` | `<time>` | time | look again from this day, for what arrived late |  |
 | `--run` | `<id>` | id | the run it is about |  |
+| `--who` | `<side>` | choice | whose replies are measured: me (the owner's) or others (the other side's) |  |
 | `--write` | `<id>` | id | one write of a run, by the operation_id its answer listed: undo or act on that write alone |  |
 | `--target` | `<ref>` | string | what it acts on, as a reference: msg:, chat:, person:, task:, … |  |
 | `--secret` | `<name>` | choice | which secret beside a bot's token to keep, typed at a hidden prompt; never the secret itself |  |
@@ -780,6 +784,9 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--currency` | `<code>` | string | an ISO 4217 code, such as EUR |  |
 | `--close-date` | `<date>` | time | the day a deal or lead is expected to close, YYYY-MM-DD |  |
 | `--owner` | `<user>` | id | the CRM user a record is assigned to, by the CRM's id |  |
+| `--notify-on` | `<when>` | choice | when a scheduled run tells the owner: always, failures or never |  |
+| `--deliver-to` | `<route>` | string | where a scheduled run's result also goes, by the owner's own CLI: telegram-bot:<profile>/<chat> or email:<profile>/<address>; repeat it for more. Not --to, which names who a message is for |  |
+| `--max-cost-per-day` | `<usd>` | number | start no run for the rest of the day once the day's runs cost this much; 0 for no cap | US dollars |
 
 <!-- flags: end -->
 
@@ -978,6 +985,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--debug` |  | on a failure, its whole record — cause and stack — in place of the short line |  | every command |
 | `--deep` | `<n>` | also check the top n in full — profile, photos, everything they wrote, and the public ban lists, which are sent their ids — one person a second. **TG specializes the SDK help with the bounded Telegram audit; MAX retains the generic SDK wording. Align the shared help with provider capabilities separately; SDK adoption alone does not remove the difference.** |  | `chats members check` |
 | `--defaults` |  | change what every profile gets, rather than this profile |  | `config set`, `config unset` |
+| `--deliver-to` | `<route>` | where a schedule's result also goes, when --notify-on says so: telegram-bot:<profile>/<chat>, email:<profile>/<address>; repeat it for more |  | `schedule agent` (planned), `schedule command` (planned) |
 | `--deny-chats` | `<ids>` | replace denied chat ids, comma-separated; empty clears; deny wins |  | `replies audience`, `replies edit` |
 | `--deny-people` | `<ids>` | replace denied sender ids, comma-separated; empty clears; deny wins |  | `replies audience`, `replies edit` |
 | `--description` | `<text>` | the new about text — of a chat or of your account. **tasks add and tasks update use Markdown for task details, completion criteria and next steps** |  | `account update`, `chats update`, `tasks add`, `tasks update` |
@@ -1174,7 +1182,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--timeout` | `<duration>` | give up on the whole command after this — 30s, 2m, 500ms |  | every command |
 | `--timezone` | `<zone>` | the IANA timezone for calendar date boundaries. **replies edit uses this option for the IANA timezone for the working window** | `system IANA timezone` | `attachments jobs install`, `replies edit`, `search all`, `search conversations`, `search messages`, `search notes`, `searches create`, `stats charts`, `stats chats newcomers`, `stats chats retention`, `stats chats show`, `stats contacts responses`, `stats contacts top`, `stats messages counters show`, `stats messages counters sync`, `stats messages discussion`, `stats messages responses`, `stats messages show`, `stats messages top`, `stats messages unanswered`, `stats messages waiting`, `stats tasks show` |
 | `--title` | `<title>` | the new name — of a chat, a folder or a forum topic. **tasks add and tasks update use this for the action and its object, in one line** |  | `bot chats admins add` (planned), `chats folders update`, `chats update`, `tasks add`, `tasks update`, `topics edit` (tg-only) |
-| `--to` | `<chat>` | where it goes: the chat to forward it to (an id, or part of a chat name), or a route a schedule's result is sent along (telegram-bot:<profile>/<chat>, email:<profile>/<address>). **the sentence says how to name a chat the messenger's way, so it differs on purpose (Help text rule 4)** |  | `messages forward`, `schedule agent` (planned), `schedule command` (planned) |
+| `--to` | `<chat>` | where it goes: the chat to forward it to (an id, or part of a chat name). **the sentence says how to name a chat the messenger's way, so it differs on purpose (Help text rule 4)** |  | `messages forward` |
 | `--topic` | `<id>` | address this forum topic: send or forward to it, read only it, or mark only it read. **Telegram group forums only; MAX explicitly refuses this option before sending** |  | `chats mark-read` (tg-only), `messages forward` (tg-only), `messages send` (tg-only), `polls create` (tg-only) |
 | `--trace` |  | one line per request on stderr: ids and timings, never message content. **max logs one line per request, tg the connection's own lines: the same option, a different mechanism (Help text rule 4)** |  | every command |
 | `--track` |  | also do it daily while serve runs |  | `chats members fetch` |

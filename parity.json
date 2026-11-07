@@ -304,6 +304,10 @@
     "--defaults": {
       "meaning": "change what every profile gets, rather than this profile"
     },
+    "--deliver-to": {
+      "value": "<route>",
+      "meaning": "where a schedule's result also goes, when --notify-on says so: telegram-bot:<profile>/<chat>, email:<profile>/<address>; repeat it for more"
+    },
     "--deny-chats": {
       "meaning": "replace denied chat ids, comma-separated; empty clears; deny wins",
       "value": "<ids>"
@@ -1065,7 +1069,7 @@
     },
     "--to": {
       "value": "<chat>",
-      "meaning": "where it goes: the chat to forward it to (an id, or part of a chat name), or a route a schedule's result is sent along (telegram-bot:<profile>/<chat>, email:<profile>/<address>)",
+      "meaning": "where it goes: the chat to forward it to (an id, or part of a chat name)",
       "note": "the sentence says how to name a chat the messenger's way, so it differs on purpose (Help text rule 4)"
     },
     "--topic": {
@@ -3959,6 +3963,12 @@
             "wa": "wa backlog: mount the shared schedule command"
           }
         },
+        "--deliver-to": {
+          "in": ["max", "tg"],
+          "planned": {
+            "wa": "wa backlog: mount the shared schedule command"
+          }
+        },
         "--every": {
           "in": ["max", "tg"],
           "planned": {
@@ -3988,12 +3998,6 @@
           "planned": {
             "wa": "wa backlog: mount the shared schedule command"
           }
-        },
-        "--to": {
-          "in": ["max", "tg"],
-          "planned": {
-            "wa": "wa backlog: mount the shared schedule command"
-          }
         }
       }
     },
@@ -4015,6 +4019,12 @@
             "wa": "wa backlog: mount the shared schedule command"
           }
         },
+        "--deliver-to": {
+          "in": ["max", "tg"],
+          "planned": {
+            "wa": "wa backlog: mount the shared schedule command"
+          }
+        },
         "--every": {
           "in": ["max", "tg"],
           "planned": {
@@ -4022,12 +4032,6 @@
           }
         },
         "--notify-on": {
-          "in": ["max", "tg"],
-          "planned": {
-            "wa": "wa backlog: mount the shared schedule command"
-          }
-        },
-        "--to": {
           "in": ["max", "tg"],
           "planned": {
             "wa": "wa backlog: mount the shared schedule command"

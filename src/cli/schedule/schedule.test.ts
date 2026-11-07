@@ -1215,7 +1215,7 @@ describe("delivery after a run", () => {
     expect(sent.at(-1)?.argv.at(-1)).toBe("not delivered to telegram-bot:personal/user:42: delivery.failed")
   })
 
-  it("stores --to as the owner typed it, lists it, and refuses a route it cannot read", async () => {
+  it("stores --deliver-to as the owner typed it, lists it, and refuses a route it cannot read", async () => {
     const { env } = setup()
     const { system } = machine("linux")
     const added = await call(
@@ -1226,9 +1226,9 @@ describe("delivery after a run", () => {
         "p",
         "--at",
         "08:30",
-        "--to",
+        "--deliver-to",
         "telegram-bot:personal/user:42",
-        "--to",
+        "--deliver-to",
         "email:work/me@example.com",
       ],
       env,
@@ -1241,11 +1241,11 @@ describe("delivery after a run", () => {
       "email:work/me@example.com",
     ])
     const listed = JSON.parse((await call(["list", "--json"], env, system)).out).items[0]
-    expect(listed.to).toEqual(["telegram-bot:personal/user:42", "email:work/me@example.com"])
+    expect(listed.deliver_to).toEqual(["telegram-bot:personal/user:42", "email:work/me@example.com"])
     expect(v.safeParse(scheduledJob, listed).success).toBe(true)
 
     const bad = await call(
-      ["agent", "other", "claude", "p", "--at", "08:30", "--to", "telegram-bot:personal/Family"],
+      ["agent", "other", "claude", "p", "--at", "08:30", "--deliver-to", "telegram-bot:personal/Family"],
       env,
       system,
     )
