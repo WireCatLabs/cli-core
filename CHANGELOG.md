@@ -179,6 +179,23 @@ shape of this file.
 
 ### Added
 
+- **Person, organization and deal contexts with their business relationships.** `canonicalPersonContext` answers
+  for any `person:<uid>` — a CRM contact, a name with no identity, someone two accounts saw — reading every account
+  in scope, with a `business` section (organizations, reporting lines both ways, deals and leads, projects,
+  categories) and `coverage`. `organizationContext` gives an organization's people, customers, suppliers, partners,
+  projects, open deals, invoices, payments and orders, counts of messages, mail and meetings through its people, and
+  open tasks. `dealContext` gives a deal's or lead's stages, client, participants, owner, project, money reached by
+  project or counterparty, and its people's messages, mail and meetings in its lifetime marked `proposed`;
+  `dealBrief` is its compact form. Every relationship says its standing, every section is bounded, and the shared
+  entities `person_context`, `organization_context`, `deal_context` and `deal_context.brief` describe them.
+  `organizationsInCategory` lists clients, suppliers, partners or employers, derived from relationships.
+  `@wirecat/cli-core/crm/testing` exports `acmeScenario`, a synthetic store for these. See
+  `docs/dev/BUSINESS-CONTEXT.md`.
+
+- **Stage history, own organizations, orders by supplier.** `deals.stages(ref)` lists every stage a deal or lead
+  entered; `knowledge.ownOrganizations()` and `knowledge.setOwnOrganization(ref, own)` read and set the own-company
+  mark; `orders.list({ supplier })`. A relationship (`knowledge.relations`) answers the `account` that reported it,
+  its dates, and a source's `position` and `derived` when it has them.
 - **`models set <id>` chooses the local embedding model for every WireCat CLI**, kept in the shared settings file:
   every embed and every search by meaning uses it, and `models list` marks it `default`. It refuses a model that is
   not downloaded, and says how many chunks the new model still lacks and about how long that takes. Vectors stay
@@ -494,6 +511,9 @@ shape of this file.
   list.
 
 ### Changed — may break callers
+
+- `DealsStore` gains `stages` and `OrganizationsStore` (so `KnowledgeStore`) gains `ownOrganizations` and
+  `setOwnOrganization`: a hand-written store or fake implementing them must add these.
 
 - **Store version 56 raises `minCompatible` to 56: a build from before it refuses the store and asks to be upgraded.**
   A build that knows no account on a link would write a CRM's people as the owner's again, or fail on the new unique

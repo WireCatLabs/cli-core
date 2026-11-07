@@ -285,6 +285,9 @@ A scope keeps the imported rows whose deciding record is in it; the rest are rea
 `business.list` (or `business`) leaves the lane out of `search all`, which names it under `missing`, as `deals.list`
 does for deals.
 
+What a person, an organization or a deal amounts to across these relationships, their deals, money and messages
+is one read each: [BUSINESS-CONTEXT.md](BUSINESS-CONTEXT.md).
+
 ### Relationships a source reports
 
 `store.relations.syncReported(account, relationships, scope)` writes what a source account says as a diff keyed by the
