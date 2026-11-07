@@ -15,18 +15,28 @@ shape of this file.
   when neither is given. A bot adapter gets `buttons` (`BotButton[][]`; `[]` means none) in the options of `send` and
   `edit`; one that cannot draw buttons must refuse them. The bot MCP tools gain `field` (one button) and `clear`.
 - **`Button.data`**, what a callback button sends the bot, for an adapter that can read it. It is never printed.
+- **`@wirecat/cli-core/crm` exports the field lookup the CRM writes use**, so a CRM CLI drops its copy:
+  `foldFieldName`, `fieldNamed`, `optionOf`, `unknownField`, `fieldPairsOf` and the `NamedField` type they read.
+  `foldName` is exported from the package root.
 
-### Security
+### Changed — may break callers
 
-- **`messages press` refuses a callback button whose data starts with `wcr`**, the prefix of review decisions, with
-  `permission_error` and reason `press.owner-hand-only`, so an agent with the owner's account cannot press a decision
-  button. It needs the adapter to fill `Button.data`; a button without data is pressed as before.
+- **`foldName` folds ё into е**, so a chat, a person and a CRM field typed with е find the one named with ё. A name
+  that matched one chat or person exactly may now match two (`Алена` and `Алёна`); that is refused with both
+  candidates, as any other ambiguous name is. й stays apart from и. The CRM field lookup now folds on top of
+  `foldName`, so it also takes composed and decomposed letters as one.
 
 ### Fixed
 
 - **`doctor --online` of a CLI built on `appDoctorCommand` runs inside cli-core's run.** It answered outside one, so
   `--record` kept no run of it and its call out was not the command's own. A config that will not load still gets an
   answer, outside a run.
+
+### Security
+
+- **`messages press` refuses a callback button whose data starts with `wcr`**, the prefix of review decisions, with
+  `permission_error` and reason `press.owner-hand-only`, so an agent with the owner's account cannot press a decision
+  button. It needs the adapter to fill `Button.data`; a button without data is pressed as before.
 
 ## 0.600.0 — 07.11.2026
 
