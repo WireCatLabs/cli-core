@@ -31,9 +31,14 @@ shape of this file.
 - **A damaged store file is `configuration_error` (`store.damaged`), not a crash.** SQLite's "database disk image is
   malformed" or "file is not a database", raised anywhere in a command or behind a wrapper's `cause`, was
   `internal_error` (`command.crashed`), "this is a bug". It now says the store file is damaged and names
-  `<cli> store recover` as the next step, on the CLI, over MCP and in the run kept of it, so a scheduled run's failure
-  banner shows the reason. `storeDamaged(error, command?)` from `@wirecat/cli-core/cli` does the same for a CLI with
-  its own failure handling.
+  `<cli> store recover` where the CLI has it, else `<cli> doctor --deep`, else no command, on the CLI, over MCP and in
+  the run kept of it, whose frames stay SQLite's own; a scheduled run's failure banner shows the reason.
+  `storeDamaged(error, next?)` from `@wirecat/cli-core/cli` does the same for a CLI with its own failure handling. A
+  damaged file named for a document or project transfer is `validation_error` (`store.file-damaged`) naming that
+  file, and `store recover run` on a store whose header is damaged says it cannot recover it (`store.unreadable`).
+- **A filesystem error is no longer read as a SQLite one.** `errno` counts as SQLite's code only on bun:sqlite's
+  `SQLiteError`: Windows' EIO (-4070) has SQLITE_NOTADB's low byte, and a busy check took a filesystem errno with
+  BUSY's low byte for a lock.
 - **`doctor --online` of a CLI built on `appDoctorCommand` runs inside cli-core's run.** It answered outside one, so
   `--record` kept no run of it and its call out was not the command's own. A config that will not load still gets an
   answer, outside a run.

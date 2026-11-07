@@ -1,6 +1,7 @@
 import { realpathSync, statSync } from "node:fs"
 import { resolve } from "node:path"
 import { CliError } from "@wirecat/cli-base"
+import { damagedFile } from "../../errors/failures.js"
 import { MIGRATIONS, migrate } from "../migrations.js"
 import { applyTransfer } from "../sqlite/document-transfer/apply.js"
 import { planTransfer } from "../sqlite/document-transfer/plan.js"
@@ -88,6 +89,10 @@ const openPreviewTarget = async (path: string) => {
 
 export const previewDocumentTransfer = async (options: DocumentTransferOptions) => {
   const location = locations(options)
+  return damagedFile([location.source, location.destination], () => previewWith(location, options))
+}
+
+const previewWith = async (location: ReturnType<typeof locations>, options: DocumentTransferOptions) => {
   const source = await openSource(location.source)
   try {
     const target = await openPreviewTarget(location.destination)
@@ -110,6 +115,13 @@ export const applyDocumentTransfer = async (options: DocumentTransferOptions & {
   if (!/^[a-f0-9]{64}$/.test(options.expected_fingerprint))
     throw new CliError("validation_error", "apply requires the fingerprint returned by a transfer preview")
   const location = locations(options)
+  return damagedFile([location.source, location.destination], () => applyWith(location, options))
+}
+
+const applyWith = async (
+  location: ReturnType<typeof locations>,
+  options: DocumentTransferOptions & { expected_fingerprint: string },
+) => {
   const source = await openSource(location.source)
   try {
     const snapshot = transferSnapshot(source.database, options.collection)

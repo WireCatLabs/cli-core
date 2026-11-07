@@ -1,3 +1,4 @@
+import { sqliteCode } from "../../errors/failures.js"
 import type { Stemmer, Stemmers } from "../../search/stem.js"
 import type { CacheDatabase } from "../driver.js"
 import { drainInvolvementQueue } from "./involvement-queue.js"
@@ -9,11 +10,7 @@ type Connection = { depth: number; reading: boolean; stemmerFor: (stemmers: Stem
 const SQLITE_BUSY = 5
 const pause = new Int32Array(new SharedArrayBuffer(4))
 
-export const isBusy = (error: unknown): boolean => {
-  const { errcode, errno } = (error ?? {}) as { errcode?: unknown; errno?: unknown }
-  const code = errcode ?? errno
-  return typeof code === "number" && (code & 0xff) === SQLITE_BUSY
-}
+export const isBusy = (error: unknown): boolean => sqliteCode(error) === SQLITE_BUSY
 
 /**
  * Takes the write lock, waiting as long as the connection's `busy_timeout`. SQLite's own wait sleeps 1 ms, then up to
