@@ -32,7 +32,7 @@ const standings = (one: { roles: { role: string | null; standing: string }[] } |
   one?.roles.map(({ role, standing }) => `${role}:${standing}`)
 
 describe("organization context", () => {
-  it("lists Acme's people and deals once each, with each role's standing, and Brightline as its supplier", async () => {
+  it("lists Acme's people and deals once each, with each role's standing, and Northstar as its supplier", async () => {
     const { store, refs } = await scenario()
     await store.knowledge.relate(null, {
       from: refs.bob,
@@ -48,12 +48,12 @@ describe("organization context", () => {
     expect(standings(acme.people.items[1])).toEqual(["contact:reported", "manager:confirmed"])
     expect(acme.people.items[0]?.roles[0]).toMatchObject({
       position: "Procurement manager",
-      account: "example-crm:brightline.example",
+      account: "example-crm:northstar.example",
     })
     expect(acme.deals.items.map((one) => one.ref)).toEqual([refs.deal])
     expect(acme.categories).toEqual(["client"])
     expect(acme.suppliers.items.map((one) => one.ref)).toEqual([refs.own])
-    expect(acme.projects.items).toEqual([{ ref: refs.project, name: "Atlas", via: ["organization"] }])
+    expect(acme.projects.items).toEqual([{ ref: refs.project, name: "Atlas", via: ["organization", "deal"] }])
     expect(acme.tasks.items.map((one) => one.ref)).toEqual([refs.task])
     expect(acme.communications).toEqual({ messages: 1, mail: 1, meetings: 1, hasMore: false })
     valid("organization_context", acme)
@@ -94,20 +94,20 @@ describe("organization context", () => {
     expect(acme.communications).toMatchObject({ messages: 1, mail: 0, meetings: 0 })
     expect(acme.coverage.accounts).toEqual(["telegram:100"])
     expect(acme.coverage.notRead.map((one) => one.source)).toEqual([
-      "email:owner@brightline.example",
-      "example-crm:brightline.example",
+      "email:owner@northstar.example",
+      "example-crm:northstar.example",
       "events",
     ])
   })
 
-  it("derives client, supplier and employer from relationships", async () => {
+  it("derives client and employer from relationships, and no supplier the owner's company buys from", async () => {
     const { store, refs } = await scenario()
 
     const refsOf = async (category: "client" | "supplier" | "employer") =>
       (await organizationsInCategory(store, category)).map((one) => one.ref)
 
     expect(await refsOf("client")).toEqual([refs.acme])
-    expect(await refsOf("supplier")).toEqual([refs.northstar])
+    expect(await refsOf("supplier")).toEqual([])
     expect(await refsOf("employer")).toEqual([refs.own])
   })
 })
@@ -165,19 +165,13 @@ describe("deal context", () => {
     expect(deal.money.payments.items).toEqual([])
   })
 
-  it("reaches an invoice through its project and its client once, naming both ways", async () => {
-    const { store, refs } = await scenario()
-    await store.deals.addPipeline({ name: "Own sales", stages: ["Talk", { name: "Won", outcome: "won" }], by: "owner" })
-    const own = await store.deals.add({
-      by: "owner",
-      title: "Atlas extension",
-      stage: "Talk",
-      organization: refs.acme,
-      project: refs.project,
-    })
+  it("keeps the owner's project on the CRM copy through the next sync, and reaches money by project too", async () => {
+    const { store, sync, refs } = await scenario()
+    await sync()
 
-    const deal = await dealContext(store, own.ref, { now: ACME_NOW })
+    const deal = await dealContext(store, refs.deal, { now: ACME_NOW })
 
+    expect(deal.project).toEqual({ ref: refs.project, name: "Atlas" })
     expect(deal.money.invoices.items).toEqual([
       expect.objectContaining({ ref: refs.invoice, linkedBy: ["project", "counterparty"] }),
     ])

@@ -3,11 +3,11 @@ import type { AccountKey, MessageStore } from "../../store/store.js"
 import { type CrmSyncReport, syncCrm } from "../index.js"
 import { type FakeCrmSource, fakeCrmSource } from "./source.js"
 
-/** The CRM portal of the owner's own company, Brightline Studio. */
-export const ACME_PORTAL: AccountKey = { provider: "example-crm", account: "brightline.example" }
+/** The CRM portal of the owner's own company, Northstar Consulting. */
+export const ACME_PORTAL: AccountKey = { provider: "example-crm", account: "northstar.example" }
 export const ACME_TELEGRAM: AccountKey = { provider: "telegram", account: "100" }
-export const ACME_MAIL: AccountKey = { provider: "email", account: "owner@brightline.example" }
-export const ACME_CALENDAR: AccountKey = { provider: "google-calendar", account: "owner@brightline.example" }
+export const ACME_MAIL: AccountKey = { provider: "email", account: "owner@northstar.example" }
+export const ACME_CALENDAR: AccountKey = { provider: "google-calendar", account: "owner@northstar.example" }
 
 const DAY = 86_400_000
 /** The deal opens on this day; every message, mail and meeting falls within its first month. */
@@ -15,7 +15,7 @@ export const ACME_OPENED = Date.UTC(2026, 9, 1)
 export const ACME_NOW = Date.UTC(2026, 10, 1)
 
 const USERS: CrmUser[] = [
-  { externalId: "u1", name: "Emma", email: "emma@brightline.example", position: "Sales owner", departments: ["10"] },
+  { externalId: "u1", name: "Emma", email: "emma@northstar.example", position: "Sales owner", departments: ["10"] },
 ]
 
 export interface AcmeScenario {
@@ -25,9 +25,9 @@ export interface AcmeScenario {
   sync: () => Promise<CrmSyncReport>
   refs: {
     owner: string
+    /** Northstar Consulting, the owner's own company. */
     own: string
     acme: string
-    northstar: string
     alice: string
     bob: string
     emma: string
@@ -40,17 +40,17 @@ export interface AcmeScenario {
 }
 
 /**
- * Plan §8's scenario, synthetic: Brightline Studio is the owner's own company and its CRM portal. Acme Ltd is its
- * customer, Northstar Consulting its supplier. Alice and Bob are Acme's CRM contacts; Emma is a portal user, the deal's
- * owner. The deal "Acme renewal" has Alice as contact (CRM), Bob as decision-maker (the owner's); project Atlas is
- * Acme's. The owner has a Telegram dialog with Alice, a mail with Bob, a Zoom meeting with all three, an invoice to
+ * Plan §8's scenario, synthetic: Northstar Consulting is the owner's own company and its CRM portal, Acme Ltd its
+ * customer. Alice and Bob are Acme's CRM contacts; Emma is a portal user, Northstar's sales owner and the deal's owner.
+ * The deal "Acme renewal" has Alice as contact (CRM), Bob as decision-maker (the owner's) and project Atlas (the
+ * owner's, on the CRM copy). The owner has a Telegram dialog with Alice, a mail with Bob, a Zoom meeting with all three, an invoice to
  * Acme with no payment and an open follow-up task. Everything is written through the store's and the CRM sync's own
  * calls; the store is the caller's, and no real account is touched.
  */
 export const acmeScenario = async (store: MessageStore): Promise<AcmeScenario> => {
   const crm = fakeCrmSource({ traits: { removedInChanges: true } })
   crm.put("organization", { externalId: "c1", name: "Acme Ltd" })
-  crm.put("organization", { externalId: "my1", name: "Brightline Studio", own: true })
+  crm.put("organization", { externalId: "my1", name: "Northstar Consulting", own: true })
   crm.put("person", {
     externalId: "7",
     name: "Alice",
@@ -76,24 +76,23 @@ export const acmeScenario = async (store: MessageStore): Promise<AcmeScenario> =
   const personOf = async (email: string) =>
     `person:${(await store.people.personOf({ provider: "email", id: email }))?.uid}`
   const [alice, bob, emma] = await Promise.all(
-    ["alice@acme.example", "bob@acme.example", "emma@brightline.example"].map(personOf),
+    ["alice@acme.example", "bob@acme.example", "emma@northstar.example"].map(personOf),
   )
   const organizations = await store.knowledge.organizations()
   const named = (name: string) => organizations.find((one) => one.name === name)?.ref as string
   const acme = named("Acme Ltd")
-  const own = named("Brightline Studio")
+  const own = named("Northstar Consulting")
   const deal = (await store.crm.refOf(ACME_PORTAL, "deal", "d1")) as string
   const owner = `person:${(await store.people.owner())?.uid}`
 
-  const northstar = (await store.knowledge.addOrganization({ kind: "company", name: "Northstar Consulting" })).ref
   const relate = (from: string, to: string, kind: "member-of" | "customer-of" | "related-to", role?: string) =>
     store.knowledge.relate(null, { from, to, kind, ...(role ? { role } : {}), by: "owner" })
   await relate(acme, own, "customer-of")
-  await relate(own, northstar, "customer-of")
   await relate(owner, own, "member-of", "founder")
   await relate(deal, bob as string, "related-to", "decision-maker")
 
   const project = (await store.knowledge.addProject({ name: "Atlas", organization: acme })).ref
+  await store.deals.setProject(deal, { project, by: "owner" })
   const invoice = (
     await store.finance.addInvoice({
       by: "owner",
@@ -197,7 +196,7 @@ export const acmeScenario = async (store: MessageStore): Promise<AcmeScenario> =
         participants: [
           { email: "alice@acme.example", name: "Alice" },
           { email: "bob@acme.example", name: "Bob" },
-          { email: "emma@brightline.example", name: "Emma" },
+          { email: "emma@northstar.example", name: "Emma" },
         ],
       },
     ],
@@ -213,7 +212,6 @@ export const acmeScenario = async (store: MessageStore): Promise<AcmeScenario> =
       owner,
       own,
       acme,
-      northstar,
       alice: alice as string,
       bob: bob as string,
       emma: emma as string,

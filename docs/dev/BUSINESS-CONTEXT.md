@@ -53,7 +53,8 @@ deals' projects, `via` saying which), `deals` (open deals and leads it is the cl
 
 `deal` (the stored row: its status is the CRM's or the owner's), `stages` (each stage it entered, in order),
 `organization` (with categories), `participants` (its `related-to` people with roles and standing), `owner` (the
-participant whose usable role is `owner`), `project`, `money`, `window` (creation to the end of the day it closed,
+participant whose usable role is `owner`), `project` (on a CRM copy too: `deals.setProject` writes the store's own
+field, which the sync never touches), `money`, `window` (creation to the end of the day it closed,
 or `now`), `communications` (what its participants said or met within the window, each `standing: "proposed"`: an
 overlap of people, not a link; with `counts`), `tasks` (open tasks of its project), `coverage`. `dealBrief` is the
 compact form for a model: names, role lists with one standing each, money totals, counts, the newest stages, gaps.
@@ -76,7 +77,7 @@ owner's person is `member-of` as `employee`, `contractor` or `founder`. Own orga
 ## Testing
 
 `acmeScenario(store)` in `@wirecat/cli-core/crm/testing` builds plan §8's synthetic scenario through the CRM sync
-and the store's own calls: Brightline Studio (own, the CRM portal), Acme Ltd (its client), Northstar Consulting
-(its supplier), Alice and Bob (Acme's CRM contacts), Emma (a portal user, the deal's owner), the deal "Acme
-renewal", project Atlas, a Telegram dialog with Alice, a mail from Bob, a Zoom call with the three, an unpaid
-invoice and an open task. `crm.put` and `sync()` change it as the CRM would.
+and the store's own calls: Northstar Consulting (own, the CRM portal), Acme Ltd (its client), Alice and Bob
+(Acme's CRM contacts), Emma (a portal user, Northstar's sales owner and the deal's), the deal "Acme renewal" with
+project Atlas set by the owner on the CRM copy, a Telegram dialog with Alice, a mail from Bob, a Zoom call with the
+three, an unpaid invoice and an open task. `crm.put` and `sync()` change it as the CRM would.

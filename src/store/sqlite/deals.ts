@@ -206,6 +206,11 @@ export interface DealsStore {
   list(filter?: DealFilter): Promise<Deal[]>
   /** Deals and leads together, by the words of their title: the most words matched first, then the latest changed. */
   find(search: DealSearch): Promise<Deal[]>
+  /**
+   * The project it belongs to; `null` clears it. A CRM copy takes it too: the project is the store's own field, which
+   * a CRM has none of and its sync never writes.
+   */
+  setProject(reference: string, input: { project: string | null; by: Author }): Promise<Deal>
   /** To another stage of its own pipeline; a stage whose outcome is won or lost closes it, an open one reopens it. */
   move(reference: string, input: { stage: string; by: Author }): Promise<Deal>
   /** Won or lost, on `date` (today when left out); it moves to its pipeline's stage of that outcome when there is one. */
@@ -738,6 +743,18 @@ export const dealOperationsOver = (context: StoreContext) => {
         .slice(0, most)
         .map(({ kind, row }) => read(`${kind}:${row.id}`))
     },
+    setProject: (reference: string, { project, by }: { project: string | null; by: Author }): Deal => {
+      authorActor(context, by)
+      const { kind, row } = rowOf(reference)
+      if (row.deleted_at != null) refuse(`${kind}:${row.id} is deleted; it no longer changes`, "deal.closed")
+      const id = project === null ? null : projectId(database, project)
+      write(database, () =>
+        database
+          .prepare(`UPDATE ${TABLES[kind]} SET project_id = ?, updated_at = ? WHERE id = ?`)
+          .run(id, now(), Number(row.id)),
+      )
+      return read(`${kind}:${row.id}`)
+    },
     move: (reference: string, { stage, by }: { stage: string; by: Author }): Deal => {
       authorActor(context, by)
       const { kind, row } = rowOf(reference)
@@ -785,6 +802,7 @@ export const dealsStoreOver = (context: StoreContext): DealsStore => {
     stages: async (reference) => operations.stages(reference),
     list: async (filter) => operations.list(filter),
     find: async (search) => operations.find(search),
+    setProject: async (reference, input) => operations.setProject(reference, input),
     move: async (reference, input) => operations.move(reference, input),
     close: async (reference, input) => operations.close(reference, input),
   }
