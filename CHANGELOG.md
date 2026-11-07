@@ -16,6 +16,12 @@ shape of this file.
   column is the one Drive documents already fill, so `date:`, the `at` of a notes hit and `search all`'s `timestamp`
   show it without a store version. Until now a local note was dated by the moment it was imported.
 
+### Changed — may break callers
+
+- **A `?` that ends a bare word is a question mark, not a wildcard.** `invoice?` and `что с бюджетом?` find
+  "invoice" and "бюджет"; before, `?` asked for one more character and `invoice` itself was missed. A `?` inside a
+  word (`inv?ice`) or after a field (`text:invoice?`) is still one character.
+
 ### Fixed
 
 - **`search all` ranks higher the record a question words differently.** For a question, a mail, message or note

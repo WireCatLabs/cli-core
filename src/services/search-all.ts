@@ -146,7 +146,8 @@ export const titleWords = (text: string): { words: string[]; anyWord: boolean } 
     node.kind === "predicate" &&
     node.field === "text" &&
     (node.operator === "term" || node.operator === "phrase")
-      ? node.value
+      ? // A title holds "invoice", not the question mark of "invoice?".
+        node.value.replace(/\?+$/u, "") || node.value
       : (() => {
           throw new CliError("validation_error", "deals and leads are found by the words of their title only")
         })(),
