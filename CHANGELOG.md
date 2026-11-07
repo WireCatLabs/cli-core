@@ -21,6 +21,15 @@ shape of this file.
   and `last_ok_at`, the newest check that passed); `doctor` and `store recover` answer `last_known_good` from it.
   `storeSummary` takes the CLI's `version` for it.
 
+### Changed — may break callers
+
+- **`personContext`, `contacts context`, `contacts prepare` and `events prepare` read only accounts of the asked
+  account's scope.** A personal account no longer reads a linked person's mail, messages, calendar events or recorded
+  meetings in work accounts, and a work account none in personal ones. To read both, pass
+  `scopes: ["personal", "work"]` in the options of `personContext`, or of `eventPreparation`. The answer's new
+  `accounts` lists every account read with its scope. The asked account must be in the store: a missing one, or an
+  `AccountKey.scope` that differs from the stored scope, is `not_found`.
+
 ### Fixed
 
 - **`scanProjectLinks` spreads from what it finds within one run.** A chat or person that scores the threshold or more
@@ -53,6 +62,9 @@ shape of this file.
   two people when the owner once moved anyone of one away from anyone of the other. An agent's link of one identity
   (a confirmed mention, a meeting participant) back over such a separation is refused with the reason
   `identity.separated`; the owner's own link still goes through. The exact-email join stays automatic otherwise.
+- **A personal account's `contacts context` no longer shows a person's work mail.** One exact email address joins a
+  personal and a work contact into one person, and the context then read every account that had seen any of that
+  person's identities. Each linked identity now also lists `seenIn`, its accounts with their scope.
 
 ## 0.604.0 — 07.11.2026
 

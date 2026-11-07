@@ -37,6 +37,8 @@ export const contextEvent = v.strictObject({
 })
 const context = v.strictObject({
   person: contextPerson,
+  /** The accounts read: only those of the scopes the caller may read. */
+  accounts: v.array(v.strictObject({ provider: text, account: id, scope: v.picklist(["personal", "work"]) })),
   shared: v.array(sharedChat),
   last: v.strictObject({
     from_them: v.nullable(contextMessage),

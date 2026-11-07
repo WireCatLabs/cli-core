@@ -9,7 +9,7 @@ import {
   type ContextOptions,
   type PersonContext,
   personContext,
-  readsOf,
+  readableAccounts,
   toContext,
 } from "./person-context.js"
 import { type PersonMeetingContextItem, personMeetingContext } from "./person-meeting-context.js"
@@ -96,7 +96,6 @@ export const personPreparation = async (
     }
   }
 
-  const reads = readsOf(context.person, asked)
   const partial = new Set(context.notRead.map((chat) => `${chat.provider}/${chat.account}/${chat.chatId}`))
   const waiting: WaitingDialog[] = []
   for (const chat of context.shared.filter((one) => one.kind === "dialog")) {
@@ -113,11 +112,11 @@ export const personPreparation = async (
   }
   waiting.sort((a, b) => Date.parse(b.message.timestamp) - Date.parse(a.message.timestamp))
 
-  const accounts = [...new Map(reads.map(({ key }) => [accountName(key), key])).values()]
+  const accounts: AccountKey[] = context.accounts.map(({ provider, account }) => ({ provider, account }))
   const held = await store.people.preparation(context.person.uid, { accounts, limit })
 
-  const stored = await store.accounts.storedAccounts()
-  const meetings = await meetingsOf(store, context.person.uid, stored, options.since, () => left)
+  const readable = await readableAccounts(store, asked, options.scopes)
+  const meetings = await meetingsOf(store, context.person.uid, readable, options.since, () => left)
 
   const sections = {
     waiting: budgeted({ items: waiting, hasMore: false }),

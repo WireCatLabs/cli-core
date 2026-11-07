@@ -2,7 +2,14 @@ import { CliError } from "@wirecat/cli-base"
 import type { Issue, Meta } from "@wirecat/cli-base/standards"
 import type { EventDetails, EventStore } from "../meetings/index.js"
 import { parseMeetingReference } from "../meetings/index.js"
-import { type ContextEvent, type ContextMessage, readsOf, recordContext } from "../services/person-context.js"
+import {
+  type AccountScope,
+  type ContextEvent,
+  type ContextMessage,
+  readableAccounts,
+  readsOf,
+  recordContext,
+} from "../services/person-context.js"
 import { type PersonMeetingContextItem, personMeetingContext } from "../services/person-meeting-context.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
 import {
@@ -69,6 +76,8 @@ export interface PreparationOptions {
   limit?: number
   /** ms: no message or meeting older. */
   since?: number
+  /** The account scopes read; the calendar account's own scope when absent. */
+  scopes?: readonly AccountScope[]
 }
 
 interface Attendee {
@@ -97,7 +106,7 @@ const UNTRUSTED = [
 /**
  * The stored evidence for one meeting: the event, and for each attendee other than the owner, their linked identities,
  * their latest messages and mail, the events and recorded meetings they shared with the owner. Reads the store only,
- * every account that saw each person (WC-ACCT-9), and writes nothing; the brief is the agent's.
+ * every account of the allowed scopes that saw each person (WC-ACCT-9), and writes nothing; the brief is the agent's.
  */
 export const eventPreparation = async (details: EventDetails, options: PreparationOptions) => {
   const { messages: store, account, personOf, now, since } = options
@@ -108,7 +117,7 @@ export const eventPreparation = async (details: EventDetails, options: Preparati
     .sort((a, b) => Number(b.organizer) - Number(a.organizer))
   const read = new Map<string, AccountKey>([[nameOf(account.key), account.key]])
   const issues: Issue[] = []
-  const stored = await store.accounts.storedAccounts()
+  const readable = await readableAccounts(store, account.key, options.scopes)
   let left = PREPARE_BYTES - size(shown)
   let truncated = others.length > PREPARE_PEOPLE
   let pending = 0
@@ -138,9 +147,9 @@ export const eventPreparation = async (details: EventDetails, options: Preparati
       people.push(nothing)
       continue
     }
-    const reads = readsOf(record, account.key)
+    const reads = readsOf(record, account.key, readable)
     for (const { key } of reads) read.set(nameOf(key), key)
-    const context = await recordContext(store, record, reads, {
+    const context = await recordContext(store, record, reads, readable, {
       messages: limit,
       bytes: Math.min(left, PERSON_BYTES),
       now,
@@ -152,10 +161,10 @@ export const eventPreparation = async (details: EventDetails, options: Preparati
         reason: "chat.not-read",
         source: `${chat.provider}:${chat.account}/${chat.chatId}`,
       })
-    const meetings = await meetingsWith(store, record.uid, stored, since)
+    const meetings = await meetingsWith(store, record.uid, readable, since)
     pending = Math.max(pending, meetings.pending)
     for (const id of meetings.accounts) {
-      const one = stored.find((held) => held.id === id)
+      const one = readable.find((held) => held.id === id)
       if (one) read.set(nameOf(one), { provider: one.provider, account: one.account })
     }
     const entry = {
@@ -188,7 +197,7 @@ export const eventPreparation = async (details: EventDetails, options: Preparati
   }
 }
 
-/** Their latest recorded meetings in every stored account that saw them; none is not an error. */
+/** Their latest recorded meetings in every account given that saw them; none is not an error. */
 const meetingsWith = async (
   store: MessageStore,
   uid: string,

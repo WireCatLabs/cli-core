@@ -1,6 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import type { Id, Page } from "../../domain/models.js"
-import type { IdentityRef, LinkedIdentity, LinkOptions, PersonRecord, StoredHit } from "../types.js"
+import type { IdentityRef, LinkedIdentity, LinkOptions, PersonRecord, StoredAccount, StoredHit } from "../types.js"
 import { and, eq, inArray, isNull, type SQL, sql } from "./drizzle/core.js"
 import { identityOf } from "./identities.js"
 import type { StoreContext } from "./open.js"
@@ -53,7 +53,7 @@ const recordOf = ({ orm }: StoreContext, personPk: number): PersonRecord => {
     .orderBy(identities.provider, identities.externalId)
     .all()
   const seen = orm
-    .select({ identityPk: accountIdentities.identityId, account: accounts.externalId })
+    .select({ identityPk: accountIdentities.identityId, account: accounts.externalId, scope: accounts.scope })
     .from(accountIdentities)
     .innerJoin(accounts, eq(accounts.id, accountIdentities.accountId))
     .where(
@@ -63,12 +63,18 @@ const recordOf = ({ orm }: StoreContext, personPk: number): PersonRecord => {
       ),
     )
     .all()
-  const identitiesOf: LinkedIdentity[] = rows.map(({ pk, isBot, linkedAt, ...row }) => ({
-    ...row,
-    isBot: isBot === null ? null : isBot === 1,
-    accounts: seen.filter((one) => one.identityPk === pk).map((one) => one.account),
-    linkedAt: new Date(linkedAt).toISOString(),
-  }))
+  const identitiesOf: LinkedIdentity[] = rows.map(({ pk, isBot, linkedAt, ...row }) => {
+    const seenIn = seen
+      .filter((one) => one.identityPk === pk)
+      .map(({ account, scope }) => ({ account, scope: scope as StoredAccount["scope"] }))
+    return {
+      ...row,
+      isBot: isBot === null ? null : isBot === 1,
+      accounts: seenIn.map((one) => one.account),
+      seenIn,
+      linkedAt: new Date(linkedAt).toISOString(),
+    }
+  })
   return { uid: String(person.id), name: person.name, identities: identitiesOf }
 }
 

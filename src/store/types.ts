@@ -63,6 +63,8 @@ export interface LinkedIdentity extends IdentityRef {
   isBot: boolean | null
   /** The accounts in this store that have seen it. */
   accounts: Id[]
+  /** The same accounts with their scope: a person joined by email may be seen by personal and work accounts. */
+  seenIn: { account: Id; scope: StoredAccount["scope"] }[]
   method: string
   linkedBy: string
   linkedAt: string

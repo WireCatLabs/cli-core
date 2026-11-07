@@ -139,8 +139,9 @@ export const contactsCommand = (messenger: Messenger): Command => {
   })
     .summary("what the local archive knows about a person")
     .description(
-      "what the store holds about one person, in every messenger linked to them: shared chats, the last " +
-        "messages each way, their recent messages, where others mentioned them — never connects",
+      "what the store holds about one person, in every messenger linked to them, read only in accounts of this " +
+        "account's scope (personal or work): shared chats, the last messages each way, their recent messages, " +
+        "where others mentioned them — never connects",
     )
     .argument("<person>", "their id, @username, or part of their name")
     .option(
