@@ -52,6 +52,7 @@ import {
   execution,
 } from "./execution.js"
 import { setupAtStart } from "./first-run.js"
+import { refuseOutsideGroup } from "./group-lock.js"
 import { type FirstScreen, installHelp } from "./help/first-screen.js"
 import { showInputFields } from "./input-fields.js"
 import { MAX_BUFFERED_INPUT, provideInputPolicy } from "./input-policy.js"
@@ -439,6 +440,7 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
         input,
         terminal: !options.streams && input.isTTY === true && process.stderr.isTTY === true,
       })
+    await refuseOutsideGroup(action, { app: definition.app, env: commandEnv })
     if (lock && isLogin(action) && !flags.dryRun) throw readOnlyRefusal(lock, "log in or out")
     if (lock && isStoreChange(action) && !flags.dryRun) throw readOnlyRefusal(lock, storeChangeRefusal(definition.app))
     refuseWriteBeforeConnecting(action, {

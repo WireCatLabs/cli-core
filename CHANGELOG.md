@@ -159,6 +159,14 @@ shape of this file.
   entry as typed. An empty group fails as `group <name> is empty`; an unknown one is `validation_error` with
   `details.groups`, and `details.suggested` when profiles carry its name. From `@wirecat/cli-core/cli` and
   `@wirecat/cli-core/services`; memo wires them in its own release.
+- **Under `<PREFIX>_GROUP_LOCK` a run refuses what does not keep to the group (`permission_error`).** A command
+  runs only when it, or a command above it, is marked `groupAware(command)` (`@wirecat/cli-core/cli`); `help`,
+  `commands` and the other words that read no account still run. Every reference typed into the run, in an argument
+  or an option value (`msg:`, `chat:`, `deal:`, `person:`, `organization:`, `note:`, …), is checked by
+  `refuseOutsideGroup(command, { app, env, store? })`: a thing that belongs only to accounts outside the group is
+  refused, one the owner made passes, a note written in memo belongs to `personal`, and a person passes when one of
+  their identities is in the group. `store.refs.accounts(ref)` says which accounts a reference's thing belongs to.
+  Group edits are refused under the lock, and `listAccountGroups` lists only the locked group.
 - **Under `<PREFIX>_GROUP_LOCK`, `listContextOf` holds only the group's accounts**, so every `--source` reader fails
   closed: a list, a bare provider or `all` resolves inside the group, and `search messages`, `search mail` and
   `search notes` without `--source` read the group. A lock naming no group is `permission_error`. The lock is read

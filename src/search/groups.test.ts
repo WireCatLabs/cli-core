@@ -3,7 +3,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { liftProfile, runGroup } from "../cli/profile.js"
-import { addGroupMember, moveGroupMember, removeGroupMember } from "../services/account-groups.js"
+import { addGroupMember, listAccountGroups, moveGroupMember, removeGroupMember } from "../services/account-groups.js"
 import { prepareLucene } from "../services/messages-search.js"
 import { listContextOf, listedAccounts } from "../services/search-kind.js"
 import { type AccountKey, type MessageStore, openStore } from "../store/store.js"
@@ -258,6 +258,14 @@ describe("the group word and the lock", () => {
 
 describe("changing a group, as a settings page does", () => {
   const at = async () => ({ store: await withWork(), account: home, app })
+
+  it("lists only the locked group and changes nothing under the lock", async () => {
+    const where = { ...(await at()), env: LOCKED }
+    expect(Object.keys((await listAccountGroups(where)).groups)).toEqual(["work"])
+    await expect(addGroupMember(where, { group: "work", member: "tg:personal" })).rejects.toThrow(
+      expect.objectContaining({ code: "permission_error" }),
+    )
+  })
 
   it("adds a member under its stable key, and refuses a name that already means something", async () => {
     const where = await at()

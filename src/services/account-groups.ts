@@ -3,7 +3,7 @@ import type { AppIdentity } from "../ports/app.js"
 import { accountsOfList, groupName, sameAs, sourceOf } from "../search/account-list.js"
 import { type GroupContext, type GroupMembership, hasGroup, NOT_GROUP_NAMES, PERSONAL } from "../search/groups.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
-import { listContextOf } from "./search-kind.js"
+import { groupLockOf, listContextOf } from "./search-kind.js"
 
 /** The store, the account running and its app: what every group edit resolves members against. */
 export interface GroupStore {
@@ -32,6 +32,16 @@ const fail = (code: "validation_error" | "not_found", message: string): never =>
 }
 
 const contextOf = ({ store, account, app, env }: GroupStore) => listContextOf(store, account, app, undefined, env)
+
+/** Under a lock the groups are the owner's to change, never the locked process's. */
+const unlocked = (at: GroupStore) => {
+  const lock = groupLockOf(at.app, at.env)
+  if (lock !== undefined)
+    throw new CliError(
+      "permission_error",
+      `this process is locked to group ${lock} — groups are changed without the lock`,
+    )
+}
 
 const usableGroup = (name: string, reserved: ReadonlySet<string> = new Set()): string => {
   groupName(name)
@@ -79,6 +89,7 @@ const isIn = (context: GroupContext, group: string, key: AccountKey): boolean =>
 export const listAccountGroups = async (at: GroupStore): Promise<GroupMembership> => (await contextOf(at)).membership
 
 export const addGroupMember = async (at: GroupStore, change: GroupMemberChange): Promise<GroupMembership> => {
+  unlocked(at)
   const group = usableGroup(change.group, change.reserved)
   const key = accountOf(await contextOf(at), change.member)
   await at.store.accounts.changeAccountGroups({ add: { group, entry: sourceOf(key) } })
@@ -86,6 +97,7 @@ export const addGroupMember = async (at: GroupStore, change: GroupMemberChange):
 }
 
 export const removeGroupMember = async (at: GroupStore, change: GroupMemberChange): Promise<GroupMembership> => {
+  unlocked(at)
   const context = await contextOf(at)
   const key = accountOf(context, change.member)
   const member = isIn(context, change.group, key)
@@ -104,6 +116,7 @@ export const removeGroupMember = async (at: GroupStore, change: GroupMemberChang
 
 /** Out of one group and into another in one write: what a drag between groups does. */
 export const moveGroupMember = async (at: GroupStore, move: GroupMemberMove): Promise<GroupMembership> => {
+  unlocked(at)
   const to = usableGroup(move.to, move.reserved)
   const context = await contextOf(at)
   const key = accountOf(context, move.member)

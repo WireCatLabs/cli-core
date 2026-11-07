@@ -363,6 +363,7 @@ export {
   setupAtStart,
   systemLanguage,
 } from "./first-run.js"
+export { groupAware, isGroupAware, referencesIn, refuseOutsideGroup } from "./group-lock.js"
 export {
   checkGuide,
   checkStep,
