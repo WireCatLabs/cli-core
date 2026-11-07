@@ -3,7 +3,7 @@ import { annotate, metaOf, sharedCommand } from "@wirecat/cli-base/commands"
 import { timezoneOf } from "@wirecat/cli-base/query"
 import { clockMeta, type Effects, type NextStep } from "@wirecat/cli-base/standards"
 import { Argument, type Command, InvalidArgumentError, Option } from "commander"
-import { environmentOf, outputFor, runBudgetOf } from "../../cli/context.js"
+import { environmentOf, inCommandRun, outputFor, runBudgetOf } from "../../cli/context.js"
 import { honoursDryRun } from "../../cli/dry-run-guard.js"
 import { changesStore, ownerOnlyOption, writesFileOnlyWith } from "../../cli/effects.js"
 import { type Body, renderAnswer } from "../../cli/envelope.js"
@@ -180,16 +180,11 @@ const addCalendarCommandsDefinition = (program: Command, options: CalendarComman
     renderAnswer(command, output, body, view ?? ((shown) => localTimesView(shown, zone(), output.color)))
   }
   /** Opens the profile for `work` and closes it before the answer prints, also when `work` fails. */
-  const within: Within = async (command, work, view) => {
-    const run = await options.open(command, { readOnly: readsOnly(command) })
-    let body: Body
-    try {
-      body = await work(run)
-    } finally {
-      await run.close?.()
-    }
-    answer(command, body, view)
-  }
+  const within: Within = (command, work, view) =>
+    inCommandRun(command, async () => {
+      const run = await options.open(command, { readOnly: readsOnly(command) })
+      answer(command, await work(run).finally(() => run.close?.()), view)
+    })
   const example = (command: Command, ...lines: string[]) =>
     annotate(command, { examples: lines.map((line) => `${options.app.command} personal ${line}`) })
 
