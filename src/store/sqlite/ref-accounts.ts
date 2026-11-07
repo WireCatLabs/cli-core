@@ -73,6 +73,18 @@ export const refAccountsOf = (database: CacheDatabase, text: string): RefAccount
       return [{ provider: "notes", account: INTERNAL_NOTES }]
     case "account":
       return accountKeys(database, [thing.id])
+    // An event is its copies' calendars' and its meetings' accounts; one with no copy is the owner's own.
+    case "event":
+      return accountKeys(database, [
+        ...ids(
+          database
+            .prepare(
+              "SELECT c.account_id FROM calendar_entries e JOIN calendars c ON c.id = e.calendar_id WHERE e.event_id = ?",
+            )
+            .all(thing.id),
+        ),
+        ...ids(database.prepare("SELECT account_id FROM meetings WHERE event_id = ?").all(thing.id)),
+      ])
     case "identity":
       return accountKeys(
         database,

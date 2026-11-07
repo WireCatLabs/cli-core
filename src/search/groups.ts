@@ -142,6 +142,16 @@ export const groupMembership = (context: ListContext): GroupMembership => {
   return { groups, duplicates, suggested, unresolved }
 }
 
+/**
+ * Whether an account is in `group`: a member, or memo's own notes for `personal`, the one group that holds them.
+ * `context` is a `listContextOf`.
+ */
+export const inGroupOf =
+  (context: GroupContext, group: string) =>
+  (key: AccountKey): boolean =>
+    (hasGroup(context.membership.groups, group) ? (context.membership.groups[group] ?? []) : []).some(sameAs(key)) ||
+    (group === PERSONAL && sameAs({ provider: "notes", account: INTERNAL_NOTES })(key))
+
 /** The groups as a source list reads them: saved entries as written, `personal` with the rest added. */
 export const groupEntries = (saved: AccountGroups, { groups }: GroupMembership): AccountGroups => ({
   ...saved,

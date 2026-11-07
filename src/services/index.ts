@@ -392,6 +392,7 @@ export {
   type GroupRequest,
   type GroupSuggestion,
   groupMembership,
+  inGroupOf,
   NOT_GROUP_NAMES,
   PERSONAL,
   type RunGroup,

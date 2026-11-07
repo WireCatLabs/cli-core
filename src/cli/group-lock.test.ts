@@ -9,7 +9,7 @@ import { exampleDeal, exampleOrganization, examplePerson, fakeCrmSource } from "
 import { openCache } from "../store/open.js"
 import { storePath } from "../store/path.js"
 import { type AccountKey, type MessageStore, openStore } from "../store/store.js"
-import { groupAware, refuseOutsideGroup } from "./group-lock.js"
+import { groupAware, refKinds, refuseOutsideGroup } from "./group-lock.js"
 import { run } from "./program.js"
 
 const app = { command: "memo", appName: "group-lock-test", envPrefix: "MEMO", description: "", version: "0" }
@@ -73,26 +73,22 @@ const personOf = (env: NodeJS.ProcessEnv, account: AccountKey) =>
     account.account,
   )
 
-/** A group-aware `tags add <tag> --message <ref>` and `deals update <deal>` as memo's would be, parsed. */
+/** Group-aware commands shaped as memo's are, parsed. */
 const parsed = (argv: string[]) => {
   const program = new Command().exitOverride()
+  const noop = () => undefined
   const tags = groupAware(new Command("tags"))
-  tags
-    .command("add")
-    .argument("<tag>")
-    .option("--message <ref>")
-    .action(() => undefined)
+  tags.command("add").argument("<tag>").option("--message <ref>").option("--note <id>").action(noop)
   const deals = groupAware(new Command("deals"))
-  deals
-    .command("update")
-    .argument("<deal>")
-    .option("--project <ref>")
-    .action(() => undefined)
-  program.addCommand(tags).addCommand(deals)
-  program
-    .command("show")
-    .argument("<ref>")
-    .action(() => undefined)
+  deals.command("update").argument("<deal>").option("--project <ref>").action(noop)
+  const organizations = groupAware(new Command("organizations"))
+  organizations.command("show").argument("<ref>").action(noop)
+  organizations.command("rename").argument("<organization>").argument("<name>").action(noop)
+  refKinds(organizations.command("open").argument("<id>"), { id: "organization" }).action(noop)
+  const events = groupAware(new Command("events"))
+  events.command("show").argument("<event>").action(noop)
+  program.addCommand(tags).addCommand(deals).addCommand(organizations).addCommand(events)
+  program.command("show").argument("<ref>").action(noop)
   let leaf: Command | undefined
   program.hook("preAction", (_root, action) => {
     leaf = action
@@ -109,6 +105,53 @@ const allowed = (env: NodeJS.ProcessEnv, store: MessageStore, argv: string[]) =>
   expect(refuseOutsideGroup(parsed(argv), { app, env, store })).resolves.toBeUndefined()
 
 describe("the group lock fails closed", () => {
+  it("checks a bare id by the kind its argument or option names, and refuses one of an unknown kind", async () => {
+    const env = envOf()
+    const store = await seeded(env)
+    const other = await organizationOf(env, crmOther)
+    const own = await organizationOf(env, crmWork)
+    await refused(env, store, ["organizations", "rename", String(other), "Pwned"])
+    await allowed(env, store, ["organizations", "rename", String(own), "Renamed"])
+    await refused(env, store, ["organizations", "open", String(other)])
+    await allowed(env, store, ["organizations", "open", String(own)])
+    await expect(
+      refuseOutsideGroup(parsed(["organizations", "show", String(own)]), { app, env, store }),
+    ).rejects.toThrow(new RegExp(`takes <ref> ${own} as an id of a kind it does not declare`))
+    const note = await store.notes.addNote({ text: "the owner's own" })
+    await refused(env, store, ["tags", "add", "x", "--note", note.id])
+    await allowed({ ...env, MEMO_GROUP_LOCK: "personal" }, store, ["tags", "add", "x", "--note", note.id])
+  })
+
+  it("puts an event in its calendar's account, so a personal event is refused under work", async () => {
+    const env = envOf()
+    const store = await seeded(env)
+    const calendarAccount = { provider: "google-calendar", account: "home" }
+    const accountId = await store.accounts.saveAccount(calendarAccount, { name: null })
+    const [calendar] = await store.calendar.saveCalendars(
+      accountId,
+      [{ externalId: "c", title: "Home", timezone: null, accessRole: "owner", primary: true, syncByDefault: true }],
+      0,
+    )
+    const [entry] = await store.calendar.saveEntries(
+      calendar?.id as number,
+      [
+        {
+          externalId: "e1",
+          kind: "single",
+          status: "confirmed",
+          title: "Dentist",
+          startsAt: 3_600_000,
+          endsAt: 7_200_000,
+        },
+      ],
+      0,
+    )
+    const event = `event:${entry?.eventId}`
+    expect(await store.refs.accounts(event)).toEqual([calendarAccount])
+    await refused(env, store, ["events", "show", event])
+    await allowed({ ...env, MEMO_GROUP_LOCK: "personal" }, store, ["events", "show", String(entry?.eventId)])
+  })
+
   it("refuses a command that does not keep to a group, naming the group, through the program", async () => {
     const env = envOf()
     const definition = {

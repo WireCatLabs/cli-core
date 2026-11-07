@@ -8,7 +8,7 @@ import { prepareLucene } from "../services/messages-search.js"
 import { listContextOf, listedAccounts } from "../services/search-kind.js"
 import { type AccountKey, type MessageStore, openStore } from "../store/store.js"
 import { accountsOfList, sameAs, sourceOf } from "./account-list.js"
-import { type RunGroup, scopeToGroup } from "./groups.js"
+import { inGroupOf, type RunGroup, scopeToGroup } from "./groups.js"
 
 const tgPersonal: AccountKey = { provider: "telegram", account: "101" }
 const tgWork: AccountKey = { provider: "telegram", account: "102" }
@@ -121,6 +121,18 @@ describe("who is in a group", () => {
     expect(Object.keys(membership.groups)).toEqual(["personal"])
     await store.accounts.saveAccountGroup("default", [sourceOf(office)])
     expect((await contextOf(store)).membership.suggested.map(({ member }) => member)).toContain("max:8")
+  })
+})
+
+describe("inGroupOf", () => {
+  it("holds a group's members, memo's own notes for personal only, and no group that does not exist", async () => {
+    const context = await contextOf(await withWork())
+    const notes = { provider: "notes", account: "internal" }
+    expect(inGroupOf(context, "work")(tgWork)).toBe(true)
+    expect(inGroupOf(context, "work")(tgPersonal)).toBe(false)
+    expect(inGroupOf(context, "work")(notes)).toBe(false)
+    expect(inGroupOf(context, "personal")(notes)).toBe(true)
+    expect(inGroupOf(context, "toString")(tgWork)).toBe(false)
   })
 })
 
