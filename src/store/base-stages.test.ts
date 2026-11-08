@@ -159,7 +159,7 @@ it("maps an own pipeline beside the set as it maps a CRM's, and leaves the set's
     "null:Signed>Won",
     "null:Dropped>Lost",
   ])
-  expect(listed.every(({ pipeline }) => pipeline === partners.ref)).toBe(true)
+  expect(listed.every(({ pipeline, externalId }) => pipeline === partners.ref && externalId === null)).toBe(true)
   await store.baseStages.map(listed[1]?.ref as string, base.stages[2]?.ref as string)
   expect(await store.baseStages.confirm({ all: true })).toBe(3)
   expect((await store.deals.get(card.ref)).baseStage).toEqual({ ref: base.stages[2]?.ref, name: "Proposal" })

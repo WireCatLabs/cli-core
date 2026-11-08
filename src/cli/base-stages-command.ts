@@ -46,6 +46,7 @@ const stageMapping = v.strictObject({
   ...named.entries,
   position: count,
   outcome,
+  external_id: v.nullable(text),
   kind,
   pipeline: reference,
   pipeline_name: text,

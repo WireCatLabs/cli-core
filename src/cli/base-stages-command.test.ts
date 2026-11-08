@@ -89,6 +89,7 @@ it("shows, edits and maps the base set in the answers' declared shapes", async (
   expect(listed.items).toHaveLength(6)
   expect(listed.items[0]).toMatchObject({
     name: "Inbox",
+    external_id: "s1",
     base_stage: { name: "New" },
     confirmed: false,
     untrusted: ["name", "pipeline_name"],

@@ -14,7 +14,7 @@ shape of this file.
   or all at once. Store version 60 adds `pipeline_stages.base_stage_id` and `base_confirmed` (columns only;
   `minCompatible` stays 56). `baseStagesCommand(app, { open, output, accounts })` from `./cli` builds the `stages`
   group for memo: `show <kind>` (the columns, with open rows and mapped CRM stages each, and `unsorted`), `create`,
-  `rename`, `move` and `remove` of a base stage, `list` (every stage outside the base sets with `base_stage` and `confirmed`, `account` `null` for an own pipeline; query
+  `rename`, `move` and `remove` of a base stage, `list` (every stage outside the base sets with `base_stage`, `confirmed` and the CRM's own `external_id`, which a CRM CLI's move matches first; `account` and `external_id` `null` for an own pipeline; query
   `kind:`, `pipeline:`, `confirmed:`), `set <stage> <base-stage>` and `confirm --pipeline <p> | --all`. `accounts`
   narrows reads and confirms to the CRM accounts a run may see, such as a group lock's. Deal and lead rows gain
   `base_stage {ref, name}`, `null` until confirmed. A new set is named in the owner's first language (Russian while

@@ -69,6 +69,8 @@ export interface BaseSet {
 export interface StageMapping extends StageName {
   position: number
   outcome: StageOutcome
+  /** The CRM's own id of the stage, which a CRM CLI's move matches first; `null` in an own pipeline. */
+  externalId: string | null
   kind: DealKind
   pipeline: string
   pipelineName: string
@@ -376,6 +378,7 @@ export const baseStagesOver = (context: StoreContext) => {
     name: String(row.name),
     position: Number(row.position),
     outcome: row.outcome as StageOutcome,
+    externalId: row.external_id == null ? null : String(row.external_id),
     kind: row.kind as DealKind,
     pipeline: `pipeline:${row.pipeline_id}`,
     pipelineName: String(row.pipeline_name),
