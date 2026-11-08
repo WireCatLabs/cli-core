@@ -1,4 +1,4 @@
-import type { Decider } from "./decisions.js"
+import type { Decider, Proposer } from "./decisions.js"
 import type { Author } from "./sqlite/memories.js"
 import type { IdentityRef } from "./types.js"
 
@@ -46,6 +46,33 @@ export interface IdentityLinkDecision {
   /** `"owner"` only on a path that established the owner decides; an agent is refused whatever the policy says. */
   by: Decider
   reason?: string
+}
+
+/** One `identity_link`, naming the people as they are now, not as they were when it was proposed. */
+export interface IdentityLinkRow {
+  id: string
+  status: "proposed" | "confirmed" | "rejected"
+  /** `person:<uid>` of the person `identity` is on, then of the one it would join. */
+  persons: [string, string]
+  identity: string
+  with: string | null
+  joins: IdentityLinkPayload["joins"]
+  signal: IdentityLinkSignal
+  score: number | null
+  candidates: string[]
+  reason: string | null
+  evidence: string[]
+  proposedBy: Proposer
+  createdAt: string
+}
+
+export interface IdentityLinkFilter {
+  /** Only the proposals naming this person, or anyone merged into them, as they are now. */
+  person?: string
+  /** `proposed` unless named. */
+  status?: IdentityLinkRow["status"] | "all"
+  limit: number
+  offset: number
 }
 
 /** What one pass of the people matcher did. */

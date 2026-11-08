@@ -223,3 +223,27 @@ describe("an agent's link through a mention", () => {
     expect(await uidOf(store, { provider: "phone", id: "+79000000001" })).toBe(person)
   })
 })
+
+describe("the link proposals read", () => {
+  it("names the people as they are now, filters by a person, and pages with hasMore", async () => {
+    const store = await open()
+    await twoPeople(store)
+    await store.people.savePeople(MAX, [
+      { id: "8", name: "Cas" },
+      { id: "9", name: "Dee" },
+    ])
+    const first = await store.people.proposeLink({ identity: ana, with: anya, signal: "agent", by: agent })
+    await store.people.proposeLink({ identity: ana, with: { provider: "max", id: "8" }, signal: "agent", by: agent })
+    await store.people.linkIdentities({ provider: "max", id: "9" }, anya, owner)
+    const now = await uidOf(store, anya)
+
+    const page = await store.people.linkProposals({ person: await uidOf(store, ana), limit: 1, offset: 0 })
+    const withAnya = await store.people.linkProposals({ person: now, limit: 10, offset: 0 })
+
+    expect(page).toMatchObject({ hasMore: true, items: [{ status: "proposed" }] })
+    expect(withAnya.items).toMatchObject([
+      { id: first.id, persons: [`person:${await uidOf(store, ana)}`, `person:${now}`] },
+    ])
+    expect(withAnya.hasMore).toBe(false)
+  })
+})

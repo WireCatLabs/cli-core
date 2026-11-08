@@ -97,8 +97,10 @@ export {
   IDENTITY_LINK_KIND,
   IDENTITY_LINK_SIGNALS,
   type IdentityLinkDecision,
+  type IdentityLinkFilter,
   type IdentityLinkInput,
   type IdentityLinkPayload,
+  type IdentityLinkRow,
   type IdentityLinkSignal,
   type MatchScan,
 } from "./identity-links.js"
