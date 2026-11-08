@@ -1,4 +1,6 @@
 import { singleLine } from "@wirecat/cli-base"
+import type { Profiles } from "../search/account-list.js"
+import type { AccountKey } from "../store/types.js"
 import { providerNamed } from "./providers.js"
 import type { RefKindName } from "./references.js"
 
@@ -47,6 +49,50 @@ export interface RefOpen {
 
 export const PROFILE_PLACEHOLDER = "<profile>"
 
+const unregistered = (provider: string) => `no CLI has registered ${provider} in this store yet; run its CLI once`
+
+export const profilesOn = (profiles: Profiles, app: string, key: AccountKey): string[] =>
+  Object.entries(profiles[app] ?? {})
+    .filter(([, saved]) => saved.provider === key.provider && saved.account === key.account)
+    .map(([name]) => name)
+
+/** From the store's record, so it answers for any CLI that registered its provider, not only the messengers. */
+export const storedProfilesFor =
+  (profiles: Profiles): ProfilesFor =>
+  (provider, account) => {
+    const tool = providerNamed(provider)?.command
+    if (tool === undefined) return { why: unregistered(provider), profiles: [] }
+    if (account === null) return { why: `${provider} names no account here`, profiles: [] }
+    const named = profilesOn(profiles, tool, { provider, account })
+    if (named.length === 1) return { profile: named[0] as string }
+    return {
+      why:
+        named.length === 0
+          ? `no ${tool} profile has run on ${provider}:${account} here; run \`${tool} <profile>\` with it once`
+          : `${named.length} ${tool} profiles are on ${provider}:${account}: ${named.join(", ")}; the owner chooses one`,
+      profiles: named,
+    }
+  }
+
+/** Which CLI changes a CRM copy on its server, and as which profile; `profile` is `null` unless exactly one fits. */
+export interface WritesWith {
+  tool: string | null
+  profile: string | null
+  profiles: string[]
+  why: string | null
+}
+
+/** `null` for the owner's own row: memo itself writes it. */
+export const writesWithOf = (account: AccountKey | null, profilesFor: ProfilesFor): WritesWith | null => {
+  if (account === null) return null
+  const tool = providerNamed(account.provider)?.command ?? null
+  if (tool === null) return { tool, profile: null, profiles: [], why: unregistered(account.provider) }
+  const asked = profilesFor(account.provider, account.account)
+  return "profile" in asked
+    ? { tool, profile: asked.profile, profiles: [asked.profile], why: null }
+    : { tool, profile: null, profiles: asked.profiles, why: asked.why }
+}
+
 /** A title from someone else's text, as one line: a newline in it would break every row it is printed in. */
 export const oneLine = (text: string): string => singleLine(text.replace(/\s+/g, " ").trim())
 
@@ -78,10 +124,7 @@ export const openOf = (
   return {
     argv: null,
     profiles: [],
-    why:
-      summary.provider === null
-        ? `nothing here opens a ${kind}`
-        : `no CLI has registered ${summary.provider} in this store yet; run its CLI once`,
+    why: summary.provider === null ? `nothing here opens a ${kind}` : unregistered(summary.provider),
   }
 }
 

@@ -1,6 +1,17 @@
+import { mkdtempSync, rmSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
+import { openStore } from "../store/store.js"
 import { providerEntryOf, providerNamed, useProviders } from "./providers.js"
-import { openOf, type ProfilesFor, type RefSummary, refLabel } from "./ref-summaries.js"
+import {
+  openOf,
+  type ProfilesFor,
+  type RefSummary,
+  refLabel,
+  storedProfilesFor,
+  writesWithOf,
+} from "./ref-summaries.js"
 
 afterEach(() => useProviders([]))
 
@@ -128,5 +139,65 @@ describe("a provider entry's opens", () => {
   it("a stored entry adds kinds to the seed's opens instead of replacing them", () => {
     useProviders([{ name: "max", kind: "messages", aliases: [], opens: { bot: "bots show" } }])
     expect(providerNamed("max")?.opens).toMatchObject({ chat: "messages list", bot: "bots show" })
+  })
+})
+
+describe("writesWithOf over the store's profiles", () => {
+  const portal = { provider: "bitrix24", account: "northstar.example" }
+  const other = { provider: "bitrix24", account: "south.example" }
+
+  const withStore = async (profiles: [string, typeof portal][]) => {
+    const directory = mkdtempSync(join(tmpdir(), "writes-with-"))
+    const store = await openStore({ path: join(directory, "store.db") })
+    try {
+      await store.accounts.registerProvider({ name: "bitrix24", kind: "crm", aliases: ["b24"], command: "b24" })
+      for (const [profile, key] of profiles) await store.accounts.saveProfile("b24", profile, key)
+      return storedProfilesFor(await store.accounts.profiles())
+    } finally {
+      await store.close()
+      rmSync(directory, { recursive: true, force: true })
+    }
+  }
+
+  it("names the one profile on the row's account", async () => {
+    const profilesFor = await withStore([
+      ["work", portal],
+      ["south", other],
+    ])
+    expect(writesWithOf(portal, profilesFor)).toEqual({ tool: "b24", profile: "work", profiles: ["work"], why: null })
+  })
+
+  it("**never picks between two profiles** on one account", async () => {
+    const profilesFor = await withStore([
+      ["work", portal],
+      ["sales", portal],
+    ])
+    expect(writesWithOf(portal, profilesFor)).toEqual({
+      tool: "b24",
+      profile: null,
+      profiles: ["work", "sales"],
+      why: "2 b24 profiles are on bitrix24:northstar.example: work, sales; the owner chooses one",
+    })
+  })
+
+  it("lists no profile of another account, and says how to add one", async () => {
+    const profilesFor = await withStore([["south", other]])
+    expect(writesWithOf(portal, profilesFor)).toEqual({
+      tool: "b24",
+      profile: null,
+      profiles: [],
+      why: "no b24 profile has run on bitrix24:northstar.example here; run `b24 <profile>` with it once",
+    })
+  })
+
+  it("is null for the owner's own row and names no tool for a provider no CLI registered", async () => {
+    const profilesFor = await withStore([])
+    expect(writesWithOf(null, profilesFor)).toBeNull()
+    expect(writesWithOf({ provider: "amocrm", account: "x.example" }, profilesFor)).toEqual({
+      tool: null,
+      profile: null,
+      profiles: [],
+      why: "no CLI has registered amocrm in this store yet; run its CLI once",
+    })
   })
 })

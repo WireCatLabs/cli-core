@@ -5,9 +5,13 @@ export {
   openOf,
   PROFILE_PLACEHOLDER,
   type ProfilesFor,
+  profilesOn,
   type RefOpen,
   type RefSummary,
   refLabel,
+  storedProfilesFor,
+  type WritesWith,
+  writesWithOf,
 } from "../domain/ref-summaries.js"
 export { botTemplate } from "../entities/list-results.js"
 export { syncProgress } from "../entities/store-records.js"

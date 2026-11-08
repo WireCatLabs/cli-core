@@ -5,6 +5,18 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Added
+
+- **`writesWithOf(account, profilesFor)` and `storedProfilesFor(profiles)`** (`./cli`): which CLI and profile change a
+  CRM copy on its server, so memo's `deals list`, `leads list` and `pipelines list` can name the writer of each row as
+  `writes_with: { tool, profile, profiles, why }`. `tool` is the command that registered the row's provider;
+  `profile` is set only when exactly one of that CLI's profiles is recorded on the row's account, otherwise it is
+  `null` and `profiles` and `why` say what there is to choose. The owner's own row answers `null`. The profiles come
+  from the store's record, which every run of a CLI saves, so a profile appears once it has run with that account.
+  `profilesOn(profiles, app, key)` is the filter both use.
+
 ## 0.610.0 — 08.11.2026
 
 ### Added
