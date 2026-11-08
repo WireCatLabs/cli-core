@@ -48,11 +48,16 @@ it("links a person by one exact e-mail, in any letter case, and adds nothing to 
   expect(added?.n).toBe(0)
 })
 
-it("links a person by one exact phone, read to E.164 as the phone_countries setting reads it", async () => {
+it("links a person by one exact phone, read to E.164 in the envelope's phone_region", async () => {
   const { store, sql } = await recordsFixture(handles)
   const ivan = knownPerson(sql, "Иван")
   ivan.give("phone", "+79000000001")
-  await take(store, envelopeOf([upsert("person", "p-2", { name: "Иван", phone: "8 (900) 000-00-01" })]))
+  await take(
+    store,
+    envelopeOf([upsert("person", "p-2", { name: "Иван", phone: "8 (900) 000-00-01" })], {
+      options: { phone_region: "ru" },
+    }),
+  )
   expect((await store.records.get({ ...SOURCE, type: "person", externalId: "p-2" }))?.entity).toBe(ivan.ref)
 })
 
@@ -182,7 +187,7 @@ it("lets the owner map an unmatched person, and projects what waited on it", asy
   const receipt = await take(
     store,
     envelopeOf([
-      upsert("person", "p-5", { name: "Both", email: "shared@example.com", phone: "89000000002" }),
+      upsert("person", "p-5", { name: "Both", email: "shared@example.com", phone: "+7 900 000-00-02" }),
       upsert(
         "payment",
         "pay-5",

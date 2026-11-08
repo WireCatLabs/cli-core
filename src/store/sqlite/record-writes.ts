@@ -56,9 +56,16 @@ export interface Unresolved {
   candidates: string[]
 }
 
+/** A value of the record that looks like an identifier and was kept as data only. */
+export interface Ignored {
+  at: (string | number)[]
+  reason: string
+}
+
 export interface WriteOutcome {
   status: "created" | "updated" | "unchanged" | "deleted"
   id: number
+  ignored?: Ignored[]
   flagged?: Flag
   /** It now has an entity, so the records waiting on it may get theirs. */
   complete?: boolean
@@ -66,6 +73,7 @@ export interface WriteOutcome {
 }
 
 interface Projected {
+  ignored?: Ignored[]
   made?: string
   /** Made as a proposal. */
   proposed?: string
@@ -140,20 +148,22 @@ export const recordWritesOver = (context: StoreContext) => {
 
   const identify = (row: Row, type: IdentityType, source: EnvelopeSource, options: EnvelopeOptions): Projected => {
     const fields = JSON.parse(String(row.fields)) as Row
-    const ids = identifiersOf(database, type, fields, source, String(row.external_id), options)
+    const ids = identifiersOf(type, fields, source, String(row.external_id), options)
     const match = matchOf(context, type, ids)
+    const ignored = ids.ignored.length > 0 ? { ignored: ids.ignored } : {}
     if (match.outcome === "ambiguous")
       return {
+        ...ignored,
         missing: [],
         unmatched: { reason: match.reason, candidates: match.ids.map((id) => entityRef(type, id) as string) },
       }
     if (match.outcome === "one") {
       const ref = entityRef(type, match.id) as string
       setEntity(Number(row.id), ref, false)
-      return { made: ref, missing: [] }
+      return { ...ignored, made: ref, missing: [] }
     }
     const related = relatedOf(Number(row.id), type)
-    if (related.missing.length > 0) return { missing: related.missing }
+    if (related.missing.length > 0) return { ...ignored, missing: related.missing }
     const organization = related.related.get("organization")?.[0]
     const id = createEntity(
       context,
@@ -166,7 +176,7 @@ export const recordWritesOver = (context: StoreContext) => {
     )
     const ref = entityRef(type, id) as string
     setEntity(Number(row.id), ref, true)
-    return { made: ref, missing: [] }
+    return { ...ignored, made: ref, missing: [] }
   }
 
   /** Gives a record its entity once every reference it names has one: a proposal, a direct row, or a match. */
@@ -235,6 +245,7 @@ export const recordWritesOver = (context: StoreContext) => {
     source: EnvelopeSource,
     options: EnvelopeOptions,
     proposed: (ref: string) => void,
+    ignore: (ignored: Ignored[]) => void,
   ): Flag | undefined => {
     const type = stored.type as RecordType
     const entityId = Number(stored.entity_id)
@@ -244,7 +255,8 @@ export const recordWritesOver = (context: StoreContext) => {
     const kind = specOf(type).update
     if (isIdentityType(type)) {
       if (Number(stored.created_entity) !== 1) return {}
-      const ids = identifiersOf(database, type, fields, source, String(row.external_id), options)
+      const ids = identifiersOf(type, fields, source, String(row.external_id), options)
+      if (ids.ignored.length > 0) ignore(ids.ignored)
       const others = entitiesByIdentifiers(database, type, ids).filter((one) => one !== entityId)
       if (others.length > 0)
         return { reason: "record.ambiguous", candidates: others.map((one) => entityRef(type, one) as string) }
@@ -310,6 +322,7 @@ export const recordWritesOver = (context: StoreContext) => {
           id: Number(stored.id),
           complete: done.made !== undefined,
           unmatched: done.unmatched,
+          ignored: done.ignored,
         }
       }
       return { status: "unchanged", id: Number(stored.id) }
@@ -343,6 +356,7 @@ export const recordWritesOver = (context: StoreContext) => {
     relate(id, accountId, [...sent, ...fieldReferences(record, options)], time)
     let made = false
     let unmatched: Unresolved | undefined
+    let ignored: Ignored[] | undefined
     let flagged: Flag | undefined =
       stored?.entity_id != null && stored.projected_fingerprint !== fingerprint ? {} : undefined
     if (typed && stored?.entity_id == null) {
@@ -350,11 +364,14 @@ export const recordWritesOver = (context: StoreContext) => {
       if (done.proposed) proposed(done.proposed)
       made = done.made !== undefined
       unmatched = done.unmatched
+      ignored = done.ignored
     } else if (typed && stored?.entity_id != null && stored.deleted_at == null) {
       const resettles = specOf(record.type as RecordType).update === "re-settle"
       // A payment takes its settles again even when only they changed, so its projected fingerprint lags behind.
       if (flagged !== undefined || resettles) {
-        const left = updateEntity(stored, id, source, options, proposed)
+        const left = updateEntity(stored, id, source, options, proposed, (list) => {
+          ignored = list
+        })
         if (left === undefined && !(resettles && beyondSettles)) {
           sql("UPDATE records SET projected_fingerprint = fingerprint WHERE id = ?").run(id)
           flagged = undefined
@@ -366,6 +383,7 @@ export const recordWritesOver = (context: StoreContext) => {
       id,
       ...(flagged === undefined ? {} : { flagged }),
       unmatched,
+      ignored,
       // Records waiting on this one move only when it has an entity: made now, or back from a delete.
       complete: made || (stored?.deleted_at != null && stored.entity_id != null),
     }
