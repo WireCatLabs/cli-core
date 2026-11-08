@@ -47,6 +47,9 @@ shape of this file.
   `knowledge.changedSources({ since })` reads the cited sources a check found changed since then and that differ
   from the version cited, with the same exclusions, so a change the timer's check already took still reaches an
   agent.
+- **`store.notes.addedSource(ref)` reads an added source back with what it is and what was kept**: `kind`, the `url`
+  as given, `fileName`, `mime`, `size`, `kept` and the `copy` path, beside its document; `undefined` for any other
+  document or a removed source. The `AddedSourceDetails` type is exported.
 
 ## 0.614.0 — 08.11.2026
 
