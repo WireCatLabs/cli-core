@@ -5,10 +5,10 @@ import type { IdentityRef } from "./types.js"
 export const IDENTITY_LINK_KIND = "identity_link"
 
 /**
- * Why two people may be one: an agent said so, they share a phone with others, or a meeting guest typed an address
- * another person has. Same address and a phone only two people share link without asking.
+ * Why two people may be one: an agent said so, they share a phone or an address with others, or a meeting guest typed
+ * an address another person has.
  */
-export const IDENTITY_LINK_SIGNALS = ["agent", "phone", "guest-email"] as const
+export const IDENTITY_LINK_SIGNALS = ["agent", "phone", "email", "guest-email"] as const
 
 export type IdentityLinkSignal = (typeof IDENTITY_LINK_SIGNALS)[number]
 
@@ -50,6 +50,8 @@ export interface IdentityLinkDecision {
 
 /** What one pass of the people matcher did. */
 export interface MatchScan {
+  /** Every identity was read, not only those changed since the last pass. */
+  full: boolean
   /** People joined without asking: same address, or a phone exactly two people have. */
   merged: { into: string; from: string; signal: "same-email" | "same-phone" }[]
   /** Proposals opened, or open ones met again. */

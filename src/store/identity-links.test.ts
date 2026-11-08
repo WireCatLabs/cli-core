@@ -111,12 +111,13 @@ describe("an identity_link proposal", () => {
     ).rejects.toMatchObject({ details: { reason: "identity.rejected" } })
   })
 
-  it("refuses a confirm once either person changed since it was proposed", async () => {
+  it("refuses a confirm once the owner took an identity off either person since it was proposed", async () => {
     const store = await open()
     await twoPeople(store)
     await store.people.savePeople(MAX, [{ id: "8", name: "Anya work" }])
-    const proposal = await store.people.proposeLink({ identity: ana, with: anya, signal: "agent", by: agent })
     await store.people.linkIdentities(anya, { provider: "max", id: "8" }, owner)
+    const proposal = await store.people.proposeLink({ identity: ana, with: anya, signal: "agent", by: agent })
+    await store.people.unlinkIdentity({ provider: "max", id: "8" }, owner)
 
     await expect(store.people.decideLink(proposal.id, { confirm: true, by: "owner" })).rejects.toMatchObject({
       code: "conflict",
