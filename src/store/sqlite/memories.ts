@@ -1,8 +1,9 @@
 import { CliError } from "@wirecat/cli-base"
 import { MEMORY_KINDS, MEMORY_SCOPES, type MEMORY_STATUSES } from "../../domain/knowledge.js"
 import type { Stemmer, Stemmers } from "../../search/stem.js"
-import { assertMayDecide, assertMayWithdraw, type Decider } from "../decisions.js"
+import { assertMayDecide, assertMayWithdraw, type Decider, deciderAuthor } from "../decisions.js"
 import { normalize } from "../normalize.js"
+import type { SourceReviewMarker } from "../source-review.js"
 import { type Actor, botNamed, ownerPerson, type ProposedByFilter, proposedBySql, proposerOf } from "./actors.js"
 import {
   assertQuoted,
@@ -17,6 +18,7 @@ import { linkKind } from "./link-kinds.js"
 import { CORPORA, corpusIndexState, drainCorpus, type NoteIndexState } from "./note-index.js"
 import { requiredThing } from "./notes.js"
 import type { StoreContext } from "./open.js"
+import { closeSourceReviews, eraseSourceReviews, sourceReviewOf } from "./source-review-marks.js"
 import { stemmerCache } from "./stems.js"
 import { referenceOfThing, storedThing } from "./things.js"
 import { write } from "./transaction.js"
@@ -47,6 +49,8 @@ export interface Memory {
   supersedes: string | null
   /** The references it rests on: `links` of kind `evidence`. */
   evidence: string[]
+  /** The open review of its sources (`memory_source_review`), when one waits for the owner. */
+  sourceReview: SourceReviewMarker | null
   lastVerifiedAt: string | null
   createdAt: string
   updatedAt: string
@@ -84,7 +88,10 @@ export interface MemoriesStore {
   update(reference: string, change: { project: string | null }): Promise<Memory>
   /** The owner, or an agent for the owner, stands behind it; its evidence was checked now. */
   confirm(reference: string, by: Decider): Promise<Memory>
-  /** Its evidence no longer holds; for an agent's memory this is how it is turned down, so `by` must be allowed. */
+  /**
+   * Its evidence no longer holds; for an agent's memory this is how it is turned down, so `by` must be allowed. A
+   * confirmed memory is the owner's to retire: an agent challenges it instead (`knowledge.challenge`).
+   */
   markStale(reference: string, by: Decider): Promise<Memory>
   /**
    * Erases the memory: its row, its text in the search and meaning indexes, and every link from or to it, except the
@@ -285,6 +292,7 @@ export const memoriesStoreOver = (
     scope: row.scope as Memory["scope"],
     supersedes: row.supersedes_id == null ? null : `memory:${row.supersedes_id}`,
     evidence: evidenceOf(context, { type: "memory", id: Number(row.id) }),
+    sourceReview: sourceReviewOf(database, { type: "memory", id: Number(row.id) }),
     lastVerifiedAt: row.last_verified_at == null ? null : iso(row.last_verified_at),
     createdAt: iso(row.created_at),
     updatedAt: iso(row.updated_at),
@@ -329,6 +337,12 @@ export const memoriesStoreOver = (
       .run(...(verified ? [status, at, at, Number(row.id)] : [status, at, Number(row.id)]))
     return memoryOf(rowOf(reference))
   }
+
+  const closing = (by: Decider, why: string) => ({
+    actor: authorActor(context, deciderAuthor(by)).actor,
+    at: now(),
+    why,
+  })
 
   /** `add` inside the caller's write, so a decision that adds a memory rolls back with it. */
   const addNow = (input: MemoryInput): Memory => {
@@ -385,8 +399,10 @@ export const memoriesStoreOver = (
           )?.id,
       )
       linkEvidence(context, { type: "memory", id: made }, input.evidence, input.author === "owner" ? "owner" : "agent")
-      if (replaced !== undefined && status === "confirmed")
+      if (replaced !== undefined && status === "confirmed") {
         database.prepare("UPDATE memories SET status = 'superseded', updated_at = ? WHERE id = ?").run(at, replaced)
+        closeSourceReviews(database, { type: "memory", id: replaced }, { actor, at, why: "superseded" })
+      }
       return made
     })
     return memoryOf(rowOf(`memory:${id}`))
@@ -403,6 +419,7 @@ export const memoriesStoreOver = (
         database
           .prepare("UPDATE memories SET status = 'superseded', updated_at = ? WHERE id = ?")
           .run(now(), Number(replaced.id))
+        closeSourceReviews(database, { type: "memory", id: Number(replaced.id) }, closing(by, "superseded"))
       }
       return setStatus(reference, "confirmed", true)
     })
@@ -448,8 +465,19 @@ export const memoriesStoreOver = (
       }),
     confirm: async (reference, by) => confirmNow(reference, by),
     markStale: async (reference, by) => {
+      const row = rowOf(reference)
+      if (by !== "owner" && row.status === "confirmed")
+        throw new CliError(
+          "permission_error",
+          `memory:${row.id} is confirmed; only the owner retires it. Challenge it with what contradicts it instead`,
+          { reason: "proposal.owner-only" },
+        )
       decided(reference, by)
-      return setStatus(reference, "stale", false)
+      return write(database, () => {
+        const memory = setStatus(reference, "stale", false)
+        closeSourceReviews(database, { type: "memory", id: Number(row.id) }, closing(by, "invalidated"))
+        return memoryOf(rowOf(memory.ref))
+      })
     },
     remove: async (reference, by) => {
       const row = rowOf(reference)
@@ -465,6 +493,7 @@ export const memoriesStoreOver = (
       const links = erase(database, () => {
         keepHighestId(database, "memories", now())
         database.prepare("UPDATE memories SET supersedes_id = NULL WHERE supersedes_id = ?").run(id)
+        eraseSourceReviews(database, { type: "memory", id })
         const count = dropLinksOf(database, { type: "memory", id }, now())
         database.prepare("DELETE FROM memories WHERE id = ?").run(id)
         return count

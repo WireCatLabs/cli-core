@@ -119,17 +119,19 @@ decide for the owner. Each runs `mayDecide` before it changes anything: an agent
 decides its own bot's proposal (every Claude Code session is the bot `claude-code`), never a rule scorer's or
 one that names no author, and nothing unless the host's `agent_decisions` is on: `openStore` keeps it off unless
 the host passes `decisions: { agentDecisions: true }` from the owner's explicit `agent_decisions: true`. Mail and
-meeting findings, task close suggestions, and any row marked `ownerOnly` (a registry row takes it from its kind), are the owner's alone even
+meeting findings, task close suggestions, source reviews, and any row marked `ownerOnly` (a registry row takes it from its kind), are the owner's alone even
 then: `mayDecide` reads the row's stored `kind`, so a path that sees the batch as a generic action refuses too. `proposalRegistry`
 (`./services`) is the one inbox over every kind (`relationship`, `key_document`, `fact`, `invoice`, `payment`,
-`order`, `memory`, `findings`, `mail_findings`, `meeting_findings`, `task_close`, `action`); a new kind is a `ProposalKind` that registers its id `prefix` or the stored proposal kinds it owns.
+`order`, `memory`, `findings`, `mail_findings`, `meeting_findings`, `task_close`, `memory_source_review`, `action`); a new kind is a `ProposalKind` that registers its id `prefix` or the stored proposal kinds it owns.
 Ids are bare numbers for stored proposals and `fact:`, `invoice:`, `payment:`, `order:`, `memory:`, `link:`, `key:` for the rest;
 a task close is `close:<task key>` (`close:Q-15`). `parseProposalIds` reads ranges and lists of them (never a range of
 task keys); only a findings batch takes part ids (`17080/f2`). A link
 keeps no actor, only provenance text, so an unconfirmed link is the owner's alone to decide, and only the owner
 removes a link or writes a confirmed link of any kind (`notes.addLink`, `relate` with `by: "owner"`); an agent's
 link is written unconfirmed. Only the owner removes, reverses or revokes an accepted fact; an agent withdraws only
-its own proposed fact or memory. Only the owner confirms a correction that retires a confirmed memory. `facts.revoke` returns an agent's accepted fact to proposed and keeps the step,
+its own proposed fact or memory. Only the owner confirms a correction that retires a confirmed memory or accepts one
+that supersedes an accepted fact, and an agent never marks a confirmed memory stale: it challenges it instead.
+`facts.revoke` returns an agent's accepted fact to proposed and keeps the step,
 with the decision it took back, in `metadata.history`; it refuses the owner's own fact and an accepted correction,
 whose superseded fact's earlier status is not kept. The policy is set once at `openStore({ decisions })` and read by every check. An agent's
 `relate` returns a `relationship` proposal.
@@ -142,6 +144,45 @@ rule links into `relationship` and `key_document` proposals on the first writabl
 reason and time. The bot comes from the link's provenance text, which anyone could write, so the moved row keeps that
 text under `suggestedLink` and only the owner decides it. Drive's editor links stay links. A suggestion an older build
 writes after that stays a link and is still listed as `link:<id>` or `key:<id>`.
+
+## When a source changes
+
+`knowledge.checkSources({ limit })` walks the evidence links of memories and facts in id order, `limit` of them (500
+by default), going on from where the last run stopped (`source-check.cursor` in `store_settings`) and starting over at
+the end. A run reads at most `20 × limit` link ids, so on a store with few evidence links among many others it
+checks fewer and moves the cursor on. For a memory or fact that still holds (a proposed or confirmed memory, a proposed or accepted fact) it
+compares each link's stored signature (see above) with the source's signature now; for one that no longer holds it
+closes the open review. It answers `{ checked, baselined, raised, refreshed, closed }`. Status never changes here, and
+a link whose source did not change is not written.
+
+| Case | Signal | Result |
+| --- | --- | --- |
+| Changed, quote still there | signature differs; the stored quote is in the new text word for word | signed anew, nothing raised |
+| Changed | signature differs; no quote stored, the quote gone, or no text to look in | review, cause `changed` |
+| Deleted | `deleted_at` (or `source_deleted_at`) set, checked before anything else | review, cause `deleted` |
+| Deleted for good | the cited row is removed, a message is tombstoned | review, cause `deleted`, in the same write as the delete |
+| Outdated | a cited fact or memory became superseded, reversed, rejected or stale | review, cause `outdated`, naming the replacement found through `supersedes` |
+| Contradicted | `knowledge.challenge(ref, { evidence, reason, by, suggestion? })` by an agent or the owner | review, cause `contradicted` |
+| Claim changed | the memory or fact itself is superseded, invalidated, reversed or rejected | its open review closes as `executed` in the same write; removing it erases its reviews |
+
+A link written before signatures is signed in silence, unless a revision or deletion of its source is dated after
+the link was written: then it raises a review, so the first check reports real changes and not every old memory.
+
+The review is a `memory_source_review` proposal with the memory or fact as its target. At most one is open per target:
+a later change folds into its payload, and its `raisedAt` (the time the registry lists it by) moves only when the
+cause grows graver, in the order `changed`, `outdated`, `deleted`, `contradicted`. The payload names each source's
+link, reference, cause and the version cited (`citedRev`), each challenge's evidence, reason and author, and the
+`suggestions` offered with a challenge (an author and the author's own text). It never holds source text: a reader
+takes the text then and now through `sourceTextAt`. When a source is erased (deleted for good, a message
+tombstoned, an account or chat purged), every review that names it, open or closed, loses that reference and the
+words of each challenge and suggestion that cited it (`[source erased]`), in the same write. Memory and fact
+reads carry `sourceReview: { id, cause } | null` from the open one.
+
+It is the owner's alone, whatever `agent_decisions` says, and no generic action path decides it
+(`source-review.dedicated-review`). `knowledge.decideSourceReview` or the registry: confirm says it still holds and
+marks a memory verified now; reject dismisses the review. Both sign its sources again as they are now. To correct
+the claim, supersede it; to withdraw it, invalidate the memory or reverse the fact. A correction that retires a
+confirmed memory or an accepted fact closes the review only once the owner confirms or accepts it.
 
 ## Money
 

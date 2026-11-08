@@ -72,6 +72,11 @@ const OTHERS: Entry[] = [
   validation("mail-findings.partial", "a cited email is not stored whole yet; cite it once it is"),
   validation("evidence-findings.dedicated-review", "review evidence findings through the dedicated findings command"),
   validation("mail-findings.dedicated-review", "review mail findings through the dedicated findings command"),
+  validation("source-review.dedicated-review", "decide a source review through the review of memories and facts"),
+  validation("source-review.reason-required", "a challenge says why in 1–2000 characters"),
+  validation("source-review.evidence-required", "a challenge cites 1–20 references that contradict it"),
+  validation("source-review.suggestion-length", "a suggestion with a challenge takes 1–2000 characters"),
+  validation("source-review.not-holding", "the memory or fact no longer holds, so there is nothing to challenge"),
   validation(
     "mail-findings.invalid",
     "a checked mail findings batch would be refused; details.problems names why, finding by finding",

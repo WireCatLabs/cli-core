@@ -25,6 +25,18 @@ shape of this file.
   checked_at }`, read from the source's columns and never its text, deletion included, so a later check can tell that
   a cited source changed or went. Reads still return evidence as references. A project snapshot leaves the signature
   behind and the restore signs each evidence link against the target store; a quote does not travel.
+- **Memories and facts follow their sources.** `store.knowledge.checkSources({ limit })` walks the evidence links of
+  memories and facts, 500 a run by default, going on from where the last run stopped, and opens one
+  `memory_source_review` proposal per memory or fact whose source changed (`changed`), was deleted (`deleted`), or
+  cites a fact or memory that no longer holds (`outdated`, naming its replacement). A changed source that still says
+  the quoted words raises nothing. A source deleted for good, or a message tombstoned, opens a `deleted` review at once.
+  `store.knowledge.challenge(ref, { evidence, reason, by, suggestion? })` raises one as `contradicted`. The check
+  answers `{ checked, baselined, raised, refreshed, closed }` and never changes a status. Memory and fact reads carry
+  `sourceReview: { id, cause } | null`. The review is the owner's alone: `knowledge.decideSourceReview` or the
+  registry confirms it (still true; a memory is verified now) or rejects it (dismissed), and both sign its sources
+  again. Superseding, invalidating, reversing or rejecting the memory or fact closes its review as executed; removing
+  it erases its reviews. When a cited source is erased, every review naming it loses that reference and the words of
+  each challenge and suggestion that cited it.
 
 ### Changed — may break callers
 
@@ -41,6 +53,11 @@ shape of this file.
   `facts.remove` no longer count it among the links they removed. A message's tombstone drops quotes of it too. A
   purged account or chat forgets evidence to every row it took, chats included, and a chat merge re-signs the
   evidence it moves onto the kept chat and messages.
+- **An agent can no longer retire what the owner stands behind**, even with `agent_decisions` on:
+  `memories.markStale` of a confirmed memory, and `facts.accept` of a correction that supersedes an accepted fact,
+  refuse an agent with `proposal.owner-only`. An agent that finds such a memory or fact wrong calls
+  `knowledge.challenge` with what contradicts it, and the owner decides the review. An agent allowed to decide may
+  still turn down another agent's proposed memory, and accept a correction of a fact that is only proposed.
 
 ### Fixed
 

@@ -3,6 +3,7 @@ import { MEETING_FINDINGS_KIND } from "../../meetings/index.js"
 import { assertMayDecide, type Decider, deciderAuthor, type Proposer } from "../decisions.js"
 import { EVIDENCE_FINDINGS_KIND } from "../evidence-findings.js"
 import { MAIL_FINDINGS_KIND } from "../mail-findings.js"
+import { SOURCE_REVIEW_KIND } from "../source-review.js"
 import type { AccountKey } from "../types.js"
 import { type Actor, type ProposedByFilter, proposedBySql } from "./actors.js"
 import { type Author, authorActor } from "./memories.js"
@@ -293,18 +294,33 @@ export const proposalOperationsOver = (context: StoreContext): ProposalOperation
   }
 }
 
-/** Stored kinds a generic action path never decides: each has its own review, which checks what the batch cites. */
-const DEDICATED_REVIEW: Record<string, { what: string; reason: string }> = {
-  [MEETING_FINDINGS_KIND]: { what: "meeting findings", reason: "meeting-findings.dedicated-review" },
-  [EVIDENCE_FINDINGS_KIND]: { what: "evidence findings", reason: "evidence-findings.dedicated-review" },
-  [MAIL_FINDINGS_KIND]: { what: "mail findings", reason: "mail-findings.dedicated-review" },
+const FINDINGS_COMMAND = "the dedicated findings command"
+
+/** Stored kinds a generic action path never decides: each has its own review, which checks what it cites. */
+const DEDICATED_REVIEW: Record<string, { what: string; reason: string; through: string }> = {
+  [MEETING_FINDINGS_KIND]: {
+    what: "meeting findings",
+    reason: "meeting-findings.dedicated-review",
+    through: FINDINGS_COMMAND,
+  },
+  [EVIDENCE_FINDINGS_KIND]: {
+    what: "evidence findings",
+    reason: "evidence-findings.dedicated-review",
+    through: FINDINGS_COMMAND,
+  },
+  [MAIL_FINDINGS_KIND]: { what: "mail findings", reason: "mail-findings.dedicated-review", through: FINDINGS_COMMAND },
+  [SOURCE_REVIEW_KIND]: {
+    what: "a source review",
+    reason: "source-review.dedicated-review",
+    through: "the review of memories and facts, which signs their sources again",
+  },
 }
 
-/** Refuses a findings batch on a generic action path: approving one as an action would skip its own checks. */
+/** Refuses a dedicated kind on a generic action path: approving one as an action would skip its own checks. */
 export const assertGenericAction = (kind: string): void => {
   const dedicated = DEDICATED_REVIEW[kind]
   if (dedicated)
-    throw new CliError("validation_error", `review ${dedicated.what} through the dedicated findings command`, {
+    throw new CliError("validation_error", `review ${dedicated.what} through ${dedicated.through}`, {
       reason: dedicated.reason,
     })
 }
@@ -320,7 +336,9 @@ export const proposedActionsStoreOver = (context: StoreContext): ProposedActions
     propose: async (input) => {
       const dedicated = DEDICATED_REVIEW[input.kind]
       if (dedicated)
-        throw new CliError("validation_error", `stage ${dedicated.what} through the dedicated findings command`)
+        throw new CliError("validation_error", `stage ${dedicated.what} through ${dedicated.through}`, {
+          reason: dedicated.reason,
+        })
       return operations.propose(input)
     },
     get: async (id) => operations.get(id),

@@ -1,7 +1,16 @@
 import { CliError } from "@wirecat/cli-base"
 import type { CacheDatabase, SqlValue } from "../driver.js"
+import type { SourceReviewSource } from "../source-review.js"
 import { ENTITY_TABLES, isEntityType } from "./entity-types.js"
-import { referenceOfThing, storedThing, type Thing } from "./things.js"
+import {
+  asReviewTarget,
+  holds,
+  type ReviewTarget,
+  raiseSourceReview,
+  scrubSourceReviews,
+  sourceChecker,
+} from "./source-review-marks.js"
+import { referenceOfThing, storedThing, type Thing, thingOf } from "./things.js"
 
 /**
  * What a cited source looks like now, read from its columns only, never its text. `sig` differs whenever the source
@@ -390,6 +399,8 @@ export interface ForgottenEvidence {
   /** The reference the link named before its source went. */
   ref: string | null
   citedRev: number | null
+  /** The link was already signed as deleted, so a check reported it then. */
+  reported: boolean
 }
 
 /**
@@ -397,7 +408,9 @@ export interface ForgottenEvidence {
  * source's words. `ids` is SQL naming the row ids. A row deleted for good also loses its pointer, so the link still
  * says that a source was cited and is gone, and never names another row that takes the same id later; its old
  * reference stays only as `target_text`, which nothing resolves since `target_folded` is empty. A tombstone
- * (`keepPointer`) keeps it, signed as deleted.
+ * (`keepPointer`) keeps it, signed as deleted. A memory or fact that still holds gets a `deleted` review in the same
+ * write, since the check will not meet a link with no pointer, nor one already signed as deleted; a link already
+ * signed as deleted was reported when the check met it.
  */
 export const forgetEvidenceTo = (
   database: CacheDatabase,
@@ -415,13 +428,14 @@ export const forgetEvidenceTo = (
   const detach = database.prepare(
     "UPDATE links SET to_type = NULL, to_id = NULL, target_text = ?, target_folded = NULL, metadata = ? WHERE id = ?",
   )
-  return links.map((link) => {
+  const forgotten = links.map((link) => {
     const thing = storedThing(link.to_type, link.to_id)
     const previous = storedEvidenceMetadata(link.metadata)
     const ref = referenceOfThing(database, thing) ?? null
     const citedRev = previous?.cited_rev ?? null
+    const signature = evidenceSignature(database, thing)
+    const reported = previous?.sig === signature.sig && signature.deleted
     if (keepPointer) {
-      const signature = evidenceSignature(database, thing)
       const metadata = { ...evidenceMetadata(signature, at, undefined), cited_rev: previous ? citedRev : signature.rev }
       database.prepare("UPDATE links SET metadata = ? WHERE id = ?").run(JSON.stringify(metadata), Number(link.id))
     } else {
@@ -435,8 +449,31 @@ export const forgetEvidenceTo = (
       }
       detach.run(ref ?? `${type}:${thing.id}`, JSON.stringify(metadata), Number(link.id))
     }
-    return { link: Number(link.id), from: storedThing(link.from_type, link.from_id), ref, citedRev }
+    return { link: Number(link.id), from: storedThing(link.from_type, link.from_id), ref, citedRev, reported }
   })
+  const member = database.prepare(`SELECT 1 WHERE ? IN (${ids.sql})`)
+  scrubSourceReviews(
+    database,
+    (ref) => {
+      const thing = thingOf(database, ref)
+      return thing?.type === type && member.get(thing.id, ...ids.params) !== undefined
+    },
+    { refs: !keepPointer },
+  )
+  const byTarget = new Map<string, { target: ReviewTarget; sources: SourceReviewSource[] }>()
+  for (const one of forgotten) {
+    const target = asReviewTarget(one.from.type, one.from.id)
+    if (one.reported || !target || !holds(database, target)) continue
+    const entry = byTarget.get(`${target.type}:${target.id}`) ?? { target, sources: [] }
+    const named = keepPointer ? { ref: one.ref } : { ref: null, kind: type }
+    entry.sources.push({ link: one.link, ...named, cause: "deleted", citedRev: one.citedRev })
+    byTarget.set(`${target.type}:${target.id}`, entry)
+  }
+  if (byTarget.size) {
+    const proposer = sourceChecker(database, at)
+    for (const { target, sources } of byTarget.values()) raiseSourceReview(database, target, { sources, proposer, at })
+  }
+  return forgotten
 }
 
 /** `forgetEvidenceTo` for one row. */
@@ -451,8 +488,9 @@ export const forgetEvidenceToRow = (
  * After a purge, in its write: forgets evidence still pointing at a row of any citable type that is no longer there,
  * so a kind the purge did not name is not missed. The purge names what it can beforehand, while references resolve.
  */
-export const forgetDanglingEvidence = (database: CacheDatabase, at: number): ForgottenEvidence[] =>
-  Object.entries(ENTITY_TABLES).flatMap(([type, table]) =>
+export const forgetDanglingEvidence = (database: CacheDatabase, at: number): ForgottenEvidence[] => {
+  scrubSourceReviews(database, (ref) => thingOf(database, ref) === undefined, { refs: true })
+  return Object.entries(ENTITY_TABLES).flatMap(([type, table]) =>
     forgetEvidenceTo(
       database,
       type,
@@ -465,6 +503,7 @@ export const forgetDanglingEvidence = (database: CacheDatabase, at: number): For
       at,
     ),
   )
+}
 
 /** Deletes a document row after forgetting the evidence that cites it, so no link is left pointing at a reused id. */
 export const deleteDocumentRow = (database: CacheDatabase, id: number, at: number): void => {
