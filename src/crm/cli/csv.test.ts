@@ -10,7 +10,7 @@ import { CRM_OPENS } from "../../domain/providers.js"
 import type { AppIdentity } from "../../ports/app.js"
 import { type MessageStore, openStore } from "../../store/store.js"
 import { exampleDeal, exampleOrganization, examplePerson, fakeCrmSource } from "../testing/index.js"
-import { addCrmCommands, type CrmRun } from "./index.js"
+import { addCrmCommands, type CrmRun, csvColumnPaths, csvFormatOption, printCsv, refuseCsvConflict } from "./index.js"
 
 const APP: AppIdentity = {
   command: "crm",
@@ -141,5 +141,65 @@ describe("deals list --format csv", () => {
     const unknown = await crm("deals", "list", "--format", "csv", "--json=nonsense")
     expect(unknown.code).not.toBe(0)
     expect(unknown.stdout).toBe("")
+  })
+})
+
+describe("a CLI's own list on the exported CSV helpers", () => {
+  const people: ProgramDefinition = {
+    app: APP,
+    configuration: settingsFor(APP),
+    commands: () => [
+      new Command("people").addCommand(
+        new Command("list").addOption(csvFormatOption()).action(function (this: Command) {
+          refuseCsvConflict(this)
+          printCsv(
+            this,
+            {
+              items: [
+                {
+                  ref: "P1",
+                  name: "Example person",
+                  phones: [
+                    { value: "+10000000001", type: "WORK" },
+                    { value: "+10000000002", type: "HOME" },
+                  ],
+                  provider_metadata: {
+                    UF_CITY: { label: "City", value: "Valencia" },
+                    UF_LATE: { label: "Late field", value: "only in a row" },
+                  },
+                },
+              ],
+              fields: [{ code: "UF_CITY", label: "City", type: "string" }],
+              page: 1,
+              hasMore: false,
+            },
+            csvColumnPaths(this, ["ref", "name", "phones", "provider_metadata"]),
+          )
+        }),
+      ),
+    ],
+  }
+  const list = async (...args: string[]) => {
+    const streams = captureStreams()
+    const code = await run(["work", "people", "list", ...args], people, { streams, tty: false, env })
+    return { code, stdout: streams.stdout.map((text) => `${text}\n`).join("") }
+  }
+
+  it("takes the caller's columns, prints a phone by its value, guarded, and gives a field only a row holds its column", async () => {
+    const { code, stdout } = await list("--format", "csv")
+
+    expect(code).toBe(0)
+    expect(rowsOf(stdout)).toEqual([
+      "ref,name,phones,City,Late field",
+      "P1,Example person,'+10000000001; +10000000002,Valencia,only in a row",
+      "",
+    ])
+  })
+
+  it("refuses another output the same way deals list does", async () => {
+    const { code, stdout } = await list("--format", "csv", "--jsonl")
+
+    expect(code).not.toBe(0)
+    expect(stdout).toBe("")
   })
 })

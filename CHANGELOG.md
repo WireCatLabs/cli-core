@@ -7,6 +7,17 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **A CLI's own CRM list can print the same `--format csv` table as `deals list`.** `@wirecat/cli-core/crm/cli`
+  exports `csvFormatOption`, `refuseCsvConflict` (the refusal of another output or an agent's run, checked before
+  the CRM is read), `csvColumnPaths` (`--json=a,b`, or the caller's own default columns) and `printCsv`, with
+  `DEAL_CSV_COLUMNS` and the `CsvPage` and `CsvField` types. `deals list` and `leads list` print through them.
+
+### Fixed
+
+- **A CSV cell prints a phone or an e-mail by its value**, where an object without a `name` was printed as JSON.
+
 ## 0.608.0 — 08.11.2026
 
 ### Fixed
