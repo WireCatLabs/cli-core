@@ -1,7 +1,8 @@
 import { CliError } from "@wirecat/cli-base"
-import type { Command } from "commander"
+import type { Command, Option } from "commander"
 import { agentOf } from "../runs/run-context.js"
 import { environmentOf } from "./context.js"
+import { ownerOnlyOption } from "./effects.js"
 
 /**
  * Who decides: the agent whose terminal runs the tool, by the variables each agent sets (`agentOf`, the same
@@ -33,3 +34,10 @@ export const actorOf = (command: Command, asOwner?: boolean): string => {
   const named = authorOf(env)
   return named === "owner" ? "agent" : named
 }
+
+/** `--as-owner` on a command whose write an agent only proposes: kept out of MCP input, refused to an agent. */
+export const asOwnerOption = (): Option =>
+  ownerOnlyOption(
+    "--as-owner",
+    "record it as yours although an agent's terminal runs the tool (AI_AGENT or CLAUDECODE set)",
+  )

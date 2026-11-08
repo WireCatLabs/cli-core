@@ -542,6 +542,8 @@ with one exact address join one person (`joinByAddress`), unless the owner separ
   rejected is never proposed or joined again. A confirm is the owner's link (method `proposal`), refused with
   `identity.stale` once `sides` no longer hold. An agent's mention confirm and meeting association go through
   `linkOrPropose`, which links only for the owner; the mention waits as `proposed`.
+  `linkPeople` (tg/max `contacts link`, a calendar's `people link`) takes who runs it from `actorOf`: an agent's link
+  becomes a proposal with its `--reason`; only the owner links an identity to `me` or unlinks one.
 - **Proposals follow the people** (`identity-link-rows.ts`, which `person-links.ts` may import without a cycle).
   `mergePerson` keeps the owner's person whichever side it is on and calls `settleLinks`: a proposal whose two people
   are one now, or a second for the same pair, is deleted, and a live one takes its current people and sides. A purge

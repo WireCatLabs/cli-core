@@ -362,7 +362,11 @@ const OTHERS: Entry[] = [
     "conflict",
     "the owner separated this identity from that person; only the owner links it again",
   ],
-  ["identity.owner-only", "permission_error", "only the owner undoes a merge, splits a person or confirms a link"],
+  [
+    "identity.owner-only",
+    "permission_error",
+    "only the owner undoes a merge, splits a person, confirms a link or links an identity to themselves",
+  ],
   [
     "identity.stale",
     "conflict",
@@ -388,7 +392,7 @@ const OTHERS: Entry[] = [
   validation("name.taken", "the name is already used"),
   validation("period.ambiguous", "the period can be read more than one way"),
   validation("proposal.wrong-state", "the proposal is not in a state that allows this"),
-  validation("proposal.reason-required", "an agent deciding for the owner gives a reason"),
+  validation("proposal.reason-required", "an agent deciding for the owner, or proposing a link, gives a reason"),
   validation(
     "decision.request-invalid",
     "a decision request needs its batch, message, owner and distinct known actions",

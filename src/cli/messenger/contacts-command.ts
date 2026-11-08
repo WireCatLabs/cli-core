@@ -11,6 +11,7 @@ import { withoutPhone } from "../../services/people.js"
 import { CHAT_MESSAGES, CONTEXT_BYTES, CONTEXT_MESSAGES } from "../../services/person-context.js"
 import { SCOPES, type Scope, TIMELINE_ITEMS } from "../../services/person-timeline.js"
 import { readSecret } from "../../terminal/prompt.js"
+import { actorOf, asOwnerOption } from "../author.js"
 import { secretInputOf } from "../context.js"
 import { FETCH, LOCAL_WRITE, REMOTE_READ } from "../effects.js"
 import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
@@ -357,11 +358,17 @@ export const contactsCommand = (messenger: Messenger): Command => {
       "<other>",
       "the same in another messenger of the store, as <messenger>:<person> — max:Ana; me: it is you, as zoom:<id> me",
     )
+    .option("--reason <text>", "why they are one person; an agent's link is a proposal and needs it")
+    .addOption(asOwnerOption())
     .action(async function (this: Command, person: string, other: string) {
       const context = messengerContext(this, messenger)
-      const linked = await context.withServices((services) => services.people.link(person, other))
+      const { reason, asOwner } = this.opts<{ reason?: string; asOwner?: boolean }>()
+      const by = actorOf(this, asOwner)
+      const linked = await context.withServices((services) => services.people.link(person, other, { by, reason }))
       renderAnswer(this, context, itemOf(snakeKeys(linked)))
-      context.renderer.success(`${linked.identities.length} identities are now one person`)
+      if (linked.proposal === undefined)
+        context.renderer.success(`${linked.identities.length} identities are now one person`)
+      else context.renderer.note(`proposed as ${linked.proposal}: only the owner links them`)
     })
 
   annotate(contacts.command("unlink"), { effects: LOCAL_WRITE, output: { entity: "linked_person" } })

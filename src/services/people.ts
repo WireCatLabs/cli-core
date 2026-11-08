@@ -72,7 +72,7 @@ export interface PeopleService {
     options: { chats: string[]; limit?: number; detail?: Detail; fetch?: boolean },
   ): Promise<PersonMessages>
   /** `other` may name another messenger of the store: `max:Ana`. */
-  link(person: string, other: string, method?: string): Promise<PersonRecord>
+  link(person: string, other: string, options: LinkPeopleOptions): Promise<LinkedPeople>
   unlink(person: string): Promise<PersonRecord>
   /**
    * Only counts and the people recognised: never a number. `IMPORT_CHUNK` numbers a request, each request
@@ -205,8 +205,8 @@ export const peopleService = (deps: ServiceDeps): PeopleService => {
       })
     },
 
-    link: async (person, other, method = "manual") =>
-      linkPeople(await deps.store(), await deps.account(), person, other, method),
+    link: async (person, other, options) =>
+      linkPeople(await deps.store(), await deps.account(), person, other, options),
 
     unlink: async (person) => {
       const store = await deps.store()
@@ -310,26 +310,62 @@ export const peopleService = (deps: ServiceDeps): PeopleService => {
 /** Numbers per request: one big list in one request is what a contact-scraping account sends. */
 const IMPORT_CHUNK = 10
 
-/** Digits, with the `+` and the spaces, dashes and brackets people type dropped. */
+export interface LinkPeopleOptions {
+  /** `"owner"`, or the agent the run is attributed to (`actorOf`): only the owner's link is made at once. */
+  by: string
+  /** Why an agent thinks they are one person; it is required of an agent and kept on the proposal. */
+  reason?: string | undefined
+  method?: string
+}
+
+/** The person as linked, or, for an agent, as still unlinked with the `identity_link` proposal waiting for the owner. */
+export type LinkedPeople = PersonRecord & { proposal?: string }
+
 /**
- * The owner's link of two people, each read in the account's messenger unless prefixed (`max:Ana`, `email:ana@x.com`,
- * `person:12`); `me` links the first to the owner. A tool without a messenger (a calendar CLI) calls it directly.
+ * Links two people, each read in the account's messenger unless prefixed (`max:Ana`, `email:ana@x.com`, `person:12`);
+ * `me` links the first to the owner. The owner's link is made at once; an agent's opens an `identity_link` proposal
+ * only the owner confirms, and an agent never says who the owner is. A tool without a messenger (a calendar CLI) calls
+ * it directly.
  */
 export const linkPeople = async (
   store: MessageStore,
   account: AccountKey,
   person: string,
   other: string,
-  method = "manual",
-): Promise<PersonRecord> => {
+  { by, reason, method = "manual" }: LinkPeopleOptions,
+): Promise<LinkedPeople> => {
   const one = await identityIn(store, account, person)
-  if (other === "me") return store.people.linkToOwner(one)
+  const owner = by === "owner"
+  if (other === "me") {
+    if (!owner)
+      throw new CliError("permission_error", "only the owner links an identity to themselves; the owner runs this", {
+        reason: "identity.owner-only",
+      })
+    return store.people.linkToOwner(one)
+  }
   const two = await identityIn(store, account, other)
   if (one.provider === two.provider && one.id === two.id)
     throw new CliError("validation_error", "that is the same person twice")
-  return store.people.linkIdentities(one, two, { method, by: "owner" })
+  if (owner) return store.people.linkIdentities(one, two, { method, by })
+  const why = reason?.trim()
+  if (!why)
+    throw new CliError("validation_error", "an agent proposing a link gives a reason: --reason <why they are one>", {
+      reason: "proposal.reason-required",
+    })
+  const record = (await store.people.personOf(one)) as PersonRecord
+  if (record.identities.some(({ provider, id }) => provider === two.provider && id === two.id)) return record
+  // `linkIdentities` merges `other`'s person into `person`'s; a confirmed proposal merges `identity`'s into `with`'s.
+  const proposed = await store.people.proposeLink({
+    identity: two,
+    with: one,
+    signal: "agent",
+    by: { bot: by },
+    reason: why,
+  })
+  return { ...record, proposal: proposed.id }
 }
 
+/** Digits, with the `+` and the spaces, dashes and brackets people type dropped. */
 export const phoneOf = (typed: string): string => {
   const digits = typed.replace(/[\s()+-]/g, "")
   if (!/^\d{6,15}$/.test(digits)) {

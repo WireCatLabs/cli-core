@@ -63,6 +63,14 @@ shape of this file.
 
 ### Changed — may break callers
 
+- **`contacts link` and a calendar's `people link` from an agent's terminal open an `identity_link` proposal instead
+  of linking.** The run is attributed as `mentions confirm` attributes it (`actorOf`: `AI_AGENT`, `CLAUDECODE` and the
+  other agents' variables, or an MCP server's run). An agent's link needs `--reason` (`proposal.reason-required`),
+  answers with the person unchanged and the proposal's id in the new `proposal` field of `linked_person` and
+  `calendar_linked_person`, and an agent's `<person> me` is refused (`identity.owner-only`). The owner's run links at
+  once, as before; `--as-owner` records an agent-terminal run as the owner's, and MCP never offers it.
+  `linkPeople(store, account, person, other, { by, reason?, method? })` and `PeopleService.link` take who runs it,
+  with no default: pass `actorOf(command)`, or `"owner"` only from a path that established the owner runs it.
 - **An agent's mention confirm or meeting participant association no longer moves an identity.** Unless `by` is
   `"owner"`, `confirmMention` to a person and `linkParticipantPerson` open an `identity_link` proposal and return its
   id as `proposal`, so an owner's link is never replaced. Such a mention has the new status `proposed` (in

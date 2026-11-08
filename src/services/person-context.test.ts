@@ -145,7 +145,7 @@ describe("contacts context", () => {
   })
 
   it("spans a linked MAX identity until it is unlinked", async () => {
-    const linked = await people().link("11", "max:m5")
+    const linked = await people().link("11", "max:m5", { by: "owner" })
     expect(linked.identities.map((one) => `${one.provider}:${one.id}`)).toEqual(["max:m5", "telegram:11"])
 
     const both = await people().context("11")
@@ -193,7 +193,7 @@ describe("contacts context", () => {
       1,
     )
 
-    const linked = await people().link("11", "email:ana@x.com")
+    const linked = await people().link("11", "email:ana@x.com", { by: "owner" })
 
     expect(linked.identities.map((one) => `${one.provider}:${one.id}`)).toEqual(["email:ana@x.com", "telegram:11"])
   })
@@ -247,7 +247,7 @@ describe("contacts context", () => {
       ],
       1,
     )
-    await people().link("11", "email:ana@x.com")
+    await people().link("11", "email:ana@x.com", { by: "owner" })
 
     const found = await people().context("11", { now })
 
