@@ -80,6 +80,10 @@ export interface RelationsStore {
 
 type Row = Record<string, unknown>
 
+// links_relationship_key's WHERE, word for word: without it SQLite cannot use that partial index, picks
+// (to_type, to_id) and reads every link of a busy end, such as a deal owner's, for each relationship (#2623).
+const KEYED = "kind IN ('member-of', 'related-to', 'reports-to', 'customer-of', 'partner-of') AND to_id IS NOT NULL"
+
 const metadataOf = (relation: ReportedRelation) =>
   relation.metadata && Object.keys(relation.metadata).length ? JSON.stringify(relation.metadata) : null
 
@@ -109,7 +113,8 @@ export const syncReportedIn = (
   const issue = (relation: ReportedRelation, reason: ReportedIssue["reason"], message: string) =>
     result.issues.push({ reason, message, from: relation.from, to: relation.to, kind: relation.kind })
   const sameKey =
-    "kind = ? AND from_type = ? AND from_id = ? AND to_type = ? AND to_id = ? AND anchor IS NULL AND ifnull(role, '') = ?"
+    `${KEYED} AND kind = ? AND from_type = ? AND from_id = ? AND to_type = ? AND to_id = ? ` +
+    "AND anchor IS NULL AND ifnull(role, '') = ?"
 
   for (const relation of relationships) {
     let from = thingOf(database, relation.from)

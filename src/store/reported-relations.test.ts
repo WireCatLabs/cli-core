@@ -1,7 +1,8 @@
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { afterEach, expect, it } from "vitest"
+import { DatabaseSync } from "node:sqlite"
+import { afterEach, expect, it, vi } from "vitest"
 import { isUsable, usableLinkSql } from "../domain/relations.js"
 import { openCache } from "./open.js"
 import { crmSettingKey, parseCrmSetting, parseCrmSettingValue } from "./sqlite/crm-settings.js"
@@ -141,4 +142,28 @@ it("lists live relationships before withdrawn ones", async () => {
     [northstar, "reported"],
     [acme, "ended"],
   ])
+})
+
+it("finds a reported relationship by its unique key, not by every link of its busier end", async () => {
+  const { path, store, acme, alice } = await fixture()
+  const prepare = vi.spyOn(DatabaseSync.prototype, "prepare")
+  const contact = { from: alice, to: acme, kind: "member-of" as const, role: "contact" }
+  const scope = { from: [alice], kinds: ["member-of" as const] }
+  await store.relations.syncReported(SOURCE, [contact], scope)
+  await store.relations.syncReported(SOURCE, [contact], scope)
+  const lookups = [...new Set(prepare.mock.calls.map(([sql]) => sql).filter((sql) => sql.includes("anchor IS NULL")))]
+  prepare.mockRestore()
+  const database = new DatabaseSync(path, { readOnly: true })
+  try {
+    expect(lookups).toHaveLength(2)
+    for (const sql of lookups)
+      expect(
+        database
+          .prepare(`EXPLAIN QUERY PLAN ${sql}`)
+          .all()
+          .map((row) => row.detail),
+      ).toEqual([expect.stringContaining("USING INDEX links_relationship_key (kind=? AND from_type=? AND from_id=?")])
+  } finally {
+    database.close()
+  }
 })
