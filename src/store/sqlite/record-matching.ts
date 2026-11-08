@@ -1,3 +1,4 @@
+import { isEmailAddress } from "../../domain/addresses.js"
 import { isObject } from "../../domain/record-fields.js"
 import { type IdentityType, RECORD_TABLES } from "../../domain/record-types.js"
 import type { EnvelopeOptions, EnvelopeSource } from "../../domain/records.js"
@@ -66,7 +67,7 @@ export const identifiersOf = (
     found.contact = { provider: source.provider, externalId: crmIdentityId(source, externalId) }
     for (const email of valuesOf(fields.email)) {
       const address = email.trim().toLowerCase()
-      if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(address) && !found.emails.includes(address)) found.emails.push(address)
+      if (isEmailAddress(address) && !found.emails.includes(address)) found.emails.push(address)
     }
     const region = options.phone_region?.toLowerCase()
     const phones = Array.isArray(fields.phone) ? fields.phone : [fields.phone]
