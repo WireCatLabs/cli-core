@@ -5,7 +5,7 @@ Every table of the shared store (tg, max, memo, zm) as its migrations create it.
 `drizzle/` must agree with it. `pnpm schema:check` fails when they do not, and `src/store/sqlite/schema.test.ts`
 checks every table and column of a new store against this page.
 
-123 tables, 25 full-text indexes.
+131 tables, 25 full-text indexes.
 
 ## Conventions
 
@@ -154,7 +154,7 @@ A real person, whatever accounts they write from: their identities point here. `
 | `phone` | text |  |  | the phone as the messenger showed it, whole; saved by `contacts sync` and an online profile read |
 | `name_folded` | text |  |  | `fold(name)`, which `tags list name:` compares; filled on open when NULL |
 
-*Keys and indexes:* `UNIQUE (provider, external_id)`, `INDEX (email) WHERE email IS NOT NULL`, `INDEX (id) WHERE name IS NOT NULL AND name_folded IS NULL`
+*Keys and indexes:* `UNIQUE (provider, external_id)`, `INDEX (email) WHERE email IS NOT NULL`, `INDEX (phone) WHERE phone IS NOT NULL`, `INDEX (id) WHERE name IS NOT NULL AND name_folded IS NULL`
 
 ### `identity_links`
 
@@ -1862,8 +1862,10 @@ An invoice the owner issued or received. Its lines are `invoice_lines` and its t
 | `created_at` | integer | not null |  | when this row was saved here |
 | `updated_at` | integer | not null |  | when this row last changed here |
 | `deleted_at` | integer |  |  | gone at the source; sync never hard-deletes |
+| `contract_id` | integer |  | → `contracts.id` | the contract it bills under |
+| `subscription_id` | integer |  | → `subscriptions.id` | the subscription whose period it bills |
 
-*Keys and indexes:* `INDEX (issuer_type, issuer_id)`, `INDEX (counterparty_type, counterparty_id)`, `INDEX (project_id)`, `INDEX (author_type, author_id)`, `INDEX (confirmed_by_type, confirmed_by_id)`
+*Keys and indexes:* `INDEX (issuer_type, issuer_id)`, `INDEX (counterparty_type, counterparty_id)`, `INDEX (project_id)`, `INDEX (author_type, author_id)`, `INDEX (confirmed_by_type, confirmed_by_id)`, `INDEX (contract_id)`, `INDEX (subscription_id)`
 
 ### `invoice_lines`
 
@@ -1880,12 +1882,13 @@ One line of an invoice, in its currency.
 | `amount` | integer | not null |  | quantity × unit price, half rounded up, in minor units of `currency` (kopecks, cents; yen for JPY): never a float |
 | `created_at` | integer | not null |  | when this row was saved here |
 | `updated_at` | integer | not null |  | when this row last changed here |
+| `catalog_item_id` | integer |  | → `catalog_items.id` | the item it bills, when known; its price is copied |
 
-*Keys and indexes:* `UNIQUE (invoice_id, position)`
+*Keys and indexes:* `UNIQUE (invoice_id, position)`, `INDEX (catalog_item_id)`
 
 ### `payments`
 
-Money that moved to or from the owner. A refund is a payment the other way, allocated to the invoice it refunds.
+Money that moved to or from the owner. A refund is a payment the other way with `refund_of`, allocated only to an invoice its payment is allocated to; paid is net of confirmed refunds.
 
 | Column | Type | Constraints | References | Meaning |
 |---|---|---|---|---|
@@ -1911,8 +1914,10 @@ Money that moved to or from the owner. A refund is a payment the other way, allo
 | `created_at` | integer | not null |  | when this row was saved here |
 | `updated_at` | integer | not null |  | when this row last changed here |
 | `deleted_at` | integer |  |  | gone at the source; sync never hard-deletes |
+| `refund_of` | integer |  | → `payments.id` | the payment this refunds: the other direction, the same currency, never more than it |
+| `subscription_id` | integer |  | → `subscriptions.id` | the subscription it pays, with or without an invoice |
 
-*Keys and indexes:* `INDEX (payer_type, payer_id)`, `INDEX (payee_type, payee_id)`, `INDEX (project_id)`, `INDEX (author_type, author_id)`, `INDEX (confirmed_by_type, confirmed_by_id)`
+*Keys and indexes:* `INDEX (payer_type, payer_id)`, `INDEX (payee_type, payee_id)`, `INDEX (project_id)`, `INDEX (author_type, author_id)`, `INDEX (confirmed_by_type, confirmed_by_id)`, `INDEX (refund_of)`, `INDEX (subscription_id)`
 
 ### `payment_allocations`
 
@@ -1965,8 +1970,11 @@ An order the owner placed with a shop or a supplier, or took from a client: for 
 | `updated_at` | integer | not null |  | when this row last changed here |
 | `deleted_at` | integer |  |  | gone at the source; sync never hard-deletes |
 | `source_url` | text |  |  | the http or https page of the order at the shop, such as an Amazon order |
+| `contract_id` | integer |  | → `contracts.id` | the `contract` it belongs to |
+| `deal_id` | integer |  | → `deals.id` | the deal it came from, when no contract sits between |
+| `direction` | text | not null |  | purchase (the owner buys), sale (the owner sells: he is the supplier) |
 
-*Keys and indexes:* `INDEX (customer_type, customer_id)`, `INDEX (supplier_type, supplier_id)`, `INDEX (invoice_id)`, `INDEX (payment_id)`, `INDEX (project_id)`, `INDEX (author_type, author_id)`, `INDEX (confirmed_by_type, confirmed_by_id)`
+*Keys and indexes:* `INDEX (customer_type, customer_id)`, `INDEX (supplier_type, supplier_id)`, `INDEX (invoice_id)`, `INDEX (payment_id)`, `INDEX (project_id)`, `INDEX (author_type, author_id)`, `INDEX (confirmed_by_type, confirmed_by_id)`, `INDEX (contract_id)`, `INDEX (deal_id)`
 
 ## Deals
 
@@ -2108,6 +2116,240 @@ A CRM account's own fields on its deals, leads, contacts or companies, as its sy
 
 *Keys and indexes:* `UNIQUE (account_id, kind, code)`
 
+## Business
+
+What the owner sells, the contracts and subscriptions he works under, and the bank accounts the money moves through. A balance is computed from its transactions; nothing is converted between currencies.
+
+### `catalog_items`
+
+What the owner or a supplier sells: a product or a service, with its price. Written directly by anyone, as it holds no money that counts; a line copies its price, so a price change never changes a line.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | PK |  |  |
+| `kind` | text | not null |  | product, service |
+| `name` | text | not null |  |  |
+| `name_folded` | text | not null |  | the name in one letter case, for finding it |
+| `sku` | text |  |  | the item's code; unique per supplier among live items |
+| `supplier_type` | text |  |  | `person` or `organization`; null for the owner's own item |
+| `supplier_id` | integer |  |  | the row in the `supplier_type` table |
+| `unit` | text |  |  | what one of it is: hour, pcs, month; free text |
+| `unit_price` | integer |  |  | 0 or more, in minor units of `currency` (kopecks, cents; yen for JPY): never a float; set with `currency` or not at all |
+| `currency` | text |  |  | ISO 4217, upper case |
+| `description` | text |  |  |  |
+| `archived_date` | text |  |  | `YYYY-MM-DD`: no longer sold; lines and subscriptions keep pointing at it |
+| `author_type` | text | not null |  | `person` or `bot` |
+| `author_id` | integer | not null |  | the row in the `author_type` table |
+| `model` | text |  |  | the model that wrote it, for an agent's |
+| `source` | text | not null |  | owner, agent, an import |
+| `metadata` | text |  |  | JSON: what the source sends that has no column, and is not searched |
+| `created_at` | integer | not null |  | when this row was saved here |
+| `updated_at` | integer | not null |  | when this row last changed here |
+| `deleted_at` | integer |  |  | gone at the source; sync never hard-deletes |
+
+*Keys and indexes:* `UNIQUE (supplier_type, supplier_id, sku) WHERE supplier_id IS NOT NULL AND sku IS NOT NULL AND deleted_at IS NULL`, `UNIQUE (sku) WHERE supplier_id IS NULL AND sku IS NOT NULL AND deleted_at IS NULL`, `INDEX (name_folded)`, `INDEX (author_type, author_id)`
+
+### `order_lines`
+
+One line of an order, in its currency. An order with lines totals their sum; lines change only while the order is proposed (by its author) or by the owner.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | PK |  |  |
+| `order_id` | integer | not null | → `orders.id` | the `order` it belongs to |
+| `position` | integer | not null |  | 1, 2, …, in the order the order lists them |
+| `description` | text | not null |  | copied from the item when not given |
+| `quantity` | text | not null |  | a decimal as text, `1` or `1.5`: never a float |
+| `unit_price` | integer |  |  | in minor units of `currency` (kopecks, cents; yen for JPY): never a float; copied, never read back from the item |
+| `amount` | integer | not null |  | quantity × unit price, half rounded up, in minor units of `currency` (kopecks, cents; yen for JPY): never a float |
+| `catalog_item_id` | integer |  | → `catalog_items.id` | the item it sells, when known |
+| `created_at` | integer | not null |  | when this row was saved here |
+| `updated_at` | integer | not null |  | when this row last changed here |
+
+*Keys and indexes:* `UNIQUE (order_id, position)`, `INDEX (catalog_item_id)`
+
+### `contracts`
+
+A contract the owner works under. Its parties are relationships with a role and its document an `attached` link. One with a value from an agent or an import is a proposal; one without a value is written confirmed, with `confirmed_by` null: nobody decided it, and `author` says who wrote it.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | PK |  |  |
+| `name` | text | not null |  |  |
+| `number` | text |  |  | the number printed on it |
+| `kind` | text | not null |  | sale, purchase, service, lease, employment, nda, license, other |
+| `status` | text | not null |  | draft, active, ended, terminated |
+| `signed_date` | text |  |  | `YYYY-MM-DD` |
+| `effective_date` | text |  |  | `YYYY-MM-DD`; at or before the expiration date |
+| `expiration_date` | text |  |  | `YYYY-MM-DD`; null when it runs until ended |
+| `auto_renew` | integer | not null |  | 1 when it renews by itself |
+| `renewal_count` | integer |  |  | how many units a renewal adds; set with `renewal_unit` |
+| `renewal_unit` | text |  |  | day, week, month, year |
+| `notice_days` | integer |  |  | days of notice to cancel; the deadline is computed from the expiration date, never stored |
+| `terms` | text |  |  | renewal, cancellation and other terms, as free text |
+| `value` | integer |  |  | 0 or more, in minor units of `currency` (kopecks, cents; yen for JPY): never a float; set with `currency` or not at all |
+| `currency` | text |  |  | ISO 4217, upper case |
+| `project_id` | integer |  | → `projects.id` | the `project` it belongs to |
+| `deal_id` | integer |  | → `deals.id` | the deal it closed |
+| `review` | text | not null |  | proposed, confirmed, rejected: the owner's entry is confirmed at once, an agent's or an import's waits |
+| `author_type` | text | not null |  | `person` or `bot` |
+| `author_id` | integer | not null |  | the row in the `author_type` table |
+| `model` | text |  |  | the model that wrote it, for an agent's |
+| `confirmed_by_type` | text |  |  | who confirmed it; null while proposed |
+| `confirmed_by_id` | integer |  |  | who confirmed it; null while proposed |
+| `source` | text | not null |  | owner, agent, an import |
+| `metadata` | text |  |  | JSON: what the source sends that has no column, and is not searched |
+| `created_at` | integer | not null |  | when this row was saved here |
+| `updated_at` | integer | not null |  | when this row last changed here |
+| `deleted_at` | integer |  |  | gone at the source; sync never hard-deletes |
+
+*Keys and indexes:* `INDEX (project_id)`, `INDEX (deal_id)`, `INDEX (author_type, author_id)`, `INDEX (confirmed_by_type, confirmed_by_id)`
+
+### `subscriptions`
+
+A subscription the owner bills (receivable) or pays (payable): one supplier, one customer, an interval and its dates. Its prices are `subscription_prices`, each a row of its own.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | PK |  |  |
+| `name` | text | not null |  | the item's name when not given |
+| `direction` | text | not null |  | receivable (the owner bills), payable (the owner pays) |
+| `supplier_type` | text | not null |  | `person` or `organization` |
+| `supplier_id` | integer | not null |  | the row in the `supplier_type` table |
+| `customer_type` | text | not null |  | `person` or `organization` |
+| `customer_id` | integer | not null |  | the row in the `customer_type` table |
+| `catalog_item_id` | integer |  | → `catalog_items.id` | the `catalog_item` it belongs to |
+| `contract_id` | integer |  | → `contracts.id` | the `contract` it belongs to |
+| `project_id` | integer |  | → `projects.id` | the `project` it belongs to |
+| `status` | text | not null |  | trial, active, paused, cancelled, ended |
+| `interval_count` | integer | not null |  | 1 or more: billed every `interval_count` units |
+| `interval_unit` | text | not null |  | day, week, month, year |
+| `start_date` | text | not null |  | `YYYY-MM-DD` |
+| `trial_end_date` | text |  |  | `YYYY-MM-DD`; required while in trial, never before the start |
+| `next_renewal_date` | text |  |  | `YYYY-MM-DD` |
+| `cancelled_date` | text |  |  | `YYYY-MM-DD`; required once cancelled |
+| `end_date` | text |  |  | `YYYY-MM-DD`; never before the start |
+| `review` | text | not null |  | proposed, confirmed, rejected: the owner's entry is confirmed at once, an agent's or an import's waits |
+| `author_type` | text | not null |  | `person` or `bot` |
+| `author_id` | integer | not null |  | the row in the `author_type` table |
+| `model` | text |  |  | the model that wrote it, for an agent's |
+| `confirmed_by_type` | text |  |  | who confirmed it; null while proposed |
+| `confirmed_by_id` | integer |  |  | who confirmed it; null while proposed |
+| `source` | text | not null |  | owner, agent, an import |
+| `metadata` | text |  |  | JSON: what the source sends that has no column, and is not searched |
+| `created_at` | integer | not null |  | when this row was saved here |
+| `updated_at` | integer | not null |  | when this row last changed here |
+| `deleted_at` | integer |  |  | gone at the source; sync never hard-deletes |
+
+*Keys and indexes:* `INDEX (supplier_type, supplier_id)`, `INDEX (customer_type, customer_id)`, `INDEX (catalog_item_id)`, `INDEX (contract_id)`, `INDEX (project_id)`, `INDEX (author_type, author_id)`, `INDEX (confirmed_by_type, confirmed_by_id)`
+
+### `subscription_prices`
+
+A subscription's price from a day on, never overwritten: a correction is a rejection and a new row. The current price is the confirmed row with the latest `effective_from` up to today.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | PK |  |  |
+| `subscription_id` | integer | not null | → `subscriptions.id` | the `subscription` it belongs to |
+| `amount` | integer | not null |  | 0 or more, in minor units of `currency` (kopecks, cents; yen for JPY): never a float |
+| `currency` | text | not null |  | ISO 4217, upper case |
+| `effective_from` | text | not null |  | `YYYY-MM-DD`: the first day it is billed |
+| `review` | text | not null |  | proposed, confirmed, rejected: the owner's entry is confirmed at once, an agent's or an import's waits |
+| `author_type` | text | not null |  | `person` or `bot` |
+| `author_id` | integer | not null |  | the row in the `author_type` table |
+| `model` | text |  |  | the model that wrote it, for an agent's |
+| `confirmed_by_type` | text |  |  | who confirmed it; null while proposed |
+| `confirmed_by_id` | integer |  |  | who confirmed it; null while proposed |
+| `source` | text | not null |  | owner, agent, an import |
+| `metadata` | text |  |  | JSON: what the source sends that has no column, and is not searched |
+| `created_at` | integer | not null |  | when this row was saved here |
+| `updated_at` | integer | not null |  | when this row last changed here |
+
+*Keys and indexes:* `UNIQUE (subscription_id, effective_from) WHERE review <> 'rejected'`, `INDEX (author_type, author_id)`, `INDEX (confirmed_by_type, confirmed_by_id)`
+
+### `financial_accounts`
+
+A bank account, card, cash box or wallet (`wallet:<id>`), in one currency: a multi-currency bank account is one row per currency. Its balance is computed from its transactions, never stored; only the owner sets the opening balance.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | PK |  |  |
+| `name` | text | not null |  |  |
+| `name_folded` | text | not null |  | the name in one letter case, for finding it |
+| `kind` | text | not null |  | bank, card, cash, wallet, other |
+| `currency` | text | not null |  | ISO 4217, upper case; kept once it has transactions |
+| `institution` | text |  |  | the bank's name, as text |
+| `number_hint` | text |  |  | the last 4 characters of the number, never the whole of it |
+| `holder_type` | text |  |  | `person` or `organization`: whose account, when not the owner's |
+| `holder_id` | integer |  |  | the row in the `holder_type` table |
+| `opening_balance` | integer |  |  | signed, in minor units of `currency` (kopecks, cents; yen for JPY): never a float, on `opening_date`; set with it or not at all, by the owner only |
+| `opening_date` | text |  |  | `YYYY-MM-DD` |
+| `closed_date` | text |  |  | `YYYY-MM-DD` |
+| `author_type` | text | not null |  | `person` or `bot` |
+| `author_id` | integer | not null |  | the row in the `author_type` table |
+| `model` | text |  |  | the model that wrote it, for an agent's |
+| `source` | text | not null |  | owner, agent, an import |
+| `metadata` | text |  |  | JSON: what the source sends that has no column, and is not searched |
+| `created_at` | integer | not null |  | when this row was saved here |
+| `updated_at` | integer | not null |  | when this row last changed here |
+| `deleted_at` | integer |  |  | gone at the source; sync never hard-deletes |
+
+*Keys and indexes:* `INDEX (name_folded)`, `INDEX (holder_type, holder_id)`, `INDEX (author_type, author_id)`
+
+### `financial_transactions`
+
+What a statement says moved on a financial account (`transaction:<id>`). A payment is the settlement between parties; the two meet only through `payment_id`, of the same currency, direction and amount.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | PK |  |  |
+| `financial_account_id` | integer | not null | → `financial_accounts.id` | the `financial_account` it belongs to |
+| `direction` | text | not null |  | in (to the account), out (from it) |
+| `amount` | integer | not null |  | more than 0, in minor units of `currency` (kopecks, cents; yen for JPY): never a float |
+| `currency` | text | not null |  | the account's |
+| `status` | text | not null |  | pending, booked: only a booked one counts in the balance |
+| `statement_date` | text | not null |  | `YYYY-MM-DD`: the day the statement shows |
+| `booked_date` | text |  |  | `YYYY-MM-DD`; set when booked, null while pending |
+| `description` | text |  |  | as the statement says it |
+| `counterparty_name` | text |  |  | as the statement says it |
+| `counterparty_type` | text |  |  | `person` or `organization`, once known |
+| `counterparty_id` | integer |  |  | the row in the `counterparty_type` table |
+| `reference` | text |  |  |  |
+| `payment_id` | integer |  | → `payments.id` | the payment it settles; one transaction per payment |
+| `project_id` | integer |  | → `projects.id` | the `project` it belongs to |
+| `review` | text | not null |  | proposed, confirmed, rejected: the owner's entry is confirmed at once, an agent's or an import's waits |
+| `author_type` | text | not null |  | `person` or `bot` |
+| `author_id` | integer | not null |  | the row in the `author_type` table |
+| `model` | text |  |  | the model that wrote it, for an agent's |
+| `confirmed_by_type` | text |  |  | who confirmed it; null while proposed |
+| `confirmed_by_id` | integer |  |  | who confirmed it; null while proposed |
+| `source` | text | not null |  | owner, agent, an import |
+| `metadata` | text |  |  | JSON: what the source sends that has no column, and is not searched |
+| `created_at` | integer | not null |  | when this row was saved here |
+| `updated_at` | integer | not null |  | when this row last changed here |
+| `deleted_at` | integer |  |  | gone at the source; sync never hard-deletes |
+
+*Keys and indexes:* `INDEX (financial_account_id, booked_date)`, `UNIQUE (payment_id) WHERE payment_id IS NOT NULL AND deleted_at IS NULL`, `INDEX (counterparty_type, counterparty_id)`, `INDEX (project_id)`, `INDEX (author_type, author_id)`, `INDEX (confirmed_by_type, confirmed_by_id)`
+
+### `transaction_splits`
+
+A part of a transaction under a category. The splits never exceed the transaction's amount; the rest is uncategorized.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | PK |  |  |
+| `transaction_id` | integer | not null | → `financial_transactions.id` | the `financial_transaction` it belongs to |
+| `position` | integer | not null |  | 1, 2, … |
+| `category` | text | not null |  | free text; there is no category table |
+| `category_folded` | text | not null |  | the category in one letter case, for totals |
+| `amount` | integer | not null |  | more than 0, in minor units of `currency` (kopecks, cents; yen for JPY): never a float |
+| `project_id` | integer |  | → `projects.id` | the `project` it belongs to |
+| `note` | text |  |  |  |
+| `created_at` | integer | not null |  | when this row was saved here |
+| `updated_at` | integer | not null |  | when this row last changed here |
+
+*Keys and indexes:* `UNIQUE (transaction_id, position)`, `INDEX (category_folded)`, `INDEX (project_id)`
+
 ## Decisions from a message
 
 The buttons of a message that asks the owner to decide a batch. A press is the owner's proof; the table only keeps the one-time keys.
@@ -2159,8 +2401,9 @@ What a source said about one of its records (a payment row of a sheet, a deal of
 | `created_at` | integer | not null |  | when this row was saved here |
 | `updated_at` | integer | not null |  | when this row last changed here |
 | `deleted_at` | integer |  |  | gone at the source; sync never hard-deletes |
+| `created_entity` | integer | not null |  | 1 when this record created its entity: made by the import |
 
-*Keys and indexes:* `UNIQUE (account_id, type, external_id)`, `INDEX (entity_type, entity_id)`
+*Keys and indexes:* `UNIQUE (account_id, type, external_id)`, `INDEX (account_id, batch_id)`, `INDEX (entity_type, entity_id)`
 
 ### `record_relations`
 
@@ -2176,6 +2419,7 @@ A record's reference to another record of the same account. A target not yet imp
 | `target_id` | integer |  | → `records.id` | null until the target is imported |
 | `created_at` | integer | not null |  | when this row was saved here |
 | `amount` | text |  |  | the share of a payment a settles relation names, a decimal in its currency; null: as far as both allow |
+| `as_role` | text |  |  | the role inside a relationship, such as decision-maker or customer |
 
 *Keys and indexes:* `UNIQUE (record_id, role, target_type, target_external_id)`, `INDEX (target_type, target_external_id)`, `INDEX (target_id)`
 

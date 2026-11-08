@@ -1,15 +1,27 @@
 import { CliError } from "@wirecat/cli-base"
+import { ORDER_DIRECTIONS, type OrderDirection } from "../../domain/business.js"
 import { sourceUrlOf } from "../../domain/external-links.js"
 import { FINANCE_REVIEWS, type FinanceReview } from "../../domain/finance.js"
-import { currencyOf, formatDecimal, minorUnits, scaleOf } from "../../domain/money.js"
+import { currencyOf, formatDecimal, minorUnits, moneyLabel, scaleOf } from "../../domain/money.js"
 import { ORDER_PURPOSES, ORDER_STATUSES, type OrderPurpose, type OrderStatus, orderTitle } from "../../domain/orders.js"
-import { assertMayDecide, type Decider, deciderAuthor } from "../decisions.js"
+import type { Decider } from "../decisions.js"
 import { fold } from "../normalize.js"
-import { ownerPerson, type ProposedByFilter, proposedBySql, proposerOf } from "./actors.js"
-import { isoDate, oneOf, type Party, type Reviewed, refuse, reviewedRowsOver, text, type Written } from "./finance.js"
-import { type Author, authorActor, projectId } from "./memories.js"
+import { ownerPerson, type ProposedByFilter, proposedBySql } from "./actors.js"
+import { type Author, projectId } from "./memories.js"
+import { type MoneyLine, type MoneyLineInput, moneyLinesOver, type PricedLine } from "./money-lines.js"
 import { requiredThing } from "./notes.js"
 import type { StoreContext } from "./open.js"
+import {
+  isoDate,
+  limitOf,
+  oneOf,
+  type Party,
+  type Reviewed,
+  refuse,
+  reviewedRowsOver,
+  text,
+  type Written,
+} from "./reviewed.js"
 import { write } from "./transaction.js"
 
 export interface Order extends Reviewed {
@@ -35,6 +47,14 @@ export interface Order extends Reviewed {
   payment: string | null
   /** The order's page at the shop, http or https. */
   sourceUrl: string | null
+  /** `sale` when the owner sells: he is then its supplier. */
+  direction: OrderDirection
+  contract: string | null
+  deal: string | null
+}
+
+export interface OrderDetail extends Order {
+  lines: MoneyLine[]
 }
 
 export interface OrderInput extends Written {
@@ -42,9 +62,10 @@ export interface OrderInput extends Written {
   customer?: string
   purpose: OrderPurpose
   supplier?: string
-  supplierName: string
+  /** Required for a purchase; a sale takes the supplier's name, the owner's by default. */
+  supplierName?: string
   number?: string
-  /** A decimal string in `currency`; give both or neither. */
+  /** A decimal string in `currency`; give both or neither. With lines it is their sum, refused when it differs. */
   total?: string
   currency?: string
   /** `placed` when left out. */
@@ -55,6 +76,13 @@ export interface OrderInput extends Written {
   payment?: string
   /** The order's page at the shop: an http or https address. */
   sourceUrl?: string
+  /** `purchase` when left out. A sale names its customer, and its supplier is the owner's own person by default. */
+  direction?: OrderDirection
+  contract?: string
+  /** The deal it came from, when no contract sits between. */
+  deal?: string
+  /** With lines the order has a currency and totals their sum. */
+  lines?: MoneyLineInput[]
 }
 
 export interface OrderFilter {
@@ -76,16 +104,21 @@ export interface OrderFilter {
  * confirmed at once; an agent's waits as proposed for him, and only he decides it.
  */
 export interface OrdersStore {
-  add(input: OrderInput): Promise<Order>
-  get(reference: string): Promise<Order>
+  add(input: OrderInput): Promise<OrderDetail>
+  get(reference: string): Promise<OrderDetail>
   list(filter?: OrderFilter): Promise<Order[]>
   /** The owner moves an order on, such as a later mail saying it shipped; `date` is the delivery day. */
   setStatus(reference: string, input: { status: OrderStatus; date?: string; by: Author }): Promise<Order>
   confirm(reference: string, by: Decider, reason?: string): Promise<Order>
   reject(reference: string, by: Decider, reason?: string): Promise<Order>
+  /** A line at the end; the owner changes any order's lines, a bot only those of an order it proposed still proposed. */
+  addLine(reference: string, input: MoneyLineInput & { by: Author }): Promise<OrderDetail>
+  removeLine(reference: string, input: { position: number; by: Author }): Promise<OrderDetail>
 }
 
 type Row = Record<string, unknown>
+
+const MAX_LINES = 500
 
 const ORDERS =
   "SELECT o.*, b.name AS author_name, b.kind AS author_kind FROM orders o " +
@@ -97,7 +130,9 @@ type OrderOperations = {
 
 export const orderOperationsOver = (context: StoreContext): OrderOperations => {
   const { database, now } = context
-  const { partyOf, partyThing, reviewedOf, written, keepEvidence, ownerOnly, keepDecision } = reviewedRowsOver(context)
+  const { partyOf, partyThing, reviewedOf, written, keepEvidence, ownerOnly, linkedId, decideRow, mayChangeParts } =
+    reviewedRowsOver(context)
+  const moneyLines = moneyLinesOver(context)
 
   const orderOf = (row: Row): Order => {
     const currency = row.currency == null ? null : String(row.currency)
@@ -128,8 +163,37 @@ export const orderOperationsOver = (context: StoreContext): OrderOperations => {
       invoice: row.invoice_id == null ? null : `invoice:${row.invoice_id}`,
       payment: row.payment_id == null ? null : `payment:${row.payment_id}`,
       sourceUrl: row.source_url == null ? null : String(row.source_url),
+      direction: row.direction as OrderDirection,
+      contract: row.contract_id == null ? null : `contract:${row.contract_id}`,
+      deal: row.deal_id == null ? null : `deal:${row.deal_id}`,
       ...reviewedOf(row, "order"),
     }
+  }
+
+  const detailOf = (row: Row): OrderDetail => ({
+    ...orderOf(row),
+    lines: row.currency == null ? [] : moneyLines.shownLines("order", Number(row.id), String(row.currency)),
+  })
+
+  /** The order's total follows its lines in the same write: the trigger checks the sum when the order changes. */
+  const retotal = (orderId: number) => {
+    database
+      .prepare(
+        "UPDATE orders SET total = coalesce((SELECT sum(amount) FROM order_lines WHERE order_id = ?), total), " +
+          "updated_at = ? WHERE id = ?",
+      )
+      .run(orderId, now(), orderId)
+  }
+
+  const mayChangeLines = (row: Row, by: Author) => {
+    mayChangeParts(
+      row,
+      by,
+      `only the owner changes the lines of order:${row.id}; a bot changes only an order it proposed that is still proposed`,
+      "order.owner-only",
+    )
+    if (row.review === "rejected" || row.deleted_at != null)
+      refuse(`order:${row.id} is ${row.deleted_at != null ? "deleted" : "rejected"}`, "order.status")
   }
 
   const rowOf = (reference: string): Row => {
@@ -138,64 +202,63 @@ export const orderOperationsOver = (context: StoreContext): OrderOperations => {
     return database.prepare(`${ORDERS} WHERE o.id = ?`).get(thing.id) as Row
   }
 
-  const linked = (reference: string | undefined, type: "invoice" | "payment"): number | null => {
-    if (reference === undefined) return null
-    const thing = requiredThing(database, reference, `the ${type}`)
-    if (thing.type !== type) return refuse(`${reference} is not an ${type}: reference`, "order.ref")
-    return thing.id
-  }
+  const linked = (reference: string | undefined, type: "invoice" | "payment" | "contract" | "deal") =>
+    linkedId(reference, type, "order.ref")
 
   const statusOf = (value: unknown) => oneOf(value, ORDER_STATUSES, "an order's status")
 
   const decide = (reference: string, by: Decider, reason: string | undefined, confirm: boolean): Order => {
     const row = rowOf(reference)
-    const ref = `order:${row.id}`
-    assertMayDecide(
-      { id: ref, proposedBy: proposerOf(database, row.author_type, row.author_id), ownerOnly: true },
-      by,
-      context.decisions,
-    )
-    if (row.review !== "proposed") refuse(`${ref} is already ${String(row.review)}`, "proposal.wrong-state")
-    write(database, () => {
-      if (confirm) {
-        const { actor } = authorActor(context, deciderAuthor(by))
-        database
-          .prepare(
-            "UPDATE orders SET review = 'confirmed', confirmed_by_type = ?, confirmed_by_id = ?, updated_at = ? WHERE id = ?",
-          )
-          .run(actor.type, actor.id, now(), Number(row.id))
-      } else
-        database
-          .prepare("UPDATE orders SET review = 'rejected', updated_at = ? WHERE id = ?")
-          .run(now(), Number(row.id))
-      keepDecision("orders", Number(row.id), by, reason)
-    })
-    return orderOf(rowOf(ref))
+    decideRow("order", row, { by, reason, confirm })
+    return orderOf(rowOf(`order:${row.id}`))
   }
 
   return {
     add: (input) => {
       const purpose = oneOf(input.purpose, ORDER_PURPOSES, "an order's purpose")
+      const direction =
+        input.direction === undefined ? "purchase" : oneOf(input.direction, ORDER_DIRECTIONS, "a direction")
       const status = input.status === undefined ? "placed" : statusOf(input.status)
-      const supplierName =
-        text(input.supplierName, "an order's supplier name", 200) ??
-        refuse("an order names its shop or supplier", "order.field")
+      const named = text(input.supplierName, "an order's supplier name", 200)
+      if (named === null && direction === "purchase") refuse("an order names its shop or supplier", "order.field")
+      if (direction === "sale" && input.customer === undefined)
+        refuse("a sale names its customer, a person: or organization:", "order.field")
       const number = text(input.number, "an order's number", 80)
-      if ((input.total === undefined) !== (input.currency === undefined))
+      const lines = input.lines ?? []
+      if (!Array.isArray(lines) || lines.length > MAX_LINES)
+        refuse(`an order has at most ${MAX_LINES} lines`, "order.field")
+      if (lines.length && input.currency === undefined) refuse("an order with lines names its currency", "order.total")
+      if (!lines.length && (input.total === undefined) !== (input.currency === undefined))
         refuse("an order's amount and currency come together", "order.field")
       const currency = input.currency === undefined ? null : currencyOf(input.currency)
-      const total = currency === null ? null : minorUnits(input.total as string, currency, "an order's amount")
+      const priced = currency === null ? [] : moneyLines.linesOf("order", lines, currency)
+      const sum = priced.reduce((all, line) => all + line.amount, 0)
+      const given =
+        currency === null || input.total === undefined ? null : minorUnits(input.total, currency, "an order's amount")
+      if (priced.length && given !== null && given !== sum)
+        refuse(
+          `the order's total ${moneyLabel(given, currency as string)} is not the sum of its lines, ` +
+            `${moneyLabel(sum, currency as string)}`,
+          "order.total",
+        )
+      const total = priced.length ? sum : given
       if (total !== null && total < 0) refuse("an order's amount is 0 or more", "money.amount")
       const orderDate = isoDate(input.orderDate, "an order's date")
       const fulfilledDate = isoDate(input.fulfilledDate, "an order's delivery date")
       const sourceUrl = input.sourceUrl === undefined ? null : sourceUrlOf(input.sourceUrl, "order.source-url")
       const id = write(database, () => {
+        const customer = partyThing(input.customer, "the customer") ?? ownerPerson(database)
+        const supplier =
+          partyThing(input.supplier, "the supplier") ?? (direction === "sale" ? ownerPerson(database) : undefined)
+        const party = partyOf(supplier?.type, supplier?.id)
+        const supplierName = named ?? party?.name ?? (party?.owner ? "owner" : null)
+        if (supplierName === null) return refuse("an order names its shop or supplier", "order.field")
         if (number !== null && ordersOfShop(database, supplierName, number).length)
           refuse(`order ${number} from ${supplierName} is already stored; change its status instead`, "order.duplicate")
-        const customer = partyThing(input.customer, "the customer") ?? ownerPerson(database)
-        const supplier = partyThing(input.supplier, "the supplier")
         const invoice = linked(input.invoice, "invoice")
         const payment = linked(input.payment, "payment")
+        const contract = linked(input.contract, "contract")
+        const deal = linked(input.deal, "deal")
         const by = written(input)
         const at = now()
         const made = Number(
@@ -204,7 +267,8 @@ export const orderOperationsOver = (context: StoreContext): OrderOperations => {
               "INSERT INTO orders (customer_type, customer_id, purpose, supplier_type, supplier_id, supplier_name, number, " +
                 "currency, total, status, order_date, fulfilled_date, invoice_id, payment_id, project_id, review, " +
                 "author_type, author_id, model, confirmed_by_type, confirmed_by_id, source, metadata, created_at, updated_at, " +
-                "source_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
+                "source_url, direction, contract_id, deal_id) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
             )
             .get(
               customer.type,
@@ -233,14 +297,18 @@ export const orderOperationsOver = (context: StoreContext): OrderOperations => {
               at,
               at,
               sourceUrl,
+              direction,
+              contract,
+              deal,
             )?.id,
         )
+        moneyLines.insertLines("order", made, priced, 1, at)
         keepEvidence("order", made, by)
         return made
       })
-      return orderOf(rowOf(`order:${id}`))
+      return detailOf(rowOf(`order:${id}`))
     },
-    get: (reference) => orderOf(rowOf(reference)),
+    get: (reference) => detailOf(rowOf(reference)),
     list: (filter = {}) => {
       const project = filter.project === undefined ? null : projectId(database, filter.project)
       const customer = partyThing(filter.customer, "the customer")
@@ -250,7 +318,7 @@ export const orderOperationsOver = (context: StoreContext): OrderOperations => {
       const review = filter.review === undefined ? null : oneOf(filter.review, FINANCE_REVIEWS, "a review")
       const number = filter.number === undefined ? null : filter.number.trim()
       const shop = filter.supplierName === undefined ? null : fold(filter.supplierName)
-      const limit = Math.min(Math.max(filter.limit ?? 100, 1), 500)
+      const limit = limitOf(filter.limit)
       const rows = database
         .prepare(
           `${ORDERS} WHERE o.deleted_at IS NULL AND (? IS NULL OR o.status = ?) AND (? IS NULL OR o.purpose = ?) ` +
@@ -297,6 +365,41 @@ export const orderOperationsOver = (context: StoreContext): OrderOperations => {
     },
     confirm: (reference, by, reason) => decide(reference, by, reason, true),
     reject: (reference, by, reason) => decide(reference, by, reason, false),
+    addLine: (reference, { by, ...line }) => {
+      const row = rowOf(reference)
+      mayChangeLines(row, by)
+      if (row.currency == null) refuse(`order:${row.id} has no currency; a line needs one`, "order.total")
+      const [priced] = moneyLines.linesOf("order", [line], String(row.currency)) as [PricedLine]
+      write(database, () => {
+        const last = Number(
+          database
+            .prepare("SELECT coalesce(max(position), 0) AS n FROM order_lines WHERE order_id = ?")
+            .get(Number(row.id))?.n,
+        )
+        if (last >= MAX_LINES) refuse(`an order has at most ${MAX_LINES} lines`, "order.field")
+        moneyLines.insertLines("order", Number(row.id), [priced], last + 1, now())
+        retotal(Number(row.id))
+      })
+      return detailOf(rowOf(`order:${row.id}`))
+    },
+    removeLine: (reference, { position, by }) => {
+      const row = rowOf(reference)
+      mayChangeLines(row, by)
+      write(database, () => {
+        const lines = Number(
+          database.prepare("SELECT count(*) AS n FROM order_lines WHERE order_id = ?").get(Number(row.id))?.n,
+        )
+        const gone = database
+          .prepare("DELETE FROM order_lines WHERE order_id = ? AND position = ?")
+          .run(Number(row.id), position)
+        if (gone.changes === 0)
+          throw new CliError("not_found", `order:${row.id} has no line ${position}`, { reason: "order.no-line" })
+        if (lines === 1)
+          refuse(`line ${position} is the last of order:${row.id}; reject or cancel the order instead`, "order.line")
+        retotal(Number(row.id))
+      })
+      return detailOf(rowOf(`order:${row.id}`))
+    },
   }
 }
 
@@ -327,5 +430,7 @@ export const ordersStoreOver = (context: StoreContext): OrdersStore => {
     setStatus: async (reference, input) => operations.setStatus(reference, input),
     confirm: async (reference, by, reason) => operations.confirm(reference, by, reason),
     reject: async (reference, by, reason) => operations.reject(reference, by, reason),
+    addLine: async (reference, input) => operations.addLine(reference, input),
+    removeLine: async (reference, input) => operations.removeLine(reference, input),
   }
 }

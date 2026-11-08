@@ -153,6 +153,7 @@ export const identities = sqliteTable(
   (table) => [
     unique().on(table.provider, table.externalId),
     index("identities_by_email").on(table.email).where(sql`email IS NOT NULL`),
+    index("identities_by_phone").on(table.phone).where(sql`phone IS NOT NULL`),
     index("identities_name_to_fold").on(table.id).where(sql`name IS NOT NULL AND name_folded IS NULL`),
   ],
 )
@@ -1817,6 +1818,8 @@ export const invoices = sqliteTable(
     createdAt: integer("created_at").notNull(),
     updatedAt: integer("updated_at").notNull(),
     deletedAt: integer("deleted_at"),
+    contractId: integer("contract_id").references(() => contracts.id),
+    subscriptionId: integer("subscription_id").references(() => subscriptions.id),
   },
   (table) => [
     index("invoices_by_issuer_type_issuer_id").on(table.issuerType, table.issuerId),
@@ -1824,6 +1827,8 @@ export const invoices = sqliteTable(
     index("invoices_by_project_id").on(table.projectId),
     index("invoices_by_author_type_author_id").on(table.authorType, table.authorId),
     index("invoices_by_confirmed_by_type_confirmed_by_id").on(table.confirmedByType, table.confirmedById),
+    index("invoices_by_contract_id").on(table.contractId),
+    index("invoices_by_subscription_id").on(table.subscriptionId),
   ],
 )
 
@@ -1842,8 +1847,12 @@ export const invoiceLines = sqliteTable(
     amount: integer("amount").notNull(),
     createdAt: integer("created_at").notNull(),
     updatedAt: integer("updated_at").notNull(),
+    catalogItemId: integer("catalog_item_id").references(() => catalogItems.id),
   },
-  (table) => [unique().on(table.invoiceId, table.position)],
+  (table) => [
+    unique().on(table.invoiceId, table.position),
+    index("invoice_lines_by_catalog_item_id").on(table.catalogItemId),
+  ],
 )
 
 /** Money that moved to or from the owner, in minor units of its currency. */
@@ -1872,6 +1881,8 @@ export const payments = sqliteTable(
     createdAt: integer("created_at").notNull(),
     updatedAt: integer("updated_at").notNull(),
     deletedAt: integer("deleted_at"),
+    refundOf: integer("refund_of").references((): AnySQLiteColumn => payments.id),
+    subscriptionId: integer("subscription_id").references(() => subscriptions.id),
   },
   (table) => [
     index("payments_by_payer_type_payer_id").on(table.payerType, table.payerId),
@@ -1879,6 +1890,8 @@ export const payments = sqliteTable(
     index("payments_by_project_id").on(table.projectId),
     index("payments_by_author_type_author_id").on(table.authorType, table.authorId),
     index("payments_by_confirmed_by_type_confirmed_by_id").on(table.confirmedByType, table.confirmedById),
+    index("payments_by_refund_of").on(table.refundOf),
+    index("payments_by_subscription_id").on(table.subscriptionId),
   ],
 )
 
@@ -1938,6 +1951,9 @@ export const orders = sqliteTable(
     updatedAt: integer("updated_at").notNull(),
     deletedAt: integer("deleted_at"),
     sourceUrl: text("source_url"),
+    contractId: integer("contract_id").references(() => contracts.id),
+    dealId: integer("deal_id").references(() => deals.id),
+    direction: text("direction").notNull().default("purchase"),
   },
   (table) => [
     index("orders_by_customer_type_customer_id").on(table.customerType, table.customerId),
@@ -1947,6 +1963,8 @@ export const orders = sqliteTable(
     index("orders_by_project_id").on(table.projectId),
     index("orders_by_author_type_author_id").on(table.authorType, table.authorId),
     index("orders_by_confirmed_by_type_confirmed_by_id").on(table.confirmedByType, table.confirmedById),
+    index("orders_by_contract_id").on(table.contractId),
+    index("orders_by_deal_id").on(table.dealId),
   ],
 )
 
@@ -2124,6 +2142,284 @@ export const crmFields = sqliteTable(
   (table) => [unique().on(table.accountId, table.kind, table.code)],
 )
 
+/** What the owner or a supplier sells, a product or a service; a line copies its price and never reads it back. */
+export const catalogItems = sqliteTable(
+  "catalog_items",
+  {
+    id: integer("id").primaryKey(),
+    kind: text("kind").notNull(),
+    name: text("name").notNull(),
+    nameFolded: text("name_folded").notNull(),
+    sku: text("sku"),
+    supplierType: text("supplier_type"),
+    supplierId: integer("supplier_id"),
+    unit: text("unit"),
+    unitPrice: integer("unit_price"),
+    currency: text("currency"),
+    description: text("description"),
+    archivedDate: text("archived_date"),
+    authorType: text("author_type").notNull(),
+    authorId: integer("author_id").notNull(),
+    model: text("model"),
+    source: text("source").notNull(),
+    metadata: text("metadata"),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+    deletedAt: integer("deleted_at"),
+  },
+  (table) => [
+    uniqueIndex("catalog_items_by_supplier_type_supplier_id_sku")
+      .on(table.supplierType, table.supplierId, table.sku)
+      .where(sql`supplier_id IS NOT NULL AND sku IS NOT NULL AND deleted_at IS NULL`),
+    uniqueIndex("catalog_items_by_sku")
+      .on(table.sku)
+      .where(sql`supplier_id IS NULL AND sku IS NOT NULL AND deleted_at IS NULL`),
+    index("catalog_items_by_name_folded").on(table.nameFolded),
+    index("catalog_items_by_author_type_author_id").on(table.authorType, table.authorId),
+  ],
+)
+
+export const orderLines = sqliteTable(
+  "order_lines",
+  {
+    id: integer("id").primaryKey(),
+    orderId: integer("order_id")
+      .notNull()
+      .references(() => orders.id),
+    position: integer("position").notNull(),
+    description: text("description").notNull(),
+    quantity: text("quantity").notNull(),
+    unitPrice: integer("unit_price"),
+    amount: integer("amount").notNull(),
+    catalogItemId: integer("catalog_item_id").references(() => catalogItems.id),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (table) => [
+    unique().on(table.orderId, table.position),
+    index("order_lines_by_catalog_item_id").on(table.catalogItemId),
+  ],
+)
+
+/** A contract the owner works under; parties are relationships, the document an `attached` link. */
+export const contracts = sqliteTable(
+  "contracts",
+  {
+    id: integer("id").primaryKey(),
+    name: text("name").notNull(),
+    number: text("number"),
+    kind: text("kind").notNull(),
+    status: text("status").notNull(),
+    signedDate: text("signed_date"),
+    effectiveDate: text("effective_date"),
+    expirationDate: text("expiration_date"),
+    autoRenew: integer("auto_renew").notNull().default(0),
+    renewalCount: integer("renewal_count"),
+    renewalUnit: text("renewal_unit"),
+    noticeDays: integer("notice_days"),
+    terms: text("terms"),
+    value: integer("value"),
+    currency: text("currency"),
+    projectId: integer("project_id").references(() => projects.id),
+    dealId: integer("deal_id").references(() => deals.id),
+    review: text("review").notNull(),
+    authorType: text("author_type").notNull(),
+    authorId: integer("author_id").notNull(),
+    model: text("model"),
+    confirmedByType: text("confirmed_by_type"),
+    confirmedById: integer("confirmed_by_id"),
+    source: text("source").notNull(),
+    metadata: text("metadata"),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+    deletedAt: integer("deleted_at"),
+  },
+  (table) => [
+    index("contracts_by_project_id").on(table.projectId),
+    index("contracts_by_deal_id").on(table.dealId),
+    index("contracts_by_author_type_author_id").on(table.authorType, table.authorId),
+    index("contracts_by_confirmed_by_type_confirmed_by_id").on(table.confirmedByType, table.confirmedById),
+  ],
+)
+
+/** A subscription the owner bills or pays; its prices are `subscription_prices`, each a row of its own. */
+export const subscriptions = sqliteTable(
+  "subscriptions",
+  {
+    id: integer("id").primaryKey(),
+    name: text("name").notNull(),
+    direction: text("direction").notNull(),
+    supplierType: text("supplier_type").notNull(),
+    supplierId: integer("supplier_id").notNull(),
+    customerType: text("customer_type").notNull(),
+    customerId: integer("customer_id").notNull(),
+    catalogItemId: integer("catalog_item_id").references(() => catalogItems.id),
+    contractId: integer("contract_id").references(() => contracts.id),
+    projectId: integer("project_id").references(() => projects.id),
+    status: text("status").notNull(),
+    intervalCount: integer("interval_count").notNull(),
+    intervalUnit: text("interval_unit").notNull(),
+    startDate: text("start_date").notNull(),
+    trialEndDate: text("trial_end_date"),
+    nextRenewalDate: text("next_renewal_date"),
+    cancelledDate: text("cancelled_date"),
+    endDate: text("end_date"),
+    review: text("review").notNull(),
+    authorType: text("author_type").notNull(),
+    authorId: integer("author_id").notNull(),
+    model: text("model"),
+    confirmedByType: text("confirmed_by_type"),
+    confirmedById: integer("confirmed_by_id"),
+    source: text("source").notNull(),
+    metadata: text("metadata"),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+    deletedAt: integer("deleted_at"),
+  },
+  (table) => [
+    index("subscriptions_by_supplier_type_supplier_id").on(table.supplierType, table.supplierId),
+    index("subscriptions_by_customer_type_customer_id").on(table.customerType, table.customerId),
+    index("subscriptions_by_catalog_item_id").on(table.catalogItemId),
+    index("subscriptions_by_contract_id").on(table.contractId),
+    index("subscriptions_by_project_id").on(table.projectId),
+    index("subscriptions_by_author_type_author_id").on(table.authorType, table.authorId),
+    index("subscriptions_by_confirmed_by_type_confirmed_by_id").on(table.confirmedByType, table.confirmedById),
+  ],
+)
+
+export const subscriptionPrices = sqliteTable(
+  "subscription_prices",
+  {
+    id: integer("id").primaryKey(),
+    subscriptionId: integer("subscription_id")
+      .notNull()
+      .references(() => subscriptions.id),
+    amount: integer("amount").notNull(),
+    currency: text("currency").notNull(),
+    effectiveFrom: text("effective_from").notNull(),
+    review: text("review").notNull(),
+    authorType: text("author_type").notNull(),
+    authorId: integer("author_id").notNull(),
+    model: text("model"),
+    confirmedByType: text("confirmed_by_type"),
+    confirmedById: integer("confirmed_by_id"),
+    source: text("source").notNull(),
+    metadata: text("metadata"),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("subscription_prices_by_subscription_id_effective_from")
+      .on(table.subscriptionId, table.effectiveFrom)
+      .where(sql`review <> 'rejected'`),
+    index("subscription_prices_by_author_type_author_id").on(table.authorType, table.authorId),
+    index("subscription_prices_by_confirmed_by_type_confirmed_by_id").on(table.confirmedByType, table.confirmedById),
+  ],
+)
+
+/** A bank account, card, cash box or wallet, in one currency; its balance is computed from its transactions. */
+export const financialAccounts = sqliteTable(
+  "financial_accounts",
+  {
+    id: integer("id").primaryKey(),
+    name: text("name").notNull(),
+    nameFolded: text("name_folded").notNull(),
+    kind: text("kind").notNull(),
+    currency: text("currency").notNull(),
+    institution: text("institution"),
+    numberHint: text("number_hint"),
+    holderType: text("holder_type"),
+    holderId: integer("holder_id"),
+    openingBalance: integer("opening_balance"),
+    openingDate: text("opening_date"),
+    closedDate: text("closed_date"),
+    authorType: text("author_type").notNull(),
+    authorId: integer("author_id").notNull(),
+    model: text("model"),
+    source: text("source").notNull(),
+    metadata: text("metadata"),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+    deletedAt: integer("deleted_at"),
+  },
+  (table) => [
+    index("financial_accounts_by_name_folded").on(table.nameFolded),
+    index("financial_accounts_by_holder_type_holder_id").on(table.holderType, table.holderId),
+    index("financial_accounts_by_author_type_author_id").on(table.authorType, table.authorId),
+  ],
+)
+
+/** What a statement says moved on a financial account; a payment it settles is `payment_id`. */
+export const financialTransactions = sqliteTable(
+  "financial_transactions",
+  {
+    id: integer("id").primaryKey(),
+    financialAccountId: integer("financial_account_id")
+      .notNull()
+      .references(() => financialAccounts.id),
+    direction: text("direction").notNull(),
+    amount: integer("amount").notNull(),
+    currency: text("currency").notNull(),
+    status: text("status").notNull(),
+    statementDate: text("statement_date").notNull(),
+    bookedDate: text("booked_date"),
+    description: text("description"),
+    counterpartyName: text("counterparty_name"),
+    counterpartyType: text("counterparty_type"),
+    counterpartyId: integer("counterparty_id"),
+    reference: text("reference"),
+    paymentId: integer("payment_id").references(() => payments.id),
+    projectId: integer("project_id").references(() => projects.id),
+    review: text("review").notNull(),
+    authorType: text("author_type").notNull(),
+    authorId: integer("author_id").notNull(),
+    model: text("model"),
+    confirmedByType: text("confirmed_by_type"),
+    confirmedById: integer("confirmed_by_id"),
+    source: text("source").notNull(),
+    metadata: text("metadata"),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+    deletedAt: integer("deleted_at"),
+  },
+  (table) => [
+    index("financial_transactions_by_financial_account_id_booked_date").on(table.financialAccountId, table.bookedDate),
+    uniqueIndex("financial_transactions_by_payment_id")
+      .on(table.paymentId)
+      .where(sql`payment_id IS NOT NULL AND deleted_at IS NULL`),
+    index("financial_transactions_by_counterparty_type_counterparty_id").on(
+      table.counterpartyType,
+      table.counterpartyId,
+    ),
+    index("financial_transactions_by_project_id").on(table.projectId),
+    index("financial_transactions_by_author_type_author_id").on(table.authorType, table.authorId),
+    index("financial_transactions_by_confirmed_by_type_confirmed_by_id").on(table.confirmedByType, table.confirmedById),
+  ],
+)
+
+export const transactionSplits = sqliteTable(
+  "transaction_splits",
+  {
+    id: integer("id").primaryKey(),
+    transactionId: integer("transaction_id")
+      .notNull()
+      .references(() => financialTransactions.id),
+    position: integer("position").notNull(),
+    category: text("category").notNull(),
+    categoryFolded: text("category_folded").notNull(),
+    amount: integer("amount").notNull(),
+    projectId: integer("project_id").references(() => projects.id),
+    note: text("note"),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (table) => [
+    unique().on(table.transactionId, table.position),
+    index("transaction_splits_by_category_folded").on(table.categoryFolded),
+    index("transaction_splits_by_project_id").on(table.projectId),
+  ],
+)
+
 export { decisionRequests } from "./schema/decision-requests.js"
 
 /** What a source said about one of its records, as it said it: the layer under the entity an import makes. */
@@ -2146,9 +2442,11 @@ export const records = sqliteTable(
     createdAt: integer("created_at").notNull(),
     updatedAt: integer("updated_at").notNull(),
     deletedAt: integer("deleted_at"),
+    createdEntity: integer("created_entity").notNull().default(0),
   },
   (table) => [
     unique().on(table.accountId, table.type, table.externalId),
+    index("records_by_account_id_batch_id").on(table.accountId, table.batchId),
     index("records_by_entity_type_entity_id").on(table.entityType, table.entityId),
   ],
 )
@@ -2166,6 +2464,7 @@ export const recordRelations = sqliteTable(
     targetId: integer("target_id").references(() => records.id),
     createdAt: integer("created_at").notNull(),
     amount: text("amount"),
+    asRole: text("as_role"),
   },
   (table) => [
     unique().on(table.recordId, table.role, table.targetType, table.targetExternalId),

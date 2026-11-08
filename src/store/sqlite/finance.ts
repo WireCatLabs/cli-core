@@ -12,58 +12,28 @@ import {
   paymentEntryTitle,
   settledStatus,
 } from "../../domain/finance.js"
-import {
-  currencyOf,
-  formatDecimal,
-  lineUnits,
-  type Money,
-  minorUnits,
-  moneyLabel,
-  moneyOf,
-  quantityOf,
-  scaleOf,
-} from "../../domain/money.js"
-import { RECORD_TYPES } from "../../domain/record-types.js"
-import { assertMayDecide, botKey, type Decider, deciderAuthor } from "../decisions.js"
-import { type Actor, type ProposedByFilter, proposedBySql, proposerOf } from "./actors.js"
-import {
-  type Author,
-  authorActor,
-  authorOf,
-  evidenceOf,
-  linkEvidence,
-  projectId,
-  projectOf,
-  subjectOf,
-} from "./memories.js"
+import { currencyOf, formatDecimal, type Money, minorUnits, moneyLabel, moneyOf, scaleOf } from "../../domain/money.js"
+import type { Decider } from "../decisions.js"
+import { type Actor, type ProposedByFilter, proposedBySql } from "./actors.js"
+import { type Author, authorActor, projectId } from "./memories.js"
+import { type MoneyLine, type MoneyLineInput, moneyLinesOver } from "./money-lines.js"
 import { requiredThing } from "./notes.js"
 import type { StoreContext } from "./open.js"
+import { netPaidSql, refundRulesOver } from "./refunds.js"
+import {
+  iso,
+  isoDate,
+  limitOf,
+  oneOf,
+  type Party,
+  prefixesText,
+  type Reviewed,
+  refuse,
+  reviewedRowsOver,
+  text,
+  type Written,
+} from "./reviewed.js"
 import { write } from "./transaction.js"
-
-/** A `person:` or `organization:` on an invoice or a payment, with its name so a list needs no lookup. */
-export interface Party {
-  ref: string
-  name: string | null
-  /** The owner's own person row. */
-  owner: boolean
-}
-
-export interface Reviewed {
-  review: FinanceReview
-  /** `name` is a bot's handle and `kind` whether it is an agent or a rule; both `null` for a person. */
-  author: { type: Actor["type"]; id: string; name: string | null; kind: "agent" | "rule" | null }
-  model: string | null
-  confirmedBy: { type: Actor["type"]; id: string } | null
-  source: string
-  /** Why an agent or an import proposed it. */
-  reason: string | null
-  /** What it was read from: the messages, documents or notes an agent or the owner cited. */
-  evidence: string[]
-  project: string | null
-  projectName: string | null
-  createdAt: string
-  updatedAt: string
-}
 
 export interface Invoice extends Reviewed {
   id: string
@@ -76,22 +46,18 @@ export interface Invoice extends Reviewed {
   counterparty: Party
   currency: string
   total: string
-  /** Settled by confirmed payments. */
+  /** Settled by confirmed payments, net of their confirmed refunds. */
   paid: string
   /** Still owed: `total − paid`. */
   open: string
   issueDate: string | null
   dueDate: string | null
   status: InvoiceStatus
+  contract: string | null
+  subscription: string | null
 }
 
-export interface InvoiceLine {
-  position: number
-  description: string
-  quantity: string
-  unitPrice: string | null
-  amount: string
-}
+export type InvoiceLine = MoneyLine
 
 export interface Allocation {
   payment: string
@@ -121,32 +87,16 @@ export interface Payment extends Reviewed {
   /** Allocated to invoices, confirmed or not. */
   allocated: string
   unallocated: string
+  /** The payment this refunds: the other direction, the same currency, never more than it. */
+  refundOf: string | null
+  subscription: string | null
 }
 
 export interface PaymentDetail extends Payment {
   allocations: Allocation[]
 }
 
-export interface Written {
-  /** The owner's entry is confirmed at once; a bot's waits as proposed for the owner. */
-  by: Author
-  project?: string
-  /** Where a bot's row came from, such as `agent` or an importer's name; the owner's is always `owner`. */
-  source?: string
-  /** Why a bot proposes it, kept for the reviewer. */
-  reason?: string
-  /** References it was read from, linked as `evidence`. */
-  evidence?: string[]
-}
-
-export interface InvoiceLineInput {
-  description: string
-  /** A decimal string; `1` when not given. */
-  quantity?: string
-  /** Decimal strings in the invoice's currency. Give either or both: both must agree, quantity × unit price. */
-  unitPrice?: string
-  amount?: string
-}
+export type InvoiceLineInput = MoneyLineInput
 
 export interface InvoiceInput extends Written {
   direction: InvoiceDirection
@@ -163,6 +113,9 @@ export interface InvoiceInput extends Written {
   lines: InvoiceLineInput[]
   /** The total printed on the invoice: refused when it is not the sum of the lines. */
   total?: string
+  contract?: string
+  /** The subscription whose period it bills. */
+  subscription?: string
 }
 
 export interface PaymentInput extends Written {
@@ -175,6 +128,9 @@ export interface PaymentInput extends Written {
   reference?: string
   /** Invoices it settles, in the payment's currency; a bot's count only once the owner confirms the payment. */
   allocations?: { invoice: string; amount: string }[]
+  /** The payment it refunds: it then goes the other way, and is allocated only to invoices that payment settles. */
+  refundOf?: string
+  subscription?: string
 }
 
 interface ListFilter {
@@ -236,67 +192,12 @@ type Row = Record<string, unknown>
 /** The types `decide` settles money for; other proposal types get their own route. */
 const FINANCE_TYPES = ["invoice", "payment"] as const
 type FinanceType = (typeof FINANCE_TYPES)[number]
-type FinanceTable = (typeof RECORD_TYPES)[FinanceType]["table"]
 const isFinanceType = (type: string): type is FinanceType => (FINANCE_TYPES as readonly string[]).includes(type)
 
-const article = (word: string) => (/^[aeiou]/.test(word) ? "an" : "a")
-/** One article, for the first prefix only: `an invoice: or payment:`. */
-export const prefixesText = (types: readonly string[]) =>
-  `${article(types[0] ?? "")} ${types.map((type) => `${type}:`).join(" or ")}`
-
-export const refuse = (
-  message: string,
-  reason: string,
-  code: "validation_error" | "permission_error" = "validation_error",
-) => {
-  throw new CliError(code, message, { reason })
-}
-
-export const oneOf = <T extends string>(value: unknown, allowed: readonly T[], what: string): T => {
-  if (typeof value !== "string" || !allowed.includes(value as T))
-    return refuse(`${what} is one of ${allowed.join(", ")}`, "finance.field")
-  return value as T
-}
-
-export const text = (value: unknown, what: string, limit: number): string | null => {
-  if (value === undefined || value === null) return null
-  if (typeof value !== "string" || !value.trim() || value.length > limit || value.includes("\0"))
-    return refuse(`${what} takes 1–${limit} characters`, "finance.field")
-  return value.trim()
-}
-
-export const isoDate = (value: unknown, what: string): string | null => {
-  if (value === undefined || value === null) return null
-  const date = typeof value === "string" ? value.trim() : ""
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || new Date(`${date}T00:00:00Z`).toISOString().slice(0, 10) !== date)
-    return refuse(`${what} is a date such as 2026-11-15`, "finance.field")
-  return date
-}
-
-export const iso = (value: unknown) => new Date(Number(value)).toISOString()
-
-const evidenceList = (value: unknown): string[] => {
-  if (value === undefined) return []
-  if (!Array.isArray(value) || value.length > 8 || value.some((one) => typeof one !== "string" || !one.trim()))
-    return refuse("evidence is a list of at most 8 references", "finance.field")
-  return [...new Set(value.map((one: string) => one.trim()))]
-}
 const MAX_LINES = 500
 
-const reasonOf = (metadata: unknown): string | null => {
-  if (metadata == null) return null
-  try {
-    const { reason } = JSON.parse(String(metadata)) as { reason?: unknown }
-    return typeof reason === "string" ? reason : null
-  } catch {
-    return null
-  }
-}
-
 /** Money settled by confirmed payments only: a proposed payment promises nothing yet. */
-const PAID =
-  "(SELECT coalesce(sum(a.amount), 0) FROM payment_allocations a JOIN payments p ON p.id = a.payment_id " +
-  "WHERE a.invoice_id = i.id AND p.review = 'confirmed' AND p.deleted_at IS NULL)"
+const PAID = netPaidSql("i.id")
 const INVOICES =
   `SELECT i.*, ${PAID} AS paid, b.name AS author_name, b.kind AS author_kind FROM invoices i ` +
   "LEFT JOIN bots b ON i.author_type = 'bot' AND b.id = i.author_id"
@@ -304,84 +205,17 @@ const PAYMENTS =
   "SELECT p.*, (SELECT coalesce(sum(amount), 0) FROM payment_allocations WHERE payment_id = p.id) AS allocated, " +
   "b.name AS author_name, b.kind AS author_kind FROM payments p LEFT JOIN bots b ON p.author_type = 'bot' AND b.id = p.author_id"
 
-/** What invoices, payments and orders share: their parties, who wrote them, and how the owner decides them. */
-export const reviewedRowsOver = (context: StoreContext) => {
-  const { database } = context
-
-  const partyOf = (type: unknown, id: unknown): Party | null => {
-    if (type == null) return null
-    const { subject, subjectName, subjectIsOwner } = subjectOf(database, { subject_type: type, subject_id: id })
-    return subject === null ? null : { ref: subject, name: subjectName, owner: subjectIsOwner }
-  }
-  const partyThing = (reference: string | undefined, what: string) => {
-    if (reference === undefined) return undefined
-    const thing = requiredThing(database, reference, what)
-    if (thing.type !== "person" && thing.type !== "organization")
-      return refuse(`${what} is a person: or organization: reference, not ${reference}`, "finance.party")
-    return thing
-  }
-  const reviewedOf = (row: Row, type: "invoice" | "payment" | "order" | "deal"): Reviewed => ({
-    review: row.review as FinanceReview,
-    author: authorOf(row),
-    model: row.model == null ? null : String(row.model),
-    confirmedBy:
-      row.confirmed_by_type == null
-        ? null
-        : { type: row.confirmed_by_type as Actor["type"], id: String(row.confirmed_by_id) },
-    source: String(row.source),
-    reason: reasonOf(row.metadata),
-    evidence: evidenceOf(context, { type, id: Number(row.id) }),
-    ...projectOf(database, row),
-    createdAt: iso(row.created_at),
-    updatedAt: iso(row.updated_at),
-  })
-
-  const written = (input: Written) => {
-    const owner = input.by === "owner"
-    const { actor, model } = authorActor(context, input.by)
-    const source = owner ? "owner" : (text(input.source, "a source", 80) ?? "agent")
-    const reason = owner ? null : text(input.reason, "a reason", 2000)
-    return {
-      owner,
-      actor,
-      model,
-      source,
-      review: owner ? "confirmed" : "proposed",
-      confirmedType: owner ? actor.type : null,
-      confirmedId: owner ? actor.id : null,
-      metadata: reason === null ? null : JSON.stringify({ reason }),
-      project: input.project === undefined ? null : projectId(database, input.project),
-      evidence: evidenceList(input.evidence),
-    }
-  }
-
-  const keepEvidence = (type: "invoice" | "payment" | "order" | "deal", id: number, by: ReturnType<typeof written>) => {
-    if (by.evidence.length) linkEvidence(context, { type, id }, by.evidence, by.owner ? "owner" : "agent")
-  }
-
-  const ownerOnly = (by: Author, what: string) => {
-    if (by !== "owner") refuse(`only the owner ${what}`, "finance.owner-only", "permission_error")
-  }
-
-  const keepDecision = (table: FinanceTable | "orders", id: number, by: Decider, reason?: string) => {
-    const why = [by === "owner" ? undefined : by.reason.trim(), reason?.trim() || undefined].filter(Boolean).join(": ")
-    if (by === "owner" && !why) return
-    const decision = by === "owner" ? { by: "owner", reason: why } : { by: "agent", bot: by.bot, reason: why }
-    database
-      .prepare(`UPDATE ${table} SET metadata = json_set(coalesce(metadata, '{}'), '$.decision', json(?)) WHERE id = ?`)
-      .run(JSON.stringify(decision), id)
-  }
-
-  return { partyOf, partyThing, reviewedOf, written, keepEvidence, ownerOnly, keepDecision }
-}
-
 type FinanceOperations = {
   [K in keyof FinanceStore]: FinanceStore[K] extends (...args: infer A) => Promise<infer R> ? (...args: A) => R : never
 }
 
 export const financeOperationsOver = (context: StoreContext): FinanceOperations => {
   const { database, now } = context
-  const { partyOf, partyThing, reviewedOf, written, keepEvidence, ownerOnly, keepDecision } = reviewedRowsOver(context)
+  const { partyOf, partyThing, reviewedOf, written, keepEvidence, ownerOnly, linkedId, decideRow, mayChangeParts } =
+    reviewedRowsOver(context)
+  const refunds = refundRulesOver(context)
+  const lines = moneyLinesOver(context)
+  const refOf = (type: string, id: unknown) => (id == null ? null : `${type}:${id}`)
 
   const invoiceOf = (row: Row): Invoice => {
     const currency = String(row.currency)
@@ -414,6 +248,8 @@ export const financeOperationsOver = (context: StoreContext): FinanceOperations 
       issueDate: row.issue_date == null ? null : String(row.issue_date),
       dueDate: fields.dueDate,
       status: fields.status,
+      contract: refOf("contract", row.contract_id),
+      subscription: refOf("subscription", row.subscription_id),
       ...reviewedOf(row, "invoice"),
     }
   }
@@ -446,6 +282,8 @@ export const financeOperationsOver = (context: StoreContext): FinanceOperations 
       reference: row.reference == null ? null : String(row.reference),
       allocated: formatDecimal(allocated, scale),
       unallocated: formatDecimal(amount - allocated, scale),
+      refundOf: refOf("payment", row.refund_of),
+      subscription: refOf("subscription", row.subscription_id),
       ...reviewedOf(row, "payment"),
     }
   }
@@ -473,18 +311,11 @@ export const financeOperationsOver = (context: StoreContext): FinanceOperations 
 
   const invoiceDetail = (reference: string): InvoiceDetail => {
     const row = rowOf(reference, "invoice")
-    const scale = scaleOf(String(row.currency))
-    const lines = database
-      .prepare("SELECT * FROM invoice_lines WHERE invoice_id = ? ORDER BY position")
-      .all(Number(row.id))
-      .map((line) => ({
-        position: Number(line.position),
-        description: String(line.description),
-        quantity: String(line.quantity),
-        unitPrice: line.unit_price == null ? null : formatDecimal(Number(line.unit_price), scale),
-        amount: formatDecimal(Number(line.amount), scale),
-      }))
-    return { ...invoiceOf(row), lines, allocations: allocationsWhere("invoice_id", Number(row.id)) }
+    return {
+      ...invoiceOf(row),
+      lines: lines.shownLines("invoice", Number(row.id), String(row.currency)),
+      allocations: allocationsWhere("invoice_id", Number(row.id)),
+    }
   }
 
   const paymentDetail = (reference: string): PaymentDetail => {
@@ -527,20 +358,20 @@ export const financeOperationsOver = (context: StoreContext): FinanceOperations 
           `${moneyLabel(fromPayment, currency)} of it is already allocated; ${moneyLabel(units, currency)} more is too much`,
         "finance.over-payment",
       )
-    const toInvoice = Number(
-      database
-        .prepare(
-          "SELECT coalesce(sum(a.amount), 0) AS n FROM payment_allocations a JOIN payments p ON p.id = a.payment_id " +
-            "WHERE a.invoice_id = ? AND ((p.review = 'confirmed' AND p.deleted_at IS NULL) OR a.payment_id = ?)",
-        )
-        .get(Number(invoice.id), Number(payment.id))?.n,
-    )
-    if (toInvoice + units > Number(invoice.total))
-      refuse(
-        `${invoiceRef} totals ${moneyLabel(Number(invoice.total), currency)} and ` +
-          `${moneyLabel(toInvoice, currency)} is already allocated to it; ${moneyLabel(units, currency)} more is too much`,
-        "finance.over-invoice",
+    if (payment.refund_of != null) refunds.refundShare(payment, Number(invoice.id), units)
+    else {
+      const toInvoice = Number(
+        database
+          .prepare(`SELECT ${netPaidSql("?", { including: "?" })} AS n`)
+          .get(Number(invoice.id), Number(payment.id))?.n,
       )
+      if (toInvoice + units > Number(invoice.total))
+        refuse(
+          `${invoiceRef} totals ${moneyLabel(Number(invoice.total), currency)} and ` +
+            `${moneyLabel(toInvoice, currency)} is already allocated to it; ${moneyLabel(units, currency)} more is too much`,
+          "finance.over-invoice",
+        )
+    }
     const at = now()
     database
       .prepare(
@@ -556,10 +387,9 @@ export const financeOperationsOver = (context: StoreContext): FinanceOperations 
   const coveredElsewhere = (paymentId: number) => {
     const over = database
       .prepare(
-        "SELECT a.invoice_id, a.amount, i.total, i.currency, (SELECT coalesce(sum(o.amount), 0) FROM payment_allocations o " +
-          "JOIN payments p ON p.id = o.payment_id WHERE o.invoice_id = a.invoice_id AND o.payment_id <> a.payment_id " +
-          "AND p.review = 'confirmed' AND p.deleted_at IS NULL) AS others FROM payment_allocations a " +
-          "JOIN invoices i ON i.id = a.invoice_id WHERE a.payment_id = ? AND a.amount + others > i.total LIMIT 1",
+        `SELECT a.invoice_id, a.amount, i.total, i.currency, ${netPaidSql("a.invoice_id", { excluding: "a.payment_id" })} ` +
+          "AS others FROM payment_allocations a JOIN invoices i ON i.id = a.invoice_id " +
+          "WHERE a.payment_id = ? AND a.amount + others > i.total LIMIT 1",
       )
       .get(paymentId)
     if (!over) return
@@ -576,57 +406,68 @@ export const financeOperationsOver = (context: StoreContext): FinanceOperations 
     const thing = requiredThing(database, reference, "the proposal")
     if (!isFinanceType(thing.type)) return refuse(`${reference} is not ${prefixesText(FINANCE_TYPES)}`, "finance.ref")
     const type = thing.type
-    const table = RECORD_TYPES[type].table
     const row = rowOf(reference, type)
     const ref = `${type}:${row.id}`
-    assertMayDecide(
-      { id: ref, proposedBy: proposerOf(database, row.author_type, row.author_id), ownerOnly: true },
-      by,
-      context.decisions,
-    )
-    if (row.review !== "proposed") refuse(`${ref} is already ${String(row.review)}`, "proposal.wrong-state")
     const id = Number(row.id)
-    write(database, () => {
-      const at = now()
-      if (confirm && type === "payment") coveredElsewhere(id)
-      if (confirm) {
-        const { actor } = authorActor(context, deciderAuthor(by))
-        database
-          .prepare(
-            `UPDATE ${table} SET review = 'confirmed', confirmed_by_type = ?, confirmed_by_id = ?, updated_at = ? WHERE id = ?`,
-          )
-          .run(actor.type, actor.id, at, id)
-      } else database.prepare(`UPDATE ${table} SET review = 'rejected', updated_at = ? WHERE id = ?`).run(at, id)
-      keepDecision(table, id, by, reason)
-      const touched =
-        type === "invoice"
-          ? [id]
-          : database
-              .prepare("SELECT invoice_id FROM payment_allocations WHERE payment_id = ?")
-              .all(id)
-              .map((one) => Number(one.invoice_id))
-      if (!confirm)
-        database
-          .prepare(`DELETE FROM payment_allocations WHERE ${type === "invoice" ? "invoice_id" : "payment_id"} = ?`)
-          .run(id)
-      for (const invoice of touched) settle(invoice)
-    })
-    return type === "invoice" ? invoiceDetail(ref) : paymentDetail(ref)
+    const payment = type === "payment"
+    decideRow(
+      type,
+      row,
+      { by, reason, confirm },
+      {
+        before: () => {
+          if (payment && confirm && row.refund_of != null) refunds.confirmable(row)
+          else if (payment && confirm) coveredElsewhere(id)
+          if (payment && !confirm) {
+            refunds.keepsRefunded(row)
+            keepsTransaction(id)
+          }
+        },
+        after: () => {
+          const touched = payment
+            ? database
+                .prepare("SELECT invoice_id FROM payment_allocations WHERE payment_id = ?")
+                .all(id)
+                .map((one) => Number(one.invoice_id))
+            : [id]
+          if (!confirm && payment) database.prepare("DELETE FROM payment_allocations WHERE payment_id = ?").run(id)
+          if (!confirm && !payment) dropAllocations(id, "")
+          for (const invoice of touched) settle(invoice)
+        },
+      },
+    )
+    return payment ? paymentDetail(ref) : invoiceDetail(ref)
   }
 
-  const mayAllocate = (row: Row, by: Author) => {
-    if (by === "owner") return
-    const own =
-      row.author_type === "bot" && row.author_name != null && botKey(String(row.author_name)) === botKey(by.bot)
-    if (row.review !== "proposed" || !own)
+  /** A statement line records this payment: it stays until the link is taken back on the transaction. */
+  const keepsTransaction = (paymentId: number) => {
+    const linked = database
+      .prepare("SELECT id FROM financial_transactions WHERE payment_id = ? AND deleted_at IS NULL LIMIT 1")
+      .get(paymentId)
+    if (linked)
       refuse(
-        `only the owner allocates payment:${row.id}; a bot allocates only from a payment it proposed that is still proposed`,
-        "finance.owner-only",
-        "permission_error",
+        `payment:${paymentId} is the payment of transaction:${linked.id}; take the link back there first`,
+        "transaction.payment",
       )
   }
 
-  const limitOf = (limit: number | undefined) => Math.min(Math.max(limit ?? 100, 1), 500)
+  /** Refunds' shares go first: a payment's share stays while a refund of it takes part of it back. */
+  const dropAllocations = (invoiceId: number, which: string) => {
+    for (const refund of [true, false])
+      database
+        .prepare(
+          "DELETE FROM payment_allocations WHERE invoice_id = ? AND payment_id IN " +
+            `(SELECT id FROM payments WHERE refund_of IS ${refund ? "NOT " : ""}NULL${which})`,
+        )
+        .run(invoiceId)
+  }
+
+  const mayAllocate = (row: Row, by: Author) =>
+    mayChangeParts(
+      row,
+      by,
+      `only the owner allocates payment:${row.id}; a bot allocates only from a payment it proposed that is still proposed`,
+    )
 
   return {
     addInvoice: (input) => {
@@ -634,30 +475,8 @@ export const financeOperationsOver = (context: StoreContext): FinanceOperations 
       const currency = currencyOf(input.currency)
       if (!Array.isArray(input.lines) || input.lines.length === 0 || input.lines.length > MAX_LINES)
         refuse(`an invoice has 1–${MAX_LINES} lines`, "finance.lines")
-      const lines = input.lines.map((line, at) => {
-        const what = `line ${at + 1}`
-        const quantity = quantityOf(line.quantity ?? "1")
-        const unitPrice =
-          line.unitPrice === undefined ? null : minorUnits(line.unitPrice, currency, `${what}'s unit price`)
-        const computed = unitPrice === null ? null : lineUnits(quantity.thousandths, unitPrice)
-        const amount = line.amount === undefined ? computed : minorUnits(line.amount, currency, `${what}'s amount`)
-        if (amount === null) return refuse(`${what} takes a unit price, an amount or both`, "finance.lines")
-        if (computed !== null && computed !== amount)
-          refuse(
-            `${what}: ${quantity.text} × ${moneyLabel(unitPrice as number, currency)} is ` +
-              `${moneyLabel(computed, currency)}, not ${moneyLabel(amount, currency)}`,
-            "finance.line-amount",
-          )
-        return {
-          description:
-            text(line.description, `${what}'s description`, 500) ??
-            refuse(`${what} needs a description`, "finance.lines"),
-          quantity: quantity.text,
-          unitPrice: unitPrice ?? (quantity.thousandths === 1000n ? amount : null),
-          amount,
-        }
-      })
-      const total = lines.reduce((sum, line) => sum + line.amount, 0)
+      const priced = lines.linesOf("invoice", input.lines, currency)
+      const total = priced.reduce((sum, line) => sum + line.amount, 0)
       if (!Number.isSafeInteger(total)) refuse("an invoice's total is too large", "finance.total")
       if (total <= 0) refuse("an invoice totals more than 0", "finance.total")
       if (input.total !== undefined) {
@@ -676,6 +495,8 @@ export const financeOperationsOver = (context: StoreContext): FinanceOperations 
         const counterparty =
           partyThing(input.counterparty, "the counterparty") ??
           refuse("an invoice names its counterparty, a person: or organization:", "finance.party")
+        const contract = linkedId(input.contract, "contract", "finance.ref")
+        const subscription = linkedId(input.subscription, "subscription", "finance.ref")
         const by = written(input)
         const at = now()
         const made = Number(
@@ -683,8 +504,8 @@ export const financeOperationsOver = (context: StoreContext): FinanceOperations 
             .prepare(
               "INSERT INTO invoices (direction, number, issuer_type, issuer_id, counterparty_type, counterparty_id, project_id, " +
                 "currency, total, issue_date, due_date, status, review, author_type, author_id, model, confirmed_by_type, " +
-                "confirmed_by_id, source, metadata, created_at, updated_at) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
+                "confirmed_by_id, source, metadata, created_at, updated_at, contract_id, subscription_id) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
             )
             .get(
               direction,
@@ -709,14 +530,11 @@ export const financeOperationsOver = (context: StoreContext): FinanceOperations 
               by.metadata,
               at,
               at,
+              contract,
+              subscription,
             )?.id,
         )
-        const insert = database.prepare(
-          "INSERT INTO invoice_lines (invoice_id, position, description, quantity, unit_price, amount, created_at, updated_at) " +
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        )
-        for (const [index, line] of lines.entries())
-          insert.run(made, index + 1, line.description, line.quantity, line.unitPrice, line.amount, at, at)
+        lines.insertLines("invoice", made, priced, 1, at)
         keepEvidence("invoice", made, by)
         return made
       })
@@ -772,21 +590,11 @@ export const financeOperationsOver = (context: StoreContext): FinanceOperations 
       ownerOnly(by, "voids an invoice")
       const row = rowOf(reference, "invoice")
       if (row.status === "void") refuse(`invoice:${row.id} is already void`, "finance.status")
-      const allocated = database
-        .prepare(
-          "SELECT 1 FROM payment_allocations a JOIN payments p ON p.id = a.payment_id " +
-            "WHERE a.invoice_id = ? AND p.review = 'confirmed' AND p.deleted_at IS NULL LIMIT 1",
-        )
-        .get(Number(row.id))
-      if (allocated)
+      const paid = Number(database.prepare(`SELECT ${netPaidSql("?")} AS n`).get(Number(row.id))?.n)
+      if (paid > 0)
         refuse(`payments are allocated to invoice:${row.id}; a paid invoice is not voided`, "finance.status")
       write(database, () => {
-        database
-          .prepare(
-            "DELETE FROM payment_allocations WHERE invoice_id = ? " +
-              "AND payment_id IN (SELECT id FROM payments WHERE review = 'proposed')",
-          )
-          .run(Number(row.id))
+        dropAllocations(Number(row.id), " AND review = 'proposed'")
         database.prepare("UPDATE invoices SET status = 'void', updated_at = ? WHERE id = ?").run(now(), Number(row.id))
       })
       return invoiceDetail(`invoice:${row.id}`)
@@ -805,13 +613,17 @@ export const financeOperationsOver = (context: StoreContext): FinanceOperations 
       const id = write(database, () => {
         const payer = partyThing(input.payer, "the payer")
         const payee = partyThing(input.payee, "the payee")
+        const refundOf = linkedId(input.refundOf, "payment", "finance.refund")
+        if (refundOf !== null) refunds.originalFor(refundOf, { direction, currency, amount })
+        const subscription = linkedId(input.subscription, "subscription", "finance.ref")
         const by = written(input)
         const at = now()
         const made = database
           .prepare(
             "INSERT INTO payments (direction, payer_type, payer_id, payee_type, payee_id, amount, currency, payment_date, " +
               "reference, project_id, review, author_type, author_id, model, confirmed_by_type, confirmed_by_id, source, " +
-              "metadata, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *",
+              "metadata, created_at, updated_at, refund_of, subscription_id) " +
+              "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *",
           )
           .get(
             direction,
@@ -834,6 +646,8 @@ export const financeOperationsOver = (context: StoreContext): FinanceOperations 
             by.metadata,
             at,
             at,
+            refundOf,
+            subscription,
           ) as Row
         keepEvidence("payment", Number(made.id), by)
         const touched = allocations.map(({ invoice, units }) => allocateRow(made, invoice, units, by.actor))
@@ -900,6 +714,10 @@ export const financeOperationsOver = (context: StoreContext): FinanceOperations 
           "finance.unallocate",
         )
       const target = rowOf(invoice, "invoice")
+      if (target.status === "void")
+        refuse(`invoice:${target.id} is void; its allocations stay as they were`, "finance.unallocate")
+      if (row.refund_of == null) refunds.keepsShare(Number(row.id), Number(target.id))
+      else refunds.keepsInvoice(row, Number(target.id))
       write(database, () => {
         const gone = database
           .prepare("DELETE FROM payment_allocations WHERE payment_id = ? AND invoice_id = ?")

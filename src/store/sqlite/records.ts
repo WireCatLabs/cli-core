@@ -27,6 +27,7 @@ import {
   type Share,
   stringField,
 } from "./record-projectors.js"
+import { netPaidSql } from "./refunds.js"
 import { referenceOfThing, storedThing } from "./things.js"
 import { read, write } from "./transaction.js"
 
@@ -180,9 +181,7 @@ export const recordStoreOver = (context: StoreContext): RecordStore => {
   const freeOn = (invoice: string, payment: string): number => {
     const [target, own] = [requiredThing(database, invoice), requiredThing(database, payment)]
     const row = sql(
-      "SELECT i.total - (SELECT coalesce(sum(a.amount), 0) FROM payment_allocations a JOIN payments p ON p.id = " +
-        "a.payment_id WHERE a.invoice_id = i.id AND a.payment_id <> ? AND p.deleted_at IS NULL " +
-        "AND p.review <> 'rejected') AS free FROM invoices i WHERE i.id = ?",
+      `SELECT i.total - ${netPaidSql("i.id", { counted: "pending", excluding: "?" })} AS free FROM invoices i WHERE i.id = ?`,
     ).get(own.id, target.id)
     return Number(row?.free ?? 0)
   }

@@ -2,6 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import { mayDecide, type Refusal } from "../../store/decisions.js"
 import type { MessageStore } from "../../store/store.js"
 import { actionKind } from "./kinds/action.js"
+import { contractKind } from "./kinds/contracts.js"
 import { factKind } from "./kinds/fact.js"
 import { invoiceKind, paymentKind } from "./kinds/finance.js"
 import { findingsKind } from "./kinds/findings.js"
@@ -14,7 +15,9 @@ import { organizationKind } from "./kinds/organization.js"
 import { relationshipKind } from "./kinds/relationship.js"
 import { relationshipUpdateKind } from "./kinds/relationship-update.js"
 import { sourceReviewKind } from "./kinds/source-review.js"
+import { subscriptionKind, subscriptionPriceKind } from "./kinds/subscriptions.js"
 import { taskCloseKind } from "./kinds/task-close.js"
+import { transactionKind } from "./kinds/transactions.js"
 import type { Decided, ProposalFilter, ProposalKind, ProposalRegistry, ProposalRow } from "./types.js"
 
 const PREFIX = /^([a-z][a-z_]*):/
@@ -148,6 +151,10 @@ export const proposalRegistry = (store: MessageStore): ProposalRegistry => {
     invoiceKind(store),
     paymentKind(store),
     orderKind(store),
+    contractKind(store),
+    subscriptionKind(store),
+    subscriptionPriceKind(store),
+    transactionKind(store),
     organizationKind(store),
     memoryKind(store),
     findingsKind(store),

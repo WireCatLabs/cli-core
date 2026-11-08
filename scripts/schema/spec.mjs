@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs"
+import { businessTables } from "./business.mjs"
 import { calendarTables } from "./calendar.mjs"
 import { actor, c, del, fk, fts, id, meta, poly, queue, ts } from "./columns.mjs"
 import { crmTables } from "./crm.mjs"
@@ -67,7 +68,11 @@ const EDITS = {
       ],
       ["name_folded", "text", { note: "`fold(name)`, which `tags list name:` compares; filled on open when NULL" }],
     ],
-    keys: ["INDEX (email) WHERE email IS NOT NULL", "INDEX (id) WHERE name IS NOT NULL AND name_folded IS NULL"],
+    keys: [
+      "INDEX (email) WHERE email IS NOT NULL",
+      "INDEX (phone) WHERE phone IS NOT NULL",
+      "INDEX (id) WHERE name IS NOT NULL AND name_folded IS NULL",
+    ],
   },
   identity_links: {
     cols: { linked_at: "created_at", linked_by: "author" },
@@ -1710,6 +1715,13 @@ const GROUPS = [
     "The owner's sales pipelines and the deals in them, with the expected amount in exact minor units. A deal's stage and its status (open, won, lost) are kept apart.",
     [],
     crmTables,
+  ],
+  [
+    "business",
+    "Business",
+    "What the owner sells, the contracts and subscriptions he works under, and the bank accounts the money moves through. A balance is computed from its transactions; nothing is converted between currencies.",
+    [],
+    businessTables,
   ],
   [
     "decision-requests",

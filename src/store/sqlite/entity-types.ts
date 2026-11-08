@@ -1,3 +1,4 @@
+import { RECORD_TABLES } from "../../domain/record-types.js"
 import type { CacheDatabase } from "../driver.js"
 
 /**
@@ -5,13 +6,13 @@ import type { CacheDatabase } from "../driver.js"
  * a new type adds it here first; `entity-types.test.ts` holds every literal in the store's SQL to this list.
  */
 export const ENTITY_TABLES = {
+  ...RECORD_TABLES,
   account: "accounts",
   attachment: "attachments",
   bot: "bots",
   calendar_entry: "calendar_entries",
   chat: "chats",
   conversation: "conversations",
-  deal: "deals",
   document: "documents",
   document_picture: "documents",
   email: "emails",
@@ -22,21 +23,13 @@ export const ENTITY_TABLES = {
   file: "files",
   identity: "identities",
   image: "attachments",
-  invoice: "invoices",
-  lead: "leads",
   meeting: "meetings",
   meeting_transcript: "meeting_transcripts",
   meeting_transcript_row: "meeting_transcript_rows",
   memory: "memories",
   message: "messages",
   note: "notes",
-  order: "orders",
-  organization: "organizations",
-  payment: "payments",
-  person: "persons",
-  pipeline: "pipelines",
   place: "places",
-  project: "projects",
   tag: "canonical_tags",
   task: "tasks",
 } as const

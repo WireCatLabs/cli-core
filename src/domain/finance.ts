@@ -19,9 +19,9 @@ export const settledStatus = (current: InvoiceStatus, total: number, paid: numbe
   return paid < total ? "partly_paid" : "paid"
 }
 
-const dayMonth = (date: string | null) => (date === null ? null : `${date.slice(8, 10)}.${date.slice(5, 7)}`)
+export const dayMonth = (date: string | null) => (date === null ? null : `${date.slice(8, 10)}.${date.slice(5, 7)}`)
 
-const notes = (...words: (string | null)[]) => {
+export const notes = (...words: (string | null)[]) => {
   const kept = words.filter((word): word is string => word !== null)
   return kept.length === 0 ? "" : ` (${kept.join(", ")})`
 }

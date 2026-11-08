@@ -61,9 +61,9 @@ export const parseDecimal = (text: string, scale: number): bigint | undefined =>
 }
 
 export const formatDecimal = (units: bigint | number, scale: number): string => {
-  const digits = BigInt(units)
-    .toString()
-    .padStart(scale + 1, "0")
+  const value = BigInt(units)
+  if (value < 0n) return `-${formatDecimal(-value, scale)}`
+  const digits = value.toString().padStart(scale + 1, "0")
   return scale === 0 ? digits : `${digits.slice(0, -scale)}.${digits.slice(-scale)}`
 }
 
@@ -98,6 +98,13 @@ export const minorUnits = (amount: unknown, currency: string, what = "an amount"
       "money.amount",
     )
   return Number(units)
+}
+
+/** Minor units for a decimal that may be negative, such as an opening balance of "-1200.50". */
+export const signedMinorUnits = (amount: unknown, currency: string, what = "an amount"): number => {
+  if (typeof amount !== "string" || !amount.trim().startsWith("-")) return minorUnits(amount, currency, what)
+  const units = minorUnits(amount.trim().slice(1), currency, what)
+  return units === 0 ? 0 : -units
 }
 
 export const moneyOf = (units: number, currency: string): Money => ({

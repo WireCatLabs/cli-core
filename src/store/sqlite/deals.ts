@@ -16,11 +16,11 @@ import { notOverriddenSql } from "../../domain/relations.js"
 import { fold } from "../normalize.js"
 import type { AccountKey } from "../types.js"
 import { type ProposedByFilter, proposedBySql } from "./actors.js"
-import { isoDate, oneOf, type Party, refuse, reviewedRowsOver, text } from "./finance.js"
 import { linkKind } from "./link-kinds.js"
 import { type Author, authorActor, authorOf, evidenceOf, linkEvidence, projectId, projectOf } from "./memories.js"
 import { requiredThing } from "./notes.js"
 import type { StoreContext } from "./open.js"
+import { type AuthorInfo, isoDate, limitOf, oneOf, type Party, refuse, reviewedRowsOver, text } from "./reviewed.js"
 import { write } from "./transaction.js"
 
 export interface PipelineStage {
@@ -94,7 +94,7 @@ export interface Deal {
   /** A CRM copy's own fields by code, as the CRM labels them; empty on the owner's own. */
   providerMetadata: Record<string, CrmValue>
   people: DealPerson[]
-  author: { type: "person" | "bot"; id: string; name: string | null; kind: "agent" | "rule" | null }
+  author: AuthorInfo
   model: string | null
   source: string
   reason: string | null
@@ -644,7 +644,7 @@ export const dealOperationsOver = (context: StoreContext) => {
       const own = scope === "own" ? 1 : 0
       const provider = scope === undefined || scope === "own" ? null : scope.provider
       const account = scope === undefined || scope === "own" ? null : scope.account
-      const limit = Math.min(Math.max(filter.limit ?? 100, 1), 500)
+      const limit = limitOf(filter.limit)
       return database
         .prepare(
           `${itemsSql(kind)} WHERE d.deleted_at IS NULL AND (? IS NULL OR d.status = ?) ` +

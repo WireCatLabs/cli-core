@@ -40,6 +40,8 @@ export const financeTables = [
       ...reviewed(),
       ...ts(),
       del(),
+      fk("contract_id", "contracts", { note: "the contract it bills under" }),
+      fk("subscription_id", "subscriptions", { note: "the subscription whose period it bills" }),
     ],
   },
   {
@@ -54,12 +56,13 @@ export const financeTables = [
       c("unit_price", "integer", { note: `${MINOR}; null when only the line's amount is known` }),
       c("amount", "integer", { notnull: true, note: `quantity × unit price, half rounded up, ${MINOR}` }),
       ...ts(),
+      fk("catalog_item_id", "catalog_items", { note: "the item it bills, when known; its price is copied" }),
     ],
     keys: ["UNIQUE (invoice_id, position)"],
   },
   {
     name: "payments",
-    doc: "Money that moved to or from the owner. A refund is a payment the other way, allocated to the invoice it refunds.",
+    doc: "Money that moved to or from the owner. A refund is a payment the other way with `refund_of`, allocated only to an invoice its payment is allocated to; paid is net of confirmed refunds.",
     cols: [
       id(),
       c("direction", "text", { notnull: true, note: "in (to the owner), out (from the owner)" }),
@@ -75,6 +78,10 @@ export const financeTables = [
       ...reviewed(),
       ...ts(),
       del(),
+      fk("refund_of", "payments", {
+        note: "the payment this refunds: the other direction, the same currency, never more than it",
+      }),
+      fk("subscription_id", "subscriptions", { note: "the subscription it pays, with or without an invoice" }),
     ],
   },
   {
@@ -120,6 +127,12 @@ export const financeTables = [
       ...ts(),
       del(),
       c("source_url", "text", { note: "the http or https page of the order at the shop, such as an Amazon order" }),
+      fk("contract_id", "contracts"),
+      fk("deal_id", "deals", { note: "the deal it came from, when no contract sits between" }),
+      c("direction", "text", {
+        notnull: true,
+        note: "purchase (the owner buys), sale (the owner sells: he is the supplier)",
+      }),
     ],
   },
 ]
