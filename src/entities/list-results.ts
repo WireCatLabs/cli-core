@@ -52,12 +52,14 @@ export const scheduledJob = v.strictObject({
       failing_since: v.optional(time),
       failures: v.optional(v.number()),
       cost_usd: v.optional(v.number()),
-      /** The last time a run did not start, and why: the day's cost cap, or too little new mail. */
+      input_hash: v.optional(text),
+      /** The last time a run did not start, and why: the day's cost cap, too little new mail, or the same input. */
       skipped: v.optional(
         v.strictObject({
           at: time,
           why: text,
-          /** A dotted id for `why`, so a client can translate it: `cost.day-cap`, `mail.none-new`, `mail.below-threshold`. */
+          /** A dotted id for `why`, so a client can translate it: `cost.day-cap`, `mail.none-new`, `mail.below-threshold`,
+           * `mail.same-input`. */
           reason: v.optional(v.pipe(text, v.regex(/^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)+$/))),
         }),
       ),

@@ -680,6 +680,7 @@ export const scheduleCommandFor = ({
           reportTemplates: reportTemplatesOf,
           ...(agentInput ? { agentInput } : {}),
           untilUnlocked: true,
+          skipRepeatedInput: true,
           ...(signal ? { signal } : {}),
         }),
       )

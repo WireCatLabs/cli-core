@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process"
+import { createHash } from "node:crypto"
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { basename, join } from "node:path"
 import { CliError, errorCodes, writeSecurely } from "@wirecat/cli-base"
@@ -142,6 +143,8 @@ export interface LastRun {
   failures?: number
   /** What the run cost, as the harness reported it; absent when it reports none. */
   costUsd?: number
+  /** The SHA-256 of a mail-gated agent's input, so a timer can tell the next input is the same one. */
+  inputHash?: string
   /** The last time the timer did not start it, and why; a run after it clears this. */
   skipped?: { at: string; why: string; reason?: SkipReason }
   /** How the result went along each of the schedule's routes; a failed delivery never fails the run. */
@@ -155,6 +158,7 @@ export const SKIP_REASONS = {
   costDayCap: "cost.day-cap",
   mailNone: "mail.none-new",
   mailBelowThreshold: "mail.below-threshold",
+  mailSameInput: "mail.same-input",
 } as const
 export type SkipReason = (typeof SKIP_REASONS)[keyof typeof SKIP_REASONS]
 
@@ -202,6 +206,7 @@ export const recordRun = (
     reason?: string
     errorCode?: string
     costUsd?: number
+    inputHash?: string
   },
 ): LastRun => {
   const before = readRun(path)
@@ -523,6 +528,25 @@ const sharedLinks = (env: NodeJS.ProcessEnv) => {
   }
 }
 
+/**
+ * WireCat Desktop, while it runs, writes `<state>/schedules/desktop.json` with its pid and the schedules whose new
+ * runs it announces itself; a marker whose pid is gone (a crash) announces nothing.
+ */
+const announcedByDesktop = (schedulesFolder: string, name: string): boolean => {
+  try {
+    const { pid, announces } = JSON.parse(readFileSync(join(schedulesFolder, "desktop.json"), "utf8")) as {
+      pid?: unknown
+      announces?: unknown
+    }
+    if (!Number.isInteger(pid) || !Array.isArray(announces) || !announces.includes(name)) return false
+    process.kill(pid as number, 0)
+    return true
+  } catch (error) {
+    // EPERM: the process is there, under another user.
+    return (error as NodeJS.ErrnoException).code === "EPERM"
+  }
+}
+
 /** A desktop notification; a machine without one loses only the notice, never the run. */
 export const notify = async (system: ServerSystem, env: NodeJS.ProcessEnv, title: string, body: string) => {
   const argv =
@@ -631,6 +655,7 @@ export const runSchedule = async (
     agentInput,
     ownerLanguage = async () => "ru",
     reportTemplates,
+    skipRepeatedInput = false,
   }: {
     now?: () => Date
     timer?: Timer
@@ -645,6 +670,11 @@ export const runSchedule = async (
     ownerLanguage?: (env: NodeJS.ProcessEnv) => Promise<string>
     /** The owner's stored report templates; the shipped ones when the host gives none. */
     reportTemplates?: (env: NodeJS.ProcessEnv) => StoredTemplates
+    /**
+     * Leave out a mail-gated agent whose input is the one its last run ended well on. The mark did not move, so the
+     * run would only meet the same input again and pay for it; new mail changes the input.
+     */
+    skipRepeatedInput?: boolean
   } = {},
 ): Promise<LastRun> => {
   const schedule = readSchedule(file)
@@ -654,13 +684,24 @@ export const runSchedule = async (
   const agent = schedule.kind === "agent"
   const retries = untilUnlocked && !("every" in schedule.when)
   const firstAt = now().getTime()
-  let last = await attemptSchedule(app, system, env, schedule, folder, {
+  const first = await attemptSchedule(app, system, env, schedule, folder, {
     now,
     signal,
     killAfterMs,
     agentRuns,
     agentInput,
+    skipRepeatedInput,
   })
+  if ("repeated" in first) {
+    recordSkip(
+      file,
+      "the input is the same as the last run's, which moved no mark; it runs again once new mail comes",
+      SKIP_REASONS.mailSameInput,
+      now(),
+    )
+    return lastRun(file) ?? first.repeated
+  }
+  let last = first
   for (
     let delay = LOCKED_FIRST_WAIT_MS;
     retries && lockedOut(last) && !signal?.aborted && now().getTime() - firstAt + delay <= LOCKED_GIVE_UP_MS;
@@ -668,13 +709,15 @@ export const runSchedule = async (
   ) {
     await wait(delay, signal)
     if (signal?.aborted) break
-    last = await attemptSchedule(app, system, env, schedule, folder, {
+    const again = await attemptSchedule(app, system, env, schedule, folder, {
       now,
       signal,
       killAfterMs,
       agentRuns,
       agentInput,
     })
+    if ("repeated" in again) break
+    last = again
   }
   const { exitCode, output } = last
   const errors = agent ? output.replace(/\.md$/, ".log") : output
@@ -703,14 +746,21 @@ export const runSchedule = async (
 
   const title = `${app.command} ${schedule.name}`
   const mode = notifyOf(schedule)
-  if (prepared && mode === "always") {
-    await notify(system, env, title, `${prepared.notice.slice(0, 180)}\n${latestText}`)
-  } else if (agent && exitCode === 0 && mode === "always") {
-    const first =
-      readFileSync(output, "utf8")
-        .split("\n")
-        .find((line) => line.trim()) ?? "report ready"
-    await notify(system, env, title, `${first.trim().slice(0, 180)}\n${join(folder, "latest.md")}`)
+  if (agent && exitCode === 0) {
+    if (mode === "always" && !announcedByDesktop(join(folder, ".."), schedule.name)) {
+      const first =
+        readFileSync(output, "utf8")
+          .split("\n")
+          .find((line) => line.trim()) ?? "report ready"
+      await notify(
+        system,
+        env,
+        title,
+        prepared
+          ? `${prepared.notice.slice(0, 180)}\n${latestText}`
+          : `${first.trim().slice(0, 180)}\n${join(folder, "latest.md")}`,
+      )
+    }
   } else if (exitCode !== 0 && mode !== "never") {
     await notify(system, env, title, `failed (exit ${exitCode}) — ${errors}`)
   }
@@ -867,14 +917,16 @@ const attemptSchedule = async (
     killAfterMs,
     agentRuns,
     agentInput,
+    skipRepeatedInput = false,
   }: {
     now: () => Date
     signal: AbortSignal | undefined
     killAfterMs: number
     agentRuns: readonly AgentCli[]
     agentInput: AgentInput | undefined
+    skipRepeatedInput?: boolean
   },
-): Promise<LastRun> => {
+): Promise<LastRun | { repeated: LastRun }> => {
   const runs = join(folder, "runs")
   const stamp = now()
     .toISOString()
@@ -909,6 +961,14 @@ const attemptSchedule = async (
   const began = now().getTime()
   log.info({ event: "schedule.start", ...facts })
   const input = agent && agentInput ? await inputOf(agentInput, system, childEnv, schedule, log) : undefined
+  const inputHash =
+    input === undefined || !schedule.onNewMail ? undefined : createHash("sha256").update(input).digest("hex")
+  const before = skipRepeatedInput && inputHash !== undefined ? readRun(join(folder, "last.json")) : undefined
+  if (before?.exitCode === 0 && before.inputHash === inputHash) {
+    // A skip every few minutes would otherwise push the kept runs' files out of runs/.
+    rmSync(join(runs, `${stamp}.jsonl`), { force: true })
+    return { repeated: before }
+  }
   let costUsd: number | undefined
   const exitCode = await new Promise<number>((resolve) => {
     const child = spawn(program, args, { env: childEnv, cwd: folder, stdio: ["pipe", "pipe", "pipe"] })
@@ -956,6 +1016,7 @@ const attemptSchedule = async (
     output,
     traceId: trace.traceId,
     ...(costUsd === undefined ? {} : { costUsd }),
+    ...(inputHash === undefined ? {} : { inputHash }),
     ...(exitCode === 0 ? {} : failureOf(readFileSync(errors, "utf8"), exitCode)),
   })
 }

@@ -7,6 +7,20 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- **One notification per digest while WireCat Desktop runs.** Desktop announces a new morning digest itself, so a
+  finished run showed two system notices. A schedule's run now leaves its own success notice out when
+  `<state>/schedules/desktop.json` names a live pid and lists the schedule in `announces` (Desktop writes it while it
+  runs, wirecat-desktop#214). A marker whose pid is gone counts for nothing; failure notices and deliveries do not
+  change.
+- **A mail-gated agent no longer runs again on the input its last run ended on.** One refusal the agent could not
+  get past (a findings key already taken) turned into a paid run every 5 minutes until the day's cost cap. The
+  timer (`schedule exec`) now keeps the SHA-256 of a `--on-new-mail` agent's input in `last.json` (`inputHash`);
+  when the next input is the same and that run exited 0, its mark did not move, so the run is left out with
+  `skipped.reason` `mail.same-input` (`SKIP_REASONS.mailSameInput`). New mail changes the input and runs normally;
+  `schedule run` by hand always runs. `runSchedule(…, { skipRepeatedInput: true })` turns it on for another timer.
+
 ### Added
 
 - **The weekly gaps message (`report/weekly-gaps`).** A morning digest may keep what it found on its own, which the

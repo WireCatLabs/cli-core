@@ -243,6 +243,34 @@ describe.runIf(process.platform !== "win32")("an agent that may run another CLI"
       expect(given.length).toBeLessThan(AGENT_INPUT_MAX_CHARS + 200)
     })
 
+    it("leaves out a timed mail-gated run whose input is the last good run's, and runs on new input", async () => {
+      const { env } = setup()
+      const { system } = machine("linux")
+      const file = agentFile(env)
+      const schedule = JSON.parse(readFileSync(file, "utf8")) as Schedule
+      const starts = join(file, "..", "starts")
+      const script = `require("fs").appendFileSync(${JSON.stringify(starts)}, "x"); process.stdin.resume()`
+      writeFileSync(
+        file,
+        JSON.stringify({ ...schedule, onNewMail: "mail-triage", argv: [process.execPath, "-e", script] }),
+      )
+      let input = "key: mail-triage:1-r1"
+      const timed = { agentInput: async () => input, skipRepeatedInput: true }
+
+      expect((await runSchedule(app, system, env, file, timed)).inputHash).toMatch(/^[0-9a-f]{64}$/)
+      const skipped = await runSchedule(app, system, env, file, timed)
+      expect(skipped.skipped).toMatchObject({ reason: "mail.same-input" })
+      expect(readFileSync(starts, "utf8")).toBe("x")
+
+      await runSchedule(app, system, env, file, { agentInput: timed.agentInput })
+      expect(readFileSync(starts, "utf8")).toBe("xx")
+
+      input = "key: mail-triage:2-r1"
+      const next = await runSchedule(app, system, env, file, timed)
+      expect(readFileSync(starts, "utf8")).toBe("xxx")
+      expect(next.skipped).toBeUndefined()
+    })
+
     it("starts the agent without input when the host's read fails", async () => {
       const { env } = setup()
       const { system } = machine("linux")
@@ -590,6 +618,31 @@ describe("a run", () => {
       expect(ran.filter((one) => one.argv[0] === "notify-send")).toHaveLength(mode === "always" ? 1 : 0)
     },
   )
+
+  it("leaves the success notice to WireCat Desktop while it runs and announces the schedule", async () => {
+    const { env } = setup()
+    const { system, ran } = machine("linux", [process.execPath])
+    const make = (name: string) =>
+      scheduled(env.CHAT_STATE_DIR, {
+        name,
+        kind: "agent",
+        argv: [process.execPath, "-e", 'console.log("ok")'],
+        when: { daily: "08:30" },
+      })
+    const digest = make("morning-digest")
+    const marker = join(digest, "..", "..", "desktop.json")
+    const notices = () => ran.filter((one) => one.argv[0] === "notify-send").length
+
+    writeFileSync(marker, JSON.stringify({ pid: process.pid, announces: ["morning-digest"] }))
+    await runSchedule(app, system, env, digest)
+    expect(notices()).toBe(0)
+    await runSchedule(app, system, env, make("review"))
+    expect(notices()).toBe(1)
+
+    writeFileSync(marker, JSON.stringify({ pid: 2 ** 22 + 1, announces: ["morning-digest"] }))
+    await runSchedule(app, system, env, digest)
+    expect(notices()).toBe(2)
+  })
 
   it("notifies a failure unless the schedule says never", async () => {
     const { env } = setup()
