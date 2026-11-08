@@ -1,10 +1,12 @@
 import { CliError } from "@wirecat/cli-base"
 import type { Contact, Id, Page, PersonAlias, Provider } from "../domain/models.js"
 import type { PeopleLookup } from "../resolve.js"
+import type { IdentityLinkDecision, IdentityLinkInput } from "./identity-links.js"
 import { keysOver } from "./keys.js"
 import { ownerPerson } from "./sqlite/actors.js"
 import type { ContactFilter } from "./sqlite/identities.js"
 import * as identities from "./sqlite/identities.js"
+import * as identityProposals from "./sqlite/identity-proposals.js"
 import type { StoreContext } from "./sqlite/open.js"
 import { linkToOwner } from "./sqlite/own-identities.js"
 import * as personLinks from "./sqlite/person-links.js"
@@ -14,6 +16,7 @@ import { type PersonPreparationRead, personPreparation } from "./sqlite/person-p
 import { personSeenInAccounts } from "./sqlite/person-scope.js"
 import type { PrivateContact, PrivateContactNote } from "./sqlite/private-people.js"
 import * as privatePeople from "./sqlite/private-people.js"
+import type { ProposedAction } from "./sqlite/proposed-actions.js"
 import { write } from "./sqlite/transaction.js"
 import type { AccountKey, IdentityRef, LinkOptions, PersonFacts, PersonRecord } from "./types.js"
 
@@ -68,6 +71,13 @@ export interface PeopleStore extends AccountPeople {
   undoMerge(to: string, from: string, by: string): Promise<PersonRecord>
   /** The owner's split: the chosen identities become one new person, which this gives. */
   split(uid: string, identities: IdentityRef[], by: string): Promise<PersonRecord>
+  /**
+   * Proposes that two identities' people are one, as an `identity_link` only the owner decides. Refused over the
+   * owner's separation or rejection; an open proposal for the same two people is given back instead of a second.
+   */
+  proposeLink(input: IdentityLinkInput): Promise<ProposedAction>
+  /** The owner's decision on an `identity_link`; confirm is refused with `identity.stale` when either person changed. */
+  decideLink(id: string, decision: IdentityLinkDecision): Promise<ProposedAction>
   /** The identity, and everyone linked with it, is the owner. */
   linkToOwner(identity: IdentityRef): Promise<PersonRecord>
   /** A person known by name only, with no identity yet: someone to assign a task to before any message names them. */
@@ -166,6 +176,8 @@ export const peopleStoreOver = (context: StoreContext, keyed: AccountPeople): Pe
     merges: async (uid) => personMerges.merges(context, uid),
     undoMerge: async (to, from, by) => write(database, () => personMerges.undoMerge(context, to, from, by)),
     split: async (uid, chosen, by) => write(database, () => personMerges.split(context, uid, chosen, by)),
+    proposeLink: async (input) => identityProposals.proposeIdentityLink(context, input),
+    decideLink: async (id, decision) => identityProposals.decideIdentityLink(context, id, decision),
     linkToOwner: async (identity) => linkToOwner(context, identity),
   }
 }
