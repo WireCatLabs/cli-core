@@ -687,8 +687,9 @@ Also:
   index and no migration. Transactions are left out: a bank statement gives tens of thousands a year, too many to fold
   per query; `transactions list` filters them. `custom:` records are not in it; they are reached from the entity they
   relate to and by `records list`. The lane is in `RESOURCES_SEARCHED`, which memo's `search all` reads, and the test
-  at `src/services/search-all-meetings.test.ts:97` changes with it. tg and max do not read it yet: their `search all`
-  reads `SOURCE_SEARCHED`, which has no `crm` either, and no permission key there can leave business data out. Each hit carries the source record's provider and
+  at `src/services/search-all-meetings.test.ts:97` changes with it. tg and max are to get the lane too, **deferred
+  until permission keys for these types exist** (see PR 6): their `search all` reads `SOURCE_SEARCHED`, which has no
+  `crm` either, and no key there could leave business data out of an agent's search. Each hit carries the source record's provider and
   account when the entity came from one.
 - **MCP** stays the three-tool bridge. No new stdin command: `records import` and `records check` are already in
   `src/mcp/catalogue.ts:35`. `records delete` is a write at `ask`. `records link` stays excluded.

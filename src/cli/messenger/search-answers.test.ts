@@ -249,6 +249,32 @@ describe("untrusted text in search answers", () => {
     expect(JSON.stringify(items)).not.toContain("\\u001b")
   })
 
+  it("search all gives a business hit its review and source record, and marks the import's words untrusted", () => {
+    const imported: SearchAllItem = {
+      ...hitOf("invoice", "books"),
+      provider: "sheet",
+      foundBy: ["title"],
+      review: "proposed",
+      sourceRecord: { provider: "sheet", account: "books", externalId: "INV-9" },
+    }
+    const own: SearchAllItem = { ...hitOf("wallet", "internal"), provider: "business", review: "confirmed" }
+    const answer = allAnswer(
+      "search all",
+      { query: "budget", items: [imported, own], hasMore: false, searched: ["business"], accounts: [], skipped: [] },
+      { limit: 10 },
+    )
+    const [invoice, wallet] = agentBody(answer).items
+    for (const item of [invoice, wallet]) v.parse(ENTITIES.hit, item)
+    expect(invoice).toMatchObject({
+      kind: "invoice",
+      review: "proposed",
+      source_record: { provider: "sheet", account: "books", external_id: "INV-9" },
+      untrusted: ["title", "excerpt", "source_record.external_id"],
+    })
+    expect(wallet).toMatchObject({ kind: "wallet", provider: "business", review: "confirmed" })
+    expect(wallet).not.toHaveProperty("source_record")
+  })
+
   it("search mail marks the headers others wrote as well as the text", () => {
     const hit = {
       locator: "msg:email/owner/t1/1",
