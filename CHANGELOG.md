@@ -24,6 +24,19 @@ shape of this file.
 - Default templates for both, for Telegram, email and text in Russian and English, with the digest's escaping and
   platform rules; `templates edit | preview` now take both keys, checked against their own synthetic samples.
 
+### Fixed
+
+- **`store recover run` no longer says nothing was lost when it cannot know.** Before the copy it compares
+  each plain index of the damaged file with its table: entries the table no longer holds are rows a stale page cut
+  off, reported per table in `lost` as `gone_at_least` with the index in `seen_in`. Rows lost from a table and its
+  indexes alike leave no trace, so the notes never say "no table lost a row": they give the lower bound, or say the
+  loss is unknown, with the last deep check that passed (`last_known_good`). On six stores the cli-testing integrity
+  harness broke, it says at least 50, 200, 50 and 265 messages are gone where 50, 241, 50 and 291 are, and "unknown"
+  on the two stores whose lost rows never reached the file.
+- **`store recover run` keeps rows that `.recover` found on pages no table claims.** It dropped them with the rest of
+  its lost-and-found table; each one now goes back into the one data table whose columns its values fit (`placed`,
+  per table), and only the rest are dropped. 9 committed messages came back on one R1 store.
+
 ## 0.614.0 — 08.11.2026
 
 ### Added

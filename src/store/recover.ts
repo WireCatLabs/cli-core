@@ -17,7 +17,7 @@ import { isStoreDamage } from "../errors/failures.js"
 import { fileSchemaOf } from "./compatibility.js"
 import type { CacheDatabase } from "./driver.js"
 import { fts5Tables, type InvalidJson, invalidJson, type StoreHealth, storeHealth } from "./health.js"
-import { recordDeepCheck } from "./marks.js"
+import { readHealthMark, recordDeepCheck } from "./marks.js"
 import { migrate } from "./migrations.js"
 import { resetAttachmentWords } from "./sqlite/attachment-texts.js"
 import { involvementStoreOver } from "./sqlite/involvements.js"
@@ -25,6 +25,7 @@ import { drainMeetingIndex } from "./sqlite/meetings.js"
 import { rebuildMentions } from "./sqlite/mentions.js"
 import { CORPORA, drainCorpus, fillTrigrams, resetNoteIndex } from "./sqlite/note-index.js"
 import { openSqlite } from "./sqlite/open.js"
+import { isDerivedTable } from "./sqlite/rollback-copy.js"
 import { fillSearchIndex, resetSearchIndex } from "./sqlite/search-index.js"
 import { stemmerCache } from "./sqlite/stems.js"
 import { fillStems, resetStems } from "./sqlite/stems-fill.js"
@@ -147,10 +148,9 @@ export const storeHolders = (path: string): { pid: number; name: string }[] | un
   })
 }
 
-/** Rows per table that holds data; `null` where the table cannot be counted. Search shadow tables are left out. */
-export const tableRows = (database: CacheDatabase): Record<string, number | null> => {
+const dataTables = (database: CacheDatabase): string[] => {
   const indexes = fts5Tables(database).map((index) => index.name)
-  const tables = database
+  return database
     .prepare(
       "SELECT name FROM sqlite_master WHERE type = 'table' AND rootpage > 0 AND name NOT LIKE 'sqlite_%' " +
         "AND name NOT LIKE 'vector_index_%' ORDER BY name",
@@ -158,6 +158,11 @@ export const tableRows = (database: CacheDatabase): Record<string, number | null
     .all()
     .map((row) => String(row.name))
     .filter((name) => !indexes.some((index) => name.startsWith(`${index}_`)))
+}
+
+/** Rows per table that holds data; `null` where the table cannot be counted. Search shadow tables are left out. */
+export const tableRows = (database: CacheDatabase): Record<string, number | null> => {
+  const tables = dataTables(database)
   return Object.fromEntries(
     tables.map((table) => {
       try {
@@ -167,6 +172,177 @@ export const tableRows = (database: CacheDatabase): Record<string, number | null
       }
     }),
   )
+}
+
+/** The tables that hold the owner's data and have a rowid: the others are rebuilt from them, or keyed otherwise. */
+const sourceTables = (database: CacheDatabase): string[] => {
+  const withoutRowid = new Set(
+    database
+      .prepare("SELECT name FROM pragma_table_list WHERE wr = 1")
+      .all()
+      .map((row) => String(row.name)),
+  )
+  return dataTables(database).filter(
+    (table) => table !== LOST_AND_FOUND && !withoutRowid.has(table) && !isDerivedTable(table),
+  )
+}
+
+export interface IndexedButGone {
+  rows: number
+  index: string
+}
+
+/**
+ * Per table, the most entries one index of the damaged file holds that its table no longer has: rows, or a later
+ * change to them, that were lost before the recovery read the file. A stale page written over a table leaves its
+ * indexes as they were; one written over the index too leaves no trace, so this is a lower bound. Partial and
+ * expression indexes are left out: a plain scan cannot read them alone.
+ */
+export const indexedButGone = (database: CacheDatabase): Record<string, IndexedButGone> => {
+  const found: Record<string, IndexedButGone> = {}
+  for (const table of sourceTables(database)) {
+    const indexes = database
+      .prepare("SELECT name FROM pragma_index_list(?) WHERE partial = 0 ORDER BY name")
+      .all(table)
+      .map((row) => String(row.name))
+    for (const index of indexes) {
+      const columns = database
+        .prepare("SELECT cid, name FROM pragma_index_xinfo(?) WHERE key = 1 ORDER BY seqno")
+        .all(index)
+      if (columns.some((column) => Number(column.cid) < 0)) continue
+      const keys = columns.map((column) => `"${String(column.name)}"`).join(", ")
+      const grouped = `${keys}, row_id`
+      let rows: number
+      try {
+        // Not EXCEPT: SQLite may merge it on the index's own order, which a damaged index does not keep.
+        rows = Number(
+          database
+            .prepare(
+              `SELECT count(*) AS n FROM (SELECT 1 FROM (SELECT ${keys}, rowid AS row_id, 1 AS side FROM "${table}" ` +
+                `INDEXED BY "${index}" UNION ALL SELECT ${keys}, rowid, 2 FROM "${table}" NOT INDEXED) ` +
+                `GROUP BY ${grouped} HAVING max(side) = 1)`,
+            )
+            .get()?.n,
+        )
+      } catch {
+        continue
+      }
+      if (rows > (found[table]?.rows ?? 0)) found[table] = { rows, index }
+    }
+  }
+  return found
+}
+
+interface Column {
+  name: string
+  type: string
+  required: boolean
+  hasDefault: boolean
+  rowid: boolean
+}
+
+/** The storage types a value read back from a column of this declared type can have: SQLite's affinity rules. */
+const storedAs = (declared: string): string[] | null => {
+  const type = declared.toUpperCase()
+  if (type.includes("INT")) return ["integer"]
+  if (/CHAR|CLOB|TEXT/.test(type)) return ["text"]
+  if (type === "" || type.includes("BLOB")) return null
+  if (/REAL|FLOA|DOUB/.test(type)) return ["real", "integer"]
+  return null
+}
+
+const columnsOf = (database: CacheDatabase, table: string): Column[] => {
+  const all = database
+    .prepare('SELECT name, type, "notnull" AS required, dflt_value, pk FROM pragma_table_info(?)')
+    .all(table)
+  const keys = all.filter((column) => Number(column.pk) > 0)
+  return all.map((column) => ({
+    name: String(column.name),
+    type: String(column.type),
+    required: Number(column.required) === 1,
+    hasDefault: column.dflt_value !== null,
+    rowid: keys.length === 1 && Number(column.pk) === 1 && String(column.type).toUpperCase() === "INTEGER",
+  }))
+}
+
+/** A row with fewer fields than the table was written before a column was added; the rest take their defaults. */
+const fits = (columns: Column[], fields: number, types: string[]): boolean =>
+  fields <= columns.length &&
+  columns.every((column, at) => {
+    if (at >= fields) return !column.required || column.hasDefault
+    const type = types[at]
+    if (column.rowid) return type === "null" || type === "integer"
+    if (type === "null") return !column.required
+    const allowed = storedAs(column.type)
+    return allowed === null || allowed.includes(type as string)
+  })
+
+/**
+ * Puts back each row `.recover` found on a page no table claims into the one data table whose columns its values fit:
+ * a stale page copied over a table cuts committed rows off it, still readable. A row that fits no table, or more
+ * than one, stays out and is counted with the rest; a row whose key the table already holds leaves the table's row.
+ */
+export const placeLostRows = (database: CacheDatabase): Record<string, number> => {
+  if (!database.prepare("SELECT 1 FROM sqlite_master WHERE name = ?").get(LOST_AND_FOUND)) return {}
+  const fields = database
+    .prepare("SELECT name FROM pragma_table_info(?) WHERE name GLOB 'c[0-9]*'")
+    .all(LOST_AND_FOUND)
+    .map((row) => String(row.name))
+  const tables = sourceTables(database).map((table) => ({ table, columns: columnsOf(database, table) }))
+  const rows = database
+    .prepare(
+      `SELECT rowid AS at, nfield, ${fields.map((field) => `typeof(${field}) AS "${field}"`).join(", ")} ` +
+        `FROM ${LOST_AND_FOUND} WHERE id IS NOT NULL`,
+    )
+    .all()
+  const placed: Record<string, number> = {}
+  // As `.recover` writes rows: before the triggers exist, whose search indexes here are the damaged ones copied.
+  const triggers: string[] = []
+  const quiet = (table: string) => {
+    if (table in placed) return
+    placed[table] = 0
+    for (const row of database
+      .prepare("SELECT name, sql FROM sqlite_master WHERE type = 'trigger' AND tbl_name = ?")
+      .all(table)) {
+      triggers.push(String(row.sql))
+      database.exec(`DROP TRIGGER "${String(row.name)}"`)
+    }
+  }
+  database.exec("PRAGMA foreign_keys = OFF")
+  database.exec("BEGIN")
+  try {
+    for (const row of rows) {
+      const count = Number(row.nfield)
+      const types = fields.slice(0, count).map((field) => String(row[field]))
+      const fitting = tables.filter(({ columns }) => fits(columns, count, types))
+      if (fitting.length !== 1) continue
+      const { table, columns } = fitting[0] as (typeof tables)[number]
+      quiet(table)
+      const given = columns.slice(0, count)
+      const names = [...(given.some((column) => column.rowid) ? [] : ["rowid"]), ...given.map((column) => column.name)]
+      const values = [
+        ...(given.some((column) => column.rowid) ? [] : ["id"]),
+        ...given.map((column, at) => (column.rowid ? "id" : `c${at}`)),
+      ]
+      const inserted = database
+        .prepare(
+          `INSERT OR IGNORE INTO "${table}" (${names.map((name) => `"${name}"`).join(", ")}) ` +
+            `SELECT ${values.join(", ")} FROM ${LOST_AND_FOUND} WHERE rowid = ?`,
+        )
+        .run(Number(row.at))
+      if (Number(inserted.changes) === 0) continue
+      placed[table] = (placed[table] ?? 0) + 1
+      database.prepare(`DELETE FROM ${LOST_AND_FOUND} WHERE rowid = ?`).run(Number(row.at))
+    }
+    for (const sql of triggers) database.exec(sql)
+    database.exec("COMMIT")
+  } catch (error) {
+    database.exec("ROLLBACK")
+    throw error
+  } finally {
+    database.exec("PRAGMA foreign_keys = ON")
+  }
+  return Object.fromEntries(Object.entries(placed).filter(([, rows]) => rows > 0))
 }
 
 /**
@@ -424,6 +600,13 @@ export interface LostRows {
   before: number | null
   read: number
   kept: number
+  /**
+   * Rows known to be gone after the recovery: an index of the damaged file lists them and its table did not hold
+   * them, less the rows put back from pages no table claimed. Rows lost without a trace are not in it.
+   */
+  goneAtLeast: number
+  /** The index that showed them. */
+  seenIn: string | null
 }
 
 export interface Recovery {
@@ -435,6 +618,13 @@ export interface Recovery {
    * `.recover` found, `kept` what fit the table; rows on pages it could not read at all are in none of them.
    */
   lost: LostRows[]
+  /** Per table, rows found on pages no table claimed and put back. */
+  placed: Record<string, number>
+  /**
+   * The last deep check that passed before this recovery. A damaged file cannot show every row it lost, so whatever
+   * was written since may be gone without a count.
+   */
+  lastKnownGood: string | null
   dangling: DanglingRows[]
   /** Values that were not valid JSON: set to NULL, or the row dropped where `required`. */
   invalidJson: InvalidJson[]
@@ -550,6 +740,9 @@ const recoverLocked = async ({
         { reason: "store.unreadable" },
       )
     }
+    note("looking for rows the indexes list and the tables no longer hold")
+    const gone = indexedButGone(watch)
+    const lastKnownGood = readHealthMark(path)?.last_ok_at ?? null
     const before = { data: dataVersion(), inode: statSync(path).ino }
 
     const stamp = new Date(now()).toISOString().replace(/[:.]/g, "-")
@@ -580,7 +773,9 @@ const recoverLocked = async ({
     let json: InvalidJson[]
     let fetch: { account: string; emails: number }[]
     let schema: number
+    let placed: Record<string, number>
     try {
+      placed = placeLostRows(opened.database)
       kept = tableRows(opened.database)
       migrate(opened.database, { command, ...(version ? { version } : {}) })
       note("clearing values that are not valid JSON")
@@ -629,14 +824,28 @@ const recoverLocked = async ({
     recordDeepCheck(path, health, { cli: command, ...(version ? { version } : {}), schema, now })
 
     const lost = Object.entries(rowsBefore)
-      .map(([table, before]) => ({ table, before, read: read[table] ?? 0, kept: kept[table] ?? 0 }))
-      .filter(({ before, read, kept }) => before === null || before > kept || read > kept)
+      .map(([table, before]) => {
+        const goneAtLeast = Math.max(0, (gone[table]?.rows ?? 0) - (placed[table] ?? 0))
+        return {
+          table,
+          before,
+          read: read[table] ?? 0,
+          kept: kept[table] ?? 0,
+          goneAtLeast,
+          seenIn: goneAtLeast > 0 ? (gone[table]?.index ?? null) : null,
+        }
+      })
+      .filter(
+        ({ before, read, kept, goneAtLeast }) => before === null || before > kept || read > kept || goneAtLeast > 0,
+      )
     const seconds = (from: number, to: number) => Math.round((to - from) / 100) / 10
     return {
       path,
       keptAt,
       sqlite3: program.version as string,
       lost,
+      placed,
+      lastKnownGood,
       dangling,
       invalidJson: json,
       mailToFetch: fetch,

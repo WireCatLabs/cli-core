@@ -426,10 +426,14 @@ the schema's pages; milliseconds) for `doctor`, deep (`PRAGMA quick_check` and e
 under a rolled-back transaction; about 30 s for 6 GB) for `store recover` and a CLI's own `doctor --deep` (memo's). `explainDamage`
 (`src/store/damage.ts`) turns a failed check into the plain-words answer every surface shows. `recoverStore`
 (`src/store/recover.ts`) copies the readable rows with the `sqlite3` program's `.recover` (node:sqlite has no recovery
-API; free pages are skipped so deleted rows stay deleted), migrates, drops and refills every fts5 and vec0 index
+API; free pages are skipped so deleted rows stay deleted), puts back the rows `.recover` found on pages no table
+claims into the one table whose columns their values fit (`placeLostRows`), migrates, drops and refills every fts5 and vec0 index
 through the normal fill code (`FILLERS` names the recipe of each index outside the corpora), rebuilds mentions and
 involvements, checks the result deeply, and swaps it in only if no process holds the store and the file did not
-change meanwhile. A new search index needs a line in `FILLERS` unless it belongs to a corpus.
+change meanwhile. A new search index needs a line in `FILLERS` unless it belongs to a corpus. Its loss report is a
+lower bound, never "nothing lost": before the copy, `indexedButGone` compares each plain index of the damaged file
+with its table, and the entries the table no longer holds are rows a stale page cut off (`goneAtLeast`, `seenIn`).
+Rows lost from a table and its indexes alike leave no trace, so the report names the last known good instead.
 
 Two marks sit beside the store, never in it, since the store may be what cannot be read (`src/store/marks.ts`). The
 damage mark `<store>.damaged.json` (`at`, `command`, `cli_version`, `run_id`, SQLite's message, the file's inode) is
