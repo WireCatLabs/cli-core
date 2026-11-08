@@ -244,12 +244,12 @@ describe("the group lock fails closed", () => {
     const env = envOf()
     const store = await seeded(env)
     const owned = await store.people.add({ name: "Ана" })
-    await allowed(env, store, ["tags", "add", "x", "--message", `person:${owned.id}`])
+    await allowed(env, store, ["tags", "add", "x", "--message", `person:${owned.uid}`])
     const note = await store.notes.addNote({ text: "the owner's own" })
     await store.accounts.saveAccountGroup("personal", ["telegram:101"])
     for (const group of ["work", "personal"]) {
       await allowed({ ...env, MEMO_GROUP_LOCK: group }, store, ["tags", "add", "x", "--message", `note:${note.id}`])
-      await allowed({ ...env, MEMO_GROUP_LOCK: group }, store, ["tags", "add", "x", "--message", `person:${owned.id}`])
+      await allowed({ ...env, MEMO_GROUP_LOCK: group }, store, ["tags", "add", "x", "--message", `person:${owned.uid}`])
     }
     await refused({ ...env, MEMO_GROUP_LOCK: "personal" }, store, [
       "tags",
@@ -312,7 +312,7 @@ describe("what a locked run shows of proposals and evidence", () => {
       subject,
       object,
       summary: null,
-      proposedBy: "agent",
+      proposedBy: { type: "bot", id: "1", name: "claude", kind: "agent" },
       reason: null,
       evidence: ["msg:telegram/102/1/1", "msg:telegram/101/1/1"],
       score: null,
