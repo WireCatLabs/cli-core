@@ -100,8 +100,8 @@ Anchors on `origin/main` 9386f1765, package 0.602.0, store version 55.
 | Memory workstream D1: person separation guard in `joinByAddress`/`linkOwnIdentities` | PR in progress, function name later | identifier matching must not rejoin two people the owner separated |
 | Memory workstream D5: one shared identity matcher | last in their order | the import's lookup lives in one self-contained function so D5 can move it unchanged |
 
-Everything in this plan that writes `links` **depends on #2628 and its follow-up, to confirm with its author.** The
-rest (tables, money rules, envelope, streaming) does not, and is built first.
+What this plan writes to `links` goes through #2628's `relations.syncReported`, on the shape agreed with the CRM
+relationships workstream (PR 5).
 
 ## Domain model
 
@@ -388,9 +388,9 @@ Trigger changes, exactly:
 | line → catalog item, order/invoice → contract, contract/order → deal, invoice/payment → subscription, subscription → contract and item, transaction → payment and wallet, refund → payment | nullable FK | structural, one target, the store's rules read it |
 | allocation (payment → invoice) | `payment_allocations` | an amount on the edge |
 | subscription supplier and customer, invoice counterparty, order customer | `_type/_id` columns | exactly one, a money rule reads it |
-| contract parties (role `customer`, `supplier`, `signatory`, `guarantor`, `other`) | relationship `related-to` from the contract, via `syncReported` | N-valued with roles; the deal-roles pattern. **Depends on #2628 follow-up**: the contract endpoints and roles join `src/domain/relations.ts` |
+| contract parties (role `customer`, `supplier`, `signatory`, `guarantor`, or one the owner added to the `contract` list) | relationship `related-to` from the contract, via `syncReported` | N-valued with roles; the deal-roles pattern; the endpoint and roles are in `src/domain/relations.ts` |
 | people on a deal or lead (owner, contact, decision-maker) | relationship `related-to` | today's CRM rows, moving to `syncReported` with #2628 |
-| person member-of organization, organization customer-of organization | relationship via `syncReported` | **depends on #2628** |
+| person member-of organization, organization customer-of organization | relationship via `syncReported` | a member's role only from the list, else `metadata.source_role`; a title is `metadata.position` |
 | contract → its document, any entity → its evidence | `links` `attached` / `evidence` | loose; documents are not business records |
 | a source's own relation with no canonical meaning (`quoted-in`, `parent-ticket`) | `record_relations` with the source's role word | kept as the source said; resolved record to record within the account |
 
@@ -595,10 +595,9 @@ Synthetic. A developer's ERP sends this JSONL (`example-erp`, account `demo`). S
 }
 ```
 
-The order is a sale, so the owner is its supplier; its total is derived from its line. Until PR 5 (relationships
-through `syncReported`) ships, `member-of` and the contract's `party` stay in `record_relations` only, and the deal's
-person is written by `saveItem`'s existing `related-to` row. The memo acceptance test asserts the relationships
-(`organizations context`, `contracts show` parties) only from the release that carries PR 5.
+The order is a sale, so the owner is its supplier; its total is derived from its line. `member-of`, the contract's
+`party` and the deal's person are reported links of the import's account (PR 5). The memo acceptance test asserts the
+relationships (`organizations context`, `contracts show` parties) only from the release that carries PR 5.
 
 What the agent runs afterwards (released commands; § CLI and MCP):
 
@@ -806,7 +805,6 @@ Synthetic data only. "core" = `src/store/*.test.ts` unless named; "memo" = cli-m
 - **Re-importing an old v1 file creates entities** for records that waited for `records link` (ruling 2). A dry run
   lists them under `created` first; the owner's real payment sheet should be dry-run before its next import.
 - **Phone links differ from the Memory linker**, which proposes on a phone-only match. Owner's choice; documented.
-- **#2628's shape may still change**; PR 5 waits for it, PRs 2–4 do not touch `links`.
 
 ## Owner answers (2026-11-07)
 

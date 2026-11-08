@@ -137,13 +137,17 @@ export const recordRelationshipsOver = (context: StoreContext) => {
       role.relationship && isSymmetric(role.relationship) ? [name] : [],
     )
     if (symmetric.length === 0) return
+    // Two branches, not an OR, so each one reads an index of record_relations instead of every record of the account.
     const incoming = sql(
-      "SELECT r.id AS record_id, r.type, r.entity_type, r.entity_id, rr.role, rr.as_role FROM record_relations rr " +
-        "JOIN records r ON r.id = rr.record_id LEFT JOIN records t ON t.id = rr.target_id AND t.deleted_at IS NULL " +
-        "WHERE r.account_id = ? AND r.deleted_at IS NULL AND r.entity_id IS NOT NULL " +
-        "AND rr.role IN (SELECT value FROM json_each(?)) AND ((t.entity_type = ? AND t.entity_id = ?) " +
-        "OR (rr.target_type = 'ref' AND rr.target_external_id = ?)) ORDER BY r.id, rr.id",
-    ).all(accountId, JSON.stringify(symmetric), entity.type, entity.id, ref)
+      "SELECT r.id AS record_id, r.type, r.entity_type, r.entity_id, rr.role, rr.as_role, rr.id AS relation_id " +
+        "FROM records t JOIN record_relations rr ON rr.target_id = t.id JOIN records r ON r.id = rr.record_id " +
+        "WHERE t.entity_type = ? AND t.entity_id = ? AND t.deleted_at IS NULL AND r.account_id = ? " +
+        "AND r.deleted_at IS NULL AND r.entity_id IS NOT NULL AND rr.role IN (SELECT value FROM json_each(?)) " +
+        "UNION ALL SELECT r.id, r.type, r.entity_type, r.entity_id, rr.role, rr.as_role, rr.id FROM record_relations rr " +
+        "JOIN records r ON r.id = rr.record_id WHERE rr.target_type = 'ref' AND rr.target_external_id = ? " +
+        "AND r.account_id = ? AND r.deleted_at IS NULL AND r.entity_id IS NOT NULL " +
+        "AND rr.role IN (SELECT value FROM json_each(?)) ORDER BY 1, 7",
+    ).all(entity.type, entity.id, accountId, JSON.stringify(symmetric), ref, accountId, JSON.stringify(symmetric))
     for (const row of incoming) {
       const kind = relationshipOf(row.type, row.role)
       if (!kind) continue

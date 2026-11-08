@@ -233,6 +233,22 @@ describe("a changed or deleted record", () => {
     expect(live(reported(sql))).toEqual([])
   })
 
+  it("withdraws the links of a record sent again without its relations", async () => {
+    const { store, sql } = await recordsFixture(handles)
+    await take(
+      store,
+      envelopeOf([
+        PIPELINE,
+        upsert("person", "ana", { name: "Ana", email: "ana@example.com" }),
+        deal("ana", "contact"),
+      ]),
+    )
+    const bare = upsert("deal", "d1", { title: "Fleet", pipeline: "sales", stage: "new" })
+    const again = await take(store, envelopeOf([bare], { batch: "2" }))
+    expect(again.relationships).toMatchObject({ withdrawn: 1 })
+    expect(live(reported(sql))).toEqual([])
+  })
+
   it("never writes again the relationship the owner removed, role included", async () => {
     const { store, sql } = await recordsFixture(handles)
     const records = [org("c1"), memberOf("ana", "c1", {}, "founder")]
@@ -427,6 +443,23 @@ describe("the owner's map and match", () => {
     expect(reported(sql, "member-of")).toEqual([])
     await store.records.map({ ...SOURCE, type: "person", externalId: "ana" }, one, "owner")
     expect(live(reported(sql, "member-of"))).toEqual([expect.objectContaining({ from: one })])
+  })
+})
+
+describe("records match", () => {
+  it("reports the links of a person it makes for an account", async () => {
+    const { store, sql } = await recordsFixture(handles)
+    const one = knownPerson(sql, "One", "ana@example.com")
+    await take(store, envelopeOf([org("c1"), memberOf("ana", "c1")]))
+    sql()
+      .prepare("DELETE FROM identity_links WHERE person_id = ?")
+      .run(Number(one.split(":")[1]))
+    sql().prepare("UPDATE records SET entity_type = NULL, entity_id = NULL WHERE type = 'person'").run()
+    sql().prepare("UPDATE links SET deleted_at = 1").run()
+    const matched = await store.records.match({ provider: SOURCE.provider, account: SOURCE.account })
+    expect(matched).toMatchObject({ created: 1, errors: [] })
+    const made = await entityOf(store, "person", "ana")
+    expect(live(reported(sql, "member-of"))).toEqual([expect.objectContaining({ from: made })])
   })
 })
 

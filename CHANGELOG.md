@@ -89,6 +89,10 @@ shape of this file.
 
 ### Changed — may break callers
 
+- **An envelope sent under a CRM's own provider and account now replaces that account's relationships for the
+  entities it lists.** A deal's people in such an envelope withdraw the CRM's people of that deal, and the CRM's next
+  sync writes its own back. An import under any other account never touches a CRM's links.
+
 - **`EntryEventType` has `call`**, and `events list event_type:` takes it. A switch over the kinds needs a branch.
 - **`kindIn` and `ListedAccount.kind` name a provider's first kind only.** A provider may hold several (`kindsIn`,
   `ListedAccount.kinds`, `holdsKind`); code that tests `kindIn(provider) === kind` misses the others.
