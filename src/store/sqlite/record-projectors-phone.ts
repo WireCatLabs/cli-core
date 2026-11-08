@@ -1,12 +1,15 @@
 import type { Message } from "../../domain/models.js"
+import { isImportedProvider } from "../../domain/providers.js"
 import type { CALL_DIRECTIONS, SMS_DIRECTIONS } from "../../domain/record-types.js"
-import { formatReference } from "../../domain/references.js"
+import type { EnvelopeSource } from "../../domain/records.js"
+import { formatReference, parseReference } from "../../domain/references.js"
 import type { EntryInput } from "../../meetings/index.js"
 import type { AccountKey } from "../types.js"
 import { calendarWritesOver } from "./calendar.js"
-import { chatPkFor, upsertChat } from "./chats.js"
+import { chatPkFor, findChatPk, raiseLastMessageAt, upsertChat, writeMembers } from "./chats.js"
+import { seenIdentity } from "./identities.js"
 import { COUNTERPART_ROLE, linkKind } from "./link-kinds.js"
-import { upsertMessage } from "./messages.js"
+import { tombstone, upsertMessage } from "./messages.js"
 import { requiredThing } from "./notes.js"
 import type { StoreContext } from "./open.js"
 import { e164Of, importedIdentity, linkToPerson } from "./record-matching.js"
@@ -22,6 +25,19 @@ import {
 } from "./record-projection.js"
 
 const CALLS_CALENDAR = "calls"
+
+/**
+ * A messenger's or a calendar's account is its sync's: an SMS or a call written there would land in a real chat or
+ * calendar. Only a provider marked import-only (`imported`, as the seeded `phone`) takes them.
+ */
+export const importOnly = (source: EnvelopeSource, type: string): void => {
+  if (!isImportedProvider(source.provider))
+    refusal(
+      `a ${type} is imported only under an import-only provider such as phone; ${source.provider} is not one`,
+      "record.provider-not-imported",
+      "type",
+    )
+}
 
 /** E.164 as a person record's phone reads, so the thread and the person agree; as written otherwise (a short code). */
 const numberOf = ({ options }: Projection, typed: string): string =>
@@ -45,7 +61,11 @@ const millis = (fields: Row, name: string): number => {
   return Number.isNaN(at) ? refusal(`fields.${name} is no moment`, "record.invalid", ["fields", name]) : at
 }
 
+const threadOf = (projection: Projection) =>
+  given<string>(projection.fields, "thread") ?? numberOf(projection, String(projection.fields.phone))
+
 const saveSms = (projection: Projection, tools: ProjectionTools): string => {
+  importOnly(projection.source, "message")
   const { context } = tools
   const { fields, externalId, source } = projection
   const sentAt = millis(fields, "sent_at")
@@ -53,6 +73,17 @@ const saveSms = (projection: Projection, tools: ProjectionTools): string => {
   const phone = numberOf(projection, String(fields.phone))
   const name = given<string>(fields, "name") ?? null
   const incoming = (fields.direction as (typeof SMS_DIRECTIONS)[number]) === "in"
+  const chatId = threadOf(projection)
+  const held = findChatPk(context, account.pk, chatId)
+  const membership =
+    held === undefined
+      ? undefined
+      : context.database.prepare("SELECT membership_state FROM chats WHERE id = ?").get(held)
+  if (membership !== undefined && membership.membership_state !== "imported")
+    refusal(`chat ${chatId} of ${account.provider}:${account.account} is not an imported one`, "record.chat", [
+      "fields",
+      "thread",
+    ])
   const identity = importedIdentity(context, {
     provider: account.provider,
     externalId: phone,
@@ -60,20 +91,12 @@ const saveSms = (projection: Projection, tools: ProjectionTools): string => {
     ...(phone.startsWith("+") ? { phone } : {}),
   })
   const person = counterpartOf(projection, tools)
-  // Linked before the message is saved: the messenger path gives an identity with no person one of its own.
+  // Linked before the identity is seen: the messenger path gives an identity with no person one of its own.
   if (person !== undefined) linkToPerson(context, person, identity, source)
-  const at = context.now()
-  context.database
-    .prepare(
-      "INSERT OR IGNORE INTO account_identities (account_id, identity_id, created_at, updated_at) VALUES (?, ?, ?, ?)",
-    )
-    .run(account.pk, identity, at, at)
-  const chatId = given<string>(fields, "thread") ?? phone
+  seenIdentity(context, account.pk, account.provider, phone, name)
   upsertChat(context, account.pk, { id: chatId, kind: "dialog", title: name ?? phone, membershipState: "imported" })
+  writeMembers(context, account, account.pk, chatId, [phone])
   const chatKey = chatPkFor(context, account.pk, chatId)
-  context.database
-    .prepare("INSERT OR IGNORE INTO chat_members (chat_id, identity_id, created_at) VALUES (?, ?, ?)")
-    .run(chatKey, identity, at)
   const read = given<boolean>(fields, "read")
   const message: Message = {
     id: externalId,
@@ -91,9 +114,7 @@ const saveSms = (projection: Projection, tools: ProjectionTools): string => {
     ...(read === undefined ? {} : { providerMetadata: { read } }),
   }
   upsertMessage(context, account, account.pk, chatKey, message, importedBy(source).source)
-  context.database
-    .prepare("UPDATE chats SET last_message_at = max(coalesce(last_message_at, 0), ?) WHERE id = ?")
-    .run(sentAt, chatKey)
+  raiseLastMessageAt(context, chatKey, sentAt)
   return formatReference({
     type: "message",
     provider: account.provider,
@@ -103,44 +124,76 @@ const saveSms = (projection: Projection, tools: ProjectionTools): string => {
   })
 }
 
+/** A changed thread or number would make a second message: the one stored stays where it is. */
+const updateSms = (ref: string, projection: Projection, tools: ProjectionTools): boolean => {
+  const stored = parseReference(ref)
+  if (stored.type === "message" && stored.chat !== threadOf(projection))
+    refusal(
+      `an SMS stays in its thread (${stored.chat}): delete it and send it again under a new external_id`,
+      "record.moved",
+      ["fields", "thread"],
+    )
+  saveSms(projection, tools)
+  return true
+}
+
 const DESCRIPTIONS: Record<(typeof CALL_DIRECTIONS)[number], string> = {
   in: "incoming call",
   out: "outgoing call",
   missed: "missed call",
 }
 
-/** The account's calls calendar, its sync marked complete: no provider syncs it, so nothing is missing from it. */
-const callsCalendar = (context: StoreContext, accountId: number, writes: ReturnType<typeof calendarWritesOver>) => {
-  const at = context.now()
-  const id = Number(
-    context.database
-      .prepare(
-        `INSERT INTO calendars (account_id, external_id, title, access_role, primary_calendar, synced, seen_at,
-           created_at, updated_at) VALUES (?, ?, 'Calls', 'owner', 1, 1, ?, ?, ?)
-         ON CONFLICT (account_id, external_id) DO UPDATE SET seen_at = excluded.seen_at RETURNING id`,
-      )
-      .get(accountId, CALLS_CALENDAR, at, at, at)?.id,
+/** Each account's calls calendar, ensured once per store handle and again only if the owner forgot it since. */
+const calendars = new WeakMap<StoreContext, Map<number, number>>()
+
+const callsCalendar = (context: StoreContext, accountId: number): number => {
+  const known = calendars.get(context) ?? new Map<number, number>()
+  calendars.set(context, known)
+  const held = known.get(accountId)
+  if (
+    held !== undefined &&
+    context.database.prepare("SELECT 1 FROM calendars WHERE id = ? AND deleted_at IS NULL").get(held)
   )
-  const cursor = {
-    v: 2,
-    token: null,
-    window: { from: 0, to: 8.64e15 },
-    fullAt: at,
-    updatedAt: at,
-    done: 0,
-    round: null,
-  }
-  writes.putCursor(id, JSON.stringify(cursor), at)
+    return held
+  const { id } = calendarWritesOver(context).saveCalendar(
+    accountId,
+    {
+      externalId: CALLS_CALENDAR,
+      title: "Calls",
+      timezone: null,
+      accessRole: "owner",
+      primary: true,
+      syncByDefault: false,
+    },
+    context.now(),
+  )
+  known.set(accountId, id)
   return id
 }
 
+const relinkCounterpart = (context: StoreContext, eventId: number, person: number | undefined) => {
+  const at = context.now()
+  context.database
+    .prepare(
+      `DELETE FROM links WHERE from_type = 'event' AND from_id = ? AND to_type = 'person' AND kind = ${linkKind("related-to")}
+         AND role = ? AND source = 'import'`,
+    )
+    .run(eventId, COUNTERPART_ROLE)
+  if (person !== undefined)
+    context.database
+      .prepare(
+        `INSERT INTO links (from_type, from_id, to_type, to_id, kind, role, source, confirmed, created_at, author,
+           updated_at) VALUES ('event', ?, 'person', ?, ${linkKind("related-to")}, ?, 'import', 1, ?, 'import', ?)`,
+      )
+      .run(eventId, person, COUNTERPART_ROLE, at, at)
+}
+
 const saveCall = (projection: Projection, tools: ProjectionTools): string => {
+  importOnly(projection.source, "event")
   const { context } = tools
   const { fields, externalId } = projection
   const startsAt = millis(fields, "started_at")
-  const account = sourceAccount(projection)
-  const writes = calendarWritesOver(context)
-  const calendarId = callsCalendar(context, account.pk, writes)
+  const calendarId = callsCalendar(context, sourceAccount(projection).pk)
   const phone = numberOf(projection, String(fields.phone))
   const direction = fields.direction as (typeof CALL_DIRECTIONS)[number]
   const seconds = given<number>(fields, "duration") ?? 0
@@ -159,39 +212,37 @@ const saveCall = (projection: Projection, tools: ProjectionTools): string => {
     participants: [],
     metadata: { callDirection: direction, callSeconds: seconds, callNumber: phone },
   }
-  writes.saveAll(calendarId, [entry], context.now())
-  const eventId = Number(
-    context.database
-      .prepare("SELECT event_id FROM calendar_entries WHERE calendar_id = ? AND external_id = ?")
-      .get(calendarId, externalId)?.event_id,
-  )
-  const at = context.now()
-  context.database
-    .prepare(
-      `DELETE FROM links WHERE from_type = 'event' AND from_id = ? AND to_type = 'person' AND kind = ${linkKind("related-to")}
-         AND role = ? AND source = 'import'`,
-    )
-    .run(eventId, COUNTERPART_ROLE)
-  const person = counterpartOf(projection, tools)
-  if (person !== undefined)
-    context.database
-      .prepare(
-        `INSERT INTO links (from_type, from_id, to_type, to_id, kind, role, source, confirmed, created_at, author,
-           updated_at) VALUES ('event', ?, 'person', ?, ${linkKind("related-to")}, ?, 'import', 1, ?, 'import', ?)`,
-      )
-      .run(eventId, person, COUNTERPART_ROLE, at, at)
+  const [saved] = calendarWritesOver(context).saveAll(calendarId, [entry], context.now())
+  const eventId = Number(saved?.eventId)
+  relinkCounterpart(context, eventId, counterpartOf(projection, tools))
   return `event:${eventId}`
 }
 
-const upserting = (save: (projection: Projection, tools: ProjectionTools) => string): RecordProjector => ({
-  create: save,
-  update: (_ref, projection, tools) => {
-    save(projection, tools)
-    return true
-  },
-})
+/** A deleted record's SMS or call goes as a messenger's deleted message goes: the copy is a tombstone. */
+const removeSms = (ref: string, { context }: ProjectionTools) => {
+  tombstone(context, requiredThing(context.database, ref).id)
+}
+
+const removeCall = (ref: string, { context }: ProjectionTools) => {
+  const eventId = requiredThing(context.database, ref).id
+  const writes = calendarWritesOver(context)
+  for (const row of context.database
+    .prepare("SELECT calendar_id, external_id FROM calendar_entries WHERE event_id = ? AND event_type = 'call'")
+    .all(eventId))
+    writes.removeAll(Number(row.calendar_id), [String(row.external_id)], context.now())
+  context.database
+    .prepare("UPDATE events SET deleted_at = coalesce(deleted_at, ?), updated_at = ? WHERE id = ?")
+    .run(context.now(), context.now(), eventId)
+}
 
 export const PHONE_PROJECTORS = {
-  message: upserting(saveSms),
-  event: upserting(saveCall),
+  message: { create: saveSms, update: updateSms, remove: removeSms },
+  event: {
+    create: saveCall,
+    update: (_ref, projection, tools) => {
+      saveCall(projection, tools)
+      return true
+    },
+    remove: removeCall,
+  },
 } as const satisfies Record<string, RecordProjector>

@@ -1,5 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import {
+  type CalendarInput,
   calendarText,
   type EntryAttachment,
   type EntryAttachmentInput,
@@ -667,8 +668,35 @@ export const calendarWritesOver = (context: StoreContext) => {
       )
       .all(calendarId, series, window.from, window.to)
 
+  /** One calendar as a provider lists it; one the owner forgot comes back, as a list naming it again does. */
+  const saveCalendar = (accountId: number, one: CalendarInput, now: number): StoredCalendar =>
+    calendarOf(
+      database
+        .prepare(
+          `INSERT INTO calendars (account_id, external_id, title, timezone, access_role, primary_calendar, synced, seen_at,
+             created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT (account_id, external_id) DO UPDATE SET title = excluded.title, timezone = excluded.timezone,
+             access_role = excluded.access_role, primary_calendar = excluded.primary_calendar, seen_at = excluded.seen_at,
+             deleted_at = NULL, updated_at = excluded.updated_at
+           RETURNING *`,
+        )
+        .get(
+          accountId,
+          one.externalId,
+          one.title,
+          one.timezone,
+          one.accessRole,
+          flag(one.primary),
+          flag(one.syncByDefault),
+          now,
+          now,
+          now,
+        ) as Row,
+    )
+
   return {
     entryRow,
+    saveCalendar,
     calendarRow,
     setEntity,
     newEntity,
@@ -696,36 +724,12 @@ export const eventStoreOver = (context: StoreContext): EventStore => {
     removeAll,
     putCursor,
     slotRows,
+    saveCalendar,
   } = calendarWritesOver(context)
 
   return {
     saveCalendars: async (accountId, calendars, now) =>
-      write(database, () => {
-        const upsert = database.prepare(
-          `INSERT INTO calendars (account_id, external_id, title, timezone, access_role, primary_calendar, synced, seen_at,
-             created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-           ON CONFLICT (account_id, external_id) DO UPDATE SET title = excluded.title, timezone = excluded.timezone,
-             access_role = excluded.access_role, primary_calendar = excluded.primary_calendar, seen_at = excluded.seen_at,
-             deleted_at = NULL, updated_at = excluded.updated_at
-           RETURNING *`,
-        )
-        return calendars.map((one) =>
-          calendarOf(
-            upsert.get(
-              accountId,
-              one.externalId,
-              one.title,
-              one.timezone,
-              one.accessRole,
-              flag(one.primary),
-              flag(one.syncByDefault),
-              now,
-              now,
-              now,
-            ) as Row,
-          ),
-        )
-      }),
+      write(database, () => calendars.map((one) => saveCalendar(accountId, one, now))),
     calendars: async (accountId) =>
       database
         .prepare("SELECT * FROM calendars WHERE account_id = ? ORDER BY primary_calendar DESC, title, id")

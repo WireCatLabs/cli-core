@@ -77,6 +77,11 @@ export interface RecordTypeSpec {
   update: "in-place" | "re-propose" | "re-settle" | "flag"
   /** A row can be marked gone, so a ref to it may read as deleted. */
   tombstone: boolean
+  /**
+   * A copy of what a sync would write (an SMS, a call): taken only under a provider marked import-only, so it can
+   * never land in a messenger's chat or a calendar's account.
+   */
+  importOnly?: boolean
   /** The type's `fields`: known keys typed, any other key kept as sent. */
   fields: FieldSchema
   /** The roles the entity is made from; any other role word is kept as the source's own. */
@@ -433,6 +438,7 @@ export const RECORD_TYPES = {
     review: "direct",
     update: "in-place",
     tombstone: true,
+    importOnly: true,
     fields: objectOf(
       {
         kind: enumOf(["sms"], "sms: a text message of the phone"),
@@ -452,6 +458,7 @@ export const RECORD_TYPES = {
     review: "direct",
     update: "in-place",
     tombstone: true,
+    importOnly: true,
     fields: objectOf(
       {
         kind: enumOf(["call"], "call: a phone call"),

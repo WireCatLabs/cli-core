@@ -35,17 +35,28 @@ const isQuotedPrintable = (line: string) => {
   return /;(ENCODING=)?QUOTED-PRINTABLE\b/i.test(colon < 0 ? line : line.slice(0, colon))
 }
 
-/** Joins folded lines (RFC 6350 3.2) and quoted-printable soft breaks, which vCard 2.1 writes without indent. */
+const isSoft = (line: string | undefined): line is string =>
+  line !== undefined && isQuotedPrintable(line) && line.endsWith("=")
+
+/**
+ * Joins folded lines (RFC 6350 3.2) and quoted-printable soft breaks, which vCard 2.1 writes without indent. A soft
+ * break never takes a card's BEGIN or END, and one with nothing after it is dropped.
+ */
 const unfolded = (text: string): string[] => {
   const lines: string[] = []
-  for (const raw of text.replace(/^﻿/, "").split(/\r\n|\r|\n/)) {
+  for (const raw of text.replace(/^\uFEFF/, "").split(/\r\n|\r|\n/)) {
     const last = lines.length - 1
     const previous = lines[last]
-    const soft = previous !== undefined && isQuotedPrintable(previous) && previous.endsWith("=")
-    if (previous !== undefined && soft) lines[last] = previous.slice(0, -1) + raw.replace(/^[ \t]/, "")
-    else if (previous !== undefined && /^[ \t]/.test(raw)) lines[last] = previous + raw.slice(1)
-    else lines.push(raw)
+    const bounds = /^(BEGIN|END):/i.test(raw)
+    if (isSoft(previous) && !bounds) lines[last] = previous.slice(0, -1) + raw.replace(/^[ \t]/, "")
+    else if (previous !== undefined && /^[ \t]/.test(raw) && !bounds) lines[last] = previous + raw.slice(1)
+    else {
+      if (isSoft(previous)) lines[last] = previous.slice(0, -1)
+      lines.push(raw)
+    }
   }
+  const last = lines.length - 1
+  if (isSoft(lines[last])) lines[last] = (lines[last] as string).slice(0, -1)
   return lines.filter((line) => line.trim() !== "")
 }
 
@@ -77,7 +88,10 @@ const propertyOf = (line: string): Property | undefined => {
 
 const encoder = new TextEncoder()
 
-const decoded = (property: Property): string => {
+/** Where a card's values tell what was read differently from what it says. */
+type Report = (message: string) => void
+
+const decoded = (property: Property, report: Report): string => {
   const encoding = property.params.get("ENCODING")?.[0]
   if (encoding !== "QUOTED-PRINTABLE") return property.value
   const bytes: number[] = []
@@ -93,6 +107,7 @@ const decoded = (property: Property): string => {
   try {
     return new TextDecoder(charset).decode(new Uint8Array(bytes))
   } catch {
+    report(`${property.name} names the unknown charset ${charset}: read as UTF-8`)
     return new TextDecoder("utf-8").decode(new Uint8Array(bytes))
   }
 }
@@ -112,7 +127,7 @@ const components = (value: string): string[] => {
   return parts.map((part) => part.trim())
 }
 
-const textOf = (property: Property) => components(decoded(property)).join(";").trim()
+const textOf = (property: Property, report: Report) => components(decoded(property, report)).join(";").trim()
 
 /** E.164, or `undefined` when the number has no country of its own and none is given. */
 const e164 = (typed: string, region: PhoneCountry | undefined): string | undefined => {
@@ -138,30 +153,44 @@ const titleWord = (title: string) => {
   return AS_WORD.test(word) ? word : undefined
 }
 
-const nameOf = (properties: Property[]): string | undefined => {
+const nameOf = (properties: Property[], report: Report): string | undefined => {
   const full = properties.find(({ name }) => name === "FN")
-  if (full && textOf(full)) return textOf(full)
+  const text = full ? textOf(full, report) : ""
+  if (text) return text
   const structured = properties.find(({ name }) => name === "N")
   if (!structured) return undefined
-  const [family = "", given = "", additional = ""] = components(decoded(structured))
+  const [family = "", given = "", additional = ""] = components(decoded(structured, report))
   return [given, additional, family].filter(Boolean).join(" ") || undefined
 }
 
 const SKIPPED = new Set(["PHOTO", "LOGO", "SOUND", "KEY"])
 
-const cardsOf = (text: string): Property[][] => {
+/** The cards, each kept even when its END is missing; what was cut off is reported, never dropped quietly. */
+const cardsOf = (text: string): { cards: Property[][]; issues: VcardIssue[] } => {
   const cards: Property[][] = []
+  const issues: VcardIssue[] = []
   let card: Property[] | undefined
+  const isBound = (property: Property, name: string) =>
+    property.name === name && property.value.trim().toUpperCase() === "VCARD"
   for (const line of unfolded(text)) {
     const property = propertyOf(line)
     if (!property) continue
-    if (property.name === "BEGIN" && property.value.trim().toUpperCase() === "VCARD") card = []
-    else if (property.name === "END" && property.value.trim().toUpperCase() === "VCARD") {
+    if (isBound(property, "BEGIN")) {
+      if (card) {
+        issues.push({ card: cards.length, message: "BEGIN:VCARD inside a card: the card ends there, unfinished" })
+        cards.push(card)
+      }
+      card = []
+    } else if (isBound(property, "END")) {
       if (card) cards.push(card)
       card = undefined
     } else if (card && !SKIPPED.has(property.name)) card.push(property)
   }
-  return cards
+  if (card) {
+    issues.push({ card: cards.length, message: "the file ends inside a card, with no END:VCARD" })
+    cards.push(card)
+  }
+  return { cards, issues }
 }
 
 /**
@@ -173,17 +202,20 @@ export const envelopeOfVcard = (
   text: string,
   { provider, account, batchId, region }: VcardOptions,
 ): { envelope: RecordsEnvelope; issues: VcardIssue[] } => {
-  const issues: VcardIssue[] = []
+  const { cards, issues } = cardsOf(text)
   const people: EnvelopeRecord[] = []
   const organizations = new Map<string, EnvelopeRecord>()
   const seen = new Set<string>()
-  for (const [index, properties] of cardsOf(text).entries()) {
+  for (const [index, properties] of cards.entries()) {
+    const report: Report = (message) => {
+      if (!issues.some((one) => one.card === index && one.message === message)) issues.push({ card: index, message })
+    }
     const values = (wanted: string) =>
       properties
         .filter(({ name }) => name === wanted)
-        .map(textOf)
+        .map((one) => textOf(one, report))
         .filter(Boolean)
-    const name = nameOf(properties)
+    const name = nameOf(properties, report)
     const phones: string[] = []
     const unread: string[] = []
     for (const typed of values("TEL")) {
@@ -199,15 +231,25 @@ export const envelopeOfVcard = (
       }
     }
     const emails = [...new Set(values("EMAIL").map((one) => one.replace(/^mailto:/i, "").toLowerCase()))]
+    if (name === undefined && phones.length === 0 && unread.length === 0 && emails.length === 0) {
+      report("the card holds no name, number or address: left out")
+      continue
+    }
     const uid = values("UID")[0]
-    const externalId = uid?.slice(0, MAX_ID) ?? hashed("vcard:", [name ?? "", ...[...phones].sort(), ...emails.sort()])
+    // A cut UID would make two long ones the same record; hashed, as an organization's long name is.
+    const externalId =
+      uid === undefined
+        ? hashed("vcard:", [name ?? "", ...[...phones].sort(), ...emails.sort()])
+        : uid.length <= MAX_ID
+          ? uid
+          : hashed("vcard:", [uid])
     if (seen.has(externalId)) {
       issues.push({ card: index, message: `another card of the file is ${externalId}: left out` })
       continue
     }
     seen.add(externalId)
     const organization = properties.find(({ name }) => name === "ORG")
-    const organizationName = organization ? components(decoded(organization))[0] : undefined
+    const organizationName = organization ? components(decoded(organization, report))[0] : undefined
     const title = values("TITLE")[0]
     const relations: RecordRelation[] = []
     if (organizationName) {

@@ -59,6 +59,8 @@ export interface RecordProjector {
    * decided it, and the change is only flagged. Left out, every change is flagged.
    */
   update?(ref: string, projection: Projection, tools: ProjectionTools): boolean
+  /** A deleted record's entity, for a source copy (an SMS, a call) the delete takes away too. Left out, it stays. */
+  remove?(ref: string, tools: ProjectionTools): void
 }
 
 export const IMPORTER = { bot: "import" } as const satisfies Author

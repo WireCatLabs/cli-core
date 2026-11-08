@@ -1,5 +1,5 @@
 import { afterEach, expect, it } from "vitest"
-import { calendarStatus } from "../calendar/index.js"
+import { accountsMeta } from "../calendar/index.js"
 import { ingestVcard } from "../services/ingest.js"
 import { personContext } from "../services/person-context.js"
 import { searchAll } from "../services/search-all.js"
@@ -177,8 +177,13 @@ it("makes calls, missed ones too, events of the calls calendar that list by pers
   const theirs = await store.calendar.events({ personId: anna, from: 0, accountId })
   expect(theirs.map(({ description }) => description)).toEqual(["incoming call", "missed call"])
   expect(await store.calendar.events({ eventType: "call", from: 0 })).toHaveLength(3)
-  const status = await calendarStatus(store.calendar, accountId, { profile: "phone:pixel", now: Date.now() })
-  expect(status.items.map(({ external_id, state }) => [external_id, state])).toEqual([["calls", "complete"]])
+  const meta = await accountsMeta(
+    store.calendar,
+    [{ id: accountId, key: { provider: "phone", account: "pixel" } }],
+    [],
+    0,
+  )
+  expect(meta).toEqual({ accounts: ["phone:pixel"], complete: true })
   expect(
     await take(store, phoneEnvelope([call("c-2", ANNA, "missed", "2026-11-03T12:30:00Z")]), { account: "pixel" }),
   ).toMatchObject({ unchanged: 1 })
@@ -407,4 +412,99 @@ it("keeps records, SMS and calls in the one account, which a group naming it onc
   ])
   expect(found.items.map(({ kind }) => kind).sort()).toEqual(["event", "message"])
   expect(found.skipped).toEqual([])
+})
+
+it("refuses SMS and calls under a provider a messenger or a calendar syncs, or one not import-only", async () => {
+  const { store, sql } = await recordsFixture(handles)
+  const db = sql()
+  const telegram = Number(
+    db
+      .prepare(
+        "INSERT INTO accounts (provider, external_id, scope, created_at, updated_at) VALUES ('telegram', '100', 'personal', 1, 1) RETURNING id",
+      )
+      .get()?.id,
+  )
+  db.prepare(
+    "INSERT INTO chats (account_id, external_id, kind, title, created_at, updated_at) VALUES (?, '-1001', 'group', 'Family', 1, 1)",
+  ).run(telegram)
+  const into = (provider: string, account: string, records: unknown[]) =>
+    take(store, envelopeOf(records, { provider, account }), { account })
+  const toTelegram = await into("telegram", "100", [
+    sms("x", ANNA, "in", "hi", "2026-11-01T09:00:00Z", { thread: "-1001" }),
+  ])
+  const toGoogle = await into("google", "me@example.test", [call("c", ANNA, "in", "2026-11-01T09:00:00Z")])
+  const toSheet = await into("sheet", "demo", [call("c", ANNA, "in", "2026-11-01T09:00:00Z")])
+  for (const receipt of [toTelegram, toGoogle, toSheet])
+    expect(receipt.errors.map(({ code }) => code)).toEqual(["record.provider-not-imported"])
+  expect(db.prepare("SELECT kind, title, membership_state FROM chats").all()).toEqual([
+    { kind: "group", title: "Family", membership_state: null },
+  ])
+  for (const table of ["messages", "calendars", "events"])
+    expect([table, db.prepare(`SELECT count(*) AS n FROM ${table}`).get()?.n]).toEqual([table, 0])
+  expect(db.prepare("SELECT count(*) AS n FROM identities WHERE provider = 'telegram'").get()?.n).toBe(0)
+})
+
+it("never writes into a chat of the account that an import did not make", async () => {
+  const { store, sql } = await recordsFixture(handles)
+  await take(store, phoneEnvelope([person(ANNA, "Анна")]), { account: PHONE.account })
+  const db = sql()
+  const account = Number(db.prepare("SELECT id FROM accounts WHERE provider = 'phone'").get()?.id)
+  db.prepare(
+    "INSERT INTO chats (account_id, external_id, kind, created_at, updated_at) VALUES (?, 'shared', 'group', 1, 1)",
+  ).run(account)
+  const receipt = await take(
+    store,
+    phoneEnvelope([sms("s-1", ANNA, "in", "hi", "2026-11-01T09:00:00Z", { thread: "shared" })]),
+    { account: PHONE.account },
+  )
+  expect(receipt.errors.map(({ code, pointer }) => [code, pointer])).toEqual([
+    ["record.chat", "/records/0/fields/thread"],
+  ])
+})
+
+it("refuses to move an SMS to another thread instead of keeping it twice", async () => {
+  const { store, sql } = await recordsFixture(handles)
+  await take(store, phoneEnvelope(thread), { account: PHONE.account })
+  const moved = sms("s-1", ANNA, "in", "Буду в десять", "2026-11-01T09:12:00+01:00", { thread: "t-9" })
+  const receipt = await take(store, phoneEnvelope([moved]), { account: PHONE.account })
+  expect(receipt.errors.map(({ code }) => code)).toEqual(["record.moved"])
+  const db = sql()
+  expect(db.prepare("SELECT count(*) AS n FROM messages WHERE external_id = 's-1'").get()?.n).toBe(1)
+  expect(db.prepare("SELECT count(*) AS n FROM chats WHERE external_id = 't-9'").get()?.n).toBe(0)
+})
+
+it("tombstones the SMS and the call a deleted record stood for, as a messenger's deleted message is", async () => {
+  const { store, sql } = await recordsFixture(handles)
+  await take(store, phoneEnvelope([...thread, call("c-1", ANNA, "in", "2026-11-03T10:00:00Z", 30)]), {
+    account: PHONE.account,
+  })
+  const gone = (type: string, id: string) => ({ key: `d-${id}`, type, external_id: id, operation: "delete" })
+  const receipt = await take(store, phoneEnvelope([gone("message", "s-1"), gone("event", "c-1")]), {
+    account: PHONE.account,
+  })
+  expect(receipt).toMatchObject({ deleted: 2, flagged: [], errors: [] })
+  const db = sql()
+  expect(
+    db.prepare("SELECT text, deleted_at IS NOT NULL AS gone FROM messages WHERE external_id = 's-1'").get(),
+  ).toEqual({
+    text: "",
+    gone: 1,
+  })
+  expect(db.prepare("SELECT deleted_at IS NOT NULL AS gone FROM events").get()).toEqual({ gone: 1 })
+  const found = await searchAll(store, ME, {
+    text: "договор OR incoming",
+    limit: 10,
+    only: ["messages", "events"],
+    exact: true,
+  })
+  expect(found.items).toEqual([])
+})
+
+it("leaves an import-only account out of the coverage a message search reports", async () => {
+  const { store } = await recordsFixture(handles)
+  await take(store, phoneEnvelope(thread), { account: PHONE.account })
+  const found = await searchAll(store, ME, { text: "договор", limit: 5, only: ["messages"], exact: true })
+  expect(found.items).toHaveLength(1)
+  expect(found.coverage?.chats).toMatchObject({ neverFetched: 0 })
+  expect(found.coverage?.attention).toEqual([])
 })

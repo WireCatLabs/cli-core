@@ -1,7 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import { calendarKey } from "../domain/calendar.js"
 import { parseLocator } from "../domain/locator.js"
-import { kindIn, UNKNOWN_PROVIDER } from "../domain/providers.js"
+import { isImportedProvider, kindIn, UNKNOWN_PROVIDER } from "../domain/providers.js"
 import { type MessengerTraits, syncsOneChat } from "../ports/traits.js"
 import type { SkippedSource } from "../search/account-list.js"
 import { PRESET_VERSION } from "../search/lucene/presets.js"
@@ -373,7 +373,8 @@ export const coverageOf = async (
   const completeness: (ChatCompleteness & AccountKey)[] = []
   const stats = new Map<string, ChatStats>()
   let inventoryComplete = scopeAccounts.length > 0
-  for (const selected of scopeAccounts) {
+  // An import-only account holds what its import wrote: no fetch could add to it, so it says nothing of coverage.
+  for (const selected of scopeAccounts.filter(({ provider }) => !isImportedProvider(provider))) {
     if (!(await store.sync.syncState(selected, CHAT_LIST_KEY))) {
       inventoryComplete = false
     }

@@ -16,6 +16,7 @@ import {
   type QueryWords,
   typedQuery,
 } from "../cli/list-query.js"
+import { isImportedProvider } from "../domain/providers.js"
 import {
   type EntryEventType,
   type Event,
@@ -634,6 +635,8 @@ export const accountsMeta = async (
 ): Promise<Pick<Meta, "accounts" | "complete" | "issues">> => {
   const issues = [...skipped]
   for (const { id, key } of accounts) {
+    // An import's calls are all it has: no sync could be behind on them.
+    if (isImportedProvider(key.provider)) continue
     const { items } = await calendarStatus(store, id, { profile: nameOf(key), now })
     if (items.length === 0) issues.push({ code: "not_found", reason: "calendar.unsynced", source: nameOf(key) })
     else if (items.some(({ state }) => state !== "complete"))

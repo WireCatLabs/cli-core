@@ -1,6 +1,9 @@
 import { afterEach, expect, it } from "vitest"
 import { RECORD_ENTITY_TYPES, RECORD_TYPES } from "../domain/record-types.js"
-import { envelopeOf, recordsFixture, SOURCE, take, upsert } from "../testing/records.js"
+import { envelopeOf, recordsFixture, SOURCE as SHEET, take, upsert } from "../testing/records.js"
+
+// SMS and calls are taken only under an import-only provider, so every type goes in under phone.
+const SOURCE = { ...SHEET, provider: "phone" }
 
 const handles: { close(): unknown }[] = []
 afterEach(async () => {
@@ -84,7 +87,7 @@ const EVERY_TYPE = [
 it("imports one record of every type into its entity: a proposal where money counts, a direct row elsewhere", async () => {
   const { store } = await recordsFixture(handles)
   expect(new Set(EVERY_TYPE.map((record) => record.type))).toEqual(new Set(RECORD_ENTITY_TYPES))
-  const receipt = await take(store, envelopeOf(EVERY_TYPE))
+  const receipt = await take(store, envelopeOf(EVERY_TYPE, { provider: SOURCE.provider }))
   expect(receipt).toMatchObject({ refused: 0, errors: [], waiting: [], unmatched: [] })
   expect(receipt.created).toBe(EVERY_TYPE.length)
 
