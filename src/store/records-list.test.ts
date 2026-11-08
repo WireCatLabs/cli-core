@@ -1,5 +1,6 @@
 import { afterEach, expect, it } from "vitest"
 import { envelopeOf, recordsFixture, SOURCE, take, upsert } from "../testing/records.js"
+import type { SourceRecord } from "./index.js"
 
 const handles: { close(): unknown }[] = []
 afterEach(async () => {
@@ -68,6 +69,10 @@ it("lists the relations pointing at a record, and at an entity by its ref or thr
   expect(await store.records.incoming(keyOf("invoice", "i1"))).toEqual([
     { record: keyOf("payment", "p1"), role: "settles", as: null, amount: "100.00" },
   ])
+  const record = await store.records.get(keyOf("invoice", "i1"))
+  expect(await store.records.incoming(record as SourceRecord)).toEqual(
+    await store.records.incoming(keyOf("invoice", "i1")),
+  )
   expect(await store.records.incoming({ entity })).toEqual([
     { record: keyOf("invoice", "i1"), role: "counterparty", as: null, amount: null },
     { record: { ...keyOf("custom:note", "n"), account: "other" }, role: "about", as: null, amount: null },

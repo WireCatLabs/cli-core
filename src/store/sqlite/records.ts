@@ -245,7 +245,11 @@ export const recordStoreOver = (context: StoreContext): RecordStore => {
       checkLimit(limit)
       return read(database, () => {
         let pointing: { sql: string; params: (string | number)[] }
-        if ("entity" in target) {
+        if ("externalId" in target) {
+          const row = rowOf(target)
+          if (!row) return []
+          pointing = { sql: "SELECT id FROM record_relations WHERE target_id = ?", params: [Number(row.id)] }
+        } else {
           const thing = requiredThing(database, target.entity, "the entity")
           pointing = {
             sql:
@@ -254,10 +258,6 @@ export const recordStoreOver = (context: StoreContext): RecordStore => {
               "WHERE t.entity_type = ? AND t.entity_id = ?",
             params: [`${thing.type}:${thing.id}`, thing.type, thing.id],
           }
-        } else {
-          const row = rowOf(target)
-          if (!row) return []
-          pointing = { sql: "SELECT id FROM record_relations WHERE target_id = ?", params: [Number(row.id)] }
         }
         return database
           .prepare(
