@@ -218,6 +218,8 @@ describe("contacts prepare across personal and work", () => {
     await store.facts.add({ type: "fact", statement: "Office fact", subject: office.ref, by: "owner" })
     await store.notes.addNote({ text: "Personal note", about: [about] })
     await store.notes.addNote({ text: "Office note", about: [office.ref, about] })
+    await store.notes.addNote({ text: "Person first, about the office", about: [about, office.ref] })
+    await store.notes.addNote({ text: "Home and office", about: [about, home.ref, office.ref] })
     for (const [made, title] of [
       [home, "Home task"],
       [office, "Office task"],
@@ -248,7 +250,7 @@ describe("contacts prepare across personal and work", () => {
     const found = await personPreparation(store, otherTg, "11")
     expect(sections(found)).toEqual({
       facts: ["Office fact", "Work fact"],
-      notes: ["Office note"],
+      notes: ["Office note", "Person first, about the office"],
       tasks: ["Office task"],
     })
     expect(found.prepare.coverage.notes.scopes).toEqual(["work"])
@@ -258,6 +260,12 @@ describe("contacts prepare across personal and work", () => {
     await scoped()
     const found = await personPreparation(store, tg, "11", { scopes: ["personal", "work"] })
     expect(sections(found).facts).toEqual(["Office fact", "Personal fact", "Unscoped fact", "Work fact"])
+    expect(sections(found).notes).toEqual([
+      "Home and office",
+      "Office note",
+      "Person first, about the office",
+      "Personal note",
+    ])
     expect(found.prepare.coverage.tasks.scopes).toEqual(["personal", "work"])
   })
 })

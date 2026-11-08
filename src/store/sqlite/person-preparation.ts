@@ -39,13 +39,20 @@ export interface PersonPreparationRead {
 const GLOBAL_PROJECT = "SELECT id FROM main.projects WHERE account_id IS NULL AND deleted_at IS NULL"
 const IN_SCOPES = "IN (SELECT value FROM json_each(?))"
 const projectScope = (id: string) => `(SELECT p.scope FROM main.projects p WHERE p.id=${id})`
+const NOTE_PROJECTS = `SELECT l.to_id FROM links l WHERE l.from_type='note' AND l.from_id=n.id AND l.to_type='project'
+  AND l.kind=${linkKind("about")}`
+/** A note is in its project's scope, or in those of the projects it is about; with no project, personal. */
+const NOTE_SCOPES = `SELECT p.scope FROM main.projects p WHERE (n.notable_type='project' AND p.id=n.notable_id)
+  OR p.id IN (${NOTE_PROJECTS})
+  UNION SELECT 'personal' WHERE n.notable_type<>'project' AND NOT EXISTS(${NOTE_PROJECTS})`
 const iso = (value: unknown) => (value == null ? null : new Date(Number(value)).toISOString())
 
 /**
  * The accepted facts, the owner's notes and the open tasks about one person. A project bound to an account is that
  * account's: its facts never come along, and its tasks only when `accounts` holds it. What belongs to no account
- * comes only in `scopes`: a fact in its own scope, else its project's, a note in its project's, a global project's
- * task in that project's. Anything else unscoped is personal, the side a work view never reads.
+ * comes only in `scopes`: a fact in its own scope, else its project's, a note only when every scope it touches is
+ * read, a global project's task in that project's. Anything else unscoped is personal, the side a work view never
+ * reads.
  */
 export const personPreparation = (
   { database, now }: Pick<StoreContext, "database" | "now">,
@@ -92,7 +99,7 @@ export const personPreparation = (
         AND ((n.notable_type='person' AND n.notable_id=?) OR EXISTS(SELECT 1 FROM links l WHERE l.from_type='note'
           AND l.from_id=n.id AND l.to_type='person' AND l.to_id=? AND l.kind=${linkKind("about")} AND l.confirmed=1))
         AND (n.notable_type='person' OR (n.notable_type='project' AND n.notable_id IN (${GLOBAL_PROJECT})))
-        AND CASE WHEN n.notable_type='project' THEN ${projectScope("n.notable_id")} ELSE 'personal' END ${IN_SCOPES}
+        AND NOT EXISTS(SELECT 1 FROM (${NOTE_SCOPES}) WHERE scope NOT ${IN_SCOPES})
         ORDER BY n.updated_at DESC, n.id DESC LIMIT ?`,
       )
       .all(person, person, inScopes, limit + 1)

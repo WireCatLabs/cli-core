@@ -13,12 +13,15 @@ shape of this file.
   personal and a work account brought every fact, note and task into `contacts prepare`, and every scope into
   `contacts events`. Now the facts, the owner's notes and the tasks of projects with no account come only from the
   asked account's scope, personal or work, or from the scopes the caller passes (`scopes`, as `personContext`
-  takes). A fact takes its own scope, then its project's. A note takes its project's scope, and a note about the
-  person alone is personal. Anything else unscoped counts as personal, so a work profile no longer sees the owner's
-  personal notes. `prepare.coverage.tasks`, `.facts` and `.notes` name the `scopes` read. `contacts events` reads the
+  takes). A fact takes its own scope, then its project's. A note shows only when every scope it touches is read: its
+  project's, or those of the projects it is about. A note about the person alone is personal. Anything else unscoped
+  counts as personal, so a work profile no longer sees the owner's personal notes. `prepare.coverage.tasks`, `.facts` and `.notes` name the `scopes` read. `contacts events` reads the
   same scopes and refuses `scope:` of another one with `permission_error` / `selection.out-of-scope`, where it
   answered that scope's rows before. A chat pinned to the other scope no longer shows in this account's events. `personTimeline` takes `scopes` and answers them. `store.people.preparation` needs
-  `scopes`, and `store.involvements.forPerson` takes `scopes` (a list) in place of `scope`.
+  `scopes`, and `store.involvements.forPerson` takes `scopes` (a list) in place of `scope`. `contacts context`,
+  `contacts prepare` and calendar preparation also leave out a chat pinned to a scope that is not read, even in a
+  readable account: its shared chat, messages and mentions. `store.chats.chatScopes(key, chatIds)` answers each chat's
+  scope, its own or else its account's.
 
 ### Added
 

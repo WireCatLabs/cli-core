@@ -48,7 +48,6 @@ export interface PersonPreparation extends PersonContext {
     limits: { items: number; bytes: number }
     coverage: {
       waiting: SectionCoverage & { rule: "their message is the newest the store holds in a one-to-one chat" }
-      /** `scopes`: what tasks of no account's project were read in; so for facts and notes. */
       tasks: SectionCoverage & { selection: "open, assigned to them in any role"; accounts: string[]; scopes: Scopes }
       facts: SectionCoverage & { selection: "accepted, about them or a project they are a member of"; scopes: Scopes }
       /** `withheld` when the profile denies `contacts.notes.list`. */

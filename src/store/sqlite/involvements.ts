@@ -36,7 +36,6 @@ export interface InvolvementStore {
   forPerson(
     personId: number,
     options?: {
-      /** Only rows of these scopes. */
       scopes?: readonly string[]
       since?: number
       until?: number

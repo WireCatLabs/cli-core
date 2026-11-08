@@ -347,6 +347,27 @@ describe("contacts context of a person merged across personal and work accounts"
   })
 })
 
+describe("contacts context of a chat pinned to the other scope", () => {
+  beforeEach(async () => {
+    await store.chats.saveChats(tg, [{ ...chat("-7", "group", "Club"), scope: "work" }])
+  })
+
+  it("leaves a work chat of a personal account out of every part", async () => {
+    const found = await personContext(store, tg, "11")
+    expect(found.shared.map(({ chatId }) => chatId)).not.toContain("-7")
+    expect(texts(found.recent.groups)).not.toContain("first in the group")
+    expect(texts(found.mentions)).not.toContain("ask @ana_a")
+    expect(found.last.fromThemAnywhere?.text).toBe("from the first Ana")
+  })
+
+  it("reads it when the caller allows both scopes", async () => {
+    const found = await personContext(store, tg, "11", { scopes: ["personal", "work"] })
+    expect(found.shared.map(({ chatId }) => chatId)).toContain("-7")
+    expect(texts(found.recent.groups)).toContain("first in the group")
+    expect(texts(found.mentions)).toContain("ask @ana_a")
+  })
+})
+
 describe("contacts context in named chats", () => {
   beforeEach(async () => {
     await store.messages.saveMessages(
