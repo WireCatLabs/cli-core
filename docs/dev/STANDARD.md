@@ -1092,7 +1092,6 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--max-cost-per-day` | `<usd>` | start no agent run for the rest of the day once its runs cost this much, in US dollars |  | `schedule agent` (planned) |
 | `--max-gaps` | `<n>` | maximum interior coverage gaps repaired in this run |  | `store gaps repair` |
 | `--max-input-bytes` | `<bytes>` | at most this many bytes of buffered stdin | `16777216` | every command |
-| `--max-meetings` | `<n>` | how many of the meeting account's meetings to look through, newest first, or all for every one (default 100) |  | `search all` (planned) |
 | `--max-messages` | `<n>` | fetch at most this many messages total (default: 500) |  | `search conversations` (max, tg only), `search messages` (max, tg only), `stats contacts top` (max, tg only), `stats messages counters sync`, `stats messages show` (max, tg only), `stats messages top` (max, tg only) |
 | `--max-output-bytes` | `<bytes>` | at most this many serialized bytes of machine data; 0 disables the bound | `4194304` | every command |
 | `--max-pages` | `<pages>` | at most this many pages of a list, with a pause between them |  | `chats members check`, `chats members fetch`, `projects evidence` |
@@ -1131,7 +1130,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--offline` |  | answer from what was recorded and never connect; fails if nothing was |  | every command |
 | `--offset-bytes` | `<n>` | start byte offset in a retained attachment | `0` | `attachments show` |
 | `--online` |  | also log in once, read one chat and start the MCP server; sends nothing. **max's own copy is worded differently until T6 moves the command onto the shared one (e13)** |  | `doctor` |
-| `--only` | `<resources>` | only these resources, separated by commas: messages, notes; meetings when --source names a meeting account |  | `search all` |
+| `--only` | `<resources>` | only these resources, separated by commas: messages, notes, events, meetings |  | `search all` |
 | `--only-admins-add` | `<on\|off>` | only admins may add members |  | `chats update` |
 | `--only-admins-call` | `<on\|off>` | only admins may start a call |  | `chats update` (max-only) |
 | `--only-admins-edit-info` | `<on\|off>` | only admins may change the name, photo and description |  | `chats update` (planned) |

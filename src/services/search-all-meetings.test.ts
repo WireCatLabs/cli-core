@@ -1,387 +1,406 @@
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { CliError } from "@wirecat/cli-base"
+import * as v from "valibot"
 import { afterEach, describe, expect, it, vi } from "vitest"
-import type { MeetingSave } from "../meetings/index.js"
+import { allHitItem } from "../cli/messenger/search-answers.js"
+import { hit as hitEntity } from "../entities/hit.js"
+import { type MeetingSave, READ_BUDGET_EXCEEDED } from "../meetings/index.js"
 import { sampleMeeting } from "../meetings/testing/index.js"
-import { type MessageStore, openStore } from "../store/store.js"
+import { type AccountKey, type MessageStore, openStore } from "../store/store.js"
+import { refreshMeetingIndex } from "./meeting-hit-search.js"
 import { readMeetingPassage } from "./meeting-passage-format.js"
 import type { SearchFound } from "./messages.js"
-import { RESOURCES_SEARCHED, searchAll } from "./search-all.js"
-import { type SearchAllIncludingMeetingsRequest, searchAllIncludingMeetings } from "./search-all-meetings.js"
+import { type SearchAllItem, type SearchAllRequest, searchAll } from "./search-all.js"
+import type { MeetingSearchItem } from "./search-all-meetings.js"
 
-const account = { provider: "zoom", account: "zm-profile:invented" }
+const alice = { provider: "zoom", account: "zm-profile:alice" }
+const bob = { provider: "zoom", account: "zm-profile:bob" }
+const caller = { provider: "example", account: "caller" }
 const stores: MessageStore[] = []
 afterEach(async () => {
   for (const store of stores.splice(0)) await store.close()
 })
+
+type Line = string | { speaker: string; text: string }
 const fixture = async () => {
-  const folder = mkdtempSync(join(tmpdir(), "zm-test-unified-search-"))
+  const folder = mkdtempSync(join(tmpdir(), "search-all-meetings-"))
   const path = join(folder, "wirecat.db")
   const store = await openStore({ path, env: { MESSAGING_STORE: path } })
   stores.push(store)
-  await store.accounts.saveAccount({ provider: "example", account: "other-invented" }, { name: "Other invented" })
-  const accountId = await store.accounts.saveAccount(account, { name: "Invented" })
+  await store.accounts.saveAccount(caller, { name: "Caller" })
   const save = async (
+    account: AccountKey,
     externalId: string,
-    text: string | string[],
+    lines: Line[],
     startedAt: number | null = 1000,
     extra: Partial<MeetingSave["meeting"]> = {},
+    { index = true }: { index?: boolean } = {},
   ) => {
+    const accountId = await store.accounts.saveAccount(account, { name: "Invented" })
     const sample = sampleMeeting()
-    const input: MeetingSave = {
+    const saved = await store.meetings.saveMeeting({
       meeting: { ...sample.meeting, accountId, externalId, startedAt, ...extra },
       transcripts: [
         {
           ...sample.transcripts[0],
-          contentHash: JSON.stringify(text),
-          rows: (Array.isArray(text) ? text : [text]).map((text, position) => ({
+          contentHash: JSON.stringify(lines),
+          rows: lines.map((line, position) => ({
             ...sample.transcripts[0].rows[0],
             position,
             speakerParticipantPosition: null,
-            text,
+            ...(typeof line === "string" ? { text: line } : { text: line.text, speakerName: line.speaker }),
           })),
         },
       ],
       now: 3000,
-    }
-    return store.meetings.saveMeeting(input)
+    })
+    if (index) await refreshMeetingIndex(store.meetings, accountId)
+    return { ...saved, accountId }
   }
-  return { store, accountId, save }
+  return { store, save }
 }
-const request = (extra: Partial<SearchAllIncludingMeetingsRequest> = {}): SearchAllIncludingMeetingsRequest => ({
+
+const meetingsOnly = (extra: Partial<SearchAllRequest> = {}): SearchAllRequest => ({
   text: "needle",
   limit: 20,
   only: ["meetings"],
+  meetingsAsked: true,
   ...extra,
 })
-const messageResult = (): SearchFound => ({
-  items: [
-    {
-      id: "1",
-      chatId: "7",
-      senderId: "9",
-      senderName: "Alice Example",
-      timestamp: "2026-10-10T00:00:00Z",
-      editedAt: null,
-      text: "needle from messenger",
-      outgoing: false,
-      attachments: [],
-      replyTo: null,
-      forwardedFrom: null,
-      reactions: null,
-      chatTitle: "Invented chat",
-      locator: "msg:example/other-invented/7/1",
-    },
-  ],
+const meetingHits = (items: SearchAllItem[]) =>
+  items.filter((item): item is MeetingSearchItem => item.kind === "meeting")
+const texts = (items: SearchAllItem[]) => items.map(({ text }) => text)
+
+const messages = (...texts: string[]): SearchFound => ({
+  items: texts.map((text, at) => ({
+    id: String(at + 1),
+    chatId: "7",
+    senderId: "9",
+    senderName: "Alice Example",
+    timestamp: "2026-10-10T00:00:00Z",
+    editedAt: null,
+    text,
+    outgoing: false,
+    attachments: [],
+    replyTo: null,
+    forwardedFrom: null,
+    reactions: null,
+    chatTitle: "Invented chat",
+    locator: `msg:example/caller/7/${at + 1}`,
+  })),
   hasMore: false,
   corrections: [],
   completeness: [],
   wordsReady: true,
-  server: { backend: "both", skipped: null, calls: 1, returned: 1, new: 0, failed: [], complete: true },
 })
 
-describe("opt-in meeting-inclusive search", () => {
-  it("keeps legacy results, exports and default resource behavior unchanged", async () => {
-    const { store } = await fixture()
-    const lookup = vi.spyOn(store.accounts, "storedAccount")
-    const meetingSearch = vi.spyOn(store.meetings, "search")
-    const legacy = await searchAll(store, account, { text: "needle", limit: 20, only: ["messages"] }, {}, async () =>
-      messageResult(),
+describe("meetings in search all", () => {
+  it("reads every meeting account, names each one it read and ranks the meetings with the other sources", async () => {
+    const { store, save } = await fixture()
+    await save(alice, "a", ["needle from alice"], 2000)
+    await save(bob, "b", ["needle from bob"], 1000)
+    const found = await searchAll(store, caller, meetingsOnly({ only: ["messages", "meetings"] }), {}, async () =>
+      messages("needle message one", "needle message two"),
     )
-    expect(
-      await searchAllIncludingMeetings(store, account, request({ only: ["messages"] }), {}, async () =>
-        messageResult(),
-      ),
-    ).toEqual(legacy)
-    expect(RESOURCES_SEARCHED).toEqual(["messages", "mail", "notes", "events", "crm", "business"])
-    expect(legacy.items[0]?.ref).toBe("msg:example/other-invented/7/1")
-    expect(lookup).not.toHaveBeenCalled()
-    expect(meetingSearch).not.toHaveBeenCalled()
-  })
-
-  it("uses the real scoped account id, names the meeting by its meeting: reference and keeps unknown timestamps", async () => {
-    const { store, accountId, save } = await fixture()
-    await save("other-account", "needle private invented", 2000, { accountId: 1 })
-    const saved = await save("selected", "needle selected", null, { title: null })
-    const found = await searchAllIncludingMeetings(
-      store,
-      { provider: "example", account: "other-invented" },
-      request({ meetingAccount: account }),
-    )
-    expect(found.items).toEqual([
-      expect.objectContaining({
-        kind: "meeting",
-        accountId,
-        provider: "zoom",
-        account: account.account,
-        meetingId: saved.meeting.id,
-        scope: "transcript",
-        startMs: 0,
-        title: null,
-        timestamp: null,
-        text: "needle selected",
-      }),
+    expect(found.searched).toEqual(["messages", "meetings"])
+    expect(found.accounts.filter(({ resource }) => resource === "meetings")).toEqual([
+      { resource: "meetings", ...alice },
+      { resource: "meetings", ...bob },
     ])
-    expect(found.items[0]).toHaveProperty("ref", `meeting:${accountId}/${saved.meeting.id}`)
-    expect(found.meetings).toMatchObject({ accountId, complete: true, meetingsScanned: 1 })
-    expect(found.hasMore).toBe(false)
+    expect(texts(found.items)).toEqual([
+      "needle message one",
+      "needle from alice",
+      "needle message two",
+      "needle from bob",
+    ])
+    expect(found.meetings).toEqual([
+      { ...alice, indexing: "ready", hasMore: false },
+      { ...bob, indexing: "ready", hasMore: false },
+    ])
   })
 
-  it("names a transcript hit's cue and speaker, and meetings passage opens that cue with the lines around it", async () => {
-    const { store, accountId, save } = await fixture()
-    const saved = await save("cues", ["first line", "second line", "the needle line", "fourth line", "fifth line"])
-    const transcript = saved.transcripts[0]?.transcript.id
-    const [hit] = (await searchAllIncludingMeetings(store, account, request())).items
-    expect(hit).toMatchObject({
-      ref: `meeting:${accountId}/${saved.meeting.id}`,
-      cueRef: `meeting:${accountId}/${saved.meeting.id}/${transcript}/2`,
-      speakerName: "Alice Example",
+  it("lets a newer hit of one account onto the page before the older hits of another", async () => {
+    const { store, save } = await fixture()
+    for (const [at, id] of ["a", "b", "c"].entries()) await save(alice, id, [`needle old ${id}`], 1000 - at)
+    await save(bob, "new", ["needle new"], 5000)
+    const found = await searchAll(store, caller, meetingsOnly({ limit: 2 }))
+    expect(texts(found.items)).toEqual(["needle new", "needle old a"])
+  })
+
+  it("reads only the meeting accounts --source names", async () => {
+    const { store, save } = await fixture()
+    await save(alice, "a", ["needle from alice"])
+    await save(bob, "b", ["needle from bob"])
+    const found = await searchAll(store, caller, meetingsOnly({ only: undefined, source: "zoom:zm-profile:bob" }))
+    expect(texts(found.items)).toEqual(["needle from bob"])
+    expect(found.accounts).toEqual([{ resource: "meetings", ...bob }])
+  })
+
+  it("leaves out a meeting account of the other scope", async () => {
+    const { store, save } = await fixture()
+    await save(alice, "a", ["needle from alice"])
+    await save({ ...bob, scope: "work" }, "b", ["needle from bob"])
+    const found = await searchAll(store, { ...caller, scope: "personal" }, meetingsOnly())
+    expect(texts(found.items)).toEqual(["needle from alice"])
+    expect(found.accounts).toEqual([{ resource: "meetings", ...alice }])
+  })
+
+  it("reads the scope of the caller's stored account unless the caller widens it", async () => {
+    const { store, save } = await fixture()
+    await save(alice, "a", ["needle from alice"])
+    const office = { provider: "example", account: "office" }
+    await store.accounts.saveAccount({ ...office, scope: "work" }, { name: "Office" })
+    const narrow = await searchAll(store, office, meetingsOnly())
+    expect(narrow.items).toEqual([])
+    expect(narrow.skipped).toEqual([
+      { resource: "meetings", code: "not_found", reason: "no meeting account in this scope" },
+    ])
+    const named = await searchAll(store, office, meetingsOnly({ only: undefined, source: "zoom:zm-profile:alice" }))
+    expect(named.skipped).toContainEqual({
+      source: "zoom:zm-profile:alice",
+      code: "not_found",
+      reason: "a personal account; this run reads work accounts",
     })
-    const { packet } = await readMeetingPassage(store.meetings, accountId, (hit as { cueRef: string }).cueRef, {
+    const wide = await searchAll(store, office, meetingsOnly({ meetingScopes: ["personal", "work"] }))
+    expect(texts(wide.items)).toEqual(["needle from alice"])
+  })
+
+  it("gives at most three passages of one meeting, each its own hit", async () => {
+    const { store, save } = await fixture()
+    const saved = await save(alice, "many", ["needle 1", "needle 2", "needle 3", "needle 4", "needle 5"], 2000)
+    await save(alice, "other", ["needle elsewhere"], 1000)
+    const found = await searchAll(store, caller, meetingsOnly())
+    const hits = meetingHits(found.items)
+    expect(hits.filter(({ meetingId }) => meetingId === saved.meeting.id)).toHaveLength(3)
+    expect(new Set(hits.map(({ cueRef }) => cueRef)).size).toBe(hits.length)
+    expect(texts(found.items)).toContain("needle elsewhere")
+    expect(new Set(hits.map(({ ref }) => ref))).toEqual(
+      new Set(hits.map(({ accountId, meetingId }) => `meeting:${accountId}/${meetingId}`)),
+    )
+  })
+
+  it("names a transcript hit's cue and speaker, and meetings passage opens that cue", async () => {
+    const { store, save } = await fixture()
+    const saved = await save(alice, "cues", ["first line", "second line", "the needle line", "fourth line"])
+    const [hit] = meetingHits((await searchAll(store, caller, meetingsOnly())).items)
+    const transcript = saved.transcripts[0]?.transcript.id
+    expect(hit).toMatchObject({
+      ref: `meeting:${saved.accountId}/${saved.meeting.id}`,
+      cueRef: `meeting:${saved.accountId}/${saved.meeting.id}/${transcript}/2`,
+      speakerName: "Alice Example",
+      title: "Example planning",
+      timestamp: new Date(1000).toISOString(),
+      foundBy: ["words"],
+    })
+    const { packet } = await readMeetingPassage(store.meetings, saved.accountId, hit?.cueRef ?? "", {
       before: 1,
       after: 1,
     })
     expect(packet.items.map(({ text }) => text)).toEqual(["second line", "the needle line", "fourth line"])
   })
 
-  it("reports unknown matching coverage on sparse pages and resumes into older matches", async () => {
+  it("keeps the meeting query language: phrases, OR and NOT", async () => {
     const { store, save } = await fixture()
-    await save("old-match", "needle older", 1000)
-    await save("new-no-match", "unrelated text", 2000)
-    await save("newest-no-match", "unrelated text", 3000)
-    const first = await searchAllIncludingMeetings(store, account, request({ limit: 1, maxMeetings: 1 }))
-    expect(first.items).toEqual([])
-    expect(first.hasMore).toBeNull()
-    expect(first.meetings).toMatchObject({
-      complete: false,
-      meetingsScanned: 1,
-      nextCursor: { meetingOffset: 1, hitOffset: 0 },
-    })
-    const rest = await searchAllIncludingMeetings(
-      store,
-      account,
-      request({ limit: 1, meetingCursor: first.meetings?.nextCursor }),
-    )
-    expect(rest.items).toHaveLength(1)
-    expect(rest.items[0]?.text).toBe("needle older")
-    expect(rest.hasMore).toBe(false)
-    expect(rest.meetings?.complete).toBe(true)
-    expect(rest.meetings?.nextCursor).toBeUndefined()
+    await save(alice, "a", ["the needle plan"], 3000)
+    await save(alice, "b", ["plan the needle"], 2000)
+    await save(alice, "c", ["a haystack needle"], 1000)
+    const ask = async (text: string) => texts((await searchAll(store, caller, meetingsOnly({ text }))).items)
+    expect(await ask('"needle plan"')).toEqual(["the needle plan"])
+    expect(await ask("haystack OR plan")).toEqual(["the needle plan", "plan the needle", "a haystack needle"])
+    expect(await ask("needle NOT plan")).toEqual(["a haystack needle"])
   })
 
-  it("pages hit rows within one meeting without skipping or repeating multiple matches", async () => {
+  it("finds a passage that holds some of a question's words", async () => {
     const { store, save } = await fixture()
-    await save("many-matches", ["needle one", "needle two", "needle three", "needle four", "needle five"])
-    const texts: string[] = []
-    let cursor: SearchAllIncludingMeetingsRequest["meetingCursor"]
-    for (let page = 0; page < 5; page++) {
-      const found = await searchAllIncludingMeetings(
-        store,
-        account,
-        request({ limit: 1, maxMeetings: 1, meetingCursor: cursor }),
-      )
-      expect(found.items).toHaveLength(1)
-      texts.push(found.items[0]?.text ?? "")
-      expect(found.hasMore).toBe(page !== 4)
-      cursor = found.meetings?.nextCursor
-    }
-    expect(texts).toEqual(["needle one", "needle two", "needle three", "needle four", "needle five"])
-    expect(cursor).toBeUndefined()
+    await save(alice, "a", ["we moved the delivery to Friday"])
+    const found = await searchAll(store, caller, meetingsOnly({ text: "when is the delivery of the boxes?" }))
+    expect(texts(found.items)).toEqual(["we moved the delivery to Friday"])
   })
 
-  it("pages meeting hits by offset as the merged list, without repeating the page before", async () => {
+  it("reads date: in the caller's timezone", async () => {
     const { store, save } = await fixture()
-    await save("many-matches", ["needle one", "needle two", "needle three"])
-    const first = await searchAllIncludingMeetings(store, account, request({ limit: 2 }))
-    expect(first.hasMore).toBe(true)
-    expect(first.nextOffset).toBe(2)
-    const second = await searchAllIncludingMeetings(store, account, request({ limit: 2, offset: first.nextOffset }))
-    expect([...first.items, ...second.items].map((item) => item.text)).toEqual([
-      "needle one",
-      "needle two",
-      "needle three",
+    // 23:30 on 1 March in UTC is already 2 March in Madrid.
+    await save(alice, "late", ["needle late"], Date.parse("2026-03-01T23:30:00Z"))
+    const on = async (timezone: string) =>
+      texts((await searchAll(store, caller, meetingsOnly({ text: "needle date:2026-03-02", timezone }))).items)
+    expect(await on("Europe/Madrid")).toEqual(["needle late"])
+    expect(await on("UTC")).toEqual([])
+  })
+
+  it("skips only the account where from: names several speakers", async () => {
+    const { store, save } = await fixture()
+    await save(alice, "a", [
+      { speaker: "Dana Example", text: "needle by one Dana" },
+      { speaker: "Dana Sample", text: "needle by the other Dana" },
     ])
-    expect(second.hasMore).toBe(false)
-    expect(second.nextOffset).toBeUndefined()
+    await save(bob, "b", [{ speaker: "Dana Example", text: "needle by Dana" }])
+    const found = await searchAll(store, caller, meetingsOnly({ text: "needle from:dana" }))
+    expect(texts(found.items)).toEqual(["needle by Dana"])
+    expect(found.skipped).toEqual([
+      expect.objectContaining({ source: "zoom:zm-profile:alice", code: "validation_error" }),
+    ])
+    expect(found.accounts).toEqual([{ resource: "meetings", ...bob }])
   })
 
-  it("keeps the first unreturned meeting hit when legacy fusion fills the output limit", async () => {
+  it("skips meetings with the reason for a field they lack, and still answers the other sources", async () => {
     const { store, save } = await fixture()
-    await save("meeting-match", "needle meeting")
-    const legacy = vi.fn(async () => messageResult())
-    const first = await searchAllIncludingMeetings(
-      store,
-      account,
-      request({ only: ["messages", "meetings"], limit: 1 }),
-      {},
-      legacy,
-    )
-    expect(first.items[0]?.kind).toBe("message")
-    expect(first.server).toEqual(messageResult().server)
+    await save(alice, "a", ["needle"])
+    for (const text of ["needle in:inbox", "needle chat:Team", "needle filename:plan.pdf"]) {
+      const found = await searchAll(
+        store,
+        caller,
+        meetingsOnly({ text, only: ["messages", "meetings"] }),
+        {},
+        async () => messages("needle message"),
+      )
+      expect(found.searched).toEqual(["messages"])
+      expect(found.skipped).toEqual([
+        expect.objectContaining({ resource: "meetings", code: "validation_error", reason: expect.any(String) }),
+      ])
+    }
+  })
+
+  it("matches only the word as typed with --exact", async () => {
+    const { store, save } = await fixture()
+    await save(alice, "a", ["needles everywhere"], 2000)
+    await save(alice, "b", ["one needle"], 1000)
+    expect(texts((await searchAll(store, caller, meetingsOnly())).items)).toEqual(["needles everywhere", "one needle"])
+    expect(texts((await searchAll(store, caller, meetingsOnly({ exact: true }))).items)).toEqual(["one needle"])
+  })
+
+  it("reports an account whose index is not built yet, and does not build it", async () => {
+    const { store, save } = await fixture()
+    await save(alice, "a", ["needle"], 1000, {}, { index: false })
+    const index = vi.spyOn(store.meetings, "indexSearch")
+    const found = await searchAll(store, caller, meetingsOnly())
+    expect(found.meetings).toEqual([{ ...alice, indexing: "pending", hasMore: false }])
+    expect(index).not.toHaveBeenCalled()
+  })
+
+  it("cuts a long passage to an excerpt around the match", async () => {
+    const { store, save } = await fixture()
+    await save(alice, "long", [`${"filler words ".repeat(60)}the needle${" more filler".repeat(60)}`])
+    const [hit] = (await searchAll(store, caller, meetingsOnly())).items
+    expect(hit?.text.length).toBeLessThanOrEqual(242)
+    expect(hit?.text).toContain("needle")
+  })
+
+  it("says which hit was found only through a garbled spelling, and centres its excerpt on that spelling", async () => {
+    const { store, save } = await fixture()
+    await save(alice, "garbled", [
+      "Итог: нужен риелтор для квартиры",
+      `${"длинное вступление ".repeat(20)}позвонили реелтора вечером`,
+    ])
+    const items = (await searchAll(store, caller, meetingsOnly({ text: "риелтор" }))).items.map(allHitItem)
+    expect(items.map((item) => v.parse(hitEntity, item))).toEqual(items)
+    expect(items.map(({ match, corrections }) => ({ match, corrections }))).toEqual([
+      { match: undefined, corrections: undefined },
+      { match: "corrected", corrections: [{ from: "риелтор", to: ["реелтора"] }] },
+    ])
+    expect(items[1]?.excerpt).toContain("реелтора")
+  })
+
+  it("reads the index in pages of at most 200 rows, and keeps paging", async () => {
+    const { store, save } = await fixture()
+    for (const id of ["a", "b"])
+      await save(
+        alice,
+        id,
+        Array.from({ length: 150 }, (_, at) => `needle ${id} ${at}`),
+      )
+    const pages = vi.spyOn(store.meetings, "searchHits")
+    const found = await searchAll(store, caller, meetingsOnly({ limit: 100 }))
+    expect(found.items).toHaveLength(6)
+    expect(pages.mock.calls.map(([, input]) => input.limit)).toEqual([101, 101, 101])
+    const wide = await searchAll(store, caller, meetingsOnly({ limit: 100, offset: 900 }))
+    expect(wide.items).toEqual([])
+    expect(pages.mock.calls.slice(3).map(([, input]) => input.limit)).toEqual([200, 200])
+  })
+
+  it("centres the excerpt on the form the index matched, never on a word under NOT", async () => {
+    const { store, save } = await fixture()
+    const filler = "filler words ".repeat(30)
+    await save(alice, "forms", [`haystack early ${filler}the plans moved ${filler}`])
+    const ask = async (text: string) => (await searchAll(store, caller, meetingsOnly({ text }))).items[0]?.text ?? ""
+    expect(await ask("planning")).toContain("plans moved")
+    const negated = await ask("moved NOT stack")
+    expect(negated).toContain("plans moved")
+    expect(negated).not.toContain("haystack")
+  })
+
+  it("pages by offset through the merged list without repeating a hit", async () => {
+    const { store, save } = await fixture()
+    for (const [at, id] of ["a", "b", "c", "d", "e"].entries()) await save(alice, id, [`needle ${id}`], 5000 - at)
+    const first = await searchAll(store, caller, meetingsOnly({ limit: 2 }))
+    const second = await searchAll(store, caller, meetingsOnly({ limit: 2, offset: first.nextOffset }))
+    const third = await searchAll(store, caller, meetingsOnly({ limit: 2, offset: second.nextOffset }))
+    expect([first, second, third].flatMap(({ items }) => texts(items))).toEqual([
+      "needle a",
+      "needle b",
+      "needle c",
+      "needle d",
+      "needle e",
+    ])
     expect(first.hasMore).toBe(true)
-    expect(first.meetings?.nextCursor).toMatchObject({ meetingOffset: 0, hitOffset: 0 })
-    const next = await searchAllIncludingMeetings(
-      store,
-      account,
-      request({ limit: 1, meetingCursor: first.meetings?.nextCursor }),
-    )
-    expect(next.items[0]?.text).toBe("needle meeting")
-    expect(next.hasMore).toBe(false)
-    expect(legacy).toHaveBeenCalledOnce()
+    expect(third.hasMore).toBe(false)
+    expect(third.nextOffset).toBeUndefined()
   })
 
-  it("searches current corrections and excludes deleted meetings", async () => {
+  it("finds nothing in a deleted meeting or a replaced transcript", async () => {
     const { store, save } = await fixture()
-    const saved = await save("corrected", "needle old")
-    await save("corrected", "replacement text")
-    await save("deleted", "needle deleted", 2000, { deletedAt: 3000 })
-    const found = await searchAllIncludingMeetings(store, account, request())
+    await save(alice, "corrected", ["needle old"])
+    await save(alice, "corrected", ["replacement text"])
+    await save(alice, "deleted", ["needle deleted"], 2000, { deletedAt: 3000 })
+    const found = await searchAll(store, caller, meetingsOnly())
     expect(found.items).toEqual([])
     expect(found.hasMore).toBe(false)
-    expect((await store.meetings.meeting(saved.meeting.id))?.transcripts).toHaveLength(2)
   })
 
-  it("supports conjunctive words and explains unsupported queries only for the meeting source", async () => {
-    const { store, save } = await fixture()
-    await save("conjunction", "needle planning")
-    expect((await searchAllIncludingMeetings(store, account, request({ text: "needle plan" }))).items).toHaveLength(1)
-    expect(
-      (await searchAllIncludingMeetings(store, account, request({ text: "text:needle AND (plan)" }))).items,
-    ).toHaveLength(1)
-    const query = vi.spyOn(store.meetings, "search")
-    for (const text of [
-      '"needle plan"',
-      "needle OR plan",
-      "needle NOT plan",
-      "needle*",
-      "/needle/",
-      "from:alice",
-      "date:[2026-01-01 TO 2026-02-01]",
-      '"unclosed',
-    ]) {
-      const found = await searchAllIncludingMeetings(
-        store,
-        account,
-        request({ text, only: ["messages", "meetings"] }),
-        {},
-        async () => messageResult(),
-      )
-      expect(found.items[0]?.kind).toBe("message")
-      expect(found.skipped).toEqual([expect.objectContaining({ resource: "meetings", reason: expect.any(String) })])
-      expect(found.searched).toEqual(["messages"])
-    }
-    const exact = await searchAllIncludingMeetings(store, account, request({ exact: true }))
-    expect(exact.skipped[0]?.reason).toContain("--exact")
-    expect(query).not.toHaveBeenCalled()
-  })
-
-  it("binds continuation to its account and query and requires meeting-only continuation", async () => {
-    const { store, save } = await fixture()
-    await save("cursor", ["needle one", "needle two"])
-    const first = await searchAllIncludingMeetings(store, account, request({ limit: 1 }))
-    const cursor = first.meetings?.nextCursor
-    expect(cursor).toBeDefined()
-    if (!cursor) throw new Error("expected meeting continuation")
-    for (const extra of [
-      { text: "different", meetingCursor: cursor },
-      { meetingCursor: { ...cursor, accountId: 1 } },
-      { only: ["messages", "meetings"] as const, meetingCursor: cursor },
-      { meetingCursor: { ...cursor, hitOffset: 999 } },
-    ])
-      await expect(searchAllIncludingMeetings(store, account, request(extra))).rejects.toMatchObject({
-        code: "validation_error",
-      })
-  })
-
-  it("validates limits and cursor bounds before invoking any legacy or meeting read", async () => {
+  it("says no meeting account is stored when the store holds none", async () => {
     const { store } = await fixture()
-    const lookup = vi.spyOn(store.accounts, "storedAccount")
-    const legacy = vi.fn(async () => messageResult())
-    for (const extra of [
-      { limit: 0 },
-      { limit: 1001 },
-      { maxMeetings: 0 },
-      { maxMeetings: 1.5 },
-      { only: [] },
-      { only: ["unknown"] as unknown as SearchAllIncludingMeetingsRequest["only"] },
-      { meetingCursor: { accountId: 1, query: "needle", meetingOffset: -1, hitOffset: 0 } },
-    ])
-      await expect(searchAllIncludingMeetings(store, account, request(extra), {}, legacy)).rejects.toMatchObject({
-        code: "validation_error",
-      })
-    expect(legacy).not.toHaveBeenCalled()
-    expect(lookup).not.toHaveBeenCalled()
+    const found = await searchAll(store, caller, meetingsOnly())
+    expect(found.searched).toEqual([])
+    expect(found.skipped).toEqual([{ resource: "meetings", code: "not_found", reason: "no meeting account stored" }])
+    expect(found).not.toHaveProperty("meetings")
   })
 
-  it("skips absent or mismatched-scope accounts without registration and propagates failures", async () => {
+  it("says nothing of meetings it was not asked for when the store holds none", async () => {
     const { store } = await fixture()
-    const register = vi.spyOn(store.accounts, "saveAccount")
-    for (const meetingAccount of [
-      { provider: "zoom", account: "zm-profile:absent" },
-      { ...account, scope: "work" as const },
-    ]) {
-      const found = await searchAllIncludingMeetings(store, account, request({ meetingAccount }))
-      expect(found.skipped[0]?.resource).toBe("meetings")
-      expect(found.hasMore).toBe(false)
-    }
-    expect(register).not.toHaveBeenCalled()
-    const error = new Error("invented store failure")
-    vi.spyOn(store.accounts, "storedAccount").mockRejectedValue(error)
-    await expect(searchAllIncludingMeetings(store, account, request())).rejects.toBe(error)
+    const found = await searchAll(store, caller, meetingsOnly({ only: undefined, meetingsAsked: undefined }))
+    expect(found.skipped.filter(({ resource }) => resource === "meetings")).toEqual([])
+    expect(found.searched).not.toContain("meetings")
   })
 
-  it("checks cancellation before reads and after an active read settles", async () => {
+  it("says the caller's account is not in the store yet when it cannot know the caller's scope", async () => {
     const { store, save } = await fixture()
-    await save("cancel", "needle")
-    const controller = new AbortController()
-    const lookup = vi.spyOn(store.accounts, "storedAccount")
-    controller.abort()
-    await expect(
-      searchAllIncludingMeetings(store, account, request({ signal: controller.signal })),
-    ).rejects.toMatchObject({ code: "cancelled" })
-    expect(lookup).not.toHaveBeenCalled()
-    const active = new AbortController()
-    const headers = vi.spyOn(store.meetings, "meetings")
-    vi.spyOn(store.meetings, "search").mockImplementation(async () => {
-      active.abort()
-      return []
-    })
-    await expect(searchAllIncludingMeetings(store, account, request({ signal: active.signal }))).rejects.toMatchObject({
-      code: "cancelled",
-    })
-    expect(headers).toHaveBeenCalledTimes(1)
-  })
-
-  it("detects changed meeting pages instead of attaching guessed metadata to hits", async () => {
-    const { store, save } = await fixture()
-    await save("changed", "needle")
-    vi.spyOn(store.meetings, "search").mockResolvedValue([
-      { meetingId: 999, scope: "transcript", id: 1, text: "needle", startMs: 0 },
+    await save(alice, "a", ["needle from alice"])
+    const stranger = { provider: "example", account: "stranger" }
+    const found = await searchAll(store, stranger, meetingsOnly())
+    expect(found.items).toEqual([])
+    expect(found.skipped).toEqual([
+      { resource: "meetings", code: "not_found", reason: "this account is not in the store yet" },
     ])
-    await expect(searchAllIncludingMeetings(store, account, request())).rejects.toMatchObject({
-      code: "validation_error",
-      message: expect.stringContaining("changed"),
-    })
   })
 
-  it("names the download command of the tool that has one, and never another tool's", async () => {
-    const { store } = await fixture()
-    const env = { WIRECAT_STATE_DIR: mkdtempSync(join(tmpdir(), "zm-test-no-models-")) }
-    const notes = request({ only: ["notes"], env })
-    const zoom = await searchAllIncludingMeetings(store, account, notes)
-    expect(zoom.notes?.meaningSkipped).toBe(
-      "e5-small is not downloaded — install it with a WireCat CLI that has `models download` (tg, max or wa); " +
-        "they share the model folder",
-    )
-    const max = await searchAllIncludingMeetings(store, account, notes, {
-      app: { command: "max", appName: "max-cli", envPrefix: "MAX", description: "", version: "1.0.0" },
+  it("asks for half the rows when a page's stored text passes the byte budget, before it skips the account", async () => {
+    const { store, save } = await fixture()
+    await save(alice, "a", ["needle from alice"])
+    const read = store.meetings.searchHits.bind(store.meetings)
+    const pages = vi.spyOn(store.meetings, "searchHits").mockImplementation(async (query, input) => {
+      if ((input.limit ?? 100) > 30) throw new CliError("validation_error", READ_BUDGET_EXCEEDED)
+      return read(query, input)
     })
-    expect(max.notes?.meaningSkipped).toBe("e5-small is not downloaded — `max models download e5-small`")
-    const memo = await searchAllIncludingMeetings(store, account, notes, {
-      app: { command: "tg", appName: "memo", envPrefix: "MEMO", description: "", version: "1.0.0" },
-      hintCommand: null,
+    const found = await searchAll(store, caller, meetingsOnly({ limit: 100 }))
+    expect(texts(found.items)).toEqual(["needle from alice"])
+    expect(pages.mock.calls.map(([, input]) => input.limit)).toEqual([101, 51, 26])
+    pages.mockImplementation(async () => {
+      throw new CliError("validation_error", READ_BUDGET_EXCEEDED)
     })
-    expect(memo.notes?.meaningSkipped).toBe(zoom.notes?.meaningSkipped)
+    const refused = await searchAll(store, caller, meetingsOnly())
+    expect(refused.skipped).toEqual([
+      { source: `zoom:${alice.account}`, code: "validation_error", reason: READ_BUDGET_EXCEEDED },
+    ])
   })
 })

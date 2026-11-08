@@ -463,9 +463,7 @@ describe("calendar commands", () => {
     expect(new Set(found.items.map(({ kind }) => kind))).toEqual(new Set(["message", "event"]))
     expect(found.items.find(({ kind }) => kind === "event")?.untrusted).toEqual(["title", "excerpt"])
     expect(found.meta).toMatchObject({ accounts: expect.arrayContaining(["telegram:500", "google-calendar:owner-1"]) })
-    expect(notes.join("")).toContain(
-      "meetings not searched: meetings are searched only when --source names a meeting account, zoom or meetings",
-    )
+    expect(notes.join("")).not.toContain("meetings not searched")
     await expect(cli("search", "all", "roadmap", "--only", "mail")).rejects.toMatchObject({ code: "validation_error" })
 
     const locked = (await setup({ locked: true })).cli

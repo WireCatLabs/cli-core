@@ -8,10 +8,11 @@ import { holdsKind, INTERNAL_NOTES } from "../domain/providers.js"
 import { runEmbedders } from "../embeddings/embed.js"
 import { chosenTextModel } from "../embeddings/models.js"
 import type { MessengerTraits } from "../ports/traits.js"
+import { entriesOfList, fitting, listedHolds } from "../search/account-list.js"
 import { plainQuery } from "../search/lucene/plain.js"
 import { MESSAGE_PARSING, SEARCH_QUERY } from "../search/lucene/types.js"
 import { planQuestion, questionLookup } from "../search/question-plan.js"
-import type { AccountKey, BusinessKind, BusinessSource, MessageStore } from "../store/store.js"
+import type { AccountKey, BusinessKind, BusinessSource, MessageStore, StoredAccount } from "../store/store.js"
 import { calendarAccounts, searchEvents } from "./events-search.js"
 import { excerpt } from "./excerpt.js"
 import type { FoundMessage, SearchFound, SearchQuery } from "./messages.js"
@@ -20,12 +21,17 @@ import { type MeaningLane, type MeaningSkipped, nearEligible } from "./messages-
 import type { SearchCoverage } from "./messages-search.js"
 import { notesScopeOf, RRF_K, searchNotes } from "./notes-search.js"
 import { BUSINESS_WORDS_ONLY, searchBusiness } from "./search-all-business.js"
+import { type MeetingAccountCoverage, type MeetingSearchItem, meetingLane } from "./search-all-meetings.js"
+import { listContextOf } from "./search-kind.js"
 import type { Backend, ServerOptions, ServerSearched } from "./server-search.js"
 
-export const RESOURCES_SEARCHED = ["messages", "mail", "notes", "events", "crm", "business"] as const
+export const RESOURCES_SEARCHED = ["messages", "mail", "notes", "events", "crm", "business", "meetings"] as const
 export type SearchedResource = (typeof RESOURCES_SEARCHED)[number]
 
-export interface SearchAllItem {
+/** One hit of `search all`: a stored record, or a passage of a meeting. */
+export type SearchAllItem = SearchAllRecordItem | MeetingSearchItem
+
+export interface SearchAllRecordItem {
   kind: "message" | "mail" | "note" | "document" | "event" | "deal" | "lead" | BusinessKind
   /** `msg:…` for a message or a mail, `note:…`, `event:…`, `deal:…`, `lead:…`, or a business ref: `invoice:…`. */
   ref: string
@@ -96,6 +102,8 @@ export interface SearchAllFound {
   coverage?: SearchCoverage
   /** When nothing was found by all the words: the words that alone find nothing in `searched` either. */
   unmatched?: string[]
+  /** What each meeting account read could answer; absent when no meeting account was read. */
+  meetings?: MeetingAccountCoverage[]
 }
 
 export interface SearchAllRequest {
@@ -113,6 +121,18 @@ export interface SearchAllRequest {
   signal?: AbortSignal
   /** The accounts `--source` chose, per kind; a kind left out reads every account of its own. */
   scope?: Partial<Record<SearchedResource, AccountKey[]>>
+  /**
+   * `--source` as typed: each kind reads the accounts the list names of it, and a kind it names none of is skipped.
+   * It replaces `scope`.
+   */
+  source?: string
+  /** The scopes whose meeting accounts are read; absent, the scope of the caller's stored account only. */
+  meetingScopes?: readonly StoredAccount["scope"][]
+  /**
+   * The caller named meetings (`--only meetings`), so none to read is a skip that makes the answer incomplete; else
+   * a store with no meeting account says nothing about them, as one with no calendar says nothing of events.
+   */
+  meetingsAsked?: boolean
   /** The CRM kinds `crm` reads; absent, deals and leads. */
   crmKinds?: readonly DealKind[]
 }
@@ -191,14 +211,54 @@ const strictWords = (text: string): string[] => {
   }
 }
 
+const accountKeyOf = ({ provider, account }: AccountKey) => `${provider}\u0000${account}`
+
+/** `--source` as the accounts each kind reads; a kind it names no account of is skipped, not read in full. */
+const sourceScope = async (
+  store: MessageStore,
+  account: AccountKey,
+  source: string,
+  asked: readonly SearchedResource[],
+  messenger: SearchAllMessenger,
+) => {
+  const entries = entriesOfList(source, await listContextOf(store, account, messenger.app))
+  // Any provider's import may write business data, so its accounts are the ones that hold some, whatever their kind.
+  const imported = asked.includes("business")
+    ? new Set((await store.business.accounts()).map(accountKeyOf))
+    : new Set<string>()
+  const holdsBusiness = (one: AccountKey) => imported.has(accountKeyOf(one))
+  const { skipped } = fitting(
+    entries,
+    asked.filter((one): one is Exclude<SearchedResource, "business"> => one !== "business"),
+    "search all",
+    (kind) => `--only leaves ${kind} out`,
+    holdsBusiness,
+  )
+  const named = (resource: SearchedResource): AccountKey[] => [
+    ...new Map(
+      entries
+        .flatMap(({ accounts }) => accounts)
+        .filter((one) => (resource === "business" ? holdsBusiness(one) : listedHolds(one, resource)))
+        .map(({ provider, account }) => [`${provider}\u0000${account}`, { provider, account }] as const),
+    ).values(),
+  ]
+  const scope = Object.fromEntries(asked.map((resource) => [resource, named(resource)]))
+  const only = asked.filter((resource) => scope[resource]?.length)
+  const unnamed: Skipped<SearchedResource>[] = asked
+    .filter((resource) => !only.includes(resource))
+    .map((resource) => ({ resource, code: "not_found", reason: `--source names no ${resource} account` }))
+  return { only, scope, skipped: [...skipped, ...unnamed] }
+}
+
 /** The accounts of every CRM the store holds copies of. */
 export const crmAccounts = async (store: MessageStore): Promise<AccountKey[]> =>
   (await store.accounts.accounts()).filter(({ provider }) => holdsKind(provider, "crm"))
 
 /**
- * `search all`: messages, mail, notes, calendar events, CRM deals and leads, and business data from the local store — messages also from the messenger's
- * server, as `search messages` asks it — each list best first, merged by reciprocal rank so no
- * resource's own scores have to be compared with another's. Events are read only when the store holds a calendar.
+ * `search all`: messages, mail, notes, calendar events, CRM deals and leads, business data and meeting passages from
+ * the local store — messages also from the messenger's server, as `search messages` asks it — each list best first,
+ * merged by rank so no resource's own scores have to be compared with another's. Events are read only when the store
+ * holds a calendar, meetings only when it holds a meeting account.
  */
 export const searchAll = async (
   store: MessageStore,
@@ -216,12 +276,16 @@ export const searchAll = async (
     throw new CliError("validation_error", `offset takes a whole number from 0 to ${MAX_SEARCH_OFFSET}`)
   // Each resource is read deep enough for the merged page, then the merge is cut.
   const window = offset + request.limit
-  const only = request.only ?? RESOURCES_SEARCHED
+  const chosen =
+    request.source === undefined
+      ? { only: request.only ?? RESOURCES_SEARCHED, scope: request.scope, skipped: [] }
+      : await sourceScope(store, account, request.source, request.only ?? RESOURCES_SEARCHED, messenger)
+  const { only, scope } = chosen
   const command = messenger.hintCommand === undefined ? messenger.app?.command : (messenger.hintCommand ?? undefined)
   const lists: SearchAllItem[][] = []
   const searched: SearchedResource[] = []
   const accounts: SearchedAccount[] = []
-  const skipped: SearchAllFound["skipped"] = []
+  const skipped: SearchAllFound["skipped"] = [...chosen.skipped]
   let hasMore = false
   let notes: SearchAllFound["notes"]
   let events: SearchAllFound["events"]
@@ -232,9 +296,10 @@ export const searchAll = async (
   /** Each hit found by meaning, by its cosine: one model for every source, so these compare across them. */
   const cosines = new Map<string, number>()
   let coverage: SearchCoverage | undefined
+  let meetings: MeetingAccountCoverage[] | undefined
 
   const messagesOf = async (kind: "messages" | "mail") => {
-    const given = request.scope?.[kind]
+    const given = scope?.[kind]
     // The server still gets the question as typed: a query that is not a sentence still finds what it holds.
     const discovers = discover && (kind === "mail" || request.backend !== "server")
     const query: SearchQuery = {
@@ -267,7 +332,7 @@ export const searchAll = async (
       (await store.accounts.accounts()).filter(({ provider }) => holdsKind(provider, kind))
     for (const one of found.skipped ?? []) if (!skipped.some(({ source }) => source === one.source)) skipped.push(one)
     accounts.push(...read.map(({ provider, account }) => ({ resource: kind, provider, account })))
-    const itemOf = (hit: FoundMessage, foundBy: SearchAllItem["foundBy"]): SearchAllItem => {
+    const itemOf = (hit: FoundMessage, foundBy: SearchAllRecordItem["foundBy"]): SearchAllRecordItem => {
       const at = parseLocator(hit.locator)
       return {
         kind: kind === "mail" ? "mail" : "message",
@@ -306,7 +371,7 @@ export const searchAll = async (
     by[kind] = { by: "words and meaning", ...(lane.partly ? { meaningSkipped: lane.partly } : {}) }
     const near = await nearEligible(store, account, query, messenger, lane.ranked, filters ? { text: filters } : {})
     // One list per resource, as notes give theirs, so messages get no second vote against mail.
-    const fused = new Map<string, { item: SearchAllItem; score: number }>()
+    const fused = new Map<string, { item: SearchAllRecordItem; score: number }>()
     byWords.forEach((item, rank) => {
       fused.set(item.ref, { item, score: 1 / (RRF_K + rank + 1) })
     })
@@ -328,7 +393,7 @@ export const searchAll = async (
     for (const resource of only) {
       try {
         if (resource === "notes") {
-          const chosen = request.scope?.notes
+          const chosen = scope?.notes
           const found = await searchNotes(store, request.text, {
             limit: window,
             command,
@@ -366,7 +431,7 @@ export const searchAll = async (
           ]
           accounts.push(...read.map((account) => ({ resource, provider: "notes", account })))
         } else if (resource === "events") {
-          const read = request.scope?.events ?? (await calendarAccounts(store))
+          const read = scope?.events ?? (await calendarAccounts(store))
           if (!read.length) continue
           const found = await searchEvents(store, request.text, {
             limit: window,
@@ -401,7 +466,7 @@ export const searchAll = async (
           accounts.push(...read.map(({ provider, account }) => ({ resource, provider, account })))
         } else if (resource === "crm") {
           const { words, anyWord } = titleWords(request.text)
-          const chosen = request.scope?.crm
+          const chosen = scope?.crm
           const found = await store.deals.find({
             words,
             anyWord: anyWord || discover,
@@ -430,9 +495,27 @@ export const searchAll = async (
             words,
             anyWord: anyWord || discover,
             window,
-            accounts: request.scope?.business,
+            accounts: scope?.business,
           })
           hasMore ||= found.hasMore
+          lists.push(found.items)
+          for (const { provider, account } of found.read) accounts.push({ resource, provider, account })
+        } else if (resource === "meetings") {
+          const found = await meetingLane(store, account, {
+            // A question finds passages that hold some of its words, as every other source does.
+            text: (discover ? questionLookup(request.text) : undefined) ?? request.text,
+            window,
+            ...(scope?.meetings === undefined ? {} : { accounts: scope.meetings }),
+            ...(request.meetingScopes === undefined ? {} : { scopes: request.meetingScopes }),
+            ...(request.meetingsAsked ? { asked: true } : {}),
+            ...(request.exact ? { exact: true } : {}),
+            ...(request.timezone === undefined ? {} : { timezone: request.timezone }),
+            ...(request.signal === undefined ? {} : { signal: request.signal }),
+          })
+          for (const one of found.skipped) skipped.push(one)
+          if (!found.read.length) continue
+          hasMore ||= found.hasMore
+          meetings = found.coverage
           lists.push(found.items)
           for (const { provider, account } of found.read) accounts.push({ resource, provider, account })
         } else lists.push(await messagesOf(resource))
@@ -470,8 +553,13 @@ export const searchAll = async (
     ...(server === undefined ? {} : { server }),
     ...(coverage === undefined ? {} : { coverage }),
     ...(unmatched.length ? { unmatched } : {}),
+    ...(meetings === undefined ? {} : { meetings }),
   }
 }
+
+/** Passages of one meeting share its `ref`, the reference evidence cites; each is still a hit of its own. */
+const hitKey = (item: SearchAllItem): string =>
+  item.kind === "meeting" ? `${item.ref}\u0000${item.scope}\u0000${item.id}` : item.ref
 
 /**
  * Every source's hits as one list: each source's best hit first, then every other hit by cosine, then by its rank in
@@ -484,9 +572,10 @@ const oneList = (lists: SearchAllItem[][], cosines: Map<string, number>): Search
   for (const list of lists) {
     let above = Number.NEGATIVE_INFINITY
     list.forEach((item, rank) => {
+      const key = hitKey(item)
       above = cosines.get(item.ref) ?? above
-      const held = place.get(item.ref)
-      if (!held || rank < held.rank) place.set(item.ref, { item, rank, cosine: above })
+      const held = place.get(key)
+      if (!held || rank < held.rank) place.set(key, { item, rank, cosine: above })
     })
   }
   const head = (rank: number) => Math.min(rank, 1)

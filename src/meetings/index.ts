@@ -398,6 +398,7 @@ export type {
   TranscriptLanguageFill,
   TranscriptRowInput,
 } from "./store.js"
+export { READ_BUDGET_EXCEEDED } from "./store.js"
 export { meetingTimestamp } from "./timestamp.js"
 export type {
   MeetingTranscriptReceiptStore,

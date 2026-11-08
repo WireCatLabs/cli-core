@@ -17,7 +17,7 @@ StandardSyntaxParser и PrecedenceQueryParser, default AND, default field `text`
 в memo; у них только поля `text`, `exact`, `body`, `tag`, `date`, `in`, `has:text`, `source` (`source:internal` —
 написанные в memo, `source:file` — файлы из папок), а у файлов-страниц ещё
 `title`, `site`, `lang`, `author`, `keyword` — то, что страница сообщает о себе; у сообщений эти поля
-ничего не находят). `search all` ищет в сообщениях и заметках сразу. Почта принадлежит memo: `memo search mail`
+ничего не находят). `search all` ищет в сообщениях, заметках, событиях календаря, сделках и встречах сразу. Почта принадлежит memo: `memo search mail`
 ищет только в почте, импортированной `memo sync --only mail`, во всех почтовых аккаунтах сразу, а
 `--source email:<адрес>` — в одном; `memo search all` добавляет почту к сообщениям и заметкам. В почте
 `chat:` и `--chat` — тред по id или теме, полей `kind` и `topic` нет; только у почты — `to:`, `cc:`,
@@ -525,9 +525,11 @@ accounts провайдера/класса, включая `all`; `in:` берё
 
 `search all --source` (MCP `source`) берёт тот же список: каждый вид читает свои аккаунты из него, вид, которого
 список не называет, не читается и есть в `skipped` (`--source names no notes account`), а элемент, чей вид `--only`
-оставил за бортом, — тоже в `skipped`. Встречи читаются, только если список называет аккаунт встреч (`zoom:<id>`,
-`zoom`, `meetings`; `all` — все аккаунты и встречи), и только один; голое `zoom` или `meetings` берёт тот аккаунт, где
-встречи есть. Без такого элемента `skipped` говорит, что встречи не искались. Ответы `search all`, `memo search mail` и
+оставил за бортом, — тоже в `skipped`. Без `--source` встречи читаются из индекса каждого аккаунта встреч, с языком
+`search meetings` (фразы, OR, NOT, `from:` — кто сказал, `date:` — в `--timezone`); `--source zoom:<id>` берёт один.
+Поле, которого у встреч нет (`in:`, `chat:`, `filename:`), пропускает встречи с причиной; ошибка в одном аккаунте
+(например, `from:` называет двух людей) пропускает только его. Одна встреча даёт не больше трёх реплик. `search all`
+индекс не строит: аккаунт, чей индекс отстаёт, назван в `missing`, а строит его `search meetings`. Ответы `search all`, `memo search mail` и
 `search notes` называют каждый прочитанный аккаунт: `accounts: [{ resource, provider, account }]`; в обычном режиме —
 строка `searched: …` в stderr.
 

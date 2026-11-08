@@ -128,11 +128,9 @@ the list fits it.
   skips `email:me@x` with "a mailbox — search mail reads it". This fixes BUG-2.
 - **`search all` with a list** gives each kind its entries. A kind with none is not read and appears
   in `skipped` as `{ resource, reason: "--source names no <kind> account" }`.
-- **Meetings** have no search index, so `search all` reads them only when `--source` names a meeting
-  account, provider or the `meetings` kind; otherwise `skipped` says meetings were not searched.
-  `--max-meetings` stays. **One meeting account per search**: the meeting cursor binds to one account, so a list
-  naming two that both hold meetings is an error that names both; of several, the one holding meetings is read and
-  the rest are in `skipped`. Reading several waits for a cursor that spans accounts.
+- **Meetings** are read through each meeting account's search index, every account of the caller's scope, or
+  the ones `--source` names; a named account of the other scope is in `skipped` with its scope. There is no
+  `--max-meetings` and no meeting cursor: pages are offsets over the merged list.
 - **`--only` stays**: it picks kinds; `--source` picks accounts; the two intersect. `--only` gains
   `documents`.
 - `--backend server` in `search all` still asks the server for the active account only; `accounts`

@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest"
 import { allHitItem, noteHitItem } from "../cli/messenger/search-answers.js"
 import { openStore } from "../store/store.js"
 import { searchNotesOf } from "./notes-search.js"
-import { searchAllWithMeetings } from "./search-all-meetings.js"
+import { searchAll } from "./search-all.js"
 
 const account = { provider: "synthetic", account: "500" }
 describe("imported document search provenance", () => {
@@ -43,7 +43,7 @@ describe("imported document search provenance", () => {
         url: "https://docs.google.com/document/d/synthetic-document/edit",
         updated_at: "2026-01-01T00:00:00.000Z",
       })
-      const all = await searchAllWithMeetings(store, account, {
+      const all = await searchAll(store, account, {
         source: "drive:personal",
         text: "budget",
         exact: true,

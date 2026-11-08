@@ -1,9 +1,14 @@
 import { createHash } from "node:crypto"
 import { CliError } from "@wirecat/cli-base"
 import type { MeetingSearchOptions, MeetingSearchStore, SearchHit } from "../../meetings/index.js"
-import { formatMeetingReference, MEETING_FIELD_NAMES, parseMeetingQuery } from "../../meetings/index.js"
+import {
+  formatMeetingReference,
+  MEETING_FIELD_NAMES,
+  parseMeetingQuery,
+  READ_BUDGET_EXCEEDED,
+} from "../../meetings/index.js"
 import { plainQuery } from "../../search/lucene/plain.js"
-import { matchMeetingText, meetingQuerySql, resolveMeetingQuery } from "./meeting-hit-query.js"
+import { matchedMeetingWords, matchMeetingText, meetingQuerySql, resolveMeetingQuery } from "./meeting-hit-query.js"
 import { indexedText } from "./meeting-index-values.js"
 import { checkMeetingCancelled } from "./meeting-operation.js"
 import { positiveReadInteger } from "./meeting-reads.js"
@@ -147,9 +152,9 @@ export function meetingHitSearchOver({ database }: StoreContext): MeetingSearchS
             after.id,
           )
         const sql = `WITH matches AS (${matching}), matching AS (SELECT rid,tier FROM matches h WHERE NOT EXISTS(SELECT 1 FROM meeting_index_pending p WHERE p.id=h.rid/4 AND p.indexable_type=CASE h.rid%4 WHEN 1 THEN 'meeting_transcript_row' WHEN 2 THEN 'meeting_chat_message' ELSE 'meeting_summary' END)), selected AS (SELECT m.id,coalesce(m.started_at,0) AS started FROM meetings m WHERE ${clauses.join(" AND ")}), hits AS (
-        SELECT h.tier,m.started,m.id AS meeting_id,0 AS kind,r.id,r.start_ms,${bytes("r", ["text"])} AS bytes,t.id AS transcript_id,r.position,t.language,(SELECT count(*) FROM meeting_transcript_rows n WHERE n.meeting_transcript_id=t.id) AS lines_total FROM matching h JOIN meeting_transcript_rows r ON h.rid%4=1 AND r.id=h.rid/4 JOIN meeting_transcripts t ON t.id=r.meeting_transcript_id AND t.superseded_at IS NULL AND t.deleted_at IS NULL JOIN selected m ON m.id=t.meeting_id
-        UNION ALL SELECT h.tier,m.started,m.id,1,c.id,NULL,${bytes("c", ["text"])},NULL,NULL,NULL,NULL FROM matching h JOIN meeting_chat_messages c ON h.rid%4=2 AND c.id=h.rid/4 JOIN selected m ON m.id=c.meeting_id
-        UNION ALL SELECT h.tier,m.started,m.id,2,s.id,NULL,${bytes("s", fields)},NULL,NULL,NULL,NULL FROM matching h JOIN meeting_summaries s ON h.rid%4=3 AND s.id=h.rid/4 JOIN selected m ON m.id=s.meeting_id)
+        SELECT h.tier,m.started,m.id AS meeting_id,0 AS kind,r.id,r.start_ms,${bytes("r", ["text", "speaker_name"])} AS bytes,t.id AS transcript_id,r.position,t.language,(SELECT count(*) FROM meeting_transcript_rows n WHERE n.meeting_transcript_id=t.id) AS lines_total,r.speaker_name AS speaker FROM matching h JOIN meeting_transcript_rows r ON h.rid%4=1 AND r.id=h.rid/4 JOIN meeting_transcripts t ON t.id=r.meeting_transcript_id AND t.superseded_at IS NULL AND t.deleted_at IS NULL JOIN selected m ON m.id=t.meeting_id
+        UNION ALL SELECT h.tier,m.started,m.id,1,c.id,NULL,${bytes("c", ["text"])},NULL,NULL,NULL,NULL,NULL FROM matching h JOIN meeting_chat_messages c ON h.rid%4=2 AND c.id=h.rid/4 JOIN selected m ON m.id=c.meeting_id
+        UNION ALL SELECT h.tier,m.started,m.id,2,s.id,NULL,${bytes("s", fields)},NULL,NULL,NULL,NULL,NULL FROM matching h JOIN meeting_summaries s ON h.rid%4=3 AND s.id=h.rid/4 JOIN selected m ON m.id=s.meeting_id)
         SELECT h.*,${bytes("m", ["title"])}+${bytes("s", ["doc_url"])} AS context_bytes FROM hits h
         JOIN meetings m ON m.id=h.meeting_id LEFT JOIN meeting_summaries s ON h.kind=2 AND s.id=h.id
         ${seek} ORDER BY h.tier,h.started DESC,h.meeting_id,h.kind,h.id LIMIT ?`
@@ -163,7 +168,7 @@ export function meetingHitSearchOver({ database }: StoreContext): MeetingSearchS
           const size = Number(row.bytes) + Number(row.context_bytes)
           if (!Number.isSafeInteger(size) || size < 0) fail("Invalid stored meeting search text size")
           total += size
-          if (total > maxReadBytes) fail("Meeting search exceeds its stored text byte budget")
+          if (total > maxReadBytes) fail(READ_BUDGET_EXCEEDED)
         }
         checkMeetingCancelled(input.signal)
         const items = rows.slice(0, limit).map((row): SearchHit & { ref: string } => {
@@ -203,6 +208,7 @@ export function meetingHitSearchOver({ database }: StoreContext): MeetingSearchS
             startMs: row.start_ms === null ? null : Number(row.start_ms),
             ...(kind === 0
               ? {
+                  speakerName: row.speaker === null ? null : String(row.speaker),
                   language: row.language === null ? null : String(row.language),
                   line: Number(row.position) + 1,
                   linesTotal: Number(row.lines_total),
@@ -213,10 +219,11 @@ export function meetingHitSearchOver({ database }: StoreContext): MeetingSearchS
         const fresh = items.flatMap((item) => {
           const corrections = matchMeetingText(tree, item.text, state.stemmer)
           if (!corrections) return []
+          const matchedWords = matchedMeetingWords(tree, item.text, state.stemmer)
           return [
             corrections.length
-              ? { ...item, match: "corrected" as const, corrections }
-              : { ...item, match: "words" as const },
+              ? { ...item, match: "corrected" as const, corrections, matchedWords }
+              : { ...item, match: "words" as const, matchedWords },
           ]
         })
         if (fresh.length !== items.length) coverage.indexing = "pending"

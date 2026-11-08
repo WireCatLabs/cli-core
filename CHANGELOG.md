@@ -5,6 +5,38 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Changed — may break callers
+
+- **`search all` reads meetings from every meeting account, through their search index, ranked with the other
+  sources.** Meetings are one more resource of `searchAll` (`RESOURCES_SEARCHED` ends with `meetings`). Without
+  `--source`, every meeting account of the scope of the caller's stored account is read, so a work profile never
+  reads personal meetings; `meetingScopes` widens it. A named account of another scope is skipped with its scope.
+  With no meeting account to read, a caller that named meetings (`meetingsAsked`, from `--only meetings`) gets a
+  `meetings` skip with `not_found`; any other answer says nothing of meetings. `--source zoom:<account>` reads only that one, and
+  `--source zoom` or `meetings` reads them all instead of refusing several. The meeting query language applies: phrases,
+  OR, NOT, `"a b"~N`, `from:` (who said it), `date:` in `--timezone`, and `--exact`. A field meetings lack (`in:`,
+  `chat:`, `filename:`) skips meetings with the reason; a failure of one account (`from:` naming two speakers) skips
+  only that account. One meeting gives at most 3 passages, each its own hit, with an excerpt of about 240 characters
+  instead of 2000. Search all never builds the index: `meetings` in the answer has `indexing: "ready" | "pending"` and
+  `hasMore` per account, and the CLI answer names a pending account in `missing`. Meeting hits carry `foundBy`
+  (`found_by`); a hit found only through a garbled spelling says so with `match: "corrected"` and `corrections`, and
+  the excerpt is centred on the words the index matched (`searchHits` hits carry them as `matchedWords`, with
+  `speakerName`). Each account's index is read 200 rows a page, and a page past the store's 4 MB budget is asked again with
+  half the rows, down to one, before the account is skipped.
+- **`--max-meetings` (MCP `max_meetings`) is gone from `search all`**, in the messenger, CRM and calendar commands,
+  and so are `maxMeetings`, `meetingCursor`, `MeetingSearchCursor`, `MeetingSearchCoverage`, `MEETINGS_UNNAMED`, the
+  `search.meetings` step, `searchAllIncludingMeetings`, `searchAllWithMeetings` (and `messages.searchAllWithMeetings`),
+  `RESOURCES_SEARCHED_WITH_MEETINGS`, `ResourceWithMeetings` and the `SearchAllIncludingMeetings*` and
+  `SearchAllWithMeetingsRequest` types. Call `searchAll` (or `messages.searchAll`) with `source`; its answer is
+  `SearchAllFound`, whose `hasMore` is always a boolean. `SearchAllItem` is now `SearchAllRecordItem | MeetingSearchItem`.
+  At their next bump of this package: tg-cli and max-cli drop `--max-meetings` from `docs/commands.md`,
+  `docs/dev/test-matrix.md` and `scripts/test-matrix-untested.ts`; whatsapp-cli from `docs/commands.md` and its test
+  matrix; gcal-cli and bitrix24-cli from their `search all` tests and test matrix; zoom-cli moves its `search all` off
+  `searchAllIncludingMeetings`; memo and zoom-cli update the `search all` options in their shared contract overrides.
+- **`liftMeetingFields` takes the caller's timezone** as a fourth argument for `date:`; without it, the process's.
+
 ## 0.612.0 — 08.11.2026
 
 ### Changed — may break callers
@@ -98,6 +130,7 @@ shape of this file.
   current built a new SQL text for every item it recomputed, so SQLite prepared each one again and the process kept
   them all. The item's id is now a bound parameter, one statement per kind of item. On the same synthetic data, the
   20,000 sync peaks at 0.6 GB instead of 3.7 GB and takes 19 s instead of 30 s, its `--rescan` 13 s instead of 21 s.
+||||||| 3bfe5f660
 
 ## 0.609.0 — 08.11.2026
 

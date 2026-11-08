@@ -235,12 +235,6 @@ export const STEPS = defineSteps([
     args: [],
     why: "the store file is damaged; this says what is lost and the commands that recover it",
   },
-  {
-    id: "search.meetings",
-    command: "*",
-    args: [{ name: "max_meetings", required: true }],
-    why: "stopped after {scanned} meetings; more may match",
-  },
 ])
 
 /** A step from its registered definition; an argument left undefined is left out, as the command line would. */

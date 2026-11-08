@@ -537,21 +537,15 @@ export {
   type SearchAllFound,
   type SearchAllItem,
   type SearchAllMessenger,
+  type SearchAllRecordItem,
   type SearchAllRequest,
   type SearchedResource,
   searchAll,
 } from "./search-all.js"
 export {
-  type MeetingSearchCoverage,
-  type MeetingSearchCursor,
+  type MeetingAccountCoverage,
   type MeetingSearchItem,
-  RESOURCES_SEARCHED_WITH_MEETINGS,
-  type ResourceWithMeetings,
-  type SearchAllIncludingMeetingsFound,
-  type SearchAllIncludingMeetingsRequest,
-  type SearchAllWithMeetingsRequest,
-  searchAllIncludingMeetings,
-  searchAllWithMeetings,
+  MOST_HITS_PER_MEETING,
 } from "./search-all-meetings.js"
 export {
   CATCH_UP_BOUNDS,
