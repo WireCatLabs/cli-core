@@ -8,6 +8,8 @@ import * as identities from "./sqlite/identities.js"
 import type { StoreContext } from "./sqlite/open.js"
 import { linkToOwner } from "./sqlite/own-identities.js"
 import * as personLinks from "./sqlite/person-links.js"
+import type { PersonMerge } from "./sqlite/person-merges.js"
+import * as personMerges from "./sqlite/person-merges.js"
 import { type PersonPreparationRead, personPreparation } from "./sqlite/person-preparation.js"
 import { personSeenInAccounts } from "./sqlite/person-scope.js"
 import type { PrivateContact, PrivateContactNote } from "./sqlite/private-people.js"
@@ -60,6 +62,12 @@ export interface PeopleStore extends AccountPeople {
   /** Records the decision in `identity_link_events`; `unlinkIdentity` undoes it. */
   linkIdentities(person: IdentityRef, other: IdentityRef, options: LinkOptions): Promise<PersonRecord>
   unlinkIdentity(identity: IdentityRef, options: LinkOptions): Promise<PersonRecord>
+  /** The people merged into this one, newest first, each with the identities that came from it. */
+  merges(uid: string): Promise<PersonMerge[]>
+  /** The owner's undo of a merge: the identities that came from `from` go back to it. Gives `from` again. */
+  undoMerge(to: string, from: string, by: string): Promise<PersonRecord>
+  /** The owner's split: the chosen identities become one new person, which this gives. */
+  split(uid: string, identities: IdentityRef[], by: string): Promise<PersonRecord>
   /** The identity, and everyone linked with it, is the owner. */
   linkToOwner(identity: IdentityRef): Promise<PersonRecord>
   /** A person known by name only, with no identity yet: someone to assign a task to before any message names them. */
@@ -155,6 +163,9 @@ export const peopleStoreOver = (context: StoreContext, keyed: AccountPeople): Pe
     unlinkIdentity: async (identity, options) => {
       return write(database, () => personLinks.unlinkIdentity(context, identity, options))
     },
+    merges: async (uid) => personMerges.merges(context, uid),
+    undoMerge: async (to, from, by) => write(database, () => personMerges.undoMerge(context, to, from, by)),
+    split: async (uid, chosen, by) => write(database, () => personMerges.split(context, uid, chosen, by)),
     linkToOwner: async (identity) => linkToOwner(context, identity),
   }
 }
