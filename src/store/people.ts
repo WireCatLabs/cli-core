@@ -84,7 +84,7 @@ export interface PeopleStore extends AccountPeople {
    * joins them, a phone more people share and a meeting guest's typed address become proposals. Never over the
    * owner's separation or rejection.
    */
-  scanMatches(): Promise<MatchScan>
+  scanMatches(options?: { full?: boolean }): Promise<MatchScan>
   /** The identity, and everyone linked with it, is the owner. */
   linkToOwner(identity: IdentityRef): Promise<PersonRecord>
   /** A person known by name only, with no identity yet: someone to assign a task to before any message names them. */
@@ -100,9 +100,12 @@ export const accountPeopleOver = (context: StoreContext): AccountPeople => {
         const accountKey = accountPk(key)
         for (const person of people) {
           identityPk(accountKey, key.provider, person.id, person.name, person)
+          if (person.email) personLinks.noteAddress(context, { provider: key.provider, id: person.id }, person.email)
+        }
+        // Every address of the batch is noted before any joins, so one shared by the whole batch is seen as shared.
+        for (const person of people)
           if (person.email)
             personLinks.joinByAddress(context, { provider: key.provider, id: person.id }, person.email, key.provider)
-        }
       }),
 
     contacts: async (key, options) => {
@@ -185,7 +188,7 @@ export const peopleStoreOver = (context: StoreContext, keyed: AccountPeople): Pe
     split: async (uid, chosen, by) => write(database, () => personMerges.split(context, uid, chosen, by)),
     proposeLink: async (input) => identityProposals.proposeIdentityLink(context, input),
     decideLink: async (id, decision) => identityProposals.decideIdentityLink(context, id, decision),
-    scanMatches: async () => scanMatches(context),
+    scanMatches: async (options) => scanMatches(context, options),
     linkToOwner: async (identity) => linkToOwner(context, identity),
   }
 }
