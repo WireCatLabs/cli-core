@@ -220,7 +220,7 @@ it("a move to a base stage takes the one stage of the row's pipeline mapped ther
   await expect(store.baseStages.resolve(deal, "Qualification")).rejects.toMatchObject({
     code: "validation_error",
     details: { reason: "stage.unmapped" },
-    message: expect.stringContaining("stages map set"),
+    message: expect.stringContaining("`stages set <stage:id>"),
   })
 })
 

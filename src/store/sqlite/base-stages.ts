@@ -472,7 +472,10 @@ export const baseStagesOver = (context: StoreContext) => {
     map: (stage: string, base: string, scope?: BaseScope): StageMapping => {
       const id = /^stage:(\d+)$/.exec(stage.trim())?.[1]
       if (id === undefined)
-        refuse(`a stage is named by its stage:<id> reference, as stages map list shows it; not ${stage}`, "stage.ref")
+        refuse(
+          `a stage is named by its stage:<id> reference, as memo's \`stages list\` shows it; not ${stage}`,
+          "stage.ref",
+        )
       const kindRow = database
         .prepare("SELECT p.kind FROM pipeline_stages s JOIN pipelines p ON p.id = s.pipeline_id WHERE s.id = ?")
         .get(Number(id))
@@ -554,7 +557,7 @@ export const baseStagesOver = (context: StoreContext) => {
       throw new CliError(
         "validation_error",
         `no stage of ${found.pipelineName} (${found.pipeline}) is mapped to ${target.name}; map one with ` +
-          `\`stages map set <stage:id> ${stageRef(target.id)}\` (the stages: \`stages map list --pipeline ${found.pipeline}\`)`,
+          `memo's \`stages set <stage:id> ${stageRef(target.id)}\` (the stages: \`stages list pipeline:${found.pipeline}\`)`,
         { reason: "stage.unmapped" },
       )
     },

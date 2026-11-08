@@ -104,7 +104,8 @@ export const baseStagesCommand = (app: AppIdentity, options: BaseStagesCommandOp
   const baseStage = "the base stage, by its stage:<id> or its name"
 
   answerEntity(
-    leaf("show", LOCAL_READ, "a base set's columns with what each holds", "show deal", "show lead --json"),
+    // A write: its first use makes the set and suggests every mapping, which a read-only store refuses.
+    leaf("show", LOCAL_WRITE, "a base set's columns with what each holds", "show deal", "show lead --json"),
     "base_stage_set",
     baseSet,
   )
