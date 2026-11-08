@@ -34,6 +34,11 @@ shape of this file.
   from the version cited, with the same exclusions, so a change the timer's check already took still reaches an
   agent.
 
+### Fixed
+
+- **`account remove` is in the messenger parity manifest** (`parity.json`), with `--keep-data`, `--delete-data`
+  and `--dry-run`, so tg, max and wa can adopt it without failing `parity:check`.
+
 ## 0.614.0 — 08.11.2026
 
 ### Added

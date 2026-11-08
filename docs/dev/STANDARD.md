@@ -1026,6 +1026,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--debug` |  | on a failure, its whole record — cause and stack — in place of the short line |  | every command |
 | `--deep` | `<n>` | also check the top n in full — profile, photos, everything they wrote, and the public ban lists, which are sent their ids — one person a second. **TG specializes the SDK help with the bounded Telegram audit; MAX retains the generic SDK wording. Align the shared help with provider capabilities separately; SDK adoption alone does not remove the difference.** |  | `chats members check` |
 | `--defaults` |  | change what every profile gets, rather than this profile |  | `config set`, `config unset` |
+| `--delete-data` |  | also delete the account's messages and files on this computer |  | `account remove` |
 | `--deliver-to` | `<route>` | where a schedule's result also goes, when --notify-on says so: telegram-bot:<profile>/<chat>, email:<profile>/<address>; repeat it for more |  | `schedule agent` (planned), `schedule command` (planned) |
 | `--deny-chats` | `<ids>` | replace denied chat ids, comma-separated; empty clears; deny wins |  | `replies audience`, `replies edit` |
 | `--deny-people` | `<ids>` | replace denied sender ids, comma-separated; empty clears; deny wins |  | `replies audience`, `replies edit` |
@@ -1036,7 +1037,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--do` | `<actions>` | actions: reply, task, or both, comma-separated |  | `replies edit` |
 | `--download` |  | first save, from the messenger, the files no download saved yet |  | `attachments extract` |
 | `--draft` |  | save the text as a draft for the owner to review and send |  | `messages send` (planned) |
-| `--dry-run` |  | judge and plan; do nothing. **A command-specific dry run keeps its richer plan; otherwise the shared shell previews arguments and permissions without running the action. Targets remain unresolved unless that command provides a preview.** |  | every command, `attachments move`, `bot chats moderate` (planned), `chats moderate`, `config repair`, `messages sync`, `stats messages counters sync`, `store clear`, `store repair`, `store reset`, `tags rebuild` |
+| `--dry-run` |  | judge and plan; do nothing. **A command-specific dry run keeps its richer plan; otherwise the shared shell previews arguments and permissions without running the action. Targets remain unresolved unless that command provides a preview.** |  | every command, `account remove`, `attachments move`, `bot chats moderate` (planned), `chats moderate`, `config repair`, `messages sync`, `stats messages counters sync`, `store clear`, `store repair`, `store reset`, `tags rebuild` |
 | `--due` | `<time>` | when a task must be done: an ISO 8601 time or a duration from now; none clears it |  | `tasks add`, `tasks update` |
 | `--due-within` | `<duration>` | list tasks due within this: 30m, 2h, 1d | `1d` | `tasks agenda` |
 | `--embedding-provider` | `<provider>` | embedding provider: local or openai; flags override profile settings |  | `conversations embed`, `conversations embeddings clear`, `conversations embeddings status`, `conversations related`, `conversations status`, `search conversations` |
@@ -1077,6 +1078,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--join-approval` | `<on\|off>` | people ask to join, and an admin lets them in |  | `chats update` (tg, wa only) |
 | `--json` |  | machine-readable output: one JSON value on stdout, nothing else |  | every command |
 | `--jsonl` |  | machine-readable output: one JSON object per line, for streaming and jq |  | every command |
+| `--keep-data` |  | keep the account's messages on this computer; search still finds them |  | `account remove` |
 | `--kind` | `<kind>` | the kind of link to record; the command lists the supported task and evidence relations |  | `tasks link` |
 | `--kinds` | `<kinds>` | chat kinds: dialog, group; comma-separated, empty for any |  | `replies edit` |
 | `--last` | `<n>` | stop once the newest n messages are held; not with --since. **max's own copy is worded differently until T6 moves the command onto the shared one (e13)** |  | `bot messages sync` (max, tg only), `messages sync`, `tasks scan` |
