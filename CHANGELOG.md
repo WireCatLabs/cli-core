@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.612.0 — 08.11.2026
+
 ### Added
 
 - **Write-time enrichment, off by default.** With the owner's consent, a hosted model reads each note, document and
