@@ -6,6 +6,7 @@ import { contractKind } from "./kinds/contracts.js"
 import { factKind } from "./kinds/fact.js"
 import { invoiceKind, paymentKind } from "./kinds/finance.js"
 import { findingsKind } from "./kinds/findings.js"
+import { identityLinkKind } from "./kinds/identity-link.js"
 import { keyDocumentKind } from "./kinds/key-document.js"
 import { mailFindingsKind } from "./kinds/mail-findings.js"
 import { meetingFindingsKind } from "./kinds/meeting-findings.js"
@@ -164,6 +165,7 @@ export const proposalRegistry = (store: MessageStore): ProposalRegistry => {
     meetingFindingsKind(store),
     taskCloseKind(store),
     sourceReviewKind(store),
+    identityLinkKind(store),
   ])
     registry.register(kind)
   registry.register(actionKind(store, registry.claimed))

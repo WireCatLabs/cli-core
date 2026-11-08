@@ -362,12 +362,15 @@ const OTHERS: Entry[] = [
     "conflict",
     "the owner separated this identity from that person; only the owner links it again",
   ],
-  ["identity.owner-only", "permission_error", "only the owner undoes a merge or splits a person"],
+  ["identity.owner-only", "permission_error", "only the owner undoes a merge, splits a person or confirms a link"],
   [
     "identity.stale",
     "conflict",
-    "an identity of the merge was merged on into another person since; undo that merge first",
+    "the people a merge or a proposed link names changed since; undo the later merge, or propose the link again",
   ],
+  ["identity.rejected", "conflict", "the owner rejected linking these people; nothing proposes the pair again"],
+  validation("identity.same", "the two identities are one person already"),
+  validation("identity-link.dedicated-review", "an identity link is staged and decided through the people review"),
   ["transcription.no-key", "authentication_error", "no OpenAI key is set for transcription"],
   validation("transcription.too-large", "the audio is over the transcription provider's size limit"),
   [

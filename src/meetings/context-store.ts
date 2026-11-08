@@ -41,6 +41,8 @@ export interface ParticipantPersonLinkReceipt extends ParticipantPerson {
   personUid: string
   previousPersonUid: string | null
   changed: boolean
+  /** An agent's association waits for the owner as this `identity_link` proposal; nothing moved. */
+  proposal?: string
 }
 
 /** Mutations must check live scoped ownership, preconditions and targets in the same transaction. */

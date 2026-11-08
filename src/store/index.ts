@@ -94,6 +94,15 @@ export {
   storeHealth,
 } from "./health.js"
 export {
+  IDENTITY_LINK_KIND,
+  IDENTITY_LINK_SIGNALS,
+  type IdentityLinkDecision,
+  type IdentityLinkInput,
+  type IdentityLinkPayload,
+  type IdentityLinkSignal,
+  type MatchScan,
+} from "./identity-links.js"
+export {
   ORGANIZATIONS_QUERY,
   organization,
   PROJECTS_QUERY,
