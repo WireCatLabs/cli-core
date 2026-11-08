@@ -25,8 +25,23 @@ shape of this file.
   the CRM is read), `csvColumnPaths` (`--json=a,b`, or the caller's own default columns) and `printCsv`, with
   `DEAL_CSV_COLUMNS` and the `CsvPage` and `CsvField` types. `deals list` and `leads list` print through them.
 
+### Changed — may break callers
+
+- **A search with no letter or digit is refused** (`validation_error`, "search needs a letter or a digit to look
+  for"). `""`, a lone `?`, `()` or an emoji alone found nothing and said nothing; `-` and `+` alone were refused
+  before as a syntax error. A lone `*` still reads as a wildcard.
+
 ### Fixed
 
+- **A question with a time or a `word:word` in it is searched by its words again.** Without a meaning model,
+  `search all`, `search notes` and `events search` sent "When is the steering committee? Answer as HH:MM" to strict
+  search, which needs every word in one record, so it found nothing. The quoting that keeps `HH:MM` and `10:30`
+  literal made the question look like a quoted phrase; a quoted single word now counts as a word of the question.
+  A quoted phrase of several words still sends the question to strict search.
+- **`search all` says which word found nothing when every word was needed and nothing was found.** For two to
+  eight plain words, each word is looked up alone, only when the answer is empty; `missing` then names the word,
+  such as "every word must be in one record, and nothing in messages, notes holds "xyzzy"", and `SearchAllFound`
+  carries it as `unmatched`. Results and ranking do not change.
 - **Search by meaning and every embed follow the chosen model.** Notes, mail, events, discovery's meaning lane,
   `search all` and the message vectors of `conversations rebuild` used e5-small whatever was set; a CLI with no
   `embedding_model` setting (memo) could not use another model at all.
