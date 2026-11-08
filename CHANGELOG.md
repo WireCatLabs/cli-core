@@ -5,6 +5,15 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Fixed
+
+- **Two pairs of reasons no longer share one message**, so the command audit (`same-error-reason`) passes in a CLI
+  that lists cli-core's reasons, such as b24 and beeline. `oauth.missing` says the profile is not signed in to the
+  provider and `session.missing` that it has no API token saved; `finance.line-amount` names an invoice line and
+  `order.line-amount` an order line. The reason ids and codes are unchanged.
+
 ## 0.607.0 — 08.11.2026
 
 ### Added
