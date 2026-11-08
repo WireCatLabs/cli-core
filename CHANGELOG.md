@@ -72,6 +72,10 @@ shape of this file.
   link of its busier end, such as a deal owner with thousands of deals, because SQLite could not use the
   relationship's unique key. On synthetic data with 10 deal owners, a first sync of 20,000 deals, 10,000 leads and
   20,000 contacts takes 30 s instead of 61 s, and a `--rescan` 21 s instead of 71 s.
+- **A large CRM sync uses a tenth of the memory and a third less time** (#2682). Keeping the involvement index current
+  built a new SQL text for every item it recomputed, so SQLite prepared each one again and the process kept them all.
+  The item's id is now a bound parameter, one statement per kind of item. On the same synthetic data, the 20,000 sync
+  peaks at 0.4 GB instead of 3.7 GB and takes 19 s instead of 30 s, its `--rescan` 12 s instead of 21 s.
 
 ## 0.608.0 — 08.11.2026
 

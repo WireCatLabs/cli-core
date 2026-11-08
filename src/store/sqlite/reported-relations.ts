@@ -82,7 +82,8 @@ type Row = Record<string, unknown>
 
 // links_relationship_key's WHERE, word for word: without it SQLite cannot use that partial index, picks
 // (to_type, to_id) and reads every link of a busy end, such as a deal owner's, for each relationship (#2623).
-const KEYED = "kind IN ('member-of', 'related-to', 'reports-to', 'customer-of', 'partner-of') AND to_id IS NOT NULL"
+export const KEYED =
+  "kind IN ('member-of', 'related-to', 'reports-to', 'customer-of', 'partner-of') AND to_id IS NOT NULL"
 
 const metadataOf = (relation: ReportedRelation) =>
   relation.metadata && Object.keys(relation.metadata).length ? JSON.stringify(relation.metadata) : null
