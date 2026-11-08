@@ -2,13 +2,14 @@ import { CliError } from "@wirecat/cli-base"
 import {
   Context,
   type Emitter,
-  Liquid,
+  type Liquid,
   type Parser,
   Tag,
   type TagToken,
   type Template,
   type TopLevelToken,
 } from "liquidjs"
+import { safeLiquid } from "../render/liquid.js"
 import type { WarningEvent } from "../runs/events.js"
 import type { ReplyRule } from "./rules.js"
 
@@ -94,30 +95,7 @@ export const renderReplyTemplate = async (reply: ReplyRule["reply"], input: Temp
         .map(({ type, value }) => [type, value]),
     )
     const localTime = `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:${parts.second}${parts.timeZoneName?.replace("GMT", "") || "+00:00"}`
-    const engine = new Liquid({
-      ownPropertyOnly: true,
-      strictVariables: true,
-      strictFilters: true,
-      lenientIf: false,
-      parseLimit: limits.parse,
-      renderLimit: limits.milliseconds,
-      memoryLimit: limits.memory,
-      preserveTimezones: true,
-    })
-    for (const name of ["include", "render", "layout"]) {
-      engine.registerTag(
-        name,
-        class extends Tag {
-          constructor(token: TagToken, tokens: TopLevelToken[], liquid: Liquid) {
-            super(token, tokens, liquid)
-            throw new Error("reply templates cannot read files")
-          }
-          render() {
-            return ""
-          }
-        },
-      )
-    }
+    const engine = safeLiquid({ parse: limits.parse, memory: limits.memory, milliseconds: limits.milliseconds })
     engine.registerTag(
       "ai",
       class extends Tag {

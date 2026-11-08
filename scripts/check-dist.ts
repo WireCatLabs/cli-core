@@ -203,3 +203,12 @@ const signIn = credentialStorage({
 signIn.write({ tokens: { refreshToken: "invented", scopes: [] }, client: { clientId: "demo" } })
 if (signIn.read()?.tokens.refreshToken !== "invented") throw new Error("./oauth did not read back an invented sign-in")
 console.log("dist: ./oauth saves and reads an invented sign-in")
+
+const { prepareReport } = await import(join(root, "background/report/render.js"))
+const digest = await prepareReport(
+  JSON.stringify({ format: "wirecat.report/1", kind: "morning-digest", date: "2026-11-06", sections: [] }),
+  { language: "ru", now: Date.parse("2026-11-06T08:00:00Z"), timeZone: "UTC" },
+)
+if (digest?.telegram !== "☀️ <b>Сводка на пятницу, 6 ноября</b>\n\nТихое утро: ничего срочного.")
+  throw new Error("the report templates are absent from dist, or render differently there")
+console.log("dist: a report renders from the templates shipped in dist")

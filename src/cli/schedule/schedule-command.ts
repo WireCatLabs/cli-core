@@ -33,7 +33,9 @@ import { parseDuration } from "../../domain/duration.js"
 import { HOLDER, type MailWaiting } from "../../mail/marks.js"
 import { type AppIdentity, readOnlyLockOf } from "../../ports/app.js"
 import { aheadOf } from "../../services/moment.js"
+import { openCache } from "../../store/open.js"
 import { storePath } from "../../store/path.js"
+import { ownerLanguages } from "../../store/store.js"
 import { type BaseEnvironment, environmentOf, setExitCode } from "../context.js"
 import { grantsAuthority, LOCAL_READ, LOCAL_WRITE, REMOTE_WRITE } from "../effects.js"
 import { type AnswerOutput, itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
@@ -254,6 +256,19 @@ const runCapOf = (argv: readonly string[]): number | null => {
   const at = argv.indexOf("--max-budget-usd")
   const cap = at < 0 ? Number.NaN : Number(argv[at + 1])
   return Number.isFinite(cap) ? cap : null
+}
+
+/** The language a report is rendered in: the store's `owner_languages`, first one; Russian when it cannot be read. */
+const ownerLanguageOf = async (env: NodeJS.ProcessEnv): Promise<string> => {
+  const path = storePath(env)
+  if (!existsSync(path)) return "ru"
+  const database = await openCache(path)
+  try {
+    const table = database.prepare("SELECT 1 FROM sqlite_master WHERE name = 'store_settings'").get()
+    return (table ? ownerLanguages(database)[0] : undefined) ?? "ru"
+  } finally {
+    database.close()
+  }
 }
 
 /**
@@ -600,6 +615,7 @@ export const scheduleCommandFor = ({
         runSchedule(app, system, context.env, scheduleFile(state, scheduleName(name)), {
           timer: timer(),
           agentRuns,
+          ownerLanguage: ownerLanguageOf,
           ...(agentInput ? { agentInput } : {}),
           ...(signal ? { signal } : {}),
         }),
@@ -640,6 +656,7 @@ export const scheduleCommandFor = ({
         runSchedule(app, system, context.env, file, {
           timer: timer(),
           agentRuns,
+          ownerLanguage: ownerLanguageOf,
           ...(agentInput ? { agentInput } : {}),
           untilUnlocked: true,
           ...(signal ? { signal } : {}),
