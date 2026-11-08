@@ -6,7 +6,7 @@ import type { StoreContext } from "./open.js"
 import { codeOf, type Row } from "./record-projection.js"
 import { isDerived } from "./record-relations.js"
 import type { Flag, recordWritesOver } from "./record-writes.js"
-import { read, write } from "./transaction.js"
+import { outsideRehearsal, read, write } from "./transaction.js"
 
 /** One line of a run: its place in the envelope or stream, the record, and why it was refused before the store. */
 export interface RunItem {
@@ -22,7 +22,10 @@ export interface RunOptions {
   options?: EnvelopeOptions
   /** How many entries each list keeps, 1000 by default; counts stay exact. */
   limit?: number
-  /** Every refusal as it happens, the ones past `limit` too. */
+  /**
+   * Every refusal as it happens, the ones past `limit` too. It must not use the store: it runs inside the run's
+   * transaction, and during a dry run its statements are refused (`store.dry-run`).
+   */
   onIssue?: (error: IngestError) => void
 }
 
@@ -56,6 +59,8 @@ export interface RecordsRun {
   unmatched: Unmatched[]
   /** Changed or deleted at the source after its entity was made. */
   flagged: FlaggedRecord[]
+  /** Values that look like identifiers and were kept as data only: a phone without `+` and no `phone_region`. */
+  ignored: { index: number; key: string; at: (string | number)[]; reason: string }[]
   /** A list stopped at `limit`. */
   truncated: boolean
 }
@@ -81,7 +86,7 @@ export const recordRunOver = (context: StoreContext, writes: ReturnType<typeof r
     const proposedTable = `records_run_${runs}_proposed`
     database.exec(
       `CREATE TEMP TABLE ${table} (idx INTEGER NOT NULL, key TEXT NOT NULL UNIQUE, identity TEXT NOT NULL UNIQUE, ` +
-        "record_id INTEGER, flagged TEXT, unmatched TEXT)",
+        "record_id INTEGER, flagged TEXT, unmatched TEXT, ignored TEXT)",
     )
     database.exec(`CREATE TEMP TABLE ${proposedTable} (ref TEXT PRIMARY KEY)`)
     try {
@@ -91,7 +96,7 @@ export const recordRunOver = (context: StoreContext, writes: ReturnType<typeof r
       const issue = (error: IngestError) => {
         if (errors.length < limit) errors.push(error)
         else truncated = true
-        onIssue?.(error)
+        if (onIssue) outsideRehearsal(() => onIssue(error))
       }
       const refused = (error: IngestError) => {
         counts.refused += 1
@@ -136,11 +141,14 @@ export const recordRunOver = (context: StoreContext, writes: ReturnType<typeof r
               const done = write(database, () => writeOne(accountId, source, record, options, proposed))
               counts[done.status] += 1
               database
-                .prepare(`UPDATE temp.${table} SET record_id = ?, flagged = ?, unmatched = ? WHERE key = ?`)
+                .prepare(
+                  `UPDATE temp.${table} SET record_id = ?, flagged = ?, unmatched = ?, ignored = ? WHERE key = ?`,
+                )
                 .run(
                   done.id,
                   done.flagged === undefined ? null : JSON.stringify(done.flagged),
                   done.unmatched === undefined ? null : JSON.stringify(done.unmatched),
+                  done.ignored?.length ? JSON.stringify(done.ignored) : null,
                   record.key,
                 )
               if (done.complete) complete.push(done.id)
@@ -207,6 +215,11 @@ export const recordRunOver = (context: StoreContext, writes: ReturnType<typeof r
           entity: entityRef(row.entity_type, row.entity_id) as string,
           ...(JSON.parse(String(row.flagged)) as Flag),
         }))
+        const ignored: RecordsRun["ignored"] = []
+        for (const row of listed(runRecords, "AND run.ignored IS NOT NULL", (one) => one))
+          for (const one of JSON.parse(String(row.ignored)) as { at: (string | number)[]; reason: string }[])
+            if (ignored.length < limit) ignored.push({ index: Number(row.idx), key: String(row.key), ...one })
+            else truncated = true
         const proposedRefs = listed(
           `SELECT ref, rowid AS position FROM temp.${proposedTable}`,
           "",
@@ -220,6 +233,7 @@ export const recordRunOver = (context: StoreContext, writes: ReturnType<typeof r
           waiting,
           unmatched,
           flagged,
+          ignored,
           truncated,
         }
       })

@@ -21,7 +21,7 @@ export interface IngestOptions {
   dryRun?: boolean
   /** Records per transaction, 1000 by default. */
   chunk?: number
-  /** Every refusal as it happens, also the ones past the receipt's 1000. */
+  /** Every refusal as it happens, also the ones past the receipt's 1000. It must not use the store (see `RunOptions`). */
   onIssue?: (issue: IngestError) => void
 }
 
@@ -49,6 +49,11 @@ export interface IngestReceipt {
    * the owner separated from them (`record.separated`): it waits, and the owner says which one it is.
    */
   unmatched: { key: string; pointer: string; reason: string; candidates: string[] }[]
+  /**
+   * Values that look like an identifier and were kept as data only, never matched: a phone without `+` when the
+   * envelope names no `options.phone_region` (`record.phone-region`).
+   */
+  ignored: { key: string; pointer: string; reason: string }[]
   errors: IngestError[]
   /** A list stopped at 1000 entries; the counts are exact. */
   truncated: boolean
@@ -66,6 +71,7 @@ const emptyReceipt = (dryRun: boolean, errors: IngestError[]): IngestReceipt => 
   waiting: [],
   flagged: [],
   unmatched: [],
+  ignored: [],
   errors,
   truncated: false,
 })
@@ -86,6 +92,11 @@ const receiptOf = (dryRun: boolean, source: EnvelopeSource, run: RecordsRun): In
     pointer: pointerOf("records", index, "fields"),
     reason,
     candidates,
+  })),
+  ignored: run.ignored.map(({ index, key, at, reason }) => ({
+    key,
+    pointer: pointerOf("records", index, ...at),
+    reason,
   })),
   errors: run.errors,
   truncated: run.truncated,

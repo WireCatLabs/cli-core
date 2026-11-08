@@ -10,7 +10,6 @@ import { crmIdentityId } from "./crm.js"
 import { insertProject } from "./knowledge.js"
 import type { StoreContext } from "./open.js"
 import { identitySeparated } from "./person-separation.js"
-import { storePhoneCountries } from "./phone-countries.js"
 import { type Row, refusal } from "./record-projection.js"
 
 /** The strong identifiers a person, organization or project record gives; a name is never one. */
@@ -25,6 +24,8 @@ export interface Identifiers {
   organization: { provider: string; value: string }[]
   /** A project's key, upper-cased. */
   key?: string
+  /** Values that look like an identifier but were not read as one, with why: a phone without `+` and no region. */
+  ignored: { at: (string | number)[]; reason: "record.phone-region" }[]
 }
 
 export type Match =
@@ -41,7 +42,8 @@ const SCHEME = /^(email|domain|tax-id:[a-z]{2}|registration:[a-z]{2})$/
  * Each scheme under a provider of its own: an organization's address is never a person's `email` identity, so a
  * company identifier can never take, or be taken for, a person's mail.
  */
-const providerOf = (scheme: string) => (scheme === "email" ? "org-email" : scheme)
+const ORG_EMAIL = "org-email"
+const providerOf = (scheme: string) => (scheme === "email" ? ORG_EMAIL : scheme)
 
 const domainOf = (value: string) =>
   value
@@ -50,19 +52,16 @@ const domainOf = (value: string) =>
     .replace(/^www\./, "")
 
 /**
- * A phone as E.164, or nothing. Written with `+` or `00` it is international. Without, it is read in the envelope's
- * `phone_region`, else in the `phone_countries` setting, and counts only when exactly one country reads it as valid:
- * `4155550100` is a number in several.
+ * A phone as E.164, `null` for a number written without `+` or `00` when the envelope names no `phone_region`, or
+ * nothing when it is no phone. Only the envelope says which country a national number is from: the store's
+ * `phone_countries` setting reads `4155550100` as Russian, so it never decides an identifier.
  */
-const e164Of = (phone: string, countries: readonly string[]): string | undefined => {
-  const typed = typedPhone(phone, { phoneCountries: countries })
-  if (typed === undefined) return undefined
-  if (/^\s*(\+|00)/.test(phone)) return typed.value
+const e164Of = (phone: string, region: string | undefined): string | null | undefined => {
+  if (/^\s*(\+|00)/.test(phone)) return typedPhone(phone)?.value
+  if (typedPhone(phone) === undefined) return undefined
+  if (region === undefined) return null
   const digits = phone.replace(/\(0\)/, "").replace(/\D/g, "")
-  const readings = new Set(
-    countries.flatMap((country) => nationalPhone(digits, [country], { anyType: true })?.value ?? []),
-  )
-  return readings.size === 1 ? [...readings][0] : undefined
+  return nationalPhone(digits, [region], { anyType: true })?.value
 }
 
 /**
@@ -70,24 +69,30 @@ const e164Of = (phone: string, countries: readonly string[]): string | undefined
  * identifier and stays in the fields, as v1 kept it; a free-mail domain claimed as an organization's is refused.
  */
 export const identifiersOf = (
-  database: CacheDatabase,
   type: IdentityType,
   fields: Row,
   source: EnvelopeSource,
   externalId: string,
   options: EnvelopeOptions = {},
 ): Identifiers => {
-  const found: Identifiers = { emails: [], phones: [], organization: [] }
+  const found: Identifiers = { emails: [], phones: [], organization: [], ignored: [] }
   if (type === "person") {
     found.contact = { provider: source.provider, externalId: crmIdentityId(source, externalId) }
     for (const email of valuesOf(fields.email)) {
       const address = email.trim().toLowerCase()
       if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(address) && !found.emails.includes(address)) found.emails.push(address)
     }
-    const countries = options.phone_region ? [options.phone_region.toLowerCase()] : storePhoneCountries(database)
-    for (const phone of valuesOf(fields.phone)) {
-      const value = e164Of(phone, countries)
-      if (value !== undefined && !found.phones.includes(value)) found.phones.push(value)
+    const region = options.phone_region?.toLowerCase()
+    const phones = Array.isArray(fields.phone) ? fields.phone : [fields.phone]
+    for (const [index, phone] of phones.entries()) {
+      if (typeof phone !== "string") continue
+      const value = e164Of(phone, region)
+      if (value === null)
+        found.ignored.push({
+          at: ["fields", "phone", ...(Array.isArray(fields.phone) ? [index] : [])],
+          reason: "record.phone-region",
+        })
+      else if (value !== undefined && !found.phones.includes(value)) found.phones.push(value)
     }
   }
   if (type === "organization")
@@ -151,7 +156,11 @@ export const entitiesByIdentifiers = (database: CacheDatabase, type: IdentityTyp
         "JOIN organizations o ON o.id = oi.organization_id WHERE o.deleted_at IS NULL AND i.provider = ? " +
         "AND i.external_id = ?",
     )
-    for (const { provider, value } of ids.organization) add(organization.all(provider, value), "id")
+    for (const { provider, value } of ids.organization) {
+      add(organization.all(provider, value), "id")
+      // Mail findings and mentions give a company its address as an `email` identity; it is the same company.
+      if (provider === ORG_EMAIL) add(organization.all("email", value), "id")
+    }
   }
   if (type === "project" && ids.key !== undefined)
     add(database.prepare("SELECT id FROM projects WHERE key = ? AND deleted_at IS NULL").all(ids.key), "id")
@@ -224,6 +233,7 @@ const identityPk = (
 const linkToPerson = (context: StoreContext, person: number, identity: number, source: EnvelopeSource) => {
   const { database, now } = context
   if (database.prepare("SELECT 1 FROM identity_links WHERE identity_id = ?").get(identity)) return
+  if (identitySeparated(context, identity, person)) return
   const at = now()
   database
     .prepare(

@@ -176,7 +176,11 @@ export const recordStoreOver = (context: StoreContext): RecordStore => {
 
   return {
     run: async (source, items, options = {}) =>
-      options.dryRun ? rehearse(database, () => run(source, items, options)) : run(source, items, options),
+      options.dryRun
+        ? rehearse({ database, client: (context.orm as unknown as { $client?: unknown }).$client }, () =>
+            run(source, items, options),
+          )
+        : run(source, items, options),
     get: async (key) =>
       read(database, () => {
         const row = rowOf(key)

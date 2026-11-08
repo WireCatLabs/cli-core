@@ -250,8 +250,24 @@ it("flags a changed person record that names another person's e-mail, and says w
   expect(links).toEqual([{ person_id: Number(bob.ref.split(":")[1]) }])
 })
 
-it("reads a phone without + only in the envelope's region, or when one configured country alone reads it", async () => {
+it("reads a phone without + only in the envelope's phone_region, and reports one it could not read", async () => {
   const { store, sql } = await recordsFixture(handles)
+  const db = sql()
+  const russian = Number(
+    db.prepare("INSERT INTO persons (name, created_at, updated_at) VALUES ('Ru', 1, 1) RETURNING id").get()?.id,
+  )
+  const identity = Number(
+    db
+      .prepare(
+        "INSERT INTO identities (provider, external_id, phone, created_at, updated_at) " +
+          "VALUES ('phone', '+74155550100', '+74155550100', 1, 1) RETURNING id",
+      )
+      .get()?.id,
+  )
+  db.prepare(
+    "INSERT INTO identity_links (identity_id, person_id, method, confidence, created_at, author, updated_at) " +
+      "VALUES (?, ?, 'initial', 1, 1, 'ingest', 1)",
+  ).run(identity, russian)
   const phones = (externalId: string) =>
     sql()
       .prepare(
@@ -260,25 +276,40 @@ it("reads a phone without + only in the envelope's region, or when one configure
       )
       .all(externalId)
       .map((row) => row.external_id)
-  await take(
+  const bare = await take(
     store,
     envelopeOf([
-      upsert("person", "ru", { phone: "8 900 000-00-01" }),
-      upsert("person", "intl", { phone: "+1 415 555 0100" }),
-      upsert("person", "short", { phone: "1234567" }),
+      upsert("person", "us", { name: "US", phone: "4155550100" }),
+      upsert("person", "intl", { phone: ["+1 415 555 0100", "8 900 000-00-01"] }),
     ]),
   )
-  expect(phones("ru")).toEqual(["+79000000001"])
+  expect(bare.ignored).toEqual([
+    { key: "person-us", pointer: "/records/0/fields/phone", reason: "record.phone-region" },
+    { key: "person-intl", pointer: "/records/1/fields/phone/1", reason: "record.phone-region" },
+  ])
+  expect((await store.records.get({ ...SOURCE, type: "person", externalId: "us" }))?.entity).not.toBe(
+    `person:${russian}`,
+  )
+  expect(phones("us")).toEqual([])
   expect(phones("intl")).toEqual(["+14155550100"])
-  expect(phones("short")).toEqual([])
   const regional = await take(
     store,
     envelopeOf([upsert("person", "es", { phone: "600 000 001" })], { options: { phone_region: "ES" } }),
   )
-  expect(regional.errors).toEqual([])
+  expect(regional).toMatchObject({ errors: [], ignored: [] })
   expect(phones("es")).toEqual(["+34600000001"])
   const odd = await take(store, envelopeOf([], { options: { phone_region: "xx" } }))
   expect(odd.errors).toEqual([expect.objectContaining({ pointer: "/options/phone_region", code: "envelope.invalid" })])
+  const plan = sql()
+    .prepare(
+      "EXPLAIN QUERY PLAN SELECT l.person_id FROM identities i JOIN identity_links l ON l.identity_id = i.id " +
+        "WHERE i.provider = 'phone' AND i.external_id = ? UNION " +
+        "SELECT l.person_id FROM identities i JOIN identity_links l ON l.identity_id = i.id WHERE i.phone IN (?, ?)",
+    )
+    .all("a", "a", "a")
+    .map((row) => String(row.detail))
+  expect(plan).toContainEqual(expect.stringContaining("identities_by_phone"))
+  expect(plan.some((step) => step.startsWith("SCAN"))).toBe(false)
 })
 
 it("reads a file that starts with a byte-order mark, as JSONL and as JSON", async () => {
@@ -336,4 +367,96 @@ it("never links a person the owner separated from an identity the record brings"
   )
   expect(receipt.unmatched).toEqual([expect.objectContaining({ reason: "record.separated", candidates: [anna.ref] })])
   expect((await store.records.get({ ...SOURCE, type: "person", externalId: "p1" }))?.entity).toBeNull()
+})
+
+it("refuses a Drizzle read during a dry run, and a write from onIssue fails instead of vanishing", async () => {
+  const { store } = await recordsFixture(handles)
+  let release: () => void = () => undefined
+  const gate = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  async function* lines() {
+    yield JSON.stringify({ schema_version: 1, source: SOURCE })
+    yield JSON.stringify(upsert("organization", "o1", { name: "Dry" }))
+    await gate
+  }
+  const dry = ingestLines(store, lines(), { account: SOURCE.account, dryRun: true, chunk: 1 })
+  await new Promise((resolve) => setTimeout(resolve, 20))
+  // Drizzle wraps what the client throws in its own error, with the refusal as the cause.
+  await expect(store.vectors.vectorStatus({ provider: "telegram", account: "x" }, "1", "m")).rejects.toMatchObject({
+    cause: { details: { reason: "store.dry-run" } },
+  })
+  release()
+  await dry
+
+  let attempt: Promise<unknown> | undefined
+  await ingest(store, envelopeOf([{ key: "x" }]), {
+    account: SOURCE.account,
+    dryRun: true,
+    onIssue: () => {
+      attempt = store.knowledge.addOrganization({ kind: "company", name: "From onIssue" })
+    },
+  })
+  await expect(attempt).rejects.toMatchObject({ details: { reason: "store.dry-run" } })
+  expect(await store.knowledge.addOrganization({ kind: "company", name: "After" })).toMatchObject({ name: "After" })
+})
+
+it("matches an imported company to the one mail already knows by its address, and the other way", async () => {
+  const { store, sql } = await recordsFixture(handles)
+  const db = sql()
+  const known = await store.knowledge.addOrganization({ kind: "company", name: "Acme (from mail)" })
+  const mail = Number(
+    db
+      .prepare(
+        "INSERT INTO identities (provider, external_id, email, created_at, updated_at) " +
+          "VALUES ('email', 'billing@acme.example', 'billing@acme.example', 1, 1) RETURNING id",
+      )
+      .get()?.id,
+  )
+  db.prepare(
+    "INSERT INTO organization_identities (identity_id, organization_id, method, author, created_at, updated_at) " +
+      "VALUES (?, ?, 'mail-finding', 'owner', 1, 1)",
+  ).run(mail, Number(known.id))
+  const email = (value: string) => ({ identifiers: [{ scheme: "email", value }] })
+  await take(store, envelopeOf([upsert("organization", "o1", { name: "Acme", ...email("Billing@Acme.example") })]))
+  expect(await store.records.get({ ...SOURCE, type: "organization", externalId: "o1" })).toMatchObject({
+    entity: known.ref,
+    createdEntity: false,
+  })
+
+  await take(store, envelopeOf([upsert("organization", "o2", { name: "Beta", ...email("hi@beta.example") })]))
+  const made = (await store.records.get({ ...SOURCE, type: "organization", externalId: "o2" }))?.entity
+  await take(store, envelopeOf([upsert("organization", "x9", email("hi@beta.example"))], { account: "erp" }), {
+    account: "erp",
+  })
+  expect((await store.records.get({ ...SOURCE, account: "erp", type: "organization", externalId: "x9" }))?.entity).toBe(
+    made,
+  )
+})
+
+it("never gives an import-made person an identity the owner separated from it", async () => {
+  const { store, sql } = await recordsFixture(handles)
+  await take(store, envelopeOf([upsert("person", "p1", { name: "Anna", email: "anna@example.com" }, { revision: 1 })]))
+  const made = Number((await store.records.get({ ...SOURCE, type: "person", externalId: "p1" }))?.entity?.split(":")[1])
+  const other = knownPerson(sql, "Other", "other@example.com")
+  const db = sql()
+  const phone = Number(
+    db
+      .prepare(
+        "INSERT INTO identities (provider, external_id, created_at, updated_at) VALUES ('phone', '+79000000005', 1, 1) " +
+          "RETURNING id",
+      )
+      .get()?.id,
+  )
+  db.prepare(
+    "INSERT INTO identity_link_events (identity_id, from_person_id, to_person_id, method, created_at, author) " +
+      "VALUES (?, ?, ?, 'manual', 1, 'owner')",
+  ).run(phone, made, Number(other.ref.split(":")[1]))
+  await take(
+    store,
+    envelopeOf([
+      upsert("person", "p1", { name: "Anna", email: "anna@example.com", phone: "+79000000005" }, { revision: 2 }),
+    ]),
+  )
+  expect(sql().prepare("SELECT count(*) AS n FROM identity_links WHERE identity_id = ?").get(phone)?.n).toBe(0)
 })
