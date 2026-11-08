@@ -313,9 +313,10 @@ what other payments, confirmed or proposed, leave open on the invoice allow. A r
 pipeline whose target has no entity keeps the record waiting until it gets one.
 
 A `person`, `organization` or `project` record is linked by one exact strong identifier: an e-mail, an E.164 phone
-(without `+`, only one the envelope's `phone_region` or exactly one `phone_countries` country reads as valid) or the
+(without `+`, only one valid in the envelope's `phone_region`; otherwise kept as data and listed as `ignored`) or the
 source's contact identity for a person, a `{scheme, value}` identity of a known scheme for an organization (an
-e-mail under `org-email`, never a person's), the key for a project. No match makes the entity (`records.created_entity = 1`) with the record's
+e-mail under `org-email`, never a person's, also matching the `email` identity mail gave a company), the key for a
+project. No match makes the entity (`records.created_entity = 1`) with the record's
 identifiers; two or more leave it `unmatched`, with the candidates, for the owner's `store.records.map`; a name never
 matches. The lookup is one function, `entitiesByIdentifiers` (`src/store/sqlite/record-matching.ts`), for the shared
 matcher to take over. `store.records.match` runs it for a whole account. The owner may remap a record whose entity the
