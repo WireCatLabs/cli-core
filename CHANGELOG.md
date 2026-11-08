@@ -106,9 +106,6 @@ shape of this file.
   `assignee:` and preparation, and assigning the old uid to a task the current person holds is a no-op.
   A source's sync that reports a relationship on the current person withdraws what it reported on the old one, so
   the relationship shows once.
-
-### Fixed
-
 - **`account remove` is in the messenger parity manifest** (`parity.json`), with `--keep-data`, `--delete-data`
   and `--dry-run`, so tg, max and wa can adopt it without failing `parity:check`.
 
