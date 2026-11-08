@@ -38,7 +38,7 @@ const domainOf = (value: string) =>
     .toLowerCase()
     .replace(/^www\./, "")
 
-/** A record's identifiers, refused (`record.identifier`) when one cannot be read as the scheme it claims. */
+/** A record's identifiers; a free-mail domain claimed as an organization's is refused (`record.identifier`). */
 export const identifiersOf = (
   database: CacheDatabase,
   type: IdentityType,
@@ -49,22 +49,16 @@ export const identifiersOf = (
   const found: Identifiers = { emails: [], phones: [], organization: [] }
   if (type === "person") {
     found.contact = { provider: source.provider, externalId: crmIdentityId(source, externalId) }
-    for (const [index, email] of listOf(fields.email).entries()) {
+    // v1 kept a sheet's junk in these columns: what does not read as an address or a number is no identifier,
+    // and stays in the fields.
+    for (const email of listOf(fields.email)) {
       const address = email.trim().toLowerCase()
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address))
-        refusal(`${email} is not an e-mail address`, "record.identifier", ["fields", "email", index])
-      found.emails.push(address)
+      if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)) found.emails.push(address)
     }
     const phoneCountries = storePhoneCountries(database)
-    for (const [index, phone] of listOf(fields.phone).entries()) {
+    for (const phone of listOf(fields.phone)) {
       const value = typedPhone(phone, { phoneCountries })?.value
-      if (value === undefined || !value.startsWith("+"))
-        refusal(
-          `${phone} is not a phone number in international form, nor one the phone_countries setting reads`,
-          "record.identifier",
-          ["fields", "phone", index],
-        )
-      found.phones.push(value as string)
+      if (value?.startsWith("+")) found.phones.push(value)
     }
   }
   if (type === "organization") {
@@ -103,11 +97,12 @@ export const entitiesByIdentifiers = (database: CacheDatabase, type: IdentityTyp
         "WHERE (i.provider = 'email' AND lower(i.external_id) = ?) OR lower(i.email) = ?",
     )
     for (const email of ids.emails) add(person.all(email, email), "person_id")
+    // A messenger or CRM contact keeps its number raw in identities.phone, with or without the +.
     const phone = database.prepare(
       "SELECT DISTINCT l.person_id FROM identities i JOIN identity_links l ON l.identity_id = i.id " +
-        "WHERE i.provider = 'phone' AND i.external_id = ?",
+        "WHERE (i.provider = 'phone' AND i.external_id = ?) OR i.phone IN (?, ?)",
     )
-    for (const value of ids.phones) add(phone.all(value), "person_id")
+    for (const value of ids.phones) add(phone.all(value, value, value.slice(1)), "person_id")
     if (ids.contact)
       add(
         database
@@ -143,11 +138,10 @@ export const separatedByOwner = (_database: CacheDatabase, _person: number, _ids
 export const matchOf = (database: CacheDatabase, type: IdentityType, ids: Identifiers): Match => {
   const found = entitiesByIdentifiers(database, type, ids)
   if (found.length === 0) return { outcome: "none" }
-  if (found.length > 1)
-    return { outcome: "ambiguous", ids: found, reason: `the identifiers belong to ${found.length} ${type} entities` }
+  if (found.length > 1) return { outcome: "ambiguous", ids: found, reason: "record.ambiguous" }
   const id = found[0] as number
   if (type === "person" && separatedByOwner(database, id, ids))
-    return { outcome: "ambiguous", ids: found, reason: "the owner separated these identities from that person" }
+    return { outcome: "ambiguous", ids: found, reason: "record.ambiguous" }
   return { outcome: "one", id }
 }
 

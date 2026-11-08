@@ -469,7 +469,7 @@ and contacts. `openOf` builds a ref's open command from it, so a new CLI's refs 
 side has one projector per type (`src/store/sqlite/record-projectors.ts`: money types in `record-projectors-money.ts`,
 direct ones in `record-projectors-direct.ts`), and person, organization and project are matched or made from their
 identifiers (`record-matching.ts`). `store.records.run` writes a stream of records per chunk, checks duplicates in a
-`TEMP` table and reads the receipt's lists from `records` at the end, so memory holds one chunk; a dry run is one
+`TEMP` table and reads the receipt's lists from `records` at the end, holding one chunk at a time; a dry run is one
 rolled-back transaction (`rehearse`, `src/store/sqlite/transaction.ts`). The contract is
 [`docs/storage/records-envelope.md`](../storage/records-envelope.md).
 

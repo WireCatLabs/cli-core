@@ -55,7 +55,8 @@ const saveDeal = (kind: DealKind) => (projection: Projection, tools: ProjectionT
   }
   const saved = tools.crm.saveItemRow(source, accountId, kind, item, tools.context.now(), {
     organization: idOf(oneOf(projection, "organization"), tools) ?? null,
-    project: idOf(oneOf(projection, "project"), tools) ?? null,
+    // Left out, the project stays: the owner may have set one on the deal here.
+    project: idOf(oneOf(projection, "project"), tools),
     ...(kind === "lead" ? { deal: idOf(oneOf(projection, "deal"), tools) ?? null } : {}),
     author: authorActor(tools.context, IMPORTER).actor,
     source: written(source).source,

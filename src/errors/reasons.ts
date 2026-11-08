@@ -228,10 +228,8 @@ const OTHERS: Entry[] = [
   validation("finance.total", "the invoice's total is not the sum of its lines"),
   validation("finance.unallocate", "a rejected or deleted payment's allocations are not taken back"),
   validation("record.entity", "the entity or proposal the record stands for was refused"),
-  validation(
-    "record.identifier",
-    "an identifier of the record is not one: a malformed e-mail, phone or a free-mail domain",
-  ),
+  validation("record.ambiguous", "the record's identifiers point at more than one entity; the owner says which"),
+  validation("record.identifier", "a free-mail domain names no organization: anyone has an address there"),
   ["record.map-owner-only", "permission_error", "only the owner says which entity a source record is"],
   validation("record.map-type", "a record maps only to an entity of its own type"),
   validation("record.mapped", "the record already stands for another entity"),

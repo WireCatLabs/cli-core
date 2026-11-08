@@ -491,30 +491,13 @@
       "type": "object",
       "properties": {
         "name": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 200,
           "description": "The person's name"
         },
         "email": {
-          "type": ["string", "array"],
-          "items": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 320
-          },
-          "maxItems": 20,
-          "description": "E-mail addresses: an exact one links the record to the one person who has it"
+          "description": "E-mail addresses, one or a list: an exact one links the record to the one person who has it"
         },
         "phone": {
-          "type": ["string", "array"],
-          "items": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 320
-          },
-          "maxItems": 20,
-          "description": "Phone numbers: an exact one, in E.164 after reading, links like an e-mail"
+          "description": "Phone numbers, one or a list: an exact one, read to E.164, links like an e-mail"
         }
       },
       "additionalProperties": true
@@ -523,9 +506,6 @@
       "type": "object",
       "properties": {
         "name": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 200,
           "description": "The organization's name"
         },
         "identifiers": {
@@ -558,21 +538,12 @@
       "type": "object",
       "properties": {
         "name": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 200,
           "description": "The project's name"
         },
         "key": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 40,
           "description": "The project's key: an existing project with it is this one"
         },
         "description": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 2000,
           "description": "What the project is"
         }
       },
