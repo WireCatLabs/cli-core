@@ -14,6 +14,7 @@ import type {
 import type { CacheDatabase, CacheStatement } from "../driver.js"
 import { NORMALIZER_VERSION, normalize } from "../normalize.js"
 import type { AccountKey, DeletionScope } from "../types.js"
+import { withoutBotTokensIn } from "./bot-tokens.js"
 import { findChatPk } from "./chats.js"
 import { applyCounterObservations } from "./counters.js"
 import { and, eq, isNull, type Placeholder, sql } from "./drizzle/core.js"
@@ -153,11 +154,12 @@ export const upsertMessage = (
   key: AccountKey,
   accountKey: number,
   chatKey: number,
-  message: Message,
+  received: Message,
   via: string,
   seenAt?: number,
 ): boolean => {
   const { orm, now } = context
+  const message = withoutBotTokensIn(received)
   const statements = statementsOf(orm)
   const sender =
     message.senderId === null || message.senderIsChat

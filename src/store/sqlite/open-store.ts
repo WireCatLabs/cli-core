@@ -8,6 +8,7 @@ import { storeCapable } from "../open.js"
 import { refuseOwnerStoreInTests, storePath } from "../path.js"
 import { sharedConfigPath } from "../shared-config.js"
 import { backfillNormalized, pendingNormalization } from "./backfill.js"
+import { maskStoredBotTokens } from "./bot-tokens.js"
 import { fillFiles } from "./files.js"
 import { fillFolded } from "./folded.js"
 import { fillJoinKeys } from "./join-keys.js"
@@ -124,6 +125,7 @@ export const openStoreContext = async (options: StoreOptions = {}): Promise<Stor
       moveSuggestedLinks(database, now)
       movePaymentFacts({ ...opened, now, decisions })
       purgeTestAccounts({ ...opened, now, decisions }, warn)
+      maskStoredBotTokens({ ...opened, now, decisions })
       const pending = pendingNormalization(database)
       if (pending > 0 && pending <= BACKFILL_ON_OPEN) backfillNormalized(database)
       followDefaultStemmers(database, now)
