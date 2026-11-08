@@ -1,3 +1,4 @@
+export { BUSINESS_KINDS, type BusinessKind } from "../domain/business.js"
 export type { CounterField, CounterObservations, CounterState } from "../domain/counters.js"
 export type { RetentionOptions } from "../domain/retention.js"
 export type { AccountAccounts, AccountsStore } from "./accounts.js"
@@ -25,9 +26,8 @@ export {
 } from "./sqlite/attachment-texts.js"
 export { pendingNormalization } from "./sqlite/backfill.js"
 export {
-  BUSINESS_KINDS,
+  BUSINESS_FIND_MAX,
   type BusinessHit,
-  type BusinessKind,
   type BusinessSearch,
   type BusinessSearchStore,
   type BusinessSource,

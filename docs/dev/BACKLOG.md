@@ -25,6 +25,11 @@ None open.
 
 - **CORE-48** · P2 · When a command can delete a phone account's calls calendar, a phone import must not bring it
   back (owner wins); add the refusal then. `src/store/sqlite/record-projectors-phone.ts` (`callsCalendar`), #2661.
+- **CORE-49** · P2 · The `crm` lane's `hasMore` is false past 500 matches: `searchAll` reads at most 500 deals and
+  leads, so a page deeper than that says nothing follows. Read `offset + limit + 1`, as the `business` lane does.
+  `src/services/search-all.ts` (crm branch), `src/store/sqlite/deals.ts` (`find`).
+- **CORE-50** · P2 · `deals.find` matches a word inside another ("get" finds "Widget"); match at a word start, as the
+  `business` lane does (`startsAWord`, `src/store/sqlite/business-search.ts`). `src/store/sqlite/deals.ts` (`find`).
 - **CORE-42** · P2 · Take cli-base ≥ 0.66.1 so a bare number counts as a word of a `--discover` question: today any
   number ("after 21 days") sends the question to strict search, which usually finds nothing (cli-base#409). Moves the
   `@wirecat/cli-base` peer range to 0.66, so the tools built on Core move with it. `src/services/messages-discovery.ts`.

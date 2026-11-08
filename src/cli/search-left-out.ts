@@ -8,6 +8,8 @@ import { settingsFor } from "./settings.js"
 const LIST_KEYS = {
   deal: "deals.list",
   lead: "leads.list",
+  // No command lists business data across its types yet; the key is the lane's own, so a profile can turn it off.
+  business: "business.list",
   messages: "messages.list",
   mail: "mail.list",
   notes: "notes.list",

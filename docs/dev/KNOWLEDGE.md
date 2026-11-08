@@ -221,15 +221,22 @@ wallets, deals, leads, pipelines and a contract without a value are written dire
 balance is the owner's only.
 
 **Search.** `search all`'s `business` lane (`store.business.find`, `src/store/sqlite/business-search.ts`) finds
-invoices, payments, orders, contracts, subscriptions, products and wallets by the words of their numbers and names:
+invoices, payments, orders, contracts, subscriptions, products and wallets by words of their numbers and names, each
+matched where a word starts ("get" never finds "Widget"):
 an invoice's number and counterparty, a payment's reference and payer or payee, an order's number, shop and line
 descriptions, a contract's name and number, a subscription's name, a product's name and SKU, a wallet's name and
 bank. It folds them in memory per query, as `deals.find` folds titles (about 0.1 s for 10,000 rows of each type);
 there is no index. Transactions are left out (a statement gives tens of thousands a year; `transactions list`
-filters them), and so are `custom:` records, rejected rows and deleted ones. Each hit carries its `review` and, when
-an import made it, its source record (`provider`, `account`, `external_id`; the oldest record when several). A scope
-keeps what imports of the named accounts made; the owner's and agents' own rows (`business:internal`) are read only
-without one.
+filters them), and so are `custom:` records, rejected rows and deleted ones. Each hit carries its `review`.
+Whether an import made a row is the row's own `source` (`import:<provider>`), not whether records point at it: the
+owner's and agents' rows are `business:internal`, even when the owner mapped a record onto one. An imported row's
+account is decided by one record, the oldest live record that maps to it, else the oldest deleted one; a record
+mapped onto it later never moves it. That record is the hit's `source_record` (`provider`, `account`,
+`external_id`). An imported row whose records all moved to other entities keeps its provider with an empty account.
+A scope keeps the imported rows whose deciding record is in it; the rest are read only without one.
+`store.business.accounts()` and `--source` skip an account whose records are all deleted. A profile that denies
+`business.list` (or `business`) leaves the lane out of `search all`, which names it under `missing`, as `deals.list`
+does for deals.
 
 ### Relationships a source reports
 

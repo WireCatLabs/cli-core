@@ -80,11 +80,15 @@ shape of this file.
   sending it again brings them back.
 - **`search all` has a `business` lane.** `searchAll` finds invoices, payments, orders, contracts, subscriptions,
   products and wallets by the words of their numbers and names (an invoice's counterparty, a payment's payer or payee,
-  an order's shop and lines), folded in memory like the `crm` lane, with no index. Each hit carries its `review`
-  (`proposed` or `confirmed`) and, when an import made it, `source_record` (`provider`, `account`, `external_id`);
-  the owner's own rows are `business:internal`. `scope.business` and `--source` read the import accounts they name.
-  Transactions, `custom:` records and rejected rows are left out. `store.business.find` and `store.business.accounts`
-  back it.
+  an order's shop and lines), each word where a word starts, folded in memory like the `crm` lane, with no index.
+  Each hit carries its `review` (`proposed` or `confirmed`). A row an import made (its `source` is
+  `import:<provider>`) carries `source_record` (`provider`, `account`, `external_id`): the oldest live record that
+  maps to it, else the oldest deleted one, which also decides its account; the owner's and agents' rows are
+  `business:internal`. `scope.business` and `--source` read the import accounts they name. Transactions, `custom:`
+  records and rejected rows are left out. `store.business.find` and `store.business.accounts` back it.
+- **Permission key `business.list`** (or `business`): a profile that denies it leaves the `business` lane out of
+  `search all` and says so under `missing`, as `deals.list` does for deals (`deniedKinds`). memo reads the lane by
+  default once it takes this release; that key turns it off.
 
 ### Changed — may break callers
 
@@ -92,6 +96,9 @@ shape of this file.
   left out, and `SearchAllItem.kind` and the `hit` entity's `kind` take `invoice`, `payment`, `order`, `contract`,
   `subscription`, `product` and `wallet`. A switch over hit kinds needs those branches; pass `only` to keep the old
   lanes. The source tools' `search all` (`SOURCE_SEARCHED`) is unchanged.
+- **`MessageStore.business` is a new required member**: a hand-made store object or test double needs it.
+- **`SearchedResource`, `ResourceWithMeetings` and `SearchAllRequest.scope` take `business`**, and the strict `hit`
+  entity takes `review` and `source_record`; an exhaustive switch or a copy of the schema needs them.
 
 - **`EntryEventType` has `call`**, and `events list event_type:` takes it. A switch over the kinds needs a branch.
 - **`kindIn` and `ListedAccount.kind` name a provider's first kind only.** A provider may hold several (`kindsIn`,

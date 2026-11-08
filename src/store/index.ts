@@ -6,6 +6,7 @@ export type {
   ContextEvidenceSender,
   ContextSource,
 } from "../context/evidence.js"
+export { BUSINESS_KINDS, type BusinessKind } from "../domain/business.js"
 export {
   FACT_STATUSES,
   FACT_TYPES,
@@ -165,14 +166,8 @@ export type {
   ContractsStore,
   ContractUpdate,
 } from "./sqlite/business-contracts.js"
-export type {
-  BusinessHit,
-  BusinessKind,
-  BusinessSearch,
-  BusinessSearchStore,
-  BusinessSource,
-} from "./sqlite/business-search.js"
-export { BUSINESS_KINDS } from "./sqlite/business-search.js"
+export type { BusinessHit, BusinessSearch, BusinessSearchStore, BusinessSource } from "./sqlite/business-search.js"
+export { BUSINESS_FIND_MAX } from "./sqlite/business-search.js"
 export type { CatalogActor, CatalogEntry, CatalogInput, CatalogQuery, CatalogStore } from "./sqlite/catalog.js"
 export { CATALOG_QUERY } from "./sqlite/catalog.js"
 export type { ChatMetadata } from "./sqlite/chats.js"

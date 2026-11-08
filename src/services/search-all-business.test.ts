@@ -1,3 +1,4 @@
+import type { DatabaseSync } from "node:sqlite"
 import { afterEach, describe, expect, it } from "vitest"
 import type { AccountKey } from "../store/store.js"
 import { envelopeOf, recordsFixture, type TestStore, take, upsert } from "../testing/records.js"
@@ -14,7 +15,7 @@ const ALPHA = { provider: "sheet", account: "alpha" }
 const BETA = { provider: "sheet", account: "beta" }
 const org = (role: string, id = "c-1") => ({ role, type: "organization", external_id: id })
 
-/** One record of every lane type, each findable by "nimbus", plus a transaction and a custom record that must not be. */
+/** One record of each lane type, each found by "nimbus", and a transaction and a custom record that must not be. */
 const ALPHA_RECORDS = [
   upsert("organization", "c-1", { name: "Nimbus Labs" }),
   upsert(
@@ -76,8 +77,10 @@ const BETA_RECORDS = [
   ),
 ]
 
-const fixture = async (): Promise<TestStore> => {
-  const { store } = await recordsFixture(handles)
+const fixture = async (): Promise<TestStore> => (await withSql()).store
+
+const withSql = async () => {
+  const { store, sql } = await recordsFixture(handles)
   for (const [account, records] of [
     [ALPHA.account, ALPHA_RECORDS],
     [BETA.account, BETA_RECORDS],
@@ -86,7 +89,19 @@ const fixture = async (): Promise<TestStore> => {
     expect(receipt).toMatchObject({ refused: 0, errors: [] })
   }
   await store.products.add({ by: "owner", name: "Nimbus switch" })
-  return store
+  return { store, sql: sql() }
+}
+
+/** A record of `account` that points at a row already there, as the owner's later mapping leaves it. */
+const mapOnto = (database: DatabaseSync, account: string, ref: string) => {
+  const [type, id] = ref.split(":")
+  database
+    .prepare(
+      "INSERT INTO records (account_id, type, external_id, fields, fingerprint, batch_id, entity_type, entity_id, " +
+        "created_at, updated_at) SELECT id, ?, 'mapped', '{}', 'f', 'b', ?, ?, 9e12, 9e12 FROM accounts " +
+        "WHERE provider = 'sheet' AND external_id = ?",
+    )
+    .run(type as string, type as string, Number(id), account)
 }
 
 const refOf = async (store: TestStore, type: string, externalId: string, account = ALPHA.account) =>
@@ -202,6 +217,59 @@ describe("search all, business lane", () => {
         reason: expect.stringMatching(/names/),
       }),
     ])
+  })
+
+  it("keeps a row in the account of its oldest live record: a record mapped onto it later never moves it", async () => {
+    const { store, sql } = await withSql()
+    const invoice = await refOf(store, "invoice", "i-1")
+    mapOnto(sql, BETA.account, invoice)
+    const refs = async (within?: AccountKey[]) => (await business(store, "INV-77", within)).items.map(({ ref }) => ref)
+    expect(await refs([BETA])).toEqual([])
+    expect(await refs([ALPHA])).toEqual([invoice])
+    expect((await business(store, "INV-77")).items[0]).toMatchObject({ account: "alpha" })
+  })
+
+  it("falls back to a deleted record only when no live one is left; an all-deleted account is not listed", async () => {
+    const { store } = await withSql()
+    const remove = (account: string, type: string, externalId: string) =>
+      take(
+        store,
+        envelopeOf([{ key: "d", type, external_id: externalId, operation: "delete" }], {
+          provider: "sheet",
+          account,
+          batch: "b2",
+        }),
+        { account },
+      )
+    await remove(ALPHA.account, "invoice", "i-1")
+    expect((await business(store, "INV-77", [ALPHA])).items[0]).toMatchObject({
+      sourceRecord: { account: "alpha", externalId: "i-1" },
+    })
+    await remove(BETA.account, "invoice", "i-1")
+    expect(await store.business.accounts()).toEqual([ALPHA])
+  })
+
+  it("tells an imported row from the owner's by the row's own source, not by the records pointing at it", async () => {
+    const { store, sql } = await withSql()
+    const invoice = await refOf(store, "invoice", "i-1")
+    sql
+      .prepare("UPDATE records SET entity_id = NULL, entity_type = NULL WHERE type = 'invoice' AND external_id = 'i-1'")
+      .run()
+    const [moved] = (await business(store, "INV-77")).items
+    expect(moved).toMatchObject({ ref: invoice, provider: "sheet", account: "" })
+    expect(moved).not.toHaveProperty("sourceRecord")
+    expect((await business(store, "INV-77", [ALPHA])).items).toEqual([])
+    const own = (await business(store, "switch")).items[0]?.ref as string
+    mapOnto(sql, ALPHA.account, own)
+    expect((await business(store, "switch")).items[0]).toMatchObject({ provider: "business", account: "internal" })
+    expect((await business(store, "switch", [ALPHA])).items).toEqual([])
+  })
+
+  it("matches a word where a word starts, never inside one", async () => {
+    const store = await fixture()
+    expect((await business(store, "outer")).items).toEqual([])
+    expect((await business(store, "rout")).items.map(({ kind }) => kind)).toEqual(["product"])
+    expect((await business(store, "77")).items.map(({ kind }) => kind)).toEqual(["invoice"])
   })
 
   it("follows --source and account groups to the import accounts they name, whatever their provider", async () => {

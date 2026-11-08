@@ -3,6 +3,9 @@ import { dayMonth, type FinanceReview, type MoneyDirection, notes } from "./fina
 import { moneyLabel } from "./money.js"
 
 export const CATALOG_KINDS = ["product", "service"] as const
+/** What the `business` lane of `search all` reads; transactions are too many to fold per query. */
+export const BUSINESS_KINDS = ["invoice", "payment", "order", "contract", "subscription", "product", "wallet"] as const
+export type BusinessKind = (typeof BUSINESS_KINDS)[number]
 export const CONTRACT_KINDS = ["sale", "purchase", "service", "lease", "employment", "nda", "license", "other"] as const
 export const CONTRACT_STATUSES = ["draft", "active", "ended", "terminated"] as const
 export const PERIOD_UNITS = ["day", "week", "month", "year"] as const

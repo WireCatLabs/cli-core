@@ -2,6 +2,7 @@ import type { ErrorCode } from "@wirecat/cli-base"
 import type { Meta, Missing, NextStep } from "@wirecat/cli-base/standards"
 import type { InferOutput } from "valibot"
 import { hitFiles } from "../../domain/attachments.js"
+import { BUSINESS_KINDS, type BusinessKind } from "../../domain/business.js"
 import { formatLocator, parseLocator } from "../../domain/locator.js"
 import { senderIsMe } from "../../domain/models.js"
 import { DEFAULT_TEXT_MODEL } from "../../embeddings/models.js"
@@ -15,7 +16,7 @@ import type { MeaningSkipped } from "../../services/messages-discovery.js"
 import type { FoundNote, NotesFoundOf } from "../../services/notes-search.js"
 import type { SearchAllItem } from "../../services/search-all.js"
 import type { MeetingSearchItem, SearchAllIncludingMeetingsFound } from "../../services/search-all-meetings.js"
-import { BUSINESS_KINDS, type BusinessKind, type StoredHistorySkip } from "../../store/store.js"
+import type { StoredHistorySkip } from "../../store/store.js"
 import { type ListBody, listOf } from "../envelope.js"
 import { nextStep } from "../steps.js"
 import { archiveSummary } from "./archive-summary.js"
@@ -332,12 +333,12 @@ const DOCUMENT_HIT_UNTRUSTED = ["title", "excerpt"]
 export const noteHitItem = (hit: FoundNote): NoteHitItem =>
   defined({ ...hit, untrusted: hit.kind === "document" ? DOCUMENT_HIT_UNTRUSTED : undefined })
 
-/** The text of each kind of `search all` hit that someone other than the owner may have written. */
 // Numbers and names come from the other side's documents or an import.
 const BUSINESS_UNTRUSTED = Object.fromEntries(
   BUSINESS_KINDS.map((kind) => [kind, ["title", "excerpt", "source_record.external_id"]]),
 ) as Record<BusinessKind, string[]>
 
+/** The text of each kind of `search all` hit that someone other than the owner may have written. */
 const ALL_HIT_UNTRUSTED: Record<HitItem["kind"], string[] | undefined> = {
   message: ["title", "excerpt", "sender_name", "attachments.name"],
   mail: ["title", "excerpt", "sender_name", "attachments.name"],
