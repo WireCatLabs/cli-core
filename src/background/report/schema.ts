@@ -98,7 +98,7 @@ type TextField = keyof typeof TEXT_LIMITS
 const REQUIRED: Record<ItemType, readonly (keyof ReportItem)[]> = {
   reply: ["who", "topic", "action", "since"],
   question: ["who", "topic", "action"],
-  task: ["topic", "due"],
+  task: ["topic"],
   fact: ["topic", "detail"],
   risk: ["topic", "detail", "action"],
   money: ["who", "topic", "amount"],

@@ -34,7 +34,7 @@ Plain text: the terminal, latest.txt, the desktop notice, the email's plain part
     {%- case item.type -%}
       {%- when "reply" %}{{ item.who }} · {{ item.topic }} — {{ item.action }}
       {%- when "question" %}{{ item.who }} спрашивает: {{ item.action }}
-      {%- when "task" %}{{ item.topic }} — {{ due }}
+      {%- when "task" %}{{ item.topic }}{% if due != "" %} — {{ due }}{% elsif item.who %} — {{ item.who }}{% endif %}
       {%- when "fact" %}{{ item.topic }}: {{ item.detail }}
       {%- when "risk" %}{{ item.topic }}: {{ item.detail }} → {{ item.action }}
       {%- when "money" %}{{ item.amount.text }} · {{ item.who }} · {{ item.topic }}{% if item.action %} — {{ item.action }}{% endif %}
@@ -52,7 +52,8 @@ Plain text: the terminal, latest.txt, the desktop notice, the email's plain part
       {%- if due != "" and "risk,money,decision" contains item.type %}{{ sep }}{{ due }}{% assign sep = " · " %}{% endif -%}
       {%- if item.action and "task,meeting" contains item.type %}{{ sep }}{{ item.action }}{% assign sep = " · " %}{% endif -%}
       {%- if item.detail and "task,money,meeting,decision" contains item.type %}{{ sep }}{{ item.detail }}{% assign sep = " · " %}{% endif -%}
-      {%- if item.who and "task,fact,risk,decision" contains item.type %}{{ sep }}{{ item.who }}{% assign sep = " · " %}{% endif -%}
+      {%- if item.who and "fact,risk,decision" contains item.type %}{{ sep }}{{ item.who }}{% assign sep = " · " %}{% endif -%}
+      {%- if item.who and item.type == "task" and due != "" %}{{ sep }}{{ item.who }}{% assign sep = " · " %}{% endif -%}
       {%- if item.channel %}{{ sep }}
         {%- case item.channel -%}
           {%- when "telegram" %}Telegram{% when "max" %}MAX{% when "whatsapp" %}WhatsApp

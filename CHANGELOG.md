@@ -31,6 +31,8 @@ shape of this file.
   (4)", zero groups left out. A `health[]` entry takes `account`, `reason` (`sync-failed`, `no-schedule`, `quiet`) and
   `since`: "🛠 Telegram (@owner): синхронизация падает с 6 ноября · исправить". An entry with a reason is shown
   whatever its `stale_hours`; a document without the new fields reads as before.
+- **A `task` item needs only its `topic`.** A task created since the last digest may have no due date; it shows no
+  deadline phrase, and its person goes on the first line: "📌 Договор с подрядчиком — Пётр Белов".
 - **Each report run keeps its checked document** as `runs/<time>.report.json` beside the run's `.md`, with refs and
   without `links` or `internal`, for Desktop to render.
 

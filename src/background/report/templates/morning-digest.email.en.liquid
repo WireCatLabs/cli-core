@@ -37,7 +37,7 @@ of the view model. No colour on the body: the grey (#8a8a8a) and the link blue (
     {%- case item.type -%}
       {%- when "reply" %}<b>{{ item.who }} · {{ item.topic }}</b> — {{ item.action }}
       {%- when "question" %}<b>{{ item.who }}</b> asks: {{ item.action }}
-      {%- when "task" %}<b>{{ item.topic }}</b> — {{ due }}
+      {%- when "task" %}<b>{{ item.topic }}</b>{% if due != "" %} — {{ due }}{% elsif item.who %} — {{ item.who }}{% endif %}
       {%- when "fact" %}<b>{{ item.topic }}</b>: {{ item.detail }}
       {%- when "risk" %}<b>{{ item.topic }}</b>: {{ item.detail }} → {{ item.action }}
       {%- when "money" %}<b>{{ item.amount.text }} · {{ item.who }} · {{ item.topic }}</b>{% if item.action %} — {{ item.action }}{% endif %}
@@ -55,7 +55,8 @@ of the view model. No colour on the body: the grey (#8a8a8a) and the link blue (
       {%- if due != "" and "risk,money,decision" contains item.type %}{{ sep }}{{ due }}{% assign sep = " · " %}{% endif -%}
       {%- if item.action and "task,meeting" contains item.type %}{{ sep }}{{ item.action }}{% assign sep = " · " %}{% endif -%}
       {%- if item.detail and "task,money,meeting,decision" contains item.type %}{{ sep }}{{ item.detail }}{% assign sep = " · " %}{% endif -%}
-      {%- if item.who and "task,fact,risk,decision" contains item.type %}{{ sep }}{{ item.who }}{% assign sep = " · " %}{% endif -%}
+      {%- if item.who and "fact,risk,decision" contains item.type %}{{ sep }}{{ item.who }}{% assign sep = " · " %}{% endif -%}
+      {%- if item.who and item.type == "task" and due != "" %}{{ sep }}{{ item.who }}{% assign sep = " · " %}{% endif -%}
       {%- if item.channel %}{{ sep }}
         {%- case item.channel -%}
           {%- when "telegram" %}Telegram{% when "max" %}MAX{% when "whatsapp" %}WhatsApp

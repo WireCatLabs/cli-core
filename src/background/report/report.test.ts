@@ -91,6 +91,7 @@ const SECTIONS = [
       },
       { type: "task", topic: "Акт сверки для «Северного ветра»", due: "2026-11-04", refs: ["task:80"] },
       { type: "task", topic: "Смета «Ремонт офиса»", due: "2026-11-06T18:00:00+03:00", who: "Марина Орлова" },
+      { type: "task", topic: "Договор с подрядчиком", who: "Пётр Белов", refs: ["task:81"] },
     ],
   },
   {
@@ -168,6 +169,7 @@ describe("links, task groups, sync health and the footer", () => {
       "message",
       "chat",
       "task",
+      "task",
       "tasks",
       "tasks",
       "tasks",
@@ -191,6 +193,18 @@ describe("links, task groups, sync health and the footer", () => {
     expect(text).toContain("🛠 MAX (старый аккаунт 394…): нет расписания синхронизации\n🛠 MAX не обновлялся 2 дня")
     expect(text.split("\n").at(-1)).toBe(
       "Просмотрено за 24 ч: Telegram, MAX, WhatsApp, почта (4 ящика) · 31 чат, 12 писем, 17 задач",
+    )
+  })
+
+  it("shows a task with no due date with no deadline phrase, its person on the first line", async () => {
+    const telegram = (await renderReport(viewOf(digest()), "telegram")).text
+    expect(telegram).toContain(
+      '📌 <b>Договор с подрядчиком</b> — Пётр Белов\n<a href="https://wirecat.dev/o#/v1/task/81">открыть</a>\n',
+    )
+    const text = (await renderReport(viewOf(digest(), "en"), "text")).text
+    expect(text).toContain("📌 Договор с подрядчиком — Пётр Белов\n")
+    expect(parseReport(digest([{ kind: "today", items: [{ type: "task", topic: "Без срока" }] }]))).not.toHaveProperty(
+      "invalid",
     )
   })
 
