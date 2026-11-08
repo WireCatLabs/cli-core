@@ -256,7 +256,15 @@ const enrichedFirst = async (
   } catch (error) {
     enrichment = { status: "failed", reason: error instanceof Error ? error.message : "enrichment failed" }
   }
-  const embedded = await embed()
+  let embedded: NotesEmbedded
+  try {
+    embedded = await embed()
+  } catch (error) {
+    // A missing model must not hide what was already sent and paid for.
+    if (enrichment && error instanceof CliError)
+      throw new CliError(error.code, error.message, { ...error.details, enrichment })
+    throw error
+  }
   if (!enrichment) return embedded
   const more = enrichment.status !== "failed" && enrichment.left > 0 && enrichment.enriched > 0
   return { ...embedded, left: embedded.left || more, enrichment }

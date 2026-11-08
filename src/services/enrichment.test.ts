@@ -183,6 +183,22 @@ describe("enrichment", () => {
     expect(best?.externalId).toBe("<one@example.com>")
   })
 
+  it("keeps what enrichment sent on the error when embedding cannot run", async () => {
+    const { env, store } = await machine()
+    turnOn(env)
+    await store.notes.addNote({ text: "cat" })
+    const model = fakeModel(() => ({ facts: ["zebra"], questions: [] }))
+    writeSharedSection(textModelsFile(env), "text_models", { use: "e5-small" })
+
+    const failed = await embedNotes(store, { env, threads: 1, enrichWith: { ...model, key: () => "test-key" } }).catch(
+      (error: unknown) => error,
+    )
+
+    expect(failed).toMatchObject({
+      details: { reason: "model.not-downloaded", enrichment: { status: "done", enriched: 1 } },
+    })
+  })
+
   it("turning it off deletes every enrichment and the record is searched by its own text again", async () => {
     const { env, store } = await machine()
     turnOn(env)
