@@ -21,6 +21,7 @@ import {
   signedDecimal,
   text,
 } from "./record-fields.js"
+import type { RelationKind } from "./relations.js"
 
 export interface RecordRoleSpec {
   /** The record types a relation of this role may point at; a typed ref (`organization:12`) is held to them too. */
@@ -30,11 +31,8 @@ export interface RecordRoleSpec {
   required?: boolean
   /** Only `settles` carries a share of the payment. */
   amount?: boolean
-  /**
-   * A business relationship between entities, by its kind in `src/domain/relations.ts`: the relation may carry
-   * `as`, the part the target plays. TODO(PR 5): type it as that module's `RelationKind` once the stack is on main.
-   */
-  relationship?: RelationshipKind
+  /** A business relationship between entities, by its kind: the relation may carry `as`, the part the target plays. */
+  relationship?: RelationKind
   /** Kept in `record_relations` only, never read to make the entity, so it never makes a record wait (PR 5). */
   kept?: boolean
   /**
@@ -47,8 +45,6 @@ export interface RecordRoleSpec {
   /** `column` names a `<column>_type`/`<column>_id` pair, a person or an organization, not a foreign key. */
   pair?: boolean
 }
-
-export type RelationshipKind = "member-of" | "customer-of" | "partner-of" | "related-to"
 
 export interface NestedSpec {
   /** Where the items are kept, and the column naming their parent. */
@@ -397,7 +393,7 @@ export const RECORD_TYPES = {
     references: { pipeline: "pipeline" },
     roles: {
       organization: { targets: ORGANIZATION, column: "organization_id" },
-      person: { targets: ["person"], many: true, relationship: "related-to" },
+      person: { targets: ["person"], many: true, relationship: "related-to", kept: true },
       project: { targets: ["project"], column: "project_id" },
     },
   },
@@ -410,7 +406,7 @@ export const RECORD_TYPES = {
     references: { pipeline: "pipeline" },
     roles: {
       organization: { targets: ORGANIZATION, column: "organization_id" },
-      person: { targets: ["person"], many: true, relationship: "related-to" },
+      person: { targets: ["person"], many: true, relationship: "related-to", kept: true },
       project: { targets: ["project"], column: "project_id" },
       deal: { targets: ["deal"], column: "deal_id" },
     },

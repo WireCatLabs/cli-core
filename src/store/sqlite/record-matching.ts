@@ -9,6 +9,7 @@ import { fold } from "../normalize.js"
 import { crmIdentityId } from "./crm.js"
 import { insertProject } from "./knowledge.js"
 import type { StoreContext } from "./open.js"
+import { identitySeparated } from "./person-separation.js"
 import { storePhoneCountries } from "./phone-countries.js"
 import { type Row, refusal } from "./record-projection.js"
 
@@ -172,21 +173,18 @@ const identitiesOf = (database: CacheDatabase, ids: Identifiers): number[] => {
   })
 }
 
-/**
- * Whether the owner separated `person` from an identity the record brings, so linking would join two people he told
- * apart. TODO(rebase onto main, #2637): return
- * `identities.some((identity) => identitySeparated(context, identity, person))` with `identitySeparated` from
- * `src/store/sqlite/person-separation.ts`; this stack's base predates that module.
- */
-export const separatedByOwner = (_database: CacheDatabase, _person: number, _identities: number[]): boolean => false
+/** Whether the owner separated `person` from an identity the record brings: linking would join what he told apart. */
+export const separatedByOwner = (context: StoreContext, person: number, identities: number[]): boolean =>
+  identities.some((identity) => identitySeparated(context, identity, person))
 
 /** What the identifiers say: no entity, exactly one, or several the owner has to choose between. */
-export const matchOf = (database: CacheDatabase, type: IdentityType, ids: Identifiers): Match => {
+export const matchOf = (context: StoreContext, type: IdentityType, ids: Identifiers): Match => {
+  const { database } = context
   const found = entitiesByIdentifiers(database, type, ids)
   if (found.length === 0) return { outcome: "none" }
   if (found.length > 1) return { outcome: "ambiguous", ids: found, reason: "record.ambiguous" }
   const id = found[0] as number
-  if (type === "person" && separatedByOwner(database, id, identitiesOf(database, ids)))
+  if (type === "person" && separatedByOwner(context, id, identitiesOf(database, ids)))
     return { outcome: "ambiguous", ids: found, reason: "record.separated" }
   return { outcome: "one", id }
 }

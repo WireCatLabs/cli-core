@@ -32,7 +32,7 @@ export const recordRemapOver = ({ database, now }: StoreContext) => {
     return false
   }
 
-  /** Repoints the entity columns and a deal's people that `record`'s dependents in its account filled from it. */
+  /** Repoints the entity columns that `record`'s dependents in its account filled from it. */
   const repointDependents = (record: Row, from: Thing, to: Thing, at: number) => {
     const dependents = database
       .prepare(
@@ -57,13 +57,6 @@ export const recordRemapOver = ({ database, now }: StoreContext) => {
               `AND ${role.column}_type = ? AND ${role.column}_id = ?`,
           )
           .run(to.type, to.id, at, entityId, from.type, from.id)
-      if (role.relationship && !role.kept)
-        database
-          .prepare(
-            "UPDATE OR IGNORE links SET to_id = ?, updated_at = ? WHERE from_type = ? AND from_id = ? " +
-              "AND to_type = ? AND to_id = ? AND source = 'crm'",
-          )
-          .run(to.id, at, type, entityId, from.type, from.id)
     }
   }
 

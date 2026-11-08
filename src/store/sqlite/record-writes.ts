@@ -141,7 +141,7 @@ export const recordWritesOver = (context: StoreContext) => {
   const identify = (row: Row, type: IdentityType, source: EnvelopeSource, options: EnvelopeOptions): Projected => {
     const fields = JSON.parse(String(row.fields)) as Row
     const ids = identifiersOf(database, type, fields, source, String(row.external_id), options)
-    const match = matchOf(database, type, ids)
+    const match = matchOf(context, type, ids)
     if (match.outcome === "ambiguous")
       return {
         missing: [],
