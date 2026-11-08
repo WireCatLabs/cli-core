@@ -3,6 +3,11 @@ import { Writable } from "node:stream"
 import { CliError } from "@wirecat/cli-base"
 import { bufferedInput, inputPolicy, MAX_SECRET_INPUT } from "../cli/input-policy.js"
 
+const EMPTY_TRIES = 3
+
+export const pasteHint = (platform: NodeJS.Platform = process.platform): string =>
+  `Nothing arrived. To paste in a terminal, use ${platform === "darwin" ? "Cmd+V" : "Ctrl+Shift+V (or right-click → Paste)"}.`
+
 export interface SecretInput {
   input?: NodeJS.ReadableStream & { isTTY?: boolean }
   output?: NodeJS.WritableStream
@@ -18,6 +23,9 @@ export interface SecretInput {
  * A token on a command line is read by `ps` and kept by shell history; a token in a file is a
  * second copy nobody remembers to delete. Both are avoided by never letting it land anywhere: it
  * is typed or piped, goes straight to the keyring, and is never echoed.
+ *
+ * An empty hidden answer at a terminal is asked again, up to three times, with a line on how to paste; a piped
+ * empty answer still comes back empty at once, so a script never waits.
  *
  * The prompt goes to **stderr**, not stdout, so that `session start --json` still writes one JSON
  * value and nothing else.
@@ -81,9 +89,22 @@ export const readSecret = async (
       reader.once("SIGINT", cancel)
       reader.once("close", cancel)
       signal?.addEventListener("abort", abort, { once: true })
-      reader.question(prompt, resolve)
-      muted = !echo
+      // Hidden input shows nothing, so a paste that never landed (Ctrl+V in a Linux terminal) looks like one that did.
+      const ask = (tries: number) => {
+        muted = false
+        reader.question(prompt, (line) => {
+          if (echo || line.trim() || tries >= EMPTY_TRIES) return resolve(line)
+          output.write(`\n${pasteHint()}\n`)
+          ask(tries + 1)
+        })
+        muted = !echo
+      }
+      ask(1)
     })
+    if (!echo && !answer.trim())
+      throw new CliError("validation_error", `nothing arrived after ${EMPTY_TRIES} tries. ${pasteHint()}`, {
+        reason: "input.empty",
+      })
     return answer.trim()
   } finally {
     input.off("data", data).off("error", inputError)

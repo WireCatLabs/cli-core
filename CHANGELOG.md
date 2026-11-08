@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.610.0 — 08.11.2026
+
 ### Added
 
 - **A scan's group senders can be found and decided together.** `chat-senders@3` names the chat and its size in its
@@ -50,6 +52,13 @@ shape of this file.
 
 
 ### Fixed
+
+- **A hidden prompt asks again when nothing arrived.** `readSecret` at a terminal took an empty Enter as the answer,
+  so a paste that never landed (Ctrl+V in a Linux terminal) failed at once with "no token was given", and the hidden
+  input showed nothing to tell it apart from a paste that worked. An empty hidden answer now prints "Nothing arrived.
+  To paste in a terminal, use Ctrl+Shift+V (or right-click → Paste)." (Cmd+V on macOS) and asks again, up to three
+  times, then fails with `validation_error`, reason `input.empty`. A piped empty answer still comes back empty at once,
+  an echoed prompt keeps its empty answer, and Ctrl-C still cancels at once.
 
 - **A large CRM sync takes a third less time and a sixth of the memory** (#2682). Keeping the involvement index
   current built a new SQL text for every item it recomputed, so SQLite prepared each one again and the process kept
