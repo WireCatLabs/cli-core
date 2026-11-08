@@ -102,14 +102,14 @@ const COLUMNS =
   "SELECT NULL AS person_id, NULL AS identity_id, NULL AS subject_type, NULL AS subject_id, NULL AS role, " +
   "NULL AS occurred_at, NULL AS scope, NULL AS account_id, NULL AS project_id WHERE 0"
 
-/** Every way of taking part, or, given a subject's kind, only the ones about the id bound as `?2`. */
+/** Every way of taking part, or, given a subject's kind, only the ones about the id bound at each `?`. */
 export const sourcesOf = (type?: string): string => {
   if (type === undefined) return [COLUMNS, ...ARMS.map(([, , sql]) => sql), linkArm("1", "1")].join(" UNION ")
   if (!/^[a-z_]+$/.test(type)) throw new CliError("configuration_error", `the involvement queue holds a ${type}`)
   return [
     COLUMNS,
-    ...ARMS.filter(([of]) => of === type).map(([, key, sql]) => `${sql} AND ${key}=?2`),
-    linkArm(`from_type='${type}' AND from_id=?2`, `to_type='${type}' AND to_id=?2`),
+    ...ARMS.filter(([of]) => of === type).map(([, key, sql]) => `${sql} AND ${key}=?`),
+    linkArm(`from_type='${type}' AND from_id=?`, `to_type='${type}' AND to_id=?`),
   ].join(" UNION ")
 }
 
@@ -134,9 +134,10 @@ export const drainInvolvementQueue = (database: CacheDatabase, cap = QUEUE_CAP):
     if (subjects.length === 0) break
     for (const subject of subjects) {
       drop.run(subject.type, subject.id)
-      database
-        .prepare(`${INSERT} SELECT s.*, ?1 FROM (${sourcesOf(subject.type)}) s JOIN persons p ON p.id=s.person_id`)
-        .run(at, subject.id)
+      // One `?` per use of the id: Node 22.16's node:sqlite cannot bind a numbered `?2` by position.
+      const sql = `${INSERT} SELECT s.*, ? FROM (${sourcesOf(subject.type)}) s JOIN persons p ON p.id=s.person_id`
+      const ids = Array<number>(sql.split("?").length - 2).fill(subject.id)
+      database.prepare(sql).run(at, ...ids)
       done.run(subject.type, subject.id)
     }
     recomputed += subjects.length
