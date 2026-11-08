@@ -55,12 +55,20 @@ export interface ReportedSync {
   issues: ReportedIssue[]
 }
 
+/** What the call did to one relationship, by its stored key: kind, ends (a partnership's lower id first) and role. */
+export type ReportedOutcome = "added" | "kept" | "restored" | "withdrawn" | "proposed" | "skippedOwnerRejected"
+
 export interface ReportedOptions {
   /** `links.source` of a link it writes; `import` when absent. */
   source?: string
   /** Who proposes in `review` mode; the source's provider, as a rule, when absent. */
   by?: Exclude<Author, "owner">
+  /** Each relationship's outcome, so a caller that reports in parts counts every one once. */
+  onOutcome?: (key: string, outcome: ReportedOutcome) => void
 }
+
+const keyOf = (kind: unknown, fromType: unknown, fromId: unknown, toType: unknown, toId: unknown, role: unknown) =>
+  `${String(kind)}|${String(fromType)}:${String(fromId)}|${String(toType)}:${String(toId)}|${role == null ? "" : String(role)}`
 
 export interface RelationsStore {
   /**
@@ -89,7 +97,7 @@ export const syncReportedIn = (
   key: AccountKey,
   relationships: ReportedRelation[],
   scope: ReportedScope,
-  { source = "import", by = { bot: key.provider, kind: "rule" } }: ReportedOptions = {},
+  { source = "import", by = { bot: key.provider, kind: "rule" }, onOutcome }: ReportedOptions = {},
 ): ReportedSync => {
   const { database, now } = context
   const proposals = relationProposalsOver(context)
@@ -131,11 +139,19 @@ export const syncReportedIn = (
     }
     if (isSymmetric(relation.kind) && to.id < from.id) [from, to] = [to, from]
     const wanted = [relation.kind, from.type, from.id, to.type, to.id, role ?? ""] as const
+    const linkKey = keyOf(relation.kind, from.type, from.id, to.type, to.id, role)
+    const counted = (outcome: ReportedOutcome) => {
+      result[outcome] += 1
+      onOutcome?.(linkKey, outcome)
+    }
     // The owner's link of the same role answers for the source too, and a confirmed one is never withdrawn.
-    if (database.prepare(`SELECT 1 FROM links WHERE ${sameKey} AND confirmed = 1 LIMIT 1`).get(...wanted)) continue
+    if (database.prepare(`SELECT 1 FROM links WHERE ${sameKey} AND confirmed = 1 LIMIT 1`).get(...wanted)) {
+      counted("kept")
+      continue
+    }
     const toRef = referenceOfThing(database, to) as string
     if (rejected(context, from, toRef, relation.kind, role)) {
-      result.skippedOwnerRejected += 1
+      counted("skippedOwnerRejected")
       continue
     }
     const held = database.prepare(`SELECT * FROM links WHERE ${sameKey} AND account_id = ?`).get(...wanted, accountId)
@@ -144,8 +160,7 @@ export const syncReportedIn = (
     const metadata = metadataOf(relation)
     if (held) {
       seen.add(Number(held.id))
-      if (held.deleted_at != null) result.restored += 1
-      else result.kept += 1
+      counted(held.deleted_at != null ? "restored" : "kept")
       database
         .prepare(
           "UPDATE links SET deleted_at = NULL, starts_at = ?, ends_at = ?, metadata = ?, updated_at = ? WHERE id = ?",
@@ -165,7 +180,7 @@ export const syncReportedIn = (
         },
         by,
       )
-      result.proposed += 1
+      counted("proposed")
       continue
     }
     const row = database
@@ -190,7 +205,7 @@ export const syncReportedIn = (
         at,
       )
     seen.add(Number(row?.id))
-    result.added += 1
+    counted("added")
   }
 
   const withdraw = database.prepare("UPDATE links SET deleted_at = ?, updated_at = ? WHERE id = ?")
@@ -210,7 +225,7 @@ export const syncReportedIn = (
         : `((to_type = ? AND to_id = ?) OR (kind = ${linkKind("partner-of")} AND from_type = ? AND from_id = ?))`
     const rows: Row[] = database
       .prepare(
-        `SELECT id FROM links WHERE account_id = ? AND confirmed = 0 AND deleted_at IS NULL AND kind IN (${kinds}) ` +
+        `SELECT id, kind, from_type, from_id, to_type, to_id, role FROM links WHERE account_id = ? AND confirmed = 0 AND deleted_at IS NULL AND kind IN (${kinds}) ` +
           `AND ${match}${roles ? ` AND ifnull(role, '') IN (${roles})` : ""}`,
       )
       .all(accountId, thing.type, thing.id, thing.type, thing.id, ...(scope.roles ?? []))
@@ -219,6 +234,7 @@ export const syncReportedIn = (
         seen.add(Number(row.id))
         withdraw.run(at, at, Number(row.id))
         result.withdrawn += 1
+        onOutcome?.(keyOf(row.kind, row.from_type, row.from_id, row.to_type, row.to_id, row.role), "withdrawn")
       }
   }
   return result

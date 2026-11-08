@@ -8,7 +8,7 @@ import { requiredThing } from "./notes.js"
 import type { StoreContext } from "./open.js"
 import { codeOf, type Row, refusal } from "./record-projection.js"
 import { isDerived } from "./record-relations.js"
-import { recordRelationshipsOver } from "./record-relationships.js"
+import { noteError, type RelationshipNote, recordRelationshipsOver } from "./record-relationships.js"
 import { recordRemapOver } from "./record-remap.js"
 import { type RecordsRun, type RunItem, type RunOptions, recordRunOver } from "./record-run.js"
 import { recordWritesOver } from "./record-writes.js"
@@ -121,17 +121,17 @@ export const recordStoreOver = (context: StoreContext): RecordStore => {
   const { pointedAt, remap } = recordRemapOver(context)
   const reported = recordRelationshipsOver(context)
 
-  /** A relationship issue of a report outside a run: no envelope to point into, so the message names the record. */
-  const reportIssue =
-    (push: (error: IngestError) => void) => (issue: { reason: string; message: string }, recordId: number | null) => {
-      const row =
-        recordId === null ? undefined : sql("SELECT type, external_id FROM records WHERE id = ?").get(recordId)
-      push({
-        pointer: "",
-        code: issue.reason,
-        message: row ? `${String(row.type)} ${String(row.external_id)}: ${issue.message}` : issue.message,
-      })
+  /** A report's issues outside a run, each once: there is no envelope to point into, so each names its record. */
+  const issuesTo = (push: (error: IngestError) => void) => {
+    const seen = new Set<string>()
+    return {
+      onNote: (note: RelationshipNote) => {
+        if (note.severity !== "issue" || seen.has(note.key)) return
+        seen.add(note.key)
+        push(noteError(note, reported.placeOf(note.record)))
+      },
     }
+  }
 
   const sourceRecordOf = (row: Row): SourceRecord => ({
     provider: String(row.provider),
@@ -278,8 +278,8 @@ export const recordStoreOver = (context: StoreContext): RecordStore => {
         reported.report(
           account,
           Number(row.account_id),
-          { records: moved, changed: moved, withdrawn: from === null ? [] : [storedThing(from.type, from.id)] },
-          reportIssue((error) => errors.push(error)),
+          { records: moved, changed: moved, entities: from === null ? [] : [storedThing(from.type, from.id)] },
+          issuesTo((error) => errors.push(error)),
         )
       })
       return read(database, () => ({
@@ -337,7 +337,7 @@ export const recordStoreOver = (context: StoreContext): RecordStore => {
             })
           }
         }
-        reported.report({ provider, account }, accountId, { records: made, changed: made }, reportIssue(errors.push))
+        reported.report({ provider, account }, accountId, { records: made, changed: made }, issuesTo(errors.push))
       })
       return { ...counts, unmatched: unmatched.list, proposed: [...proposed], errors: errors.list, truncated }
     },

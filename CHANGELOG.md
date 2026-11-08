@@ -12,11 +12,13 @@ shape of this file.
 - **A records import reports its relationships as links of its account.** A deal's or lead's people, a contract's
   parties, a person's `member-of` and an organization's `customer-of` and `partner-of` go through
   `relations.syncReported` per chunk, so a re-import keeps them, a changed role adds a link and withdraws the old one,
-  a delete withdraws them, and `records map` moves them with the entity. A `member-of` word off the organization list
-  is `metadata.source_role`, a person's `fields.position` is `metadata.position`, and neither ever becomes the role.
-  The receipt adds `relationships` (`added`, `kept`, `restored`, `withdrawn`, `proposed`, `skippedOwnerRejected`),
-  and a relationship's issue is an error coded `relationship.*`. An envelope under a CRM's own account is that
-  account's set.
+  a delete withdraws them, `records map` moves them with the entity, and rejecting a proposed contract withdraws its
+  parties at once. A role comes only from its list: any other word is kept on a link without a role, in the list
+  `metadata.source_role`, and named in the receipt's new `notices` (`relationship.role-unlisted`). A person's
+  `fields.position` is `metadata.position`, never the role. The receipt adds `relationships` (`added`, `kept`,
+  `restored`, `withdrawn`, `proposed`, `skippedOwnerRejected`), each link counted once per run, and a relationship's
+  issue is an error coded `relationship.*`, naming its `record` when that record came in an earlier batch.
+  `syncReported` takes `onOutcome`, and counts a link the owner confirmed as `kept`.
 - **A contract may be related to a person or an organization,** with the roles `customer`, `supplier`, `signatory`
   and `guarantor` (`CONTRACT_ROLES`), a `contract` list the owner may add to like the others.
 - **Store version 57: business tables.** `store.products` (`product:<id>`, written directly, a line copies its
@@ -92,7 +94,6 @@ shape of this file.
 - **An envelope sent under a CRM's own provider and account now replaces that account's relationships for the
   entities it lists.** A deal's people in such an envelope withdraw the CRM's people of that deal, and the CRM's next
   sync writes its own back. An import under any other account never touches a CRM's links.
-
 - **`EntryEventType` has `call`**, and `events list event_type:` takes it. A switch over the kinds needs a branch.
 - **`kindIn` and `ListedAccount.kind` name a provider's first kind only.** A provider may hold several (`kindsIn`,
   `ListedAccount.kinds`, `holdsKind`); code that tests `kindIn(provider) === kind` misses the others.
@@ -118,7 +119,6 @@ shape of this file.
 
 ### Added
 
-||||||| parent of 03fcce9af (feat(records): an import reports its relationships through relations.syncReported)
 - **Business relationships: `reports-to`, `customer-of` and `partner-of`, role lists, and a `standing` on every
   relationship.** `knowledge.relate` takes a person reporting to a person, a person or organization buying from an
   organization, and two partner organizations (stored once, the lower id first, whichever way they are named). A deal

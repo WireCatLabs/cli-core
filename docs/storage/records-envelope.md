@@ -97,28 +97,41 @@ entity type: the entities are the call's `scope.from` and the type's relationshi
 carries every relationship of the entities it lists, gathered from every live record of the account mapped to the
 entity, so a second record of the same person never withdraws what the first reports.
 
-| Role | Link | Role of the link |
+| Role | Link | Its role list |
 | --- | --- | --- |
-| deal's or lead's `person` | `related-to` deal → person | `as`: one of the deal roles, or one the owner added |
-| contract's `party` | `related-to` contract → person or organization | `as`: `customer`, `supplier`, `signatory`, `guarantor`, or one the owner added to the `contract` list |
-| person's `member-of` | `member-of` person → organization | `as` only when it is on the organization list (the owner's roles too); any other word is `metadata.source_role`, never a role |
-| organization's `customer-of`, `partner-of` | organization → organization | none; `as` is `metadata.source_role` |
+| deal's or lead's `person` | `related-to` deal → person | the deal roles |
+| contract's `party` | `related-to` contract → person or organization | `customer`, `supplier`, `signatory`, `guarantor` (`contract`) |
+| person's `member-of` | `member-of` person → organization | the organization roles |
+| organization's `customer-of`, `partner-of` | organization → organization | none |
 
+- `as` is the link's role only when its list holds it, the owner's own roles of that list included. Any other word is
+  kept on a link without a role, in `metadata.source_role`, a list of every word the account's records used for
+  that pair (both sides of a partnership too); `record_relations.as_role` keeps each record's word. A word a list
+  does not hold is also a `notices` entry (`relationship.role-unlisted`), never an error, and once the owner adds it
+  to the list the next import writes the link with that role and withdraws the one without. On a relationship with
+  no list, `as` is always only `source_role`.
 - A person's `fields.position` (text, up to 200 characters) is the job title on each of its `member-of` links,
-  `metadata.position`; a title never becomes a role, and `employee` is never inferred from one.
+  `metadata.position`; a title never becomes a role, and `employee` is never inferred from one. Known limit: one
+  position per person, written to every one of their `member-of` links; when two records of the account stand for
+  the same person, the most recently changed one's position is the one written.
 - A relationship whose target has no entity yet is left out until it gets one, in this run or a later one, or by
   `records match` or `records map`; the records that point at it are reported again then. A partnership one side
   reports is kept when the other side is imported again.
 - A record that changes reports its new set: a new role on a pair is a new link, the one no longer sent is withdrawn
   (`deleted_at`). A deleted record's entity is reported with what its account's other live records still say, often
   nothing, and a record whose target was deleted no longer reports the link to it.
-- The owner's word wins: a link he confirmed is never withdrawn, and one he removed or rejected, role included, is
-  never written again (`skippedOwnerRejected`). With `crm.<provider>:<account>.links` set to `review` a new link is a
+- The owner's word wins: a link he confirmed is never withdrawn (and counts as `kept`), and one he removed or
+  rejected, role included, is never written again (`skippedOwnerRejected`). An entity he rejected, such as a proposed
+  contract, or one that is deleted reports nothing: rejecting a contract withdraws its parties at once, and a
+  re-import does not bring them back. With `crm.<provider>:<account>.links` set to `review` a new link is a
   `relationship` proposal.
 - Accounts are separate: a CRM's links under its account are never touched by an import under another one. An envelope
   sent under a CRM's own provider and account is that account's set: an envelope deal's people replace the CRM's
   people of that deal, and a link both report takes the last writer's metadata, until the CRM's next sync writes its
   own back.
+- `relationships` in the receipt counts each link once per run, however many chunks report it, and each issue or
+  notice is listed once. An issue about a record of an earlier batch, reported again because what it points at
+  changed, has the pointer `""` and names the record (`record: {type, externalId}`).
 - A dry run reports the same counts and writes none.
 
 ## Matching person, organization, project
@@ -194,8 +207,8 @@ const receipt = await ingestLines(store, jsonlLines(process.stdin), { account: "
 errors, truncated }`. `proposed` lists the proposals made or changed; `waiting[{key, pointer, missing}]`,
 `flagged[{key, pointer, entity, reason?, candidates?}]`, `unmatched[{key, pointer, reason, candidates}]`,
 `ignored[{key, pointer, reason}]`; `relationships{added, kept, restored, withdrawn, proposed, skippedOwnerRejected}`,
-the links of § Relationships; `errors[{pointer, code, message, key}]`, the pointer an RFC 6901 JSON pointer into the
-envelope.
+the links of § Relationships; `notices[{pointer, code, message, key}]`, taken but not as sent; `errors[{pointer, code,
+message, key, record?}]`, the pointer an RFC 6901 JSON pointer into the envelope.
 
 ## Error codes
 
@@ -216,7 +229,8 @@ envelope.
 | `record.over-payment` | settles amounts past the payment |
 | `record.reference-not-found` | a `ref` the store lacks; a deal's stage its pipeline lacks |
 | `record.map-owner-only`, `record.map-type`, `record.mapped` | `store.records.map` |
-| `relationship.invalid`, `relationship.reference-unknown` | in `errors`, not refusals: a relationship's role off its list, ends the registry does not join, or a `ref` the store lacks; the pointer is the record's `relations`, or `""` with the record named when it was not in this envelope |
+| `relationship.invalid`, `relationship.reference-unknown` | in `errors`, not refusals: ends the registry does not join, or a `ref` the store lacks; the pointer is the record's `relations`, or `""` with `record` named when it was not in this envelope |
+| `relationship.role-unlisted` | in `notices`: an `as` its role list does not hold, kept as `metadata.source_role` |
 | the store's own codes | `finance.*`, `order.*`, `contract.*`, `subscription.*`, `wallet.*`, `transaction.*`, `product.*`, `money.*` when an entity is refused |
 
 ## The example

@@ -225,10 +225,14 @@ as `partial` once the budget is spent (WC-LIFE-16). A contact whose email
 belongs to two people is named in the sync's issues until the owner separates it.
 
 A records import uses it too, per chunk under the envelope's account: a deal's or lead's people, a contract's
-parties, a person's `member-of` (a word off the organization list kept as `metadata.source_role`, the person's
-`fields.position` as `metadata.position`) and an organization's `customer-of` and `partner-of`, each entity's set
-gathered from every live record of the account mapped to it. A delete, `records map` and `records match` report again
-what they change ([records envelope, § Relationships](../storage/records-envelope.md#relationships)).
+parties, a person's `member-of` and an organization's `customer-of` and `partner-of`, each entity's set gathered from
+every live record of the account mapped to it. A role comes only from its list; any other word is kept, with every
+other word for that pair, as the list `metadata.source_role`, and the person's `fields.position` is
+`metadata.position`. A delete, `records map` and `records match` report again what they change, and rejecting a
+proposed contract withdraws its parties in the same transaction
+([records envelope, § Relationships](../storage/records-envelope.md#relationships)). `onOutcome` in the options gets
+each relationship's outcome by its stored key, so a caller reporting in parts counts each once; a link the owner
+confirmed counts as `kept`.
 
 A mail findings batch (`store.mailFindings`) also takes `invoice`, `payment`, `order` and `order_update` findings.
 Staging runs what accepting would write through `store.finance` or `store.orders` and rolls it back, so a batch the

@@ -61,6 +61,11 @@ export interface IngestReceipt {
    * is in `errors`, code `relationship.*`.
    */
   relationships: RelationshipCounts
+  /**
+   * Taken, but not as the source put it: a relationship's word off its role list is kept on a link without a role, as
+   * `metadata.source_role` (`relationship.role-unlisted`).
+   */
+  notices: IngestError[]
   errors: IngestError[]
   /** A list stopped at 1000 entries; the counts are exact. */
   truncated: boolean
@@ -80,6 +85,7 @@ const emptyReceipt = (dryRun: boolean, errors: IngestError[]): IngestReceipt => 
   unmatched: [],
   ignored: [],
   relationships: { added: 0, kept: 0, restored: 0, withdrawn: 0, proposed: 0, skippedOwnerRejected: 0 },
+  notices: [],
   errors,
   truncated: false,
 })
@@ -107,6 +113,7 @@ const receiptOf = (dryRun: boolean, source: EnvelopeSource, run: RecordsRun): In
     reason,
   })),
   relationships: run.relationships,
+  notices: run.notices,
   errors: run.errors,
   truncated: run.truncated,
 })

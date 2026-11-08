@@ -80,6 +80,8 @@ export interface IngestError {
   code: string
   message: string
   key?: string
+  /** The record an entry is about when it is not in this envelope: one of an earlier batch. */
+  record?: { type: string; externalId: string }
 }
 
 const WORD = `^${WORD_BODY}$`

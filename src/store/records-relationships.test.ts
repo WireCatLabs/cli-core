@@ -1,5 +1,6 @@
 import { createReadStream } from "node:fs"
 import { afterEach, describe, expect, it } from "vitest"
+import { RECORD_TYPES, type RecordRoleSpec } from "../domain/record-types.js"
 import type { EnvelopeRecord } from "../domain/records.js"
 import { checkEnds, roleListOf } from "../domain/relations.js"
 import { ingestLines, jsonlLines } from "../services/ingest.js"
@@ -156,7 +157,7 @@ describe("member-of", () => {
     expect(links.find((link) => link.from === ana)).toMatchObject({ role: "founder", metadata: { position: "CTO" } })
     expect(links.find((link) => link.from === boris)).toMatchObject({
       role: null,
-      metadata: { source_role: "rainmaker", position: "Head of sales" },
+      metadata: { source_role: ["rainmaker"], position: "Head of sales" },
     })
   })
 
@@ -275,8 +276,8 @@ describe("partner-of", () => {
 })
 
 describe("issues", () => {
-  it("names a contract party's unlisted role and a missing ref in errors, pointing at the record's relations", async () => {
-    const { store } = await recordsFixture(handles)
+  it("keeps a contract party's unlisted word as source_role with a notice, and names a missing ref in errors", async () => {
+    const { store, sql } = await recordsFixture(handles)
     const receipt = await take(
       store,
       envelopeOf([
@@ -294,13 +295,24 @@ describe("issues", () => {
         ),
       ]),
     )
-    expect(receipt.errors).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ pointer: "/records/1/relations", code: "relationship.invalid", key: "contract-k1" }),
-        expect.objectContaining({ pointer: "/records/1/relations", code: "relationship.reference-unknown" }),
-      ]),
-    )
+    expect(receipt.errors).toEqual([
+      expect.objectContaining({
+        pointer: "/records/1/relations",
+        code: "relationship.reference-unknown",
+        key: "contract-k1",
+      }),
+    ])
+    expect(receipt.notices).toEqual([
+      expect.objectContaining({
+        pointer: "/records/1/relations",
+        code: "relationship.role-unlisted",
+        key: "contract-k1",
+      }),
+    ])
     expect(receipt.refused).toBe(0)
+    expect(reported(sql, "related-to")).toEqual([
+      expect.objectContaining({ role: null, metadata: { source_role: ["witness"] } }),
+    ])
   })
 
   it("takes a contract role the owner added", async () => {
@@ -477,5 +489,172 @@ describe("the registry", () => {
     expect(roleListOf("related-to", "contract", "organization")).toBe("contract")
     expect(() => checkEnds("related-to", "contract", "person")).not.toThrow()
     expect(() => checkEnds("related-to", "contract", "project")).toThrow(/only to a person or an organization/)
+  })
+})
+
+describe("the review's cases", () => {
+  const contract = (as: string, extra: Record<string, unknown> = {}) =>
+    upsert(
+      "contract",
+      "k1",
+      { name: "Lease", kind: "service", ...extra },
+      { relations: [{ role: "party", type: "organization", external_id: "c1", as }] },
+    )
+
+  it("withdraws a rejected contract's parties at once, and a re-import does not bring them back", async () => {
+    const { store, sql } = await recordsFixture(handles)
+    const records = [org("c1"), contract("customer", { value: "1000.00", currency: "EUR" })]
+    await take(store, envelopeOf(records))
+    expect(live(reported(sql, "related-to"))).toHaveLength(1)
+    await store.contracts.reject(await entityOf(store, "contract", "k1"), "owner")
+    expect(live(reported(sql, "related-to"))).toEqual([])
+    const again = await take(store, envelopeOf(records, { batch: "2" }))
+    expect(again.relationships).toMatchObject({ added: 0, kept: 0, restored: 0 })
+    expect(live(reported(sql, "related-to"))).toEqual([])
+  })
+
+  it("is the contract alone among the reviewed types that report relationships, so rejecting it withdraws them", () => {
+    const reviewed = Object.entries(RECORD_TYPES).flatMap(([type, spec]) =>
+      (spec.review === "proposal" || spec.review === "valued-proposal") &&
+      Object.values(spec.roles as Record<string, RecordRoleSpec>).some((role) => role.relationship)
+        ? [type]
+        : [],
+    )
+    expect(reviewed).toEqual(["contract"])
+  })
+
+  it("leaves the pair a link when a party's role changes to a word off the list", async () => {
+    const { store, sql } = await recordsFixture(handles)
+    await take(store, envelopeOf([org("c1"), contract("customer")]))
+    const changed = await take(store, envelopeOf([contract("buyer")], { batch: "2" }))
+    expect(changed).toMatchObject({ errors: [], relationships: { added: 1, withdrawn: 1 } })
+    expect(live(reported(sql, "related-to"))).toEqual([
+      expect.objectContaining({ role: null, metadata: { source_role: ["buyer"] } }),
+    ])
+  })
+
+  it("takes the role once the owner adds the word to the list, and withdraws the link without one", async () => {
+    const { store, sql } = await recordsFixture(handles)
+    const records = [org("c1"), memberOf("ana", "c1", {}, "rainmaker")]
+    await take(store, envelopeOf(records))
+    await store.knowledge.addRole("organization", "rainmaker")
+    const again = await take(store, envelopeOf(records, { batch: "2" }))
+    expect(again).toMatchObject({ notices: [], relationships: { added: 1, withdrawn: 1 } })
+    expect(live(reported(sql, "member-of"))).toEqual([expect.objectContaining({ role: "rainmaker", metadata: null })])
+  })
+
+  it("keeps every word when two records, or the two sides of a partnership, use different ones", async () => {
+    const { store, sql } = await recordsFixture(handles)
+    await take(
+      store,
+      envelopeOf([
+        org("c1"),
+        org("a", { relations: [{ role: "partner-of", type: "organization", external_id: "b", as: "reseller" }] }),
+        org("b", { relations: [{ role: "partner-of", type: "organization", external_id: "a", as: "distributor" }] }),
+        memberOf("ana", "c1", {}, "rainmaker"),
+        upsert(
+          "person",
+          "ana-again",
+          { name: "Ana", email: "ana@example.com" },
+          { relations: [{ role: "member-of", type: "organization", external_id: "c1", as: "closer" }] },
+        ),
+      ]),
+    )
+    const words = (kind: string) =>
+      [...((live(reported(sql, kind))[0]?.metadata?.source_role as string[]) ?? [])].sort()
+    expect(live(reported(sql, "member-of"))).toHaveLength(1)
+    expect(words("member-of")).toEqual(["closer", "rainmaker"])
+    expect(live(reported(sql, "partner-of"))).toHaveLength(1)
+    expect(words("partner-of")).toEqual(["distributor", "reseller"])
+  })
+
+  it("counts each link once per run when one entity's records come in separate chunks", async () => {
+    const { store, sql } = await recordsFixture(handles)
+    const ana = memberOf("ana", "c1")
+    const again = upsert(
+      "person",
+      "ana-again",
+      { name: "Ana", email: "ana@example.com" },
+      { relations: [{ role: "member-of", type: "organization", external_id: "c2" }] },
+    )
+    await take(store, envelopeOf([org("c1"), org("c2"), ana, again]))
+    const lines = async function* (batch: string) {
+      yield JSON.stringify({ schema_version: 1, source: { ...SOURCE, batch_id: batch } })
+      yield JSON.stringify(ana)
+      yield JSON.stringify(again)
+    }
+    const kept = await ingestLines(store, lines("2"), { account: SOURCE.account, chunk: 1 })
+    expect(kept.relationships).toMatchObject({ added: 0, kept: 2 })
+
+    sql()
+      .prepare("INSERT INTO store_settings (key, value, at) VALUES (?, ?, 1)")
+      .run(`crm.${SOURCE.provider}:${SOURCE.account}.links`, JSON.stringify("review"))
+    const twice = upsert(
+      "person",
+      "bo",
+      { name: "Bo", email: "bo@example.com" },
+      { relations: [{ role: "member-of", type: "organization", external_id: "c1" }] },
+    )
+    const twiceAgain = upsert(
+      "person",
+      "bo-again",
+      { name: "Bo", email: "bo@example.com" },
+      { relations: [{ role: "member-of", type: "organization", external_id: "c1" }] },
+    )
+    const proposed = await ingestLines(
+      store,
+      (async function* () {
+        yield JSON.stringify({ schema_version: 1, source: { ...SOURCE, batch_id: "3" } })
+        yield JSON.stringify(twice)
+        yield JSON.stringify(twiceAgain)
+      })(),
+      { account: SOURCE.account, chunk: 1 },
+    )
+    const pending = sql()
+      .prepare("SELECT count(*) AS n FROM proposed_actions WHERE kind = 'relationship' AND status = 'proposed'")
+      .get()
+    expect(proposed.relationships.proposed).toBe(Number(pending?.n))
+    expect(pending?.n).toBe(1)
+  })
+
+  it("counts a link the owner confirmed as kept", async () => {
+    const { store, sql } = await recordsFixture(handles)
+    const records = [org("c1"), memberOf("ana", "c1")]
+    await take(store, envelopeOf(records))
+    await store.knowledge.confirmRelation(null, String(reported(sql, "member-of")[0]?.id), "owner")
+    const again = await take(store, envelopeOf(records, { batch: "2" }))
+    expect(again.relationships).toMatchObject({ added: 0, kept: 1, withdrawn: 0 })
+  })
+
+  it("names the record of an earlier batch an issue is about", async () => {
+    const { store } = await recordsFixture(handles)
+    await take(
+      store,
+      envelopeOf([
+        org("c1"),
+        upsert(
+          "contract",
+          "k1",
+          { name: "Lease", kind: "service" },
+          {
+            relations: [
+              { role: "party", type: "organization", external_id: "c1", as: "customer" },
+              { role: "party", ref: "person:999999" },
+            ],
+          },
+        ),
+      ]),
+    )
+    const receipt = await take(
+      store,
+      envelopeOf([{ key: "gone", type: "organization", external_id: "c1", operation: "delete" }], { batch: "2" }),
+    )
+    expect(receipt.errors).toEqual([
+      expect.objectContaining({
+        pointer: "",
+        code: "relationship.reference-unknown",
+        record: { type: "contract", externalId: "k1" },
+      }),
+    ])
   })
 })
