@@ -3,13 +3,15 @@ import { assertMayDecide, deciderAuthor } from "../decisions.js"
 import {
   IDENTITY_LINK_KIND,
   type IdentityLinkDecision,
+  type IdentityLinkFilter,
   type IdentityLinkInput,
   type IdentityLinkPayload,
+  type IdentityLinkRow,
   type IdentityLinkSignal,
 } from "../identity-links.js"
 import type { IdentityRef, LinkOptions } from "../types.js"
 import { ensurePerson } from "./identities.js"
-import { type LinkIndex, linkIndex, settleLinks, sidesOf } from "./identity-link-rows.js"
+import { type LinkIndex, linkIndex, linkRows, settleLinks, sidesOf } from "./identity-link-rows.js"
 import type { Author } from "./memories.js"
 import { currentPerson } from "./merged-persons.js"
 import type { StoreContext } from "./open.js"
@@ -240,3 +242,47 @@ export const decideIdentityLink = (context: StoreContext, id: string, decision: 
     settleMentions(context, payload, "linked")
     return approved
   })
+
+const SHOWN: Record<string, IdentityLinkRow["status"]> = {
+  proposed: "proposed",
+  rejected: "rejected",
+  approved: "confirmed",
+  executed: "confirmed",
+  failed: "confirmed",
+}
+
+/** The `identity_link` proposals, newest first, each naming its people as they are now; a page and whether more follow. */
+export const identityLinkRows = (
+  context: StoreContext,
+  { person, status = "proposed", limit, offset }: IdentityLinkFilter,
+): { items: IdentityLinkRow[]; hasMore: boolean } => {
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 500)
+    throw new CliError("validation_error", "a list of link proposals takes 1–500 items")
+  const asked = person === undefined ? undefined : currentPerson(context.database, Number(person))
+  const operations = proposalOperationsOver(context)
+  const rows = linkRows(context.database, ["proposed", "rejected", "approved", "executed", "failed"])
+    .filter((row) => status === "all" || SHOWN[row.status] === status)
+    .filter((row) => asked === undefined || (row.pair?.includes(asked) ?? false))
+    .reverse()
+  const items = rows.slice(offset, offset + limit).map((row): IdentityLinkRow => {
+    const action = operations.get(row.id)
+    const payload = row.payload
+    const [from, to] = row.pair ?? payload.persons.map(Number)
+    return {
+      id: row.id,
+      status: SHOWN[row.status] ?? "proposed",
+      persons: [`person:${from}`, `person:${to}`],
+      identity: payload.identity,
+      with: payload.with,
+      joins: payload.joins,
+      signal: payload.signal,
+      score: payload.score,
+      candidates: (payload.candidates ?? []).map((uid) => `person:${uid}`),
+      reason: action.reason,
+      evidence: payload.evidence,
+      proposedBy: proposerOfAction(action),
+      createdAt: action.createdAt,
+    }
+  })
+  return { items, hasMore: rows.length > offset + limit }
+}

@@ -1,7 +1,13 @@
 import { CliError } from "@wirecat/cli-base"
 import type { Contact, Id, Page, PersonAlias, Provider } from "../domain/models.js"
 import type { PeopleLookup } from "../resolve.js"
-import type { IdentityLinkDecision, IdentityLinkInput, MatchScan } from "./identity-links.js"
+import type {
+  IdentityLinkDecision,
+  IdentityLinkFilter,
+  IdentityLinkInput,
+  IdentityLinkRow,
+  MatchScan,
+} from "./identity-links.js"
 import { keysOver } from "./keys.js"
 import { ownerPerson } from "./sqlite/actors.js"
 import type { ContactFilter } from "./sqlite/identities.js"
@@ -85,6 +91,8 @@ export interface PeopleStore extends AccountPeople {
    * owner's separation or rejection.
    */
   scanMatches(options?: { full?: boolean }): Promise<MatchScan>
+  /** The `identity_link` proposals, newest first, naming the people as they are now; `proposed` unless `status` says. */
+  linkProposals(filter: IdentityLinkFilter): Promise<{ items: IdentityLinkRow[]; hasMore: boolean }>
   /** The identity, and everyone linked with it, is the owner. */
   linkToOwner(identity: IdentityRef): Promise<PersonRecord>
   /** A person known by name only, with no identity yet: someone to assign a task to before any message names them. */
@@ -189,6 +197,7 @@ export const peopleStoreOver = (context: StoreContext, keyed: AccountPeople): Pe
     proposeLink: async (input) => identityProposals.proposeIdentityLink(context, input),
     decideLink: async (id, decision) => identityProposals.decideIdentityLink(context, id, decision),
     scanMatches: async (options) => scanMatches(context, options),
+    linkProposals: async (filter) => identityProposals.identityLinkRows(context, filter),
     linkToOwner: async (identity) => linkToOwner(context, identity),
   }
 }
