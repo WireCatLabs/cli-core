@@ -10,7 +10,7 @@ Every string from the report is already escaped. Lines are written with {{ nl }}
 {%- if summary %}{{ nl }}{{ summary }}{% endif -%}
 {%- if quiet -%}
   {{ nl }}{{ nl }}
-  {%- if health.items.size > 0 %}Новых дел нет, но {{ health.items[0].source }} не обновлялся {{ health.items[0].span }}.
+  {%- if health.items.size > 0 %}Новых дел нет, но синхронизация требует внимания.
   {%- else %}Тихое утро: ничего срочного.{% endif -%}
 {%- endif -%}
 {%- for section in sections -%}
@@ -67,11 +67,50 @@ Every string from the report is already escaped. Lines are written with {{ nl }}
     {%- if second != "" %}{{ nl }}{{ second }}{% endif -%}
   {%- endfor -%}
   {%- if section.more > 0 %}{{ nl }}ещё {{ section.more }}{% endif -%}
+  {%- if section.groups.size > 0 %}{{ nl }}
+    {%- for group in section.groups -%}
+      {%- unless forloop.first %} · {% endunless -%}
+      {%- capture words -%}
+        {%- case group.filter -%}
+          {%- when "overdue" %}Все просроченные
+          {%- when "today" %}{% if forloop.first %}На сегодня{% else %}на сегодня{% endif %}
+          {%- when "tomorrow" %}{% if forloop.first %}На завтра{% else %}на завтра{% endif %}
+          {%- when "new" %}{% if forloop.first %}Новые{% else %}новые{% endif %}
+        {%- endcase %} ({{ group.count }})
+      {%- endcapture -%}
+      {%- if group.link %}<a href="{{ group.link.url }}">{{ words }}</a>{% else %}{{ words }}{% endif -%}
+    {%- endfor -%}
+  {%- endif -%}
 {%- endfor -%}
-{%- unless quiet -%}
-  {%- if health.items.size > 0 %}{{ nl }}{% endif -%}
-  {%- for source in health.items -%}
-    {{ nl }}{{ health.emoji }} {{ source.source }} не обновлялся {{ source.span }}
-    {%- for link in source.links %} · <a href="{{ link.url }}">{{ link.label }}</a>{% endfor -%}
+{%- if health.items.size > 0 %}{{ nl }}{% endif -%}
+{%- for source in health.items -%}
+  {{ nl }}{{ health.emoji }} {{ source.source }}
+  {%- if source.account %} ({{ source.account }}){% endif -%}
+  {%- case source.reason -%}
+    {%- when "sync-failed" %}: синхронизация падает{% if source.since %} с {{ source.since.date }}{% endif %}
+    {%- when "no-schedule" %}: нет расписания синхронизации
+    {%- when "quiet" %}: ничего нового {% if source.since %}с {{ source.since.date }}{% else %}{{ source.span }}{% endif %}
+    {%- else %} не обновлялся {{ source.span }}
+  {%- endcase -%}
+  {%- for link in source.links %} · <a href="{{ link.url }}">{{ link.label }}</a>{% endfor -%}
+{%- endfor -%}
+{%- if scope -%}
+  {{ nl }}{{ nl }}Просмотрено за {{ scope.window }}
+  {%- for source in scope.sources -%}
+    {%- if forloop.first %}: {% else %}, {% endif -%}
+    {%- case source.kind -%}
+      {%- when "telegram" %}Telegram{% when "max" %}MAX{% when "whatsapp" %}WhatsApp
+      {%- when "mail" %}почта{% when "meeting" %}встречи{% when "task" %}задачи
+    {%- endcase -%}
+    {%- if source.accounts > 1 %} ({{ source.accounts }} {% if source.kind == "mail" %}{% case source.plural %}{% when "one" %}ящик{% when "few" %}ящика{% else %}ящиков{% endcase %}{% else %}{% case source.plural %}{% when "one" %}аккаунт{% when "few" %}аккаунта{% else %}аккаунтов{% endcase %}{% endif %}){% endif -%}
   {%- endfor -%}
-{%- endunless -%}
+  {%- for count in scope.counts -%}
+    {%- if forloop.first %} · {% else %}, {% endif -%}
+    {{ count.count }} {% case count.kind -%}
+      {%- when "chats" %}{% case count.plural %}{% when "one" %}чат{% when "few" %}чата{% else %}чатов{% endcase %}
+      {%- when "mail" %}{% case count.plural %}{% when "one" %}письмо{% when "few" %}письма{% else %}писем{% endcase %}
+      {%- when "tasks" %}{% case count.plural %}{% when "one" %}задача{% when "few" %}задачи{% else %}задач{% endcase %}
+      {%- when "meetings" %}{% case count.plural %}{% when "one" %}встреча{% when "few" %}встречи{% else %}встреч{% endcase %}
+    {%- endcase -%}
+  {%- endfor -%}
+{%- endif -%}

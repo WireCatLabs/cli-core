@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest"
+import { type LinkForm, linkFor, parseLink } from "../../domain/links.js"
 import { TELEGRAM_TEXT_CHARS } from "../deliver.js"
 import { prepareReport, renderReport } from "./render.js"
 import { parseReport } from "./schema.js"
@@ -15,9 +16,30 @@ const digest = (sections: unknown[] = SECTIONS, extra: Record<string, unknown> =
     summary: "Три ответа ждут вас, один платёж просрочен.",
     sections,
     health: [
+      {
+        source: "Telegram",
+        account: "@ownerdemo",
+        reason: "sync-failed",
+        since: "2026-11-04T23:10:00+03:00",
+        stale_hours: 33,
+        refs: ["sync:telegram/1001"],
+      },
+      { source: "MAX", account: "старый аккаунт 394…", reason: "no-schedule", since: null, stale_hours: 0 },
       { source: "MAX", stale_hours: 50, refs: ["account:max/1"] },
       { source: "почта Gmail", stale_hours: 3 },
     ],
+    scope: {
+      from: "2026-11-05T08:30:00+03:00",
+      to: "2026-11-06T08:30:00+03:00",
+      sources: [
+        { kind: "telegram", accounts: 1 },
+        { kind: "max", accounts: 1 },
+        { kind: "whatsapp", accounts: 1 },
+        { kind: "mail", accounts: 4 },
+      ],
+      counts: { chats: 31, mail: 12, tasks: 17, meetings: 0 },
+    },
+    tasks: { overdue: 5, today: 3, tomorrow: 2, new: 4, new_since: "2026-11-05T08:30:00+03:00" },
     internal: { gaps: [{ ref: "msg:email/9", what: "не проверено", section: "owed" }], notes: "секрет" },
     ...extra,
   })
@@ -55,7 +77,7 @@ const SECTIONS = [
         quote: "Сможем подписать в пятницу?",
         since: "2026-11-04T14:20:00+03:00",
         channel: "mail",
-        refs: ["msg:email/1"],
+        refs: ["msg:email/anna%40example.com/5005/6006"],
         links: [{ kind: "web", url: "https://attacker.example/", label: "письмо" }],
       },
       {
@@ -65,14 +87,23 @@ const SECTIONS = [
         action: "можно ли перенести поставку плитки на 20-е?",
         since: "2026-11-05T19:00:00+03:00",
         channel: "telegram",
+        refs: ["chat:telegram/1001/4004"],
       },
-      { type: "task", topic: "Акт сверки для «Северного ветра»", due: "2026-11-04" },
+      { type: "task", topic: "Акт сверки для «Северного ветра»", due: "2026-11-04", refs: ["task:80"] },
       { type: "task", topic: "Смета «Ремонт офиса»", due: "2026-11-06T18:00:00+03:00", who: "Марина Орлова" },
     ],
   },
   {
     kind: "decisions",
-    items: [{ type: "decision", topic: "Находки из почты", action: "ждут проверки", count: 12 }],
+    items: [
+      {
+        type: "decision",
+        topic: "Находки из почты",
+        action: "ждут проверки",
+        count: 12,
+        refs: ["proposal:fact%3A512"],
+      },
+    ],
   },
   {
     kind: "meetings",
@@ -108,19 +139,103 @@ const SECTIONS = [
 
 const options = { language: "ru", now: NOW, timeZone: ZONE }
 
-const viewOf = (text: string, language = "ru") => {
+const viewOf = (text: string, language = "ru", form: LinkForm = "web") => {
   const parsed = parseReport(text)
   if (!parsed || "invalid" in parsed) throw new Error(`not a report: ${JSON.stringify(parsed)}`)
-  return reportView(parsed.report, { language, now: NOW, timeZone: ZONE })
+  return reportView(parsed.report, {
+    language,
+    now: NOW,
+    timeZone: ZONE,
+    linkOf: (ref) => linkFor(ref, { form, env: {} }),
+  })
 }
 
 describe("a wirecat.report/1 document", () => {
   it.each(["telegram", "email", "text"] as const)("renders the ru digest for %s", async (channel) => {
-    const rendering = await renderReport(viewOf(digest()), channel)
+    const rendering = await renderReport(viewOf(digest(), "ru", channel === "text" ? "app" : "web"), channel)
     expect(rendering).toMatchObject({ templateFailed: false, templateTags: 0 })
     const extension = channel === "text" ? "txt" : "html"
     await expect(`${rendering.text}\n`).toMatchFileSnapshot(`__snapshots__/morning-digest.ru.${channel}.${extension}`)
     expect(rendering.text).not.toMatch(/msg:|account:|attacker|секрет|owed/)
+  })
+})
+
+describe("links, task groups, sync health and the footer", () => {
+  it("links every slice kind with an https link the grammar accepts, and keeps those hrefs", async () => {
+    const { text, templateTags } = await renderReport(viewOf(digest()), "telegram")
+    const hrefs = [...text.matchAll(/href="([^"]+)"/g)].map((match) => match[1] as string)
+    expect(hrefs.map((href) => parseLink(href)?.type)).toEqual([
+      "message",
+      "chat",
+      "task",
+      "tasks",
+      "tasks",
+      "tasks",
+      "tasks",
+      "proposal",
+      "sync",
+    ])
+    expect(hrefs.every((href) => href.startsWith("https://wirecat.dev/o#/v1/"))).toBe(true)
+    expect(templateTags).toBe(0)
+  })
+
+  it("writes the group links, the account's sync problem and what was viewed", async () => {
+    const { text } = await renderReport(viewOf(digest()), "text")
+    expect(text).toContain(
+      "Все просроченные (5) https://wirecat.dev/o#/v1/tasks/overdue · на сегодня (3) https://wirecat.dev/o#/v1/tasks/today",
+    )
+    expect(text).toContain("новые (4) https://wirecat.dev/o#/v1/tasks/new/2026-11-05T08%3A30%3A00%2B03%3A00")
+    expect(text).toContain(
+      "🛠 Telegram (@ownerdemo): синхронизация падает с 4 ноября · https://wirecat.dev/o#/v1/sync/telegram/1001",
+    )
+    expect(text).toContain("🛠 MAX (старый аккаунт 394…): нет расписания синхронизации\n🛠 MAX не обновлялся 2 дня")
+    expect(text.split("\n").at(-1)).toBe(
+      "Просмотрено за 24 ч: Telegram, MAX, WhatsApp, почта (4 ящика) · 31 чат, 12 писем, 17 задач",
+    )
+  })
+
+  it("names the window in days, and leaves out zero groups and zero counts", async () => {
+    const scope = {
+      from: "2026-11-03T08:30:00+03:00",
+      to: "2026-11-06T08:30:00+03:00",
+      sources: [{ kind: "mail", accounts: 1 }],
+      counts: { chats: 0, mail: 1, tasks: 0 },
+    }
+    const { text } = await renderReport(viewOf(digest(SECTIONS, { scope, tasks: { today: 1, new: 2 } }), "en"), "text")
+    expect(text.split("\n").at(-1)).toBe("Viewed over 3 days: mail · 1 email")
+    expect(text).toContain("Due today (1) https://wirecat.dev/o#/v1/tasks/today · new (2)\n")
+  })
+
+  it("leaves every link out when links are off, and keeps the words", async () => {
+    const prepared = await prepareReport(digest(), { ...options, env: { WIRECAT_LINKS: "off" } })
+    expect(prepared?.telegram).not.toContain("<a ")
+    expect(prepared?.terminal).not.toContain("wirecat://")
+    expect(prepared?.text).toContain("Все просроченные (5) · на сегодня (3)")
+  })
+
+  it("prepares web links for the routes, app links for the terminal, and the checked document", async () => {
+    const prepared = await prepareReport(digest(), { ...options, env: {} })
+    expect(prepared?.text).toContain("https://wirecat.dev/o#/v1/task/80")
+    expect(prepared?.terminal).toContain("wirecat://open/v1/task/80")
+    expect(prepared?.terminal).not.toContain("https://wirecat.dev")
+    expect(prepared?.notice).toBe("☀️ Сводка на пятницу, 6 ноября\nТри ответа ждут вас, один платёж просрочен.")
+    const document = JSON.parse(prepared?.document ?? "")
+    expect(document).not.toHaveProperty("internal")
+    expect(document.sections[1].items[0]).not.toHaveProperty("links")
+    expect(document.tasks.new_since).toBe("2026-11-05T08:30:00+03:00")
+    const again = await prepareReport(JSON.stringify(document), options)
+    expect(JSON.parse(again?.document ?? "")).toEqual(document)
+  })
+
+  it("still reads a document written before accounts and scope, and refuses a health entry with neither hours nor reason", async () => {
+    const old = await prepareReport(
+      digest(SECTIONS, { health: [{ source: "MAX", stale_hours: 50 }], scope: undefined, tasks: undefined }),
+      options,
+    )
+    expect(old?.text).toContain("🛠 MAX не обновлялся 2 дня")
+    expect(old?.text).not.toContain("Просмотрено")
+    const broken = await prepareReport(digest(SECTIONS, { health: [{ source: "MAX" }] }), options)
+    expect(broken?.run.invalid).toBe("health[0].stale_hours")
   })
 })
 
@@ -163,7 +278,7 @@ describe("the platform rules", () => {
       const { text, templateTags } = await renderReport(viewOf(digest(injected)), channel)
       expect(text).toContain("Злоумышленник &lt;a href=&quot;https://evil.example&quot;&gt;клик&lt;/a&gt;")
       expect(text).toContain("&lt;b&gt;срочно&lt;/b&gt; &amp; важно")
-      expect(text).not.toContain("<a ")
+      expect(text).not.toMatch(/<a href="https:\/\/evil/)
       expect(templateTags).toBe(0)
     }
   })
@@ -229,7 +344,9 @@ describe("an answer as a report", () => {
   })
 
   it("says a quiet day, and does not call it calm while a source is stale", async () => {
-    expect((await prepareReport(digest([]), options))?.text).toContain("Новых дел нет, но MAX не обновлялся 2 дня.")
+    const quiet = (await prepareReport(digest([]), options))?.text
+    expect(quiet).toContain("Новых дел нет, но синхронизация требует внимания.")
+    expect(quiet).toContain("🛠 MAX не обновлялся 2 дня")
     const fresh = await prepareReport(digest([], { health: [] }), options)
     expect(fresh?.text).toContain("Тихое утро: ничего срочного.")
   })

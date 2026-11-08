@@ -2,9 +2,12 @@ import { spawn } from "node:child_process"
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { basename, join } from "node:path"
 import { CliError, errorCodes, writeSecurely } from "@wirecat/cli-base"
+import { linkConfigOf } from "../domain/links.js"
 import { type AppIdentity, mailHolderVariable, readOnlyLockOf } from "../ports/app.js"
 import { recordLogFor } from "../runs/record-log.js"
 import { childTrace } from "../runs/scope.js"
+import { storePath } from "../store/path.js"
+import { readSharedSection, sharedConfigPath } from "../store/shared-config.js"
 import { type Delivery, deliver } from "./deliver.js"
 import { prepareReport, type ReportRun } from "./report/render.js"
 import type { ServerSystem } from "./system.js"
@@ -504,6 +507,15 @@ export const timerFor = (app: AppIdentity, system: ServerSystem, env: NodeJS.Pro
   )
 }
 
+/** The shared `links` settings; a config file that cannot be read keeps the default rather than stop a digest. */
+const sharedLinks = (env: NodeJS.ProcessEnv) => {
+  try {
+    return linkConfigOf(readSharedSection(sharedConfigPath(storePath(env), env), "links"))
+  } catch {
+    return linkConfigOf(undefined)
+  }
+}
+
 /** A desktop notification; a machine without one loses only the notice, never the run. */
 export const notify = async (system: ServerSystem, env: NodeJS.ProcessEnv, title: string, body: string) => {
   const argv =
@@ -657,16 +669,20 @@ export const runSchedule = async (
   const { exitCode, output } = last
   const errors = agent ? output.replace(/\.md$/, ".log") : output
   if (agent && exitCode === 0) copyFileSync(output, join(folder, "latest.md"))
+  const runEnv = { ...env, ...schedule.environment }
   const prepared =
     agent && exitCode === 0
       ? await prepareReport(readFileSync(output, "utf8"), {
-          language: await ownerLanguage({ ...env, ...schedule.environment }).catch(() => "ru"),
+          language: await ownerLanguage(runEnv).catch(() => "ru"),
           now: now().getTime(),
+          links: sharedLinks(runEnv),
+          env: runEnv,
         })
       : undefined
   const latestText = join(folder, "latest.txt")
   if (prepared) {
-    writeFileSync(latestText, `${prepared.text}\n`, { mode: 0o600 })
+    writeFileSync(latestText, `${prepared.terminal}\n`, { mode: 0o600 })
+    if (prepared.document) writeFileSync(output.replace(/\.md$/, ".report.json"), prepared.document, { mode: 0o600 })
     last = rewriteRun(join(folder, "last.json"), { ...last, report: prepared.run })
   } else if (agent && exitCode === 0) rmSync(latestText, { force: true })
 
@@ -691,7 +707,6 @@ export const runSchedule = async (
   const routes = schedule.to ?? []
   if (routes.length > 0 && (exitCode === 0 ? mode === "always" : mode !== "never")) {
     const at = shortTime(last.at)
-    const runEnv = { ...env, ...schedule.environment }
     const locked = readOnlyLockOf(app, runEnv)
     const deliveries = await deliver(
       system,
