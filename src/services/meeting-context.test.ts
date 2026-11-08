@@ -250,3 +250,19 @@ it("lets an agent's participant link wait for the owner as a proposal, and moves
     (await store.meetings.participantPerson({ accountId, meetingId: details.meeting.id, participantId })).personUid,
   ).toBe(before.personUid)
 })
+
+it("takes a run that names no author for an agent's, so its participant link is a proposal", async () => {
+  const { store, accountId, details } = await fixture()
+  await store.people.savePeople(account, [{ id: "bob-sample", name: "Bob Sample" }])
+  const bob = (await store.people.personOf({ provider: "example", id: "bob-sample" }))?.uid as string
+  const participantId = details.participants[0]?.id ?? 0
+  const service = await createMeetingContextService(store, account)
+
+  const { result } = await service.change(
+    details.meeting.id,
+    { action: "person.link", participantId, personUid: bob, targetAccountIds: [accountId] },
+    { apply: true },
+  )
+
+  expect(result).toMatchObject({ changed: false, proposal: expect.any(String) })
+})

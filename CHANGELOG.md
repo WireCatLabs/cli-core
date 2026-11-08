@@ -69,9 +69,10 @@ shape of this file.
   `MENTION_STATUSES`, `status:` and the `mention_decision` answer) until the owner decides: `linked` on confirm,
   `found` again on reject. The association's `changed` is `false` and its `person_uid` the participant's current
   person.
-- **`createMeetingContextService(store, account, { author })` takes who runs it, required: `"owner"` or `"agent"`.**
-  It linked every participant as the owner's; an agent's `person.link` now opens a proposal. Pass `"agent"` whenever
-  an agent runs the command (`actorOf`).
+- **`createMeetingContextService(store, account, { author })` takes who runs it: `"owner"` or `"agent"`.** It linked
+  every participant as the owner's; an agent's `person.link` now opens a proposal. Left out, `author` is `"agent"`, so
+  a caller that does not say who runs it no longer moves an identity as the owner: pass `"owner"` when the owner runs
+  the command (`actorOf`).
 - **`mergePerson` keeps the owner's person whichever side it is on, and gives the person that stays.**
   `linkIdentities`, the same-address join at import, a confirmed proposal and the scan could each move every identity
   of the owner onto a contact; the owner's uid now always stays.
