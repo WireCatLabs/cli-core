@@ -91,12 +91,14 @@ export {
   ADDED_PROVIDER,
   CRM_OPENS,
   FOLDER_PROVIDERS,
+  holdsKind,
   isFolderProvider,
   isKind,
   KINDS,
   type Kind,
   kindIn,
   kindOf,
+  kindsIn,
   PROVIDERS,
   type ProviderEntry,
   providerNamed,
@@ -158,6 +160,7 @@ export {
   usableLink,
 } from "./domain/relations.js"
 export { normalizeTag, TAG_TYPES, type TagType } from "./domain/tags.js"
+export { envelopeOfVcard, isVcard, type VcardIssue, type VcardOptions } from "./domain/vcard.js"
 export { type AppErrors, DETAILS as CORE_DETAILS, failureContext, REASONS as CORE_REASONS } from "./errors/reasons.js"
 export {
   canonicalMeetingReference,

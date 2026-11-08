@@ -74,7 +74,7 @@
         },
         "type": {
           "type": "string",
-          "pattern": "^(invoice|payment|person|organization|project|order|product|contract|subscription|wallet|transaction|deal|lead|pipeline|custom:[a-z0-9][a-z0-9_-]{0,62})$"
+          "pattern": "^(invoice|payment|person|organization|project|order|product|contract|subscription|wallet|transaction|deal|lead|message|event|pipeline|custom:[a-z0-9][a-z0-9_-]{0,62})$"
         },
         "external_id": {
           "type": "string",
@@ -327,6 +327,40 @@
           "if": {
             "properties": {
               "type": {
+                "const": "message"
+              }
+            },
+            "required": ["type"]
+          },
+          "then": {
+            "properties": {
+              "fields": {
+                "$ref": "#/$defs/fields-message"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "event"
+              }
+            },
+            "required": ["type"]
+          },
+          "then": {
+            "properties": {
+              "fields": {
+                "$ref": "#/$defs/fields-event"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
                 "const": "pipeline"
               }
             },
@@ -361,7 +395,7 @@
         },
         "type": {
           "type": "string",
-          "pattern": "^(invoice|payment|person|organization|project|order|product|contract|subscription|wallet|transaction|deal|lead|pipeline|custom:[a-z0-9][a-z0-9_-]{0,62})$"
+          "pattern": "^(invoice|payment|person|organization|project|order|product|contract|subscription|wallet|transaction|deal|lead|message|event|pipeline|custom:[a-z0-9][a-z0-9_-]{0,62})$"
         },
         "external_id": {
           "type": "string",
@@ -1087,6 +1121,95 @@
         }
       },
       "required": ["title", "pipeline", "stage"],
+      "additionalProperties": true
+    },
+    "fields-message": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["sms"],
+          "description": "sms: a text message of the phone"
+        },
+        "direction": {
+          "type": "string",
+          "enum": ["in", "out"],
+          "description": "in: the other side wrote it; out: the owner did"
+        },
+        "phone": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "description": "The other side's number as the phone shows it: read to E.164 with the store's phone_countries"
+        },
+        "name": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "The other side's name as the phone shows it"
+        },
+        "thread": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "The phone's thread id; the number when left out"
+        },
+        "body": {
+          "type": "string",
+          "maxLength": 20000,
+          "description": "The text"
+        },
+        "sent_at": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}(:[0-9]{2}(\\.[0-9]{1,9})?)?(Z|[+-][0-9]{2}:[0-9]{2})$",
+          "description": "When it was sent"
+        },
+        "read": {
+          "type": ["boolean", "null"],
+          "description": "An incoming message the owner opened"
+        }
+      },
+      "required": ["kind", "direction", "phone", "body", "sent_at"],
+      "additionalProperties": true
+    },
+    "fields-event": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["call"],
+          "description": "call: a phone call"
+        },
+        "direction": {
+          "type": "string",
+          "enum": ["in", "out", "missed"],
+          "description": "in, out, or missed: a call the owner did not take"
+        },
+        "phone": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "description": "The other side's number as the phone shows it: read to E.164 with the store's phone_countries"
+        },
+        "name": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "The other side's name as the phone shows it"
+        },
+        "started_at": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}(:[0-9]{2}(\\.[0-9]{1,9})?)?(Z|[+-][0-9]{2}:[0-9]{2})$",
+          "description": "When it rang"
+        },
+        "duration": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "maximum": 604800,
+          "description": "Seconds talked; 0 when missed"
+        }
+      },
+      "required": ["kind", "direction", "phone", "started_at"],
       "additionalProperties": true
     },
     "fields-pipeline": {

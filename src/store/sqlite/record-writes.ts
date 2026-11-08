@@ -38,6 +38,7 @@ import {
 } from "./record-matching.js"
 import { codeOf, type Projection, type ProjectionTools, type Row, refusal, stringField } from "./record-projection.js"
 import { RECORD_PROJECTORS } from "./record-projectors.js"
+import { importOnly } from "./record-projectors-phone.js"
 import { recordRelationsOver } from "./record-relations.js"
 import { recordSettlingOver } from "./record-settling.js"
 import { importStampsOver } from "./record-stamps.js"
@@ -121,10 +122,16 @@ export const recordWritesOver = (context: StoreContext) => {
     return tools
   }
 
-  const projectionOf = (row: Row, source: EnvelopeSource, related: ReturnType<typeof relatedOf>): Projection => ({
+  const projectionOf = (
+    row: Row,
+    source: EnvelopeSource,
+    related: ReturnType<typeof relatedOf>,
+    options: EnvelopeOptions,
+  ): Projection => ({
     externalId: String(row.external_id),
     accountId: Number(row.account_id),
     source,
+    options,
     fields: JSON.parse(String(row.fields)) as Row,
     related: related.related,
     as: related.as,
@@ -187,7 +194,7 @@ export const recordWritesOver = (context: StoreContext) => {
     if (projector === null) return { missing: [] }
     const related = relatedOf(Number(row.id), type)
     if (related.missing.length > 0) return { missing: related.missing }
-    const projection = projectionOf(row, source, related)
+    const projection = projectionOf(row, source, related, options)
     if (hasV1Roles(type)) for (const name of FIELD_REFERENCE_ROLES) stringField(projection.fields, name)
     const ref = projector.create(projection, toolsOf())
     const entity = setEntity(Number(row.id), ref, false)
@@ -269,11 +276,14 @@ export const recordWritesOver = (context: StoreContext) => {
     if (kind === "re-propose" && !stamps.untouched(type, entityId)) return {}
     const related = relatedOf(id, type)
     if (related.missing.length > 0) return {}
-    if (!projector.update(ref, projectionOf(row, source, related), toolsOf())) return {}
+    if (!projector.update(ref, projectionOf(row, source, related, options), toolsOf())) return {}
     if (kind === "re-propose") stamps.stamp(type, entityId)
     if (isProposed(type, entityId)) proposed(ref)
     return undefined
   }
+
+  const restorer = (type: unknown) =>
+    isRecordType(String(type)) ? RECORD_PROJECTORS[String(type) as RecordType]?.restore : undefined
 
   const writeOne = (
     accountId: number,
@@ -282,6 +292,8 @@ export const recordWritesOver = (context: StoreContext) => {
     options: EnvelopeOptions,
     proposed: (ref: string) => void,
   ): WriteOutcome => {
+    if (isRecordType(record.type) && (RECORD_TYPES[record.type] as RecordTypeSpec).importOnly)
+      importOnly(source, record.type)
     const stored = sql("SELECT * FROM records WHERE account_id = ? AND type = ? AND external_id = ?").get(
       accountId,
       record.type,
@@ -310,6 +322,13 @@ export const recordWritesOver = (context: StoreContext) => {
         source.batch_id,
         Number(stored.id),
       )
+      const remove = isRecordType(String(stored.type))
+        ? RECORD_PROJECTORS[String(stored.type) as RecordType]?.remove
+        : undefined
+      if (remove && stored.entity_id != null) {
+        remove(entityRef(stored.entity_type, stored.entity_id) as string, toolsOf())
+        return { status: "deleted", id: Number(stored.id) }
+      }
       return { status: "deleted", id: Number(stored.id), ...(liveEntity(stored) ? { flagged: {} } : {}) }
     }
     const fields = JSON.stringify(record.fields)
@@ -365,6 +384,18 @@ export const recordWritesOver = (context: StoreContext) => {
       made = done.made !== undefined
       unmatched = done.unmatched
       ignored = done.ignored
+    } else if (typed && stored?.entity_id != null && stored.deleted_at != null && restorer(stored.type)) {
+      // A source copy's record that comes back is live again: the delete tombstoned it, so this brings it back.
+      const related = relatedOf(id, record.type as RecordType)
+      if (related.missing.length === 0) {
+        restorer(stored.type)?.(
+          entityRef(stored.entity_type, stored.entity_id) as string,
+          projectionOf(sql("SELECT * FROM records WHERE id = ?").get(id) as Row, source, related, options),
+          toolsOf(),
+        )
+        sql("UPDATE records SET projected_fingerprint = fingerprint WHERE id = ?").run(id)
+        flagged = undefined
+      }
     } else if (typed && stored?.entity_id != null && stored.deleted_at == null) {
       const resettles = specOf(record.type as RecordType).update === "re-settle"
       // A payment takes its settles again even when only they changed, so its projected fingerprint lags behind.

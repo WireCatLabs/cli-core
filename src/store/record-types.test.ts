@@ -35,7 +35,8 @@ describe("the record type registry", () => {
   it("is the source of the tables, refs and tombstones the store resolves", () => {
     for (const [type, spec] of Object.entries(RECORD_TYPES)) {
       expect(ENTITY_TABLES[type as keyof typeof ENTITY_TABLES]).toBe(spec.table)
-      expect(SIMPLE_REFERENCES).toContain(type)
+      // A message's ref is its locator, msg:<provider>/<account>/<chat>/<message>.
+      if (type !== "message") expect(SIMPLE_REFERENCES).toContain(type)
     }
   })
 
@@ -44,7 +45,7 @@ describe("the record type registry", () => {
       for (const [name, role] of rolesOf(type)) {
         for (const target of role.targets)
           expect([type, name, SIMPLE_REFERENCES.includes(target as never)]).toEqual([type, name, true])
-        const needsColumn = !role.kept && !role.many
+        const needsColumn = !role.kept && !role.many && !role.linked
         expect([type, name, needsColumn ? role.column !== undefined : true]).toEqual([type, name, true])
       }
   })

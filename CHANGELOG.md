@@ -7,6 +7,32 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **Phone data in the records envelope.** A `message` of kind `sms` becomes a chat and message, and an `event` of kind
+  `call` an event of the `calls` calendar (`event_type: call`, never busy), both in the one account the import names,
+  so `search all`, `events list event_type:call`, an account group and a person's context read them. The other side is
+  the `counterpart` person record, matched by phone or made; `events list person:` finds a call through it.
+  `envelopeOfVcard(text, { provider, account, batchId, region })` and `isVcard` turn a `.vcf` (2.1, 3.0, 4.0) into
+  persons and their organizations, and `ingestVcard` (`./services`) imports it. A number without a country code is
+  read only with `region`.
+- **A provider may hold several kinds.** A provider entry takes `kinds` beside `kind` (its first), and search lanes
+  pick the accounts whose provider holds their kind (`holdsKind`, `kindsIn`). The seeded `phone` holds `messages` and
+  `events`. An entry with `kind` alone means what it meant; an older build reads the first kind only.
+  Entries of one name join their kinds, so registering an older shape never drops another build's. `imported`
+  marks a provider no sync writes; SMS and calls are taken only there (`record.provider-not-imported`), never into a
+  chat whose membership is not `imported` (`record.chat`), and an SMS moved to another thread is refused
+  (`record.moved`). A deleted SMS or call record tombstones its message or event, and
+  sending it again brings them back.
+
+### Changed — may break callers
+
+- **`EntryEventType` has `call`**, and `events list event_type:` takes it. A switch over the kinds needs a branch.
+- **`kindIn` and `ListedAccount.kind` name a provider's first kind only.** A provider may hold several (`kindsIn`,
+  `ListedAccount.kinds`, `holdsKind`); code that tests `kindIn(provider) === kind` misses the others.
+- **`calendarAccounts`, `inSource(..., "events")` and `events list person:` now return phone accounts and calls**:
+  a phone account holds events, and a call's other side is found by its `related-to` link.
+
 ## 0.607.0 — 08.11.2026
 
 ### Added

@@ -1,6 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import type { RecordEntityType } from "../../domain/record-types.js"
-import type { EnvelopeSource } from "../../domain/records.js"
+import type { EnvelopeOptions, EnvelopeSource } from "../../domain/records.js"
 import type { contractOperationsOver } from "./business-contracts.js"
 import type { crmRowsOver } from "./crm.js"
 import type { financeOperationsOver, PaymentDetail } from "./finance.js"
@@ -26,6 +26,7 @@ export interface Projection {
   externalId: string
   accountId: number
   source: EnvelopeSource
+  options: EnvelopeOptions
   fields: Row
   /** The entities its relations resolved to, by role, in the order sent. */
   related: Map<string, string[]>
@@ -58,6 +59,10 @@ export interface RecordProjector {
    * decided it, and the change is only flagged. Left out, every change is flagged.
    */
   update?(ref: string, projection: Projection, tools: ProjectionTools): boolean
+  /** A deleted record's entity, for a source copy (an SMS, a call) the delete takes away too. Left out, it stays. */
+  remove?(ref: string, tools: ProjectionTools): void
+  /** Brings back what `remove` took when the record is sent again after its delete. */
+  restore?(ref: string, projection: Projection, tools: ProjectionTools): void
 }
 
 export const IMPORTER = { bot: "import" } as const satisfies Author

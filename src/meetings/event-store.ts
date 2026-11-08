@@ -7,8 +7,15 @@ import type { Event } from "./model.js"
 
 /** RFC 5545 PARTSTAT: a participant's answer, and the owner's own. */
 export type ParticipantResponse = "needs-action" | "accepted" | "tentative" | "declined" | "delegated"
-/** What kind of entry it is. Only `default` and `from-mail` are searched (requirements 3.4). */
-export type EntryEventType = "default" | "out-of-office" | "focus" | "working-location" | "birthday" | "from-mail"
+/** What kind of entry it is. `default`, `from-mail` and `call` are searched (requirements 3.4); `call` is a phone's. */
+export type EntryEventType =
+  | "default"
+  | "out-of-office"
+  | "focus"
+  | "working-location"
+  | "birthday"
+  | "from-mail"
+  | "call"
 /** RFC 5545 TRANSP. */
 export type EntryTransparency = "opaque" | "transparent"
 /** RFC 5545 CLASS, plus `default`: the calendar's own setting. */

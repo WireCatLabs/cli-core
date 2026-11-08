@@ -1,4 +1,12 @@
-import { addProvider, type ProviderEntry, providerEntryOf, useStoredProviders } from "../../domain/providers.js"
+import {
+  addProvider,
+  importedOf,
+  kindsOfEntry,
+  type ProviderEntry,
+  providerEntryOf,
+  unitedKinds,
+  useStoredProviders,
+} from "../../domain/providers.js"
 import type { CacheDatabase } from "../driver.js"
 import { write } from "./transaction.js"
 
@@ -28,10 +36,29 @@ const nameOf = (stored: unknown) =>
  * Writes `entry` over the stored one of its name and loads the result. Every run of every CLI calls it, so it
  * writes only when the entry changed. Entries this build cannot read stay stored for the CLIs that can.
  */
+/**
+ * The entry with what the stored one of its name held beyond it: another build's kinds are never dropped, and
+ * `imported` is kept as `importedOf` rules, so it can be neither stripped nor added later.
+ */
+const keptBeside = (entry: ProviderEntry, stored: readonly unknown[]): ProviderEntry => {
+  const found = stored.find((one) => nameOf(one) === entry.name)
+  let held: ProviderEntry | undefined
+  try {
+    held = found === undefined ? undefined : providerEntryOf(found)
+  } catch {
+    held = undefined
+  }
+  const imported = importedOf(entry, held)
+  const { imported: _given, ...rest } = entry
+  const kinds =
+    held && held.kind === entry.kind ? unitedKinds(kindsOfEntry(held), kindsOfEntry(entry)) : kindsOfEntry(entry)
+  return { ...rest, ...(kinds.length > 1 ? { kinds } : {}), ...(imported ? { imported: true } : {}) }
+}
+
 export const registerProvider = (database: CacheDatabase, value: ProviderEntry, now: number): void => {
-  const entry = providerEntryOf(value)
   write(database, () => {
     const stored = storedProvidersOf(database)
+    const entry = keptBeside(providerEntryOf(value), stored)
     const others = stored.filter((one) => nameOf(one) !== entry.name)
     try {
       useStoredProviders(others)

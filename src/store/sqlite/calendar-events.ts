@@ -2,8 +2,13 @@ import { CliError } from "@wirecat/cli-base"
 import type { Event, EventFilter } from "../../meetings/index.js"
 import type { CacheDatabase } from "../driver.js"
 import { eventOf } from "./events.js"
+import { COUNTERPART_ROLE, linkKind } from "./link-kinds.js"
 
 const DAY = 86_400_000
+
+const COUNTERPART_LINK =
+  "EXISTS (SELECT 1 FROM links l WHERE l.from_type = 'event' AND l.from_id = e.id AND l.to_type = 'person' " +
+  `AND l.to_id = ? AND l.kind = ${linkKind("related-to")} AND l.role = '${COUNTERPART_ROLE}')`
 
 const accountsOf = (filter: EventFilter): readonly number[] | undefined => {
   if (filter.accountIds !== undefined && filter.accountId !== undefined)
@@ -76,13 +81,14 @@ export const listEvents = (database: CacheDatabase, filter: EventFilter): Event[
   if (filter.eventType !== undefined) clauses.push(ofKind([filter.eventType]))
   if (filter.notEventTypes?.length) clauses.push(`NOT ${ofKind(filter.notEventTypes)}`)
   if (filter.personId !== undefined) {
+    // A phone call's other side is a number, which a participant (an address) cannot hold: the import links the person.
     clauses.push(
-      entries(
+      `(${entries(
         "EXISTS (SELECT 1 FROM calendar_entry_participants p JOIN identity_links il ON il.identity_id = p.identity_id " +
           "WHERE p.entry_id = ce.id AND il.person_id = ?)",
-      ),
+      )} OR ${COUNTERPART_LINK})`,
     )
-    params.push(filter.personId)
+    params.push(filter.personId, filter.personId)
   }
   const account = (alias: string) => (accounts === undefined ? "" : ` AND ${inAccounts(`${alias}.account_id`)}`)
   if (filter.changedSince !== undefined) {

@@ -1,5 +1,17 @@
 import { describe, expect, it } from "vitest"
-import { isKind, KINDS, kindIn, kindOf, PROVIDERS, providerNamed } from "./providers.js"
+import {
+  addProvider,
+  holdsKind,
+  isKind,
+  KINDS,
+  kindIn,
+  kindOf,
+  kindsIn,
+  PROVIDERS,
+  providerEntryOf,
+  providerNamed,
+  useProviders,
+} from "./providers.js"
 
 describe("the provider registry", () => {
   it("gives every provider one kind and every name or alias one provider", () => {
@@ -20,5 +32,35 @@ describe("the provider registry", () => {
     expect(isKind("events")).toBe(true)
     expect(isKind("Documents")).toBe(true)
     expect(isKind("telegram")).toBe(false)
+  })
+
+  it("lets one provider hold several kinds, the first its kind, and leaves a one-kind entry as it was", () => {
+    expect(kindsIn("phone")).toEqual(["messages", "events"])
+    expect(kindIn("phone")).toBe("messages")
+    expect(holdsKind("phone", "events")).toBe(true)
+    expect(kindsIn("telegram")).toEqual(["messages"])
+    expect(holdsKind("telegram", "events")).toBe(false)
+    expect(kindsIn("a-messenger-of-a-consumer")).toEqual([])
+    expect(providerEntryOf({ name: "gcal", kind: "events" })).toEqual({ name: "gcal", kind: "events", aliases: [] })
+    expect(providerEntryOf({ name: "box", kinds: ["mail", "notes"] })).toMatchObject({
+      kind: "mail",
+      kinds: ["mail", "notes"],
+    })
+    expect(() => providerEntryOf({ name: "box", kind: "notes", kinds: ["mail", "notes"] })).toThrow(
+      /first of its kinds/,
+    )
+    expect(() => providerEntryOf({ name: "box", kinds: [] })).toThrow(/kind is one of/)
+  })
+
+  it("joins an older one-kind entry to a provider that holds more, and still refuses one that disagrees", () => {
+    try {
+      useProviders([{ name: "phone", kind: "messages", aliases: ["mobile"] }])
+      expect(kindsIn("phone")).toEqual(["messages", "events"])
+      expect(providerNamed("mobile")?.name).toBe("phone")
+      expect(() => addProvider({ name: "phone", kind: "events", aliases: [] })).toThrow(/disagree on the kind/)
+      expect(() => addProvider({ name: "telegram", kind: "events", aliases: [] })).toThrow(/disagree on the kind/)
+    } finally {
+      useProviders([])
+    }
   })
 })

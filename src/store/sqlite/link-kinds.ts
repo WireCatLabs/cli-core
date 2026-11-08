@@ -33,3 +33,6 @@ export { RELATION_KINDS } from "../../domain/relations.js"
 
 /** A kind as an SQL literal, so a kind written into a query is checked against the list. */
 export const linkKind = (kind: LinkKind): string => `'${kind}'`
+
+/** The `role` of the `related-to` link from a phone call's event to the person on the other end. */
+export const COUNTERPART_ROLE = "counterpart"

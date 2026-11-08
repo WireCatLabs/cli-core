@@ -11,6 +11,7 @@ import {
   type RecordsEnvelope,
   recordErrors,
 } from "../domain/records.js"
+import { envelopeOfVcard, type VcardIssue, type VcardOptions } from "../domain/vcard.js"
 import { type RecordsRun, type RunItem, waitingPointer } from "../store/index.js"
 import type { MessageStore } from "../store/store.js"
 
@@ -167,4 +168,24 @@ export const ingestLines = async (
     }
   }
   return receiptOf(dryRun, source, await store.records.run(source, items(), { dryRun, chunk, options, onIssue }))
+}
+
+export interface IngestVcardOptions extends IngestOptions, Omit<VcardOptions, "account"> {}
+
+/**
+ * A `.vcf` address book (`isVcard`) through `envelopeOfVcard`, then `ingest`: the receipt, and what the converter kept
+ * without matching (a national number with no `region`, a card repeated in the file).
+ */
+export const ingestVcard = async (
+  store: Pick<MessageStore, "records">,
+  text: string,
+  { provider, batchId, region, ...options }: IngestVcardOptions,
+): Promise<IngestReceipt & { vcard: VcardIssue[] }> => {
+  const { envelope, issues } = envelopeOfVcard(text, {
+    provider,
+    account: options.account,
+    batchId,
+    ...(region === undefined ? {} : { region }),
+  })
+  return { ...(await ingest(store, envelope, options)), vcard: issues }
 }

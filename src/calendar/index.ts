@@ -39,6 +39,7 @@ export {
   syncWithFeeds,
 } from "./feeds.js"
 export { type IcsEvent, type IcsOverride, type IcsRead, type IcsSkip, readIcs, writeIcs } from "./ics.js"
+export { accountsMeta } from "./reads.js"
 export { repeatRule } from "./recurrence.js"
 export type {
   BusyTimes,

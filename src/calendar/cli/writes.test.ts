@@ -291,7 +291,7 @@ describe("calendar write commands", () => {
     const tool = toolsFromCommands(describeProgram(program())).find(({ command }) => command === "events list")
     const query = JSON.stringify(tool?.input.entries.query)
     expect(query).toContain("-field:value or NOT field:value leaves out what matches, for event_type only")
-    expect(query).toContain("event_type (default|out-of-office|focus|working-location|birthday|from-mail)")
+    expect(query).toContain("event_type (default|out-of-office|focus|working-location|birthday|from-mail|call)")
     expect(query).not.toContain("the fields are below")
   })
 

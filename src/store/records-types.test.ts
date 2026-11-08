@@ -1,6 +1,9 @@
 import { afterEach, expect, it } from "vitest"
 import { RECORD_ENTITY_TYPES, RECORD_TYPES } from "../domain/record-types.js"
-import { envelopeOf, recordsFixture, SOURCE, take, upsert } from "../testing/records.js"
+import { envelopeOf, recordsFixture, SOURCE as SHEET, take, upsert } from "../testing/records.js"
+
+// SMS and calls are taken only under an import-only provider, so every type goes in under phone.
+const SOURCE = { ...SHEET, provider: "phone" }
 
 const handles: { close(): unknown }[] = []
 afterEach(async () => {
@@ -67,18 +70,31 @@ const EVERY_TYPE = [
     { direction: "in", amount: "200.00", date: "2026-11-01", splits: [{ amount: "150.00", category: "rent" }] },
     { relations: [{ role: "wallet", type: "wallet", external_id: "w-1" }] },
   ),
+  upsert(
+    "message",
+    "sms-1",
+    { kind: "sms", direction: "in", phone: "+44 7700 900001", body: "Счёт получил", sent_at: "2026-11-01T10:00:00Z" },
+    { relations: [{ role: "counterpart", type: "person", external_id: "p-1" }] },
+  ),
+  upsert(
+    "event",
+    "call-1",
+    { kind: "call", direction: "missed", phone: "+44 7700 900001", started_at: "2026-11-01T11:00:00Z" },
+    { relations: [{ role: "counterpart", type: "person", external_id: "p-1" }] },
+  ),
 ]
 
 it("imports one record of every type into its entity: a proposal where money counts, a direct row elsewhere", async () => {
   const { store } = await recordsFixture(handles)
   expect(new Set(EVERY_TYPE.map((record) => record.type))).toEqual(new Set(RECORD_ENTITY_TYPES))
-  const receipt = await take(store, envelopeOf(EVERY_TYPE))
+  const receipt = await take(store, envelopeOf(EVERY_TYPE, { provider: SOURCE.provider }))
   expect(receipt).toMatchObject({ refused: 0, errors: [], waiting: [], unmatched: [] })
   expect(receipt.created).toBe(EVERY_TYPE.length)
 
   for (const record of EVERY_TYPE) {
     const stored = await store.records.get({ ...SOURCE, type: record.type, externalId: record.external_id })
-    expect([record.key, stored?.entity?.split(":")[0]]).toEqual([record.key, record.type])
+    const prefix = record.type === "message" ? "msg" : record.type
+    expect([record.key, stored?.entity?.split(":")[0]]).toEqual([record.key, prefix])
     const review = RECORD_TYPES[record.type as keyof typeof RECORD_TYPES].review
     const proposed = receipt.proposed.includes(stored?.entity as string)
     // A contract without a value feeds no total: it is written confirmed.

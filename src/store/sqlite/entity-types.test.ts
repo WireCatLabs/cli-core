@@ -28,7 +28,7 @@ describe("the entity types a pointer may hold", () => {
             // Meeting FTS queue kinds are a separate closed registry, not polymorphic entity pointers.
             if (/^indexable_type\b/.test(match[0]) && Object.hasOwn(INDEX_CODES, type)) continue
             // A calendar entry's `event_type` is Google's kind of event, not a pointer.
-            if (/^event_type\b/.test(match[0])) continue
+            if (/^(event_type|eventType)\b/.test(match[0])) continue
             written.add(type)
           }
 

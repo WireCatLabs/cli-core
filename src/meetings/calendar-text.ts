@@ -55,6 +55,10 @@ export const ENTRY_METADATA_KEYS = [
   "hangoutLink",
   "locked",
   "privateCopy",
+  // A phone call's, from a records import: the entry's other columns have no place for them.
+  "callDirection",
+  "callSeconds",
+  "callNumber",
 ] as const
 
 export const entryMetadata = (metadata: Record<string, unknown> | null | undefined): Record<string, unknown> => {
