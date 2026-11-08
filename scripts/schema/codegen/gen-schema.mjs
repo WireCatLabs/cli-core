@@ -54,6 +54,8 @@ const NAMES = {
   "member_stays:chat_id,identity_id": "member_stays_open",
   "message_links:message_id,ifnull(parent_id, 0),source,kind,ifnull(build, 0)": "message_links_unique",
   "message_links:chat_id,build": "message_links_by_build",
+  "links:kind,from_type,from_id,to_type,to_id,ifnull(anchor, ''),ifnull(role, ''),ifnull(account_id, 0)":
+    "links_relationship_key",
   "conversations:chat_id,build,first_at": "conversations_by_chat",
   "conversation_chunks:content_hash": "conversation_chunks_by_hash",
   "reminders:account_id,state,due_at": "reminders_due",
@@ -101,8 +103,8 @@ const parseKey = (k) => {
 const colRef = (c) => {
   const desc = c.match(/^(\w+) DESC$/)
   if (desc) return `desc(table.${camel(desc[1])})`
-  const fn = c.match(/^ifnull\((\w+), 0\)$/)
-  if (fn) return `sql\`ifnull(\${table.${camel(fn[1])}}, 0)\``
+  const fn = c.match(/^ifnull\((\w+), (0|'')\)$/)
+  if (fn) return `sql\`ifnull(\${table.${camel(fn[1])}}, ${fn[2]})\``
   return `table.${camel(c)}`
 }
 const keyCode = (t, k) => {

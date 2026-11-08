@@ -1,10 +1,19 @@
-export type { CrmChanges, CrmIdPage, CrmPage, CrmSource, CrmSourceTraits } from "./source.js"
+export type {
+  CrmCallContext,
+  CrmChanges,
+  CrmGap,
+  CrmIdPage,
+  CrmPage,
+  CrmSource,
+  CrmSourceTraits,
+} from "./source.js"
 export {
   type CrmCursor,
   type CrmSyncIssue,
   type CrmSyncOptions,
   type CrmSyncReport,
   type CrmSyncResult,
+  crmGapsOf,
   crmStatus,
   cursorName,
   parseCrmCursor,

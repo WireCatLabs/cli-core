@@ -47,6 +47,9 @@ const V31_TABLES = [
   "taggings",
 ]
 
+/** Version 56 rewrites CRM links and folds duplicates, which an older build would write again. */
+const V56_TABLES = ["links", "proposed_actions"]
+
 /** One migration creates the whole schema; every later one is added as the next version. */
 export const MANIFEST: ManifestEntry[] = [
   { name: "20261010184427_initial", version: 1, minCompatible: 1 },
@@ -132,6 +135,9 @@ export const MANIFEST: ManifestEntry[] = [
   { name: "20261106225547_version-54-crm-fields", version: 54, minCompatible: 34 },
   { name: "20261107032742_version-55-decision-requests", version: 55, minCompatible: 34 },
   { name: "20261107043407_version-55-decision-requests-index", version: 55, minCompatible: 34 },
+  { name: "20261107162427_version-56-relationship-links", version: 56, minCompatible: 56, tables: V56_TABLES },
+  { name: "20261107162448_version-56-relationship-links-history", version: 56, minCompatible: 56, tables: V56_TABLES },
+  { name: "20261107163245_version-56-relationship-links-key", version: 56, minCompatible: 56, tables: V56_TABLES },
 ]
 
 export const generatedMigrations = (

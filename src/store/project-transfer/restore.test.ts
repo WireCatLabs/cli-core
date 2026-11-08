@@ -1,8 +1,9 @@
 import { afterEach, expect, it } from "vitest"
 import { projectTransferPairFixture } from "../../testing/project-transfer-pair.js"
+import { restoreAnnotationRecords } from "../sqlite/project-transfer/records.js"
 import { openStore } from "../store.js"
 import { snapshotProjectAnnotations } from "./snapshot.js"
-import { projectAnnotationSnapshotFingerprint } from "./snapshot-model.js"
+import { decodeProjectAnnotationSnapshot, projectAnnotationSnapshotFingerprint } from "./snapshot-model.js"
 import type { ProjectAnnotationStore } from "./store.js"
 
 const fixtures: Awaited<ReturnType<typeof projectTransferPairFixture>>[] = []
@@ -201,4 +202,34 @@ it("refuses missing or unknown restore arguments without writing", async () => {
     api.restore(Object.assign({ ...input, fingerprint: "a".repeat(64) }, { unexpected: true })),
   ).rejects.toMatchObject({ code: "validation_error", message: expect.stringContaining("unexpected") })
   expect(state(f)).toBe(before)
+})
+
+it("maps a snapshot relationship onto the one the target holds, confirming it when the snapshot did", async () => {
+  const f = await fixture()
+  const parsed = JSON.parse(f.snapshot) as { links: { kind: string; role: string | null; confirmed: boolean }[] }
+  const key = parsed.links.find((link) => link.kind === "related-to" && link.role === "key")
+  if (!key) throw new Error("the fixture has a key document link")
+  Object.assign(key, { confirmed: true, ends_at: 5_000, deleted_at: 6_000 })
+  const held = await f.store.notes.addLink({
+    from: f.document.ref,
+    to: f.project.ref,
+    kind: "related-to",
+    role: "key",
+    origin: "suggested",
+    confirmed: false,
+  })
+  // The public port refuses a target that already holds annotations; the records step must still never fail raw.
+  restoreAnnotationRecords(
+    f.db,
+    Number(f.project.ref.slice("project:".length)),
+    decodeProjectAnnotationSnapshot(JSON.stringify(parsed)),
+    f.bindings,
+  )
+  expect(
+    f.db
+      .prepare(
+        "SELECT id, confirmed FROM links WHERE kind = 'related-to' AND role = 'key' AND to_type = 'project' AND to_id = ?",
+      )
+      .all(Number(f.project.ref.slice("project:".length))),
+  ).toEqual([{ id: Number(held.id), confirmed: 1 }])
 })

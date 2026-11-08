@@ -92,9 +92,10 @@ export const restoreAnnotationRecords = (
     const from = resolve(link.from),
       to = resolve(link.to)
     if (!from) throw new CliError("validation_error", "project annotation link source is required")
-    const row = database
+    // A relationship the store already holds under its unique key keeps that row: the snapshot maps onto it.
+    const made = database
       .prepare(
-        "INSERT INTO links(from_type,from_id,to_type,to_id,kind,anchor,source,target_text,target_folded,role,evidence,metadata,confirmed,created_at,author,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id",
+        "INSERT INTO links(from_type,from_id,to_type,to_id,kind,anchor,source,target_text,target_folded,role,evidence,metadata,confirmed,created_at,author,updated_at,starts_at,ends_at,deleted_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT DO NOTHING RETURNING id",
       )
       .get(
         from.type,
@@ -113,8 +114,24 @@ export const restoreAnnotationRecords = (
         link.created_at,
         link.author,
         link.updated_at,
+        link.starts_at ?? null,
+        link.ends_at ?? null,
+        link.deleted_at ?? null,
       )
+    const row =
+      made ??
+      database
+        .prepare(
+          "SELECT id FROM links WHERE kind=? AND from_type=? AND from_id=? AND to_type IS ? AND to_id IS ? " +
+            "AND ifnull(anchor,'')=ifnull(?,'') AND ifnull(role,'')=ifnull(?,'') AND account_id IS NULL",
+        )
+        .get(link.kind, from.type, from.id, to?.type ?? null, to?.id ?? null, link.anchor, link.role)
     if (!row) throw new CliError("configuration_error", "project annotation link insertion failed")
+    // The owner confirmed it where the snapshot was taken: the row it maps onto says so too.
+    if (!made && link.confirmed)
+      database
+        .prepare("UPDATE links SET confirmed = 1, updated_at = max(updated_at, ?) WHERE id = ? AND confirmed = 0")
+        .run(link.updated_at, Number(row.id))
     mappings[link.ref] = `link:${row.id}`
   }
   return mappings

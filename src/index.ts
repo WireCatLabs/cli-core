@@ -3,6 +3,7 @@ export type { CounterField, CounterObservation, CounterObservations, CounterStat
 export { COUNTER_FIELDS, counterValue, observedCounters } from "./domain/counters.js"
 export {
   CRM_KINDS,
+  type CrmDepartment,
   type CrmField,
   type CrmItem,
   type CrmKind,
@@ -11,6 +12,7 @@ export {
   type CrmPipeline,
   type CrmRecords,
   type CrmStage,
+  type CrmUser,
   type CrmValue,
   isItemKind,
 } from "./domain/crm.js"
@@ -120,6 +122,8 @@ export {
   RELATION_KINDS,
   RELATIONS,
   type RelationKind,
+  ROLE_LISTS,
+  type RoleList,
   rolesOf,
   STANDINGS,
   type Standing,

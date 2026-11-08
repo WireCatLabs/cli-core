@@ -83,8 +83,8 @@ const ARMS: [string, string, string][] = [
 const linkArm = (linkFrom: string, linkTo: string) => `
   SELECT CASE WHEN l.to_type='person' THEN l.to_id ELSE il.person_id END AS person_id, CASE WHEN l.to_type='identity' THEN l.to_id END AS identity_id, l.from_type AS subject_type, l.from_id AS subject_id, coalesce(l.role,'linked') AS role, l.created_at AS occurred_at,
     coalesce(c.scope,a.scope,p.scope,'personal') AS scope, coalesce(m.account_id,c.account_id,e.account_id,mt.account_id,d.account_id) AS account_id, p.id AS project_id
-    FROM (SELECT from_type,from_id,to_type,to_id,role,created_at,confirmed FROM links WHERE ${linkFrom}
-      UNION ALL SELECT to_type,to_id,from_type,from_id,role,created_at,confirmed FROM links WHERE from_type IN ('person','identity') AND to_id IS NOT NULL AND ${linkTo}) l
+    FROM (SELECT from_type,from_id,to_type,to_id,role,created_at,confirmed,account_id,deleted_at FROM links WHERE ${linkFrom}
+      UNION ALL SELECT to_type,to_id,from_type,from_id,role,created_at,confirmed,account_id,deleted_at FROM links WHERE from_type IN ('person','identity') AND to_id IS NOT NULL AND ${linkTo}) l
     LEFT JOIN identity_links il ON l.to_type='identity' AND il.identity_id=l.to_id
     LEFT JOIN messages m ON l.from_type='message' AND m.id=l.from_id
     LEFT JOIN chats c ON c.id=CASE WHEN l.from_type='chat' THEN l.from_id ELSE m.chat_id END

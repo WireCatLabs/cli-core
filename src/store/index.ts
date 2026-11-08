@@ -160,7 +160,14 @@ export type { BotUpdate, BotUpdateStore } from "./sqlite/bot-updates.js"
 export type { CatalogActor, CatalogEntry, CatalogInput, CatalogQuery, CatalogStore } from "./sqlite/catalog.js"
 export { CATALOG_QUERY } from "./sqlite/catalog.js"
 export type { ChatMetadata } from "./sqlite/chats.js"
-export { type CrmCopies, type CrmSaved, type CrmSkipped, crmIdentityId } from "./sqlite/crm.js"
+export { type CrmCopies, type CrmRelationIssue, type CrmSaved, type CrmSkipped, crmIdentityId } from "./sqlite/crm.js"
+export {
+  COMPANY_TYPE_MEANINGS,
+  type CompanyTypeMeaning,
+  CRM_LINK_MODES,
+  type CrmLinkMode,
+  crmSettingKey,
+} from "./sqlite/crm-settings.js"
 export type {
   Deal,
   DealFilter,
@@ -295,7 +302,17 @@ export type {
   RecordsWritten,
   SourceRecord,
 } from "./sqlite/records.js"
+export type { RelationFilter, RelationList, RelationListItem } from "./sqlite/relation-list.js"
 export type { LinkDecision, RelationUpdate } from "./sqlite/relation-proposals.js"
+export type { RelationReads } from "./sqlite/relation-reads.js"
+export type { RelationRole, RelationRoles } from "./sqlite/relation-roles.js"
+export type {
+  RelationsStore,
+  ReportedIssue,
+  ReportedRelation,
+  ReportedScope,
+  ReportedSync,
+} from "./sqlite/reported-relations.js"
 export {
   fillSearchIndex,
   resetSearchIndex,

@@ -2,7 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import { type QueryAst, walkQuery } from "@wirecat/cli-base/query"
 import { parseLocator } from "../../domain/locator.js"
 import { formatReference, parseReference, type Reference } from "../../domain/references.js"
-import { checkEnds, checkRole, isSymmetric } from "../../domain/relations.js"
+import { checkEnds, isSymmetric, notOverriddenSql } from "../../domain/relations.js"
 import { normalizeTag } from "../../domain/tags.js"
 import { normalizeVocabularyName } from "../../domain/vocabulary.js"
 import { formatMeetingReference } from "../../meetings/index.js"
@@ -30,6 +30,7 @@ import {
   relationProposalsOver,
   type Scored,
 } from "./relation-proposals.js"
+import { checkStoredRole, type RelationReads, relationReadsOver } from "./relation-reads.js"
 import type { TagCreationOptions } from "./tag-creation.js"
 import {
   addTags as addThingTags,
@@ -125,7 +126,7 @@ export interface Reminder {
 
 export type LabelledType = "note" | "document" | "person" | "organization" | "project" | "task" | "meeting" | "folder"
 
-export interface KnowledgeStore extends VocabularyStore, MeetingProjectsStore, OrganizationsStore {
+export interface KnowledgeStore extends VocabularyStore, MeetingProjectsStore, OrganizationsStore, RelationReads {
   taskIds(
     key: AccountKey,
     options?: { state?: "open" | "done" | "dismissed"; limit?: number; offset?: number; sources?: string[] },
@@ -208,6 +209,9 @@ export interface KnowledgeStore extends VocabularyStore, MeetingProjectsStore, O
     id: string,
     input: RelationUpdate & { by: Exclude<Author, "owner">; reason?: string },
   ): Promise<ProposedAction>
+  /** Ends it at `at` (UTC ms) without removing it; an agent's end is a `relationship_update` proposal. */
+  endRelation(key: KnowledgeScope, id: string, at: number, by: "owner"): Promise<KnowledgeRelation>
+  endRelation(key: KnowledgeScope, id: string, at: number, by: Exclude<Author, "owner">): Promise<ProposedAction>
   /** Decides a `relationship_update` proposal; a confirmed one changes the relationship in the same transaction. */
   decideRelationUpdate(
     id: string,
@@ -219,8 +223,8 @@ export interface KnowledgeStore extends VocabularyStore, MeetingProjectsStore, O
   decideSuggestedLink(id: string, decision: LinkDecision): Promise<Link | null>
   relations(key: KnowledgeScope, reference?: string): Promise<KnowledgeRelation[]>
   /**
-   * Removing an unconfirmed relationship rejects it, so `by` must be allowed to decide it. Removing a link to a
-   * project, or rejecting any suggestion, leaves a rejected `relationship` proposal so a scan never proposes it again.
+   * Removing an unconfirmed relationship rejects it, so `by` must be allowed to decide it. Every removal leaves a
+   * rejected `relationship` proposal, so neither a scan nor a source's sync brings the pair back.
    */
   removeRelation(key: KnowledgeScope, id: string, by: Decider): Promise<{ id: string; removed: true }>
   confirmRelation(key: KnowledgeScope, id: string, by: Decider): Promise<KnowledgeRelation>
@@ -443,10 +447,7 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
     if (!row) throw new CliError("not_found", "no relationship with that id")
     return row
   }
-  /**
-   * The two ends of a relationship, checked against the registry, in stored order (a symmetric pair's lower id first),
-   * and the link that already joins them.
-   */
+  /** The two ends, checked by the registry, in stored order (a symmetric pair's lower id first), and their link. */
   const pair = (
     key: KnowledgeScope,
     input: { from: string; to: string; kind: KnowledgeRelation["kind"]; role?: string | undefined },
@@ -456,15 +457,16 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
     if (from.type === to.type && from.id === to.id)
       throw new CliError("validation_error", "a relationship needs two distinct references")
     checkEnds(input.kind, from.type, to.type)
-    if (input.role !== undefined) checkRole(input.kind, from.type, to.type, input.role.trim())
+    if (input.role !== undefined) checkStoredRole(database, input.kind, from.type, to.type, input.role.trim())
     let ends = { from: input.from, to: input.to }
-    if (isSymmetric(input.kind) && to.id < from.id) {
-      ;[from, to] = [to, from]
-      ends = { from: input.to, to: input.from }
-    }
+    if (isSymmetric(input.kind) && to.id < from.id) [from, to, ends] = [to, from, { from: input.to, to: input.from }]
+    const role = input.role === undefined ? null : input.role.trim()
     const existing = database
-      .prepare(`${RELATIONS} AND from_type=? AND from_id=? AND to_type=? AND to_id=? AND kind=?`)
-      .get(from.type, from.id, to.type, to.id, input.kind)
+      .prepare(
+        `${RELATIONS} AND from_type=? AND from_id=? AND to_type=? AND to_id=? AND kind=? AND account_id IS NULL ` +
+          "AND (? IS NULL OR ifnull(role, '') = ?)",
+      )
+      .get(from.type, from.id, to.type, to.id, input.kind, role, role)
     return { from, to, existing, ends }
   }
   /** A chat may only be the member: its reference names its own account, so it is never another account's. */
@@ -523,6 +525,7 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
     ...vocabularyStoreOver(context),
     ...organizationsStoreOver(context),
     ...meetingProjectsStoreOver(context),
+    ...relationReadsOver(context),
     taskIds: async (key, options = {}) => {
       const { limit, offset } = bounded(options.limit, options.offset)
       if (options.state !== undefined && !["open", "done", "dismissed"].includes(options.state))
@@ -818,16 +821,7 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
       const confirmed = input.confirmed !== false
       return relationOf(
         write(database, () =>
-          insertLink(context, {
-            ...ends,
-            kind: input.kind,
-            origin: confirmed ? "owner" : "suggested",
-            confirmed,
-            ...(input.role === undefined ? {} : { role: input.role }),
-            ...(input.purpose === undefined ? {} : { purpose: input.purpose }),
-            ...(input.evidence === undefined ? {} : { evidence: input.evidence }),
-            ...(input.provenance === undefined ? {} : { provenance: input.provenance }),
-          }),
+          insertLink(context, { ...input, ...ends, by: "owner", origin: confirmed ? "owner" : "suggested", confirmed }),
         ),
       )
     }) as KnowledgeStore["relate"],
@@ -846,13 +840,16 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
       input: RelationUpdate & { by: Author; reason?: string },
     ) => {
       checked(key)
-      const row = relation(id)
-      const link = linkOf(database, row)
-      if (typeof input.role === "string")
-        checkRole(link.kind, String(row.from_type), String(row.to_type), input.role.trim())
+      const link = linkOf(database, relation(id))
       if (input.by === "owner") return relationOf(proposals.update(link, input))
       return proposals.proposeUpdate(link, input, input.by)
     }) as KnowledgeStore["updateRelation"],
+    endRelation: (async (key: KnowledgeScope, id: string, at: number, by: Author) => {
+      checked(key)
+      const link = linkOf(database, relation(id))
+      if (by === "owner") return relationOf(proposals.update(link, { endsAt: at }))
+      return proposals.proposeUpdate(link, { endsAt: at }, by)
+    }) as KnowledgeStore["endRelation"],
     decideRelationUpdate: async (id, decision) => {
       const { proposal, link } = proposals.decideUpdate(id, decision)
       return { proposal, relation: link && relationOf(link) }
@@ -865,7 +862,8 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
       if (reference !== undefined && !thing) return []
       return database
         .prepare(
-          `${RELATIONS} AND (? IS NULL OR (from_type=? AND from_id=?) OR (to_type=? AND to_id=?)) ORDER BY created_at, id LIMIT 500`,
+          // Live ones first: a long history of withdrawn links never pushes them past the cap.
+          `${RELATIONS} AND ${notOverriddenSql("links")} AND (? IS NULL OR (from_type=? AND from_id=?) OR (to_type=? AND to_id=?)) ORDER BY deleted_at IS NOT NULL, created_at, id LIMIT 500`,
         )
         .all(thing?.type ?? null, thing?.type ?? null, thing?.id ?? null, thing?.type ?? null, thing?.id ?? null)
         .map((row) => relationOf(linkOf(database, row)))
@@ -876,7 +874,8 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
       const link = linkOf(database, row)
       assertMayDecide({ id: `link:${id}`, proposedBy: UNVERIFIED }, by, context.decisions)
       write(database, () => {
-        if (!link.confirmed || String(row.to_type) === "project") proposals.rejected(link, by)
+        if (link.overrides === undefined) proposals.rejected(link, by)
+        database.prepare("UPDATE links SET updated_at = ? WHERE id = ?").run(now(), Number(id))
         database.prepare("DELETE FROM links WHERE id = ?").run(Number(id))
       })
       return { id, removed: true }

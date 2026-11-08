@@ -83,9 +83,28 @@ export const rolesOf = (kind: string, from: string, to: string): readonly string
   return spec?.roles?.from?.[from as End] ?? spec?.roles?.to?.[to as End]
 }
 
-/** The role as given when the relationship has no list, or when it is on the list; refused otherwise. */
-export const checkRole = (kind: string, from: string, to: string, role: string): string => {
+/** The role lists the owner may add to; each is a list the registry gives some relationship's ends. */
+export const ROLE_LISTS = { organization: ORGANIZATION_ROLES, project: PROJECT_ROLES, deal: DEAL_ROLES } as const
+export type RoleList = keyof typeof ROLE_LISTS
+
+/** Which list a relationship's role comes from, or `undefined` where a role is free text. */
+export const roleListOf = (kind: string, from: string, to: string): RoleList | undefined => {
   const roles = rolesOf(kind, from, to)
+  return (Object.keys(ROLE_LISTS) as RoleList[]).find((list) => ROLE_LISTS[list] === roles)
+}
+
+/**
+ * The role as given when the relationship has no list, or when it is on the list or among `extra` (the owner's own
+ * roles for that list); refused otherwise.
+ */
+export const checkRole = (
+  kind: string,
+  from: string,
+  to: string,
+  role: string,
+  extra: readonly string[] = [],
+): string => {
+  const roles = rolesOf(kind, from, to)?.concat(extra)
   if (roles && !roles.includes(role))
     throw new CliError("validation_error", `a ${from}'s role on ${kind} ${to} is one of ${roles.join(", ")}`, {
       reason: "relationship.role-unknown",
@@ -112,8 +131,22 @@ export interface StandingFields {
   accountId?: number | null
   /** Epoch ms, exclusive. */
   endsAt?: number | null
-  /** The source stopped reporting it. */
   deletedAt?: number | null
+}
+
+/** What a `links` row of a relationship kind holds beyond any link, when set. */
+export interface RelationshipColumns {
+  /** The `accounts` row of the source that reported it. */
+  accountId?: number
+  /** When it held, epoch ms; `endsAt` exclusive. */
+  startsAt?: number
+  endsAt?: number
+  /** The source stopped reporting it. */
+  deletedAt?: number
+  /** A job title beside it (`metadata.position`), never its role. */
+  position?: string
+  /** The source's link this owner link overrides (`metadata.overrides`). */
+  overrides?: number
 }
 
 /** The owner's confirmation outlives a source that stopped reporting it; only its own end date ends it. */
@@ -129,5 +162,16 @@ export const isUsable = (standing: Standing): boolean => standing === "confirmed
 
 export const usableLink = (link: StandingFields, now: number): boolean => isUsable(standingOf(link, now))
 
+/**
+ * The `links` row aliased `alias` has no owner link overriding it (`metadata.overrides`, an owner's edit of a link a
+ * source reported): where one does, the override is the answer.
+ */
+export const notOverriddenSql = (alias: string): string =>
+  `NOT EXISTS (SELECT 1 FROM links override WHERE override.kind = ${alias}.kind AND override.from_type = ${alias}.from_type ` +
+  `AND override.from_id = ${alias}.from_id AND override.to_type = ${alias}.to_type AND override.to_id = ${alias}.to_id ` +
+  `AND json_extract(override.metadata, '$.overrides') = ${alias}.id)`
+
 /** `usableLink` as SQL over the `links` row aliased `alias`; without `now` an end date is not checked. */
-export const usableLinkSql = (alias: string, _now?: number): string => `${alias}.confirmed = 1`
+export const usableLinkSql = (alias: string, now?: number): string =>
+  `(${alias}.confirmed = 1 OR (${alias}.account_id IS NOT NULL AND ${alias}.deleted_at IS NULL))` +
+  (now === undefined ? "" : ` AND (${alias}.ends_at IS NULL OR ${alias}.ends_at > ${Math.trunc(now)})`)

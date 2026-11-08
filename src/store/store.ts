@@ -58,6 +58,7 @@ import { projectAnnotationStoreOver } from "./sqlite/project-transfer/store.js"
 import { type ProposedActionsStore, proposedActionsStoreOver } from "./sqlite/proposed-actions.js"
 import { type RecordStore, recordStoreOver } from "./sqlite/records.js"
 import { refSummariesOf } from "./sqlite/ref-summaries.js"
+import { type RelationsStore, relationsStoreOver } from "./sqlite/reported-relations.js"
 import * as stems from "./sqlite/stems.js"
 import { type StoreTaskStore, taskStoreOver } from "./sqlite/tasks.js"
 import { type SyncStore, syncStoreOver } from "./sync.js"
@@ -131,6 +132,8 @@ export interface MessageStore {
   readonly deals: DealsStore
   /** A CRM account's pipelines, deals, leads, contacts and companies, written as the CRM has them. */
   readonly crm: CrmCopies
+  /** Relationships a source account reports, written as a diff that never overrides the owner's. */
+  readonly relations: RelationsStore
   /** The one-time keys behind the buttons of a message that asks the owner to decide a batch. */
   readonly decisionRequests: DecisionRequestStore
   /** What each import said, by the source's identity; `ingest` (services) is the way in. */
@@ -254,6 +257,7 @@ const storeOver = (context: StoreContext): MessageStore => {
   const orders = once(() => ordersStoreOver(context))
   const deals = once(() => dealsStoreOver(context))
   const crm = once(() => crmCopiesOver(context, accountPeopleOver(context)))
+  const relations = once(() => relationsStoreOver(context))
   const decisionRequests = once(() => decisionRequestStoreOver(context))
   const records = once(() => recordStoreOver(context))
   const memories = once(() => memoriesStoreOver(context))
@@ -371,6 +375,9 @@ const storeOver = (context: StoreContext): MessageStore => {
     },
     get crm() {
       return crm()
+    },
+    get relations() {
+      return relations()
     },
     get decisionRequests() {
       return decisionRequests()

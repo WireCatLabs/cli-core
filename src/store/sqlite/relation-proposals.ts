@@ -6,6 +6,7 @@ import type { Author } from "./memories.js"
 import { insertLink, type Link, linkOf, purposeOf } from "./notes.js"
 import type { StoreContext } from "./open.js"
 import { type ProposedAction, proposalOperationsOver, proposerOfAction } from "./proposed-actions.js"
+import { checkStoredRole } from "./relation-roles.js"
 import { type Thing, thingOf } from "./things.js"
 import { write } from "./transaction.js"
 
@@ -25,6 +26,11 @@ export interface KnowledgeRelation {
   confidenceCategory: "owner-confirmed" | "weak"
   /** Derived from the link: the owner's, a source's nobody confirmed, a suggestion, or one that ended. */
   standing: Standing
+  /** A job title beside the relationship, never its role. */
+  position: string | null
+  /** When it held, as ISO times; `endsAt` exclusive; `null` when nobody said. */
+  startsAt: string | null
+  endsAt: string | null
   createdAt: string
 }
 
@@ -37,7 +43,13 @@ export interface RelateInput {
   evidence?: string
   confirmed?: boolean
   provenance?: string
+  position?: string
+  /** UTC ms; `endsAt` exclusive and after `startsAt`. */
+  startsAt?: number
+  endsAt?: number
 }
+
+const isoOf = (ms: number | undefined) => (ms === undefined ? null : new Date(ms).toISOString())
 
 export const relationOf = (link: Link, now: number): KnowledgeRelation => ({
   id: link.id,
@@ -51,6 +63,9 @@ export const relationOf = (link: Link, now: number): KnowledgeRelation => ({
   provenance: link.provenance,
   confidenceCategory: link.confirmed ? "owner-confirmed" : "weak",
   standing: standingOf(link, now),
+  position: link.position ?? null,
+  startsAt: isoOf(link.startsAt),
+  endsAt: isoOf(link.endsAt),
   createdAt: link.createdAt,
 })
 
@@ -90,22 +105,122 @@ export const relationProposalsOver = (context: StoreContext) => {
         at,
       )
   }
+  /** The role lists may have changed since a proposal was made: a role is checked when it is written. */
+  const checkedRole = (link: Link, role: RelationUpdate["role"]) => {
+    if (typeof role !== "string") return
+    const [fromType, , toType] = fromTo(link)
+    checkStoredRole(database, link.kind, fromType, toType, role)
+  }
   const applyUpdate = (link: Link, input: RelationUpdate): Link => {
     const changes = changesOf(input)
+    checkedRole(link, changes.role)
+    if ("role" in changes) {
+      const taken = database
+        .prepare(
+          "SELECT b.id FROM links a JOIN links b ON b.kind = a.kind AND b.from_type = a.from_type AND b.from_id = a.from_id " +
+            "AND b.to_type = a.to_type AND b.to_id = a.to_id AND b.anchor IS a.anchor AND b.account_id IS a.account_id " +
+            "AND ifnull(b.role, '') = ifnull(?, '') AND b.id <> a.id WHERE a.id = ?",
+        )
+        .get(changes.role ?? null, Number(link.id))
+      if (taken)
+        throw new CliError("validation_error", `relationship ${String(taken.id)} already holds that role`, {
+          reason: "relationship.exists",
+        })
+    }
+    const startsAt = "startsAt" in changes ? (changes.startsAt ?? undefined) : link.startsAt
+    const endsAt = "endsAt" in changes ? (changes.endsAt ?? undefined) : link.endsAt
+    spanOf(startsAt, endsAt)
     database
       .prepare(
         "UPDATE links SET role = CASE WHEN ? THEN ? ELSE role END, purpose = CASE WHEN ? THEN ? ELSE purpose END, " +
-          "updated_at = ? WHERE id = ?",
+          "starts_at = CASE WHEN ? THEN ? ELSE starts_at END, ends_at = CASE WHEN ? THEN ? ELSE ends_at END, " +
+          "metadata = CASE WHEN ? THEN (CASE WHEN ? IS NULL THEN json_remove(coalesce(metadata, '{}'), '$.position') " +
+          "ELSE json_set(coalesce(metadata, '{}'), '$.position', ?) END) ELSE metadata END, updated_at = ? WHERE id = ?",
       )
       .run(
         Number("role" in changes),
         changes.role ?? null,
         Number("purpose" in changes),
         changes.purpose ?? null,
+        Number("startsAt" in changes),
+        changes.startsAt ?? null,
+        Number("endsAt" in changes),
+        changes.endsAt ?? null,
+        Number("position" in changes),
+        changes.position ?? null,
+        changes.position ?? null,
         now(),
         Number(link.id),
       )
     return linkOf(database, database.prepare("SELECT * FROM links WHERE id = ?").get(Number(link.id)) as Row)
+  }
+  /**
+   * The owner's change. On a link a source reported, the source's row stays for its sync to diff, and one owner link
+   * overrides it (`metadata.overrides`): made by the first change, changed in place by every later one. Reads show the
+   * override instead of the source's row.
+   */
+  const ownerUpdate = (link: Link, input: RelationUpdate): Link => {
+    if (link.accountId === undefined || link.confirmed) return applyUpdate(link, input)
+    const held = database
+      .prepare(
+        "SELECT * FROM links WHERE kind = ? AND from_type = ? AND from_id = ? AND to_type = ? AND to_id = ? " +
+          "AND account_id IS NULL AND json_extract(metadata, '$.overrides') = ?",
+      )
+      .get(...endsOf(link), Number(link.id))
+    if (held) return applyUpdate(linkOf(database, held), input)
+    const changes = changesOf(input)
+    const pick = <K extends keyof RelationUpdate>(key: K, kept: RelationUpdate[K]) =>
+      key in changes ? changes[key] : kept
+    const role = pick("role", link.role) ?? null
+    const at = now()
+    const metadata = JSON.stringify({
+      overrides: Number(link.id),
+      ...(link.position ? { position: link.position } : {}),
+    })
+    // An owner link of that role on the pair already (from `relate`) becomes the override rather than a second one.
+    const same = database
+      .prepare(
+        "SELECT id FROM links WHERE kind = ? AND from_type = ? AND from_id = ? AND to_type = ? AND to_id = ? " +
+          "AND account_id IS NULL AND anchor IS NULL AND ifnull(role, '') = ?",
+      )
+      .get(...endsOf(link), role ?? "")
+    const id = same
+      ? Number(same.id)
+      : Number(
+          database
+            .prepare(
+              "INSERT INTO links (from_type, from_id, to_type, to_id, kind, role, purpose, source, metadata, confirmed, " +
+                "starts_at, ends_at, created_at, author, updated_at) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, 'owner', ?, 1, ?, ?, ?, 'owner', ?) RETURNING id",
+            )
+            .get(
+              ...fromTo(link),
+              link.kind,
+              role,
+              link.purpose,
+              metadata,
+              link.startsAt ?? null,
+              link.endsAt ?? null,
+              at,
+              at,
+            )?.id,
+        )
+    if (same)
+      database
+        .prepare("UPDATE links SET metadata = json_set(coalesce(metadata, '{}'), '$.overrides', ?) WHERE id = ?")
+        .run(Number(link.id), id)
+    const { role: _, ...rest } = changes
+    const owned = linkOf(database, database.prepare("SELECT * FROM links WHERE id = ?").get(id) as Row)
+    return Object.keys(rest).length ? applyUpdate(owned, rest) : owned
+  }
+  const fromTo = (link: Link) => {
+    const from = thingOf(database, link.from) as Thing
+    const to = thingOf(database, String(link.to)) as Thing
+    return [from.type, from.id, to.type, to.id] as const
+  }
+  const endsOf = (link: Link) => {
+    const [fromType, fromId, toType, toId] = fromTo(link)
+    return [link.kind, fromType, fromId, toType, toId] as const
   }
   /**
    * A scan's newer score on a pending proposal, in place under the same id. A rule's own row takes the new score,
@@ -180,11 +295,15 @@ export const relationProposalsOver = (context: StoreContext) => {
         kind: string
         role?: string
         purpose?: string
+        position?: string
+        startsAt?: number
+        endsAt?: number
         evidence?: string[]
         reason?: string
       } & Scored,
       by: Exclude<Author, "owner">,
     ): ProposedAction => {
+      spanOf(input.startsAt, input.endsAt)
       const evidence = input.evidence ?? []
       if (!Array.isArray(evidence) || evidence.length > 5 || evidence.some((ref) => typeof ref !== "string"))
         throw new CliError("validation_error", "a relationship proposal cites up to 5 references")
@@ -193,9 +312,10 @@ export const relationProposalsOver = (context: StoreContext) => {
         const held = database
           .prepare(
             "SELECT id FROM proposed_actions WHERE kind='relationship' AND status='proposed' AND target_type=? AND target_id=? " +
-              "AND json_extract(payload,'$.to')=? AND json_extract(payload,'$.kind')=? ORDER BY id LIMIT 1",
+              "AND json_extract(payload,'$.to')=? AND json_extract(payload,'$.kind')=? " +
+              "AND (? IS NULL OR json_extract(payload,'$.role') IS ?) ORDER BY id LIMIT 1",
           )
-          .get(from.type, from.id, input.to, input.kind)
+          .get(from.type, from.id, input.to, input.kind, input.role ?? null, input.role ?? null)
         if (held) {
           const action = operations.get(String(held.id))
           return scored ? rescored(action, input, scored, by) : action
@@ -210,6 +330,9 @@ export const relationProposalsOver = (context: StoreContext) => {
             kind: input.kind,
             ...(input.role === undefined ? {} : { role: input.role }),
             ...(input.purpose === undefined ? {} : { purpose: purposeOf(input.purpose) }),
+            ...(input.position === undefined ? {} : { position: positionOf(input.position) }),
+            ...(input.startsAt === undefined ? {} : { startsAt: input.startsAt }),
+            ...(input.endsAt === undefined ? {} : { endsAt: input.endsAt }),
             evidence,
             ...scored,
           },
@@ -220,10 +343,11 @@ export const relationProposalsOver = (context: StoreContext) => {
 
     rejected: (link: Link, by: Decider, reason?: string): void => rejected(link, by, reason),
 
-    update: (link: Link, input: RelationUpdate): Link => write(database, () => applyUpdate(link, input)),
+    update: (link: Link, input: RelationUpdate): Link => write(database, () => ownerUpdate(link, input)),
 
     proposeUpdate: (link: Link, input: RelationUpdate & { reason?: string }, by: Exclude<Author, "owner">) => {
       const changes = changesOf(input)
+      checkedRole(link, changes.role)
       return write(database, () => {
         const from = thingOf(database, link.from)
         const held = database
@@ -244,7 +368,13 @@ export const relationProposalsOver = (context: StoreContext) => {
             to: link.to,
             kind: link.kind,
             changes,
-            before: { role: link.role, purpose: link.purpose },
+            before: {
+              role: link.role,
+              purpose: link.purpose,
+              position: link.position ?? null,
+              startsAt: link.startsAt ?? null,
+              endsAt: link.endsAt ?? null,
+            },
           },
           ...(input.reason === undefined ? {} : { reason: input.reason }),
         })
@@ -264,7 +394,7 @@ export const relationProposalsOver = (context: StoreContext) => {
         const payload = proposal.payload as { relationship: string; changes: RelationUpdate }
         const row = database.prepare("SELECT * FROM links WHERE id = ?").get(Number(payload.relationship))
         if (!row) throw new CliError("not_found", `relationship ${payload.relationship} is gone`)
-        const link = applyUpdate(linkOf(database, row), payload.changes)
+        const link = ownerUpdate(linkOf(database, row), payload.changes)
         return {
           proposal: operations.approve(
             id,
@@ -297,14 +427,23 @@ export const relationProposalsOver = (context: StoreContext) => {
           kind?: string
           role?: string
           purpose?: string
+          position?: string
+          startsAt?: number
+          endsAt?: number
         }
         const key = proposal.kind === "key_document"
+        const ends = key ? undefined : [thingOf(database, String(payload.from)), thingOf(database, String(payload.to))]
+        if (ends?.[0] && ends[1] && payload.role !== undefined)
+          checkStoredRole(database, payload.kind ?? "member-of", ends[0].type, ends[1].type, payload.role)
         const link = insertLink(context, {
           from: String(key ? payload.ref : payload.from),
           to: String(key ? payload.project : payload.to),
           kind: key ? "related-to" : ((payload.kind ?? "member-of") as Link["kind"]),
           ...(key ? { role: "key" } : payload.role === undefined ? {} : { role: payload.role }),
           ...(key || payload.purpose === undefined ? {} : { purpose: payload.purpose }),
+          ...(key || payload.position === undefined ? {} : { position: payload.position }),
+          ...(key || payload.startsAt === undefined ? {} : { startsAt: payload.startsAt }),
+          ...(key || payload.endsAt === undefined ? {} : { endsAt: payload.endsAt }),
           ...(proposal.reason === null ? {} : { evidence: proposal.reason }),
           ...decidedOrigin(decision.by),
         })
@@ -325,6 +464,7 @@ export const relationProposalsOver = (context: StoreContext) => {
         const link = linkOf(database, row)
         if (!decision.confirm) {
           rejected(link, decision.by, decision.reason)
+          database.prepare("UPDATE links SET updated_at = ? WHERE id = ?").run(now(), Number(id))
           database.prepare("DELETE FROM links WHERE id = ?").run(Number(id))
           return null
         }
@@ -362,10 +502,30 @@ const scoredOf = (input: Scored): Required<Scored> | undefined => {
   return { score, signals: signals.map(({ scorer, weight, why }) => ({ scorer, weight, why })) }
 }
 
-/** A relationship's role and purpose to set; `null` clears one. */
+/** What to set on a relationship; `null` clears one. Times are UTC ms, `endsAt` exclusive. */
 export interface RelationUpdate {
   role?: string | null
   purpose?: string | null
+  position?: string | null
+  startsAt?: number | null
+  endsAt?: number | null
+}
+
+const timeOf = (value: number, what: string): number => {
+  if (!Number.isSafeInteger(value) || value < 0) throw new CliError("validation_error", `${what} is UTC milliseconds`)
+  return value
+}
+
+/** A relationship ends after it starts. */
+export const spanOf = (startsAt: number | null | undefined, endsAt: number | null | undefined): void => {
+  if (startsAt != null && endsAt != null && endsAt <= startsAt)
+    throw new CliError("validation_error", "a relationship ends after it starts")
+}
+
+export const positionOf = (position: string): string => {
+  const value = position.trim()
+  if (!value || value.length > 200) throw new CliError("validation_error", "a position takes 1–200 characters")
+  return value
 }
 
 /** What a relationship update sets, checked; `null` clears a field and an absent one is left alone. */
@@ -373,8 +533,12 @@ const changesOf = (input: RelationUpdate): RelationUpdate => {
   const changes: RelationUpdate = {}
   if (input.role !== undefined) changes.role = input.role === null ? null : roleOf(input.role)
   if (input.purpose !== undefined) changes.purpose = input.purpose === null ? null : purposeOf(input.purpose)
+  if (input.position !== undefined) changes.position = input.position === null ? null : positionOf(input.position)
+  if (input.startsAt !== undefined)
+    changes.startsAt = input.startsAt === null ? null : timeOf(input.startsAt, "a start")
+  if (input.endsAt !== undefined) changes.endsAt = input.endsAt === null ? null : timeOf(input.endsAt, "an end")
   if (!Object.keys(changes).length)
-    throw new CliError("validation_error", "a relationship update sets a role, a purpose or both")
+    throw new CliError("validation_error", "a relationship update sets a role, a purpose, a position or its dates")
   return changes
 }
 

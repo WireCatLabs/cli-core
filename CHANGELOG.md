@@ -23,7 +23,47 @@ shape of this file.
 - **`@wirecat/cli-core/cli` exports `AGENT_INPUT_MAX_CHARS`**, the 60,000-character cut of an agent's input, so a
   host that builds the input can stay under it and cut at its own boundaries.
 
+- **Relationship links know the account that reported them, when they held, and their history (store version 56).**
+  `links` gains `account_id`, `starts_at`, `ends_at` and `deleted_at`; `link_revisions` keeps one row per change of a
+  relationship link (`added`, `changed`, `ended`, `confirmed`, `withdrawn`, `restored`, `rejected`, `removed`),
+  written by triggers, never for a change of `updated_at` alone and never for links of other kinds. A unique key on
+  relationship links (kind, ends, anchor, role, account) lets one pair hold several roles and keeps a source's claim
+  apart from the owner's; the migration folds duplicates onto the owner's row, keeps their metadata and re-points the
+  proposals that named a dropped row.
+
+- **A CRM sync keeps the relationships the CRM reports, as a diff.** Contacts become `member-of` their companies (role
+  `contact`, the job title beside it), a deal's contacts keep their deal roles and its `assignee` is its `owner`, the
+  account's users are `member-of` its own companies as `employee` and, from the departments, `reports-to` their head.
+  What the CRM stops reporting is withdrawn, not deleted; a link the owner confirmed is never withdrawn, and one the
+  owner removed or rejected, role included, is not written again (`skipped_owner_rejected`). A deal that names a
+  contact not synced yet gets it on a later run. `CrmPerson.organizations`/`position`, `CrmItem.people[].primary`,
+  `CrmOrganization.own`/`type`, `CrmUser`, `CrmDepartment` and `CrmSource.users()`/`departments()` carry them, all
+  optional. The same diff is `store.relations.syncReported` for any source. The store settings
+  `crm.<provider>:<account>.links` (`reported` or `review`: new relationships wait as proposals) and
+  `crm.<provider>:<account>.company-types` (a company type means `customer-of`, `supplier` or `partner-of` the own
+  company) are offered by every CLI's `config`. `knowledge.setOwnOrganization` records the owner's own-company
+  mark, which no sync changes; `crmGapsOf` reads what the account's last sync could not list (`{ kind, reason, code?, scope?, message }`).
+  Every `CrmSource` call takes an optional `CrmCallContext`: `spend()` takes one budget unit per extra request and
+  stops the run as `partial` when it is spent; `gap()` reports what a call could not read without failing it.
+- **A relationship keeps a job title and when it held.** `relate` and `updateRelation` take `position`, `startsAt`
+  and `endsAt` (UTC ms, the end after the start); relationships answer `position`, `startsAt` and `endsAt`.
+  `knowledge.endRelation(key, id, at, by)` ends one without removing it (standing `ended` from then); an agent's end
+  is a `relationship_update` proposal.
+- **The owner adds his own roles to the organization, project and deal role lists.** `knowledge.roles(list)`,
+  `addRole(list, id, label?)` and `removeRole(list, id)`, kept in the store setting `relationships.roles.<list>`; a
+  role id is lowercase letters, digits and `-`. Built-in roles stay; a role a relationship still holds is not removed
+  (`relationship.role-in-use` with the count).
+- **`knowledge.listRelations(filter)` filters and pages relationships and pending relationship proposals in SQL.**
+  By `kind`, `role`, `standing`, `from`, `to`, `about` (both ways, each row with `direction` and the inverse label),
+  `at`, `includeEnded`, `accounts` (a source's rows only from these; the owner's always) and `deniedKinds`; `limit`
+  and `page` with `hasMore`. Each row says its `source` (`link` or `proposal`) and `custom` for a stored role off its
+  list.
+
 ### Changed — may break callers
+
+- **Store version 56 raises `minCompatible` to 56: a build from before it refuses the store and asks to be upgraded.**
+  A build that knows no account on a link would write a CRM's people as the owner's again, or fail on the new unique
+  key. Bump every CLI the same day as this release.
 
 - **A person's role on an organization, a project, a deal or a lead must be one of that relationship's roles.**
   `relate` and `updateRelation` refuse any other with `relationship.role-unknown`, naming the roles it takes; a role
@@ -32,6 +72,25 @@ shape of this file.
   `metadata.position`, never in the role); memo's `author`, `lead` and `cto` examples and tests need it.
 - **`KnowledgeRelation.standing` and the `relationship` entity's `standing` are required.** A caller that builds one
   by hand adds it; `standingOf` derives it from the link.
+- **A CRM's deal and lead people are `confirmed: false`, `standing: reported` (store version 56).** They were stored
+  confirmed, as if the owner had said so. They still count wherever confirmed relationships count (`usableLink`), and
+  a deal still lists them; a view that reads `confirmed: false` as "proposed" (memo's relationships list) should read
+  `standing` instead.
+- **The owner's change to a relationship a CRM reported overrides it.** The first `updateRelation`, `endRelation` or
+  confirmed `relationship_update` on a reported link makes one owner link that overrides it (`metadata.overrides`);
+  later changes change that link in place. Reads show the override instead of the CRM's row, which its sync keeps
+  diffing; removing the override shows the CRM's row again. A role is checked against the current role lists when a
+  proposal is approved, and a role a pending proposal holds counts as in use.
+- **`relate` with a role the pair does not hold yet makes a second relationship**, since one pair may hold several
+  roles; without a role it answers the pair's link as before. `updateRelation` to a role the pair already holds is
+  refused with `relationship.exists`.
+- **Removing any relationship leaves a rejected proposal**, so neither a scan nor a source's sync brings it back; it
+  was so only for a link to a project or a suggestion.
+
+### Fixed
+
+- **The person a CRM contact or user makes takes its name.** Joined to the mail contact of its address first, it was
+  left with no name.
 
 ### Fixed
 

@@ -329,7 +329,9 @@ describe("the rollback copy", () => {
     await store.close()
     const [copy] = copiesIn(backups)
     expect(copy).toMatch(/^wirecat-rollback-schema-33-/)
-    expect((await tablesOfCopy(join(backups, String(copy)))).names.sort()).toEqual(COPY_TABLES)
+    expect((await tablesOfCopy(join(backups, String(copy)))).names.sort()).toEqual(
+      [...new Set([...COPY_TABLES, ...namedAfter(33)])].sort(),
+    )
 
     await (await openStore({ path, now: () => T + 25 * HOUR, warn: (line) => warnings.push(line) })).close()
     expect(copiesIn(backups)).toEqual([])

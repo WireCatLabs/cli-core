@@ -47,9 +47,18 @@ says which roles it takes:
 | `partner-of` | organization ↔ organization, stored once with the lower id as `from` | none |
 | `related-to` | person, organization, project, task, deal, lead → person, organization, project, task | a deal's or lead's: `owner`, `contact`, `decision-maker`, `influencer`; others free text |
 
-A job title is never a role. Inverses are never stored. Every relationship read carries a derived `standing`:
+The owner may add his own roles to the organization, project and deal lists (`knowledge.addRole`, store setting
+`relationships.roles.<list>`); `knowledge.roles(list)` answers the built-in roles and his, each with `builtIn`. A
+built-in role stays, and an owner role a relationship still holds is not removed. A job title is never a role: it is `position` beside the relationship (`metadata.position`), with `startsAt` and
+`endsAt` (when it held, UTC ms, end exclusive). `endRelation` sets the end instead of removing the relationship; an
+agent's end, like any agent's change, is a `relationship_update` proposal. Inverses are never stored.
+`listRelations(filter)` answers links and pending `relationship` proposals together, filtered and paged in one query
+(kind, role, standing, ends, `about` with direction and inverse, `at`, ended ones, account scope, denied kinds). Every relationship read carries a derived `standing`:
 `confirmed` (the owner's), `reported` (a source account's that nobody confirmed), `proposed` (a suggestion waiting
-for review) or `ended`. Readers that count relationships (`personPreparation`, `projectStatus`, the stored project
+for review) or `ended` (`ends_at` passed, or the source stopped reporting it: `deleted_at`). Store version 56 gives a
+relationship link the account that reported it (`account_id`), when it held (`starts_at`, `ends_at`) and a history,
+`link_revisions`, written by triggers. One pair may hold several roles: the key is kind, ends, anchor, role and account, so a
+CRM's claim never replaces the owner's, and `relate` without a role answers the pair's link that is there. Readers that count relationships (`personPreparation`, `projectStatus`, the stored project
 gathering) take the usable ones, confirmed or reported, through `usableLink`. Who works on a task is
 `store.tasks.assign` (`task_assignments`: assignee, reviewer or watcher), not a link; store version 2 copied
 the old `assigned-to` links there. A relationship is a confirmed owner statement or an explicitly
@@ -180,6 +189,40 @@ it are `links` of kind `related-to` with a `role` (`owner`, `contact`, `decision
 write alike, with no review; only the author is kept. Triggers write each stage a row enters to
 `pipeline_stage_changes`, and `pipeline(ref)` counts from it how many rows reached each stage and the conversion to
 the next. The migration seeds the lead pipeline `Leads` (`new`, `contacted`, `qualified`, `won`, `lost`).
+
+### Relationships a source reports
+
+`store.relations.syncReported(account, relationships, scope)` writes what a source account says as a diff keyed by the
+relationship's unique key: one it newly reports is a `reported` link with the account (`confirmed = 0`,
+`account_id`), or a `relationship` proposal when the account's setting `crm.<provider>:<account>.links` is `review`
+(that setting governs new relationships only; links already stored stay usable); one it still reports is kept (no
+history row); one inside `scope` it no longer reports is withdrawn (`deleted_at`), never deleted. A link the owner
+confirmed is never withdrawn and stays `confirmed`, and once confirmed the sync takes it as present. Another role on
+a pair is another relationship, never a conflict. The only case where the owner's word stops the source: the owner
+removed or rejected that very relationship, role included (every removal leaves a rejected `relationship`
+proposal); the answer counts those in `skippedOwnerRejected`. A ref the store does not hold is an issue in the
+answer, not an error.
+
+The CRM sync uses it for every relationship a CRM reports: a contact `member-of` its companies with role `contact`
+(the job title in `metadata.position`), a deal's or lead's contacts with their deal role, the deal's `assignee` as
+`owner`, each active user `member-of` the account's own companies (`organizations.metadata.own` with
+`own_by`: the CRM sets and clears only its own mark, `knowledge.setOwnOrganization` sets the owner's, which no sync
+changes) as `employee` (an inactive user's withdrawn), and, when the CRM
+lists departments, `reports-to` the head of the user's department, a head the head of the parent one
+(`metadata.derived = "department-head"`; no head, no link). A CRM user is an identity `<account>/user/<id>`, joined
+to a person by exact email as a contact is. With `crm.<provider>:<account>.company-types` mapping a company type to
+`customer-of`, `supplier` or `partner-of`, a company of that type becomes a customer of, a supplier to or a partner
+of the own company; every stored company is checked once the run read the companies, so a new setting applies on the
+next sync. A field the CRM left out (`organizations`, `people`, `assignee`, `type`, `users()`,
+`departments()`, a user's `departments`) withdraws nothing. A relationship whose other end is not stored yet waits in
+the account's sync state (`crm:pending-relations`, read and written once per page) and is written at the end of a
+later sync; it is dropped when its row is deleted, after 30 days or past 5000, with one issue. A deal owner is not
+waited for when the CRM lists no users. Each sync replaces `crm:gaps`, what it could not read (a kind the CRM has
+not, users or departments not listed or refused with their code and the `scope` a refusal's details name, and gaps
+a source reports through `context.gap`), which `crmGapsOf` reads. Every source call gets a `CrmCallContext`: a
+source that makes more requests than the one the engine counts takes each with `context.spend()`, which stops the run
+as `partial` once the budget is spent (WC-LIFE-16). A contact whose email
+belongs to two people is named in the sync's issues until the owner separates it.
 
 A mail findings batch (`store.mailFindings`) also takes `invoice`, `payment`, `order` and `order_update` findings.
 Staging runs what accepting would write through `store.finance` or `store.orders` and rolls it back, so a batch the

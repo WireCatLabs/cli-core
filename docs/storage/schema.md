@@ -5,7 +5,7 @@ Every table of the shared store (tg, max, memo, zm) as its migrations create it.
 `drizzle/` must agree with it. `pnpm schema:check` fails when they do not, and `src/store/sqlite/schema.test.ts`
 checks every table and column of a new store against this page.
 
-122 tables, 25 full-text indexes.
+123 tables, 25 full-text indexes.
 
 ## Conventions
 
@@ -551,6 +551,23 @@ Each voter's newest vote in a poll, where the messenger sends votes one by one (
 | `updated_at` | integer | not null |  | when this row last changed here |
 
 *Keys and indexes:* `UNIQUE (chat_id, message_external_id, identity_id)`, `INDEX (identity_id)`
+
+### `link_revisions`
+
+One row per change of a relationship link (the kinds of `RELATIONS`: `member-of`, `related-to`, `reports-to`, `customer-of`, `partner-of`). Triggers on `links` write it in the changing statement's transaction, so a hard delete keeps its trail; a change of `updated_at` alone writes none. Links of any other kind never write one. No foreign key: the link may be gone.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | PK |  |  |
+| `link_id` | integer | not null |  | the `links` row |
+| `change` | text | not null |  | `added`, `changed` (role, dates or account), `ended` (`ends_at` set), `confirmed`, `withdrawn` (`deleted_at` set: the source stopped reporting it), `restored` (reported again), `rejected` (a suggestion the owner rejected) or `removed` (deleted) |
+| `before` | text |  |  | JSON of role, confirmed, account_id, starts_at, ends_at and deleted_at before; null when added |
+| `after` | text |  |  | the same after; null when removed |
+| `author` | text |  |  | the link's `author` after the change, or before a removal |
+| `account_id` | integer |  |  | the link's account after the change, or before a removal |
+| `created_at` | integer | not null |  | when this row was saved here |
+
+*Keys and indexes:* `INDEX (link_id, created_at)`
 
 ### `chat_revisions`
 
@@ -2269,8 +2286,12 @@ Every connection between two things that no column holds. Kinds: `blocked-by` (a
 | `author` | text |  |  | `owner`, `agent`, `rule` |
 | `updated_at` | integer | not null |  | when this row last changed here |
 | `purpose` | text |  |  | what a chat is for in a project: a purpose from memo's config, no fixed set; null means `work` |
+| `account_id` | integer |  |  | the `accounts` row of the source that reported a relationship, such as a CRM account; null for the owner's and an agent's |
+| `starts_at` | integer |  |  | when a relationship began, when known; never guessed |
+| `ends_at` | integer |  |  | when a relationship ended (exclusive), when known |
+| `deleted_at` | integer |  |  | the source stopped reporting the relationship; the row and its history stay |
 
-*Keys and indexes:* `INDEX (target_folded) WHERE to_id IS NULL`, `INDEX (from_type, from_id)`, `INDEX (to_type, to_id)`
+*Keys and indexes:* `INDEX (target_folded) WHERE to_id IS NULL`, `UNIQUE (kind, from_type, from_id, to_type, to_id, ifnull(anchor, ''), ifnull(role, ''), ifnull(account_id, 0)) WHERE kind IN ('member-of', 'related-to', 'reports-to', 'customer-of', 'partner-of') AND to_id IS NOT NULL`, `INDEX (from_type, from_id)`, `INDEX (to_type, to_id)`
 
 ### `searches`
 
