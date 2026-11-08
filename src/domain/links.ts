@@ -139,9 +139,9 @@ export const refsForLink = (refs: readonly string[]): string[] => [
 
 /**
  * The target a ref names, or `null` when it names nothing a link opens. A store reference (`msg:`, `chat:`, `task:`,
- * `person:`, `project:`) is read by its own grammar; the kinds that are no reference are written as their path with a colon after the
- * kind: `proposal:fact%3A512`, `tasks:overdue`, `tasks:new/2026-11-07T08%3A00%3A00Z`, `digest:2026-11-08`,
- * `sync:telegram/1001`.
+ * `person:`, `project:`) is read by its own grammar; the kinds that are no reference are written as their path with a
+ * colon after the kind: `proposal:fact%3A512`, `tasks:overdue`, `tasks:new/2026-11-07T08%3A00%3A00Z`,
+ * `digest:2026-11-08`, `sync:telegram/1001`.
  */
 export const linkTargetOf = (ref: string): DeepLinkTarget | null => {
   const text = ref.trim()
