@@ -8,8 +8,7 @@ import { reviewedKind, reviewedRow } from "./shared.js"
  */
 export const invoiceKind = (store: Pick<MessageStore, "finance">): ProposalKind =>
   reviewedKind<Invoice>({
-    kind: "invoice",
-    prefix: "invoice",
+    type: "invoice",
     list: (options) => store.finance.invoices(options),
     get: (id) => store.finance.invoice(id),
     row: (invoice) => reviewedRow("invoice", invoice, invoice.counterparty.ref),
@@ -19,8 +18,7 @@ export const invoiceKind = (store: Pick<MessageStore, "finance">): ProposalKind 
 
 export const paymentKind = (store: Pick<MessageStore, "finance">): ProposalKind =>
   reviewedKind<FinancePayment>({
-    kind: "payment",
-    prefix: "payment",
+    type: "payment",
     list: (options) => store.finance.payments(options),
     get: (id) => store.finance.payment(id),
     row: (payment) =>

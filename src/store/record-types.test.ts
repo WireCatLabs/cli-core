@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from "node:fs"
+import { readFileSync } from "node:fs"
 import { describe, expect, it } from "vitest"
 import { fieldError } from "../domain/record-fields.js"
 import { DECIDED_TABLES, RECORD_ENTITY_TYPES, RECORD_TYPES, rolesOf, TYPE_PATTERN } from "../domain/record-types.js"
@@ -21,7 +21,7 @@ describe("the record type registry", () => {
     for (const type of RECORD_ENTITY_TYPES) {
       const projector = RECORD_PROJECTORS[type]
       if (projector === null) continue
-      const changes = ["in-place", "re-propose"].includes(RECORD_TYPES[type].update)
+      const changes = ["in-place", "re-propose", "re-settle"].includes(RECORD_TYPES[type].update)
       expect([type, projector.update !== undefined]).toEqual([type, changes])
     }
   })
@@ -68,10 +68,7 @@ describe("the record type registry", () => {
 })
 
 describe("the envelope's JSON Schema", () => {
-  it("is the file the package ships, generated from the registry", () => {
-    // RECORDS_SCHEMA_WRITE=1 rewrites the file after a registry change.
-    if (process.env.RECORDS_SCHEMA_WRITE)
-      writeFileSync(SCHEMA_FILE, `${JSON.stringify(RECORDS_ENVELOPE_SCHEMA, null, 2)}\n`)
+  it("is the file the package ships, generated from the registry by pnpm schema:envelope", () => {
     expect(JSON.parse(readFileSync(SCHEMA_FILE, "utf8"))).toEqual(RECORDS_ENVELOPE_SCHEMA)
   })
 

@@ -53,7 +53,12 @@
       "properties": {
         "lines": {
           "enum": ["text", "products"],
-          "description": "products: an invoice line's product (an external id) or product_ref (a product: ref) names its product; text, the default, keeps them as data. Order lines always read them."
+          "description": "products: an invoice line's product (an external id) names its product; text, the default, keeps it as data. Order lines always read it, and product_ref (a product: ref) is read on every line."
+        },
+        "phone_region": {
+          "type": "string",
+          "pattern": "^[A-Za-z]{2}$",
+          "description": "The country a person's phone without + is read in. Without it such a number is an identifier only when exactly one country of the store's phone_countries setting reads it as valid"
         }
       }
     },
@@ -384,58 +389,58 @@
       "type": "object",
       "properties": {
         "direction": {
-          "type": "string",
-          "enum": ["receivable", "payable"]
+          "type": ["string", "null"],
+          "enum": ["receivable", "payable", null]
         },
         "number": {
-          "type": "string",
+          "type": ["string", "null"],
           "minLength": 1,
           "maxLength": 80,
           "description": "The invoice's number"
         },
         "currency": {
-          "type": "string",
+          "type": ["string", "null"],
           "pattern": "^[A-Za-z]{3}$",
           "description": "ISO 4217 code"
         },
         "issue_date": {
-          "type": "string",
+          "type": ["string", "null"],
           "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
           "description": "The day it was issued"
         },
         "due_date": {
-          "type": "string",
+          "type": ["string", "null"],
           "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
           "description": "The day it is due"
         },
         "total": {
-          "type": "string",
+          "type": ["string", "null"],
           "pattern": "^[0-9]{1,16}(\\.[0-9]{1,6})?$",
           "description": "The printed total: refused when it is not the sum of the lines"
         },
         "lines": {
-          "type": "array",
+          "type": ["array", "null"],
           "items": {
             "type": "object",
             "properties": {
               "description": {
-                "type": "string",
+                "type": ["string", "null"],
                 "minLength": 1,
                 "maxLength": 2000,
                 "description": "What the line is for; the product's name when left out"
               },
               "quantity": {
-                "type": "string",
+                "type": ["string", "null"],
                 "pattern": "^[0-9]{1,16}(\\.[0-9]{1,6})?$",
                 "description": "A decimal, 1 when left out"
               },
               "unit_price": {
-                "type": "string",
+                "type": ["string", "null"],
                 "pattern": "^[0-9]{1,16}(\\.[0-9]{1,6})?$",
                 "description": "A decimal in the parent's currency"
               },
               "amount": {
-                "type": "string",
+                "type": ["string", "null"],
                 "pattern": "^[0-9]{1,16}(\\.[0-9]{1,6})?$",
                 "description": "A decimal in the parent's currency: quantity × unit price"
               },
@@ -443,7 +448,7 @@
                 "description": "The product record's external id in this account, read with options.lines products"
               },
               "product_ref": {
-                "type": "string",
+                "type": ["string", "null"],
                 "pattern": "^product:[1-9][0-9]*$",
                 "description": "A product: ref of the store"
               }
@@ -460,26 +465,26 @@
       "type": "object",
       "properties": {
         "direction": {
-          "type": "string",
-          "enum": ["in", "out"]
+          "type": ["string", "null"],
+          "enum": ["in", "out", null]
         },
         "amount": {
-          "type": "string",
+          "type": ["string", "null"],
           "pattern": "^[0-9]{1,16}(\\.[0-9]{1,6})?$",
           "description": "A decimal in currency"
         },
         "currency": {
-          "type": "string",
+          "type": ["string", "null"],
           "pattern": "^[A-Za-z]{3}$",
           "description": "ISO 4217 code"
         },
         "date": {
-          "type": "string",
+          "type": ["string", "null"],
           "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
           "description": "The day it was paid"
         },
         "reference": {
-          "type": "string",
+          "type": ["string", "null"],
           "minLength": 1,
           "maxLength": 2000,
           "description": "The payment's reference"
@@ -509,27 +514,7 @@
           "description": "The organization's name"
         },
         "identifiers": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "scheme": {
-                "type": "string",
-                "pattern": "^(email|domain|tax-id:[a-z]{2}|registration:[a-z]{2})$",
-                "description": "email, domain, tax-id:<country> or registration:<country>"
-              },
-              "value": {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 320,
-                "description": "The identifier as the scheme writes it"
-              }
-            },
-            "required": ["scheme", "value"],
-            "additionalProperties": true
-          },
-          "maxItems": 20,
-          "description": "Strong identifiers: one that another organization has links the record to it"
+          "description": "Strong identifiers, a list of {scheme, value}: scheme email, domain, tax-id:<cc> or registration:<cc>. One that another organization has links the record to it; any other item is kept as data"
         }
       },
       "additionalProperties": true
@@ -553,81 +538,81 @@
       "type": "object",
       "properties": {
         "number": {
-          "type": "string",
+          "type": ["string", "null"],
           "minLength": 1,
           "maxLength": 80,
           "description": "The order's number at the supplier"
         },
         "direction": {
-          "type": "string",
-          "enum": ["purchase", "sale"],
+          "type": ["string", "null"],
+          "enum": ["purchase", "sale", null],
           "description": "purchase when left out; in a sale the owner is the supplier"
         },
         "purpose": {
-          "type": "string",
-          "enum": ["personal", "business", "client", "other"],
+          "type": ["string", "null"],
+          "enum": ["personal", "business", "client", "other", null],
           "description": "business when left out"
         },
         "status": {
-          "type": "string",
-          "enum": ["placed", "shipped", "delivered", "cancelled", "returned"],
+          "type": ["string", "null"],
+          "enum": ["placed", "shipped", "delivered", "cancelled", "returned", null],
           "description": "placed when left out"
         },
         "supplier_name": {
-          "type": "string",
+          "type": ["string", "null"],
           "minLength": 1,
           "maxLength": 200,
           "description": "The shop or supplier as the source names it"
         },
         "order_date": {
-          "type": "string",
+          "type": ["string", "null"],
           "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
           "description": "The day it was ordered"
         },
         "fulfilled_date": {
-          "type": "string",
+          "type": ["string", "null"],
           "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
           "description": "The day it was delivered"
         },
         "currency": {
-          "type": "string",
+          "type": ["string", "null"],
           "pattern": "^[A-Za-z]{3}$",
           "description": "ISO 4217 code"
         },
         "total": {
-          "type": "string",
+          "type": ["string", "null"],
           "pattern": "^[0-9]{1,16}(\\.[0-9]{1,6})?$",
           "description": "With lines, their sum"
         },
         "source_url": {
-          "type": "string",
+          "type": ["string", "null"],
           "minLength": 1,
           "maxLength": 2000,
           "description": "The order's page at the shop"
         },
         "lines": {
-          "type": "array",
+          "type": ["array", "null"],
           "items": {
             "type": "object",
             "properties": {
               "description": {
-                "type": "string",
+                "type": ["string", "null"],
                 "minLength": 1,
                 "maxLength": 2000,
                 "description": "What the line is for; the product's name when left out"
               },
               "quantity": {
-                "type": "string",
+                "type": ["string", "null"],
                 "pattern": "^[0-9]{1,16}(\\.[0-9]{1,6})?$",
                 "description": "A decimal, 1 when left out"
               },
               "unit_price": {
-                "type": "string",
+                "type": ["string", "null"],
                 "pattern": "^[0-9]{1,16}(\\.[0-9]{1,6})?$",
                 "description": "A decimal in the parent's currency"
               },
               "amount": {
-                "type": "string",
+                "type": ["string", "null"],
                 "pattern": "^[0-9]{1,16}(\\.[0-9]{1,6})?$",
                 "description": "A decimal in the parent's currency: quantity × unit price"
               },
@@ -635,7 +620,7 @@
                 "description": "The product record's external id in this account, read with options.lines products"
               },
               "product_ref": {
-                "type": "string",
+                "type": ["string", "null"],
                 "pattern": "^product:[1-9][0-9]*$",
                 "description": "A product: ref of the store"
               }
@@ -652,8 +637,8 @@
       "type": "object",
       "properties": {
         "kind": {
-          "type": "string",
-          "enum": ["product", "service"],
+          "type": ["string", "null"],
+          "enum": ["product", "service", null],
           "description": "product when left out"
         },
         "name": {
@@ -663,35 +648,35 @@
           "description": "The product's name"
         },
         "sku": {
-          "type": "string",
+          "type": ["string", "null"],
           "minLength": 1,
           "maxLength": 80,
           "description": "The supplier's code for it"
         },
         "unit": {
-          "type": "string",
+          "type": ["string", "null"],
           "minLength": 1,
           "maxLength": 40,
           "description": "hour, pcs, month: free text"
         },
         "unit_price": {
-          "type": "string",
+          "type": ["string", "null"],
           "pattern": "^[0-9]{1,16}(\\.[0-9]{1,6})?$",
           "description": "A decimal in currency"
         },
         "currency": {
-          "type": "string",
+          "type": ["string", "null"],
           "pattern": "^[A-Za-z]{3}$",
           "description": "ISO 4217 code"
         },
         "description": {
-          "type": "string",
+          "type": ["string", "null"],
           "minLength": 1,
           "maxLength": 2000,
           "description": "What it is"
         },
         "archived_date": {
-          "type": "string",
+          "type": ["string", "null"],
           "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
           "description": "No longer sold from this day"
         }
@@ -709,7 +694,7 @@
           "description": "The contract's name"
         },
         "number": {
-          "type": "string",
+          "type": ["string", "null"],
           "minLength": 1,
           "maxLength": 80,
           "description": "The contract's number"
@@ -719,53 +704,53 @@
           "enum": ["sale", "purchase", "service", "lease", "employment", "nda", "license", "other"]
         },
         "status": {
-          "type": "string",
-          "enum": ["draft", "active", "ended", "terminated"],
+          "type": ["string", "null"],
+          "enum": ["draft", "active", "ended", "terminated", null],
           "description": "active when left out"
         },
         "signed_date": {
-          "type": "string",
+          "type": ["string", "null"],
           "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
           "description": "The day it was signed"
         },
         "effective_date": {
-          "type": "string",
+          "type": ["string", "null"],
           "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
           "description": "The day it starts"
         },
         "expiration_date": {
-          "type": "string",
+          "type": ["string", "null"],
           "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
           "description": "The day it ends; open-ended when left out"
         },
         "auto_renew": {
-          "type": "boolean",
+          "type": ["boolean", "null"],
           "description": "Whether it renews itself"
         },
         "renewal": {
-          "type": "string",
+          "type": ["string", "null"],
           "pattern": "^[1-9][0-9]{0,2}-(day|week|month|year)$",
           "description": "1-year"
         },
         "notice_days": {
-          "type": "integer",
+          "type": ["integer", "null"],
           "minimum": 0,
           "maximum": 3650,
           "description": "Days of notice before it ends"
         },
         "terms": {
-          "type": "string",
+          "type": ["string", "null"],
           "minLength": 1,
           "maxLength": 20000,
           "description": "Renewal, cancellation and other terms, as text"
         },
         "value": {
-          "type": "string",
+          "type": ["string", "null"],
           "pattern": "^[0-9]{1,16}(\\.[0-9]{1,6})?$",
           "description": "A decimal in currency: the contract is then a proposal"
         },
         "currency": {
-          "type": "string",
+          "type": ["string", "null"],
           "pattern": "^[A-Za-z]{3}$",
           "description": "ISO 4217 code"
         }
@@ -777,7 +762,7 @@
       "type": "object",
       "properties": {
         "name": {
-          "type": "string",
+          "type": ["string", "null"],
           "minLength": 1,
           "maxLength": 200,
           "description": "Its name; the product's when left out"
@@ -788,8 +773,8 @@
           "description": "receivable: the owner bills it; payable: the owner pays it"
         },
         "status": {
-          "type": "string",
-          "enum": ["trial", "active", "paused", "cancelled", "ended"]
+          "type": ["string", "null"],
+          "enum": ["trial", "active", "paused", "cancelled", "ended", null]
         },
         "interval": {
           "type": "string",
@@ -802,27 +787,27 @@
           "description": "The first day"
         },
         "trial_end_date": {
-          "type": "string",
+          "type": ["string", "null"],
           "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
           "description": "The trial's last day"
         },
         "next_renewal_date": {
-          "type": "string",
+          "type": ["string", "null"],
           "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
           "description": "The next renewal"
         },
         "cancelled_date": {
-          "type": "string",
+          "type": ["string", "null"],
           "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
           "description": "The day it was cancelled"
         },
         "end_date": {
-          "type": "string",
+          "type": ["string", "null"],
           "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
           "description": "The last day"
         },
         "prices": {
-          "type": "array",
+          "type": ["array", "null"],
           "items": {
             "type": "object",
             "properties": {
@@ -837,7 +822,7 @@
                 "description": "ISO 4217 code"
               },
               "effective_from": {
-                "type": "string",
+                "type": ["string", "null"],
                 "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
                 "description": "The day the price starts; the subscription's start when left out"
               }
@@ -862,8 +847,8 @@
           "description": "The account's name"
         },
         "kind": {
-          "type": "string",
-          "enum": ["bank", "card", "cash", "wallet", "other"],
+          "type": ["string", "null"],
+          "enum": ["bank", "card", "cash", "wallet", "other", null],
           "description": "bank when left out"
         },
         "currency": {
@@ -872,24 +857,24 @@
           "description": "ISO 4217 code"
         },
         "institution": {
-          "type": "string",
+          "type": ["string", "null"],
           "minLength": 1,
           "maxLength": 200,
           "description": "The bank, as text"
         },
         "number_hint": {
-          "type": "string",
+          "type": ["string", "null"],
           "minLength": 1,
           "maxLength": 4,
           "description": "The last 4 characters of its number; a whole IBAN or card number is refused"
         },
         "opening_balance": {
-          "type": "string",
+          "type": ["string", "null"],
           "pattern": "^-?[0-9]{1,16}(\\.[0-9]{1,6})?$",
           "description": "Kept in the record only: the owner sets the wallet's opening balance"
         },
         "opening_date": {
-          "type": "string",
+          "type": ["string", "null"],
           "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
           "description": "The day of that balance"
         }
@@ -910,13 +895,13 @@
           "description": "A decimal above 0 in the wallet's currency"
         },
         "currency": {
-          "type": "string",
+          "type": ["string", "null"],
           "pattern": "^[A-Za-z]{3}$",
           "description": "ISO 4217 code"
         },
         "status": {
-          "type": "string",
-          "enum": ["pending", "booked"],
+          "type": ["string", "null"],
+          "enum": ["pending", "booked", null],
           "description": "booked when left out"
         },
         "date": {
@@ -925,30 +910,30 @@
           "description": "The day the statement shows"
         },
         "booked_date": {
-          "type": "string",
+          "type": ["string", "null"],
           "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
           "description": "The day it was booked; the statement day when left out"
         },
         "description": {
-          "type": "string",
+          "type": ["string", "null"],
           "minLength": 1,
           "maxLength": 2000,
           "description": "As the statement says it"
         },
         "counterparty_name": {
-          "type": "string",
+          "type": ["string", "null"],
           "minLength": 1,
           "maxLength": 200,
           "description": "As the statement names the other side"
         },
         "reference": {
-          "type": "string",
+          "type": ["string", "null"],
           "minLength": 1,
           "maxLength": 200,
           "description": "The statement's reference"
         },
         "splits": {
-          "type": "array",
+          "type": ["array", "null"],
           "items": {
             "type": "object",
             "properties": {
@@ -964,7 +949,7 @@
                 "description": "Free text, such as rent"
               },
               "note": {
-                "type": "string",
+                "type": ["string", "null"],
                 "minLength": 1,
                 "maxLength": 2000,
                 "description": "A note"
@@ -1002,38 +987,38 @@
           "description": "The stage's external id in that pipeline"
         },
         "status": {
-          "type": "string",
-          "enum": ["open", "won", "lost"],
+          "type": ["string", "null"],
+          "enum": ["open", "won", "lost", null],
           "description": "Left out, the stage's outcome says it"
         },
         "amount": {
-          "type": "string",
+          "type": ["string", "null"],
           "pattern": "^[0-9]{1,16}(\\.[0-9]{1,6})?$",
           "description": "A decimal in currency"
         },
         "currency": {
-          "type": "string",
+          "type": ["string", "null"],
           "pattern": "^[A-Za-z]{3}$",
           "description": "ISO 4217 code"
         },
         "close_date": {
-          "type": "string",
+          "type": ["string", "null"],
           "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
           "description": "When it is expected to close"
         },
         "closed_date": {
-          "type": "string",
+          "type": ["string", "null"],
           "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
           "description": "When it was won or lost"
         },
         "closed_reason": {
-          "type": "string",
+          "type": ["string", "null"],
           "minLength": 1,
           "maxLength": 2000,
           "description": "Why it was won or lost"
         },
         "url": {
-          "type": "string",
+          "type": ["string", "null"],
           "minLength": 1,
           "maxLength": 2000,
           "description": "The source's page for it"
@@ -1064,38 +1049,38 @@
           "description": "The stage's external id in that pipeline"
         },
         "status": {
-          "type": "string",
-          "enum": ["open", "won", "lost"],
+          "type": ["string", "null"],
+          "enum": ["open", "won", "lost", null],
           "description": "Left out, the stage's outcome says it"
         },
         "amount": {
-          "type": "string",
+          "type": ["string", "null"],
           "pattern": "^[0-9]{1,16}(\\.[0-9]{1,6})?$",
           "description": "A decimal in currency"
         },
         "currency": {
-          "type": "string",
+          "type": ["string", "null"],
           "pattern": "^[A-Za-z]{3}$",
           "description": "ISO 4217 code"
         },
         "close_date": {
-          "type": "string",
+          "type": ["string", "null"],
           "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
           "description": "When it is expected to close"
         },
         "closed_date": {
-          "type": "string",
+          "type": ["string", "null"],
           "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
           "description": "When it was won or lost"
         },
         "closed_reason": {
-          "type": "string",
+          "type": ["string", "null"],
           "minLength": 1,
           "maxLength": 2000,
           "description": "Why it was won or lost"
         },
         "url": {
-          "type": "string",
+          "type": ["string", "null"],
           "minLength": 1,
           "maxLength": 2000,
           "description": "The source's page for it"
@@ -1108,8 +1093,8 @@
       "type": "object",
       "properties": {
         "kind": {
-          "type": "string",
-          "enum": ["deal", "lead"],
+          "type": ["string", "null"],
+          "enum": ["deal", "lead", null],
           "description": "deal when left out"
         },
         "name": {
@@ -1136,13 +1121,13 @@
                 "description": "The stage's name"
               },
               "position": {
-                "type": "integer",
+                "type": ["integer", "null"],
                 "minimum": 0,
                 "maximum": 1000
               },
               "outcome": {
-                "type": "string",
-                "enum": ["open", "won", "lost"],
+                "type": ["string", "null"],
+                "enum": ["open", "won", "lost", null],
                 "description": "open when left out"
               }
             },

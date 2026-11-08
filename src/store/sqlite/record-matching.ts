@@ -1,6 +1,8 @@
 import { typedPhone } from "../../domain/mentions.js"
-import type { IdentityType } from "../../domain/record-types.js"
-import type { EnvelopeSource } from "../../domain/records.js"
+import { nationalPhone } from "../../domain/phones.js"
+import { isObject } from "../../domain/record-fields.js"
+import { type IdentityType, RECORD_TABLES } from "../../domain/record-types.js"
+import type { EnvelopeOptions, EnvelopeSource } from "../../domain/records.js"
 import { FREE_MAIL } from "../../mail/score.js"
 import type { CacheDatabase } from "../driver.js"
 import { fold } from "../normalize.js"
@@ -12,14 +14,14 @@ import { type Row, refusal } from "./record-projection.js"
 
 /** The strong identifiers a person, organization or project record gives; a name is never one. */
 export interface Identifiers {
-  /** Lower-cased. */
+  /** Lower-cased, as every writer of an e-mail identity keeps them. */
   emails: string[]
   /** E.164. */
   phones: string[]
   /** The source's own contact identity, `<account>/contact/<external id>` under its provider, as CRM sync writes it. */
   contact?: { provider: string; externalId: string }
-  /** `{scheme, value}` of an organization, the scheme as the identity's provider. */
-  organization: { scheme: string; value: string }[]
+  /** An organization's, by the identity provider its scheme is kept under. */
+  organization: { provider: string; value: string }[]
   /** A project's key, upper-cased. */
   key?: string
 }
@@ -27,10 +29,18 @@ export interface Identifiers {
 export type Match =
   | { outcome: "none" }
   | { outcome: "one"; id: number }
-  | { outcome: "ambiguous"; ids: number[]; reason: string }
+  | { outcome: "ambiguous"; ids: number[]; reason: "record.ambiguous" | "record.separated" }
 
-const listOf = (value: unknown): string[] =>
-  value === undefined || value === null ? [] : (Array.isArray(value) ? value : [value]).map(String)
+const valuesOf = (value: unknown): string[] =>
+  (Array.isArray(value) ? value : [value]).filter((one): one is string => typeof one === "string")
+
+const SCHEME = /^(email|domain|tax-id:[a-z]{2}|registration:[a-z]{2})$/
+
+/**
+ * Each scheme under a provider of its own: an organization's address is never a person's `email` identity, so a
+ * company identifier can never take, or be taken for, a person's mail.
+ */
+const providerOf = (scheme: string) => (scheme === "email" ? "org-email" : scheme)
 
 const domainOf = (value: string) =>
   value
@@ -38,48 +48,84 @@ const domainOf = (value: string) =>
     .toLowerCase()
     .replace(/^www\./, "")
 
-/** A record's identifiers; a free-mail domain claimed as an organization's is refused (`record.identifier`). */
+/**
+ * A phone as E.164, or nothing. Written with `+` or `00` it is international. Without, it is read in the envelope's
+ * `phone_region`, else in the `phone_countries` setting, and counts only when exactly one country reads it as valid:
+ * `4155550100` is a number in several.
+ */
+const e164Of = (phone: string, countries: readonly string[]): string | undefined => {
+  const typed = typedPhone(phone, { phoneCountries: countries })
+  if (typed === undefined) return undefined
+  if (/^\s*(\+|00)/.test(phone)) return typed.value
+  const digits = phone.replace(/\(0\)/, "").replace(/\D/g, "")
+  const readings = new Set(
+    countries.flatMap((country) => nationalPhone(digits, [country], { anyType: true })?.value ?? []),
+  )
+  return readings.size === 1 ? [...readings][0] : undefined
+}
+
+/**
+ * A record's identifiers. What does not read as an e-mail, a phone or a `{scheme, value}` of a known scheme is no
+ * identifier and stays in the fields, as v1 kept it; a free-mail domain claimed as an organization's is refused.
+ */
 export const identifiersOf = (
   database: CacheDatabase,
   type: IdentityType,
   fields: Row,
   source: EnvelopeSource,
   externalId: string,
+  options: EnvelopeOptions = {},
 ): Identifiers => {
   const found: Identifiers = { emails: [], phones: [], organization: [] }
   if (type === "person") {
     found.contact = { provider: source.provider, externalId: crmIdentityId(source, externalId) }
-    // v1 kept a sheet's junk in these columns: what does not read as an address or a number is no identifier,
-    // and stays in the fields.
-    for (const email of listOf(fields.email)) {
+    for (const email of valuesOf(fields.email)) {
       const address = email.trim().toLowerCase()
-      if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)) found.emails.push(address)
+      if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(address) && !found.emails.includes(address)) found.emails.push(address)
     }
-    const phoneCountries = storePhoneCountries(database)
-    for (const phone of listOf(fields.phone)) {
-      const value = typedPhone(phone, { phoneCountries })?.value
-      if (value?.startsWith("+")) found.phones.push(value)
+    const countries = options.phone_region ? [options.phone_region.toLowerCase()] : storePhoneCountries(database)
+    for (const phone of valuesOf(fields.phone)) {
+      const value = e164Of(phone, countries)
+      if (value !== undefined && !found.phones.includes(value)) found.phones.push(value)
     }
   }
-  if (type === "organization") {
-    const identifiers = Array.isArray(fields.identifiers) ? (fields.identifiers as Row[]) : []
-    for (const [index, { scheme, value }] of identifiers.entries()) {
-      const kind = String(scheme)
-      const text = kind === "email" ? String(value).trim().toLowerCase() : String(value).trim()
-      const normalized = kind === "domain" ? domainOf(text) : text
-      if (kind === "domain" && FREE_MAIL.has(normalized))
+  if (type === "organization")
+    for (const [index, item] of (Array.isArray(fields.identifiers) ? fields.identifiers : []).entries()) {
+      if (!isObject(item) || typeof item.scheme !== "string" || typeof item.value !== "string") continue
+      if (!SCHEME.test(item.scheme) || !item.value.trim()) continue
+      const value =
+        item.scheme === "domain"
+          ? domainOf(item.value)
+          : item.scheme === "email"
+            ? item.value.trim().toLowerCase()
+            : item.value.trim()
+      if (item.scheme === "domain" && FREE_MAIL.has(value))
         refusal(
-          `${normalized} is a free mail domain: anyone has an address there, so it names no organization`,
+          `${value} is a free mail domain: anyone has an address there, so it names no organization`,
           "record.identifier",
           ["fields", "identifiers", index, "value"],
         )
-      found.organization.push({ scheme: kind, value: normalized })
+      found.organization.push({ provider: providerOf(item.scheme), value })
     }
-  }
-  if (type === "project" && typeof fields.key === "string") found.key = fields.key.trim().toUpperCase()
-  return [...new Set(found.emails)].length === found.emails.length
-    ? found
-    : { ...found, emails: [...new Set(found.emails)] }
+  if (type === "project" && typeof fields.key === "string" && fields.key.trim())
+    found.key = fields.key.trim().toUpperCase()
+  return found
+}
+
+const PERSON_BY = {
+  // UNION, not OR: each branch reads its own index.
+  email:
+    "SELECT l.person_id FROM identities i JOIN identity_links l ON l.identity_id = i.id " +
+    "WHERE i.provider = 'email' AND i.external_id = ? UNION " +
+    "SELECT l.person_id FROM identities i JOIN identity_links l ON l.identity_id = i.id WHERE i.email = ?",
+  // A messenger or CRM contact keeps its number raw in identities.phone, with or without the +.
+  phone:
+    "SELECT l.person_id FROM identities i JOIN identity_links l ON l.identity_id = i.id " +
+    "WHERE i.provider = 'phone' AND i.external_id = ? UNION " +
+    "SELECT l.person_id FROM identities i JOIN identity_links l ON l.identity_id = i.id WHERE i.phone IN (?, ?)",
+  contact:
+    "SELECT l.person_id FROM identities i JOIN identity_links l ON l.identity_id = i.id " +
+    "WHERE i.provider = ? AND i.external_id = ?",
 }
 
 /**
@@ -92,47 +138,47 @@ export const entitiesByIdentifiers = (database: CacheDatabase, type: IdentityTyp
     for (const row of rows) found.add(Number(row[column]))
   }
   if (type === "person") {
-    const person = database.prepare(
-      "SELECT DISTINCT l.person_id FROM identities i JOIN identity_links l ON l.identity_id = i.id " +
-        "WHERE (i.provider = 'email' AND lower(i.external_id) = ?) OR lower(i.email) = ?",
-    )
-    for (const email of ids.emails) add(person.all(email, email), "person_id")
-    // A messenger or CRM contact keeps its number raw in identities.phone, with or without the +.
-    const phone = database.prepare(
-      "SELECT DISTINCT l.person_id FROM identities i JOIN identity_links l ON l.identity_id = i.id " +
-        "WHERE (i.provider = 'phone' AND i.external_id = ?) OR i.phone IN (?, ?)",
-    )
-    for (const value of ids.phones) add(phone.all(value, value, value.slice(1)), "person_id")
+    for (const email of ids.emails) add(database.prepare(PERSON_BY.email).all(email, email), "person_id")
+    for (const value of ids.phones)
+      add(database.prepare(PERSON_BY.phone).all(value, value, value.slice(1)), "person_id")
     if (ids.contact)
-      add(
-        database
-          .prepare(
-            "SELECT l.person_id FROM identities i JOIN identity_links l ON l.identity_id = i.id " +
-              "WHERE i.provider = ? AND i.external_id = ?",
-          )
-          .all(ids.contact.provider, ids.contact.externalId),
-        "person_id",
-      )
+      add(database.prepare(PERSON_BY.contact).all(ids.contact.provider, ids.contact.externalId), "person_id")
   }
   if (type === "organization") {
     const organization = database.prepare(
-      "SELECT DISTINCT o.id FROM identities i JOIN organization_identities oi ON oi.identity_id = i.id " +
+      "SELECT o.id FROM identities i JOIN organization_identities oi ON oi.identity_id = i.id " +
         "JOIN organizations o ON o.id = oi.organization_id WHERE o.deleted_at IS NULL AND i.provider = ? " +
         "AND i.external_id = ?",
     )
-    for (const { scheme, value } of ids.organization) add(organization.all(scheme, value), "id")
+    for (const { provider, value } of ids.organization) add(organization.all(provider, value), "id")
   }
   if (type === "project" && ids.key !== undefined)
     add(database.prepare("SELECT id FROM projects WHERE key = ? AND deleted_at IS NULL").all(ids.key), "id")
   return [...found].sort((a, b) => a - b)
 }
 
+/** The identities the store already has for a person record's identifiers. */
+const identitiesOf = (database: CacheDatabase, ids: Identifiers): number[] => {
+  const pairs: [string, string][] = [
+    ...ids.emails.map((value): [string, string] => ["email", value]),
+    ...ids.phones.map((value): [string, string] => ["phone", value]),
+    ...(ids.contact ? [[ids.contact.provider, ids.contact.externalId] as [string, string]] : []),
+  ]
+  return pairs.flatMap(([provider, value]) => {
+    const row = database
+      .prepare("SELECT id FROM identities WHERE provider = ? AND external_id = ?")
+      .get(provider, value)
+    return row ? [Number(row.id)] : []
+  })
+}
+
 /**
- * Whether the owner separated `person` from anyone these identifiers belong to, so linking would join two people he
- * told apart. TODO(cli-messaging-19 D1): call `separated()`/`identitySeparated()` from
- * `src/store/sqlite/person-separation.ts` once that branch is merged; until then no separation is stored to read.
+ * Whether the owner separated `person` from an identity the record brings, so linking would join two people he told
+ * apart. TODO(rebase onto main, #2637): return
+ * `identities.some((identity) => identitySeparated(context, identity, person))` with `identitySeparated` from
+ * `src/store/sqlite/person-separation.ts`; this stack's base predates that module.
  */
-export const separatedByOwner = (_database: CacheDatabase, _person: number, _ids: Identifiers): boolean => false
+export const separatedByOwner = (_database: CacheDatabase, _person: number, _identities: number[]): boolean => false
 
 /** What the identifiers say: no entity, exactly one, or several the owner has to choose between. */
 export const matchOf = (database: CacheDatabase, type: IdentityType, ids: Identifiers): Match => {
@@ -140,8 +186,8 @@ export const matchOf = (database: CacheDatabase, type: IdentityType, ids: Identi
   if (found.length === 0) return { outcome: "none" }
   if (found.length > 1) return { outcome: "ambiguous", ids: found, reason: "record.ambiguous" }
   const id = found[0] as number
-  if (type === "person" && separatedByOwner(database, id, ids))
-    return { outcome: "ambiguous", ids: found, reason: "record.ambiguous" }
+  if (type === "person" && separatedByOwner(database, id, identitiesOf(database, ids)))
+    return { outcome: "ambiguous", ids: found, reason: "record.separated" }
   return { outcome: "one", id }
 }
 
@@ -225,8 +271,8 @@ export const addIdentifiers = (
       )
   }
   if (type === "organization")
-    for (const { scheme, value } of ids.organization) {
-      const identity = identityPk(context, { provider: scheme, externalId: value, name })
+    for (const { provider, value } of ids.organization) {
+      const identity = identityPk(context, { provider, externalId: value, name })
       const at = now()
       database
         .prepare(
@@ -298,7 +344,7 @@ export const renameMade = (
   before: unknown,
 ) => {
   if (typeof name !== "string" || !name.trim() || name === before) return
-  const table = type === "person" ? "persons" : type === "organization" ? "organizations" : "projects"
+  const table = RECORD_TABLES[type]
   const folded = type === "project" ? ", name_folded = ?" : ""
   database
     .prepare(`UPDATE ${table} SET name = ?${folded}, updated_at = ? WHERE id = ? AND name IS ?`)

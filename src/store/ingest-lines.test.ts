@@ -4,7 +4,7 @@ import { join } from "node:path"
 import { Readable } from "node:stream"
 import { afterEach, expect, it } from "vitest"
 import type { IngestError } from "../domain/records.js"
-import { ingestLines, linesOf } from "../services/ingest.js"
+import { ingestLines, jsonlLines } from "../services/ingest.js"
 import { recordsFixture, SOURCE, upsert } from "../testing/records.js"
 
 const handles: { close(): unknown }[] = []
@@ -19,7 +19,7 @@ it("reads stdin line by line, skips blank lines, and refuses a broken line at it
   const { store } = await recordsFixture(handles)
   const stdin = Readable.from([`\n${HEADER}\r\n`, `${shipment(1)}\n\n`, "not json\n", shipment(2)])
   const issues: IngestError[] = []
-  const receipt = await ingestLines(store, linesOf(stdin), {
+  const receipt = await ingestLines(store, jsonlLines(stdin), {
     account: SOURCE.account,
     onIssue: (one) => issues.push(one),
   })
@@ -31,9 +31,9 @@ it("reads stdin line by line, skips blank lines, and refuses a broken line at it
 it("refuses a header that is not one, and an envelope sent as its first line", async () => {
   const { store } = await recordsFixture(handles)
   const whole = JSON.stringify({ schema_version: 1, source: SOURCE, records: [] })
-  const receipt = await ingestLines(store, linesOf(Readable.from([whole])), { account: SOURCE.account })
+  const receipt = await ingestLines(store, jsonlLines(Readable.from([whole])), { account: SOURCE.account })
   expect(receipt.errors).toEqual([expect.objectContaining({ pointer: "/records", code: "envelope.invalid" })])
-  const other = await ingestLines(store, linesOf(Readable.from([HEADER])), { account: "someone-else" })
+  const other = await ingestLines(store, jsonlLines(Readable.from([HEADER])), { account: "someone-else" })
   expect(other.errors).toEqual([expect.objectContaining({ code: "envelope.account-mismatch" })])
 })
 
@@ -54,12 +54,12 @@ it("streams a file in chunks, and a dry run gives the true receipt across chunks
   ]
   writeFileSync(path, [HEADER, ...records.map((one) => JSON.stringify(one))].join("\n"))
   const options = { account: SOURCE.account, chunk: 2 }
-  const dry = await ingestLines(store, linesOf(createReadStream(path)), { ...options, dryRun: true })
+  const dry = await ingestLines(store, jsonlLines(createReadStream(path)), { ...options, dryRun: true })
   expect(dry).toMatchObject({ dryRun: true, created: 7, waiting: [], proposed: [expect.stringMatching(/^invoice:/)] })
   expect(await store.records.list(SOURCE)).toEqual([])
   expect(await store.finance.invoices()).toEqual([])
 
-  const real = await ingestLines(store, linesOf(createReadStream(path)), options)
+  const real = await ingestLines(store, jsonlLines(createReadStream(path)), options)
   expect(real).toMatchObject({ dryRun: false, created: 7, waiting: [], proposed: dry.proposed })
 })
 
@@ -67,7 +67,7 @@ it("keeps the first 1000 entries of a list and says so, while the counts stay ex
   const { store } = await recordsFixture(handles)
   const broken = Array.from({ length: 1003 }, () => "{}")
   let told = 0
-  const receipt = await ingestLines(store, linesOf(Readable.from([HEADER, ...broken].map((line) => `${line}\n`))), {
+  const receipt = await ingestLines(store, jsonlLines(Readable.from([HEADER, ...broken].map((line) => `${line}\n`))), {
     account: SOURCE.account,
     onIssue: () => {
       told += 1
@@ -77,3 +77,16 @@ it("keeps the first 1000 entries of a list and says so, while the counts stay ex
   expect(receipt.errors).toHaveLength(1000)
   expect(told).toBe(1003)
 })
+
+it("pages the waiting list and stops it at 1000, saying so", async () => {
+  const { store } = await recordsFixture(handles)
+  const deals = Array.from({ length: 1001 }, (_, n) =>
+    JSON.stringify(upsert("deal", `d-${n}`, { title: `Deal ${n}`, pipeline: "missing", stage: "new" })),
+  )
+  const receipt = await ingestLines(store, jsonlLines(Readable.from([HEADER, ...deals].map((line) => `${line}\n`))), {
+    account: SOURCE.account,
+  })
+  expect(receipt).toMatchObject({ created: 1001, truncated: true })
+  expect(receipt.waiting).toHaveLength(1000)
+  expect(receipt.waiting.at(-1)).toMatchObject({ key: "deal-d-999", pointer: "/records/999/fields/pipeline" })
+}, 60_000)

@@ -1,6 +1,6 @@
 import { createReadStream } from "node:fs"
 import { afterEach, expect, it } from "vitest"
-import { ingestLines, linesOf } from "../services/ingest.js"
+import { ingestLines, jsonlLines } from "../services/ingest.js"
 import { recordsFixture } from "../testing/records.js"
 
 const handles: { close(): unknown }[] = []
@@ -10,7 +10,7 @@ afterEach(async () => {
 
 const EXAMPLE = new URL("../../schemas/examples/records-business.jsonl", import.meta.url)
 const run = (store: Parameters<typeof ingestLines>[0], dryRun = false) =>
-  ingestLines(store, linesOf(createReadStream(EXAMPLE)), { account: "demo", dryRun })
+  ingestLines(store, jsonlLines(createReadStream(EXAMPLE)), { account: "demo", dryRun })
 const KEY = { provider: "example-erp", account: "demo" }
 
 it("takes the plan's example file end to end, and a second run changes nothing", async () => {

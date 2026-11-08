@@ -4,15 +4,15 @@ import type { DealKind, DealStatus, StageOutcome } from "../../domain/deals.js"
 import { authorActor } from "./memories.js"
 import { requiredThing } from "./notes.js"
 import {
+  entityOf,
   given,
   IMPORTER,
-  oneOf,
+  importedBy,
   type Projection,
   type ProjectionTools,
   type RecordProjector,
   type Row,
   refusal,
-  written,
 } from "./record-projection.js"
 
 const productFields = (fields: Row) => ({
@@ -54,12 +54,12 @@ const saveDeal = (kind: DealKind) => (projection: Projection, tools: ProjectionT
     url: given<string>(fields, "url"),
   }
   const saved = tools.crm.saveItemRow(source, accountId, kind, item, tools.context.now(), {
-    organization: idOf(oneOf(projection, "organization"), tools) ?? null,
+    organization: idOf(entityOf(projection, "organization"), tools) ?? null,
     // Left out, the project stays: the owner may have set one on the deal here.
-    project: idOf(oneOf(projection, "project"), tools),
-    ...(kind === "lead" ? { deal: idOf(oneOf(projection, "deal"), tools) ?? null } : {}),
+    project: idOf(entityOf(projection, "project"), tools),
+    ...(kind === "lead" ? { deal: idOf(entityOf(projection, "deal"), tools) ?? null } : {}),
     author: authorActor(tools.context, IMPORTER).actor,
-    source: written(source).source,
+    source: importedBy(source).source,
   })
   if ("reason" in saved) return refusal(saved.message, "record.reference-not-found", ["fields", "stage"])
   return `${kind}:${saved.id}`
@@ -85,7 +85,7 @@ export const DIRECT_PROJECTORS = {
         kind: given<CatalogKind>(fields, "kind"),
         sku: given<string>(fields, "sku"),
         supplier: related.get("supplier")?.[0],
-        source: written(source).source,
+        source: importedBy(source).source,
       })
       const archived = given<string>(fields, "archived_date")
       if (archived !== undefined) products.update(made.ref, { by: IMPORTER, archivedDate: archived })
@@ -116,7 +116,7 @@ export const DIRECT_PROJECTORS = {
         institution: given<string>(fields, "institution"),
         numberHint: given<string>(fields, "number_hint"),
         holder: related.get("holder")?.[0],
-        source: written(source).source,
+        source: importedBy(source).source,
       }).ref,
     update: (ref, { fields }, { wallets }) => {
       wallets.update(ref, {

@@ -114,9 +114,11 @@ export type {
 } from "./domain/rankings-options.js"
 export { rankingOptions } from "./domain/rankings-options.js"
 export {
+  type EnvelopeOptions,
   type EnvelopeRecord,
   type EnvelopeSource,
   envelopeOfJsonl,
+  envelopeOfText,
   type IngestError,
   RECORD_ENTITY_TYPES,
   RECORD_OPERATIONS,

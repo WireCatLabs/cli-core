@@ -1,29 +1,16 @@
 import { isRecordType, type RecordRoleSpec, type RecordType, roleOf } from "../../domain/record-types.js"
 import type { RecordRelation } from "../../domain/records.js"
-import type { CacheDatabase } from "../driver.js"
 import { requiredThing } from "./notes.js"
 import type { StoreContext } from "./open.js"
 import { refusal, type Share } from "./record-projection.js"
 import { referenceOfThing, storedThing } from "./things.js"
 
-/** Prepared once per store: a run writes thousands of records through the same few statements. */
-export const statementsOf = (database: CacheDatabase) => {
-  const statements = new Map<string, ReturnType<CacheDatabase["prepare"]>>()
-  return (text: string) => {
-    let statement = statements.get(text)
-    if (!statement) {
-      statement = database.prepare(text)
-      statements.set(text, statement)
-    }
-    return statement
-  }
-}
-
 /** A reference a record's fields make (`fields.pipeline`, `fields.lines.product`): no role a source sends has a dot. */
 export const isDerived = (role: string) => role.startsWith("fields.")
 
 /** A record's relations in `record_relations`: as sent, a typed ref with the target type ref, and those its fields make. */
-export const recordRelationsOver = ({ database }: StoreContext, sql: ReturnType<typeof statementsOf>) => {
+export const recordRelationsOver = ({ database }: StoreContext) => {
+  const sql = (text: string) => database.prepare(text)
   const entityRef = (type: unknown, id: unknown): string | null =>
     type == null ? null : (referenceOfThing(database, storedThing(type, id)) ?? `${String(type)}:${String(id)}`)
 
@@ -73,7 +60,7 @@ export const recordRelationsOver = ({ database }: StoreContext, sql: ReturnType<
       }
       related.set(role, [...(related.get(role) ?? []), ref])
       as.set(role, [...(as.get(role) ?? []), row.as_role == null ? null : String(row.as_role)])
-      if (role === "settles") shares.push({ invoice: ref, amount: row.amount == null ? null : String(row.amount) })
+      if (spec.amount) shares.push({ invoice: ref, amount: row.amount == null ? null : String(row.amount) })
     }
     for (const [role, refs] of related)
       if (refs.length > 1 && !roleOf(type, role)?.many) refusal(`a record has one ${role}`, "record.relation-ambiguous")

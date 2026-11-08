@@ -25,7 +25,7 @@ export {
   type IngestReceipt,
   ingest,
   ingestLines,
-  linesOf,
+  jsonlLines,
 } from "./ingest.js"
 export {
   aliasHits,

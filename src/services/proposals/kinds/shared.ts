@@ -1,3 +1,4 @@
+import type { DecidedType } from "../../../domain/record-types.js"
 import type { Proposer } from "../../../store/decisions.js"
 import type { Decision, ProposalFilter, ProposalKind, ProposalRow } from "../types.js"
 
@@ -92,15 +93,15 @@ export const reviewedRow = (kind: string, entry: ReviewedEntry, object: string |
  * money: the store refuses an agent whatever the policy says.
  */
 export const reviewedKind = <T>(spec: {
-  kind: string
-  prefix: string
+  /** A type the record registry marks reviewed: its kind and its ref prefix both. */
+  type: DecidedType
   list: (options: ReturnType<typeof pushed> & { review?: "proposed" | "confirmed" | "rejected" }) => Promise<T[]>
   get: (id: string) => Promise<T>
   row: (entry: T) => ProposalRow
   decide: (id: string, confirm: boolean, decision: Pick<Decision, "by" | "reason">) => Promise<string>
 }): ProposalKind => ({
-  kind: spec.kind,
-  prefix: spec.prefix,
+  kind: spec.type,
+  prefix: spec.type,
   list: async (filter) => {
     const status = filter.status ?? "proposed"
     const entries = await spec.list({ ...pushed(filter), ...(status === "all" ? {} : { review: status }) })
@@ -109,6 +110,6 @@ export const reviewedKind = <T>(spec: {
   get: async (id) => spec.row(await spec.get(id)),
   decide: async (id, { confirm, by, reason }) => {
     const made = await spec.decide(id, confirm, { by, reason })
-    return { id, kind: spec.kind, status: confirm ? "confirmed" : "rejected", made: confirm ? [made] : [] }
+    return { id, kind: spec.type, status: confirm ? "confirmed" : "rejected", made: confirm ? [made] : [] }
   },
 })

@@ -1,20 +1,24 @@
-import { RECORD_TYPES, roleOf } from "../../domain/record-types.js"
+import { isRecordType, RECORD_TYPES, roleOf } from "../../domain/record-types.js"
 import { pointerPairs } from "./entity-types.js"
 import type { StoreContext } from "./open.js"
 import type { Row } from "./record-projection.js"
+
+interface Thing {
+  type: string
+  id: number
+}
 
 /** The owner's remap of a record whose entity the import made: what this account's records filled from it follows. */
 export const recordRemapOver = ({ database, now }: StoreContext) => {
   /** Whether any row points at the entity: a pointer pair, a foreign key or a record; its own identities do not count. */
   const pointedAt = (type: string, id: number): boolean => {
-    // record_relations' target_type/target_id name a record, not an entity, though they look like a pointer pair.
-    for (const { table, pointer } of pointerPairs(database).filter((pair) => pair.table !== "record_relations"))
+    for (const { table, pointer } of pointerPairs(database))
       if (
         database.prepare(`SELECT 1 FROM ${table} WHERE ${pointer}_type = ? AND ${pointer}_id = ? LIMIT 1`).get(type, id)
       )
         return true
-    const target = (RECORD_TYPES as Record<string, { table: string }>)[type]?.table
-    if (target === undefined) return false
+    if (!isRecordType(type)) return false
+    const target = RECORD_TYPES[type].table
     const OWN = new Set(["identity_links", "identity_link_events", "organization_identities"])
     for (const { name } of database
       .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'")
@@ -28,12 +32,8 @@ export const recordRemapOver = ({ database, now }: StoreContext) => {
     return false
   }
 
-  /**
-   * Repoints what this account's records filled from `record` to `to`: the columns their roles name, a deal's people,
-   * and the identities the import gave the entity it made.
-   */
-  const repoint = (record: Row, from: { type: string; id: number }, to: { type: string; id: number }) => {
-    const at = now()
+  /** Repoints the entity columns and a deal's people that `record`'s dependents in its account filled from it. */
+  const repointDependents = (record: Row, from: Thing, to: Thing, at: number) => {
     const dependents = database
       .prepare(
         "SELECT rr.role, r.type, r.entity_type, r.entity_id FROM record_relations rr JOIN records r ON r.id = rr.record_id " +
@@ -42,10 +42,11 @@ export const recordRemapOver = ({ database, now }: StoreContext) => {
       .all(Number(record.id), Number(record.account_id))
     for (const row of dependents) {
       const role = roleOf(String(row.type), String(row.role))
-      const table = (RECORD_TYPES as Record<string, { table: string }>)[String(row.entity_type)]?.table
-      if (role === undefined || table === undefined) continue
+      const type = String(row.entity_type)
+      if (role === undefined || !isRecordType(type)) continue
+      const { table } = RECORD_TYPES[type]
       const entityId = Number(row.entity_id)
-      if (role.column?.endsWith("_id") || role.column === "refund_of")
+      if (role.column !== undefined && !role.pair)
         database
           .prepare(`UPDATE ${table} SET ${role.column} = ?, updated_at = ? WHERE id = ? AND ${role.column} = ?`)
           .run(to.id, at, entityId, from.id)
@@ -56,15 +57,35 @@ export const recordRemapOver = ({ database, now }: StoreContext) => {
               `AND ${role.column}_type = ? AND ${role.column}_id = ?`,
           )
           .run(to.type, to.id, at, entityId, from.type, from.id)
-      if (role.relationship && (row.entity_type === "deal" || row.entity_type === "lead"))
+      if (role.relationship && !role.kept)
         database
           .prepare(
             "UPDATE OR IGNORE links SET to_id = ?, updated_at = ? WHERE from_type = ? AND from_id = ? " +
               "AND to_type = ? AND to_id = ? AND source = 'crm'",
           )
-          .run(to.id, at, row.entity_type, entityId, from.type, from.id)
+          .run(to.id, at, type, entityId, from.type, from.id)
     }
-    if (from.type === "person") {
+  }
+
+  /**
+   * Moves `record` from the entity the import made to `to`, with every record of the account linked to that entity by
+   * the same identifiers, what their dependents filled from them, and the identities the import gave it.
+   */
+  const remap = (record: Row, from: Thing, to: Thing) => {
+    const at = now()
+    const moved = database
+      .prepare("SELECT * FROM records WHERE account_id = ? AND entity_type = ? AND entity_id = ?")
+      .all(Number(record.account_id), from.type, from.id)
+    for (const row of moved) {
+      repointDependents(row, from, to, at)
+      database
+        .prepare(
+          "UPDATE records SET entity_type = ?, entity_id = ?, created_entity = 0, projected_fingerprint = fingerprint " +
+            "WHERE id = ?",
+        )
+        .run(to.type, to.id, Number(row.id))
+    }
+    if (from.type === "person")
       for (const link of database
         .prepare("SELECT identity_id FROM identity_links WHERE person_id = ? AND method = 'import'")
         .all(from.id)) {
@@ -78,7 +99,6 @@ export const recordRemapOver = ({ database, now }: StoreContext) => {
           )
           .run(Number(link.identity_id), from.id, to.id, at)
       }
-    }
     if (from.type === "organization")
       database
         .prepare(
@@ -88,5 +108,5 @@ export const recordRemapOver = ({ database, now }: StoreContext) => {
         .run(to.id, at, from.id)
   }
 
-  return { pointedAt, repoint }
+  return { pointedAt, remap }
 }

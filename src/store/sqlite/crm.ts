@@ -169,7 +169,13 @@ const SOURCE = "crm"
  * `contact:` references percent-encode it, so the `/` stays one part.
  */
 export const crmIdentityId = (key: AccountKey, externalId: string, type: "contact" | "user" = "contact"): string =>
-  `${key.account}/${type}/${externalId}`
+  `${idPart(key.account)}/${type}/${idPart(externalId)}`
+
+/**
+ * A `/` inside an account or an id would let `a` + `b/contact/c` and `a/contact/b` + `c` name one contact, so it is
+ * escaped, with the `%` that escapes it; an id with neither, every CRM's so far, is written as before.
+ */
+const idPart = (value: string) => value.replaceAll("%", "%25").replaceAll("/", "%2F")
 
 const tallied = (): Tally => ({ issues: [], skippedOwnerRejected: 0, unlistedUsers: 0, droppedPending: 0 })
 const relationNotes = ({ issues, skippedOwnerRejected, unlistedUsers, droppedPending }: Tally) => ({
@@ -1063,7 +1069,7 @@ export const crmCopiesOver = (context: StoreContext, people: AccountPeople): Crm
         ? Number(
             database
               .prepare("SELECT count(*) AS n FROM identities WHERE provider = ? AND substr(external_id, 1, ?) = ?")
-              .get(key.provider, key.account.length + 1, `${key.account}/`)?.n,
+              .get(key.provider, idPart(key.account).length + 1, `${idPart(key.account)}/`)?.n,
           )
         : stored(key, kind).length,
     refOf: async (key, kind, externalId) => {
