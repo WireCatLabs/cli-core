@@ -60,7 +60,7 @@ const indexedMailPieces = (
 ) => {
   const candidates = database.prepare(`${MAIL_PIECE_ROWS} AND p.id IN (SELECT value FROM json_each(?)) ORDER BY p.id`)
   const merged = new Map<string, { score: number }>()
-  for (const kind of ["email_thread", "attachment"]) {
+  for (const kind of ["email_thread", "attachment", "email_enrichment"]) {
     const found = searchIndex(
       database,
       model,

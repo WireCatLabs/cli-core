@@ -140,6 +140,8 @@ export const MANIFEST: ManifestEntry[] = [
   { name: "20261107163245_version-56-relationship-links-key", version: 56, minCompatible: 56, tables: V56_TABLES },
   { name: "20261108010753_version-57-business", version: 57, minCompatible: 56 },
   { name: "20261108010754_version-57-business-rules", version: 57, minCompatible: 56 },
+  { name: "20261108104659_version-58-enrichments", version: 58, minCompatible: 56 },
+  { name: "20261108104701_version-58-enrichments-deletes", version: 58, minCompatible: 56 },
 ]
 
 export const generatedMigrations = (

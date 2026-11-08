@@ -86,4 +86,24 @@ describe("search all's one list of mail and notes", () => {
     expect(found.items[0]).toMatchObject({ kind: "mail", foundBy: ["words"] })
     expect(found.items[0]?.text).toContain("zephyrine")
   })
+
+  it("**keeps a rare word's second hit next to its first**, not behind every hit meaning found", async () => {
+    const mails = Array.from({ length: 12 }, (_, n) => `Retreat plans, part ${n + 1}.`)
+    const rare = ["The zephyrine contract is signed.", "Zephyrine invoice attached."]
+    const store = await seeded([...mails, ...rare], [])
+
+    const found = await search(store, "zephyrine", nearest([12, ...mails.map((_, n) => n)]))
+
+    expect(found.items.slice(0, 2).map(({ foundBy }) => foundBy)).toEqual([["words", "meaning"], ["words"]])
+  })
+
+  it("keeps both hits of a rare word that meaning found neither of on the page", async () => {
+    const mails = Array.from({ length: 12 }, (_, n) => `Retreat plans, part ${n + 1}.`)
+    const rare = ["The zephyrine contract is signed.", "Zephyrine invoice attached."]
+    const store = await seeded([...mails, ...rare], [])
+
+    const found = await search(store, "zephyrine", nearest(mails.map((_, n) => n)))
+
+    expect(found.items.slice(0, 10).filter(({ text }) => /zephyrine/i.test(text))).toHaveLength(2)
+  })
 })

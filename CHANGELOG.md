@@ -5,7 +5,35 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
-## Unreleased
+## 0.612.0 — 08.11.2026
+
+### Changed — may break callers
+
+- **`models consents` is offered only when the tool asks for it** with `modelCatalogueCommand(app, { enrichment:
+  true })`, as memo will. Other CLIs (gcal, mail, drive…) no longer list it: turning enrichment on changes the shared
+  store for every CLI, so one tool owns the switch.
+
+### Added
+
+- **Write-time enrichment, off by default.** With the owner's consent, a hosted model reads each note, document and
+  email and writes standalone facts and two questions in other words; search finds the record by them and still cites
+  the record. `models consents show` gives the state, the records covered and the cost estimate;
+  `models consents set openai --model gpt-4o-mini` says what would be sent and changes nothing until `--yes`;
+  `models consents revoke` turns it off and deletes what was written. Every answer carries `target` (the provider,
+  model and endpoint the estimate is about: the setting in force, the one `set` proposes, or the default offer while
+  off) with `key: {present, source, env_var}` (never the key), `per_sync`, `syncs_needed`, `offered` (provider and
+  model pairs with their prices), `measured` and `off_command`, so a window can write the consent in its own words. One setting for every WireCat CLI, the
+  `enrichment` section of the shared settings file. `embedNotes` and `embedMail` enrich up to 600 records a run before
+  they embed, each record once per text; a failed batch leaves its records for the next sync. The text goes into the
+  stems and a chunk of its own, never into `--exact`, the trigrams or the record's own chunks. An agent cannot turn it
+  on. The key: the tool's `embeddings:<provider>` entry, the environment, then its entry named after the provider
+  (`embeddingKeys(app).readPlain`). `enrichRecords`, `enrichmentState`, `readEnrichmentSetting` and `writeEnrichmentSetting` from
+  `@wirecat/cli-core/services`; `store.enrichment`.
+- Store version 58: `enrichments`, one row per enriched record, deleted with the record. Additive; `minCompatible`
+  stays 56.
+- The model gateway's answer carries `usage` (input and output tokens) for OpenAI and Anthropic.
+
+## 0.611.0 — 08.11.2026
 
 ### Added
 
@@ -44,6 +72,8 @@ shape of this file.
 
 ### Fixed
 
+- **In `search all`, a hit only words found keeps its place next to the hits around it.** It takes the cosine of the
+  hit above it in its own source, so an exact word's second hit no longer sorts behind every hit meaning found.
 - **cli-core accepts `@wirecat/cli-base` up to 0.85.x.** Its peer range stopped at `<0.83.0`, so a CLI could not take
   cli-base 0.85.0's `hostFetch` and the `network.hosts` manifest next to cli-core. Nothing else changes for a caller.
 

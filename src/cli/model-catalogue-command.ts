@@ -1,5 +1,5 @@
 import { join } from "node:path"
-import { CliError } from "@wirecat/cli-base"
+import { CliError, type KeyringStore } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { defineQuery } from "@wirecat/cli-base/query"
 import { Command } from "commander"
@@ -12,6 +12,7 @@ import { install, installedBytes, isInstalled, modelsDirectory } from "../speech
 import { DEFAULT_ORDER, orderedModels, speechModel } from "../speech/models.js"
 import { stepLines } from "../terminal/step-lines.js"
 import { FETCH, grantsAuthority, LOCAL_READ, LOCAL_WRITE, NO_EFFECTS } from "./effects.js"
+import { enrichmentConsentsCommand } from "./enrichment-consents-command.js"
 import { type Body, itemOf, listOf } from "./envelope.js"
 import { listQuery, nativeTerms, termField, typedQuery, withQuery } from "./list-query.js"
 
@@ -28,6 +29,13 @@ export const MODEL_CATALOGUE_QUERY = defineQuery({
 export interface ModelCatalogueOptions {
   kinds: readonly ("audio" | "text")[]
   env: () => NodeJS.ProcessEnv
+  /**
+   * Offer `models consents`, the switch for write-time enrichment. Only the tool whose sync enriches asks for it
+   * (memo): it changes the shared store for every CLI.
+   */
+  enrichment?: boolean
+  /** Where `models consents` looks for the enrichment provider's key; the system keyring when absent. */
+  keyring?: KeyringStore
   output: (answer: Body, command: Command) => void
   diagnostic: (line: string) => void
   jsonOption?: boolean
@@ -158,7 +166,10 @@ export const modelCatalogueCommand = (app: AppIdentity, options: ModelCatalogueO
         options.output(itemOf(textModelItem(model, env)), this)
       })
   }
-  if (options.jsonOption) for (const command of models.commands) command.option("--json", "print JSON")
+  if (options.enrichment === true) models.addCommand(enrichmentConsentsCommand(app, options))
+  if (options.jsonOption)
+    for (const command of models.commands.flatMap((one) => (one.commands.length ? one.commands : [one])))
+      command.option("--json", "print JSON")
   return models
 }
 

@@ -48,9 +48,16 @@ export interface ModelTarget {
   baseUrl?: string
 }
 
+/** Input and output tokens as the provider reported them, which price differently. */
+export interface ModelUsage {
+  input: number
+  output: number
+}
+
 export interface ModelAnswer {
   text: string
   tokens: number
+  usage?: ModelUsage
   provider: string
   model: string
 }
@@ -64,7 +71,7 @@ export interface ModelAdapter {
     options: Record<string, unknown>,
     apiKey: string | undefined,
     fetcher: typeof fetch,
-  ) => Promise<{ text: string; tokens: number }>
+  ) => Promise<{ text: string; tokens: number; usage?: ModelUsage }>
   baseUrl: string
 }
 

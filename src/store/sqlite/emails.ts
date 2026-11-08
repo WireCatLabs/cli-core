@@ -30,6 +30,7 @@ import {
   storedWhole,
 } from "./email-locations.js"
 import { markEmailsDeleted, markEmailsRestored, recountEmailThread as recount, setEmailFlags } from "./email-state.js"
+import { EMAIL_ENRICHMENT, enrichmentText } from "./enrichments.js"
 import { bool, flag, fromJson, int, page, str, toJson } from "./events.js"
 import { folded } from "./folded.js"
 import { ensurePerson } from "./identities.js"
@@ -994,6 +995,10 @@ export const mailStoreOver = (
           if (!threads.has(owner)) threads.set(owner, threadPieces(database, owner))
           const piece = threads.get(owner)?.[Number(row.position)]
           return piece && piece.hash === row.hash ? [{ hash: piece.hash, text: piece.text }] : []
+        }
+        if (type === EMAIL_ENRICHMENT) {
+          const text = enrichmentText(database, type, owner)
+          return text === undefined ? [] : [{ hash: String(row.hash), text }]
         }
         const text = str(file.get(owner)?.text)
         return text == null ? [] : [{ hash: String(row.hash), text: text.slice(Number(row.start), Number(row.end)) }]

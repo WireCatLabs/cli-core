@@ -14,7 +14,8 @@ work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
 fetch() { # package integrity
-  curl -fsSL "https://registry.npmjs.org/$1/-/$1-$VERSION.tgz" -o "$work/$1.tgz"
+  curl -fsSL --retry 5 --retry-connrefused --retry-delay 5 --connect-timeout 20 --max-time 300 --retry-max-time 600 \
+    "https://registry.npmjs.org/$1/-/$1-$VERSION.tgz" -o "$work/$1.tgz"
   actual="sha512-$(openssl dgst -sha512 -binary "$work/$1.tgz" | base64 | tr -d '\n')"
   [ "$actual" = "$2" ] || { echo "$1-$VERSION.tgz is not the file npm records" >&2; exit 1; }
   mkdir "$work/$1"

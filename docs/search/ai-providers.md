@@ -126,3 +126,35 @@ memo models download e5-large
 memo models set e5-large
 memo models add e5-base --payload '{"repository":"Xenova/multilingual-e5-base","onnx":"onnx/model_quantized.onnx","dims":768,"pooling":"mean","prefix":{"query":"query: ","passage":"passage: "}}'
 ```
+
+## Enrichment: rewriting records for search (off by default)
+
+Enrichment sends each note, document and email to a hosted model, which writes standalone facts (names in full,
+dates made absolute) and two questions in other words. Search then finds the record by those words too: they go into
+the stems and into a chunk of their own beside the record's, so a hit still cites the record. `--exact`, the trigrams
+and the record's own chunks keep only its own text. On 10,444 synthetic records it lifted memo 0.131.55 on reworded
+questions from 0.62 to 0.79 at @10, and cost first place on questions in the record's own words (0.54 to 0.48), for
+about $0.49 with gpt-4o-mini ([cli-testing #322](https://github.com/WireCatLabs/cli-testing/pull/322)).
+
+It is off until the owner says yes. One setting serves every WireCat CLI: the `enrichment` section of the shared
+settings file (`provider`, `model`, optional `base_url`, `consented_at`).
+
+```sh
+memo models consents show --json                          # on or off, records, enriched, pending, cost estimate
+memo models consents set openai --model gpt-4o-mini       # what would be sent and what it costs; changes nothing
+memo models consents set openai --model gpt-4o-mini --yes # on
+memo models consents revoke                               # off, and deletes what the model wrote
+```
+
+With it on, `embedNotes` and `embedMail` (every `sync` that embeds) first enrich up to 600 records that have no
+enrichment of their current text, 20 to a request and four requests at once, then embed. A record is sent once per
+text: an edit sends it again, a re-sync does not. A batch the model answers wrongly leaves its records for the next
+sync; a rate limit or a missing key stops the run. The records go as untrusted data, never as instructions; each
+record adds at most five facts and three questions of at most 400 characters.
+
+When the tool passes its identity (memo does), the key is read from its keyring entry `embeddings:<provider>`
+(`models keys set openai` in tg and MAX), then `<PREFIX>_OPENAI_API_KEY` / `OPENAI_API_KEY` (or the Anthropic ones),
+then an entry of the tool's service named after the provider alone (`cli-memo` / `anthropic`). The consent text also
+says that a question in the record's own words finds that record first a little less often.
+An agent's shell cannot turn it on, and over MCP `models consents set` needs `mcp.authority`. Prices for the
+estimate are known for `openai/gpt-4o-mini` and `anthropic/claude-haiku-5-5`; another model gets `usd: null`.

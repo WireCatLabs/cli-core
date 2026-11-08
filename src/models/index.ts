@@ -5,7 +5,7 @@ import { type ModelAdapter, type ModelAnswer, type ModelRequest, type ModelTarge
 
 export type { ModelSettings } from "./settings.js"
 export { modelTarget } from "./settings.js"
-export type { ModelAdapter, ModelAnswer, ModelImage, ModelRequest, ModelTarget } from "./types.js"
+export type { ModelAdapter, ModelAnswer, ModelImage, ModelRequest, ModelTarget, ModelUsage } from "./types.js"
 
 export interface GatewayDeps {
   resolve: (purpose: string) => ModelTarget | undefined

@@ -57,6 +57,7 @@ const PROVIDER_API: Entry[] = [
 
 const OTHERS: Entry[] = [
   ["query.time-limit", "timeout", "the search took longer than its time limit; the query itself is valid"],
+  ["enrichment.owner-only", "permission_error", "only the owner turns enrichment on, not an agent"],
   ["model.offline", "permission_error", "downloading a model needs the network; --offline was requested"],
   [
     "contract.unacknowledged-override",

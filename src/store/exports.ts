@@ -53,6 +53,15 @@ export {
   type ThreadActivity,
 } from "./sqlite/email-activity.js"
 export { messageOfEmail, threadConversation } from "./sqlite/emails.js"
+export {
+  ENRICHMENT_SUBJECTS,
+  type EnrichmentCandidate,
+  type EnrichmentCounts,
+  type EnrichmentNarrowing,
+  type EnrichmentStore,
+  type EnrichmentSubject,
+  type SavedEnrichment,
+} from "./sqlite/enrichments.js"
 export { orphanPointers } from "./sqlite/entity-types.js"
 export { involvementStoreOver } from "./sqlite/involvements.js"
 export type {

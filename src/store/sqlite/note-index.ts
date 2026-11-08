@@ -6,8 +6,10 @@ import { taskStemsOf, taskWordsOf } from "../../search/task-similarity.js"
 import { type CacheDatabase, isQueryOnly } from "../driver.js"
 import { normalize } from "../normalize.js"
 import { dropDocumentPicture } from "./document-pictures.js"
+import { currentEnrichment, EMAIL_ENRICHMENT, ENRICHMENT_POSITION } from "./enrichments.js"
 import { int } from "./events.js"
 import { indexRow } from "./index-state.js"
+import { noteIndexText } from "./index-text.js"
 import { speech } from "./lucene-fields.js"
 import type { Where } from "./query-filter.js"
 import { savedStemmers } from "./stems.js"
@@ -152,8 +154,7 @@ export const CORPORA = {
   },
 } as const satisfies Record<string, Corpus>
 
-/** What a row is indexed as: its title, then its text. Chunk offsets point into this. */
-export const noteIndexText = (title: string | null, text: string): string => (title ? `${title}\n\n${text}` : text)
+export { noteIndexText } from "./index-text.js"
 
 const queuedAs = (corpus: Corpus) => corpus.queued ?? corpus.type
 
@@ -273,25 +274,55 @@ const writer = (database: CacheDatabase, corpus: Corpus, stemmer: Stemmer) => {
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     ),
     dequeue: database.prepare(`DELETE FROM ${corpus.type}_index_pending WHERE indexable_type = ? AND id = ?`),
+    emailAt: database.prepare("SELECT coalesce(received_at, sent_at) AS at FROM emails WHERE id = ?"),
   }
+  const enrichedType = corpus.type === "email" ? EMAIL_ENRICHMENT : corpus.type
   return (id: number) => {
     const row = read.get(id)
-    const before = oldHashes.all(corpus.type, id).map((hash) => String(hash.hash))
+    const before = [
+      ...oldHashes.all(corpus.type, id).map((hash) => String(hash.hash)),
+      ...(corpus.type === "email" ? oldHashes.all(EMAIL_ENRICHMENT, id).map((hash) => String(hash.hash)) : []),
+    ]
     statements.dropWords.run(id)
     statements.dropStems.run(id)
     statements.dropTrigrams?.run(id)
     statements.dropChunks.run(corpus.type, id)
+    if (corpus.type === "email") statements.dropChunks.run(EMAIL_ENRICHMENT, id)
     const live = row !== undefined && Number(row.live) === 1
     const text = live ? noteIndexText(row.title == null ? null : String(row.title), String(row.body)) : ""
     const scope = live ? String(row.scope ?? "personal") : ""
+    // Only the stems see it: words, trigrams and --exact stay the record's own text.
+    const enrichment = text.trim() ? currentEnrichment(database, corpus.type, id, text) : undefined
     const terms = corpus.terms && text ? corpus.terms(text, stemmer) : undefined
     const words = terms ? terms.words : normalize(text)
     if (words !== "") {
       statements.words.run(id, words, scope)
       statements.trigrams?.run(id, words)
     }
-    const stems = terms ? terms.stems : text ? stemmer.indexText(text) : ""
+    const stems = terms ? terms.stems : text ? stemmer.indexText(enrichment ? `${text}\n\n${enrichment}` : text) : ""
     if (stems !== "") statements.stems.run(id, stems, scope)
+    // A chunk of its own, never appended to the record's: appended text diluted the record's vector (cli-testing
+    // knowledge-graph-memory, 0.71 to 0.67 by meaning).
+    if (enrichment) {
+      const at = Date.now()
+      const occurred = corpus.type === "email" ? int(statements.emailAt.get(id)?.at) : null
+      statements.chunk.run(
+        enrichedType,
+        id,
+        corpus.type === "email" ? 0 : ENRICHMENT_POSITION,
+        0,
+        0,
+        chunkHash(enrichment),
+        scope,
+        int(row?.account_id),
+        at,
+        at,
+      )
+      if (occurred !== null && occurred !== undefined)
+        database
+          .prepare("UPDATE chunks SET occurred_at = ? WHERE chunkable_type = ? AND chunkable_id = ?")
+          .run(occurred, EMAIL_ENRICHMENT, id)
+    }
     if (text.trim() && corpus.pieces !== false) {
       const at = Date.now()
       const sections = row?.metadata == null ? [] : storedSections(String(row.metadata))

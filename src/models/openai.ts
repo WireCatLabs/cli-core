@@ -50,7 +50,7 @@ export const openai: ModelAdapter = {
       if (!response.ok) throw new Error("provider rejected request")
       const body = (await response.json()) as {
         choices?: { finish_reason?: string; message?: { content?: unknown } }[]
-        usage?: { total_tokens?: number }
+        usage?: { total_tokens?: number; prompt_tokens?: number; completion_tokens?: number }
       }
       const choice = body.choices?.[0]
       if (
@@ -60,6 +60,13 @@ export const openai: ModelAdapter = {
         (body.usage?.total_tokens ?? 0) < 1
       )
         throw new Error("incomplete response")
-      return { text: choice.message.content, tokens: body.usage?.total_tokens as number }
+      const { prompt_tokens: input, completion_tokens: output } = body.usage ?? {}
+      return {
+        text: choice.message.content,
+        tokens: body.usage?.total_tokens as number,
+        ...(Number.isInteger(input) && Number.isInteger(output)
+          ? { usage: { input: input as number, output: output as number } }
+          : {}),
+      }
     }),
 }

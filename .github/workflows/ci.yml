@@ -22,7 +22,7 @@ permissions:
 
 jobs:
   ci:
-    uses: WireCatLabs/cli-base/.github/workflows/node-ci.yml@08d954b245268c7552a2d33a9ed4c78743784e5a # v0.61.2
+    uses: WireCatLabs/cli-base/.github/workflows/node-ci.yml@34a442be7352a59598b0bdcccc03186ae1f6a728 # v0.85.1
     with:
       pack: ${{ inputs.pack || false }}
       # 588 test files took 250 s on one runner; `ci / coverage` merges the shards and holds the floor. Two, not four:
@@ -85,7 +85,8 @@ jobs:
       - run: |
           docker run --rm -v "$PWD:/w" -w /w ubuntu:26.04 sh -ec '
             apt-get update >/dev/null && apt-get install -y nodejs gcc curl unzip procps >/dev/null
-            curl -sSfL https://www.sqlite.org/2023/sqlite-amalgamation-3420000.zip -o /tmp/old.zip
+            curl -sSfL --retry 5 --retry-all-errors --retry-delay 5 --connect-timeout 20 --max-time 60 --retry-max-time 120 \
+              https://www.sqlite.org/2023/sqlite-amalgamation-3420000.zip -o /tmp/old.zip
             unzip -q /tmp/old.zip -d /tmp && mkdir /old
             gcc -O1 -fPIC -shared -Wl,-soname,libsqlite3.so.0 -DSQLITE_ENABLE_FTS5 -DSQLITE_ENABLE_FTS3 \
               -DSQLITE_ENABLE_SESSION -DSQLITE_ENABLE_PREUPDATE_HOOK -DSQLITE_ENABLE_COLUMN_METADATA \

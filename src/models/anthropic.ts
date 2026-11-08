@@ -50,6 +50,13 @@ export const anthropic: ModelAdapter = {
         .filter((block) => block.type === "text")
         .map((block) => block.text)
         .join(""),
+      usage: {
+        input:
+          response.usage.input_tokens +
+          (response.usage.cache_creation_input_tokens ?? 0) +
+          (response.usage.cache_read_input_tokens ?? 0),
+        output: response.usage.output_tokens,
+      },
       tokens:
         response.usage.input_tokens +
         response.usage.output_tokens +
