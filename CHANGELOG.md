@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.617.0 — 08.11.2026
+
 ### Security
 
 - **Messenger bot tokens are masked in the store.** A Telegram bot token (`<bot id>:<secret>`, as BotFather sends
