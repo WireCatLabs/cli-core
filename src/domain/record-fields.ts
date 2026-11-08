@@ -23,6 +23,7 @@ export interface FieldSchema {
 export const DECIMAL_PATTERN = "^[0-9]{1,16}(\\.[0-9]{1,6})?$"
 const SIGNED_DECIMAL = "^-?[0-9]{1,16}(\\.[0-9]{1,6})?$"
 const DAY = "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+const INSTANT = "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}(:[0-9]{2}(\\.[0-9]{1,9})?)?(Z|[+-][0-9]{2}:[0-9]{2})$"
 
 export const text = (description?: string, maxLength = 2000): FieldSchema => ({
   type: "string",
@@ -37,6 +38,8 @@ export const signedDecimal = (description: string): FieldSchema => ({
   description,
 })
 export const day = (description: string): FieldSchema => ({ type: "string", pattern: DAY, description })
+/** ISO 8601 with its offset: a phone's time without one would be read in whatever zone the importer runs in. */
+export const instant = (description: string): FieldSchema => ({ type: "string", pattern: INSTANT, description })
 export const enumOf = (values: readonly string[], description?: string): FieldSchema => ({
   type: "string",
   enum: values,

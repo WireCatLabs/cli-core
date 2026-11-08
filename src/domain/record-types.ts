@@ -17,6 +17,7 @@ import {
   decimal,
   enumOf,
   type FieldSchema,
+  instant,
   objectOf,
   signedDecimal,
   text,
@@ -44,6 +45,11 @@ export interface RecordRoleSpec {
   column?: string
   /** `column` names a `<column>_type`/`<column>_id` pair, a person or an organization, not a foreign key. */
   pair?: boolean
+  /**
+   * Filled as a link instead of a column: an SMS's identity linked to the person, a call's `related-to` link. The
+   * remap repoints it too.
+   */
+  linked?: boolean
 }
 
 export interface NestedSpec {
@@ -99,6 +105,17 @@ const lineItem = objectOf({
   product: { description: "The product record's external id in this account, read with options.lines products" },
   product_ref: { type: "string", pattern: "^product:[1-9][0-9]*$", description: "A product: ref of the store" },
 })
+
+export const SMS_DIRECTIONS = ["in", "out"] as const
+export const CALL_DIRECTIONS = ["in", "out", "missed"] as const
+
+const phoneFields = {
+  phone: text("The other side's number as the phone shows it: read to E.164 with the store's phone_countries", 64),
+  name: text("The other side's name as the phone shows it", 200),
+}
+
+/** The person record of the number: matched by phone or made, as a person record is. */
+const COUNTERPART = { counterpart: { targets: ["person"], linked: true } } as const
 
 const linesIn = (table: string, parent: string) =>
   ({ table, parent, references: { product: "product" }, refs: { product_ref: "product" } }) as const
@@ -410,6 +427,42 @@ export const RECORD_TYPES = {
       project: { targets: ["project"], column: "project_id" },
       deal: { targets: ["deal"], column: "deal_id" },
     },
+  },
+  message: {
+    table: "messages",
+    review: "direct",
+    update: "in-place",
+    tombstone: true,
+    fields: objectOf(
+      {
+        kind: enumOf(["sms"], "sms: a text message of the phone"),
+        direction: enumOf(SMS_DIRECTIONS, "in: the other side wrote it; out: the owner did"),
+        ...phoneFields,
+        thread: text("The phone's thread id; the number when left out", 512),
+        body: { type: "string", maxLength: 20_000, description: "The text" },
+        sent_at: instant("When it was sent"),
+        read: { type: "boolean", description: "An incoming message the owner opened" },
+      },
+      { required: ["kind", "direction", "phone", "body", "sent_at"] },
+    ),
+    roles: COUNTERPART,
+  },
+  event: {
+    table: "events",
+    review: "direct",
+    update: "in-place",
+    tombstone: true,
+    fields: objectOf(
+      {
+        kind: enumOf(["call"], "call: a phone call"),
+        direction: enumOf(CALL_DIRECTIONS, "in, out, or missed: a call the owner did not take"),
+        ...phoneFields,
+        started_at: instant("When it rang"),
+        duration: { type: "integer", minimum: 0, maximum: 604_800, description: "Seconds talked; 0 when missed" },
+      },
+      { required: ["kind", "direction", "phone", "started_at"] },
+    ),
+    roles: COUNTERPART,
   },
   pipeline: {
     table: "pipelines",

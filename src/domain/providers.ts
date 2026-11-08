@@ -33,6 +33,9 @@ export const PROVIDERS: readonly ProviderEntry[] = [
   { name: "local", kind: "notes", aliases: [] },
   { name: "obsidian", kind: "notes", aliases: [] },
   { name: "zoom", kind: "meetings", aliases: [] },
+  // A phone export's records envelope writes its SMS and its calls here, one account per source account.
+  { name: "sms", kind: "messages", aliases: [] },
+  { name: "calls", kind: "events", aliases: [] },
 ]
 
 const LABELS: Readonly<Record<string, string>> = {
@@ -44,6 +47,7 @@ const LABELS: Readonly<Record<string, string>> = {
   "whatsapp-bot": "WhatsApp bot",
   "google-drive": "Google Drive",
   email: "mail",
+  sms: "SMS",
 }
 
 /** How a text names a provider to a person: `MAX`, not `max`. */

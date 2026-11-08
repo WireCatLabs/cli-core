@@ -191,7 +191,8 @@ const spanOf = (entry: { startsAt: number | null; endsAt: number | null }) => {
   return { start, end: Math.max(entry.endsAt ?? start, start + 1) }
 }
 
-export const eventStoreOver = (context: StoreContext): EventStore => {
+/** The entry writes behind the calendar store, run inside the caller's transaction: the records import shares them. */
+export const calendarWritesOver = (context: StoreContext) => {
   const { database } = context
 
   const entryRow = (id: number) => database.prepare("SELECT * FROM calendar_entries WHERE id = ?").get(id) as Row
@@ -665,6 +666,37 @@ export const eventStoreOver = (context: StoreContext): EventStore => {
            AND original_starts_at >= ? AND original_starts_at < ? AND deleted_at IS NULL ORDER BY original_starts_at`,
       )
       .all(calendarId, series, window.from, window.to)
+
+  return {
+    entryRow,
+    calendarRow,
+    setEntity,
+    newEntity,
+    refreshEvent,
+    refreshSeries,
+    refreshAround,
+    saveAll,
+    removeAll,
+    putCursor,
+    slotRows,
+  }
+}
+
+export const eventStoreOver = (context: StoreContext): EventStore => {
+  const { database } = context
+  const {
+    entryRow,
+    calendarRow,
+    setEntity,
+    newEntity,
+    refreshEvent,
+    refreshSeries,
+    refreshAround,
+    saveAll,
+    removeAll,
+    putCursor,
+    slotRows,
+  } = calendarWritesOver(context)
 
   return {
     saveCalendars: async (accountId, calendars, now) =>

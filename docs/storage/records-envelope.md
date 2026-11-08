@@ -39,7 +39,7 @@ made (§ Matching).
 
 ## Types
 
-Every type below is an entity type and a ref prefix. Anything else a source has is `custom:<name>`: kept as a record
+Every type below is an entity type and a ref prefix, except that a message's ref is its locator (`msg:`). Anything else a source has is `custom:<name>`: kept as a record
 with its fields and relations, never projected. `task` is refused (`record.type`): tasks have their own source rules.
 
 | Type | Becomes | A changed record | Roles (`*` several, `as` a relationship) | Nested in `fields` |
@@ -57,6 +57,8 @@ with its fields and relations, never projected. `task` is refused (`record.type`
 | `subscription` | proposed | re-proposed (a new price is added), else flagged | `supplier`, `customer`, `product`, `contract`, `project` | `prices` |
 | `wallet` | written; the opening balance stays in the record | in place | `holder` | — |
 | `transaction` | proposed | re-proposed (splits replaced), else flagged | `wallet` (required), `counterparty`, `payment`, `project` | `splits` |
+| `message` (kind `sms`) | written, an SMS in `sms:<account>` | in place, as an edit | `counterpart` | — |
+| `event` (kind `call`) | written, a call in `calls:<account>` | in place | `counterpart` | — |
 
 Each type's known `fields` keys are typed in the schema (`$defs/fields-<type>`); any other key is kept as sent. An
 import never writes confirmed money: what feeds a total is a proposal of the bot `import` that only the owner decides.
@@ -193,3 +195,72 @@ contract with a value, a sale order with one line of that service, an invoice an
 product, proposes the contract, order, invoice and payment, allocates the payment, and keeps the quote as a record
 whose `quoted-for` resolves to the deal's record. Run twice, every record is `unchanged`
 (`src/store/records-example.test.ts`).
+
+## Phone data: SMS, calls, contacts
+
+A phone export is one envelope (JSON or JSONL) of one source account: `message` records of kind `sms`, `event`
+records of kind `call`, and `person` records from the address book or from the numbers the export saw.
+`envelopeOfVcard` turns a `.vcf` file into such an envelope. Both types are written directly (`review: direct`):
+they carry no money.
+
+**Where the kind is kept.** A search reads an account by its provider's kind (`messages`, `events`), and one
+provider has one kind, so the source's own account cannot hold both. The import writes them into two accounts named
+after the source account: SMS into `sms:<account>` (provider `sms`, kind `messages`) and calls into
+`calls:<account>` (provider `calls`, kind `events`), both in the provider seed. The record itself stays in the
+source's account, as every record does. A call's calendar entry also has `event_type: call`, so
+`events list event_type:call` lists calls among the calendars' events. No column is added.
+
+```json
+{ "key": "sms-1", "type": "message", "external_id": "sms-1",
+  "fields": { "kind": "sms", "direction": "in", "phone": "+34600111222", "name": "Иван Петров",
+              "body": "Буду в 10", "sent_at": "2026-11-01T09:12:00+01:00", "read": true },
+  "relations": [{ "role": "counterpart", "type": "person", "external_id": "+34600111222" }] }
+{ "key": "call-1", "type": "event", "external_id": "call-1",
+  "fields": { "kind": "call", "direction": "missed", "phone": "+34600111222", "started_at": "2026-11-01T10:00:00Z",
+              "duration": 0 },
+  "relations": [{ "role": "counterpart", "type": "person", "external_id": "+34600111222" }] }
+```
+
+**SMS → chats and messages.**
+
+- One chat per thread in `sms:<account>`: `fields.thread` (the phone's thread id) when sent, else the counterpart's
+  number read to E.164 with the store's `phone_countries` (as written when it does not read: a short code, a
+  sender name such as `Sberbank`). Kind `dialog`, membership `imported`, the title `fields.name` or the number.
+- `direction`: `in` is the counterpart's message, `out` the owner's (`outgoing`, no sender). The counterpart is an
+  identity of provider `sms` whose id is the number, kept as the identity's `phone` too, a member of the chat and
+  seen by the account, so the person's context and `search messages` read it as a messenger contact.
+- `body` is the text, `sent_at` (ISO 8601 with an offset) the time. `read` (an incoming message the owner opened) is
+  kept in the message's metadata: the store has no per-message read state for incoming messages.
+- The message is written through the messenger path (`upsertMessage`), so its words and meaning are indexed as a
+  messenger's; `messages.source` is `import:<provider>`. A changed record edits the text, as an edit does.
+- MMS attachments are out of scope: a record's other fields are kept in the record only.
+
+**Calls → events.** One calendar `calls` in `calls:<account>`, its sync marked complete. Each call is a calendar
+entry (`event_type: call`, `transparency: transparent`, so it never counts as busy or overlapping) and the event it
+makes: start `started_at`, end start plus `duration` seconds, title `fields.name` or the number, description
+`incoming call`, `outgoing call` or `missed call`. Direction, duration and number are in the entry's metadata.
+
+**The counterpart.** `counterpart` names the person record of the number (one, optional). That record is matched
+or made as § Matching says: one exact phone links, none makes a person, two or more leave the person `unmatched`
+with its candidates, and the SMS or call **waits** until the owner maps it. Never by name. Once the person is known,
+the SMS identity is linked to that person (`method: import`, so an owner's remap moves it), and a call gets a link
+`related-to` (role `counterpart`) from the event to the person, read by `events list person:` and by the person's
+context. A record without `counterpart` keeps only the number. A source sends one person record per number, keyed
+by the number or its contact id; a vCard contact with the same number links to the same person.
+
+**vCard → envelope.** `envelopeOfVcard(text, { provider, account, batchId, region })` in `src/domain/vcard.ts`,
+exported from the package, gives `{ envelope, issues }`. `isVcard(text)` tells a `.vcf` from a JSON or JSONL file,
+and `ingestVcard(store, text, { account, provider, batchId, region })` (`@wirecat/cli-core/services`) converts and
+imports it in one call, its receipt with the converter's `vcard` issues beside the import's.
+
+- vCard 2.1, 3.0 and 4.0: folded lines, quoted-printable (with 2.1's soft breaks), `CHARSET` (UTF-8,
+  windows-1251, KOI8-R), `\,` `\;` `\n` escapes, `item1.` groups.
+- One `person` record per card: `FN`, else `N` as given then family name; `TEL` read to E.164, `EMAIL`.
+- A number with `+` or `00` is read as is. A national number is read only with `region` (a country of
+  `phone_countries`); without it, it stays in `fields.phone_unread`, is no identifier, and is reported in `issues`.
+- `ORG` is one `organization` record per name in the file (`external_id` `org:<folded name>`), and the person is
+  `member-of` it; `TITLE` is kept in `fields.title`, and is the relation's `as` when it reads as a word (`cto`).
+  Each account gets its own organization for an `ORG` name: a name never matches across accounts or entities.
+- `external_id` is the card's `UID`, else a hash of its name, numbers and addresses: a card without UID whose
+  numbers change is a new record. `REV` is not a `revision`: a source that never sends one could not change it later.
+- `PHOTO`, `LOGO`, `SOUND`, `KEY` are skipped.
