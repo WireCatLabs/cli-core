@@ -20,6 +20,11 @@ shape of this file.
 - **`models add <id> --payload '<json>'` adds an ONNX embedding model from Hugging Face**, pinned to a commit with
   each file's sha256, in the same shape as the built-in models. Its vectors' key carries its weights' hash.
 - `chosenTextModel`, `textModels` and `useTextModel` from `@wirecat/cli-core/services`; `store.vectors.vectorCounts`.
+- **`config set owner_languages ru,en` says which languages the owner reads**, store-wide and offered by every
+  WireCat CLI, not only the messengers: ISO 639-1 codes in his order, each once; `ru` when unset. The first is the
+  language everything written for him is in; a title quoted in a later one stays untranslated. An unknown code is
+  refused by name. `ownerLanguages(database)` from `@wirecat/cli-core/store` reads it, primary first, with
+  `DEFAULT_OWNER_LANGUAGES`. Nothing reads it yet: the digest renderer will.
 - **A CLI's own CRM list can print the same `--format csv` table as `deals list`.** `@wirecat/cli-core/crm/cli`
   exports `csvFormatOption`, `refuseCsvConflict` (the refusal of another output or an agent's run, checked before
   the CRM is read), `csvColumnPaths` (`--json=a,b`, or the caller's own default columns) and `printCsv`, with
