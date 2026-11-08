@@ -152,7 +152,7 @@ describe("contacts context", () => {
     expect(texts(both.recent.direct)).toContain("from Ana on MAX")
     expect(both.shared).toContainEqual(expect.objectContaining({ provider: "max", account: "900", chatId: "m1" }))
 
-    await people().unlink("max:m5")
+    await people().unlink("max:m5", { by: "owner" })
     const alone = await people().context("11")
     expect(alone.person.identities).toHaveLength(1)
     expect(texts(alone.recent.direct)).not.toContain("from Ana on MAX")

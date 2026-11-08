@@ -3640,7 +3640,7 @@ describe("the shared read commands", () => {
     expect(Object.keys(JSON.parse(projected.stdout[0] ?? "null").item)).toEqual(["uid"])
   })
 
-  it("contacts link from an agent's terminal opens a proposal the owner confirms; the owner's links at once", async () => {
+  it("contacts link from an agent's terminal opens a proposal and its unlink is refused; the owner's links at once", async () => {
     const root = mkdtempSync(join(tmpdir(), "contacts-link-"))
     const env = {
       CHAT_PROFILE: "default",
@@ -3691,9 +3691,18 @@ describe("the shared read commands", () => {
     expect(owned.code, owned.stderr.join(" ")).toBe(0)
     expect(JSON.parse(owned.stdout[0] ?? "null").item).not.toHaveProperty("proposal")
     expect(providersOf(owned)).toEqual(["max:m6", "telegram:11"])
-    const vouched = await link(["max:m6", "max:m5", "--as-owner"], agent)
-    expect(vouched.code, vouched.stderr.join(" ")).toBe(0)
-    expect(providersOf(vouched)).toEqual(["max:m5", "max:m6", "telegram:11"])
+    const unlinked = await call(
+      ["contacts", "unlink", "max:m6", "--offline", "--json"],
+      never,
+      agent,
+      {},
+      {
+        provider: "telegram",
+      },
+    )
+    expect(unlinked.code).not.toBe(0)
+    expect(unlinked.stderr.join(" ")).toContain("identity.owner-only")
+    expect(providersOf(await link(["11", "max:m6"], env))).toEqual(["max:m6", "telegram:11"])
 
     const reopened = await openStore({ path: env.MESSAGING_STORE })
     const proposals = await reopened.proposedActions.list({ kinds: ["identity_link"] })

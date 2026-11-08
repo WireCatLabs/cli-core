@@ -365,7 +365,7 @@ const OTHERS: Entry[] = [
   [
     "identity.owner-only",
     "permission_error",
-    "only the owner undoes a merge, splits a person, confirms a link or links an identity to themselves",
+    "only the owner undoes a merge, splits a person, confirms or undoes a link, or links an identity to themselves",
   ],
   [
     "identity.stale",

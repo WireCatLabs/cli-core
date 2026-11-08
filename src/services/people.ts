@@ -73,7 +73,8 @@ export interface PeopleService {
   ): Promise<PersonMessages>
   /** `other` may name another messenger of the store: `max:Ana`. */
   link(person: string, other: string, options: LinkPeopleOptions): Promise<LinkedPeople>
-  unlink(person: string): Promise<PersonRecord>
+  /** The owner's alone: an unlink separates two people, and nothing links them again on its own. */
+  unlink(person: string, options: { by: string }): Promise<PersonRecord>
   /**
    * Only counts and the people recognised: never a number. `IMPORT_CHUNK` numbers a request, each request
    * through the guard, each number counted toward the hourly limit.
@@ -208,7 +209,11 @@ export const peopleService = (deps: ServiceDeps): PeopleService => {
     link: async (person, other, options) =>
       linkPeople(await deps.store(), await deps.account(), person, other, options),
 
-    unlink: async (person) => {
+    unlink: async (person, { by }) => {
+      if (by !== "owner")
+        throw new CliError("permission_error", "only the owner unlinks an identity; the owner runs this", {
+          reason: "identity.owner-only",
+        })
       const store = await deps.store()
       return store.people.unlinkIdentity(await identityIn(store, await deps.account(), person), {
         method: "manual",
