@@ -7,6 +7,16 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **`templates` takes the language as `--locale <code>`, not `--language <code>`, and its words come from the shared
+  vocabulary.** `--language` is the query language in every other command (`<lucene|legacy>`); the template's
+  language keeps its field name, `language`. `--file <file>` names the file as the vocabulary does, `templates
+  list [query...]` narrows by `key`, `channel`, `language` and `source` (`templates list channel:telegram source:stored`)
+  and answers the `template` entity, and every command has a short summary. The shared commands' lint now covers the
+  group, so `cli-dev lint` passes on a tool that mounts it with cli-base 0.88.0 (`preview`, `--locale`, `--undo`,
+  `--channel <channel>`).
+
 ### Fixed
 
 - **One notification per digest while WireCat Desktop runs.** Desktop announces a new morning digest itself, so a
