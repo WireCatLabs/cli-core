@@ -119,11 +119,12 @@ export const cursorOf = (throughId: number, readAt: number) => `${throughId}.${r
 
 /**
  * The findings key of one run: `<holder>:<through_id>`, and `-r<resets>` once the owner moved the mark back, so the
- * runs after a reset never reach a key a batch staged before it holds. The same review gives the same key: a retry
- * of one run stages nothing twice.
+ * runs after a reset never reach a key a batch staged before it holds. A batch that ends at the mark itself, held
+ * emails only, adds `-h<highest held id>`: the run that set the mark already holds the plain key. The same review
+ * gives the same key: a retry of one run stages nothing twice.
  */
-export const findingsKeyOf = (holder: string, throughId: number, resets: number) =>
-  `${holder}:${throughId}${resets > 0 ? `-r${resets}` : ""}`
+export const findingsKeyOf = (holder: string, throughId: number, resets: number, heldThrough?: number) =>
+  `${holder}:${throughId}${heldThrough === undefined ? "" : `-h${heldThrough}`}${resets > 0 ? `-r${resets}` : ""}`
 
 const parseCursor = (cursor: string) => {
   const match = /^(\d+)\.(\d+)$/.exec(cursor.trim())
@@ -133,8 +134,11 @@ const parseCursor = (cursor: string) => {
 }
 
 /** A bulk email that is not surely a newsletter: the holder gets its subject and first lines only. */
+/** An email as a hit, with its store id: the order a mark counts by. */
+export type MarkedHit = StoredHit & { storeId: number }
+
 export interface BulkExcerpt {
-  email: StoredHit
+  email: MarkedHit
   /** The first lines of its own text, without the subject. */
   excerpt: string
   /** What kept it, or the newsletter signs too few to leave it out. */
@@ -145,7 +149,7 @@ export interface BulkExcerpt {
 
 export interface MarkRead {
   /** The emails for the holder, oldest first; bulk, envelopes, drafts, suspicious senders and partial mail left out. */
-  emails: StoredHit[]
+  emails: MarkedHit[]
   /** Bulk mail past the mark that is not surely a newsletter, oldest first; none when the triage gives no excerpts. */
   excerpts: BulkExcerpt[]
   /** What `acknowledge --cursor` takes once the holder is done with these. */
@@ -176,11 +180,17 @@ export const readPastMark = async (
     const one = sorted.get(id)
     return one ? [{ email: one.email, excerpt: one.excerpt, cues: one.cues, partial: one.partial }] : []
   })
-  const emails = await store.mail.emailHits(wanted.filter((id) => !sorted.has(id)))
+  const ids = wanted.filter((one) => !sorted.has(one))
+  const hits = await store.mail.emailHits(ids)
+  // emailHits keeps the ids' order and drops an email deleted since; only then is each one asked for alone.
+  const emails: MarkedHit[] =
+    hits.length === ids.length ? hits.map((hit, index) => ({ ...hit, storeId: ids[index] as number })) : []
+  if (hits.length !== ids.length)
+    for (const id of ids) for (const hit of await store.mail.emailHits([id])) emails.push({ ...hit, storeId: id })
   return { emails, excerpts, ...read }
 }
 
-type Sorted = Map<number, BulkSorted & { email: StoredHit; partial: boolean }>
+type Sorted = Map<number, BulkSorted & { email: MarkedHit; partial: boolean }>
 
 /**
  * The batch's bulk emails a holder might read, sorted by `newsletterSorter`, and where the batch ends so it holds at
@@ -204,7 +214,7 @@ const sortBulk = async (
     const one = sort({ subject, text: mailOwnText(body), from: email.email?.from?.address ?? null })
     if (one.verdict === "excerpt" && excerpts === triage.perRead) return { sorted, end: index }
     if (one.verdict === "excerpt") excerpts += 1
-    sorted.set(marked.id, { ...one, email, partial: marked.partial })
+    sorted.set(marked.id, { ...one, email: { ...email, storeId: marked.id }, partial: marked.partial })
   }
   return { sorted, end: batch.length }
 }
@@ -234,9 +244,9 @@ const examine = async (
     skipped: noneSkipped(),
     mark: saved,
   }
-  const keyed = (throughId: number) => ({
+  const keyed = (throughId: number, heldThrough?: number) => ({
     cursor: cursorOf(throughId, now),
-    findingsKey: throughId > 0 ? findingsKeyOf(holder, throughId, saved?.resets ?? 0) : undefined,
+    findingsKey: throughId > 0 ? findingsKeyOf(holder, throughId, saved?.resets ?? 0, heldThrough) : undefined,
   })
   if (!account) return { ...empty, ...keyed(0) }
   if (!saved) return { ...empty, ...keyed(await store.mail.newestEmailId(account.id)) }
@@ -270,7 +280,7 @@ const examine = async (
     wanted: wanted.sort((a, b) => a - b),
     sorted: new Map([...sorted].filter(([, one]) => one.verdict === "excerpt")),
     oldestStoredAt,
-    ...keyed(batch.at(-1)?.id ?? mark.throughId),
+    ...(batch.length > 0 ? keyed(batch.at(-1)?.id ?? mark.throughId) : keyed(mark.throughId, wanted.at(-1))),
     more: newer.length > batch.length,
     held,
     skipped,

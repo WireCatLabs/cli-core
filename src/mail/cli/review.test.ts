@@ -464,6 +464,27 @@ describe("a holder's processing mark", () => {
     expect(none.skipped.bulk).toBe(1)
   })
 
+  it("gives each email the cursor that ends the batch at it, so a reader that shows part acknowledges only that", async () => {
+    const box = await setUp()
+    await box.synced()
+    await box.ack((await box.read()).cursor)
+    await box.thread("t-1", email("one", 3))
+    await box.thread("t-2", email("two", 2))
+    await box.thread("t-3", email("three", 1))
+    await box.synced()
+    const first = await box.read()
+    expect(texts(first.answer)).toEqual(["text of one", "text of two", "text of three"])
+    const [one, two, three] = first.answer.items.map((item) => item.email)
+    expect(three?.cursor).toBe(first.cursor)
+    expect(two?.findings_key).toMatch(/^triage:\d+$/)
+    expect(new Set([one?.findings_key, two?.findings_key, three?.findings_key]).size).toBe(3)
+
+    await box.ack(two?.cursor as string)
+    const rest = await box.read()
+    expect(texts(rest.answer)).toEqual(["text of three"])
+    expect(rest.answer.items[0]?.email.cursor).toBe(rest.cursor)
+  })
+
   it("never moves back, and two holders keep their own marks", async () => {
     const box = await setUp()
     await box.synced()
@@ -533,6 +554,33 @@ describe("a holder's processing mark", () => {
     expect(agent.err).toContain("mail.reset-owner-only")
     expect((await reset(["--last", "1"], { MAIL_MAIL_HOLDER: "triage" })).code).toBe(5)
     expect((await reset(["--last", "1"])).code).toBe(0)
+  })
+
+  it("keys a batch cut after its held emails apart from the run that set the mark", async () => {
+    const box = await setUp()
+    await box.synced()
+    await box.ack((await box.read()).cursor)
+    await box.thread("t-big", email("big", 2, { metadata: PARTIAL }))
+    await box.synced()
+    const setting = await box.withStore((store) => readPastMark(store, MINE, "triage"))
+    await box.ack(setting.cursor)
+
+    await box.thread("t-big", email("big", 2, { metadata: { partial: null } }))
+    await box.synced()
+    const heldOnly = await box.withStore((store) => readPastMark(store, MINE, "triage"))
+    expect(heldOnly.findingsKey).toMatch(/^triage:\d+-h\d+$/)
+    expect(heldOnly.findingsKey).not.toBe(setting.findingsKey)
+
+    await box.thread("t-new", email("new", 1))
+    await box.synced()
+    const { answer } = await box.read()
+    const [big, fresh] = answer.items.map((item) => item.email)
+    expect(texts(answer)).toEqual(["text of big", "text of new"])
+    expect(String(big?.cursor).split(".")[0]).toBe(setting.cursor.split(".")[0])
+    expect(big?.findings_key).toBe(heldOnly.findingsKey)
+    expect(new Set([setting.findingsKey, big?.findings_key, fresh?.findings_key]).size).toBe(3)
+    await box.ack(big?.cursor as string)
+    expect(texts((await box.read()).answer)).toEqual(["text of new"])
   })
 
   it("holds a partial email until it is whole, then gives it once", async () => {

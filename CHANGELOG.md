@@ -16,6 +16,12 @@ shape of this file.
   Each relationship answers `standing`: `confirmed`, `reported` (a source's, nobody confirmed it), `proposed` or
   `ended`. The kinds, their ends and roles are one registry, `RELATIONS` (`src/domain/relations.ts`), exported with
   `ORGANIZATION_ROLES`, `PROJECT_ROLES`, `standingOf` and `usableLink`.
+- **`review --holder` gives each email the cursor and findings key that end the batch at it** (`email.cursor`,
+  `email.findings_key`). A reader that cuts the batch to fit, such as an agent's input, acknowledges the last email it
+  showed instead of the batch's end, so the mark never moves past mail it did not show. Held emails, older than
+  the mark, end the batch at the mark with a key of their own (`<holder>:<mark>-h<highest held id>`).
+- **`@wirecat/cli-core/cli` exports `AGENT_INPUT_MAX_CHARS`**, the 60,000-character cut of an agent's input, so a
+  host that builds the input can stay under it and cut at its own boundaries.
 
 ### Changed — may break callers
 
@@ -26,6 +32,11 @@ shape of this file.
   `metadata.position`, never in the role); memo's `author`, `lead` and `cto` examples and tests need it.
 - **`KnowledgeRelation.standing` and the `relationship` entity's `standing` are required.** A caller that builds one
   by hand adds it; `standingOf` derives it from the link.
+
+### Fixed
+
+- **A holder's batch of held emails only no longer reuses the findings key of the run that set the mark**, which
+  refused its staging (`key-used`): it takes `-h<highest held id>`.
 
 ## 0.605.0 — 07.11.2026
 

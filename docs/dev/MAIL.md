@@ -137,7 +137,11 @@ A holder — an agent or a pipeline — keeps how far it processed an account's 
 `consumer:<holder>` under the account in `sync_cursors` (`src/mail/marks.ts`); purging the account clears it with the
 mail. The mark counts by `emails.id`, the store's insert order, so mail stored late with an old date is still after
 it. `review --holder <name>` reads up to 200 emails past the mark, and the held ones now whole, and gives a cursor
-(`<last id>.<read time>`); it moves nothing. `messages acknowledge --holder <name> --cursor <cursor>` moves the mark
+(`<last id>.<read time>`); it moves nothing. Each email it gives also carries `email.cursor` and
+`email.findings_key`, the cursor and key that end the batch at that email, so a reader that shows only part of the
+batch acknowledges no email it did not show: it takes the pair of the shown email with the highest cursor id, and
+the next read starts after it. Held emails end the batch at the mark with a key of their own,
+`<holder>:<mark>-h<highest held id>`, since the run that set the mark holds the plain key. `messages acknowledge --holder <name> --cursor <cursor>` moves the mark
 there, never back; it only adds to the holder's own bookkeeping, so a read-only scheduled run may run it
 (`destroysNothing`). Only the owner moves a mark back: `messages reset --holder <name>` with `--since-time <time>`
 (past every email received since then) or `--last <n>` (past the last n emails the holder was given), and

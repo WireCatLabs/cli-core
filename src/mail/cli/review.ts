@@ -27,7 +27,7 @@ import { formatReference } from "../../domain/references.js"
 import { AGENDA_DEFAULTS } from "../../services/agenda.js"
 import { REVIEW_DAYS, reviewStart } from "../../services/inbox.js"
 import type { AccountKey, EmailMarks } from "../../store/store.js"
-import { readPastMark } from "../marks.js"
+import { cursorOf, findingsKeyOf, readPastMark } from "../marks.js"
 import { BULK_TRIAGE_DEFAULTS } from "../newsletter.js"
 import { hitText } from "../read.js"
 import { type MailHit, type MailReview, OWED_DAYS, REVIEW_THREADS, reviewMail } from "../review.js"
@@ -173,6 +173,7 @@ const reviewAnswer = (found: MailReview, mailbox: AccountKey, fresh: boolean, st
         bulk: (message.marks?.bulk ?? false) || message.excerptOnly === true,
         ...(message.excerptOnly ? { excerpt_only: true } : {}),
         ...(message.partialExcerpt ? { partial: true } : {}),
+        ...(message.through ? { cursor: message.through.cursor, findings_key: message.through.findingsKey } : {}),
         list_id: message.marks?.listId ?? null,
         rule_id: message.marks?.ruleId ?? null,
         ...(message.marks
@@ -201,15 +202,30 @@ const holderReview = async (command: Command, mail: MailReads, holder: string, q
       "--holder reads past its own mark — not with a query, --unanswered or --waiting",
     )
   const triage = mail.bulkTriage?.(command) ?? BULK_TRIAGE_DEFAULTS
+  const now = Date.now()
   const { read, mailbox, marks } = await mail.read(command, async (store, mailbox) => {
-    const read = await readPastMark(store, mailbox, holder, { triage })
+    const read = await readPastMark(store, mailbox, holder, { triage, now })
     const ids = [...read.emails, ...read.excerpts.map(({ email }) => email)].map((one) => one.id)
     const account = ids.length ? await store.accounts.storedAccount(mailbox) : undefined
     const marks = account ? await store.mail.emailMarks(account.id, ids) : new Map()
     return { read, mailbox, marks }
   })
+  const markedThrough = read.mark?.throughId ?? 0
+  const heldThrough = [...read.emails, ...read.excerpts.map(({ email }) => email)].reduce(
+    (most, { storeId }) => (storeId <= markedThrough ? Math.max(most, storeId) : most),
+    0,
+  )
+  // A held email is older than the mark, and a cursor never moves the mark back.
+  const through = (id: number) => {
+    const held = id <= markedThrough
+    const at = held ? markedThrough : id
+    return {
+      cursor: cursorOf(at, now),
+      findingsKey: findingsKeyOf(holder, at, read.mark?.resets ?? 0, held ? heldThrough : undefined),
+    }
+  }
   // An agent reads this: earlier mail and signatures stay out of its text; the fingerprint is over the stored body.
-  const emails: MailHit[] = [
+  const listed: (MailHit & { storeId: number })[] = [
     ...read.emails.map((email) => ({ ...email, text: mailOwnText(email.text) })),
     ...read.excerpts.map(({ email, excerpt, partial }) => {
       const subject = email.email?.subject
@@ -221,6 +237,7 @@ const holderReview = async (command: Command, mail: MailReads, holder: string, q
       }
     }),
   ]
+  const emails = listed.map(({ storeId, ...email }) => ({ ...email, through: through(storeId) }))
   const chats = new Map<string, MailReview["chats"][number]>()
   for (const email of emails) {
     const chat = chats.get(email.chatId) ?? {
@@ -234,10 +251,10 @@ const holderReview = async (command: Command, mail: MailReads, holder: string, q
     chat.messages.push(mark ? { ...email, marks: mark } : email)
     chats.set(email.chatId, chat)
   }
-  const now = new Date().toISOString()
+  const until = new Date(now).toISOString()
   const found: MailReview = {
-    since: read.mark?.throughAt ? new Date(read.mark.throughAt).toISOString() : now,
-    until: now,
+    since: read.mark?.throughAt ? new Date(read.mark.throughAt).toISOString() : until,
+    until,
     complete: !read.more,
     chats: [...chats.values()],
     skipped: [],
