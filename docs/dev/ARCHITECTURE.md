@@ -631,6 +631,10 @@ adapter method is optional and reached with `capability()`; the wrappers pass th
 they do not name. How to write an adapter for a new messenger, and test it with the contract cases,
 is [the adapter guide](ADAPTERS.md).
 
+`account remove` (`src/cli/account-remove.ts`) is opt-in: a tool hands it hooks for its own sign-out, keyring
+entries and files, and the command forgets the profile and keeps or purges its account in the store
+([guide](ACCOUNT-REMOVAL.md)).
+
 The MCP server (`src/mcp/server.ts`) holds one connection for minutes and runs one call at a time. Its tools are
 the CLI's commands (`toolsFromCommands`, `src/mcp/agent.ts`), each run in-process through the CLI's own `run`
 (`runCommandForAgent`) on that connection, so a tool answers and refuses exactly as the command does. What only an

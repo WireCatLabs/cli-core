@@ -1,8 +1,9 @@
 import { existsSync, readFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
+import { DEFAULT_LINK_CONFIG, type LinkConfig, type LinkForm, linkFor } from "../../domain/links.js"
 import { safeLiquid } from "../../render/liquid.js"
 import { TELEGRAM_TEXT_CHARS } from "../deliver.js"
-import { parseReport } from "./schema.js"
+import { parseReport, type ReportKind, reportDocument } from "./schema.js"
 import { type ReportView, reportView } from "./view.js"
 
 export const REPORT_CHANNELS = ["telegram", "email", "text"] as const
@@ -56,52 +57,54 @@ const linkUrls = (view: ReportView): Set<string> =>
     [
       ...view.links,
       ...view.sections.flatMap((section) => section.items.flatMap((item) => item.links)),
+      ...view.sections.flatMap((section) => section.groups.flatMap((group) => (group.link ? [group.link] : []))),
       ...view.health.items.flatMap((item) => item.links),
     ].map((link) => link.url),
   )
 
 /**
  * What a template's HTML may keep, enforced after it rendered: the channel's tags and attributes only, a `style`
- * with no `url(`, and an `href` only to a URL of the view model. Anything else goes, its text kept; `changed` counts
- * what went.
+ * with no `url(`, and an `href` only to a URL of the view model. Anything else goes, its text kept; `removed` names
+ * what went, once per occurrence, and `changed` counts it.
  */
 export const sanitizeHtml = (
   channel: Exclude<ReportChannel, "text">,
   html: string,
   urls: ReadonlySet<string>,
-): { html: string; changed: number } => {
+): { html: string; changed: number; removed: string[] } => {
   const allowed = ALLOWED[channel]
-  let changed = 0
+  const removed: string[] = []
   const dropped: boolean[] = []
-  const withoutBlocks = html.replace(/<(script|style|iframe|object)\b[\s\S]*?(<\/\1\s*>|$)/gi, () => {
-    changed++
+  const withoutBlocks = html.replace(/<(script|style|iframe|object)\b[\s\S]*?(<\/\1\s*>|$)/gi, (_, name) => {
+    removed.push(`<${String(name).toLowerCase()}> and its content`)
     return ""
   })
   const out = withoutBlocks.replace(/<(\/?)([a-zA-Z][a-zA-Z0-9]*)\b([^<>]*)>|[<>]/g, (tag, close, name, rest) => {
     if (name === undefined) {
-      changed++
+      removed.push(`a bare ${tag}`)
       return escapeHtml(tag)
     }
     const lower = String(name).toLowerCase()
     const attributes = allowed[lower]
     if (close) {
       if (lower === "a" && dropped.pop()) return ""
-      if (!attributes) changed++
+      if (!attributes) removed.push(`</${lower}>`)
       return attributes ? `</${lower}>` : ""
     }
     if (!attributes) {
-      changed++
+      removed.push(`<${lower}>`)
       return ""
     }
     const kept: string[] = []
     const all = [...String(rest).matchAll(/([a-zA-Z-]+)\s*=\s*"([^"]*)"/g)]
-    if (all.length !== (String(rest).match(/=/g)?.length ?? 0)) changed++
+    if (all.length !== (String(rest).match(/=/g)?.length ?? 0)) removed.push(`an unquoted attribute on <${lower}>`)
     for (const [, key = "", value = ""] of all) {
       const attribute = key.toLowerCase()
       const unescaped = value.replace(/&amp;/g, "&")
-      if (!attributes.includes(attribute)) changed++
-      else if (attribute === "href" && !urls.has(unescaped)) changed++
-      else if (attribute === "style" && /url\(|expression\(|javascript:/i.test(value)) changed++
+      if (!attributes.includes(attribute)) removed.push(`${attribute} on <${lower}>`)
+      else if (attribute === "href" && !urls.has(unescaped)) removed.push(`an href that is not a link of the report`)
+      else if (attribute === "style" && /url\(|expression\(|javascript:/i.test(value))
+        removed.push(`a style with url(), expression() or javascript:`)
       else kept.push(`${attribute}="${value}"`)
     }
     if (lower === "a") {
@@ -111,7 +114,7 @@ export const sanitizeHtml = (
     }
     return `<${lower}${kept.map((one) => ` ${one}`).join("")}>`
   })
-  return { html: out, changed }
+  return { html: out, changed: removed.length, removed }
 }
 
 export interface Rendering {
@@ -130,9 +133,9 @@ const renderOnce = async (view: ReportView, channel: ReportChannel, source: stri
   const scope = (channel === "text" ? view : escapedDeep(view)) as object
   const rendered = String(await engine.parseAndRender(source, scope)).trim()
   if (!rendered) throw new Error("empty")
-  if (channel === "text") return { text: rendered, templateTags: 0 }
-  const { html, changed } = sanitizeHtml(channel, rendered, linkUrls(view))
-  return { text: html, templateTags: changed }
+  if (channel === "text") return { text: rendered, templateTags: 0, removed: [] as string[] }
+  const { html, changed, removed } = sanitizeHtml(channel, rendered, linkUrls(view))
+  return { text: html, templateTags: changed, removed }
 }
 
 const renderWithFallback = async (
@@ -188,6 +191,47 @@ export const renderReport = async (
   }
 }
 
+/**
+ * Why `source` may not be saved for this view, empty when it may, and what it renders: it must render, the platform
+ * rules may take nothing out, and a Telegram text must fit once the size fit dropped what it could. Unlike
+ * `renderReport` it never falls back to the shipped template.
+ */
+export const checkTemplate = async (
+  view: ReportView,
+  channel: ReportChannel,
+  source: string,
+): Promise<{ problems: string[]; text: string }> => {
+  let current = view
+  for (;;) {
+    let rendering: Awaited<ReturnType<typeof renderOnce>>
+    try {
+      rendering = await renderOnce(current, channel, source)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      return { problems: [message === "empty" ? "it renders nothing" : `it does not render: ${message}`], text: "" }
+    }
+    if (rendering.removed.length > 0)
+      return {
+        problems: [...new Set(rendering.removed)].map((what) => `the ${channel} rules would remove ${what}`),
+        text: rendering.text,
+      }
+    if (channel !== "telegram" || rendering.text.length <= TELEGRAM_TEXT_CHARS)
+      return { problems: [], text: rendering.text }
+    const smaller = dropOne(current)
+    if (!smaller)
+      return {
+        problems: [
+          `it is ${rendering.text.length} characters with every item left out; Telegram takes ${TELEGRAM_TEXT_CHARS}`,
+        ],
+        text: rendering.text,
+      }
+    current = smaller
+  }
+}
+
+/** The owner's stored templates of one report kind and language, by channel; a missing channel uses the shipped one. */
+export type StoredTemplates = (kind: ReportKind, language: string) => Promise<Partial<Record<ReportChannel, string>>>
+
 /** What `last.json` keeps of a report run, beside the deliveries. */
 export interface ReportRun {
   language: string
@@ -200,7 +244,12 @@ export interface ReportRun {
 
 export interface PreparedReport {
   telegram: string
+  /** Plain text with web links: the email's plain part. */
   text: string
+  /** Plain text with app links (`wirecat://`), which a desktop terminal opens: `latest.txt`. */
+  terminal: string
+  /** The checked `wirecat.report/1` document as JSON, for `<run>.report.json`; absent for an invalid one. */
+  document?: string
   subject: string
   /** The desktop notice: the title line and the summary. */
   notice: string
@@ -223,8 +272,19 @@ export const prepareReport = async (
     language,
     now,
     timeZone,
-    templates = {},
-  }: { language: string; now: number; timeZone?: string; templates?: Partial<Record<ReportChannel, string>> },
+    templates: storedTemplates,
+    links = DEFAULT_LINK_CONFIG,
+    env = process.env,
+  }: {
+    language: string
+    now: number
+    timeZone?: string
+    /** A lookup that fails delivers with the shipped templates and records `report.template-failed`. */
+    templates?: StoredTemplates
+    links?: LinkConfig
+    /** Read for `WIRECAT_LINKS=off`. */
+    env?: NodeJS.ProcessEnv
+  },
 ): Promise<PreparedReport | undefined> => {
   const parsed = parseReport(answer)
   if (!parsed) return undefined
@@ -233,6 +293,7 @@ export const prepareReport = async (
     return {
       telegram: escapeHtml(line),
       text: line,
+      terminal: line,
       subject: line,
       notice: line,
       invalid: true,
@@ -240,17 +301,35 @@ export const prepareReport = async (
     }
   }
   const shipped = existsSync(templateFile(parsed.report.kind, "telegram", language)) ? language : DEFAULT_LANGUAGE
-  const view = reportView(parsed.report, { language: shipped, now, ...(timeZone ? { timeZone } : {}) })
-  const telegram = await renderReport(view, "telegram", templateOf(templates, "telegram"))
-  const text = await renderReport(view, "text", templateOf(templates, "text"))
+  const viewFor = (form: LinkForm) =>
+    reportView(parsed.report, {
+      language: shipped,
+      now,
+      ...(timeZone ? { timeZone } : {}),
+      linkOf: (ref) => linkFor(ref, { form, config: links, env }),
+    })
+  let lookupFailed = false
+  const templates = storedTemplates
+    ? await storedTemplates(parsed.report.kind, shipped).catch(() => {
+        lookupFailed = true
+        return {}
+      })
+    : {}
+  const web = viewFor("web")
+  const telegram = await renderReport(web, "telegram", templateOf(templates, "telegram"))
+  const text = await renderReport(web, "text", templateOf(templates, "text"))
+  const terminal = await renderReport(viewFor("app"), "text", templateOf(templates, "text"))
+  const renderings = [telegram, text, terminal]
   const reasons = [
-    ...(telegram.templateFailed || text.templateFailed ? [REPORT_REASONS.templateFailed] : []),
-    ...(telegram.templateTags + text.templateTags > 0 ? [REPORT_REASONS.templateTags] : []),
+    ...(lookupFailed || renderings.some((one) => one.templateFailed) ? [REPORT_REASONS.templateFailed] : []),
+    ...(renderings.some((one) => one.templateTags > 0) ? [REPORT_REASONS.templateTags] : []),
   ]
   const title = text.text.split("\n")[0] ?? ""
   return {
     telegram: telegram.text,
     text: text.text,
+    terminal: terminal.text,
+    document: `${JSON.stringify(reportDocument(parsed.report), null, 2)}\n`,
     subject: title,
     notice: [title, parsed.report.summary].filter(Boolean).join("\n"),
     invalid: false,

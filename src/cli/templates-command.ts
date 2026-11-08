@@ -1,0 +1,347 @@
+import { spawnSync } from "node:child_process"
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
+import { CliError, resolvePaths } from "@wirecat/cli-base"
+import { annotate } from "@wirecat/cli-base/commands"
+import { Command, Option } from "commander"
+import {
+  checkTemplate,
+  defaultTemplate,
+  REPORT_CHANNELS,
+  type ReportChannel,
+  renderReport,
+} from "../background/report/render.js"
+import type { ReportKind } from "../background/report/schema.js"
+import {
+  checkTemplateSave,
+  previewView,
+  shippedLanguages,
+  TEMPLATE_KEYS,
+  templateKeyOf,
+} from "../background/report/stored-templates.js"
+import type { AppIdentity } from "../ports/app.js"
+import { agentOf } from "../runs/run-context.js"
+import { type MessageStore, openStore, type TemplateAddress } from "../store/store.js"
+import { grantsAuthority, LOCAL_READ, LOCAL_WRITE } from "./effects.js"
+import { type Body, itemOf, listOf } from "./envelope.js"
+import { ownerLanguageOf } from "./schedule/schedule-command.js"
+
+export interface TemplatesOptions {
+  env: () => NodeJS.ProcessEnv
+  output: (answer: Body, command: Command) => void
+  diagnostic: (line: string) => void
+  /** Opens `path` in the owner's editor and returns when it closes; `$VISUAL` or `$EDITOR` when absent. */
+  editor?: (path: string, env: NodeJS.ProcessEnv) => void
+}
+
+const withStore = async <T>(env: NodeJS.ProcessEnv, work: (store: MessageStore) => T | Promise<T>) => {
+  const store = await openStore({ env })
+  try {
+    return await work(store)
+  } finally {
+    await store.close()
+  }
+}
+
+const systemEditor = (path: string, env: NodeJS.ProcessEnv) => {
+  const editor = env.VISUAL?.trim() || env.EDITOR?.trim()
+  if (!editor)
+    throw new CliError("validation_error", "set VISUAL or EDITOR, or pass the template with --file", {
+      reason: "template.no-editor",
+    })
+  const [program = editor, ...args] = editor.split(/\s+/)
+  const ran = spawnSync(program, [...args, path], { stdio: "inherit", env })
+  if (ran.status !== 0)
+    throw new CliError("validation_error", `the editor exited with ${ran.status ?? ran.signal}; nothing was saved`)
+}
+
+const channelOption = () =>
+  new Option("--channel <channel>", "telegram (Bot API HTML), email (HTML with inline styles) or text")
+    .choices(REPORT_CHANNELS)
+    .makeOptionMandatory()
+
+const languageOption = () =>
+  new Option("--language <code>", "the template's language, ISO 639-1; the owner's first language if not given")
+
+/** The key, its report kind and the language, refused when nothing renders the key or cli-core ships no such language. */
+const addressOf = async (
+  key: string,
+  given: { channel: ReportChannel; language?: string },
+  env: NodeJS.ProcessEnv,
+): Promise<{ address: TemplateAddress; kind: ReportKind; channel: ReportChannel }> => {
+  const known = templateKeyOf(key)
+  if (!known)
+    throw new CliError(
+      "validation_error",
+      `no template ${key}; the keys are ${TEMPLATE_KEYS.map((one) => one.key).join(", ")}`,
+      {
+        reason: "template.unknown-key",
+      },
+    )
+  if (known.kind === null)
+    throw new CliError(
+      "validation_error",
+      `nothing renders ${key} yet (${known.about}), so a template for it cannot be checked or saved`,
+      { reason: "template.no-renderer" },
+    )
+  const language = (given.language ?? (await ownerLanguageOf(env))).trim().toLowerCase()
+  const languages = shippedLanguages(known.kind)
+  if (!languages.includes(language))
+    throw new CliError(
+      "validation_error",
+      `${key} has templates in ${languages.join(", ")}; a ${language} one would never be used`,
+      { reason: "template.unknown-language" },
+    )
+  return { address: { key, channel: given.channel, language }, kind: known.kind, channel: given.channel }
+}
+
+const refuseAgent = (env: NodeJS.ProcessEnv) => {
+  // A template decides what every later digest says to the owner; an agent could make it hide or invent things.
+  if (agentOf(env))
+    throw new CliError("permission_error", "only the owner changes a message template, not an agent", {
+      reason: "template.owner-only",
+    })
+}
+
+const stateOf = (app: AppIdentity, env: NodeJS.ProcessEnv) =>
+  resolvePaths({ appName: app.appName, prefix: app.envPrefix, env }).state
+
+const historyOf = (store: MessageStore, address: TemplateAddress) =>
+  store.templates.history(address).map((entry) => ({
+    id: entry.id,
+    saved_at: new Date(entry.savedAt).toISOString(),
+    saved_by: entry.savedBy,
+    replaced_at: new Date(entry.replacedAt).toISOString(),
+    chars: entry.body.length,
+  }))
+
+/**
+ * `templates`: the owner's own templates for the messages WireCat sends him, kept in the shared store over the ones
+ * cli-core ships. The platform rules (escaping, the tags each channel keeps, links only to the report's own, the
+ * Telegram size) stay in code and run after every render, so a template cannot break them.
+ */
+export const templatesCommand = (app: AppIdentity, options: TemplatesOptions): Command => {
+  const editor = options.editor ?? systemEditor
+  const templates = annotate(new Command("templates"), { effects: LOCAL_READ }).description(
+    "the templates of the digest and the other messages sent to you, per channel and language; edit, preview, reset",
+  )
+
+  annotate(templates.command("list"), {
+    effects: LOCAL_READ,
+    examples: [`${app.command} templates list`],
+  })
+    .description("every template key, channel and language, and whether yours or the shipped one applies")
+    .action(async function (this: Command) {
+      const env = options.env()
+      const stored = await withStore(env, (store) => store.templates.list())
+      const items = TEMPLATE_KEYS.flatMap((known) =>
+        REPORT_CHANNELS.flatMap((channel) =>
+          (known.kind === null ? [null] : shippedLanguages(known.kind)).map((language) => {
+            const row = stored.find(
+              (one) => one.key === known.key && one.channel === channel && one.language === language,
+            )
+            return {
+              key: known.key,
+              channel,
+              language,
+              about: known.about,
+              renders: known.kind !== null,
+              source: row ? "stored" : known.kind === null ? "none" : "default",
+              updated_at: row ? new Date(row.updatedAt).toISOString() : null,
+              updated_by: row?.updatedBy ?? null,
+            }
+          }),
+        ),
+      )
+      options.output(listOf("templates list", { items, limit: items.length, has_more: false }), this)
+    })
+
+  annotate(templates.command("show"), {
+    effects: LOCAL_READ,
+    examples: [`${app.command} templates show report/morning-digest --channel telegram`],
+  })
+    .description("the template that applies, yours or the shipped one, and the bodies your changes replaced")
+    .argument("<key>", "the template, such as report/morning-digest")
+    .addOption(channelOption())
+    .addOption(languageOption())
+    .action(async function (this: Command, key: string, given: { channel: ReportChannel; language?: string }) {
+      const env = options.env()
+      const { address, kind, channel } = await addressOf(key, given, env)
+      const item = await withStore(env, (store) => {
+        const row = store.templates.get(address)
+        return {
+          ...address,
+          source: row ? "stored" : "default",
+          body: row?.body ?? defaultTemplate(kind, channel, address.language),
+          updated_at: row ? new Date(row.updatedAt).toISOString() : null,
+          updated_by: row?.updatedBy ?? null,
+          history: historyOf(store, address),
+        }
+      })
+      options.output(itemOf(item), this)
+    })
+
+  grantsAuthority(
+    annotate(templates.command("edit"), {
+      effects: LOCAL_WRITE,
+      examples: [
+        `${app.command} templates edit report/morning-digest --channel telegram`,
+        `${app.command} templates edit report/morning-digest --channel text --file digest.text.liquid`,
+        `${app.command} templates edit report/morning-digest --channel telegram --undo`,
+      ],
+    }),
+  )
+    .description(
+      "change a template in $EDITOR or from --file; it is checked first, and a failed check saves nothing and says why",
+    )
+    .argument("<key>", "the template, such as report/morning-digest")
+    .addOption(channelOption())
+    .addOption(languageOption())
+    .option("--file <path>", "take the new template from this file instead of opening an editor")
+    .addOption(
+      new Option("--undo", "put back the body your last change replaced; twice is back where you were").conflicts(
+        "file",
+      ),
+    )
+    .action(async function (
+      this: Command,
+      key: string,
+      given: { channel: ReportChannel; language?: string; file?: string; undo?: boolean },
+    ) {
+      const env = options.env()
+      refuseAgent(env)
+      const { address, kind, channel } = await addressOf(key, given, env)
+      const { current, previous } = await withStore(env, (store) => ({
+        current: store.templates.get(address)?.body,
+        previous: store.templates.history(address, 1)[0]?.body,
+      }))
+      const effective = current ?? defaultTemplate(kind, channel, address.language)
+      let draft: string | undefined
+      let body: string
+      if (given.undo) {
+        if (previous === undefined)
+          throw new CliError(
+            "validation_error",
+            `${key} ${channel} ${address.language} has no earlier body to put back`,
+            {
+              reason: "template.no-history",
+            },
+          )
+        body = previous
+      } else if (given.file !== undefined) {
+        body = readFileSync(given.file, "utf8")
+      } else {
+        draft = join(
+          mkdtempSync(join(tmpdir(), "wirecat-template-")),
+          `${key.replace("/", "-")}.${channel}.${address.language}.liquid`,
+        )
+        writeFileSync(draft, effective, { mode: 0o600 })
+        editor(draft, env)
+        body = readFileSync(draft, "utf8")
+      }
+      if (body === effective) {
+        if (draft) rmSync(join(draft, ".."), { recursive: true, force: true })
+        options.diagnostic(`${key} ${channel} ${address.language} is unchanged; nothing saved`)
+        options.output(itemOf({ ...address, changed: false }), this)
+        return
+      }
+      const checks = await checkTemplateSave({
+        kind,
+        channel,
+        language: address.language,
+        body,
+        state: stateOf(app, env),
+        now: Date.now(),
+      })
+      const problems = checks.flatMap((check) => check.problems.map((problem) => `${check.against}: ${problem}`))
+      if (problems.length > 0)
+        throw new CliError(
+          "validation_error",
+          `the template was not saved — ${problems.join("; ")}${
+            draft ? `. Your text is in ${draft}; fix it and run again with --file ${draft}` : ""
+          }`,
+          { reason: "template.check-failed" },
+        )
+      const saved = await withStore(env, (store) => store.templates.save(address, body, app.command))
+      if (draft) rmSync(join(draft, ".."), { recursive: true, force: true })
+      options.diagnostic(
+        `saved ${key} ${channel} ${address.language}; checked against ${checks.map((check) => check.against).join(" and ")}`,
+      )
+      options.output(
+        itemOf({
+          ...address,
+          changed: true,
+          updated_at: new Date(saved.updatedAt).toISOString(),
+          updated_by: saved.updatedBy,
+          checked_against: checks.map((check) => check.against),
+        }),
+        this,
+      )
+    })
+
+  annotate(templates.command("preview"), {
+    effects: LOCAL_READ,
+    examples: [
+      `${app.command} templates preview report/morning-digest --channel telegram`,
+      `${app.command} templates preview report/morning-digest --channel email --file draft.liquid`,
+    ],
+  })
+    .description(
+      "what would be sent on that channel, from the last real report or a synthetic one when there is none; saves nothing",
+    )
+    .argument("<key>", "the template, such as report/morning-digest")
+    .addOption(channelOption())
+    .addOption(languageOption())
+    .option("--file <path>", "preview this draft instead of the template that applies")
+    .action(async function (
+      this: Command,
+      key: string,
+      given: { channel: ReportChannel; language?: string; file?: string },
+    ) {
+      const env = options.env()
+      const { address, kind, channel } = await addressOf(key, given, env)
+      const stored =
+        given.file === undefined ? await withStore(env, (store) => store.templates.get(address)?.body) : undefined
+      const body = given.file === undefined ? stored : readFileSync(given.file, "utf8")
+      const { against, view } = previewView(stateOf(app, env), kind, address.language, Date.now())
+      const rendering = await renderReport(view, channel, body === undefined ? {} : { template: body })
+      const problems = body === undefined ? [] : (await checkTemplate(view, channel, body)).problems
+      options.output(
+        itemOf({
+          ...address,
+          template: given.file === undefined ? (stored === undefined ? "default" : "stored") : given.file,
+          against,
+          template_failed: rendering.templateFailed,
+          problems,
+          text: rendering.text,
+        }),
+        this,
+      )
+    })
+
+  grantsAuthority(
+    annotate(templates.command("reset"), {
+      effects: LOCAL_WRITE,
+      examples: [`${app.command} templates reset report/morning-digest --channel telegram`],
+    }),
+  )
+    .description("go back to the shipped template; yours is kept in the history, and edit --undo brings it back")
+    .argument("<key>", "the template, such as report/morning-digest")
+    .addOption(channelOption())
+    .addOption(languageOption())
+    .action(async function (this: Command, key: string, given: { channel: ReportChannel; language?: string }) {
+      const env = options.env()
+      refuseAgent(env)
+      const { address } = await addressOf(key, given, env)
+      const changed = await withStore(env, (store) => store.templates.reset(address))
+      options.diagnostic(
+        changed
+          ? `${key} ${address.channel} ${address.language} uses the shipped template again`
+          : `${key} ${address.channel} ${address.language} already uses the shipped template`,
+      )
+      options.output(itemOf({ ...address, changed }), this)
+    })
+
+  return templates
+}

@@ -1,4 +1,4 @@
-import { closeSync, copyFileSync, mkdtempSync, openSync, writeSync } from "node:fs"
+import { closeSync, copyFileSync, mkdtempSync, openSync, writeFileSync, writeSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
@@ -82,6 +82,18 @@ describe("store recover", () => {
     await expect(storeRecoveryRun(env, { command: "chat", timers: () => ["memo-import.timer"] })).rejects.toThrow(
       "systemctl --user stop memo-import.timer",
     )
+  })
+
+  it("names the last deep check that passed as the time since which rows may be gone", async () => {
+    const { env, clean } = await damagedStore()
+    const lastOk = "2026-11-01T08:00:00.000Z"
+    writeFileSync(
+      `${env.MESSAGING_STORE}.health.json`,
+      JSON.stringify({ checked_at: lastOk, ok: true, problems: 0, schema: null, cli: "chat", last_ok_at: lastOk }),
+    )
+    const answer = await storeRecoveryRun(env, { command: "chat", timers: () => [], copy: copyOf(clean) })
+    expect(answer.lastKnownGood).toBe(lastOk)
+    expect(recoveryNotes(answer).at(-2)).toContain(`written since the last deep check that passed (${lastOk})`)
   })
 
   it("runs the recovery, and says where the damaged file is and what to run next", async () => {

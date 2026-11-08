@@ -41,10 +41,35 @@ export interface ReportSection {
   more: number
 }
 
+export const HEALTH_REASONS = ["sync-failed", "no-schedule", "quiet"] as const
+export type HealthReason = (typeof HEALTH_REASONS)[number]
+
+/** One account's sync problem. A document written before accounts were named has only `source` and `staleHours`. */
 export interface HealthEntry {
   source: string
+  /** The account's name, username or address, never a raw id. */
+  account: string | null
+  reason: HealthReason | null
+  since: string | null
   staleHours: number
   refs: string[]
+}
+
+/** What the digest was built from: memo fills it from the agenda, not the agent. */
+export interface ReportScope {
+  from: string
+  to: string
+  sources: { kind: ChannelKind; accounts: number }[]
+  counts: { chats: number; mail: number; tasks: number; meetings: number }
+}
+
+/** The open task groups, each opened by a `tasks/<filter>` link; `new` counts what was created since `newSince`. */
+export interface TaskCounts {
+  overdue: number
+  today: number
+  tomorrow: number
+  new: number
+  newSince: string | null
 }
 
 /** A `wirecat.report/1` document as the renderers read it: checked, cut to its limits, with no `links` or `internal`. */
@@ -54,15 +79,26 @@ export interface Report {
   summary: string | null
   sections: ReportSection[]
   health: HealthEntry[]
+  scope: ReportScope | null
+  tasks: TaskCounts | null
 }
 
-const TEXT_LIMITS = { summary: 120, who: 80, topic: 60, action: 120, detail: 160, quote: 100, source: 40 } as const
+const TEXT_LIMITS = {
+  summary: 120,
+  who: 80,
+  topic: 60,
+  action: 120,
+  detail: 160,
+  quote: 100,
+  source: 40,
+  account: 60,
+} as const
 type TextField = keyof typeof TEXT_LIMITS
 
 const REQUIRED: Record<ItemType, readonly (keyof ReportItem)[]> = {
   reply: ["who", "topic", "action", "since"],
   question: ["who", "topic", "action"],
-  task: ["topic", "due"],
+  task: ["topic"],
   fact: ["topic", "detail"],
   risk: ["topic", "detail", "action"],
   money: ["who", "topic", "amount"],
@@ -137,6 +173,49 @@ const amountOf = (value: unknown, at: string): Amount | null => {
   }
 }
 
+const wholeOr0 = (value: unknown, at: string): number => (value === undefined || value === null ? 0 : whole(value, at))
+
+const scopeOf = (value: unknown): ReportScope | null => {
+  if (value === undefined || value === null) return null
+  if (!isObject(value)) throw new Invalid("scope")
+  const from = momentOf(value.from, "scope.from")
+  const to = momentOf(value.to, "scope.to")
+  if (from === null || to === null || Date.parse(to) < Date.parse(from)) throw new Invalid("scope.to")
+  const sources = value.sources === undefined || value.sources === null ? [] : value.sources
+  if (!Array.isArray(sources)) throw new Invalid("scope.sources")
+  const counts = value.counts === undefined || value.counts === null ? {} : value.counts
+  if (!isObject(counts)) throw new Invalid("scope.counts")
+  return {
+    from,
+    to,
+    sources: sources.map((source, s) => {
+      if (!isObject(source)) throw new Invalid(`scope.sources[${s}]`)
+      return {
+        kind: oneOf(CHANNEL_KINDS, source.kind, `scope.sources[${s}].kind`),
+        accounts: source.accounts === undefined ? 1 : whole(source.accounts, `scope.sources[${s}].accounts`),
+      }
+    }),
+    counts: {
+      chats: wholeOr0(counts.chats, "scope.counts.chats"),
+      mail: wholeOr0(counts.mail, "scope.counts.mail"),
+      tasks: wholeOr0(counts.tasks, "scope.counts.tasks"),
+      meetings: wholeOr0(counts.meetings, "scope.counts.meetings"),
+    },
+  }
+}
+
+const tasksOf = (value: unknown): TaskCounts | null => {
+  if (value === undefined || value === null) return null
+  if (!isObject(value)) throw new Invalid("tasks")
+  return {
+    overdue: wholeOr0(value.overdue, "tasks.overdue"),
+    today: wholeOr0(value.today, "tasks.today"),
+    tomorrow: wholeOr0(value.tomorrow, "tasks.tomorrow"),
+    new: wholeOr0(value.new, "tasks.new"),
+    newSince: momentOf(value.new_since, "tasks.new_since"),
+  }
+}
+
 const cut = (text: string, limit: number) => (text.length <= limit ? text : `${text.slice(0, limit - 1).trimEnd()}…`)
 
 /**
@@ -206,16 +285,52 @@ const checked = (document: unknown): { report: Report; leaks: number } => {
       sections,
       health: health.map((entry, h): HealthEntry => {
         const at = `health[${h}]`
-        if (!isObject(entry) || typeof entry.stale_hours !== "number" || !(entry.stale_hours >= 0))
-          throw new Invalid(at)
+        if (!isObject(entry)) throw new Invalid(at)
+        const reason =
+          entry.reason === undefined || entry.reason === null
+            ? null
+            : oneOf(HEALTH_REASONS, entry.reason, `${at}.reason`)
+        // A named reason is the problem itself; the hours are only how stale an account without one is.
+        const hours = entry.stale_hours ?? (reason === null ? undefined : 0)
+        if (typeof hours !== "number" || !(hours >= 0)) throw new Invalid(`${at}.stale_hours`)
         const source = text(entry.source, "source", `${at}.source`)
         if (source === null) throw new Invalid(`${at}.source`)
-        return { source, staleHours: entry.stale_hours, refs: refsOf(entry.refs, `${at}.refs`) }
+        return {
+          source,
+          account: text(entry.account, "account", `${at}.account`),
+          reason,
+          since: momentOf(entry.since, `${at}.since`),
+          staleHours: hours,
+          refs: refsOf(entry.refs, `${at}.refs`),
+        }
       }),
+      scope: scopeOf(document.scope),
+      tasks: tasksOf(document.tasks),
     },
     leaks,
   }
 }
+
+/**
+ * The checked document in the `wirecat.report/1` shape it came in, for `<run>.report.json`: what the renderers kept,
+ * with refs (Desktop builds its own links from them) and without `links` or `internal`.
+ */
+export const reportDocument = (report: Report): Record<string, unknown> => ({
+  format: REPORT_FORMAT,
+  kind: report.kind,
+  date: report.date,
+  summary: report.summary,
+  sections: report.sections,
+  health: report.health.map(({ staleHours, ...entry }) => ({ ...entry, stale_hours: staleHours })),
+  scope: report.scope,
+  tasks: report.tasks && {
+    overdue: report.tasks.overdue,
+    today: report.tasks.today,
+    tomorrow: report.tasks.tomorrow,
+    new: report.tasks.new,
+    new_since: report.tasks.newSince,
+  },
+})
 
 export type ParsedReport = { report: Report; leaks: number } | { invalid: string }
 

@@ -1,6 +1,6 @@
-import type { ChannelKind, ItemType, Report, ReportItem, ReportKind, SectionKind } from "./schema.js"
+import type { ChannelKind, HealthReason, ItemType, Report, ReportItem, ReportKind, SectionKind } from "./schema.js"
 
-/** A link the renderer built; a template may point an `href` only at one of these. Empty until deep links exist. */
+/** A link the renderer built from a ref; a template may point an `href` only at one of these. */
 export interface ViewLink {
   kind: "open" | "web"
   url: string
@@ -41,19 +41,40 @@ export interface ViewItem {
   links: ViewLink[]
 }
 
+export interface ViewTaskGroup {
+  filter: "overdue" | "today" | "tomorrow" | "new"
+  count: number
+  /** `tasks/<filter>`; null when links are off, or `new` has no time to count from. */
+  link: ViewLink | null
+}
+
 export interface ViewSection {
   kind: SectionKind
   emoji: string
   items: ViewItem[]
   /** The "ещё N" count: what the agent left out plus what the cap or the Telegram fit dropped. */
   more: number
+  /** The task group links, on the section that holds the task items only; zero groups left out. */
+  groups: ViewTaskGroup[]
 }
 
 export interface ViewHealth {
   source: string
+  account: string | null
+  reason: HealthReason | null
+  since: Moment | null
   hours: number
   span: string
   links: ViewLink[]
+}
+
+/** The footer line: a template picks a word's form by `plural` (`Intl.PluralRules`: one, few, many, other). */
+export interface ViewScope {
+  /** "24 ч", "3 дня": hours below two days or for a part of a day, else days. */
+  window: string
+  sources: { kind: ChannelKind; accounts: number; plural: string }[]
+  /** Zero counts left out, in the order chats, mail, tasks, meetings. */
+  counts: { kind: "chats" | "mail" | "tasks" | "meetings"; count: number; plural: string }[]
 }
 
 /** What a report template gets. Every string an agent wrote is already escaped for an HTML channel. */
@@ -68,7 +89,16 @@ export interface ReportView {
   /** Nothing in the six sections: the template says so, and says a stale source if there is one. */
   quiet: boolean
   counts: { today: number; money: number }
+  scope: ViewScope | null
   links: ViewLink[]
+}
+
+/** Builds the URL a ref opens, or null; the renderer passes `linkFor` with the form its channel needs. */
+export type LinkOf = (ref: string) => string | null
+
+const LINK_WORDS: Record<string, { open: string; fix: string }> = {
+  ru: { open: "открыть", fix: "исправить" },
+  en: { open: "open", fix: "fix" },
 }
 
 export const SECTION_EMOJI: Record<SectionKind, string> = {
@@ -89,6 +119,7 @@ export const SECTION_CAPS: Record<SectionKind | "health", number> = {
   health: 3,
 }
 const STALE_HOURS = 24
+const HOUR_MS = 3_600_000
 
 const emojiOf = (item: ReportItem, overdue: boolean): string => {
   switch (item.type) {
@@ -162,15 +193,62 @@ const amountText = (amount: NonNullable<ReportItem["amount"]>, language: string)
   return `${amount.direction === "in" ? "+" : "−"}${money}`
 }
 
+const taskGroups = (tasks: Report["tasks"], linkOf: LinkOf, label: string): ViewTaskGroup[] => {
+  if (!tasks) return []
+  const groups: { filter: ViewTaskGroup["filter"]; count: number; ref: string | null }[] = [
+    { filter: "overdue", count: tasks.overdue, ref: "tasks:overdue" },
+    { filter: "today", count: tasks.today, ref: "tasks:today" },
+    { filter: "tomorrow", count: tasks.tomorrow, ref: "tasks:tomorrow" },
+    {
+      filter: "new",
+      count: tasks.new,
+      ref: tasks.newSince === null ? null : `tasks:new/${encodeURIComponent(tasks.newSince)}`,
+    },
+  ]
+  return groups
+    .filter((group) => group.count > 0)
+    .map(({ filter, count, ref }) => {
+      const url = ref === null ? null : linkOf(ref)
+      return { filter, count, link: url === null ? null : { kind: "open", url, label } }
+    })
+}
+
+const scopeView = (scope: NonNullable<Report["scope"]>, language: string): ViewScope => {
+  const plural = new Intl.PluralRules(language)
+  const hours = Math.round((Date.parse(scope.to) - Date.parse(scope.from)) / HOUR_MS)
+  const window =
+    hours >= 48 && hours % 24 === 0
+      ? new Intl.NumberFormat(language, { style: "unit", unit: "day", unitDisplay: "long" }).format(hours / 24)
+      : new Intl.NumberFormat(language, { style: "unit", unit: "hour", unitDisplay: "short" }).format(hours)
+  const counts = (["chats", "mail", "tasks", "meetings"] as const)
+    .map((kind) => ({ kind, count: scope.counts[kind], plural: plural.select(scope.counts[kind]) }))
+    .filter((one) => one.count > 0)
+  return {
+    window,
+    sources: scope.sources.map((source) => ({ ...source, plural: plural.select(source.accounts) })),
+    counts,
+  }
+}
+
 /**
  * The view model of a checked report: sections in their fixed order, each cut to its cap with the rest counted in
  * `more`, dates and money formatted in `language` and `timeZone`. Refs never reach it.
  */
 export const reportView = (
   report: Report,
-  { language, now, timeZone }: { language: string; now: number; timeZone?: string },
+  {
+    language,
+    now,
+    timeZone,
+    linkOf = () => null,
+  }: { language: string; now: number; timeZone?: string; linkOf?: LinkOf },
 ): ReportView => {
   const moment = (iso: string | null) => (iso === null ? null : momentFor(iso, now, language, timeZone))
+  const words = LINK_WORDS[language] ?? (LINK_WORDS.en as { open: string; fix: string })
+  const linksOf = (refs: readonly string[], label: string): ViewLink[] => {
+    const url = refs.map(linkOf).find((one) => one !== null)
+    return url ? [{ kind: "open", url, label }] : []
+  }
   const itemOf = (item: ReportItem): ViewItem => {
     const due = moment(item.due)
     const overdue = (item.type === "task" || item.type === "money" || item.type === "risk") && due?.past === true
@@ -190,7 +268,7 @@ export const reportView = (
       since: moment(item.since),
       due,
       time: moment(item.time),
-      links: [],
+      links: linksOf(item.refs, words.open),
     }
   }
   const order = Object.keys(SECTION_EMOJI) as SectionKind[]
@@ -206,10 +284,16 @@ export const reportView = (
         emoji: SECTION_EMOJI[kind],
         items: items.slice(0, cap).map(itemOf),
         more: more + Math.max(items.length - cap, 0),
+        groups: [],
       },
     ]
   })
-  const stale = report.health.filter((entry) => entry.staleHours > STALE_HOURS)
+  const groups = taskGroups(report.tasks, linkOf, words.open)
+  const holder =
+    sections.find((section) => section.items.some((item) => item.type === "task")) ??
+    sections.find((section) => section.kind === "today") ??
+    sections.at(-1)
+  const stale = report.health.filter((entry) => entry.reason !== null || entry.staleHours > STALE_HOURS)
   const count = (kind: SectionKind) => {
     const section = sections.find((one) => one.kind === kind)
     return section ? section.items.length + section.more : 0
@@ -220,21 +304,25 @@ export const reportView = (
     emoji: "☀️",
     date: momentFor(report.date, now, language, timeZone),
     summary: report.summary,
-    sections,
+    sections: sections.map((section) => (section === holder ? { ...section, groups } : section)),
     health: {
       emoji: "🛠",
       items: stale.slice(0, SECTION_CAPS.health).map((entry) => ({
         source: entry.source,
+        account: entry.account,
+        reason: entry.reason,
+        since: moment(entry.since),
         hours: entry.staleHours,
         span: new Intl.NumberFormat(language, { style: "unit", unit: "day", unitDisplay: "long" }).format(
           Math.floor(entry.staleHours / 24),
         ),
-        links: [],
+        links: linksOf(entry.refs, words.fix),
       })),
       more: Math.max(stale.length - SECTION_CAPS.health, 0),
     },
     quiet: sections.length === 0,
     counts: { today: count("today"), money: count("money") },
+    scope: report.scope && scopeView(report.scope, language),
     links: [],
   }
 }

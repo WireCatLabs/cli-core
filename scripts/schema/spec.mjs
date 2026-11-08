@@ -10,6 +10,7 @@ import { financeTables } from "./finance.mjs"
 import { recordTables } from "./records.mjs"
 import { linkRevisionsTable, RELATIONSHIP_KEY, relationshipColumns } from "./relationships.mjs"
 import { tagConsolidationTables, taggingTable } from "./tag-consolidations.mjs"
+import { templateSection } from "./templates.mjs"
 
 const scratch = process.env.SCRATCH ?? new URL(".", import.meta.url).pathname
 const info = JSON.parse(readFileSync(`${scratch}/info.json`, "utf8"))
@@ -1734,6 +1735,7 @@ const GROUPS = [
     [],
     enrichmentTables,
   ],
+  templateSection,
   [
     "records",
     "Source records",

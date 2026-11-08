@@ -68,6 +68,7 @@ import { type RelationsStore, relationsStoreOver } from "./sqlite/reported-relat
 import * as stems from "./sqlite/stems.js"
 import { type SubscriptionsStore, subscriptionsStoreOver } from "./sqlite/subscriptions.js"
 import { type StoreTaskStore, taskStoreOver } from "./sqlite/tasks.js"
+import { type TemplateStore, templateStoreOver } from "./sqlite/templates.js"
 import { type WalletsStore, walletsStoreOver } from "./sqlite/wallets.js"
 import { storeErrors } from "./store-errors.js"
 import { type SyncStore, syncStoreOver } from "./sync.js"
@@ -156,6 +157,8 @@ export interface MessageStore {
   readonly relations: RelationsStore
   /** The one-time keys behind the buttons of a message that asks the owner to decide a batch. */
   readonly decisionRequests: DecisionRequestStore
+  /** The message templates the owner saved over the shipped ones, with every body a change replaced. */
+  readonly templates: TemplateStore
   /** What each import said, by the source's identity; `ingest` (services) is the way in. */
   readonly records: RecordStore
   /** What agents concluded: summaries, digests, facts, preferences, each with evidence and a scope. */
@@ -281,6 +284,7 @@ const storeOver = (context: StoreContext): MessageStore => {
   const crm = once(() => crmCopiesOver(context, accountPeopleOver(context)))
   const relations = once(() => relationsStoreOver(context))
   const decisionRequests = once(() => decisionRequestStoreOver(context))
+  const templates = once(() => templateStoreOver(context))
   const records = once(() => recordStoreOver(context))
   const memories = once(() => memoriesStoreOver(context))
   const proposedActions = once(() => proposedActionsStoreOver(context))
@@ -423,6 +427,9 @@ const storeOver = (context: StoreContext): MessageStore => {
     },
     get decisionRequests() {
       return decisionRequests()
+    },
+    get templates() {
+      return templates()
     },
     get records() {
       return records()

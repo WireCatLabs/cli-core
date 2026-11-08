@@ -64,6 +64,18 @@ export {
   type TextSpan,
   validateFormattedText,
 } from "./domain/formatting.js"
+export {
+  DEFAULT_LINK_CONFIG,
+  type DeepLinkTarget,
+  formatLink,
+  LINK_VERSION,
+  type LinkConfig,
+  type LinkForm,
+  linkConfigOf,
+  linkFor,
+  linkTargetOf,
+  parseLink,
+} from "./domain/links.js"
 export { formatLocator, isLocator, type MessageLocator, parseLocator } from "./domain/locator.js"
 export { type Markup, parseMarkdown } from "./domain/markdown.js"
 export { parseMarkdownSpans } from "./domain/markdown-spans.js"

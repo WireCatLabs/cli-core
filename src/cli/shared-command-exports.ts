@@ -144,4 +144,6 @@ export const skillCommand = sharedCommand(skillCommandDefinition)
 export const upgradeCommand = sharedCommand(upgradeCommandDefinition)
 
 import { modelCatalogueCommand as modelCatalogueDefinition } from "./model-catalogue-command.js"
+import { templatesCommand as templatesDefinition } from "./templates-command.js"
 export const modelCatalogueCommand = sharedCommand(modelCatalogueDefinition)
+export const templatesCommand = sharedCommand(templatesDefinition)
