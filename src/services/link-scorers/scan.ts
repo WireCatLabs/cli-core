@@ -12,7 +12,7 @@ import { emailDomain } from "./email-domain.js"
 import { mailThread } from "./mail-thread.js"
 import { memberChats } from "./member-chats.js"
 import { memberDialog } from "./member-dialog.js"
-import { sameAccount } from "./shared.js"
+import { personRefOf, sameAccount } from "./shared.js"
 import type {
   LinkCandidate,
   LinkScorer,
@@ -125,6 +125,7 @@ export const scanProjectLinks = async (store: MessageStore, input: ScanInput): P
     purposes: input.purposes ?? BUILT_IN_PURPOSES,
     owner: owner ? `person:${owner.uid}` : null,
     ...(input.signal ? { signal: input.signal } : {}),
+    remember: rememberer(),
   }
   const scorers = input.scorers ?? (project ? SCORERS : PERSON_SCORERS)
   const skipped: ScanResult["skipped"] = {
@@ -145,12 +146,12 @@ export const scanProjectLinks = async (store: MessageStore, input: ScanInput): P
   }
 
   let seeds = scorerInput.confirmed
-  let collected = await collect(store, scorerInput, scorers, (scorer) => candidatesOf(scorer, seeds))
+  let collected = await collect(scorerInput, scorers, (scorer) => candidatesOf(scorer, seeds))
   for (let hop = 0; hop < MAX_HOPS && scorers.some((one) => one.spreads); hop++) {
     const grown = await seedsOf(store, seeds, collected.scored, threshold)
     if (!grown) break
     seeds = grown
-    collected = await collect(store, scorerInput, scorers, (scorer) => candidatesOf(scorer, seeds))
+    collected = await collect(scorerInput, scorers, (scorer) => candidatesOf(scorer, seeds))
   }
   skipped.nameOnly = collected.nameOnly
   skipped.unresolved = collected.unresolved
@@ -226,7 +227,6 @@ type Scored = Awaited<ReturnType<typeof collect>>["scored"]
 
 /** Every scorer's candidates, combined per pair and scored, highest first. */
 const collect = async (
-  store: MessageStore,
   input: ScorerInput,
   scorers: readonly LinkScorer[],
   candidatesOf: (scorer: LinkScorer) => Promise<LinkCandidate[]>,
@@ -238,7 +238,7 @@ const collect = async (
     input.signal?.throwIfAborted()
     for (const candidate of await candidatesOf(scorer)) {
       const key = pairKey(candidate)
-      const verdict = await admissible(store, input, candidate)
+      const verdict = await admissible(input, candidate)
       if (verdict === "owner") continue
       if (verdict === "name-only") {
         nameOnly.add(key)
@@ -306,7 +306,6 @@ const seedsOf = async (
 
 /** A person candidate stands only on an identity that is that person's; a chat only in a source the scan reads. */
 const admissible = async (
-  store: MessageStore,
   input: ScorerInput,
   candidate: LinkCandidate,
 ): Promise<"ok" | "owner" | "name-only" | "unresolved"> => {
@@ -316,14 +315,23 @@ const admissible = async (
   if (candidate.from.startsWith("person:")) {
     const identity = candidate.identity === undefined ? undefined : referenceOf(candidate.identity)
     if (identity?.type !== "contact") return "name-only"
-    const person = await store.people.personOf({ provider: identity.provider, id: identity.id })
-    return person !== undefined && `person:${person.uid}` === candidate.from ? "ok" : "name-only"
+    return (await personRefOf(input, identity.provider, identity.id)) === candidate.from ? "ok" : "name-only"
   }
   if (candidate.from.startsWith("chat:")) {
     const chat = referenceOf(candidate.from)
     return chat?.type === "chat" && input.sources.some((source) => sameAccount(source, chat)) ? "ok" : "unresolved"
   }
   return "unresolved"
+}
+
+/** The store does not change under a scan until it writes its proposals, after the last pass. */
+const rememberer = (): NonNullable<ScorerInput["remember"]> => {
+  const held = new Map<string, Promise<unknown>>()
+  return <T>(key: string, read: () => Promise<T>) => {
+    const found = held.get(key) ?? read()
+    held.set(key, found)
+    return found as Promise<T>
+  }
 }
 
 const referenceOf = (text: string) => {

@@ -488,6 +488,7 @@ export {
 export { SEARCHES_QUERY } from "./messenger/searches-command.js"
 export { servingProfiles } from "./messenger/serve-command.js"
 export { DAY_MS, FIRST_FETCH_MS, type MemberFetches, memberFetches } from "./messenger/serve-members.js"
+export { OUTDATED_CHECK_MS, outdatedReason, ownPackageRoot, watchOutdated } from "./messenger/serve-outdated.js"
 export { STEMS_EVERY_MS, STEMS_SLICE_MS, type StemFills, stemFills } from "./messenger/serve-stems.js"
 export type { Running, ServerOptions, ServerProcess, ServerSystem } from "./messenger/server-command.js"
 export { storeSummary } from "./messenger/store-maintenance-command.js"

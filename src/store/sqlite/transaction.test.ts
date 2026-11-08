@@ -2,9 +2,10 @@ import { spawn } from "node:child_process"
 import { mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { DatabaseSync } from "node:sqlite"
 import { afterEach, describe, expect, it } from "vitest"
 import type { CacheDatabase } from "../driver.js"
-import { migrate } from "../migrations.js"
+import { MIGRATIONS, migrate } from "../migrations.js"
 import { openCache } from "../open.js"
 import { read, write } from "./transaction.js"
 
@@ -92,6 +93,40 @@ describe("write", () => {
     expect(queued(other)).toEqual({ message_stems_pending: 0, mention_pending: 0, involvement_pending: 0 })
   })
 
+  it("rethrows the error that ended the transaction when SQLite has already rolled it back", async () => {
+    const database = await fresh()
+    const fail = (sql: string) => () => {
+      database.exec(sql)
+      throw new Error("disk I/O error")
+    }
+    expect(() => write(database, fail("ROLLBACK"))).toThrow("disk I/O error")
+    expect(() => write(database, () => write(database, fail("ROLLBACK")))).toThrow("disk I/O error")
+    expect(() => read(database, fail("ROLLBACK TO r1; RELEASE r1"))).toThrow("disk I/O error")
+    write(database, () => saveMessage(database))
+    expect(count(database, "messages")).toBe(1)
+  })
+
+  it("leaves the lock free a moment after a write that had to wait for it, so the next waiter gets in", async () => {
+    const database = await fresh()
+    let busy = true
+    let committed = 0
+    const contended: CacheDatabase = {
+      ...database,
+      prepare: (sql) => database.prepare(sql),
+      exec: (sql) => {
+        if (sql === "BEGIN IMMEDIATE" && busy) {
+          busy = false
+          throw Object.assign(new Error("database is locked"), { errcode: 5 })
+        }
+        database.exec(sql)
+        if (sql === "COMMIT") committed = performance.now()
+      },
+    }
+    write(contended, () => saveMessage(database))
+    expect(performance.now() - committed).toBeGreaterThanOrEqual(2)
+    expect(count(database, "messages")).toBe(1)
+  })
+
   it("refuses to write inside a read, where nothing would drain", async () => {
     const database = await fresh()
     expect(() => read(database, () => write(database, () => saveMessage(database)))).toThrow("inside a read")
@@ -141,4 +176,44 @@ while (Date.now() < end) {
       other.kill()
     }
   }, 20_000)
+
+  it("migrates in between a writer's back-to-back transactions", async () => {
+    const path = join(mkdtempSync(join(tmpdir(), "migrate-busy-")), "store.db")
+    const database = await openCache(path)
+    opened.push(database)
+    migrate(database, { migrations: MIGRATIONS.slice(0, -1) })
+    const other = holder(path)
+    try {
+      await new Promise((resolve) => other.stdout.once("data", resolve))
+      await new Promise((resolve) => setTimeout(resolve, 200))
+      const started = Date.now()
+      migrate(database)
+      expect(Date.now() - started).toBeLessThan(1000)
+      expect(database.prepare("SELECT max(version) AS v FROM schema_migrations").get()?.v).toBe(
+        MIGRATIONS.at(-1)?.version,
+      )
+    } finally {
+      other.kill()
+    }
+  }, 20_000)
+})
+
+describe("opening a current store while another connection holds the write lock", () => {
+  it("checks the schema and the recorded client without waiting for the lock", async () => {
+    const path = join(mkdtempSync(join(tmpdir(), "migrate-current-")), "store.db")
+    const database = await openCache(path)
+    opened.push(database)
+    migrate(database, { command: "tg", version: "1.0.0" })
+    const other = new DatabaseSync(path)
+    other.exec("BEGIN IMMEDIATE")
+    try {
+      const started = Date.now()
+      migrate(database)
+      migrate(database, { command: "tg", version: "1.0.0" })
+      expect(Date.now() - started).toBeLessThan(1000)
+    } finally {
+      other.exec("ROLLBACK")
+      other.close()
+    }
+  })
 })

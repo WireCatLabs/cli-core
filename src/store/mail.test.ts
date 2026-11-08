@@ -1,6 +1,7 @@
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { DatabaseSync } from "node:sqlite"
 import { afterEach, describe, expect, it } from "vitest"
 import { migrate } from "./migrations.js"
 import { type EmailFilter, type EmailInput, emailHitsByPk, mailStoreOver, type ThreadSave } from "./sqlite/emails.js"
@@ -390,6 +391,31 @@ describe("mail store", () => {
     expect(pieces()).toBe(1)
     await mail.chunksToEmbed("test:model:2", { limit: 10 })
     expect(pieces()).toBe(1)
+  })
+
+  it("lists pieces to embed without the write lock once the mail index is current", async () => {
+    const path = freshPath()
+    const { database, orm } = await openSqlite(path)
+    opened.push(database)
+    migrate(database)
+    database
+      .prepare(
+        "INSERT INTO accounts (id, provider, external_id, name, created_at, updated_at) VALUES (1, 'email', 'o', 'O', 1, 1)",
+      )
+      .run()
+    const mail = mailStoreOver({ database, orm, now: () => 1 })
+    await mail.saveThread(thread([email()]))
+    const first = await mail.chunksToEmbed("test:model:2", { limit: 10 })
+    const other = new DatabaseSync(path)
+    other.exec("BEGIN IMMEDIATE")
+    try {
+      const started = Date.now()
+      expect(await mail.chunksToEmbed("test:model:2", { limit: 10 })).toEqual(first)
+      expect(Date.now() - started).toBeLessThan(1000)
+    } finally {
+      other.exec("ROLLBACK")
+      other.close()
+    }
   })
 
   it("cuts a store cut the older ways again, and drops the vectors of the pieces it no longer has", async () => {

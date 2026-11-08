@@ -352,19 +352,27 @@ export const drainCorpus = (
 ): number => {
   if (isQueryOnly(database)) return 0
   // Pieces written before they carried their account get it, once: purge and vector search filter by it.
-  if (corpus.type === "email" || corpus.type === "document")
-    database
-      .prepare(
-        `UPDATE chunks SET account_id = (SELECT account_id FROM ${corpus.table} WHERE id = chunks.chunkable_id)
-          WHERE chunkable_type = ? AND account_id IS NULL`,
-      )
-      .run(corpus.type)
-  // The first schema seeded no row for mail; a data row, so no migration.
-  database
-    .prepare(
-      "INSERT OR IGNORE INTO search_index_state (name, watermark, filled_through, terms_through, normalizer_version) VALUES (?, 0, 0, 0, 1)",
+  if (
+    (corpus.type === "email" || corpus.type === "document") &&
+    database.prepare("SELECT 1 FROM chunks WHERE chunkable_type = ? AND account_id IS NULL LIMIT 1").get(corpus.type)
+  )
+    write(database, () =>
+      database
+        .prepare(
+          `UPDATE chunks SET account_id = (SELECT account_id FROM ${corpus.table} WHERE id = chunks.chunkable_id)
+            WHERE chunkable_type = ? AND account_id IS NULL`,
+        )
+        .run(corpus.type),
     )
-    .run(corpus.index)
+  // The first schema seeded no row for mail; a data row, so no migration.
+  if (!database.prepare("SELECT 1 FROM search_index_state WHERE name = ?").get(corpus.index))
+    write(database, () =>
+      database
+        .prepare(
+          "INSERT OR IGNORE INTO search_index_state (name, watermark, filled_through, terms_through, normalizer_version) VALUES (?, 0, 0, 0, 1)",
+        )
+        .run(corpus.index),
+    )
   const state = corpusIndexState(database, corpus)
   if (state.wanted === null) return 0
   const stemmer = stemmerFor(savedStemmers(database) ?? DEFAULT_STEMMERS)

@@ -4,7 +4,7 @@ import { isUsable } from "../../domain/relations.js"
 import { normalizeVocabularyName } from "../../domain/vocabulary.js"
 import type { MessageStore } from "../../store/store.js"
 import type { AccountKey } from "../../store/types.js"
-import type { ScannedProject } from "./types.js"
+import type { ScannedProject, ScorerInput } from "./types.js"
 
 const escaped = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
 const folded = (text: string) => text.normalize("NFKC").toLowerCase().replace(/\s+/gu, " ")
@@ -41,8 +41,14 @@ export const sameAccount = (a: AccountKey, b: { provider: string; account: strin
   a.provider === b.provider && String(a.account) === b.account
 
 /** The person an identity is, as `person:<uid>`; `undefined` when the store has no person for it. */
-export const personRefOf = async (store: MessageStore, provider: string, id: Id): Promise<string | undefined> => {
-  const person = await store.people.personOf({ provider, id })
+export const personRefOf = async (
+  input: Pick<ScorerInput, "store" | "remember">,
+  provider: string,
+  id: Id,
+): Promise<string | undefined> => {
+  const person = await remembered(input, `person-of\u0000${provider}\u0000${String(id)}`, () =>
+    input.store.people.personOf({ provider, id }),
+  )
   return person ? `person:${person.uid}` : undefined
 }
 
@@ -72,5 +78,15 @@ export const identitiesIn = async (
   }
   return found
 }
+
+/** What `read` gives, once per scan when the scan remembers. */
+export const remembered = <T>(input: Pick<ScorerInput, "remember">, key: string, read: () => Promise<T>): Promise<T> =>
+  input.remember ? input.remember(key, read) : read()
+
+/** A member's chats in one account, read once per scan by every scorer that asks. */
+export const chatsWithOf = (input: Pick<ScorerInput, "store" | "remember">, key: AccountKey, id: string) =>
+  remembered(input, `chats-with\u0000${key.provider}\u0000${key.account}\u0000${id}`, () =>
+    input.store.chats.chatsWith(key, id),
+  )
 
 export const aborted = (signal: AbortSignal | undefined): void => signal?.throwIfAborted()
