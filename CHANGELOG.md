@@ -5,6 +5,13 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Fixed
+
+- **cli-core accepts `@wirecat/cli-base` up to 0.85.x.** Its peer range stopped at `<0.83.0`, so a CLI could not take
+  cli-base 0.85.0's `hostFetch` and the `network.hosts` manifest next to cli-core. Nothing else changes for a caller.
+
 ## 0.610.0 — 08.11.2026
 
 ### Added
