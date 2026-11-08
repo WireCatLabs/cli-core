@@ -342,7 +342,9 @@ with it fills every deal's and lead's `assignee` (a source contract case checks 
 `settings unset` of it gives the copy to the next sign-in. Out of scope is a deleted mark, as for a row the CRM
 deleted: `mine` hides those rows from lists and search, but their earlier copy stays in the store file. Deleting a
 copy touches no relationship, so the owner's confirmed links stay and return with the row. An id list that is empty
-never marks rows deleted without `--rescan`, whatever the copy's size.
+never marks rows deleted without `--rescan`, whatever the copy's size. `store status` reads both without a sync: each deal and lead row's
+`scope` gives the setting, the scope its cursor reads new pages under (`all` under a source without `self()`),
+and `held` while the cursor's `narrowing` keeps stored rows outside it.
 
 A mail findings batch (`store.mailFindings`) also takes `invoice`, `payment`, `order` and `order_update` findings.
 Staging runs what accepting would write through `store.finance` or `store.orders` and rolls it back, so a batch the

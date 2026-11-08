@@ -19,6 +19,12 @@ shape of this file.
   the store by each row's assignee, with no list from the CRM; a wider one lists deals and leads in full again. The
   sync answer carries `scope` and each kind's `out_of_scope`; a kind that failed on a setting names it (`setting`)
   and the answer offers no retry.
+- **`store status` says each deal and lead kind's scope without a sync**: `scope.setting` is the saved
+  `crm.<provider>:<account>.scope` (`mine` when never set; `scope.explicit` says whether the owner stored it), and
+  `scope.applied` the scope new pages are read under, `{ mode: "all" }` or `{ mode: "mine", users }` (the own user
+  and the unassigned ones), `null` before the first sync. `scope.held: true` while a held narrowing keeps stored rows
+  outside it. `applied` is `all` under `mine` when the CRM's CLI names no own user (`self()`): its sync copies
+  everything.
 - **A default `mine` that would mark most of a kind deleted is held** (`crm.narrowing-held`, naming the own user and
   the count, and `held: true` on the kind) until the owner sets the `scope` setting; `--rescan` does not lift it.
   While held, new pages are read under `mine` and the stored rows are kept; a later `scope all` lists every deal
