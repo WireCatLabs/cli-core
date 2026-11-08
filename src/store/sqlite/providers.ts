@@ -1,5 +1,6 @@
 import {
   addProvider,
+  importedOf,
   kindsOfEntry,
   type ProviderEntry,
   providerEntryOf,
@@ -36,21 +37,22 @@ const nameOf = (stored: unknown) =>
  * writes only when the entry changed. Entries this build cannot read stay stored for the CLIs that can.
  */
 /**
- * The entry with the kinds the stored one of its name held beyond it: another build's kinds are never dropped. Its
- * `imported` is not carried over, so a stale entry can never open a synced provider to imports.
+ * The entry with what the stored one of its name held beyond it: another build's kinds are never dropped, and
+ * `imported` is kept as `importedOf` rules, so it can be neither stripped nor added later.
  */
 const keptBeside = (entry: ProviderEntry, stored: readonly unknown[]): ProviderEntry => {
-  const held = stored.find((one) => nameOf(one) === entry.name)
-  if (held === undefined) return entry
-  let before: ProviderEntry
+  const found = stored.find((one) => nameOf(one) === entry.name)
+  let held: ProviderEntry | undefined
   try {
-    before = providerEntryOf(held)
+    held = found === undefined ? undefined : providerEntryOf(found)
   } catch {
-    return entry
+    held = undefined
   }
-  if (before.kind !== entry.kind) return entry
-  const kinds = unitedKinds(kindsOfEntry(before), kindsOfEntry(entry))
-  return { ...entry, ...(kinds.length > 1 ? { kinds } : {}) }
+  const imported = importedOf(entry, held)
+  const { imported: _given, ...rest } = entry
+  const kinds =
+    held && held.kind === entry.kind ? unitedKinds(kindsOfEntry(held), kindsOfEntry(entry)) : kindsOfEntry(entry)
+  return { ...rest, ...(kinds.length > 1 ? { kinds } : {}), ...(imported ? { imported: true } : {}) }
 }
 
 export const registerProvider = (database: CacheDatabase, value: ProviderEntry, now: number): void => {

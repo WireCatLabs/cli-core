@@ -150,4 +150,11 @@ describe("envelopeOfVcard", () => {
       phone_region: "gb",
     })
   })
+
+  it("never lets a soft break swallow the next property", () => {
+    const { envelope } = cards(
+      "BEGIN:VCARD\nVERSION:2.1\nFN;ENCODING=QUOTED-PRINTABLE:Ab=\nTEL:+447700900111\nEND:VCARD\n",
+    )
+    expect(envelope.records[0]?.fields).toEqual({ name: "Ab", phone: ["+447700900111"] })
+  })
 })

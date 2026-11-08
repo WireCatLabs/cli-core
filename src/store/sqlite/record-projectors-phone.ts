@@ -1,6 +1,6 @@
 import type { Message } from "../../domain/models.js"
 import { isImportedProvider } from "../../domain/providers.js"
-import type { CALL_DIRECTIONS, SMS_DIRECTIONS } from "../../domain/record-types.js"
+import { article, type CALL_DIRECTIONS, type SMS_DIRECTIONS } from "../../domain/record-types.js"
 import type { EnvelopeSource } from "../../domain/records.js"
 import { formatReference, parseReference } from "../../domain/references.js"
 import type { EntryInput } from "../../meetings/index.js"
@@ -33,7 +33,7 @@ const CALLS_CALENDAR = "calls"
 export const importOnly = (source: EnvelopeSource, type: string): void => {
   if (!isImportedProvider(source.provider))
     refusal(
-      `a ${type} is imported only under an import-only provider such as phone; ${source.provider} is not one`,
+      `${article(type)} ${type} is imported only under an import-only provider such as phone; ${source.provider} is not one`,
       "record.provider-not-imported",
       "type",
     )
@@ -64,7 +64,7 @@ const millis = (fields: Row, name: string): number => {
 const threadOf = (projection: Projection) =>
   given<string>(projection.fields, "thread") ?? numberOf(projection, String(projection.fields.phone))
 
-const saveSms = (projection: Projection, tools: ProjectionTools): string => {
+const saveSms = (projection: Projection, tools: ProjectionTools, revive = false): string => {
   importOnly(projection.source, "message")
   const { context } = tools
   const { fields, externalId, source } = projection
@@ -113,7 +113,16 @@ const saveSms = (projection: Projection, tools: ProjectionTools): string => {
     reactions: null,
     ...(read === undefined ? {} : { providerMetadata: { read } }),
   }
-  upsertMessage(context, account, account.pk, chatKey, message, importedBy(source).source)
+  // Seen after its tombstone, the messenger path takes a deleted message back, its text with it.
+  upsertMessage(
+    context,
+    account,
+    account.pk,
+    chatKey,
+    message,
+    importedBy(source).source,
+    revive ? context.now() + 1 : undefined,
+  )
   raiseLastMessageAt(context, chatKey, sentAt)
   return formatReference({
     type: "message",
@@ -125,7 +134,7 @@ const saveSms = (projection: Projection, tools: ProjectionTools): string => {
 }
 
 /** A changed thread or number would make a second message: the one stored stays where it is. */
-const updateSms = (ref: string, projection: Projection, tools: ProjectionTools): boolean => {
+const staysInThread = (ref: string, projection: Projection) => {
   const stored = parseReference(ref)
   if (stored.type === "message" && stored.chat !== threadOf(projection))
     refusal(
@@ -133,6 +142,10 @@ const updateSms = (ref: string, projection: Projection, tools: ProjectionTools):
       "record.moved",
       ["fields", "thread"],
     )
+}
+
+const updateSms = (ref: string, projection: Projection, tools: ProjectionTools): boolean => {
+  staysInThread(ref, projection)
   saveSms(projection, tools)
   return true
 }
@@ -239,8 +252,23 @@ const removeCall = (ref: string, { context }: ProjectionTools) => {
     .run(context.now(), context.now(), eventId)
 }
 
+const restoreCall = (_ref: string, projection: Projection, tools: ProjectionTools) => {
+  const eventId = requiredThing(tools.context.database, saveCall(projection, tools)).id
+  tools.context.database
+    .prepare("UPDATE events SET deleted_at = NULL, updated_at = ? WHERE id = ?")
+    .run(tools.context.now(), eventId)
+}
+
 export const PHONE_PROJECTORS = {
-  message: { create: saveSms, update: updateSms, remove: removeSms },
+  message: {
+    create: (projection, tools) => saveSms(projection, tools),
+    update: updateSms,
+    remove: removeSms,
+    restore: (ref, projection, tools) => {
+      staysInThread(ref, projection)
+      saveSms(projection, tools, true)
+    },
+  },
   event: {
     create: saveCall,
     update: (_ref, projection, tools) => {
@@ -248,5 +276,6 @@ export const PHONE_PROJECTORS = {
       return true
     },
     remove: removeCall,
+    restore: restoreCall,
   },
 } as const satisfies Record<string, RecordProjector>

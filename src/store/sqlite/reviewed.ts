@@ -1,6 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import type { FinanceReview } from "../../domain/finance.js"
-import { DECIDED_TABLES, type DecidedTable, type DecidedType } from "../../domain/record-types.js"
+import { article, DECIDED_TABLES, type DecidedTable, type DecidedType } from "../../domain/record-types.js"
 import { assertMayDecide, botKey, type Decider, deciderAuthor } from "../decisions.js"
 import { type Actor, proposerOf } from "./actors.js"
 import {
@@ -60,7 +60,6 @@ export interface Written {
   evidence?: string[]
 }
 
-const article = (word: string) => (/^[aeiou]/.test(word) ? "an" : "a")
 /** One article, for the first prefix only: `an invoice: or payment:`. */
 export const prefixesText = (types: readonly string[]) =>
   `${article(types[0] ?? "")} ${types.map((type) => `${type}:`).join(" or ")}`

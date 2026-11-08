@@ -248,6 +248,23 @@ export const kindsIn = (provider: Provider): readonly Kind[] => {
   return entry ? kindsOfEntry(entry) : []
 }
 
+/**
+ * Whether an entry may carry `imported`, beside one stored before (`held`): never for a built-in a sync writes, only
+ * as the first entry of its name, and never dropped once given. Answers the flag to store.
+ */
+export const importedOf = (entry: ProviderEntry, held: ProviderEntry | undefined): boolean => {
+  const builtIn = PROVIDERS.find(({ name }) => name === entry.name)
+  if (builtIn) {
+    if (entry.imported === true && builtIn.imported !== true)
+      invalid(`provider ${entry.name} is synced, so an entry cannot make it import-only`)
+    return builtIn.imported === true
+  }
+  if (held === undefined) return entry.imported === true
+  if (entry.imported === true && held.imported !== true)
+    invalid(`provider ${entry.name} was registered without imported: an entry cannot make it import-only later`)
+  return held.imported === true
+}
+
 /** Whether a provider's accounts hold only what imports wrote: the one place a records import writes messages and events. */
 export const isImportedProvider = (provider: Provider): boolean =>
   registry.find(({ name }) => name === provider)?.imported === true

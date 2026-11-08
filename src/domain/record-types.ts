@@ -588,3 +588,6 @@ export const FIELD_REFERENCE_ROLES = roleNames(RECORD_ENTITY_TYPES, (role) => ro
 export const hasV1Roles = (type: RecordType) => rolesOf(type).some(([, role]) => role.v1)
 
 export const IDENTITY_TYPES = RECORD_ENTITY_TYPES.filter((type) => RECORD_TYPES[type].review === "identity")
+
+/** `a` or `an` before a type word: `an event`, `an invoice`, `a message`. */
+export const article = (word: string) => (/^[aeiou]/.test(word) ? "an" : "a")

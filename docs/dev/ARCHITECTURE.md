@@ -459,8 +459,8 @@ entries when it opens (`src/store/sqlite/open-store.ts:78`) on top of the built-
 `src/domain/providers.ts:17`), so `kindOf` and `providerNamed` keep their signatures. `kinds` lists every kind a provider's accounts
 hold, `kind` first (the seeded `phone` holds messages and events), and search lanes pick accounts by `holdsKind`.
 Entries of one name join their kinds; two that start with different kinds fail with both names. `imported`
-marks a provider no sync writes (the seeded `phone`): only there may a records import write SMS and calls, and a
-later entry cannot turn it on. Searches skip the accounts of a provider nobody registered and list them under `skipped`
+marks a provider no sync writes (the seeded `phone`): only there may a records import write SMS and calls. A built-in's flag is
+fixed; another provider takes it from the first entry of its name only, and a later entry can neither strip nor add it. Searches skip the accounts of a provider nobody registered and list them under `skipped`
 (`UNKNOWN_PROVIDER`, `src/search/account-list.ts:258`). `opens` names the read command, after `<command> <profile>`,
 that opens each kind of reference (`{ document: "documents show" }`); the tg, max and wa seeds open chats, messages
 and contacts. `openOf` builds a ref's open command from it, so a new CLI's refs open in memo with no change here.

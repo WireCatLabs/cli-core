@@ -155,4 +155,19 @@ describe("the stored provider registry", () => {
     expect(isImportedProvider("phone")).toBe(true)
     await store.close()
   })
+
+  it("**takes imported only from the first entry of a name**, and never lets a later one strip or add it", async () => {
+    const store = await openStore({ path: pathOf() })
+    await registerProvider(store, { name: "example-import", kind: "messages", aliases: [], imported: true })
+    await registerProvider(store, { name: "example-import", kind: "messages", aliases: [] })
+    expect(isImportedProvider("example-import")).toBe(true)
+    await registerProvider(store, { name: "google", kind: "events", aliases: [] })
+    await expect(
+      registerProvider(store, { name: "google", kind: "events", aliases: [], imported: true }),
+    ).rejects.toThrow(/registered without imported/)
+    expect(isImportedProvider("google")).toBe(false)
+    await registerProvider(store, { name: "phone", kind: "messages", aliases: [] })
+    expect(isImportedProvider("phone")).toBe(true)
+    await store.close()
+  })
 })

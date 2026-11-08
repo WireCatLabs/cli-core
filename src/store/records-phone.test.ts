@@ -538,3 +538,62 @@ it("refuses calls while the owner has deleted the calls calendar, keeps the SMS,
   expect(again).toMatchObject({ created: 1, unchanged: 1, errors: [] })
   expect(db.prepare("SELECT count(*) AS n FROM calendars").get()?.n).toBe(1)
 })
+
+it("never writes a call into another account's calendar that took the id a dry run left behind", async () => {
+  const { store, sql } = await recordsFixture(handles)
+  await take(store, phoneEnvelope([person(ANNA, "Анна"), call("c-1", ANNA, "in", "2026-11-03T10:00:00Z")]), {
+    account: PHONE.account,
+    dryRun: true,
+  })
+  const db = sql()
+  const google = Number(
+    db
+      .prepare(
+        "INSERT INTO accounts (provider, external_id, scope, created_at, updated_at) VALUES ('google', 'g', 'personal', 1, 1) RETURNING id",
+      )
+      .get()?.id,
+  )
+  db.prepare(
+    "INSERT INTO calendars (account_id, external_id, title, access_role, primary_calendar, synced, created_at, updated_at) " +
+      "VALUES (?, 'g', 'Work', 'owner', 1, 1, 1, 1)",
+  ).run(google)
+  const receipt = await take(
+    store,
+    phoneEnvelope([person(ANNA, "Анна"), call("c-1", ANNA, "in", "2026-11-03T10:00:00Z")]),
+    {
+      account: PHONE.account,
+    },
+  )
+  expect(receipt).toMatchObject({ errors: [], waiting: [] })
+  expect(
+    db
+      .prepare(
+        "SELECT c.external_id AS calendar, a.provider FROM calendar_entries ce JOIN calendars c ON c.id = ce.calendar_id " +
+          "JOIN accounts a ON a.id = c.account_id",
+      )
+      .all(),
+  ).toEqual([{ calendar: "calls", provider: "phone" }])
+})
+
+it("brings an SMS and a call back when their deleted records are sent again", async () => {
+  const { store, sql } = await recordsFixture(handles)
+  const sent = [...thread, call("c-1", ANNA, "in", "2026-11-03T10:00:00Z", 30)]
+  await take(store, phoneEnvelope(sent), { account: PHONE.account })
+  const gone = (type: string, id: string) => ({ key: `d-${id}`, type, external_id: id, operation: "delete" })
+  await take(store, phoneEnvelope([gone("message", "s-1"), gone("event", "c-1")]), { account: PHONE.account })
+  const back = await take(store, phoneEnvelope(sent), { account: PHONE.account })
+  expect(back).toMatchObject({ updated: 2, errors: [], flagged: [] })
+  const db = sql()
+  expect(db.prepare("SELECT text, deleted_at FROM messages WHERE external_id = 's-1'").get()).toEqual({
+    text: "Буду в десять, привезу договор",
+    deleted_at: null,
+  })
+  expect(db.prepare("SELECT deleted_at, status FROM events").get()).toEqual({ deleted_at: null, status: "confirmed" })
+  const found = await searchAll(store, ME, {
+    text: "договор OR incoming",
+    limit: 10,
+    only: ["messages", "events"],
+    exact: true,
+  })
+  expect(found.items.map(({ kind }) => kind).sort()).toEqual(["event", "message"])
+})
