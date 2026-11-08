@@ -14,6 +14,6 @@ describe("canonical command paths", () => {
       expect.arrayContaining(["show", "events", "aliases"]),
     )
     const models = program.commands.find((command) => command.name() === "models")
-    expect(models?.commands.map((command) => command.name()).sort()).toEqual(["download", "keys", "list"])
+    expect(models?.commands.map((command) => command.name()).sort()).toEqual(["add", "download", "keys", "list", "set"])
   })
 })

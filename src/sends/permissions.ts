@@ -42,6 +42,10 @@ export const DEFAULT_PERMISSIONS: Readonly<Record<PermissionKey, Level>> = {
   "server.stop": "ask",
   "server.restart": "ask",
   "models.download": "ask",
+  // NEED-2357.f: many MCP clients (ChatGPT) cannot answer a question, and a switch deletes nothing; kept as a key so a
+  // profile can still deny it.
+  "models.set": "allow",
+  "models.add": "ask",
   "images.models.download": "ask",
   "schedule.run": "ask",
   "schedule.exec": "ask",

@@ -10,7 +10,7 @@ import {
   textModelsDirectory,
   type WarmEmbedders,
 } from "../embeddings/embed.js"
-import { DEFAULT_TEXT_MODEL, meaningFloor, type TextModel, textModel, vectorModelKey } from "../embeddings/models.js"
+import { chosenTextModel, meaningFloor, type TextModel, textModel, vectorModelKey } from "../embeddings/models.js"
 import type { PictureEmbedder } from "../images/picture/embedder.js"
 import { DEFAULT_IMAGE_MODEL, imageModel } from "../images/picture/models.js"
 import type { AppIdentity } from "../ports/app.js"
@@ -119,7 +119,7 @@ export const searchNotesQuery = async (
 }
 
 export interface NotesEmbedOptions {
-  /** A local text model by id; e5-small, as conversations use, when absent. */
+  /** A local text model by id; the one `models use` chose, as conversations use, when absent. */
   model?: string
   /** How many chunks this run embeds at most; the next run continues. */
   maxChunks?: number
@@ -148,7 +148,7 @@ export const localModel = (
   env: NodeJS.ProcessEnv | undefined,
   command: string | undefined,
 ) => {
-  const model = textModel(choice ?? DEFAULT_TEXT_MODEL)
+  const model = textModel(choice ?? chosenTextModel(env).id, env)
   const directory = textModelsDirectory(env)
   if (!isTextModelInstalled(model, directory))
     throw new CliError("not_found", `${model.id} is not downloaded — ${downloadHint(model.id, command)}`, {

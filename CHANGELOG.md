@@ -9,6 +9,17 @@ shape of this file.
 
 ### Added
 
+- **`models set <id>` chooses the local embedding model for every WireCat CLI**, kept in the shared settings file:
+  every embed and every search by meaning uses it, and `models list` marks it `default`. It refuses a model that is
+  not downloaded, and says how many chunks the new model still lacks and about how long that takes. Vectors stay
+  per model, so a switch deletes nothing and switching back is instant. It asks nothing, over MCP too (permission
+  `models.set` is `allow`); `models add` needs `mcp.authority` there.
+- **`e5-large`**, multilingual-e5-large 8-bit (MIT, 579 MB, 1024 dims), the large one beside `e5-small` (small) and
+  `embeddinggemma` (medium). `models list --json` gives each text model's `size`, `dims`, `terms` and
+  `chunks_per_second`.
+- **`models add <id> --payload '<json>'` adds an ONNX embedding model from Hugging Face**, pinned to a commit with
+  each file's sha256, in the same shape as the built-in models. Its vectors' key carries its weights' hash.
+- `chosenTextModel`, `textModels` and `useTextModel` from `@wirecat/cli-core/services`; `store.vectors.vectorCounts`.
 - **A CLI's own CRM list can print the same `--format csv` table as `deals list`.** `@wirecat/cli-core/crm/cli`
   exports `csvFormatOption`, `refuseCsvConflict` (the refusal of another output or an agent's run, checked before
   the CRM is read), `csvColumnPaths` (`--json=a,b`, or the caller's own default columns) and `printCsv`, with
@@ -16,6 +27,9 @@ shape of this file.
 
 ### Fixed
 
+- **Search by meaning and every embed follow the chosen model.** Notes, mail, events, discovery's meaning lane,
+  `search all` and the message vectors of `conversations rebuild` used e5-small whatever was set; a CLI with no
+  `embedding_model` setting (memo) could not use another model at all.
 - **A CSV cell prints a phone or an e-mail by its value**, where an object without a `name` was printed as JSON.
 - **A CRM sync no longer slows down with every deal it saves** (#2623). Looking up a reported relationship read every
   link of its busier end, such as a deal owner with thousands of deals, because SQLite could not use the

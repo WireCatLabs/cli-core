@@ -176,7 +176,33 @@ describe("models text", () => {
     ).toEqual([
       ["e5-small", true, true],
       ["embeddinggemma", false, false],
+      ["e5-large", false, false],
     ])
+  })
+
+  it("**models set** makes a downloaded model the default every CLI lists, with what it still has to embed", async () => {
+    const { go, env } = await call(["models", "set", "e5-large", "--json"])
+    const model = textModel("e5-large")
+    for (const [file, path] of placedText(model, textModelsDirectory(env))) {
+      mkdirSync(dirname(path), { recursive: true })
+      sized(path, file.bytes)
+    }
+
+    const { code, stdout } = await go()
+
+    expect(code).toBe(0)
+    const { item } = v.parse(itemEnvelopeSchema(ENTITIES["model.chosen"]), JSON.parse(stdout[0] ?? ""))
+    expect(item).toMatchObject({ id: "e5-large", size: "large", dims: 1024, default: true, previous: "e5-small" })
+    const listed = await go(["models", "list", "kind:text", "--json"])
+    const { items } = v.parse(listEnvelopeSchema(modelEntity), JSON.parse(listed.stdout[0] ?? ""))
+    expect(items.filter((one) => one.default).map(({ id }) => id)).toEqual(["e5-large"])
+  })
+
+  it("**models set** refuses a model that is not downloaded and names the download", async () => {
+    const { go } = await call(["models", "set", "embeddinggemma", "--json"])
+    const { code, stdout, stderr } = await go()
+    expect(code).not.toBe(0)
+    expect(`${stdout.join("")}${stderr.join("")}`).toContain("chat models download embeddinggemma --accept-terms")
   })
 
   it("names the download step while the default embedding model is missing", async () => {

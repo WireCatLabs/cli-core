@@ -1,6 +1,7 @@
 # AI providers for search
 
-Search defaults to local `e5-small` embeddings. Conversation analysis defaults to your own agent using the linking skill; ordinary `conversations links rebuild` uses stored messages and local rules. Configuration alone never starts analysis.
+Search uses the local embedding model chosen with `models set`, `e5-small` until one is chosen (see
+[Choosing the local embedding model](#choosing-the-local-embedding-model)). Conversation analysis defaults to your own agent using the linking skill; ordinary `conversations links rebuild` uses stored messages and local rules. Configuration alone never starts analysis.
 
 These shared SDK settings/options reach MAX and Telegram at their next cli-core dependency bump.
 
@@ -38,7 +39,7 @@ requests on shutdown, so a timed-out one-shot does not leave an HTTP request hol
 | Profile setting | Values / default |
 |---|---|
 | `embedding_provider` | `local` (default), `openai` |
-| `embedding_model` | Local model ID, or the provider's embedding model; unset uses e5-small locally and text-embedding-3-small at OpenAI |
+| `embedding_model` | Local model ID, or the provider's embedding model; unset uses the `models set` choice locally and text-embedding-3-small at OpenAI |
 | `embedding_base_url` | OpenAI-compatible API base, including `/v1` where required |
 | `embedding_dims` | Positive vector dimension; required for a custom embedding endpoint |
 | `models.analysis.provider` | unset or `off` (your agent links; the default), `openai`, `anthropic` |
@@ -90,3 +91,38 @@ Anthropic uses the official TypeScript SDK and [Messages streaming](https://plat
 
 Embedding endpoints must accept requests at the configured URL directly. Set `embedding_base_url` to
 the API base serving `/embeddings`; configured gateways use normal HTTP redirect handling.
+
+## Choosing the local embedding model
+
+One choice serves every WireCat CLI on this machine: `models set <id>` writes `text_models.use` to the shared settings
+file (`~/.config/WireCat/config.json`, or the one beside a store moved by `MESSAGING_STORE`). Every embed (sync of
+notes, mail, events and messages) and every search by meaning then uses it. A CLI's own `embedding_model`, its
+`<PREFIX>_EMBEDDING_MODEL` and a `--model` flag still win in that CLI; `models set` says so when one does.
+
+| Id | Size | On disk | Licence | Speed (chunks a second, one session) |
+|---|---|---|---|---|
+| `e5-small` (default) | small | 135 MB | MIT | about 31 |
+| `embeddinggemma` | medium | 218 MB | Gemma Terms of Use (`--accept-terms`) | about 2 |
+| `e5-large` | large | 579 MB | MIT | about 4 |
+
+`models set` refuses a model that is not downloaded and names the download. Vectors are kept per model (the
+`embeddings` table's key is `local:<id>:<dims>`), so a switch deletes nothing and re-embeds nothing at once: it prints
+how many chunks the new model still lacks and about how long the syncs take over them. Until they are done, search by
+meaning reads only the new model's vectors and words find the rest. Switching back is instant.
+
+`models set` asks nothing, in a terminal or over MCP: many MCP clients cannot answer a question, and a switch can be
+undone. A profile that must not switch models denies `models.set`. `models add` still needs `mcp.authority` over
+MCP, as every command that changes what a later run does.
+
+`models add <id> --payload '<json>'` adds a model of your own from Hugging Face: `repository`, `revision`, `onnx`,
+`externalData`, `dims`, `pooling` (`mean` or `sentence_embedding`), `prefix.query`, `prefix.passage`, `maxTokens`.
+It is pinned to the commit the revision names, with each file's size and sha256, and kept in `text_models.custom`
+of the same file in the same shape as the built-in models; `models download <id>` then downloads it, checks every
+hash and embeds a word to check the vector length. A custom model's vector key carries its weights' hash, so an id
+redefined as another model never reads the old vectors.
+
+```sh
+memo models download e5-large
+memo models set e5-large
+memo models add e5-base --payload '{"repository":"Xenova/multilingual-e5-base","onnx":"onnx/model_quantized.onnx","dims":768,"pooling":"mean","prefix":{"query":"query: ","passage":"passage: "}}'
+```
