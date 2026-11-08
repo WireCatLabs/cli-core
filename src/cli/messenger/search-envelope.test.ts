@@ -126,11 +126,11 @@ describe("search answers", () => {
     expect(parsed.issues).toBeUndefined()
     expect(answer.missing).toContainEqual({
       field: "discovery",
-      why: "searched by words only: e5-small is not downloaded",
+      why: "searched by words only: embeddinggemma is not downloaded",
       step: "models.download",
     })
     expect((await pretty("search", "messages", "which chapter?", "--discover")).stderr.join("")).toContain(
-      "meaning search not used: e5-small is not downloaded — `chat models download e5-small`, then " +
+      "meaning search not used: embeddinggemma is not downloaded — `chat models download embeddinggemma`, then " +
         "`chat conversations rebuild` gives messages their vectors",
     )
   })

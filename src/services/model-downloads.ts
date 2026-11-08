@@ -1,3 +1,5 @@
+import { writeFileSync } from "node:fs"
+import { join } from "node:path"
 import { CliError } from "@wirecat/cli-base"
 import { isTextModelInstalled, placedText, textModelsDirectory } from "../embeddings/embed.js"
 import { type RerankModel, rerankModel, type TextModel, textModel } from "../embeddings/models.js"
@@ -47,20 +49,16 @@ const nativeRuntime = async ({ env, progress = () => {} }: ModelDownloadOptions)
  */
 export const downloadTextModel = async (
   id: string,
-  { env, progress = () => {}, bytes, acceptTerms = false }: ModelDownloadOptions & { acceptTerms?: boolean },
+  { env, progress = () => {}, bytes }: ModelDownloadOptions & { acceptTerms?: boolean },
 ): Promise<DownloadedModel<TextModel>> => {
   const model = textModel(id, env)
-  if (model.terms && !acceptTerms) {
-    throw new CliError(
-      "validation_error",
-      `${model.id} comes under the ${model.licence} (${model.terms}): read them, then run this again with --accept-terms`,
-    )
-  }
   const directory = textModelsDirectory(env)
   if (!isTextModelInstalled(model, directory)) {
     progress(`${model.id}: ${megabytes(bytesOf(model))} from Hugging Face`)
     await installFiles(placedText(model, directory), { progress, ...(bytes ? { bytes } : {}) })
   }
+  // The licence asks for a notice with each copy, not for a click: it is kept beside the files.
+  if (model.notice) writeFileSync(join(directory, model.id, "NOTICE"), `${model.notice}\n`)
   await nativeRuntime({ env, progress })
   progress(`${model.id}: loading it once to check it works`)
   const { openEmbedder } = await import("../embeddings/embed.js")

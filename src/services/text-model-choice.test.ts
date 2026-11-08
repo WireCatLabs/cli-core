@@ -1,9 +1,10 @@
 import { createHash } from "node:crypto"
-import { mkdirSync, mkdtempSync, readFileSync, symlinkSync } from "node:fs"
+import { mkdirSync, mkdtempSync, readFileSync, symlinkSync, truncateSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
-import { join } from "node:path"
+import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { afterEach, describe, expect, it } from "vitest"
+import { isTextModelInstalled, placedText, textModelsDirectory } from "../embeddings/embed.js"
 import {
   type CustomTextModel,
   chosenTextModel,
@@ -15,6 +16,7 @@ import {
 import { readSharedSection, writeSharedSection } from "../store/shared-config.js"
 import { type MessageStore, openStore } from "../store/store.js"
 import { embeddingTarget } from "./embeddings-maintenance.js"
+import { meaningModel } from "./meaning-model.js"
 import { embedNotes, nearestNotes } from "./notes-search.js"
 import { addCustomTextModel, useTextModel } from "./text-model-choice.js"
 
@@ -59,9 +61,9 @@ const machine = async (custom: CustomTextModel[] = [tiny("tiny-a"), tiny("tiny-b
 }
 
 describe("the chosen text model", () => {
-  it("is e5-small until the owner chooses, then every embed and search by meaning uses the choice", async () => {
+  it("is EmbeddingGemma until the owner chooses, then every embed and search by meaning uses the choice", async () => {
     const { env, store } = await machine()
-    expect(chosenTextModel(env)).toEqual({ id: "e5-small", from: "default" })
+    expect(chosenTextModel(env)).toEqual({ id: "embeddinggemma", from: "default" })
     await store.notes.addNote({ text: "fish fish fish" })
 
     await useTextModel("tiny-a", { env, command: "memo" })
@@ -102,7 +104,7 @@ describe("the chosen text model", () => {
     await expect(nearestNotes(store, "x", { env, model: "embeddinggemma", limit: 1 })).rejects.toThrow(
       "embeddinggemma is not downloaded",
     )
-    expect(chosenTextModel(env).id).toBe("e5-small")
+    expect(chosenTextModel(env).id).toBe("embeddinggemma")
   })
 
   it("gives a custom model a key with its weights' hash, so a redefined id never reads the old vectors", async () => {
@@ -177,5 +179,49 @@ describe("a custom model in the shared file", () => {
     expect(textModel("mine", env).files).toEqual(model.files)
     expect(readSharedSection(textModelsFile(env), "text_models")).toMatchObject({ custom: [{ id: "mine" }] })
     expect(asked.some((url) => url.includes("/resolve/main/"))).toBe(false)
+  })
+})
+
+/** A model's files at their pinned sizes, which is what the installed check reads. */
+const place = (id: string, env: NodeJS.ProcessEnv) => {
+  for (const [file, path] of placedText(textModel(id), textModelsDirectory(env))) {
+    mkdirSync(dirname(path), { recursive: true })
+    writeFileSync(path, "")
+    truncateSync(path, file.bytes)
+  }
+}
+
+describe("EmbeddingGemma as the default", () => {
+  it("keeps e5-small, the default before, on a machine that has only it, and moves once Gemma is downloaded", async () => {
+    const { env } = await machine([])
+    place("e5-small", env)
+    expect(chosenTextModel(env)).toEqual({ id: "e5-small", from: "default" })
+    place("embeddinggemma", env)
+    expect(isTextModelInstalled(textModel("embeddinggemma"), textModelsDirectory(env))).toBe(true)
+    expect(chosenTextModel(env)).toEqual({ id: "embeddinggemma", from: "default" })
+  })
+
+  it("**searches with e5-small's vectors while Gemma's are fewer**, then with Gemma's; a chosen model always", async () => {
+    const { env, store } = await machine([])
+    place("e5-small", env)
+    place("embeddinggemma", env)
+    const save = (id: string, hashes: string[]) => {
+      const { dims } = textModel(id)
+      return store.vectors.saveVectors(
+        vectorModelKey(textModel(id)),
+        dims,
+        hashes.map((hash) => ({ hash, vector: new Float32Array(dims) })),
+      )
+    }
+    await save("e5-small", ["a", "b", "c"])
+    await save("embeddinggemma", ["a"])
+    expect(await meaningModel(store, env)).toBe("e5-small")
+
+    await save("embeddinggemma", ["b", "c"])
+    expect(await meaningModel(store, env)).toBe("embeddinggemma")
+
+    await save("embeddinggemma", [])
+    writeSharedSection(textModelsFile(env), "text_models", { use: "e5-small" })
+    expect(await meaningModel(store, env)).toBe("e5-small")
   })
 })

@@ -442,7 +442,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--meeting-project-candidates` |  | switch | expose read-only project suggestions from selected meeting evidence and the global project vocabulary |  |
 | `--meeting-preparation` |  | switch | expose meeting preparation tools, including their remote schedule reads |  |
 | `--dry-run` |  | switch | judge and plan; do nothing |  |
-| `--accept-terms` |  | switch | accept the model's licence terms |  |
+| `--accept-terms` |  | switch | no longer needed; ignored |  |
 | `--as-owner` |  | switch | record the action as the owner's although an agent's terminal runs the tool |  |
 | `--from-app` |  | switch | the owner acted in the app; its word, not a check |  |
 | `--allow-any-file` |  | switch | send a file even from a credential folder or the tool's own folders |  |
@@ -951,7 +951,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | Option | Value | Meaning | Default | Commands |
 |---|---|---|---|---|
 | `--about-text` | `<who>` | who sees the about text: everyone, contacts or nobody |  | `account privacy set` (planned) |
-| `--accept-terms` |  | accept the model's licence terms, for a model that has its own |  | `models download` |
+| `--accept-terms` |  | no longer needed; kept so older scripts still run |  | `models download` |
 | `--add` | `<chat>` | put a chat into a folder; repeat it for more |  | `chats folders update` |
 | `--after-n` | `<n>` | how many messages after it |  | `messages context`, `projects evidence` |
 | `--agent` | `<agent>` | install the skill for this agent; asks at a terminal, otherwise none |  | `setup` |

@@ -296,7 +296,7 @@ describe("CRM commands", () => {
     await cli("sync")
     const found = await cli("search", "all", "website")
     const hints = JSON.stringify(found.missing)
-    expect(hints).toContain("e5-small is not downloaded")
+    expect(hints).toContain("embeddinggemma is not downloaded")
     expect(hints).not.toContain("crm models download")
     expect(hints).toContain("(tg, max or wa)")
   })

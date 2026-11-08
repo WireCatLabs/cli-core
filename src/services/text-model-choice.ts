@@ -39,7 +39,7 @@ export const useTextModel = async (
   if (!isTextModelInstalled(model, textModelsDirectory(env)))
     throw new CliError(
       "not_found",
-      `${model.id} is not downloaded — \`${command} models download ${model.id}${model.terms ? " --accept-terms" : ""}\` first`,
+      `${model.id} is not downloaded — \`${command} models download ${model.id}\` first`,
       { reason: "model.not-downloaded", model: model.id },
     )
   const previous = chosenTextModel(env).id

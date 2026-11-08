@@ -99,10 +99,17 @@ file (`~/.config/WireCat/config.json`, or the one beside a store moved by `MESSA
 notes, mail, events and messages) and every search by meaning then uses it. A CLI's own `embedding_model`, its
 `<PREFIX>_EMBEDDING_MODEL` and a `--model` flag still win in that CLI; `models set` says so when one does.
 
+With nothing chosen, the model is EmbeddingGemma (e5-small until November 2026). A machine that has e5-small and not
+EmbeddingGemma keeps using e5-small, so its search by meaning never stops for a missing model. Once EmbeddingGemma is
+downloaded, syncs embed with it, and search by meaning keeps reading e5-small's vectors until the store holds more of
+EmbeddingGemma's; about 20 minutes of embedding for 10,000 chunks of 1,200 characters on an 8-thread laptop, done a
+part per sync. EmbeddingGemma comes under the Gemma Terms of Use: its `NOTICE` lies beside its files, and
+`models list --json` gives `licence` and `terms`. `--accept-terms` is no longer needed and is ignored.
+
 | Id | Size | On disk | Licence | Speed (chunks a second, one session) |
 |---|---|---|---|---|
-| `e5-small` (default) | small | 135 MB | MIT | about 31 |
-| `embeddinggemma` | medium | 218 MB | Gemma Terms of Use (`--accept-terms`) | about 5 |
+| `embeddinggemma` (default) | medium | 218 MB | Gemma Terms of Use | about 5 |
+| `e5-small` | small | 135 MB | MIT | about 31 |
 | `e5-large` | large | 579 MB | MIT | about 4 |
 
 `models set` refuses a model that is not downloaded and names the download. Vectors are kept per model (the

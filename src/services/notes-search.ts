@@ -28,6 +28,7 @@ import type { AccountKey, EnrichmentSubject, MessageStore } from "../store/store
 import { openPictureEmbedderFor } from "./document-pictures.js"
 import { documentSource } from "./document-source.js"
 import { type EnrichOptions, type EnrichRun, enrichRecords } from "./enrichment.js"
+import { meaningModel } from "./meaning-model.js"
 import { plainQueryWords, titleQuery, titleTiers } from "./notes-title-tier.js"
 import { PICTURE_FLOOR, plainWords } from "./pictures.js"
 import { listContextOf } from "./search-kind.js"
@@ -313,7 +314,7 @@ const queryVector = async (
   { model: choice, folderIds, withInternal, source, env, threads, command, embedders }: Omit<NearestOptions, "limit">,
 ): Promise<{ key: string; vector: Float32Array; floor: number }> => {
   if (!query.trim()) throw new CliError("validation_error", "say what to find in the notes")
-  const { model, directory, key } = localModel(choice, env, command)
+  const { model, directory, key } = localModel(choice ?? (await meaningModel(store, env)), env, command)
   const scope = {
     ...(folderIds ? { folderIds } : {}),
     ...(withInternal ? { withInternal: true } : {}),
