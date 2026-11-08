@@ -3,11 +3,15 @@ import { fileURLToPath } from "node:url"
 import { DEFAULT_LINK_CONFIG, type LinkConfig, type LinkForm, linkFor } from "../../domain/links.js"
 import { safeLiquid } from "../../render/liquid.js"
 import { TELEGRAM_TEXT_CHARS } from "../deliver.js"
-import { parseReport, type ReportKind, reportDocument } from "./schema.js"
+import type { GapsView, MessageKind, NoticeView } from "./messages.js"
+import { parseReport, reportDocument } from "./schema.js"
 import { type ReportView, reportView } from "./view.js"
 
 export const REPORT_CHANNELS = ["telegram", "email", "text"] as const
 export type ReportChannel = (typeof REPORT_CHANNELS)[number]
+
+/** What a template renders: the digest's view, the weekly gaps' or a failed schedule's notice. */
+export type MessageView = ReportView | GapsView | NoticeView
 
 const DEFAULT_LANGUAGE = "en"
 const LIMITS = { parse: 65_536, memory: 4_000_000, milliseconds: 1_000 }
@@ -52,15 +56,20 @@ const ALLOWED: Record<Exclude<ReportChannel, "text">, Record<string, readonly st
   },
 }
 
-const linkUrls = (view: ReportView): Set<string> =>
-  new Set(
-    [
-      ...view.links,
-      ...view.sections.flatMap((section) => section.items.flatMap((item) => item.links)),
-      ...view.sections.flatMap((section) => section.groups.flatMap((group) => (group.link ? [group.link] : []))),
-      ...view.health.items.flatMap((item) => item.links),
-    ].map((link) => link.url),
-  )
+/** Every link URL anywhere in the view: the only places a template's `href` may point. */
+const linkUrls = (view: MessageView): Set<string> => {
+  const urls = new Set<string>()
+  const walk = (value: unknown): void => {
+    if (Array.isArray(value)) value.forEach(walk)
+    else if (value && typeof value === "object") {
+      const { kind, url, label } = value as Record<string, unknown>
+      if ((kind === "open" || kind === "web") && typeof url === "string" && typeof label === "string") urls.add(url)
+      else Object.values(value).forEach(walk)
+    }
+  }
+  walk(view)
+  return urls
+}
 
 /**
  * What a template's HTML may keep, enforced after it rendered: the channel's tags and attributes only, a `style`
@@ -125,7 +134,7 @@ export interface Rendering {
   templateTags: number
 }
 
-const renderOnce = async (view: ReportView, channel: ReportChannel, source: string) => {
+const renderOnce = async (view: MessageView, channel: ReportChannel, source: string) => {
   const engine = safeLiquid(LIMITS)
   if (channel !== "text")
     // These would turn text an agent wrote back into markup after it was escaped.
@@ -139,7 +148,7 @@ const renderOnce = async (view: ReportView, channel: ReportChannel, source: stri
 }
 
 const renderWithFallback = async (
-  view: ReportView,
+  view: MessageView,
   channel: ReportChannel,
   template: string | undefined,
 ): Promise<Rendering> => {
@@ -152,8 +161,14 @@ const renderWithFallback = async (
   }
 }
 
-/** The view with one item fewer: the last of the largest section, counted in that section's `more`. */
-const dropOne = (view: ReportView): ReportView | undefined => {
+/**
+ * The view with one item fewer: the digest's last item of its largest section, the last gap; counted in `more`.
+ * A notice has nothing to drop.
+ */
+const dropOne = (view: MessageView): MessageView | undefined => {
+  if (view.kind === "schedule-failed") return undefined
+  if (view.kind === "weekly-gaps")
+    return view.items.length === 0 ? undefined : { ...view, items: view.items.slice(0, -1), more: view.more + 1 }
   const lists = [...view.sections.map((section) => section.items.length), view.health.items.length]
   const largest = lists.reduce((most, one) => Math.max(most, one), 0)
   if (largest === 0) return undefined
@@ -176,7 +191,7 @@ const dropOne = (view: ReportView): ReportView | undefined => {
  * this channel only. Telegram is rendered again with an item fewer, from the largest section, until it fits.
  */
 export const renderReport = async (
-  view: ReportView,
+  view: MessageView,
   channel: ReportChannel,
   { template }: { template?: string } = {},
 ): Promise<Rendering> => {
@@ -197,7 +212,7 @@ export const renderReport = async (
  * `renderReport` it never falls back to the shipped template.
  */
 export const checkTemplate = async (
-  view: ReportView,
+  view: MessageView,
   channel: ReportChannel,
   source: string,
 ): Promise<{ problems: string[]; text: string }> => {
@@ -230,7 +245,7 @@ export const checkTemplate = async (
 }
 
 /** The owner's stored templates of one report kind and language, by channel; a missing channel uses the shipped one. */
-export type StoredTemplates = (kind: ReportKind, language: string) => Promise<Partial<Record<ReportChannel, string>>>
+export type StoredTemplates = (kind: MessageKind, language: string) => Promise<Partial<Record<ReportChannel, string>>>
 
 /** What `last.json` keeps of a report run, beside the deliveries. */
 export interface ReportRun {
@@ -340,4 +355,53 @@ export const prepareReport = async (
 const templateOf = (templates: Partial<Record<ReportChannel, string>>, channel: ReportChannel) => {
   const template = templates[channel]
   return template === undefined ? {} : { template }
+}
+
+/** A message other than the digest, rendered for every channel: what `deliver` sends as a rendered parcel. */
+export interface PreparedMessage {
+  telegram: string
+  email: string
+  text: string
+  /** The text's first line. */
+  subject: string
+  invalid: false
+  language: string
+  /** `report.template-failed`, `report.template-tags`: as a report run records them. */
+  reasons: string[]
+}
+
+/**
+ * Renders `kind` in the owner's language, or in English when cli-core ships no template in it, over the owner's
+ * stored templates; a lookup or a template that fails falls back to the shipped one, as a report's does.
+ */
+export const prepareMessage = async (
+  kind: MessageKind,
+  viewOf: (language: string) => MessageView,
+  { language, templates: storedTemplates }: { language: string; templates?: StoredTemplates },
+): Promise<PreparedMessage> => {
+  const shipped = existsSync(templateFile(kind, "telegram", language)) ? language : DEFAULT_LANGUAGE
+  let lookupFailed = false
+  const templates = storedTemplates
+    ? await storedTemplates(kind, shipped).catch(() => {
+        lookupFailed = true
+        return {}
+      })
+    : {}
+  const view = viewOf(shipped)
+  const telegram = await renderReport(view, "telegram", templateOf(templates, "telegram"))
+  const email = await renderReport(view, "email", templateOf(templates, "email"))
+  const text = await renderReport(view, "text", templateOf(templates, "text"))
+  const renderings = [telegram, email, text]
+  return {
+    telegram: telegram.text,
+    email: email.text,
+    text: text.text,
+    subject: text.text.split("\n")[0] ?? "",
+    invalid: false,
+    language: shipped,
+    reasons: [
+      ...(lookupFailed || renderings.some((one) => one.templateFailed) ? [REPORT_REASONS.templateFailed] : []),
+      ...(renderings.some((one) => one.templateTags > 0) ? [REPORT_REASONS.templateTags] : []),
+    ],
+  }
 }

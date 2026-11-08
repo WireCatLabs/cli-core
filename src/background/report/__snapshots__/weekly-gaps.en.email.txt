@@ -1,0 +1,7 @@
+<div style="max-width:600px;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:15px">
+<p style="margin:0 0 4px;font-size:19px"><b>🔍 What the digest found on its own this week</b></p>
+<p style="margin:0 0 12px;color:#8a8a8a;font-size:13px">Not in the day's selection · 5 digests, November 2 to November 9</p>
+<p style="margin:0 0 10px">• Анна Котова ждёт ответа в WhatsApp<br><span style="color:#8a8a8a;font-size:13px">in 3 digests, last on November 8 · <a href="https://wirecat.dev/o#/v1/chat/whatsapp/1001/4004" style="color:#3b82c4">open</a></span></p>
+<p style="margin:0 0 10px">• письмо от Вектора не попало в почту дня!<br><span style="color:#8a8a8a;font-size:13px">in 2 digests, last on November 4</span></p>
+<p style="margin:0 0 10px">• Встреча в среду есть в календаре, а в списке встреч её нет<br><span style="color:#8a8a8a;font-size:13px">November 6</span></p>
+</div>

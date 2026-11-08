@@ -1,0 +1,15 @@
+{%- comment -%}
+Telegram HTML: only <b>, <i> and <a href> survive, and an href only to a link of the view model.
+Every string is already escaped. Lines are written with {{ nl }}; tags trim the source's own.
+{%- endcomment -%}
+{%- capture nl %}
+{% endcapture -%}
+🔍 <b>Что сводка нашла сама за неделю</b>
+{{- nl }}<i>Этого не было в подборке дня · {{ runs }} {% case plural %}{% when "one" %}сводка{% when "few" %}сводки{% else %}сводок{% endcase %} с {{ from.date }} по {{ to.date }}</i>
+{%- if items.size == 0 %}{{ nl }}{{ nl }}Пропусков не было.{% endif -%}
+{%- for item in items -%}
+  {{ nl }}{{ nl }}• {{ item.what }}
+  {{- nl }}<i>{% if item.seen > 1 %}в {{ item.seen }} {% if item.plural == "one" %}сводке{% else %}сводках{% endif %}, последний раз {% endif %}{{ item.last.date }}</i>
+  {%- for link in item.links %} · <a href="{{ link.url }}">{{ link.label }}</a>{% endfor -%}
+{%- endfor -%}
+{%- if more > 0 %}{{ nl }}{{ nl }}ещё {{ more }}{% endif -%}

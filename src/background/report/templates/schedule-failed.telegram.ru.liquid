@@ -1,0 +1,9 @@
+{%- comment -%}
+Telegram HTML: only <b>, <i> and <a href> survive, and an href only to a link of the view model.
+{%- endcomment -%}
+{%- capture nl %}
+{% endcapture -%}
+⚠️ <b>{% if schedule == "morning-digest" %}Утренняя сводка не собралась{% else %}Расписание «{{ tool }} {{ schedule }}» не работает{% endif %}</b>
+{{- nl }}{% if failures > 1 %}Не работает с {{ since.date }}{% if since.time %}, {{ since.time }}{% endif %} · {{ failures }} {% case plural %}{% when "one" %}запуск{% when "few" %}запуска{% else %}запусков{% endcase %} подряд{% else %}Сбой {% if at.day == "today" %}сегодня{% elsif at.day == "yesterday" %}вчера{% else %}{{ at.date }}{% endif %}{% if at.time %} в {{ at.time }}{% endif %}{% endif %}
+{{- nl }}Причина: {% case cause %}{% when "locked" %}хранилище паролей было заблокировано, разблокируйте компьютер{% when "sign-in" %}нужно заново войти в аккаунт{% when "network" %}нет связи с сервисом{% when "provider" %}сервис ответил ошибкой{% when "setup" %}ошибка в настройках{% when "stopped" %}запуск остановили{% else %}программа завершилась с ошибкой{% endcase %}
+{%- for link in links %}{{ nl }}<a href="{{ link.url }}">{{ link.label }}</a>{% endfor -%}
