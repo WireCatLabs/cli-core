@@ -7,6 +7,15 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **Links open a person and a project.** The v1 link grammar takes `person/<id>` and `project/<key>`
+  (`https://wirecat.dev/o#/v1/person/77`, `wirecat://open/v1/project/ACME%20site`), and `linkFor` builds them from a
+  report item's `person:<id>` and `project:<key>` refs; a project key is one encoded part. An item still opens where
+  it happened first: a person or a project ref gives its one link only when no other ref does
+  (`refsForLink(refs)`, exported). `test/fixtures/links-v1.json` has the new cases; the bounce page and WireCat
+  Desktop need them too before such a link opens there.
+
 ### Security
 
 - **Messenger bot tokens are masked in the store.** A Telegram bot token (`<bot id>:<secret>`, as BotFather sends
