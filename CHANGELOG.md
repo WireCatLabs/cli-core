@@ -7,6 +7,41 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **Store version 57: business tables.** `store.products` (`product:<id>`, written directly, a line copies its
+  price), `store.contracts` (`contract:<id>`: an agent's or an import's is proposed only when it carries a value, and
+  only the owner changes the value of a confirmed one; the notice deadline is computed), `store.subscriptions`
+  (`subscription:<id>`, every price a row and a proposal of its own, `subscription_price:<id>`, never overwritten;
+  `currentPrice` is the confirmed one in force today), `store.wallets` (`wallet:<id>`, one currency each, the balance
+  computed from confirmed, booked transactions after the opening day, pending ones beside it; only the owner sets the
+  opening balance) and `store.transactions` (`transaction:<id>`, splits by category within the amount, a payment linked
+  only of the same currency, direction and amount, once). `minCompatible` stays 56, as version 56 set it.
+- **Orders take lines, a direction, a contract and a deal.** With lines an order totals their sum (`order.total`);
+  `orders.addLine` and `orders.removeLine` change them, the owner on any order, an agent only on its own proposed one.
+  A `sale` makes the owner its supplier. `orders.add` and `orders.get` answer `OrderDetail` with `lines`.
+- **Refunds.** `finance.addPayment({ refundOf })` writes a payment the other way that takes money back
+  (`finance.refund`, `finance.over-refund`, `finance.refunded`): it is confirmed only after its payment, goes back only
+  to an invoice its payment paid, never more than that payment gave it, and a refunded payment is not rejected.
+  Invoices and payments take a `contract` and a `subscription`; an invoice line may name a `product`.
+- **Review kinds `contract`, `subscription`, `subscription_price` and `transaction`**, decided by the owner only, as
+  invoices are. Confirming a subscription confirms the prices proposed with it; a later price is its own proposal
+  (`subscription_price:<id>`). A bot changes only its own still-proposed rows; a confirmed one is the owner's.
+- **`InvoiceLine.product`** names the product a line was priced from, and `OrderInput.supplierName` may be left out
+  of a sale. `signedMinorUnits` and a `formatDecimal` that prints negative amounts are exported.
+- **New reasons:** `finance.refund`, `finance.over-refund`, `finance.refunded`; `order.total`, `order.line` (an order
+  keeps its last line), `order.no-line`, `order.lines`, `order.line-amount`, `order.currency`, `order.owner-only`;
+  `product.field`, `product.duplicate`, `product.ref`; `contract.field`, `contract.ref`; `subscription.field`,
+  `subscription.interval`, `subscription.price`, `subscription.no-price`, `subscription.ref`; `wallet.field`,
+  `wallet.number`, `wallet.ref`; `transaction.field`, `transaction.payment`, `transaction.ref`, `transaction.split`,
+  `transaction.no-split`.
+
+### Changed — may break callers
+
+- **An invoice's paid amount is net of confirmed refunds.** `paid`, `open`, the status, `openTotals` and the void check
+  read one figure, the confirmed allocations of payments less those of their refunds: an invoice refunded in full is
+  `issued` again and may be voided. An older memo computes paid gross; update memo before writing refunds.
+
 ## 0.606.0 — 08.11.2026
 
 ### Added
