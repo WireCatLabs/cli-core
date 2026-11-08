@@ -1,5 +1,6 @@
 import type { Id } from "../../domain/models.js"
 import { formatReference } from "../../domain/references.js"
+import { isUsable } from "../../domain/relations.js"
 import { normalizeVocabularyName } from "../../domain/vocabulary.js"
 import type { MessageStore } from "../../store/store.js"
 import type { AccountKey } from "../../store/types.js"
@@ -51,7 +52,8 @@ export const projectsOf = async (store: MessageStore, person: string, project: s
     project,
     ...(await store.knowledge.relations(null, person))
       .filter(
-        (one) => one.confirmed && one.kind === "member-of" && one.from === person && one.to.startsWith("project:"),
+        (one) =>
+          isUsable(one.standing) && one.kind === "member-of" && one.from === person && one.to.startsWith("project:"),
       )
       .map((one) => one.to),
   ]).size

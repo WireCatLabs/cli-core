@@ -147,7 +147,7 @@ describe("cross-source knowledge metadata", () => {
       from: `person:${person?.uid}`,
       to: organization.ref,
       kind: "member-of",
-      role: "author",
+      role: "employee",
     })
     expect(
       await f.store.knowledge.relate(key, { by: "owner", from: relation.from, to: relation.to, kind: "member-of" }),

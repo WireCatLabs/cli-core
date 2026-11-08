@@ -1,6 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import type { Id } from "../../domain/models.js"
 import { formatReference } from "../../domain/references.js"
+import { isUsable } from "../../domain/relations.js"
 import type { AccountKey, MessageStore } from "../../store/store.js"
 import { chatCoverage } from "../chat-coverage.js"
 import { LINK_PURPOSE, type PurposeConfig, purposeRead, purposesOf } from "../project-purposes.js"
@@ -107,7 +108,7 @@ const childrenOf = async (
     const below: string[] = []
     for (const parent of level)
       for (const relation of await store.knowledge.relations(null, parent)) {
-        if (!relation.confirmed || relation.kind !== "member-of" || relation.to !== parent) continue
+        if (!isUsable(relation.standing) || relation.kind !== "member-of" || relation.to !== parent) continue
         if (!relation.from.startsWith("project:")) continue
         const ref = relation.from
         const entry = catalog.get(ref)
