@@ -26,11 +26,22 @@ shape of this file.
   WireCat CLI, not only the messengers: ISO 639-1 codes in his order, each once; `ru` when unset. The first is the
   language everything written for him is in; a title quoted in a later one stays untranslated. An unknown code is
   refused by name. `ownerLanguages(database)` from `@wirecat/cli-core/store` reads it, primary first, with
-  `DEFAULT_OWNER_LANGUAGES`. Nothing reads it yet: the digest renderer will.
+  `DEFAULT_OWNER_LANGUAGES`. A scheduled agent's report is rendered in the first language.
 - **A CLI's own CRM list can print the same `--format csv` table as `deals list`.** `@wirecat/cli-core/crm/cli`
   exports `csvFormatOption`, `refuseCsvConflict` (the refusal of another output or an agent's run, checked before
   the CRM is read), `csvColumnPaths` (`--json=a,b`, or the caller's own default columns) and `printCsv`, with
   `DEAL_CSV_COLUMNS` and the `CsvPage` and `CsvField` types. `deals list` and `leads list` print through them.
+- **A scheduled agent that answers with a `wirecat.report/1` document gets a rendered message, not its raw text.**
+  The document is one JSON object, bare or as the only fenced `json` block: dated sections (`today`, `decisions`,
+  `money`, `meetings`, `projects`, `mail`) of typed items, and stale sources in `health`. The Telegram route gets
+  HTML from a template shipped for the owner's first language (`owner_languages`; `ru` and `en`, English words for
+  any other), fitted under 4 096 characters by dropping the last item of the largest section, so no file is sent;
+  mail gets the plain-text rendering with its title as the subject; `latest.txt` beside `latest.md` keeps the same
+  text. Agent text is escaped before a template sees it, and after rendering only `b`, `i` and `a` survive for
+  Telegram (`div p b i a br span` with `style` for email), each `href` only to a link the renderer built. Store
+  references, backticks, `--flags` and snake_case words are taken out of agent text and counted as `report.leaks`
+  in `last.json`. A document that fails the check is never shown: each route gets one line in the owner's language,
+  with `delivery.report-invalid`. Any other answer keeps the Markdown path.
 
 ### Changed — may break callers
 

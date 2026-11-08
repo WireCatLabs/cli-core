@@ -1,0 +1,76 @@
+{%- comment -%}
+Plain text: the terminal, latest.txt, the desktop notice, the email's plain part. Line 2 is indented by three spaces.
+{%- endcomment -%}
+{%- capture nl %}
+{% endcapture -%}
+{%- assign weekdays = "понедельник,вторник,среду,четверг,пятницу,субботу,воскресенье" | split: "," -%}
+{%- assign weekday = date.weekday | minus: 1 -%}
+{{ emoji }} Сводка на {{ weekdays[weekday] }}, {{ date.date }}
+{%- if summary %}{{ nl }}{{ summary }}{% endif -%}
+{%- if quiet -%}
+  {{ nl }}{{ nl }}
+  {%- if health.items.size > 0 %}Новых дел нет, но {{ health.items[0].source }} не обновлялся {{ health.items[0].span }}.
+  {%- else %}Тихое утро: ничего срочного.{% endif -%}
+{%- endif -%}
+{%- for section in sections -%}
+  {{ nl }}{{ nl }}{{ section.emoji }}{{ " " }}
+  {%- case section.kind -%}
+    {%- when "today" %}Сегодня
+    {%- when "decisions" %}Ждут вашего решения
+    {%- when "money" %}Деньги
+    {%- when "meetings" %}Встречи
+    {%- when "projects" %}Проекты в движении
+    {%- when "mail" %}Новая почта
+  {%- endcase -%}
+  {%- for item in section.items -%}
+    {%- capture due -%}
+      {%- if item.due -%}
+        {%- if item.overdue %}просрочено на {{ item.due.span }}
+        {%- else %}срок {% if item.due.day == "today" %}сегодня{% elsif item.due.day == "tomorrow" %}завтра{% else %}{{ item.due.date }}{% endif %}{% if item.due.time %}, {{ item.due.time }}{% endif %}
+        {%- endif -%}
+      {%- endif -%}
+    {%- endcapture -%}
+    {{ nl }}{{ item.emoji }}{{ " " }}
+    {%- case item.type -%}
+      {%- when "reply" %}{{ item.who }} · {{ item.topic }} — {{ item.action }}
+      {%- when "question" %}{{ item.who }} спрашивает: {{ item.action }}
+      {%- when "task" %}{{ item.topic }} — {{ due }}
+      {%- when "fact" %}{{ item.topic }}: {{ item.detail }}
+      {%- when "risk" %}{{ item.topic }}: {{ item.detail }} → {{ item.action }}
+      {%- when "money" %}{{ item.amount.text }} · {{ item.who }} · {{ item.topic }}{% if item.action %} — {{ item.action }}{% endif %}
+      {%- when "decision" %}{{ item.topic }} — {% if item.count %}{{ item.count }} {% endif %}{{ item.action }}
+      {%- when "meeting" -%}
+        {%- if item.time.day == "today" %}{{ item.time.time }}
+        {%- elsif item.time.day == "yesterday" %}Вчера
+        {%- elsif item.time.day == "tomorrow" %}Завтра, {{ item.time.time }}
+        {%- else %}{{ item.time.date }}{% if item.time.time %}, {{ item.time.time }}{% endif %}
+        {%- endif %} · {{ item.topic }}{% if item.who %} · {{ item.who }}{% endif %}
+    {%- endcase -%}
+    {%- assign sep = "" -%}
+    {%- capture second -%}
+      {%- if item.since and "reply,question" contains item.type %}{{ sep }}ждёт {{ item.since.span }}{% assign sep = " · " %}{% endif -%}
+      {%- if due != "" and "risk,money,decision" contains item.type %}{{ sep }}{{ due }}{% assign sep = " · " %}{% endif -%}
+      {%- if item.action and "task,meeting" contains item.type %}{{ sep }}{{ item.action }}{% assign sep = " · " %}{% endif -%}
+      {%- if item.detail and "task,money,meeting,decision" contains item.type %}{{ sep }}{{ item.detail }}{% assign sep = " · " %}{% endif -%}
+      {%- if item.who and "task,fact,risk,decision" contains item.type %}{{ sep }}{{ item.who }}{% assign sep = " · " %}{% endif -%}
+      {%- if item.channel %}{{ sep }}
+        {%- case item.channel -%}
+          {%- when "telegram" %}Telegram{% when "max" %}MAX{% when "whatsapp" %}WhatsApp
+          {%- when "mail" %}почта{% when "meeting" %}встреча{% when "task" %}задача
+        {%- endcase -%}
+        {%- assign sep = " · " -%}
+      {%- endif -%}
+      {%- if item.quote %}{{ sep }}«{{ item.quote }}»{% assign sep = " · " %}{% endif -%}
+      {%- for link in item.links %}{{ sep }}{{ link.url }}{% assign sep = " · " %}{% endfor -%}
+    {%- endcapture -%}
+    {%- if second != "" %}{{ nl }}   {{ second }}{% endif -%}
+  {%- endfor -%}
+  {%- if section.more > 0 %}{{ nl }}ещё {{ section.more }}{% endif -%}
+{%- endfor -%}
+{%- unless quiet -%}
+  {%- if health.items.size > 0 %}{{ nl }}{% endif -%}
+  {%- for source in health.items -%}
+    {{ nl }}{{ health.emoji }} {{ source.source }} не обновлялся {{ source.span }}
+    {%- for link in source.links %} · {{ link.url }}{% endfor -%}
+  {%- endfor -%}
+{%- endunless -%}

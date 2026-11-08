@@ -1172,6 +1172,46 @@ describe("delivery after a run", () => {
     expect(JSON.parse(readFileSync(join(file, "..", "last.json"), "utf8")).deliveries).toHaveLength(2)
   })
 
+  it("renders a report document for each route and keeps its plain text as latest.txt", async () => {
+    const report = {
+      format: "wirecat.report/1",
+      kind: "morning-digest",
+      date: "2026-11-06",
+      sections: [{ kind: "today", items: [{ type: "task", topic: "Смета <офиса>", due: "2026-11-01" }] }],
+    }
+    const { env, system, file, sends } = routed({
+      argv: [process.execPath, "-e", `console.log(${JSON.stringify(JSON.stringify(report))})`],
+    })
+    const last = await runSchedule(app, system, env, file, { ownerLanguage: async () => "ru" })
+
+    const [bot, mail] = sends()
+    expect(bot?.argv).toContain("--html")
+    expect(bot?.argv).not.toContain("--file")
+    expect(bot?.argv.at(-1)).toMatch(
+      /^☀️ <b>Сводка на пятницу, 6 ноября<\/b>\n\n🔥 <b>Сегодня<\/b>\n⏰ <b>Смета &lt;офиса&gt;/,
+    )
+    expect(mail?.argv.slice(-2)).toEqual(["--subject", "☀️ Сводка на пятницу, 6 ноября"])
+    expect(mail?.input).toMatch(/^☀️ Сводка на пятницу, 6 ноября\n\n🔥 Сегодня\n⏰ Смета <офиса> — просрочено на/)
+    expect(readFileSync(join(file, "..", "latest.txt"), "utf8")).toBe(`${mail?.input}\n`)
+    expect(last.report).toEqual({ language: "ru", leaks: 0 })
+    expect(JSON.parse(readFileSync(join(file, "..", "last.json"), "utf8")).report).toEqual(last.report)
+  })
+
+  it("sends one line in place of a report that fails its check, never the document", async () => {
+    const { env, system, file, sends } = routed({
+      argv: [process.execPath, "-e", 'console.log(JSON.stringify({ format: "wirecat.report/1", kind: "x" }))'],
+    })
+    const last = await runSchedule(app, system, env, file)
+
+    expect(sends().map((one) => one.argv.at(-1))).toEqual([
+      "Сводка не собралась: ошибка формата. Подробности в WireCat.",
+      "Сводка не собралась: ошибка формата. Подробности в WireCat.",
+    ])
+    expect(sends()[1]?.input).toBe("Сводка не собралась: ошибка формата. Подробности в WireCat.")
+    expect(last.deliveries?.map((one) => one.reason)).toEqual(["delivery.report-invalid", "delivery.report-invalid"])
+    expect(last.report).toMatchObject({ invalid: "kind", reasons: ["delivery.report-invalid"] })
+  })
+
   it("sends a failed run's one line, and nothing when the schedule says never", async () => {
     const failing = routed({ argv: [process.execPath, "-e", 'console.log("half a report"); process.exit(3)'] })
     await runSchedule(app, failing.system, failing.env, failing.file)
