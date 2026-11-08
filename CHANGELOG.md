@@ -5,15 +5,19 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
-## 0.609.0 — 08.11.2026
+## Unreleased
 
 ### Added
 
 - **A scan's group senders can be found and decided together.** `chat-senders@3` names the chat and its size in its
-  reason ("wrote 40 messages in «Sales» (35 people) since 2026-08-10"), and its evidence leads with the chat's ref.
+  reason ("wrote 40 messages in «Sales» (25 people) since 2026-08-10"), and its evidence leads with the chat's ref.
   `ProposalFilter.via` keeps the proposals whose evidence holds a reference, and `store.proposedActions.list` takes
   `evidence` to filter in the query, so `via` pages stored relationship proposals in full. A pending `chat-senders@2`
   proposal takes the new reason and evidence on the next scan, under the same id.
+
+## 0.609.0 — 08.11.2026
+
+### Added
 
 - **`models set <id>` chooses the local embedding model for every WireCat CLI**, kept in the shared settings file:
   every embed and every search by meaning uses it, and `models list` marks it `default`. It refuses a model that is
