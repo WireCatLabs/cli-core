@@ -65,6 +65,29 @@ export interface SourceCheck {
   refreshed: number
   /** Open reviews of a memory or fact met in this run that no longer holds, closed. */
   closed: number
+  /**
+   * Sources found changed in this run, raised or signed anew, that no open `evidence_findings` batch cites: what an
+   * agent may read again for new facts. Deleted sources and cited memories or facts are left out.
+   */
+  changedRefs: string[]
+}
+
+/** A cited source found changed since it was cited, by a check at `checkedAt`. */
+export interface ChangedSource {
+  ref: string
+  checkedAt: string
+}
+
+/** One source of a review as it was cited and as it is now, for the owner to compare; both are the source's text. */
+export interface SourceReviewText {
+  link: number
+  ref: string | null
+  /** The words the claim rested on, as its author quoted them. */
+  quote: string | null
+  /** `null` where the store keeps no history for the kind, or the source is gone. */
+  cited: string | null
+  /** `null` where the store keeps no text for the kind, or the source is deleted. */
+  now: string | null
 }
 
 /** What stands in a review for words about a source that was erased since. */

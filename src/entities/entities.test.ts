@@ -750,6 +750,7 @@ const samples: Record<EntityName, unknown> = {
     supersedes: null,
     evidence: ["msg:telegram/1/2/3"],
     last_verified_at: null,
+    source_review: { id: "4", cause: "changed" },
     created_at: at,
     updated_at: at,
   },

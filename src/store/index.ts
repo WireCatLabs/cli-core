@@ -155,6 +155,7 @@ export type {
   ProjectAnnotationTargetRequest,
 } from "./project-transfer/store.js"
 export {
+  type ChangedSource,
   SOURCE_REVIEW_CAUSES,
   SOURCE_REVIEW_KIND,
   type SourceCheck,
@@ -163,6 +164,7 @@ export {
   type SourceReviewMarker,
   type SourceReviewPayload,
   type SourceReviewSource,
+  type SourceReviewText,
 } from "./source-review.js"
 export {
   ADDED_KINDS,

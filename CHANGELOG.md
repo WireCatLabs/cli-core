@@ -23,6 +23,16 @@ shape of this file.
   (`sync/<tool>`). A notice whose templates fail sends the old line. The desktop notice is unchanged.
 - Default templates for both, for Telegram, email and text in Russian and English, with the digest's escaping and
   platform rules; `templates edit | preview` now take both keys, checked against their own synthetic samples.
+- **A source check names what changed, and a source review's text can be read.** `knowledge.checkSources` also
+  answers `changedRefs`: the sources found changed in that run, whether they raised a review or still said the
+  quoted words, that no open `evidence_findings` batch cites, leaving out deleted sources and cited memories or facts.
+  An agent reads those again for new facts. `knowledge.sourceReviewTexts(id)` gives each source of a
+  `memory_source_review` with its quote, its text as cited (notes, documents and messages keep history) and its text
+  now, so a reader compares them while the review itself holds no source text. The shared `memory` and `fact`
+  entities take an optional `source_review: { id, cause } | null`, the marker reads already carry.
+  `knowledge.changedSources({ since })` reads the cited sources a check found changed since then and that differ
+  from the version cited, with the same exclusions, so a change the timer's check already took still reaches an
+  agent.
 
 ## 0.614.0 — 08.11.2026
 
