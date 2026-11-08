@@ -166,6 +166,22 @@ export const linkOrPropose = (
   })
 }
 
+/** The mentions an agent's proposal left `proposed` take the owner's answer: linked, or undecided again. */
+const settleMentions = ({ database, now }: StoreContext, payload: IdentityLinkPayload, to: "linked" | "found") => {
+  const { provider, id } = parseIdentityRef(payload.identity)
+  const identity = database
+    .prepare("SELECT id FROM identities WHERE provider = ? AND external_id = ?")
+    .get(provider, id)
+  if (!identity) return
+  const cleared = to === "found" ? ", target_type = NULL, target_id = NULL" : ""
+  database
+    .prepare(
+      `UPDATE mentions SET status = ?${cleared}, updated_at = ? WHERE status = 'proposed' AND target_type = 'identity' ` +
+        "AND target_id = ?",
+    )
+    .run(to, now(), Number(identity.id))
+}
+
 /**
  * Decides an `identity_link`, the owner's alone. Confirm links the two people as the owner's link, refused with
  * `identity.stale` when either person changed since it was proposed; reject keeps them apart and the pair is not
@@ -185,7 +201,11 @@ export const decideIdentityLink = (context: StoreContext, id: string, decision: 
     const author = deciderAuthor(decision.by)
     const reason = decision.reason?.trim() || undefined
     const noted = reason === undefined ? {} : { reason }
-    if (!decision.confirm) return operations.reject(id, author, { dismissed: true, ...noted })
+    if (!decision.confirm) {
+      const rejected = operations.reject(id, author, { dismissed: true, ...noted })
+      settleMentions(context, proposal.payload as IdentityLinkPayload, "found")
+      return rejected
+    }
     if (proposal.status !== "proposed")
       throw new CliError("validation_error", `${id} is already ${proposal.status}`, { reason: "proposal.wrong-state" })
     const payload = proposal.payload as IdentityLinkPayload
@@ -217,5 +237,6 @@ export const decideIdentityLink = (context: StoreContext, id: string, decision: 
       context.database,
       recordOf(context, kept).identities.flatMap(({ name, username }) => [name, username]),
     )
+    settleMentions(context, payload, "linked")
     return approved
   })
