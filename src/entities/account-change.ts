@@ -21,7 +21,7 @@ export const accountPrivacy = v.strictObject({
 })
 export const accountPrivacyChange = v.strictObject({ operation_id: id, privacy: accountPrivacy })
 
-const removalKind = v.picklist(["sign_in", "keyring", "config", "file", "store"])
+const removalKind = v.picklist(["sign_in", "keyring", "config", "file", "store", "unit", "schedule"])
 export const accountRemoval = v.strictObject({
   profile: text,
   data: v.picklist(["kept", "deleted"]),

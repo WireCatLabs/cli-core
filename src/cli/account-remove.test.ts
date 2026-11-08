@@ -6,6 +6,8 @@ import { memoryKeyring } from "@wirecat/cli-base/testing"
 import { Command } from "commander"
 import { describe, expect, it } from "vitest"
 import { lockPath } from "../background/lock.js"
+import type { ServerSystem } from "../background/system.js"
+import { unitScope } from "../background/units.js"
 import { openStore } from "../store/store.js"
 import { messenger } from "../testing/shared-program.js"
 import { type AccountRemoval, type AccountRemovalContext, accountRemoveCommand } from "./account-remove.js"
@@ -20,6 +22,8 @@ const SERVICE = "chat-cli"
 const setup = async () => {
   const root = mkdtempSync(join(tmpdir(), "account-remove-"))
   const env: NodeJS.ProcessEnv = {
+    HOME: root,
+    XDG_CONFIG_HOME: join(root, "xdg"),
     CHAT_STATE_DIR: join(root, "state"),
     CHAT_CONFIG_DIR: join(root, "config"),
     CHAT_CACHE_DIR: join(root, "cache"),
@@ -69,10 +73,27 @@ const removalOf = ({ root, session, media }: Setup, calls: AccountRemovalContext
   dataFiles: (profile) => (profile === "personal" ? [media] : []),
 })
 
+const machine = () => {
+  const ran: string[][] = []
+  const system: ServerSystem = {
+    platform: "linux",
+    uid: 501,
+    entry: ["/opt/node", "/opt/chat/bin/chat.js"],
+    run: async (argv) => {
+      ran.push(argv)
+      return { code: 0, stdout: "", stderr: "" }
+    },
+    spawn: () => 0,
+    pause: async () => {},
+  }
+  return { system, ran }
+}
+
 const call = async (
   argv: string[],
   { env, keyring }: { env: NodeJS.ProcessEnv; keyring: KeyringStore },
   removal: AccountRemoval,
+  system: ServerSystem = machine().system,
 ) => {
   const streams = captureStreams()
   const code = await run(
@@ -85,7 +106,7 @@ const call = async (
         ),
       ],
     },
-    { streams, tty: false, env, keyring },
+    { streams, tty: false, env, keyring, system },
   )
   const out = streams.stdout.join("")
   const err = streams.stderr.join("")
@@ -267,5 +288,120 @@ describe("a messenger's account group", () => {
 
     expect(names()).not.toContain("remove")
     expect(names({ signOut: async () => ({ revoked: null, removed: [] }) })).toContain("remove")
+  })
+})
+
+describe("account remove and what cli-core keeps for the profile", () => {
+  const stateOf = ({ root }: Setup, ...parts: string[]) => join(root, "state", ...parts)
+  const write = (path: string, text = "{}") => {
+    mkdirSync(join(path, ".."), { recursive: true })
+    writeFileSync(path, text)
+  }
+
+  it("removes cli-core's own files of the profile, its serve unit and its schedules, and keeps the sends journal", async () => {
+    const given = await setup()
+    const own = [
+      stateOf(given, "flood", "personal.json"),
+      stateOf(given, "pace", "personal.json"),
+      stateOf(given, "profiles", "personal.recipients.json"),
+      stateOf(given, "provider-log", "personal.jsonl"),
+      stateOf(given, "mcp-http", "personal.json"),
+      stateOf(given, "personal.replies-state.json"),
+      stateOf(given, "inbox", "personal.json"),
+      stateOf(given, "schedule-daily-review", "personal.json"),
+      stateOf(given, "checkpoints", "personal", "sync.json"),
+    ]
+    for (const file of own) write(file)
+    const others = stateOf(given, "flood", "work.json")
+    const journal = stateOf(given, "sends", "personal.jsonl")
+    write(others)
+    write(journal, "")
+    const unitFor = (profile: string) =>
+      join(given.root, "xdg", "systemd", "user", `chat-serve-${unitScope(app, profile, given.env)}.service`)
+    write(unitFor("personal"), "")
+    write(unitFor("work"), "")
+    const schedule = (name: string, profile: string) =>
+      write(
+        stateOf(given, "schedules", name, "schedule.json"),
+        JSON.stringify({
+          name,
+          kind: "command",
+          argv: ["inbox"],
+          when: { every: 60 },
+          environment: { CHAT_PROFILE: profile },
+          createdAt: "2026-11-08T00:00:00Z",
+        }),
+      )
+    schedule("daily", "personal")
+    schedule("nightly", "work")
+    const { system, ran } = machine()
+
+    const dry = await call(
+      ["personal", "--json", "account", "remove", "--keep-data", "--dry-run"],
+      given,
+      removalOf(given),
+      system,
+    )
+    expect(dry.item.removed).toEqual(
+      expect.arrayContaining([
+        ...own.slice(0, -1).map((target) => ({ kind: "file", target })),
+        { kind: "file", target: stateOf(given, "checkpoints", "personal") },
+        { kind: "unit", target: unitFor("personal") },
+        { kind: "schedule", target: "daily" },
+      ]),
+    )
+    expect(ran.filter((argv) => argv.includes("disable"))).toEqual([])
+
+    const result = await call(
+      ["personal", "--json", "account", "remove", "--keep-data", "--yes"],
+      given,
+      removalOf(given),
+      system,
+    )
+
+    expect(result.code).toBe(0)
+    for (const file of own) expect(existsSync(file)).toBe(false)
+    expect(existsSync(unitFor("personal"))).toBe(false)
+    expect(existsSync(stateOf(given, "schedules", "daily", "schedule.json"))).toBe(false)
+    expect(existsSync(others)).toBe(true)
+    expect(existsSync(unitFor("work"))).toBe(true)
+    expect(existsSync(stateOf(given, "schedules", "nightly", "schedule.json"))).toBe(true)
+    expect(existsSync(journal)).toBe(true)
+    expect(result.item.kept).toContainEqual({
+      kind: "file",
+      target: journal,
+      reason: "the record of what was sent for this account",
+    })
+    const disabled = ran.map((argv) => argv.join(" ")).filter((line) => line.includes("disable"))
+    expect(disabled.some((line) => line.includes("chat-schedule-daily.timer"))).toBe(true)
+    expect(disabled.some((line) => line.includes("nightly") || line.includes("serve-work"))).toBe(false)
+  })
+
+  it("lets a hook's paths lie in the tool's own extra folders inside the home folder", async () => {
+    const given = await setup()
+    const extra = join(given.root, ".local", "share", "zm")
+    const checkpoint = join(extra, "checkpoints", "personal")
+    write(join(checkpoint, "meetings.json"))
+    const result = await call(["personal", "--json", "account", "remove", "--keep-data", "--yes"], given, {
+      ...removalOf(given),
+      ownFolders: () => [extra],
+      stateFiles: () => [checkpoint],
+    })
+
+    expect(result.code).toBe(0)
+    expect(existsSync(checkpoint)).toBe(false)
+  })
+
+  it("refuses an extra folder that is relative, outside the home folder or the home folder itself", async () => {
+    const given = await setup()
+    for (const folder of ["relative/zm", join(tmpdir(), "elsewhere-zm"), given.root]) {
+      const result = await call(["personal", "--json", "account", "remove", "--keep-data", "--yes"], given, {
+        ...removalOf(given),
+        ownFolders: () => [folder],
+      })
+
+      expect(result.error).toMatchObject({ code: "configuration_error", reason: "account-remove.folder-outside" })
+    }
+    expect(existsSync(given.session)).toBe(true)
   })
 })

@@ -1,5 +1,6 @@
 import { existsSync, rmSync } from "node:fs"
-import { resolve as absolute, sep } from "node:path"
+import { homedir } from "node:os"
+import { resolve as absolute, isAbsolute, join, sep } from "node:path"
 import {
   CliError,
   Credentials,
@@ -13,17 +14,23 @@ import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { lockPath, readLock, servingProfiles } from "../background/lock.js"
 import { alive } from "../background/processes.js"
+import { listSchedules, type Schedule, scheduleFile, timerFor } from "../background/schedules.js"
+import { type ServerSystem, thisMachine } from "../background/system.js"
+import { locationVariables, platformFor, type Unit } from "../background/units.js"
 import type { Provider } from "../domain/models.js"
+import { httpLockFile } from "../mcp/http/state.js"
 import type { AppIdentity } from "../ports/app.js"
+import { sendsPathFor } from "../sends/journal.js"
 import { storePath } from "../store/path.js"
 import { openStore } from "../store/store.js"
 import type { AccountKey } from "../store/types.js"
 import { readConfigFile, withoutPath } from "./config-issues.js"
-import { baseContext, environmentOf } from "./context.js"
+import { type BaseEnvironment, baseContext, environmentOf } from "./context.js"
 import { logsInOrOut, REMOTE_WRITE } from "./effects.js"
 import { itemOf, renderAnswer } from "./envelope.js"
 import { accountFileFor, recalledAccount } from "./messenger/accounts.js"
 import { answerOf } from "./messenger/ask.js"
+import { profileFiles } from "./profile-files.js"
 import type { GlobalFlags, ResolveOptions, Settings } from "./settings.js"
 
 export interface AccountRemovalContext {
@@ -72,6 +79,11 @@ export interface AccountRemoval {
   forgetConfig?(profile: string, context: AccountRemovalContext): string[]
   /** What holds this profile now, beyond a serve cli-core sees itself: "a sync", or `undefined`. */
   busy?(profile: string, context: AccountRemovalContext): string | undefined
+  /**
+   * Folders the tool keeps outside the ones its cli-core identity names, where its hooks' paths may also lie: zoom's
+   * `~/.config/zm` and `~/.local/share/zm`. Each must be absolute and inside the home folder.
+   */
+  ownFolders?(context: AccountRemovalContext): string[]
 }
 
 export interface AccountRemoveOptions {
@@ -81,7 +93,7 @@ export interface AccountRemoveOptions {
   resolveSettings?: (flags: GlobalFlags, options?: ResolveOptions) => Settings
 }
 
-type Kind = "sign_in" | "keyring" | "config" | "file" | "store"
+type Kind = "sign_in" | "keyring" | "config" | "file" | "store" | "unit" | "schedule"
 interface Entry {
   kind: Kind
   target: string
@@ -103,9 +115,17 @@ const choiceOf = ({ keepData, deleteData }: { keepData?: boolean; deleteData?: b
 }
 
 /** Inside the tool's own folders and not one of them: a hook's mistake must not reach the home folder. */
-const insideOwnFolders = (app: AppIdentity, env: NodeJS.ProcessEnv) => {
-  const roots = Object.values(resolvePaths({ appName: app.appName, prefix: app.envPrefix, env })).map((root) =>
-    absolute(root),
+const insideOwnFolders = (app: AppIdentity, env: NodeJS.ProcessEnv, extra: readonly string[]) => {
+  const home = absolute(env.HOME ?? env.USERPROFILE ?? homedir())
+  for (const root of extra)
+    if (!isAbsolute(root) || !absolute(root).startsWith(`${home}${sep}`))
+      throw new CliError(
+        "configuration_error",
+        `${app.command} named ${root} as one of its folders, but it is not an absolute path inside ${home} — nothing was removed; report this as a bug`,
+        { reason: "account-remove.folder-outside" },
+      )
+  const roots = [...Object.values(resolvePaths({ appName: app.appName, prefix: app.envPrefix, env })), ...extra].map(
+    (root) => absolute(root),
   )
   return (path: string): string => {
     const full = absolute(path)
@@ -116,6 +136,41 @@ const insideOwnFolders = (app: AppIdentity, env: NodeJS.ProcessEnv) => {
         { reason: "account-remove.path-outside" },
       )
     return full
+  }
+}
+
+/** The profile's own serve unit, by its exact name, when one is installed; never a pattern over the unit folder. */
+const serveUnit = (app: AppIdentity, system: ServerSystem, profile: string, env: NodeJS.ProcessEnv) => {
+  if (!env.HOME) return undefined
+  const unit = platformFor(app, system, env).unit({
+    profile,
+    command: [],
+    environment: { [`${app.envPrefix}_PROFILE`]: profile, ...locationVariables(app, env) },
+  })
+  return unit.path && existsSync(unit.path) ? unit : undefined
+}
+
+const removeUnit = async (app: AppIdentity, system: ServerSystem, unit: Unit, env: NodeJS.ProcessEnv) => {
+  const platform = platformFor(app, system, env)
+  for (const argv of platform.uninstall(unit)) {
+    const ran = await system.run(argv, env)
+    if (ran.code !== 0) throw new CliError("configuration_error", `${argv.join(" ")} failed: ${ran.stderr.trim()}`)
+  }
+  rmSync(unit.path, { force: true })
+}
+
+/** As `schedule remove` does: the timer and the schedule's file go, its past output stays. */
+const removeSchedules = async (
+  app: AppIdentity,
+  system: ServerSystem,
+  state: string,
+  schedules: readonly Schedule[],
+  env: NodeJS.ProcessEnv,
+) => {
+  const timer = timerFor(app, system, env)
+  for (const { name } of schedules) {
+    await timer.remove(name)
+    rmSync(scheduleFile(state, name), { force: true })
   }
 }
 
@@ -193,9 +248,13 @@ export const accountRemoveCommand = (
         ...(context.keyring ? { keyring: context.keyring } : {}),
         mayRevoke: !moved,
       }
+      const state = resolvePaths({ appName: app.appName, prefix: app.envPrefix, env }).state
+      const httpLock = readLock(httpLockFile(join(state, "mcp-http", `${profile}.json`)))
       const holder = servingProfiles(app, env).includes(profile)
         ? `\`${app.command} serve\``
-        : removal.busy?.(profile, hooks)
+        : httpLock && alive(httpLock.pid)
+          ? `\`${app.command} mcp serve --http\``
+          : removal.busy?.(profile, hooks)
       if (holder)
         throw new CliError(
           "conflict",
@@ -203,11 +262,15 @@ export const accountRemoveCommand = (
           { reason: "account-remove.busy" },
         )
 
-      const own = insideOwnFolders(app, env)
+      const own = insideOwnFolders(app, env, removal.ownFolders?.(hooks) ?? [])
+      const schedules = listSchedules(state).filter(
+        (schedule) => schedule.environment[`${app.envPrefix}_PROFILE`] === profile,
+      )
       const serveLock = lockPath(app, profile, env)
       const staleLock = readLock(serveLock)
       const stateFiles = [
         accountFile,
+        ...profileFiles(app, profile, env, listSchedules(state)),
         ...(staleLock && !alive(staleLock.pid) ? [serveLock] : []),
         ...(removal.stateFiles?.(profile, hooks) ?? []),
       ].map(own)
@@ -226,6 +289,14 @@ export const accountRemoveCommand = (
       }))
       const sections = removal.forgetConfig ? [] : configSections(settings.configPath, profile)
       const storeHere = existsSync(storePath(env))
+      const system = environmentOf<BaseEnvironment & { system?: ServerSystem }>(this).system ?? thisMachine()
+      const unit = serveUnit(app, system, profile, env)
+      if (unit && (await platformFor(app, system, env).state(unit)).active)
+        throw new CliError(
+          "conflict",
+          `${unit.name} is running for ${profile} — stop it first (\`${app.command} ${profile} server stop\`), then remove the account`,
+          { reason: "account-remove.busy" },
+        )
 
       const removed: Entry[] = [{ kind: "sign_in", target: `${app.command} sign-in of ${profile}` }]
       const kept: Kept[] = []
@@ -236,6 +307,11 @@ export const accountRemoveCommand = (
       for (const at of sections) removed.push({ kind: "config", target: at.join(".") })
       const present = (path: string) => existsSync(path)
       for (const file of stateFiles.filter(present)) removed.push({ kind: "file", target: file })
+      if (unit) removed.push({ kind: "unit", target: unit.path })
+      for (const { name } of schedules) removed.push({ kind: "schedule", target: name })
+      const journal = sendsPathFor(app, profile, env)
+      if (existsSync(journal))
+        kept.push({ kind: "file", target: journal, reason: "the record of what was sent for this account" })
       const accountName = account ? `${account.provider}:${account.account}` : undefined
       if (data === "deleted") {
         for (const file of dataFiles.filter(present)) removed.push({ kind: "file", target: file })
@@ -318,6 +394,8 @@ export const accountRemoveCommand = (
             await store.close()
           }
         }
+        if (unit) await removeUnit(app, system, unit, env)
+        if (schedules.length > 0) await removeSchedules(app, system, state, schedules, env)
         for (const entry of removed) if (entry.kind === "file") rmSync(entry.target, { recursive: true, force: true })
         if (removal.forgetConfig)
           for (const target of removal.forgetConfig(profile, hooks)) removed.push({ kind: "config", target })

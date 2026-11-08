@@ -47,6 +47,11 @@ const SIGN_IN: Entry[] = [
   ["account-remove.busy", "conflict", "a serve or a sync runs for this profile; stop it first"],
   ["account-remove.unconfirmed", "confirmation_required", "removing an account asks first; add --yes"],
   ["account-remove.path-outside", "configuration_error", "the tool named a path outside its own folders"],
+  [
+    "account-remove.folder-outside",
+    "configuration_error",
+    "the tool named a folder of its own outside the home folder",
+  ],
 ]
 
 /** Reasons every CLI over a provider's API raises alike: gcal and drive today. */

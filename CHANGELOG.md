@@ -19,6 +19,11 @@ shape of this file.
   over MCP nor under `<PREFIX>_READ_ONLY`. The answer is the entity `account_removal`; reasons `account-remove.*`.
   A messenger opts in with `Messenger.accountRemoval`; any other CLI mounts `accountRemoveCommand(app, hooks)`
   ([guide](docs/dev/ACCOUNT-REMOVAL.md)). `store.accounts.forgetProfile` forgets which account a profile was.
+  It also removes what cli-core keeps for the profile, so no tool lists it: its flood, pace, recipients, moderation,
+  provider log, MCP HTTP tokens, replies state and rules, `--new` points and checkpoints, its serve unit (by its exact
+  name) and the schedules whose environment names it. The sends journal stays, under `kept`. A tool whose files live
+  outside its cli-core folders names them with the `ownFolders` hook; each must be absolute and inside the home folder
+  (`account-remove.folder-outside`).
 
 ### Changed — may break callers
 
