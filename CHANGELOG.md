@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.607.0 — 08.11.2026
+
 ### Added
 
 - **`deals list --format csv` and `leads list --format csv`: a page of deals or leads as a table for a spreadsheet.**
