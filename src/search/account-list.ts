@@ -9,6 +9,7 @@ import {
   type Kind,
   kindIn,
   kindOf,
+  kindsIn,
   providerNamed,
   providers as registered,
   UNKNOWN_PROVIDER,
@@ -72,7 +73,12 @@ export interface ListContext {
  */
 export interface ListedAccount extends AccountKey {
   kind: Kind | undefined
+  /** Every kind it holds, `kind` first: a phone account holds messages and events. Empty when `kind` is unknown. */
+  kinds: readonly Kind[]
 }
+
+/** Whether a listed account holds `kind`. */
+export const listedHolds = (account: Pick<ListedAccount, "kinds">, kind: Kind): boolean => account.kinds.includes(kind)
 
 /** One entry of the list as written, a group's member included, and the accounts it named. */
 export interface ListedEntry {
@@ -87,11 +93,19 @@ type Held = ListedAccount & { name: string | null; stored?: AccountKey }
 const kindHere = (provider: Provider, running: ListContext["running"]): Kind | undefined =>
   provider === running.provider ? kindOf(provider) : kindIn(provider)
 
+const kindsOfHere = (provider: Provider, running: ListContext["running"]) => {
+  const kinds = kindsIn(provider)
+  return {
+    kind: kindHere(provider, running),
+    kinds: kinds.length === 0 && provider === running.provider ? [kindOf(provider)] : kinds,
+  }
+}
+
 const heldOf = (stored: readonly StoredAccount[], running: ListContext["running"]): Held[] => [
   ...stored
     .filter(({ provider }) => kindIn(provider) !== "notes" && !isDocumentAccountProvider(provider))
-    .map(({ provider, account, name }) => ({ provider, account, name, kind: kindHere(provider, running) })),
-  { provider: "notes", account: INTERNAL_NOTES, name: null, kind: "notes" },
+    .map(({ provider, account, name }) => ({ provider, account, name, ...kindsOfHere(provider, running) })),
+  { provider: "notes", account: INTERNAL_NOTES, name: null, kind: "notes", kinds: ["notes"] },
   ...stored
     .filter(({ provider }) => isFolderProvider(provider))
     .map(({ id, name, provider, account }) => ({
@@ -99,6 +113,7 @@ const heldOf = (stored: readonly StoredAccount[], running: ListContext["running"
       account: String(id),
       name,
       kind: "notes" as const,
+      kinds: ["notes"] as const,
       stored: { provider, account },
     })),
   ...stored
@@ -108,6 +123,7 @@ const heldOf = (stored: readonly StoredAccount[], running: ListContext["running"
       account: String(id),
       name,
       kind: "notes" as const,
+      kinds: ["notes"] as const,
       stored: { provider, account },
     })),
 ]
@@ -156,7 +172,7 @@ const accountOf = (prefix: string, ref: string, held: readonly Held[], context: 
     ofProvider.find(({ account }) => account === key.account) ?? {
       ...key,
       name: null,
-      kind: kindHere(key.provider, context.running),
+      ...kindsOfHere(key.provider, context.running),
     }
   const recorded = context.profiles[prefix.toLowerCase()]?.[ref]
   if (recorded && isFolderProvider(recorded.provider)) {
@@ -194,8 +210,8 @@ const accountsOfWord = (word: string, held: readonly Held[], context: ListContex
   const wanted = word.toLowerCase()
   if (wanted === "all") return [...held]
   if (wanted === "personal" || wanted === "bots")
-    return held.filter(({ provider, kind }) => kind === "messages" && isBotProvider(provider) === (wanted === "bots"))
-  if (isKind(wanted)) return held.filter(({ kind }) => kind === wanted)
+    return held.filter((one) => listedHolds(one, "messages") && isBotProvider(one.provider) === (wanted === "bots"))
+  if (isKind(wanted)) return held.filter((one) => listedHolds(one, wanted))
   const recorded = context.profiles[wanted]
   if (
     recorded &&
@@ -250,7 +266,7 @@ export const entriesOfList = (value: string, context: ListContext): ListedEntry[
   for (const item of itemsOf(value)) entry(item)
   return entries.map(({ entry, accounts }) => ({
     entry,
-    accounts: accounts.map(({ provider, account, kind }) => ({ provider, account, kind })),
+    accounts: accounts.map(({ provider, account, kind, kinds }) => ({ provider, account, kind, kinds })),
   }))
 }
 
@@ -292,7 +308,7 @@ export const fitting = (
   const chosen = new Map<string, AccountKey>()
   const skipped: SkippedSource[] = []
   for (const { entry, accounts } of entries) {
-    const fits = accounts.filter(({ kind }) => kind !== undefined && kinds.includes(kind))
+    const fits = accounts.filter((one) => kinds.some((kind) => listedHolds(one, kind)))
     for (const { provider, account } of fits)
       if (!chosen.has(keyOf({ provider, account }))) chosen.set(keyOf({ provider, account }), { provider, account })
     const known = accounts.filter(({ kind }) => kind !== undefined)

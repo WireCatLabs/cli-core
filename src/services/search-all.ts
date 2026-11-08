@@ -4,7 +4,7 @@ import { type HitFile, hitFiles } from "../domain/attachments.js"
 import type { DealKind } from "../domain/deals.js"
 import { parseLocator } from "../domain/locator.js"
 import { type MailFields, senderIsMe } from "../domain/models.js"
-import { INTERNAL_NOTES, kindIn } from "../domain/providers.js"
+import { holdsKind, INTERNAL_NOTES } from "../domain/providers.js"
 import { runEmbedders } from "../embeddings/embed.js"
 import { DEFAULT_TEXT_MODEL } from "../embeddings/models.js"
 import type { MessengerTraits } from "../ports/traits.js"
@@ -171,7 +171,7 @@ export const titleWords = (text: string): { words: string[]; anyWord: boolean } 
 
 /** The accounts of every CRM the store holds copies of. */
 export const crmAccounts = async (store: MessageStore): Promise<AccountKey[]> =>
-  (await store.accounts.accounts()).filter(({ provider }) => kindIn(provider) === "crm")
+  (await store.accounts.accounts()).filter(({ provider }) => holdsKind(provider, "crm"))
 
 /**
  * `search all`: messages, mail, notes, calendar events and CRM deals and leads from the local store — messages also from the messenger's
@@ -242,7 +242,7 @@ export const searchAll = async (
     const read =
       found.coverage?.accounts ??
       given ??
-      (await store.accounts.accounts()).filter(({ provider }) => kindIn(provider) === kind)
+      (await store.accounts.accounts()).filter(({ provider }) => holdsKind(provider, kind))
     for (const one of found.skipped ?? []) if (!skipped.some(({ source }) => source === one.source)) skipped.push(one)
     accounts.push(...read.map(({ provider, account }) => ({ resource: kind, provider, account })))
     const itemOf = (hit: FoundMessage, foundBy: SearchAllItem["foundBy"]): SearchAllItem => {

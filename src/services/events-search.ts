@@ -1,5 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
-import { kindIn } from "../domain/providers.js"
+import { holdsKind } from "../domain/providers.js"
 import type { WarmEmbedders } from "../embeddings/embed.js"
 import { meaningFloor } from "../embeddings/models.js"
 import { plainQuery } from "../search/lucene/plain.js"
@@ -87,7 +87,7 @@ const accountIdsOf = async (store: MessageStore, accounts: readonly AccountKey[]
 /** The calendar accounts the store holds: every account whose provider is of the `events` kind. */
 export const calendarAccounts = async (store: MessageStore): Promise<AccountKey[]> =>
   (await store.accounts.storedAccounts())
-    .filter(({ provider }) => kindIn(provider) === "events")
+    .filter(({ provider }) => holdsKind(provider, "events"))
     .map(({ provider, account }) => ({ provider, account }))
 
 export const foundEvent = (

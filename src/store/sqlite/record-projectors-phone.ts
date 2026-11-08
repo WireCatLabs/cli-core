@@ -4,7 +4,6 @@ import type { CALL_DIRECTIONS, SMS_DIRECTIONS } from "../../domain/record-types.
 import { formatReference } from "../../domain/references.js"
 import type { EntryInput } from "../../meetings/index.js"
 import type { AccountKey } from "../types.js"
-import { accountPk } from "./accounts.js"
 import { calendarWritesOver } from "./calendar.js"
 import { chatPkFor, upsertChat } from "./chats.js"
 import { COUNTERPART_ROLE, linkKind } from "./link-kinds.js"
@@ -24,8 +23,6 @@ import {
   refusal,
 } from "./record-projection.js"
 
-export const SMS_PROVIDER = "sms"
-export const CALLS_PROVIDER = "calls"
 const CALLS_CALENDAR = "calls"
 
 /** E.164 when the number reads as one with the store's countries; as written otherwise (a short code, a name). */
@@ -34,20 +31,12 @@ const numberOf = ({ database }: StoreContext, typed: string): string => {
   return value?.startsWith("+") ? value : typed.trim()
 }
 
-/** The account a phone kind is kept in: one per source account, in the source account's scope. */
-const kindAccount = (
-  { context }: ProjectionTools,
-  provider: string,
-  projection: Projection,
-): AccountKey & { pk: number } => {
-  const scope = context.database.prepare("SELECT scope FROM accounts WHERE id = ?").get(projection.accountId)?.scope
-  const key: AccountKey = {
-    provider,
-    account: projection.source.account,
-    ...(scope === "work" || scope === "personal" ? { scope } : {}),
-  }
-  return { ...key, pk: accountPk(context, key) }
-}
+/** The import's own account holds its SMS and calls too, so one `provider:account` in a group reaches all of it. */
+const sourceAccount = ({ source, accountId }: Projection): AccountKey & { pk: number } => ({
+  provider: source.provider,
+  account: source.account,
+  pk: accountId,
+})
 
 const counterpartOf = (projection: Projection, { context }: ProjectionTools): number | undefined => {
   const ref = entityOf(projection, "counterpart")
@@ -64,12 +53,12 @@ const saveSms = (projection: Projection, tools: ProjectionTools): string => {
   const { context } = tools
   const { fields, externalId, source } = projection
   const sentAt = millis(fields, "sent_at")
-  const account = kindAccount(tools, SMS_PROVIDER, projection)
+  const account = sourceAccount(projection)
   const phone = numberOf(context, String(fields.phone))
   const name = given<string>(fields, "name") ?? null
   const incoming = (fields.direction as (typeof SMS_DIRECTIONS)[number]) === "in"
   const identity = importedIdentity(context, {
-    provider: SMS_PROVIDER,
+    provider: account.provider,
     externalId: phone,
     name,
     ...(phone.startsWith("+") ? { phone } : {}),
@@ -111,7 +100,7 @@ const saveSms = (projection: Projection, tools: ProjectionTools): string => {
     .run(sentAt, chatKey)
   return formatReference({
     type: "message",
-    provider: SMS_PROVIDER,
+    provider: account.provider,
     account: account.account,
     chat: chatId,
     message: externalId,
@@ -153,7 +142,7 @@ const saveCall = (projection: Projection, tools: ProjectionTools): string => {
   const { context } = tools
   const { fields, externalId } = projection
   const startsAt = millis(fields, "started_at")
-  const account = kindAccount(tools, CALLS_PROVIDER, projection)
+  const account = sourceAccount(projection)
   const writes = calendarWritesOver(context)
   const calendarId = callsCalendar(context, account.pk, writes)
   const phone = numberOf(context, String(fields.phone))

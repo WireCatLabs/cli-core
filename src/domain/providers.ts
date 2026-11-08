@@ -8,7 +8,13 @@ export type Kind = (typeof KINDS)[number]
 
 export interface ProviderEntry {
   name: Provider
+  /** The first of `kinds`: what a build that knows one kind per provider reads. */
   kind: Kind
+  /**
+   * Every kind its accounts hold, `kind` first: one phone account holds SMS and calls, so an account group naming it
+   * once reaches both. Left out, `[kind]`.
+   */
+  kinds?: readonly Kind[]
   aliases: readonly string[]
   /** The CLI that wrote the entry (`zm`, `drive`). One CLI may write several providers, so it is not an alias. */
   command?: string
@@ -34,9 +40,8 @@ export const PROVIDERS: readonly ProviderEntry[] = [
   { name: "obsidian", kind: "notes", aliases: [] },
   { name: "added", kind: "notes", aliases: [] },
   { name: "zoom", kind: "meetings", aliases: [] },
-  // A phone export's records envelope writes its SMS and its calls here, one account per source account.
-  { name: "sms", kind: "messages", aliases: [] },
-  { name: "calls", kind: "events", aliases: [] },
+  // A phone export's records: its SMS and its calls in the one account the import names.
+  { name: "phone", kind: "messages", kinds: ["messages", "events"], aliases: [] },
 ]
 
 const LABELS: Readonly<Record<string, string>> = {
@@ -49,7 +54,6 @@ const LABELS: Readonly<Record<string, string>> = {
   "google-drive": "Google Drive",
   added: "added by hand",
   email: "mail",
-  sms: "SMS",
 }
 
 /** How a text names a provider to a person: `MAX`, not `max`. */
@@ -123,32 +127,48 @@ const opensOf = (value: unknown, named: string): Partial<Record<RefKindName, str
 export const providerEntryOf = (value: unknown): ProviderEntry => {
   if (typeof value !== "object" || value === null || Array.isArray(value))
     return invalid("a provider entry is an object")
-  const { name, kind, aliases = [], command, opens } = value as Record<string, unknown>
+  const { name, kind, kinds, aliases = [], command, opens } = value as Record<string, unknown>
   const named = wordOf(name, "a provider's name")
-  if (typeof kind !== "string" || !(KINDS as readonly string[]).includes(kind))
-    invalid(`provider ${named}'s kind is one of ${KINDS.join(", ")} — not ${JSON.stringify(kind)}`)
+  const isKindWord = (one: unknown): one is Kind =>
+    typeof one === "string" && (KINDS as readonly string[]).includes(one)
+  const given = kinds === undefined ? [kind] : Array.isArray(kinds) && kinds.length > 0 ? kinds : [undefined]
+  for (const one of given)
+    if (!isKindWord(one)) invalid(`provider ${named}'s kind is one of ${KINDS.join(", ")} — not ${JSON.stringify(one)}`)
+  const list = [...new Set(given as Kind[])]
+  if (kind !== undefined && kind !== list[0]) invalid(`provider ${named}'s kind is the first of its kinds`)
   if (!Array.isArray(aliases)) invalid(`provider ${named}'s aliases are a list`)
   return {
     name: named,
-    kind: kind as Kind,
+    kind: list[0] as Kind,
+    ...(list.length > 1 ? { kinds: list } : {}),
     aliases: [...new Set((aliases as unknown[]).map((alias) => wordOf(alias, `an alias of ${named}`)))],
     ...(command === undefined ? {} : { command: wordOf(command, `the command of ${named}`) }),
     ...(opens === undefined ? {} : { opens: opensOf(opens, named) }),
   }
 }
 
-const describe = ({ name, kind, command }: ProviderEntry) => `${name} (${kind}${command ? `, from ${command}` : ""})`
+export const kindsOfEntry = (entry: Pick<ProviderEntry, "kind" | "kinds">): readonly Kind[] =>
+  entry.kinds ?? [entry.kind]
+
+const describe = (entry: ProviderEntry) =>
+  `${entry.name} (${kindsOfEntry(entry).join(", ")}${entry.command ? `, from ${entry.command}` : ""})`
+
+/** One list of kinds holding the other, both led by the same kind: an older build writes that first one only. */
+const widerKinds = (a: readonly Kind[], b: readonly Kind[]): readonly Kind[] | undefined =>
+  b.every((one) => a.includes(one)) ? a : a.every((one) => b.includes(one)) ? b : undefined
 
 const wordsOf = ({ name, aliases }: ProviderEntry) => [name, ...aliases]
 
 /** `entry` joined to `known`: the same name keeps one entry with both entries' aliases; a clash is an error. */
 const joined = (known: readonly ProviderEntry[], entry: ProviderEntry): ProviderEntry[] => {
   const same = known.find(({ name }) => name === entry.name)
-  if (same && same.kind !== entry.kind)
+  const kinds = same ? widerKinds(kindsOfEntry(same), kindsOfEntry(entry)) : kindsOfEntry(entry)
+  if (same && (kinds === undefined || same.kind !== entry.kind))
     invalid(`two provider entries disagree on the kind: ${describe(same)} and ${describe(entry)}`)
   const merged: ProviderEntry = same
     ? {
         ...same,
+        ...(kinds && kinds.length > 1 ? { kinds } : {}),
         aliases: [...new Set([...same.aliases, ...entry.aliases])],
         ...(entry.command ? { command: entry.command } : {}),
         ...(entry.opens ? { opens: { ...same.opens, ...entry.opens } } : {}),
@@ -209,6 +229,20 @@ export const providerNamed = (word: string): ProviderEntry | undefined => {
 /** The kind of a provider the registry knows; `undefined` for one no entry names, which a search skips. */
 export const kindIn = (provider: Provider): Kind | undefined =>
   isFolderProvider(provider) ? "notes" : registry.find(({ name }) => name === provider)?.kind
+
+/** Every kind a provider's accounts hold, its `kind` first; empty for one no entry names. */
+export const kindsIn = (provider: Provider): readonly Kind[] => {
+  if (isFolderProvider(provider)) return ["notes"]
+  const entry = registry.find(({ name }) => name === provider)
+  return entry ? kindsOfEntry(entry) : []
+}
+
+/** Whether a provider's accounts hold `kind`: what a search lane picks its accounts by. */
+export const holdsKind = (provider: Provider, kind: Kind): boolean => kindsIn(provider).includes(kind)
+
+/** `holdsKind`, with a provider no entry names counted as a messenger, as `kindOf` counts it. */
+export const holdsKindOf = (provider: Provider, kind: Kind): boolean =>
+  kindIn(provider) === undefined ? kind === "messages" : holdsKind(provider, kind)
 
 /** A provider the registry does not list counts as a messenger here; a search asks `kindIn` and skips it. */
 export const kindOf = (provider: Provider): Kind => kindIn(provider) ?? "messages"

@@ -1,6 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import type { Provider } from "../domain/models.js"
-import { isKind, kindOf, providerNamed } from "../domain/providers.js"
+import { holdsKindOf, isKind, providerNamed } from "../domain/providers.js"
 
 /** `personal` and `bots` split `all`: a bot's account is one whose provider ends in `-bot` (`isBotProvider`). */
 export type Source = Provider | "personal" | "bots" | "all"
@@ -15,7 +15,7 @@ export const inSource = (source: Source, provider: Provider): boolean =>
   (source === "personal" && !isBotProvider(provider)) ||
   source === provider ||
   providerNamed(source)?.name === provider ||
-  (isKind(source) && kindOf(provider) === source)
+  (isKind(source) && holdsKindOf(provider, source))
 
 const fail = (message: string): never => {
   throw new CliError("validation_error", message)
