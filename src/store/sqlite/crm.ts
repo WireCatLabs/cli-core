@@ -743,7 +743,7 @@ export const crmCopiesOver = (context: StoreContext, people: AccountPeople): Crm
             const sourceRole = textOf(company.sourceRole, 200)
             const metadata = {
               ...(position ? { position } : {}),
-              ...(sourceRole ? { source_role: sourceRole } : {}),
+              ...(sourceRole ? { source_role: [sourceRole] } : {}),
               ...(company.primary ? { primary: true } : {}),
             }
             return {

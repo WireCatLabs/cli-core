@@ -291,9 +291,16 @@ does for deals.
 relationship's unique key: one it newly reports is a `reported` link with the account (`confirmed = 0`,
 `account_id`), or a `relationship` proposal when the account's setting `crm.<provider>:<account>.links` is `review`
 (that setting governs new relationships only; links already stored stay usable); one it still reports is kept (no
-history row); one inside `scope` it no longer reports is withdrawn (`deleted_at`), never deleted. A link the owner
+history row, and no write when nothing changed); one inside `scope` it no longer reports is withdrawn (`deleted_at`),
+never deleted, and only by the writer that wrote it (`links.source`, the call's `source`), so a CRM sync and an
+import on one account never withdraw each other's links. A link the owner
 confirmed is never withdrawn and stays `confirmed`, and once confirmed the sync takes it as present. Another role on
-a pair is another relationship, never a conflict. The only case where the owner's word stops the source: the owner
+a pair is another relationship, never a conflict, except for a no-role link the owner confirmed or overrode whose
+`metadata.source_role` (one word or a list) names the reported role: that is the same relationship, and the owner's
+link stays the answer; either counts as `kept`. `metadata.source_role` is a list of the source's words (a row
+written as one word reads as a list), and a relationship answers it as `sourceRoles`. `onOutcome` hears each
+relationship once: `{ outcome, key, id }`. A link it writes carries the caller's `by.kind` as its author (`rule` when
+absent). The only case where the owner's word stops the source: the owner
 removed or rejected that very relationship, role included (every removal leaves a rejected `relationship`
 proposal); the answer counts those in `skippedOwnerRejected`. A ref the store does not hold is an issue in the
 answer, not an error.

@@ -257,10 +257,9 @@ export const thingRef = (database: CacheDatabase, type: unknown, id: unknown): s
   type == null || id == null ? null : (referenceOfThing(database, storedThing(type, id)) ?? null)
 
 export const linkOf = (database: CacheDatabase, row: Row): Link => {
-  const metadata =
-    row.metadata == null
-      ? {}
-      : (JSON.parse(String(row.metadata)) as { provenance?: string; position?: unknown; overrides?: unknown })
+  const metadata: Record<string, unknown> = row.metadata == null ? {} : JSON.parse(String(row.metadata))
+  // An older row holds one word; every reader gets a list.
+  const sourceRoles = [metadata.source_role].flat().filter((word): word is string => typeof word === "string")
   return {
     id: String(row.id),
     from: thingRef(database, row.from_type, row.from_id) as string,
@@ -272,7 +271,7 @@ export const linkOf = (database: CacheDatabase, row: Row): Link => {
     role: row.role == null ? null : String(row.role),
     purpose: row.purpose == null ? null : String(row.purpose),
     evidence: row.evidence == null ? null : String(row.evidence),
-    provenance: metadata.provenance ?? null,
+    provenance: typeof metadata.provenance === "string" ? metadata.provenance : null,
     confirmed: Number(row.confirmed) === 1,
     createdAt: iso(row.created_at),
     ...(row.account_id == null ? {} : { accountId: Number(row.account_id) }),
@@ -281,6 +280,7 @@ export const linkOf = (database: CacheDatabase, row: Row): Link => {
     ...(row.deleted_at == null ? {} : { deletedAt: Number(row.deleted_at) }),
     ...(typeof metadata.position === "string" ? { position: metadata.position } : {}),
     ...(typeof metadata.overrides === "number" ? { overrides: metadata.overrides } : {}),
+    ...(sourceRoles.length ? { sourceRoles } : {}),
   }
 }
 

@@ -28,6 +28,8 @@ export interface KnowledgeRelation {
   standing: Standing
   /** A job title beside the relationship, never its role. */
   position: string | null
+  /** The source's own words for it, off the role list (`metadata.source_role`), never its role. */
+  sourceRoles?: string[]
   /** When it held, as ISO times; `endsAt` exclusive; `null` when nobody said. */
   startsAt: string | null
   endsAt: string | null
@@ -64,6 +66,7 @@ export const relationOf = (link: Link, now: number): KnowledgeRelation => ({
   confidenceCategory: link.confirmed ? "owner-confirmed" : "weak",
   standing: standingOf(link, now),
   position: link.position ?? null,
+  ...(link.sourceRoles ? { sourceRoles: link.sourceRoles } : {}),
   startsAt: isoOf(link.startsAt),
   endsAt: isoOf(link.endsAt),
   createdAt: link.createdAt,

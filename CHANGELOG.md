@@ -5,6 +5,28 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Added
+
+- **`relations.syncReported` takes `onOutcome`**, called once per relationship with `{ outcome, key, id }`: `added`,
+  `kept`, `restored`, `withdrawn`, `proposed` or `skipped`, the relationship's key (`kind|from|to|role`) and the link
+  that answers for it (`null` when proposed or skipped). An import that reports in parts counts each one once per run.
+- **A relationship answers `sourceRoles`**: the source's own words for it off the role list
+  (`metadata.source_role`). The CRM sync stores them as a list. An older row that holds one word still reads as a list.
+
+### Fixed
+
+- **A relationship the owner confirmed counts as `kept` when a source reports it again.** It counted nowhere.
+- **A reported relationship no longer duplicates the owner's link for the role its source named.** When the owner
+  confirmed or overrode a no-role link whose `metadata.source_role` (one word or a list) holds a role, and a source
+  later reports that role on the same pair, `relations.syncReported` adds no second link: the owner's stays the answer.
+- **`relations.syncReported` withdraws only the links its own writer wrote**: those whose `links.source` is the
+  call's `source`. A CRM sync (`crm`) and an import on one account no longer withdraw each other's links.
+- **A role only withdrawn links hold can be removed.** `knowledge.removeRole` no longer counts them as uses.
+- **A link `relations.syncReported` writes carries the caller's author** (`by.kind`), not always `rule`, and a link
+  it still reports unchanged is not written again, so a sync no longer queues its people for involvement every page.
+
 ## 0.614.0 — 08.11.2026
 
 ### Added

@@ -55,12 +55,26 @@ export interface ReportedSync {
   issues: ReportedIssue[]
 }
 
+/** What a call did to one relationship. */
+export interface ReportedOutcome {
+  outcome: "added" | "kept" | "restored" | "withdrawn" | "proposed" | "skipped"
+  /** `kind|from|to|role`, by the stored ends (a partnership's lower id first): one per relationship. */
+  key: string
+  /** The link that answers for it, the owner's when the owner holds it; `null` when proposed or skipped. */
+  id: string | null
+}
+
 export interface ReportedOptions {
   /** `links.source` of a link it writes; `import` when absent. */
   source?: string
   /** Who proposes in `review` mode; the source's provider, as a rule, when absent. */
   by?: Exclude<Author, "owner">
+  /** Called once per relationship, so a caller that reports in parts counts each one once per run. */
+  onOutcome?: (outcome: ReportedOutcome) => void
 }
+
+const keyOf = (kind: unknown, fromType: unknown, fromId: unknown, toType: unknown, toId: unknown, role: unknown) =>
+  `${String(kind)}|${String(fromType)}:${String(fromId)}|${String(toType)}:${String(toId)}|${role == null ? "" : String(role)}`
 
 export interface RelationsStore {
   /**
@@ -94,7 +108,7 @@ export const syncReportedIn = (
   key: AccountKey,
   relationships: ReportedRelation[],
   scope: ReportedScope,
-  { source = "import", by = { bot: key.provider, kind: "rule" } }: ReportedOptions = {},
+  { source = "import", by = { bot: key.provider, kind: "rule" }, onOutcome }: ReportedOptions = {},
 ): ReportedSync => {
   const { database, now } = context
   const proposals = relationProposalsOver(context)
@@ -113,9 +127,8 @@ export const syncReportedIn = (
   const seen = new Set<number>()
   const issue = (relation: ReportedRelation, reason: ReportedIssue["reason"], message: string) =>
     result.issues.push({ reason, message, from: relation.from, to: relation.to, kind: relation.kind })
-  const sameKey =
-    `${KEYED} AND kind = ? AND from_type = ? AND from_id = ? AND to_type = ? AND to_id = ? ` +
-    "AND anchor IS NULL AND ifnull(role, '') = ?"
+  const samePair = `${KEYED} AND kind = ? AND from_type = ? AND from_id = ? AND to_type = ? AND to_id = ? AND anchor IS NULL`
+  const sameKey = `${samePair} AND ifnull(role, '') = ?`
 
   for (const relation of relationships) {
     let from = thingOf(database, relation.from)
@@ -137,11 +150,25 @@ export const syncReportedIn = (
     }
     if (isSymmetric(relation.kind) && to.id < from.id) [from, to] = [to, from]
     const wanted = [relation.kind, from.type, from.id, to.type, to.id, role ?? ""] as const
+    const linkKey = keyOf(relation.kind, from.type, from.id, to.type, to.id, role)
+    const counted = (outcome: ReportedOutcome["outcome"], id: unknown) => {
+      result[outcome === "skipped" ? "skippedOwnerRejected" : outcome] += 1
+      onOutcome?.({ outcome, key: linkKey, id: id == null ? null : String(id) })
+    }
     // The owner's link of the same role answers for the source too, and a confirmed one is never withdrawn.
-    if (database.prepare(`SELECT 1 FROM links WHERE ${sameKey} AND confirmed = 1 LIMIT 1`).get(...wanted)) continue
+    const owned: Row[] = database
+      .prepare(`SELECT id, role, metadata FROM links WHERE ${samePair} AND confirmed = 1`)
+      .all(...wanted.slice(0, 5))
+    const confirmed = owned.find((link) => (link.role ?? "") === (role ?? "")) ?? ownerTook(context, owned, role)
+    if (confirmed) {
+      // The overridden link is the source's own: still reported, so it is not withdrawn.
+      if (confirmed.reported != null) seen.add(Number(confirmed.reported))
+      counted("kept", confirmed.id)
+      continue
+    }
     const toRef = referenceOfThing(database, to) as string
     if (rejected(context, from, toRef, relation.kind, role)) {
-      result.skippedOwnerRejected += 1
+      counted("skipped", null)
       continue
     }
     const held = database.prepare(`SELECT * FROM links WHERE ${sameKey} AND account_id = ?`).get(...wanted, accountId)
@@ -150,13 +177,16 @@ export const syncReportedIn = (
     const metadata = metadataOf(relation)
     if (held) {
       seen.add(Number(held.id))
-      if (held.deleted_at != null) result.restored += 1
-      else result.kept += 1
-      database
-        .prepare(
-          "UPDATE links SET deleted_at = NULL, starts_at = ?, ends_at = ?, metadata = ?, updated_at = ? WHERE id = ?",
-        )
-        .run(startsAt, endsAt, metadata, at, Number(held.id))
+      counted(held.deleted_at != null ? "restored" : "kept", held.id)
+      const same =
+        held.deleted_at == null && held.starts_at === startsAt && held.ends_at === endsAt && held.metadata === metadata
+      // Any write to a link queues its ends for involvement again, so an unchanged one is left alone.
+      if (!same)
+        database
+          .prepare(
+            "UPDATE links SET deleted_at = NULL, starts_at = ?, ends_at = ?, metadata = ?, updated_at = ? WHERE id = ?",
+          )
+          .run(startsAt, endsAt, metadata, at, Number(held.id))
       continue
     }
     if (review) {
@@ -171,13 +201,13 @@ export const syncReportedIn = (
         },
         by,
       )
-      result.proposed += 1
+      counted("proposed", null)
       continue
     }
     const row = database
       .prepare(
         "INSERT INTO links (from_type, from_id, to_type, to_id, kind, role, source, metadata, confirmed, account_id, " +
-          "starts_at, ends_at, created_at, author, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, 'rule', ?) " +
+          "starts_at, ends_at, created_at, author, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?) " +
           "RETURNING id",
       )
       .get(
@@ -193,10 +223,11 @@ export const syncReportedIn = (
         startsAt,
         endsAt,
         at,
+        by.kind ?? "agent",
         at,
       )
     seen.add(Number(row?.id))
-    result.added += 1
+    counted("added", row?.id)
   }
 
   const withdraw = database.prepare("UPDATE links SET deleted_at = ?, updated_at = ? WHERE id = ?")
@@ -214,20 +245,45 @@ export const syncReportedIn = (
       end === "from"
         ? `((from_type = ? AND from_id = ?) OR (kind = ${linkKind("partner-of")} AND to_type = ? AND to_id = ?))`
         : `((to_type = ? AND to_id = ?) OR (kind = ${linkKind("partner-of")} AND from_type = ? AND from_id = ?))`
+    // Only the writer's own links: a CRM sync and an import on one account never withdraw each other's.
     const rows: Row[] = database
       .prepare(
-        `SELECT id FROM links WHERE account_id = ? AND confirmed = 0 AND deleted_at IS NULL AND kind IN (${kinds}) ` +
+        `SELECT id, kind, from_type, from_id, to_type, to_id, role FROM links WHERE account_id = ? AND source = ? AND confirmed = 0 AND deleted_at IS NULL AND kind IN (${kinds}) ` +
           `AND ${match}${roles ? ` AND ifnull(role, '') IN (${roles})` : ""}`,
       )
-      .all(accountId, thing.type, thing.id, thing.type, thing.id, ...(scope.roles ?? []))
+      .all(accountId, source, thing.type, thing.id, thing.type, thing.id, ...(scope.roles ?? []))
     for (const row of rows)
       if (!seen.has(Number(row.id))) {
         seen.add(Number(row.id))
         withdraw.run(at, at, Number(row.id))
         result.withdrawn += 1
+        const linkKey = keyOf(row.kind, row.from_type, row.from_id, row.to_type, row.to_id, row.role)
+        onOutcome?.({ outcome: "withdrawn", key: linkKey, id: String(row.id) })
       }
   }
   return result
+}
+
+const parsed = (metadata: unknown): Record<string, unknown> => (metadata == null ? {} : JSON.parse(String(metadata)))
+
+/**
+ * The owner confirmed, or overrode, the pair's no-role link whose source called it `role`: once the role is listed, the
+ * source reports it with that role, and it is the same relationship. `source_role` is one word or a list of them.
+ * The answer names the overridden link as `reported`, if that is how the owner took it.
+ */
+const ownerTook = ({ database }: StoreContext, owned: Row[], role: string | null): Row | undefined => {
+  if (role === null) return undefined
+  const named = (link: Row | undefined) =>
+    link?.role == null && [parsed(link?.metadata).source_role].flat().includes(role)
+  const bare = owned.find((link) => link.role == null && named(link))
+  if (bare) return bare
+  for (const link of owned) {
+    const overridden = parsed(link.metadata).overrides
+    if (typeof overridden !== "number") continue
+    const source = database.prepare("SELECT id, role, metadata FROM links WHERE id = ?").get(overridden)
+    if (named(source)) return { ...link, reported: source?.id }
+  }
+  return undefined
 }
 
 /** The owner rejected or removed exactly this relationship: its pair, kind and role, whoever reported it. */
