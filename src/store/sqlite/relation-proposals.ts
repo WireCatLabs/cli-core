@@ -1,5 +1,11 @@
 import { CliError } from "@wirecat/cli-base"
-import { type RelationKind, type Standing, standingOf } from "../../domain/relations.js"
+import {
+  checkEngagement,
+  type Engagement,
+  type RelationKind,
+  type Standing,
+  standingOf,
+} from "../../domain/relations.js"
 import { assertMayDecide, botKey, type Decider, deciderAuthor } from "../decisions.js"
 import { actorOfOrigin, botNamed, ownerPerson } from "./actors.js"
 import type { Author } from "./memories.js"
@@ -28,6 +34,10 @@ export interface KnowledgeRelation {
   standing: Standing
   /** A job title beside the relationship, never its role. */
   position: string | null
+  /** What the role means here, in the owner's words. */
+  roleNote: string | null
+  /** How much the owner deals with a person on a project himself; `null` is unknown. */
+  engagement: Engagement | null
   /** When it held, as ISO times; `endsAt` exclusive; `null` when nobody said. */
   startsAt: string | null
   endsAt: string | null
@@ -44,6 +54,8 @@ export interface RelateInput {
   confirmed?: boolean
   provenance?: string
   position?: string
+  roleNote?: string
+  engagement?: Engagement
   /** UTC ms; `endsAt` exclusive and after `startsAt`. */
   startsAt?: number
   endsAt?: number
@@ -64,6 +76,8 @@ export const relationOf = (link: Link, now: number): KnowledgeRelation => ({
   confidenceCategory: link.confirmed ? "owner-confirmed" : "weak",
   standing: standingOf(link, now),
   position: link.position ?? null,
+  roleNote: link.roleNote ?? null,
+  engagement: link.engagement ?? null,
   startsAt: isoOf(link.startsAt),
   endsAt: isoOf(link.endsAt),
   createdAt: link.createdAt,
@@ -106,14 +120,25 @@ export const relationProposalsOver = (context: StoreContext) => {
       )
   }
   /** The role lists may have changed since a proposal was made: a role is checked when it is written. */
-  const checkedRole = (link: Link, role: RelationUpdate["role"]) => {
-    if (typeof role !== "string") return
+  const checkedRole = (link: Link, { role, engagement }: RelationUpdate) => {
     const [fromType, , toType] = fromTo(link)
-    checkStoredRole(database, link.kind, fromType, toType, role)
+    if (typeof role === "string") checkStoredRole(database, link.kind, fromType, toType, role)
+    if (typeof engagement === "string") checkEngagement(link.kind, fromType, toType, engagement)
+  }
+  /** The link's metadata with the changed fields set or, when `null`, removed; `undefined` when none changed. */
+  const metadataOf = (link: Link, changes: RelationUpdate): string | undefined => {
+    const fields = METADATA_FIELDS.filter((field) => field in changes)
+    if (!fields.length) return
+    const row = database.prepare("SELECT metadata FROM links WHERE id = ?").get(Number(link.id))
+    const metadata = row?.metadata == null ? {} : (JSON.parse(String(row.metadata)) as Record<string, unknown>)
+    for (const field of fields)
+      if (changes[field] == null) delete metadata[field]
+      else metadata[field] = changes[field]
+    return JSON.stringify(metadata)
   }
   const applyUpdate = (link: Link, input: RelationUpdate): Link => {
     const changes = changesOf(input)
-    checkedRole(link, changes.role)
+    checkedRole(link, changes)
     if ("role" in changes) {
       const taken = database
         .prepare(
@@ -130,12 +155,12 @@ export const relationProposalsOver = (context: StoreContext) => {
     const startsAt = "startsAt" in changes ? (changes.startsAt ?? undefined) : link.startsAt
     const endsAt = "endsAt" in changes ? (changes.endsAt ?? undefined) : link.endsAt
     spanOf(startsAt, endsAt)
+    const metadata = metadataOf(link, changes)
     database
       .prepare(
         "UPDATE links SET role = CASE WHEN ? THEN ? ELSE role END, purpose = CASE WHEN ? THEN ? ELSE purpose END, " +
           "starts_at = CASE WHEN ? THEN ? ELSE starts_at END, ends_at = CASE WHEN ? THEN ? ELSE ends_at END, " +
-          "metadata = CASE WHEN ? THEN (CASE WHEN ? IS NULL THEN json_remove(coalesce(metadata, '{}'), '$.position') " +
-          "ELSE json_set(coalesce(metadata, '{}'), '$.position', ?) END) ELSE metadata END, updated_at = ? WHERE id = ?",
+          "metadata = CASE WHEN ? THEN ? ELSE metadata END, updated_at = ? WHERE id = ?",
       )
       .run(
         Number("role" in changes),
@@ -146,9 +171,8 @@ export const relationProposalsOver = (context: StoreContext) => {
         changes.startsAt ?? null,
         Number("endsAt" in changes),
         changes.endsAt ?? null,
-        Number("position" in changes),
-        changes.position ?? null,
-        changes.position ?? null,
+        Number(metadata !== undefined),
+        metadata ?? null,
         now(),
         Number(link.id),
       )
@@ -176,6 +200,8 @@ export const relationProposalsOver = (context: StoreContext) => {
     const metadata = JSON.stringify({
       overrides: Number(link.id),
       ...(link.position ? { position: link.position } : {}),
+      ...(link.roleNote ? { roleNote: link.roleNote } : {}),
+      ...(link.engagement ? { engagement: link.engagement } : {}),
     })
     // An owner link of that role on the pair already (from `relate`) becomes the override rather than a second one.
     const same = database
@@ -296,6 +322,8 @@ export const relationProposalsOver = (context: StoreContext) => {
         role?: string
         purpose?: string
         position?: string
+        roleNote?: string
+        engagement?: Engagement
         startsAt?: number
         endsAt?: number
         evidence?: string[]
@@ -331,6 +359,8 @@ export const relationProposalsOver = (context: StoreContext) => {
             ...(input.role === undefined ? {} : { role: input.role }),
             ...(input.purpose === undefined ? {} : { purpose: purposeOf(input.purpose) }),
             ...(input.position === undefined ? {} : { position: positionOf(input.position) }),
+            ...(input.roleNote === undefined ? {} : { roleNote: roleNoteOf(input.roleNote) }),
+            ...(input.engagement === undefined ? {} : { engagement: input.engagement }),
             ...(input.startsAt === undefined ? {} : { startsAt: input.startsAt }),
             ...(input.endsAt === undefined ? {} : { endsAt: input.endsAt }),
             evidence,
@@ -347,7 +377,7 @@ export const relationProposalsOver = (context: StoreContext) => {
 
     proposeUpdate: (link: Link, input: RelationUpdate & { reason?: string }, by: Exclude<Author, "owner">) => {
       const changes = changesOf(input)
-      checkedRole(link, changes.role)
+      checkedRole(link, changes)
       return write(database, () => {
         const from = thingOf(database, link.from)
         const held = database
@@ -372,6 +402,8 @@ export const relationProposalsOver = (context: StoreContext) => {
               role: link.role,
               purpose: link.purpose,
               position: link.position ?? null,
+              roleNote: link.roleNote ?? null,
+              engagement: link.engagement ?? null,
               startsAt: link.startsAt ?? null,
               endsAt: link.endsAt ?? null,
             },
@@ -428,6 +460,8 @@ export const relationProposalsOver = (context: StoreContext) => {
           role?: string
           purpose?: string
           position?: string
+          roleNote?: string
+          engagement?: Engagement
           startsAt?: number
           endsAt?: number
         }
@@ -435,6 +469,8 @@ export const relationProposalsOver = (context: StoreContext) => {
         const ends = key ? undefined : [thingOf(database, String(payload.from)), thingOf(database, String(payload.to))]
         if (ends?.[0] && ends[1] && payload.role !== undefined)
           checkStoredRole(database, payload.kind ?? "member-of", ends[0].type, ends[1].type, payload.role)
+        if (ends?.[0] && ends[1] && payload.engagement !== undefined)
+          checkEngagement(payload.kind ?? "member-of", ends[0].type, ends[1].type, payload.engagement)
         const link = insertLink(context, {
           from: String(key ? payload.ref : payload.from),
           to: String(key ? payload.project : payload.to),
@@ -442,6 +478,8 @@ export const relationProposalsOver = (context: StoreContext) => {
           ...(key ? { role: "key" } : payload.role === undefined ? {} : { role: payload.role }),
           ...(key || payload.purpose === undefined ? {} : { purpose: payload.purpose }),
           ...(key || payload.position === undefined ? {} : { position: payload.position }),
+          ...(key || payload.roleNote === undefined ? {} : { roleNote: payload.roleNote }),
+          ...(key || payload.engagement === undefined ? {} : { engagement: payload.engagement }),
           ...(key || payload.startsAt === undefined ? {} : { startsAt: payload.startsAt }),
           ...(key || payload.endsAt === undefined ? {} : { endsAt: payload.endsAt }),
           ...(proposal.reason === null ? {} : { evidence: proposal.reason }),
@@ -507,6 +545,8 @@ export interface RelationUpdate {
   role?: string | null
   purpose?: string | null
   position?: string | null
+  roleNote?: string | null
+  engagement?: Engagement | null
   startsAt?: number | null
   endsAt?: number | null
 }
@@ -522,6 +562,15 @@ export const spanOf = (startsAt: number | null | undefined, endsAt: number | nul
     throw new CliError("validation_error", "a relationship ends after it starts")
 }
 
+/** The relationship fields kept in `links.metadata`. */
+const METADATA_FIELDS = ["position", "roleNote", "engagement"] as const
+
+export const roleNoteOf = (note: string): string => {
+  const value = note.trim()
+  if (!value || value.length > 200) throw new CliError("validation_error", "a role note takes 1–200 characters")
+  return value
+}
+
 export const positionOf = (position: string): string => {
   const value = position.trim()
   if (!value || value.length > 200) throw new CliError("validation_error", "a position takes 1–200 characters")
@@ -534,11 +583,16 @@ const changesOf = (input: RelationUpdate): RelationUpdate => {
   if (input.role !== undefined) changes.role = input.role === null ? null : roleOf(input.role)
   if (input.purpose !== undefined) changes.purpose = input.purpose === null ? null : purposeOf(input.purpose)
   if (input.position !== undefined) changes.position = input.position === null ? null : positionOf(input.position)
+  if (input.roleNote !== undefined) changes.roleNote = input.roleNote === null ? null : roleNoteOf(input.roleNote)
+  if (input.engagement !== undefined) changes.engagement = input.engagement
   if (input.startsAt !== undefined)
     changes.startsAt = input.startsAt === null ? null : timeOf(input.startsAt, "a start")
   if (input.endsAt !== undefined) changes.endsAt = input.endsAt === null ? null : timeOf(input.endsAt, "an end")
   if (!Object.keys(changes).length)
-    throw new CliError("validation_error", "a relationship update sets a role, a purpose, a position or its dates")
+    throw new CliError(
+      "validation_error",
+      "a relationship update sets a role, a role note, an engagement level, a purpose, a position or its dates",
+    )
   return changes
 }
 

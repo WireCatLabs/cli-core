@@ -50,7 +50,12 @@ says which roles it takes:
 The owner may add his own roles to the organization, project and deal lists (`knowledge.addRole`, store setting
 `relationships.roles.<list>`); `knowledge.roles(list)` answers the built-in roles and his, each with `builtIn`. A
 built-in role stays, and an owner role a relationship still holds is not removed. A job title is never a role: it is `position` beside the relationship (`metadata.position`), with `startsAt` and
-`endsAt` (when it held, UTC ms, end exclusive). `endRelation` sets the end instead of removing the relationship; an
+`endsAt` (when it held, UTC ms, end exclusive). What a role means on this link, in the owner's words, is `roleNote`
+beside it (`metadata.roleNote`, up to 200 characters); store version 59 moved a person's free-text role on a project
+or an organization there and left the role unset (of two rows that would then share the relationship key, the
+oldest moved; none moved beside a row with no role). A person's `member-of` a project also takes `engagement`
+(`metadata.engagement`): `none`, `low`, `medium` or `high`, how much the owner deals with that person himself, not how
+active the person is; absent means unknown. `byEngagement` orders such links high, medium, unknown, low, none. `endRelation` sets the end instead of removing the relationship; an
 agent's end, like any agent's change, is a `relationship_update` proposal. Inverses are never stored.
 `listRelations(filter)` answers links and pending `relationship` proposals together, filtered and paged in one query
 (kind, role, standing, ends, `about` with direction and inverse, `at`, ended ones, account scope, denied kinds). Every relationship read carries a derived `standing`:

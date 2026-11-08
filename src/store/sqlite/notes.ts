@@ -11,7 +11,7 @@ import {
   notAdded,
 } from "../../domain/providers.js"
 import { parseReference } from "../../domain/references.js"
-import { isRelationKind, type RelationshipColumns } from "../../domain/relations.js"
+import { isEngagement, isRelationKind, type RelationshipColumns } from "../../domain/relations.js"
 import { normalizeTag } from "../../domain/tags.js"
 import type { Section } from "../../readers/types.js"
 import { assertMayWithdraw, type Decider } from "../decisions.js"
@@ -107,7 +107,7 @@ export interface LinkListFilter {
   confirmed?: boolean
 }
 
-export interface LinkInput extends Pick<RelationshipColumns, "position" | "startsAt" | "endsAt"> {
+export interface LinkInput extends Omit<RelationshipColumns, "accountId" | "deletedAt" | "overrides"> {
   from: string
   to?: string
   targetText?: string
@@ -257,10 +257,7 @@ export const thingRef = (database: CacheDatabase, type: unknown, id: unknown): s
   type == null || id == null ? null : (referenceOfThing(database, storedThing(type, id)) ?? null)
 
 export const linkOf = (database: CacheDatabase, row: Row): Link => {
-  const metadata =
-    row.metadata == null
-      ? {}
-      : (JSON.parse(String(row.metadata)) as { provenance?: string; position?: unknown; overrides?: unknown })
+  const metadata: Partial<Record<string, unknown>> = row.metadata == null ? {} : JSON.parse(String(row.metadata))
   return {
     id: String(row.id),
     from: thingRef(database, row.from_type, row.from_id) as string,
@@ -272,7 +269,7 @@ export const linkOf = (database: CacheDatabase, row: Row): Link => {
     role: row.role == null ? null : String(row.role),
     purpose: row.purpose == null ? null : String(row.purpose),
     evidence: row.evidence == null ? null : String(row.evidence),
-    provenance: metadata.provenance ?? null,
+    provenance: typeof metadata.provenance === "string" ? metadata.provenance : null,
     confirmed: Number(row.confirmed) === 1,
     createdAt: iso(row.created_at),
     ...(row.account_id == null ? {} : { accountId: Number(row.account_id) }),
@@ -280,6 +277,8 @@ export const linkOf = (database: CacheDatabase, row: Row): Link => {
     ...(row.ends_at == null ? {} : { endsAt: Number(row.ends_at) }),
     ...(row.deleted_at == null ? {} : { deletedAt: Number(row.deleted_at) }),
     ...(typeof metadata.position === "string" ? { position: metadata.position } : {}),
+    ...(typeof metadata.roleNote === "string" ? { roleNote: metadata.roleNote } : {}),
+    ...(isEngagement(metadata.engagement) ? { engagement: metadata.engagement } : {}),
     ...(typeof metadata.overrides === "number" ? { overrides: metadata.overrides } : {}),
   }
 }
@@ -387,7 +386,9 @@ export const insertLink = (context: StoreContext, input: LinkInput): Link => {
   const position = input.position === undefined ? undefined : textOf(input.position, "a position", 200)
   if (input.startsAt !== undefined && input.endsAt !== undefined && input.endsAt <= input.startsAt)
     throw new CliError("validation_error", "a relationship ends after it starts")
-  const metadata = provenance === undefined && position === undefined ? null : JSON.stringify({ provenance, position })
+  const roleNote = input.roleNote === undefined ? undefined : textOf(input.roleNote, "a role note", 200)
+  const fields = { provenance, position, roleNote, engagement: input.engagement }
+  const metadata = Object.values(fields).every((value) => value === undefined) ? null : JSON.stringify(fields)
   const row = database
     .prepare(
       "INSERT INTO links (from_type, from_id, to_type, to_id, kind, anchor, source, target_text, target_folded, role, evidence, " +

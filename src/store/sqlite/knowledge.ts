@@ -3,7 +3,7 @@ import { type QueryAst, walkQuery } from "@wirecat/cli-base/query"
 import { parseLocator } from "../../domain/locator.js"
 import { isBusinessType } from "../../domain/record-types.js"
 import { formatReference, parseReference, type Reference } from "../../domain/references.js"
-import { checkEnds, isSymmetric, notOverriddenSql } from "../../domain/relations.js"
+import { checkEnds, checkEngagement, isSymmetric, notOverriddenSql } from "../../domain/relations.js"
 import { normalizeTag } from "../../domain/tags.js"
 import { normalizeVocabularyName } from "../../domain/vocabulary.js"
 import { formatMeetingReference } from "../../meetings/index.js"
@@ -443,7 +443,7 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
   /** The two ends, checked by the registry, in stored order (a symmetric pair's lower id first), and their link. */
   const pair = (
     key: KnowledgeScope,
-    input: { from: string; to: string; kind: KnowledgeRelation["kind"]; role?: string | undefined },
+    input: { from: string; to: string; kind: KnowledgeRelation["kind"]; role?: string; engagement?: string },
   ) => {
     let from = related(key, input.from, true)
     let to = related(key, input.to)
@@ -451,6 +451,7 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
       throw new CliError("validation_error", "a relationship needs two distinct references")
     checkEnds(input.kind, from.type, to.type)
     if (input.role !== undefined) checkStoredRole(database, input.kind, from.type, to.type, input.role.trim())
+    if (input.engagement !== undefined) checkEngagement(input.kind, from.type, to.type, input.engagement)
     let ends = { from: input.from, to: input.to }
     if (isSymmetric(input.kind) && to.id < from.id) [from, to, ends] = [to, from, { from: input.to, to: input.from }]
     const role = input.role === undefined ? null : input.role.trim()

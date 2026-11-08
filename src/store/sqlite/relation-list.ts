@@ -1,5 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import {
+  type Engagement,
   inverseOf,
   notOverriddenSql,
   RELATION_KINDS,
@@ -173,6 +174,8 @@ export const relationListOver = (context: StoreContext): RelationList => {
       role?: string
       purpose?: string
       position?: string
+      roleNote?: string
+      engagement?: Engagement
       startsAt?: number
       endsAt?: number
     }
@@ -190,6 +193,8 @@ export const relationListOver = (context: StoreContext): RelationList => {
       confidenceCategory: "weak",
       standing: "proposed",
       position: payload.position ?? null,
+      roleNote: payload.roleNote ?? null,
+      engagement: payload.engagement ?? null,
       startsAt: iso(payload.startsAt),
       endsAt: iso(payload.endsAt),
       createdAt: action.createdAt,

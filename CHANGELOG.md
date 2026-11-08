@@ -5,6 +5,28 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Added
+
+- **A person's engagement on a project.** `engagement` on a person's `member-of` a project: `none`, `low`,
+  `medium` or `high`, how much the owner deals with that person himself, not how active the person is; absent means
+  unknown. `relate` and `updateRelation` take it (`null` clears it), an agent's change is a `relationship_update`
+  proposal as for a role, and every relationship read carries it. It is refused on any other relationship
+  (`relationship.engagement-ends`). `byEngagement` and `engagementRank` order links high, medium, unknown, low,
+  none; `ENGAGEMENT_LEVELS` lists the levels.
+- **A role note beside the role.** `roleNote`, up to 200 characters, says what the role means on this link in the
+  owner's words, while the role itself stays one of its list. `relate` and `updateRelation` take it; `null` clears it.
+
+### Fixed
+
+- **A free-text role from before the role lists no longer blocks an update.** Store version 59 moves a person's role
+  on a project or an organization that is not on its list (the built-in roles and the owner's own) into `roleNote`
+  and leaves the role unset, so a later update can set a listed role and no words are lost. The old role stays in
+  the relationship's history. Of two such rows of one relationship, the oldest moves; none moves beside a row of
+  the same relationship with no role. The change is additive: `minCompatible` stays 56, and an older build reads the
+  link with no role.
+
 ## 0.612.0 — 08.11.2026
 
 ### Changed — may break callers
