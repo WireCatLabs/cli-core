@@ -9,10 +9,11 @@ import {
 } from "../identity-links.js"
 import type { IdentityRef, LinkOptions } from "../types.js"
 import { ensurePerson } from "./identities.js"
+import { type LinkIndex, linkIndex, settleLinks, sidesOf } from "./identity-link-rows.js"
 import type { Author } from "./memories.js"
 import { currentPerson } from "./merged-persons.js"
 import type { StoreContext } from "./open.js"
-import { linkIdentityToPerson, mergePerson, move, recordOf, required } from "./person-links.js"
+import { linkIdentityToPerson, mergePerson, move, recordOf, required, survivorOf } from "./person-links.js"
 import { resolvePersonLinks } from "./person-resolution.js"
 import { identitySeparated, separated } from "./person-separation.js"
 import { type ProposedAction, proposalOperationsOver, proposerOfAction } from "./proposed-actions.js"
@@ -58,57 +59,11 @@ const personOfIdentity = ({ database }: StoreContext, pk: number): number | unde
   return row ? Number(row.person_id) : undefined
 }
 
-const sideOf = ({ database }: StoreContext, person: number): string =>
-  database
-    .prepare("SELECT identity_id FROM identity_links WHERE person_id = ? ORDER BY identity_id")
-    .all(person)
-    .map(({ identity_id }) => String(identity_id))
-    .join(",")
-
-const pairOf = (a: number | string, b: number | string): string =>
-  [Number(a), Number(b)].sort((x, y) => x - y).join("-")
-
-const pkOf = ({ database }: StoreContext, ref: string): number | undefined => {
-  const { provider, id } = parseIdentityRef(ref)
-  const row = database.prepare("SELECT id FROM identities WHERE provider = ? AND external_id = ?").get(provider, id)
-  return row ? Number(row.id) : undefined
-}
-
-/** The two people a stored proposal names now: merges since may have moved either side; a purge may have erased one. */
-const currentPair = (context: StoreContext, payload: IdentityLinkPayload): string | undefined => {
-  const identity = pkOf(context, payload.identity)
-  const other = payload.with === null ? undefined : pkOf(context, payload.with)
-  const from = identity === undefined ? undefined : personOfIdentity(context, identity)
-  const to =
-    payload.with === null
-      ? currentPerson(context.database, Number(payload.persons[1]))
-      : other === undefined
-        ? undefined
-        : personOfIdentity(context, other)
-  return from === undefined || to === undefined ? undefined : pairOf(from, to)
-}
-
-const knownProposals = (context: StoreContext) =>
-  context.database
-    .prepare("SELECT id, status, payload FROM proposed_actions WHERE kind = ? AND status IN ('proposed', 'rejected')")
-    .all(IDENTITY_LINK_KIND)
-    .map((row) => ({ id: String(row.id), status: String(row.status), payload: JSON.parse(String(row.payload)) }))
-
-/** The proposal the owner rejected for these two people, or else the one open for them. */
-export const knownPair = (context: StoreContext, a: number, b: number): { id: string; status: string } | undefined => {
-  const pair = pairOf(a, b)
-  const found = knownProposals(context).filter(({ payload }) => {
-    const named = payload as IdentityLinkPayload
-    return pairOf(...named.persons) === pair || currentPair(context, named) === pair
-  })
-  return found.find(({ status }) => status === "rejected") ?? found[0]
-}
-
 /**
  * Opens an `identity_link` proposal for two people, unless the owner separated them, rejected the pair before, or one
  * is already open for it: then it says which. At most one proposal is open per pair of people.
  */
-export const openIdentityLink = (context: StoreContext, opening: Opening): Opened =>
+export const openIdentityLink = (context: StoreContext, opening: Opening, index?: LinkIndex): Opened =>
   write(context.database, () => {
     const { from, to } = opening
     if (from === to) return { outcome: "skipped", reason: "identity.same" }
@@ -116,29 +71,28 @@ export const openIdentityLink = (context: StoreContext, opening: Opening): Opene
       opening.joins === "identity" ? identitySeparated(context, opening.identity, to) : separated(context, from, to)
     if (apart) return { outcome: "skipped", reason: "identity.separated" }
     const operations = proposalOperationsOver(context)
-    const known = knownPair(context, from, to)
+    const known = (index ?? linkIndex(context.database)).known(from, to)
     if (known?.status === "rejected") return { outcome: "skipped", reason: "identity.rejected" }
     if (known) return { outcome: "open", action: operations.get(known.id) }
     const payload: IdentityLinkPayload = {
       identity: refOf(context, opening.identity),
       with: opening.with === null ? null : refOf(context, opening.with),
       persons: [String(from), String(to)],
-      sides: [sideOf(context, from), sideOf(context, to)],
+      sides: sidesOf(context.database, from, to),
       joins: opening.joins,
       signal: opening.signal,
       score: opening.score ?? null,
       ...(opening.candidates && opening.candidates.length > 2 ? { candidates: opening.candidates.map(String) } : {}),
       evidence: opening.evidence ?? [],
     }
-    return {
-      outcome: "proposed",
-      action: operations.propose({
-        kind: IDENTITY_LINK_KIND,
-        by: opening.by,
-        payload,
-        ...(opening.reason?.trim() ? { reason: opening.reason.trim() } : {}),
-      }),
-    }
+    const action = operations.propose({
+      kind: IDENTITY_LINK_KIND,
+      by: opening.by,
+      payload,
+      ...(opening.reason?.trim() ? { reason: opening.reason.trim() } : {}),
+    })
+    index?.add({ id: action.id, status: "proposed", payload, pair: [from, to] })
+    return { outcome: "proposed", action }
   })
 
 const refusalOf = (reason: "identity.same" | "identity.separated" | "identity.rejected"): CliError =>
@@ -245,18 +199,23 @@ export const decideIdentityLink = (context: StoreContext, id: string, decision: 
     if (
       String(from) !== wasFrom ||
       String(to) !== wasTo ||
-      sideOf(context, from) !== payload.sides[0] ||
-      sideOf(context, to) !== payload.sides[1]
+      sidesOf(context.database, from, to).join("|") !== payload.sides.join("|")
     )
       throw new CliError("conflict", `the people ${id} names changed since it was proposed; propose it again`, {
         reason: "identity.stale",
       })
     const options = { method: CONFIRMED, by: "owner" }
+    const kept = payload.joins === "person" ? survivorOf(context, from, to) : to
+    // Approved first: the merge settles the proposals naming these people, and this one is decided, not moot.
+    const approved = operations.approve(id, { person: String(kept), ...noted }, author)
     if (payload.joins === "person") mergePerson(context, from, to, options)
-    else move(context, identity.pk, from, to, options)
+    else {
+      move(context, identity.pk, from, to, options)
+      settleLinks(context.database, [from, to])
+    }
     resolvePersonLinks(
       context.database,
-      recordOf(context, to).identities.flatMap(({ name, username }) => [name, username]),
+      recordOf(context, kept).identities.flatMap(({ name, username }) => [name, username]),
     )
-    return operations.approve(id, { person: String(to), ...noted }, author)
+    return approved
   })

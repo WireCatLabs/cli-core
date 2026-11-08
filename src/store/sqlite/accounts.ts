@@ -4,6 +4,7 @@ import type { AccountKey, StoredAccount } from "../types.js"
 import { and, asc, eq, inArray, sql } from "./drizzle/core.js"
 import { pointerPairs } from "./entity-types.js"
 import { forgetDanglingEvidence, forgetEvidenceTo } from "./evidence-signature.js"
+import { forgetErasedLinks } from "./identity-link-rows.js"
 import { mergeSql } from "./merged-persons.js"
 import type { StoreContext } from "./open.js"
 import {
@@ -275,6 +276,7 @@ export const dropOrphanPeople = (database: CacheDatabase, unseenBefore: Set<numb
   for (const table of ["identity_revisions", "identity_link_events", "identity_links"])
     database.prepare(`DELETE FROM ${table} WHERE identity_id IN (SELECT value FROM json_each(?))`).run(gone)
   database.prepare("DELETE FROM identities WHERE id IN (SELECT value FROM json_each(?))").run(gone)
+  forgetErasedLinks(database)
   database
     .prepare(
       `DELETE FROM persons WHERE id IN (SELECT value FROM json_each(?)) AND owner = 0

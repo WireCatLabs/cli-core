@@ -132,7 +132,7 @@ describe("a phone", () => {
     expect(scan.skipped).toMatchObject([{ signal: "same-phone", reason: "identity.separated" }])
   })
 
-  it("that three people share proposes each pair once, and a rejected pair stays rejected", async () => {
+  it("that three people share proposes each pair once, a later pass looks only at what changed, and a rejected pair stays rejected", async () => {
     const store = await open()
     await store.people.savePeople(PERSONAL, [
       { id: "5", name: "Ana", phone: "79001234567" },
@@ -148,7 +148,8 @@ describe("a phone", () => {
     const [rejected] = first.proposed
     await store.people.decideLink(rejected?.id as string, { confirm: false, by: "owner" })
 
-    const again = await store.people.scanMatches()
+    expect((await store.people.scanMatches()).proposed).toEqual([])
+    const again = await store.people.scanMatches({ full: true })
 
     expect(again.proposed.map(({ id, opened }) => ({ id, opened }))).toEqual(
       first.proposed.slice(1).map(({ id }) => ({ id, opened: false })),

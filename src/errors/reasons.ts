@@ -371,6 +371,7 @@ const OTHERS: Entry[] = [
   ["identity.rejected", "conflict", "the owner rejected linking these people; nothing proposes the pair again"],
   validation("identity.same", "the two identities are one person already"),
   validation("identity.shared-phone", "more than six people share the phone number, so it proposes no one"),
+  validation("identity.shared-email", "more than six people share the address, so it proposes no one"),
   validation("identity-link.dedicated-review", "an identity link is staged and decided through the people review"),
   ["transcription.no-key", "authentication_error", "no OpenAI key is set for transcription"],
   validation("transcription.too-large", "the audio is over the transcription provider's size limit"),
