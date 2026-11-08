@@ -94,7 +94,7 @@ describe("opt-in meeting-inclusive search", () => {
         messageResult(),
       ),
     ).toEqual(legacy)
-    expect(RESOURCES_SEARCHED).toEqual(["messages", "mail", "notes", "events", "crm"])
+    expect(RESOURCES_SEARCHED).toEqual(["messages", "mail", "notes", "events", "crm", "business"])
     expect(legacy.items[0]?.ref).toBe("msg:example/other-invented/7/1")
     expect(lookup).not.toHaveBeenCalled()
     expect(meetingSearch).not.toHaveBeenCalled()

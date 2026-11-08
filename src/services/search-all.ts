@@ -11,7 +11,7 @@ import type { MessengerTraits } from "../ports/traits.js"
 import { plainQuery } from "../search/lucene/plain.js"
 import { MESSAGE_PARSING, SEARCH_QUERY } from "../search/lucene/types.js"
 import { planQuestion, questionLookup } from "../search/question-plan.js"
-import type { AccountKey, MessageStore } from "../store/store.js"
+import type { AccountKey, BusinessKind, BusinessSource, MessageStore } from "../store/store.js"
 import { calendarAccounts, searchEvents } from "./events-search.js"
 import { excerpt } from "./excerpt.js"
 import type { FoundMessage, SearchFound, SearchQuery } from "./messages.js"
@@ -19,14 +19,15 @@ import { MAX_SEARCH_OFFSET, searchStore } from "./messages-archive-search.js"
 import { type MeaningLane, type MeaningSkipped, nearEligible } from "./messages-discovery.js"
 import type { SearchCoverage } from "./messages-search.js"
 import { notesScopeOf, RRF_K, searchNotes } from "./notes-search.js"
+import { BUSINESS_WORDS_ONLY, searchBusiness } from "./search-all-business.js"
 import type { Backend, ServerOptions, ServerSearched } from "./server-search.js"
 
-export const RESOURCES_SEARCHED = ["messages", "mail", "notes", "events", "crm"] as const
+export const RESOURCES_SEARCHED = ["messages", "mail", "notes", "events", "crm", "business"] as const
 export type SearchedResource = (typeof RESOURCES_SEARCHED)[number]
 
 export interface SearchAllItem {
-  kind: "message" | "mail" | "note" | "document" | "event" | "deal" | "lead"
-  /** `msg:…` for a message or a mail, `note:…` for a note, `event:…` for a calendar event, `deal:…`, `lead:…`. */
+  kind: "message" | "mail" | "note" | "document" | "event" | "deal" | "lead" | BusinessKind
+  /** `msg:…` for a message or a mail, `note:…`, `event:…`, `deal:…`, `lead:…`, or a business ref: `invoice:…`. */
   ref: string
   provider: string
   /** The account it was found in; a note's folder id, or `internal` for a note written in memo. */
@@ -47,6 +48,10 @@ export interface SearchAllItem {
   attachments?: HitFile[]
   /** Which search found it: words, meaning or both. */
   foundBy: ("title" | "words" | "meaning")[]
+  /** A business hit's: whether the owner confirmed it, or it waits for him. */
+  review?: "proposed" | "confirmed"
+  /** A business hit's source record, when an import made it. */
+  sourceRecord?: BusinessSource
 }
 
 /** One account a search read, by the kind it was read for: the shape memo's `search all` answers too. */
@@ -152,7 +157,10 @@ const filtersBeside = (text: string): string | undefined => {
  * What a deal or a lead is found by: words or phrases of its title, all of them, or any with OR. Anything else is
  * refused, so `search all` skips deals with the reason instead of matching a field they do not have.
  */
-export const titleWords = (text: string): { words: string[]; anyWord: boolean } => {
+export const titleWords = (
+  text: string,
+  refused = "deals and leads are found by the words of their title only",
+): { words: string[]; anyWord: boolean } => {
   const { root } = parseLucene(text, SEARCH_QUERY)
   const clauses = root.kind === "boolean" ? root.clauses : [{ node: root, occur: "must" as const }]
   const words = clauses.map(({ node, occur }) =>
@@ -163,7 +171,7 @@ export const titleWords = (text: string): { words: string[]; anyWord: boolean } 
       ? // A title holds "invoice", not the question mark of "invoice?".
         node.value.replace(/\?+$/u, "") || node.value
       : (() => {
-          throw new CliError("validation_error", "deals and leads are found by the words of their title only")
+          throw new CliError("validation_error", refused)
         })(),
   )
   return { words, anyWord: clauses.length > 1 && clauses.every(({ occur }) => occur === "should") }
@@ -174,7 +182,7 @@ export const crmAccounts = async (store: MessageStore): Promise<AccountKey[]> =>
   (await store.accounts.accounts()).filter(({ provider }) => holdsKind(provider, "crm"))
 
 /**
- * `search all`: messages, mail, notes, calendar events and CRM deals and leads from the local store — messages also from the messenger's
+ * `search all`: messages, mail, notes, calendar events, CRM deals and leads, and business data from the local store — messages also from the messenger's
  * server, as `search messages` asks it — each list best first, merged by reciprocal rank so no
  * resource's own scores have to be compared with another's. Events are read only when the store holds a calendar.
  */
@@ -401,6 +409,17 @@ export const searchAll = async (
           )
           const read = chosen ?? [...(await crmAccounts(store)), { provider: "crm", account: INTERNAL_NOTES }]
           for (const { provider, account } of read) accounts.push({ resource, provider, account })
+        } else if (resource === "business") {
+          const { words, anyWord } = titleWords(request.text, BUSINESS_WORDS_ONLY)
+          const found = await searchBusiness(store, {
+            words,
+            anyWord: anyWord || discover,
+            window,
+            accounts: request.scope?.business,
+          })
+          hasMore ||= found.hasMore
+          lists.push(found.items)
+          for (const { provider, account } of found.read) accounts.push({ resource, provider, account })
         } else lists.push(await messagesOf(resource))
         searched.push(resource)
       } catch (error) {
