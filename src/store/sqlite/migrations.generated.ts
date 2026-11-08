@@ -1208,5 +1208,13 @@ export const GENERATED: { name: string; statements: string[] }[] = [
       "CREATE TRIGGER enrichments_note_gone AFTER DELETE ON notes BEGIN\n  DELETE FROM enrichments WHERE subject_type = 'note' AND subject_id = OLD.id;\nEND;",
       "CREATE TRIGGER enrichments_email_gone AFTER DELETE ON emails BEGIN\n  DELETE FROM enrichments WHERE subject_type = 'email' AND subject_id = OLD.id;\n  DELETE FROM chunks WHERE chunkable_type = 'email_enrichment' AND chunkable_id = OLD.id;\nEND;"
     ]
+  },
+  {
+    "name": "20261108164557_version-60-templates",
+    "statements": [
+      "CREATE TABLE `templates` (\n\t`key` text NOT NULL,\n\t`channel` text NOT NULL,\n\t`language` text NOT NULL,\n\t`body` text NOT NULL,\n\t`updated_at` integer NOT NULL,\n\t`updated_by` text NOT NULL,\n\tCONSTRAINT `templates_pk` PRIMARY KEY(`key`, `channel`, `language`)\n);",
+      "CREATE TABLE `templates_history` (\n\t`id` integer PRIMARY KEY,\n\t`key` text NOT NULL,\n\t`channel` text NOT NULL,\n\t`language` text NOT NULL,\n\t`body` text NOT NULL,\n\t`saved_at` integer NOT NULL,\n\t`saved_by` text NOT NULL,\n\t`replaced_at` integer NOT NULL\n);",
+      "CREATE INDEX `templates_history_by_key_channel_language_id` ON `templates_history` (`key`,`channel`,`language`,`id`);"
+    ]
   }
 ]

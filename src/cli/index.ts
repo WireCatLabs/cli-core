@@ -612,6 +612,7 @@ export {
   tagsCommand,
   tasksCommand,
   tasksStatsCommand,
+  templatesCommand,
   topicsCommand,
   unpinCommand,
   upgradeCommand,
@@ -637,4 +638,5 @@ export {
   storeRecoveryRun,
 } from "./store-recover.js"
 export { changeStoreSetting, isStoreSetting, STORE_SETTINGS, storeSettings } from "./store-settings.js"
+export type { TemplatesOptions } from "./templates-command.js"
 export { restartServers, type UpgradeContext } from "./upgrade-command.js"

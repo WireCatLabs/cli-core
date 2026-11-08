@@ -397,6 +397,7 @@ export type { TaskRelation, TaskRelationKind, TaskRelationsStore } from "./sqlit
 export { TASK_RELATION_KINDS } from "./sqlite/task-relations.js"
 export type { TaskStatRow, TaskStatScope } from "./sqlite/task-stats.js"
 export type { StoreTaskStore } from "./sqlite/tasks.js"
+export type { StoredTemplate, TemplateAddress, TemplateHistoryEntry, TemplateStore } from "./sqlite/templates.js"
 export type {
   TagPreflight,
   VocabularyAlias,
