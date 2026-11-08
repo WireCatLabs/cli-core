@@ -39,7 +39,7 @@ const digest = (sections: unknown[] = SECTIONS, extra: Record<string, unknown> =
       ],
       counts: { chats: 31, mail: 12, tasks: 17, meetings: 0 },
     },
-    tasks: { overdue: 5, today: 3, tomorrow: 2, new: 4, new_since: "2026-11-05T08:30:00+03:00" },
+    tasks: { overdue: 5, today: 3, tomorrow: 2, new: 4, new_since: "2026-11-05T08:30:00+03:00", undated: 91 },
     internal: { gaps: [{ ref: "msg:email/9", what: "не проверено", section: "owed" }], notes: "секрет" },
     ...extra,
   })
@@ -174,11 +174,28 @@ describe("links, task groups, sync health and the footer", () => {
       "tasks",
       "tasks",
       "tasks",
+      "tasks",
       "proposal",
       "sync",
     ])
     expect(hrefs.every((href) => href.startsWith("https://wirecat.dev/o#/v1/"))).toBe(true)
     expect(templateTags).toBe(0)
+  })
+
+  it("opens where an item happened before who it is about, and the person or project when that is all it has", () => {
+    const items = [
+      { type: "task", who: "Анна", topic: "Счёт", refs: ["person:77", "project:ACME", "msg:max/1001/-2002/3003"] },
+      { type: "task", who: "Пётр", topic: "Встреча", refs: ["person:78"] },
+      { type: "task", who: "Ирина", topic: "Сайт", refs: ["project:ACME site"] },
+    ]
+    const urls = viewOf(digest([{ kind: "today", items }]))
+      .sections.flatMap((section) => section.items)
+      .map((item) => item.links[0]?.url)
+    expect(urls).toEqual([
+      "https://wirecat.dev/o#/v1/msg/max/1001/-2002/3003",
+      "https://wirecat.dev/o#/v1/person/78",
+      "https://wirecat.dev/o#/v1/project/ACME%20site",
+    ])
   })
 
   it("writes the group links, the account's sync problem and what was viewed", async () => {
@@ -187,6 +204,7 @@ describe("links, task groups, sync health and the footer", () => {
       "Все просроченные (5) https://wirecat.dev/o#/v1/tasks/overdue · на сегодня (3) https://wirecat.dev/o#/v1/tasks/today",
     )
     expect(text).toContain("новые (4) https://wirecat.dev/o#/v1/tasks/new/2026-11-05T08%3A30%3A00%2B03%3A00")
+    expect(text).toContain("\nбез срока: 91 · открыть https://wirecat.dev/o#/v1/tasks/undated")
     expect(text).toContain(
       "🛠 Telegram (@ownerdemo): синхронизация падает с 4 ноября · https://wirecat.dev/o#/v1/sync/telegram/1001",
     )
@@ -194,6 +212,14 @@ describe("links, task groups, sync health and the footer", () => {
     expect(text.split("\n").at(-1)).toBe(
       "Просмотрено за 24 ч: Telegram, MAX, WhatsApp, почта (4 ящика) · 31 чат, 12 писем, 17 задач",
     )
+  })
+
+  it("leaves out the no-due-date line when the report has none", async () => {
+    const tasks = { overdue: 1, today: 0, tomorrow: 0, new: 0, new_since: null }
+    for (const undated of [0, undefined]) {
+      const { text } = await renderReport(viewOf(digest(SECTIONS, { tasks: { ...tasks, undated } })), "text")
+      expect(text).not.toContain("без срока")
+    }
   })
 
   it("shows a task with no due date with no deadline phrase, its person on the first line", async () => {
@@ -311,7 +337,7 @@ describe("the platform rules", () => {
     const broken = await renderReport(view, "telegram", { template: "{{ sections[0].nothing_here }}" })
     expect(broken.templateFailed).toBe(true)
     expect(broken.text).toBe((await renderReport(view, "telegram")).text)
-    const prepared = await prepareReport(digest(), { ...options, templates: { telegram: "{% if %}" } })
+    const prepared = await prepareReport(digest(), { ...options, templates: async () => ({ telegram: "{% if %}" }) })
     expect(prepared?.run.reasons).toEqual(["report.template-failed"])
     expect(prepared?.text).toBe((await renderReport(view, "text")).text)
   })

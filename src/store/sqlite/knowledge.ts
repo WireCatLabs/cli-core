@@ -3,7 +3,7 @@ import { type QueryAst, walkQuery } from "@wirecat/cli-base/query"
 import { parseLocator } from "../../domain/locator.js"
 import { isBusinessType } from "../../domain/record-types.js"
 import { formatReference, parseReference, type Reference } from "../../domain/references.js"
-import { checkEnds, isSymmetric, notOverriddenSql } from "../../domain/relations.js"
+import { checkEnds, checkEngagement, isSymmetric, notOverriddenSql } from "../../domain/relations.js"
 import { normalizeTag } from "../../domain/tags.js"
 import { normalizeVocabularyName } from "../../domain/vocabulary.js"
 import { formatMeetingReference } from "../../meetings/index.js"
@@ -18,6 +18,7 @@ import { LABELLED, type LabelledType } from "./labelled.js"
 import { linkKind, RELATION_KINDS } from "./link-kinds.js"
 import { type MeetingProjectsStore, meetingProjectsStoreOver } from "./meeting-projects.js"
 import type { Author } from "./memories.js"
+import { idsOf } from "./merged-persons.js"
 import { holdingText } from "./note-index.js"
 import { insertLink, type Link, linkOf } from "./notes.js"
 import type { StoreContext } from "./open.js"
@@ -281,6 +282,8 @@ const DEALS = ["deal", "lead"]
 
 export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
   const { database, now } = context
+  const ids = (thing: { type: string; id: number } | undefined) =>
+    thing ? idsOf(database, thing.type, thing.id) : null
   const account = (key: AccountKey) => {
     const row = database
       .prepare("SELECT id FROM accounts WHERE provider=? AND external_id=?")
@@ -443,7 +446,7 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
   /** The two ends, checked by the registry, in stored order (a symmetric pair's lower id first), and their link. */
   const pair = (
     key: KnowledgeScope,
-    input: { from: string; to: string; kind: KnowledgeRelation["kind"]; role?: string | undefined },
+    input: { from: string; to: string; kind: KnowledgeRelation["kind"]; role?: string; engagement?: string },
   ) => {
     let from = related(key, input.from, true)
     let to = related(key, input.to)
@@ -451,6 +454,7 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
       throw new CliError("validation_error", "a relationship needs two distinct references")
     checkEnds(input.kind, from.type, to.type)
     if (input.role !== undefined) checkStoredRole(database, input.kind, from.type, to.type, input.role.trim())
+    if (input.engagement !== undefined) checkEngagement(input.kind, from.type, to.type, input.engagement)
     let ends = { from: input.from, to: input.to }
     if (isSymmetric(input.kind) && to.id < from.id) [from, to, ends] = [to, from, { from: input.to, to: input.from }]
     const role = input.role === undefined ? null : input.role.trim()
@@ -571,10 +575,10 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
       const text = options.search === undefined ? undefined : holdingText("note", "id", options.search)
       const rows = database
         .prepare(
-          "SELECT * FROM notes WHERE deleted_at IS NULL AND (? IS NULL OR (notable_type = ? AND notable_id = ?)) " +
+          "SELECT * FROM notes WHERE deleted_at IS NULL AND (? IS NULL OR (notable_type = ? AND notable_id IN (SELECT value FROM json_each(?)))) " +
             `${text ? `AND ${text.sql} ` : ""}ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`,
         )
-        .all(thing?.type ?? null, thing?.type ?? null, thing?.id ?? null, ...(text?.params ?? []), limit + 1, offset)
+        .all(thing?.type ?? null, thing?.type ?? null, ids(thing), ...(text?.params ?? []), limit + 1, offset)
       const items = rows.slice(0, limit).flatMap((row) => annotationOf(row) ?? [])
       return { items, hasMore: rows.length > limit }
     },
@@ -786,9 +790,9 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
       return database
         .prepare(
           // Live ones first: a long history of withdrawn links never pushes them past the cap.
-          `${RELATIONS} AND ${notOverriddenSql("links")} AND (? IS NULL OR (from_type=? AND from_id=?) OR (to_type=? AND to_id=?)) ORDER BY deleted_at IS NOT NULL, created_at, id LIMIT 500`,
+          `${RELATIONS} AND ${notOverriddenSql("links")} AND (? IS NULL OR (from_type=? AND from_id IN (SELECT value FROM json_each(?))) OR (to_type=? AND to_id IN (SELECT value FROM json_each(?)))) ORDER BY deleted_at IS NOT NULL, created_at, id LIMIT 500`,
         )
-        .all(thing?.type ?? null, thing?.type ?? null, thing?.id ?? null, thing?.type ?? null, thing?.id ?? null)
+        .all(thing?.type ?? null, thing?.type ?? null, ids(thing), thing?.type ?? null, ids(thing))
         .map((row) => relationOf(linkOf(database, row)))
     },
     removeRelation: async (key, id, by) => {

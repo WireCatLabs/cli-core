@@ -174,6 +174,8 @@ export interface Messenger extends ServiceMessenger {
    * signed in; `account list` and the profile errors say so too. Unset: every profile counts as signed in.
    */
   profileState?: (profile: string, env: NodeJS.ProcessEnv) => ProfileState
+  /** Opts in to `account remove`: what signing out and forgetting a profile means for this messenger. */
+  accountRemoval?: import("../account-remove.js").AccountRemoval
   /** The help for a `<chat>` argument, in this messenger's words. */
   chatArgument: string
   /** The chat purposes `projects evidence` and `projects status` know; core's built-in ones when unset. */

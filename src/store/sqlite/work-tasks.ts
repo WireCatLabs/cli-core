@@ -19,6 +19,7 @@ import type { CacheDatabase, SqlValue } from "../driver.js"
 import type { Actor } from "./actors.js"
 import { folded } from "./folded.js"
 import { type Author, authorActor } from "./memories.js"
+import { idsOf } from "./merged-persons.js"
 import { CORPORA, drainCorpus } from "./note-index.js"
 import { requiredThing } from "./notes.js"
 import type { StoreContext } from "./open.js"
@@ -29,7 +30,9 @@ import {
   boardOrder,
   type DueGroup,
   dueGroups,
+  mergedAssignees,
   projectTaskColumns,
+  TASK_PEOPLE,
   type TaskSort,
   withoutField,
 } from "./task-board.js"
@@ -423,7 +426,7 @@ export const workTaskOperationsOver = (context: StoreContext): WorkTaskOperation
     database.prepare("UPDATE tasks SET updated_at = ? WHERE id = ?").run(at, task)
   const boardWhere = (query: QueryAst | undefined, zone: string | undefined, at: number): Where => {
     if (query === undefined) return { sql: BOARD_SCOPE, params: [] }
-    const where = queryFilter(query, projectTaskColumns(at, timezoneOf(zone)), {
+    const where = queryFilter(query, projectTaskColumns(at, timezoneOf(zone), database), {
       command: "tasks list",
       now: at,
       ...(zone ? { zone } : {}),
@@ -745,9 +748,10 @@ export const workTaskOperationsOver = (context: StoreContext): WorkTaskOperation
         const person = personOf(to)
         const held = database
           .prepare(
-            "SELECT 1 FROM task_assignments WHERE task_id = ? AND assignee_type = 'person' AND assignee_id = ? AND role = ?",
+            "SELECT 1 FROM task_assignments WHERE task_id = ? AND assignee_type = 'person' " +
+              "AND assignee_id IN (SELECT value FROM json_each(?)) AND role = ?",
           )
-          .get(task, person, role)
+          .get(task, idsOf(database, "person", person), role)
         if (held) return
         const at = now()
         database
@@ -964,13 +968,8 @@ export const workTaskOperationsOver = (context: StoreContext): WorkTaskOperation
     },
     taskPeople: async ({ limit = 500 } = {}) =>
       database
-        .prepare(
-          "SELECT p.id, p.name, p.owner, count(DISTINCT t.id) AS n FROM persons p " +
-            "LEFT JOIN task_assignments a ON a.assignee_type = 'person' AND a.assignee_id = p.id " +
-            "LEFT JOIN tasks t ON t.id = a.task_id AND t.deleted_at IS NULL " +
-            "GROUP BY p.id ORDER BY p.owner DESC, n DESC, p.name IS NULL, p.name COLLATE NOCASE, p.id LIMIT ?",
-        )
-        .all(Math.min(Math.max(limit, 1), 5000))
+        .prepare(`${TASK_PEOPLE}`)
+        .all(mergedAssignees(database), Math.min(Math.max(limit, 1), 5000))
         .map((row) => ({
           person: `person:${row.id}`,
           name: row.name == null ? null : String(row.name),

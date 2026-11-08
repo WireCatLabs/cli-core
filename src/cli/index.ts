@@ -1,5 +1,13 @@
 export { AI_ENTRIES, AI_SETTING_KEYS, type AISettings, resolveAISettings } from "../analysis/settings.js"
-export { AGENT_INPUT_MAX_CHARS, type AgentCli, type AgentInput } from "../background/schedules.js"
+export {
+  AGENT_INPUT_MAX_CHARS,
+  type AgentCli,
+  type AgentInput,
+  readSchedule,
+  SCHEDULE_DEFAULTS,
+  scheduleFile,
+  spentToday,
+} from "../background/schedules.js"
 export { parseDuration } from "../domain/duration.js"
 export {
   openOf,
@@ -159,6 +167,14 @@ export {
   type SignInStepsOptions,
   signInSteps,
 } from "../terminal/sign-in-steps.js"
+export {
+  type AccountRemoval,
+  type AccountRemovalContext,
+  type AccountRemoveOptions,
+  type AccountSecrets,
+  accountRemoveCommand,
+  type SignedOut,
+} from "./account-remove.js"
 export { liftOptionsAfterDashes } from "./after-dashes.js"
 export {
   type AgentPolicy,
@@ -472,6 +488,7 @@ export {
 export { SEARCHES_QUERY } from "./messenger/searches-command.js"
 export { servingProfiles } from "./messenger/serve-command.js"
 export { DAY_MS, FIRST_FETCH_MS, type MemberFetches, memberFetches } from "./messenger/serve-members.js"
+export { OUTDATED_CHECK_MS, outdatedReason, ownPackageRoot, watchOutdated } from "./messenger/serve-outdated.js"
 export { STEMS_EVERY_MS, STEMS_SLICE_MS, type StemFills, stemFills } from "./messenger/serve-stems.js"
 export type { Running, ServerOptions, ServerProcess, ServerSystem } from "./messenger/server-command.js"
 export { storeSummary } from "./messenger/store-maintenance-command.js"
@@ -524,6 +541,7 @@ export {
 export { STATUS_ROWS, STATUS_SIGNAL_ROWS } from "./project-status-rows.js"
 export { fieldsOf, projectFields } from "./result-fields.js"
 export {
+  backfillScheduleRun,
   SCHEDULE_SETTINGS,
   type ScheduleHost,
   type ScheduleLimits,
@@ -612,6 +630,7 @@ export {
   tagsCommand,
   tasksCommand,
   tasksStatsCommand,
+  templatesCommand,
   topicsCommand,
   unpinCommand,
   upgradeCommand,
@@ -637,4 +656,5 @@ export {
   storeRecoveryRun,
 } from "./store-recover.js"
 export { changeStoreSetting, isStoreSetting, STORE_SETTINGS, storeSettings } from "./store-settings.js"
+export type { TemplatesOptions } from "./templates-command.js"
 export { restartServers, type UpgradeContext } from "./upgrade-command.js"

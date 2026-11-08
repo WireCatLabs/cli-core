@@ -50,7 +50,10 @@ says which roles it takes:
 The owner may add his own roles to the organization, project and deal lists (`knowledge.addRole`, store setting
 `relationships.roles.<list>`); `knowledge.roles(list)` answers the built-in roles and his, each with `builtIn`. A
 built-in role stays, and an owner role a relationship still holds is not removed. A job title is never a role: it is `position` beside the relationship (`metadata.position`), with `startsAt` and
-`endsAt` (when it held, UTC ms, end exclusive). `endRelation` sets the end instead of removing the relationship; an
+`endsAt` (when it held, UTC ms, end exclusive). What a role means on this link, in the owner's words, is `roleNote`
+beside it (`metadata.roleNote`, up to 200 characters). A person's `member-of` a project also takes `engagement`
+(`metadata.engagement`): `none`, `low`, `medium` or `high`, how much the owner deals with that person himself, not how
+active the person is; absent means unknown. `byEngagement` orders such links high, medium, unknown, low, none. `endRelation` sets the end instead of removing the relationship; an
 agent's end, like any agent's change, is a `relationship_update` proposal. Inverses are never stored.
 `listRelations(filter)` answers links and pending `relationship` proposals together, filtered and paged in one query
 (kind, role, standing, ends, `about` with direction and inverse, `at`, ended ones, account scope, denied kinds). Every relationship read carries a derived `standing`:
@@ -152,7 +155,12 @@ by default), going on from where the last run stopped (`source-check.cursor` in 
 the end. A run reads at most `20 × limit` link ids, so on a store with few evidence links among many others it
 checks fewer and moves the cursor on. For a memory or fact that still holds (a proposed or confirmed memory, a proposed or accepted fact) it
 compares each link's stored signature (see above) with the source's signature now; for one that no longer holds it
-closes the open review. It answers `{ checked, baselined, raised, refreshed, closed }`. Status never changes here, and
+closes the open review. It answers `{ checked, baselined, raised, refreshed, closed, changedRefs }`: `changedRefs`
+names the sources found changed in this run, raised or signed anew, that no open `evidence_findings` batch cites,
+leaving out deleted sources and cited memories or facts, for an agent to read again for new facts. A change is
+reported there once, by the run that sees it; `knowledge.changedSources({ since })` reads it again later: the links a
+check re-signed since then (`checked_at`) whose version is no longer the one cited, with the same exclusions, so a
+change the timer's check took still reaches an agent. Status never changes here, and
 a link whose source did not change is not written.
 
 | Case | Signal | Result |
@@ -173,10 +181,12 @@ a later change folds into its payload, and its `raisedAt` (the time the registry
 cause grows graver, in the order `changed`, `outdated`, `deleted`, `contradicted`. The payload names each source's
 link, reference, cause and the version cited (`citedRev`), each challenge's evidence, reason and author, and the
 `suggestions` offered with a challenge (an author and the author's own text). It never holds source text: a reader
-takes the text then and now through `sourceTextAt`. When a source is erased (deleted for good, a message
+takes the text then and now through `knowledge.sourceReviewTexts(id)`: per source its
+link, reference, the quote, the text as cited (where the store keeps history: notes, documents, messages) and now. When a source is erased (deleted for good, a message
 tombstoned, an account or chat purged), every review that names it, open or closed, loses that reference and the
 words of each challenge and suggestion that cited it (`[source erased]`), in the same write. Memory and fact
-reads carry `sourceReview: { id, cause } | null` from the open one.
+reads carry `sourceReview: { id, cause } | null` from the open one, and the `memory` and `fact` entities
+`source_review`.
 
 It is the owner's alone, whatever `agent_decisions` says, and no generic action path decides it
 (`source-review.dedicated-review`). `knowledge.decideSourceReview` or the registry: confirm says it still holds and

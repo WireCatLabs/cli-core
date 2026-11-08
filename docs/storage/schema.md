@@ -5,7 +5,7 @@ Every table of the shared store (tg, max, memo, zm) as its migrations create it.
 `drizzle/` must agree with it. `pnpm schema:check` fails when they do not, and `src/store/sqlite/schema.test.ts`
 checks every table and column of a new store against this page.
 
-132 tables, 25 full-text indexes.
+134 tables, 25 full-text indexes.
 
 ## Conventions
 
@@ -162,7 +162,7 @@ A real person, whatever accounts they write from: their identities point here. `
 |---|---|---|---|---|
 | `identity_id` | integer | PK | → `identities.id` |  |
 | `person_id` | integer | not null | → `persons.id` | the `person` it belongs to |
-| `method` | text | not null |  | How the identity was assigned to its person: `initial` when first seen, or a caller's label such as `manual` or `same-email`. |
+| `method` | text | not null |  | How the identity was assigned to its person: `initial` when first seen, `unlink`, `split` or `undo-merge` when the owner took it apart, or a caller's label such as `manual` or `same-email`. |
 | `confidence` | real | not null |  | How sure the link is, from 0 to 1; 1 for every link the store writes. |
 | `created_at` | integer | not null |  | when this row was saved here |
 | `author` | text | not null |  | Who decided the link: `ingest` for the automatic first link, otherwise `owner` or the name of a program. |
@@ -179,7 +179,7 @@ A real person, whatever accounts they write from: their identities point here. `
 | `identity_id` | integer | not null | → `identities.id` | the `identity` it belongs to |
 | `from_person_id` | integer |  | → `persons.id` | the `person` it belongs to |
 | `to_person_id` | integer | not null | → `persons.id` | the `person` it belongs to |
-| `method` | text | not null |  | How this move of an identity between persons was decided (`initial`, `manual`, `same-email`…), kept so a bad link can be undone. |
+| `method` | text | not null |  | How this move of an identity between persons was decided (`initial`, `manual`, `same-email`, `unlink`, `split`, `undo-merge`…). A move that emptied its person is a merge; `unlink`, `split` and `undo-merge` never are. A person with no identity and a merge out of it is merged away: its row stays, readers skip it, and its uid means the person of its latest merge, so `undoMerge` can give it back. |
 | `created_at` | integer | not null |  | when this row was saved here |
 | `author` | text | not null |  | Who made this move: `ingest`, `owner`, or a program's name. |
 
@@ -2397,6 +2397,42 @@ What a hosted model wrote about one note, document or email when the owner turne
 | `created_at` | integer | not null |  | when this row was saved here |
 
 *Keys and indexes:* `PRIMARY KEY (subject_type, subject_id)`
+
+## Message templates
+
+The templates the owner wrote over the shipped ones, for the digest and the other messages sent to him, with every body a change replaced.
+
+### `templates`
+
+A message template the owner wrote over the one cli-core ships, per key, channel and language. Every WireCat tool renders with it; a template that fails at send time falls back to the shipped one for that channel. Deleting the row (`templates reset`) brings the shipped one back.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `key` | text | not null |  | what the template renders, such as `report/morning-digest` |
+| `channel` | text | not null |  | `telegram`, `email` or `text` |
+| `language` | text | not null |  | ISO 639-1 code |
+| `body` | text | not null |  | the Liquid source, checked before it was saved |
+| `updated_at` | integer | not null |  | when this row last changed here |
+| `updated_by` | text | not null |  | the command that saved it, such as `memo` |
+
+*Keys and indexes:* `PRIMARY KEY (key, channel, language)`
+
+### `templates_history`
+
+Every template body a save or a reset replaced, so an edit can be undone. Append-only.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | PK |  |  |
+| `key` | text | not null |  |  |
+| `channel` | text | not null |  |  |
+| `language` | text | not null |  |  |
+| `body` | text | not null |  | the body as it was before the change |
+| `saved_at` | integer | not null |  | when that body had been saved |
+| `saved_by` | text | not null |  |  |
+| `replaced_at` | integer | not null |  |  |
+
+*Keys and indexes:* `INDEX (key, channel, language, id)`
 
 ## Source records
 

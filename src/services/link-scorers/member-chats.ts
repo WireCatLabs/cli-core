@@ -1,4 +1,4 @@
-import { chatRef, identitiesIn } from "./shared.js"
+import { chatRef, chatsWithOf, identitiesIn } from "./shared.js"
 import type { LinkCandidate, LinkScorer } from "./types.js"
 
 const WEIGHT = 0.5
@@ -8,7 +8,8 @@ export const memberChats: LinkScorer = {
   id: "member-chats",
   version: 1,
   spreads: true,
-  candidates: async ({ store, project, confirmed, sources, owner, signal }) => {
+  candidates: async (input) => {
+    const { store, project, confirmed, sources, owner, signal } = input
     if (!project) return []
     const people = confirmed.people.filter((person) => person !== owner)
     const found: LinkCandidate[] = []
@@ -16,7 +17,7 @@ export const memberChats: LinkScorer = {
       const members = new Map<string, Set<string>>()
       for (const { person, id } of await identitiesIn(store, people, key.provider)) {
         signal?.throwIfAborted()
-        for (const chat of await store.chats.chatsWith(key, id)) {
+        for (const chat of await chatsWithOf(input, key, id)) {
           if (chat.kind !== "group" && chat.kind !== "channel") continue
           const held = members.get(String(chat.id)) ?? new Set<string>()
           held.add(person)

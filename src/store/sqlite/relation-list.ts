@@ -1,5 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import {
+  type Engagement,
   inverseOf,
   notOverriddenSql,
   RELATION_KINDS,
@@ -10,6 +11,7 @@ import {
 } from "../../domain/relations.js"
 import type { AccountKey } from "../types.js"
 import { linkKind } from "./link-kinds.js"
+import { idsOf } from "./merged-persons.js"
 import { linkOf } from "./notes.js"
 import type { StoreContext } from "./open.js"
 import { proposalOperationsOver } from "./proposed-actions.js"
@@ -85,7 +87,11 @@ export const relationListOver = (context: StoreContext): RelationList => {
       }
       const end = (side: "from" | "to", ref: string) => {
         const found = thing(ref, `the ${side} end`)
-        add(`r.${side}_type = ? AND r.${side}_id = ?`, found.type, found.id)
+        add(
+          `r.${side}_type = ? AND r.${side}_id IN (SELECT value FROM json_each(?))`,
+          found.type,
+          idsOf(database, found.type, found.id),
+        )
       }
       if (filter.kind !== undefined) add("r.kind = ?", filter.kind)
       if (filter.role !== undefined) add("ifnull(r.role, '') = ?", filter.role.trim())
@@ -94,11 +100,11 @@ export const relationListOver = (context: StoreContext): RelationList => {
       const about = filter.about === undefined ? undefined : thing(filter.about, "the reference")
       if (about)
         add(
-          "((r.from_type = ? AND r.from_id = ?) OR (r.to_type = ? AND r.to_id = ?))",
+          `((r.from_type = ? AND r.from_id IN (SELECT value FROM json_each(?))) OR (r.to_type = ? AND r.to_id IN (SELECT value FROM json_each(?))))`,
           about.type,
-          about.id,
+          idsOf(database, about.type, about.id),
           about.type,
-          about.id,
+          idsOf(database, about.type, about.id),
         )
       if (filter.at !== undefined)
         add("(r.starts_at IS NULL OR r.starts_at <= ?) AND (r.ends_at IS NULL OR ? < r.ends_at)", filter.at, filter.at)
@@ -173,6 +179,8 @@ export const relationListOver = (context: StoreContext): RelationList => {
       role?: string
       purpose?: string
       position?: string
+      roleNote?: string
+      engagement?: Engagement
       startsAt?: number
       endsAt?: number
     }
@@ -190,6 +198,8 @@ export const relationListOver = (context: StoreContext): RelationList => {
       confidenceCategory: "weak",
       standing: "proposed",
       position: payload.position ?? null,
+      roleNote: payload.roleNote ?? null,
+      engagement: payload.engagement ?? null,
       startsAt: iso(payload.startsAt),
       endsAt: iso(payload.endsAt),
       createdAt: action.createdAt,

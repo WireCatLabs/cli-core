@@ -111,6 +111,8 @@ describe("command effects", () => {
         "server install",
         "server uninstall",
         "skill install",
+        "templates edit",
+        "templates reset",
       ].sort(),
     )
   })

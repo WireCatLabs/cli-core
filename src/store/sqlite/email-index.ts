@@ -172,13 +172,17 @@ export const drainEmailIndex = (database: CacheDatabase, stemmerFor: (stemmers: 
         .prepare("INSERT OR REPLACE INTO store_settings (key, value, at) VALUES (?, ?, ?)")
         .run(MAIL_CUT, CUT, Date.now())
     })
-  database
-    .prepare(
-      `INSERT OR IGNORE INTO email_index_pending (indexable_type, id)
-         SELECT DISTINCT 'email_thread', e.email_thread_id FROM email_index_pending q JOIN emails e ON e.id = q.id
-          WHERE q.indexable_type = 'email' AND e.email_thread_id IS NOT NULL`,
+  const unqueued = `FROM email_index_pending q JOIN emails e ON e.id = q.id
+    WHERE q.indexable_type = 'email' AND e.email_thread_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM email_index_pending t
+      WHERE t.indexable_type = 'email_thread' AND t.id = e.email_thread_id)`
+  if (database.prepare(`SELECT 1 ${unqueued} LIMIT 1`).get())
+    write(database, () =>
+      database
+        .prepare(
+          `INSERT OR IGNORE INTO email_index_pending (indexable_type, id) SELECT DISTINCT 'email_thread', e.email_thread_id ${unqueued}`,
+        )
+        .run(),
     )
-    .run()
   // Attachments saved before their text was cut into pieces get them here, once.
   const unchunked = database
     .prepare(
@@ -201,8 +205,8 @@ export const drainEmailIndex = (database: CacheDatabase, stemmerFor: (stemmers: 
   )
   const done = database.prepare("DELETE FROM email_index_pending WHERE indexable_type = 'email_thread' AND id = ?")
   let threads = 0
-  for (;;) {
-    const count = write(database, () => {
+  while (next.all().length > 0)
+    threads += write(database, () => {
       const ids = next.all().map(({ id }) => Number(id))
       for (const id of ids) {
         chunkThread(database, id, Date.now())
@@ -210,8 +214,5 @@ export const drainEmailIndex = (database: CacheDatabase, stemmerFor: (stemmers: 
       }
       return ids.length
     })
-    if (count === 0) break
-    threads += count
-  }
   return emails + threads
 }

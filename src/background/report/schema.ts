@@ -63,13 +63,17 @@ export interface ReportScope {
   counts: { chats: number; mail: number; tasks: number; meetings: number }
 }
 
-/** The open task groups, each opened by a `tasks/<filter>` link; `new` counts what was created since `newSince`. */
+/**
+ * The open task groups, each opened by a `tasks/<filter>` link; `new` counts what was created since `newSince`,
+ * `undated` the open tasks with no due date (0 when the report leaves it out).
+ */
 export interface TaskCounts {
   overdue: number
   today: number
   tomorrow: number
   new: number
   newSince: string | null
+  undated: number
 }
 
 /** A `wirecat.report/1` document as the renderers read it: checked, cut to its limits, with no `links` or `internal`. */
@@ -213,6 +217,7 @@ const tasksOf = (value: unknown): TaskCounts | null => {
     tomorrow: wholeOr0(value.tomorrow, "tasks.tomorrow"),
     new: wholeOr0(value.new, "tasks.new"),
     newSince: momentOf(value.new_since, "tasks.new_since"),
+    undated: wholeOr0(value.undated, "tasks.undated"),
   }
 }
 
@@ -329,8 +334,16 @@ export const reportDocument = (report: Report): Record<string, unknown> => ({
     tomorrow: report.tasks.tomorrow,
     new: report.tasks.new,
     new_since: report.tasks.newSince,
+    undated: report.tasks.undated,
   },
 })
+
+/** The JSON text of a run's answer: the bare object, or the only fenced `json` block; undefined for anything else. */
+export const jsonOfAnswer = (answer: string): string | undefined => {
+  const text = answer.trim()
+  const fenced = /^```json[ \t]*\n([\s\S]*?)\n```$/.exec(text)?.[1]
+  return fenced ?? (text.startsWith("{") ? text : undefined)
+}
 
 export type ParsedReport = { report: Report; leaks: number } | { invalid: string }
 
@@ -340,9 +353,7 @@ export type ParsedReport = { report: Report; leaks: number } | { invalid: string
  * of the first field that failed, and is never shown.
  */
 export const parseReport = (answer: string): ParsedReport | undefined => {
-  const text = answer.trim()
-  const fenced = /^```json[ \t]*\n([\s\S]*?)\n```$/.exec(text)?.[1]
-  const json = fenced ?? (text.startsWith("{") ? text : undefined)
+  const json = jsonOfAnswer(answer)
   if (json === undefined) return undefined
   let document: unknown
   try {

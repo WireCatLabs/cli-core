@@ -42,6 +42,7 @@ import type { ProgramDefinition } from "../cli/program.js"
 import { runsCommand } from "../cli/runs/command.js"
 import { settingsFor } from "../cli/settings.js"
 import { skillCommand } from "../cli/skill-command.js"
+import { templatesCommand } from "../cli/templates-command.js"
 import { GROUP_SETTINGS } from "../domain/models.js"
 
 export const app = {
@@ -148,5 +149,6 @@ export const sharedProgram: ProgramDefinition = {
     program.command("meetings").description("stored meetings")
     addMeetingSeriesInventoryCommand(program, { read: refuse, output: () => undefined, signal: () => undefined })
     addMeetingProjectCandidatesCommand(program, { read: refuse, output: () => undefined, signal: () => undefined })
+    program.addCommand(templatesCommand(app, { env: () => ({}), output: () => undefined, diagnostic: () => undefined }))
   },
 }

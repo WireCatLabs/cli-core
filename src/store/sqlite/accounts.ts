@@ -4,6 +4,7 @@ import type { AccountKey, StoredAccount } from "../types.js"
 import { and, asc, eq, inArray, sql } from "./drizzle/core.js"
 import { pointerPairs } from "./entity-types.js"
 import { forgetDanglingEvidence, forgetEvidenceTo } from "./evidence-signature.js"
+import { mergeSql } from "./merged-persons.js"
 import type { StoreContext } from "./open.js"
 import {
   accountIdentities,
@@ -239,7 +240,9 @@ export const unreferenced = (database: CacheDatabase, table: "identities"): Set<
 /**
  * People only the purged account had seen go with it. An identity stays while anything else points at it
  * (another account, a tag, a note, a link), or while its person is kept: the owner, a person something
- * points at, or one linked to an identity that stays.
+ * points at, or one linked to an identity that stays. An identity also stays while a person it was merged out of is
+ * pointed at, so that person stays merged away and its references keep meaning the person it is now. A person the
+ * identity was merged out of goes too, unless another identity's move or anything else still points at it.
  */
 export const dropOrphanPeople = (database: CacheDatabase, unseenBefore: Set<number>) => {
   const orphans = [...unreferenced(database, "identities")].filter((id) => !unseenBefore.has(id))
@@ -252,6 +255,8 @@ export const dropOrphanPeople = (database: CacheDatabase, unseenBefore: Set<numb
         `SELECT DISTINCT l.identity_id AS id FROM identity_links l JOIN persons p ON p.id = l.person_id
           WHERE l.identity_id IN (SELECT value FROM json_each(?)) AND (p.owner <> 0
             OR p.id IN (SELECT id FROM (${personRefs}) WHERE id IS NOT NULL)
+            OR EXISTS (SELECT 1 FROM identity_link_events e WHERE e.identity_id = l.identity_id AND ${mergeSql("e")}
+              AND e.from_person_id IN (SELECT id FROM (${personRefs}) WHERE id IS NOT NULL))
             OR EXISTS (SELECT 1 FROM identity_links o WHERE o.person_id = p.id
               AND o.identity_id NOT IN (SELECT value FROM json_each(?))))`,
       )
@@ -261,9 +266,11 @@ export const dropOrphanPeople = (database: CacheDatabase, unseenBefore: Set<numb
   const gone = JSON.stringify(orphans.filter((id) => !kept.has(id)))
   const persons = database
     .prepare(
-      "SELECT DISTINCT person_id AS id FROM identity_links WHERE identity_id IN (SELECT value FROM json_each(?))",
+      `SELECT person_id AS id FROM identity_links WHERE identity_id IN (SELECT value FROM json_each(?))
+        UNION SELECT from_person_id FROM identity_link_events WHERE identity_id IN (SELECT value FROM json_each(?))
+          AND from_person_id IS NOT NULL`,
     )
-    .all(gone)
+    .all(gone, gone)
     .map(({ id }) => Number(id))
   for (const table of ["identity_revisions", "identity_link_events", "identity_links"])
     database.prepare(`DELETE FROM ${table} WHERE identity_id IN (SELECT value FROM json_each(?))`).run(gone)

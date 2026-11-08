@@ -2,6 +2,7 @@ import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
+import { contextEvidenceFingerprint } from "../context/evidence.js"
 import type { Message } from "../domain/models.js"
 import { proposalRegistry } from "../services/proposals/registry.js"
 import type { DecisionPolicy } from "./decisions.js"
@@ -90,6 +91,7 @@ describe("checking the sources of memories and facts", () => {
       raised: 0,
       refreshed: 1,
       closed: 0,
+      changedRefs: [f.note.ref],
     })
     expect(f.reviews()).toEqual([])
     expect(f.signatures(memory)).toMatchObject([
@@ -751,5 +753,145 @@ describe("a chat merge", () => {
     await f.store.chats.rekeyChat(owner, "phone", "lid")
     expect(await f.store.knowledge.checkSources()).toMatchObject({ checked: 2, raised: 0, refreshed: 0 })
     expect(f.reviews()).toEqual([])
+  })
+})
+
+describe("what a source check offers for reading again", () => {
+  it("lists changed sources, raised or signed anew, but not deleted ones, cited memories, or what a batch reads", async () => {
+    const f = await fixture()
+    const notes = await Promise.all(
+      ["Delivery on the 28th", "Call at 10", "Room 4", "Gone soon"].map((text) => f.store.notes.addNote({ text })),
+    )
+    const [kept, raised, extracting, gone] = notes as [
+      (typeof notes)[0],
+      (typeof notes)[0],
+      (typeof notes)[0],
+      (typeof notes)[0],
+    ]
+    const cited = await f.remember([kept.ref], "Cited memory")
+    await f.remember([{ ref: kept.ref, quote: "Delivery" }, raised.ref, extracting.ref, gone.ref, cited.ref])
+    f.later()
+    await f.store.notes.editNote(kept.ref, "Delivery on the 30th", 1)
+    await f.store.notes.editNote(raised.ref, "Call at 11", 1)
+    await f.store.notes.editNote(extracting.ref, "Room 5", 1)
+    await f.store.notes.removeNote(gone.ref)
+    await f.store.memories.markStale(cited.ref, "owner")
+    const record = await f.store.contextRecords?.read(extracting.ref)
+    if (!record) throw new Error("Missing record")
+    const project = await f.store.knowledge.addProject({ name: "Harbour" })
+    await f.store.evidenceFindings.stage(
+      {
+        schemaVersion: 1,
+        key: "room",
+        extractor: "synthetic",
+        findings: [
+          {
+            id: "room",
+            kind: "fact",
+            type: "decision",
+            statement: "The meeting moved to room 5",
+            project: project.ref,
+            evidence: [{ reference: extracting.ref, fingerprint: contextEvidenceFingerprint(record) }],
+          },
+        ],
+      },
+      agent,
+    )
+    const check = await f.store.knowledge.checkSources()
+    expect(check.changedRefs.sort()).toEqual([kept.ref, raised.ref].sort())
+  })
+})
+
+describe("changed sources since a time", () => {
+  it("still lists a change an earlier check took, and leaves out deleted, extracted and unchanged sources", async () => {
+    const f = await fixture()
+    const notes = await Promise.all(
+      ["Delivery on the 28th", "Call at 10", "Room 4", "Gone soon", "Same"].map((text) =>
+        f.store.notes.addNote({ text }),
+      ),
+    )
+    const [kept, raised, extracting, gone, same] = notes as [
+      (typeof notes)[0],
+      (typeof notes)[0],
+      (typeof notes)[0],
+      (typeof notes)[0],
+      (typeof notes)[0],
+    ]
+    await f.remember([{ ref: kept.ref, quote: "Delivery" }, raised.ref, extracting.ref, gone.ref, same.ref])
+    f.later()
+    await f.store.notes.editNote(kept.ref, "Delivery on the 30th", 1)
+    await f.store.notes.editNote(raised.ref, "Call at 11", 1)
+    await f.store.notes.editNote(extracting.ref, "Room 5", 1)
+    await f.store.notes.removeNote(gone.ref)
+    const since = f.clock.at
+    expect((await f.store.knowledge.checkSources()).changedRefs.sort()).toEqual(
+      [kept.ref, raised.ref, extracting.ref].sort(),
+    )
+    f.later()
+    expect((await f.store.knowledge.checkSources()).changedRefs).toEqual([])
+    const record = await f.store.contextRecords?.read(extracting.ref)
+    if (!record) throw new Error("Missing record")
+    const project = await f.store.knowledge.addProject({ name: "Harbour" })
+    await f.store.evidenceFindings.stage(
+      {
+        schemaVersion: 1,
+        key: "room",
+        extractor: "synthetic",
+        findings: [
+          {
+            id: "room",
+            kind: "fact",
+            type: "decision",
+            statement: "The meeting moved to room 5",
+            project: project.ref,
+            evidence: [{ reference: extracting.ref, fingerprint: contextEvidenceFingerprint(record) }],
+          },
+        ],
+      },
+      agent,
+    )
+    const changed = await f.store.knowledge.changedSources({ since })
+    expect(changed.map(({ ref }) => ref).sort()).toEqual([kept.ref, raised.ref].sort())
+    expect(changed[0]?.checkedAt).toBe(new Date(since).toISOString())
+    expect(await f.store.knowledge.changedSources({ since: since + 1 })).toEqual([])
+  })
+})
+
+describe("reading a review's sources", () => {
+  it("gives each source as cited and as it is now, with the quote, while the review holds no text", async () => {
+    const f = await quoted()
+    const other = await f.store.notes.addNote({ text: "Second note" })
+    const memory = await f.remember([{ ref: f.note.ref, quote: "delivery on the 28th" }, other.ref])
+    f.later()
+    await f.store.notes.editNote(f.note.ref, "We agreed delivery on the 30th.", 1)
+    await f.store.notes.removeNote(other.ref)
+    await f.store.knowledge.checkSources()
+    const marker = (await f.store.memories.get(memory.ref)).sourceReview
+    expect(await f.store.knowledge.sourceReviewTexts(marker?.id as string)).toEqual([
+      { link: expect.any(Number), ref: null, quote: null, cited: null, now: null },
+      {
+        link: expect.any(Number),
+        ref: f.note.ref,
+        quote: "delivery on the 28th",
+        cited: "We agreed delivery on the 28th. Call at 10.",
+        now: "We agreed delivery on the 30th.",
+      },
+    ])
+  })
+
+  it("refuses a proposal that is not a source review", async () => {
+    const f = await quoted()
+    const memory = await f.store.memories.add({
+      kind: "preference",
+      body: "Proposed",
+      scope: "work",
+      evidence: [f.note.ref],
+      author: agent,
+      status: "proposed",
+    })
+    const proposal = (await f.store.proposedActions.list({})).find((one) => one.target === memory.ref)
+    await expect(f.store.knowledge.sourceReviewTexts(proposal?.id ?? "1")).rejects.toMatchObject({
+      code: expect.stringMatching(/validation_error|not_found/),
+    })
   })
 })

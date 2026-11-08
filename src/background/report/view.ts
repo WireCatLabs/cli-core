@@ -1,3 +1,4 @@
+import { refsForLink } from "../../domain/links.js"
 import type { ChannelKind, HealthReason, ItemType, Report, ReportItem, ReportKind, SectionKind } from "./schema.js"
 
 /** A link the renderer built from a ref; a template may point an `href` only at one of these. */
@@ -56,6 +57,8 @@ export interface ViewSection {
   more: number
   /** The task group links, on the section that holds the task items only; zero groups left out. */
   groups: ViewTaskGroup[]
+  /** The open tasks with no due date, a line after the groups on the same section; null when there are none. */
+  undated: { count: number; link: ViewLink | null } | null
 }
 
 export interface ViewHealth {
@@ -246,7 +249,9 @@ export const reportView = (
   const moment = (iso: string | null) => (iso === null ? null : momentFor(iso, now, language, timeZone))
   const words = LINK_WORDS[language] ?? (LINK_WORDS.en as { open: string; fix: string })
   const linksOf = (refs: readonly string[], label: string): ViewLink[] => {
-    const url = refs.map(linkOf).find((one) => one !== null)
+    const url = refsForLink(refs)
+      .map(linkOf)
+      .find((one) => one !== null)
     return url ? [{ kind: "open", url, label }] : []
   }
   const itemOf = (item: ReportItem): ViewItem => {
@@ -285,10 +290,18 @@ export const reportView = (
         items: items.slice(0, cap).map(itemOf),
         more: more + Math.max(items.length - cap, 0),
         groups: [],
+        undated: null,
       },
     ]
   })
   const groups = taskGroups(report.tasks, linkOf, words.open)
+  const undatedLink = linkOf("tasks:undated")
+  const undated = report.tasks?.undated
+    ? {
+        count: report.tasks.undated,
+        link: undatedLink === null ? null : { kind: "open" as const, url: undatedLink, label: words.open },
+      }
+    : null
   const holder =
     sections.find((section) => section.items.some((item) => item.type === "task")) ??
     sections.find((section) => section.kind === "today") ??
@@ -304,7 +317,7 @@ export const reportView = (
     emoji: "☀️",
     date: momentFor(report.date, now, language, timeZone),
     summary: report.summary,
-    sections: sections.map((section) => (section === holder ? { ...section, groups } : section)),
+    sections: sections.map((section) => (section === holder ? { ...section, groups, undated } : section)),
     health: {
       emoji: "🛠",
       items: stale.slice(0, SECTION_CAPS.health).map((entry) => ({

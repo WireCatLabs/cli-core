@@ -8,12 +8,15 @@ export type DeepLinkTarget =
   | { type: "message"; provider: string; account: string; chat: string; message: string }
   | { type: "chat"; provider: string; account: string; chat: string }
   | { type: "task"; id: string }
-  | { type: "tasks"; filter: "overdue" | "today" | "tomorrow" }
+  | { type: "tasks"; filter: "overdue" | "today" | "tomorrow" | "undated" }
   | { type: "tasks"; filter: "new"; since: string }
   /** A review id as `memo review` shows it (`17070`, `fact:512`): not a reference, so it is one encoded part. */
   | { type: "proposal"; id: string }
   | { type: "digest"; date: string }
   | { type: "sync"; tool: string; account?: string }
+  | { type: "person"; id: string }
+  /** A project's store id or its key, as `project:<key>` names it. */
+  | { type: "project"; id: string }
 
 export type LinkForm = "web" | "app"
 
@@ -28,7 +31,7 @@ export const DEFAULT_LINK_CONFIG: LinkConfig = { base: "https://wirecat.dev/o", 
 const APP_PREFIX = "wirecat://open"
 const MAX_PATH = 512
 const MAX_SEGMENTS = 6
-const TASK_FILTERS = ["overdue", "today", "tomorrow"] as const
+const TASK_FILTERS = ["overdue", "today", "tomorrow", "undated"] as const
 const DATE = /^\d{4}-\d{2}-\d{2}$/
 const DATE_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})$/
 
@@ -41,7 +44,9 @@ const partsOf = (target: DeepLinkTarget): string[] => {
     case "chat":
       return ["chat", target.provider, target.account, target.chat]
     case "task":
-      return ["task", target.id]
+    case "person":
+    case "project":
+      return [target.type, target.id]
     case "tasks":
       return target.filter === "new" ? ["tasks", "new", target.since] : ["tasks", target.filter]
     case "proposal":
@@ -65,7 +70,9 @@ const targetOfParts = (parts: string[]): DeepLinkTarget | null => {
     case "chat":
       return rest.length === 3 ? { type: "chat", provider: a, account: b, chat: c } : null
     case "task":
-      return rest.length === 1 ? { type: "task", id: a } : null
+    case "person":
+    case "project":
+      return rest.length === 1 ? { type: kind as "task" | "person" | "project", id: a } : null
     case "tasks":
       if (rest.length === 1 && (TASK_FILTERS as readonly string[]).includes(a))
         return { type: "tasks", filter: a as (typeof TASK_FILTERS)[number] }
@@ -118,13 +125,23 @@ export const parseLink = (text: string): DeepLinkTarget | null => {
 }
 
 const LINK_ONLY = new Set(["tasks", "proposal", "digest", "sync"])
-const FROM_REFERENCE = new Set(["message", "chat", "task"])
+const FROM_REFERENCE = new Set(["message", "chat", "task", "person", "project"])
+const ENTITY_KINDS = new Set(["person", "project"])
 
 /**
- * The target a ref names, or `null` when it names nothing a link opens. A store reference (`msg:`, `chat:`, `task:`)
- * is read by its own grammar; the kinds that are no reference are written as their path with a colon after the
- * kind: `proposal:fact%3A512`, `tasks:overdue`, `tasks:new/2026-11-07T08%3A00%3A00Z`, `digest:2026-11-08`,
- * `sync:telegram/1001`.
+ * The refs in the order an item's one link is chosen from: a person or a project names who or what an item is about,
+ * not where it happened, so it opens only when nothing else does.
+ */
+export const refsForLink = (refs: readonly string[]): string[] => [
+  ...refs.filter((ref) => !ENTITY_KINDS.has(ref.slice(0, ref.indexOf(":")))),
+  ...refs.filter((ref) => ENTITY_KINDS.has(ref.slice(0, ref.indexOf(":")))),
+]
+
+/**
+ * The target a ref names, or `null` when it names nothing a link opens. A store reference (`msg:`, `chat:`, `task:`,
+ * `person:`, `project:`) is read by its own grammar; the kinds that are no reference are written as their path with a
+ * colon after the kind: `proposal:fact%3A512`, `tasks:overdue`, `tasks:new/2026-11-07T08%3A00%3A00Z`,
+ * `digest:2026-11-08`, `sync:telegram/1001`.
  */
 export const linkTargetOf = (ref: string): DeepLinkTarget | null => {
   const text = ref.trim()

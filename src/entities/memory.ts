@@ -1,6 +1,6 @@
 import * as v from "valibot"
 import { MEMORY_KINDS, MEMORY_SCOPES, MEMORY_STATUSES } from "../domain/knowledge.js"
-import { author, evidenceSource, id, reference, text, time } from "./fields.js"
+import { author, evidenceSource, id, reference, sourceReview, text, time } from "./fields.js"
 
 export const memory = v.strictObject({
   ref: reference,
@@ -24,6 +24,7 @@ export const memory = v.strictObject({
   /** With `--sources`: each piece of evidence read back. */
   sources: v.optional(v.array(evidenceSource)),
   last_verified_at: v.nullable(time),
+  source_review: v.optional(sourceReview),
   created_at: time,
   updated_at: time,
 })

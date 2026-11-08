@@ -155,6 +155,7 @@ export type {
   ProjectAnnotationTargetRequest,
 } from "./project-transfer/store.js"
 export {
+  type ChangedSource,
   SOURCE_REVIEW_CAUSES,
   SOURCE_REVIEW_KIND,
   type SourceCheck,
@@ -163,11 +164,13 @@ export {
   type SourceReviewMarker,
   type SourceReviewPayload,
   type SourceReviewSource,
+  type SourceReviewText,
 } from "./source-review.js"
 export {
   ADDED_KINDS,
   type AddedSource,
   type AddedSourceContent,
+  type AddedSourceDetails,
   type AddedSourceInput,
   addedSourceKeyOf,
 } from "./sqlite/added-sources.js"
@@ -326,6 +329,7 @@ export type {
 } from "./sqlite/notes.js"
 export type { Order, OrderDetail, OrderFilter, OrderInput, OrdersStore } from "./sqlite/orders.js"
 export { DEFAULT_OWNER_LANGUAGES, ownerLanguages } from "./sqlite/owner-languages.js"
+export { mergeId, type PersonMerge, parseMergeId } from "./sqlite/person-merges.js"
 export type { PrivateContact, PrivateContactNote } from "./sqlite/private-people.js"
 export type { Product, ProductFilter, ProductInput, ProductsStore, ProductUpdate } from "./sqlite/products.js"
 export {
@@ -397,6 +401,7 @@ export type { TaskRelation, TaskRelationKind, TaskRelationsStore } from "./sqlit
 export { TASK_RELATION_KINDS } from "./sqlite/task-relations.js"
 export type { TaskStatRow, TaskStatScope } from "./sqlite/task-stats.js"
 export type { StoreTaskStore } from "./sqlite/tasks.js"
+export type { StoredTemplate, TemplateAddress, TemplateHistoryEntry, TemplateStore } from "./sqlite/templates.js"
 export type {
   TagPreflight,
   VocabularyAlias,

@@ -63,6 +63,7 @@ const CORE_SECTIONS: Readonly<Record<string, HelpSection>> = {
   replies: "automate",
   runs: "automate",
   schedule: "automate",
+  templates: "automate",
   serve: "automate",
   server: "automate",
   account: "setup",

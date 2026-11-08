@@ -116,6 +116,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `status` | how a thing stands right now | `readiness` |
 | `check` | verify, and change nothing; the answer says what is wrong and how to fix it | `audit`, `preflight` |
 | `test` | run rules over what is already stored and say what they would have done, doing none of it |  |
+| `preview` | render what would be sent or written, from what is stored or a draft; sends and saves nothing |  |
 | `apply` | run the owner's saved rules over what is already stored and change what they match; dry run unless --yes |  |
 | `scan` | read stored messages for what a rule finds, such as tasks, and list it; records it only with --yes |  |
 | `pause` | stop what a running process does for a profile, without stopping the process |  |
@@ -271,6 +272,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `topics` | collection | forum topics in a group |  |
 | `models` | collection | local or remote models |  |
 | `tags` | collection | labels the owner puts on things |  |
+| `groups` | collection | account groups: the accounts a run in a group reads, such as work and personal (WC-ACCT-13) |  |
 | `searches` | collection | the owner's saved searches |  |
 | `copies` | collection | tables kept aside by a repair |  |
 | `tables` | collection | the tables of the local store, with their kind, row count and size |  |
@@ -307,6 +309,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `facts` | collection | what happened, with evidence |  |
 | `memories` | collection | what an agent concluded, with evidence and scope |  |
 | `relationships` | collection | confirmed or suggested links between people, organizations and projects |  |
+| `roles` | collection | the parts a person plays in a relationship, built in or the owner's own |  |
 | `sheets` | collection | remote spreadsheets and their cell ranges, read or changed through a provider |  |
 | `files` | collection | files in the source, such as Google Drive, read and changed there |  |
 | `comments` | collection | comments people left on a thing in the source: a channel post or a file |  |
@@ -522,6 +525,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--retract` |  | switch | take the owner's vote back |  |
 | `--revoke` |  | switch | forget every login given to a browser app |  |
 | `--track` |  | switch | also do it daily while serve runs |  |
+| `--undo` |  | switch | put back what the last change replaced, not a new value |  |
 | `--transcribe` |  | switch | also transcribe voice messages not transcribed yet, on this machine |  |
 | `--block` |  | switch | also keep them from coming back by the chat's link |  |
 | `--check` |  | switch | also ask the source and say what it answers: a newer version, who a bot is, whether a login works |  |
@@ -584,6 +588,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--render` | `<mode>` | choice | how returned cell values are represented: formatted display values, unformatted values or formulas |  |
 | `--analysis-provider` | `<provider>` | choice | who analyses the selected text: the calling agent or a configured model service |  |
 | `--embedding-provider` | `<provider>` | choice | who computes embeddings: a local model or a configured remote model service |  |
+| `--region` | `<country>` | string | the two-letter country code, such as ru, that phone numbers written without + are read in |  |
 | `--consent-provider` | `<identity>` | string | the exact model-service identity whose recorded consent is being removed |  |
 | `--claim` | `<claim>` | choice | the ownership claim to remove from a tag: manual or auto |  |
 | `--answer-model` | `<model>` | string | remove only stored analysis answers made by this model; does not run a model |  |
@@ -680,7 +685,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--anonymous` |  | switch | nobody sees who voted for what |  |
 | `--approval` |  | switch | who joins by the link asks first, and an admin lets them in |  |
 | `--can` | `<rights>` | list | what an admin may do, comma-separated |  |
-| `--channel` |  | switch | a channel instead of a group |  |
+| `--channel` |  | switch | a channel instead of a group (a switch), or what a message is written for (<channel>), such as email |  |
 | `--certainty` | `<n>` | number | how sure the agent is, from 0 to 1; kept with what it wrote |  |
 | `--closed` | `<on\|off>` | choice | close it to new messages, or reopen it |  |
 | `--comment-to` | `<post>` | id | comment on this channel post |  |
@@ -723,7 +728,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--evidence` | `<ref...>` | list | what shows it: msg:, note:, meeting:, person: or another reference |  |
 | `--exclude-chat` | `<chat>` | id | never show this chat in it; repeat it for more |  |
 | `--field` | `<key=value>` | string | set one named field on a write, as key=value; repeat it for more |  |
-| `--file` | `<file>` | path | a file to send with the message; the text becomes its caption |  |
+| `--file` | `<file>` | path | a file it reads: one to send with a message, the text its caption, or the new text of a write |  |
 | `--filename` | `<name>` | string | the name others see for the file, instead of its name on disk |  |
 | `--history` |  | switch | the people added also see the messages from before they came |  |
 | `--include` | `<kinds>` | list | every chat of these kinds, comma-separated |  |
@@ -743,6 +748,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--reason` | `<text>` | string | why, in a few words; kept with it |  |
 | `--remind-time` | `<time>` | time | when to look at it again |  |
 | `--role` | `<role>` | string | the part it plays, in a word or two |  |
+| `--label` | `<label>` | string | a human-readable label for an id, such as the name shown for a custom relationship role |  |
 | `--scope` | `<scope>` | choice | personal or work: which side of the owner's life it belongs to |  |
 | `--solution` | `<text>` | string | with --quiz, what people see once they answered |  |
 | `--spoiler` |  | switch | hide the photo or video behind a spoiler until tapped |  |
@@ -801,6 +807,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--amount` | `<decimal>` | string | a sum of money as a decimal, such as 1500.50, in --currency |  |
 | `--currency` | `<code>` | string | an ISO 4217 code, such as EUR |  |
 | `--close-date` | `<date>` | time | the day a deal or lead is expected to close, YYYY-MM-DD |  |
+| `--position` | `<title>` | string | a person's job title on a relationship, stored as position; never the role |  |
 | `--owner` | `<user>` | id | the CRM user a record is assigned to, by the CRM's id |  |
 | `--status` | `<state>` | choice | the state to put it in; the command lists the states |  |
 | `--product` | `<product>` | string | a product or service the owner sells or buys: product:<id> |  |
@@ -819,6 +826,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--unit` | `<text>` | string | what one of it is counted in, such as hour or piece |  |
 | `--sku` | `<code>` | string | the stock code the seller gives it |  |
 | `--archived` | `<on\|off>` | choice | set it aside as no longer in use, or bring it back; what points at it keeps pointing at it |  |
+| `--locale` | `<code>` | string | a human language, as an ISO 639-1 code such as en or ru: which language's version it acts on |  |
 | `--notify-on` | `<when>` | choice | when a scheduled run tells the owner: always, failures or never |  |
 | `--deliver-to` | `<route>` | string | where a scheduled run's result also goes, by the owner's own CLI: telegram-bot:<profile>/<chat> or email:<profile>/<address>; repeat it for more. Not --to, which names who a message is for |  |
 | `--max-cost-per-day` | `<usd>` | number | start no run for the rest of the day once the day's runs cost this much; 0 for no cap | US dollars |
@@ -1022,6 +1030,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--debug` |  | on a failure, its whole record — cause and stack — in place of the short line |  | every command |
 | `--deep` | `<n>` | also check the top n in full — profile, photos, everything they wrote, and the public ban lists, which are sent their ids — one person a second. **TG specializes the SDK help with the bounded Telegram audit; MAX retains the generic SDK wording. Align the shared help with provider capabilities separately; SDK adoption alone does not remove the difference.** |  | `chats members check` |
 | `--defaults` |  | change what every profile gets, rather than this profile |  | `config set`, `config unset` |
+| `--delete-data` |  | also delete the account's messages and files on this computer |  | `account remove` |
 | `--deliver-to` | `<route>` | where a schedule's result also goes, when --notify-on says so: telegram-bot:<profile>/<chat>, email:<profile>/<address>; repeat it for more |  | `schedule agent` (planned), `schedule command` (planned) |
 | `--deny-chats` | `<ids>` | replace denied chat ids, comma-separated; empty clears; deny wins |  | `replies audience`, `replies edit` |
 | `--deny-people` | `<ids>` | replace denied sender ids, comma-separated; empty clears; deny wins |  | `replies audience`, `replies edit` |
@@ -1032,7 +1041,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--do` | `<actions>` | actions: reply, task, or both, comma-separated |  | `replies edit` |
 | `--download` |  | first save, from the messenger, the files no download saved yet |  | `attachments extract` |
 | `--draft` |  | save the text as a draft for the owner to review and send |  | `messages send` (planned) |
-| `--dry-run` |  | judge and plan; do nothing. **A command-specific dry run keeps its richer plan; otherwise the shared shell previews arguments and permissions without running the action. Targets remain unresolved unless that command provides a preview.** |  | every command, `attachments move`, `bot chats moderate` (planned), `chats moderate`, `config repair`, `messages sync`, `stats messages counters sync`, `store clear`, `store repair`, `store reset`, `tags rebuild` |
+| `--dry-run` |  | judge and plan; do nothing. **A command-specific dry run keeps its richer plan; otherwise the shared shell previews arguments and permissions without running the action. Targets remain unresolved unless that command provides a preview.** |  | every command, `account remove`, `attachments move`, `bot chats moderate` (planned), `chats moderate`, `config repair`, `messages sync`, `stats messages counters sync`, `store clear`, `store repair`, `store reset`, `tags rebuild` |
 | `--due` | `<time>` | when a task must be done: an ISO 8601 time or a duration from now; none clears it |  | `tasks add`, `tasks update` |
 | `--due-within` | `<duration>` | list tasks due within this: 30m, 2h, 1d | `1d` | `tasks agenda` |
 | `--embedding-provider` | `<provider>` | embedding provider: local or openai; flags override profile settings |  | `conversations embed`, `conversations embeddings clear`, `conversations embeddings status`, `conversations related`, `conversations status`, `search conversations` |
@@ -1073,6 +1082,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--join-approval` | `<on\|off>` | people ask to join, and an admin lets them in |  | `chats update` (tg, wa only) |
 | `--json` |  | machine-readable output: one JSON value on stdout, nothing else |  | every command |
 | `--jsonl` |  | machine-readable output: one JSON object per line, for streaming and jq |  | every command |
+| `--keep-data` |  | keep the account's messages on this computer; search still finds them |  | `account remove` |
 | `--kind` | `<kind>` | the kind of link to record; the command lists the supported task and evidence relations |  | `tasks link` |
 | `--kinds` | `<kinds>` | chat kinds: dialog, group; comma-separated, empty for any |  | `replies edit` |
 | `--last` | `<n>` | stop once the newest n messages are held; not with --since. **max's own copy is worded differently until T6 moves the command onto the shared one (e13)** |  | `bot messages sync` (max, tg only), `messages sync`, `tasks scan` |

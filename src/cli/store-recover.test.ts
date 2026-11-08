@@ -1,4 +1,4 @@
-import { closeSync, copyFileSync, mkdtempSync, openSync, writeSync } from "node:fs"
+import { closeSync, copyFileSync, mkdtempSync, openSync, writeFileSync, writeSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
@@ -84,12 +84,31 @@ describe("store recover", () => {
     )
   })
 
+  it("names the last deep check that passed as the time since which rows may be gone", async () => {
+    const { env, clean } = await damagedStore()
+    const lastOk = "2026-11-01T08:00:00.000Z"
+    writeFileSync(
+      `${env.MESSAGING_STORE}.health.json`,
+      JSON.stringify({ checked_at: lastOk, ok: true, problems: 0, schema: null, cli: "chat", last_ok_at: lastOk }),
+    )
+    const answer = await storeRecoveryRun(env, { command: "chat", timers: () => [], copy: copyOf(clean) })
+    expect(answer.lastKnownGood).toBe(lastOk)
+    expect(answer.refetch.since).toBe("2026-10-31T08:00:00.000Z")
+    expect(recoveryNotes(answer)).toContain(
+      "notes, memories, tags and whatever else only this store held cannot be fetched again",
+    )
+    expect(recoveryNotes(answer).at(-2)).toContain(`written since the last deep check that passed (${lastOk})`)
+  })
+
   it("runs the recovery, and says where the damaged file is and what to run next", async () => {
     const { env, clean } = await damagedStore()
     const answer = await storeRecoveryRun(env, { command: "chat", timers: () => [], copy: copyOf(clean) })
     expect(answer.checkedOk).toBe(true)
     expect(answer.next.at(-1)).toMatch(/systemctl --user start/)
     expect(recoveryNotes(answer)[0]).toContain(answer.keptAt)
+    expect(recoveryNotes(answer).at(-2)).toMatch(
+      /^how many rows were lost is unknown: .* written since the store was made/,
+    )
     expect((await storeRecoveryCheck(env, "chat")).ok).toBe(true)
   })
 })

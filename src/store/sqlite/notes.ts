@@ -11,7 +11,7 @@ import {
   notAdded,
 } from "../../domain/providers.js"
 import { parseReference } from "../../domain/references.js"
-import { isRelationKind, type RelationshipColumns } from "../../domain/relations.js"
+import { isEngagement, isRelationKind, type RelationshipColumns } from "../../domain/relations.js"
 import { normalizeTag } from "../../domain/tags.js"
 import type { Section } from "../../readers/types.js"
 import { assertMayWithdraw, type Decider } from "../decisions.js"
@@ -26,6 +26,7 @@ import { PREFERRED_FILE, syncFile } from "./files.js"
 import { type ImportedDocuments, importedDocumentWhere } from "./imported-documents.js"
 import { LINK_KINDS, LINK_ORIGINS, type LINK_SOURCES, linkKind } from "./link-kinds.js"
 import { reviewLink } from "./link-reviews.js"
+import { currentPerson, idsOf } from "./merged-persons.js"
 import { dateFileNotes } from "./note-dates.js"
 import { holdingText } from "./note-index.js"
 import type { NoteSearch } from "./note-search.js"
@@ -107,7 +108,7 @@ export interface LinkListFilter {
   confirmed?: boolean
 }
 
-export interface LinkInput extends Pick<RelationshipColumns, "position" | "startsAt" | "endsAt"> {
+export interface LinkInput extends Omit<RelationshipColumns, "accountId" | "deletedAt" | "overrides"> {
   from: string
   to?: string
   targetText?: string
@@ -257,10 +258,7 @@ export const thingRef = (database: CacheDatabase, type: unknown, id: unknown): s
   type == null || id == null ? null : (referenceOfThing(database, storedThing(type, id)) ?? null)
 
 export const linkOf = (database: CacheDatabase, row: Row): Link => {
-  const metadata =
-    row.metadata == null
-      ? {}
-      : (JSON.parse(String(row.metadata)) as { provenance?: string; position?: unknown; overrides?: unknown })
+  const metadata: Partial<Record<string, unknown>> = row.metadata == null ? {} : JSON.parse(String(row.metadata))
   return {
     id: String(row.id),
     from: thingRef(database, row.from_type, row.from_id) as string,
@@ -272,7 +270,7 @@ export const linkOf = (database: CacheDatabase, row: Row): Link => {
     role: row.role == null ? null : String(row.role),
     purpose: row.purpose == null ? null : String(row.purpose),
     evidence: row.evidence == null ? null : String(row.evidence),
-    provenance: metadata.provenance ?? null,
+    provenance: typeof metadata.provenance === "string" ? metadata.provenance : null,
     confirmed: Number(row.confirmed) === 1,
     createdAt: iso(row.created_at),
     ...(row.account_id == null ? {} : { accountId: Number(row.account_id) }),
@@ -280,6 +278,8 @@ export const linkOf = (database: CacheDatabase, row: Row): Link => {
     ...(row.ends_at == null ? {} : { endsAt: Number(row.ends_at) }),
     ...(row.deleted_at == null ? {} : { deletedAt: Number(row.deleted_at) }),
     ...(typeof metadata.position === "string" ? { position: metadata.position } : {}),
+    ...(typeof metadata.roleNote === "string" ? { roleNote: metadata.roleNote } : {}),
+    ...(isEngagement(metadata.engagement) ? { engagement: metadata.engagement } : {}),
     ...(typeof metadata.overrides === "number" ? { overrides: metadata.overrides } : {}),
   }
 }
@@ -313,7 +313,7 @@ const personsNamed = (database: CacheDatabase, key: string): Set<number> => {
         "WHERE a.name_folded = ? OR a.name = ?",
     )
     .all(key, key)
-  for (const row of aliases) if (row.person_id != null) found.add(Number(row.person_id))
+  for (const row of aliases) if (row.person_id != null) found.add(currentPerson(database, Number(row.person_id)))
   return found
 }
 
@@ -387,7 +387,9 @@ export const insertLink = (context: StoreContext, input: LinkInput): Link => {
   const position = input.position === undefined ? undefined : textOf(input.position, "a position", 200)
   if (input.startsAt !== undefined && input.endsAt !== undefined && input.endsAt <= input.startsAt)
     throw new CliError("validation_error", "a relationship ends after it starts")
-  const metadata = provenance === undefined && position === undefined ? null : JSON.stringify({ provenance, position })
+  const roleNote = input.roleNote === undefined ? undefined : textOf(input.roleNote, "a role note", 200)
+  const fields = { provenance, position, roleNote, engagement: input.engagement }
+  const metadata = Object.values(fields).every((value) => value === undefined) ? null : JSON.stringify(fields)
   const row = database
     .prepare(
       "INSERT INTO links (from_type, from_id, to_type, to_id, kind, anchor, source, target_text, target_folded, role, evidence, " +
@@ -832,7 +834,7 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
       const documentText = options.search === undefined ? undefined : holdingText("document", "d.id", options.search)
       const noteText = options.search === undefined ? undefined : holdingText("note", "n.id", options.search)
       const aboutType = about?.type ?? null
-      const aboutId = about?.id ?? null
+      const aboutId = about ? idsOf(database, about.type, about.id) : null
       const files =
         options.source === "internal"
           ? []
@@ -847,7 +849,7 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
                     "JOIN documents d ON d.id = f.document_id JOIN accounts a ON a.id = f.account_id " +
                     "WHERE f.deleted_at IS NULL AND d.deleted_at IS NULL AND f.account_id = ? AND ? IS NOT NULL ") +
                   "AND coalesce(json_extract(d.metadata, '$.catalog.active'), 1)=1 " +
-                  `AND (? IS NULL OR EXISTS (SELECT 1 FROM links l WHERE l.from_type = 'document' AND l.from_id = d.id AND l.kind = ${linkKind("about")} AND l.to_type = ? AND l.to_id = ?)) ` +
+                  `AND (? IS NULL OR EXISTS (SELECT 1 FROM links l WHERE l.from_type = 'document' AND l.from_id = d.id AND l.kind = ${linkKind("about")} AND l.to_type = ? AND l.to_id IN (SELECT value FROM json_each(?)))) ` +
                   `${documentText ? `AND ${documentText.sql} ` : ""}ORDER BY d.created_at DESC, d.id DESC LIMIT ?`,
               )
               .all(folder, folder, aboutType, aboutType, aboutId, ...(documentText?.params ?? []), limit + offset + 1)
@@ -858,7 +860,7 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
           : database
               .prepare(
                 "SELECT n.* FROM notes n WHERE n.deleted_at IS NULL " +
-                  `AND (? IS NULL OR (n.notable_type = ? AND n.notable_id = ?) OR EXISTS (SELECT 1 FROM links l WHERE l.from_type = 'note' AND l.from_id = n.id AND l.kind = ${linkKind("about")} AND l.to_type = ? AND l.to_id = ?)) ` +
+                  `AND (? IS NULL OR (n.notable_type = ? AND n.notable_id IN (SELECT value FROM json_each(?))) OR EXISTS (SELECT 1 FROM links l WHERE l.from_type = 'note' AND l.from_id = n.id AND l.kind = ${linkKind("about")} AND l.to_type = ? AND l.to_id IN (SELECT value FROM json_each(?)))) ` +
                   `${noteText ? `AND ${noteText.sql} ` : ""}ORDER BY n.created_at DESC, n.id DESC LIMIT ?`,
               )
               .all(aboutType, aboutType, aboutId, aboutType, aboutId, ...(noteText?.params ?? []), limit + offset + 1)

@@ -75,6 +75,7 @@ export {
   linkFor,
   linkTargetOf,
   parseLink,
+  refsForLink,
 } from "./domain/links.js"
 export { formatLocator, isLocator, type MessageLocator, parseLocator } from "./domain/locator.js"
 export { type Markup, parseMarkdown } from "./domain/markdown.js"
@@ -156,6 +157,10 @@ export {
   type RefKindSpec,
 } from "./domain/references.js"
 export {
+  byEngagement,
+  ENGAGEMENT_LEVELS,
+  type Engagement,
+  engagementRank,
   inverseOf,
   isUsable,
   ORGANIZATION_ROLES,

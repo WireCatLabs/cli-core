@@ -42,6 +42,16 @@ const SIGN_IN: Entry[] = [
   ["oauth.scope-missing", "permission_error", "the sign-in lacks a permission this command needs"],
   ["sign-in.client-rejected", "configuration_error", "the provider rejected the OAuth client"],
   ["sign-in.secret-without-id", "configuration_error", "an OAuth client secret is set without its client id"],
+  validation("account-remove.no-choice", "account remove needs --keep-data or --delete-data, one of them"),
+  ["account-remove.unknown-profile", "not_found", "no profile by this name on this computer"],
+  ["account-remove.busy", "conflict", "a serve or a sync runs for this profile; stop it first"],
+  ["account-remove.unconfirmed", "confirmation_required", "removing an account asks first; add --yes"],
+  ["account-remove.path-outside", "configuration_error", "the tool named a path outside its own folders"],
+  [
+    "account-remove.folder-outside",
+    "configuration_error",
+    "the tool named a folder of its own outside the home folder",
+  ],
 ]
 
 /** Reasons every CLI over a provider's API raises alike: gcal and drive today. */
@@ -209,6 +219,11 @@ const OTHERS: Entry[] = [
     "recovering the store needs the sqlite3 program, 3.43 or newer, with its .recover command",
   ],
   validation("store.recovery-failed", "the recovered store did not pass its check, so the store was left as it was"),
+  [
+    "serve.outdated",
+    "configuration_error",
+    "the store or the installed version is newer than this serve; it stopped so its unit starts the installed one",
+  ],
   validation("store.recovering", "another recovery of the store is running; wait for it to finish"),
   validation("store.changed-during-recovery", "the store was written to during the recovery, so it was left as it was"),
   [
@@ -352,6 +367,12 @@ const OTHERS: Entry[] = [
     "conflict",
     "the owner separated this identity from that person; only the owner links it again",
   ],
+  ["identity.owner-only", "permission_error", "only the owner undoes a merge or splits a person"],
+  [
+    "identity.stale",
+    "conflict",
+    "an identity of the merge was merged on into another person since; undo that merge first",
+  ],
   ["transcription.no-key", "authentication_error", "no OpenAI key is set for transcription"],
   validation("transcription.too-large", "the audio is over the transcription provider's size limit"),
   [
@@ -396,6 +417,8 @@ const OTHERS: Entry[] = [
   validation("relationship.role-built-in", "a built-in role stays on its list"),
   validation("relationship.role-in-use", "relationships still hold that role; change them first (details.count)"),
   validation("relationship.role-unknown", "the role is not one the relationship takes; the message lists them"),
+  validation("relationship.engagement-ends", "only a person's member-of a project takes an engagement level"),
+  validation("relationship.engagement-unknown", "the engagement level is not none, low, medium or high"),
   validation("ranking.invalid", "the ranking is not valid"),
   validation("ref.malformed", "the reference has a known kind but not its shape"),
   validation("ref.unknown-kind", "the text names no kind of reference"),
@@ -413,6 +436,13 @@ const OTHERS: Entry[] = [
   validation("tag-review.required", "the tag needs the owner's review first"),
   ["tag-review.stale", "configuration_error", "the tag review changed meanwhile"],
   validation("tag.invalid", "the tag is not valid"),
+  validation("template.unknown-key", "there is no message template by that key"),
+  validation("template.no-renderer", "nothing renders that template key yet, so a template for it cannot be checked"),
+  validation("template.unknown-language", "cli-core ships no template in that language, so one would never be used"),
+  validation("template.check-failed", "the template failed its check and was not saved; the message says why"),
+  validation("template.no-history", "the template has no earlier body to put back"),
+  validation("template.no-editor", "no editor is set: set VISUAL or EDITOR, or pass the template with --file"),
+  ["template.owner-only", "permission_error", "only the owner changes a message template, not an agent"],
   ["reactions.list-hidden", "permission_error", "the chat does not let its members see who reacted"],
   ["reactions.broadcast", "permission_error", "a channel does not show who reacted to its posts"],
   validation("task.external-id", "an external id is <service>:<id>, such as avito:4512345678"),

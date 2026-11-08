@@ -3,7 +3,10 @@ import { dirname, join } from "node:path"
 import { CliError, resolvePaths, writeSecurely } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Argument, Command, Option } from "commander"
+import { backfillSchedule } from "../../background/backfill.js"
 import { parseRoute, ROUTE_HELP, routeText } from "../../background/deliver.js"
+import { REPORT_CHANNELS, type StoredTemplates } from "../../background/report/render.js"
+import { keyOfKind } from "../../background/report/stored-templates.js"
 import {
   type AgentCli,
   type AgentInput,
@@ -35,7 +38,7 @@ import { type AppIdentity, readOnlyLockOf } from "../../ports/app.js"
 import { aheadOf } from "../../services/moment.js"
 import { openCache } from "../../store/open.js"
 import { storePath } from "../../store/path.js"
-import { ownerLanguages } from "../../store/store.js"
+import { ownerLanguages, storedTemplateBodies } from "../../store/store.js"
 import { type BaseEnvironment, environmentOf, setExitCode } from "../context.js"
 import { grantsAuthority, LOCAL_READ, LOCAL_WRITE, REMOTE_WRITE } from "../effects.js"
 import { type AnswerOutput, itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
@@ -259,7 +262,7 @@ const runCapOf = (argv: readonly string[]): number | null => {
 }
 
 /** The language a report is rendered in: the store's `owner_languages`, first one; Russian when it cannot be read. */
-const ownerLanguageOf = async (env: NodeJS.ProcessEnv): Promise<string> => {
+export const ownerLanguageOf = async (env: NodeJS.ProcessEnv): Promise<string> => {
   const path = storePath(env)
   if (!existsSync(path)) return "ru"
   const database = await openCache(path)
@@ -270,6 +273,51 @@ const ownerLanguageOf = async (env: NodeJS.ProcessEnv): Promise<string> => {
     database.close()
   }
 }
+
+/** The templates the owner saved for a report, read without migrating the store; none when there is no store. */
+const reportTemplatesOf =
+  (env: NodeJS.ProcessEnv): StoredTemplates =>
+  async (kind, language) => {
+    const path = storePath(env)
+    if (!existsSync(path)) return {}
+    const database = await openCache(path)
+    try {
+      const bodies = storedTemplateBodies(database, keyOfKind(kind), language)
+      return Object.fromEntries(
+        REPORT_CHANNELS.flatMap((channel) => (channel in bodies ? [[channel, bodies[channel]]] : [])),
+      )
+    } finally {
+      database.close()
+    }
+  }
+
+/**
+ * One past day's run of the agent schedule in `file`, as `backfillSchedule` makes it, with the owner's language and
+ * templates as `schedule run` renders them; a stop of the command stops the agent.
+ */
+export const backfillScheduleRun = (
+  command: Command,
+  app: AppIdentity,
+  env: NodeJS.ProcessEnv,
+  file: string,
+  { at, input, agentRuns = [] }: { at: Date; input?: string; agentRuns?: readonly AgentCli[] },
+) =>
+  untilChildEnds(command, (signal) =>
+    backfillSchedule(
+      app,
+      environmentOf<BaseEnvironment & { system?: ServerSystem }>(command).system ?? thisMachine(),
+      env,
+      file,
+      {
+        at,
+        agentRuns,
+        ownerLanguage: ownerLanguageOf,
+        reportTemplates: reportTemplatesOf,
+        ...(input === undefined ? {} : { input }),
+        ...(signal ? { signal } : {}),
+      },
+    ),
+  )
 
 /**
  * Runs the CLI's own commands, or an agent, later or on a timer — through systemd (Linux), launchd
@@ -616,6 +664,7 @@ export const scheduleCommandFor = ({
           timer: timer(),
           agentRuns,
           ownerLanguage: ownerLanguageOf,
+          reportTemplates: reportTemplatesOf,
           ...(agentInput ? { agentInput } : {}),
           ...(signal ? { signal } : {}),
         }),
@@ -657,8 +706,10 @@ export const scheduleCommandFor = ({
           timer: timer(),
           agentRuns,
           ownerLanguage: ownerLanguageOf,
+          reportTemplates: reportTemplatesOf,
           ...(agentInput ? { agentInput } : {}),
           untilUnlocked: true,
+          skipRepeatedInput: true,
           ...(signal ? { signal } : {}),
         }),
       )

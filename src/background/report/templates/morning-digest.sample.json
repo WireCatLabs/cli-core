@@ -1,0 +1,157 @@
+{
+  "format": "wirecat.report/1",
+  "kind": "morning-digest",
+  "date": "2026-11-06",
+  "summary": "Two replies are waiting, one payment is overdue.",
+  "sections": [
+    {
+      "kind": "today",
+      "items": [
+        {
+          "type": "reply",
+          "who": "Alice Example",
+          "topic": "warehouse lease",
+          "action": "Say whether signing on Friday works",
+          "quote": "Can we sign on Friday?",
+          "since": "2026-11-04T14:20:00+03:00",
+          "channel": "mail",
+          "refs": ["msg:email/alice%40example.com/5005/6006"]
+        },
+        {
+          "type": "question",
+          "who": "Bob Sample",
+          "topic": "tile delivery",
+          "action": "can the delivery move to the 20th?",
+          "since": "2026-11-05T19:00:00+03:00",
+          "channel": "telegram",
+          "refs": ["chat:telegram/1001/4004"]
+        },
+        { "type": "task", "topic": "Reconciliation for Demo Ltd", "due": "2026-11-04", "refs": ["task:80"] },
+        { "type": "task", "topic": "Office repair estimate", "due": "2026-11-06T18:00:00+03:00", "who": "Carol Test" },
+        {
+          "type": "task",
+          "topic": "Contractor agreement",
+          "who": "Dan Fixture",
+          "priority": "high",
+          "refs": ["task:81"]
+        }
+      ],
+      "more": 1
+    },
+    {
+      "kind": "decisions",
+      "items": [
+        {
+          "type": "decision",
+          "topic": "Findings from mail",
+          "action": "waiting for review",
+          "count": 12,
+          "refs": ["proposal:fact%3A512"]
+        }
+      ]
+    },
+    {
+      "kind": "money",
+      "items": [
+        {
+          "type": "money",
+          "who": "Demo Ltd",
+          "topic": "November rent",
+          "action": "pay",
+          "amount": { "value": 48000, "currency": "RUB", "direction": "out" },
+          "due": "2026-11-03",
+          "channel": "mail",
+          "refs": ["msg:email/7"]
+        },
+        {
+          "type": "money",
+          "who": "Sample LLC",
+          "topic": "prepayment, contract 14",
+          "amount": { "value": 1200, "currency": "EUR", "direction": "in" }
+        }
+      ]
+    },
+    {
+      "kind": "meetings",
+      "items": [
+        {
+          "type": "meeting",
+          "topic": "Warehouse stand-up",
+          "time": "2026-11-06T11:00:00+03:00",
+          "who": "Alice Example, Dan Fixture",
+          "action": "bring the lease figures",
+          "channel": "meeting"
+        }
+      ]
+    },
+    {
+      "kind": "projects",
+      "items": [
+        {
+          "type": "fact",
+          "topic": "Warehouse",
+          "detail": "the landlord agreed to 5% off from January",
+          "who": "Alice Example"
+        },
+        {
+          "type": "risk",
+          "topic": "Cable delivery",
+          "detail": "the supplier has not answered for 4 days",
+          "action": "call Dan Fixture before noon",
+          "priority": "high"
+        }
+      ],
+      "more": 2
+    },
+    {
+      "kind": "mail",
+      "items": [
+        {
+          "type": "reply",
+          "who": "Erin Placeholder",
+          "topic": "invoice copy",
+          "action": "send the signed copy",
+          "since": "2026-11-05T09:00:00+03:00",
+          "channel": "mail",
+          "refs": ["msg:email/9"]
+        }
+      ]
+    }
+  ],
+  "health": [
+    {
+      "source": "Telegram",
+      "account": "@demo",
+      "reason": "sync-failed",
+      "since": "2026-11-04T23:10:00+03:00",
+      "stale_hours": 33,
+      "refs": ["sync:telegram/1001"]
+    },
+    { "source": "MAX", "account": "test account", "reason": "no-schedule", "stale_hours": 0 },
+    {
+      "source": "Mail",
+      "account": "owner@example.com",
+      "reason": "quiet",
+      "stale_hours": 50,
+      "refs": ["account:max/1"]
+    }
+  ],
+  "scope": {
+    "from": "2026-11-05T08:30:00+03:00",
+    "to": "2026-11-06T08:30:00+03:00",
+    "sources": [
+      { "kind": "telegram", "accounts": 1 },
+      { "kind": "max", "accounts": 1 },
+      { "kind": "mail", "accounts": 2 }
+    ],
+    "counts": { "chats": 31, "mail": 12, "tasks": 17, "meetings": 1 }
+  },
+  "tasks": {
+    "overdue": 5,
+    "today": 3,
+    "tomorrow": 2,
+    "new": 4,
+    "new_since": "2026-11-05T08:30:00+03:00",
+    "undated": 91
+  }
+}

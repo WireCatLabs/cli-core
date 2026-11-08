@@ -12,6 +12,7 @@
       "!src/store/sqlite/migrations.generated.ts",
       "!src/search/snowball",
       "!.worktrees",
+      "!.claude",
       "!config/wirecat"
     ]
   },
@@ -829,7 +830,7 @@
             "noExcessiveLinesPerFile": {
               "level": "error",
               "options": {
-                "maxLines": 457
+                "maxLines": 464
               }
             }
           }

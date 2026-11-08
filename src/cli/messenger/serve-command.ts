@@ -19,6 +19,7 @@ import { onlineDeps } from "../../services/deps.js"
 import { servicesFor } from "../../services/index.js"
 import { patiently } from "../../services/patience.js"
 import { applyTaskRulesOnArrival, openRequestTask } from "../../services/task-rules.js"
+import { storePath } from "../../store/path.js"
 import { environmentOf } from "../context.js"
 import { REMOTE_WRITE } from "../effects.js"
 import { itemOf, renderAnswer } from "../envelope.js"
@@ -27,6 +28,7 @@ import { type Messenger, type MessengerContext, messengerContext } from "./conte
 import { START_SYNC_PER_CHAT, startSync } from "./serve-catch-up.js"
 import { memberFetches } from "./serve-members.js"
 import { noticeFor, recordDiagnostics, type ServeNotice } from "./serve-notice.js"
+import { outdatedReason, ownPackageRoot, watchOutdated } from "./serve-outdated.js"
 import { serveRelay } from "./serve-relay.js"
 import { stemFills } from "./serve-stems.js"
 import { listenUntilStopped } from "./watch-command.js"
@@ -87,7 +89,7 @@ export const serveCommand = (messenger: Messenger): Command => {
     const counts: Record<string, number> = {}
     const rules = replying(context, messenger, Date.parse(startedAt))
     const tasks = tasking(context, warn)
-    const { handled, startSyncDelayMs } = environmentOf(this)
+    const { handled, startSyncDelayMs, outdated: outdatedHook } = environmentOf(this)
     const count = (event: MessageEvent) => {
       counts[event.event] = (counts[event.event] ?? 0) + 1
       if (event.event === "message") {
@@ -166,9 +168,26 @@ export const serveCommand = (messenger: Messenger): Command => {
       withStore: (work) => context.withStore((store) => work(store), { name: "serve stems" }),
       warn,
     })
+    const listening = new AbortController()
+    let outdated: string | undefined
+    const packageRoot = outdatedHook?.packageRoot ?? ownPackageRoot(version)
+    const watch = watchOutdated({
+      check: () =>
+        outdatedReason({
+          command: messenger.app.command,
+          running: version,
+          storePath: storePath(context.env),
+          packageRoot,
+        }),
+      onOutdated: (reason) => {
+        outdated = reason
+        listening.abort()
+      },
+      ...(outdatedHook?.everyMs === undefined ? {} : { everyMs: outdatedHook.everyMs }),
+    })
     try {
       await listenUntilStopped(this, context, relay?.messenger ?? messenger, count, {
-        stop: new AbortController(),
+        stop: listening,
         catchUp: true,
         onReady,
         connected: (open) => {
@@ -180,6 +199,7 @@ export const serveCommand = (messenger: Messenger): Command => {
         },
       })
     } finally {
+      watch.stop()
       await relaying
       await relay?.close()
       rules.stop()
@@ -190,6 +210,8 @@ export const serveCommand = (messenger: Messenger): Command => {
       await tasks.settled()
       releaseLock(path)
     }
+    // Not 0: the unit restarts only a serve that failed, and the restart is what loads the installed build.
+    if (outdated !== undefined) throw new CliError("configuration_error", outdated, { reason: "serve.outdated" })
     // `kept` and the reply counts are keyed by event names and rule ids, never camelCased.
     renderAnswer(
       this,

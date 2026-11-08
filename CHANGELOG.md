@@ -14,6 +14,213 @@ shape of this file.
   mail-cli older than 0.21.0 refuses the flag, and the report then goes as the `text` rendering, as before, with
   `delivery.html-fallback` in `last.json`. A report that failed its check still mails its one line as text.
 
+## 0.618.0 — 09.11.2026
+
+### Added
+
+- **Links open a person and a project.** The v1 link grammar takes `person/<id>` and `project/<key>`
+  (`https://wirecat.dev/o#/v1/person/77`, `wirecat://open/v1/project/ACME%20site`), and `linkFor` builds them from a
+  report item's `person:<id>` and `project:<key>` refs; a project key is one encoded part. An item still opens where
+  it happened first: a person or a project ref gives its one link only when no other ref does
+  (`refsForLink(refs)`, exported). `test/fixtures/links-v1.json` has the new cases; the bounce page and WireCat
+  Desktop need them too before such a link opens there.
+- **An agent schedule's run for a past day (`backfillSchedule`, `backfillScheduleRun`).** It runs the schedule's
+  agent as its timer does, with the same harness, flags, per-run cap and an input of the host's, and keeps the run in
+  `runs/` under the time it is given (`2026-11-05T07-30-00Z.md`, `.log`, `.jsonl`), with `"backfill": true` in its
+  `.report.json`; the report is rendered as of that time. It sends nothing, shows no notice, and leaves `last.json`,
+  `latest.md` and `latest.txt` as they are; its cost counts in today's `spend.json`. The count of runs a schedule keeps
+  (30) no longer removes a backfilled run, which is older than the runs around it. `readSchedule`, `scheduleFile`,
+  `spentToday` and `SCHEDULE_DEFAULTS` are exported from `@wirecat/cli-core/cli` for a host's own checks.
+- **A person's engagement on a project.** `engagement` on a person's `member-of` a project: `none`, `low`,
+  `medium` or `high`, how much the owner deals with that person himself, not how active the person is; absent means
+  unknown. `relate` and `updateRelation` take it (`null` clears it), an agent's change is a `relationship_update`
+  proposal as for a role, and every relationship read carries it. It is refused on any other relationship
+  (`relationship.engagement-ends`). `byEngagement` and `engagementRank` order links high, medium, unknown, low,
+  none; `ENGAGEMENT_LEVELS` lists the levels.
+- **A role note beside the role.** `roleNote`, up to 200 characters, says what the role means on this link in the
+  owner's words, while the role itself stays one of its list. `relate` and `updateRelation` take it; `null` clears it.
+
+### Fixed
+
+- **`store recover run` no longer says nothing was lost when it cannot know.** Before the copy it compares
+  each plain index of the damaged file with its table: entries the table no longer holds are rows a stale page cut
+  off, reported per table in `lost` as `gone_at_least` with the index in `seen_in`. Rows lost from a table and its
+  indexes alike leave no trace, so the notes never say "no table lost a row": they give the lower bound, or say the
+  loss is unknown, with the last deep check that passed (`last_known_good`). On six stores the cli-testing integrity
+  harness broke, it says at least 50, 200, 50 and 265 messages are gone where 50, 241, 50 and 291 are, and "unknown"
+  on the two stores whose lost rows never reached the file.
+- **`store recover run` keeps rows that `.recover` found on pages no table claims.** It dropped them with the rest of
+  its lost-and-found table; each one now goes back into the one data table whose columns its values fit (`placed`,
+  per table), and only the rest are dropped. 9 committed messages came back on one R1 store.
+- **After `store recover run`, the next ordinary sync fetches again what the damage may have taken.** A messenger
+  sync jumps over every stretch the store marks as fetched, so a hole inside one stayed for good. The recovery now
+  forgets what was fetched from a day before the last deep check that passed (all of it when none is on record): each
+  chat's held stretches end at its last message sent before then, and each mail folder keeps as listed only the UIDs
+  up to its last email from before then. `refetch` in the answer says how many chats and mail folders per account,
+  and the notes say what cannot come back: what only the store held, and WhatsApp history the phone does not push
+  again. Nothing on any service is asked or changed by the recovery. On the T1-roles store the cli-testing harness
+  broke with a hole of 291 messages inside a chat, one ordinary sync brought all of them back; without this, 200
+  were still missing after 25 syncs.
+- **A `serve` no longer runs on after the store or the installed package moved past it.** Every minute it
+  checks whether the store's format is one its build can no longer write, or whether a newer version of its own
+  package is installed on disk; then it logs one error, `serve.outdated`, and exits 3, which its unit
+  (`Restart=on-failure`) answers by starting the installed build. A wa serve had stored nothing for a day on 0.30.0
+  after 0.33.0 moved the store to format 57. `outdatedReason`, `watchOutdated` and `ownPackageRoot` from
+  `@wirecat/cli-core/cli`, for a CLI with a serve of its own.
+- **Busy sync runs no longer fail with "database is locked".** Each writable open read the schema version under the
+  write lock, without the retry other writes use, so with several tools syncing at once it gave up after 5 s. A
+  current store is now checked without the lock, and a migration takes it with the retry. Listing mail pieces to
+  embed (`mail.chunksToEmbed`, and mail search) wrote its queue bookkeeping outside a transaction; it now reads
+  first and writes through the store's transaction only when there is work. A write that had to wait for the lock
+  leaves it free for 2 ms after it commits, so a waiter gets in between one process's back-to-back writes.
+- **The real error of a failed write is shown.** When SQLite had already rolled a transaction back itself (an I/O
+  error, a full disk), the store's own rollback failed with "cannot rollback - no transaction is active", and that
+  message replaced the real one.
+- **`relationships scan` reads each chat once, however many times it spreads.** Each of its up to 4 passes read every
+  chat found so far again (up to 2 000 messages each) and looked up every sender's person again, so a project with
+  confirmed links took about three times longer than one without: 4.9–5.8 s against 1.6–1.9 s on a synthetic store
+  of 2 600 chats. A scan now keeps what it read until it ends: 0.6–0.8 s on the same store, with the same proposals.
+
+## 0.617.0 — 08.11.2026
+
+### Security
+
+- **Messenger bot tokens are masked in the store.** A Telegram bot token (`<bot id>:<secret>`, as BotFather sends
+  it) in a message's text or caption, in the quote of a reply, or in an edit is saved as `<bot id>:<bot token
+  hidden>`, before the search copy and the vectors are made, for every messenger. Messages already stored, and those
+  an older build saves later, are masked the next time a store is opened for writing, from the newest message checked
+  last time (`store_settings.bot_tokens_masked_through`): the text, the search copy, the quote and the edit history,
+  and the vectors of the conversation pieces they were in are dropped, to be made again. No store version.
+- **`Chat.searchable: false`**: a messenger saves a chat whose messages hold credentials as not searchable. Search
+  over all chats, search by meaning and context evidence leave it out (as for any chat with `chats.searchable = 0`);
+  a read that names the chat still sees it. A later save without the
+  field keeps the mark, and nothing a messenger saves unhides a chat.
+
+## 0.616.0 — 08.11.2026
+
+### Added
+
+- **The weekly gaps message (`report/weekly-gaps`).** A morning digest may keep what it found on its own, which the
+  agenda did not show, in `internal.gaps` (`{ what, refs | ref, section }`); the digest never shows it. Once a week a
+  delivered digest run also sends those gaps along the same routes as one message: on Monday, or on the first digest
+  of a week whose Monday run did not send them, and never before a schedule's first Monday. It reads the run files
+  of the last 7 days, says a gap that several runs found once (the same ref, or the same words but for case and
+  punctuation) with how many digests found it, the most frequent first, and sends nothing for a week without gaps.
+  No agent runs for it. When it went, how many gaps and the deliveries are in the schedule's `weekly-gaps.json`.
+- **A failed scheduled run sends a rendered notice (`notice/schedule-failed`).** In place of the one English line,
+  every route of a schedule that notifies on failures gets which schedule failed, since when and how many runs in a
+  row, the cause in the owner's language (keyring locked, sign-in needed, service unreachable, service error,
+  settings, stopped, crashed: from the error code, never its message) and one "fix" link to the tool's sync screen
+  (`sync/<tool>`). A notice whose templates fail sends the old line. The desktop notice is unchanged.
+- Default templates for both, for Telegram, email and text in Russian and English, with the digest's escaping and
+  platform rules; `templates edit | preview` now take both keys, checked against their own synthetic samples.
+- **A source check names what changed, and a source review's text can be read.** `knowledge.checkSources` also
+  answers `changedRefs`: the sources found changed in that run, whether they raised a review or still said the
+  quoted words, that no open `evidence_findings` batch cites, leaving out deleted sources and cited memories or facts.
+  An agent reads those again for new facts. `knowledge.sourceReviewTexts(id)` gives each source of a
+  `memory_source_review` with its quote, its text as cited (notes, documents and messages keep history) and its text
+  now, so a reader compares them while the review itself holds no source text. The shared `memory` and `fact`
+  entities take an optional `source_review: { id, cause } | null`, the marker reads already carry.
+  `knowledge.changedSources({ since })` reads the cited sources a check found changed since then and that differ
+  from the version cited, with the same exclusions, so a change the timer's check already took still reaches an
+  agent.
+- **`store.notes.addedSource(ref)` reads an added source back with what it is and what was kept**: `kind`, the `url`
+  as given, `fileName`, `mime`, `size`, `kept` and the `copy` path, beside its document; `undefined` for any other
+  document or a removed source. The `AddedSourceDetails` type is exported.
+- **`people.merges(uid)`, `people.undoMerge(to, from, by)` and `people.split(uid, identities, by)`.** `merges` lists
+  the people merged into a person, each with the identities from it that are still there, the method, who and when,
+  under an id `merge:<to>-<from>` (`parseMergeId` reads it back). `undoMerge` moves those identities back to the old
+  person, whose uid stays the same, and leaves any the owner split or unlinked off since; a chain of merges undoes
+  newest first. `split` moves the chosen identities to one new person. Both are the owner's only
+  (`identity.owner-only`; pass `"owner"` only from a path that established the owner ran it), and an automatic match
+  by the same address does not join those people again. `undoMerge` refuses with `identity.stale` when one of the
+  identities was merged on into another person since.
+- **The digest says how many open tasks have no due date.** A report may give `tasks.undated` (a whole number; absent
+  is 0), and the section with the task group links gets one line after them, "без срока: 91 · открыть" or "no due
+  date: 91 · open", in every channel's Russian and English template, linking `tasks/undated`. The line is left out
+  when the count is 0. The v1 link grammar takes `tasks/undated` beside `overdue`, `today`, `tomorrow` and
+  `new/<since>`; the bounce page and WireCat Desktop need it too before such a link opens there.
+
+### Changed — may break callers
+
+- **`templates` takes the language as `--locale <code>`, not `--language <code>`, and its words come from the shared
+  vocabulary.** `--language` is the query language in every other command (`<lucene|legacy>`); the template's
+  language keeps its field name, `language`. `--file <file>` names the file as the vocabulary does, `templates list
+  [query...]` narrows by `key`, `channel`, `language` and `source` (`templates list channel:telegram source:stored`)
+  and answers the `template` entity, every command has a short summary, and `<tool> commands` lists the group under
+  Automate, not Other. The shared commands' lint now covers the group, so `cli-dev lint` passes on a tool that mounts
+  it with cli-base 0.89.0 (`preview`, `--locale`, `--undo`, `--channel <channel>`).
+- **`people.personByUid` of a person merged into someone else answers with that person.** Its `uid` is the
+  current person's, not the one asked for, and `mergedInto` is set; `personSeenInAccounts` follows the same merge.
+  A caller that compares the answer's `uid` with the one it passed reads `mergedInto` instead.
+- **`unlinkIdentity` records its move with method `unlink`, whatever method the caller passes,** so a separation is
+  never listed as a merge.
+
+### Fixed
+
+- **One notification per digest while WireCat Desktop runs.** Desktop announces a new morning digest itself, so a
+  finished run showed two system notices. A schedule's run now leaves its own success notice out when
+  `<state>/schedules/desktop.json` names a live pid and lists the schedule in `announces` (Desktop writes it while it
+  runs, wirecat-desktop#214). A marker whose pid is gone counts for nothing; failure notices and deliveries do not
+  change.
+- **A mail-gated agent no longer runs again on the input its last run ended on.** One refusal the agent could not
+  get past (a findings key already taken) turned into a paid run every 5 minutes until the day's cost cap. The
+  timer (`schedule exec`) now keeps the SHA-256 of a `--on-new-mail` agent's input in `last.json` (`inputHash`);
+  when the next input is the same and that run exited 0, its mark did not move, so the run is left out with
+  `skipped.reason` `mail.same-input` (`SKIP_REASONS.mailSameInput`). New mail changes the input and runs normally;
+  `schedule run` by hand always runs. `runSchedule(…, { skipRepeatedInput: true })` turns it on for another timer.
+- **A person shows once after a merge.** The person a merge emptied stayed in `taskPeople`, so memo's `people list`
+  and `search people` showed the same person two or three times. It is skipped now and its tasks count for the person
+  it was merged into. Rows that name the old uid keep it, so undoing loses nothing, and the filters by a person read
+  them with the current person: memories, facts, notes, documents' `person:`, relationships, the task board's
+  `assignee:` and preparation, and assigning the old uid to a task the current person holds is a no-op.
+  A source's sync that reports a relationship on the current person withdraws what it reported on the old one, so
+  the relationship shows once.
+
+- **`account remove` is in the messenger parity manifest** (`parity.json`), with `--keep-data`, `--delete-data`
+  and `--dry-run`, so tg, max and wa can adopt it without failing `parity:check`.
+
+## 0.614.0 — 08.11.2026
+
+### Added
+
+- **The owner's own message templates, in the shared store (store version 59).** `templatesCommand(app, { env,
+  output, diagnostic })` gives a tool `templates list | show | edit | preview | reset <key> --channel
+  telegram|email|text [--language <code>]`. Keys: `report/morning-digest`; `report/weekly-gaps` and
+  `notice/schedule-failed` are listed, but nothing renders them yet, so they cannot be edited. `edit` opens
+  `$VISUAL`/`$EDITOR` on the template that applies, or takes `--file`; a save is checked first against a synthetic
+  report and the tool's last real `<run>.report.json`: it must render, the channel's rules may remove nothing (a tag
+  outside the list, an `href` that is not a link of the report, a `style` with `url(`), and a Telegram text must fit
+  4 096 characters once the size fit dropped what it could. A failed check saves nothing and says why, and keeps an
+  editor draft for `--file`. Every save and reset keeps the replaced body in `templates_history`; `edit --undo` puts
+  back the last one. `reset` deletes the row, so the shipped template applies again. `edit` and `reset` change what
+  later runs send (`grantsAuthority`), and an agent is refused (`template.owner-only`). A scheduled report renders
+  with the stored templates of the owner's language; a stored body that fails, or a store that cannot be read,
+  falls back to the shipped template for that channel and records `report.template-failed`. The email template is
+  stored and previewed, but mail still sends the plain-text rendering. `store.templates` and
+  `storedTemplateBodies(database, key, language)` from `@wirecat/cli-core/store`.
+- **`account remove`, built once for every tool.** `<tool> <profile> account remove --keep-data|--delete-data` signs
+  the profile out with the tool's own `signOut` hook, then forgets it here: its keyring entries, its
+  `state/accounts/<profile>.json`, the tool's own state files and its sections in the config file; other profiles stay.
+  `--delete-data` also purges the account from the shared store (`store.accounts.purge`) and deletes the tool's data
+  files; `--keep-data` leaves its messages in the store, still searchable, and says so under `kept`. It asks first, or
+  `--yes`; under `--json` without `--yes` it answers `confirmation_required`; `--dry-run` lists every entry, section and
+  file. It refuses while a serve or a sync holds the profile, a path outside the tool's own folders, and runs neither
+  over MCP nor under `<PREFIX>_READ_ONLY`. The answer is the entity `account_removal`; reasons `account-remove.*`.
+  A messenger opts in with `Messenger.accountRemoval`; any other CLI mounts `accountRemoveCommand(app, hooks)`
+  ([guide](docs/dev/ACCOUNT-REMOVAL.md)). `store.accounts.forgetProfile` forgets which account a profile was.
+  It also removes what cli-core keeps for the profile, so no tool lists it: its flood, pace, recipients, moderation,
+  provider log, MCP HTTP tokens, replies state and rules, `--new` points and checkpoints, its serve unit (by its exact
+  name) and the schedules whose environment names it. The sends journal stays, under `kept`. A tool whose files live
+  outside its cli-core folders names them with the `ownFolders` hook; each must be absolute and inside the home folder
+  (`account-remove.folder-outside`).
+
+### Fixed
+
+- **cli-core accepts any `@wirecat/cli-base` 0.x from 0.80.7 (`>=0.80.7 <1.0.0`).** Its peer range stopped at
+  `<0.86.0`, so a CLI could not take cli-base 0.86.0 or 0.87.0 beside it. The range is pinned again at 1.0. Nothing
+  else changes for a caller.
+
 ## 0.612.0 — 08.11.2026
 
 ### Changed — may break callers
