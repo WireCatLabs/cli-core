@@ -16,12 +16,14 @@ export const e164Of = (phone: string, region: string | undefined): string | null
 }
 
 /**
- * The E.164 number a stored phone stands for, read the one way every match reads it: a `phone` identity keeps the
- * number whole, and a messenger or CRM contact keeps it in `identities.phone` with or without the `+`. Anything else
- * written there matches nothing.
+ * The E.164 number a stored phone stands for. A `phone` identity keeps the number whole; a messenger keeps it as bare
+ * digits without the `+`; a CRM contact keeps it as the CRM shows it, formatted. A number written with `+` or `00` is
+ * read whatever its spacing; bare digits only as an international number; a national number names no country, so it
+ * matches nothing.
  */
 export const storedPhone = (raw: string): string | undefined => {
-  const found = /^\+?([1-9]\d{6,14})$/.exec(raw)
+  if (/^\s*(\+|00)/.test(raw)) return typedPhone(raw)?.value
+  const found = /^([1-9]\d{6,14})$/.exec(raw.trim())
   return found ? `+${found[1]}` : undefined
 }
 

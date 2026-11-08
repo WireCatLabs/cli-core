@@ -542,10 +542,12 @@ with one exact address join one person (`joinByAddress`), unless the owner separ
   rejected is never proposed again. A confirm is the owner's link (method `proposal`), refused with `identity.stale`
   once `sides` no longer hold. An agent's mention confirm and meeting association go through `linkOrPropose`, which
   links only for the owner.
-- **One matcher** (`person-matcher.ts`) is the records import's person lookup and the phone reading
-  (`e164Of` for what a source typed, `storedPhone` for a stored column: the E.164 number, with or without the `+`).
-  `scanMatches` (`person-match-scan.ts`) uses it over the whole store: the same address joins people (NEED-2382), a
-  number exactly two people have joins them, three to six on one number and a meeting guest's typed address
+- **One matcher** (`person-matcher.ts`) is the records import's person lookup and the phone reading: `e164Of` for
+  what a source typed, `storedPhone` for a stored column (a number with `+` or `00` however it is spaced, or bare
+  international digits; a national number names no country and matches nothing). The import's lookup still matches
+  only the E.164 number with or without the `+`. `scanMatches` (`person-match-scan.ts`) uses it over the whole
+  store: the same address joins people (NEED-2382), a number exactly two people have joins them, never moving the
+  owner's person away, and three to six on one number and a meeting guest's typed address
   (`meeting_participants.email`) become proposals. Its merges are authored `rule`: a move the owner authored counts
   as a separation, so an automatic one must never be.
 

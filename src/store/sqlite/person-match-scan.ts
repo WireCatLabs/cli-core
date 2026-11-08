@@ -85,13 +85,18 @@ const resolveNames = (context: StoreContext, person: number) =>
       .flatMap((row) => [row.name as string | null, row.username as string | null]),
   )
 
+const isOwner = ({ database }: StoreContext, person: number): boolean =>
+  Number(database.prepare("SELECT owner FROM persons WHERE id = ?").get(person)?.owner) === 1
+
+/** The owner's person is never merged away: anyone who joins them comes to them. */
 const join = (
   context: StoreContext,
   result: MatchScan,
-  from: number,
-  into: number,
+  one: number,
+  other: number,
   signal: "same-email" | "same-phone",
 ): void => {
+  const [from, into] = isOwner(context, one) ? [other, one] : [one, other]
   if (separated(context, from, into)) {
     result.skipped.push({ persons: [String(from), String(into)], signal, reason: "identity.separated" })
     return
@@ -111,7 +116,9 @@ const sameEmail = (context: StoreContext, result: MatchScan) => {
       .prepare("SELECT id FROM identities WHERE provider = 'email' AND (external_id = ? OR email = ?) LIMIT 1")
       .get(address, address)
     const held = contact ? personOf(context, Number(contact.id)) : undefined
-    const into = held !== undefined && people.has(held) ? held : [...people.keys()].reduce((a, b) => Math.min(a, b))
+    const owner = [...people.keys()].find((person) => isOwner(context, person))
+    const into =
+      owner ?? (held !== undefined && people.has(held) ? held : [...people.keys()].reduce((a, b) => Math.min(a, b)))
     for (const from of people.keys()) if (from !== into) join(context, result, from, into, "same-email")
   }
 }

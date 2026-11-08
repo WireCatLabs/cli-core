@@ -140,7 +140,7 @@ export function meetingContextLinksOver(context: StoreContext): MeetingContextSt
           return {
             meetingId: input.meetingId,
             participantId: input.participantId,
-            personUid: input.personUid,
+            personUid: proposal === undefined ? input.personUid : (found.personUid ?? input.personUid),
             previousPersonUid: found.personUid,
             changed,
             ...(proposal === undefined ? {} : { proposal }),

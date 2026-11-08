@@ -89,12 +89,34 @@ describe("a phone", () => {
     expect(scan.merged).toMatchObject([{ signal: "same-phone" }])
   })
 
-  it("reads a number written with spaces as no match, as the import's lookup does", async () => {
+  it("reads a CRM's formatted international number, and never guesses the country of a national one", async () => {
     const store = await open()
     await store.people.savePeople(PERSONAL, [{ id: "5", name: "Ana", phone: "79001234567" }])
-    await store.people.savePeople(MAX, [{ id: "7", name: "Anya", phone: "+7 900 123-45-67" }])
+    await store.people.savePeople(WORK, [{ id: "contact/20", name: "Ana Example", phone: "+7 (900) 123-45-67" }])
+    await store.people.savePeople(MAX, [{ id: "7", name: "Anya", phone: "8 900 123-45-67" }])
 
-    expect((await store.people.scanMatches()).merged).toEqual([])
+    const scan = await store.people.scanMatches()
+
+    expect(await uidOf(store, "bitrix24", "contact/20")).toBe(await uidOf(store, "telegram", "5"))
+    expect(await uidOf(store, "max", "7")).not.toBe(await uidOf(store, "telegram", "5"))
+    expect(scan.merged).toHaveLength(1)
+  })
+
+  it("brings a contact with the owner's number to the owner, never the owner to the contact", async () => {
+    const store = await open()
+    await store.people.savePeople(WORK, [{ id: "contact/20", name: "Slava Example", phone: "+7 900 123-45-67" }])
+    await store.people.savePeople(PERSONAL, [{ id: "9", name: "Slava", phone: "79001234567" }])
+    const me = { uid: await uidOf(store, "telegram", "9") }
+    const database = await raw()
+    database.prepare("UPDATE persons SET owner = 0").run()
+    database.prepare("UPDATE persons SET owner = 1 WHERE id = ?").run(Number(me.uid))
+    expect(Number(me.uid)).toBeGreaterThan(Number(await uidOf(store, "bitrix24", "contact/20")))
+
+    await store.people.scanMatches()
+
+    const owner = await store.people.owner()
+    expect(owner?.uid).toBe(me.uid)
+    expect(owner?.identities.map(({ provider }) => provider).sort()).toEqual(["bitrix24", "telegram"])
   })
 
   it("never joins two people the owner separated", async () => {
