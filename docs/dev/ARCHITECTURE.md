@@ -365,7 +365,12 @@ messenger account, never mail), mail and notes in turn and merges their lists by
 no resource's own scores are compared with another's. A resource that cannot answer the query — a
 field it lacks, or nothing stored — is listed in `skipped` with the reason instead of failing the search.
 Its messages take the same server step as `search messages` (`--backend`, default `both`, through
-`messages.searchAll`); mail and notes are always the local store's.
+`messages.searchAll`); mail and notes are always the local store's. The `crm` and `business` lanes fold short
+titles in memory per query, with no index: `deals.find` reads deal and lead titles, `store.business.find`
+(`src/store/sqlite/business-search.ts`) the numbers and names of invoices, payments, orders, contracts, subscriptions,
+products and wallets ([KNOWLEDGE.md § Money](KNOWLEDGE.md#money)). A business hit's account is its source record's,
+found through `records.entity_type`/`entity_id`; under `--source` the lane reads the import accounts the list names,
+whatever their provider (`fitting`'s `alsoFits`). Source tools' `search all` (`SOURCE_SEARCHED`) reads neither lane.
 
 `searchAllIncludingMeetings` (`src/services/search-all-meetings.ts`) is a separate opt-in service.
 It delegates the legacy search unchanged, then blends its ordered result with one explicit meeting
@@ -475,7 +480,9 @@ identifiers (`record-matching.ts`). `record-writes.ts` takes one record into its
 says; `record-run.ts` writes a stream per chunk, checks duplicates in `TEMP` tables and pages the receipt's lists from
 them at the end, holding one chunk at a time; a dry run is one rolled-back transaction (`rehearse`,
 `src/store/sqlite/transaction.ts`) that refuses every other statement on the handle meanwhile. The contract is
-[`docs/storage/records-envelope.md`](../storage/records-envelope.md).
+[`docs/storage/records-envelope.md`](../storage/records-envelope.md). Invoices, payments, orders and the
+version 57 tables carry no `account_id` (deals and leads do, for CRM sync): such an entity's account is its records',
+which the `business` search lane reads for scope and provenance.
 
 **Ref summaries.** `store.refs.summaries(refs)` (`src/store/sqlite/ref-summaries.ts`) names a page of refs in one
 statement per kind present: a `VALUES` list of the wanted refs joined to the kind's table. It never throws: a bad ref

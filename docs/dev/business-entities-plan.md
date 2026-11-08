@@ -3,7 +3,8 @@
 For the developer and agent who build it. The user-facing pages come later (§ Docs). This file is the design and the
 build order; it is deleted when the work is merged.
 
-Status: **proposed 2026-11-07.** Owner rulings of 2026-11-07 are binding and are listed in § Rulings, including the
+Status: **building, 2026-11-08.** PRs 1 and 2 are merged (#2656, #2634). PR 3 (#2649), PR 4 (#2660), the phone
+records (#2661), PR 5 (#2668) and PR 6 (the search lane and the docs) are open, each on the one before. Owner rulings of 2026-11-07 are binding and are listed in § Rulings, including the
 answers to the three questions this plan raised. Code comments in this work follow the repository rule: sparse, and only *why*.
 
 ## Why
@@ -685,8 +686,9 @@ Also:
   invoices, payments, orders, contracts, subscriptions, products and wallets, folded in memory like `deals.find`, no
   index and no migration. Transactions are left out: a bank statement gives tens of thousands a year, too many to fold
   per query; `transactions list` filters them. `custom:` records are not in it; they are reached from the entity they
-  relate to and by `records list`. tg and max get the lane too: their `search all` lists it, and the test at
-  `src/services/search-all-meetings.test.ts:97` changes with it. Each hit carries the source record's provider and
+  relate to and by `records list`. The lane is in `RESOURCES_SEARCHED`, which memo's `search all` reads, and the test
+  at `src/services/search-all-meetings.test.ts:97` changes with it. tg and max do not read it yet: their `search all`
+  reads `SOURCE_SEARCHED`, which has no `crm` either, and no permission key there can leave business data out. Each hit carries the source record's provider and
   account when the entity came from one.
 - **MCP** stays the three-tool bridge. No new stdin command: `records import` and `records check` are already in
   `src/mcp/catalogue.ts:35`. `records delete` is a write at `ask`. `records link` stays excluded.

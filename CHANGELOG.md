@@ -78,8 +78,20 @@ shape of this file.
   chat whose membership is not `imported` (`record.chat`), and an SMS moved to another thread is refused
   (`record.moved`). A deleted SMS or call record tombstones its message or event, and
   sending it again brings them back.
+- **`search all` has a `business` lane.** `searchAll` finds invoices, payments, orders, contracts, subscriptions,
+  products and wallets by the words of their numbers and names (an invoice's counterparty, a payment's payer or payee,
+  an order's shop and lines), folded in memory like the `crm` lane, with no index. Each hit carries its `review`
+  (`proposed` or `confirmed`) and, when an import made it, `source_record` (`provider`, `account`, `external_id`);
+  the owner's own rows are `business:internal`. `scope.business` and `--source` read the import accounts they name.
+  Transactions, `custom:` records and rejected rows are left out. `store.business.find` and `store.business.accounts`
+  back it.
 
 ### Changed — may break callers
+
+- **`RESOURCES_SEARCHED` ends with `business`**, so `searchAll` and `searchAllWithMeetings` read it when `only` is
+  left out, and `SearchAllItem.kind` and the `hit` entity's `kind` take `invoice`, `payment`, `order`, `contract`,
+  `subscription`, `product` and `wallet`. A switch over hit kinds needs those branches; pass `only` to keep the old
+  lanes. The source tools' `search all` (`SOURCE_SEARCHED`) is unchanged.
 
 - **`EntryEventType` has `call`**, and `events list event_type:` takes it. A switch over the kinds needs a branch.
 - **`kindIn` and `ListedAccount.kind` name a provider's first kind only.** A provider may hold several (`kindsIn`,
