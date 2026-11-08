@@ -16,8 +16,11 @@ vec_url=https://github.com/asg017/sqlite-vec/releases/download/v0.1.9/sqlite-vec
 vec_sha256=3acd67cb4aff080c7050926fd3cf8227905fe5b7ee3829d8ee5024ab1283cf61
 
 work=$(mktemp -d)
-curl -sSfL "$url" -o "$work/sqlite.zip"
-curl -sSfL "$vec_url" -o "$work/vec.tar.gz"
+# No --retry-all-errors: the manylinux image's curl may predate it (7.71), and --retry already covers 5xx and timeouts.
+curl -sSfL --retry 5 --retry-connrefused --retry-delay 5 --connect-timeout 20 --max-time 300 --retry-max-time 600 \
+  "$url" -o "$work/sqlite.zip"
+curl -sSfL --retry 5 --retry-connrefused --retry-delay 5 --connect-timeout 20 --max-time 300 --retry-max-time 600 \
+  "$vec_url" -o "$work/vec.tar.gz"
 if command -v sha256sum >/dev/null; then sum=sha256sum; else sum="shasum -a 256"; fi
 echo "$sha256  $work/sqlite.zip" | $sum -c - >/dev/null
 echo "$vec_sha256  $work/vec.tar.gz" | $sum -c - >/dev/null
