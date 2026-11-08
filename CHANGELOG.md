@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.609.0 — 08.11.2026
+
 ### Added
 
 - **`models set <id>` chooses the local embedding model for every WireCat CLI**, kept in the shared settings file:
