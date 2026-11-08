@@ -322,12 +322,13 @@ export const memoriesStoreOver = (
     return row
   }
   /**
-   * A correction retired the memory if it was ever confirmed. An older store let an agent's proposal retire it at
-   * once, so a memory superseded only by the one being confirmed is not refused.
+   * Another correction retired the memory if it is confirmed. Not `last_verified_at`: the owner's source review sets
+   * it on a proposal too. An older store let an agent's proposal retire the memory at once, so a memory superseded
+   * only by proposals is not refused.
    */
   const retiredByAnother = (replaced: number, by: number): boolean =>
     database
-      .prepare("SELECT 1 FROM memories WHERE supersedes_id = ? AND id <> ? AND last_verified_at IS NOT NULL LIMIT 1")
+      .prepare("SELECT 1 FROM memories WHERE supersedes_id = ? AND id <> ? AND status = 'confirmed' LIMIT 1")
       .get(replaced, by) !== undefined
   const setStatus = (reference: string, status: Memory["status"], verified: boolean) => {
     const row = rowOf(reference)

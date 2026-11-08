@@ -24,6 +24,14 @@ shape of this file.
 - Default templates for both, for Telegram, email and text in Russian and English, with the digest's escaping and
   platform rules; `templates edit | preview` now take both keys, checked against their own synthetic samples.
 
+### Fixed
+
+- **A proposal whose sources the owner verified no longer blocks confirming another correction.** Confirming a
+  correction refused with `memory.already-superseded` when a rival correction of the same memory was still proposed but
+  the owner had confirmed its source review, since that sets `lastVerifiedAt`. A rival now counts as having retired the
+  memory once it left `proposed`, so one confirmed and later marked stale or corrected still refuses a queued
+  proposal. Confirming a correction of a memory that is already superseded is the owner's alone.
+
 ## 0.614.0 — 08.11.2026
 
 ### Added

@@ -216,6 +216,24 @@ describe("correcting a memory", () => {
     ).rejects.toMatchObject(twice)
   })
 
+  it("lets the owner confirm a correction while a rival proposal only had its sources verified", async () => {
+    const { store, input, old, proposal } = await corrected()
+    const rival = await store.memories.add({
+      ...input,
+      body: "Kai Sample prefers calls",
+      author: agent,
+      supersedes: old.ref,
+    })
+    const review = await store.knowledge.challenge(rival.ref, { evidence: input.evidence, reason: "check", by: agent })
+    await store.knowledge.decideSourceReview(review.id, { confirm: true, by: "owner" })
+    expect(await store.memories.get(rival.ref)).toMatchObject({
+      status: "proposed",
+      lastVerifiedAt: expect.any(String),
+    })
+    expect(await store.memories.confirm(proposal.ref, "owner")).toMatchObject({ status: "confirmed" })
+    expect(await store.memories.get(old.ref)).toMatchObject({ status: "superseded" })
+  })
+
   it("by the owner directly retires the old memory at once", async () => {
     const { store, input, old } = await corrected()
     const fixed = await store.memories.add({
