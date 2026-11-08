@@ -1,5 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import { parseReference } from "../../domain/references.js"
+import { isUsable } from "../../domain/relations.js"
 import type { MessageStore } from "../../store/store.js"
 import type { AccountKey } from "../../store/types.js"
 import { BUILT_IN_PURPOSES } from "../project-purposes.js"
@@ -64,7 +65,7 @@ const projectOf = async (store: MessageStore, reference: string): Promise<Scanne
 const confirmedOf = async (store: MessageStore, project: ScannedProject | null) => {
   if (!project) return { chats: [], people: [] }
   const members = (await store.knowledge.relations(null, project.ref)).filter(
-    (one) => one.confirmed && one.kind === "member-of" && one.to === project.ref,
+    (one) => isUsable(one.standing) && one.kind === "member-of" && one.to === project.ref,
   )
   return {
     chats: [...new Set(members.map((one) => one.from).filter((ref) => ref.startsWith("chat:")))].sort(),

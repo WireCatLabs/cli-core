@@ -1,4 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
+import { usableLinkSql } from "../../domain/relations.js"
 import type { CacheDatabase } from "../driver.js"
 
 /** One SELECT per way of taking part: the subject's kind, the column that holds its id, and the query. */
@@ -93,7 +94,7 @@ const linkArm = (linkFrom: string, linkTo: string) => `
     LEFT JOIN tasks t ON l.from_type='task' AND t.id=l.from_id
     LEFT JOIN projects p ON p.id=CASE WHEN l.from_type='project' THEN l.from_id ELSE t.project_id END
     LEFT JOIN accounts a ON a.id=coalesce(m.account_id,c.account_id,e.account_id,mt.account_id,d.account_id)
-    WHERE l.to_type IN ('person','identity') AND l.to_id IS NOT NULL AND l.confirmed=1 AND (l.from_type<>'message' OR m.deleted_at IS NULL) AND (l.from_type<>'email' OR e.deleted_at IS NULL) AND (l.from_type<>'meeting' OR mt.deleted_at IS NULL) AND (l.from_type<>'task' OR t.deleted_at IS NULL) AND (l.from_type<>'document' OR d.deleted_at IS NULL)
+    WHERE l.to_type IN ('person','identity') AND l.to_id IS NOT NULL AND ${usableLinkSql("l")} AND (l.from_type<>'message' OR m.deleted_at IS NULL) AND (l.from_type<>'email' OR e.deleted_at IS NULL) AND (l.from_type<>'meeting' OR mt.deleted_at IS NULL) AND (l.from_type<>'task' OR t.deleted_at IS NULL) AND (l.from_type<>'document' OR d.deleted_at IS NULL)
 `
 
 /** A thing whose rows are recomputed: its kind as `involvement_pending` names it, and its id. */

@@ -2,6 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import { type QueryAst, walkQuery } from "@wirecat/cli-base/query"
 import { parseLocator } from "../../domain/locator.js"
 import { formatReference, parseReference, type Reference } from "../../domain/references.js"
+import { checkEnds, checkRole, isSymmetric } from "../../domain/relations.js"
 import { normalizeTag } from "../../domain/tags.js"
 import { normalizeVocabularyName } from "../../domain/vocabulary.js"
 import { formatMeetingReference } from "../../meetings/index.js"
@@ -25,7 +26,7 @@ import {
   type LinkDecision,
   type RelateInput,
   type RelationUpdate,
-  relationOf,
+  relationOf as relationAt,
   relationProposalsOver,
   type Scored,
 } from "./relation-proposals.js"
@@ -261,8 +262,9 @@ const oneOf = <T extends string>(value: string, allowed: readonly T[], what: str
   return value as T
 }
 
-/** What a relationship may connect. */
+/** What a relationship may connect; a deal or a lead only as the end its people hang from. */
 const RELATED = ["person", "organization", "project", "task"]
+const DEALS = ["deal", "lead"]
 /** What a label without an account may sit on; a chat, contact or message is the messenger's tag. */
 const LABELLED: Record<string, LabelledType> = {
   note: "note",
@@ -434,34 +436,47 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
   })
 
   const proposals = relationProposalsOver(context)
+  const relationOf = (link: Link) => relationAt(link, now())
   const RELATIONS = `SELECT * FROM links WHERE kind IN (${RELATION_KINDS.map(linkKind).join(",")}) AND to_id IS NOT NULL`
   const relation = (id: string) => {
     const row = /^\d+$/.test(id) ? database.prepare(`${RELATIONS} AND id = ?`).get(Number(id)) : undefined
     if (!row) throw new CliError("not_found", "no relationship with that id")
     return row
   }
-  /** The two ends of a relationship, checked, and the link that already joins them. */
-  const pair = (key: KnowledgeScope, input: { from: string; to: string; kind: KnowledgeRelation["kind"] }) => {
-    const from = related(key, input.from, true)
-    const to = related(key, input.to)
-    if ((from.type === to.type && from.id === to.id) || !RELATION_KINDS.includes(input.kind))
-      throw new CliError("validation_error", "a relationship needs distinct references and a supported kind")
-    if ((from.type === "chat" || from.type === "email_thread") && (input.kind !== "member-of" || to.type !== "project"))
-      throw new CliError("validation_error", "a chat is related only as member-of a project")
+  /**
+   * The two ends of a relationship, checked against the registry, in stored order (a symmetric pair's lower id first),
+   * and the link that already joins them.
+   */
+  const pair = (
+    key: KnowledgeScope,
+    input: { from: string; to: string; kind: KnowledgeRelation["kind"]; role?: string | undefined },
+  ) => {
+    let from = related(key, input.from, true)
+    let to = related(key, input.to)
+    if (from.type === to.type && from.id === to.id)
+      throw new CliError("validation_error", "a relationship needs two distinct references")
+    checkEnds(input.kind, from.type, to.type)
+    if (input.role !== undefined) checkRole(input.kind, from.type, to.type, input.role.trim())
+    let ends = { from: input.from, to: input.to }
+    if (isSymmetric(input.kind) && to.id < from.id) {
+      ;[from, to] = [to, from]
+      ends = { from: input.to, to: input.from }
+    }
     const existing = database
       .prepare(`${RELATIONS} AND from_type=? AND from_id=? AND to_type=? AND to_id=? AND kind=?`)
       .get(from.type, from.id, to.type, to.id, input.kind)
-    return { from, to, existing }
+    return { from, to, existing, ends }
   }
   /** A chat may only be the member: its reference names its own account, so it is never another account's. */
   const related = (key: KnowledgeScope, reference: string, member = false): Thing => {
     checked(key)
     const thing = thingOf(database, reference)
     const chat = member && (thing?.type === "chat" || thing?.type === "email_thread")
-    if (!thing || !(RELATED.includes(thing.type) || chat) || stateOfThing(database, thing) !== "available")
+    const end = thing && (RELATED.includes(thing.type) || chat || (member && DEALS.includes(thing.type)))
+    if (!thing || !end || stateOfThing(database, thing) !== "available")
       throw new CliError(
         "not_found",
-        `reference needs a stored person:, organization:, project:${member ? ", task: or chat:" : " or task:"}`,
+        `reference needs a stored person:, organization:, project:${member ? ", task:, deal:, lead: or chat:" : " or task:"}`,
       )
     if (chat && key !== null) {
       const parsed = parseReference(reference) as { provider: string; account: string }
@@ -787,7 +802,7 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
         throw new CliError("validation_error", "a relationship names who writes it: the owner or an agent", {
           reason: "proposal.decider-required",
         })
-      const { from, existing } = pair(key, input)
+      const { from, existing, ends } = pair(key, input)
       if (input.by !== "owner") {
         if (existing)
           throw new CliError("validation_error", `relationship ${String(existing.id)} already links them`, {
@@ -795,7 +810,7 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
           })
         return proposals.propose(
           from,
-          { ...input, ...(input.evidence === undefined ? {} : { reason: input.evidence }), evidence: [] },
+          { ...input, ...ends, ...(input.evidence === undefined ? {} : { reason: input.evidence }), evidence: [] },
           input.by,
         )
       }
@@ -804,8 +819,7 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
       return relationOf(
         write(database, () =>
           insertLink(context, {
-            from: input.from,
-            to: input.to,
+            ...ends,
             kind: input.kind,
             origin: confirmed ? "owner" : "suggested",
             confirmed,
@@ -818,12 +832,12 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
       )
     }) as KnowledgeStore["relate"],
     proposeRelation: async (key, input, by) => {
-      const { from, existing } = pair(key, input)
+      const { from, existing, ends } = pair(key, input)
       if (existing)
         throw new CliError("validation_error", `relationship ${String(existing.id)} already links them`, {
           reason: "relationship.exists",
         })
-      return proposals.propose(from, input, by)
+      return proposals.propose(from, { ...input, ...ends }, by)
     },
     relationState: async (key, input) => proposals.state(() => pair(key, input), input),
     updateRelation: (async (
@@ -832,7 +846,10 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
       input: RelationUpdate & { by: Author; reason?: string },
     ) => {
       checked(key)
-      const link = linkOf(database, relation(id))
+      const row = relation(id)
+      const link = linkOf(database, row)
+      if (typeof input.role === "string")
+        checkRole(link.kind, String(row.from_type), String(row.to_type), input.role.trim())
       if (input.by === "owner") return relationOf(proposals.update(link, input))
       return proposals.proposeUpdate(link, input, input.by)
     }) as KnowledgeStore["updateRelation"],

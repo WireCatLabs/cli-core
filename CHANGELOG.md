@@ -5,6 +5,28 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Added
+
+- **Business relationships: `reports-to`, `customer-of` and `partner-of`, role lists, and a `standing` on every
+  relationship.** `knowledge.relate` takes a person reporting to a person, a person or organization buying from an
+  organization, and two partner organizations (stored once, the lower id first, whichever way they are named). A deal
+  or a lead may be a relationship's `from`, so its people are relationships too, and `influencer` joins the deal roles.
+  Each relationship answers `standing`: `confirmed`, `reported` (a source's, nobody confirmed it), `proposed` or
+  `ended`. The kinds, their ends and roles are one registry, `RELATIONS` (`src/domain/relations.ts`), exported with
+  `ORGANIZATION_ROLES`, `PROJECT_ROLES`, `standingOf` and `usableLink`.
+
+### Changed — may break callers
+
+- **A person's role on an organization, a project, a deal or a lead must be one of that relationship's roles.**
+  `relate` and `updateRelation` refuse any other with `relationship.role-unknown`, naming the roles it takes; a role
+  between other ends stays free text, and roles already stored are read as they are. `member-of` now joins only to an
+  organization or a project. What to do: map a free-text role to the closest listed one (a job title goes in
+  `metadata.position`, never in the role); memo's `author`, `lead` and `cto` examples and tests need it.
+- **`KnowledgeRelation.standing` and the `relationship` entity's `standing` are required.** A caller that builds one
+  by hand adds it; `standingOf` derives it from the link.
+
 ## 0.605.0 — 07.11.2026
 
 ### Changed — may break callers

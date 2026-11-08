@@ -1,4 +1,5 @@
 import * as v from "valibot"
+import { DEAL_ROLES } from "../domain/deals.js"
 import { count, id, reference, text, time, untrusted } from "./fields.js"
 
 const nullableText = v.nullable(text)
@@ -45,7 +46,7 @@ export const deal = v.strictObject({
       option_id: v.optional(v.union([v.string(), v.array(v.string())])),
     }),
   ),
-  people: v.array(v.strictObject({ ...party.entries, role: v.picklist(["owner", "contact", "decision-maker"]) })),
+  people: v.array(v.strictObject({ ...party.entries, role: v.picklist(DEAL_ROLES) })),
   author: v.strictObject({
     type: v.picklist(["person", "bot"]),
     id,
