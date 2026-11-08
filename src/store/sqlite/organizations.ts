@@ -3,6 +3,7 @@ import { evaluate, type QueryAst, walkQuery } from "@wirecat/cli-base/query"
 import { ORGANIZATIONS_QUERY } from "../knowledge-query.js"
 import type { Organization } from "./knowledge.js"
 import type { StoreContext } from "./open.js"
+import { categorySql, type OrganizationFilter } from "./organization-categories.js"
 import { queryFilter } from "./query-filter.js"
 import { thingOf } from "./things.js"
 import { write } from "./transaction.js"
@@ -19,7 +20,8 @@ export const organizationOf = (row: Row): Organization => ({
 })
 
 export interface OrganizationsStore {
-  organizations(query?: QueryAst): Promise<Organization[]>
+  /** At most 500, by name; with `filter.category`, only that category's, chosen in SQL. */
+  organizations(query?: QueryAst, filter?: OrganizationFilter): Promise<Organization[]>
   /** Renames an organization given as `organization:<id>` or by its id; its kind and scope stay. */
   updateOrganization(organization: string, input: { name: string }): Promise<Organization>
   /**
@@ -27,13 +29,21 @@ export interface OrganizationsStore {
    * to the CRM's own-company flag.
    */
   setOwnOrganization(organization: string, own: boolean | null): Promise<{ ref: string; own: boolean }>
+  /** The owner's own companies: the owner's mark, else a CRM's own-company flag (`metadata.own`). */
+  ownOrganizations(): Promise<Organization[]>
 }
 
 export const organizationsStoreOver = ({ database, now }: StoreContext): OrganizationsStore => ({
-  organizations: async (query) => {
+  organizations: async (query, filter = {}) => {
+    const category = categorySql(filter, now())
+    const inCategory = category ? ` AND ${category.sql}` : ""
     // `lower()` folds ASCII only and an organization has no folded copy, so a name filter runs on the rows.
     if (query && walkQuery(query.root).some((node) => node.field === "name"))
-      return (database.prepare("SELECT * FROM organizations WHERE deleted_at IS NULL ORDER BY name, id").all() as Row[])
+      return (
+        database
+          .prepare(`SELECT * FROM organizations o WHERE deleted_at IS NULL${inCategory} ORDER BY name, id`)
+          .all(...(category?.params ?? [])) as Row[]
+      )
         .map(organizationOf)
         .filter((one) => evaluate(query, ORGANIZATIONS_QUERY.fields, { ...one, created_at: one.createdAt }))
         .slice(0, 500)
@@ -47,11 +57,19 @@ export const organizationsStoreOver = ({ database, now }: StoreContext): Organiz
       })
     return database
       .prepare(
-        `SELECT * FROM organizations WHERE deleted_at IS NULL${where ? ` AND (${where.sql})` : ""} ORDER BY name, id LIMIT 500`,
+        `SELECT * FROM organizations o WHERE deleted_at IS NULL${where ? ` AND (${where.sql})` : ""}${inCategory} ` +
+          "ORDER BY name, id LIMIT 500",
       )
-      .all(...(where?.params ?? []))
+      .all(...(where?.params ?? []), ...(category?.params ?? []))
       .map(organizationOf)
   },
+  ownOrganizations: async () =>
+    database
+      .prepare(
+        "SELECT * FROM organizations WHERE deleted_at IS NULL AND json_extract(metadata, '$.own') = 1 ORDER BY name, id",
+      )
+      .all()
+      .map(organizationOf),
   updateOrganization: async (organization, { name }) =>
     write(database, () => {
       const title = name.trim()

@@ -14,6 +14,32 @@ shape of this file.
   that answers for it (`null` when proposed or skipped). An import that reports in parts counts each one once per run.
 - **A relationship answers `sourceRoles`**: the source's own words for it off the role list
   (`metadata.source_role`). The CRM sync stores them as a list. An older row that holds one word still reads as a list.
+- **Person, organization and deal contexts with their business relationships.** `canonicalPersonContext` answers
+  for any `person:<uid>` — a CRM contact, a name with no identity, someone two accounts saw — reading every account
+  in scope, with a `business` section (organizations, reporting lines both ways, deals and leads, projects,
+  categories) and `coverage`. `organizationContext` gives an organization's people, customers, suppliers, partners,
+  projects, open deals, invoices, payments and orders, counts of messages, mail and meetings through its people, and
+  open tasks. `dealContext` gives a deal's or lead's stages, client, participants, owner, project, money reached by
+  project or counterparty, and its people's messages, mail and meetings in its lifetime marked `proposed`;
+  `dealBrief` is its compact form. Every relationship says its standing, every section is bounded, and the shared
+  entities `person_context`, `organization_context`, `deal_context` and `deal_context.brief` describe them.
+  `organizationsInCategory` lists clients, suppliers, partners or employers, derived from relationships.
+  `@wirecat/cli-core/crm/testing` exports `acmeScenario`, a synthetic store for these. See
+  `docs/dev/BUSINESS-CONTEXT.md`.
+- **Stage history, a CRM deal's project, own organizations, orders by supplier, organizations by category.**
+  `deals.stages(ref)` lists every stage a deal or lead entered; `deals.setProject(ref, { project, by })` sets its
+  project, on a CRM copy too: the project is the store's own field, which the CRM sync never writes.
+  `knowledge.ownOrganizations()` lists the owner's companies, his own mark first, else the CRM's;
+  `orders.list({ supplier })`; `deals.list({ accounts })` (copies from those CRM accounts, the owner's own always);
+  `knowledge.organizations(query, { category, accounts })` keeps one category's, chosen
+  in SQL. A context's `coverage` names each CRM account's sync gaps (`crmGapsOf`) and each kind the profile denies
+  (`deniedKinds`: no deal or lead row, title or count is answered). A relationship (`knowledge.relations`) answers
+  the `account` that reported it and how a source `derived` it.
+
+### Changed — may break callers
+
+- `DealsStore` gains `stages` and `setProject`, and `OrganizationsStore` (so `KnowledgeStore`) gains
+  `ownOrganizations`: a hand-written store or fake implementing them must add these.
 
 ### Fixed
 

@@ -11,7 +11,7 @@ import {
   notAdded,
 } from "../../domain/providers.js"
 import { parseReference } from "../../domain/references.js"
-import { isEngagement, isRelationKind, type RelationshipColumns } from "../../domain/relations.js"
+import { isRelationKind, type RelationshipColumns } from "../../domain/relations.js"
 import { normalizeTag } from "../../domain/tags.js"
 import type { Section } from "../../readers/types.js"
 import { assertMayWithdraw, type Decider } from "../decisions.js"
@@ -26,6 +26,10 @@ import { PREFERRED_FILE, syncFile } from "./files.js"
 import { type ImportedDocuments, importedDocumentWhere } from "./imported-documents.js"
 import { LINK_KINDS, LINK_ORIGINS, type LINK_SOURCES, linkKind } from "./link-kinds.js"
 import { reviewLink } from "./link-reviews.js"
+import { linkOf } from "./link-row.js"
+
+export { linkOf, thingRef } from "./link-row.js"
+
 import { currentPerson, idsOf } from "./merged-persons.js"
 import { dateFileNotes } from "./note-dates.js"
 import { holdingText } from "./note-index.js"
@@ -33,7 +37,7 @@ import type { NoteSearch } from "./note-search.js"
 import type { StoreContext } from "./open.js"
 import { addTags, ensureTag, type Label, labelsOf } from "./tags.js"
 import { oneOf, textOf } from "./text-input.js"
-import { referenceOfThing, storedThing, type Thing, thingOf } from "./things.js"
+import { type Thing, thingOf } from "./things.js"
 import { write } from "./transaction.js"
 
 export const NOTE_FORMATS = ["obsidian", "markdown"] as const
@@ -252,39 +256,6 @@ export const noteRowOf = (database: CacheDatabase, reference: string): Note | un
     return documentOf(database.prepare("SELECT * FROM documents WHERE id = ?").get(thing.id) as Row)
   if (thing?.type === "note") return noteOf(database.prepare("SELECT * FROM notes WHERE id = ?").get(thing.id) as Row)
   return undefined
-}
-
-export const thingRef = (database: CacheDatabase, type: unknown, id: unknown): string | null =>
-  type == null || id == null ? null : (referenceOfThing(database, storedThing(type, id)) ?? null)
-
-export const linkOf = (database: CacheDatabase, row: Row): Link => {
-  const metadata: Partial<Record<string, unknown>> = row.metadata == null ? {} : JSON.parse(String(row.metadata))
-  // An older row holds one word; every reader gets a list.
-  const sourceRoles = [metadata.source_role].flat().filter((word): word is string => typeof word === "string")
-  return {
-    id: String(row.id),
-    from: thingRef(database, row.from_type, row.from_id) as string,
-    to: thingRef(database, row.to_type, row.to_id),
-    kind: row.kind as Link["kind"],
-    anchor: row.anchor == null ? null : String(row.anchor),
-    origin: row.source as Link["origin"],
-    targetText: row.target_text == null ? null : String(row.target_text),
-    role: row.role == null ? null : String(row.role),
-    purpose: row.purpose == null ? null : String(row.purpose),
-    evidence: row.evidence == null ? null : String(row.evidence),
-    provenance: typeof metadata.provenance === "string" ? metadata.provenance : null,
-    confirmed: Number(row.confirmed) === 1,
-    createdAt: iso(row.created_at),
-    ...(row.account_id == null ? {} : { accountId: Number(row.account_id) }),
-    ...(row.starts_at == null ? {} : { startsAt: Number(row.starts_at) }),
-    ...(row.ends_at == null ? {} : { endsAt: Number(row.ends_at) }),
-    ...(row.deleted_at == null ? {} : { deletedAt: Number(row.deleted_at) }),
-    ...(typeof metadata.position === "string" ? { position: metadata.position } : {}),
-    ...(typeof metadata.roleNote === "string" ? { roleNote: metadata.roleNote } : {}),
-    ...(isEngagement(metadata.engagement) ? { engagement: metadata.engagement } : {}),
-    ...(typeof metadata.overrides === "number" ? { overrides: metadata.overrides } : {}),
-    ...(sourceRoles.length ? { sourceRoles } : {}),
-  }
 }
 
 /** The row a reference names, refused when the store holds none. */

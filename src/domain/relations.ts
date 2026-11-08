@@ -185,6 +185,10 @@ export interface RelationshipColumns {
   overrides?: number
   /** The source's own words for it, off the role list (`metadata.source_role`), never its role. */
   sourceRoles?: string[]
+  /** The source account that reported it, `<provider>:<account>`. */
+  account?: string
+  /** How a source made the relationship when it stated none, such as `department-head`. */
+  derived?: string
 }
 
 /** The owner's confirmation outlives a source that stopped reporting it; only its own end date ends it. */

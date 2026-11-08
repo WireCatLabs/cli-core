@@ -15,7 +15,7 @@ import { ulid } from "../ulid.js"
 import { ownerPerson } from "./actors.js"
 import { forgetEvidenceToRow } from "./evidence-signature.js"
 import { LABELLED, type LabelledType } from "./labelled.js"
-import { linkKind, RELATION_KINDS } from "./link-kinds.js"
+import { linkKind, RELATION_KINDS, REPORTER_SQL } from "./link-kinds.js"
 import { type MeetingProjectsStore, meetingProjectsStoreOver } from "./meeting-projects.js"
 import type { Author } from "./memories.js"
 import { idsOf } from "./merged-persons.js"
@@ -437,7 +437,7 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
 
   const proposals = relationProposalsOver(context)
   const relationOf = (link: Link) => relationAt(link, now())
-  const RELATIONS = `SELECT * FROM links WHERE kind IN (${RELATION_KINDS.map(linkKind).join(",")}) AND to_id IS NOT NULL`
+  const RELATIONS = `SELECT *, ${REPORTER_SQL} FROM links WHERE kind IN (${RELATION_KINDS.map(linkKind).join(",")}) AND to_id IS NOT NULL`
   const relation = (id: string) => {
     const row = /^\d+$/.test(id) ? database.prepare(`${RELATIONS} AND id = ?`).get(Number(id)) : undefined
     if (!row) throw new CliError("not_found", "no relationship with that id")

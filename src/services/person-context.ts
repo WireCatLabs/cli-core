@@ -88,6 +88,8 @@ export interface ContextOptions {
    * and a work contact into one person, so a personal account must not read that person's work mail by default.
    */
   scopes?: readonly AccountScope[]
+  /** The calendar accounts' store ids whose events are read; left out, every calendar's. */
+  calendarIds?: readonly number[]
 }
 
 export const toContext = (key: AccountKey, message: Message, chatTitle: string | null): ContextMessage => ({
@@ -154,7 +156,7 @@ const EVENT_PAGE = 100
 const EVENT_ROWS = 1000
 
 /** Up to `limit` events of `filter`, in its order, the first occurrence of each series only and none cancelled. */
-const eventsOnce = async (
+export const eventsOnce = async (
   store: MessageStore,
   filter: EventFilter,
   limit: number,
@@ -243,7 +245,7 @@ export const recordContext = async (
   record: PersonRecord,
   reads: { key: AccountKey; scope: AccountScope; identity: LinkedIdentity }[],
   readable: readonly StoredAccount[],
-  { messages = CONTEXT_MESSAGES, bytes = CONTEXT_BYTES, since, now = Date.now() }: ContextOptions = {},
+  { messages = CONTEXT_MESSAGES, bytes = CONTEXT_BYTES, since, now = Date.now(), calendarIds }: ContextOptions = {},
 ): Promise<Omit<PersonContext, "person">> => {
   const recent = (message: ContextMessage) => since === undefined || Date.parse(message.timestamp) >= since
 
@@ -315,7 +317,9 @@ export const recordContext = async (
   const personId = Number(record.uid)
   const calendars: StoredAccount[] = []
   for (const one of readable) if ((await store.calendar.calendars(one.id)).length) calendars.push(one)
-  const accountIds = calendars.map(({ id }) => id)
+  const readableIds = calendars.map(({ id }) => id)
+  // Only the calendars asked for, and never one outside the read scope.
+  const accountIds = calendarIds === undefined ? readableIds : readableIds.filter((id) => calendarIds.includes(id))
   const nothing = { items: [], cut: false }
   const upcoming = accountIds.length ? await eventsOnce(store, { personId, accountIds, from: now }, messages) : nothing
   const upcomingIds = new Set(upcoming.items.map(({ id }) => id))

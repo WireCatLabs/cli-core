@@ -60,6 +60,15 @@ export interface PipelineReport extends Omit<Pipeline, "stages"> {
   since: string | null
 }
 
+/** One stage a deal or a lead entered, as the store saw it: a CRM copy's change is dated by the sync that saw it. */
+export interface StageChange {
+  /** `null` for the stage it started in. */
+  from: string | null
+  to: string
+  pipeline: string
+  at: string
+}
+
 export interface DealPerson extends Party {
   role: DealRole
 }
@@ -140,6 +149,8 @@ export interface DealFilter {
   kind?: DealKind
   /** Only the owner's own, or only one CRM account's copies. */
   account?: DealScope
+  /** Copies only from these CRM accounts; the owner's and agents' own always, as `listRelations` keeps theirs. */
+  accounts?: AccountKey[]
   status?: DealStatus
   /** A stage's name, in any letter case. */
   stage?: string
@@ -192,9 +203,16 @@ export interface DealsStore {
   add(input: DealInput): Promise<Deal>
   /** `deal:<id>` or `lead:<id>`; a bare id is a deal. */
   get(reference: string): Promise<Deal>
+  /** Every stage it entered, in the order it entered them: a CRM's own stamps may run out of order. */
+  stages(reference: string): Promise<StageChange[]>
   list(filter?: DealFilter): Promise<Deal[]>
   /** Deals and leads together, by the words of their title: the most words matched first, then the latest changed. */
   find(search: DealSearch): Promise<Deal[]>
+  /**
+   * The project it belongs to; `null` clears it. A CRM copy takes it too: the project is the store's own field, which
+   * a CRM has none of and its sync never writes.
+   */
+  setProject(reference: string, input: { project: string | null; by: Author }): Promise<Deal>
   /** To another stage of its own pipeline; a stage whose outcome is won or lost closes it, an open one reopens it. */
   move(reference: string, input: { stage: string; by: Author }): Promise<Deal>
   /** Won or lost, on `date` (today when left out); it moves to its pipeline's stage of that outcome when there is one. */
@@ -638,6 +656,22 @@ export const dealOperationsOver = (context: StoreContext) => {
       return read(`${kind}:${id}`)
     },
     get: (reference: string): Deal => read(reference),
+    stages: (reference: string): StageChange[] => {
+      const { kind, row } = rowOf(reference)
+      return database
+        .prepare(
+          "SELECT c.pipeline_id, c.changed_at, f.name AS from_name, t.name AS to_name FROM pipeline_stage_changes c " +
+            "LEFT JOIN pipeline_stages f ON f.id = c.from_stage_id JOIN pipeline_stages t ON t.id = c.to_stage_id " +
+            "WHERE c.item_type = ? AND c.item_id = ? ORDER BY c.id",
+        )
+        .all(kind, Number(row.id))
+        .map((change) => ({
+          from: change.from_name == null ? null : String(change.from_name),
+          to: String(change.to_name),
+          pipeline: `pipeline:${change.pipeline_id}`,
+          at: iso(change.changed_at),
+        }))
+    },
     list: (filter: DealFilter = {}): Deal[] => {
       const kind = kindOf(filter.kind)
       const project = filter.project === undefined ? null : projectId(database, filter.project)
@@ -652,12 +686,17 @@ export const dealOperationsOver = (context: StoreContext) => {
       const provider = scope === undefined || scope === "own" ? null : scope.provider
       const account = scope === undefined || scope === "own" ? null : scope.account
       const limit = limitOf(filter.limit)
+      const keys = filter.accounts?.map((one) => `${one.provider}:${one.account}`)
+      const inAccounts =
+        keys === undefined
+          ? ""
+          : `AND (d.account_id IS NULL OR a.provider || ':' || a.external_id IN (${keys.map(() => "?").join(", ") || "NULL"})) `
       return database
         .prepare(
           `${itemsSql(kind)} WHERE d.deleted_at IS NULL AND (? IS NULL OR d.status = ?) ` +
             "AND (? IS NULL OR d.project_id = ?) AND (? IS NULL OR s.name_folded = ?) AND (? IS NULL OR p.id = ?) " +
             "AND (? IS NULL OR d.organization_id = ?) AND (? = 0 OR d.account_id IS NULL) " +
-            `AND (? IS NULL OR (a.provider = ? AND a.external_id = ?)) AND ${by.sql} ` +
+            `AND (? IS NULL OR (a.provider = ? AND a.external_id = ?)) ${inAccounts}AND ${by.sql} ` +
             "ORDER BY d.created_at DESC, d.id DESC LIMIT ? OFFSET ?",
         )
         .all(
@@ -675,6 +714,7 @@ export const dealOperationsOver = (context: StoreContext) => {
           provider,
           provider,
           account,
+          ...(keys ?? []),
           ...by.params,
           limit,
           Math.max(0, Math.trunc(filter.offset ?? 0)),
@@ -710,6 +750,18 @@ export const dealOperationsOver = (context: StoreContext) => {
         )
         .slice(0, most)
         .map(({ kind, row }) => read(`${kind}:${row.id}`))
+    },
+    setProject: (reference: string, { project, by }: { project: string | null; by: Author }): Deal => {
+      authorActor(context, by)
+      const { kind, row } = rowOf(reference)
+      if (row.deleted_at != null) refuse(`${kind}:${row.id} is deleted; it no longer changes`, "deal.closed")
+      const id = project === null ? null : projectId(database, project)
+      write(database, () =>
+        database
+          .prepare(`UPDATE ${TABLES[kind]} SET project_id = ?, updated_at = ? WHERE id = ?`)
+          .run(id, now(), Number(row.id)),
+      )
+      return read(`${kind}:${row.id}`)
     },
     move: (reference: string, { stage, by }: { stage: string; by: Author }): Deal => {
       authorActor(context, by)
@@ -755,8 +807,10 @@ export const dealsStoreOver = (context: StoreContext): DealsStore => {
     pipeline: async (reference, options) => operations.pipeline(reference, options),
     add: async (input) => operations.add(input),
     get: async (reference) => operations.get(reference),
+    stages: async (reference) => operations.stages(reference),
     list: async (filter) => operations.list(filter),
     find: async (search) => operations.find(search),
+    setProject: async (reference, input) => operations.setProject(reference, input),
     move: async (reference, input) => operations.move(reference, input),
     close: async (reference, input) => operations.close(reference, input),
   }
