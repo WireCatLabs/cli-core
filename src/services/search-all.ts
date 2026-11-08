@@ -455,11 +455,10 @@ export const searchAll = async (
 }
 
 /**
- * Every source's hits as one list: by the rank each has in its own source, then by cosine. Rank alone gave every
- * source's hit at one rank the same score, so the sources took turns and the order among them was the order they were
- * read in (MEMO-37). One model scores every source, so cosine compares across them; a hit meaning did not find comes
- * after those it did at the same rank. Each source's own order is kept, so recall at any depth past the number of
- * sources does not change.
+ * Every source's hits as one list: each source's best hit first, then every other hit by cosine, then by its rank in
+ * its source. Taking turns by rank (MEMO-37) gave each of two sources half of a ten-hit page however weak its hits;
+ * one model scores every source, so cosine compares across them (IDEA-249). A hit meaning did not find comes after
+ * those it did.
  */
 const oneList = (lists: SearchAllItem[][], cosines: Map<string, number>): SearchAllItem[] => {
   const place = new Map<string, { item: SearchAllItem; rank: number }>()
@@ -469,7 +468,8 @@ const oneList = (lists: SearchAllItem[][], cosines: Map<string, number>): Search
       if (!held || rank < held.rank) place.set(item.ref, { item, rank })
     })
   const cosine = (ref: string) => cosines.get(ref) ?? Number.NEGATIVE_INFINITY
+  const head = (rank: number) => Math.min(rank, 1)
   return [...place.values()]
-    .sort((a, b) => a.rank - b.rank || cosine(b.item.ref) - cosine(a.item.ref))
+    .sort((a, b) => head(a.rank) - head(b.rank) || cosine(b.item.ref) - cosine(a.item.ref) || a.rank - b.rank)
     .map(({ item }) => item)
 }
