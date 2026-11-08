@@ -49,7 +49,9 @@ tg work mentions rebuild phone             # read the numbers already stored aga
 
 With `es,ru`, `612 345 678` and `612345678` are `+34 612 345 678`, and `8 900 000-00-01` is still Russian. The
 countries are most of Europe, the US and Canada, Russia and its neighbours; `config set` lists them when one is not
-known. Without the setting only Russian numbers are read without `+`, as before.
+known. Without the setting only Russian numbers are read without `+`, as before. A records import reads a person's phone without
+`+` the same way, unless its envelope names `options.phone_region`, and counts it as an identifier only when exactly
+one of these countries reads it as valid ([the records envelope](storage/records-envelope.md)).
 
 - Digits in groups, or after a word such as `tel`, `móvil`, `Handy` or `téléphone`, may be any number of the country.
 - Digits alone count only when they are a mobile number: bare landline-shaped digits are more often an order or an

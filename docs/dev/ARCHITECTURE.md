@@ -468,9 +468,10 @@ and contacts. `openOf` builds a ref's open command from it, so a new CLI's refs 
 `fields` schema and roles; the JSON Schema file, the refs, `ENTITY_TABLES` and the owner's review read it. The store
 side has one projector per type (`src/store/sqlite/record-projectors.ts`: money types in `record-projectors-money.ts`,
 direct ones in `record-projectors-direct.ts`), and person, organization and project are matched or made from their
-identifiers (`record-matching.ts`). `store.records.run` writes a stream of records per chunk, checks duplicates in a
-`TEMP` table and reads the receipt's lists from `records` at the end, holding one chunk at a time; a dry run is one
-rolled-back transaction (`rehearse`, `src/store/sqlite/transaction.ts`). The contract is
+identifiers (`record-matching.ts`). `record-writes.ts` takes one record into its entity as the registry's `update`
+says; `record-run.ts` writes a stream per chunk, checks duplicates in `TEMP` tables and pages the receipt's lists from
+them at the end, holding one chunk at a time; a dry run is one rolled-back transaction (`rehearse`,
+`src/store/sqlite/transaction.ts`) that refuses every other statement on the handle meanwhile. The contract is
 [`docs/storage/records-envelope.md`](../storage/records-envelope.md).
 
 **Ref summaries.** `store.refs.summaries(refs)` (`src/store/sqlite/ref-summaries.ts`) names a page of refs in one
