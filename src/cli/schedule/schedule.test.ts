@@ -243,6 +243,34 @@ describe.runIf(process.platform !== "win32")("an agent that may run another CLI"
       expect(given.length).toBeLessThan(AGENT_INPUT_MAX_CHARS + 200)
     })
 
+    it("leaves out a timed mail-gated run whose input is the last good run's, and runs on new input", async () => {
+      const { env } = setup()
+      const { system } = machine("linux")
+      const file = agentFile(env)
+      const schedule = JSON.parse(readFileSync(file, "utf8")) as Schedule
+      const starts = join(file, "..", "starts")
+      const script = `require("fs").appendFileSync(${JSON.stringify(starts)}, "x"); process.stdin.resume()`
+      writeFileSync(
+        file,
+        JSON.stringify({ ...schedule, onNewMail: "mail-triage", argv: [process.execPath, "-e", script] }),
+      )
+      let input = "key: mail-triage:1-r1"
+      const timed = { agentInput: async () => input, skipRepeatedInput: true }
+
+      expect((await runSchedule(app, system, env, file, timed)).inputHash).toMatch(/^[0-9a-f]{64}$/)
+      const skipped = await runSchedule(app, system, env, file, timed)
+      expect(skipped.skipped).toMatchObject({ reason: "mail.same-input" })
+      expect(readFileSync(starts, "utf8")).toBe("x")
+
+      await runSchedule(app, system, env, file, { agentInput: timed.agentInput })
+      expect(readFileSync(starts, "utf8")).toBe("xx")
+
+      input = "key: mail-triage:2-r1"
+      const next = await runSchedule(app, system, env, file, timed)
+      expect(readFileSync(starts, "utf8")).toBe("xxx")
+      expect(next.skipped).toBeUndefined()
+    })
+
     it("starts the agent without input when the host's read fails", async () => {
       const { env } = setup()
       const { system } = machine("linux")
