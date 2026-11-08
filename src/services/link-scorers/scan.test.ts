@@ -224,6 +224,33 @@ describe("link scorers", () => {
     expect((await chatSenders.candidates(await inputOf(f)))[0]?.weight).toBe(0.2)
   })
 
+  it("chat-senders: the reason names the group and its size, the evidence leads with the chat", async () => {
+    const f = await fixture()
+    await f.store.roster.saveMembers(
+      TG,
+      "-900",
+      Array.from({ length: 35 }, (_, index) => String(1000 + index)),
+    )
+    const [found] = await chatSenders.candidates(await inputOf(f))
+    expect(found).toMatchObject({
+      why: "wrote 6 messages in «Ops» (35 people) since 2026-10-05",
+      evidence: [f.ops, expect.stringMatching(/^msg:telegram\/2\/-900\//)],
+    })
+  })
+
+  it("a group's sender proposals are listed together by the chat in their evidence", async () => {
+    const f = await fixture()
+    const result = await scanProjectLinks(f.store, { project: "HRB", sources: [TG, MAX], since: SINCE, write: true })
+    const senders = result.proposals.filter((one) => one.signals.some((signal) => signal.scorer === "chat-senders@3"))
+    expect(senders.length).toBe(2)
+    const registry = proposalRegistry(f.store)
+    const listed = await registry.list({ kinds: ["relationship"], via: f.ops, limit: 1, offset: 0 })
+    expect(listed.hasMore).toBe(true)
+    const all = await registry.list({ via: f.ops, limit: 50, offset: 0 })
+    expect(all.items.map((one) => one.id).sort()).toEqual(senders.map((one) => String(one.id)).sort())
+    expect(all.items.every((one) => one.evidence[0] === f.ops)).toBe(true)
+  })
+
   it("mail-thread: a member's thread, strong when the subject names the project", async () => {
     const f = await fixture()
     await f.store.people.savePeople(MAIL, [{ id: "lee@vendor.test", name: "Lee Park" }])

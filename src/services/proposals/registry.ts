@@ -74,7 +74,9 @@ export const emptyProposalRegistry = (
       const wide: ProposalFilter = { ...filter, offset: 0, limit: filter.offset + filter.limit + 1 }
       const rows = (
         await Promise.all(asked.map(async (kind) => (await kind.list(wide)).map((row) => marked(kind, row))))
-      ).flat()
+      )
+        .flat()
+        .filter((row) => filter.via === undefined || row.evidence.includes(filter.via))
       rows.sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id))
       const page = rows.slice(filter.offset, filter.offset + filter.limit + 1)
       return { items: page.slice(0, filter.limit), hasMore: page.length > filter.limit }

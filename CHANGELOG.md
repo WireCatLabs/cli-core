@@ -9,6 +9,12 @@ shape of this file.
 
 ### Added
 
+- **A scan's group senders can be found and decided together.** `chat-senders@3` names the chat and its size in its
+  reason ("wrote 40 messages in «Sales» (35 people) since 2026-08-10"), and its evidence leads with the chat's ref.
+  `ProposalFilter.via` keeps the proposals whose evidence holds a reference, and `store.proposedActions.list` takes
+  `evidence` to filter in the query, so `via` pages stored relationship proposals in full. A pending `chat-senders@2`
+  proposal takes the new reason and evidence on the next scan, under the same id.
+
 - **`models set <id>` chooses the local embedding model for every WireCat CLI**, kept in the shared settings file:
   every embed and every search by meaning uses it, and `models list` marks it `default`. It refuses a model that is
   not downloaded, and says how many chunks the new model still lacks and about how long that takes. Vectors stay
