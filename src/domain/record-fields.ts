@@ -41,14 +41,6 @@ export const oneOf = (values: readonly string[], description?: string): FieldSch
   ...(description ? { description } : {}),
 })
 export const currency: FieldSchema = { type: "string", pattern: "^[A-Za-z]{3}$", description: "ISO 4217 code" }
-/** One value or a list of them, as a sheet gives one e-mail and a CRM several. */
-export const textOrList = (description: string): FieldSchema => ({
-  type: ["string", "array"],
-  items: text(undefined, 320),
-  maxItems: 20,
-  description,
-})
-
 /** An object whose known keys are typed; any other key is kept as the source sent it. */
 export const objectOf = (
   properties: Record<string, FieldSchema>,

@@ -20,7 +20,6 @@ import {
   oneOf,
   signedDecimal,
   text,
-  textOrList,
 } from "./record-fields.js"
 
 export interface RecordRoleSpec {
@@ -78,6 +77,12 @@ export interface RecordTypeSpec {
   /** Keys of `fields` that name another record of this account by external id, and its type: a deal's pipeline. */
   references?: Record<string, string>
 }
+
+/**
+ * A key v1 already took as any JSON: typing it would refuse sheets v1 kept, so a value that does not read is simply
+ * no identifier or no name.
+ */
+const kept = (description: string): FieldSchema => ({ description })
 
 const PARTY = ["person", "organization"] as const
 const ORGANIZATION = ["organization"] as const
@@ -163,9 +168,9 @@ export const RECORD_TYPES = {
     update: "in-place",
     tombstone: false,
     fields: objectOf({
-      name: text("The person's name", 200),
-      email: textOrList("E-mail addresses: an exact one links the record to the one person who has it"),
-      phone: textOrList("Phone numbers: an exact one, in E.164 after reading, links like an e-mail"),
+      name: kept("The person's name"),
+      email: kept("E-mail addresses, one or a list: an exact one links the record to the one person who has it"),
+      phone: kept("Phone numbers, one or a list: an exact one, read to E.164, links like an e-mail"),
     }),
     roles: { "member-of": { targets: ORGANIZATION, relationship: true, kept: true } },
   },
@@ -175,7 +180,7 @@ export const RECORD_TYPES = {
     update: "in-place",
     tombstone: true,
     fields: objectOf({
-      name: text("The organization's name", 200),
+      name: kept("The organization's name"),
       identifiers: listOf(
         objectOf(
           {
@@ -203,9 +208,9 @@ export const RECORD_TYPES = {
     update: "in-place",
     tombstone: true,
     fields: objectOf({
-      name: text("The project's name", 200),
-      key: text("The project's key: an existing project with it is this one", 40),
-      description: text("What the project is", 2000),
+      name: kept("The project's name"),
+      key: kept("The project's key: an existing project with it is this one"),
+      description: kept("What the project is"),
     }),
     roles: { organization: { targets: ORGANIZATION, column: "organization_id" } },
   },

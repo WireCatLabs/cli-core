@@ -70,7 +70,7 @@ it("leaves a person whose identifiers name two people unmatched, with both as ca
     {
       key: "person-p-3",
       pointer: "/records/0/fields",
-      reason: "the identifiers belong to 2 person entities",
+      reason: "record.ambiguous",
       candidates: [one.ref, two.ref],
     },
   ])
@@ -172,4 +172,73 @@ it("matches or makes a person an earlier version left waiting, on its next impor
   expect(await store.records.get({ ...SOURCE, type: "person", externalId: "old-2" })).toMatchObject({
     createdEntity: true,
   })
+})
+
+it("lets the owner map an unmatched person, and projects what waited on it", async () => {
+  const { store, sql } = await recordsFixture(handles)
+  const one = knownPerson(sql, "One")
+  one.give("email", "shared@example.com")
+  knownPerson(sql, "Two").give("phone", "+79000000002")
+  const receipt = await take(
+    store,
+    envelopeOf([
+      upsert("person", "p-5", { name: "Both", email: "shared@example.com", phone: "89000000002" }),
+      upsert(
+        "payment",
+        "pay-5",
+        { direction: "in", amount: "10.00", currency: "EUR", date: "2026-11-01" },
+        { relations: [{ role: "payer", type: "person", external_id: "p-5" }] },
+      ),
+    ]),
+  )
+  expect(receipt.unmatched).toHaveLength(1)
+  expect(receipt.waiting).toEqual([{ key: "payment-pay-5", pointer: "/records/1/relations", missing: ["payer"] }])
+
+  const mapped = await store.records.map({ ...SOURCE, type: "person", externalId: "p-5" }, one.ref, "owner")
+  expect(mapped).toMatchObject({ entity: one.ref, createdEntity: false, unused: null })
+  const [payment] = await store.finance.payments()
+  expect(payment).toMatchObject({ review: "proposed", payer: { ref: one.ref } })
+  await expect(
+    store.records.map({ ...SOURCE, type: "person", externalId: "p-5" }, "person:999", "owner"),
+  ).rejects.toMatchObject({ code: "not_found" })
+})
+
+it("remaps an import-made organization after the owner confirmed the invoice and payment that name it", async () => {
+  const { store } = await recordsFixture(handles)
+  const ours = await store.knowledge.addOrganization({ kind: "company", name: "Our client" })
+  const first = await take(
+    store,
+    envelopeOf([
+      upsert("organization", "c-6", { name: "Client" }),
+      upsert(
+        "invoice",
+        "i-6",
+        { direction: "receivable", currency: "EUR", lines: [{ description: "Rent", amount: "10.00" }] },
+        { relations: [{ role: "counterparty", type: "organization", external_id: "c-6" }] },
+      ),
+      upsert(
+        "payment",
+        "pay-6",
+        { direction: "in", amount: "10.00", currency: "EUR", date: "2026-11-01" },
+        {
+          relations: [
+            { role: "payer", type: "organization", external_id: "c-6" },
+            { role: "settles", type: "invoice", external_id: "i-6" },
+          ],
+        },
+      ),
+    ]),
+  )
+  const [invoice, payment] = first.proposed as [string, string]
+  await store.finance.confirm(invoice, "owner")
+  await store.finance.confirm(payment, "owner")
+  const made = (await store.records.get({ ...SOURCE, type: "organization", externalId: "c-6" }))?.entity
+
+  const mapped = await store.records.map({ ...SOURCE, type: "organization", externalId: "c-6" }, ours.ref, "owner")
+  expect(mapped).toMatchObject({ entity: ours.ref, unused: made })
+  expect(await store.finance.invoice(invoice)).toMatchObject({ review: "confirmed", counterparty: { ref: ours.ref } })
+  expect(await store.finance.payment(payment)).toMatchObject({ review: "confirmed", payer: { ref: ours.ref } })
+  await expect(
+    store.records.map({ ...SOURCE, type: "organization", externalId: "c-6" }, made as string, "owner"),
+  ).rejects.toMatchObject({ details: { reason: "record.mapped" } })
 })

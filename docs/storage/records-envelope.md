@@ -80,15 +80,16 @@ Every file, v1 files included. A name alone never matches.
 
 | Type | Strong identifiers |
 | --- | --- |
-| person | `fields.email` (one or a list), trimmed and lower-cased; `fields.phone` (one or a list), read to E.164 with the store's `phone_countries` setting; and the source's own contact identity `<account>/contact/<external id>` under its provider, the one CRM sync writes |
+| person | `fields.email` (one or a list), trimmed and lower-cased; `fields.phone` (one or a list), read to E.164 with the store's `phone_countries` setting and compared with `phone` identities and with the number a contact keeps (`identities.phone`, with or without `+`; a number kept in another spelling does not match); and the source's own contact identity `<account>/contact/<external id>` under its provider, the one CRM sync writes |
 | organization | `fields.identifiers`: `{scheme, value}` with scheme `email`, `domain`, `tax-id:<cc>` or `registration:<cc>`, stored as identities of the organization |
 | project | `fields.key` |
 
 - The identifiers point at no entity: the import **makes** one, marked `createdEntity`, and gives it the record's
-  identifiers. A free-mail domain is no organization's domain (`record.identifier`), nor is a malformed e-mail or phone.
+  identifiers. A value that does not read as an e-mail or a phone is no identifier and stays in the fields, as v1
+  kept it. A free-mail domain is refused as an organization's domain (`record.identifier`).
 - They point at exactly one: the record **links** to it, and nothing is added to that entity.
 - They point at two or more: the record **waits**, listed under `unmatched` with the `candidates`. The owner says
-  which one it is with `store.records.map`; an agent only reports it.
+  which one it is with `store.records.map`; an agent only reports it. Its `reason` is `record.ambiguous`.
 - Phone counts as e-mail does, by the owner's choice; the Memory workstream's own linker treats a phone-only match as a
   proposal.
 - A record an earlier version left waiting is matched or made on the next import that sends it, unchanged or not, or
@@ -116,7 +117,8 @@ const receipt = await ingestLines(store, linesOf(process.stdin), { account: "dem
 ```
 
 - `ingest(store, envelope, options)` takes a parsed JSON envelope; `ingestLines` reads JSONL line by line, writes
-  every 1000 records (`chunk`) in one transaction, and keeps one chunk in memory. Duplicate keys and
+  every 1000 records (`chunk`) in one transaction, holding only the chunk being written (peak memory over large
+  files is not measured yet). Duplicate keys and
   `(type, external_id)` are checked in a `TEMP` table, and the receipt's lists are read from the store at the end.
 - The receipt's counts are exact; each list keeps its first 1000 entries and sets `truncated`. `onIssue` gets every
   refusal as it happens.
@@ -142,7 +144,7 @@ key}]`, the pointer an RFC 6901 JSON pointer into the envelope.
 | `record.duplicate-key`, `record.duplicate` | a key or a `(type, external_id)` seen earlier in the run |
 | `record.too-large`, `record.secret-field` | fields over 64 KiB; a secret-named key or a credential-shaped value |
 | `record.relation-ambiguous` | two targets for a role that takes one |
-| `record.identifier` | a malformed e-mail or phone, or a free-mail domain |
+| `record.identifier` | a free-mail domain given as an organization's `domain` |
 | `record.stale-revision`, `record.not-found` | revisions; a delete of a record never imported |
 | `record.over-payment` | settles amounts past the payment |
 | `record.reference-not-found` | a `ref` the store lacks; a deal's stage its pipeline lacks |

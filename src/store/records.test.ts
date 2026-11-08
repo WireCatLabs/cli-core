@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, expect, it } from "vitest"
-import { type EnvelopeRecord, envelopeOfJsonl, RECORDS_ENVELOPE_SCHEMA } from "../domain/records.js"
+import { type EnvelopeRecord, envelopeOfJsonl, RECORDS_ENVELOPE_SCHEMA, recordErrors } from "../domain/records.js"
 import { ingest } from "../services/ingest.js"
 import { proposalRegistry } from "../services/proposals/registry.js"
 import { openStore } from "./store.js"
@@ -368,4 +368,23 @@ it("refuses unknown options, a relation with both a ref and a type, and `as` on 
     "/records/0/relations/0/ref record.invalid",
     "/records/1/relations/0/as record.invalid",
   ])
+})
+
+it("still takes every record shape v1 kept, junk included, before the store sees it", () => {
+  const kept = [
+    payment("j-1", { amount: "1.00", payer: "organization:1", reference: "x".repeat(400), note: { any: [1] } }),
+    invoice("j-2", "5.00"),
+    { ...client, fields: { name: "x".repeat(500), email: "n/a", phone: "-", inn: 7700000000 } },
+    {
+      key: "p",
+      type: "person",
+      external_id: "p",
+      operation: "upsert",
+      fields: { name: 42, phone: "12", email: ["", 5] },
+    },
+    { key: "pr", type: "project", external_id: "pr", operation: "upsert", fields: { name: "", key: 7 } },
+    { key: "c", type: "custom:row", external_id: "c", operation: "upsert", fields: { deep: { a: [{ b: null }] } } },
+    { key: "d", type: "invoice", external_id: "d", operation: "delete" },
+  ]
+  expect(kept.flatMap((record, index) => recordErrors(record, index))).toEqual([])
 })

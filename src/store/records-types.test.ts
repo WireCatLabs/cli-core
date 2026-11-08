@@ -134,7 +134,6 @@ it("refuses what the registry rules out, each at its pointer with a stable code"
         },
       ),
       upsert("organization", "e", { name: "Gmail fan", identifiers: [{ scheme: "domain", value: "gmail.com" }] }),
-      upsert("person", "f", { name: "Nobody", phone: "12" }),
       upsert(
         "custom:note",
         "g",
@@ -155,16 +154,15 @@ it("refuses what the registry rules out, each at its pointer with a stable code"
       ),
     ]),
   )
-  expect(receipt.refused).toBe(9)
+  expect(receipt.refused).toBe(8)
   expect(receipt.errors.map(({ pointer, code }) => `${pointer} ${code}`)).toEqual([
     "/records/0/fields/unit_price record.invalid",
     "/records/1/relations record.invalid",
     "/records/2/relations/0 record.invalid",
     "/records/3/relations/0/as record.invalid",
     "/records/4/fields/identifiers/0/value record.identifier",
-    "/records/5/fields/phone/0 record.identifier",
-    "/records/6/relations/0/ref record.invalid",
-    "/records/7/type record.type",
-    "/records/8/relations/1 record.relation-ambiguous",
+    "/records/5/relations/0/ref record.invalid",
+    "/records/6/type record.type",
+    "/records/7/relations/1 record.relation-ambiguous",
   ])
 })

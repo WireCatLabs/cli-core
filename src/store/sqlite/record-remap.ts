@@ -7,7 +7,8 @@ import type { Row } from "./record-projection.js"
 export const recordRemapOver = ({ database, now }: StoreContext) => {
   /** Whether any row points at the entity: a pointer pair, a foreign key or a record; its own identities do not count. */
   const pointedAt = (type: string, id: number): boolean => {
-    for (const { table, pointer } of pointerPairs(database))
+    // record_relations' target_type/target_id name a record, not an entity, though they look like a pointer pair.
+    for (const { table, pointer } of pointerPairs(database).filter((pair) => pair.table !== "record_relations"))
       if (
         database.prepare(`SELECT 1 FROM ${table} WHERE ${pointer}_type = ? AND ${pointer}_id = ? LIMIT 1`).get(type, id)
       )
