@@ -382,9 +382,10 @@ it("refuses a Drizzle read during a dry run, and a write from onIssue fails inst
   }
   const dry = ingestLines(store, lines(), { account: SOURCE.account, dryRun: true, chunk: 1 })
   await new Promise((resolve) => setTimeout(resolve, 20))
-  // Drizzle wraps what the client throws in its own error, with the refusal as the cause.
   await expect(store.vectors.vectorStatus({ provider: "telegram", account: "x" }, "1", "m")).rejects.toMatchObject({
-    cause: { details: { reason: "store.dry-run" } },
+    name: "CliError",
+    code: "conflict",
+    details: { reason: "store.dry-run" },
   })
   release()
   await dry

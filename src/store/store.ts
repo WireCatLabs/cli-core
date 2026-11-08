@@ -67,6 +67,7 @@ import * as stems from "./sqlite/stems.js"
 import { type SubscriptionsStore, subscriptionsStoreOver } from "./sqlite/subscriptions.js"
 import { type StoreTaskStore, taskStoreOver } from "./sqlite/tasks.js"
 import { type WalletsStore, walletsStoreOver } from "./sqlite/wallets.js"
+import { storeErrors } from "./store-errors.js"
 import { type SyncStore, syncStoreOver } from "./sync.js"
 import { type TagsStore, tagsStoreOver } from "./tags.js"
 import type { AccountKey } from "./types.js"
@@ -191,10 +192,7 @@ export const openStore = async (options: StoreOptions = {}): Promise<MessageStor
 /** Built on first use, once, so a spy on an area sees every call. */
 const once = <T>(build: () => T): (() => T) => {
   let built: T | undefined
-  return () => {
-    built ??= build()
-    return built
-  }
+  return () => (built ??= storeErrors(build()))
 }
 
 const areaOf = <K extends Keyed<K>, A extends K>(keyed: () => K, whole: (keyed: K) => A): (() => Area<K, A>) =>

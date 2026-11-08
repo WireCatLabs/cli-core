@@ -151,8 +151,8 @@ const receipt = await ingestLines(store, jsonlLines(process.stdin), { account: "
 - **A dry run is one transaction, rolled back at the end**, so its receipt is true for references between chunks. It
   holds the store's write lock for the whole run, so tg, max and memo wait meanwhile, and the WAL file grows by the
   batch's size until the next checkpoint. Any other read or write through the same store handle while it runs is
-  refused (`store.dry-run`, code `conflict`), through the hand-written SQL and Drizzle alike (Drizzle reports it as
-  the cause of its own query error): it would otherwise land inside the dry run and be rolled back with it.
+  refused (`store.dry-run`, code `conflict`), through the hand-written SQL and Drizzle alike; a store method throws the
+  refusal itself, not Drizzle's query error around it. It would otherwise land inside the dry run and be rolled back.
 
 ## Receipt
 
