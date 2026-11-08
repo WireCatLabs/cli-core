@@ -132,9 +132,9 @@ memo models add e5-base --payload '{"repository":"Xenova/multilingual-e5-base","
 Enrichment sends each note, document and email to a hosted model, which writes standalone facts (names in full,
 dates made absolute) and two questions in other words. Search then finds the record by those words too: they go into
 the stems and into a chunk of their own beside the record's, so a hit still cites the record. `--exact`, the trigrams
-and the record's own chunks keep only its own text. On 10,444 synthetic records it lifted reworded questions in
-memo 0.131.47 from 0.34 to 0.56 at @10, for $0.60 with gpt-4o-mini
-([cli-testing](https://github.com/WireCatLabs/cli-testing/tree/main/performance/agents/knowledge-graph-memory)).
+and the record's own chunks keep only its own text. On 10,444 synthetic records it lifted memo 0.131.55 on reworded
+questions from 0.62 to 0.79 at @10, and cost first place on questions in the record's own words (0.54 to 0.48), for
+about $0.49 with gpt-4o-mini ([cli-testing #322](https://github.com/WireCatLabs/cli-testing/pull/322)).
 
 It is off until the owner says yes. One setting serves every WireCat CLI: the `enrichment` section of the shared
 settings file (`provider`, `model`, optional `base_url`, `consented_at`).
