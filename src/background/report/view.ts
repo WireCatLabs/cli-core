@@ -1,3 +1,4 @@
+import { refsForLink } from "../../domain/links.js"
 import type { ChannelKind, HealthReason, ItemType, Report, ReportItem, ReportKind, SectionKind } from "./schema.js"
 
 /** A link the renderer built from a ref; a template may point an `href` only at one of these. */
@@ -248,7 +249,9 @@ export const reportView = (
   const moment = (iso: string | null) => (iso === null ? null : momentFor(iso, now, language, timeZone))
   const words = LINK_WORDS[language] ?? (LINK_WORDS.en as { open: string; fix: string })
   const linksOf = (refs: readonly string[], label: string): ViewLink[] => {
-    const url = refs.map(linkOf).find((one) => one !== null)
+    const url = refsForLink(refs)
+      .map(linkOf)
+      .find((one) => one !== null)
     return url ? [{ kind: "open", url, label }] : []
   }
   const itemOf = (item: ReportItem): ViewItem => {

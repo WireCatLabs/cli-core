@@ -8,6 +8,7 @@ import {
   linkFor,
   linkTargetOf,
   parseLink,
+  refsForLink,
 } from "./links.js"
 
 interface Fixture {
@@ -56,8 +57,8 @@ describe("the v1 link grammar, as the shared fixture states it", () => {
 })
 
 describe("linkFor", () => {
-  it("leaves out what no link opens: a person, an unknown ref, a target the parser would refuse", () => {
-    expect(linkFor("person:77", { form: "web", env })).toBeNull()
+  it("leaves out what no link opens: an organization, an unknown ref, a target the parser would refuse", () => {
+    expect(linkFor("organization:78", { form: "web", env })).toBeNull()
     expect(linkFor("account:max/1", { form: "web", env })).toBeNull()
     expect(linkFor({ type: "digest", date: "08.11.2026" }, { form: "web", env })).toBeNull()
     expect(linkFor({ type: "task", id: "1".repeat(600) }, { form: "web", env })).toBeNull()
@@ -72,5 +73,16 @@ describe("linkFor", () => {
     const config = linkConfigOf({ base: "https://links.example/open/" })
     expect(linkFor("task:80", { form: "web", config, env })).toBe("https://links.example/open#/v1/task/80")
     expect(linkConfigOf({ base: "http://plain.example", enabled: "no" })).toEqual(DEFAULT_LINK_CONFIG)
+  })
+})
+
+describe("refsForLink", () => {
+  it("puts person and project refs after the refs that say where an item happened", () => {
+    expect(refsForLink(["person:77", "project:ACME", "msg:max/1/2/3", "task:80"])).toEqual([
+      "msg:max/1/2/3",
+      "task:80",
+      "person:77",
+      "project:ACME",
+    ])
   })
 })

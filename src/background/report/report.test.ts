@@ -182,6 +182,22 @@ describe("links, task groups, sync health and the footer", () => {
     expect(templateTags).toBe(0)
   })
 
+  it("opens where an item happened before who it is about, and the person or project when that is all it has", () => {
+    const items = [
+      { type: "task", who: "Анна", topic: "Счёт", refs: ["person:77", "project:ACME", "msg:max/1001/-2002/3003"] },
+      { type: "task", who: "Пётр", topic: "Встреча", refs: ["person:78"] },
+      { type: "task", who: "Ирина", topic: "Сайт", refs: ["project:ACME site"] },
+    ]
+    const urls = viewOf(digest([{ kind: "today", items }]))
+      .sections.flatMap((section) => section.items)
+      .map((item) => item.links[0]?.url)
+    expect(urls).toEqual([
+      "https://wirecat.dev/o#/v1/msg/max/1001/-2002/3003",
+      "https://wirecat.dev/o#/v1/person/78",
+      "https://wirecat.dev/o#/v1/project/ACME%20site",
+    ])
+  })
+
   it("writes the group links, the account's sync problem and what was viewed", async () => {
     const { text } = await renderReport(viewOf(digest()), "text")
     expect(text).toContain(

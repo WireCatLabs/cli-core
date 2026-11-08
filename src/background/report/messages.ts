@@ -1,5 +1,6 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
+import { refsForLink } from "../../domain/links.js"
 import { jsonOfAnswer, REPORT_FORMAT, type ReportKind, withoutLeaks } from "./schema.js"
 import { type LinkOf, type Moment, momentFor, type ViewLink } from "./view.js"
 
@@ -234,7 +235,9 @@ const LINK_WORDS: Record<string, { open: string; fix: string }> = {
 const wordsOf = (language: string) => LINK_WORDS[language] ?? (LINK_WORDS.en as { open: string; fix: string })
 
 const linkOfRefs = (refs: readonly string[], linkOf: LinkOf, label: string): ViewLink[] => {
-  const url = refs.map(linkOf).find((one) => one !== null)
+  const url = refsForLink(refs)
+    .map(linkOf)
+    .find((one) => one !== null)
   return url ? [{ kind: "open", url, label }] : []
 }
 

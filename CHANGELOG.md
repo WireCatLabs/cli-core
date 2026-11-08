@@ -7,6 +7,22 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **Links open a person and a project.** The v1 link grammar takes `person/<id>` and `project/<key>`
+  (`https://wirecat.dev/o#/v1/person/77`, `wirecat://open/v1/project/ACME%20site`), and `linkFor` builds them from a
+  report item's `person:<id>` and `project:<key>` refs; a project key is one encoded part. An item still opens where
+  it happened first: a person or a project ref gives its one link only when no other ref does
+  (`refsForLink(refs)`, exported). `test/fixtures/links-v1.json` has the new cases; the bounce page and WireCat
+  Desktop need them too before such a link opens there.
+- **An agent schedule's run for a past day (`backfillSchedule`, `backfillScheduleRun`).** It runs the schedule's
+  agent as its timer does, with the same harness, flags, per-run cap and an input of the host's, and keeps the run in
+  `runs/` under the time it is given (`2026-11-05T07-30-00Z.md`, `.log`, `.jsonl`), with `"backfill": true` in its
+  `.report.json`; the report is rendered as of that time. It sends nothing, shows no notice, and leaves `last.json`,
+  `latest.md` and `latest.txt` as they are; its cost counts in today's `spend.json`. The count of runs a schedule keeps
+  (30) no longer removes a backfilled run, which is older than the runs around it. `readSchedule`, `scheduleFile`,
+  `spentToday` and `SCHEDULE_DEFAULTS` are exported from `@wirecat/cli-core/cli` for a host's own checks.
+
 ## 0.617.0 — 08.11.2026
 
 ### Security
