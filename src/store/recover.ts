@@ -19,6 +19,7 @@ import type { CacheDatabase } from "./driver.js"
 import { fts5Tables, type InvalidJson, invalidJson, type StoreHealth, storeHealth } from "./health.js"
 import { readHealthMark, recordDeepCheck } from "./marks.js"
 import { migrate } from "./migrations.js"
+import { forgetCoverageSince, REFILL_MARGIN_MS, type Refetch } from "./refill.js"
 import { resetAttachmentWords } from "./sqlite/attachment-texts.js"
 import { involvementStoreOver } from "./sqlite/involvements.js"
 import { drainMeetingIndex } from "./sqlite/meetings.js"
@@ -629,6 +630,8 @@ export interface Recovery {
   /** Values that were not valid JSON: set to NULL, or the row dropped where `required`. */
   invalidJson: InvalidJson[]
   mailToFetch: { account: string; emails: number }[]
+  /** What was marked not fetched, from a day before `lastKnownGood` on, so the next ordinary sync fetches it again. */
+  refetch: Refetch
   rebuilt: DerivedRebuild
   copyErrors: string[]
   health: StoreHealth
@@ -774,6 +777,7 @@ const recoverLocked = async ({
     let fetch: { account: string; emails: number }[]
     let schema: number
     let placed: Record<string, number>
+    let refetch: Refetch
     try {
       placed = placeLostRows(opened.database)
       kept = tableRows(opened.database)
@@ -784,6 +788,8 @@ const recoverLocked = async ({
       note("looking for rows that point at rows that were lost")
       dangling = danglingRows(opened.database)
       fetch = mailToFetch(opened.database)
+      const good = lastKnownGood === null ? Number.NaN : Date.parse(lastKnownGood)
+      refetch = forgetCoverageSince(opened.database, Number.isNaN(good) ? null : good - REFILL_MARGIN_MS, now())
       schema = fileSchemaOf(opened.database).version
       opened.database.exec("PRAGMA wal_checkpoint(TRUNCATE)")
     } catch (error) {
@@ -849,6 +855,7 @@ const recoverLocked = async ({
       dangling,
       invalidJson: json,
       mailToFetch: fetch,
+      refetch,
       rebuilt,
       copyErrors,
       health,

@@ -219,6 +219,11 @@ const OTHERS: Entry[] = [
     "recovering the store needs the sqlite3 program, 3.43 or newer, with its .recover command",
   ],
   validation("store.recovery-failed", "the recovered store did not pass its check, so the store was left as it was"),
+  [
+    "serve.outdated",
+    "configuration_error",
+    "the store or the installed version is newer than this serve; it stopped so its unit starts the installed one",
+  ],
   validation("store.recovering", "another recovery of the store is running; wait for it to finish"),
   validation("store.changed-during-recovery", "the store was written to during the recovery, so it was left as it was"),
   [

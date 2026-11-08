@@ -93,6 +93,10 @@ describe("store recover", () => {
     )
     const answer = await storeRecoveryRun(env, { command: "chat", timers: () => [], copy: copyOf(clean) })
     expect(answer.lastKnownGood).toBe(lastOk)
+    expect(answer.refetch.since).toBe("2026-10-31T08:00:00.000Z")
+    expect(recoveryNotes(answer)).toContain(
+      "notes, memories, tags and whatever else only this store held cannot be fetched again",
+    )
     expect(recoveryNotes(answer).at(-2)).toContain(`written since the last deep check that passed (${lastOk})`)
   })
 

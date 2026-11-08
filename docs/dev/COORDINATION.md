@@ -36,6 +36,10 @@ nothing now.
   [issue #849](https://github.com/WireCatLabs/cli-core/issues/849), one line, after reading its latest
   comments and `gh run list --workflow release.yml`. Two sessions merge and release here, and on 2026-10-10
   one released 0.219.0 from a `main` one merge short of the other's work (owner's rule, 2026-10-11).
+- **Hold `main` only while your pull request is green** (issue #849, rule 4): claim it when CI passes, merge and
+  release; if CI turns red, post "main free" and queue again at the end. **A holder silent for 45 minutes without a
+  merge loses `main`** (rule 5, owner's rule 2026-11-08): the next session in the queue posts "taking main (stale:
+  <holder> since HH:MM UTC)" and goes ahead, and the old holder queues again at the end.
 - Release only through `bin/release`: `gh workflow run release.yml` started by hand skips the lock below.
   When you must start it by hand, pass the `main` you checked: `-f commit=<its full 40-character sha>`.
   The run refuses any other commit, so a merge that lands after your checks is not published.

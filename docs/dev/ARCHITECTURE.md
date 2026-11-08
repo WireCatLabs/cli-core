@@ -445,6 +445,19 @@ inode) lifts it. The health mark `<store>.health.json` (`checked_at`, `ok`, `pro
 `last_ok_at`) is written by every deep check (`doctor --deep`, `store recover`, the check after `store recover run`);
 `last_ok_at` is the last known good that `store recover` reports.
 
+After the copy, `store recover run` forgets what the store says was fetched from a day before `last_ok_at` on
+(`forgetCoverageSince`, `src/store/refill.ts`; everything when no deep check ever passed), so the next ordinary sync
+or serve fetches it again instead of jumping over a hole: each chat's `sync_ranges` end at its last message sent
+before then (by message id, or by send time for a messenger that keys by time, which shows as keys of 10^12 and up),
+its `fetched:` mark goes and its `history_start:` mark too when no stretch reaching it is left; each mail folder's
+`mail_resume:` point keeps only the UIDs up to the last located email from before then (none when the folder has no
+located email), and an mbox point written since is dropped. The answer says per account how many chats and folders
+(`refetch`). WhatsApp history comes back only as the phone pushes it.
+
+A `serve` checks every minute whether the store moved past what its build may write, or whether a newer version of
+its own package is installed on disk, and then ends with `serve.outdated` (exit 3), so its unit, which restarts on
+failure, starts the installed build (`src/cli/messenger/serve-outdated.ts`).
+
 ### Entities and source records
 
 The rules are in the cli-base handbook, [Data model](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/data-model.md)

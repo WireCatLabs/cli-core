@@ -173,6 +173,26 @@ export const storeRecoveryRun = async (
   }
 }
 
+const refetchNotes = ({ since, chats, mail }: RecoveryRun["refetch"]): string[] => {
+  const from = since === null ? "from the start" : `from ${since} on`
+  const marked = [
+    ...chats.map(({ provider, account, chats }) => `${chats} chats of ${provider} ${account}`),
+    ...mail.map(({ account, folders }) => `${folders} mail folders of ${account}`),
+  ]
+  return [
+    marked.length > 0
+      ? `marked as not fetched ${from}, so the next sync or serve fetches it again: ${marked.join(", ")}`
+      : `nothing held ${from} was marked as fetched, so there is nothing to fetch again`,
+    ...chats
+      .filter(({ provider }) => provider === "whatsapp")
+      .map(
+        ({ account }) =>
+          `whatsapp ${account}: WhatsApp cannot be asked for its chats, so only what the phone pushes while serve runs comes back`,
+      ),
+    "notes, memories, tags and whatever else only this store held cannot be fetched again",
+  ]
+}
+
 /** The lines a person reads under the answer; the JSON carries the same in its fields. */
 export const recoveryNotes = (answer: RecoveryCheck | RecoveryRun): string[] => {
   if ("keptAt" in answer) {
@@ -190,6 +210,7 @@ export const recoveryNotes = (answer: RecoveryCheck | RecoveryRun): string[] => 
       ...Object.entries(answer.placed).map(
         ([table, rows]) => `${table}: ${rows} rows found on pages no table claimed were put back`,
       ),
+      ...refetchNotes(answer.refetch),
       `${lost.some((line) => line.includes("are gone")) ? "more rows may be gone" : "how many rows were lost is unknown"}: ` +
         `damage can take rows written ${since} without leaving a trace; a sync fetches again what the servers still hold`,
       ...answer.dangling.map(

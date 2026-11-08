@@ -13,6 +13,9 @@ import { defaultRule } from "../../replies/rules.js"
 import { NOT_ALLOWED } from "../../replies/serve.js"
 import { CORE_LOG_EVENTS } from "../../runs/log-events.js"
 import { SendJournal, sendsPathFor } from "../../sends/journal.js"
+import { SPEAKS } from "../../store/compatibility.js"
+import { openSqlite, openStore } from "../../store/store.js"
+
 import { run } from "../program.js"
 import { settingsFor } from "../settings.js"
 import { rememberAccount } from "./accounts.js"
@@ -46,7 +49,13 @@ const setup = () => {
 
 const seen: { lock?: { pid: number; version?: string; listeningAt?: string } } = {}
 
-const call = async (argv: string[], env: NodeJS.ProcessEnv, asked: ConnectOptions[] = [], signal?: AbortSignal) => {
+const call = async (
+  argv: string[],
+  env: NodeJS.ProcessEnv,
+  asked: ConnectOptions[] = [],
+  signal?: AbortSignal,
+  outdated?: { everyMs?: number; packageRoot?: string },
+) => {
   const connect = async (_: unknown, __: unknown, options?: ConnectOptions) => {
     asked.push(options ?? {})
     return {
@@ -77,6 +86,7 @@ const call = async (argv: string[], env: NodeJS.ProcessEnv, asked: ConnectOption
       tty: false,
       env,
       ...(signal ? { signal } : {}),
+      ...(outdated ? { outdated } : {}),
     },
   )
   const answer = streams.stdout[0] ? JSON.parse(streams.stdout[0]).item : undefined
@@ -343,5 +353,61 @@ describe("serve's catch-up on start", () => {
     expect(asked[0]).toMatchObject({ limit: expect.any(Number) })
     expect(answer.caught_up).toMatchObject({ chats: 1, failed: 0, stopped: false })
     expect(answer.caught_up.fetched).toBeGreaterThanOrEqual(2)
+  })
+})
+
+describe("serve on an outdated build (BUG-643)", () => {
+  it("**exits 3 once another build moves the store past what it may write**", async () => {
+    const { env } = setup()
+    const path = env.MESSAGING_STORE
+    ;(await openStore({ path })).close()
+    const fail = new AbortController()
+    const failsafe = setTimeout(() => fail.abort(), 5000)
+    setTimeout(async () => {
+      const { database } = await openSqlite(path)
+      database
+        .prepare("INSERT INTO schema_migrations (version, min_compatible, applied_at) VALUES (?, ?, ?)")
+        .run(SPEAKS + 1, SPEAKS + 1, Date.now())
+      database.close()
+    }, 30)
+
+    const { code, answer, stderr } = await call(["serve", "--json"], env, [], fail.signal, { everyMs: 20 })
+    clearTimeout(failsafe)
+
+    expect(fail.signal.aborted).toBe(false)
+    expect(code).toBe(3)
+    expect(answer).toBeUndefined()
+    expect(stderr.join("\n")).toContain(`speaks ${SPEAKS} and can no longer write it`)
+  })
+
+  it("exits 3 once a newer version is installed over the package it runs from", async () => {
+    const { root, env } = setup()
+    const packageRoot = join(root, "package")
+    mkdirSync(packageRoot)
+    writeFileSync(join(packageRoot, "package.json"), JSON.stringify({ version: "1.0.0" }))
+    setTimeout(() => writeFileSync(join(packageRoot, "package.json"), JSON.stringify({ version: "1.1.0" })), 30)
+    const fail = new AbortController()
+    const failsafe = setTimeout(() => fail.abort(), 5000)
+
+    const { code, stderr } = await call(["serve", "--json"], env, [], fail.signal, { everyMs: 20, packageRoot })
+    clearTimeout(failsafe)
+
+    expect(code).toBe(3)
+    expect(stderr.join("\n")).toContain("chat 1.1.0 is installed and this serve runs 1.0.0")
+  })
+
+  it("keeps running on a store a newer build may still share with it", async () => {
+    const { env } = setup()
+    const path = env.MESSAGING_STORE
+    ;(await openStore({ path })).close()
+    const { database } = await openSqlite(path)
+    database
+      .prepare("INSERT INTO schema_migrations (version, min_compatible, applied_at) VALUES (?, ?, ?)")
+      .run(SPEAKS + 1, SPEAKS, Date.now())
+    database.close()
+    const stop = new AbortController()
+    setTimeout(() => stop.abort(), 120)
+
+    expect((await call(["serve", "--json"], env, [], stop.signal, { everyMs: 20 })).code).toBe(0)
   })
 })
