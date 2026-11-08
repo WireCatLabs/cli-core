@@ -5,6 +5,23 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Added
+
+- **Base stages of deals and of leads, and CRM stages mapped onto them (store version 60).** One editable base set
+  per kind; every CRM stage maps onto one of its stages, suggested by the store and confirmed by the owner, one by one
+  or all at once. Store version 60 adds `pipeline_stages.base_stage_id` and `base_confirmed` (columns only;
+  `minCompatible` stays 56). `baseStagesCommand(app, { open, output, accounts })` from `./cli` builds the `stages`
+  group for memo: `show <kind>` (the columns, with open rows and mapped CRM stages each, and `unsorted`), `create`,
+  `rename`, `move` and `remove` of a base stage, `list` (every CRM stage with `base_stage` and `confirmed`; query
+  `kind:`, `pipeline:`, `confirmed:`), `set <stage> <base-stage>` and `confirm --pipeline <p> | --all`. `accounts`
+  narrows reads and confirms to the CRM accounts a run may see, such as a group lock's. Deal and lead rows gain
+  `base_stage {ref, name}`, `null` until confirmed. A CRM CLI's `deals move <ref> stage:<id>` (and `leads move`) moves
+  to the one stage of the card's pipeline mapped to that base stage, and refuses several (`stage.choice-required`,
+  with `candidates`) or none (`stage.unmapped`) before anything is written. `store.baseStages` holds the same
+  operations.
+
 ## 0.614.0 — 08.11.2026
 
 ### Added

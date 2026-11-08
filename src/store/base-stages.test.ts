@@ -214,6 +214,9 @@ it("a move to a base stage takes the one stage of the row's pipeline mapped ther
     },
   })
 
+  const contract = await refOf(store, "Contract")
+  expect((await store.baseStages.resolve(deal, contract)).stage).toMatchObject({ ref: contract, externalId: "s3" })
+
   await expect(store.baseStages.resolve(deal, "Qualification")).rejects.toMatchObject({
     code: "validation_error",
     details: { reason: "stage.unmapped" },

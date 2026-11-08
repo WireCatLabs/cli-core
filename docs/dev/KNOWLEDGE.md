@@ -237,6 +237,25 @@ write alike, with no review; only the author is kept. Triggers write each stage 
 `pipeline_stage_changes`, and `pipeline(ref)` counts from it how many rows reached each stage and the conversion to
 the next. The migration seeds the lead pipeline `Leads` (`new`, `contacted`, `qualified`, `won`, `lost`).
 
+**Base stages (store version 60).** The owner keeps one base set of stages per kind, and every CRM stage maps onto one
+stage of its kind's set, so a board shows deals or leads from every pipeline and CRM in the same columns
+(`store.baseStages`). A base set is an own pipeline named by the store setting `stages.base.<kind>`
+(`"pipeline:<id>"`). Its first use takes the owner's only own pipeline of the kind when it has a stage of every
+outcome (the seeded `Leads`, so `leads add` without a stage still finds one pipeline), and otherwise makes `Base
+stages` with the defaults (`DEFAULT_BASE_STAGES`: deals New, Qualification, Proposal, Negotiation, Won, Lost; leads
+New, Contacted, Qualified, Converted, Rejected). `pipeline_stages.base_stage_id` is the base stage a stage maps to and
+`base_confirmed` whether the owner confirmed it; a base stage maps to itself, confirmed. The store suggests a mapping
+at the first use and at every sync of a CRM pipeline (`suggestBaseStages`): won and lost by outcome; an open stage by
+its relative place among its pipeline's open stages, and where that falls between two base stages, the one of the
+same name, else the nearer. A suggestion never replaces a confirmed row, so a stage the CRM adds after the confirm
+waits as a suggestion. A deal's or lead's `baseStage` is set only once its stage is confirmed; otherwise a board
+shows it unsorted. Only CRM stages are mapped: an own row in an own pipeline other than the set stays unsorted.
+`resolve(row, base)` gives the one stage of the row's pipeline confirmed onto the base stage, the stage itself when it
+is a `stage:<id>` of that pipeline, `stage.choice-required` with `candidates` when several are, and `stage.unmapped`
+when none is. Editing keeps a stage of each outcome (`stage.base-outcome`) and refuses to remove a stage the owner's own
+rows stood in (`stage.base-in-use`); removing one sends what was confirmed onto it back to a suggestion. `stage:<id>`
+names a stage only in these commands and answers; it is not a ref type of its own.
+
 Store version 57 adds the rest of a small business; the columns are in [schema.md](../storage/schema.md).
 `store.products` keeps what the owner or a supplier sells (`catalog_items`, `product:<id>`), with an optional price.
 An order now has lines (`order_lines`, `addLine`), and an order's or an invoice's line may name its product.

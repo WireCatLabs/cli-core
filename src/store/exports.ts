@@ -25,6 +25,7 @@ export {
   type TextOrigin,
 } from "./sqlite/attachment-texts.js"
 export { pendingNormalization } from "./sqlite/backfill.js"
+export type { BaseScope, BaseSet, BaseStagesStore, StageMapping } from "./sqlite/base-stages.js"
 export {
   BUSINESS_FIND_MAX,
   type BusinessHit,

@@ -82,6 +82,8 @@ export interface CrmCommandOptions {
 }
 
 const MOST = 500
+/** A stage by the store's reference, as `stages map list` and a deal's `base_stage` name it. */
+const STAGE_REF = /^stage:\d+$/
 
 const DEAL_FIELDS = [
   termField("status", "enum", "status:open", { values: DEAL_STATUSES }),
@@ -525,11 +527,20 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
     )
     if (move)
       example(
-        reference(move).argument("<stage>", "the stage, by the CRM's id or a name only one stage of its pipeline has"),
+        reference(move).argument(
+          "<stage>",
+          "the stage, by the CRM's id or a name only one stage of its pipeline has; or a stage:<id>, of its pipeline " +
+            "or of the owner's base set, which moves it to the one stage of its pipeline mapped there and refuses " +
+            "several (with the candidates) or none",
+        ),
         `${plural} move ${kind}:12 "Quote sent"`,
+        `${plural} move ${kind}:12 stage:5`,
       ).action(async (ref: string, stage: string, opts: { operationId?: string }, command: Command) => {
         await run(command, async (context) => {
-          const done = await moveCrmItem(context, kind, ref, stage, idOf(opts))
+          const target = STAGE_REF.test(stage.trim())
+            ? ((await context.store.baseStages.resolve(ref, stage.trim())).stage.externalId ?? stage)
+            : stage
+          const done = await moveCrmItem(context, kind, ref, target, idOf(opts))
           return answered(done.operationId, done.item)
         })
       })

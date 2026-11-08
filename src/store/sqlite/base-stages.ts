@@ -98,8 +98,9 @@ export interface BaseStagesStore {
   /** Confirms every suggestion of one pipeline, or of all of them in scope; answers how many. */
   confirm(target: { pipeline: string } | { all: true; kind?: DealKind }, scope?: BaseScope): Promise<number>
   /**
-   * The stage of the row's own pipeline confirmed onto `base`. Refused with `stage.choice-required` and the candidates
-   * when several are, and with `stage.unmapped` when none is.
+   * The stage of the row's own pipeline confirmed onto `base` (a base stage by `stage:<id>` or name), or `base` itself
+   * when it is a `stage:<id>` of that pipeline. Refused with `stage.choice-required` and the candidates when several
+   * are confirmed onto it, and with `stage.unmapped` when none is.
    */
   resolve(
     item: string,
@@ -511,6 +512,21 @@ export const baseStagesOver = (context: StoreContext) => {
     resolve: (item: string, base: string) => {
       const found = deals.get(item)
       const pipeline = Number(found.pipeline.slice("pipeline:".length))
+      const candidateOf = (row: Row) => ({
+        ref: stageRef(row.id),
+        name: String(row.name),
+        externalId: row.external_id == null ? null : String(row.external_id),
+        outcome: row.outcome as StageOutcome,
+      })
+      // A candidate named back by its reference, after a choice-required answer, is the move itself.
+      const own = /^stage:(\d+)$/.exec(base.trim())?.[1]
+      const direct =
+        own === undefined
+          ? undefined
+          : database
+              .prepare("SELECT * FROM pipeline_stages WHERE id = ? AND pipeline_id = ? AND deleted_at IS NULL")
+              .get(Number(own), pipeline)
+      if (direct) return { stage: candidateOf(direct) }
       const target = baseStageRow(ensure(found.kind), base)
       const candidates = database
         .prepare(
@@ -518,18 +534,13 @@ export const baseStagesOver = (context: StoreContext) => {
             "AND deleted_at IS NULL ORDER BY position, id",
         )
         .all(pipeline, Number(target.id))
-        .map((row) => ({
-          ref: stageRef(row.id),
-          name: String(row.name),
-          externalId: row.external_id == null ? null : String(row.external_id),
-          outcome: row.outcome as StageOutcome,
-        }))
+        .map(candidateOf)
       if (candidates.length === 1) return { stage: candidates[0] as (typeof candidates)[number] }
       if (candidates.length > 1)
         throw new CliError(
           "validation_error",
           `more than one stage of ${found.pipelineName} maps to ${target.name}: ` +
-            `${candidates.map(({ name, ref }) => `${name} (${ref})`).join(", ")}; move to one of them by name`,
+            `${candidates.map(({ name, ref }) => `${name} (${ref})`).join(", ")}; move to one of them by its reference`,
           {
             reason: "stage.choice-required",
             candidates: candidates.map(({ ref, name, externalId, outcome }) => ({

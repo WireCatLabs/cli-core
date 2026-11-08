@@ -391,6 +391,34 @@ describe("CRM write commands", () => {
     expect(closed.item.deal).toMatchObject({ status: "lost", closed_reason: "Example: chose another supplier" })
   })
 
+  it("move to a base stage's stage:<id> writes the one stage mapped there, and refuses many or none", async () => {
+    const { cli, ref, store, source } = await synced()
+    await store.baseStages.confirm({ all: true })
+    const base = await store.baseStages.show("deal")
+    const at = (name: string) => base.stages.find((one) => one.name === name)?.ref as string
+    const moved = await cli("deals", "move", ref, at("Negotiation"))
+    expect(moved.item.deal).toMatchObject({ stage: "Quote sent", base_stage: { name: "Negotiation" } })
+
+    const first = (await store.baseStages.mappings({ kind: "deal" })).find(({ name }) => name === "New")?.ref as string
+    await store.baseStages.map(first, at("Negotiation"))
+    const refused = cli("deals", "move", ref, at("Negotiation"))
+    await expect(refused).rejects.toMatchObject({
+      code: "validation_error",
+      details: {
+        reason: "stage.choice-required",
+        candidates: [
+          { ref: first, name: "New", external_id: "new", outcome: "open" },
+          expect.objectContaining({ name: "Quote sent" }),
+        ],
+      },
+    })
+    await expect(cli("deals", "move", ref, at("Proposal"))).rejects.toMatchObject({
+      details: { reason: "stage.unmapped" },
+    })
+    expect(source.writes).toHaveLength(1)
+    expect((await cli("deals", "move", ref, first)).item.deal).toMatchObject({ stage: "New" })
+  })
+
   it("are MCP writes, and --field takes a list", () => {
     const root = new Command("crm")
     addCrmCommands(root, { app: APP, open: () => Promise.reject(new Error("not opened")), writes: WRITES })
