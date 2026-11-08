@@ -31,7 +31,8 @@ shape of this file.
   write lock, without the retry other writes use, so with several tools syncing at once it gave up after 5 s. A
   current store is now checked without the lock, and a migration takes it with the retry. Listing mail pieces to
   embed (`mail.chunksToEmbed`, and mail search) wrote its queue bookkeeping outside a transaction; it now reads
-  first and writes through the store's transaction only when there is work.
+  first and writes through the store's transaction only when there is work. A write that had to wait for the lock
+  leaves it free for 2 ms after it commits, so a waiter gets in between one process's back-to-back writes.
 - **The real error of a failed write is shown.** When SQLite had already rolled a transaction back itself (an I/O
   error, a full disk), the store's own rollback failed with "cannot rollback - no transaction is active", and that
   message replaced the real one.

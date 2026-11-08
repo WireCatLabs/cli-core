@@ -20,17 +20,18 @@ export const isBusy = (error: unknown): boolean => sqliteCode(error) === SQLITE_
  * Takes the write lock, waiting as long as the connection's `busy_timeout`. SQLite's own wait sleeps 1 ms, then up to
  * 100 ms between tries, so a process that commits and begins again at once is never seen free and the waiter fails
  * with "database is locked" after the full timeout. Trying every millisecond sees a gap of a fraction of a
- * millisecond between two writes; a writer that leaves none still starves it, hence `writeBatch`'s pause.
+ * millisecond between two writes; a writer that leaves none still starves it, hence the pause after a write that
+ * waited. Answers whether it had to wait.
  */
-export const beginImmediate = (database: CacheDatabase): void => {
+export const beginImmediate = (database: CacheDatabase): boolean => {
   const timeout = Number(database.prepare("PRAGMA busy_timeout").get()?.timeout ?? 0)
   const deadline = Date.now() + timeout
   database.exec("PRAGMA busy_timeout = 0")
   try {
-    for (;;) {
+    for (let waited = false; ; waited = true) {
       try {
         database.exec("BEGIN IMMEDIATE")
-        return
+        return waited
       } catch (error) {
         if (!isBusy(error) || Date.now() >= deadline) throw error
         Atomics.wait(pause, 0, 0, 1)
@@ -80,12 +81,7 @@ export const write = <T>(
  * the next `write`. The outermost pauses 2 ms after it commits: a loop that begins again at once leaves another
  * process's `write` a gap of microseconds, and it misses that gap until its 5 s wait runs out.
  */
-export const writeBatch = <T>(database: CacheDatabase, body: () => T): T => {
-  const outer = connectionOf(database).depth === 0
-  const result = transact(database, body, false)
-  if (outer) Atomics.wait(pause, 0, 0, BATCH_PAUSE_MS)
-  return result
-}
+export const writeBatch = <T>(database: CacheDatabase, body: () => T): T => transact(database, body, false)
 
 const BATCH_PAUSE_MS = 2
 
@@ -94,8 +90,8 @@ const transact = <T>(database: CacheDatabase, body: () => T, drain: boolean, bef
   if (connection.reading) throw new Error("a store write cannot run inside a read")
   const outer = connection.depth === 0
   const name = `w${connection.depth + 1}`
-  if (outer) beginImmediate(database)
-  else database.exec(`SAVEPOINT ${name}`)
+  const waited = outer && beginImmediate(database)
+  if (!outer) database.exec(`SAVEPOINT ${name}`)
   connection.depth += 1
   try {
     const result = body()
@@ -106,6 +102,9 @@ const transact = <T>(database: CacheDatabase, body: () => T, drain: boolean, bef
     }
     beforeCommit?.()
     database.exec(outer ? "COMMIT" : `RELEASE ${name}`)
+    // A write that had to wait has others waiting behind it, and its caller's next write would begin before they see
+    // the lock free. Pausing only then costs an uncontended write nothing.
+    if (outer && (waited || !drain)) Atomics.wait(pause, 0, 0, BATCH_PAUSE_MS)
     return result
   } catch (error) {
     rollBack(database, outer ? "ROLLBACK" : `ROLLBACK TO ${name}; RELEASE ${name}`)

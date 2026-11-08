@@ -106,6 +106,27 @@ describe("write", () => {
     expect(count(database, "messages")).toBe(1)
   })
 
+  it("leaves the lock free a moment after a write that had to wait for it, so the next waiter gets in", async () => {
+    const database = await fresh()
+    let busy = true
+    let committed = 0
+    const contended: CacheDatabase = {
+      ...database,
+      prepare: (sql) => database.prepare(sql),
+      exec: (sql) => {
+        if (sql === "BEGIN IMMEDIATE" && busy) {
+          busy = false
+          throw Object.assign(new Error("database is locked"), { errcode: 5 })
+        }
+        database.exec(sql)
+        if (sql === "COMMIT") committed = performance.now()
+      },
+    }
+    write(contended, () => saveMessage(database))
+    expect(performance.now() - committed).toBeGreaterThanOrEqual(2)
+    expect(count(database, "messages")).toBe(1)
+  })
+
   it("refuses to write inside a read, where nothing would drain", async () => {
     const database = await fresh()
     expect(() => read(database, () => write(database, () => saveMessage(database)))).toThrow("inside a read")
