@@ -2,6 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import { type FACT_STATUSES, FACT_TYPES, MEMORY_SCOPES } from "../../domain/knowledge.js"
 import { calendarMoment } from "../../domain/moment.js"
 import { assertMayDecide, assertMayWithdraw, type Decider, deciderAuthor } from "../decisions.js"
+import type { SourceReviewMarker } from "../source-review.js"
 import { type Actor, type ProposedByFilter, proposedBySql, proposerOf } from "./actors.js"
 import type { EvidenceInput } from "./evidence-signature.js"
 import { type EvidenceSource, evidenceSourcesOf } from "./evidence-sources.js"
@@ -21,6 +22,7 @@ import {
 } from "./memories.js"
 import { requiredThing } from "./notes.js"
 import type { StoreContext } from "./open.js"
+import { closeSourceReviews, eraseSourceReviews, sourceReviewOf } from "./source-review-marks.js"
 import { write } from "./transaction.js"
 
 /** What happened, as its evidence shows; its evidence is `links` of kind `evidence`. */
@@ -45,6 +47,8 @@ export interface Fact {
   scope: (typeof MEMORY_SCOPES)[number] | null
   source: string
   evidence: string[]
+  /** The open review of its sources (`memory_source_review`), when one waits for the owner. */
+  sourceReview: SourceReviewMarker | null
   createdAt: string
   updatedAt: string
 }
@@ -139,6 +143,7 @@ export const factOperationsOver = (context: StoreContext): FactOperations => {
     scope: row.scope == null ? null : (row.scope as Fact["scope"]),
     source: String(row.source),
     evidence: evidenceOf(context, { type: "fact", id: Number(row.id) }),
+    sourceReview: sourceReviewOf(database, { type: "fact", id: Number(row.id) }),
     createdAt: iso(row.created_at),
     updatedAt: iso(row.updated_at),
   })
@@ -156,15 +161,22 @@ export const factOperationsOver = (context: StoreContext): FactOperations => {
       },
       by,
     )
-  const decided = (row: Row, by: Decider) =>
+  const decided = (row: Row, by: Decider, ownerOnly = false) =>
     assertMayDecide(
       {
         id: `fact:${row.id}`,
         proposedBy: proposerOf(database, row.author_type, row.author_id),
+        ownerOnly,
       },
       by,
       context.decisions,
     )
+  /** Accepting it would retire a fact the owner stands behind, which only the owner may, as for memories. */
+  const retiresAccepted = (row: Row): boolean =>
+    row.status === "proposed" &&
+    row.supersedes_id != null &&
+    database.prepare("SELECT 1 FROM facts WHERE id = ? AND status = 'accepted'").get(Number(row.supersedes_id)) !==
+      undefined
   /** Keeps who decided for the owner and why in `metadata.decision`; the decider's actor is in `confirmed_by`. */
   const keepDecision = (id: number, by: Decider, reason?: string) => {
     const why = [by === "owner" ? undefined : by.reason.trim(), reason?.trim() || undefined].filter(Boolean).join(": ")
@@ -186,13 +198,21 @@ export const factOperationsOver = (context: StoreContext): FactOperations => {
       )
       .run(actor.type, actor.id, at, id)
     keepDecision(id, by, reason)
-    if (row.supersedes_id != null)
+    if (row.supersedes_id != null) {
       database
         .prepare(
           "UPDATE facts SET status = 'superseded', updated_at = ? WHERE id = ? AND status IN ('proposed', 'accepted')",
         )
         .run(at, Number(row.supersedes_id))
+      closeSourceReviews(database, { type: "fact", id: Number(row.supersedes_id) }, { actor, at, why: "superseded" })
+    }
   }
+  const closing = (id: number, by: Decider, why: string) =>
+    closeSourceReviews(
+      database,
+      { type: "fact", id },
+      { actor: authorActor(context, deciderAuthor(by)).actor, at: now(), why },
+    )
 
   return {
     add: (input) => {
@@ -295,7 +315,7 @@ export const factOperationsOver = (context: StoreContext): FactOperations => {
     },
     accept: (reference, by, reason) => {
       const row = rowOf(reference)
-      decided(row, by)
+      decided(row, by, retiresAccepted(row))
       write(database, () => accept(Number(row.id), by, reason))
       return factOf(rowOf(reference))
     },
@@ -309,7 +329,10 @@ export const factOperationsOver = (context: StoreContext): FactOperations => {
       assertMayWithdraw({ id: `fact:${row.id}`, proposedBy: { type: "unknown" }, proposed: false }, by)
       if (row.type !== "decision") throw new CliError("validation_error", "only a decision can be reversed")
       if (row.status !== "accepted") throw new CliError("validation_error", "only an accepted decision can be reversed")
-      database.prepare("UPDATE facts SET status = 'reversed', updated_at = ? WHERE id = ?").run(now(), Number(row.id))
+      write(database, () => {
+        database.prepare("UPDATE facts SET status = 'reversed', updated_at = ? WHERE id = ?").run(now(), Number(row.id))
+        closing(Number(row.id), by, "reversed")
+      })
       return factOf(rowOf(reference))
     },
     revoke: (reference, by, reason) => {
@@ -370,6 +393,7 @@ export const factOperationsOver = (context: StoreContext): FactOperations => {
       write(database, () => {
         database.prepare("UPDATE facts SET status = 'rejected', updated_at = ? WHERE id = ?").run(now(), Number(row.id))
         keepDecision(Number(row.id), by, reason)
+        closing(Number(row.id), by, "rejected")
       })
       return factOf(rowOf(reference))
     },
@@ -382,6 +406,7 @@ export const factOperationsOver = (context: StoreContext): FactOperations => {
         keepHighestId(database, "facts", now())
         if (twin !== undefined) keepHighestId(database, "memories", now())
         database.prepare("UPDATE facts SET supersedes_id = NULL WHERE supersedes_id = ?").run(id)
+        eraseSourceReviews(database, { type: "fact", id })
         const count = dropLinksOf(database, { type: "fact", id }, now())
         database.prepare("DELETE FROM links WHERE from_type = 'fact' AND from_id = ?").run(id)
         database.prepare("DELETE FROM taggings WHERE taggable_type = 'fact' AND taggable_id = ?").run(id)

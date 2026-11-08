@@ -13,6 +13,7 @@ import { orderKind } from "./kinds/orders.js"
 import { organizationKind } from "./kinds/organization.js"
 import { relationshipKind } from "./kinds/relationship.js"
 import { relationshipUpdateKind } from "./kinds/relationship-update.js"
+import { sourceReviewKind } from "./kinds/source-review.js"
 import { taskCloseKind } from "./kinds/task-close.js"
 import type { Decided, ProposalFilter, ProposalKind, ProposalRegistry, ProposalRow } from "./types.js"
 
@@ -153,6 +154,7 @@ export const proposalRegistry = (store: MessageStore): ProposalRegistry => {
     mailFindingsKind(store),
     meetingFindingsKind(store),
     taskCloseKind(store),
+    sourceReviewKind(store),
   ])
     registry.register(kind)
   registry.register(actionKind(store, registry.claimed))

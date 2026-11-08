@@ -13,6 +13,7 @@ import type { AccountKey } from "../types.js"
 import { ulid } from "../ulid.js"
 import { ownerPerson } from "./actors.js"
 import { forgetEvidenceToRow } from "./evidence-signature.js"
+import { LABELLED, type LabelledType } from "./labelled.js"
 import { linkKind, RELATION_KINDS } from "./link-kinds.js"
 import { type MeetingProjectsStore, meetingProjectsStoreOver } from "./meeting-projects.js"
 import type { Author } from "./memories.js"
@@ -32,6 +33,7 @@ import {
   type Scored,
 } from "./relation-proposals.js"
 import { checkStoredRole, type RelationReads, relationReadsOver } from "./relation-reads.js"
+import { type SourceReviewStore, sourceReviewStoreOver } from "./source-review.js"
 import type { TagCreationOptions } from "./tag-creation.js"
 import {
   addTags as addThingTags,
@@ -125,9 +127,14 @@ export interface Reminder {
   receipt: string | null
 }
 
-export type LabelledType = "note" | "document" | "person" | "organization" | "project" | "task" | "meeting" | "folder"
+export type { LabelledType } from "./labelled.js"
 
-export interface KnowledgeStore extends VocabularyStore, MeetingProjectsStore, OrganizationsStore, RelationReads {
+export interface KnowledgeStore
+  extends VocabularyStore,
+    MeetingProjectsStore,
+    OrganizationsStore,
+    RelationReads,
+    SourceReviewStore {
   taskIds(
     key: AccountKey,
     options?: { state?: "open" | "done" | "dismissed"; limit?: number; offset?: number; sources?: string[] },
@@ -270,17 +277,6 @@ const oneOf = <T extends string>(value: string, allowed: readonly T[], what: str
 /** What a relationship may connect; a deal or a lead only as the end its people hang from. */
 const RELATED = ["person", "organization", "project", "task"]
 const DEALS = ["deal", "lead"]
-/** What a label without an account may sit on; a chat, contact or message is the messenger's tag. */
-const LABELLED: Record<string, LabelledType> = {
-  note: "note",
-  document: "document",
-  person: "person",
-  organization: "organization",
-  project: "project",
-  task: "task",
-  meeting: "meeting",
-  account: "folder",
-}
 
 export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
   const { database, now } = context
@@ -859,6 +855,7 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
       return { proposal, relation: link && relationOf(link) }
     },
     decideLinkProposal: async (id, decision) => proposals.decideProposal(id, decision),
+    ...sourceReviewStoreOver(context),
     decideSuggestedLink: async (id, decision) => proposals.decideLink(id, decision),
     relations: async (key, reference) => {
       checked(key)

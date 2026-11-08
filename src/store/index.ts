@@ -153,6 +153,16 @@ export type {
   ProjectAnnotationStore,
   ProjectAnnotationTargetRequest,
 } from "./project-transfer/store.js"
+export {
+  SOURCE_REVIEW_CAUSES,
+  SOURCE_REVIEW_KIND,
+  type SourceCheck,
+  type SourceReviewCause,
+  type SourceReviewChallenge,
+  type SourceReviewMarker,
+  type SourceReviewPayload,
+  type SourceReviewSource,
+} from "./source-review.js"
 export type { AgentAction, AgentActionInput, AgentActionsStore } from "./sqlite/agent-actions.js"
 export { resetAttachmentWords } from "./sqlite/attachment-texts.js"
 export { backfillNormalized, pendingNormalization } from "./sqlite/backfill.js"
@@ -321,6 +331,7 @@ export {
   type SearchIndexState,
   searchIndexState,
 } from "./sqlite/search-index.js"
+export type { ChallengeInput, SourceReviewDecision } from "./sqlite/source-review.js"
 export type { SyncStateSave } from "./sqlite/sync.js"
 export type { TagCreationOptions, TagCreationReview } from "./sqlite/tag-creation.js"
 export type { TagKind, TagRow } from "./sqlite/tags.js"
