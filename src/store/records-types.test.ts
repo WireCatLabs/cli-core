@@ -67,6 +67,18 @@ const EVERY_TYPE = [
     { direction: "in", amount: "200.00", date: "2026-11-01", splits: [{ amount: "150.00", category: "rent" }] },
     { relations: [{ role: "wallet", type: "wallet", external_id: "w-1" }] },
   ),
+  upsert(
+    "message",
+    "sms-1",
+    { kind: "sms", direction: "in", phone: "+7 900 000-00-01", body: "Счёт получил", sent_at: "2026-11-01T10:00:00Z" },
+    { relations: [{ role: "counterpart", type: "person", external_id: "p-1" }] },
+  ),
+  upsert(
+    "event",
+    "call-1",
+    { kind: "call", direction: "missed", phone: "+7 900 000-00-01", started_at: "2026-11-01T11:00:00Z" },
+    { relations: [{ role: "counterpart", type: "person", external_id: "p-1" }] },
+  ),
 ]
 
 it("imports one record of every type into its entity: a proposal where money counts, a direct row elsewhere", async () => {
@@ -78,7 +90,8 @@ it("imports one record of every type into its entity: a proposal where money cou
 
   for (const record of EVERY_TYPE) {
     const stored = await store.records.get({ ...SOURCE, type: record.type, externalId: record.external_id })
-    expect([record.key, stored?.entity?.split(":")[0]]).toEqual([record.key, record.type])
+    const prefix = record.type === "message" ? "msg" : record.type
+    expect([record.key, stored?.entity?.split(":")[0]]).toEqual([record.key, prefix])
     const review = RECORD_TYPES[record.type as keyof typeof RECORD_TYPES].review
     const proposed = receipt.proposed.includes(stored?.entity as string)
     // A contract without a value feeds no total: it is written confirmed.
