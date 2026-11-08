@@ -3,8 +3,8 @@
 For the developer and agent who build it. The user-facing pages come later (§ Docs). This file is the design and the
 build order; it is deleted when the work is merged.
 
-Status: **building, 2026-11-08.** PRs 1 and 2 are merged (#2656, #2634). PR 3 (#2649), PR 4 (#2660), the phone
-records (#2661), PR 5 (#2668) and PR 6 (the search lane and the docs) are open, each on the one before. Owner rulings of 2026-11-07 are binding and are listed in § Rulings, including the
+Status: **building, 2026-11-08.** PRs 1–4 and the phone records are merged (#2656, #2634, #2649, #2660, #2661).
+PR 5 (#2668) and PR 6 (the search lane and the docs) are open. Owner rulings of 2026-11-07 are binding and are listed in § Rulings, including the
 answers to the three questions this plan raised. Code comments in this work follow the repository rule: sparse, and only *why*.
 
 ## Why

@@ -148,7 +148,6 @@ export interface MessageStore {
   readonly wallets: WalletsStore
   /** What statements say moved on the wallets, split by category; an agent's or an import's wait for the owner. */
   readonly transactions: TransactionsStore
-  /** Invoices, payments, orders, contracts, subscriptions, products and wallets, found by their numbers and names. */
   readonly business: BusinessSearchStore
   /** A CRM account's pipelines, deals, leads, contacts and companies, written as the CRM has them. */
   readonly crm: CrmCopies

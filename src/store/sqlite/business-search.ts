@@ -39,6 +39,7 @@ export interface BusinessHit {
   updatedAt: number
 }
 
+/** Invoices, payments, orders, contracts, subscriptions, products and wallets, found by their numbers and names. */
 export interface BusinessSearchStore {
   find(search: BusinessSearch): Promise<BusinessHit[]>
   /** Every account with a live record of a row the lane reads. */
