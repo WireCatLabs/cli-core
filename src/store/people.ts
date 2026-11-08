@@ -1,7 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import type { Contact, Id, Page, PersonAlias, Provider } from "../domain/models.js"
 import type { PeopleLookup } from "../resolve.js"
-import type { IdentityLinkDecision, IdentityLinkInput } from "./identity-links.js"
+import type { IdentityLinkDecision, IdentityLinkInput, MatchScan } from "./identity-links.js"
 import { keysOver } from "./keys.js"
 import { ownerPerson } from "./sqlite/actors.js"
 import type { ContactFilter } from "./sqlite/identities.js"
@@ -10,6 +10,7 @@ import * as identityProposals from "./sqlite/identity-proposals.js"
 import type { StoreContext } from "./sqlite/open.js"
 import { linkToOwner } from "./sqlite/own-identities.js"
 import * as personLinks from "./sqlite/person-links.js"
+import { scanMatches } from "./sqlite/person-match-scan.js"
 import type { PersonMerge } from "./sqlite/person-merges.js"
 import * as personMerges from "./sqlite/person-merges.js"
 import { type PersonPreparationRead, personPreparation } from "./sqlite/person-preparation.js"
@@ -78,6 +79,12 @@ export interface PeopleStore extends AccountPeople {
   proposeLink(input: IdentityLinkInput): Promise<ProposedAction>
   /** The owner's decision on an `identity_link`; confirm is refused with `identity.stale` when either person changed. */
   decideLink(id: string, decision: IdentityLinkDecision): Promise<ProposedAction>
+  /**
+   * One pass of the people matcher: the same address joins people in every scope, a phone exactly two people have
+   * joins them, a phone more people share and a meeting guest's typed address become proposals. Never over the
+   * owner's separation or rejection.
+   */
+  scanMatches(): Promise<MatchScan>
   /** The identity, and everyone linked with it, is the owner. */
   linkToOwner(identity: IdentityRef): Promise<PersonRecord>
   /** A person known by name only, with no identity yet: someone to assign a task to before any message names them. */
@@ -178,6 +185,7 @@ export const peopleStoreOver = (context: StoreContext, keyed: AccountPeople): Pe
     split: async (uid, chosen, by) => write(database, () => personMerges.split(context, uid, chosen, by)),
     proposeLink: async (input) => identityProposals.proposeIdentityLink(context, input),
     decideLink: async (id, decision) => identityProposals.decideIdentityLink(context, id, decision),
+    scanMatches: async () => scanMatches(context),
     linkToOwner: async (identity) => linkToOwner(context, identity),
   }
 }
