@@ -90,6 +90,9 @@ describe("store recover", () => {
     expect(answer.checkedOk).toBe(true)
     expect(answer.next.at(-1)).toMatch(/systemctl --user start/)
     expect(recoveryNotes(answer)[0]).toContain(answer.keptAt)
+    expect(recoveryNotes(answer).at(-2)).toMatch(
+      /^how many rows were lost is unknown: .* written since the store was made/,
+    )
     expect((await storeRecoveryCheck(env, "chat")).ok).toBe(true)
   })
 })

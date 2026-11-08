@@ -177,12 +177,21 @@ export const storeRecoveryRun = async (
 export const recoveryNotes = (answer: RecoveryCheck | RecoveryRun): string[] => {
   if ("keptAt" in answer) {
     const lost = answer.lost.map(
-      ({ table, before, read, kept }) =>
-        `${table}: ${kept} kept of ${before ?? "an uncountable number"}${read > kept ? `, ${read - kept} read but unusable` : ""}`,
+      ({ table, before, read, kept, goneAtLeast, seenIn }) =>
+        `${table}: ${kept} kept of ${before ?? "an uncountable number"}${read > kept ? `, ${read - kept} read but unusable` : ""}` +
+        (goneAtLeast > 0 ? `; at least ${goneAtLeast} rows are gone (the index ${seenIn} lists them)` : ""),
     )
+    const since = answer.lastKnownGood
+      ? `since the last deep check that passed (${answer.lastKnownGood})`
+      : "since the store was made (no deep check that passed is on record)"
     return [
       `recovered in ${answer.seconds.total} s; the damaged file is kept at ${answer.keptAt}`,
-      ...(lost.length ? lost : ["no table lost a row"]),
+      ...lost,
+      ...Object.entries(answer.placed).map(
+        ([table, rows]) => `${table}: ${rows} rows found on pages no table claimed were put back`,
+      ),
+      `${lost.some((line) => line.includes("are gone")) ? "more rows may be gone" : "how many rows were lost is unknown"}: ` +
+        `damage can take rows written ${since} without leaving a trace; a sync fetches again what the servers still hold`,
       ...answer.dangling.map(
         ({ table, parent, rows }) => `${rows} rows of ${table} point at ${parent} rows the store does not hold`,
       ),
