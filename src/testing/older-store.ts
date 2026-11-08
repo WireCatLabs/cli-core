@@ -15,7 +15,7 @@ const UNDO: Record<number, string> = {
     ALTER TABLE orders DROP COLUMN deal_id; ALTER TABLE orders DROP COLUMN direction; DROP TABLE contracts;
     DROP TABLE order_lines; DROP INDEX invoice_lines_by_catalog_item_id; ALTER TABLE invoice_lines DROP COLUMN catalog_item_id;
     DROP TABLE catalog_items; DROP INDEX payments_by_refund_of; ALTER TABLE payments DROP COLUMN refund_of;
-    DROP INDEX records_by_account_id_batch_id; ALTER TABLE records DROP COLUMN created_entity;
+    DROP INDEX records_by_account_id_batch_id; ALTER TABLE records DROP COLUMN created_entity; DROP INDEX identities_by_phone;
     ALTER TABLE record_relations DROP COLUMN as_role;
     CREATE TRIGGER orders_valid_bi BEFORE INSERT ON orders
       WHEN new.customer_type NOT IN ('person', 'organization')
