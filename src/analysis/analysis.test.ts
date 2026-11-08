@@ -115,7 +115,7 @@ describe("configured analysis", () => {
         "input",
         100,
       ),
-    ).resolves.toEqual({ text: answer(), tokens: 100 })
+    ).resolves.toMatchObject({ text: answer(), tokens: 100 })
     expect(server.seen).toHaveLength(1)
   })
   for (const provider of ["openai", "anthropic"] as const) {

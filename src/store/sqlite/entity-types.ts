@@ -16,6 +16,7 @@ export const ENTITY_TABLES = {
   document: "documents",
   document_picture: "documents",
   email: "emails",
+  email_enrichment: "emails",
   email_thread: "email_threads",
   event: "events",
   event_series: "event_series",
