@@ -5,6 +5,37 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Added
+
+- **Person, organization and deal contexts with their business relationships.** `canonicalPersonContext` answers
+  for any `person:<uid>` — a CRM contact, a name with no identity, someone two accounts saw — reading every account
+  in scope, with a `business` section (organizations, reporting lines both ways, deals and leads, projects,
+  categories) and `coverage`. `organizationContext` gives an organization's people, customers, suppliers, partners,
+  projects, open deals, invoices, payments and orders, counts of messages, mail and meetings through its people, and
+  open tasks. `dealContext` gives a deal's or lead's stages, client, participants, owner, project, money reached by
+  project or counterparty, and its people's messages, mail and meetings in its lifetime marked `proposed`;
+  `dealBrief` is its compact form. Every relationship says its standing, every section is bounded, and the shared
+  entities `person_context`, `organization_context`, `deal_context` and `deal_context.brief` describe them.
+  `organizationsInCategory` lists clients, suppliers, partners or employers, derived from relationships.
+  `@wirecat/cli-core/crm/testing` exports `acmeScenario`, a synthetic store for these. See
+  `docs/dev/BUSINESS-CONTEXT.md`.
+- **Stage history, a CRM deal's project, own organizations, orders by supplier, organizations by category.**
+  `deals.stages(ref)` lists every stage a deal or lead entered; `deals.setProject(ref, { project, by })` sets its
+  project, on a CRM copy too: the project is the store's own field, which the CRM sync never writes.
+  `knowledge.ownOrganizations()` lists the owner's companies, his own mark first, else the CRM's;
+  `orders.list({ supplier })`; `deals.list({ accounts })` (copies from those CRM accounts, the owner's own always);
+  `knowledge.organizations(query, { category, accounts })` keeps one category's, chosen
+  in SQL. A context's `coverage` names each CRM account's sync gaps (`crmGapsOf`) and each kind the profile denies
+  (`deniedKinds`: no deal or lead row, title or count is answered). A relationship (`knowledge.relations`) answers
+  the `account` that reported it and how a source `derived` it.
+
+### Changed — may break callers
+
+- `DealsStore` gains `stages` and `setProject`, and `OrganizationsStore` (so `KnowledgeStore`) gains
+  `ownOrganizations`: a hand-written store or fake implementing them must add these.
+
 ## 0.614.0 — 08.11.2026
 
 ### Added
@@ -179,28 +210,6 @@ shape of this file.
 
 ### Added
 
-- **Person, organization and deal contexts with their business relationships.** `canonicalPersonContext` answers
-  for any `person:<uid>` — a CRM contact, a name with no identity, someone two accounts saw — reading every account
-  in scope, with a `business` section (organizations, reporting lines both ways, deals and leads, projects,
-  categories) and `coverage`. `organizationContext` gives an organization's people, customers, suppliers, partners,
-  projects, open deals, invoices, payments and orders, counts of messages, mail and meetings through its people, and
-  open tasks. `dealContext` gives a deal's or lead's stages, client, participants, owner, project, money reached by
-  project or counterparty, and its people's messages, mail and meetings in its lifetime marked `proposed`;
-  `dealBrief` is its compact form. Every relationship says its standing, every section is bounded, and the shared
-  entities `person_context`, `organization_context`, `deal_context` and `deal_context.brief` describe them.
-  `organizationsInCategory` lists clients, suppliers, partners or employers, derived from relationships.
-  `@wirecat/cli-core/crm/testing` exports `acmeScenario`, a synthetic store for these. See
-  `docs/dev/BUSINESS-CONTEXT.md`.
-
-- **Stage history, a CRM deal's project, own organizations, orders by supplier, organizations by category.**
-  `deals.stages(ref)` lists every stage a deal or lead entered; `deals.setProject(ref, { project, by })` sets its
-  project, on a CRM copy too: the project is the store's own field, which the CRM sync never writes.
-  `knowledge.ownOrganizations()` lists the owner's companies, his own mark first, else the CRM's;
-  `orders.list({ supplier })`; `deals.list({ accounts })` (copies from those CRM accounts, the owner's own always);
-  `knowledge.organizations(query, { category, accounts })` keeps one category's, chosen
-  in SQL. A context's `coverage` names each CRM account's sync gaps (`crmGapsOf`) and each kind the profile denies
-  (`deniedKinds`: no deal or lead row, title or count is answered). A relationship (`knowledge.relations`) answers
-  the `account` that reported it and how a source `derived` it.
 - **`models set <id>` chooses the local embedding model for every WireCat CLI**, kept in the shared settings file:
   every embed and every search by meaning uses it, and `models list` marks it `default`. It refuses a model that is
   not downloaded, and says how many chunks the new model still lacks and about how long that takes. Vectors stay
@@ -516,9 +525,6 @@ shape of this file.
   list.
 
 ### Changed — may break callers
-
-- `DealsStore` gains `stages` and `setProject`, and `OrganizationsStore` (so `KnowledgeStore`) gains
-  `ownOrganizations`: a hand-written store or fake implementing them must add these.
 
 - **Store version 56 raises `minCompatible` to 56: a build from before it refuses the store and asks to be upgraded.**
   A build that knows no account on a link would write a CRM's people as the owner's again, or fail on the new unique
