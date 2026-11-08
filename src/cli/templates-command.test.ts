@@ -90,7 +90,7 @@ describe("templates", () => {
       expect.objectContaining({ key: KEY, channel: "telegram", language: "ru", source: "stored" }),
     )
     expect(rows).toContainEqual(
-      expect.objectContaining({ key: "report/weekly-gaps", channel: "text", renders: false, source: "none" }),
+      expect.objectContaining({ key: "report/weekly-gaps", channel: "text", language: "ru", source: "default" }),
     )
   })
 
@@ -161,7 +161,7 @@ describe("templates", () => {
     expect(readFileSync(draft, "utf8")).toMatch(/<script>/)
   })
 
-  it("lets only the owner change a template, and refuses keys nothing renders and languages never used", async () => {
+  it("lets only the owner change a template, and refuses unknown keys and languages never used", async () => {
     const agent = fixture({ CLAUDECODE: "1" })
     await expect(
       agent.run("edit", KEY, "--channel", "text", "--file", agent.file("a", "{{ summary }}")),
@@ -170,14 +170,40 @@ describe("templates", () => {
     await agent.run("show", KEY, "--channel", "text")
 
     const { run } = fixture()
-    await expect(run("show", "report/weekly-gaps", "--channel", "text")).rejects.toThrow(
-      /nothing renders report\/weekly-gaps yet/,
-    )
     await expect(run("show", "report/nope", "--channel", "text")).rejects.toThrow(/no template report\/nope/)
     await expect(run("show", KEY, "--channel", "text", "--language", "de")).rejects.toThrow(
       /en, ru; a de one would never/,
     )
   })
+
+  it.each([
+    [
+      "report/weekly-gaps",
+      "weekly-gaps",
+      "{{ runs }} · {% for item in items %}{{ item.what }}{% endfor %}",
+      "{{ summary }}",
+    ],
+    ["notice/schedule-failed", "schedule-failed", "{{ schedule }} · {{ cause }}", "{{ items[0].what }}"],
+  ] as const)(
+    "edits %s against its own sample, and refuses a body its sample cannot render",
+    async (key, kind, good, bad) => {
+      const { run, item, file } = fixture()
+      await run("show", key, "--channel", "telegram")
+      expect(item()).toMatchObject({ source: "default", body: defaultTemplate(kind, "telegram", "ru") })
+
+      await run("edit", key, "--channel", "telegram", "--file", file("good.liquid", good))
+      expect(item()).toMatchObject({ changed: true, checked_against: ["sample"] })
+      await run("preview", key, "--channel", "telegram")
+      expect(item()).toMatchObject({ template: "stored", against: "sample", problems: [] })
+
+      await expect(run("edit", key, "--channel", "text", "--file", file("bad.liquid", bad))).rejects.toThrow(
+        /sample: it does not render/,
+      )
+      await expect(
+        run("edit", key, "--channel", "telegram", "--file", file("u.liquid", `<u>${good}</u>`)),
+      ).rejects.toThrow(/would remove <u>/)
+    },
+  )
 
   it("delivers with a stored template, and falls back to the shipped one when a stored body fails", async () => {
     const { env } = fixture()

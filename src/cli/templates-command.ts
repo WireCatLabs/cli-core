@@ -5,6 +5,7 @@ import { join } from "node:path"
 import { CliError, resolvePaths } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command, Option } from "commander"
+import type { MessageKind } from "../background/report/messages.js"
 import {
   checkTemplate,
   defaultTemplate,
@@ -12,7 +13,6 @@ import {
   type ReportChannel,
   renderReport,
 } from "../background/report/render.js"
-import type { ReportKind } from "../background/report/schema.js"
 import {
   checkTemplateSave,
   previewView,
@@ -64,12 +64,12 @@ const channelOption = () =>
 const languageOption = () =>
   new Option("--language <code>", "the template's language, ISO 639-1; the owner's first language if not given")
 
-/** The key, its report kind and the language, refused when nothing renders the key or cli-core ships no such language. */
+/** The key, its message kind and the language, refused when cli-core ships no template in that language. */
 const addressOf = async (
   key: string,
   given: { channel: ReportChannel; language?: string },
   env: NodeJS.ProcessEnv,
-): Promise<{ address: TemplateAddress; kind: ReportKind; channel: ReportChannel }> => {
+): Promise<{ address: TemplateAddress; kind: MessageKind; channel: ReportChannel }> => {
   const known = templateKeyOf(key)
   if (!known)
     throw new CliError(
@@ -78,12 +78,6 @@ const addressOf = async (
       {
         reason: "template.unknown-key",
       },
-    )
-  if (known.kind === null)
-    throw new CliError(
-      "validation_error",
-      `nothing renders ${key} yet (${known.about}), so a template for it cannot be checked or saved`,
-      { reason: "template.no-renderer" },
     )
   const language = (given.language ?? (await ownerLanguageOf(env))).trim().toLowerCase()
   const languages = shippedLanguages(known.kind)
@@ -137,7 +131,7 @@ export const templatesCommand = (app: AppIdentity, options: TemplatesOptions): C
       const stored = await withStore(env, (store) => store.templates.list())
       const items = TEMPLATE_KEYS.flatMap((known) =>
         REPORT_CHANNELS.flatMap((channel) =>
-          (known.kind === null ? [null] : shippedLanguages(known.kind)).map((language) => {
+          shippedLanguages(known.kind).map((language) => {
             const row = stored.find(
               (one) => one.key === known.key && one.channel === channel && one.language === language,
             )
@@ -146,8 +140,8 @@ export const templatesCommand = (app: AppIdentity, options: TemplatesOptions): C
               channel,
               language,
               about: known.about,
-              renders: known.kind !== null,
-              source: row ? "stored" : known.kind === null ? "none" : "default",
+              renders: true,
+              source: row ? "stored" : "default",
               updated_at: row ? new Date(row.updatedAt).toISOString() : null,
               updated_by: row?.updatedBy ?? null,
             }

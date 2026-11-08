@@ -1222,17 +1222,126 @@ describe("delivery after a run", () => {
     expect(last.report).toMatchObject({ invalid: "kind", reasons: ["delivery.report-invalid"] })
   })
 
-  it("sends a failed run's one line, and nothing when the schedule says never", async () => {
-    const failing = routed({ argv: [process.execPath, "-e", 'console.log("half a report"); process.exit(3)'] })
-    await runSchedule(app, failing.system, failing.env, failing.file)
-    const line = failing.sends()[0]?.argv.at(-1) ?? ""
-    expect(line).toMatch(/chat digest failed at .+ \(exit 3\)/)
-    expect(line).not.toContain("half a report")
-    expect(failing.sends()[0]?.argv).not.toContain("--file")
+  it("sends a failed run's notice on every route, and nothing when the schedule says never", async () => {
+    const stderr = JSON.stringify({ error: { code: "authentication_error", reason: "auth.expired", message: "Анна" } })
+    const failing = routed({
+      argv: [
+        process.execPath,
+        "-e",
+        `console.log("half a report"); console.error(${JSON.stringify(stderr)}); process.exit(3)`,
+      ],
+    })
+    const last = await runSchedule(app, failing.system, failing.env, failing.file, { ownerLanguage: async () => "ru" })
+    const [bot, mail] = failing.sends()
+    expect(bot?.argv).toContain("--html")
+    expect(bot?.argv).not.toContain("--file")
+    expect(bot?.argv.at(-1)).toMatch(
+      /^⚠️ <b>Расписание «chat digest» не работает<\/b>\nСбой сегодня в \d\d:\d\d\nПричина: нужно заново войти в аккаунт\n<a href="https:\/\/wirecat\.dev\/o#\/v1\/sync\/chat">исправить<\/a>$/,
+    )
+    expect(mail?.argv.slice(-2)).toEqual(["--subject", "⚠️ Расписание «chat digest» не работает"])
+    expect(mail?.input).toMatch(/^⚠️ Расписание «chat digest» не работает\n.+\nПричина: нужно заново войти в аккаунт\n/)
+    for (const sent of [bot?.argv.join(" "), mail?.input]) {
+      expect(sent).not.toContain("half a report")
+      expect(sent).not.toContain("Анна")
+    }
+    expect(last.deliveries?.every((one) => one.ok)).toBe(true)
 
     const quiet = routed({ argv: [process.execPath, "-e", "process.exit(3)"], notify: "never" })
     await runSchedule(app, quiet.system, quiet.env, quiet.file)
     expect(quiet.sends()).toEqual([])
+  })
+
+  describe("the weekly gaps", () => {
+    const answer = (gaps: unknown[]) =>
+      JSON.stringify({
+        format: "wirecat.report/1",
+        kind: "morning-digest",
+        date: "2026-11-09",
+        sections: [{ kind: "today", items: [{ type: "task", topic: "Смета" }] }],
+        internal: { gaps },
+      })
+    const MONDAY = new Date(2026, 10, 9, 8, 30)
+    const at = (days: number) => new Date(MONDAY.getTime() + days * 86_400_000)
+    const weekBefore = (file: string) => {
+      const runs = join(file, "..", "runs")
+      mkdirSync(runs, { recursive: true })
+      const gap = { what: "Анна Котова ждёт ответа в WhatsApp", refs: ["chat:whatsapp/1001/4004"], section: "owed" }
+      for (const [day, gaps] of [
+        [-6, [gap]],
+        [
+          -4,
+          [
+            { ...gap, what: "Котова ждёт ответа" },
+            { what: "Счёт «Вектора» нашёлся поиском", refs: [] },
+          ],
+        ],
+        [-2, [{ what: "счёт Вектора нашёлся поиском!", refs: [] }]],
+        [-8, [{ what: "старше недели", refs: [] }]],
+      ] as const) {
+        const stamp = at(day)
+          .toISOString()
+          .replaceAll(":", "-")
+          .replace(/\.\d+Z$/, "Z")
+        writeFileSync(join(runs, `${stamp}.md`), answer([...gaps]))
+      }
+    }
+
+    it("goes once a week, on the Monday digest's routes, as one message with each gap once", async () => {
+      const today = { what: "Котова ждёт ответа в WhatsApp", refs: ["chat:whatsapp/1001/4004"] }
+      const { env, system, file, sends } = routed({
+        argv: [process.execPath, "-e", `console.log(${JSON.stringify(answer([today]))})`],
+      })
+      weekBefore(file)
+      await runSchedule(app, system, env, file, { now: () => MONDAY, ownerLanguage: async () => "ru" })
+
+      const [, , bot, mail] = sends()
+      expect(sends()).toHaveLength(4)
+      const text = bot?.argv.at(-1) ?? ""
+      expect(text).toMatch(/^🔍 <b>Что сводка нашла сама за неделю<\/b>\n<i>Этого не было в подборке дня · 4 сводки/)
+      expect(text.match(/^• /gm)).toHaveLength(2)
+      expect(text).toContain("• Котова ждёт ответа в WhatsApp\n<i>в 3 сводках")
+      expect(text).toContain("• счёт Вектора нашёлся поиском!\n<i>в 2 сводках")
+      expect(text).not.toContain("старше недели")
+      expect(mail?.argv.slice(-2)).toEqual(["--subject", "🔍 Что сводка нашла сама за неделю"])
+      const record = JSON.parse(readFileSync(join(file, "..", "weekly-gaps.json"), "utf8"))
+      expect(record).toMatchObject({ gaps: 2, runs: 4, deliveries: [{ ok: true }, { ok: true }] })
+
+      await runSchedule(app, system, env, file, { now: () => at(0.01), ownerLanguage: async () => "ru" })
+      await runSchedule(app, system, env, file, { now: () => at(1), ownerLanguage: async () => "ru" })
+      expect(sends()).toHaveLength(8)
+      expect(
+        sends()
+          .slice(4)
+          .every((one) => !String(one.argv.at(-1)).startsWith("🔍")),
+      ).toBe(true)
+    })
+
+    it("waits for a Monday when it never went, and a week whose Monday digest failed gets it the next day", async () => {
+      const { env, system, file, sends } = routed({
+        argv: [process.execPath, "-e", `console.log(${JSON.stringify(answer([{ what: "пропуск", refs: [] }]))})`],
+      })
+      await runSchedule(app, system, env, file, { now: () => at(-1), ownerLanguage: async () => "ru" })
+      expect(sends()).toHaveLength(2)
+
+      writeFileSync(join(file, "..", "weekly-gaps.json"), JSON.stringify({ at: at(-7).toISOString(), gaps: 1 }))
+      await runSchedule(app, system, env, file, { now: () => at(1), ownerLanguage: async () => "ru" })
+      expect(sends()).toHaveLength(6)
+      expect(sends()[4]?.argv.at(-1)).toMatch(/^🔍 /)
+    })
+
+    it("sends nothing for a week without gaps, nor for a digest that is not delivered", async () => {
+      const quiet = routed({ argv: [process.execPath, "-e", `console.log(${JSON.stringify(answer([]))})`] })
+      await runSchedule(app, quiet.system, quiet.env, quiet.file, { now: () => MONDAY })
+      expect(quiet.sends()).toHaveLength(2)
+      expect(JSON.parse(readFileSync(join(quiet.file, "..", "weekly-gaps.json"), "utf8"))).toMatchObject({ gaps: 0 })
+
+      const silent = routed({
+        argv: [process.execPath, "-e", `console.log(${JSON.stringify(answer([{ what: "пропуск" }]))})`],
+        notify: "failures",
+      })
+      await runSchedule(app, silent.system, silent.env, silent.file, { now: () => MONDAY })
+      expect(silent.sends()).toEqual([])
+    })
   })
 
   it("leaves a repeating agent's success at home by default", async () => {
