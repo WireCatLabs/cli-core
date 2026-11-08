@@ -268,12 +268,13 @@ describe("enrichment", () => {
       status: "stopped",
       enriched: 0,
       left: 1,
-      reason: expect.stringMatching(/OPENAI_API_KEY/),
+      reason: expect.stringMatching(/models keys set openai/),
+      reason_id: "enrichment.no-key",
     })
     expect(model.requests).toEqual([])
   })
 
-  it("stops on a provider error and keeps the records pending", async () => {
+  it("fails when no record comes back enriched, and keeps the records pending", async () => {
     const { env, store } = await machine()
     turnOn(env)
     await store.notes.addNote({ text: "cat" })
@@ -285,7 +286,33 @@ describe("enrichment", () => {
 
     const run = await enrichRecords(store, { env, adapters: { openai: failing }, key: () => "test-key" })
 
-    expect(run).toMatchObject({ status: "done", enriched: 0, failed: 1, left: 1 })
+    expect(run).toMatchObject({
+      status: "failed",
+      enriched: 0,
+      failed: 1,
+      left: 1,
+      reason_id: "enrichment.bad-replies",
+    })
+  })
+
+  it.each([
+    ["a refused key", async () => new Response("{}", { status: 401 }), "enrichment.key-rejected", /refused the key/],
+    [
+      "an unreachable provider",
+      async (): Promise<Response> => {
+        throw new TypeError("fetch failed")
+      },
+      "enrichment.unreachable",
+      /could not be reached/,
+    ],
+  ])("fails with %s named by its id", async (_name, fetch, reasonId, reason) => {
+    const { env, store } = await machine()
+    turnOn(env)
+    await store.notes.addNote({ text: "cat" })
+
+    const run = await enrichRecords(store, { env, fetch, key: () => "test-key" })
+
+    expect(run).toMatchObject({ status: "failed", enriched: 0, failed: 1, left: 1, reason_id: reasonId, reason })
   })
 })
 

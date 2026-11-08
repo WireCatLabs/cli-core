@@ -9,6 +9,17 @@ shape of this file.
 
 ### Added
 
+- **`models keys set|remove <provider>` beside `models consents`** (with `modelCatalogueCommand({ enrichment: true })`):
+  the key write-time enrichment sends, kept in the tool's keyring entry `embeddings:<provider>` (a 0600 file when no
+  keyring is reachable). `set` reads it at a hidden prompt or from stdin, never as an argument, and answers
+  `{ provider, stored: true, source: "keyring" | "file" }`; `remove` answers `{ provider, removed, from }`. A run with
+  moved folders writes and removes its own temporary entry, never the shared one. `modelCatalogueCommand` takes
+  `stdin` for tests.
+- **`reason_id` on a stopped or failed enrichment run**, from `ENRICHMENT_REASON_IDS`: `enrichment.no-key`,
+  `key-rejected`, `unreachable`, `rate-limited`, `bad-replies`, `cancelled`, `error`. The model gateway tags a refused
+  key (`model.key-rejected`, HTTP 401 or 403) and a provider it cannot reach (`model.unreachable`) in the error's
+  `reason`; the code and the message stay the same.
+
 - **A report or message (the digest, the weekly gaps, a failed schedule's notice) goes to an email route as
   HTML.** The `email` template's rendering is sent on stdin with `mail <profile> messages send --html` and the title
   as the subject; mail-cli 0.21.0 adds the plain-text part. A mail-cli older than 0.21.0 refuses the flag, and the
@@ -38,6 +49,10 @@ shape of this file.
   a quote keep their fingerprints.
 
 ### Changed — may break callers
+
+- **An enrichment run that sent records and got none back enriched is `failed`**, with a reason, not `done`. A run
+  with some enriched stays `done` or `stopped`; one that sent nothing (no key) stays `stopped`. The no-key reason names
+  `models keys set <provider>`.
 
 - **EmbeddingGemma is the default text model**, not e5-small (`DEFAULT_TEXT_MODEL`). With no `models set`, embeds
   and searches by meaning use it; e5-small and e5-large stay choosable. A machine that has e5-small and not

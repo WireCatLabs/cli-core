@@ -4,12 +4,14 @@ import { annotate } from "@wirecat/cli-base/commands"
 import { defineQuery } from "@wirecat/cli-base/query"
 import { Command } from "commander"
 import { isTextModelInstalled, textModelsDirectory } from "../embeddings/embed.js"
+import { embeddingKeys } from "../embeddings/keys.js"
 import { chosenTextModel, DEFAULT_TEXT_MODEL, type TextModel, textModel, textModels } from "../embeddings/models.js"
 import type { AppIdentity } from "../ports/app.js"
 import { downloadTextModel } from "../services/model-downloads.js"
 import { addCustomTextModel, type TextModelSwitch, useTextModel } from "../services/text-model-choice.js"
 import { install, installedBytes, isInstalled, modelsDirectory } from "../speech/install.js"
 import { DEFAULT_ORDER, orderedModels, speechModel } from "../speech/models.js"
+import { readSecret } from "../terminal/prompt.js"
 import { stepLines } from "../terminal/step-lines.js"
 import { FETCH, grantsAuthority, LOCAL_READ, LOCAL_WRITE, NO_EFFECTS } from "./effects.js"
 import { enrichmentConsentsCommand } from "./enrichment-consents-command.js"
@@ -34,8 +36,10 @@ export interface ModelCatalogueOptions {
    * (memo): it changes the shared store for every CLI.
    */
   enrichment?: boolean
-  /** Where `models consents` looks for the enrichment provider's key; the system keyring when absent. */
+  /** Where `models consents` and `models keys` keep the provider's key; the system keyring when absent. */
   keyring?: KeyringStore
+  /** Where `models keys set` reads the key; process.stdin when absent. */
+  stdin?: () => NodeJS.ReadableStream | undefined
   output: (answer: Body, command: Command) => void
   diagnostic: (line: string) => void
   jsonOption?: boolean
@@ -166,11 +170,60 @@ export const modelCatalogueCommand = (app: AppIdentity, options: ModelCatalogueO
         options.output(itemOf(textModelItem(model, env)), this)
       })
   }
-  if (options.enrichment === true) models.addCommand(enrichmentConsentsCommand(app, options))
+  if (options.enrichment === true) {
+    models.addCommand(enrichmentConsentsCommand(app, options))
+    models.addCommand(providerKeysCommand(app, options))
+  }
   if (options.jsonOption)
     for (const command of models.commands.flatMap((one) => (one.commands.length ? one.commands : [one])))
       command.option("--json", "print JSON")
   return models
+}
+
+const PROVIDER = /^[a-z0-9][a-z0-9.:-]*$/
+
+const providerOf = (given: string): string => {
+  const provider = given.trim().toLowerCase()
+  if (!PROVIDER.test(provider))
+    throw new CliError("validation_error", "name the provider: openai, anthropic, or the host of a --base-url server")
+  return provider
+}
+
+/** The enrichment provider's key in the tool's keyring entry `embeddings:<provider>`; never printed, never an argument. */
+const providerKeysCommand = (app: AppIdentity, options: ModelCatalogueOptions): Command => {
+  const keys = new Command("keys").description("the API key write-time enrichment sends with each request")
+  const store = () => embeddingKeys(app, options.env(), options.keyring)
+  grantsAuthority(
+    annotate(keys.command("set"), {
+      effects: LOCAL_WRITE,
+      output: { entity: "model_key", view: "stored" },
+      examples: [`${app.command} models keys set openai < key.txt`],
+    }),
+  )
+    .argument("<provider>", "openai, anthropic, or the host of a --base-url server that wants a key")
+    .description("store a key, typed at a hidden prompt or piped on stdin — never as an argument")
+    .action(async function (this: Command, given: string) {
+      const provider = providerOf(given)
+      const input = options.stdin?.()
+      const secret = (await readSecret(`API key for ${provider}: `, input ? { input } : {})).trim()
+      if (!secret) throw new CliError("validation_error", "no key was given — nothing was stored")
+      options.output(itemOf({ provider, stored: true, source: store().write(provider, secret) }), this)
+    })
+  grantsAuthority(
+    annotate(keys.command("remove"), {
+      effects: LOCAL_WRITE,
+      output: { entity: "model_key", view: "removed" },
+      examples: [`${app.command} models keys remove openai`],
+    }),
+  )
+    .argument("<provider>", "openai, anthropic, or a server's host")
+    .description("forget the stored key; a key in the environment stays")
+    .action(function (this: Command, given: string) {
+      const provider = providerOf(given)
+      const removed = store().remove(provider)
+      options.output(itemOf({ provider, removed: removed.length > 0, from: removed }), this)
+    })
+  return keys
 }
 
 const PROGRESS_EVERY_MS = 500
