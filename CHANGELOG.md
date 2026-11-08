@@ -7,20 +7,6 @@ shape of this file.
 
 ## Unreleased
 
-### Fixed
-
-- **One notification per digest while WireCat Desktop runs.** Desktop announces a new morning digest itself, so a
-  finished run showed two system notices. A schedule's run now leaves its own success notice out when
-  `<state>/schedules/desktop.json` names a live pid and lists the schedule in `announces` (Desktop writes it while it
-  runs, wirecat-desktop#214). A marker whose pid is gone counts for nothing; failure notices and deliveries do not
-  change.
-- **A mail-gated agent no longer runs again on the input its last run ended on.** One refusal the agent could not
-  get past (a findings key already taken) turned into a paid run every 5 minutes until the day's cost cap. The
-  timer (`schedule exec`) now keeps the SHA-256 of a `--on-new-mail` agent's input in `last.json` (`inputHash`);
-  when the next input is the same and that run exited 0, its mark did not move, so the run is left out with
-  `skipped.reason` `mail.same-input` (`SKIP_REASONS.mailSameInput`). New mail changes the input and runs normally;
-  `schedule run` by hand always runs. `runSchedule(…, { skipRepeatedInput: true })` turns it on for another timer.
-
 ### Added
 
 - **The weekly gaps message (`report/weekly-gaps`).** A morning digest may keep what it found on its own, which the
@@ -50,6 +36,43 @@ shape of this file.
 - **`store.notes.addedSource(ref)` reads an added source back with what it is and what was kept**: `kind`, the `url`
   as given, `fileName`, `mime`, `size`, `kept` and the `copy` path, beside its document; `undefined` for any other
   document or a removed source. The `AddedSourceDetails` type is exported.
+- **`people.merges(uid)`, `people.undoMerge(to, from, by)` and `people.split(uid, identities, by)`.** `merges` lists
+  the people merged into a person, each with the identities from it that are still there, the method, who and when,
+  under an id `merge:<to>-<from>` (`parseMergeId` reads it back). `undoMerge` moves those identities back to the old
+  person, whose uid stays the same, and leaves any the owner split or unlinked off since; a chain of merges undoes
+  newest first. `split` moves the chosen identities to one new person. Both are the owner's only
+  (`identity.owner-only`; pass `"owner"` only from a path that established the owner ran it), and an automatic match
+  by the same address does not join those people again. `undoMerge` refuses with `identity.stale` when one of the
+  identities was merged on into another person since.
+
+### Changed — may break callers
+
+- **`people.personByUid` of a person merged into someone else answers with that person.** Its `uid` is the
+  current person's, not the one asked for, and `mergedInto` is set; `personSeenInAccounts` follows the same merge.
+  A caller that compares the answer's `uid` with the one it passed reads `mergedInto` instead.
+- **`unlinkIdentity` records its move with method `unlink`, whatever method the caller passes,** so a separation is
+  never listed as a merge.
+
+### Fixed
+
+- **One notification per digest while WireCat Desktop runs.** Desktop announces a new morning digest itself, so a
+  finished run showed two system notices. A schedule's run now leaves its own success notice out when
+  `<state>/schedules/desktop.json` names a live pid and lists the schedule in `announces` (Desktop writes it while it
+  runs, wirecat-desktop#214). A marker whose pid is gone counts for nothing; failure notices and deliveries do not
+  change.
+- **A mail-gated agent no longer runs again on the input its last run ended on.** One refusal the agent could not
+  get past (a findings key already taken) turned into a paid run every 5 minutes until the day's cost cap. The
+  timer (`schedule exec`) now keeps the SHA-256 of a `--on-new-mail` agent's input in `last.json` (`inputHash`);
+  when the next input is the same and that run exited 0, its mark did not move, so the run is left out with
+  `skipped.reason` `mail.same-input` (`SKIP_REASONS.mailSameInput`). New mail changes the input and runs normally;
+  `schedule run` by hand always runs. `runSchedule(…, { skipRepeatedInput: true })` turns it on for another timer.
+- **A person shows once after a merge.** The person a merge emptied stayed in `taskPeople`, so memo's `people list`
+  and `search people` showed the same person two or three times. It is skipped now and its tasks count for the person
+  it was merged into. Rows that name the old uid keep it, so undoing loses nothing, and the filters by a person read
+  them with the current person: memories, facts, notes, documents' `person:`, relationships, the task board's
+  `assignee:` and preparation, and assigning the old uid to a task the current person holds is a no-op.
+  A source's sync that reports a relationship on the current person withdraws what it reported on the old one, so
+  the relationship shows once.
 
 ### Fixed
 
