@@ -94,6 +94,7 @@ const OTHERS: Entry[] = [
   ),
   validation("mail-findings.key-used", "the findings batch key was already used for different input"),
   validation("finding.unknown-field", "a finding has a field its kind does not take"),
+  validation("finding.quote-not-found", "a finding's quote is not in the text it cites, word for word"),
   validation("finding.missing-field", "a finding leaves out a field its kind needs"),
   validation("document.changed", "the document changed while it was read; nothing was saved"),
   ["document.not-imported", "not_found", "the document is not imported in this source account"],
