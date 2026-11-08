@@ -1192,12 +1192,21 @@ describe("delivery after a run", () => {
     expect(bot?.argv.at(-1)).toMatch(
       /^☀️ <b>Сводка на пятницу, 6 ноября<\/b>\n\n🔥 <b>Сегодня<\/b>\n⏰ <b>Смета &lt;офиса&gt;/,
     )
-    expect(mail?.argv.slice(-2)).toEqual(["--subject", "☀️ Сводка на пятницу, 6 ноября"])
-    expect(mail?.input).toMatch(/^☀️ Сводка на пятницу, 6 ноября\n\n🔥 Сегодня\n⏰ Смета <офиса> — просрочено на/)
-    expect(mail?.input).toContain("https://wirecat.dev/o#/v1/task/80")
-    expect(readFileSync(join(file, "..", "latest.txt"), "utf8")).toBe(
-      `${mail?.input?.replace("https://wirecat.dev/o#/v1/task/80", "wirecat://open/v1/task/80")}\n`,
-    )
+    expect(mail?.argv.slice(4)).toEqual([
+      "messages",
+      "send",
+      "--html",
+      "--to",
+      "me@example.com",
+      "--subject",
+      "☀️ Сводка на пятницу, 6 ноября",
+    ])
+    expect(mail?.input).toMatch(/^<div style="max-width:600px;/)
+    expect(mail?.input).toContain("Смета &lt;офиса&gt;")
+    expect(mail?.input).toContain('href="https://wirecat.dev/o#/v1/task/80"')
+    const latest = readFileSync(join(file, "..", "latest.txt"), "utf8")
+    expect(latest).toMatch(/^☀️ Сводка на пятницу, 6 ноября\n\n🔥 Сегодня\n⏰ Смета <офиса> — просрочено на/)
+    expect(latest).toContain("wirecat://open/v1/task/80")
     const document = readFileSync(last.output.replace(/\.md$/, ".report.json"), "utf8")
     expect(JSON.parse(document)).toMatchObject({
       format: "wirecat.report/1",
@@ -1205,6 +1214,37 @@ describe("delivery after a run", () => {
     })
     expect(last.report).toEqual({ language: "ru", leaks: 0 })
     expect(JSON.parse(readFileSync(join(file, "..", "last.json"), "utf8")).report).toEqual(last.report)
+  })
+
+  it("mails a report as plain text when the installed mail refuses --html, and records the fallback", async () => {
+    const report = {
+      format: "wirecat.report/1",
+      kind: "morning-digest",
+      date: "2026-11-06",
+      sections: [{ kind: "today", items: [{ type: "task", topic: "Смета", due: "2026-11-01" }] }],
+    }
+    const { env, system, file, sends } = routed({
+      argv: [process.execPath, "-e", `console.log(${JSON.stringify(JSON.stringify(report))})`],
+      to: ["email:work/me@example.com"],
+    })
+    const stderr = `${JSON.stringify({ error: { code: "validation_error", reason: "input.invalid", message: "unknown option '--html'" } })}\n`
+    const older: ServerSystem = {
+      ...system,
+      run: async (argv, runEnv, options) => {
+        const ran = await system.run(argv, runEnv, options)
+        return argv[0] !== "notify-send" && argv.includes("--html") ? { code: 2, stdout: "", stderr } : ran
+      },
+    }
+    const last = await runSchedule(app, older, env, file, { ownerLanguage: async () => "ru" })
+
+    const [html, plain] = sends()
+    expect(html?.input).toMatch(/^<div /)
+    expect(plain?.argv).not.toContain("--html")
+    expect(plain?.argv.slice(-2)).toEqual(["--subject", "☀️ Сводка на пятницу, 6 ноября"])
+    expect(plain?.input).toMatch(/^☀️ Сводка на пятницу, 6 ноября\n\n🔥 Сегодня\n⏰ Смета — просрочено на/)
+    expect(last.deliveries).toEqual([
+      { to: "email:work/me@example.com", ok: true, reason: "delivery.html-fallback", error: expect.any(String) },
+    ])
   })
 
   it("sends one line in place of a report that fails its check, never the document", async () => {
@@ -1218,6 +1258,7 @@ describe("delivery after a run", () => {
       "Сводка не собралась: ошибка формата. Подробности в WireCat.",
     ])
     expect(sends()[1]?.input).toBe("Сводка не собралась: ошибка формата. Подробности в WireCat.")
+    expect(sends()[1]?.argv).not.toContain("--html")
     expect(last.deliveries?.map((one) => one.reason)).toEqual(["delivery.report-invalid", "delivery.report-invalid"])
     expect(last.report).toMatchObject({ invalid: "kind", reasons: ["delivery.report-invalid"] })
   })

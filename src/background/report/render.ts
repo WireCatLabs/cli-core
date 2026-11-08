@@ -202,7 +202,9 @@ export interface ReportRun {
 
 export interface PreparedReport {
   telegram: string
-  /** Plain text with web links: the email's plain part. */
+  /** HTML with inline CSS for `mail messages send --html`; absent for an invalid report, which goes as `text`. */
+  email?: string
+  /** Plain text with web links: the email when the installed mail cannot send `--html`. */
   text: string
   /** Plain text with app links (`wirecat://`), which a desktop terminal opens: `latest.txt`. */
   terminal: string
@@ -267,9 +269,10 @@ export const prepareReport = async (
     })
   const web = viewFor("web")
   const telegram = await renderReport(web, "telegram", templateOf(templates, "telegram"))
+  const email = await renderReport(web, "email", templateOf(templates, "email"))
   const text = await renderReport(web, "text", templateOf(templates, "text"))
   const terminal = await renderReport(viewFor("app"), "text", templateOf(templates, "text"))
-  const renderings = [telegram, text, terminal]
+  const renderings = [telegram, email, text, terminal]
   const reasons = [
     ...(renderings.some((one) => one.templateFailed) ? [REPORT_REASONS.templateFailed] : []),
     ...(renderings.some((one) => one.templateTags > 0) ? [REPORT_REASONS.templateTags] : []),
@@ -277,6 +280,7 @@ export const prepareReport = async (
   const title = text.text.split("\n")[0] ?? ""
   return {
     telegram: telegram.text,
+    email: email.text,
     text: text.text,
     terminal: terminal.text,
     document: `${JSON.stringify(reportDocument(parsed.report), null, 2)}\n`,

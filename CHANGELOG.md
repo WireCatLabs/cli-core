@@ -5,6 +5,15 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Added
+
+- **A report goes to an email route as HTML.** The `email` template's rendering is sent on stdin with
+  `mail <profile> messages send --html` and the title as the subject; mail-cli 0.21.0 adds the plain-text part. A
+  mail-cli older than 0.21.0 refuses the flag, and the report then goes as the `text` rendering, as before, with
+  `delivery.html-fallback` in `last.json`. A report that failed its check still mails its one line as text.
+
 ## 0.612.0 — 08.11.2026
 
 ### Changed — may break callers
