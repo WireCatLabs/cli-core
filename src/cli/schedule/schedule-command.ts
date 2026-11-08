@@ -5,7 +5,7 @@ import { annotate } from "@wirecat/cli-base/commands"
 import { Argument, Command, Option } from "commander"
 import { parseRoute, ROUTE_HELP, routeText } from "../../background/deliver.js"
 import { REPORT_CHANNELS, type StoredTemplates } from "../../background/report/render.js"
-import { reportKeyOf } from "../../background/report/stored-templates.js"
+import { keyOfKind } from "../../background/report/stored-templates.js"
 import {
   type AgentCli,
   type AgentInput,
@@ -281,7 +281,7 @@ const reportTemplatesOf =
     if (!existsSync(path)) return {}
     const database = await openCache(path)
     try {
-      const bodies = storedTemplateBodies(database, reportKeyOf(kind), language)
+      const bodies = storedTemplateBodies(database, keyOfKind(kind), language)
       return Object.fromEntries(
         REPORT_CHANNELS.flatMap((channel) => (channel in bodies ? [[channel, bodies[channel]]] : [])),
       )

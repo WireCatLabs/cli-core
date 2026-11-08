@@ -1,0 +1,12 @@
+{%- comment -%}
+Email HTML with inline CSS: only div, p, b, i, a, br and span survive, with a style attribute and an href to a link
+of the view model. No colour on the body: the grey (#8a8a8a) and the link blue (#3b82c4) read on white and on dark.
+{%- endcomment -%}
+{%- capture nl %}
+{% endcapture -%}
+<div style="max-width:600px;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:15px">
+{{- nl }}<p style="margin:0 0 8px;font-size:19px"><b>⚠️ {% if schedule == "morning-digest" %}Утренняя сводка не собралась{% else %}Расписание «{{ tool }} {{ schedule }}» не работает{% endif %}</b></p>
+{{- nl }}<p style="margin:0 0 4px">{% if failures > 1 %}Не работает с {{ since.date }}{% if since.time %}, {{ since.time }}{% endif %} · {{ failures }} {% case plural %}{% when "one" %}запуск{% when "few" %}запуска{% else %}запусков{% endcase %} подряд{% else %}Сбой {% if at.day == "today" %}сегодня{% elsif at.day == "yesterday" %}вчера{% else %}{{ at.date }}{% endif %}{% if at.time %} в {{ at.time }}{% endif %}{% endif %}</p>
+{{- nl }}<p style="margin:0 0 12px">Причина: {% case cause %}{% when "locked" %}хранилище паролей было заблокировано, разблокируйте компьютер{% when "sign-in" %}нужно заново войти в аккаунт{% when "network" %}нет связи с сервисом{% when "provider" %}сервис ответил ошибкой{% when "setup" %}ошибка в настройках{% when "stopped" %}запуск остановили{% else %}программа завершилась с ошибкой{% endcase %}</p>
+{%- for link in links %}{{ nl }}<p style="margin:0"><a href="{{ link.url }}" style="color:#3b82c4">{{ link.label }}</a></p>{% endfor -%}
+{{ nl }}</div>
