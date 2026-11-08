@@ -188,7 +188,8 @@ const readBody = async (response: PageResponse, limit: number): Promise<Uint8Arr
 const needsSignIn = (url: URL) =>
   new CliError(
     "authentication_error",
-    `${url.hostname} asks for a sign-in: read a private Google document through Drive`,
+    `${url.hostname} asks for a sign-in: add a private Google document through Drive, with ` +
+      "drive documents add <url> --profiles <names|all>",
     {
       reason: "source.needs-sign-in",
     },

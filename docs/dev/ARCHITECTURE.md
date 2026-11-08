@@ -1011,7 +1011,7 @@ hand, and nothing else may reach a private address through it.
 | more than 5 redirects | `source.url-redirects` |
 | 30 s passed | `source.url-timeout` |
 | the name does not resolve, the connection fails | `source.url-unreachable` (network) |
-| a Docs, Sheets, Slides or Drive address that redirects to `accounts.google.com`, answers 401/403, or answers 200 with Google's sign-in form (a form posting to `accounts.google.com` and a sign-in path, both) | `source.needs-sign-in`, which says to read it through Drive |
+| a Docs, Sheets, Slides or Drive address that redirects to `accounts.google.com`, answers 401/403, or answers 200 with Google's sign-in form (a form posting to `accounts.google.com` and a sign-in path, both) | `source.needs-sign-in`, which names `drive documents add <url> --profiles <names\|all>` |
 
 The answer is `{ requestedUrl, finalUrl, status, contentType, bytes, text, extractor, read, truncated }`.
 

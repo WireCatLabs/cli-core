@@ -34,6 +34,12 @@ shape of this file.
   from the version cited, with the same exclusions, so a change the timer's check already took still reaches an
   agent.
 
+### Fixed
+
+- **A private Google document's refusal names the drive command that adds it.** `source.needs-sign-in` now says
+  `drive documents add <url> --profiles <names|all>` instead of only "through Drive". The reason and its code are
+  unchanged.
+
 ## 0.614.0 — 08.11.2026
 
 ### Added
