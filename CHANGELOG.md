@@ -5,46 +5,7 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
-## 0.614.0 — 08.11.2026
-
-### Added
-
-- **The owner's own message templates, in the shared store (store version 59).** `templatesCommand(app, { env,
-  output, diagnostic })` gives a tool `templates list | show | edit | preview | reset <key> --channel
-  telegram|email|text [--language <code>]`. Keys: `report/morning-digest`; `report/weekly-gaps` and
-  `notice/schedule-failed` are listed, but nothing renders them yet, so they cannot be edited. `edit` opens
-  `$VISUAL`/`$EDITOR` on the template that applies, or takes `--file`; a save is checked first against a synthetic
-  report and the tool's last real `<run>.report.json`: it must render, the channel's rules may remove nothing (a tag
-  outside the list, an `href` that is not a link of the report, a `style` with `url(`), and a Telegram text must fit
-  4 096 characters once the size fit dropped what it could. A failed check saves nothing and says why, and keeps an
-  editor draft for `--file`. Every save and reset keeps the replaced body in `templates_history`; `edit --undo` puts
-  back the last one. `reset` deletes the row, so the shipped template applies again. `edit` and `reset` change what
-  later runs send (`grantsAuthority`), and an agent is refused (`template.owner-only`). A scheduled report renders
-  with the stored templates of the owner's language; a stored body that fails, or a store that cannot be read,
-  falls back to the shipped template for that channel and records `report.template-failed`. The email template is
-  stored and previewed, but mail still sends the plain-text rendering. `store.templates` and
-  `storedTemplateBodies(database, key, language)` from `@wirecat/cli-core/store`.
-- **`account remove`, built once for every tool.** `<tool> <profile> account remove --keep-data|--delete-data` signs
-  the profile out with the tool's own `signOut` hook, then forgets it here: its keyring entries, its
-  `state/accounts/<profile>.json`, the tool's own state files and its sections in the config file; other profiles stay.
-  `--delete-data` also purges the account from the shared store (`store.accounts.purge`) and deletes the tool's data
-  files; `--keep-data` leaves its messages in the store, still searchable, and says so under `kept`. It asks first, or
-  `--yes`; under `--json` without `--yes` it answers `confirmation_required`; `--dry-run` lists every entry, section and
-  file. It refuses while a serve or a sync holds the profile, a path outside the tool's own folders, and runs neither
-  over MCP nor under `<PREFIX>_READ_ONLY`. The answer is the entity `account_removal`; reasons `account-remove.*`.
-  A messenger opts in with `Messenger.accountRemoval`; any other CLI mounts `accountRemoveCommand(app, hooks)`
-  ([guide](docs/dev/ACCOUNT-REMOVAL.md)). `store.accounts.forgetProfile` forgets which account a profile was.
-  It also removes what cli-core keeps for the profile, so no tool lists it: its flood, pace, recipients, moderation,
-  provider log, MCP HTTP tokens, replies state and rules, `--new` points and checkpoints, its serve unit (by its exact
-  name) and the schedules whose environment names it. The sends journal stays, under `kept`. A tool whose files live
-  outside its cli-core folders names them with the `ownFolders` hook; each must be absolute and inside the home folder
-  (`account-remove.folder-outside`).
-
-### Fixed
-
-- **cli-core accepts any `@wirecat/cli-base` 0.x from 0.80.7 (`>=0.80.7 <1.0.0`).** Its peer range stopped at
-  `<0.86.0`, so a CLI could not take cli-base 0.86.0 or 0.87.0 beside it. The range is pinned again at 1.0. Nothing
-  else changes for a caller.
+## Unreleased
 
 ### Added
 
@@ -113,6 +74,47 @@ shape of this file.
 
 - **`listContextOf` returns a `GroupContext`**, a `ListContext` with `membership`, and `group:all` names every
   account in a `--source` list.
+
+## 0.614.0 — 08.11.2026
+
+### Added
+
+- **The owner's own message templates, in the shared store (store version 59).** `templatesCommand(app, { env,
+  output, diagnostic })` gives a tool `templates list | show | edit | preview | reset <key> --channel
+  telegram|email|text [--language <code>]`. Keys: `report/morning-digest`; `report/weekly-gaps` and
+  `notice/schedule-failed` are listed, but nothing renders them yet, so they cannot be edited. `edit` opens
+  `$VISUAL`/`$EDITOR` on the template that applies, or takes `--file`; a save is checked first against a synthetic
+  report and the tool's last real `<run>.report.json`: it must render, the channel's rules may remove nothing (a tag
+  outside the list, an `href` that is not a link of the report, a `style` with `url(`), and a Telegram text must fit
+  4 096 characters once the size fit dropped what it could. A failed check saves nothing and says why, and keeps an
+  editor draft for `--file`. Every save and reset keeps the replaced body in `templates_history`; `edit --undo` puts
+  back the last one. `reset` deletes the row, so the shipped template applies again. `edit` and `reset` change what
+  later runs send (`grantsAuthority`), and an agent is refused (`template.owner-only`). A scheduled report renders
+  with the stored templates of the owner's language; a stored body that fails, or a store that cannot be read,
+  falls back to the shipped template for that channel and records `report.template-failed`. The email template is
+  stored and previewed, but mail still sends the plain-text rendering. `store.templates` and
+  `storedTemplateBodies(database, key, language)` from `@wirecat/cli-core/store`.
+- **`account remove`, built once for every tool.** `<tool> <profile> account remove --keep-data|--delete-data` signs
+  the profile out with the tool's own `signOut` hook, then forgets it here: its keyring entries, its
+  `state/accounts/<profile>.json`, the tool's own state files and its sections in the config file; other profiles stay.
+  `--delete-data` also purges the account from the shared store (`store.accounts.purge`) and deletes the tool's data
+  files; `--keep-data` leaves its messages in the store, still searchable, and says so under `kept`. It asks first, or
+  `--yes`; under `--json` without `--yes` it answers `confirmation_required`; `--dry-run` lists every entry, section and
+  file. It refuses while a serve or a sync holds the profile, a path outside the tool's own folders, and runs neither
+  over MCP nor under `<PREFIX>_READ_ONLY`. The answer is the entity `account_removal`; reasons `account-remove.*`.
+  A messenger opts in with `Messenger.accountRemoval`; any other CLI mounts `accountRemoveCommand(app, hooks)`
+  ([guide](docs/dev/ACCOUNT-REMOVAL.md)). `store.accounts.forgetProfile` forgets which account a profile was.
+  It also removes what cli-core keeps for the profile, so no tool lists it: its flood, pace, recipients, moderation,
+  provider log, MCP HTTP tokens, replies state and rules, `--new` points and checkpoints, its serve unit (by its exact
+  name) and the schedules whose environment names it. The sends journal stays, under `kept`. A tool whose files live
+  outside its cli-core folders names them with the `ownFolders` hook; each must be absolute and inside the home folder
+  (`account-remove.folder-outside`).
+
+### Fixed
+
+- **cli-core accepts any `@wirecat/cli-base` 0.x from 0.80.7 (`>=0.80.7 <1.0.0`).** Its peer range stopped at
+  `<0.86.0`, so a CLI could not take cli-base 0.86.0 or 0.87.0 beside it. The range is pinned again at 1.0. Nothing
+  else changes for a caller.
 
 ## 0.612.0 — 08.11.2026
 
