@@ -7,6 +7,12 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`appMcpCommand`'s `signedIn` hook gets the run's keyring** as a third argument, so `mcp check` reads a test's
+  `memoryKeyring()` and the CLI no longer captures it in a `preAction` hook of its own. A hook that throws, such as
+  on a locked keyring, counts as not signed in. A two-argument hook still works.
+
 ### Fixed
 
 - **A CRM field lookup's refusal names the option the name came from.** `fieldNamed`, `unknownField` and `optionOf`
