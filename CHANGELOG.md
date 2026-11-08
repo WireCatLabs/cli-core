@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.608.0 — 08.11.2026
+
 ### Fixed
 
 - **Two pairs of reasons no longer share one message**, so the command audit (`same-error-reason`) passes in a CLI
