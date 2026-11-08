@@ -195,51 +195,46 @@ const textOf = (value: unknown, most: number): string | null => {
   return kept || null
 }
 
-export const crmCopiesOver = (context: StoreContext, people: AccountPeople): CrmCopies => {
-  const { database, now } = context
+/** What another writer than CRM sync resolved for an item: given ids win over the CRM's own lookups by external id. */
+export interface ItemWriter {
+  organization?: number | null
+  deal?: number | null
+  project?: number | null
+  author?: { type: string; id: number }
+  source?: string
+}
+
+/** The single-row writes CRM sync and the records envelope share, so both land on one `(account, external id)` row. */
+export const crmRowsOver = (context: StoreContext) => {
+  const { database } = context
   const author = (key: AccountKey) => authorActor(context, { bot: key.provider, kind: "rule" }).actor
-  const account = (key: AccountKey) => accountPk(context, key)
 
   const pipelineOf = (accountId: number, kind: DealKind, externalId: string) =>
     database
       .prepare("SELECT * FROM pipelines WHERE account_id = ? AND kind = ? AND external_id = ?")
       .get(accountId, kind, externalId)
-  /**
-   * One kind's whole list: a pipeline it lacks is marked deleted, one listed again comes back. An empty list marks
-   * nothing: a sign-in that lost its CRM rights lists no pipeline at all.
-   */
-  const savePipelines = (key: AccountKey, kind: DealKind, pipelines: CrmPipeline[]): CrmSaved =>
-    write(database, () => {
-      const accountId = account(key)
-      const at = now()
-      for (const pipeline of pipelines) {
-        const name = textOf(pipeline.name, 80) ?? pipeline.externalId
-        const held = pipelineOf(accountId, kind, pipeline.externalId)
-        const id = held
-          ? Number(held.id)
-          : Number(
-              database
-                .prepare(
-                  "INSERT INTO pipelines (account_id, external_id, kind, name, name_folded, created_at, updated_at) " +
-                    "VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id",
-                )
-                .get(accountId, pipeline.externalId, kind, name, fold(name), at, at)?.id,
-            )
-        if (held && (held.name !== name || held.deleted_at != null))
+  /** One pipeline and its stages, by the source's ids; the rest of the account's pipelines stay as they are. */
+  const savePipeline = (accountId: number, kind: DealKind, pipeline: CrmPipeline, at: number): number => {
+    const name = textOf(pipeline.name, 80) ?? pipeline.externalId
+    const held = pipelineOf(accountId, kind, pipeline.externalId)
+    const id = held
+      ? Number(held.id)
+      : Number(
           database
-            .prepare("UPDATE pipelines SET name = ?, name_folded = ?, updated_at = ?, deleted_at = NULL WHERE id = ?")
-            .run(name, fold(name), at, id)
-        saveStages(id, pipeline, at)
-      }
-      if (pipelines.length === 0) return { saved: 0, skipped: [] }
-      const listed = new Set(pipelines.map(({ externalId }) => externalId))
-      const mark = database.prepare("UPDATE pipelines SET deleted_at = ?, updated_at = ? WHERE id = ?")
-      for (const row of database
-        .prepare("SELECT id, external_id FROM pipelines WHERE account_id = ? AND kind = ? AND deleted_at IS NULL")
-        .all(accountId, kind))
-        if (!listed.has(String(row.external_id))) mark.run(at, at, Number(row.id))
-      return { saved: pipelines.length, skipped: [] }
-    })
+            .prepare(
+              "INSERT INTO pipelines (account_id, external_id, kind, name, name_folded, created_at, updated_at) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id",
+            )
+            .get(accountId, pipeline.externalId, kind, name, fold(name), at, at)?.id,
+        )
+    if (held && (held.name !== name || held.deleted_at != null))
+      database
+        .prepare("UPDATE pipelines SET name = ?, name_folded = ?, updated_at = ?, deleted_at = NULL WHERE id = ?")
+        .run(name, fold(name), at, id)
+    saveStages(id, pipeline, at)
+    saveStages(id, pipeline, at)
+    return id
+  }
 
   /**
    * Stage names are unique in a pipeline, but a CRM may swap two, or give two stages one name: listed stages first
@@ -287,6 +282,172 @@ export const crmCopiesOver = (context: StoreContext, people: AccountPeople): Crm
           .run(pipelineId, stage.name, stage.folded, stage.position, stage.outcome, stage.externalId, at, at)
     }
   }
+
+  const organizationIdOf = (accountId: number, externalId: string): number | null => {
+    const row = database
+      .prepare(
+        "SELECT entity_id FROM records WHERE account_id = ? AND type = 'organization' AND external_id = ? " +
+          "AND entity_type = 'organization'",
+      )
+      .get(accountId, externalId)
+    return row?.entity_id == null ? null : Number(row.entity_id)
+  }
+  /** The deal or lead row of `(account, external id)`; `writer` gives what another writer than CRM sync resolved. */
+  const saveItemRow = (
+    key: AccountKey,
+    accountId: number,
+    kind: DealKind,
+    item: CrmItem,
+    at: number,
+    writer: ItemWriter = {},
+  ): CrmSkipped | { id: number } => {
+    const pipeline = pipelineOf(accountId, kind, item.pipeline)
+    const stage =
+      pipeline &&
+      database
+        .prepare("SELECT id, outcome FROM pipeline_stages WHERE pipeline_id = ? AND external_id = ?")
+        .get(Number(pipeline.id), item.stage)
+    if (!pipeline || !stage)
+      return {
+        externalId: item.externalId,
+        reason: "crm.stage-unknown" as const,
+        message: `${kind} ${item.externalId} stands in stage ${item.stage} of pipeline ${item.pipeline}, which is not stored`,
+      }
+    const title = textOf(item.title, 200) ?? `${kind} ${item.externalId}`
+    const given = item.amount != null && item.currency != null
+    const currency = given ? currencyOf(item.currency) : null
+    const amount =
+      currency === null ? null : minorUnits(String(item.amount), currency, `${kind} ${item.externalId}'s amount`)
+    if (amount !== null && amount < 0) throw new CliError("validation_error", "an amount is 0 or more")
+    if (item.status != null && !(STAGE_OUTCOMES as readonly string[]).includes(item.status))
+      throw new CliError("validation_error", `${kind} ${item.externalId}'s status is open, won or lost`)
+    const status = item.status ?? String(stage.outcome)
+    const closed =
+      status === "open"
+        ? null
+        : (day(item.closedDate, "a closed day") ?? new Date(epoch(item.updatedAt, at)).toISOString().slice(0, 10))
+    const deal =
+      writer.deal !== undefined
+        ? writer.deal === null
+          ? undefined
+          : { id: writer.deal }
+        : kind === "lead" && item.deal
+          ? database.prepare("SELECT id FROM deals WHERE account_id = ? AND external_id = ?").get(accountId, item.deal)
+          : undefined
+    const metadata = {
+      ...(item.metadata ?? {}),
+      ...(item.url ? { url: item.url } : {}),
+      ...(item.assignee ? { assignee: crmIdentityId(key, item.assignee, "user") } : {}),
+      ...(item.closedReason && status !== "open" ? { closed_reason: textOf(item.closedReason, 2000) } : {}),
+    }
+    const values = {
+      title,
+      organization:
+        writer.organization !== undefined
+          ? writer.organization
+          : item.organization
+            ? organizationIdOf(accountId, item.organization)
+            : null,
+      stage: Number(stage.id),
+      status,
+      currency,
+      amount,
+      close: day(item.closeDate, "an expected close day"),
+      closed,
+      metadata: Object.keys(metadata).length ? JSON.stringify(metadata) : null,
+      created: epoch(item.createdAt, at),
+      updated: epoch(item.updatedAt, at),
+    }
+    const table = TABLES[kind]
+    const held = database
+      .prepare(`SELECT id FROM ${table} WHERE account_id = ? AND external_id = ?`)
+      .get(accountId, item.externalId)
+    let id: number
+    if (held) {
+      id = Number(held.id)
+      database
+        .prepare(
+          `UPDATE ${table} SET title = ?, organization_id = ?, stage_id = ?, status = ?, currency = ?, amount = ?, ` +
+            "close_date = ?, closed_date = ?, metadata = ?, updated_at = ?, deleted_at = NULL" +
+            (kind === "lead" ? ", deal_id = coalesce(?, deal_id)" : "") +
+            " WHERE id = ?",
+        )
+        .run(
+          values.title,
+          values.organization,
+          values.stage,
+          values.status,
+          values.currency,
+          values.amount,
+          values.close,
+          values.closed,
+          values.metadata,
+          values.updated,
+          ...(kind === "lead" ? [deal ? Number(deal.id) : null] : []),
+          id,
+        )
+    } else {
+      const actor = writer.author ?? author(key)
+      id = Number(
+        database
+          .prepare(
+            `INSERT INTO ${table} (title, organization_id, stage_id, status, currency, amount, close_date, closed_date, ` +
+              `account_id, external_id, author_type, author_id, source, metadata, created_at, updated_at` +
+              (kind === "lead" ? ", deal_id" : "") +
+              `) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?${kind === "lead" ? ", ?" : ""}) RETURNING id`,
+          )
+          .get(
+            values.title,
+            values.organization,
+            values.stage,
+            values.status,
+            values.currency,
+            values.amount,
+            values.close,
+            values.closed,
+            accountId,
+            item.externalId,
+            actor.type,
+            actor.id,
+            writer.source ?? SOURCE,
+            values.metadata,
+            values.created,
+            values.updated,
+            ...(kind === "lead" ? [deal ? Number(deal.id) : null] : []),
+          )?.id,
+      )
+    }
+    if (writer.project !== undefined)
+      database.prepare(`UPDATE ${table} SET project_id = ? WHERE id = ?`).run(writer.project, id)
+    return { id }
+  }
+
+  return { savePipeline, saveItemRow, organizationIdOf }
+}
+
+export const crmCopiesOver = (context: StoreContext, people: AccountPeople): CrmCopies => {
+  const { database, now } = context
+  const { savePipeline, saveItemRow, organizationIdOf } = crmRowsOver(context)
+  const account = (key: AccountKey) => accountPk(context, key)
+
+  /**
+   * One kind's whole list: a pipeline it lacks is marked deleted, one listed again comes back. An empty list marks
+   * nothing: a sign-in that lost its CRM rights lists no pipeline at all.
+   */
+  const savePipelines = (key: AccountKey, kind: DealKind, pipelines: CrmPipeline[]): CrmSaved =>
+    write(database, () => {
+      const accountId = account(key)
+      const at = now()
+      for (const pipeline of pipelines) savePipeline(accountId, kind, pipeline, at)
+      if (pipelines.length === 0) return { saved: 0, skipped: [] }
+      const listed = new Set(pipelines.map(({ externalId }) => externalId))
+      const mark = database.prepare("UPDATE pipelines SET deleted_at = ?, updated_at = ? WHERE id = ?")
+      for (const row of database
+        .prepare("SELECT id, external_id FROM pipelines WHERE account_id = ? AND kind = ? AND deleted_at IS NULL")
+        .all(accountId, kind))
+        if (!listed.has(String(row.external_id))) mark.run(at, at, Number(row.id))
+      return { saved: pipelines.length, skipped: [] }
+    })
 
   // Unlike pipelines, an empty list does mark every field deleted: a CRM with no custom fields is an ordinary answer.
   const saveFields = (key: AccountKey, kind: CrmKind, fields: CrmField[]): CrmSaved =>
@@ -395,15 +556,6 @@ export const crmCopiesOver = (context: StoreContext, people: AccountPeople): Crm
     return person
   }
 
-  const organizationIdOf = (accountId: number, externalId: string): number | null => {
-    const row = database
-      .prepare(
-        "SELECT entity_id FROM records WHERE account_id = ? AND type = 'organization' AND external_id = ? " +
-          "AND entity_type = 'organization'",
-      )
-      .get(accountId, externalId)
-    return row?.entity_id == null ? null : Number(row.entity_id)
-  }
   const refOf = (key: AccountKey, accountId: number, ref: CrmRef): string | null => {
     if (ref.type === "contact" || ref.type === "user") {
       const person = personIdOf(key, ref.id, ref.type)
@@ -560,113 +712,9 @@ export const crmCopiesOver = (context: StoreContext, people: AccountPeople): Crm
     at: number,
     report: { tally: Tally; pending: PendingBook; users: boolean },
   ) => {
-    const pipeline = pipelineOf(accountId, kind, item.pipeline)
-    const stage =
-      pipeline &&
-      database
-        .prepare("SELECT id, outcome FROM pipeline_stages WHERE pipeline_id = ? AND external_id = ?")
-        .get(Number(pipeline.id), item.stage)
-    if (!pipeline || !stage)
-      return {
-        externalId: item.externalId,
-        reason: "crm.stage-unknown" as const,
-        message: `${kind} ${item.externalId} stands in stage ${item.stage} of pipeline ${item.pipeline}, which is not stored`,
-      }
-    const title = textOf(item.title, 200) ?? `${kind} ${item.externalId}`
-    const given = item.amount != null && item.currency != null
-    const currency = given ? currencyOf(item.currency) : null
-    const amount =
-      currency === null ? null : minorUnits(String(item.amount), currency, `${kind} ${item.externalId}'s amount`)
-    if (amount !== null && amount < 0) throw new CliError("validation_error", "an amount is 0 or more")
-    if (item.status != null && !(STAGE_OUTCOMES as readonly string[]).includes(item.status))
-      throw new CliError("validation_error", `${kind} ${item.externalId}'s status is open, won or lost`)
-    const status = item.status ?? String(stage.outcome)
-    const closed =
-      status === "open"
-        ? null
-        : (day(item.closedDate, "a closed day") ?? new Date(epoch(item.updatedAt, at)).toISOString().slice(0, 10))
-    const deal =
-      kind === "lead" && item.deal
-        ? database.prepare("SELECT id FROM deals WHERE account_id = ? AND external_id = ?").get(accountId, item.deal)
-        : undefined
-    const metadata = {
-      ...(item.metadata ?? {}),
-      ...(item.url ? { url: item.url } : {}),
-      ...(item.assignee ? { assignee: crmIdentityId(key, item.assignee, "user") } : {}),
-      ...(item.closedReason && status !== "open" ? { closed_reason: textOf(item.closedReason, 2000) } : {}),
-    }
-    const values = {
-      title,
-      organization: item.organization ? organizationIdOf(accountId, item.organization) : null,
-      stage: Number(stage.id),
-      status,
-      currency,
-      amount,
-      close: day(item.closeDate, "an expected close day"),
-      closed,
-      metadata: Object.keys(metadata).length ? JSON.stringify(metadata) : null,
-      created: epoch(item.createdAt, at),
-      updated: epoch(item.updatedAt, at),
-    }
-    const table = TABLES[kind]
-    const held = database
-      .prepare(`SELECT id FROM ${table} WHERE account_id = ? AND external_id = ?`)
-      .get(accountId, item.externalId)
-    let id: number
-    if (held) {
-      id = Number(held.id)
-      database
-        .prepare(
-          `UPDATE ${table} SET title = ?, organization_id = ?, stage_id = ?, status = ?, currency = ?, amount = ?, ` +
-            "close_date = ?, closed_date = ?, metadata = ?, updated_at = ?, deleted_at = NULL" +
-            (kind === "lead" ? ", deal_id = coalesce(?, deal_id)" : "") +
-            " WHERE id = ?",
-        )
-        .run(
-          values.title,
-          values.organization,
-          values.stage,
-          values.status,
-          values.currency,
-          values.amount,
-          values.close,
-          values.closed,
-          values.metadata,
-          values.updated,
-          ...(kind === "lead" ? [deal ? Number(deal.id) : null] : []),
-          id,
-        )
-    } else {
-      const actor = author(key)
-      id = Number(
-        database
-          .prepare(
-            `INSERT INTO ${table} (title, organization_id, stage_id, status, currency, amount, close_date, closed_date, ` +
-              `account_id, external_id, author_type, author_id, source, metadata, created_at, updated_at` +
-              (kind === "lead" ? ", deal_id" : "") +
-              `) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?${kind === "lead" ? ", ?" : ""}) RETURNING id`,
-          )
-          .get(
-            values.title,
-            values.organization,
-            values.stage,
-            values.status,
-            values.currency,
-            values.amount,
-            values.close,
-            values.closed,
-            accountId,
-            item.externalId,
-            actor.type,
-            actor.id,
-            SOURCE,
-            values.metadata,
-            values.created,
-            values.updated,
-            ...(kind === "lead" ? [deal ? Number(deal.id) : null] : []),
-          )?.id,
-      )
-    }
+    const saved = saveItemRow(key, accountId, kind, item, at)
+    if ("reason" in saved) return saved
+    const { id } = saved
     if (item.people === undefined && item.assignee === undefined) return null
     const self: CrmRef = { type: kind, id: item.externalId }
     const wanted: Wanted[] = (item.people ?? []).map((person) => ({

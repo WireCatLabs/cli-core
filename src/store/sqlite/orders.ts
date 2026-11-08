@@ -111,6 +111,11 @@ export interface OrdersStore {
   setStatus(reference: string, input: { status: OrderStatus; date?: string; by: Author }): Promise<Order>
   confirm(reference: string, by: Decider, reason?: string): Promise<Order>
   reject(reference: string, by: Decider, reason?: string): Promise<Order>
+  /**
+   * Everything an add sets, again: the owner on any order, a bot only on one it proposed that is still proposed, as
+   * an import does when its source changed the order. Its lines are replaced; who wrote it and its review stay.
+   */
+  revise(reference: string, input: OrderInput): Promise<OrderDetail>
   /** A line at the end; the owner changes any order's lines, a bot only those of an order it proposed still proposed. */
   addLine(reference: string, input: MoneyLineInput & { by: Author }): Promise<OrderDetail>
   removeLine(reference: string, input: { position: number; by: Author }): Promise<OrderDetail>
@@ -213,8 +218,9 @@ export const orderOperationsOver = (context: StoreContext): OrderOperations => {
     return orderOf(rowOf(`order:${row.id}`))
   }
 
-  return {
-    add: (input) => {
+  /** Checks an add's input and writes it: a new order, or `held`'s columns and lines replaced. */
+  const save = (input: OrderInput, held?: Row): number => {
+    {
       const purpose = oneOf(input.purpose, ORDER_PURPOSES, "an order's purpose")
       const direction =
         input.direction === undefined ? "purchase" : oneOf(input.direction, ORDER_DIRECTIONS, "a direction")
@@ -253,14 +259,53 @@ export const orderOperationsOver = (context: StoreContext): OrderOperations => {
         const party = partyOf(supplier?.type, supplier?.id)
         const supplierName = named ?? party?.name ?? (party?.owner ? "owner" : null)
         if (supplierName === null) return refuse("an order names its shop or supplier", "order.field")
-        if (number !== null && ordersOfShop(database, supplierName, number).length)
+        if (
+          number !== null &&
+          ordersOfShop(database, supplierName, number).some((one) => held === undefined || one.id !== held.id)
+        )
           refuse(`order ${number} from ${supplierName} is already stored; change its status instead`, "order.duplicate")
         const invoice = linked(input.invoice, "invoice")
         const payment = linked(input.payment, "payment")
         const contract = linked(input.contract, "contract")
         const deal = linked(input.deal, "deal")
-        const by = written(input)
         const at = now()
+        if (held !== undefined) {
+          const id = Number(held.id)
+          database.prepare("DELETE FROM order_lines WHERE order_id = ?").run(id)
+          database
+            .prepare(
+              "UPDATE orders SET customer_type = ?, customer_id = ?, purpose = ?, supplier_type = ?, supplier_id = ?, " +
+                "supplier_name = ?, number = ?, currency = ?, total = ?, status = ?, order_date = ?, " +
+                "fulfilled_date = ?, invoice_id = ?, payment_id = ?, project_id = ?, source_url = ?, direction = ?, " +
+                "contract_id = ?, deal_id = ?, updated_at = ? WHERE id = ?",
+            )
+            .run(
+              customer.type,
+              customer.id,
+              purpose,
+              supplier?.type ?? null,
+              supplier?.id ?? null,
+              supplierName,
+              number,
+              currency,
+              total,
+              status,
+              orderDate,
+              fulfilledDate,
+              invoice,
+              payment,
+              input.project === undefined ? null : projectId(database, input.project),
+              sourceUrl,
+              direction,
+              contract,
+              deal,
+              at,
+              id,
+            )
+          moneyLines.insertLines("order", id, priced, 1, at)
+          return id
+        }
+        const by = written(input)
         const made = Number(
           database
             .prepare(
@@ -306,7 +351,16 @@ export const orderOperationsOver = (context: StoreContext): OrderOperations => {
         keepEvidence("order", made, by)
         return made
       })
-      return detailOf(rowOf(`order:${id}`))
+      return id
+    }
+  }
+
+  return {
+    add: (input) => detailOf(rowOf(`order:${save(input)}`)),
+    revise: (reference, input) => {
+      const row = rowOf(reference)
+      mayChangeLines(row, input.by)
+      return detailOf(rowOf(`order:${save(input, row)}`))
     },
     get: (reference) => detailOf(rowOf(reference)),
     list: (filter = {}) => {
@@ -432,5 +486,6 @@ export const ordersStoreOver = (context: StoreContext): OrdersStore => {
     reject: async (reference, by, reason) => operations.reject(reference, by, reason),
     addLine: async (reference, input) => operations.addLine(reference, input),
     removeLine: async (reference, input) => operations.removeLine(reference, input),
+    revise: async (reference, input) => operations.revise(reference, input),
   }
 }

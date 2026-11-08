@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "WireCat records envelope, version 1",
-  "description": "Records one source sends to the store. JSONL is the same model: the first line holds schema_version and source, each further line one record.",
+  "description": "Records one source sends to the store. JSONL is the same model: the first line holds schema_version, source and options, each further line one record.",
   "type": "object",
   "required": ["schema_version", "source", "records"],
   "additionalProperties": false,
@@ -11,6 +11,9 @@
     },
     "source": {
       "$ref": "#/$defs/source"
+    },
+    "options": {
+      "$ref": "#/$defs/options"
     },
     "records": {
       "type": "array",
@@ -44,6 +47,16 @@
         }
       }
     },
+    "options": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "lines": {
+          "enum": ["text", "products"],
+          "description": "products: an invoice line's product (an external id) or product_ref (a product: ref) names its product; text, the default, keeps them as data. Order lines always read them."
+        }
+      }
+    },
     "record": {
       "type": "object",
       "required": ["key", "type", "external_id", "operation"],
@@ -56,7 +69,7 @@
         },
         "type": {
           "type": "string",
-          "pattern": "^(invoice|payment|person|organization|project|custom:[a-z0-9][a-z0-9_-]{0,62})$"
+          "pattern": "^(invoice|payment|person|organization|project|order|product|contract|subscription|wallet|transaction|deal|lead|pipeline|custom:[a-z0-9][a-z0-9_-]{0,62})$"
         },
         "external_id": {
           "type": "string",
@@ -82,12 +95,260 @@
             "$ref": "#/$defs/relation"
           }
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "invoice"
+              }
+            },
+            "required": ["type"]
+          },
+          "then": {
+            "properties": {
+              "fields": {
+                "$ref": "#/$defs/fields-invoice"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "payment"
+              }
+            },
+            "required": ["type"]
+          },
+          "then": {
+            "properties": {
+              "fields": {
+                "$ref": "#/$defs/fields-payment"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "person"
+              }
+            },
+            "required": ["type"]
+          },
+          "then": {
+            "properties": {
+              "fields": {
+                "$ref": "#/$defs/fields-person"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "organization"
+              }
+            },
+            "required": ["type"]
+          },
+          "then": {
+            "properties": {
+              "fields": {
+                "$ref": "#/$defs/fields-organization"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "project"
+              }
+            },
+            "required": ["type"]
+          },
+          "then": {
+            "properties": {
+              "fields": {
+                "$ref": "#/$defs/fields-project"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "order"
+              }
+            },
+            "required": ["type"]
+          },
+          "then": {
+            "properties": {
+              "fields": {
+                "$ref": "#/$defs/fields-order"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "product"
+              }
+            },
+            "required": ["type"]
+          },
+          "then": {
+            "properties": {
+              "fields": {
+                "$ref": "#/$defs/fields-product"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "contract"
+              }
+            },
+            "required": ["type"]
+          },
+          "then": {
+            "properties": {
+              "fields": {
+                "$ref": "#/$defs/fields-contract"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "subscription"
+              }
+            },
+            "required": ["type"]
+          },
+          "then": {
+            "properties": {
+              "fields": {
+                "$ref": "#/$defs/fields-subscription"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "wallet"
+              }
+            },
+            "required": ["type"]
+          },
+          "then": {
+            "properties": {
+              "fields": {
+                "$ref": "#/$defs/fields-wallet"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "transaction"
+              }
+            },
+            "required": ["type"]
+          },
+          "then": {
+            "properties": {
+              "fields": {
+                "$ref": "#/$defs/fields-transaction"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "deal"
+              }
+            },
+            "required": ["type"]
+          },
+          "then": {
+            "properties": {
+              "fields": {
+                "$ref": "#/$defs/fields-deal"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "lead"
+              }
+            },
+            "required": ["type"]
+          },
+          "then": {
+            "properties": {
+              "fields": {
+                "$ref": "#/$defs/fields-lead"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "pipeline"
+              }
+            },
+            "required": ["type"]
+          },
+          "then": {
+            "properties": {
+              "fields": {
+                "$ref": "#/$defs/fields-pipeline"
+              }
+            }
+          }
+        }
+      ]
     },
     "relation": {
       "type": "object",
-      "required": ["role", "type", "external_id"],
+      "required": ["role"],
       "additionalProperties": false,
+      "oneOf": [
+        {
+          "required": ["type", "external_id"]
+        },
+        {
+          "required": ["ref"]
+        }
+      ],
       "properties": {
         "role": {
           "type": "string",
@@ -95,12 +356,22 @@
         },
         "type": {
           "type": "string",
-          "pattern": "^(invoice|payment|person|organization|project|custom:[a-z0-9][a-z0-9_-]{0,62})$"
+          "pattern": "^(invoice|payment|person|organization|project|order|product|contract|subscription|wallet|transaction|deal|lead|pipeline|custom:[a-z0-9][a-z0-9_-]{0,62})$"
         },
         "external_id": {
           "type": "string",
           "minLength": 1,
           "maxLength": 512
+        },
+        "ref": {
+          "type": "string",
+          "pattern": "^[a-z]+:[^\\s]{1,500}$",
+          "description": "A store entity, such as organization:12"
+        },
+        "as": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9_-]{0,62}$",
+          "description": "On a relationship role: the part the target plays, such as decision-maker"
         },
         "amount": {
           "type": "string",
@@ -108,6 +379,811 @@
           "description": "A settles relation's share of the payment, a decimal in its currency"
         }
       }
+    },
+    "fields-invoice": {
+      "type": "object",
+      "properties": {
+        "direction": {
+          "type": "string",
+          "enum": ["receivable", "payable"]
+        },
+        "number": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "description": "The invoice's number"
+        },
+        "currency": {
+          "type": "string",
+          "pattern": "^[A-Za-z]{3}$",
+          "description": "ISO 4217 code"
+        },
+        "issue_date": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+          "description": "The day it was issued"
+        },
+        "due_date": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+          "description": "The day it is due"
+        },
+        "total": {
+          "type": "string",
+          "pattern": "^[0-9]{1,16}(\\.[0-9]{1,6})?$",
+          "description": "The printed total: refused when it is not the sum of the lines"
+        },
+        "lines": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "description": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000,
+                "description": "What the line is for; the product's name when left out"
+              },
+              "quantity": {
+                "type": "string",
+                "pattern": "^[0-9]{1,16}(\\.[0-9]{1,6})?$",
+                "description": "A decimal, 1 when left out"
+              },
+              "unit_price": {
+                "type": "string",
+                "pattern": "^[0-9]{1,16}(\\.[0-9]{1,6})?$",
+                "description": "A decimal in the parent's currency"
+              },
+              "amount": {
+                "type": "string",
+                "pattern": "^[0-9]{1,16}(\\.[0-9]{1,6})?$",
+                "description": "A decimal in the parent's currency: quantity × unit price"
+              },
+              "product": {
+                "description": "The product record's external id in this account, read with options.lines products"
+              },
+              "product_ref": {
+                "type": "string",
+                "pattern": "^product:[1-9][0-9]*$",
+                "description": "A product: ref of the store"
+              }
+            },
+            "additionalProperties": true
+          },
+          "maxItems": 500,
+          "description": "The invoice's lines"
+        }
+      },
+      "additionalProperties": true
+    },
+    "fields-payment": {
+      "type": "object",
+      "properties": {
+        "direction": {
+          "type": "string",
+          "enum": ["in", "out"]
+        },
+        "amount": {
+          "type": "string",
+          "pattern": "^[0-9]{1,16}(\\.[0-9]{1,6})?$",
+          "description": "A decimal in currency"
+        },
+        "currency": {
+          "type": "string",
+          "pattern": "^[A-Za-z]{3}$",
+          "description": "ISO 4217 code"
+        },
+        "date": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+          "description": "The day it was paid"
+        },
+        "reference": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000,
+          "description": "The payment's reference"
+        }
+      },
+      "additionalProperties": true
+    },
+    "fields-person": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "The person's name"
+        },
+        "email": {
+          "type": ["string", "array"],
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 320
+          },
+          "maxItems": 20,
+          "description": "E-mail addresses: an exact one links the record to the one person who has it"
+        },
+        "phone": {
+          "type": ["string", "array"],
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 320
+          },
+          "maxItems": 20,
+          "description": "Phone numbers: an exact one, in E.164 after reading, links like an e-mail"
+        }
+      },
+      "additionalProperties": true
+    },
+    "fields-organization": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "The organization's name"
+        },
+        "identifiers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "scheme": {
+                "type": "string",
+                "pattern": "^(email|domain|tax-id:[a-z]{2}|registration:[a-z]{2})$",
+                "description": "email, domain, tax-id:<country> or registration:<country>"
+              },
+              "value": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 320,
+                "description": "The identifier as the scheme writes it"
+              }
+            },
+            "required": ["scheme", "value"],
+            "additionalProperties": true
+          },
+          "maxItems": 20,
+          "description": "Strong identifiers: one that another organization has links the record to it"
+        }
+      },
+      "additionalProperties": true
+    },
+    "fields-project": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "The project's name"
+        },
+        "key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40,
+          "description": "The project's key: an existing project with it is this one"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000,
+          "description": "What the project is"
+        }
+      },
+      "additionalProperties": true
+    },
+    "fields-order": {
+      "type": "object",
+      "properties": {
+        "number": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "description": "The order's number at the supplier"
+        },
+        "direction": {
+          "type": "string",
+          "enum": ["purchase", "sale"],
+          "description": "purchase when left out; in a sale the owner is the supplier"
+        },
+        "purpose": {
+          "type": "string",
+          "enum": ["personal", "business", "client", "other"],
+          "description": "business when left out"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["placed", "shipped", "delivered", "cancelled", "returned"],
+          "description": "placed when left out"
+        },
+        "supplier_name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "The shop or supplier as the source names it"
+        },
+        "order_date": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+          "description": "The day it was ordered"
+        },
+        "fulfilled_date": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+          "description": "The day it was delivered"
+        },
+        "currency": {
+          "type": "string",
+          "pattern": "^[A-Za-z]{3}$",
+          "description": "ISO 4217 code"
+        },
+        "total": {
+          "type": "string",
+          "pattern": "^[0-9]{1,16}(\\.[0-9]{1,6})?$",
+          "description": "With lines, their sum"
+        },
+        "source_url": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000,
+          "description": "The order's page at the shop"
+        },
+        "lines": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "description": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000,
+                "description": "What the line is for; the product's name when left out"
+              },
+              "quantity": {
+                "type": "string",
+                "pattern": "^[0-9]{1,16}(\\.[0-9]{1,6})?$",
+                "description": "A decimal, 1 when left out"
+              },
+              "unit_price": {
+                "type": "string",
+                "pattern": "^[0-9]{1,16}(\\.[0-9]{1,6})?$",
+                "description": "A decimal in the parent's currency"
+              },
+              "amount": {
+                "type": "string",
+                "pattern": "^[0-9]{1,16}(\\.[0-9]{1,6})?$",
+                "description": "A decimal in the parent's currency: quantity × unit price"
+              },
+              "product": {
+                "description": "The product record's external id in this account, read with options.lines products"
+              },
+              "product_ref": {
+                "type": "string",
+                "pattern": "^product:[1-9][0-9]*$",
+                "description": "A product: ref of the store"
+              }
+            },
+            "additionalProperties": true
+          },
+          "maxItems": 500,
+          "description": "The order's lines"
+        }
+      },
+      "additionalProperties": true
+    },
+    "fields-product": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["product", "service"],
+          "description": "product when left out"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "The product's name"
+        },
+        "sku": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "description": "The supplier's code for it"
+        },
+        "unit": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40,
+          "description": "hour, pcs, month: free text"
+        },
+        "unit_price": {
+          "type": "string",
+          "pattern": "^[0-9]{1,16}(\\.[0-9]{1,6})?$",
+          "description": "A decimal in currency"
+        },
+        "currency": {
+          "type": "string",
+          "pattern": "^[A-Za-z]{3}$",
+          "description": "ISO 4217 code"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000,
+          "description": "What it is"
+        },
+        "archived_date": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+          "description": "No longer sold from this day"
+        }
+      },
+      "required": ["name"],
+      "additionalProperties": true
+    },
+    "fields-contract": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "The contract's name"
+        },
+        "number": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "description": "The contract's number"
+        },
+        "kind": {
+          "type": "string",
+          "enum": ["sale", "purchase", "service", "lease", "employment", "nda", "license", "other"]
+        },
+        "status": {
+          "type": "string",
+          "enum": ["draft", "active", "ended", "terminated"],
+          "description": "active when left out"
+        },
+        "signed_date": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+          "description": "The day it was signed"
+        },
+        "effective_date": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+          "description": "The day it starts"
+        },
+        "expiration_date": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+          "description": "The day it ends; open-ended when left out"
+        },
+        "auto_renew": {
+          "type": "boolean",
+          "description": "Whether it renews itself"
+        },
+        "renewal": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]{0,2}-(day|week|month|year)$",
+          "description": "1-year"
+        },
+        "notice_days": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3650,
+          "description": "Days of notice before it ends"
+        },
+        "terms": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 20000,
+          "description": "Renewal, cancellation and other terms, as text"
+        },
+        "value": {
+          "type": "string",
+          "pattern": "^[0-9]{1,16}(\\.[0-9]{1,6})?$",
+          "description": "A decimal in currency: the contract is then a proposal"
+        },
+        "currency": {
+          "type": "string",
+          "pattern": "^[A-Za-z]{3}$",
+          "description": "ISO 4217 code"
+        }
+      },
+      "required": ["name", "kind"],
+      "additionalProperties": true
+    },
+    "fields-subscription": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "Its name; the product's when left out"
+        },
+        "direction": {
+          "type": "string",
+          "enum": ["receivable", "payable"],
+          "description": "receivable: the owner bills it; payable: the owner pays it"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["trial", "active", "paused", "cancelled", "ended"]
+        },
+        "interval": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]{0,2}-(day|week|month|year)$",
+          "description": "1-month"
+        },
+        "start_date": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+          "description": "The first day"
+        },
+        "trial_end_date": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+          "description": "The trial's last day"
+        },
+        "next_renewal_date": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+          "description": "The next renewal"
+        },
+        "cancelled_date": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+          "description": "The day it was cancelled"
+        },
+        "end_date": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+          "description": "The last day"
+        },
+        "prices": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "amount": {
+                "type": "string",
+                "pattern": "^[0-9]{1,16}(\\.[0-9]{1,6})?$",
+                "description": "A decimal in currency"
+              },
+              "currency": {
+                "type": "string",
+                "pattern": "^[A-Za-z]{3}$",
+                "description": "ISO 4217 code"
+              },
+              "effective_from": {
+                "type": "string",
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+                "description": "The day the price starts; the subscription's start when left out"
+              }
+            },
+            "required": ["amount", "currency"],
+            "additionalProperties": true
+          },
+          "maxItems": 100,
+          "description": "Its prices, each from a day; a price is never overwritten"
+        }
+      },
+      "required": ["direction", "interval", "start_date"],
+      "additionalProperties": true
+    },
+    "fields-wallet": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "The account's name"
+        },
+        "kind": {
+          "type": "string",
+          "enum": ["bank", "card", "cash", "wallet", "other"],
+          "description": "bank when left out"
+        },
+        "currency": {
+          "type": "string",
+          "pattern": "^[A-Za-z]{3}$",
+          "description": "ISO 4217 code"
+        },
+        "institution": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "The bank, as text"
+        },
+        "number_hint": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4,
+          "description": "The last 4 characters of its number; a whole IBAN or card number is refused"
+        },
+        "opening_balance": {
+          "type": "string",
+          "pattern": "^-?[0-9]{1,16}(\\.[0-9]{1,6})?$",
+          "description": "Kept in the record only: the owner sets the wallet's opening balance"
+        },
+        "opening_date": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+          "description": "The day of that balance"
+        }
+      },
+      "required": ["name", "currency"],
+      "additionalProperties": true
+    },
+    "fields-transaction": {
+      "type": "object",
+      "properties": {
+        "direction": {
+          "type": "string",
+          "enum": ["in", "out"]
+        },
+        "amount": {
+          "type": "string",
+          "pattern": "^[0-9]{1,16}(\\.[0-9]{1,6})?$",
+          "description": "A decimal above 0 in the wallet's currency"
+        },
+        "currency": {
+          "type": "string",
+          "pattern": "^[A-Za-z]{3}$",
+          "description": "ISO 4217 code"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "booked"],
+          "description": "booked when left out"
+        },
+        "date": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+          "description": "The day the statement shows"
+        },
+        "booked_date": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+          "description": "The day it was booked; the statement day when left out"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000,
+          "description": "As the statement says it"
+        },
+        "counterparty_name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "As the statement names the other side"
+        },
+        "reference": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "The statement's reference"
+        },
+        "splits": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "amount": {
+                "type": "string",
+                "pattern": "^[0-9]{1,16}(\\.[0-9]{1,6})?$",
+                "description": "A decimal above 0"
+              },
+              "category": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "description": "Free text, such as rent"
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000,
+                "description": "A note"
+              }
+            },
+            "required": ["amount", "category"],
+            "additionalProperties": true
+          },
+          "maxItems": 100,
+          "description": "Categories of its amount; what they leave is uncategorized"
+        }
+      },
+      "required": ["direction", "amount", "date"],
+      "additionalProperties": true
+    },
+    "fields-deal": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "The deal's title"
+        },
+        "pipeline": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "The pipeline record's external id in this account"
+        },
+        "stage": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "The stage's external id in that pipeline"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["open", "won", "lost"],
+          "description": "Left out, the stage's outcome says it"
+        },
+        "amount": {
+          "type": "string",
+          "pattern": "^[0-9]{1,16}(\\.[0-9]{1,6})?$",
+          "description": "A decimal in currency"
+        },
+        "currency": {
+          "type": "string",
+          "pattern": "^[A-Za-z]{3}$",
+          "description": "ISO 4217 code"
+        },
+        "close_date": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+          "description": "When it is expected to close"
+        },
+        "closed_date": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+          "description": "When it was won or lost"
+        },
+        "closed_reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000,
+          "description": "Why it was won or lost"
+        },
+        "url": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000,
+          "description": "The source's page for it"
+        }
+      },
+      "required": ["title", "pipeline", "stage"],
+      "additionalProperties": true
+    },
+    "fields-lead": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "The lead's title"
+        },
+        "pipeline": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "The pipeline record's external id in this account"
+        },
+        "stage": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "The stage's external id in that pipeline"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["open", "won", "lost"],
+          "description": "Left out, the stage's outcome says it"
+        },
+        "amount": {
+          "type": "string",
+          "pattern": "^[0-9]{1,16}(\\.[0-9]{1,6})?$",
+          "description": "A decimal in currency"
+        },
+        "currency": {
+          "type": "string",
+          "pattern": "^[A-Za-z]{3}$",
+          "description": "ISO 4217 code"
+        },
+        "close_date": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+          "description": "When it is expected to close"
+        },
+        "closed_date": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+          "description": "When it was won or lost"
+        },
+        "closed_reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000,
+          "description": "Why it was won or lost"
+        },
+        "url": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000,
+          "description": "The source's page for it"
+        }
+      },
+      "required": ["title", "pipeline", "stage"],
+      "additionalProperties": true
+    },
+    "fields-pipeline": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["deal", "lead"],
+          "description": "deal when left out"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "description": "The pipeline's name"
+        },
+        "stages": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "external_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512,
+                "description": "The stage's id at the source"
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80,
+                "description": "The stage's name"
+              },
+              "position": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 1000
+              },
+              "outcome": {
+                "type": "string",
+                "enum": ["open", "won", "lost"],
+                "description": "open when left out"
+              }
+            },
+            "required": ["external_id", "name"],
+            "additionalProperties": true
+          },
+          "maxItems": 30,
+          "description": "The stages in order"
+        }
+      },
+      "required": ["name", "stages"],
+      "additionalProperties": true
     }
   }
 }
