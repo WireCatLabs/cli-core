@@ -179,7 +179,7 @@ const eventsOnce = async (
 
 const nameOf = ({ provider, account }: AccountKey) => `${provider}:${account}`
 
-const readable = async (store: MessageStore, asked: AccountKey, scopes?: readonly AccountScope[]) => {
+const allowedOf = async (store: MessageStore, asked: AccountKey, scopes?: readonly AccountScope[]) => {
   const stored = await store.accounts.storedAccounts()
   const own = stored.find((one) => nameOf(one) === nameOf(asked))
   if (!own || (asked.scope !== undefined && asked.scope !== own.scope))
@@ -193,7 +193,7 @@ export const readableAccounts = async (
   asked: AccountKey,
   scopes?: readonly AccountScope[],
 ): Promise<StoredAccount[]> => {
-  const { stored, allowed } = await readable(store, asked, scopes)
+  const { stored, allowed } = await allowedOf(store, asked, scopes)
   return stored.filter((one) => allowed.includes(one.scope))
 }
 
@@ -202,7 +202,7 @@ export const readableScopes = async (
   store: MessageStore,
   asked: AccountKey,
   scopes?: readonly AccountScope[],
-): Promise<readonly AccountScope[]> => (await readable(store, asked, scopes)).allowed
+): Promise<readonly AccountScope[]> => (await allowedOf(store, asked, scopes)).allowed
 
 /**
  * The accounts each identity is read in, among `readable` only: for the messenger asked, only the account asked

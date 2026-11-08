@@ -33,8 +33,8 @@ The store records updates; the provider decides how to replay them.
 `store.involvements.rebuild(personId?)` replaces derived rows for one integer person ID, or for everyone when no ID
 is supplied. Rebuild after a sync or after linking identities. It runs atomically, so a failed rebuild retains the
 previous timeline. `forPerson(personId, { scopes?, since?, until?, before?, limit? })` reads the derived index,
-newest first, in one query; `scopes` keeps the rows of those scopes, `since` and `until` are inclusive milliseconds, and a message or chat row carries its
-provider, account, chat and message ids. `before: { at, id }` returns the rows after that one in the order, so
+newest first, in one query; `scopes` keeps the rows of those scopes, `since` and `until` are inclusive milliseconds,
+and a message or chat row carries its provider, account, chat and message ids. `before: { at, id }` returns the rows after that one in the order, so
 equal times neither repeat nor skip. `contacts events` rebuilds one person's rows, then reads them in the asked account's scope only, and pages with
 `--cursor` (`before:<ms>:<row id>`, from `page.next`; the filters are repeated).
 The default limit is 100 and the maximum is 1000.
