@@ -916,7 +916,9 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
       const pair = (reference: string | undefined) => {
         if (reference === undefined) return { known: true, type: null, id: null }
         const thing = thingOf(database, reference)
-        return thing ? { known: true, type: thing.type, id: thing.id } : { known: false, type: null, id: null }
+        return thing
+          ? { known: true, type: thing.type, id: idsOf(database, thing.type, thing.id) }
+          : { known: false, type: null, id: null }
       }
       const from = pair(options.from)
       const to = pair(options.to)
@@ -930,7 +932,8 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
       ]
       return database
         .prepare(
-          "SELECT * FROM links WHERE (? IS NULL OR (from_type = ? AND from_id = ?)) AND (? IS NULL OR (to_type = ? AND to_id = ?)) " +
+          "SELECT * FROM links WHERE (? IS NULL OR (from_type = ? AND from_id IN (SELECT value FROM json_each(?)))) " +
+            "AND (? IS NULL OR (to_type = ? AND to_id IN (SELECT value FROM json_each(?)))) " +
             `AND (? = 0 OR to_id IS NULL)${filters.map(({ sql }) => ` AND (${sql})`).join("")} ORDER BY created_at, id LIMIT 5000`,
         )
         .all(

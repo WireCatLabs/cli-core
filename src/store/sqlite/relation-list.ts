@@ -97,14 +97,16 @@ export const relationListOver = (context: StoreContext): RelationList => {
       if (filter.from !== undefined) end("from", filter.from)
       if (filter.to !== undefined) end("to", filter.to)
       const about = filter.about === undefined ? undefined : thing(filter.about, "the reference")
+      const aboutIds = about ? idsOf(database, about.type, about.id) : "[]"
       if (about)
         add(
           `((r.from_type = ? AND r.from_id IN (SELECT value FROM json_each(?))) OR (r.to_type = ? AND r.to_id IN (SELECT value FROM json_each(?))))`,
           about.type,
-          idsOf(database, about.type, about.id),
+          aboutIds,
           about.type,
-          idsOf(database, about.type, about.id),
+          aboutIds,
         )
+      const aboutSame = new Set(JSON.parse(aboutIds) as number[])
       if (filter.at !== undefined)
         add("(r.starts_at IS NULL OR r.starts_at <= ?) AND (r.ends_at IS NULL OR ? < r.ends_at)", filter.at, filter.at)
       if (filter.standing !== undefined) add("r.standing = ?", filter.standing)
@@ -145,7 +147,7 @@ export const relationListOver = (context: StoreContext): RelationList => {
         const item = row.source === "link" ? linkItem(Number(row.id), at) : proposalItem(String(row.id))
         if (!about) return item
         const from = thingOf(database, item.from)
-        const outgoing = from?.type === about.type && from.id === about.id
+        const outgoing = from?.type === about.type && aboutSame.has(from.id)
         return outgoing
           ? { ...item, direction: "outgoing" }
           : { ...item, direction: "incoming", inverse: inverseOf(item.kind) }

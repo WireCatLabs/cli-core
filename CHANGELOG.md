@@ -35,6 +35,9 @@ shape of this file.
   `assignee:` and preparation, and assigning the old uid to a task the current person holds is a no-op.
   A source's sync that reports a relationship on the current person withdraws what it reported on the old one, so
   the relationship shows once.
+- **The links list and the relationships list read a merged person's old rows too.** `notes.links({ from, to })` with
+  the current person now lists links written on a uid merged into them, and `listRelations({ about })` marks such a
+  relationship `outgoing` or `incoming` by the person it is about, not by the uid written on it.
 
 ## 0.612.0 — 08.11.2026
 
