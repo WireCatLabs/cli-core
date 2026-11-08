@@ -4,7 +4,7 @@ import { Command } from "commander"
 import { describe, expect, it } from "vitest"
 import { secretInputOf } from "../cli/context.js"
 import { run } from "../cli/program.js"
-import { readSecret } from "./prompt.js"
+import { pasteHint, readSecret } from "./prompt.js"
 
 const terminal = () => Object.assign(new PassThrough(), { isTTY: true })
 const collected = () => {
@@ -73,6 +73,31 @@ describe("readSecret", () => {
       { code: "cancelled" },
     )
     expect(text()).toBe("")
+  })
+
+  it("returns a piped empty answer at once, with no prompt and no second try", async () => {
+    const { output, text } = collected()
+    expect(await readSecret("token: ", { input: Readable.from([""]), output })).toBe("")
+    expect(text()).toBe("")
+  })
+
+  it("asks a hidden prompt again after an empty line and keeps the answer that follows", async () => {
+    const input = terminal()
+    const { output, text } = collected()
+    const answer = readSecret("token: ", { input, output })
+    input.write("\n")
+    setImmediate(() => input.write("s3cret\n"))
+
+    expect(await answer).toBe("s3cret")
+    expect(text()).toContain(pasteHint())
+  })
+
+  it("takes an empty echoed answer as it is", async () => {
+    const input = terminal()
+    const answer = readSecret("code: ", { input, output: collected().output, echo: true })
+    input.write("\n")
+
+    expect(await answer).toBe("")
   })
 
   it("collects a piped secret with cancellation enabled", async () => {
