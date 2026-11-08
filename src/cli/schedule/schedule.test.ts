@@ -1172,12 +1172,14 @@ describe("delivery after a run", () => {
     expect(JSON.parse(readFileSync(join(file, "..", "last.json"), "utf8")).deliveries).toHaveLength(2)
   })
 
-  it("renders a report document for each route and keeps its plain text as latest.txt", async () => {
+  it("renders a report for each route, keeps its terminal text as latest.txt and the document beside the run", async () => {
     const report = {
       format: "wirecat.report/1",
       kind: "morning-digest",
       date: "2026-11-06",
-      sections: [{ kind: "today", items: [{ type: "task", topic: "Смета <офиса>", due: "2026-11-01" }] }],
+      sections: [
+        { kind: "today", items: [{ type: "task", topic: "Смета <офиса>", due: "2026-11-01", refs: ["task:80"] }] },
+      ],
     }
     const { env, system, file, sends } = routed({
       argv: [process.execPath, "-e", `console.log(${JSON.stringify(JSON.stringify(report))})`],
@@ -1192,7 +1194,15 @@ describe("delivery after a run", () => {
     )
     expect(mail?.argv.slice(-2)).toEqual(["--subject", "☀️ Сводка на пятницу, 6 ноября"])
     expect(mail?.input).toMatch(/^☀️ Сводка на пятницу, 6 ноября\n\n🔥 Сегодня\n⏰ Смета <офиса> — просрочено на/)
-    expect(readFileSync(join(file, "..", "latest.txt"), "utf8")).toBe(`${mail?.input}\n`)
+    expect(mail?.input).toContain("https://wirecat.dev/o#/v1/task/80")
+    expect(readFileSync(join(file, "..", "latest.txt"), "utf8")).toBe(
+      `${mail?.input?.replace("https://wirecat.dev/o#/v1/task/80", "wirecat://open/v1/task/80")}\n`,
+    )
+    const document = readFileSync(last.output.replace(/\.md$/, ".report.json"), "utf8")
+    expect(JSON.parse(document)).toMatchObject({
+      format: "wirecat.report/1",
+      sections: [{ items: [{ refs: ["task:80"] }] }],
+    })
     expect(last.report).toEqual({ language: "ru", leaks: 0 })
     expect(JSON.parse(readFileSync(join(file, "..", "last.json"), "utf8")).report).toEqual(last.report)
   })

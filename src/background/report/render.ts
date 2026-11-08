@@ -1,8 +1,9 @@
 import { existsSync, readFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
+import { DEFAULT_LINK_CONFIG, type LinkConfig, type LinkForm, linkFor } from "../../domain/links.js"
 import { safeLiquid } from "../../render/liquid.js"
 import { TELEGRAM_TEXT_CHARS } from "../deliver.js"
-import { parseReport } from "./schema.js"
+import { parseReport, reportDocument } from "./schema.js"
 import { type ReportView, reportView } from "./view.js"
 
 export const REPORT_CHANNELS = ["telegram", "email", "text"] as const
@@ -56,6 +57,7 @@ const linkUrls = (view: ReportView): Set<string> =>
     [
       ...view.links,
       ...view.sections.flatMap((section) => section.items.flatMap((item) => item.links)),
+      ...view.sections.flatMap((section) => section.groups.flatMap((group) => (group.link ? [group.link] : []))),
       ...view.health.items.flatMap((item) => item.links),
     ].map((link) => link.url),
   )
@@ -200,7 +202,12 @@ export interface ReportRun {
 
 export interface PreparedReport {
   telegram: string
+  /** Plain text with web links: the email's plain part. */
   text: string
+  /** Plain text with app links (`wirecat://`), which a desktop terminal opens: `latest.txt`. */
+  terminal: string
+  /** The checked `wirecat.report/1` document as JSON, for `<run>.report.json`; absent for an invalid one. */
+  document?: string
   subject: string
   /** The desktop notice: the title line and the summary. */
   notice: string
@@ -224,7 +231,17 @@ export const prepareReport = async (
     now,
     timeZone,
     templates = {},
-  }: { language: string; now: number; timeZone?: string; templates?: Partial<Record<ReportChannel, string>> },
+    links = DEFAULT_LINK_CONFIG,
+    env = process.env,
+  }: {
+    language: string
+    now: number
+    timeZone?: string
+    templates?: Partial<Record<ReportChannel, string>>
+    links?: LinkConfig
+    /** Read for `WIRECAT_LINKS=off`. */
+    env?: NodeJS.ProcessEnv
+  },
 ): Promise<PreparedReport | undefined> => {
   const parsed = parseReport(answer)
   if (!parsed) return undefined
@@ -233,6 +250,7 @@ export const prepareReport = async (
     return {
       telegram: escapeHtml(line),
       text: line,
+      terminal: line,
       subject: line,
       notice: line,
       invalid: true,
@@ -240,17 +258,28 @@ export const prepareReport = async (
     }
   }
   const shipped = existsSync(templateFile(parsed.report.kind, "telegram", language)) ? language : DEFAULT_LANGUAGE
-  const view = reportView(parsed.report, { language: shipped, now, ...(timeZone ? { timeZone } : {}) })
-  const telegram = await renderReport(view, "telegram", templateOf(templates, "telegram"))
-  const text = await renderReport(view, "text", templateOf(templates, "text"))
+  const viewFor = (form: LinkForm) =>
+    reportView(parsed.report, {
+      language: shipped,
+      now,
+      ...(timeZone ? { timeZone } : {}),
+      linkOf: (ref) => linkFor(ref, { form, config: links, env }),
+    })
+  const web = viewFor("web")
+  const telegram = await renderReport(web, "telegram", templateOf(templates, "telegram"))
+  const text = await renderReport(web, "text", templateOf(templates, "text"))
+  const terminal = await renderReport(viewFor("app"), "text", templateOf(templates, "text"))
+  const renderings = [telegram, text, terminal]
   const reasons = [
-    ...(telegram.templateFailed || text.templateFailed ? [REPORT_REASONS.templateFailed] : []),
-    ...(telegram.templateTags + text.templateTags > 0 ? [REPORT_REASONS.templateTags] : []),
+    ...(renderings.some((one) => one.templateFailed) ? [REPORT_REASONS.templateFailed] : []),
+    ...(renderings.some((one) => one.templateTags > 0) ? [REPORT_REASONS.templateTags] : []),
   ]
   const title = text.text.split("\n")[0] ?? ""
   return {
     telegram: telegram.text,
     text: text.text,
+    terminal: terminal.text,
+    document: `${JSON.stringify(reportDocument(parsed.report), null, 2)}\n`,
     subject: title,
     notice: [title, parsed.report.summary].filter(Boolean).join("\n"),
     invalid: false,

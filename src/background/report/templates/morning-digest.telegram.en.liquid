@@ -10,7 +10,7 @@ Every string from the report is already escaped. Lines are written with {{ nl }}
 {%- if summary %}{{ nl }}{{ summary }}{% endif -%}
 {%- if quiet -%}
   {{ nl }}{{ nl }}
-  {%- if health.items.size > 0 %}Nothing new, but {{ health.items[0].source }} has not synced for {{ health.items[0].span }}.
+  {%- if health.items.size > 0 %}Nothing new, but sync needs attention.
   {%- else %}A quiet morning: nothing urgent.{% endif -%}
 {%- endif -%}
 {%- for section in sections -%}
@@ -35,7 +35,7 @@ Every string from the report is already escaped. Lines are written with {{ nl }}
     {%- case item.type -%}
       {%- when "reply" %}<b>{{ item.who }} · {{ item.topic }}</b> — {{ item.action }}
       {%- when "question" %}<b>{{ item.who }}</b> asks: {{ item.action }}
-      {%- when "task" %}<b>{{ item.topic }}</b> — {{ due }}
+      {%- when "task" %}<b>{{ item.topic }}</b>{% if due != "" %} — {{ due }}{% elsif item.who %} — {{ item.who }}{% endif %}
       {%- when "fact" %}<b>{{ item.topic }}</b>: {{ item.detail }}
       {%- when "risk" %}<b>{{ item.topic }}</b>: {{ item.detail }} → {{ item.action }}
       {%- when "money" %}<b>{{ item.amount.text }} · {{ item.who }} · {{ item.topic }}</b>{% if item.action %} — {{ item.action }}{% endif %}
@@ -53,7 +53,8 @@ Every string from the report is already escaped. Lines are written with {{ nl }}
       {%- if due != "" and "risk,money,decision" contains item.type %}{{ sep }}{{ due }}{% assign sep = " · " %}{% endif -%}
       {%- if item.action and "task,meeting" contains item.type %}{{ sep }}{{ item.action }}{% assign sep = " · " %}{% endif -%}
       {%- if item.detail and "task,money,meeting,decision" contains item.type %}{{ sep }}{{ item.detail }}{% assign sep = " · " %}{% endif -%}
-      {%- if item.who and "task,fact,risk,decision" contains item.type %}{{ sep }}{{ item.who }}{% assign sep = " · " %}{% endif -%}
+      {%- if item.who and "fact,risk,decision" contains item.type %}{{ sep }}{{ item.who }}{% assign sep = " · " %}{% endif -%}
+      {%- if item.who and item.type == "task" and due != "" %}{{ sep }}{{ item.who }}{% assign sep = " · " %}{% endif -%}
       {%- if item.channel %}{{ sep }}
         {%- case item.channel -%}
           {%- when "telegram" %}Telegram{% when "max" %}MAX{% when "whatsapp" %}WhatsApp
@@ -67,11 +68,50 @@ Every string from the report is already escaped. Lines are written with {{ nl }}
     {%- if second != "" %}{{ nl }}{{ second }}{% endif -%}
   {%- endfor -%}
   {%- if section.more > 0 %}{{ nl }}{{ section.more }} more{% endif -%}
+  {%- if section.groups.size > 0 %}{{ nl }}
+    {%- for group in section.groups -%}
+      {%- unless forloop.first %} · {% endunless -%}
+      {%- capture words -%}
+        {%- case group.filter -%}
+          {%- when "overdue" %}All overdue
+          {%- when "today" %}{% if forloop.first %}Due today{% else %}due today{% endif %}
+          {%- when "tomorrow" %}{% if forloop.first %}Due tomorrow{% else %}due tomorrow{% endif %}
+          {%- when "new" %}{% if forloop.first %}New{% else %}new{% endif %}
+        {%- endcase %} ({{ group.count }})
+      {%- endcapture -%}
+      {%- if group.link %}<a href="{{ group.link.url }}">{{ words }}</a>{% else %}{{ words }}{% endif -%}
+    {%- endfor -%}
+  {%- endif -%}
 {%- endfor -%}
-{%- unless quiet -%}
-  {%- if health.items.size > 0 %}{{ nl }}{% endif -%}
-  {%- for source in health.items -%}
-    {{ nl }}{{ health.emoji }} {{ source.source }} has not synced for {{ source.span }}
-    {%- for link in source.links %} · <a href="{{ link.url }}">{{ link.label }}</a>{% endfor -%}
+{%- if health.items.size > 0 %}{{ nl }}{% endif -%}
+{%- for source in health.items -%}
+  {{ nl }}{{ health.emoji }} {{ source.source }}
+  {%- if source.account %} ({{ source.account }}){% endif -%}
+  {%- case source.reason -%}
+    {%- when "sync-failed" %}: sync failing{% if source.since %} since {{ source.since.date }}{% endif %}
+    {%- when "no-schedule" %}: no sync schedule
+    {%- when "quiet" %}: nothing new {% if source.since %}since {{ source.since.date }}{% else %}for {{ source.span }}{% endif %}
+    {%- else %} has not synced for {{ source.span }}
+  {%- endcase -%}
+  {%- for link in source.links %} · <a href="{{ link.url }}">{{ link.label }}</a>{% endfor -%}
+{%- endfor -%}
+{%- if scope -%}
+  {{ nl }}{{ nl }}Viewed over {{ scope.window }}
+  {%- for source in scope.sources -%}
+    {%- if forloop.first %}: {% else %}, {% endif -%}
+    {%- case source.kind -%}
+      {%- when "telegram" %}Telegram{% when "max" %}MAX{% when "whatsapp" %}WhatsApp
+      {%- when "mail" %}mail{% when "meeting" %}meetings{% when "task" %}tasks
+    {%- endcase -%}
+    {%- if source.accounts > 1 %} ({{ source.accounts }} {% if source.kind == "mail" %}{% if source.plural == "one" %}mailbox{% else %}mailboxes{% endif %}{% else %}{% if source.plural == "one" %}account{% else %}accounts{% endif %}{% endif %}){% endif -%}
   {%- endfor -%}
-{%- endunless -%}
+  {%- for count in scope.counts -%}
+    {%- if forloop.first %} · {% else %}, {% endif -%}
+    {{ count.count }} {% case count.kind -%}
+      {%- when "chats" %}{% if count.plural == "one" %}chat{% else %}chats{% endif %}
+      {%- when "mail" %}{% if count.plural == "one" %}email{% else %}emails{% endif %}
+      {%- when "tasks" %}{% if count.plural == "one" %}task{% else %}tasks{% endif %}
+      {%- when "meetings" %}{% if count.plural == "one" %}meeting{% else %}meetings{% endif %}
+    {%- endcase -%}
+  {%- endfor -%}
+{%- endif -%}

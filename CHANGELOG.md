@@ -35,6 +35,41 @@ shape of this file.
 
 ## 0.611.0 — 08.11.2026
 
+### Added
+
+- **Deep links into WireCat Desktop.** `linkFor(ref, { form: "web" | "app" })` builds
+  `https://wirecat.dev/o#/v1/<kind>/<parts>` or `wirecat://open/v1/<kind>/<parts>`; `parseLink` reads either form or
+  the bare `/v1/…` path, and `formatLink` writes the path. Kinds: `msg/<provider>/<account>/<chat>/<message>`,
+  `chat/<provider>/<account>/<chat>` (an email thread too), `task/<id>`, `tasks/overdue|today|tomorrow`,
+  `tasks/new/<ISO time>`, `proposal/<review id>`, `digest/<date>`, `sync/<tool>[/<account>]`. Each part is
+  percent-encoded as one segment; another version, an unknown kind, a part too many or empty, more than 6 segments or a
+  path over 512 characters is not a link, and a query is ignored. A ref is a store reference (`msg:`, `chat:`,
+  `task:`) or, for the kinds that are no reference, the path with a colon after the kind (`proposal:fact%3A512`,
+  `tasks:overdue`, `sync:telegram/1001`). The shared config's `links` section sets `base` and `enabled`;
+  `WIRECAT_LINKS=off` turns links off for one run, and `linkFor` then answers `null`. A link only opens a screen.
+  `test/fixtures/links-v1.json` holds the cases Desktop and the bounce page check their own parsers against.
+- **A report links its items, its task groups and its sync problems.** The renderer fills each item's `links` from its
+  `refs` ("открыть"), and a health entry's from its `sync:` ref ("исправить"): the web form for Telegram and mail, the
+  app form in `latest.txt`. Links an agent wrote are still dropped, and with links off the words stay without a link.
+- **`wirecat.report/1` takes `scope`, `tasks` and named accounts in `health`.** `scope` (`from`, `to`, `sources[]` of
+  `kind` and `accounts`, `counts` of `chats`, `mail`, `tasks`, `meetings`) becomes the last line of all three
+  templates: "Просмотрено за 24 ч: Telegram, MAX, WhatsApp, почта (4 ящика) · 31 чат, 12 писем, 17 задач", zero
+  counts left out. `tasks` (`overdue`, `today`, `tomorrow`, `new`, `new_since`) becomes one line of `tasks/<filter>`
+  links after the section that holds the task items: "Все просроченные (5) · на сегодня (3) · на завтра (2) · новые
+  (4)", zero groups left out. A `health[]` entry takes `account`, `reason` (`sync-failed`, `no-schedule`, `quiet`) and
+  `since`: "🛠 Telegram (@owner): синхронизация падает с 6 ноября · исправить". An entry with a reason is shown
+  whatever its `stale_hours`; a document without the new fields reads as before.
+- **A `task` item needs only its `topic`.** A task created since the last digest may have no due date; it shows no
+  deadline phrase, and its person goes on the first line: "📌 Договор с подрядчиком — Пётр Белов".
+- **Each report run keeps its checked document** as `runs/<time>.report.json` beside the run's `.md`, with refs and
+  without `links` or `internal`, for Desktop to render.
+
+### Changed — may break callers
+
+- `PreparedReport` has `terminal` (plain text with app links, written to `latest.txt`) beside `text` (plain text with
+  web links, the email's body) and `document`. A quiet day with a sync problem says "Новых дел нет, но синхронизация
+  требует внимания." and lists the health lines below.
+
 ### Fixed
 
 - **In `search all`, a hit only words found keeps its place next to the hits around it.** It takes the cosine of the
