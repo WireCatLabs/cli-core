@@ -253,10 +253,10 @@ export const recordStoreOver = (context: StoreContext): RecordStore => {
           const thing = requiredThing(database, target.entity, "the entity")
           pointing = {
             sql:
-              "SELECT id FROM record_relations WHERE target_type = 'ref' AND target_external_id = ? UNION " +
+              "SELECT id FROM record_relations WHERE target_type = ? AND target_external_id = ? UNION " +
               "SELECT rr.id FROM record_relations rr JOIN records t ON t.id = rr.target_id " +
               "WHERE t.entity_type = ? AND t.entity_id = ?",
-            params: [`${thing.type}:${thing.id}`, thing.type, thing.id],
+            params: ["ref", `${thing.type}:${thing.id}`, thing.type, thing.id],
           }
         }
         return database
