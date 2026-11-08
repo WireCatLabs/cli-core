@@ -16,7 +16,7 @@ import { currencyOf, formatDecimal, type Money, minorUnits, moneyLabel, moneyOf,
 import type { Decider } from "../decisions.js"
 import { type Actor, type ProposedByFilter, proposedBySql } from "./actors.js"
 import { type Author, authorActor, projectId } from "./memories.js"
-import { type MoneyLine, type MoneyLineInput, moneyLinesOver } from "./money-lines.js"
+import { MAX_LINES, type MoneyLine, type MoneyLineInput, moneyLinesOver, type PricedLine } from "./money-lines.js"
 import { requiredThing } from "./notes.js"
 import type { StoreContext } from "./open.js"
 import { netPaidSql, refundRulesOver } from "./refunds.js"
@@ -159,6 +159,13 @@ export interface FinanceStore {
       number?: string
     },
   ): Promise<Invoice[]>
+  /**
+   * A line at the end, and the total follows. The owner changes any invoice's lines but a void one's, a bot only those
+   * of an invoice it proposed that is still proposed; the total never falls below what confirmed payments settled.
+   */
+  addInvoiceLine(reference: string, input: InvoiceLineInput & { by: Author }): Promise<InvoiceDetail>
+  /** Under the same rules as `addInvoiceLine`; an invoice keeps at least one line. */
+  removeInvoiceLine(reference: string, input: { position: number; by: Author }): Promise<InvoiceDetail>
   /** The owner sends a draft: its status then follows its allocations. */
   issueInvoice(reference: string, by: Author): Promise<InvoiceDetail>
   /** The owner cancels an invoice no confirmed payment is allocated to; proposed allocations to it go. */
@@ -193,8 +200,6 @@ type Row = Record<string, unknown>
 const FINANCE_TYPES = ["invoice", "payment"] as const
 type FinanceType = (typeof FINANCE_TYPES)[number]
 const isFinanceType = (type: string): type is FinanceType => (FINANCE_TYPES as readonly string[]).includes(type)
-
-const MAX_LINES = 500
 
 /** Money settled by confirmed payments only: a proposed payment promises nothing yet. */
 const PAID = netPaidSql("i.id")
@@ -462,6 +467,40 @@ export const financeOperationsOver = (context: StoreContext): FinanceOperations 
         .run(invoiceId)
   }
 
+  const mayChangeLines = (row: Row, by: Author) => {
+    mayChangeParts(
+      row,
+      by,
+      `only the owner changes the lines of invoice:${row.id}; ` +
+        "a bot changes only an invoice it proposed that is still proposed",
+    )
+    if (row.deleted_at != null || row.review === "rejected" || row.status === "void")
+      refuse(
+        `invoice:${row.id} is ${row.deleted_at != null ? "deleted" : row.review === "rejected" ? "rejected" : "void"}`,
+        "finance.status",
+      )
+  }
+
+  /** Checked here before the trigger, which only aborts without saying why. */
+  const relined = (row: Row, change: (id: number) => void): InvoiceDetail => {
+    const [id, currency] = [Number(row.id), String(row.currency)]
+    write(database, () => {
+      change(id)
+      const total = lines.sumOf("invoice", id)
+      if (!Number.isSafeInteger(total)) refuse("an invoice's total is too large", "finance.total")
+      if (total <= 0) refuse("an invoice totals more than 0", "finance.total")
+      const paid = Number(database.prepare(`SELECT ${netPaidSql("?")} AS n`).get(id)?.n)
+      if (total < paid)
+        refuse(
+          `${moneyLabel(paid, currency)} is paid on invoice:${id}; its lines cannot total ${moneyLabel(total, currency)}`,
+          "finance.below-paid",
+        )
+      lines.retotal("invoice", id, now())
+      settle(id)
+    })
+    return invoiceDetail(`invoice:${id}`)
+  }
+
   const mayAllocate = (row: Row, by: Author) =>
     mayChangeParts(
       row,
@@ -541,6 +580,17 @@ export const financeOperationsOver = (context: StoreContext): FinanceOperations 
       return invoiceDetail(`invoice:${id}`)
     },
     invoice: (reference) => invoiceDetail(reference),
+    addInvoiceLine: (reference, { by, ...line }) => {
+      const row = rowOf(reference, "invoice")
+      mayChangeLines(row, by)
+      const [priced] = lines.linesOf("invoice", [line], String(row.currency)) as [PricedLine]
+      return relined(row, (id) => lines.appendLine("invoice", id, priced, now()))
+    },
+    removeInvoiceLine: (reference, { position, by }) => {
+      const row = rowOf(reference, "invoice")
+      mayChangeLines(row, by)
+      return relined(row, (id) => lines.deleteLine("invoice", id, position))
+    },
     invoices: (filter = {}) => {
       const project = filter.project === undefined ? null : projectId(database, filter.project)
       const counterparty = partyThing(filter.counterparty, "the counterparty")
@@ -755,6 +805,8 @@ export const financeStoreOver = (context: StoreContext): FinanceStore => {
   return {
     addInvoice: async (input) => operations.addInvoice(input),
     invoice: async (reference) => operations.invoice(reference),
+    addInvoiceLine: async (reference, input) => operations.addInvoiceLine(reference, input),
+    removeInvoiceLine: async (reference, input) => operations.removeInvoiceLine(reference, input),
     invoices: async (filter) => operations.invoices(filter),
     issueInvoice: async (reference, by) => operations.issueInvoice(reference, by),
     voidInvoice: async (reference, by) => operations.voidInvoice(reference, by),

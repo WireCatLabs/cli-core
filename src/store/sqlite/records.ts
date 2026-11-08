@@ -59,6 +59,14 @@ export interface MappedRecord extends SourceRecord {
   errors: IngestError[]
 }
 
+export interface IncomingRelation {
+  /** The live record whose relation points at the target. */
+  record: RecordKey
+  role: string
+  as: string | null
+  amount: string | null
+}
+
 export interface MatchRun {
   linked: number
   created: number
@@ -90,9 +98,19 @@ export interface RecordStore {
     /** Only persons, organizations and projects whose identifiers point at more than one entity. */
     unmatched?: boolean
     flagged?: boolean
+    /** A ref such as `person:4`: the records mapped to that entity. */
+    entity?: string
+    batch?: string
+    /** `true`: only deleted records; `false`: only live ones; left out, both. */
+    deleted?: boolean
     /** 1–500, 100 by default. */
     limit?: number
   }): Promise<SourceRecord[]>
+  /**
+   * The relations of live records that point at a record of the account, or at an entity: by its ref, or through a
+   * record mapped to it. An entity's are read across every account, and each names its own. Oldest relation first.
+   */
+  incoming(target: RecordKey | { entity: string }, options?: { limit?: number }): Promise<IncomingRelation[]>
   /**
    * The owner says which entity a record is: `person:4` for a payer a sheet names. Never done by name. Records that
    * waited for it get their entity, as proposals. A record whose entity the import made moves, with every record of
@@ -106,6 +124,11 @@ export interface RecordStore {
 const LIMIT = 1000
 
 const iso = (value: unknown) => new Date(Number(value)).toISOString()
+
+const checkLimit = (limit: number) => {
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 500)
+    throw new CliError("validation_error", "a record list takes 1–500 items")
+}
 
 const IDENTITY_SQL = IDENTITY_TYPES.map((type) => `'${type}'`).join(", ")
 
@@ -186,31 +209,75 @@ export const recordStoreOver = (context: StoreContext): RecordStore => {
         const row = rowOf(key)
         return row ? sourceRecordOf(row) : undefined
       }),
-    list: async ({ provider, account, type, waiting, unmatched, flagged, limit = 100 }) => {
-      if (!Number.isSafeInteger(limit) || limit < 1 || limit > 500)
-        throw new CliError("validation_error", "a record list takes 1–500 items")
+    list: async ({ provider, account, type, waiting, unmatched, flagged, entity, batch, deleted, limit = 100 }) => {
+      checkLimit(limit)
       return read(database, () => {
-        if (findAccountPk(context, { provider, account }) === undefined) return []
-        const rows = database
+        const accountId = findAccountPk(context, { provider, account })
+        if (accountId === undefined) return []
+        const where = ["r.account_id = ?"]
+        const params: (string | number)[] = [accountId]
+        const and = (condition: string, ...values: (string | number)[]) => {
+          where.push(condition)
+          for (const value of values) params.push(value)
+        }
+        if (type !== undefined) and("r.type = ?", type)
+        if (waiting)
+          and(
+            "r.entity_id IS NULL AND r.deleted_at IS NULL AND r.type NOT LIKE 'custom:%' " +
+              `AND r.type NOT IN (${IDENTITY_SQL})`,
+          )
+        if (unmatched) and(`r.entity_id IS NULL AND r.deleted_at IS NULL AND r.type IN (${IDENTITY_SQL})`)
+        if (flagged)
+          and("r.entity_id IS NOT NULL AND (r.deleted_at IS NOT NULL OR r.projected_fingerprint IS NOT r.fingerprint)")
+        if (entity !== undefined) {
+          const thing = requiredThing(database, entity, "the entity")
+          and("r.entity_type = ? AND r.entity_id = ?", thing.type, thing.id)
+        }
+        if (batch !== undefined) and("r.batch_id = ?", batch)
+        if (deleted !== undefined) and(`r.deleted_at IS ${deleted ? "NOT " : ""}NULL`)
+        return database
+          .prepare(`${SELECT}WHERE ${where.join(" AND ")} ORDER BY r.updated_at DESC, r.id DESC LIMIT ?`)
+          .all(...params, limit)
+          .map(sourceRecordOf)
+      })
+    },
+    incoming: async (target, { limit = 100 } = {}) => {
+      checkLimit(limit)
+      return read(database, () => {
+        let pointing: { sql: string; params: (string | number)[] }
+        if ("entity" in target) {
+          const thing = requiredThing(database, target.entity, "the entity")
+          pointing = {
+            sql:
+              "SELECT id FROM record_relations WHERE target_type = 'ref' AND target_external_id = ? UNION " +
+              "SELECT rr.id FROM record_relations rr JOIN records t ON t.id = rr.target_id " +
+              "WHERE t.entity_type = ? AND t.entity_id = ?",
+            params: [`${thing.type}:${thing.id}`, thing.type, thing.id],
+          }
+        } else {
+          const row = rowOf(target)
+          if (!row) return []
+          pointing = { sql: "SELECT id FROM record_relations WHERE target_id = ?", params: [Number(row.id)] }
+        }
+        return database
           .prepare(
-            `${SELECT}WHERE a.provider = ? AND a.external_id = ? AND (? IS NULL OR r.type = ?) ` +
-              "AND (? IS NULL OR (r.entity_id IS NULL AND r.deleted_at IS NULL AND r.type NOT LIKE 'custom:%' " +
-              `AND r.type NOT IN (${IDENTITY_SQL}))) ` +
-              `AND (? IS NULL OR (r.entity_id IS NULL AND r.deleted_at IS NULL AND r.type IN (${IDENTITY_SQL}))) ` +
-              "AND (? IS NULL OR (r.entity_id IS NOT NULL AND (r.deleted_at IS NOT NULL " +
-              "OR r.projected_fingerprint IS NOT r.fingerprint))) ORDER BY r.updated_at DESC, r.id DESC LIMIT ?",
+            "SELECT rr.role, rr.as_role, rr.amount, r.type, r.external_id, a.provider, a.external_id AS account " +
+              "FROM record_relations rr JOIN records r ON r.id = rr.record_id JOIN accounts a ON a.id = r.account_id " +
+              `WHERE rr.id IN (${pointing.sql}) AND r.deleted_at IS NULL AND rr.role NOT LIKE 'fields.%' ` +
+              "ORDER BY rr.id LIMIT ?",
           )
-          .all(
-            provider,
-            account,
-            type ?? null,
-            type ?? null,
-            waiting ? 1 : null,
-            unmatched ? 1 : null,
-            flagged ? 1 : null,
-            limit,
-          )
-        return rows.map(sourceRecordOf)
+          .all(...pointing.params, limit)
+          .map((row) => ({
+            record: {
+              provider: String(row.provider),
+              account: String(row.account),
+              type: String(row.type),
+              externalId: String(row.external_id),
+            },
+            role: String(row.role),
+            as: row.as_role == null ? null : String(row.as_role),
+            amount: row.amount == null ? null : String(row.amount),
+          }))
       })
     },
     map: async (key, entity, by) => {

@@ -8,7 +8,7 @@ import type { Decider } from "../decisions.js"
 import { fold } from "../normalize.js"
 import { ownerPerson, type ProposedByFilter, proposedBySql } from "./actors.js"
 import { type Author, projectId } from "./memories.js"
-import { type MoneyLine, type MoneyLineInput, moneyLinesOver, type PricedLine } from "./money-lines.js"
+import { MAX_LINES, type MoneyLine, type MoneyLineInput, moneyLinesOver, type PricedLine } from "./money-lines.js"
 import { requiredThing } from "./notes.js"
 import type { StoreContext } from "./open.js"
 import {
@@ -123,8 +123,6 @@ export interface OrdersStore {
 
 type Row = Record<string, unknown>
 
-const MAX_LINES = 500
-
 const ORDERS =
   "SELECT o.*, b.name AS author_name, b.kind AS author_kind FROM orders o " +
   "LEFT JOIN bots b ON o.author_type = 'bot' AND b.id = o.author_id"
@@ -179,16 +177,6 @@ export const orderOperationsOver = (context: StoreContext): OrderOperations => {
     ...orderOf(row),
     lines: row.currency == null ? [] : moneyLines.shownLines("order", Number(row.id), String(row.currency)),
   })
-
-  /** The order's total follows its lines in the same write: the trigger checks the sum when the order changes. */
-  const retotal = (orderId: number) => {
-    database
-      .prepare(
-        "UPDATE orders SET total = coalesce((SELECT sum(amount) FROM order_lines WHERE order_id = ?), total), " +
-          "updated_at = ? WHERE id = ?",
-      )
-      .run(orderId, now(), orderId)
-  }
 
   const mayChangeLines = (row: Row, by: Author) => {
     mayChangeParts(
@@ -425,14 +413,8 @@ export const orderOperationsOver = (context: StoreContext): OrderOperations => {
       if (row.currency == null) refuse(`order:${row.id} has no currency; a line needs one`, "order.total")
       const [priced] = moneyLines.linesOf("order", [line], String(row.currency)) as [PricedLine]
       write(database, () => {
-        const last = Number(
-          database
-            .prepare("SELECT coalesce(max(position), 0) AS n FROM order_lines WHERE order_id = ?")
-            .get(Number(row.id))?.n,
-        )
-        if (last >= MAX_LINES) refuse(`an order has at most ${MAX_LINES} lines`, "order.field")
-        moneyLines.insertLines("order", Number(row.id), [priced], last + 1, now())
-        retotal(Number(row.id))
+        moneyLines.appendLine("order", Number(row.id), priced, now())
+        moneyLines.retotal("order", Number(row.id), now())
       })
       return detailOf(rowOf(`order:${row.id}`))
     },
@@ -440,17 +422,8 @@ export const orderOperationsOver = (context: StoreContext): OrderOperations => {
       const row = rowOf(reference)
       mayChangeLines(row, by)
       write(database, () => {
-        const lines = Number(
-          database.prepare("SELECT count(*) AS n FROM order_lines WHERE order_id = ?").get(Number(row.id))?.n,
-        )
-        const gone = database
-          .prepare("DELETE FROM order_lines WHERE order_id = ? AND position = ?")
-          .run(Number(row.id), position)
-        if (gone.changes === 0)
-          throw new CliError("not_found", `order:${row.id} has no line ${position}`, { reason: "order.no-line" })
-        if (lines === 1)
-          refuse(`line ${position} is the last of order:${row.id}; reject or cancel the order instead`, "order.line")
-        retotal(Number(row.id))
+        moneyLines.deleteLine("order", Number(row.id), position)
+        moneyLines.retotal("order", Number(row.id), now())
       })
       return detailOf(rowOf(`order:${row.id}`))
     },
