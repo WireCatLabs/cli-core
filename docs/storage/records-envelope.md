@@ -30,7 +30,8 @@ made (§ Matching).
 - `options.lines`: `text` (the default) keeps an invoice line's `product` as data, as v1 did; `products` reads it as the
   product record's external id. Order lines always read it. `product_ref` (`product:4`) names a store product on any
   line.
-- `options.phone_region`: the country (`es`, `RU`) a person's phone written without `+` is read in (§ Matching).
+- `options.phone_region`: the country (`es`, `RU`) a person's phone written without `+` is read in (§ Matching);
+  without it such a number is never an identifier. A vCard import passes its region here too.
 - A byte-order mark before the first line is skipped. `envelopeOfText(text)` reads a file's text as JSON or JSONL.
 - **JSONL** is the same model: the first non-empty line holds `schema_version`, `source` and `options`, each further
   non-empty line one record. A line that is not JSON is refused at its index. A JSON object with `records` is a whole
@@ -63,8 +64,9 @@ A contract without a value, a product, a pipeline, a deal, a lead and a wallet f
 
 **Re-proposing never overwrites the owner.** The import keeps a digest of what it last wrote of a proposal it may
 re-propose (its row and its lines, prices or splits). The owner may edit a proposal without deciding it; once the
-digest no longer matches, a change from the source is only `flagged`. A payment takes its settles again only while every
-allocation on it is the import's own.
+digest no longer matches, a change from the source is only `flagged`. That holds for any other writer too, such as
+another CLI's process: the safe side, at the cost of flagging an edit nobody meant to keep. A payment takes its
+settles again only while every allocation on it is the import's own.
 
 ## Relations
 
@@ -93,7 +95,7 @@ Every file, v1 files included. A name alone never matches.
 | Type | Strong identifiers |
 | --- | --- |
 | person | `fields.email` (one or a list), trimmed and lower-cased as every writer of an e-mail identity keeps them; `fields.phone` (one or a list), read to E.164 (below) and compared with `phone` identities and with the number a contact keeps (`identities.phone`, with or without `+`; a number kept in another spelling does not match); and the source's own contact identity `<account>/contact/<external id>` under its provider, the one CRM sync writes, a `/` or `%` in the account or id escaped |
-| organization | `fields.identifiers`: a list of `{scheme, value}` with scheme `email`, `domain`, `tax-id:<cc>` or `registration:<cc>`, stored as identities of the organization under the scheme, an e-mail under `org-email`, so a company's address is never a person's identity. Any other item is kept as data |
+| organization | `fields.identifiers`: a list of `{scheme, value}` with scheme `email`, `domain`, `tax-id:<cc>` or `registration:<cc>`, stored as identities of the organization under the scheme, an e-mail under `org-email`, so a company's address is never a person's identity. An e-mail also matches the `email` identity mail findings or mentions gave a company. Any other item is kept as data |
 | project | `fields.key` |
 
 - The identifiers point at no entity: the import **makes** one, marked `createdEntity`, and gives it the record's
@@ -102,10 +104,11 @@ Every file, v1 files included. A name alone never matches.
 - They point at exactly one: the record **links** to it, and nothing is added to that entity.
 - They point at two or more: the record **waits**, listed under `unmatched` with the `candidates`. The owner says
   which one it is with `store.records.map`; an agent only reports it. Its `reason` is `record.ambiguous`.
-- **A phone** written with `+` or `00` is international. Without them it is read in `options.phone_region` when the
-  envelope gives one, else in the countries of the store's `phone_countries` setting
-  ([Numbers from other countries](../mentions.md#numbers-from-other-countries)), and is an identifier only when
-  exactly one of them reads it as a valid number. Otherwise it stays in the fields and never matches.
+- **A phone** written with `+` or `00` is international. Without them it is an identifier only when the envelope names
+  `options.phone_region` and the number is valid there. The store's `phone_countries` setting
+  ([Numbers from other countries](../mentions.md#numbers-from-other-countries)) never decides it: with `ru`, the US
+  number `4155550100` reads as a Russian one. Otherwise the number stays in the fields, never matches, and the
+  receipt lists it under `ignored` (`record.phone-region`).
 - A person record changed later that names another person's e-mail or phone gives its entity nothing and is
   `flagged`, with `reason: "record.ambiguous"` and that person among the `candidates`.
 - `record.separated` instead of `record.ambiguous`: the one person the identifiers match is one the owner separated
@@ -142,18 +145,21 @@ const receipt = await ingestLines(store, jsonlLines(process.stdin), { account: "
   files is not measured yet). Duplicate keys and
   `(type, external_id)` are checked in a `TEMP` table, and the receipt's lists are read from the store at the end.
 - The receipt's counts are exact; each list keeps its first 1000 entries and sets `truncated`. `onIssue` (on `ingest`
-  too) gets every refusal as it happens.
+  too) gets every refusal as it happens. It must not use the store: it runs inside the run's transaction, and during a
+  dry run its statements are refused (`store.dry-run`) rather than rolled back unseen.
 - A real run commits per chunk: a failure midway leaves earlier chunks written, and running it again is idempotent.
 - **A dry run is one transaction, rolled back at the end**, so its receipt is true for references between chunks. It
   holds the store's write lock for the whole run, so tg, max and memo wait meanwhile, and the WAL file grows by the
   batch's size until the next checkpoint. Any other read or write through the same store handle while it runs is
-  refused (`store.dry-run`, code `conflict`): it would otherwise land inside the dry run and be rolled back with it.
+  refused (`store.dry-run`, code `conflict`), through the hand-written SQL and Drizzle alike (Drizzle reports it as
+  the cause of its own query error): it would otherwise land inside the dry run and be rolled back with it.
 
 ## Receipt
 
-`{ dryRun, source, created, updated, unchanged, deleted, refused, proposed, waiting, flagged, unmatched, errors,
-truncated }`. `proposed` lists the proposals made or changed; `waiting[{key, pointer, missing}]`,
-`flagged[{key, pointer, entity, reason?, candidates?}]`, `unmatched[{key, pointer, reason, candidates}]`; `errors[{pointer, code, message,
+`{ dryRun, source, created, updated, unchanged, deleted, refused, proposed, waiting, flagged, unmatched, ignored,
+errors, truncated }`. `proposed` lists the proposals made or changed; `waiting[{key, pointer, missing}]`,
+`flagged[{key, pointer, entity, reason?, candidates?}]`, `unmatched[{key, pointer, reason, candidates}]`,
+`ignored[{key, pointer, reason}]`; `errors[{pointer, code, message,
 key}]`, the pointer an RFC 6901 JSON pointer into the envelope.
 
 ## Error codes
@@ -168,6 +174,7 @@ key}]`, the pointer an RFC 6901 JSON pointer into the envelope.
 | `record.relation-ambiguous` | two targets for a role that takes one |
 | `record.identifier` | a free-mail domain given as an organization's `domain` |
 | `record.ambiguous`, `record.separated` | reported in `unmatched` (and `flagged`), not refusals: § Matching |
+| `record.phone-region` | reported in `ignored`, not a refusal: a phone without `+` and no `options.phone_region` |
 | `record.entity` | the store refused the entity or proposal the record stands for, with no code of its own |
 | `store.dry-run` | another read or write of the store handle while a dry run holds it |
 | `record.stale-revision`, `record.not-found` | revisions; a delete of a record never imported |
