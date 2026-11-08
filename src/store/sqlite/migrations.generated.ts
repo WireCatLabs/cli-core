@@ -1218,7 +1218,7 @@ export const GENERATED: { name: string; statements: string[] }[] = [
     ]
   },
   {
-    "name": "20261108170238_version-60-base-stages",
+    "name": "20261108190101_version-60-base-stages",
     "statements": [
       "ALTER TABLE `pipeline_stages` ADD `base_stage_id` integer REFERENCES pipeline_stages(id);",
       "ALTER TABLE `pipeline_stages` ADD `base_confirmed` integer DEFAULT 0 NOT NULL;",
