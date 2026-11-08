@@ -20,6 +20,18 @@ shape of this file.
 - **Permission key `business.list`** (or `business`): a profile that denies it leaves the `business` lane out of
   `search all` and says so under `missing`, as `deals.list` does for deals (`deniedKinds`). memo reads the lane by
   default once it takes this release; that key turns it off.
+- **`store.finance.addInvoiceLine` and `removeInvoiceLine` change an invoice's lines, as `store.orders` does an
+  order's.** A `product` reference copies the product's name and price, and a later price change leaves the line as it
+  is. The owner changes any invoice's lines but a void, rejected or deleted one's; a bot only those of an invoice it
+  proposed that is still proposed (`finance.owner-only`). The total follows the lines, and the status follows the total
+  against what confirmed payments settled. Refused: removing the last line (`finance.line`), a position with no line
+  (`finance.no-line`), and lines totalling less than is paid (`finance.below-paid`).
+- **`store.records.list` takes `entity`, `batch` and `deleted`, and `store.records.incoming` lists what points at a
+  record or an entity**, for a `records show` that shows relations both ways. `entity` is a ref and lists the records
+  mapped to it; `batch` is a `batch_id`; `deleted: true` lists only deleted records, `false` only live ones, and left
+  out lists both, as before. `incoming(key)` gives the live records whose relations resolve to that record;
+  `incoming({ entity })` those naming the entity by ref, from every account, and those resolved to a record mapped to
+  it. Each names its record's provider, account, type and id, with the role, `as` and `amount`.
 
 ### Changed — may break callers
 

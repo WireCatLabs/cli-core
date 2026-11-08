@@ -1,3 +1,4 @@
+import { CliError } from "@wirecat/cli-base"
 import { formatDecimal, lineUnits, minorUnits, moneyLabel, quantityOf, scaleOf } from "../../domain/money.js"
 import { requiredThing } from "./notes.js"
 import type { StoreContext } from "./open.js"
@@ -32,10 +33,26 @@ export interface PricedLine {
   productId: number | null
 }
 
-/** Where each parent keeps its lines, and the prefix of the reasons its line errors carry. */
+export const MAX_LINES = 500
+
+/** Where each parent keeps its lines, and the reasons its line errors carry. */
 const PARENTS = {
-  invoice: { table: "invoice_lines", column: "invoice_id", reasons: "finance" },
-  order: { table: "order_lines", column: "order_id", reasons: "order" },
+  invoice: {
+    parents: "invoices",
+    table: "invoice_lines",
+    column: "invoice_id",
+    reasons: "finance",
+    full: "finance.lines",
+    instead: "reject or void the invoice instead",
+  },
+  order: {
+    parents: "orders",
+    table: "order_lines",
+    column: "order_id",
+    reasons: "order",
+    full: "order.field",
+    instead: "reject or cancel the order instead",
+  },
 } as const
 
 export type LineParent = keyof typeof PARENTS
@@ -126,5 +143,41 @@ export const moneyLinesOver = ({ database }: StoreContext) => {
       )
   }
 
-  return { linesOf, insertLines, shownLines }
+  /** Writes a line after the last one; the caller retotals the parent in the same write. */
+  const appendLine = (parent: LineParent, id: number, line: PricedLine, at: number) => {
+    const { table, column, full } = PARENTS[parent]
+    const last = Number(
+      database.prepare(`SELECT coalesce(max(position), 0) AS n FROM ${table} WHERE ${column} = ?`).get(id)?.n,
+    )
+    if (last >= MAX_LINES) refuse(`an ${parent} has at most ${MAX_LINES} lines`, full)
+    insertLines(parent, id, [line], last + 1, at)
+  }
+
+  /** Removes one line, never the last; the caller retotals the parent in the same write. */
+  const deleteLine = (parent: LineParent, id: number, position: number) => {
+    const { table, column, reasons, instead } = PARENTS[parent]
+    const lines = Number(database.prepare(`SELECT count(*) AS n FROM ${table} WHERE ${column} = ?`).get(id)?.n)
+    const gone = database.prepare(`DELETE FROM ${table} WHERE ${column} = ? AND position = ?`).run(id, position)
+    if (gone.changes === 0)
+      throw new CliError("not_found", `${parent}:${id} has no line ${position}`, { reason: `${reasons}.no-line` })
+    if (lines === 1) refuse(`line ${position} is the last of ${parent}:${id}; ${instead}`, `${reasons}.line`)
+  }
+
+  const sumOf = (parent: LineParent, id: number): number => {
+    const { table, column } = PARENTS[parent]
+    return Number(database.prepare(`SELECT coalesce(sum(amount), 0) AS n FROM ${table} WHERE ${column} = ?`).get(id)?.n)
+  }
+
+  /** The parent's total follows its lines: orders' trigger checks the sum when the order changes. */
+  const retotal = (parent: LineParent, id: number, at: number) => {
+    const { parents, table, column } = PARENTS[parent]
+    database
+      .prepare(
+        `UPDATE ${parents} SET total = coalesce((SELECT sum(amount) FROM ${table} WHERE ${column} = ?), total), ` +
+          "updated_at = ? WHERE id = ?",
+      )
+      .run(id, at, id)
+  }
+
+  return { linesOf, insertLines, shownLines, appendLine, deleteLine, sumOf, retotal }
 }

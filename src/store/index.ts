@@ -338,6 +338,7 @@ export {
 } from "./sqlite/proposed-actions.js"
 export {
   type FlaggedRecord,
+  type IncomingRelation,
   type MappedRecord,
   type MatchRun,
   type RecordKey,
