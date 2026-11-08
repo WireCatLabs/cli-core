@@ -159,6 +159,14 @@ export {
   type SignInStepsOptions,
   signInSteps,
 } from "../terminal/sign-in-steps.js"
+export {
+  type AccountRemoval,
+  type AccountRemovalContext,
+  type AccountRemoveOptions,
+  type AccountSecrets,
+  accountRemoveCommand,
+  type SignedOut,
+} from "./account-remove.js"
 export { liftOptionsAfterDashes } from "./after-dashes.js"
 export {
   type AgentPolicy,

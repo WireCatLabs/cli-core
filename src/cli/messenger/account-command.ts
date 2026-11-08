@@ -4,6 +4,7 @@ import { Command } from "commander"
 import { withoutPhone } from "../../services/people.js"
 import { storePath } from "../../store/path.js"
 import { openStore } from "../../store/store.js"
+import { accountRemoveCommand } from "../account-remove.js"
 import { REMOTE_READ, REMOTE_WRITE } from "../effects.js"
 import { itemOf, renderAnswer } from "../envelope.js"
 import { queryTerms, withQuery } from "../list-query.js"
@@ -122,6 +123,13 @@ export const accountCommand = (messenger: Messenger): Command => {
         }),
     )
     .addCommand(accountSessionsCommand(messenger))
+  if (messenger.accountRemoval)
+    account.addCommand(
+      accountRemoveCommand(messenger.app, messenger.accountRemoval, {
+        provider: messenger.provider,
+        resolveSettings: messenger.resolveSettings,
+      }),
+    )
   if (messenger.privacy === true) account.addCommand(privacyCommand(messenger))
   return hideNever(messenger, account)
 }

@@ -42,6 +42,16 @@ const SIGN_IN: Entry[] = [
   ["oauth.scope-missing", "permission_error", "the sign-in lacks a permission this command needs"],
   ["sign-in.client-rejected", "configuration_error", "the provider rejected the OAuth client"],
   ["sign-in.secret-without-id", "configuration_error", "an OAuth client secret is set without its client id"],
+  validation("account-remove.no-choice", "account remove needs --keep-data or --delete-data, one of them"),
+  ["account-remove.unknown-profile", "not_found", "no profile by this name on this computer"],
+  ["account-remove.busy", "conflict", "a serve or a sync runs for this profile; stop it first"],
+  ["account-remove.unconfirmed", "confirmation_required", "removing an account asks first; add --yes"],
+  ["account-remove.path-outside", "configuration_error", "the tool named a path outside its own folders"],
+  [
+    "account-remove.folder-outside",
+    "configuration_error",
+    "the tool named a folder of its own outside the home folder",
+  ],
 ]
 
 /** Reasons every CLI over a provider's API raises alike: gcal and drive today. */
