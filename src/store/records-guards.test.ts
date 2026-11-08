@@ -312,3 +312,28 @@ it("tells every refusal to onIssue for a JSON envelope too", async () => {
   })
   expect(told.sort()).toEqual(["/records/0/type", "/records/1/fields/unit_price"])
 })
+
+it("never links a person the owner separated from an identity the record brings", async () => {
+  const { store, sql } = await recordsFixture(handles)
+  const anna = knownPerson(sql, "Anna", "anna@example.com")
+  const other = knownPerson(sql, "Other", "other@example.com")
+  const db = sql()
+  const phone = Number(
+    db
+      .prepare(
+        "INSERT INTO identities (provider, external_id, created_at, updated_at) VALUES ('phone', '+79000000001', 1, 1) " +
+          "RETURNING id",
+      )
+      .get()?.id,
+  )
+  db.prepare(
+    "INSERT INTO identity_link_events (identity_id, from_person_id, to_person_id, method, created_at, author) " +
+      "VALUES (?, ?, ?, 'manual', 1, 'owner')",
+  ).run(phone, Number(anna.ref.split(":")[1]), Number(other.ref.split(":")[1]))
+  const receipt = await take(
+    store,
+    envelopeOf([upsert("person", "p1", { email: "anna@example.com", phone: "+7 900 000-00-01" })]),
+  )
+  expect(receipt.unmatched).toEqual([expect.objectContaining({ reason: "record.separated", candidates: [anna.ref] })])
+  expect((await store.records.get({ ...SOURCE, type: "person", externalId: "p1" }))?.entity).toBeNull()
+})
