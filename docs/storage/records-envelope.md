@@ -57,8 +57,8 @@ with its fields and relations, never projected. `task` is refused (`record.type`
 | `subscription` | proposed | re-proposed (a new price is added), else flagged | `supplier`, `customer`, `product`, `contract`, `project` | `prices` |
 | `wallet` | written; the opening balance stays in the record | in place | `holder` | — |
 | `transaction` | proposed | re-proposed (splits replaced), else flagged | `wallet` (required), `counterparty`, `payment`, `project` | `splits` |
-| `message` (kind `sms`) | written, an SMS in `sms:<account>` | in place, as an edit | `counterpart` | — |
-| `event` (kind `call`) | written, a call in `calls:<account>` | in place | `counterpart` | — |
+| `message` (kind `sms`) | written, an SMS of the account | in place, as an edit | `counterpart` | — |
+| `event` (kind `call`) | written, a call of the account | in place | `counterpart` | — |
 
 Each type's known `fields` keys are typed in the schema (`$defs/fields-<type>`); any other key is kept as sent. An
 import never writes confirmed money: what feeds a total is a proposal of the bot `import` that only the owner decides.
@@ -203,11 +203,11 @@ records of kind `call`, and `person` records from the address book or from the n
 `envelopeOfVcard` turns a `.vcf` file into such an envelope. Both types are written directly (`review: direct`):
 they carry no money.
 
-**Where the kind is kept.** A search reads an account by its provider's kind (`messages`, `events`), and one
-provider has one kind, so the source's own account cannot hold both. The import writes them into two accounts named
-after the source account: SMS into `sms:<account>` (provider `sms`, kind `messages`) and calls into
-`calls:<account>` (provider `calls`, kind `events`), both in the provider seed. The record itself stays in the
-source's account, as every record does. A call's calendar entry also has `event_type: call`, so
+**One account per phone.** The records, the SMS and the calls of an import all stay in the account it names
+(`--account phone:pixel`), so an account group (WC-ACCT-13) lists the phone once and reaches all of it. A search lane
+reads the accounts whose provider **holds** its kind, and a provider may hold several (`kinds`): the seeded `phone`
+holds `messages` and `events`. A source under another provider registers one with the kinds it holds; one no entry
+names is skipped, as any unknown provider is. A call's calendar entry has `event_type: call`, so
 `events list event_type:call` lists calls among the calendars' events. No column is added.
 
 ```json
@@ -223,11 +223,11 @@ source's account, as every record does. A call's calendar entry also has `event_
 
 **SMS → chats and messages.**
 
-- One chat per thread in `sms:<account>`: `fields.thread` (the phone's thread id) when sent, else the counterpart's
+- One chat per thread in the account: `fields.thread` (the phone's thread id) when sent, else the counterpart's
   number read to E.164 with the store's `phone_countries` (as written when it does not read: a short code, a
   sender name such as `Sberbank`). Kind `dialog`, membership `imported`, the title `fields.name` or the number.
 - `direction`: `in` is the counterpart's message, `out` the owner's (`outgoing`, no sender). The counterpart is an
-  identity of provider `sms` whose id is the number, kept as the identity's `phone` too, a member of the chat and
+  identity of the account's provider whose id is the number, kept as the identity's `phone` too, a member of the chat and
   seen by the account, so the person's context and `search messages` read it as a messenger contact.
 - `body` is the text, `sent_at` (ISO 8601 with an offset) the time. `read` (an incoming message the owner opened) is
   kept in the message's metadata: the store has no per-message read state for incoming messages.
@@ -235,7 +235,7 @@ source's account, as every record does. A call's calendar entry also has `event_
   messenger's; `messages.source` is `import:<provider>`. A changed record edits the text, as an edit does.
 - MMS attachments are out of scope: a record's other fields are kept in the record only.
 
-**Calls → events.** One calendar `calls` in `calls:<account>`, its sync marked complete. Each call is a calendar
+**Calls → events.** One calendar `calls` in the account, its sync marked complete. Each call is a calendar
 entry (`event_type: call`, `transparency: transparent`, so it never counts as busy or overlapping) and the event it
 makes: start `started_at`, end start plus `duration` seconds, title `fields.name` or the number, description
 `incoming call`, `outgoing call` or `missed call`. Direction, duration and number are in the entry's metadata.

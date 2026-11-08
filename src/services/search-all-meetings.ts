@@ -2,7 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import { parseLucene, type QueryNode } from "@wirecat/cli-base/query"
 import type { SearchHit } from "../meetings/index.js"
 import { formatMeetingReference } from "../meetings/index.js"
-import { entriesOfList, fitting } from "../search/account-list.js"
+import { entriesOfList, fitting, listedHolds } from "../search/account-list.js"
 import { SEARCH_QUERY } from "../search/lucene/types.js"
 import { codeOf } from "../sends/guarded.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
@@ -374,7 +374,7 @@ const searchAllOfSource = async (
     ...new Map(
       entries
         .flatMap(({ accounts }) => accounts)
-        .filter(({ kind }) => kind === resource)
+        .filter((one) => listedHolds(one, resource))
         .map(({ provider, account }) => [`${provider}\u0000${account}`, { provider, account }] as const),
     ).values(),
   ]

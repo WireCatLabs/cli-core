@@ -3,6 +3,7 @@ import { calendarStatus } from "../calendar/index.js"
 import { ingestVcard } from "../services/ingest.js"
 import { personContext } from "../services/person-context.js"
 import { searchAll } from "../services/search-all.js"
+import { searchAllWithMeetings } from "../services/search-all-meetings.js"
 import { envelopeOf, recordsFixture, SOURCE, take, upsert } from "../testing/records.js"
 
 const handles: { close(): unknown }[] = []
@@ -10,7 +11,7 @@ afterEach(async () => {
   for (const handle of handles.splice(0)) await handle.close()
 })
 
-const PHONE = { provider: "android", account: "pixel", batch_id: "2026-11-08" }
+const PHONE = { provider: "phone", account: "pixel", batch_id: "2026-11-08" }
 const ME = { provider: "telegram", account: "100" }
 const ANNA = "+34600111222"
 const OLEG = "+34600333444"
@@ -71,7 +72,7 @@ it("writes SMS threads both ways as chats of the sms account, the person matched
   const chats = db
     .prepare(
       "SELECT c.external_id, c.kind, c.title, c.membership_state FROM chats c JOIN accounts a ON a.id = c.account_id " +
-        "WHERE a.provider = 'sms' AND a.external_id = 'pixel' ORDER BY c.external_id",
+        "WHERE a.provider = 'phone' AND a.external_id = 'pixel' ORDER BY c.external_id",
     )
     .all()
   expect(chats).toEqual([
@@ -92,7 +93,7 @@ it("writes SMS threads both ways as chats of the sms account, the person matched
       sent_at: Date.parse("2026-11-01T08:12:00Z"),
       text: "Буду в десять, привезу договор",
       metadata: '{"read":true}',
-      source: "import:android",
+      source: "import:phone",
       sender: ANNA,
       person_id: anna,
     },
@@ -102,7 +103,7 @@ it("writes SMS threads both ways as chats of the sms account, the person matched
       sent_at: Date.parse("2026-11-01T08:13:30Z"),
       text: "Отлично, жду",
       metadata: null,
-      source: "import:android",
+      source: "import:phone",
       sender: null,
       person_id: null,
     },
@@ -112,13 +113,13 @@ it("writes SMS threads both ways as chats of the sms account, the person matched
       sent_at: Date.parse("2026-11-02T18:00:00Z"),
       text: "Перезвони по поводу аренды",
       metadata: '{"read":false}',
-      source: "import:android",
+      source: "import:phone",
       sender: OLEG,
       person_id: Number(oleg?.entity?.slice("person:".length)),
     },
   ])
   const message = await store.records.get({ ...PHONE, type: "message", externalId: "s-1" })
-  expect(message?.entity).toBe(`msg:sms/pixel/${encodeURIComponent(ANNA)}/s-1`)
+  expect(message?.entity).toBe(`msg:phone/pixel/${encodeURIComponent(ANNA)}/s-1`)
 })
 
 it("takes the same export again as unchanged, and a changed text as an edit", async () => {
@@ -167,16 +168,16 @@ it("makes calls, missed ones too, events of the calls calendar that list by pers
       transparency: "transparent",
       metadata: JSON.stringify({ callDirection: "in", callSeconds: 125, callNumber: ANNA }),
       calendar: "calls",
-      provider: "calls",
+      provider: "phone",
     },
     expect.objectContaining({ description: "missed call", event_type: "call", ends_at: start + 9_000_000 }),
     expect.objectContaining({ title: "900", description: "outgoing call" }),
   ])
-  const accountId = Number(db.prepare("SELECT id FROM accounts WHERE provider = 'calls'").get()?.id)
+  const accountId = Number(db.prepare("SELECT id FROM accounts WHERE provider = 'phone'").get()?.id)
   const theirs = await store.calendar.events({ personId: anna, from: 0, accountId })
   expect(theirs.map(({ description }) => description)).toEqual(["incoming call", "missed call"])
   expect(await store.calendar.events({ eventType: "call", from: 0 })).toHaveLength(3)
-  const status = await calendarStatus(store.calendar, accountId, { profile: "calls:pixel", now: Date.now() })
+  const status = await calendarStatus(store.calendar, accountId, { profile: "phone:pixel", now: Date.now() })
   expect(status.items.map(({ external_id, state }) => [external_id, state])).toEqual([["calls", "complete"]])
   expect(
     await take(store, phoneEnvelope([call("c-2", ANNA, "missed", "2026-11-03T12:30:00Z")]), { account: "pixel" }),
@@ -190,11 +191,11 @@ it("lets search all find SMS among messages and calls among events", async () =>
   })
   const messages = await searchAll(store, ME, { text: "договор", limit: 10, only: ["messages"], exact: true })
   expect(messages.items.map(({ provider, account, kind }) => [kind, provider, account])).toEqual([
-    ["message", "sms", "pixel"],
+    ["message", "phone", "pixel"],
   ])
   const events = await searchAll(store, ME, { text: "incoming", limit: 10, only: ["events"], exact: true })
   expect(events.items).toHaveLength(1)
-  expect(events.items[0]).toMatchObject({ provider: "calls", account: "pixel" })
+  expect(events.items[0]).toMatchObject({ provider: "phone", account: "pixel" })
 })
 
 it("waits with the candidates when the number names two people, and never links by name", async () => {
@@ -278,7 +279,7 @@ it("keeps each phone account apart: the same number and ids in two accounts are 
   const chats = db
     .prepare(
       "SELECT a.external_id AS account, count(*) AS n FROM chats c JOIN accounts a ON a.id = c.account_id " +
-        "WHERE a.provider = 'sms' GROUP BY a.external_id ORDER BY a.external_id",
+        "WHERE a.provider = 'phone' GROUP BY a.external_id ORDER BY a.external_id",
     )
     .all()
   expect(chats).toEqual([
@@ -291,7 +292,7 @@ it("keeps each phone account apart: the same number and ids in two accounts are 
     limit: 10,
     only: ["messages"],
     exact: true,
-    scope: { messages: [{ provider: "sms", account: "work-phone" }] },
+    scope: { messages: [{ provider: "phone", account: "work-phone" }] },
   })
   expect(found.items.map(({ account }) => account)).toEqual(["work-phone"])
 })
@@ -376,11 +377,34 @@ it("gives the person's context their SMS dialog and their calls", async () => {
   await take(store, phoneEnvelope([...thread, call("c-1", ANNA, "missed", "2026-11-03T10:00:00Z")]), {
     account: PHONE.account,
   })
-  const context = await personContext(store, { provider: "sms", account: "pixel" }, ANNA, {
+  const context = await personContext(store, { provider: "phone", account: "pixel" }, ANNA, {
     now: Date.parse("2026-11-08T00:00:00Z"),
   })
   expect(context.recent.direct.map(({ text }) => text)).toEqual(["Отлично, жду", "Буду в десять, привезу договор"])
   expect(context.events.recent.map(({ ref }) => ref)).toEqual([
     (await store.records.get({ ...PHONE, type: "event", externalId: "c-1" }))?.entity,
   ])
+})
+
+it("keeps records, SMS and calls in the one account, which a group naming it once reads for both kinds", async () => {
+  const { store, sql } = await recordsFixture(handles)
+  await take(store, phoneEnvelope([...thread, call("c-1", OLEG, "in", "2026-11-03T10:00:00Z", 60)]), {
+    account: PHONE.account,
+  })
+  const accounts = sql().prepare("SELECT provider, external_id FROM accounts WHERE provider <> 'internal'").all()
+  expect(accounts).toEqual([{ provider: "phone", external_id: "pixel" }])
+  await store.accounts.saveAccountGroup("mobile", ["phone:pixel"])
+  const found = await searchAllWithMeetings(store, ME, {
+    text: "договор OR incoming",
+    limit: 10,
+    only: ["messages", "events"],
+    exact: true,
+    source: "group:mobile",
+  })
+  expect(found.accounts.map(({ resource, provider, account }) => `${resource} ${provider}:${account}`)).toEqual([
+    "messages phone:pixel",
+    "events phone:pixel",
+  ])
+  expect(found.items.map(({ kind }) => kind).sort()).toEqual(["event", "message"])
+  expect(found.skipped).toEqual([])
 })

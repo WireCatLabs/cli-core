@@ -1,5 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
-import { isKind, kindOf, providerNamed } from "../domain/providers.js"
+import { holdsKindOf, isKind, providerNamed } from "../domain/providers.js"
 import type { AppIdentity } from "../ports/app.js"
 import { entriesOfList, fitting, isAccountList, type ListContext, type SkippedSource } from "../search/account-list.js"
 import type { AccountKey, MessageStore, StoredAccount } from "../store/store.js"
@@ -73,14 +73,14 @@ export const accountsOfKind = (
   if (kind === "messages") {
     if (explicit === MAIL)
       throw new CliError("validation_error", "mail is searched with `memo search mail`, not search messages")
-    return chosen.filter(({ provider }) => kindOf(provider) === "messages")
+    return chosen.filter(({ provider }) => holdsKindOf(provider, "messages"))
   }
   if (explicit !== undefined && explicit !== MAIL && explicit !== "all")
     throw new CliError(
       "validation_error",
       `search mail reads mail only — \`${command === undefined ? "" : `${command} `}search messages\` searches ${explicit}`,
     )
-  const mail = (listed ? chosen : held).filter(({ provider }) => kindOf(provider) === "mail")
+  const mail = (listed ? chosen : held).filter(({ provider }) => holdsKindOf(provider, "mail"))
   if (mail.length === 0)
     throw new CliError(
       "not_found",
