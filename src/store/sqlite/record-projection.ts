@@ -1,6 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import type { RecordEntityType } from "../../domain/record-types.js"
-import type { EnvelopeSource } from "../../domain/records.js"
+import type { EnvelopeOptions, EnvelopeSource } from "../../domain/records.js"
 import type { contractOperationsOver } from "./business-contracts.js"
 import type { crmRowsOver } from "./crm.js"
 import type { financeOperationsOver, PaymentDetail } from "./finance.js"
@@ -26,6 +26,7 @@ export interface Projection {
   externalId: string
   accountId: number
   source: EnvelopeSource
+  options: EnvelopeOptions
   fields: Row
   /** The entities its relations resolved to, by role, in the order sent. */
   related: Map<string, string[]>

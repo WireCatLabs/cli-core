@@ -13,8 +13,8 @@ afterEach(async () => {
 
 const PHONE = { provider: "phone", account: "pixel", batch_id: "2026-11-08" }
 const ME = { provider: "telegram", account: "100" }
-const ANNA = "+34600111222"
-const OLEG = "+34600333444"
+const ANNA = "+447700900111"
+const OLEG = "+447700900333"
 
 const person = (phone: string, name: string) => upsert("person", phone, { name, phone })
 const counterpart = (phone: string) => ({ relations: [{ role: "counterpart", type: "person", external_id: phone }] })
@@ -330,7 +330,7 @@ const CARDS = [
   "BEGIN:VCARD",
   "VERSION:2.1",
   "N;CHARSET=UTF-8;ENCODING=QUOTED-PRINTABLE:=D0=98=D0=B2=D0=B0=D0=BD=D0=BE=D0=B2=D0=B0;=D0=90=D0=BD=D0=BD=D0=B0;;;",
-  "TEL;CELL:+34 600 111 222",
+  "TEL;CELL:+44 7700 900111",
   "ORG:ООО Ромашка",
   "TITLE:CTO",
   "END:VCARD",
@@ -338,7 +338,7 @@ const CARDS = [
   "VERSION:3.0",
   "UID:card-boris",
   "FN:Борис Сидоров",
-  "TEL;TYPE=WORK:+34 600 555 666",
+  "TEL;TYPE=WORK:+44 7700 900555",
   "EMAIL:Boris@Example.com",
   "ORG:ООО Ромашка;Продажи",
   "END:VCARD",

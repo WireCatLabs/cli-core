@@ -243,6 +243,7 @@ export const envelopeOfVcard = (
     envelope: {
       schema_version: 1,
       source: { provider, account, batch_id: batchId },
+      ...(region === undefined ? {} : { options: { phone_region: region } }),
       records: [...organizations.values(), ...people],
     },
     issues,
