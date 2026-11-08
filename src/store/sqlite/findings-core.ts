@@ -98,13 +98,17 @@ export const findingsCoreOver = (context: StoreContext, kind: string) => {
 
   const create = (finding: Finding, agent: FindingsAgent, decidedBy: Decider): string => {
     const evidence = finding.evidence.map((item) => item.reference)
+    // The quote goes into the evidence link, so a later source check knows which words the fact rests on.
+    const quoted = finding.evidence.map((item) =>
+      item.quote === undefined ? item.reference : { ref: item.reference, quote: item.quote },
+    )
     if (finding.kind === "fact") {
       const fact = facts.add({
         type: finding.type,
         statement: finding.statement,
         ...(finding.project === undefined ? {} : { project: finding.project }),
         ...(finding.subject === undefined ? {} : { subject: finding.subject }),
-        evidence,
+        evidence: quoted,
         by: agent,
       })
       return facts.acceptChecked(fact.ref, decidedBy).ref
@@ -126,7 +130,7 @@ export const findingsCoreOver = (context: StoreContext, kind: string) => {
     )
     const id = taskRowOf(database, task.id)
     if (id === undefined) throw new CliError("configuration_error", "created finding task is unavailable")
-    linkEvidence(context, { type: finding.type, id }, evidence, "agent")
+    linkEvidence(context, { type: finding.type, id }, quoted, "agent")
     if (finding.assignee) tasks.assign(task.id, { to: finding.assignee, role: "assignee" }, agent)
     return task.ref
   }
