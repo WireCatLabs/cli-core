@@ -9,41 +9,6 @@ shape of this file.
 
 ### Added
 
-- **The weekly gaps message (`report/weekly-gaps`).** A morning digest may keep what it found on its own, which the
-  agenda did not show, in `internal.gaps` (`{ what, refs | ref, section }`); the digest never shows it. Once a week a
-  delivered digest run also sends those gaps along the same routes as one message: on Monday, or on the first digest
-  of a week whose Monday run did not send them, and never before a schedule's first Monday. It reads the run files
-  of the last 7 days, says a gap that several runs found once (the same ref, or the same words but for case and
-  punctuation) with how many digests found it, the most frequent first, and sends nothing for a week without gaps.
-  No agent runs for it. When it went, how many gaps and the deliveries are in the schedule's `weekly-gaps.json`.
-- **A failed scheduled run sends a rendered notice (`notice/schedule-failed`).** In place of the one English line,
-  every route of a schedule that notifies on failures gets which schedule failed, since when and how many runs in a
-  row, the cause in the owner's language (keyring locked, sign-in needed, service unreachable, service error,
-  settings, stopped, crashed: from the error code, never its message) and one "fix" link to the tool's sync screen
-  (`sync/<tool>`). A notice whose templates fail sends the old line. The desktop notice is unchanged.
-- Default templates for both, for Telegram, email and text in Russian and English, with the digest's escaping and
-  platform rules; `templates edit | preview` now take both keys, checked against their own synthetic samples.
-- **A source check names what changed, and a source review's text can be read.** `knowledge.checkSources` also
-  answers `changedRefs`: the sources found changed in that run, whether they raised a review or still said the
-  quoted words, that no open `evidence_findings` batch cites, leaving out deleted sources and cited memories or facts.
-  An agent reads those again for new facts. `knowledge.sourceReviewTexts(id)` gives each source of a
-  `memory_source_review` with its quote, its text as cited (notes, documents and messages keep history) and its text
-  now, so a reader compares them while the review itself holds no source text. The shared `memory` and `fact`
-  entities take an optional `source_review: { id, cause } | null`, the marker reads already carry.
-  `knowledge.changedSources({ since })` reads the cited sources a check found changed since then and that differ
-  from the version cited, with the same exclusions, so a change the timer's check already took still reaches an
-  agent.
-- **`store.notes.addedSource(ref)` reads an added source back with what it is and what was kept**: `kind`, the `url`
-  as given, `fileName`, `mime`, `size`, `kept` and the `copy` path, beside its document; `undefined` for any other
-  document or a removed source. The `AddedSourceDetails` type is exported.
-- **`people.merges(uid)`, `people.undoMerge(to, from, by)` and `people.split(uid, identities, by)`.** `merges` lists
-  the people merged into a person, each with the identities from it that are still there, the method, who and when,
-  under an id `merge:<to>-<from>` (`parseMergeId` reads it back). `undoMerge` moves those identities back to the old
-  person, whose uid stays the same, and leaves any the owner split or unlinked off since; a chain of merges undoes
-  newest first. `split` moves the chosen identities to one new person. Both are the owner's only
-  (`identity.owner-only`; pass `"owner"` only from a path that established the owner ran it), and an automatic match
-  by the same address does not join those people again. `undoMerge` refuses with `identity.stale` when one of the
-  identities was merged on into another person since.
 - **`identity_link` proposals: "these two are one person", which only the owner decides.** `people.proposeLink` opens
   one, at most one open per pair of people, and refuses a pair the owner separated (`identity.separated`) or rejected
   before (`identity.rejected`). `people.decideLink` and the proposal registry decide it: an agent is refused whatever
@@ -81,6 +46,49 @@ shape of this file.
 - **At import, an address two or more other people have joins no one, and neither does a pair the owner rejected.**
   The whole batch of `savePeople` is noted before any join, so one `office@` on many contacts stays shared; the scan
   proposes those people instead.
+
+## 0.616.0 — 08.11.2026
+
+### Added
+
+- **The weekly gaps message (`report/weekly-gaps`).** A morning digest may keep what it found on its own, which the
+  agenda did not show, in `internal.gaps` (`{ what, refs | ref, section }`); the digest never shows it. Once a week a
+  delivered digest run also sends those gaps along the same routes as one message: on Monday, or on the first digest
+  of a week whose Monday run did not send them, and never before a schedule's first Monday. It reads the run files
+  of the last 7 days, says a gap that several runs found once (the same ref, or the same words but for case and
+  punctuation) with how many digests found it, the most frequent first, and sends nothing for a week without gaps.
+  No agent runs for it. When it went, how many gaps and the deliveries are in the schedule's `weekly-gaps.json`.
+- **A failed scheduled run sends a rendered notice (`notice/schedule-failed`).** In place of the one English line,
+  every route of a schedule that notifies on failures gets which schedule failed, since when and how many runs in a
+  row, the cause in the owner's language (keyring locked, sign-in needed, service unreachable, service error,
+  settings, stopped, crashed: from the error code, never its message) and one "fix" link to the tool's sync screen
+  (`sync/<tool>`). A notice whose templates fail sends the old line. The desktop notice is unchanged.
+- Default templates for both, for Telegram, email and text in Russian and English, with the digest's escaping and
+  platform rules; `templates edit | preview` now take both keys, checked against their own synthetic samples.
+- **A source check names what changed, and a source review's text can be read.** `knowledge.checkSources` also
+  answers `changedRefs`: the sources found changed in that run, whether they raised a review or still said the
+  quoted words, that no open `evidence_findings` batch cites, leaving out deleted sources and cited memories or facts.
+  An agent reads those again for new facts. `knowledge.sourceReviewTexts(id)` gives each source of a
+  `memory_source_review` with its quote, its text as cited (notes, documents and messages keep history) and its text
+  now, so a reader compares them while the review itself holds no source text. The shared `memory` and `fact`
+  entities take an optional `source_review: { id, cause } | null`, the marker reads already carry.
+  `knowledge.changedSources({ since })` reads the cited sources a check found changed since then and that differ
+  from the version cited, with the same exclusions, so a change the timer's check already took still reaches an
+  agent.
+- **`store.notes.addedSource(ref)` reads an added source back with what it is and what was kept**: `kind`, the `url`
+  as given, `fileName`, `mime`, `size`, `kept` and the `copy` path, beside its document; `undefined` for any other
+  document or a removed source. The `AddedSourceDetails` type is exported.
+- **`people.merges(uid)`, `people.undoMerge(to, from, by)` and `people.split(uid, identities, by)`.** `merges` lists
+  the people merged into a person, each with the identities from it that are still there, the method, who and when,
+  under an id `merge:<to>-<from>` (`parseMergeId` reads it back). `undoMerge` moves those identities back to the old
+  person, whose uid stays the same, and leaves any the owner split or unlinked off since; a chain of merges undoes
+  newest first. `split` moves the chosen identities to one new person. Both are the owner's only
+  (`identity.owner-only`; pass `"owner"` only from a path that established the owner ran it), and an automatic match
+  by the same address does not join those people again. `undoMerge` refuses with `identity.stale` when one of the
+  identities was merged on into another person since.
+
+### Changed — may break callers
+
 - **`people.personByUid` of a person merged into someone else answers with that person.** Its `uid` is the
   current person's, not the one asked for, and `mergedInto` is set; `personSeenInAccounts` follows the same merge.
   A caller that compares the answer's `uid` with the one it passed reads `mergedInto` instead.
@@ -107,6 +115,7 @@ shape of this file.
   `assignee:` and preparation, and assigning the old uid to a task the current person holds is a no-op.
   A source's sync that reports a relationship on the current person withdraws what it reported on the old one, so
   the relationship shows once.
+
 - **`account remove` is in the messenger parity manifest** (`parity.json`), with `--keep-data`, `--delete-data`
   and `--dry-run`, so tg, max and wa can adopt it without failing `parity:check`.
 
