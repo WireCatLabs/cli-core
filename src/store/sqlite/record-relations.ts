@@ -32,6 +32,14 @@ export const recordRelationsOver = ({ database }: StoreContext, sql: ReturnType<
     return entityRef(thing.type, thing.id) as string
   }
 
+  /** A pipeline CRM sync wrote for this account has no record, yet a deal of the account stands in it. */
+  const syncedPipeline = (recordId: number, row: Record<string, unknown>) =>
+    row.target_type === "pipeline" &&
+    sql(
+      "SELECT 1 FROM pipelines p JOIN records r ON r.account_id = p.account_id WHERE r.id = ? AND p.external_id = ? " +
+        "AND p.deleted_at IS NULL",
+    ).get(recordId, String(row.target_external_id)) !== undefined
+
   /** What a projection needs from a record's relations: entities by role, the roles still without one, the shares. */
   const relatedOf = (recordId: number, type: RecordType) => {
     const rows = sql(
@@ -48,8 +56,9 @@ export const recordRelationsOver = ({ database }: StoreContext, sql: ReturnType<
       const role = String(row.role)
       if (isDerived(role)) {
         const ref = entityRef(row.entity_type, row.entity_id)
-        if (ref === null) missing.add(role)
-        else if (role.endsWith(".product")) products.set(String(row.target_external_id), ref)
+        if (ref === null) {
+          if (!syncedPipeline(recordId, row)) missing.add(role)
+        } else if (role.endsWith(".product")) products.set(String(row.target_external_id), ref)
         continue
       }
       const spec: RecordRoleSpec | undefined = roleOf(type, role)
