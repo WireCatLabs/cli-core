@@ -17,6 +17,7 @@ import { DEAL_KINDS, DEAL_STATUSES, type DealKind } from "../../domain/deals.js"
 import { deal as dealEntity } from "../../entities/deal.js"
 import { count, text } from "../../entities/fields.js"
 import type { AppIdentity } from "../../ports/app.js"
+import { CRM_SCOPES } from "../../store/sqlite/crm-settings.js"
 import type { Deal, DealFilter, Pipeline } from "../../store/sqlite/deals.js"
 import type { MessageStore } from "../../store/store.js"
 import type { AccountKey } from "../../store/types.js"
@@ -167,6 +168,19 @@ const crmSyncProgress = v.strictObject({
   round: v.nullable(v.picklist(["full", "changes"])),
   id_pass: v.nullable(text),
   stored: count,
+  scope: v.optional(
+    v.strictObject({
+      setting: v.picklist(CRM_SCOPES),
+      explicit: v.boolean(),
+      held: v.optional(v.literal(true)),
+      applied: v.nullable(
+        v.variant("mode", [
+          v.strictObject({ mode: v.literal("all") }),
+          v.strictObject({ mode: v.literal("mine"), users: v.array(text) }),
+        ]),
+      ),
+    }),
+  ),
   job: text,
   profile: text,
   done: count,

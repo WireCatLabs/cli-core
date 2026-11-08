@@ -282,6 +282,46 @@ it("after a held narrowing, scope all lists in full: deals made or given away du
   expect(moved?.title).toBe("Moved on")
 })
 
+it("store status gives each deal and lead kind its saved scope and the one its copy holds, without a sync", async () => {
+  const { store, source, set, raw, sync } = await scoped()
+  const scopes = async () =>
+    Object.fromEntries(
+      (await crmStatus(store, PORTAL, { profile: "work", now: Date.now() })).items.map((one) => [
+        one.kind,
+        "scope" in one ? one.scope : undefined,
+      ]),
+    )
+  expect(await scopes()).toEqual({
+    organization: undefined,
+    person: undefined,
+    deal: { setting: "mine", explicit: false, applied: null },
+    lead: { setting: "mine", explicit: false, applied: null },
+  })
+  source().put("deal", exampleDeal("d0", { assignee: "7" }))
+  for (let at = 1; at <= 3; at += 1) source().put("deal", exampleDeal(`d${at}`, { assignee: "9" }))
+  await set("scope", "all")
+  await sync()
+  expect((await scopes()).deal).toEqual({ setting: "all", explicit: true, applied: { mode: "all" } })
+  await raw("scope", undefined)
+  expect(dealOf(await sync())).toMatchObject({ held: true })
+  expect((await scopes()).deal).toEqual({
+    setting: "mine",
+    explicit: false,
+    applied: { mode: "mine", users: ["7"] },
+    held: true,
+  })
+  await set("scope", "mine")
+  expect(dealOf(await sync())?.held).toBeUndefined()
+  expect((await scopes()).deal).toEqual({ setting: "mine", explicit: true, applied: { mode: "mine", users: ["7"] } })
+  await set("unassigned", "15")
+  await sync()
+  expect((await scopes()).deal).toEqual({
+    setting: "mine",
+    explicit: true,
+    applied: { mode: "mine", users: ["15", "7"] },
+  })
+})
+
 it("narrows at once when the owner set scope mine, however much it removes", async () => {
   const { source, set, sync, deals } = await scoped()
   source().put("deal", exampleDeal("d0", { assignee: "7" }))

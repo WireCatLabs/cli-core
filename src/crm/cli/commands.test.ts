@@ -156,6 +156,10 @@ describe("CRM commands", () => {
     const { cli } = await setup()
     const synced = await cli("sync")
     expect(synced.item).toMatchObject({ state: "complete", complete: true, provider: "example-crm" })
+    const status = await cli("store", "status")
+    expect(status.items.find(({ kind }) => kind === "deal")).toMatchObject({
+      scope: { setting: "mine", explicit: false, applied: { mode: "all" } },
+    })
     const deals = await cli("deals", "list")
     expect(deals.items.map(({ external_id }) => external_id).sort()).toEqual(["d1", "d2"])
     const open = await cli("deals", "list", "status:open")
