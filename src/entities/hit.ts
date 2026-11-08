@@ -1,5 +1,5 @@
 import * as v from "valibot"
-import { BUSINESS_KINDS } from "../store/sqlite/business-search.js"
+import { BUSINESS_KINDS } from "../domain/business.js"
 import { hitFile } from "./attachment.js"
 import { count, reference, text, time, untrusted } from "./fields.js"
 

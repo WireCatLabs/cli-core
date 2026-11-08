@@ -9,7 +9,7 @@ afterEach(async () => {
 })
 
 const ROWS = 10_000
-// Measured 70–125 ms on a laptop for 70,000 rows; the budget leaves room for a slow CI runner.
+// Measured 70–125 ms on a laptop for 70,000 rows, a 1,000-row page included; the budget is for slow CI runners.
 const BUDGET_MS = 3_000
 
 /** Copies row `id` of `table` until it holds `ROWS` rows, `vary` giving each copy its own numbers and names. */
@@ -104,14 +104,14 @@ it(`folds ${ROWS} rows of each lane type within ${BUDGET_MS} ms`, async () => {
   ])
     expect([table, database.prepare(`SELECT count(*) AS n FROM ${table}`).get()?.n]).toEqual([table, ROWS])
 
-  const timed = async (text: string) => {
+  const timed = async (text: string, page: { limit: number; offset?: number } = { limit: 20 }) => {
     const started = performance.now()
     const found = await searchAll(
       store,
       { provider: "notes", account: "internal" },
       {
         text,
-        limit: 20,
+        ...page,
         only: ["business"],
       },
     )
@@ -122,7 +122,11 @@ it(`folds ${ROWS} rows of each lane type within ${BUDGET_MS} ms`, async () => {
   const many = await timed("1")
   expect(many.found.items).toHaveLength(20)
   expect(many.found.hasMore).toBe(true)
+  // Past the 500 rows the lane once read at most, a deep page still knows more follow.
+  const deep = await timed("1", { limit: 1000, offset: 500 })
+  expect(deep.found.items).toHaveLength(1000)
+  expect(deep.found.hasMore).toBe(true)
   const none = await timed("nothing-holds-this")
   expect(none.found.items).toEqual([])
-  for (const { ms } of [one, many, none]) expect(ms).toBeLessThan(BUDGET_MS)
+  for (const { ms } of [one, many, deep, none]) expect(ms).toBeLessThan(BUDGET_MS)
 })

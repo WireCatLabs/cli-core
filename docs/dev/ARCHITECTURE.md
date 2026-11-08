@@ -368,8 +368,9 @@ Its messages take the same server step as `search messages` (`--backend`, defaul
 `messages.searchAll`); mail and notes are always the local store's. The `crm` and `business` lanes fold short
 titles in memory per query, with no index: `deals.find` reads deal and lead titles, `store.business.find`
 (`src/store/sqlite/business-search.ts`) the numbers and names of invoices, payments, orders, contracts, subscriptions,
-products and wallets ([KNOWLEDGE.md § Money](KNOWLEDGE.md#money)). A business hit's account is its source record's,
-found through `records.entity_type`/`entity_id`; under `--source` the lane reads the import accounts the list names,
+products and wallets ([KNOWLEDGE.md § Money](KNOWLEDGE.md#money)), each word at a word start. A business hit's
+account is one record's: the oldest live one of `records.entity_type`/`entity_id`, else the oldest deleted one, and
+only for a row whose `source` is `import:<provider>`; under `--source` the lane reads the import accounts the list names,
 whatever their provider (`fitting`'s `alsoFits`). The `search all` of tg, max and a calendar CLI (`SOURCE_SEARCHED`)
 reads neither lane; a CRM CLI's reads `crm`.
 
