@@ -298,22 +298,24 @@ const READS: Record<Kind, string> = {
 
 /**
  * The accounts of `kinds` the entries name, and each entry that names none of them with the reason. A search
- * fails only when nothing fits: `what` names the search in that error.
+ * fails only when nothing fits: `what` names the search in that error. `alsoFits` takes an account no kind names,
+ * such as one a records import wrote business data into.
  */
 export const fitting = (
   entries: readonly ListedEntry[],
   kinds: readonly Kind[],
   what: string,
   reasonOf: (kind: Kind) => string = (kind) => READS[kind],
+  alsoFits: (account: AccountKey) => boolean = () => false,
 ): { accounts: AccountKey[]; skipped: SkippedSource[] } => {
   const chosen = new Map<string, AccountKey>()
   const skipped: SkippedSource[] = []
   for (const { entry, accounts } of entries) {
-    const fits = accounts.filter((one) => kinds.some((kind) => listedHolds(one, kind)))
+    const fits = accounts.filter((one) => kinds.some((kind) => listedHolds(one, kind)) || alsoFits(one))
     for (const { provider, account } of fits)
       if (!chosen.has(keyOf({ provider, account }))) chosen.set(keyOf({ provider, account }), { provider, account })
     const known = accounts.filter(({ kind }) => kind !== undefined)
-    const unknown = accounts.filter(({ kind }) => kind === undefined)
+    const unknown = accounts.filter((one) => one.kind === undefined && !alsoFits(one))
     if (known.length)
       for (const { provider, account } of unknown)
         skipped.push({ source: `${provider}:${account}`, code: "not_found", reason: UNKNOWN_PROVIDER })

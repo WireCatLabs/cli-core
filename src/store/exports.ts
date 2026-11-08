@@ -24,6 +24,14 @@ export {
   type TextOrigin,
 } from "./sqlite/attachment-texts.js"
 export { pendingNormalization } from "./sqlite/backfill.js"
+export {
+  BUSINESS_KINDS,
+  type BusinessHit,
+  type BusinessKind,
+  type BusinessSearch,
+  type BusinessSearchStore,
+  type BusinessSource,
+} from "./sqlite/business-search.js"
 export type { ChatRekey, ChatRekeys } from "./sqlite/chat-rekey.js"
 export { CHAT_COLUMNS, TRACKED_CHAT_COLUMNS, titlePart } from "./sqlite/chats.js"
 export { storeClients } from "./sqlite/clients.js"
