@@ -116,7 +116,11 @@ const recordsData = (batch: readonly EnrichmentCandidate[]) =>
 const keyReader = (options: EnrichOptions, setting: EnrichmentSetting) => {
   if (options.key) return () => options.key?.(setting.provider)
   const name = setting.base_url === undefined ? setting.provider : endpointKeyName(setting.base_url)
-  if (options.app) return () => embeddingKeys(options.app as AppIdentity, options.env, options.keyring).read(name)?.key
+  if (options.app) {
+    const keys = embeddingKeys(options.app, options.env, options.keyring)
+    // The tool's `embeddings:<provider>` entry or the environment, then an entry named after the provider alone.
+    return () => keys.read(name)?.key ?? (setting.base_url === undefined ? keys.readPlain(setting.provider) : undefined)
+  }
   const variable = `${setting.provider.toUpperCase()}_API_KEY`
   return () => (setting.base_url === undefined ? options.env[variable]?.trim() || undefined : undefined)
 }

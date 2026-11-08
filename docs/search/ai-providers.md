@@ -152,7 +152,9 @@ text: an edit sends it again, a re-sync does not. A batch the model answers wron
 sync; a rate limit or a missing key stops the run. The records go as untrusted data, never as instructions; each
 record adds at most five facts and three questions of at most 400 characters.
 
-The key is read from the tool's keyring entry `embeddings:<provider>` when the tool passes its identity
-(`models keys set openai` in tg and MAX), else from `OPENAI_API_KEY` / `ANTHROPIC_API_KEY`.
+When the tool passes its identity (memo does), the key is read from its keyring entry `embeddings:<provider>`
+(`models keys set openai` in tg and MAX), then `<PREFIX>_OPENAI_API_KEY` / `OPENAI_API_KEY` (or the Anthropic ones),
+then an entry of the tool's service named after the provider alone (`cli-memo` / `anthropic`). The consent text also
+says that a question in the record's own words finds that record first a little less often.
 An agent's shell cannot turn it on, and over MCP `models consents set` needs `mcp.authority`. Prices for the
 estimate are known for `openai/gpt-4o-mini` and `anthropic/claude-haiku-5-5`; another model gets `usd: null`.

@@ -41,6 +41,8 @@ export const embeddingKeys = (app: AppIdentity, env: NodeJS.ProcessEnv = process
         : undefined
       return shared ? { key: shared, source: "env" } : undefined
     },
+    /** A key kept under the provider's own name, as an owner may have stored it by hand for the whole tool. */
+    readPlain: (provider: string): string | undefined => credentials(provider).read(provider)?.secret,
     write: (provider: string, key: string): CredentialSource =>
       credentials(provider).write(account(provider), key, { signIn: true }),
     remove: (provider: string): CredentialSource[] => credentials(provider).remove(account(provider)),

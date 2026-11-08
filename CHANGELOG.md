@@ -33,7 +33,8 @@ shape of this file.
   `enrichment` section of the shared settings file. `embedNotes` and `embedMail` enrich up to 600 records a run before
   they embed, each record once per text; a failed batch leaves its records for the next sync. The text goes into the
   stems and a chunk of its own, never into `--exact`, the trigrams or the record's own chunks. An agent cannot turn it
-  on. `enrichRecords`, `enrichmentState`, `readEnrichmentSetting` and `writeEnrichmentSetting` from
+  on. The key: the tool's `embeddings:<provider>` entry, the environment, then its entry named after the provider
+  (`embeddingKeys(app).readPlain`). `enrichRecords`, `enrichmentState`, `readEnrichmentSetting` and `writeEnrichmentSetting` from
   `@wirecat/cli-core/services`; `store.enrichment`.
 - Store version 58: `enrichments`, one row per enriched record, deleted with the record. Additive; `minCompatible`
   stays 56.

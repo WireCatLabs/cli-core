@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, symlinkSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
+import { memoryKeyring } from "@wirecat/cli-base"
 import { afterEach, describe, expect, it } from "vitest"
 import { textModelsFile } from "../embeddings/models.js"
 import type { ModelAdapter, ModelRequest } from "../models/index.js"
@@ -210,6 +211,33 @@ describe("enrichment", () => {
     expect(state.estimate).toMatchObject({ records: 1, input_tokens: 140, output_tokens: 70 })
     expect(state.estimate.usd).toBeGreaterThan(0)
     expect(unknown.estimate.usd).toBeNull()
+  })
+
+  it("reads the tool's keyring entry named after the provider", async () => {
+    const { env, store } = await machine()
+    writeEnrichmentSetting(env, {
+      provider: "anthropic",
+      model: "claude-haiku-5-5",
+      consented_at: "2026-11-08T10:00:00.000Z",
+    })
+    await store.notes.addNote({ text: "cat" })
+    const seen: (string | undefined)[] = []
+    const adapter: ModelAdapter = {
+      baseUrl: "https://api.anthropic.com",
+      validate: (options) => options,
+      complete: async (_target, request, _options, apiKey) => {
+        seen.push(apiKey)
+        return { text: JSON.stringify({ records: [{ i: 0, facts: ["zebra"], questions: [] }] }), tokens: 3 }
+      },
+    }
+    const keyring = memoryKeyring()
+    keyring.set("fixture", "anthropic", "test-key")
+    const app = { command: "fixture", appName: "fixture", envPrefix: "FIXTURE", description: "", version: "1" }
+
+    const run = await enrichRecords(store, { env, app, keyring, adapters: { anthropic: adapter } })
+
+    expect(run).toMatchObject({ status: "done", enriched: 1 })
+    expect(seen).toEqual(["test-key"])
   })
 
   it("sends nothing without a key for the public API", async () => {
