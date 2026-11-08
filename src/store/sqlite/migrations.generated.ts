@@ -1210,7 +1210,7 @@ export const GENERATED: { name: string; statements: string[] }[] = [
     ]
   },
   {
-    "name": "20261108164557_version-60-templates",
+    "name": "20261108165309_version-59-templates",
     "statements": [
       "CREATE TABLE `templates` (\n\t`key` text NOT NULL,\n\t`channel` text NOT NULL,\n\t`language` text NOT NULL,\n\t`body` text NOT NULL,\n\t`updated_at` integer NOT NULL,\n\t`updated_by` text NOT NULL,\n\tCONSTRAINT `templates_pk` PRIMARY KEY(`key`, `channel`, `language`)\n);",
       "CREATE TABLE `templates_history` (\n\t`id` integer PRIMARY KEY,\n\t`key` text NOT NULL,\n\t`channel` text NOT NULL,\n\t`language` text NOT NULL,\n\t`body` text NOT NULL,\n\t`saved_at` integer NOT NULL,\n\t`saved_by` text NOT NULL,\n\t`replaced_at` integer NOT NULL\n);",

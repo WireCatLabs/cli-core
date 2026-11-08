@@ -142,7 +142,7 @@ export const MANIFEST: ManifestEntry[] = [
   { name: "20261108010754_version-57-business-rules", version: 57, minCompatible: 56 },
   { name: "20261108104659_version-58-enrichments", version: 58, minCompatible: 56 },
   { name: "20261108104701_version-58-enrichments-deletes", version: 58, minCompatible: 56 },
-  { name: "20261108164557_version-60-templates", version: 60, minCompatible: 56 },
+  { name: "20261108165309_version-59-templates", version: 59, minCompatible: 56 },
 ]
 
 export const generatedMigrations = (

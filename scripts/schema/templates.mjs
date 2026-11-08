@@ -30,3 +30,11 @@ export const templateTables = [
     keys: ["INDEX (key, channel, language, id)"],
   },
 ]
+
+export const templateSection = [
+  "templates",
+  "Message templates",
+  "The templates the owner wrote over the shipped ones, for the digest and the other messages sent to him, with every body a change replaced.",
+  [],
+  templateTables,
+]

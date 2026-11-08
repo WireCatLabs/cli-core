@@ -10,7 +10,7 @@ import { financeTables } from "./finance.mjs"
 import { recordTables } from "./records.mjs"
 import { linkRevisionsTable, RELATIONSHIP_KEY, relationshipColumns } from "./relationships.mjs"
 import { tagConsolidationTables, taggingTable } from "./tag-consolidations.mjs"
-import { templateTables } from "./templates.mjs"
+import { templateSection } from "./templates.mjs"
 
 const scratch = process.env.SCRATCH ?? new URL(".", import.meta.url).pathname
 const info = JSON.parse(readFileSync(`${scratch}/info.json`, "utf8"))
@@ -1735,13 +1735,7 @@ const GROUPS = [
     [],
     enrichmentTables,
   ],
-  [
-    "templates",
-    "Message templates",
-    "The templates the owner wrote over the shipped ones, for the digest and the other messages sent to him, with every body a change replaced.",
-    [],
-    templateTables,
-  ],
+  templateSection,
   [
     "records",
     "Source records",
