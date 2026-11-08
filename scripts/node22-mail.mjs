@@ -57,6 +57,7 @@ try {
   const restored = await store.mail.thread(saved.thread.id)
   assert.equal(restored.thread.emailsCount, 1)
   assert.equal(restored.thread.deletedAt, null)
+  assert.equal(store.decisionRequests.prune(), 0)
   process.stdout.write(
     `${JSON.stringify({
       node: process.version,
@@ -64,6 +65,7 @@ try {
       counts_and_deletion: true,
       flag_noop: true,
       account_scope: true,
+      decision_request_prune: true,
     })}\n`,
   )
 } finally {

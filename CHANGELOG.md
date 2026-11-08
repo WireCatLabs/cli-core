@@ -68,6 +68,8 @@ shape of this file.
 
 ### Fixed
 
+- **Pruning old decision requests works on Node 22.16.** The query bound a numbered `?1`, which Node 22.16's
+  `node:sqlite` rejects with "column index out of range". The old-Node CI job now runs a prune.
 - **A mail's vector names its sender at the end, not first.** Every mail piece began "Name: Subject", so search by
   meaning took the sender for the topic of each email they wrote; the piece now ends "From: Name". Every store cuts its
   mail again once (`mail_pieces_cut`), and the next syncs re-embed it: about 3 minutes for 10,000 mail pieces with
