@@ -35,12 +35,14 @@ const isQuotedPrintable = (line: string) => {
   return /;(ENCODING=)?QUOTED-PRINTABLE\b/i.test(colon < 0 ? line : line.slice(0, colon))
 }
 
+const PROPERTY_START = /^([A-Za-z0-9-]+\.)?[A-Za-z][A-Za-z0-9-]*(;[^:]*)?:/
+
 const isSoft = (line: string | undefined): line is string =>
   line !== undefined && isQuotedPrintable(line) && line.endsWith("=")
 
 /**
  * Joins folded lines (RFC 6350 3.2) and quoted-printable soft breaks, which vCard 2.1 writes without indent. A soft
- * break never takes a card's BEGIN or END, and one with nothing after it is dropped.
+ * break never takes a card's BEGIN or END or the next property, and one with nothing after it is dropped.
  */
 const unfolded = (text: string): string[] => {
   const lines: string[] = []
@@ -48,7 +50,9 @@ const unfolded = (text: string): string[] => {
     const last = lines.length - 1
     const previous = lines[last]
     const bounds = /^(BEGIN|END):/i.test(raw)
-    if (isSoft(previous) && !bounds) lines[last] = previous.slice(0, -1) + raw.replace(/^[ \t]/, "")
+    // A soft break's next line is encoded text; one that reads as `NAME[;params]:` starts the next property.
+    if (isSoft(previous) && !bounds && !PROPERTY_START.test(raw))
+      lines[last] = previous.slice(0, -1) + raw.replace(/^[ \t]/, "")
     else if (previous !== undefined && /^[ \t]/.test(raw) && !bounds) lines[last] = previous + raw.slice(1)
     else {
       if (isSoft(previous)) lines[last] = previous.slice(0, -1)

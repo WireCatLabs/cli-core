@@ -4,6 +4,7 @@ import { PHONE_COUNTRIES } from "./phones.js"
 import { DECIMAL_PATTERN, fieldError, isObject } from "./record-fields.js"
 import {
   AMOUNT_ROLES,
+  article,
   isRecordType,
   nestedOf,
   RECORD_ENTITY_TYPES,
@@ -265,17 +266,24 @@ const typeErrors = (record: EnvelopeRecord, at: (string | number)[]): IngestErro
     const here = [...at, "relations", index]
     const role = roleOf(type, relation.role)
     if (relation.as !== undefined && !role?.relationship)
-      return [invalid([...here, "as"], `a ${type}'s ${relation.role} is not a relationship: it takes no as`)]
+      return [
+        invalid([...here, "as"], `${article(type)} ${type}'s ${relation.role} is not a relationship: it takes no as`),
+      ]
     if (role === undefined || role.v1) continue
     const target = targetTypeOf(relation)
     if (!role.targets.includes(target))
-      return [invalid(here, `a ${type}'s ${relation.role} is ${role.targets.map((one) => `a ${one}`).join(" or ")}`)]
+      return [
+        invalid(
+          here,
+          `${article(type)} ${type}'s ${relation.role} is ${role.targets.map((one) => `${article(one)} ${one}`).join(" or ")}`,
+        ),
+      ]
     if (!role.many && relations.some((other, before) => before < index && other.role === relation.role))
-      return [invalid(here, `a ${type} has one ${relation.role}`, "record.relation-ambiguous")]
+      return [invalid(here, `${article(type)} ${type} has one ${relation.role}`, "record.relation-ambiguous")]
   }
   for (const [name, role] of rolesOf(type))
     if (role.required && !relations.some((relation) => relation.role === name))
-      return [invalid([...at, "relations"], `a ${type} names its ${name} in relations`)]
+      return [invalid([...at, "relations"], `${article(type)} ${type} names its ${name} in relations`)]
   return []
 }
 

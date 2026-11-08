@@ -61,6 +61,8 @@ export interface RecordProjector {
   update?(ref: string, projection: Projection, tools: ProjectionTools): boolean
   /** A deleted record's entity, for a source copy (an SMS, a call) the delete takes away too. Left out, it stays. */
   remove?(ref: string, tools: ProjectionTools): void
+  /** Brings back what `remove` took when the record is sent again after its delete. */
+  restore?(ref: string, projection: Projection, tools: ProjectionTools): void
 }
 
 export const IMPORTER = { bot: "import" } as const satisfies Author

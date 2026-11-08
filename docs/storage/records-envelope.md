@@ -212,8 +212,8 @@ calls among the calendars' events. No column is added.
 **Only an import-only provider takes them.** A messenger's or a calendar's account belongs to its sync, so a
 `message` or `event` record under any provider whose entry is not marked `imported` is refused
 (`record.provider-not-imported`) before anything is written: the seeded `phone` is marked, `telegram`, a calendar
-provider or an unregistered `sheet` are not. An entry can be marked only by the first entry of its name, never by a
-later one. An SMS is never written into a chat of the account whose membership is not `imported` (`record.chat`),
+provider or an unregistered `sheet` are not. A built-in's flag is its own; another provider takes it only from the
+first entry of its name, and a later entry can neither strip nor add it. An SMS is never written into a chat of the account whose membership is not `imported` (`record.chat`),
 and its counterpart's identity is under the import's own provider.
 
 ```json
@@ -242,7 +242,8 @@ and its counterpart's identity is under the import's own provider.
   that moves it to another thread (a new `thread` or number) is refused (`record.moved`): delete the record and send
   it again under a new `external_id`.
 - A deleted record's SMS is a tombstone, as a messenger's deleted message is; a deleted call's entry is cancelled and
-  its event marked deleted, so neither is found any more.
+  its event marked deleted, so neither is found any more. A deleted record sent again is live again: its SMS and its
+  call come back.
 - An import-only account says nothing of a search's coverage: no fetch could add to what its import wrote.
 - MMS attachments are out of scope: a record's other fields are kept in the record only.
 

@@ -282,6 +282,9 @@ export const recordWritesOver = (context: StoreContext) => {
     return undefined
   }
 
+  const restorer = (type: unknown) =>
+    isRecordType(String(type)) ? RECORD_PROJECTORS[String(type) as RecordType]?.restore : undefined
+
   const writeOne = (
     accountId: number,
     source: EnvelopeSource,
@@ -381,6 +384,18 @@ export const recordWritesOver = (context: StoreContext) => {
       made = done.made !== undefined
       unmatched = done.unmatched
       ignored = done.ignored
+    } else if (typed && stored?.entity_id != null && stored.deleted_at != null && restorer(stored.type)) {
+      // A source copy's record that comes back is live again: the delete tombstoned it, so this brings it back.
+      const related = relatedOf(id, record.type as RecordType)
+      if (related.missing.length === 0) {
+        restorer(stored.type)?.(
+          entityRef(stored.entity_type, stored.entity_id) as string,
+          projectionOf(sql("SELECT * FROM records WHERE id = ?").get(id) as Row, source, related, options),
+          toolsOf(),
+        )
+        sql("UPDATE records SET projected_fingerprint = fingerprint WHERE id = ?").run(id)
+        flagged = undefined
+      }
     } else if (typed && stored?.entity_id != null && stored.deleted_at == null) {
       const resettles = specOf(record.type as RecordType).update === "re-settle"
       // A payment takes its settles again even when only they changed, so its projected fingerprint lags behind.
