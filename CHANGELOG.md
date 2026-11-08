@@ -19,6 +19,15 @@ shape of this file.
   throws the new reason `session.missing` (`authentication_error`, naming `session start`), the one "not signed in"
   every token CLI gives; `signedIn(profile)` is `appMcpCommand`'s hook.
 
+### Changed — may break callers
+
+- **`run()` refuses `--offline` for a command annotated `offline: false`, or under a group that is**, before its
+  action and before the first-run questions: `permission_error`, reason `offline.refused`. A command's own
+  `--dry-run` still runs. cli-core's own such commands answered `validation_error` (`upgrade`, `topics`,
+  `chats inspect`, `chats send-as`) or `busy.offline` (`calendars busy`); they now all answer `offline.refused`, exit
+  code 5 instead of 2. `refuseOffline(command, service)` in `@wirecat/cli-core/cli` is the same refusal for a command
+  whose need depends on a flag, such as `session status --check`, so b24, beeline, gcal and cli-template drop theirs.
+
 ### Fixed
 
 - **A CRM field lookup's refusal names the option the name came from.** `fieldNamed`, `unknownField` and `optionOf`

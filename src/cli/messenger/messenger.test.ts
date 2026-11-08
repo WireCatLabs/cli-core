@@ -5810,7 +5810,7 @@ describe("the guard, account and mcp config commands", () => {
     expect(unknown.code).not.toBe(0)
     expect(links).toHaveLength(connected)
 
-    expect((await call(["chats", "inspect", "x", "--offline"], async () => reader, env)).code).toBe(2)
+    expect((await call(["chats", "inspect", "x", "--offline"], async () => reader, env)).code).toBe(5)
     expect((await call(["chats", "inspect", "x"], async () => fake, env)).code).toBe(2)
   })
 
@@ -5891,7 +5891,7 @@ describe("the guard, account and mcp config commands", () => {
       created_at: null,
       untrusted: ["title"],
     })
-    expect((await show(["7", "4", "--offline"], forum)).code).toBe(2)
+    expect((await show(["7", "4", "--offline"], forum)).code).toBe(5)
     expect((await show(["7", " "], forum)).code).toBe(2)
     expect((await show(["7", "4"], fake)).code).toBe(2)
     expect((await show(["7", "4"], forum, {})).code).not.toBe(0)
