@@ -68,13 +68,23 @@ const sideOf = ({ database }: StoreContext, person: number): string =>
 const pairOf = (a: number | string, b: number | string): string =>
   [Number(a), Number(b)].sort((x, y) => x - y).join("-")
 
-/** The two people a stored proposal names now: merges since may have moved either side. */
+const pkOf = ({ database }: StoreContext, ref: string): number | undefined => {
+  const { provider, id } = parseIdentityRef(ref)
+  const row = database.prepare("SELECT id FROM identities WHERE provider = ? AND external_id = ?").get(provider, id)
+  return row ? Number(row.id) : undefined
+}
+
+/** The two people a stored proposal names now: merges since may have moved either side; a purge may have erased one. */
 const currentPair = (context: StoreContext, payload: IdentityLinkPayload): string | undefined => {
-  const from = personOfIdentity(context, required(context, parseIdentityRef(payload.identity)).pk)
+  const identity = pkOf(context, payload.identity)
+  const other = payload.with === null ? undefined : pkOf(context, payload.with)
+  const from = identity === undefined ? undefined : personOfIdentity(context, identity)
   const to =
     payload.with === null
       ? currentPerson(context.database, Number(payload.persons[1]))
-      : personOfIdentity(context, required(context, parseIdentityRef(payload.with)).pk)
+      : other === undefined
+        ? undefined
+        : personOfIdentity(context, other)
   return from === undefined || to === undefined ? undefined : pairOf(from, to)
 }
 
