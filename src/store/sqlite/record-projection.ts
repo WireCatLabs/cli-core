@@ -66,6 +66,13 @@ export const IMPORTER = { bot: "import" } as const satisfies Author
 export const importersProposal = (entity: Pick<Reviewed, "review" | "author">) =>
   entity.review === "proposed" && entity.author.type === "bot" && entity.author.name === IMPORTER.bot
 
+/** The stable word a store refusal carries, for the receipt. */
+export const codeOf = (error: CliError): string => {
+  const reason = (error.details as { reason?: unknown } | undefined)?.reason
+  if (typeof reason === "string") return reason
+  return error.code === "not_found" ? "record.reference-not-found" : "record.entity"
+}
+
 /** `at` names the record's member at fault; a refused entity is the fields' fault. */
 export const refusal = (message: string, code: string, at?: string | (string | number)[]): never => {
   throw new CliError("validation_error", message, { reason: code, ...(at === undefined ? {} : { at }) })
@@ -82,14 +89,14 @@ export const stringField = (fields: Row, name: string): string | undefined => {
 export const given = <T>(fields: Row, name: string): T | undefined =>
   fields[name] === undefined || fields[name] === null ? undefined : (fields[name] as T)
 
-export const written = (source: EnvelopeSource) => ({
+export const importedBy = (source: EnvelopeSource) => ({
   by: IMPORTER,
   source: `import:${source.provider}`,
   reason: `imported from ${source.provider} account ${source.account}, batch ${source.batch_id}`,
 })
 
 /** The one entity a single role resolved to. */
-export const oneOf = (projection: Projection, role: string): string | undefined => projection.related.get(role)?.[0]
+export const entityOf = (projection: Projection, role: string): string | undefined => projection.related.get(role)?.[0]
 
 /** A line's product: the product record it names in this account, or a `product:` ref. */
 const productOf = (projection: Projection, line: Row): string | undefined => {
@@ -98,7 +105,7 @@ const productOf = (projection: Projection, line: Row): string | undefined => {
   return undefined
 }
 
-export const linesOf = (projection: Projection, list: unknown) =>
+export const moneyLinesOf = (projection: Projection, list: unknown) =>
   (Array.isArray(list) ? (list as Row[]) : []).map((line) => {
     const product = productOf(projection, line)
     return {

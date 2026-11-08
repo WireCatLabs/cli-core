@@ -11,13 +11,13 @@ import { DEAL_KINDS, DEAL_STATUSES } from "./deals.js"
 import { INVOICE_DIRECTIONS, MONEY_DIRECTIONS } from "./finance.js"
 import { ORDER_PURPOSES, ORDER_STATUSES } from "./orders.js"
 import {
+  arrayOf,
   currency,
   day,
   decimal,
+  enumOf,
   type FieldSchema,
-  listOf,
   objectOf,
-  oneOf,
   signedDecimal,
   text,
 } from "./record-fields.js"
@@ -30,23 +30,30 @@ export interface RecordRoleSpec {
   required?: boolean
   /** Only `settles` carries a share of the payment. */
   amount?: boolean
-  /** A business relationship between entities: the relation may carry `as`, the part the target plays. */
-  relationship?: boolean
   /**
-   * Kept in `record_relations` only, never read to make the entity, so it never makes a record wait: the
-   * relationships an import reports reach `links` with cli-core #2628's follow-up.
+   * A business relationship between entities, by its kind in `src/domain/relations.ts`: the relation may carry
+   * `as`, the part the target plays. TODO(PR 5): type it as that module's `RelationKind` once the stack is on main.
    */
+  relationship?: RelationshipKind
+  /** Kept in `record_relations` only, never read to make the entity, so it never makes a record wait (PR 5). */
   kept?: boolean
   /**
    * A role v1 already had: `fields.<role>` may name a store ref instead of a relation, and its target type is not
    * checked, so every v1 file means what it meant.
    */
   v1?: boolean
-  /** The entity's own column or `<name>_type`/`<name>_id` pair this role fills, which an owner's remap repoints. */
+  /** The entity's own column this role fills, which an owner's remap repoints. */
   column?: string
+  /** `column` names a `<column>_type`/`<column>_id` pair, a person or an organization, not a foreign key. */
+  pair?: boolean
 }
 
+export type RelationshipKind = "member-of" | "customer-of" | "partner-of" | "related-to"
+
 export interface NestedSpec {
+  /** Where the items are kept, and the column naming their parent. */
+  table: string
+  parent: string
   /** Item keys that name another record of this account by external id, and the type of that record. */
   references?: Record<string, string>
   /** Item keys that name an entity by its ref, and the type it must be. */
@@ -97,7 +104,8 @@ const lineItem = objectOf({
   product_ref: { type: "string", pattern: "^product:[1-9][0-9]*$", description: "A product: ref of the store" },
 })
 
-const LINES = { references: { product: "product" }, refs: { product_ref: "product" } } as const
+const linesIn = (table: string, parent: string) =>
+  ({ table, parent, references: { product: "product" }, refs: { product_ref: "product" } }) as const
 
 const dealFields = (kind: "deal" | "lead") =>
   objectOf(
@@ -105,7 +113,7 @@ const dealFields = (kind: "deal" | "lead") =>
       title: text(`The ${kind}'s title`, 200),
       pipeline: text("The pipeline record's external id in this account", 512),
       stage: text("The stage's external id in that pipeline", 512),
-      status: oneOf(DEAL_STATUSES, "Left out, the stage's outcome says it"),
+      status: enumOf(DEAL_STATUSES, "Left out, the stage's outcome says it"),
       amount: decimal("A decimal in currency"),
       currency,
       close_date: day("When it is expected to close"),
@@ -124,22 +132,22 @@ export const RECORD_TYPES = {
     update: "flag",
     tombstone: true,
     fields: objectOf({
-      direction: oneOf(INVOICE_DIRECTIONS),
+      direction: enumOf(INVOICE_DIRECTIONS),
       number: text("The invoice's number", 80),
       currency,
       issue_date: day("The day it was issued"),
       due_date: day("The day it is due"),
       total: decimal("The printed total: refused when it is not the sum of the lines"),
-      lines: listOf(lineItem, 500, "The invoice's lines"),
+      lines: arrayOf(lineItem, 500, "The invoice's lines"),
     }),
     roles: {
-      issuer: { targets: PARTY, v1: true, column: "issuer" },
-      counterparty: { targets: PARTY, v1: true, column: "counterparty" },
+      issuer: { targets: PARTY, v1: true, column: "issuer", pair: true },
+      counterparty: { targets: PARTY, v1: true, column: "counterparty", pair: true },
       project: { targets: ["project"], v1: true, column: "project_id" },
       contract: { targets: ["contract"], column: "contract_id" },
       subscription: { targets: ["subscription"], column: "subscription_id" },
     },
-    nested: { lines: LINES },
+    nested: { lines: linesIn("invoice_lines", "invoice_id") },
   },
   payment: {
     table: "payments",
@@ -147,15 +155,15 @@ export const RECORD_TYPES = {
     update: "re-settle",
     tombstone: true,
     fields: objectOf({
-      direction: oneOf(MONEY_DIRECTIONS),
+      direction: enumOf(MONEY_DIRECTIONS),
       amount: decimal("A decimal in currency"),
       currency,
       date: day("The day it was paid"),
       reference: text("The payment's reference", 2000),
     }),
     roles: {
-      payer: { targets: PARTY, v1: true, column: "payer" },
-      payee: { targets: PARTY, v1: true, column: "payee" },
+      payer: { targets: PARTY, v1: true, column: "payer", pair: true },
+      payee: { targets: PARTY, v1: true, column: "payee", pair: true },
       project: { targets: ["project"], v1: true, column: "project_id" },
       settles: { targets: ["invoice"], many: true, amount: true, v1: true },
       refund_of: { targets: ["payment"], column: "refund_of" },
@@ -172,7 +180,7 @@ export const RECORD_TYPES = {
       email: kept("E-mail addresses, one or a list: an exact one links the record to the one person who has it"),
       phone: kept("Phone numbers, one or a list: an exact one, read to E.164, links like an e-mail"),
     }),
-    roles: { "member-of": { targets: ORGANIZATION, relationship: true, kept: true } },
+    roles: { "member-of": { targets: ORGANIZATION, relationship: "member-of", kept: true } },
   },
   organization: {
     table: "organizations",
@@ -181,25 +189,14 @@ export const RECORD_TYPES = {
     tombstone: true,
     fields: objectOf({
       name: kept("The organization's name"),
-      identifiers: listOf(
-        objectOf(
-          {
-            scheme: {
-              type: "string",
-              pattern: "^(email|domain|tax-id:[a-z]{2}|registration:[a-z]{2})$",
-              description: "email, domain, tax-id:<country> or registration:<country>",
-            },
-            value: text("The identifier as the scheme writes it", 320),
-          },
-          { required: ["scheme", "value"] },
-        ),
-        20,
-        "Strong identifiers: one that another organization has links the record to it",
+      identifiers: kept(
+        "Strong identifiers, a list of {scheme, value}: scheme email, domain, tax-id:<cc> or registration:<cc>. One that " +
+          "another organization has links the record to it; any other item is kept as data",
       ),
     }),
     roles: {
-      "customer-of": { targets: ORGANIZATION, relationship: true, kept: true },
-      "partner-of": { targets: ORGANIZATION, relationship: true, kept: true },
+      "customer-of": { targets: ORGANIZATION, relationship: "customer-of", kept: true },
+      "partner-of": { targets: ORGANIZATION, relationship: "partner-of", kept: true },
     },
   },
   project: {
@@ -221,27 +218,27 @@ export const RECORD_TYPES = {
     tombstone: true,
     fields: objectOf({
       number: text("The order's number at the supplier", 80),
-      direction: oneOf(ORDER_DIRECTIONS, "purchase when left out; in a sale the owner is the supplier"),
-      purpose: oneOf(ORDER_PURPOSES, "business when left out"),
-      status: oneOf(ORDER_STATUSES, "placed when left out"),
+      direction: enumOf(ORDER_DIRECTIONS, "purchase when left out; in a sale the owner is the supplier"),
+      purpose: enumOf(ORDER_PURPOSES, "business when left out"),
+      status: enumOf(ORDER_STATUSES, "placed when left out"),
       supplier_name: text("The shop or supplier as the source names it", 200),
       order_date: day("The day it was ordered"),
       fulfilled_date: day("The day it was delivered"),
       currency,
       total: decimal("With lines, their sum"),
       source_url: text("The order's page at the shop", 2000),
-      lines: listOf(lineItem, 500, "The order's lines"),
+      lines: arrayOf(lineItem, 500, "The order's lines"),
     }),
     roles: {
-      customer: { targets: PARTY, column: "customer" },
-      supplier: { targets: PARTY, column: "supplier" },
+      customer: { targets: PARTY, column: "customer", pair: true },
+      supplier: { targets: PARTY, column: "supplier", pair: true },
       project: { targets: ["project"], column: "project_id" },
       contract: { targets: ["contract"], column: "contract_id" },
       deal: { targets: ["deal"], column: "deal_id" },
       invoice: { targets: ["invoice"], column: "invoice_id" },
       payment: { targets: ["payment"], column: "payment_id" },
     },
-    nested: { lines: LINES },
+    nested: { lines: linesIn("order_lines", "order_id") },
   },
   product: {
     table: "catalog_items",
@@ -250,7 +247,7 @@ export const RECORD_TYPES = {
     tombstone: true,
     fields: objectOf(
       {
-        kind: oneOf(CATALOG_KINDS, "product when left out"),
+        kind: enumOf(CATALOG_KINDS, "product when left out"),
         name: text("The product's name", 200),
         sku: text("The supplier's code for it", 80),
         unit: text("hour, pcs, month: free text", 40),
@@ -261,7 +258,7 @@ export const RECORD_TYPES = {
       },
       { required: ["name"] },
     ),
-    roles: { supplier: { targets: PARTY, column: "supplier" } },
+    roles: { supplier: { targets: PARTY, column: "supplier", pair: true } },
   },
   contract: {
     table: "contracts",
@@ -272,8 +269,8 @@ export const RECORD_TYPES = {
       {
         name: text("The contract's name", 200),
         number: text("The contract's number", 80),
-        kind: oneOf(CONTRACT_KINDS),
-        status: oneOf(CONTRACT_STATUSES, "active when left out"),
+        kind: enumOf(CONTRACT_KINDS),
+        status: enumOf(CONTRACT_STATUSES, "active when left out"),
         signed_date: day("The day it was signed"),
         effective_date: day("The day it starts"),
         expiration_date: day("The day it ends; open-ended when left out"),
@@ -289,7 +286,7 @@ export const RECORD_TYPES = {
     roles: {
       project: { targets: ["project"], column: "project_id" },
       deal: { targets: ["deal"], column: "deal_id" },
-      party: { targets: PARTY, many: true, relationship: true, kept: true },
+      party: { targets: PARTY, many: true, relationship: "related-to", kept: true },
       document: { targets: ["document"], many: true, kept: true },
     },
   },
@@ -301,15 +298,15 @@ export const RECORD_TYPES = {
     fields: objectOf(
       {
         name: text("Its name; the product's when left out", 200),
-        direction: oneOf(INVOICE_DIRECTIONS, "receivable: the owner bills it; payable: the owner pays it"),
-        status: oneOf(SUBSCRIPTION_STATUSES),
+        direction: enumOf(INVOICE_DIRECTIONS, "receivable: the owner bills it; payable: the owner pays it"),
+        status: enumOf(SUBSCRIPTION_STATUSES),
         interval: { type: "string", pattern: "^[1-9][0-9]{0,2}-(day|week|month|year)$", description: "1-month" },
         start_date: day("The first day"),
         trial_end_date: day("The trial's last day"),
         next_renewal_date: day("The next renewal"),
         cancelled_date: day("The day it was cancelled"),
         end_date: day("The last day"),
-        prices: listOf(
+        prices: arrayOf(
           objectOf(
             {
               amount: decimal("A decimal in currency"),
@@ -325,12 +322,13 @@ export const RECORD_TYPES = {
       { required: ["direction", "interval", "start_date"] },
     ),
     roles: {
-      supplier: { targets: PARTY, column: "supplier" },
-      customer: { targets: PARTY, column: "customer" },
+      supplier: { targets: PARTY, column: "supplier", pair: true },
+      customer: { targets: PARTY, column: "customer", pair: true },
       product: { targets: ["product"], column: "catalog_item_id" },
       contract: { targets: ["contract"], column: "contract_id" },
       project: { targets: ["project"], column: "project_id" },
     },
+    nested: { prices: { table: "subscription_prices", parent: "subscription_id" } },
   },
   wallet: {
     table: "financial_accounts",
@@ -340,7 +338,7 @@ export const RECORD_TYPES = {
     fields: objectOf(
       {
         name: text("The account's name", 200),
-        kind: oneOf(WALLET_KINDS, "bank when left out"),
+        kind: enumOf(WALLET_KINDS, "bank when left out"),
         currency,
         institution: text("The bank, as text", 200),
         number_hint: text("The last 4 characters of its number; a whole IBAN or card number is refused", 4),
@@ -349,7 +347,7 @@ export const RECORD_TYPES = {
       },
       { required: ["name", "currency"] },
     ),
-    roles: { holder: { targets: PARTY, column: "holder" } },
+    roles: { holder: { targets: PARTY, column: "holder", pair: true } },
   },
   transaction: {
     table: "financial_transactions",
@@ -358,16 +356,16 @@ export const RECORD_TYPES = {
     tombstone: true,
     fields: objectOf(
       {
-        direction: oneOf(MONEY_DIRECTIONS),
+        direction: enumOf(MONEY_DIRECTIONS),
         amount: decimal("A decimal above 0 in the wallet's currency"),
         currency,
-        status: oneOf(TRANSACTION_STATUSES, "booked when left out"),
+        status: enumOf(TRANSACTION_STATUSES, "booked when left out"),
         date: day("The day the statement shows"),
         booked_date: day("The day it was booked; the statement day when left out"),
         description: text("As the statement says it", 2000),
         counterparty_name: text("As the statement names the other side", 200),
         reference: text("The statement's reference", 200),
-        splits: listOf(
+        splits: arrayOf(
           objectOf(
             {
               amount: decimal("A decimal above 0"),
@@ -384,10 +382,11 @@ export const RECORD_TYPES = {
     ),
     roles: {
       wallet: { targets: ["wallet"], required: true, column: "financial_account_id" },
-      counterparty: { targets: PARTY, column: "counterparty" },
+      counterparty: { targets: PARTY, column: "counterparty", pair: true },
       payment: { targets: ["payment"], column: "payment_id" },
       project: { targets: ["project"], column: "project_id" },
     },
+    nested: { splits: { table: "transaction_splits", parent: "transaction_id" } },
   },
   deal: {
     table: "deals",
@@ -398,7 +397,7 @@ export const RECORD_TYPES = {
     references: { pipeline: "pipeline" },
     roles: {
       organization: { targets: ORGANIZATION, column: "organization_id" },
-      person: { targets: ["person"], many: true, relationship: true },
+      person: { targets: ["person"], many: true, relationship: "related-to" },
       project: { targets: ["project"], column: "project_id" },
     },
   },
@@ -411,7 +410,7 @@ export const RECORD_TYPES = {
     references: { pipeline: "pipeline" },
     roles: {
       organization: { targets: ORGANIZATION, column: "organization_id" },
-      person: { targets: ["person"], many: true, relationship: true },
+      person: { targets: ["person"], many: true, relationship: "related-to" },
       project: { targets: ["project"], column: "project_id" },
       deal: { targets: ["deal"], column: "deal_id" },
     },
@@ -423,15 +422,15 @@ export const RECORD_TYPES = {
     tombstone: false,
     fields: objectOf(
       {
-        kind: oneOf(DEAL_KINDS, "deal when left out"),
+        kind: enumOf(DEAL_KINDS, "deal when left out"),
         name: text("The pipeline's name", 80),
-        stages: listOf(
+        stages: arrayOf(
           objectOf(
             {
               external_id: text("The stage's id at the source", 512),
               name: text("The stage's name", 80),
               position: { type: "integer", minimum: 0, maximum: 1000 },
-              outcome: oneOf(DEAL_STATUSES, "open when left out"),
+              outcome: enumOf(DEAL_STATUSES, "open when left out"),
             },
             { required: ["external_id", "name"] },
           ),
@@ -442,6 +441,7 @@ export const RECORD_TYPES = {
       { required: ["name", "stages"] },
     ),
     roles: {},
+    nested: { stages: { table: "pipeline_stages", parent: "pipeline_id" } },
   },
 } as const satisfies Record<string, RecordTypeSpec>
 
@@ -507,8 +507,11 @@ export const TYPE_RULE = `a type is one of ${RECORD_ENTITY_TYPES.join(", ")} or 
 export const rolesOf = (type: RecordType): [string, RecordRoleSpec][] =>
   Object.entries(RECORD_TYPES[type].roles as Record<string, RecordRoleSpec>)
 
-export const roleOf = (type: string, role: string): RecordRoleSpec | undefined =>
-  isRecordType(type) ? (RECORD_TYPES[type].roles as Record<string, RecordRoleSpec>)[role] : undefined
+export const roleOf = (type: string, role: string): RecordRoleSpec | undefined => {
+  if (!isRecordType(type)) return undefined
+  const roles = RECORD_TYPES[type].roles as Record<string, RecordRoleSpec>
+  return Object.hasOwn(roles, role) ? roles[role] : undefined
+}
 
 export const nestedOf = (type: RecordType): [string, NestedSpec][] =>
   Object.entries((RECORD_TYPES[type] as RecordTypeSpec).nested ?? {})
@@ -521,3 +524,11 @@ export const roleNames = (types: readonly RecordType[], keep: (role: RecordRoleS
 ]
 
 export const AMOUNT_ROLES = roleNames(RECORD_ENTITY_TYPES, (role) => role.amount)
+
+/** v1's roles of a type, which `fields.<role>` may also name: v1 refused such a field when it was not text. */
+export const FIELD_REFERENCE_ROLES = roleNames(RECORD_ENTITY_TYPES, (role) => role.v1 && !role.many)
+
+/** The types whose records v1 projected: their v1 roles keep v1's reading. */
+export const hasV1Roles = (type: RecordType) => rolesOf(type).some(([, role]) => role.v1)
+
+export const IDENTITY_TYPES = RECORD_ENTITY_TYPES.filter((type) => RECORD_TYPES[type].review === "identity")

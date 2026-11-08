@@ -242,3 +242,35 @@ it("remaps an import-made organization after the owner confirmed the invoice and
     store.records.map({ ...SOURCE, type: "organization", externalId: "c-6" }, made as string, "owner"),
   ).rejects.toMatchObject({ details: { reason: "record.mapped" } })
 })
+
+it("lists a waiting person whose identifiers name two people when the owner matches the whole account", async () => {
+  const { store, sql } = await recordsFixture(handles)
+  const one = knownPerson(sql, "One")
+  one.give("email", "one@example.com")
+  const two = knownPerson(sql, "Two")
+  two.give("email", "two@example.com")
+  const fields = { name: "Both", email: ["one@example.com", "two@example.com"] }
+  const db = sql()
+  db.prepare("INSERT INTO accounts (provider, external_id, created_at, updated_at) VALUES (?, ?, 1, 1)").run(
+    SOURCE.provider,
+    SOURCE.account,
+  )
+  db.prepare(
+    "INSERT INTO records (account_id, type, external_id, fields, fingerprint, batch_id, created_at, updated_at) " +
+      "VALUES ((SELECT id FROM accounts WHERE provider = ? AND external_id = ?), 'person', 'both', ?, ?, 'v1', 1, 1)",
+  ).run(SOURCE.provider, SOURCE.account, JSON.stringify(fields), recordFingerprint(fields, []))
+  expect(await store.records.match({ provider: SOURCE.provider, account: SOURCE.account })).toEqual({
+    linked: 0,
+    created: 0,
+    unmatched: [
+      {
+        key: { provider: SOURCE.provider, account: SOURCE.account, type: "person", externalId: "both" },
+        reason: "record.ambiguous",
+        candidates: [one.ref, two.ref],
+      },
+    ],
+    proposed: [],
+    errors: [],
+    truncated: false,
+  })
+})

@@ -2,55 +2,71 @@ import type { ContractKind, ContractStatus, OrderDirection } from "../../domain/
 import type { InvoiceDirection, MoneyDirection } from "../../domain/finance.js"
 import type { OrderPurpose, OrderStatus } from "../../domain/orders.js"
 import type { InvoiceInput, PaymentInput } from "./finance.js"
+import { authorActor } from "./memories.js"
 import type { TransactionInput } from "./money-transactions.js"
+import { requiredThing } from "./notes.js"
+import type { StoreContext } from "./open.js"
 import type { OrderInput } from "./orders.js"
 import {
+  entityOf,
   given,
+  IMPORTER,
+  importedBy,
   importersProposal,
-  linesOf,
-  oneOf,
+  moneyLinesOf,
   type Projection,
   type RecordProjector,
   refusal,
   stringField,
-  written,
 } from "./record-projection.js"
 import type { SubscriptionInput } from "./subscriptions.js"
 
+const allocatedByOthers = (context: StoreContext, paymentId: number): boolean => {
+  const importer = authorActor(context, IMPORTER).actor
+  return (
+    context.database
+      .prepare(
+        "SELECT 1 FROM payment_allocations WHERE payment_id = ? AND NOT (author_type = ? AND author_id = ?) LIMIT 1",
+      )
+      .get(paymentId, importer.type, importer.id) !== undefined
+  )
+}
+
 /** v1's single roles, which `fields.<role>` may also name as a store ref; roles added later come from relations only. */
-const v1Role = (projection: Projection, role: string) => oneOf(projection, role) ?? stringField(projection.fields, role)
+const v1Role = (projection: Projection, role: string) =>
+  entityOf(projection, role) ?? stringField(projection.fields, role)
 
 const invoiceOf = (projection: Projection): InvoiceInput => {
   const { fields, source } = projection
   if (!Array.isArray(fields.lines) || fields.lines.some((line) => typeof line !== "object" || line === null))
     return refusal("an invoice's fields.lines is a list of lines", "record.invalid")
   return {
-    ...written(source),
+    ...importedBy(source),
     direction: fields.direction as InvoiceDirection,
     number: stringField(fields, "number"),
     issuer: v1Role(projection, "issuer"),
     counterparty: v1Role(projection, "counterparty") as string,
     project: v1Role(projection, "project"),
-    contract: oneOf(projection, "contract"),
-    subscription: oneOf(projection, "subscription"),
+    contract: entityOf(projection, "contract"),
+    subscription: entityOf(projection, "subscription"),
     currency: fields.currency as string,
     issueDate: stringField(fields, "issue_date"),
     dueDate: stringField(fields, "due_date"),
     total: fields.total as string | undefined,
-    lines: linesOf(projection, fields.lines),
+    lines: moneyLinesOf(projection, fields.lines),
   }
 }
 
 const paymentOf = (projection: Projection): PaymentInput => {
   const { fields, source } = projection
   return {
-    ...written(source),
+    ...importedBy(source),
     direction: fields.direction as MoneyDirection,
     payer: v1Role(projection, "payer"),
     payee: v1Role(projection, "payee"),
     project: v1Role(projection, "project"),
-    refundOf: oneOf(projection, "refund_of"),
-    subscription: oneOf(projection, "subscription"),
+    refundOf: entityOf(projection, "refund_of"),
+    subscription: entityOf(projection, "subscription"),
     amount: fields.amount as string,
     currency: fields.currency as string,
     date: fields.date as string,
@@ -61,14 +77,14 @@ const paymentOf = (projection: Projection): PaymentInput => {
 const orderOf = (projection: Projection): OrderInput => {
   const { fields, source } = projection
   return {
-    ...written(source),
-    customer: oneOf(projection, "customer"),
-    supplier: oneOf(projection, "supplier"),
-    project: oneOf(projection, "project"),
-    contract: oneOf(projection, "contract"),
-    deal: oneOf(projection, "deal"),
-    invoice: oneOf(projection, "invoice"),
-    payment: oneOf(projection, "payment"),
+    ...importedBy(source),
+    customer: entityOf(projection, "customer"),
+    supplier: entityOf(projection, "supplier"),
+    project: entityOf(projection, "project"),
+    contract: entityOf(projection, "contract"),
+    deal: entityOf(projection, "deal"),
+    invoice: entityOf(projection, "invoice"),
+    payment: entityOf(projection, "payment"),
     purpose: given<OrderPurpose>(fields, "purpose") ?? "business",
     direction: given<OrderDirection>(fields, "direction"),
     status: given<OrderStatus>(fields, "status"),
@@ -79,7 +95,7 @@ const orderOf = (projection: Projection): OrderInput => {
     currency: given(fields, "currency"),
     total: given(fields, "total"),
     sourceUrl: given(fields, "source_url"),
-    ...(Array.isArray(fields.lines) ? { lines: linesOf(projection, fields.lines) } : {}),
+    ...(Array.isArray(fields.lines) ? { lines: moneyLinesOf(projection, fields.lines) } : {}),
   }
 }
 
@@ -99,7 +115,7 @@ const contractFields = (projection: Projection) => {
     terms: given<string>(fields, "terms"),
     value: given<string>(fields, "value"),
     currency: given<string>(fields, "currency"),
-    deal: oneOf(projection, "deal"),
+    deal: entityOf(projection, "deal"),
   }
 }
 
@@ -108,10 +124,10 @@ const subscriptionFields = (projection: Projection) => {
   return {
     name: given<string>(fields, "name"),
     direction: given<InvoiceDirection>(fields, "direction") as InvoiceDirection,
-    supplier: oneOf(projection, "supplier"),
-    customer: oneOf(projection, "customer"),
-    product: oneOf(projection, "product"),
-    contract: oneOf(projection, "contract"),
+    supplier: entityOf(projection, "supplier"),
+    customer: entityOf(projection, "customer"),
+    product: entityOf(projection, "product"),
+    contract: entityOf(projection, "contract"),
     status: given<SubscriptionInput["status"]>(fields, "status"),
     every: given<string>(fields, "interval") as string,
     startDate: given<string>(fields, "start_date") as string,
@@ -141,9 +157,9 @@ const transactionFields = (projection: Projection) => {
     bookedDate: given<string>(fields, "booked_date"),
     description: given<string>(fields, "description"),
     counterpartyName: given<string>(fields, "counterparty_name"),
-    counterparty: oneOf(projection, "counterparty"),
+    counterparty: entityOf(projection, "counterparty"),
     reference: given<string>(fields, "reference"),
-    payment: oneOf(projection, "payment"),
+    payment: entityOf(projection, "payment"),
   }
 }
 
@@ -160,6 +176,15 @@ export const MONEY_PROJECTORS = {
   invoice: { create: (projection, { finance }) => finance.addInvoice(invoiceOf(projection)).ref },
   payment: {
     create: (projection, { finance, settle }) => settle(finance.addPayment(paymentOf(projection)), projection.shares),
+    // Only the import's own allocations are taken back: one the owner made on its proposal leaves the change flagged.
+    update: (ref, projection, { finance, settle, context }) => {
+      const payment = finance.payment(ref)
+      if (!importersProposal(payment) || allocatedByOthers(context, requiredThing(context.database, ref).id))
+        return false
+      for (const { invoice } of payment.allocations) finance.unallocate({ payment: ref, invoice, by: IMPORTER })
+      settle(finance.payment(ref), projection.shares)
+      return true
+    },
   },
   order: {
     create: (projection, { orders }) => orders.add(orderOf(projection)).ref,
@@ -172,28 +197,28 @@ export const MONEY_PROJECTORS = {
   contract: {
     create: (projection, { contracts }) =>
       contracts.add({
-        ...written(projection.source),
+        ...importedBy(projection.source),
         ...contractFields(projection),
-        project: oneOf(projection, "project"),
+        project: entityOf(projection, "project"),
       }).ref,
     update: (ref, projection, { contracts }) => {
       if (!importersProposal(contracts.get(ref))) return false
-      contracts.update(ref, { by: written(projection.source).by, ...contractFields(projection) })
+      contracts.update(ref, { by: importedBy(projection.source).by, ...contractFields(projection) })
       return true
     },
   },
   subscription: {
     create: (projection, { subscriptions }) =>
       subscriptions.add({
-        ...written(projection.source),
+        ...importedBy(projection.source),
         ...subscriptionFields(projection),
-        project: oneOf(projection, "project"),
+        project: entityOf(projection, "project"),
         prices: pricesOf(projection),
       }).ref,
     update: (ref, projection, { subscriptions }) => {
       const held = subscriptions.get(ref)
       if (!importersProposal(held)) return false
-      const { by, source, reason } = written(projection.source)
+      const { by, source, reason } = importedBy(projection.source)
       subscriptions.update(ref, { by, ...subscriptionFields(projection) })
       const kept = new Set(held.prices.filter((one) => one.review !== "rejected").map((one) => one.effectiveFrom))
       const start = given<string>(projection.fields, "start_date")
@@ -206,17 +231,17 @@ export const MONEY_PROJECTORS = {
   transaction: {
     create: (projection, { transactions }) =>
       transactions.add({
-        ...written(projection.source),
+        ...importedBy(projection.source),
         ...transactionFields(projection),
-        wallet: oneOf(projection, "wallet") as string,
+        wallet: entityOf(projection, "wallet") as string,
         currency: given(projection.fields, "currency"),
-        project: oneOf(projection, "project"),
+        project: entityOf(projection, "project"),
         splits: splitsOf(projection),
       }).ref,
     update: (ref, projection, { transactions }) => {
       const held = transactions.get(ref)
       if (!importersProposal(held)) return false
-      const { by } = written(projection.source)
+      const { by } = importedBy(projection.source)
       for (const { position } of held.splits) transactions.removeSplit(ref, { position, by })
       transactions.update(ref, { by, ...transactionFields(projection) })
       for (const split of splitsOf(projection)) transactions.addSplit(ref, { ...split, by })

@@ -32,7 +32,7 @@ it("keeps records whose references are not imported yet, and projects them when 
   expect(first.proposed).toEqual([])
   expect(first.waiting).toEqual([
     { key: "order-o-1", pointer: "/records/0/relations", missing: ["customer", "fields.lines.product"] },
-    { key: "deal-d-1", pointer: "/records/1/relations", missing: ["fields.pipeline"] },
+    { key: "deal-d-1", pointer: "/records/1/fields/pipeline", missing: ["fields.pipeline"] },
     { key: "transaction-t-1", pointer: "/records/2/relations", missing: ["wallet"] },
   ])
   expect(await store.records.list({ ...SOURCE, waiting: true })).toHaveLength(3)

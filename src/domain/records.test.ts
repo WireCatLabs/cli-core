@@ -15,7 +15,8 @@ it("names every registered type when it refuses one", () => {
     {
       pointer: "/records/0/type",
       code: "record.type",
-      message: "a type is one of invoice, payment, person, organization, project or custom:<name>",
+      message:
+        "a type is one of invoice, payment, person, organization, project, order, product, contract, subscription, wallet, transaction, deal, lead, pipeline or custom:<name>",
       key: "k",
     },
   ])

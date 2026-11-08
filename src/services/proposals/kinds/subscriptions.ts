@@ -5,8 +5,7 @@ import { reviewedKind, reviewedRow } from "./shared.js"
 /** An agent's or an import's subscription, by its own ref (`subscription:12`); only the owner decides it. */
 export const subscriptionKind = (store: Pick<MessageStore, "subscriptions">): ProposalKind =>
   reviewedKind<Subscription>({
-    kind: "subscription",
-    prefix: "subscription",
+    type: "subscription",
     list: (options) => store.subscriptions.list(options),
     get: (id) => store.subscriptions.get(id),
     row: (subscription) =>
@@ -26,8 +25,7 @@ export const subscriptionKind = (store: Pick<MessageStore, "subscriptions">): Pr
  */
 export const subscriptionPriceKind = (store: Pick<MessageStore, "subscriptions">): ProposalKind =>
   reviewedKind<SubscriptionPrice>({
-    kind: "subscription_price",
-    prefix: "subscription_price",
+    type: "subscription_price",
     list: ({ review, proposedBy, limit }) => store.subscriptions.prices({ review, proposedBy, limit }),
     get: (id) => store.subscriptions.price(id),
     row: (price) => reviewedRow("subscription_price", price, price.subscription),

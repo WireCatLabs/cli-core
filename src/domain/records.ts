@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto"
 import { holdsCredential, secretNamed } from "../runs/secrets.js"
-import { DECIMAL_PATTERN, fieldError } from "./record-fields.js"
+import { PHONE_COUNTRIES } from "./phones.js"
+import { DECIMAL_PATTERN, fieldError, isObject } from "./record-fields.js"
 import {
   AMOUNT_ROLES,
   isRecordType,
@@ -40,6 +41,11 @@ export interface RecordRelation {
 export const LINE_OPTIONS = ["text", "products"] as const
 export interface EnvelopeOptions {
   lines?: (typeof LINE_OPTIONS)[number]
+  /**
+   * The country a phone number without `+` is read in, such as `es`. Without it such a number is an identifier only
+   * when exactly one country of the store's `phone_countries` setting reads it as valid.
+   */
+  phone_region?: string
 }
 
 export interface EnvelopeRecord {
@@ -118,8 +124,15 @@ export const RECORDS_ENVELOPE_SCHEMA = {
         lines: {
           enum: [...LINE_OPTIONS],
           description:
-            "products: an invoice line's product (an external id) or product_ref (a product: ref) names its " +
-            "product; text, the default, keeps them as data. Order lines always read them.",
+            "products: an invoice line's product (an external id) names its product; text, the default, keeps it " +
+            "as data. Order lines always read it, and product_ref (a product: ref) is read on every line.",
+        },
+        phone_region: {
+          type: "string",
+          pattern: "^[A-Za-z]{2}$",
+          description:
+            "The country a person's phone without + is read in. Without it such a number is an identifier only when " +
+            "exactly one country of the store's phone_countries setting reads it as valid",
         },
       },
     },
@@ -175,9 +188,6 @@ const wordPattern = new RegExp(WORD)
 const typePattern = new RegExp(TYPE_PATTERN)
 const decimalPattern = new RegExp(DECIMAL)
 const refPattern = new RegExp(REF)
-
-const isObject = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value)
 
 const escapePointer = (segment: string | number) => String(segment).replaceAll("~", "~0").replaceAll("/", "~1")
 export const pointerOf = (...segments: (string | number)[]) => segments.map((s) => `/${escapePointer(s)}`).join("")
@@ -356,9 +366,21 @@ export const headerErrors = (envelope: unknown, account: string, more: string[] 
   const { options } = envelope
   if (options !== undefined) {
     if (!isObject(options)) return [invalid(["options"], "options is an object", "envelope.invalid")]
-    const unknown = extraKeys(options, ["lines"])
+    const unknown = extraKeys(options, ["lines", "phone_region"])
     if (unknown.length > 0)
-      return [invalid(["options", unknown[0] as string], "options holds lines", "envelope.invalid")]
+      return [invalid(["options", unknown[0] as string], "options holds lines and phone_region", "envelope.invalid")]
+    if (
+      options.phone_region !== undefined &&
+      (typeof options.phone_region !== "string" ||
+        !(PHONE_COUNTRIES as readonly string[]).includes(options.phone_region.toLowerCase()))
+    )
+      return [
+        invalid(
+          ["options", "phone_region"],
+          `options.phone_region is one of ${PHONE_COUNTRIES.join(", ")}`,
+          "envelope.invalid",
+        ),
+      ]
     if (options.lines !== undefined && !LINE_OPTIONS.includes(options.lines as never))
       return [invalid(["options", "lines"], `options.lines is ${LINE_OPTIONS.join(" or ")}`, "envelope.invalid")]
   }
@@ -397,28 +419,47 @@ export const recordFingerprint = (fields: Record<string, unknown>, relations: Re
     )
     .digest("hex")
 
+const BOM = "\uFEFF"
+
+/** A file's text without the byte-order mark a spreadsheet export puts before it. */
+export const withoutBom = (text: string): string => (text.startsWith(BOM) ? text.slice(1) : text)
+
+/** One JSONL line as JSON; a line that is not JSON comes back as the text, for the record check to refuse at its index. */
+export const jsonLine = (line: string): unknown => {
+  try {
+    return JSON.parse(withoutBom(line))
+  } catch {
+    return line
+  }
+}
+
 /**
- * A JSONL import as the envelope it stands for: the first line holds `schema_version` and `source`, each further
- * non-empty line one record. A line that is not JSON comes back as a record the envelope check refuses, at its index.
+ * A JSONL import as the envelope it stands for: the first line holds `schema_version`, `source` and `options`, each
+ * further non-empty line one record.
  */
 export const envelopeOfJsonl = (text: string): unknown => {
-  const lines = text.split(/\r?\n/)
+  const lines = withoutBom(text).split(/\r?\n/)
   const first = lines.findIndex((line) => line.trim() !== "")
   if (first < 0) return {}
-  const parse = (line: string): unknown => {
-    try {
-      return JSON.parse(line)
-    } catch {
-      return line
-    }
-  }
-  const header = parse(lines[first] as string)
+  const header = jsonLine(lines[first] as string)
   const records: unknown[] = []
   for (let at = first + 1; at < lines.length; at++) {
     const line = lines[at] as string
-    if (line.trim() !== "") records.push(parse(line))
+    if (line.trim() !== "") records.push(jsonLine(line))
   }
   return isObject(header) ? { ...header, records } : header
+}
+
+/**
+ * A file's text as the envelope it stands for: one JSON envelope, or JSONL, told apart by the first non-empty line;
+ * a JSON object holding `records` is a whole envelope.
+ */
+export const envelopeOfText = (text: string): unknown => {
+  const clean = withoutBom(text)
+  const first = clean.split(/\r?\n/).find((line) => line.trim() !== "")
+  const head = first === undefined ? undefined : jsonLine(first)
+  if (isObject(head) && !Object.hasOwn(head, "records")) return envelopeOfJsonl(clean)
+  return jsonLine(clean)
 }
 
 /** A reference a record's fields make to another record of the account, kept so the record waits for it. */

@@ -1,3 +1,5 @@
+import { AsyncLocalStorage } from "node:async_hooks"
+import { CliError } from "@wirecat/cli-base"
 import { sqliteCode } from "../../errors/failures.js"
 import type { Stemmer, Stemmers } from "../../search/stem.js"
 import type { CacheDatabase } from "../driver.js"
@@ -6,6 +8,8 @@ import { drainMentions } from "./mention-drain.js"
 import { drainStems, stemmerCache } from "./stems.js"
 
 type Connection = { depth: number; reading: boolean; stemmerFor: (stemmers: Stemmers) => Stemmer }
+
+const rehearsal = new AsyncLocalStorage<CacheDatabase>()
 
 const SQLITE_BUSY = 5
 const pause = new Int32Array(new SharedArrayBuffer(4))
@@ -103,16 +107,33 @@ const transact = <T>(database: CacheDatabase, body: () => T, drain: boolean, bef
 
 /**
  * Async work in one write transaction that is always rolled back: a dry run over a stream, whose later chunks must see
- * what earlier ones would write. Writes inside become savepoints. It holds the write lock for the whole run.
+ * what earlier ones would write. Writes inside become savepoints. It holds the write lock for the whole run, and any
+ * other statement on this connection meanwhile is refused (`store.dry-run`). Not a second connection: this process's
+ * other writers would then wait on the lock with the event loop blocked, and the dry run could not go on meanwhile.
  */
 export const rehearse = async <T>(database: CacheDatabase, body: () => Promise<T>): Promise<T> => {
   const connection = connectionOf(database)
   if (connection.depth > 0 || connection.reading) throw new Error("a rehearsal starts outside any transaction")
+  const { prepare, exec } = database
+  // Anything else on the connection would land inside the dry run: its write rolled back with it, its read seeing
+  // rows that never exist. Every statement outside the dry run's own async work is refused until it ends.
+  const own = <A extends unknown[], R>(call: (...args: A) => R) =>
+    function (this: CacheDatabase, ...args: A): R {
+      if (rehearsal.getStore() !== database)
+        throw new CliError("conflict", "a dry run of an import holds the store; try again once it ends", {
+          reason: "store.dry-run",
+        })
+      return call.apply(database, args)
+    }
   beginImmediate(database)
   connection.depth += 1
+  database.prepare = own(prepare)
+  database.exec = own(exec)
   try {
-    return await body()
+    return await rehearsal.run(database, body)
   } finally {
+    database.prepare = prepare
+    database.exec = exec
     connection.depth -= 1
     database.exec("ROLLBACK")
   }
