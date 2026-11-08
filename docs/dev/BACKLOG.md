@@ -23,6 +23,8 @@ None open.
 
 ## Next (P2)
 
+- **CORE-48** · P2 · When a command can delete a phone account's calls calendar, a phone import must not bring it
+  back (owner wins); add the refusal then. `src/store/sqlite/record-projectors-phone.ts` (`callsCalendar`), #2661.
 - **CORE-45** · P2 · Personal CRM as typed tables (slice B2): `pipelines`, `pipeline_stages`, `opportunities`, status
   kept apart from stage; people on a deal are links with a role. Like the finance tables (#2425). Same plan, §4.3.
 - **CORE-42** · P2 · Take cli-base ≥ 0.66.1 so a bare number counts as a word of a `--discover` question: today any

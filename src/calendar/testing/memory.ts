@@ -380,9 +380,6 @@ export const memoryEventStore = (): EventStore => {
     async setCalendarSynced(calendarId, synced) {
       calendarOf(calendarId).synced = synced
     },
-    async restoreCalendar(calendarId) {
-      calendarOf(calendarId).deletedAt = null
-    },
     async forgetCalendar(calendarId, now) {
       const calendar = calendarOf(calendarId)
       const mine = entries.filter((one) => one.calendarId === calendarId)
