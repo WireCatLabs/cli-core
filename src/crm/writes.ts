@@ -204,7 +204,7 @@ export const foldFieldName = (name: string): string => foldName(name.trim()).rep
 const named = ({ code, label }: NamedField) => ({ code, label })
 
 /** No field by that name: the fields whose code or label holds it, or is held in it, are its candidates. */
-export const unknownField = (fields: readonly NamedField[], name: string): CliError => {
+export const unknownField = (fields: readonly NamedField[], name: string, param = "--field"): CliError => {
   const want = foldFieldName(name)
   const close = fields.filter((field) =>
     [field.code, field.label ?? ""].some((one) => {
@@ -215,12 +215,12 @@ export const unknownField = (fields: readonly NamedField[], name: string): CliEr
   return new CliError(
     "validation_error",
     `no custom field is named ${name}${close.length ? "; close ones are in candidates" : ""} — \`fields list\` lists them`,
-    { reason: "field.unknown", param: "--field", candidates: close.map(named) },
+    { reason: "field.unknown", param, candidates: close.map(named) },
   )
 }
 
 /** A field by its code or its whole label; two with that label are refused with both, never guessed. */
-export const fieldNamed = <F extends NamedField>(fields: readonly F[], name: string): F => {
+export const fieldNamed = <F extends NamedField>(fields: readonly F[], name: string, param = "--field"): F => {
   const want = foldFieldName(name)
   const byCode = fields.find((field) => foldFieldName(field.code) === want)
   if (byCode) return byCode
@@ -232,15 +232,15 @@ export const fieldNamed = <F extends NamedField>(fields: readonly F[], name: str
       `${labelled.length} custom fields are labelled ${name}; name one by its code`,
       {
         reason: "field.ambiguous",
-        param: "--field",
+        param,
         candidates: labelled.map(named),
       },
     )
-  throw unknownField(fields, name)
+  throw unknownField(fields, name, param)
 }
 
 /** A list field's option id, by its id or its whole label; a field with no options takes the value as typed. */
-export const optionOf = (field: NamedField, value: string): string => {
+export const optionOf = (field: NamedField, value: string, param = "--field"): string => {
   if (!field.options) return value
   const want = foldFieldName(value)
   const found =
@@ -249,7 +249,7 @@ export const optionOf = (field: NamedField, value: string): string => {
   if (!found)
     throw new CliError("validation_error", `${field.label ?? field.code} has no option ${value}`, {
       reason: "field.unknown-option",
-      param: "--field",
+      param,
       field: field.code,
       allowed: field.options,
     })

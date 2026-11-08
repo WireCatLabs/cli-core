@@ -35,6 +35,15 @@ describe("the CRM field lookup a CRM CLI shares", () => {
     expect(source && optionOf(source, "сайт елки")).toBe("7")
   })
 
+  it("names the option the name came from in a refusal", () => {
+    const [source] = fields
+    const refusedWith = (param: string) => expect.objectContaining({ details: expect.objectContaining({ param }) })
+    expect(() => fieldNamed(fields, "Город", "--query")).toThrow(refusedWith("--query"))
+    expect(() => fieldNamed(fields, "source", "--query")).toThrow(refusedWith("--query"))
+    expect(() => source && optionOf(source, "Почта", "--query")).toThrow(refusedWith("--query"))
+    expect(() => fieldNamed(fields, "source")).toThrow(refusedWith("--field"))
+  })
+
   it("splits --field pairs at the first = and refuses one with no key", () => {
     expect(fieldPairsOf(["UF_NOTE=a=b", "UF_CITY="])).toEqual([
       ["UF_NOTE", "a=b"],
