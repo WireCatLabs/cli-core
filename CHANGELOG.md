@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.611.0 — 08.11.2026
+
 ### Fixed
 
 - **In `search all`, a hit only words found keeps its place next to the hits around it.** It takes the cosine of the
