@@ -587,3 +587,25 @@ it("answers the owner's edits of a CRM contact with one override, changed in pla
   await sync()
   expect((await toAcme()).map(({ id, role, standing }) => [id, role, standing])).toEqual([[crm, "contact", "reported"]])
 })
+
+it("keeps a contact's company role off the role list as a list of the CRM's words", async () => {
+  const { path, store, crm, sync, person } = await acme()
+  crm.put("person", {
+    externalId: "7",
+    name: "Alice",
+    email: "alice@acme.example",
+    organizations: [{ externalId: "c1", sourceRole: "Buyer" }],
+  })
+  await sync()
+  const [member] = (await store.knowledge.relations(null, await person("alice@acme.example"))).filter(
+    ({ kind }) => kind === "member-of",
+  )
+  expect(member).toMatchObject({ role: "contact", sourceRoles: ["Buyer"] })
+  const database = await openCache(path)
+  try {
+    const stored = database.prepare("SELECT json_type(metadata, '$.source_role') AS type FROM links WHERE id = ?")
+    expect(stored.get(Number(member?.id))).toEqual({ type: "array" })
+  } finally {
+    database.close()
+  }
+})

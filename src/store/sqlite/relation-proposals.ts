@@ -38,6 +38,8 @@ export interface KnowledgeRelation {
   roleNote: string | null
   /** How much the owner deals with a person on a project himself; `null` is unknown. */
   engagement: Engagement | null
+  /** The source's own words for it, off the role list (`metadata.source_role`), never its role. */
+  sourceRoles?: string[]
   /** When it held, as ISO times; `endsAt` exclusive; `null` when nobody said. */
   startsAt: string | null
   endsAt: string | null
@@ -78,6 +80,7 @@ export const relationOf = (link: Link, now: number): KnowledgeRelation => ({
   position: link.position ?? null,
   roleNote: link.roleNote ?? null,
   engagement: link.engagement ?? null,
+  ...(link.sourceRoles ? { sourceRoles: link.sourceRoles } : {}),
   startsAt: isoOf(link.startsAt),
   endsAt: isoOf(link.endsAt),
   createdAt: link.createdAt,

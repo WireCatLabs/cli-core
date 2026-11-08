@@ -259,6 +259,8 @@ export const thingRef = (database: CacheDatabase, type: unknown, id: unknown): s
 
 export const linkOf = (database: CacheDatabase, row: Row): Link => {
   const metadata: Partial<Record<string, unknown>> = row.metadata == null ? {} : JSON.parse(String(row.metadata))
+  // An older row holds one word; every reader gets a list.
+  const sourceRoles = [metadata.source_role].flat().filter((word): word is string => typeof word === "string")
   return {
     id: String(row.id),
     from: thingRef(database, row.from_type, row.from_id) as string,
@@ -281,6 +283,7 @@ export const linkOf = (database: CacheDatabase, row: Row): Link => {
     ...(typeof metadata.roleNote === "string" ? { roleNote: metadata.roleNote } : {}),
     ...(isEngagement(metadata.engagement) ? { engagement: metadata.engagement } : {}),
     ...(typeof metadata.overrides === "number" ? { overrides: metadata.overrides } : {}),
+    ...(sourceRoles.length ? { sourceRoles } : {}),
   }
 }
 
