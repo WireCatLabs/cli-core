@@ -66,11 +66,11 @@ export {
 } from "./domain/formatting.js"
 export {
   DEFAULT_LINK_CONFIG,
+  type DeepLinkTarget,
   formatLink,
   LINK_VERSION,
   type LinkConfig,
   type LinkForm,
-  type LinkTarget,
   linkConfigOf,
   linkFor,
   linkTargetOf,

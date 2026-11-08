@@ -4,7 +4,7 @@ import { parseReference } from "./references.js"
  * What a WireCat link opens. A link only opens a screen in WireCat Desktop: no kind performs an action, a proposal
  * link shows the proposal and the owner presses Confirm or Reject there.
  */
-export type LinkTarget =
+export type DeepLinkTarget =
   | { type: "message"; provider: string; account: string; chat: string; message: string }
   | { type: "chat"; provider: string; account: string; chat: string }
   | { type: "task"; id: string }
@@ -34,7 +34,7 @@ const DATE_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\
 
 const isMoment = (text: string, pattern: RegExp) => pattern.test(text) && !Number.isNaN(Date.parse(text))
 
-const partsOf = (target: LinkTarget): string[] => {
+const partsOf = (target: DeepLinkTarget): string[] => {
   switch (target.type) {
     case "message":
       return ["msg", target.provider, target.account, target.chat, target.message]
@@ -54,9 +54,9 @@ const partsOf = (target: LinkTarget): string[] => {
 }
 
 /** The path after the version, `msg/max/1001/-2002/3003`: each part percent-encoded, so no id can add a part. */
-const pathOf = (target: LinkTarget) => partsOf(target).map(encodeURIComponent).join("/")
+const pathOf = (target: DeepLinkTarget) => partsOf(target).map(encodeURIComponent).join("/")
 
-const targetOfParts = (parts: string[]): LinkTarget | null => {
+const targetOfParts = (parts: string[]): DeepLinkTarget | null => {
   const [kind, ...rest] = parts
   const [a = "", b = "", c = "", d = ""] = rest
   switch (kind) {
@@ -86,7 +86,7 @@ const targetOfParts = (parts: string[]): LinkTarget | null => {
 }
 
 /** A path after the version, or `null`: an empty part or one that does not decode is not a WireCat link. */
-const targetOfPath = (path: string): LinkTarget | null => {
+const targetOfPath = (path: string): DeepLinkTarget | null => {
   const raw = path.split("/")
   if (raw.some((part) => part === "")) return null
   try {
@@ -97,13 +97,13 @@ const targetOfPath = (path: string): LinkTarget | null => {
 }
 
 /** `/v1/msg/max/1001/-2002/3003`, the part both forms share. */
-export const formatLink = (target: LinkTarget): string => `/${LINK_VERSION}/${pathOf(target)}`
+export const formatLink = (target: DeepLinkTarget): string => `/${LINK_VERSION}/${pathOf(target)}`
 
 /**
  * The target of a link in either form (`https://…#/v1/…`, `wirecat://open/v1/…`) or of its bare path (`/v1/…`), or
  * `null` for anything else: another version, an unknown kind, a part too many or empty, a path over 512 characters.
  */
-export const parseLink = (text: string): LinkTarget | null => {
+export const parseLink = (text: string): DeepLinkTarget | null => {
   const link = text.trim()
   const path = link.startsWith(`${APP_PREFIX}/`)
     ? link.slice(APP_PREFIX.length)
@@ -126,7 +126,7 @@ const FROM_REFERENCE = new Set(["message", "chat", "task"])
  * kind: `proposal:fact%3A512`, `tasks:overdue`, `tasks:new/2026-11-07T08%3A00%3A00Z`, `digest:2026-11-08`,
  * `sync:telegram/1001`.
  */
-export const linkTargetOf = (ref: string): LinkTarget | null => {
+export const linkTargetOf = (ref: string): DeepLinkTarget | null => {
   const text = ref.trim()
   const colon = text.indexOf(":")
   if (colon < 0) return null
@@ -134,7 +134,7 @@ export const linkTargetOf = (ref: string): LinkTarget | null => {
   if (LINK_ONLY.has(kind)) return targetOfPath(`${kind}/${text.slice(colon + 1)}`)
   try {
     const reference = parseReference(text)
-    return FROM_REFERENCE.has(reference.type) ? (reference as LinkTarget) : null
+    return FROM_REFERENCE.has(reference.type) ? (reference as DeepLinkTarget) : null
   } catch {
     return null
   }
@@ -156,7 +156,7 @@ export const linkConfigOf = (section: unknown): LinkConfig => {
  * one run) or the ref names nothing a link opens; the caller then leaves the link out.
  */
 export const linkFor = (
-  ref: LinkTarget | string,
+  ref: DeepLinkTarget | string,
   {
     form,
     config = DEFAULT_LINK_CONFIG,

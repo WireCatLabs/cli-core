@@ -2,8 +2,8 @@ import { readFileSync } from "node:fs"
 import { describe, expect, it } from "vitest"
 import {
   DEFAULT_LINK_CONFIG,
+  type DeepLinkTarget,
   formatLink,
-  type LinkTarget,
   linkConfigOf,
   linkFor,
   linkTargetOf,
@@ -11,9 +11,9 @@ import {
 } from "./links.js"
 
 interface Fixture {
-  valid: { ref: string; path: string; web: string; app: string; target: LinkTarget }[]
+  valid: { ref: string; path: string; web: string; app: string; target: DeepLinkTarget }[]
   refused: { path: string; why: string }[]
-  ignored_query: { path: string; target: LinkTarget }[]
+  ignored_query: { path: string; target: DeepLinkTarget }[]
 }
 
 const fixture = JSON.parse(
@@ -43,7 +43,13 @@ describe("the v1 link grammar, as the shared fixture states it", () => {
   })
 
   it("keeps @, /, :, spaces and negative ids inside one segment", () => {
-    const target: LinkTarget = { type: "message", provider: "email", account: "a@b.c", chat: "x/y: z", message: "-5" }
+    const target: DeepLinkTarget = {
+      type: "message",
+      provider: "email",
+      account: "a@b.c",
+      chat: "x/y: z",
+      message: "-5",
+    }
     expect(formatLink(target)).toBe("/v1/msg/email/a%40b.c/x%2Fy%3A%20z/-5")
     expect(parseLink(formatLink(target))).toEqual(target)
   })
