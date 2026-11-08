@@ -51,6 +51,11 @@ shape of this file.
   as given, `fileName`, `mime`, `size`, `kept` and the `copy` path, beside its document; `undefined` for any other
   document or a removed source. The `AddedSourceDetails` type is exported.
 
+### Fixed
+
+- **`account remove` is in the messenger parity manifest** (`parity.json`), with `--keep-data`, `--delete-data`
+  and `--dry-run`, so tg, max and wa can adopt it without failing `parity:check`.
+
 ## 0.614.0 — 08.11.2026
 
 ### Added
