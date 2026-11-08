@@ -24,6 +24,14 @@ shape of this file.
 - Default templates for both, for Telegram, email and text in Russian and English, with the digest's escaping and
   platform rules; `templates edit | preview` now take both keys, checked against their own synthetic samples.
 
+### Fixed
+
+- **A vCard's phone region is read in either case.** `envelopeOfVcard` and `ingestVcard` with `region: "GB"` left a
+  national number unmatched, as only `gb` worked; they now lowercase it as the envelope's `options.phone_region` does.
+- **A sale's title names its customer.** An order with `direction: "sale"` was titled by its supplier, the owner
+  (`Order O-55 · owner, …`); its title and ref summary now read `Order O-55 · to <customer>, …`, and its review row's
+  `object` is the customer. A purchase still names its supplier.
+
 ## 0.614.0 — 08.11.2026
 
 ### Added

@@ -151,6 +151,16 @@ describe("envelopeOfVcard", () => {
     })
   })
 
+  it("reads the region in either case, as the envelope's phone_region is", () => {
+    const { envelope, issues } = cards("BEGIN:VCARD\nFN:A\nTEL:07700 900111\nEND:VCARD", { region: "GB" })
+    expect(envelope.records.find(({ type }) => type === "person")?.fields).toEqual({
+      name: "A",
+      phone: ["+447700900111"],
+    })
+    expect(issues).toEqual([])
+    expect(envelope.options).toEqual({ phone_region: "gb" })
+  })
+
   it("never lets a soft break swallow the next property", () => {
     const { envelope } = cards(
       "BEGIN:VCARD\nVERSION:2.1\nFN;ENCODING=QUOTED-PRINTABLE:Ab=\nTEL:+447700900111\nEND:VCARD\n",
