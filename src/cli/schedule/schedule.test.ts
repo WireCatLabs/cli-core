@@ -591,6 +591,31 @@ describe("a run", () => {
     },
   )
 
+  it("leaves the success notice to WireCat Desktop while it runs and announces the schedule", async () => {
+    const { env } = setup()
+    const { system, ran } = machine("linux", [process.execPath])
+    const make = (name: string) =>
+      scheduled(env.CHAT_STATE_DIR, {
+        name,
+        kind: "agent",
+        argv: [process.execPath, "-e", 'console.log("ok")'],
+        when: { daily: "08:30" },
+      })
+    const digest = make("morning-digest")
+    const marker = join(digest, "..", "..", "desktop.json")
+    const notices = () => ran.filter((one) => one.argv[0] === "notify-send").length
+
+    writeFileSync(marker, JSON.stringify({ pid: process.pid, announces: ["morning-digest"] }))
+    await runSchedule(app, system, env, digest)
+    expect(notices()).toBe(0)
+    await runSchedule(app, system, env, make("review"))
+    expect(notices()).toBe(1)
+
+    writeFileSync(marker, JSON.stringify({ pid: 2 ** 22 + 1, announces: ["morning-digest"] }))
+    await runSchedule(app, system, env, digest)
+    expect(notices()).toBe(2)
+  })
+
   it("notifies a failure unless the schedule says never", async () => {
     const { env } = setup()
     const { system, ran } = machine("linux", [process.execPath])

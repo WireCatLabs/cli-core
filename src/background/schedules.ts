@@ -516,6 +516,25 @@ const sharedLinks = (env: NodeJS.ProcessEnv) => {
   }
 }
 
+/**
+ * WireCat Desktop, while it runs, writes `<state>/schedules/desktop.json` with its pid and the schedules whose new
+ * runs it announces itself; a marker whose pid is gone (a crash) announces nothing.
+ */
+const announcedByDesktop = (schedulesFolder: string, name: string): boolean => {
+  try {
+    const { pid, announces } = JSON.parse(readFileSync(join(schedulesFolder, "desktop.json"), "utf8")) as {
+      pid?: unknown
+      announces?: unknown
+    }
+    if (!Number.isInteger(pid) || !Array.isArray(announces) || !announces.includes(name)) return false
+    process.kill(pid as number, 0)
+    return true
+  } catch (error) {
+    // EPERM: the process is there, under another user.
+    return (error as NodeJS.ErrnoException).code === "EPERM"
+  }
+}
+
 /** A desktop notification; a machine without one loses only the notice, never the run. */
 export const notify = async (system: ServerSystem, env: NodeJS.ProcessEnv, title: string, body: string) => {
   const argv =
@@ -696,14 +715,21 @@ export const runSchedule = async (
 
   const title = `${app.command} ${schedule.name}`
   const mode = notifyOf(schedule)
-  if (prepared && mode === "always") {
-    await notify(system, env, title, `${prepared.notice.slice(0, 180)}\n${latestText}`)
-  } else if (agent && exitCode === 0 && mode === "always") {
-    const first =
-      readFileSync(output, "utf8")
-        .split("\n")
-        .find((line) => line.trim()) ?? "report ready"
-    await notify(system, env, title, `${first.trim().slice(0, 180)}\n${join(folder, "latest.md")}`)
+  if (agent && exitCode === 0) {
+    if (mode === "always" && !announcedByDesktop(join(folder, ".."), schedule.name)) {
+      const first =
+        readFileSync(output, "utf8")
+          .split("\n")
+          .find((line) => line.trim()) ?? "report ready"
+      await notify(
+        system,
+        env,
+        title,
+        prepared
+          ? `${prepared.notice.slice(0, 180)}\n${latestText}`
+          : `${first.trim().slice(0, 180)}\n${join(folder, "latest.md")}`,
+      )
+    }
   } else if (exitCode !== 0 && mode !== "never") {
     await notify(system, env, title, `failed (exit ${exitCode}) — ${errors}`)
   }
