@@ -72,11 +72,12 @@ export const enrichmentPrice = (provider: string, model: string, baseUrl?: strin
   baseUrl === undefined ? PRICES[`${provider}/${model}`] : undefined
 
 /**
- * Per record, measured on 10,444 synthetic records with gpt-4o-mini in batches of 20 (cli-testing
- * knowledge-graph-memory, 2026-11-07): 45 input tokens a record of about 100 characters and 85 output tokens.
+ * Per record, measured with this prompt and gpt-4o-mini on 1,048 synthetic records of about 100 characters, 20 to a
+ * request (cli-testing write-time-enrichment, 2026-11-08): 66 input tokens, 41 of them the prompt's share, and 65
+ * output tokens.
  */
-const OUTPUT_TOKENS_PER_RECORD = 90
-const PROMPT_TOKENS_PER_RECORD = 25
+const OUTPUT_TOKENS_PER_RECORD = 70
+const PROMPT_TOKENS_PER_RECORD = 40
 
 export interface EnrichmentEstimate {
   records: number

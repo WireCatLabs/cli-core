@@ -207,7 +207,7 @@ describe("enrichment", () => {
     const state = await enrichmentState(store, env, { provider: "openai", model: "gpt-4o-mini" })
     const unknown = await enrichmentState(store, env, { provider: "openai", model: "my-model" })
 
-    expect(state.estimate).toMatchObject({ records: 1, input_tokens: 125, output_tokens: 90 })
+    expect(state.estimate).toMatchObject({ records: 1, input_tokens: 140, output_tokens: 70 })
     expect(state.estimate.usd).toBeGreaterThan(0)
     expect(unknown.estimate.usd).toBeNull()
   })
