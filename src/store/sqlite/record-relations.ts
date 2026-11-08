@@ -22,7 +22,7 @@ export const statementsOf = (database: CacheDatabase) => {
 /** A reference a record's fields make (`fields.pipeline`, `fields.lines.product`): no role a source sends has a dot. */
 export const isDerived = (role: string) => role.startsWith("fields.")
 
-/** A record's relations in `record_relations`: as sent, typed refs as `target_type = 'ref'`, and those its fields make. */
+/** A record's relations in `record_relations`: as sent, a typed ref with the target type ref, and those its fields make. */
 export const recordRelationsOver = ({ database }: StoreContext, sql: ReturnType<typeof statementsOf>) => {
   const entityRef = (type: unknown, id: unknown): string | null =>
     type == null ? null : (referenceOfThing(database, storedThing(type, id)) ?? `${String(type)}:${String(id)}`)
