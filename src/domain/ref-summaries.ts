@@ -30,6 +30,16 @@ export interface RefSummary {
 export interface RefsStore {
   /** One query per kind present. Never throws for a bad ref: it comes back `unknown`, `unavailable`. */
   summaries(refs: readonly string[], options?: { excerpt?: boolean }): Promise<Map<string, RefSummary>>
+  /**
+   * The accounts the referenced thing belongs to: `[]` when no account brought it (the owner made it), `undefined`
+   * when the store holds nothing for the reference or it is not one.
+   */
+  accounts(ref: string): Promise<{ provider: string; account: string }[] | undefined>
+  /**
+   * Each part the thing belongs to, all of which a group must hold: a proposed action (`action:<id>`) is its own
+   * account and its target's; a suggested link (`link:<id>`) its two ends; anything else one part, as `accounts`.
+   */
+  ends(ref: string): Promise<{ provider: string; account: string }[][] | undefined>
 }
 
 /** The caller's answer to "which profile opens this": one signed in, or the choices and why there is not one. */

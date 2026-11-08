@@ -7,6 +7,7 @@ import { isCliFailure } from "../errors/failures.js"
 import type { CrmRelationIssue, CrmSaved, CrmSkipped } from "../store/sqlite/crm.js"
 import type { MessageStore } from "../store/store.js"
 import type { AccountKey } from "../store/types.js"
+import { ungroupedHint } from "./group-hint.js"
 import type { CrmCallContext, CrmGap, CrmPage, CrmSource } from "./source.js"
 
 const DAY = 86_400_000
@@ -146,6 +147,11 @@ export interface CrmSyncReport {
     steps: number
   }
   hint?: string
+  /**
+   * On the first sync of an account no saved group lists: how to add it to a work group. Not `next`, which in an answer
+   * is the list of steps to run.
+   */
+  groupHint?: string
 }
 
 const CONTINUE = "run sync again to continue"
@@ -484,6 +490,8 @@ export const syncCrm = async (
     droppedPending: 0,
   }
   const kinds = CRM_KINDS.filter((kind) => source.traits.kinds.includes(kind))
+  const cursors = await Promise.all(kinds.map((kind) => store.sync.syncState(account, cursorName(kind))))
+  const first = cursors.every((cursor) => cursor === undefined)
   let stopped: BudgetStop | null = null
   for (const kind of DEAL_KINDS)
     if (!stopped && kinds.includes(kind)) {
@@ -558,6 +566,8 @@ export const syncCrm = async (
     report.complete = false
     report.hint = CONTINUE
   }
+  const groupHint = first ? await ungroupedHint(store, account) : undefined
+  if (groupHint) report.groupHint = groupHint
   return report
 }
 

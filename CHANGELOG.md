@@ -35,11 +35,73 @@ shape of this file.
   in SQL. A context's `coverage` names each CRM account's sync gaps (`crmGapsOf`) and each kind the profile denies
   (`deniedKinds`: no deal or lead row, title or count is answered). A relationship (`knowledge.relations`) answers
   the `account` that reported it and how a source `derived` it.
+- **Account groups for memo's group word (WC-ACCT-13).** The default group is `all`: every account, never saved, so
+  a run with no group reads everything, as before. A group the owner saves (`account_groups.<name>`) is exactly its
+  list, `personal` like any other, and a group never saved does not exist. Groups and the lock are opt-in narrowing
+  for agents; the default still reads everything. `search notes` in a group reads memo's own notes beside the group's
+  folders, since they are the owner's.
+- **`runGroup` and `scopeToGroup`.** memo lifts the first word with `liftProfile`, as every CLI does. `runGroup` takes
+  it, or `<PREFIX>_GROUP`; `all` means no restriction, and a word that is no group name is `validation_error`. Under
+  `<PREFIX>_GROUP_LOCK` it refuses any other group, `all` included, with `permission_error`; a lock of `all` locks
+  nothing. `scopeToGroup` turns a run's `--source` into the group: none becomes `group:<name>`, a bare provider or
+  kind keeps the group's accounts of it, and `all` anywhere in the list, an account outside the group or a write's
+  `--account` outside it is refused (`validation_error`, or `permission_error` under the lock), naming the entry as
+  typed. An empty group fails as `group <name> is empty`; an unknown one is `validation_error` with
+  `details.groups`, and `details.suggested` when profiles carry its name. From `@wirecat/cli-core/cli` and
+  `@wirecat/cli-core/services`; memo wires them in its own release.
+- **Under `<PREFIX>_GROUP_LOCK` a run refuses what does not keep to the group (`permission_error`).** A command
+  runs only when it, or a command above it, is marked `groupAware(command)` (`@wirecat/cli-core/cli`); `help`,
+  `commands` and the other words that read no account still run. Every reference typed into the run, in an argument
+  or an option value (`msg:`, `chat:`, `deal:`, `person:`, `event:`, …), is checked by
+  `refuseOutsideGroup(command, { app, env, store? })`: account data that belongs only to accounts outside the group
+  is refused, such as a message, a chat, mail, a calendar event, a CRM row, or a person seen only by outside
+  accounts. What the owner made, with no account (memo's notes, projects, tasks, invoices, owner deals and
+  organizations, memories, facts), passes in every group. A bare id counts too, as `<kind>:<id>`, where the command
+  says its kind: `refKinds(command, { id: "organization", "--note": "note" })`, or an argument or `--<kind>` option
+  named after a kind (`<organization>`, `--project`). A command that declares no kinds has any other argument value
+  refused; `refKinds(command, {})` lets free text through. `store.refs.accounts(ref)` says which accounts a
+  reference's thing belongs to (`[]` for the owner's own); an event is its calendars' and meetings' accounts, a
+  folder's file is its folder (`notes:<id>`). `inGroupOf(context, group)` (services) is the membership test.
+  Group edits are refused under the lock, and `listAccountGroups` lists only the locked group.
+- **What a locked run shows of proposals and evidence: `groupGuardOf(store, app, env)` and `lockedRegistry`**
+  (services). The guard says whether a reference is `visible` in the locked group (every part of its thing: a
+  proposed action is its own account and its target's, a suggested link its two ends), `keep`s the visible references
+  of a list and `strip`s outside ones from every `evidence` and `sources` array of an answer, counting them as
+  `out_of_scope`; a memory's or fact's own text stays. `lockedRegistry` wraps the proposal registry so a proposal whose
+  subject, object or action is outside the group is not listed, shown or decided (`permission_error`), and shown ones
+  keep only the group's evidence. `refKinds` takes `action` (`actions confirm 17`) and `proposal` (`review confirm
+  17070,link:17,fact:512`), and `store.refs.ends(ref)` gives each part. A key-document suggestion (`key:9`) is its
+  link's two ends, so a Drive or mail document of an outside account is refused; a close suggestion (`close:Q-15`) is
+  its task's, the owner's, with its evidence stripped; any other proposal prefix is refused. Under the lock `listContextOf` holds only the
+  group's accounts, notes folders included.
+- **Under `<PREFIX>_GROUP_LOCK`, `listContextOf` holds only the group's accounts**, so every `--source` reader fails
+  closed: a list, a bare provider or `all` resolves inside the group, and `search messages`, `search mail` and
+  `search notes` without `--source` read the group. A lock naming no saved group is `permission_error`. The lock is
+  read from the run's `env` only, never `process.env`: `groupLockOf(app, env)`, `listContextOf(…, env)`,
+  `listedAccounts(…, env)`, `env` on `prepareLucene`/`searchLucene`'s messenger, on `searchNotesOf` and on a
+  `GroupStore`. A caller that passes no `env` reads without a lock.
+- **Group membership for a settings page: `listAccountGroups`, `addGroupMember`, `removeGroupMember`,
+  `moveGroupMember`** (services), over `store.accounts.changeAccountGroups`. The list gives each saved group, then
+  `all` with every account (reason `all`), each member with every saved entry that names it, its profile names in
+  every app, its reason (`setting`) and `also_in`, plus `duplicates` (allowed, shown) and `suggested`: a profile name
+  that another app's profile or a saved group shares, for an account not in that group; never applied. A member is
+  saved as `provider:account`, so renaming a profile changes nothing. memo's own notes (`notes:internal`) and an
+  unsaved running account are listed in no group. A remove takes out every entry that names only that account, and
+  refuses one that names others too; a move does that and the add in one write, deciding which entries go inside it;
+  a move from `all` is an add. `all`, `bots` and the caller's `reserved` words cannot name a group, and `config set
+  account_groups.all` and `.bots` are refused.
+- **`deniedKindsOf(permissions, kinds, by, defaults?)`** (`@wirecat/cli-core/cli`, with `deniedKinds`): the kinds
+  `search all` leaves out under a CLI's own permission levels, such as memo's, without messenger profile settings.
+- **The first CRM sync of an account no saved group lists answers `group_hint`**: ``add it to a work group:
+  `memo groups add work <provider>:<account>` `` (memo's command ships with it). Not when a saved group lists the
+  account, and not on later syncs. `hint` still carries "run sync again to continue".
 
 ### Changed — may break callers
 
 - `DealsStore` gains `stages` and `setProject`, and `OrganizationsStore` (so `KnowledgeStore`) gains
   `ownOrganizations`: a hand-written store or fake implementing them must add these.
+- **`listContextOf` returns a `GroupContext`**, a `ListContext` with `membership`, and `group:all` names every
+  account in a `--source` list.
 
 ### Fixed
 

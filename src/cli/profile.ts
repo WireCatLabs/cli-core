@@ -1,5 +1,8 @@
 import { CliError } from "@wirecat/cli-base"
 import type { Command } from "commander"
+import { type AppIdentity, envName } from "../ports/app.js"
+import { isGroupName } from "../search/account-list.js"
+import type { RunGroup } from "../search/groups.js"
 
 /** How the command line names this profile: always the first word, since none is assumed. */
 export const asFirstWord = (profile: string): string => `${profile} `
@@ -72,6 +75,36 @@ export const liftProfile = (
   const first = argv[at]
   if (first === undefined || first.startsWith("-") || words.has(first)) return { rest: argv }
   return { profile: first, rest: [...argv.slice(0, at), ...argv.slice(at + 1)] }
+}
+
+/**
+ * The group a run reads, from the first word (`liftProfile` lifts it) or `<PREFIX>_GROUP`; `all`, the default, is
+ * every account, so no restriction. Under `<PREFIX>_GROUP_LOCK` any other group, `all` included, is refused, as the
+ * profile lock refuses another profile (WC-ACCT-5); a lock of `all` locks nothing.
+ */
+export const runGroup = (app: AppIdentity, env: NodeJS.ProcessEnv, word?: string): RunGroup | undefined => {
+  const GROUP = envName(app, "GROUP")
+  const LOCK = envName(app, "GROUP_LOCK")
+  const lock = env[LOCK]?.trim() || undefined
+  const named = word ?? (env[GROUP]?.trim() || undefined)
+  const from = word === undefined ? GROUP : "first word"
+  for (const [name, origin] of [
+    [named, from],
+    [lock, LOCK],
+  ] as const)
+    if (name !== undefined && !isGroupName(name))
+      throw new CliError(
+        "validation_error",
+        `"${name}" (${origin}) is not a group name — letters, digits, - and _, starting with a letter or a digit`,
+      )
+  if (lock === undefined || lock.toLowerCase() === "all")
+    return named === undefined || named.toLowerCase() === "all" ? undefined : { name: named, from, locked: false }
+  if (named !== undefined && named !== lock)
+    throw new CliError(
+      "permission_error",
+      `this process is locked to group ${lock} (${LOCK}) — group "${named}" (${from}) is refused`,
+    )
+  return { name: lock, from: LOCK, locked: true }
 }
 
 /** The root's options that take the next word as their value: `--timeout 30s`. */

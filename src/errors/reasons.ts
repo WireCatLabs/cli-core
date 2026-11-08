@@ -410,6 +410,7 @@ const OTHERS: Entry[] = [
   ],
   validation("proposal.decider-required", "a decision names who decides: the owner or an agent with a reason"),
   validation("proposal.ids", "the proposal ids cannot be read"),
+  ["group.outside", "permission_error", "the process is locked to a group, and this belongs to accounts outside it"],
   ["proposal.own", "permission_error", "an agent never decides its own proposal"],
   ["proposal.owner-only", "permission_error", "only the owner decides this proposal"],
   ["proposals.agent-decisions-off", "permission_error", "agent decisions are turned off; the owner decides"],
