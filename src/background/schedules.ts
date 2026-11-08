@@ -520,7 +520,7 @@ export const timerFor = (app: AppIdentity, system: ServerSystem, env: NodeJS.Pro
 }
 
 /** The shared `links` settings; a config file that cannot be read keeps the default rather than stop a digest. */
-const sharedLinks = (env: NodeJS.ProcessEnv) => {
+export const sharedLinks = (env: NodeJS.ProcessEnv) => {
   try {
     return linkConfigOf(readSharedSection(sharedConfigPath(storePath(env), env), "links"))
   } catch {
@@ -605,7 +605,7 @@ export const findProgram = (name: string, env: NodeJS.ProcessEnv, platform: Node
 
 const KEEP_RUNS = 30
 /** How long a stopped child has to save and answer after SIGTERM before it is killed. */
-const KILL_AFTER_MS = 10_000
+export const KILL_AFTER_MS = 10_000
 /**
  * The reason tg and max give when a profile that has logged in here cannot read its sign-in: the keyring is
  * locked or out of reach, which a later try fixes and a new login does not.
@@ -741,7 +741,9 @@ export const runSchedule = async (
   } else if (agent && exitCode === 0) rmSync(latestText, { force: true })
 
   const stampOf = (file: string) => file.split(".")[0] ?? file
-  const kept = new Set([...new Set(readdirSync(runs).map(stampOf))].sort().slice(-KEEP_RUNS))
+  const stamps = [...new Set(readdirSync(runs).map(stampOf))].sort()
+  const old = new Set(stamps.filter((stamp) => backfilled(runs, stamp)))
+  const kept = new Set([...stamps.filter((stamp) => !old.has(stamp)).slice(-KEEP_RUNS), ...old])
   for (const file of readdirSync(runs)) if (!kept.has(stampOf(file))) rmSync(join(runs, file), { force: true })
 
   const title = `${app.command} ${schedule.name}`
@@ -905,7 +907,7 @@ const inputOf = async (
 }
 
 /** One run of the schedule's command or agent: its output in `runs/`, its result in `last.json`. */
-const attemptSchedule = async (
+export const attemptSchedule = async (
   app: AppIdentity,
   system: ServerSystem,
   env: NodeJS.ProcessEnv,
@@ -918,6 +920,7 @@ const attemptSchedule = async (
     agentRuns,
     agentInput,
     skipRepeatedInput = false,
+    at,
   }: {
     now: () => Date
     signal: AbortSignal | undefined
@@ -925,10 +928,12 @@ const attemptSchedule = async (
     agentRuns: readonly AgentCli[]
     agentInput: AgentInput | undefined
     skipRepeatedInput?: boolean
+    /** A backfill's run time: the files are named for it, and `last.json` is left as it is. */
+    at?: Date
   },
 ): Promise<LastRun | { repeated: LastRun }> => {
   const runs = join(folder, "runs")
-  const stamp = now()
+  const stamp = (at ?? now())
     .toISOString()
     .replaceAll(":", "-")
     .replace(/\.\d+Z$/, "Z")
@@ -1010,13 +1015,26 @@ const attemptSchedule = async (
     durationMs: ended.getTime() - began,
     ...(costUsd === undefined ? {} : { costUsd }),
   })
-  return recordRun(join(folder, "last.json"), {
-    at: ended.toISOString(),
+  const run = {
+    at: (at ?? ended).toISOString(),
     exitCode,
     output,
     traceId: trace.traceId,
     ...(costUsd === undefined ? {} : { costUsd }),
     ...(inputHash === undefined ? {} : { inputHash }),
     ...(exitCode === 0 ? {} : failureOf(readFileSync(errors, "utf8"), exitCode)),
-  })
+  }
+  return at ? run : recordRun(join(folder, "last.json"), run)
+}
+
+/** A backfilled run is older than the runs it joins, so the count that keeps the newest runs would remove it first. */
+const backfilled = (runs: string, stamp: string): boolean => {
+  const document = join(runs, `${stamp}.report.json`)
+  try {
+    return (
+      existsSync(document) && (JSON.parse(readFileSync(document, "utf8")) as { backfill?: unknown }).backfill === true
+    )
+  } catch {
+    return false
+  }
 }

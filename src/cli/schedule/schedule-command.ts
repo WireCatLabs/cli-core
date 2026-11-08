@@ -3,6 +3,7 @@ import { dirname, join } from "node:path"
 import { CliError, resolvePaths, writeSecurely } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Argument, Command, Option } from "commander"
+import { backfillSchedule } from "../../background/backfill.js"
 import { parseRoute, ROUTE_HELP, routeText } from "../../background/deliver.js"
 import { REPORT_CHANNELS, type StoredTemplates } from "../../background/report/render.js"
 import { keyOfKind } from "../../background/report/stored-templates.js"
@@ -289,6 +290,34 @@ const reportTemplatesOf =
       database.close()
     }
   }
+
+/**
+ * One past day's run of the agent schedule in `file`, as `backfillSchedule` makes it, with the owner's language and
+ * templates as `schedule run` renders them; a stop of the command stops the agent.
+ */
+export const backfillScheduleRun = (
+  command: Command,
+  app: AppIdentity,
+  env: NodeJS.ProcessEnv,
+  file: string,
+  { at, input, agentRuns = [] }: { at: Date; input?: string; agentRuns?: readonly AgentCli[] },
+) =>
+  untilChildEnds(command, (signal) =>
+    backfillSchedule(
+      app,
+      environmentOf<BaseEnvironment & { system?: ServerSystem }>(command).system ?? thisMachine(),
+      env,
+      file,
+      {
+        at,
+        agentRuns,
+        ownerLanguage: ownerLanguageOf,
+        reportTemplates: reportTemplatesOf,
+        ...(input === undefined ? {} : { input }),
+        ...(signal ? { signal } : {}),
+      },
+    ),
+  )
 
 /**
  * Runs the CLI's own commands, or an agent, later or on a timer — through systemd (Linux), launchd

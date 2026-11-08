@@ -15,6 +15,7 @@ import { logRecordSchema } from "@wirecat/cli-base/standards"
 import { Command } from "commander"
 import * as v from "valibot"
 import { describe, expect, it, vi } from "vitest"
+import { backfillSchedule } from "../../background/backfill.js"
 import {
   AGENT_INPUT_MAX_CHARS,
   type AgentInput,
@@ -1164,6 +1165,84 @@ describe.runIf(process.platform !== "win32")("an agent gated on new mail", () =>
       "Bad",
     ])
     expect(bad.code).toBe(2)
+  })
+})
+
+describe.runIf(process.platform !== "win32")("a backfilled run", () => {
+  const report = {
+    format: "wirecat.report/1",
+    kind: "morning-digest",
+    date: "2026-11-05",
+    sections: [{ kind: "today", items: [{ type: "task", topic: "Смета", due: "2026-11-05", refs: ["task:80"] }] }],
+  }
+  const backfill = () => {
+    const { env, root } = setup()
+    const claude = join(root, "bin", "claude")
+    // Keeps its stdin beside itself and answers as claude's JSON does, with the run's cost.
+    writeFileSync(
+      claude,
+      `#!${process.execPath}\nconst fs = require("node:fs")\nfs.writeFileSync(__filename + ".input", fs.readFileSync(0))\n` +
+        `process.stdout.write(${JSON.stringify(JSON.stringify({ type: "result", result: JSON.stringify(report), total_cost_usd: 0.09 }))})\n`,
+    )
+    const sent: string[][] = []
+    const system: ServerSystem = {
+      platform: "linux",
+      uid: 501,
+      entry: [process.execPath],
+      spawn: () => 0,
+      pause: async () => {},
+      run: async (argv) => {
+        sent.push(argv)
+        return { code: 0, stdout: "", stderr: "" }
+      },
+    }
+    const file = scheduleFile(env.CHAT_STATE_DIR, "morning-digest")
+    mkdirSync(join(file, ".."), { recursive: true })
+    writeFileSync(
+      file,
+      JSON.stringify({
+        name: "morning-digest",
+        kind: "agent",
+        argv: [claude, "-p", "Run the digest.", "--max-budget-usd", "0.5"],
+        when: { daily: "08:30" },
+        environment: { CHAT_PROFILE: "work" },
+        createdAt: "",
+        to: ["telegram-bot:personal/user:42"],
+      }),
+    )
+    writeFileSync(join(file, "..", "last.json"), '{"at":"2026-11-08T07:30:00.000Z","exitCode":0,"output":"x"}\n')
+    return { env, system, file, claude, sent }
+  }
+
+  it("keeps the report under the day's time with backfill set, sends nothing and leaves the last run", async () => {
+    const { env, system, file, claude, sent } = backfill()
+    const at = new Date("2026-11-05T07:30:00Z")
+    const last = await backfillSchedule(app, system, env, file, { at, input: "backfill: 2026-11-05\n" })
+
+    expect(last).toMatchObject({ at: at.toISOString(), exitCode: 0, costUsd: 0.09, report: { leaks: 0 } })
+    expect(last.output).toBe(join(file, "..", "runs", "2026-11-05T07-30-00Z.md"))
+    expect(JSON.parse(readFileSync(last.output.replace(/\.md$/, ".report.json"), "utf8"))).toMatchObject({
+      date: "2026-11-05",
+      backfill: true,
+    })
+    expect(readFileSync(`${claude}.input`, "utf8")).toBe("backfill: 2026-11-05\n")
+    expect(sent).toEqual([])
+    expect(readFileSync(join(file, "..", "last.json"), "utf8")).toContain('"at":"2026-11-08T07:30:00.000Z"')
+    expect(existsSync(join(file, "..", "latest.md")) || existsSync(join(file, "..", "latest.txt"))).toBe(false)
+    expect(JSON.parse(readFileSync(join(file, "..", "spend.json"), "utf8")).usd).toBe(0.09)
+  })
+
+  it("is not removed by the count of runs kept, which it would otherwise leave first", async () => {
+    const { env, system, file } = backfill()
+    const old = await backfillSchedule(app, system, env, file, { at: new Date("2026-10-01T07:30:00Z") })
+    const runs = join(file, "..", "runs")
+    for (let day = 1; day <= 30; day++)
+      writeFileSync(join(runs, `2026-10-${String(day + 1).padStart(2, "0")}T08-00-00Z.md`), "x")
+    await runSchedule(app, system, env, file)
+
+    expect(existsSync(old.output)).toBe(true)
+    expect(existsSync(join(runs, "2026-10-02T08-00-00Z.md"))).toBe(false)
+    expect(readdirSync(runs).filter((one) => one.endsWith(".md"))).toHaveLength(31)
   })
 })
 
