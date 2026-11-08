@@ -228,6 +228,12 @@ const OTHERS: Entry[] = [
   validation("finance.total", "the invoice's total is not the sum of its lines"),
   validation("finance.unallocate", "a rejected or deleted payment's allocations are not taken back"),
   validation("record.entity", "the entity or proposal the record stands for was refused"),
+  validation(
+    "record.provider-not-imported",
+    "SMS and calls are imported only under an import-only provider, such as phone",
+  ),
+  validation("record.chat", "the chat an SMS names is not an imported one: a sync owns it"),
+  validation("record.moved", "an SMS stays in its thread: delete it and send it again under a new external_id"),
   validation("record.phone-region", "a phone without + is read only in the envelope's phone_region; kept as data"),
   validation("record.separated", "the owner told the one entity these identifiers match apart from them"),
   ["store.dry-run", "conflict", "a dry run of an import holds the store; the read or write waits for it to end"],

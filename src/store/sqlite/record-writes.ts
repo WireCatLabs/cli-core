@@ -38,6 +38,7 @@ import {
 } from "./record-matching.js"
 import { codeOf, type Projection, type ProjectionTools, type Row, refusal, stringField } from "./record-projection.js"
 import { RECORD_PROJECTORS } from "./record-projectors.js"
+import { importOnly } from "./record-projectors-phone.js"
 import { recordRelationsOver } from "./record-relations.js"
 import { recordSettlingOver } from "./record-settling.js"
 import { importStampsOver } from "./record-stamps.js"
@@ -288,6 +289,8 @@ export const recordWritesOver = (context: StoreContext) => {
     options: EnvelopeOptions,
     proposed: (ref: string) => void,
   ): WriteOutcome => {
+    if (isRecordType(record.type) && (RECORD_TYPES[record.type] as RecordTypeSpec).importOnly)
+      importOnly(source, record.type)
     const stored = sql("SELECT * FROM records WHERE account_id = ? AND type = ? AND external_id = ?").get(
       accountId,
       record.type,
@@ -316,6 +319,13 @@ export const recordWritesOver = (context: StoreContext) => {
         source.batch_id,
         Number(stored.id),
       )
+      const remove = isRecordType(String(stored.type))
+        ? RECORD_PROJECTORS[String(stored.type) as RecordType]?.remove
+        : undefined
+      if (remove && stored.entity_id != null) {
+        remove(entityRef(stored.entity_type, stored.entity_id) as string, toolsOf())
+        return { status: "deleted", id: Number(stored.id) }
+      }
       return { status: "deleted", id: Number(stored.id), ...(liveEntity(stored) ? { flagged: {} } : {}) }
     }
     const fields = JSON.stringify(record.fields)

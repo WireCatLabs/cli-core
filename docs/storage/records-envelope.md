@@ -206,9 +206,15 @@ they carry no money.
 **One account per phone.** The records, the SMS and the calls of an import all stay in the account it names
 (`--account phone:pixel`), so an account group (WC-ACCT-13) lists the phone once and reaches all of it. A search lane
 reads the accounts whose provider **holds** its kind, and a provider may hold several (`kinds`): the seeded `phone`
-holds `messages` and `events`. A source under another provider registers one with the kinds it holds; one no entry
-names is skipped, as any unknown provider is. A call's calendar entry has `event_type: call`, so
-`events list event_type:call` lists calls among the calendars' events. No column is added.
+holds `messages` and `events`. A call's calendar entry has `event_type: call`, so `events list event_type:call` lists
+calls among the calendars' events. No column is added.
+
+**Only an import-only provider takes them.** A messenger's or a calendar's account belongs to its sync, so a
+`message` or `event` record under any provider whose entry is not marked `imported` is refused
+(`record.provider-not-imported`) before anything is written: the seeded `phone` is marked, `telegram`, a calendar
+provider or an unregistered `sheet` are not. An entry can be marked only by the first entry of its name, never by a
+later one. An SMS is never written into a chat of the account whose membership is not `imported` (`record.chat`),
+and its counterpart's identity is under the import's own provider.
 
 ```json
 { "key": "sms-1", "type": "message", "external_id": "sms-1",
@@ -224,18 +230,24 @@ names is skipped, as any unknown provider is. A call's calendar entry has `event
 **SMS → chats and messages.**
 
 - One chat per thread in the account: `fields.thread` (the phone's thread id) when sent, else the counterpart's
-  number read to E.164 with the store's `phone_countries` (as written when it does not read: a short code, a
-  sender name such as `Sberbank`). Kind `dialog`, membership `imported`, the title `fields.name` or the number.
+  number read to E.164 as a person record's phone is (with `+`, or in `options.phone_region`; as written otherwise:
+  a short code, a sender name such as `ExampleBank`). Kind `dialog`, membership `imported`, the title `fields.name` or the number.
 - `direction`: `in` is the counterpart's message, `out` the owner's (`outgoing`, no sender). The counterpart is an
   identity of the account's provider whose id is the number, kept as the identity's `phone` too, a member of the chat and
   seen by the account, so the person's context and `search messages` read it as a messenger contact.
 - `body` is the text, `sent_at` (ISO 8601 with an offset) the time. `read` (an incoming message the owner opened) is
   kept in the message's metadata: the store has no per-message read state for incoming messages.
 - The message is written through the messenger path (`upsertMessage`), so its words and meaning are indexed as a
-  messenger's; `messages.source` is `import:<provider>`. A changed record edits the text, as an edit does.
+  messenger's; `messages.source` is `import:<provider>`. A changed record edits the text, as an edit does. A change
+  that moves it to another thread (a new `thread` or number) is refused (`record.moved`): delete the record and send
+  it again under a new `external_id`.
+- A deleted record's SMS is a tombstone, as a messenger's deleted message is; a deleted call's entry is cancelled and
+  its event marked deleted, so neither is found any more.
+- An import-only account says nothing of a search's coverage: no fetch could add to what its import wrote.
 - MMS attachments are out of scope: a record's other fields are kept in the record only.
 
-**Calls → events.** One calendar `calls` in the account, its sync marked complete. Each call is a calendar
+**Calls → events.** One calendar `calls` in the account, made on the first call (and again if the owner forgot it).
+No sync reads it, and `events list` does not report an import-only account as incomplete. Each call is a calendar
 entry (`event_type: call`, `transparency: transparent`, so it never counts as busy or overlapping) and the event it
 makes: start `started_at`, end start plus `duration` seconds, title `fields.name` or the number, description
 `incoming call`, `outgoing call` or `missed call`. Direction, duration and number are in the entry's metadata.
@@ -263,6 +275,9 @@ imports it in one call, its receipt with the converter's `vcard` issues beside t
 - `ORG` is one `organization` record per name in the file (`external_id` `org:<folded name>`), and the person is
   `member-of` it; `TITLE` is kept in `fields.title`, and is the relation's `as` when it reads as a word (`cto`).
   Each account gets its own organization for an `ORG` name: a name never matches across accounts or entities.
-- `external_id` is the card's `UID`, else a hash of its name, numbers and addresses: a card without UID whose
-  numbers change is a new record. `REV` is not a `revision`: a source that never sends one could not change it later.
+- `external_id` is the card's `UID` (hashed when it is longer than 512 characters), else a hash of its name, numbers
+  and addresses: a card without UID whose numbers change is a new record. `REV` is not a `revision`: a source that never sends one could not change it later.
 - `PHOTO`, `LOGO`, `SOUND`, `KEY` are skipped.
+- Nothing is dropped quietly: a card cut by another `BEGIN:VCARD` or by the end of the file, an unknown `CHARSET`
+  (read as UTF-8), a card with no name, number or address (left out) and a repeated `UID` are each in `issues`. A
+  quoted-printable soft break never joins a card's `BEGIN` or `END`.

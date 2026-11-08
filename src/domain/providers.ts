@@ -15,6 +15,11 @@ export interface ProviderEntry {
    * once reaches both. Left out, `[kind]`.
    */
   kinds?: readonly Kind[]
+  /**
+   * Its accounts hold only what an import wrote: no messenger or calendar syncs them, so a records import may write
+   * messages and events there. Fixed by the first entry of its name; a later one may not turn it on.
+   */
+  imported?: boolean
   aliases: readonly string[]
   /** The CLI that wrote the entry (`zm`, `drive`). One CLI may write several providers, so it is not an alias. */
   command?: string
@@ -40,7 +45,7 @@ export const PROVIDERS: readonly ProviderEntry[] = [
   { name: "obsidian", kind: "notes", aliases: [] },
   { name: "zoom", kind: "meetings", aliases: [] },
   // A phone export's records: its SMS and its calls in the one account the import names.
-  { name: "phone", kind: "messages", kinds: ["messages", "events"], aliases: [] },
+  { name: "phone", kind: "messages", kinds: ["messages", "events"], aliases: [], imported: true },
 ]
 
 const LABELS: Readonly<Record<string, string>> = {
@@ -117,7 +122,7 @@ const opensOf = (value: unknown, named: string): Partial<Record<RefKindName, str
 export const providerEntryOf = (value: unknown): ProviderEntry => {
   if (typeof value !== "object" || value === null || Array.isArray(value))
     return invalid("a provider entry is an object")
-  const { name, kind, kinds, aliases = [], command, opens } = value as Record<string, unknown>
+  const { name, kind, kinds, aliases = [], command, opens, imported } = value as Record<string, unknown>
   const named = wordOf(name, "a provider's name")
   const isKindWord = (one: unknown): one is Kind =>
     typeof one === "string" && (KINDS as readonly string[]).includes(one)
@@ -127,10 +132,12 @@ export const providerEntryOf = (value: unknown): ProviderEntry => {
   const list = [...new Set(given as Kind[])]
   if (kind !== undefined && kind !== list[0]) invalid(`provider ${named}'s kind is the first of its kinds`)
   if (!Array.isArray(aliases)) invalid(`provider ${named}'s aliases are a list`)
+  if (imported !== undefined && typeof imported !== "boolean") invalid(`provider ${named}'s imported is true or false`)
   return {
     name: named,
     kind: list[0] as Kind,
     ...(list.length > 1 ? { kinds: list } : {}),
+    ...(imported === true ? { imported: true } : {}),
     aliases: [...new Set((aliases as unknown[]).map((alias) => wordOf(alias, `an alias of ${named}`)))],
     ...(command === undefined ? {} : { command: wordOf(command, `the command of ${named}`) }),
     ...(opens === undefined ? {} : { opens: opensOf(opens, named) }),
@@ -143,22 +150,26 @@ export const kindsOfEntry = (entry: Pick<ProviderEntry, "kind" | "kinds">): read
 const describe = (entry: ProviderEntry) =>
   `${entry.name} (${kindsOfEntry(entry).join(", ")}${entry.command ? `, from ${entry.command}` : ""})`
 
-/** One list of kinds holding the other, both led by the same kind: an older build writes that first one only. */
-const widerKinds = (a: readonly Kind[], b: readonly Kind[]): readonly Kind[] | undefined =>
-  b.every((one) => a.includes(one)) ? a : a.every((one) => b.includes(one)) ? b : undefined
+/** Both lists, the known one's order first: an older build writes the first kind only, and drops none. */
+export const unitedKinds = (known: readonly Kind[], entry: readonly Kind[]): readonly Kind[] => [
+  ...new Set([...known, ...entry]),
+]
 
 const wordsOf = ({ name, aliases }: ProviderEntry) => [name, ...aliases]
 
 /** `entry` joined to `known`: the same name keeps one entry with both entries' aliases; a clash is an error. */
 const joined = (known: readonly ProviderEntry[], entry: ProviderEntry): ProviderEntry[] => {
   const same = known.find(({ name }) => name === entry.name)
-  const kinds = same ? widerKinds(kindsOfEntry(same), kindsOfEntry(entry)) : kindsOfEntry(entry)
-  if (same && (kinds === undefined || same.kind !== entry.kind))
+  const kinds = same ? unitedKinds(kindsOfEntry(same), kindsOfEntry(entry)) : kindsOfEntry(entry)
+  if (same && same.kind !== entry.kind)
     invalid(`two provider entries disagree on the kind: ${describe(same)} and ${describe(entry)}`)
+  // A messenger's entry turned import-only would let an import write into its chats.
+  if (same && entry.imported === true && same.imported !== true)
+    invalid(`provider ${entry.name} is synced, so an entry cannot make it import-only`)
   const merged: ProviderEntry = same
     ? {
         ...same,
-        ...(kinds && kinds.length > 1 ? { kinds } : {}),
+        ...(kinds.length > 1 ? { kinds } : {}),
         aliases: [...new Set([...same.aliases, ...entry.aliases])],
         ...(entry.command ? { command: entry.command } : {}),
         ...(entry.opens ? { opens: { ...same.opens, ...entry.opens } } : {}),
@@ -226,6 +237,10 @@ export const kindsIn = (provider: Provider): readonly Kind[] => {
   const entry = registry.find(({ name }) => name === provider)
   return entry ? kindsOfEntry(entry) : []
 }
+
+/** Whether a provider's accounts hold only what imports wrote: the one place a records import writes messages and events. */
+export const isImportedProvider = (provider: Provider): boolean =>
+  registry.find(({ name }) => name === provider)?.imported === true
 
 /** Whether a provider's accounts hold `kind`: what a search lane picks its accounts by. */
 export const holdsKind = (provider: Provider, kind: Kind): boolean => kindsIn(provider).includes(kind)

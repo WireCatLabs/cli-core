@@ -3,7 +3,15 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { DatabaseSync } from "node:sqlite"
 import { afterEach, describe, expect, it } from "vitest"
-import { kindIn, kindOf, providerNamed, providers, useProviders } from "../../domain/providers.js"
+import {
+  isImportedProvider,
+  kindIn,
+  kindOf,
+  kindsIn,
+  providerNamed,
+  providers,
+  useProviders,
+} from "../../domain/providers.js"
 import { openStore, registerProvider } from "../store.js"
 import { openSqlite } from "./open.js"
 
@@ -118,5 +126,33 @@ describe("the stored provider registry", () => {
       "drive",
     ])
     expect(providers().map(({ name }) => name)).toContain("drive")
+  })
+
+  it("**keeps another build's kinds** when an older one registers the same provider with its first kind only", async () => {
+    const path = pathOf()
+    const newer = await openStore({ path })
+    await registerProvider(newer, {
+      name: "example-phone",
+      kind: "messages",
+      kinds: ["messages", "events"],
+      aliases: [],
+    })
+    await registerProvider(newer, { name: "example-phone", kind: "messages", aliases: ["exp"] })
+    await newer.close()
+    useProviders([])
+    const reader = await openStore({ path, readOnly: true })
+    expect(kindsIn("example-phone")).toEqual(["messages", "events"])
+    expect(providerNamed("exp")?.name).toBe("example-phone")
+    await reader.close()
+  })
+
+  it("**never lets an entry make a synced provider import-only**", async () => {
+    const store = await openStore({ path: pathOf() })
+    await expect(
+      registerProvider(store, { name: "telegram", kind: "messages", aliases: [], imported: true }),
+    ).rejects.toThrow(/synced, so an entry cannot make it import-only/)
+    expect(isImportedProvider("telegram")).toBe(false)
+    expect(isImportedProvider("phone")).toBe(true)
+    await store.close()
   })
 })

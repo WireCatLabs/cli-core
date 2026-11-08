@@ -107,4 +107,47 @@ describe("envelopeOfVcard", () => {
     expect(isVcard("﻿BEGIN:VCARD\r\nVERSION:3.0")).toBe(true)
     expect(isVcard('{"schema_version":1}')).toBe(false)
   })
+
+  it("never joins a soft break onto a card's END or past the last line", () => {
+    const end = cards(
+      "BEGIN:VCARD\nVERSION:2.1\nFN;ENCODING=QUOTED-PRINTABLE:Ab=\nEND:VCARD\nBEGIN:VCARD\nFN:B\nEND:VCARD\n",
+    )
+    expect(end.envelope.records.map(({ fields }) => fields?.name)).toEqual(["Ab", "B"])
+    expect(end.issues).toEqual([])
+    const last = cards("BEGIN:VCARD\nVERSION:2.1\nFN;ENCODING=QUOTED-PRINTABLE:Ab=")
+    expect(last.envelope.records.map(({ fields }) => fields?.name)).toEqual(["Ab"])
+    expect(last.issues).toEqual([{ card: 0, message: "the file ends inside a card, with no END:VCARD" }])
+  })
+
+  it("reports a card cut by another BEGIN, an unknown charset and an empty card, and drops none quietly", () => {
+    const { envelope, issues } = cards(
+      [
+        "BEGIN:VCARD\nFN:Outer\nBEGIN:VCARD\nFN:Inner\nEND:VCARD",
+        "BEGIN:VCARD\nVERSION:2.1\nFN;CHARSET=X-NOPE;ENCODING=QUOTED-PRINTABLE:A=42\nEND:VCARD",
+        "BEGIN:VCARD\nVERSION:3.0\nEND:VCARD",
+      ].join("\n"),
+    )
+    expect(envelope.records.map(({ fields }) => fields?.name)).toEqual(["Outer", "Inner", "AB"])
+    expect(issues).toEqual([
+      { card: 0, message: "BEGIN:VCARD inside a card: the card ends there, unfinished" },
+      { card: 2, message: "FN names the unknown charset x-nope: read as UTF-8" },
+      { card: 3, message: "the card holds no name, number or address: left out" },
+    ])
+  })
+
+  it("hashes a UID too long for an external id, so two long ones stay two cards", () => {
+    const card = (uid: string) => `BEGIN:VCARD\nVERSION:3.0\nUID:${uid}\nFN:${uid.slice(-1)}\nEND:VCARD`
+    const ids = people([card("u".repeat(600)), card(`${"u".repeat(600)}v`)].join("\n")).map(
+      ({ external_id }) => external_id,
+    )
+    expect(ids).toHaveLength(2)
+    expect(new Set(ids).size).toBe(2)
+    for (const id of ids) expect(id).toMatch(/^vcard:[0-9a-f]{32}$/)
+  })
+
+  it("carries the region as the envelope's phone_region", () => {
+    expect(cards("BEGIN:VCARD\nFN:A\nTEL:07700 900111\nEND:VCARD", { region: "gb" }).envelope.options).toEqual({
+      phone_region: "gb",
+    })
+  })
 })

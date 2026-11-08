@@ -228,6 +228,15 @@ export const upsertChat = (context: StoreContext, accountKey: number, chat: Chat
     .run()
 }
 
+/** Moves a chat's newest-message time forward only: messages imported out of order never move it back. */
+export const raiseLastMessageAt = ({ orm }: StoreContext, chatKey: number, at: number): void => {
+  orm
+    .update(chats)
+    .set({ lastMessageAt: sql`max(coalesce(${chats.lastMessageAt}, 0), ${at})` })
+    .where(eq(chats.id, chatKey))
+    .run()
+}
+
 const bit = (value: boolean | undefined): number | null => (value === undefined ? null : value ? 1 : 0)
 
 /**
