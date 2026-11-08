@@ -141,6 +141,7 @@ const dealSample = {
   pipeline: "pipeline:2",
   pipeline_name: "Sales",
   stage: "Quote",
+  base_stage: { ref: "stage:7", name: "Proposal" },
   status: "open",
   organization: { ref: "organization:3", name: "Sample LLC", owner: false },
   currency: "EUR",

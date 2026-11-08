@@ -16,6 +16,7 @@ import { notOverriddenSql } from "../../domain/relations.js"
 import { fold } from "../normalize.js"
 import type { AccountKey } from "../types.js"
 import { type ProposedByFilter, proposedBySql } from "./actors.js"
+import { suggestBaseStages } from "./base-suggest.js"
 import { linkKind } from "./link-kinds.js"
 import { type Author, authorActor, authorOf, evidenceOf, linkEvidence, projectId, projectOf } from "./memories.js"
 import { requiredThing } from "./notes.js"
@@ -83,6 +84,11 @@ export interface Deal {
   pipeline: string
   pipelineName: string
   stage: string
+  /**
+   * The stage of the owner's base set its stage maps to, once confirmed; a stage of the base set is its own. `null`
+   * while unmapped or only suggested: a board shows it as unsorted.
+   */
+  baseStage: { ref: string; name: string } | null
   status: DealStatus
   organization: Party | null
   /** Both `null` when no amount is expected yet. */
@@ -228,9 +234,11 @@ const TABLES = { deal: "deals", lead: "leads" } as const
 
 const itemsSql = (kind: DealKind) =>
   "SELECT d.*, s.name AS stage_name, s.pipeline_id, p.name AS pipeline_name, b.name AS author_name, " +
-  "b.kind AS author_kind, a.provider AS account_provider, a.external_id AS account_external_id " +
+  "b.kind AS author_kind, a.provider AS account_provider, a.external_id AS account_external_id, " +
+  "bs.id AS base_stage_ref_id, bs.name AS base_stage_name " +
   `FROM ${TABLES[kind]} d JOIN pipeline_stages s ON s.id = d.stage_id JOIN pipelines p ON p.id = s.pipeline_id ` +
-  "LEFT JOIN bots b ON d.author_type = 'bot' AND b.id = d.author_id LEFT JOIN accounts a ON a.id = d.account_id"
+  "LEFT JOIN bots b ON d.author_type = 'bot' AND b.id = d.author_id LEFT JOIN accounts a ON a.id = d.account_id " +
+  "LEFT JOIN pipeline_stages bs ON s.base_confirmed = 1 AND bs.id = s.base_stage_id"
 
 const MAX_STAGES = 30
 const MAX_PEOPLE = 20
@@ -300,6 +308,10 @@ export const dealOperationsOver = (context: StoreContext) => {
         pipeline: `pipeline:${row.pipeline_id}`,
         pipelineName: String(row.pipeline_name),
         stage: fields.stage,
+        baseStage:
+          row.base_stage_ref_id == null
+            ? null
+            : { ref: `stage:${row.base_stage_ref_id}`, name: String(row.base_stage_name) },
         status: fields.status,
         organization: partyOf(row.organization_id == null ? null : "organization", row.organization_id),
         currency,
@@ -566,6 +578,7 @@ export const dealOperationsOver = (context: StoreContext) => {
         kept.forEach((stage, index) => {
           insert.run(made, stage.name, fold(stage.name), index + 1, stage.outcome, at, at)
         })
+        suggestBaseStages(database, pipelineKind, [made])
         return made
       })
       return pipelinesOf(

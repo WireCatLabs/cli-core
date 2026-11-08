@@ -423,6 +423,90 @@ describe("CRM write commands", () => {
     expect(closed.item.deal).toMatchObject({ status: "lost", closed_reason: "Example: chose another supplier" })
   })
 
+  it("move to a base stage's stage:<id> writes the one stage mapped there, and refuses many or none", async () => {
+    const { cli, ref, store, source } = await synced()
+    await store.baseStages.confirm({ all: true })
+    const base = await store.baseStages.show("deal")
+    // The owner's language is unset, so the default names are Russian: columns by place.
+    const at = (name: "Proposal" | "Negotiation") => base.stages[name === "Proposal" ? 2 : 3]?.ref as string
+    const moved = await cli("deals", "move", ref, at("Negotiation"))
+    expect(moved.item.deal).toMatchObject({ stage: "Quote sent", base_stage: { ref: at("Negotiation") } })
+
+    const first = (await store.baseStages.mappings({ kind: "deal" })).find(({ name }) => name === "New")?.ref as string
+    await store.baseStages.map(first, at("Negotiation"))
+    const refused = cli("deals", "move", ref, at("Negotiation"))
+    await expect(refused).rejects.toMatchObject({
+      code: "validation_error",
+      details: {
+        reason: "stage.choice-required",
+        candidates: [
+          { ref: first, name: "New", external_id: "new", outcome: "open" },
+          expect.objectContaining({ name: "Quote sent" }),
+        ],
+      },
+    })
+    await expect(cli("deals", "move", ref, at("Proposal"))).rejects.toMatchObject({
+      details: { reason: "stage.unmapped" },
+    })
+    expect(source.writes).toHaveLength(1)
+    expect((await cli("deals", "move", ref, first)).item.deal).toMatchObject({ stage: "New" })
+    await store.crm.savePipelines({ provider: "example-crm", account: "portal-other" }, "deal", [
+      {
+        externalId: "x",
+        name: "Elsewhere",
+        stages: [{ externalId: "x1", name: "Open", position: 1, outcome: "open" }],
+      },
+    ])
+    await store.crm.saveItems({ provider: "example-crm", account: "portal-other" }, "deal", [
+      { externalId: "far", title: "Far", pipeline: "x", stage: "x1" },
+    ])
+    const far = (await store.crm.refOf({ provider: "example-crm", account: "portal-other" }, "deal", "far")) as string
+    await expect(cli("deals", "move", far, at("Negotiation"))).rejects.toMatchObject({ code: "not_found" })
+  })
+
+  it("a refused move to a base stage prints the candidates in its JSON error", async () => {
+    const { store } = await synced()
+    await store.baseStages.confirm({ all: true })
+    const base = await store.baseStages.show("deal")
+    const negotiation = base.stages[3]?.ref as string
+    const first = (await store.baseStages.mappings({ kind: "deal" })).find(({ name }) => name === "New")?.ref as string
+    await store.baseStages.map(first, negotiation)
+    const ref = (await store.deals.list({ status: "open" }))[0]?.ref as string
+    const definition = {
+      app: APP,
+      commands: () => {
+        const root = new Command("crm")
+        addCrmCommands(root, {
+          app: APP,
+          open: async () => ({
+            profile: "work",
+            account: PORTAL,
+            store,
+            source: () => fakeCrmSource(),
+            writes: () => ({}) as never,
+          }),
+          writes: WRITES,
+        })
+        return [...root.commands]
+      },
+    }
+    const streams = captureStreams()
+    expect(await run(["deals", "move", ref, negotiation, "--json"], definition, { streams, tty: false, env: {} })).toBe(
+      2,
+    )
+    const printed = JSON.parse([...streams.stdout, ...streams.stderr].join("").trim().split("\n").at(-1) as string)
+    expect(printed.error).toMatchObject({
+      code: "validation_error",
+      reason: "stage.choice-required",
+      details: {
+        candidates: [
+          { ref: first, name: "New", external_id: "new", outcome: "open" },
+          expect.objectContaining({ name: "Quote sent", external_id: "quote" }),
+        ],
+      },
+    })
+  })
+
   it("are MCP writes, and --field takes a list", () => {
     const root = new Command("crm")
     addCrmCommands(root, { app: APP, open: () => Promise.reject(new Error("not opened")), writes: WRITES })

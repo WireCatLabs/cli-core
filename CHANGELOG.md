@@ -131,6 +131,21 @@ shape of this file.
   `writesWithOf(…, { allowed })` takes the caller's profile or group lock: a profile it forbids is never named, and
   the one it leaves is the answer. A write already refuses a row of another account than its profile's live one
   (`not_found`), so a profile re-pointed to another portal cannot change the old portal's rows.
+- **Base stages of deals and of leads, and CRM stages mapped onto them (store version 60).** One editable base set
+  per kind; every other pipeline's stage, a CRM's or the owner's own, maps onto one of its stages, suggested by the store and confirmed by the owner, one by one
+  or all at once. Store version 60 adds `pipeline_stages.base_stage_id` and `base_confirmed` (columns only;
+  `minCompatible` stays 56). `baseStagesCommand(app, { open, output, accounts })` from `./cli` builds the `stages`
+  group for memo: `show <kind>` (the columns, with open rows and mapped CRM stages each, and `unsorted`), `create`,
+  `rename`, `move` and `remove` of a base stage, `list` (every stage outside the base sets with `base_stage`, `confirmed` and the CRM's own `external_id`, which a CRM CLI's move matches first; `account` and `external_id` `null` for an own pipeline; query
+  `kind:`, `pipeline:`, `confirmed:`), `set <stage> <base-stage>` and `confirm --pipeline <p> | --all`. `accounts`
+  narrows reads and confirms to the CRM accounts a run may see, such as a group lock's. Deal and lead rows gain
+  `base_stage {ref, name}`, `null` until confirmed. A new set is named in the owner's first language (Russian while
+  `owner_languages` is unset, Spanish, else English); the seeded `Leads` becomes the lead set with capitalised names. An
+  agent's `stages set` records a suggestion; `confirm` and the set's edits refuse an agent (`stage.owner-only`). On a
+  read-only store `stages show` reads the set its first use would make without writing it. A CRM CLI's `deals move <ref> stage:<id>` (and `leads move`) moves
+  to the one stage of the card's pipeline mapped to that base stage, and refuses several (`stage.choice-required`,
+  with `candidates`) or none (`stage.unmapped`) before anything is written. `store.baseStages` holds the same
+  operations.
 
 ### Changed — may break callers
 

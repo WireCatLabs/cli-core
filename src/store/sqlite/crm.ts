@@ -17,6 +17,7 @@ import type { RelationKind } from "../../domain/relations.js"
 import type { AccountPeople } from "../people.js"
 import type { AccountKey } from "../types.js"
 import { accountPk, findAccountPk } from "./accounts.js"
+import { suggestBaseStages } from "./base-suggest.js"
 import { type CrmSkipped, crmAccountPrefix, crmIdentityId, crmRowsOver, SOURCE, TABLES, textOf } from "./crm-rows.js"
 import { crmCompanyTypes, crmOwnUser, crmScope, crmSettingKey, saveCrmSetting } from "./crm-settings.js"
 import type { StoreContext } from "./open.js"
@@ -190,7 +191,8 @@ export const crmCopiesOver = (context: StoreContext, people: AccountPeople): Crm
     write(database, () => {
       const accountId = account(key)
       const at = now()
-      for (const pipeline of pipelines) savePipeline(accountId, kind, pipeline, at)
+      const saved = pipelines.map((pipeline) => savePipeline(accountId, kind, pipeline, at))
+      suggestBaseStages(database, kind, saved)
       if (pipelines.length === 0) return { saved: 0, skipped: [] }
       const listed = new Set(pipelines.map(({ externalId }) => externalId))
       const mark = database.prepare("UPDATE pipelines SET deleted_at = ?, updated_at = ? WHERE id = ?")

@@ -29,6 +29,7 @@ const DEFAULTS = {
   "orders.direction": "purchase",
   "records.created_entity": 0,
   "contracts.auto_renew": 0,
+  "pipeline_stages.base_confirmed": 0,
 }
 const CASCADE = new Set([
   "message_links.chat_id",

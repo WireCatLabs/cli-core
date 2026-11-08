@@ -247,6 +247,34 @@ write alike, with no review; only the author is kept. Triggers write each stage 
 `pipeline_stage_changes`, and `pipeline(ref)` counts from it how many rows reached each stage and the conversion to
 the next. The migration seeds the lead pipeline `Leads` (`new`, `contacted`, `qualified`, `won`, `lost`).
 
+**Base stages (store version 60).** The owner keeps one base set of stages per kind, and every CRM stage maps onto one
+stage of its kind's set, so a board shows deals or leads from every pipeline and CRM in the same columns
+(`store.baseStages`). A base set is an own pipeline named by the store setting `stages.base.<kind>`
+(`"pipeline:<id>"`). Its first use takes the owner's only own pipeline of the kind when it has a stage of every
+outcome (the seeded `Leads`, so `leads add` without a stage still finds one pipeline; its lower-case stage names get a
+capital, `new` → `New`, and keep their folded names), and otherwise makes a set with the defaults in the owner's first
+language (`owner_languages`: Russian while unset, Spanish, else English; deals New, Qualification, Proposal,
+Negotiation, Won, Lost; leads New, Contacted, Qualified, Converted, Rejected). An owner with exactly one own deal
+pipeline that has every outcome gets that pipeline as his deal set, and editing the set edits it. After creation the
+names are data the owner renames. On a read-only store before the first use, `show` answers the set it would take or
+make, in memory: the defaults then have no `pipeline` and no stage `ref`, and everything is unsorted. There is one set
+per kind for the owner across every account group: a group-locked run may edit it, and its edits re-suggest the
+mappings of every account. An agent's run may suggest a mapping (`stages set` records it unconfirmed), but confirming
+and editing the set are the owner's (`stage.owner-only`), a guard against a change by mistake as the owner-only store
+settings are. `pipeline_stages.base_stage_id` is the base stage a stage maps to and
+`base_confirmed` whether the owner confirmed it; a base stage maps to itself, confirmed. The store suggests a mapping
+at the first use, at every sync of a CRM pipeline and when an own pipeline is made (`suggestBaseStages`): won and lost by outcome; an open stage by
+its relative place among its pipeline's open stages, and where that falls between two base stages, the one of the
+same name, else the nearer. A suggestion never replaces a confirmed row, so a stage the CRM adds after the confirm
+waits as a suggestion. A deal's or lead's `baseStage` is set only once its stage is confirmed; otherwise a board
+shows it unsorted. Every pipeline but the base sets is mapped alike: a CRM's (suggested at each sync) and the owner's
+own (suggested when it is made, `account` `null`); the set's own stages are the columns and map to themselves.
+`resolve(row, base)` gives the one stage of the row's pipeline confirmed onto the base stage, the stage itself when it
+is a `stage:<id>` of that pipeline, `stage.choice-required` with `candidates` when several are, and `stage.unmapped`
+when none is. Editing keeps a stage of each outcome (`stage.base-outcome`) and refuses to remove a stage the owner's own
+rows stood in (`stage.base-in-use`); removing one sends what was confirmed onto it back to a suggestion. `stage:<id>`
+names a stage only in these commands and answers; it is not a ref type of its own.
+
 Store version 57 adds the rest of a small business; the columns are in [schema.md](../storage/schema.md).
 `store.products` keeps what the owner or a supplier sells (`catalog_items`, `product:<id>`), with an optional price.
 An order now has lines (`order_lines`, `addLine`), and an order's or an invoice's line may name its product.
