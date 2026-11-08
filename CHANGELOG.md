@@ -34,6 +34,16 @@ shape of this file.
 
 ### Changed — may break callers
 
+- **EmbeddingGemma is the default text model**, not e5-small (`DEFAULT_TEXT_MODEL`). With no `models set`, embeds
+  and searches by meaning use it; e5-small and e5-large stay choosable. A machine that has e5-small and not
+  EmbeddingGemma keeps e5-small (`PREVIOUS_DEFAULT_TEXT_MODEL`). Once EmbeddingGemma is downloaded, syncs embed with
+  it, and search by meaning in notes, mail, messages and events keeps reading e5-small's vectors while the store holds
+  more of them (`meaningModel`); about 20 minutes of embedding for 10,000 pieces, a part per sync. A caller that
+  expected e5-small without choosing it sees `embeddinggemma` in missing-model steps.
+- **`models download` no longer asks to accept EmbeddingGemma's terms.** The Gemma Terms of Use ask for a notice with
+  each copy: the download writes `NOTICE` beside the model's files, and `THIRD_PARTY_NOTICES` names it.
+  `--accept-terms` is ignored; `models list --json` keeps `licence` and `terms`.
+
 - **`contacts link` and a calendar's `people link` from an agent's terminal open an `identity_link` proposal instead
   of linking, and an agent's `contacts unlink` is refused (`identity.owner-only`).** The run is attributed as
   `mentions confirm` attributes it (`actorOf`: `AI_AGENT`, `CLAUDECODE` and the other agents' variables, or an MCP
