@@ -64,6 +64,8 @@ export {
 } from "./domain/orders.js"
 export { countedPoll } from "./domain/polls.js"
 export {
+  ADDED_ACCOUNT,
+  ADDED_PROVIDER,
   CRM_OPENS,
   FOLDER_PROVIDERS,
   isFolderProvider,

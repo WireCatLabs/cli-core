@@ -25,6 +25,7 @@ import { type RosterStore, rosterStoreOver } from "./roster.js"
 import { type SearchIndexStore, searchIndexStoreOver } from "./search-index.js"
 import { type SearchesStore, searchesStoreOver } from "./searches.js"
 import * as accounts from "./sqlite/accounts.js"
+import { addedSourcesOver } from "./sqlite/added-sources.js"
 import { type AgentActionsStore, agentActionsStoreOver } from "./sqlite/agent-actions.js"
 import * as attachmentTexts from "./sqlite/attachment-texts.js"
 import { type BotUpdateStore, botUpdateStoreOver } from "./sqlite/bot-updates.js"
@@ -242,7 +243,7 @@ const storeOver = (context: StoreContext): MessageStore => {
   const tasks = once(() => taskStoreOver(context))
   const sourceMentions = once(() => sourceMentionStoreOver(context))
   const knowledge = once(() => knowledgeStoreOver(context))
-  const notes = once(() => ({ ...notesStoreOver(context), ...noteSearchOver(context) }))
+  const notes = once(() => ({ ...notesStoreOver(context), ...addedSourcesOver(context), ...noteSearchOver(context) }))
   const catalog = once(() => catalogStoreOver(context))
   const files = once(() => filesStoreOver(context))
   const calendar = once(() => ({ ...eventStoreOver(context), ...eventSearchOver(context) }))

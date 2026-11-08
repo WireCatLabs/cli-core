@@ -2,11 +2,13 @@ import { CliError } from "@wirecat/cli-base"
 import { MAX_TEXT_CHARS } from "../../attachments/limits.js"
 import { googleDocumentLinks } from "../../domain/google-documents.js"
 import {
+  ADDED_PROVIDER,
   DOCUMENT_ACCOUNT_PROVIDERS,
   filesAccountSql,
   folderProviderOf,
   folderProviderSql,
   isDocumentAccountProvider,
+  notAdded,
 } from "../../domain/providers.js"
 import { parseReference } from "../../domain/references.js"
 import { isRelationKind, type RelationshipColumns } from "../../domain/relations.js"
@@ -17,6 +19,7 @@ import type { CacheDatabase, CacheStatement } from "../driver.js"
 import { fold } from "../normalize.js"
 import { ulid } from "../ulid.js"
 import { ownerPerson } from "./actors.js"
+import type { AddedSources } from "./added-sources.js"
 import { type DocumentMetadata, encodeDocumentMetadata, languageOf } from "./document-metadata.js"
 import { deleteDocumentRow, forgetEvidenceToRow } from "./evidence-signature.js"
 import { PREFERRED_FILE, syncFile } from "./files.js"
@@ -28,6 +31,7 @@ import { holdingText } from "./note-index.js"
 import type { NoteSearch } from "./note-search.js"
 import type { StoreContext } from "./open.js"
 import { addTags, ensureTag, type Label, labelsOf } from "./tags.js"
+import { oneOf, textOf } from "./text-input.js"
 import { referenceOfThing, storedThing, type Thing, thingOf } from "./things.js"
 import { write } from "./transaction.js"
 
@@ -141,7 +145,7 @@ export interface MessageDocument {
   fileId: string
 }
 
-export interface NotesStore extends NoteSearch, ImportedDocuments {
+export interface NotesStore extends NoteSearch, ImportedDocuments, AddedSources {
   addFolder(input: { name: string; format?: NoteFolder["format"] }): Promise<NoteFolder>
   /** The notes folders only; a documents account is not one (`documentsAccounts`). */
   folders(): Promise<NoteFolder[]>
@@ -201,18 +205,6 @@ type Row = Record<string, unknown>
 const iso = (value: unknown) => new Date(Number(value)).toISOString()
 const optionalIso = (value: unknown) => (value == null ? null : iso(value))
 
-const textOf = (text: string, what: string, max = 100_000, allowEmpty = false) => {
-  const value = text.trim()
-  if ((!value && !allowEmpty) || value.length > max)
-    throw new CliError("validation_error", `${what} takes ${allowEmpty ? 0 : 1}–${max} characters`)
-  return value
-}
-
-const oneOf = <T extends string>(value: string, allowed: readonly T[], what: string): T => {
-  if (!allowed.includes(value as T)) throw new CliError("validation_error", `${what} is one of ${allowed.join(", ")}`)
-  return value as T
-}
-
 /** What a link's written target is matched by: case, accents and a leading `@` do not count. */
 export const targetKey = (text: string): string => fold(text).trim().replace(/^@/, "")
 
@@ -261,7 +253,7 @@ export const noteRowOf = (database: CacheDatabase, reference: string): Note | un
   return undefined
 }
 
-const thingRef = (database: CacheDatabase, type: unknown, id: unknown): string | null =>
+export const thingRef = (database: CacheDatabase, type: unknown, id: unknown): string | null =>
   type == null || id == null ? null : (referenceOfThing(database, storedThing(type, id)) ?? null)
 
 export const linkOf = (database: CacheDatabase, row: Row): Link => {
@@ -428,9 +420,9 @@ export const insertLink = (context: StoreContext, input: LinkInput): Link => {
 }
 
 /** A folder's `accounts` row; its format lives in `settings`. */
-const folderOf = (row: Row): NoteFolder => {
+export const folderOf = (row: Row): NoteFolder => {
   const settings = row.settings == null ? {} : (JSON.parse(String(row.settings)) as { format?: string })
-  const folder = !isDocumentAccountProvider(String(row.provider))
+  const folder = !isDocumentAccountProvider(String(row.provider)) && row.provider !== ADDED_PROVIDER
   return {
     id: String(row.id),
     name: folder ? String(row.name) : `${String(row.provider)}:${String(row.external_id)}`,
@@ -458,7 +450,7 @@ const frontMatterOf = (metadata: unknown): unknown => {
   }
 }
 
-const pathParts = (path: string) => {
+export const pathParts = (path: string) => {
   const slash = path.lastIndexOf("/")
   const fileName = slash < 0 ? path : path.slice(slash + 1)
   const dot = fileName.lastIndexOf(".")
@@ -469,13 +461,16 @@ const pathParts = (path: string) => {
   }
 }
 
-export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof NoteSearch> => {
+export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof NoteSearch | keyof AddedSources> => {
   const { database, now } = context
-  const folderRow = (id: string) => {
+  /** `synced`: an account a sync writes, which the added sources never are. */
+  const folderRow = (id: string, synced = false) => {
     const row = /^\d+$/.test(id)
       ? database.prepare(`SELECT * FROM accounts WHERE id = ? AND ${filesAccountSql()}`).get(Number(id))
       : undefined
     if (!row) throw new CliError("not_found", `no notes folder ${id} in the local store`)
+    if (synced && row.provider === ADDED_PROVIDER)
+      throw new CliError("validation_error", `account ${id} holds the sources added by hand; no folder syncs it`)
     return row
   }
   const documentRow = (id: string) => {
@@ -525,12 +520,12 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
   const sameContent = (hash: string | null, text: string): number[] => {
     if (!hash || !text.trim()) return []
     const live = database
-      .prepare("SELECT id FROM documents WHERE content_hash = ? AND deleted_at IS NULL ORDER BY id")
+      .prepare(`SELECT id FROM documents d WHERE content_hash = ? AND deleted_at IS NULL AND ${notAdded} ORDER BY id`)
       .all(hash)
     if (live.length) return live.map(({ id }) => Number(id))
     return database
       .prepare(
-        "SELECT d.id FROM documents d WHERE d.content_hash = ? AND d.deleted_at IS NOT NULL AND NOT EXISTS " +
+        `SELECT d.id FROM documents d WHERE d.content_hash = ? AND d.deleted_at IS NOT NULL AND ${notAdded} AND NOT EXISTS ` +
           "(SELECT 1 FROM files f WHERE f.document_id = d.id AND f.deleted_at IS NULL) ORDER BY d.id",
       )
       .all(hash)
@@ -616,7 +611,7 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
         .map(folderOf),
     saveFileNote: async (input) =>
       write(database, () => {
-        const folder = Number(folderRow(input.folderId).id)
+        const folder = Number(folderRow(input.folderId, true).id)
         const path = textOf(input.path, "a note's path", 4096)
         const text = textOf(input.text, "a note's text", MAX_TEXT_CHARS, true)
         const frontMatter = input.frontMatter == null ? null : JSON.stringify(input.frontMatter)
@@ -719,7 +714,7 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
       }),
     renameFileNote: async (folderId, from, to) =>
       write(database, () => {
-        const folder = Number(folderRow(folderId).id)
+        const folder = Number(folderRow(folderId, true).id)
         const target = textOf(to, "a note's path", 4096)
         const at = now()
         const place = fileAt(folder, from, true)
@@ -762,10 +757,10 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
         return noteAt(id, folder, target)
       }),
     dateFileNotes: async (folderId, dates) =>
-      write(database, () => dateFileNotes(database, Number(folderRow(folderId).id), dates)),
+      write(database, () => dateFileNotes(database, Number(folderRow(folderId, true).id), dates)),
     deleteFileNotes: async (folderId, paths) =>
       write(database, () => {
-        const folder = Number(folderRow(folderId).id)
+        const folder = Number(folderRow(folderId, true).id)
         let deleted = 0
         for (const path of paths) {
           const at = now()

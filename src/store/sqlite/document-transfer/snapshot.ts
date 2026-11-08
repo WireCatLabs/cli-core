@@ -1,5 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
-import { filesAccountSql } from "../../../domain/providers.js"
+import { ADDED_PROVIDER, filesAccountSql } from "../../../domain/providers.js"
 import { digest } from "../../document-transfer/digest.js"
 import type {
   TransferEntity,
@@ -190,7 +190,7 @@ export const transferSnapshot = (database: CacheDatabase, collection: string): T
       if (thing.type === "document") {
         const doc = database
           .prepare(
-            `SELECT a.provider,a.external_id AS account,a.name,d.external_id,d.body,d.content_hash,d.deleted_at FROM documents d JOIN accounts a ON a.id=d.account_id WHERE d.id=? AND ${filesAccountSql("a.provider")}`,
+            `SELECT a.provider,a.external_id AS account,a.name,d.external_id,d.body,d.content_hash,d.deleted_at FROM documents d JOIN accounts a ON a.id=d.account_id WHERE d.id=? AND ${filesAccountSql("a.provider")} AND a.provider<>'${ADDED_PROVIDER}'`,
           )
           .get(thing.id)
         if (doc) {

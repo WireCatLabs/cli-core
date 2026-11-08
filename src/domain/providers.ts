@@ -32,6 +32,7 @@ export const PROVIDERS: readonly ProviderEntry[] = [
   { name: "notes", kind: "notes", aliases: [] },
   { name: "local", kind: "notes", aliases: [] },
   { name: "obsidian", kind: "notes", aliases: [] },
+  { name: "added", kind: "notes", aliases: [] },
   { name: "zoom", kind: "meetings", aliases: [] },
 ]
 
@@ -43,6 +44,7 @@ const LABELS: Readonly<Record<string, string>> = {
   whatsapp: "WhatsApp",
   "whatsapp-bot": "WhatsApp bot",
   "google-drive": "Google Drive",
+  added: "added by hand",
   email: "mail",
 }
 
@@ -71,9 +73,17 @@ export const folderProviderOf = (format: "obsidian" | "markdown"): "obsidian" | 
 export const DOCUMENT_ACCOUNT_PROVIDERS = ["google-drive"] as const
 export const isDocumentAccountProvider = (provider: string): boolean =>
   (DOCUMENT_ACCOUNT_PROVIDERS as readonly string[]).includes(provider)
-/** A folder or a documents account, in SQL over an `accounts` row's `provider` column. */
+/**
+ * What the owner adds by hand (`saveAddedSource`): one account, `owner`. Neither a folder nor a documents account, so no
+ * folder can be bound to it and no sync deletes a source whose file is gone.
+ */
+export const ADDED_PROVIDER = "added"
+export const ADDED_ACCOUNT = "owner"
+/** Documents `d` outside the added sources: a folder file joined to one would delete it when the file goes. */
+export const notAdded = `d.account_id NOT IN (SELECT id FROM accounts WHERE provider = '${ADDED_PROVIDER}')`
+/** A folder, a documents account or the added sources, in SQL over an `accounts` row's `provider` column. */
 export const filesAccountSql = (column = "provider"): string =>
-  `${column} IN (${[...FOLDER_PROVIDERS, ...DOCUMENT_ACCOUNT_PROVIDERS].map((name) => `'${name}'`).join(", ")})`
+  `${column} IN (${[...FOLDER_PROVIDERS, ...DOCUMENT_ACCOUNT_PROVIDERS, ADDED_PROVIDER].map((name) => `'${name}'`).join(", ")})`
 /** Notes written in memo have no account row; this is their account. */
 export const INTERNAL_NOTES = "internal"
 
