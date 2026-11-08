@@ -9,6 +9,8 @@ shape of this file.
 
 ### Fixed
 
+- **In `search all`, a hit only words found keeps its place next to the hits around it.** It takes the cosine of the
+  hit above it in its own source, so an exact word's second hit no longer sorts behind every hit meaning found.
 - **cli-core accepts `@wirecat/cli-base` up to 0.85.x.** Its peer range stopped at `<0.83.0`, so a CLI could not take
   cli-base 0.85.0's `hostFetch` and the `network.hosts` manifest next to cli-core. Nothing else changes for a caller.
 
