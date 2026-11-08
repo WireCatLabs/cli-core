@@ -29,6 +29,11 @@ export const MODEL_CATALOGUE_QUERY = defineQuery({
 export interface ModelCatalogueOptions {
   kinds: readonly ("audio" | "text")[]
   env: () => NodeJS.ProcessEnv
+  /**
+   * Offer `models consents`, the switch for write-time enrichment. Only the tool whose sync enriches asks for it
+   * (memo): it changes the shared store for every CLI.
+   */
+  enrichment?: boolean
   /** Where `models consents` looks for the enrichment provider's key; the system keyring when absent. */
   keyring?: KeyringStore
   output: (answer: Body, command: Command) => void
@@ -161,7 +166,7 @@ export const modelCatalogueCommand = (app: AppIdentity, options: ModelCatalogueO
         options.output(itemOf(textModelItem(model, env)), this)
       })
   }
-  if (options.kinds.includes("text")) models.addCommand(enrichmentConsentsCommand(app, options))
+  if (options.enrichment === true) models.addCommand(enrichmentConsentsCommand(app, options))
   if (options.jsonOption)
     for (const command of models.commands.flatMap((one) => (one.commands.length ? one.commands : [one])))
       command.option("--json", "print JSON")

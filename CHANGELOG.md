@@ -7,6 +7,12 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **`models consents` is offered only when the tool asks for it** with `modelCatalogueCommand(app, { enrichment:
+  true })`, as memo will. Other CLIs (gcal, mail, drive…) no longer list it: turning enrichment on changes the shared
+  store for every CLI, so one tool owns the switch.
+
 ## 0.612.0 — 08.11.2026
 
 ### Added

@@ -21,6 +21,7 @@ const fixture = async (extra: NodeJS.ProcessEnv = {}) => {
   const lines: string[] = []
   const models = modelCatalogueCommand(app, {
     kinds: ["text"],
+    enrichment: true,
     env: () => env,
     keyring: memoryKeyring(),
     output: (body) => answers.push(body),
@@ -34,6 +35,17 @@ const fixture = async (extra: NodeJS.ProcessEnv = {}) => {
 }
 
 describe("models consents", () => {
+  it("is offered only by a tool that asks for it", () => {
+    const models = modelCatalogueCommand(app, {
+      kinds: ["text"],
+      env: () => ({}),
+      output: () => {},
+      diagnostic: () => {},
+    })
+
+    expect(models.commands.map((command) => command.name())).not.toContain("consents")
+  })
+
   it("is off until the owner says yes, and the preview names the provider, the records and the cost", async () => {
     const { env, run, item, lines } = await fixture()
 
