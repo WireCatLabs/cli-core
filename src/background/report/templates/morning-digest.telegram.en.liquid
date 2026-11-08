@@ -82,6 +82,9 @@ Every string from the report is already escaped. Lines are written with {{ nl }}
       {%- if group.link %}<a href="{{ group.link.url }}">{{ words }}</a>{% else %}{{ words }}{% endif -%}
     {%- endfor -%}
   {%- endif -%}
+  {%- if section.undated %}{{ nl }}no due date: {{ section.undated.count }}
+    {%- if section.undated.link %} · <a href="{{ section.undated.link.url }}">open</a>{% endif -%}
+  {%- endif -%}
 {%- endfor -%}
 {%- if health.items.size > 0 %}{{ nl }}{% endif -%}
 {%- for source in health.items -%}

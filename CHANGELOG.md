@@ -33,6 +33,12 @@ shape of this file.
 
 ### Added
 
+- **The digest says how many open tasks have no due date.** A report may give `tasks.undated` (a whole number; absent
+  is 0), and the section with the task group links gets one line after them, "без срока: 91 · открыть" or "no due
+  date: 91 · open", in every channel's Russian and English template, linking `tasks/undated`. The line is left out
+  when the count is 0. The v1 link grammar takes `tasks/undated` beside `overdue`, `today`, `tomorrow` and
+  `new/<since>`; the bounce page and WireCat Desktop need it too before such a link opens there.
+
 - **The weekly gaps message (`report/weekly-gaps`).** A morning digest may keep what it found on its own, which the
   agenda did not show, in `internal.gaps` (`{ what, refs | ref, section }`); the digest never shows it. Once a week a
   delivered digest run also sends those gaps along the same routes as one message: on Monday, or on the first digest

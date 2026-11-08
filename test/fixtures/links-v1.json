@@ -86,6 +86,16 @@
       }
     },
     {
+      "ref": "tasks:undated",
+      "path": "/v1/tasks/undated",
+      "web": "https://wirecat.dev/o#/v1/tasks/undated",
+      "app": "wirecat://open/v1/tasks/undated",
+      "target": {
+        "type": "tasks",
+        "filter": "undated"
+      }
+    },
+    {
       "ref": "tasks:today",
       "path": "/v1/tasks/today",
       "web": "https://wirecat.dev/o#/v1/tasks/today",
