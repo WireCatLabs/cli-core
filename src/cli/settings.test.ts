@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import * as v from "valibot"
@@ -48,6 +48,18 @@ describe("where a setting came from", () => {
     expect(settings().sources.commandTimeoutMs).toBe("default")
     expect(settings({}, { APP_TIMEOUT: "10s" }).sources.commandTimeoutMs).toBe("APP_TIMEOUT")
     expect(settings({ timeout: "1s" }).sources.commandTimeoutMs).toBe("flag")
+  })
+})
+
+describe("the starter config file", () => {
+  it("**is written on a first run, and not under `<PREFIX>_READ_ONLY`**, which still reads the defaults", () => {
+    const locked = settings({}, { APP_READ_ONLY: "1" })
+    expect(existsSync(join(configDir, "config.json"))).toBe(false)
+    expect(locked.readOnlyLock).toBe("APP_READ_ONLY")
+    expect(locked.limit).toBe(20)
+
+    settings({}, { APP_READ_ONLY: "0" })
+    expect(existsSync(join(configDir, "config.json"))).toBe(true)
   })
 })
 

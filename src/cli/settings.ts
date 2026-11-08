@@ -629,7 +629,8 @@ export const settingsFor = <T extends object = Record<never, never>>(
     const env = options.env ?? process.env
     const configPath = configPathFor(options)
     try {
-      if (!options.readOnly) ensureDefaultConfig(configPath, withDefaults(DEFAULT_CONFIG).config)
+      if (!options.readOnly && !readOnlyLockOf(app, env))
+        ensureDefaultConfig(configPath, withDefaults(DEFAULT_CONFIG).config)
     } catch (error) {
       throw new CliError("configuration_error", error instanceof Error ? error.message : String(error))
     }

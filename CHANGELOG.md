@@ -74,6 +74,8 @@ shape of this file.
   e5-small and about 20 with EmbeddingGemma on an 8-thread laptop.
 - **EmbeddingGemma's catalogued speed is 5 chunks a second, not 2.** A memo sync bounds its chunks by this speed, so
   one sync embedded 39 chunks and a five-minute timer run did seconds of work; it now takes 97.
+- **Under `<PREFIX>_READ_ONLY`, a first run writes no starter `config.json`.** The settings are read as the defaults
+  instead, as for a dry run. Without the lock, the file is still written on a first run.
 
 ## 0.618.0 — 09.11.2026
 
