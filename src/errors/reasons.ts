@@ -305,6 +305,7 @@ const OTHERS: Entry[] = [
     "more than one stage of the row's pipeline maps to that base stage; move to one of the candidates",
   ),
   validation("stage.ref", "a stage is named by its stage:<id> reference"),
+  ["stage.owner-only", "permission_error", "only the owner confirms mappings and edits a base set, not an agent"],
   validation("stage.unmapped", "no stage of the row's pipeline maps to that base stage; map one first"),
   ["stage.not-found", "not_found", "no stored stage has that reference or name"],
   validation("pipeline.ambiguous", "more than one pipeline has that name; name it by its pipeline: reference"),

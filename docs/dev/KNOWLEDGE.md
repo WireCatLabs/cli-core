@@ -241,9 +241,17 @@ the next. The migration seeds the lead pipeline `Leads` (`new`, `contacted`, `qu
 stage of its kind's set, so a board shows deals or leads from every pipeline and CRM in the same columns
 (`store.baseStages`). A base set is an own pipeline named by the store setting `stages.base.<kind>`
 (`"pipeline:<id>"`). Its first use takes the owner's only own pipeline of the kind when it has a stage of every
-outcome (the seeded `Leads`, so `leads add` without a stage still finds one pipeline), and otherwise makes `Base
-stages` with the defaults (`DEFAULT_BASE_STAGES`: deals New, Qualification, Proposal, Negotiation, Won, Lost; leads
-New, Contacted, Qualified, Converted, Rejected). `pipeline_stages.base_stage_id` is the base stage a stage maps to and
+outcome (the seeded `Leads`, so `leads add` without a stage still finds one pipeline; its lower-case stage names get a
+capital, `new` → `New`, and keep their folded names), and otherwise makes a set with the defaults in the owner's first
+language (`owner_languages`: Russian while unset, Spanish, else English; deals New, Qualification, Proposal,
+Negotiation, Won, Lost; leads New, Contacted, Qualified, Converted, Rejected). An owner with exactly one own deal
+pipeline that has every outcome gets that pipeline as his deal set, and editing the set edits it. After creation the
+names are data the owner renames. On a read-only store before the first use, `show` answers the set it would take or
+make, in memory: the defaults then have no `pipeline` and no stage `ref`, and everything is unsorted. There is one set
+per kind for the owner across every account group: a group-locked run may edit it, and its edits re-suggest the
+mappings of every account. An agent's run may suggest a mapping (`stages set` records it unconfirmed), but confirming
+and editing the set are the owner's (`stage.owner-only`), a guard against a change by mistake as the owner-only store
+settings are. `pipeline_stages.base_stage_id` is the base stage a stage maps to and
 `base_confirmed` whether the owner confirmed it; a base stage maps to itself, confirmed. The store suggests a mapping
 at the first use and at every sync of a CRM pipeline (`suggestBaseStages`): won and lost by outcome; an open stage by
 its relative place among its pipeline's open stages, and where that falls between two base stages, the one of the

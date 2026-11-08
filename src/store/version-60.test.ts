@@ -38,8 +38,8 @@ it("adds base stages to a version 58 file's CRM pipelines, unmapped, and suggest
     const base = await store.baseStages.show("deal")
     expect(base.unsorted).toEqual({ open: 1, stages: 2 })
     expect(await store.baseStages.mappings()).toMatchObject([
-      { name: "New", baseStage: { name: "New" }, confirmed: false },
-      { name: "Won", baseStage: { name: "Won" }, confirmed: false },
+      { name: "New", baseStage: { name: "Новая" }, confirmed: false },
+      { name: "Won", baseStage: { name: "Выиграна" }, confirmed: false },
     ])
   } finally {
     await store.close()

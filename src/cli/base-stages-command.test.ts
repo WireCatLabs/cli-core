@@ -6,6 +6,8 @@ import { captureStreams } from "@wirecat/cli-base"
 import { Command } from "commander"
 import * as v from "valibot"
 import { expect, it } from "vitest"
+import { openCache } from "../store/open.js"
+import { saveOwnerLanguages } from "../store/sqlite/owner-languages.js"
 import { openStore } from "../store/store.js"
 import type { AccountKey } from "../store/types.js"
 import { answerEntitySchema } from "./answer-entity.js"
@@ -19,9 +21,12 @@ const app = { command: "fixture", appName: "fixture", envPrefix: "FIXTURE", desc
 const PORTAL = { provider: "example-crm", account: "portal-a" }
 const OTHER = { provider: "example-crm", account: "portal-b" }
 
-const fixture = async (accounts?: AccountKey[]) => {
+const fixture = async (accounts?: AccountKey[], env: NodeJS.ProcessEnv = {}) => {
   const path = join(mkdtempSync(join(tmpdir(), "base-stages-command-")), "store.db")
   const seeded = await openStore({ path })
+  const database = await openCache(path)
+  saveOwnerLanguages(database, ["en"], Date.now())
+  database.close()
   for (const key of [PORTAL, OTHER])
     await seeded.crm.savePipelines(key, "deal", [
       {
@@ -38,6 +43,7 @@ const fixture = async (accounts?: AccountKey[]) => {
   const answers: Body[] = []
   const run = async (...words: string[]) => {
     const stages = baseStagesCommand(app, {
+      env: () => env,
       open: () => openStore({ path }),
       output: (body) => answers.push(body),
       ...(accounts ? { accounts: async () => accounts } : {}),
@@ -103,13 +109,35 @@ it("reads and confirms only the accounts the host puts in scope", async () => {
   expect((await run("show", "deal")).item).toMatchObject({ unsorted: { open: 0, stages: 0 } })
 })
 
+it("lets an agent suggest a mapping, and keeps confirming and editing the set to the owner", async () => {
+  const { run } = await fixture(undefined, { AI_AGENT: "codex" })
+  const [inbox] = (await run("list")).items
+  expect((await run("set", inbox?.ref as string, "Proposal")).item).toMatchObject({
+    base_stage: { name: "Proposal" },
+    confirmed: false,
+  })
+  for (const words of [
+    ["confirm", "--all"],
+    ["create", "deal", "Demo"],
+    ["rename", "deal", "New", "Fresh"],
+  ])
+    await expect(run(...words)).rejects.toMatchObject({
+      code: "permission_error",
+      details: { reason: "stage.owner-only" },
+    })
+})
+
 it("passes the command lint memo runs on its tree", async () => {
   const definition = {
     app,
     commands: () => [
       commandsCommand(app),
       runsCommand(app),
-      baseStagesCommand(app, { open: () => Promise.reject(new Error("not opened")), output: () => {} }),
+      baseStagesCommand(app, {
+        env: () => ({}),
+        open: () => Promise.reject(new Error("not opened")),
+        output: () => {},
+      }),
     ],
   }
   const streams = captureStreams()

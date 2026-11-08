@@ -3,6 +3,8 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, expect, it } from "vitest"
 import type { CrmPipeline, CrmStage } from "../domain/crm.js"
+import { openCache } from "./open.js"
+import { saveOwnerLanguages } from "./sqlite/owner-languages.js"
 import { type MessageStore, openStore } from "./store.js"
 
 const stores: MessageStore[] = []
@@ -32,9 +34,14 @@ const SALES: CrmPipeline = {
   ],
 }
 
-const open = async () => {
-  const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "base-stages-")), "store.db") })
+/** English unless asked: unset, the owner reads Russian. */
+const open = async (languages: string[] | null = ["en"]) => {
+  const path = join(mkdtempSync(join(tmpdir(), "base-stages-")), "store.db")
+  const store = await openStore({ path })
   stores.push(store)
+  const database = await openCache(path)
+  saveOwnerLanguages(database, languages ?? undefined, Date.now())
+  database.close()
   return store
 }
 
@@ -81,15 +88,42 @@ it("takes the store's own Leads pipeline as the lead set, so a lead still starts
   const leads = await store.baseStages.show("lead")
   expect(leads.pipeline).toBe(seeded?.ref)
   expect(leads.stages.map(({ name, outcome }) => `${name}:${outcome}`)).toEqual([
-    "new:open",
-    "contacted:open",
-    "qualified:open",
-    "won:won",
-    "lost:lost",
+    "New:open",
+    "Contacted:open",
+    "Qualified:open",
+    "Won:won",
+    "Lost:lost",
   ])
   const lead = await store.deals.add({ by: "owner", kind: "lead", title: "Call from the site" })
-  expect(lead).toMatchObject({ stage: "new", baseStage: { ref: leads.stages[0]?.ref, name: "new" } })
+  expect(lead).toMatchObject({ stage: "New", baseStage: { ref: leads.stages[0]?.ref, name: "New" } })
+  expect((await store.deals.add({ by: "owner", kind: "lead", title: "Mail", stage: "contacted" })).stage).toBe(
+    "Contacted",
+  )
   expect(await store.deals.pipelines({ kind: "lead", account: "own" })).toHaveLength(1)
+})
+
+it("names a new set in the owner's first language: Russian while unset, Spanish, else English", async () => {
+  const names = async (languages: string[] | null) =>
+    (await (await open(languages)).baseStages.show("deal")).stages.map(({ name }) => name)
+  expect(await names(null)).toEqual(["Новая", "Квалификация", "Предложение", "Переговоры", "Выиграна", "Проиграна"])
+  expect((await names(["es", "en"]))[0]).toBe("Nuevo")
+  expect((await names(["de"]))[0]).toBe("New")
+})
+
+it("reads a set a read-only store has not made yet, in memory, and writes nothing", async () => {
+  const path = join(mkdtempSync(join(tmpdir(), "base-stages-ro-")), "store.db")
+  const seeded = await openStore({ path })
+  await seeded.crm.savePipelines(PORTAL, "deal", [SALES])
+  await seeded.close()
+  const store = await openStore({ path, readOnly: true })
+  stores.push(store)
+  const deals = await store.baseStages.show("deal")
+  expect(deals).toMatchObject({ pipeline: null, unsorted: { open: 0, stages: 5 } })
+  expect(deals.stages.map(({ ref, open }) => `${ref}:${open}`)).toEqual(Array(6).fill("null:0"))
+  const leads = await store.baseStages.show("lead")
+  expect(leads.pipeline).toMatch(/^pipeline:\d+$/)
+  expect(leads.stages[0]).toMatchObject({ name: "New", ref: expect.stringMatching(/^stage:/) })
+  expect(await store.baseStages.mappings()).toMatchObject([{ baseStage: null }, {}, {}, {}, {}])
 })
 
 it("makes a deal set of its own beside several own deal pipelines", async () => {
@@ -267,7 +301,12 @@ it("edits a base set and keeps at least one stage of each outcome", async () => 
 it("keeps a base stage the owner's own deals stood in", async () => {
   const store = await open()
   const base = await store.baseStages.show("deal")
-  const own = await store.deals.add({ by: "owner", title: "Own", stage: "Qualification", pipeline: base.pipeline })
+  const own = await store.deals.add({
+    by: "owner",
+    title: "Own",
+    stage: "Qualification",
+    pipeline: base.pipeline as string,
+  })
   expect(own.baseStage).toEqual({ ref: base.stages[1]?.ref, name: "Qualification" })
   await store.baseStages.add("deal", { name: "Spare" })
   await expect(store.baseStages.remove("deal", "Qualification")).rejects.toMatchObject({

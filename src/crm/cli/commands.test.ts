@@ -395,9 +395,10 @@ describe("CRM write commands", () => {
     const { cli, ref, store, source } = await synced()
     await store.baseStages.confirm({ all: true })
     const base = await store.baseStages.show("deal")
-    const at = (name: string) => base.stages.find((one) => one.name === name)?.ref as string
+    // The owner's language is unset, so the default names are Russian: columns by place.
+    const at = (name: "Proposal" | "Negotiation") => base.stages[name === "Proposal" ? 2 : 3]?.ref as string
     const moved = await cli("deals", "move", ref, at("Negotiation"))
-    expect(moved.item.deal).toMatchObject({ stage: "Quote sent", base_stage: { name: "Negotiation" } })
+    expect(moved.item.deal).toMatchObject({ stage: "Quote sent", base_stage: { ref: at("Negotiation") } })
 
     const first = (await store.baseStages.mappings({ kind: "deal" })).find(({ name }) => name === "New")?.ref as string
     await store.baseStages.map(first, at("Negotiation"))
@@ -435,7 +436,7 @@ describe("CRM write commands", () => {
     const { store } = await synced()
     await store.baseStages.confirm({ all: true })
     const base = await store.baseStages.show("deal")
-    const negotiation = base.stages.find(({ name }) => name === "Negotiation")?.ref as string
+    const negotiation = base.stages[3]?.ref as string
     const first = (await store.baseStages.mappings({ kind: "deal" })).find(({ name }) => name === "New")?.ref as string
     await store.baseStages.map(first, negotiation)
     const ref = (await store.deals.list({ status: "open" }))[0]?.ref as string

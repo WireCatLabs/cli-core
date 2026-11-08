@@ -5,29 +5,37 @@ import { fold } from "../normalize.js"
 import type { AccountKey } from "../types.js"
 import { dealOperationsOver } from "./deals.js"
 import type { StoreContext } from "./open.js"
+import { ownerLanguages } from "./owner-languages.js"
 import { oneOf, refuse, text } from "./reviewed.js"
 import { write } from "./transaction.js"
 
-/** What a base set holds the first time it is used; the owner edits it from there. */
-export const DEFAULT_BASE_STAGES: Record<DealKind, readonly { name: string; outcome: StageOutcome }[]> = {
-  lead: [
-    { name: "New", outcome: "open" },
-    { name: "Contacted", outcome: "open" },
-    { name: "Qualified", outcome: "open" },
-    { name: "Converted", outcome: "won" },
-    { name: "Rejected", outcome: "lost" },
-  ],
-  deal: [
-    { name: "New", outcome: "open" },
-    { name: "Qualification", outcome: "open" },
-    { name: "Proposal", outcome: "open" },
-    { name: "Negotiation", outcome: "open" },
-    { name: "Won", outcome: "won" },
-    { name: "Lost", outcome: "lost" },
-  ],
+const OUTCOMES: Record<DealKind, readonly StageOutcome[]> = {
+  lead: ["open", "open", "open", "won", "lost"],
+  deal: ["open", "open", "open", "open", "won", "lost"],
 }
 
-const BASE_NAME = "Base stages"
+/** The default sets' names in the languages they are written in; any other owner language gets English. */
+const NAMES: Record<string, { set: string } & Record<DealKind, readonly string[]>> = {
+  en: {
+    set: "Base stages",
+    lead: ["New", "Contacted", "Qualified", "Converted", "Rejected"],
+    deal: ["New", "Qualification", "Proposal", "Negotiation", "Won", "Lost"],
+  },
+  ru: {
+    set: "Базовые стадии",
+    lead: ["Новый", "Связались", "Квалифицирован", "Конвертирован", "Отклонён"],
+    deal: ["Новая", "Квалификация", "Предложение", "Переговоры", "Выиграна", "Проиграна"],
+  },
+  es: {
+    set: "Etapas base",
+    lead: ["Nuevo", "Contactado", "Calificado", "Convertido", "Rechazado"],
+    deal: ["Nuevo", "Calificación", "Propuesta", "Negociación", "Ganado", "Perdido"],
+  },
+}
+
+const namesFor = (database: CacheDatabase) =>
+  NAMES[ownerLanguages(database)[0] ?? "en"] ?? (NAMES.en as (typeof NAMES)[string])
+
 const MAX_BASE_STAGES = 30
 
 export const baseSettingKey = (kind: DealKind) => `stages.base.${kind}`
@@ -39,7 +47,9 @@ export interface StageName {
 }
 
 /** One column of a base set: the open deals or leads whose stage maps to it, and how many stages do. */
-export interface BaseColumn extends StageName {
+export interface BaseColumn extends Omit<StageName, "ref"> {
+  /** `null` only in a set read from a read-only store before its first use made it. */
+  ref: string | null
   position: number
   outcome: StageOutcome
   open: number
@@ -49,8 +59,8 @@ export interface BaseColumn extends StageName {
 
 export interface BaseSet {
   kind: DealKind
-  /** The owner's own pipeline that holds the set. */
-  pipeline: string
+  /** The owner's own pipeline that holds the set; `null` while a read-only read shows the defaults not made yet. */
+  pipeline: string | null
   stages: BaseColumn[]
   /** What no column holds yet: open rows whose stage is unmapped or only suggested, and those stages. */
   unsorted: { open: number; stages: number }
@@ -93,8 +103,8 @@ export interface BaseStagesStore {
   /** Refused for the last stage of its outcome and for one the owner's own rows stand or stood in. */
   remove(kind: DealKind, stage: string): Promise<BaseSet>
   mappings(filter?: MappingFilter): Promise<StageMapping[]>
-  /** Maps `stage:<id>` onto a base stage of its kind, confirmed. */
-  map(stage: string, base: string, scope?: BaseScope): Promise<StageMapping>
+  /** Maps `stage:<id>` onto a base stage of its kind, confirmed unless `confirmed: false` (an agent's suggestion). */
+  map(stage: string, base: string, scope?: BaseScope, options?: { confirmed?: boolean }): Promise<StageMapping>
   /** Confirms every suggestion of one pipeline, or of all of them in scope; answers how many. */
   confirm(target: { pipeline: string } | { all: true; kind?: DealKind }, scope?: BaseScope): Promise<number>
   /**
@@ -204,8 +214,9 @@ export const baseStagesOver = (context: StoreContext) => {
         .all(kind)
         .map((row) => String(row.name_folded)),
     )
-    let name = BASE_NAME
-    for (let suffix = 2; taken.has(fold(name)); suffix += 1) name = `${BASE_NAME} ${suffix}`
+    const base = namesFor(database).set
+    let name = base
+    for (let suffix = 2; taken.has(fold(name)); suffix += 1) name = `${base} ${suffix}`
     return name
   }
 
@@ -239,12 +250,18 @@ export const baseStagesOver = (context: StoreContext) => {
             )
             .get(kind, name, fold(name), at, at)?.id,
         )
-        for (const [index, stage] of DEFAULT_BASE_STAGES[kind].entries())
-          insertStage(id, stage.name, stage.outcome, index + 1, at)
-      } else
+        const names = namesFor(database)[kind]
+        for (const [index, name] of names.entries())
+          insertStage(id, name, OUTCOMES[kind][index] as StageOutcome, index + 1, at)
+      } else {
         database
           .prepare("UPDATE pipeline_stages SET base_stage_id = id, base_confirmed = 1 WHERE pipeline_id = ?")
           .run(id)
+        const rename = database.prepare("UPDATE pipeline_stages SET name = ?, updated_at = ? WHERE id = ?")
+        for (const stage of baseStagesOf(database, id))
+          if (String(stage.name) !== capitalised(String(stage.name)))
+            rename.run(capitalised(String(stage.name)), at, Number(stage.id))
+      }
       database
         .prepare("INSERT OR REPLACE INTO store_settings (key, value, at) VALUES (?, ?, ?)")
         .run(baseSettingKey(kind), JSON.stringify(`pipeline:${id}`), at)
@@ -252,6 +269,12 @@ export const baseStagesOver = (context: StoreContext) => {
       return id
     })
   }
+
+  /** The seeded `Leads` has `new` … `lost`: a column title starts with a capital; the folded name stays. */
+  const capitalised = (name: string) =>
+    name === name.toLocaleLowerCase() ? name.charAt(0).toLocaleUpperCase() + name.slice(1) : name
+
+  const readOnly = () => Number(database.prepare("PRAGMA query_only").get()?.query_only) === 1
 
   const insertStage = (pipeline: number, name: string, outcome: StageOutcome, position: number, at: number) => {
     const id = Number(
@@ -310,7 +333,62 @@ export const baseStagesOver = (context: StoreContext) => {
     return value
   }
 
+  /**
+   * The set a first use would make, read without a write: on a read-only store the columns of the pipeline it would
+   * take, or the defaults with no reference yet. Nothing is mapped, so every CRM stage and row is unsorted.
+   */
+  const unmade = (kind: DealKind, scope?: BaseScope): BaseSet => {
+    const { sql, params } = scopeSql(scope)
+    const adopted = adoptable(kind)
+    const standing = (stage: number) =>
+      Number(
+        database
+          .prepare(
+            `SELECT count(*) AS n FROM ${ITEM_TABLES[kind]} WHERE stage_id = ? AND status = 'open' AND deleted_at IS NULL`,
+          )
+          .get(stage)?.n,
+      )
+    const stages =
+      adopted === undefined
+        ? namesFor(database)[kind].map((name, index) => ({
+            ref: null,
+            name,
+            position: index + 1,
+            outcome: OUTCOMES[kind][index] as StageOutcome,
+            open: 0,
+            mapped: 0,
+          }))
+        : baseStagesOf(database, adopted).map((stage) => ({
+            ref: stageRef(stage.id),
+            name: capitalised(String(stage.name)),
+            position: Number(stage.position),
+            outcome: stage.outcome as StageOutcome,
+            open: standing(Number(stage.id)),
+            mapped: 0,
+          }))
+    const total = database
+      .prepare(
+        `SELECT count(*) AS n FROM ${ITEM_TABLES[kind]} d JOIN pipeline_stages s ON s.id = d.stage_id ` +
+          `JOIN pipelines p ON p.id = s.pipeline_id WHERE d.status = 'open' AND d.deleted_at IS NULL AND ${sql}`,
+      )
+      .get(...params)
+    const crm = database
+      .prepare(
+        "SELECT count(*) AS n FROM pipeline_stages s JOIN pipelines p ON p.id = s.pipeline_id WHERE p.kind = ? " +
+          `AND p.account_id IS NOT NULL AND s.deleted_at IS NULL AND p.deleted_at IS NULL AND ${sql}`,
+      )
+      .get(kind, ...params)
+    const own = stages.reduce((sum, stage) => sum + stage.open, 0)
+    return {
+      kind,
+      pipeline: adopted === undefined ? null : `pipeline:${adopted}`,
+      stages,
+      unsorted: { open: Number(total?.n) - own, stages: Number(crm?.n) },
+    }
+  }
+
   const show = (kind: DealKind, scope?: BaseScope): BaseSet => {
+    if (basePipelineOf(database, kindOf(kind)) === undefined && readOnly()) return unmade(kind, scope)
     const pipeline = ensure(kindOf(kind))
     const { sql, params } = scopeSql(scope)
     const table = ITEM_TABLES[kind]
@@ -469,7 +547,12 @@ export const baseStagesOver = (context: StoreContext) => {
       return show(chosen)
     },
     mappings: (filter: MappingFilter = {}): StageMapping[] => mappableRows(filter).map(mappingOf),
-    map: (stage: string, base: string, scope?: BaseScope): StageMapping => {
+    map: (
+      stage: string,
+      base: string,
+      scope?: BaseScope,
+      { confirmed = true }: { confirmed?: boolean } = {},
+    ): StageMapping => {
       const id = /^stage:(\d+)$/.exec(stage.trim())?.[1]
       if (id === undefined)
         refuse(
@@ -494,8 +577,8 @@ export const baseStagesOver = (context: StoreContext) => {
           )
         const target = baseStageRow(pipeline, base)
         database
-          .prepare("UPDATE pipeline_stages SET base_stage_id = ?, base_confirmed = 1, updated_at = ? WHERE id = ?")
-          .run(Number(target.id), now(), Number(id))
+          .prepare("UPDATE pipeline_stages SET base_stage_id = ?, base_confirmed = ?, updated_at = ? WHERE id = ?")
+          .run(Number(target.id), confirmed ? 1 : 0, now(), Number(id))
         return mappingOf(mappableRows({ kind }, "s.id = ?", [Number(id)])[0] as Row)
       })
     },
@@ -573,7 +656,7 @@ export const baseStagesStoreOver = (context: StoreContext): BaseStagesStore => {
     move: async (kind, stage, position) => operations.move(kind, stage, position),
     remove: async (kind, stage) => operations.remove(kind, stage),
     mappings: async (filter) => operations.mappings(filter),
-    map: async (stage, base, scope) => operations.map(stage, base, scope),
+    map: async (stage, base, scope, options) => operations.map(stage, base, scope, options),
     confirm: async (target, scope) => operations.confirm(target, scope),
     resolve: async (item, base) => operations.resolve(item, base),
   }

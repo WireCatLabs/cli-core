@@ -17,7 +17,10 @@ shape of this file.
   `rename`, `move` and `remove` of a base stage, `list` (every CRM stage with `base_stage` and `confirmed`; query
   `kind:`, `pipeline:`, `confirmed:`), `set <stage> <base-stage>` and `confirm --pipeline <p> | --all`. `accounts`
   narrows reads and confirms to the CRM accounts a run may see, such as a group lock's. Deal and lead rows gain
-  `base_stage {ref, name}`, `null` until confirmed. A CRM CLI's `deals move <ref> stage:<id>` (and `leads move`) moves
+  `base_stage {ref, name}`, `null` until confirmed. A new set is named in the owner's first language (Russian while
+  `owner_languages` is unset, Spanish, else English); the seeded `Leads` becomes the lead set with capitalised names. An
+  agent's `stages set` records a suggestion; `confirm` and the set's edits refuse an agent (`stage.owner-only`). On a
+  read-only store `stages show` reads the set its first use would make without writing it. A CRM CLI's `deals move <ref> stage:<id>` (and `leads move`) moves
   to the one stage of the card's pipeline mapped to that base stage, and refuses several (`stage.choice-required`,
   with `candidates`) or none (`stage.unmapped`) before anything is written. `store.baseStages` holds the same
   operations.
