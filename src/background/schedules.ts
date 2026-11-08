@@ -2,14 +2,21 @@ import { spawn } from "node:child_process"
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { basename, join } from "node:path"
 import { CliError, errorCodes, writeSecurely } from "@wirecat/cli-base"
-import { linkConfigOf } from "../domain/links.js"
+import { linkConfigOf, linkFor } from "../domain/links.js"
 import { type AppIdentity, mailHolderVariable, readOnlyLockOf } from "../ports/app.js"
 import { recordLogFor } from "../runs/record-log.js"
 import { childTrace } from "../runs/scope.js"
 import { storePath } from "../store/path.js"
 import { readSharedSection, sharedConfigPath } from "../store/shared-config.js"
-import { type Delivery, deliver } from "./deliver.js"
-import { prepareReport, type ReportRun, type StoredTemplates } from "./report/render.js"
+import { type Delivery, deliver, type Parcel } from "./deliver.js"
+import { causeOf, gapsView, noticeView, weeklyGapsOf } from "./report/messages.js"
+import {
+  type PreparedMessage,
+  prepareMessage,
+  prepareReport,
+  type ReportRun,
+  type StoredTemplates,
+} from "./report/render.js"
 import type { ServerSystem } from "./system.js"
 
 /** Minutes between runs, a daily local time, or one local moment. */
@@ -735,37 +742,63 @@ export const runSchedule = async (
   }
 
   const routes = schedule.to ?? []
+  const locked = readOnlyLockOf(app, runEnv)
+  const sendAlong = async (parcel: Parcel) => {
+    const deliveries = await deliver(system, runEnv, routes, parcel, {
+      find: (name, on) => findProgram(name, on, system.platform),
+      errorOf: reasonOf,
+      ...(locked ? { locked } : {}),
+    })
+    const lost = deliveries.filter((one) => !one.ok)
+    if (lost.length > 0 && mode !== "never") {
+      await notify(system, env, title, lost.map((one) => `not delivered to ${one.to}: ${one.reason}`).join("\n"))
+    }
+    return deliveries
+  }
+  const messageOptions = async () => ({
+    language: await ownerLanguage(runEnv).catch(() => "ru"),
+    linkOf: (ref: string) => linkFor(ref, { form: "web", config: sharedLinks(runEnv), env: runEnv }),
+    ...(reportTemplates ? { templates: reportTemplates(runEnv) } : {}),
+  })
   if (routes.length > 0 && (exitCode === 0 ? mode === "always" : mode !== "never")) {
     const at = shortTime(last.at)
-    const locked = readOnlyLockOf(app, runEnv)
-    const deliveries = await deliver(
-      system,
-      runEnv,
-      routes,
+    const notice = exitCode === 0 ? undefined : await failureNotice(app, schedule, last, now(), await messageOptions())
+    const deliveries = await sendAlong(
       exitCode === 0
         ? {
             title: `${title} · ${at}`,
             file: { path: output, name: `${schedule.name}-${at.replace(/[ :]/g, "-")}.${agent ? "md" : "txt"}` },
             ...(prepared ? { rendered: prepared } : {}),
           }
-        : {
-            title: `${title} failed · ${at}`,
-            line:
-              `${title} failed at ${at} (exit ${exitCode}` +
-              `${last.failures && last.failures > 1 ? `, ${last.failures} runs in a row` : ""})` +
-              `${last.reason ? `: ${last.reason}` : ""} — ${errors}`,
-          },
-      {
-        find: (name, on) => findProgram(name, on, system.platform),
-        errorOf: reasonOf,
-        ...(locked ? { locked } : {}),
-      },
+        : notice
+          ? { title: notice.subject, rendered: notice }
+          : {
+              title: `${title} failed · ${at}`,
+              line:
+                `${title} failed at ${at} (exit ${exitCode}` +
+                `${last.failures && last.failures > 1 ? `, ${last.failures} runs in a row` : ""})` +
+                `${last.reason ? `: ${last.reason}` : ""} — ${errors}`,
+            },
     )
     last = rewriteRun(join(folder, "last.json"), { ...last, deliveries })
-    const lost = deliveries.filter((one) => !one.ok)
-    if (lost.length > 0 && mode !== "never") {
-      await notify(system, env, title, lost.map((one) => `not delivered to ${one.to}: ${one.reason}`).join("\n"))
-    }
+  }
+  if (routes.length > 0 && mode === "always" && prepared && !prepared.invalid && gapsDue(folder, now())) {
+    const gaps = weeklyGapsOf(runs, now().getTime())
+    const options = await messageOptions()
+    const message =
+      gaps.gaps.length === 0
+        ? undefined
+        : await prepareMessage(
+            "weekly-gaps",
+            (language) => gapsView(gaps, { language, now: now().getTime(), linkOf: options.linkOf }),
+            options,
+          ).catch(() => undefined)
+    const deliveries = message ? await sendAlong({ title: message.subject, rendered: message }) : []
+    writeSecurely(
+      join(folder, WEEKLY_GAPS_FILE),
+      `${JSON.stringify({ at: now().toISOString(), gaps: gaps.gaps.length, runs: gaps.runs, deliveries }, null, 2)}\n`,
+      0o600,
+    )
   }
 
   if ("once" in schedule.when) {
@@ -773,6 +806,57 @@ export const runSchedule = async (
     rmSync(file, { force: true })
   }
   return last
+}
+
+/**
+ * The rendered notice of a failed run: which schedule, since when, the cause, and one link to the tool's sync
+ * screen; undefined when even the shipped template fails, and the run's one line goes instead.
+ */
+const failureNotice = async (
+  app: AppIdentity,
+  schedule: Schedule,
+  last: LastRun,
+  at: Date,
+  options: { language: string; linkOf: (ref: string) => string | null; templates?: StoredTemplates },
+): Promise<PreparedMessage | undefined> => {
+  const failure = {
+    kind: "schedule-failed" as const,
+    tool: app.command,
+    schedule: schedule.name,
+    at: last.at,
+    since: last.failingSince ?? last.at,
+    failures: last.failures ?? 1,
+    cause: lockedOut(last) ? ("locked" as const) : causeOf(last.errorCode, last.exitCode),
+    refs: [`sync:${app.command}`],
+  }
+  return prepareMessage(
+    "schedule-failed",
+    (language) => noticeView(failure, { language, now: at.getTime(), linkOf: options.linkOf }),
+    options,
+  ).catch(() => undefined)
+}
+
+/** When the weekly gaps went last, how many, and along which routes. */
+const WEEKLY_GAPS_FILE = "weekly-gaps.json"
+
+/** Monday 00:00, local time, of the week `at` falls in. */
+const weekStart = (at: Date): number => {
+  const day = new Date(at)
+  day.setHours(0, 0, 0, 0)
+  day.setDate(day.getDate() - ((day.getDay() + 6) % 7))
+  return day.getTime()
+}
+
+/**
+ * Whether this digest run also sends the week's gaps: on a Monday, or on the first run of a week whose Monday run
+ * did not send them. A schedule that never sent any waits for its first Monday, so it never sends one day's gaps.
+ */
+const gapsDue = (folder: string, now: Date): boolean => {
+  let sent: number | undefined
+  try {
+    sent = Date.parse((JSON.parse(readFileSync(join(folder, WEEKLY_GAPS_FILE), "utf8")) as { at: string }).at)
+  } catch {}
+  return sent === undefined || Number.isNaN(sent) ? now.getDay() === 1 : sent < weekStart(now)
 }
 
 /** The agent's input, or none: a host read that fails leaves the agent to fetch what it needs itself. */

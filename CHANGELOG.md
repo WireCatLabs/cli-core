@@ -15,6 +15,23 @@ shape of this file.
   runs, wirecat-desktop#214). A marker whose pid is gone counts for nothing; failure notices and deliveries do not
   change.
 
+### Added
+
+- **The weekly gaps message (`report/weekly-gaps`).** A morning digest may keep what it found on its own, which the
+  agenda did not show, in `internal.gaps` (`{ what, refs | ref, section }`); the digest never shows it. Once a week a
+  delivered digest run also sends those gaps along the same routes as one message: on Monday, or on the first digest
+  of a week whose Monday run did not send them, and never before a schedule's first Monday. It reads the run files
+  of the last 7 days, says a gap that several runs found once (the same ref, or the same words but for case and
+  punctuation) with how many digests found it, the most frequent first, and sends nothing for a week without gaps.
+  No agent runs for it. When it went, how many gaps and the deliveries are in the schedule's `weekly-gaps.json`.
+- **A failed scheduled run sends a rendered notice (`notice/schedule-failed`).** In place of the one English line,
+  every route of a schedule that notifies on failures gets which schedule failed, since when and how many runs in a
+  row, the cause in the owner's language (keyring locked, sign-in needed, service unreachable, service error,
+  settings, stopped, crashed: from the error code, never its message) and one "fix" link to the tool's sync screen
+  (`sync/<tool>`). A notice whose templates fail sends the old line. The desktop notice is unchanged.
+- Default templates for both, for Telegram, email and text in Russian and English, with the digest's escaping and
+  platform rules; `templates edit | preview` now take both keys, checked against their own synthetic samples.
+
 ## 0.614.0 — 08.11.2026
 
 ### Added

@@ -1,0 +1,6 @@
+<div style="max-width:600px;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:15px">
+<p style="margin:0 0 8px;font-size:19px"><b>⚠️ The morning digest could not be built</b></p>
+<p style="margin:0 0 4px">Failing since November 7, 08:31 · 3 runs in a row</p>
+<p style="margin:0 0 12px">Why: the account needs a new sign-in</p>
+<p style="margin:0"><a href="https://wirecat.dev/o#/v1/sync/memo" style="color:#3b82c4">fix</a></p>
+</div>
