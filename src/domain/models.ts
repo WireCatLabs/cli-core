@@ -29,6 +29,12 @@ export interface Chat {
   /** Saving a chat: absent keeps the stored parent, `null` clears it. */
   parentChatId?: Id | null
   scope?: "personal" | "work"
+  /**
+   * Saving a chat: `false` keeps it out of search over all chats, as a chat whose messages hold credentials
+   * (Telegram's BotFather) should be; a read that names the chat still sees it. Absent keeps the stored
+   * mark, and nothing a messenger saves unhides a chat.
+   */
+  searchable?: false
   id: Id
   title: string | null
   kind: ChatKind
