@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.618.0 — 09.11.2026
+
 ### Added
 
 - **Links open a person and a project.** The v1 link grammar takes `person/<id>` and `project/<key>`
