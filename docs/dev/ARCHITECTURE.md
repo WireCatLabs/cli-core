@@ -370,7 +370,8 @@ titles in memory per query, with no index: `deals.find` reads deal and lead titl
 (`src/store/sqlite/business-search.ts`) the numbers and names of invoices, payments, orders, contracts, subscriptions,
 products and wallets ([KNOWLEDGE.md § Money](KNOWLEDGE.md#money)). A business hit's account is its source record's,
 found through `records.entity_type`/`entity_id`; under `--source` the lane reads the import accounts the list names,
-whatever their provider (`fitting`'s `alsoFits`). Source tools' `search all` (`SOURCE_SEARCHED`) reads neither lane.
+whatever their provider (`fitting`'s `alsoFits`). The `search all` of tg, max and a calendar CLI (`SOURCE_SEARCHED`)
+reads neither lane; a CRM CLI's reads `crm`.
 
 `searchAllIncludingMeetings` (`src/services/search-all-meetings.ts`) is a separate opt-in service.
 It delegates the legacy search unchanged, then blends its ordered result with one explicit meeting
