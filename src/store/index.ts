@@ -170,6 +170,7 @@ export {
   ADDED_KINDS,
   type AddedSource,
   type AddedSourceContent,
+  type AddedSourceDetails,
   type AddedSourceInput,
   addedSourceKeyOf,
 } from "./sqlite/added-sources.js"
