@@ -18,6 +18,8 @@ export interface FakeCrmSourceOptions {
   pageSize?: number
   /** What the write side takes: every verb on both kinds, not idempotent, when absent. */
   capabilities?: Partial<CrmWriteCapabilities>
+  /** The sign-in's own user, as `self()` answers it; absent, the fake names none and is copied whole. */
+  self?: string
 }
 
 /** One write the fake CRM was sent, in order. */
@@ -211,6 +213,7 @@ export const fakeCrmSource = (options: FakeCrmSourceOptions = {}): FakeCrmSource
   const fake: FakeCrmSource = {
     provider: "example-crm",
     traits,
+    ...(options.self === undefined ? {} : { self: () => options.self as string }),
     calls,
     capabilities,
     writes,

@@ -123,6 +123,10 @@ const STAGE_UNTRUSTED = ["name", "pipeline_name"]
 const crmSync = v.strictObject({
   provider: text,
   account: text,
+  scope: v.variant("mode", [
+    v.strictObject({ mode: v.literal("all") }),
+    v.strictObject({ mode: v.literal("mine"), self: text, also: v.array(text) }),
+  ]),
   pipelines: count,
   users: v.optional(count),
   skipped_owner_rejected: count,
@@ -135,8 +139,11 @@ const crmSync = v.strictObject({
       saved: count,
       removed: count,
       unlisted: count,
+      out_of_scope: count,
+      held: v.optional(v.literal(true)),
       pass: v.optional(v.picklist(["complete", "partial", "held"])),
       error: v.optional(text),
+      setting: v.optional(text),
     }),
   ),
   issues: v.array(
@@ -268,11 +275,14 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
           ...(opts.rescan ? { rescan: true } : {}),
         })
         const failed = report.synced.filter((one) => one.error !== undefined)
+        // A kind that failed on a setting fails the same way again until the owner changes it: no retry is offered.
+        const retried = failed.filter((one) => one.setting === undefined)
+        const settings = [...new Set(failed.flatMap((one) => one.setting ?? []))]
         const timeout = command.optsWithGlobals<{ timeout?: string }>().timeout
         // The same command again, never --rescan: that would drop the round this run leaves in progress.
         const stuck = report.state === "partial" && report.progress.steps === 0 && failed.length === 0
         const next: NextStep[] | undefined =
-          failed.length || (report.state === "partial" && !stuck)
+          retried.length || (report.state === "partial" && !stuck && failed.length === 0)
             ? [
                 {
                   kind: "command",
@@ -281,7 +291,7 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
                   args: Object.fromEntries(
                     Object.entries({ max_pages: opts.maxPages, timeout }).filter(([, value]) => value !== undefined),
                   ),
-                  why: failed.length
+                  why: retried.length
                     ? "a kind failed to sync; running sync again retries it"
                     : "the sync stopped before its end to answer in time; running it again goes on from there",
                   safe_to_auto_execute: true,
@@ -289,8 +299,11 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
               ]
             : undefined
         const progressAt = lineOf(command, "store status")
+        const fixes = settings.map((setting) => lineOf(command, `config set ${setting} <value>`))
         const hint = failed.length
-          ? `${failed.map((one) => `${one.kind}: ${one.error}`).join("; ")} — run sync again to retry`
+          ? `${failed.map((one) => `${one.kind}: ${one.error}`).join("; ")} — ${
+              fixes.length ? `fix the setting: ${fixes.join("; ")}` : "run sync again to retry"
+            }`
           : stuck
             ? `this run moved nothing on: raise --timeout or --max-pages, then run sync again; see progress: ${progressAt}`
             : report.state === "partial"
@@ -300,7 +313,7 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
         // What the healthy kinds brought is saved and answered; each failure and each item not kept is an issue.
         const issues = [
           ...failed.map((one) => ({
-            code: "provider_error" as const,
+            code: one.setting === undefined ? ("provider_error" as const) : ("validation_error" as const),
             reason: "sync.partial",
             source: `crm:${one.kind}`,
           })),

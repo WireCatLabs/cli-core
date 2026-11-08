@@ -17,6 +17,7 @@ import { toolsFromCommands } from "../../mcp/agent.js"
 import type { AppIdentity } from "../../ports/app.js"
 import { SendJournal, sendsPathFor } from "../../sends/journal.js"
 import type { Level } from "../../sends/permissions.js"
+import { openCache } from "../../store/open.js"
 import { type MessageStore, openStore } from "../../store/store.js"
 import {
   exampleDeal,
@@ -66,7 +67,8 @@ const setup = async (
     idempotent?: boolean
   } = {},
 ) => {
-  const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "crm-cli-")), "store.db") })
+  const path = join(mkdtempSync(join(tmpdir(), "crm-cli-")), "store.db")
+  const store = await openStore({ path })
   opened.push(store)
   await store.accounts.registerProvider({
     name: "example-crm",
@@ -146,7 +148,7 @@ const setup = async (
     }
     return envelope as Record<string, unknown> & { item: Record<string, unknown>; items: Record<string, unknown>[] }
   }
-  return { store, source, cli, printed, journal, alsoChecks }
+  return { path, store, source, cli, printed, journal, alsoChecks }
 }
 
 describe("CRM commands", () => {
@@ -280,6 +282,24 @@ describe("CRM commands", () => {
     ])
     const status = await cli("store", "status")
     expect(status.items.map(({ kind, state }) => [kind, state])).toContainEqual(["deal", "partial"])
+  })
+
+  it("a sync that fails on a malformed unassigned setting offers no retry and names the setting to change", async () => {
+    const scoped = fakeCrmSource({ self: "7" })
+    const { path, cli } = await setup({ source: () => scoped })
+    const database = await openCache(path)
+    database
+      .prepare("INSERT INTO store_settings (key, value, at) VALUES (?, ?, 1)")
+      .run(`crm.${PORTAL.provider}:${PORTAL.account}.unassigned`, JSON.stringify(["bot"]))
+    database.close()
+    const failed = await cli("sync")
+    expect(failed.next).toBeUndefined()
+    expect(failed.item.hint).toContain(
+      `fix the setting: crm config set crm.${PORTAL.provider}:${PORTAL.account}.unassigned`,
+    )
+    expect(failed.meta).toMatchObject({
+      issues: expect.arrayContaining([{ code: "validation_error", reason: "sync.partial", source: "crm:deal" }]),
+    })
   })
 
   it("search all finds a deal by a word of its title", async () => {

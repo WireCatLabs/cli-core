@@ -7,6 +7,7 @@ import {
   type CrmOrganization,
   type CrmPerson,
   type CrmPipeline,
+  type CrmScopeSetting,
   type CrmUser,
   isItemKind,
 } from "../../domain/crm.js"
@@ -17,7 +18,7 @@ import type { AccountPeople } from "../people.js"
 import type { AccountKey } from "../types.js"
 import { accountPk, findAccountPk } from "./accounts.js"
 import { type CrmSkipped, crmAccountPrefix, crmIdentityId, crmRowsOver, SOURCE, TABLES, textOf } from "./crm-rows.js"
-import { crmCompanyTypes } from "./crm-settings.js"
+import { crmCompanyTypes, crmOwnUser, crmScope, crmSettingKey, saveCrmSetting } from "./crm-settings.js"
 import type { StoreContext } from "./open.js"
 import { type ReportedRelation, type ReportedScope, syncReportedIn } from "./reported-relations.js"
 import { clearState, syncStateOf, writeState } from "./sync.js"
@@ -141,6 +142,21 @@ export interface CrmCopies {
     kind: CrmKind,
     listed: string[],
     before: number,
+    options?: { dryRun?: boolean },
+  ): Promise<number>
+  /** Which deals and leads the account's sync copies: its `scope` and `unassigned` settings. */
+  scope(key: AccountKey): Promise<CrmScopeSetting>
+  /** The CRM user whose copy this is (`self` setting); none before the first sync of a source that names one. */
+  ownUser(key: AccountKey): Promise<string | undefined>
+  saveOwnUser(key: AccountKey, userId: string): Promise<void>
+  /**
+   * Marks deleted every stored deal or lead of the kind assigned to a user outside `userIds`; one with no assignee
+   * stays. Reads only the store. Answers how many; `dryRun` only counts them.
+   */
+  removeOutOfScope(
+    key: AccountKey,
+    kind: DealKind,
+    userIds: readonly string[],
     options?: { dryRun?: boolean },
   ): Promise<number>
   /** How many of the kind the account holds, not deleted; every contact it ever saved. */
@@ -793,6 +809,23 @@ export const crmCopiesOver = (context: StoreContext, people: AccountPeople): Crm
           (row) => !held.has(String(row.external_id)) && Number(row.updated_at) < before,
         )
         return dryRun ? gone.length : markDeleted(key, kind, gone)
+      }),
+    scope: async (key) => crmScope(database, key),
+    ownUser: async (key) => crmOwnUser(database, key),
+    saveOwnUser: async (key, userId) => saveCrmSetting(database, crmSettingKey(key, "self"), userId, now()),
+    removeOutOfScope: async (key, kind, userIds, { dryRun } = {}) =>
+      write(database, () => {
+        const keep = new Set(userIds.map((id) => crmIdentityId(key, id, "user")))
+        const accountId = findAccountPk(context, key)
+        if (accountId === undefined) return 0
+        const rows = database
+          .prepare(
+            `SELECT id, external_id, json_extract(metadata, '$.assignee') AS assignee FROM ${TABLES[kind]} ` +
+              "WHERE account_id = ? AND deleted_at IS NULL",
+          )
+          .all(accountId)
+          .filter((row) => row.assignee != null && !keep.has(String(row.assignee)))
+        return dryRun ? rows.length : markDeleted(key, kind, rows)
       }),
     count: async (key, kind) =>
       kind === "person"

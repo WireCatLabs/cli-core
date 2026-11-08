@@ -339,6 +339,31 @@ source that makes more requests than the one the engine counts takes each with `
 as `partial` once the budget is spent (WC-LIFE-16). A contact whose email
 belongs to two people is named in the sync's issues until the owner separates it.
 
+Which deals and leads a sync copies is the account's `crm.<provider>:<account>.scope`: `mine` (the default) keeps
+those with no assignee and those assigned to the sign-in's own user or to a user in
+`crm.<provider>:<account>.unassigned` (the CRM's numeric user ids whose items the owner counts as nobody's, such as an
+integration's; `settings set` refuses any other entry); `all` keeps every one. Contacts and companies are always
+copied whole. A source names its own user with `self()`; a source without it is copied whole, and the answer's
+`scope` (`{ mode, self, also }`) says what was applied. User ids are normalised once in core (`normalCrmUserId`:
+`015` is `15`). The engine applies the scope to every page it gets, so a row a round of changes finds outside it,
+such as a deal given to another user, is marked deleted at once (`outOfScope`); a source may also filter by
+`context.scope` to read less, but lists every assignee's changes. Each deal and lead cursor keeps the scope it holds:
+a narrower one is applied in the store, by each stored row's assignee, with no list from the CRM; a wider one lists
+the kind in full again and runs no id pass. A narrowing under the default `mine` (no `scope` setting stored) that
+would mark more than half of a kind deleted is held as `crm.narrowing-held` (and `held: true` on the kind), naming
+the own user and the count, until the owner sets the `scope` setting; `--rescan` does not lift it. While it is held,
+new pages are still read under `mine`, and only the stored rows outside it are kept: a sign-in whose user holds few of
+the copy's deals is more likely the wrong one than the owner's wish. `config set` of `scope`, `self` or
+`unassigned` stops an agent's run (its own shell, or MCP with `mcp.authority`) with `permission_error`: the owner sets
+them in a terminal. It guards against a change by mistake and is not a boundary: an agent that drops its markers or
+writes the store file directly is not stopped. `self()` must answer a numeric user id (else `invalid_response`), and a source
+with it fills every deal's and lead's `assignee` (a source contract case checks it). One account's copy belongs to one user: the first sync stores it as
+`crm.<provider>:<account>.self`, a sign-in of another user is refused with the setting named, and
+`settings unset` of it gives the copy to the next sign-in. Out of scope is a deleted mark, as for a row the CRM
+deleted: `mine` hides those rows from lists and search, but their earlier copy stays in the store file. Deleting a
+copy touches no relationship, so the owner's confirmed links stay and return with the row. An id list that is empty
+never marks rows deleted without `--rescan`, whatever the copy's size.
+
 A mail findings batch (`store.mailFindings`) also takes `invoice`, `payment`, `order` and `order_update` findings.
 Staging runs what accepting would write through `store.finance` or `store.orders` and rolls it back, so a batch the
 owner could not accept is refused with the same reason; an `order_update` needs the stored order of its
