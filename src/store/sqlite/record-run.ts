@@ -5,6 +5,7 @@ import { accountPk } from "./accounts.js"
 import type { StoreContext } from "./open.js"
 import { codeOf, type Row } from "./record-projection.js"
 import { isDerived } from "./record-relations.js"
+import { addCounts, noRelationships, type RelationshipCounts, recordRelationshipsOver } from "./record-relationships.js"
 import type { Flag, recordWritesOver } from "./record-writes.js"
 import { outsideRehearsal, read, write } from "./transaction.js"
 
@@ -61,6 +62,8 @@ export interface RecordsRun {
   flagged: FlaggedRecord[]
   /** Values that look like identifiers and were kept as data only: a phone without `+` and no `phone_region`. */
   ignored: { index: number; key: string; at: (string | number)[]; reason: string }[]
+  /** What the records' relationships did to the links this account reports. */
+  relationships: RelationshipCounts
   /** A list stopped at `limit`. */
   truncated: boolean
 }
@@ -75,6 +78,7 @@ const PAGE = 500
 export const recordRunOver = (context: StoreContext, writes: ReturnType<typeof recordWritesOver>) => {
   const { database } = context
   const { writeOne, completeDependents, entityRef, missingOf } = writes
+  const reported = recordRelationshipsOver(context)
 
   return async (
     source: EnvelopeSource,
@@ -93,6 +97,7 @@ export const recordRunOver = (context: StoreContext, writes: ReturnType<typeof r
       let truncated = false
       const errors: IngestError[] = []
       const counts = { created: 0, updated: 0, unchanged: 0, deleted: 0, refused: 0 }
+      const relationships = noRelationships()
       const issue = (error: IngestError) => {
         if (errors.length < limit) errors.push(error)
         else truncated = true
@@ -107,8 +112,11 @@ export const recordRunOver = (context: StoreContext, writes: ReturnType<typeof r
       }
       const takeChunk = (batch: RunItem[]) =>
         write(database, () => {
-          const accountId = accountPk(context, { provider: source.provider, account: source.account })
+          const key = { provider: source.provider, account: source.account }
+          const accountId = accountPk(context, key)
           const complete: number[] = []
+          const written: number[] = []
+          const changed: number[] = []
           for (const { index, record, errors: before } of batch) {
             if (before?.length) {
               counts.refused += 1
@@ -140,6 +148,8 @@ export const recordRunOver = (context: StoreContext, writes: ReturnType<typeof r
             try {
               const done = write(database, () => writeOne(accountId, source, record, options, proposed))
               counts[done.status] += 1
+              written.push(done.id)
+              if (done.complete || done.status === "deleted") changed.push(done.id)
               database
                 .prepare(
                   `UPDATE temp.${table} SET record_id = ?, flagged = ?, unmatched = ?, ignored = ? WHERE key = ?`,
@@ -163,7 +173,30 @@ export const recordRunOver = (context: StoreContext, writes: ReturnType<typeof r
               })
             }
           }
-          for (const id of complete) completeDependents(id, source, proposed, issue)
+          const made = (id: number) => {
+            written.push(id)
+            changed.push(id)
+          }
+          for (const id of complete) completeDependents(id, source, proposed, issue, made)
+          const done = reported.report(key, accountId, { records: written, changed }, (one, recordId) => {
+            const row =
+              recordId === null
+                ? undefined
+                : database
+                    .prepare(
+                      `SELECT run.idx, run.key, r.type, r.external_id FROM records r LEFT JOIN temp.${table} run ` +
+                        "ON run.record_id = r.id WHERE r.id = ?",
+                    )
+                    .get(recordId)
+            issue({
+              pointer: row?.idx == null ? "" : pointerOf("records", Number(row.idx), "relations"),
+              code: one.reason,
+              message:
+                row && row.idx == null ? `${String(row.type)} ${String(row.external_id)}: ${one.message}` : one.message,
+              ...(row?.key == null ? {} : { key: String(row.key) }),
+            })
+          })
+          addCounts(relationships, done)
         })
       let batch: RunItem[] = []
       for await (const item of items) {
@@ -234,6 +267,7 @@ export const recordRunOver = (context: StoreContext, writes: ReturnType<typeof r
           unmatched,
           flagged,
           ignored,
+          relationships,
           truncated,
         }
       })

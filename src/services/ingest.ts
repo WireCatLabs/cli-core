@@ -12,7 +12,7 @@ import {
   recordErrors,
 } from "../domain/records.js"
 import { envelopeOfVcard, type VcardIssue, type VcardOptions } from "../domain/vcard.js"
-import { type RecordsRun, type RunItem, waitingPointer } from "../store/index.js"
+import { type RecordsRun, type RelationshipCounts, type RunItem, waitingPointer } from "../store/index.js"
 import type { MessageStore } from "../store/store.js"
 
 export interface IngestOptions {
@@ -55,6 +55,12 @@ export interface IngestReceipt {
    * envelope names no `options.phone_region` (`record.phone-region`).
    */
   ignored: { key: string; pointer: string; reason: string }[]
+  /**
+   * The links this import's account reports from the records' relationships: new, held, back after a withdrawal,
+   * withdrawn, waiting for review, and left out because the owner rejected that very relationship. An issue with one
+   * is in `errors`, code `relationship.*`.
+   */
+  relationships: RelationshipCounts
   errors: IngestError[]
   /** A list stopped at 1000 entries; the counts are exact. */
   truncated: boolean
@@ -73,6 +79,7 @@ const emptyReceipt = (dryRun: boolean, errors: IngestError[]): IngestReceipt => 
   flagged: [],
   unmatched: [],
   ignored: [],
+  relationships: { added: 0, kept: 0, restored: 0, withdrawn: 0, proposed: 0, skippedOwnerRejected: 0 },
   errors,
   truncated: false,
 })
@@ -99,6 +106,7 @@ const receiptOf = (dryRun: boolean, source: EnvelopeSource, run: RecordsRun): In
     pointer: pointerOf("records", index, ...at),
     reason,
   })),
+  relationships: run.relationships,
   errors: run.errors,
   truncated: run.truncated,
 })

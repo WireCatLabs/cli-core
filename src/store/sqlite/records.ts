@@ -1,15 +1,18 @@
 import { CliError } from "@wirecat/cli-base"
 import { IDENTITY_TYPES } from "../../domain/record-types.js"
 import type { EnvelopeSource, IngestError } from "../../domain/records.js"
+import type { AccountKey } from "../types.js"
 import { findAccountPk } from "./accounts.js"
 import type { Author } from "./memories.js"
 import { requiredThing } from "./notes.js"
 import type { StoreContext } from "./open.js"
 import { codeOf, type Row, refusal } from "./record-projection.js"
 import { isDerived } from "./record-relations.js"
+import { recordRelationshipsOver } from "./record-relationships.js"
 import { recordRemapOver } from "./record-remap.js"
 import { type RecordsRun, type RunItem, type RunOptions, recordRunOver } from "./record-run.js"
 import { recordWritesOver } from "./record-writes.js"
+import { storedThing } from "./things.js"
 import { read, rehearse, write } from "./transaction.js"
 
 export type { FlaggedRecord, RecordsRun, RunItem, RunOptions, Unmatched } from "./record-run.js"
@@ -116,6 +119,19 @@ export const recordStoreOver = (context: StoreContext): RecordStore => {
   const { entityRef, project, completeDependents } = writes
   const run = recordRunOver(context, writes)
   const { pointedAt, remap } = recordRemapOver(context)
+  const reported = recordRelationshipsOver(context)
+
+  /** A relationship issue of a report outside a run: no envelope to point into, so the message names the record. */
+  const reportIssue =
+    (push: (error: IngestError) => void) => (issue: { reason: string; message: string }, recordId: number | null) => {
+      const row =
+        recordId === null ? undefined : sql("SELECT type, external_id FROM records WHERE id = ?").get(recordId)
+      push({
+        pointer: "",
+        code: issue.reason,
+        message: row ? `${String(row.type)} ${String(row.external_id)}: ${issue.message}` : issue.message,
+      })
+    }
 
   const sourceRecordOf = (row: Row): SourceRecord => ({
     provider: String(row.provider),
@@ -231,6 +247,12 @@ export const recordStoreOver = (context: StoreContext): RecordStore => {
         const same = row.entity_type === thing.type && Number(row.entity_id) === thing.id
         const from =
           row.entity_id != null && !same ? { type: String(row.entity_type), id: Number(row.entity_id) } : null
+        const moved =
+          from === null
+            ? [Number(row.id)]
+            : sql("SELECT id FROM records WHERE account_id = ? AND entity_type = ? AND entity_id = ?")
+                .all(Number(row.account_id), from.type, from.id)
+                .map((one) => Number(one.id))
         if (from !== null) {
           if (Number(row.created_entity) !== 1)
             refusal(
@@ -250,6 +272,14 @@ export const recordStoreOver = (context: StoreContext): RecordStore => {
           source,
           (ref) => proposed.add(ref),
           (error) => errors.push(error),
+          (id) => moved.push(id),
+        )
+        const account: AccountKey = { provider: key.provider, account: key.account }
+        reported.report(
+          account,
+          Number(row.account_id),
+          { records: moved, changed: moved, withdrawn: from === null ? [] : [storedThing(from.type, from.id)] },
+          reportIssue((error) => errors.push(error)),
         )
       })
       return read(database, () => ({
@@ -277,6 +307,7 @@ export const recordStoreOver = (context: StoreContext): RecordStore => {
               `AND type IN (${IDENTITY_SQL}) ORDER BY id`,
           )
           .all(accountId)
+        const made: number[] = []
         for (const row of rows) {
           const source = { provider, account, batch_id: String(row.batch_id) }
           const recordKey = { provider, account, type: String(row.type), externalId: String(row.external_id) }
@@ -286,6 +317,7 @@ export const recordStoreOver = (context: StoreContext): RecordStore => {
             if (!done.made) continue
             const created = sql("SELECT created_entity FROM records WHERE id = ?").get(Number(row.id))?.created_entity
             counts[Number(created) === 1 ? "created" : "linked"] += 1
+            made.push(Number(row.id))
             completeDependents(
               Number(row.id),
               source,
@@ -294,6 +326,7 @@ export const recordStoreOver = (context: StoreContext): RecordStore => {
                 else if (!proposed.has(ref)) flag()
               },
               errors.push,
+              (id) => made.push(id),
             )
           } catch (error) {
             if (!(error instanceof CliError)) throw error
@@ -304,6 +337,7 @@ export const recordStoreOver = (context: StoreContext): RecordStore => {
             })
           }
         }
+        reported.report({ provider, account }, accountId, { records: made, changed: made }, reportIssue(errors.push))
       })
       return { ...counts, unmatched: unmatched.list, proposed: [...proposed], errors: errors.list, truncated }
     },

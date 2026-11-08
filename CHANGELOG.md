@@ -9,6 +9,16 @@ shape of this file.
 
 ### Added
 
+- **A records import reports its relationships as links of its account.** A deal's or lead's people, a contract's
+  parties, a person's `member-of` and an organization's `customer-of` and `partner-of` go through
+  `relations.syncReported` per chunk, so a re-import keeps them, a changed role adds a link and withdraws the old one,
+  a delete withdraws them, and `records map` moves them with the entity. A `member-of` word off the organization list
+  is `metadata.source_role`, a person's `fields.position` is `metadata.position`, and neither ever becomes the role.
+  The receipt adds `relationships` (`added`, `kept`, `restored`, `withdrawn`, `proposed`, `skippedOwnerRejected`),
+  and a relationship's issue is an error coded `relationship.*`. An envelope under a CRM's own account is that
+  account's set.
+- **A contract may be related to a person or an organization,** with the roles `customer`, `supplier`, `signatory`
+  and `guarantor` (`CONTRACT_ROLES`), a `contract` list the owner may add to like the others.
 - **Store version 57: business tables.** `store.products` (`product:<id>`, written directly, a line copies its
   price), `store.contracts` (`contract:<id>`: an agent's or an import's is proposed only when it carries a value, and
   only the owner changes the value of a confirmed one; the notice deadline is computed), `store.subscriptions`
@@ -56,8 +66,6 @@ shape of this file.
 - **`options.phone_region`**: a person's phone without `+` is an identifier only when the envelope names this country
   and the number is valid there; the `phone_countries` setting never decides it. Without it the number stays data and
   the receipt lists it under `ignored` (`record.phone-region`).
-- **An envelope deal's and lead's people stay as record relations** (with `as`) until imports report relationships to
-  the store; they no longer write the deal's person links.
 - **`orders.revise(order, input)`** replaces an order's columns and lines: the owner on any order, a bot on its own
   proposed one. New reasons `record.identifier`, `record.ambiguous`, `record.separated`, `record.phone-region` and
   `store.dry-run`.
@@ -106,6 +114,7 @@ shape of this file.
 
 ### Added
 
+||||||| parent of 03fcce9af (feat(records): an import reports its relationships through relations.syncReported)
 - **Business relationships: `reports-to`, `customer-of` and `partner-of`, role lists, and a `standing` on every
   relationship.** `knowledge.relate` takes a person reporting to a person, a person or organization buying from an
   organization, and two partner organizations (stored once, the lower id first, whichever way they are named). A deal
