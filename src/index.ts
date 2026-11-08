@@ -142,6 +142,7 @@ export {
   type RefKindSpec,
 } from "./domain/references.js"
 export {
+  CONTRACT_ROLES,
   inverseOf,
   isUsable,
   ORGANIZATION_ROLES,

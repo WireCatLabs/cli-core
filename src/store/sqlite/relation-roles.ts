@@ -54,17 +54,22 @@ export const extraRolesOf = (database: CacheDatabase, kind: string, from: string
 export const checkStoredRole = (database: CacheDatabase, kind: string, from: string, to: string, role: string) =>
   checkRole(kind, from, to, role, extraRolesOf(database, kind, from, to))
 
-/** The links whose role comes from this list: a person's on an organization or a project, a deal's or a lead's people. */
+/** The `related-to` links whose role comes from a list, by the types that name it. */
+const RELATED_FROM: Partial<Record<RoleList, string>> = { deal: "'deal', 'lead'", contract: "'contract'" }
+
+/**
+ * The links whose role comes from this list: a person's on an organization or a project, a deal's or a lead's people,
+ * a contract's parties.
+ */
 const usedBy = (database: CacheDatabase, list: RoleList, role: string): number => {
-  const links =
-    list === "deal"
-      ? "kind = 'related-to' AND from_type IN ('deal', 'lead')"
-      : `kind = 'member-of' AND from_type = 'person' AND to_type = '${list}'`
+  const related = RELATED_FROM[list]
+  const links = related
+    ? `kind = 'related-to' AND from_type IN (${related})`
+    : `kind = 'member-of' AND from_type = 'person' AND to_type = '${list}'`
   // A pending proposal would make the role a relationship's once approved: it counts as a use.
-  const proposals =
-    list === "deal"
-      ? "target_type IN ('deal', 'lead') AND json_extract(payload, '$.kind') = 'related-to'"
-      : `target_type = 'person' AND json_extract(payload, '$.kind') = 'member-of' AND json_extract(payload, '$.to') LIKE '${list}:%'`
+  const proposals = related
+    ? `target_type IN (${related}) AND json_extract(payload, '$.kind') = 'related-to'`
+    : `target_type = 'person' AND json_extract(payload, '$.kind') = 'member-of' AND json_extract(payload, '$.to') LIKE '${list}:%'`
   return Number(
     database
       .prepare(
