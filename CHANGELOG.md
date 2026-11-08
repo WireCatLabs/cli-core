@@ -7,6 +7,16 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- **One notification per digest while WireCat Desktop runs.** Desktop announces a new morning digest itself, so a
+  finished run showed two system notices. A schedule's run now leaves its own success notice out when
+  `<state>/schedules/desktop.json` names a live pid and lists the schedule in `announces` (Desktop writes it while it
+  runs, wirecat-desktop#214). A marker whose pid is gone counts for nothing; failure notices and deliveries do not
+  change.
+
+## 0.614.0 — 08.11.2026
+
 ### Added
 
 - **The owner's own message templates, in the shared store (store version 59).** `templatesCommand(app, { env,
@@ -24,19 +34,6 @@ shape of this file.
   falls back to the shipped template for that channel and records `report.template-failed`. The email template is
   stored and previewed, but mail still sends the plain-text rendering. `store.templates` and
   `storedTemplateBodies(database, key, language)` from `@wirecat/cli-core/store`.
-
-### Fixed
-
-- **One notification per digest while WireCat Desktop runs.** Desktop announces a new morning digest itself, so a
-  finished run showed two system notices. A schedule's run now leaves its own success notice out when
-  `<state>/schedules/desktop.json` names a live pid and lists the schedule in `announces` (Desktop writes it while it
-  runs, wirecat-desktop#214). A marker whose pid is gone counts for nothing; failure notices and deliveries do not
-  change.
-
-## 0.614.0 — 08.11.2026
-
-### Added
-
 - **`account remove`, built once for every tool.** `<tool> <profile> account remove --keep-data|--delete-data` signs
   the profile out with the tool's own `signOut` hook, then forgets it here: its keyring entries, its
   `state/accounts/<profile>.json`, the tool's own state files and its sections in the config file; other profiles stay.
