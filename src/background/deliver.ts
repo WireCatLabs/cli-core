@@ -50,12 +50,14 @@ export const DELIVERY_REASONS = {
   timeout: "delivery.timeout",
   failed: "delivery.failed",
   htmlFallback: "delivery.html-fallback",
+  reportInvalid: "delivery.report-invalid",
 } as const
 export type DeliveryReason = (typeof DELIVERY_REASONS)[keyof typeof DELIVERY_REASONS]
 
 /**
  * One route's outcome, kept in `last.json`. `error` is the sending CLI's error code and reason id, never its message.
- * A send that went as plain text because Telegram refused the HTML is `ok` with the `html-fallback` reason.
+ * A send that went as plain text because Telegram refused the HTML is `ok` with the `html-fallback` reason, and the
+ * one line sent in place of a report that failed its check is `ok` with `report-invalid`.
  */
 export interface Delivery {
   to: string
@@ -101,6 +103,40 @@ export interface Parcel {
   file?: { path: string; name: string }
   /** A failed run: one line, no file. */
   line?: string
+  /** A report document, already rendered: the file and the title are not sent. */
+  rendered?: RenderedParcel
+}
+
+export interface RenderedParcel {
+  telegram: string
+  text: string
+  subject: string
+  /** The report failed its check and `text` is the one line that says so. */
+  invalid: boolean
+}
+
+/** Plain text for a bot when Telegram refused the HTML, cut where a line ends. */
+const plainFit = (text: string): string => {
+  if (text.length <= TELEGRAM_TEXT_CHARS) return text
+  const cut = text.slice(0, TELEGRAM_TEXT_CHARS - 2)
+  const line = cut.lastIndexOf("\n")
+  return `${line > 0 ? cut.slice(0, line) : cut}\n…`
+}
+
+/** A rendered report needs no file: Telegram's text was fitted when it was rendered, and mail has no limit. */
+const renderedArgvOf = (program: string, route: Route, rendered: RenderedParcel, plain = false) => {
+  const lead = [program, route.profile, "--json", "--no-input"]
+  if (route.kind === "email") return [...lead, "messages", "send", "--to", route.address, "--subject", rendered.subject]
+  return [
+    ...lead,
+    "bot",
+    "messages",
+    "send",
+    ...(plain ? [] : ["--html"]),
+    "--",
+    route.chat,
+    plain ? plainFit(rendered.text) : rendered.telegram,
+  ]
 }
 
 const textOf = (title: string, report: string) => (report.trim() ? `${title}\n${report.trim()}` : title)
@@ -201,7 +237,9 @@ export const deliver = async (
       out.push(failed(to, DELIVERY_REASONS.programMissing, command))
       continue
     }
-    const tooLong = route.kind === "telegram-bot" && htmlOf(parcel.title, report).length > TELEGRAM_TEXT_CHARS
+    const { rendered } = parcel
+    const tooLong =
+      !rendered && route.kind === "telegram-bot" && htmlOf(parcel.title, report).length > TELEGRAM_TEXT_CHARS
     // The sending CLI refuses its own and the other WireCat folders, where the report lives, so it gets a copy.
     const folder =
       route.kind === "telegram-bot" && parcel.file && tooLong ? mkdtempSync(join(tmpdir(), "wirecat-deliver-")) : ""
@@ -211,9 +249,13 @@ export const deliver = async (
       const { [`${prefix}_PROFILE`]: _, ...childEnv } = env
       const options = {
         timeoutMs,
-        ...(route.kind === "email" ? { input: report.trim() ? report : parcel.title } : {}),
+        ...(route.kind === "email" ? { input: rendered ? rendered.text : report.trim() ? report : parcel.title } : {}),
       }
-      let ran = await system.run(argvOf(program, route, parcel.title, report, copy), childEnv, options)
+      const argv = (plain = false) =>
+        rendered
+          ? renderedArgvOf(program, route, rendered, plain)
+          : argvOf(program, route, parcel.title, report, copy, plain)
+      let ran = await system.run(argv(), childEnv, options)
       let fellBack = ""
       if (
         route.kind === "telegram-bot" &&
@@ -222,10 +264,16 @@ export const deliver = async (
         codeOf(ran.stderr) === REFUSED_CONTENT
       ) {
         fellBack = errorOf(ran.stderr, ran.code)
-        ran = await system.run(argvOf(program, route, parcel.title, report, copy, true), childEnv, options)
+        ran = await system.run(argv(true), childEnv, options)
       }
       if (ran.code === 0) {
-        out.push(fellBack ? { to, ok: true, reason: DELIVERY_REASONS.htmlFallback, error: fellBack } : { to, ok: true })
+        out.push(
+          rendered?.invalid
+            ? { to, ok: true, reason: DELIVERY_REASONS.reportInvalid }
+            : fellBack
+              ? { to, ok: true, reason: DELIVERY_REASONS.htmlFallback, error: fellBack }
+              : { to, ok: true },
+        )
       } else if (ran.code === TIMED_OUT) out.push(failed(to, DELIVERY_REASONS.timeout))
       else out.push(failed(to, DELIVERY_REASONS.failed, errorOf(ran.stderr, ran.code)))
     } catch {

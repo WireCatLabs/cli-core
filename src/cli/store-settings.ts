@@ -26,16 +26,20 @@ import {
   crmSettingsOf,
   DEFAULT_AGENT_CLOSE,
   DEFAULT_FIRST_PASS_PER_CHAT,
+  DEFAULT_OWNER_LANGUAGES,
   firstPassPerChatOf,
   openStore,
   parseCrmSetting,
   parseCrmSettingValue,
+  parseOwnerLanguages,
   saveCrmSetting,
   savedAgentClose,
   savedFirstPassPerChat,
+  savedOwnerLanguages,
   savedPhoneCountries,
   savedStemmers,
   savedTaskCategories,
+  saveOwnerLanguages,
   saveStorePhoneCountries,
   stemmersOrigin,
 } from "../store/store.js"
@@ -45,6 +49,7 @@ const SCRIPTS: Record<string, keyof Stemmers> = {
   "search_stemmers.latin": "latin",
 }
 
+const OWNER_LANGUAGES = "owner_languages"
 const PHONE_COUNTRIES = "phone_countries"
 const TASK_CATEGORIES = "task_categories"
 const CATEGORY_PREFIX = `${TASK_CATEGORIES}.`
@@ -55,6 +60,7 @@ const FIRST_PASS = "task_first_pass_per_chat"
 /** Settings of the store file, not of a profile: the store is one file for every profile, tg and MAX. */
 export const STORE_SETTINGS = [
   ...Object.keys(SCRIPTS),
+  OWNER_LANGUAGES,
   PHONE_COUNTRIES,
   `${CATEGORY_PREFIX}<name>`,
   AGENT_CLOSE,
@@ -72,14 +78,15 @@ const CRM_SETTINGS = ["crm.<provider>:<account>.links", "crm.<provider>:<account
  */
 export const storeSettingsOf = (app: Pick<AppIdentity, "messenger">): string[] =>
   app.messenger === false
-    ? [...Object.keys(SCRIPTS), ...CRM_SETTINGS]
+    ? [...Object.keys(SCRIPTS), OWNER_LANGUAGES, ...CRM_SETTINGS]
     : [...STORE_SETTINGS, `${GROUP_PREFIX}<name>`, ...CRM_SETTINGS]
 
 export const offersStoreSetting = (app: Pick<AppIdentity, "messenger">, setting: string): boolean =>
-  app.messenger !== false || setting in SCRIPTS || parseCrmSetting(setting) !== undefined
+  app.messenger !== false || setting in SCRIPTS || setting === OWNER_LANGUAGES || parseCrmSetting(setting) !== undefined
 
 export const isStoreSetting = (setting: string): boolean =>
   setting in SCRIPTS ||
+  setting === OWNER_LANGUAGES ||
   setting === PHONE_COUNTRIES ||
   setting === TASK_CATEGORIES ||
   setting.startsWith(CATEGORY_PREFIX) ||
@@ -97,6 +104,7 @@ export const changeStoreSetting = async (
 ) => {
   if (setting.startsWith(GROUP_PREFIX)) return changeGroup(app, env, setting, value)
   if (parseCrmSetting(setting)) return changeCrm(env, setting, value)
+  if (setting === OWNER_LANGUAGES) return changeOwnerLanguages(env, value)
   if (setting === PHONE_COUNTRIES) return changePhoneCountries(app, env, value)
   if (setting === TASK_CATEGORIES || setting.startsWith(CATEGORY_PREFIX))
     return changeCategory(app, env, setting, value)
@@ -115,6 +123,28 @@ export const changeStoreSetting = async (
     }
   } finally {
     await store.close()
+  }
+}
+
+const changeOwnerLanguages = async (env: NodeJS.ProcessEnv, value: string | undefined) => {
+  const languages = value === undefined ? undefined : parseOwnerLanguages(value)
+  await (await openStore({ env })).close()
+  const database = await openCache(storePath(env))
+  try {
+    saveOwnerLanguages(database, languages, Date.now())
+  } finally {
+    database.close()
+  }
+  return {
+    result: {
+      store: storePath(env),
+      scope: "store",
+      setting: OWNER_LANGUAGES,
+      value: (languages ?? DEFAULT_OWNER_LANGUAGES).join(","),
+    },
+    note:
+      "store-wide — what every WireCat tool writes for the owner is in the first language; " +
+      "a title quoted in the others stays as written",
   }
 }
 
@@ -323,6 +353,7 @@ export const storeSettings = async (env: NodeJS.ProcessEnv) => {
   let byDefault = false
   let unreadable = false
   let groups: AccountGroups = {}
+  let ownerLanguages: string[] | undefined
   let phoneCountries: string[] | undefined
   let categories: TaskCategory[] | undefined
   let agentClose: ReturnType<typeof savedAgentClose> = {}
@@ -336,6 +367,7 @@ export const storeSettings = async (env: NodeJS.ProcessEnv) => {
         saved = table ? savedStemmers(database) : undefined
         byDefault = table ? stemmersOrigin(database)?.origin === "default" : false
         groups = table ? accountGroupsOf(database) : {}
+        ownerLanguages = table ? savedOwnerLanguages(database) : undefined
         phoneCountries = table ? savedPhoneCountries(database) : undefined
         categories = table ? savedTaskCategories(database) : undefined
         agentClose = table ? savedAgentClose(database) : {}
@@ -361,6 +393,14 @@ export const storeSettings = async (env: NodeJS.ProcessEnv) => {
   })
   return [
     ...stemmers,
+    unreadable
+      ? { setting: OWNER_LANGUAGES, value: null, from: "store unreadable", scope: "store" }
+      : {
+          setting: OWNER_LANGUAGES,
+          value: (ownerLanguages ?? DEFAULT_OWNER_LANGUAGES).join(","),
+          from: ownerLanguages ? "store" : "default",
+          scope: "store",
+        },
     unreadable
       ? { setting: PHONE_COUNTRIES, value: null, from: "store unreadable", scope: "store" }
       : {

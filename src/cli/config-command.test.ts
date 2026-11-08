@@ -13,6 +13,7 @@ import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
 import * as v from "valibot"
 import { describe, expect, it } from "vitest"
+import { openCache, ownerLanguages } from "../store/index.js"
 import { commandsCommand } from "./commands-command.js"
 import { configCommand } from "./config-command.js"
 import { run } from "./program.js"
@@ -134,6 +135,60 @@ describe("config", () => {
     expect(listed).toEqual(expect.arrayContaining(["limit"]))
     for (const setting of listed)
       expect(messengers.includes(setting) || /^task_(categories|agent_close|first_pass)/u.test(setting)).toBe(false)
+  })
+
+  it("**owner_languages is store-wide in every CLI**: an ordered list without repeats, ru when unset", async () => {
+    const tool = { ...app, messenger: false }
+    const own = settingsFor(tool)
+    const root = mkdtempSync(join(tmpdir(), "config-"))
+    const env = {
+      CHAT_CONFIG_DIR: join(root, "config"),
+      CHAT_STATE_DIR: join(root, "state"),
+      MESSAGING_STORE: join(root, "w.db"),
+    }
+    const call = async (...argv: string[]) => {
+      const streams = captureStreams()
+      const code = await run(
+        ["work", "config", ...argv, "--json"],
+        { app: tool, commands: () => [configCommand(tool, own)] },
+        { streams, tty: false, env },
+      )
+      return { code, item: streams.stdout[0] ? JSON.parse(streams.stdout[0]).item : undefined, stderr: streams.stderr }
+    }
+    const read = async () => {
+      const database = await openCache(env.MESSAGING_STORE)
+      try {
+        return ownerLanguages(database)
+      } finally {
+        database.close()
+      }
+    }
+
+    const set = await call("set", "owner_languages", "EN, ru,en")
+    expect(set.code, set.stderr.join("\n")).toBe(0)
+    expect(set.item).toMatchObject({ scope: "store", setting: "owner_languages", value: "en,ru" })
+    expect(await read()).toEqual(["en", "ru"])
+    expect((await call("show")).item.store_settings).toContainEqual({
+      setting: "owner_languages",
+      value: "en,ru",
+      from: "store",
+      scope: "store",
+    })
+
+    const refused = await call("set", "owner_languages", "ru,xx")
+    expect(refused.code).toBe(2)
+    expect(JSON.parse(refused.stderr[0] ?? "{}").error).toMatchObject({ code: "validation_error" })
+    expect(refused.stderr.join("\n")).toContain("not xx")
+    expect(await read()).toEqual(["en", "ru"])
+
+    expect((await call("unset", "owner_languages")).item).toMatchObject({ value: "ru" })
+    expect(await read()).toEqual(["ru"])
+    expect((await call("show")).item.store_settings).toContainEqual({
+      setting: "owner_languages",
+      value: "ru",
+      from: "default",
+      scope: "store",
+    })
   })
 
   it("**saves a setting, shows where it came from, and removes it again** — a messenger's own included", async () => {

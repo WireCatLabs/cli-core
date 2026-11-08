@@ -1,10 +1,29 @@
+import { CliError } from "@wirecat/cli-base"
+import { parseLucene } from "@wirecat/cli-base/query"
 import type { Embedder } from "../embeddings/embed.js"
 import { chosenTextModel } from "../embeddings/models.js"
+import { meaningWords } from "../search/lucene/meaning-parts.js"
+import { validateFields } from "../search/lucene/registry.js"
+import { SEARCH_QUERY } from "../search/lucene/types.js"
+import { questionLookup, questionText } from "../search/question-plan.js"
 import type { AccountKey } from "../store/store.js"
 import type { ServiceDeps } from "./deps.js"
 import { embeddingTarget, type ModelDeps, withEmbedder } from "./embeddings-maintenance.js"
 import { MEANING_DEPTH, type MeaningLane, type MeaningRanked } from "./messages-discovery.js"
 import { plainWords } from "./pictures.js"
+
+// The text notes embed: `search all` compares cosines across sources, so all must embed one text (IDEA-249).
+const meaningText = (question: string): string => {
+  try {
+    const text = questionLookup(question) === undefined ? question : questionText(question)
+    const root = validateFields(parseLucene(text, { ...SEARCH_QUERY, defaultField: "text" })).root
+    // `content:invoice` or `budg*` leave notes nothing to embed; mail keeps its words then.
+    return meaningWords(root) || plainWords(question)
+  } catch (error) {
+    if (error instanceof CliError) return plainWords(question)
+    throw error
+  }
+}
 
 /**
  * Discovery's meaning half: the default local model over each message's own vector. It runs only when the model is
@@ -34,7 +53,7 @@ export const meaningLane =
       else ((await store.vectors.hasMessageVectors(one, target.key)) ? ready : without).push(one)
     }
     if (ready.length === 0 && mail.size === 0) return skipped("no message has a vector yet", "conversations.rebuild")
-    const words = plainWords(question)
+    const words = meaningText(question)
     try {
       const ranked: MeaningRanked = []
       if (words) {

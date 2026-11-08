@@ -69,6 +69,13 @@ export {
 export { drainNoteIndex, noteIndexState, resetNoteIndex } from "./sqlite/note-index.js"
 export type { Link as ThingLink } from "./sqlite/notes.js"
 export { openSqlite } from "./sqlite/open.js"
+export {
+  DEFAULT_OWNER_LANGUAGES,
+  ownerLanguages,
+  parseOwnerLanguages,
+  savedOwnerLanguages,
+  saveOwnerLanguages,
+} from "./sqlite/owner-languages.js"
 export type {
   PersonPreparationRead,
   PreparationFact,

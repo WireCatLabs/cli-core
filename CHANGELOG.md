@@ -5,7 +5,7 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
-## Unreleased
+## 0.609.0 — 08.11.2026
 
 ### Added
 
@@ -26,10 +26,26 @@ shape of this file.
 - **`models add <id> --payload '<json>'` adds an ONNX embedding model from Hugging Face**, pinned to a commit with
   each file's sha256, in the same shape as the built-in models. Its vectors' key carries its weights' hash.
 - `chosenTextModel`, `textModels` and `useTextModel` from `@wirecat/cli-core/services`; `store.vectors.vectorCounts`.
+- **`config set owner_languages ru,en` says which languages the owner reads**, store-wide and offered by every
+  WireCat CLI, not only the messengers: ISO 639-1 codes in his order, each once; `ru` when unset. The first is the
+  language everything written for him is in; a title quoted in a later one stays untranslated. An unknown code is
+  refused by name. `ownerLanguages(database)` from `@wirecat/cli-core/store` reads it, primary first, with
+  `DEFAULT_OWNER_LANGUAGES`. A scheduled agent's report is rendered in the first language.
 - **A CLI's own CRM list can print the same `--format csv` table as `deals list`.** `@wirecat/cli-core/crm/cli`
   exports `csvFormatOption`, `refuseCsvConflict` (the refusal of another output or an agent's run, checked before
   the CRM is read), `csvColumnPaths` (`--json=a,b`, or the caller's own default columns) and `printCsv`, with
   `DEAL_CSV_COLUMNS` and the `CsvPage` and `CsvField` types. `deals list` and `leads list` print through them.
+- **A scheduled agent that answers with a `wirecat.report/1` document gets a rendered message, not its raw text.**
+  The document is one JSON object, bare or as the only fenced `json` block: dated sections (`today`, `decisions`,
+  `money`, `meetings`, `projects`, `mail`) of typed items, and stale sources in `health`. The Telegram route gets
+  HTML from a template shipped for the owner's first language (`owner_languages`; `ru` and `en`, English words for
+  any other), fitted under 4 096 characters by dropping the last item of the largest section, so no file is sent;
+  mail gets the plain-text rendering with its title as the subject; `latest.txt` beside `latest.md` keeps the same
+  text. Agent text is escaped before a template sees it, and after rendering only `b`, `i` and `a` survive for
+  Telegram (`div p b i a br span` with `style` for email), each `href` only to a link the renderer built. Store
+  references, backticks, `--flags` and snake_case words are taken out of agent text and counted as `report.leaks`
+  in `last.json`. A document that fails the check is never shown: each route gets one line in the owner's language,
+  with `delivery.report-invalid`. Any other answer keeps the Markdown path.
 
 ### Changed — may break callers
 
@@ -39,6 +55,12 @@ shape of this file.
 
 ### Fixed
 
+- **`search all` no longer gives each source half of a ten-hit page.** Each source's best hit comes first, then every
+  other hit by its cosine to the question, then by its rank in its source. Ordered by rank first, the sources took
+  turns, so a mail at its third to fifth place fell off the page behind notes that matched far less.
+- **Mail looks up by meaning with the text notes embed for the same question.** It embedded the words a picture
+  search keeps, which drop a question mark and a time (`10:30`), so mail and note cosines did not compare. A query
+  that leaves notes nothing to embed (`content:invoice`, `budg*`) keeps the old words for mail.
 - **A question with a time or a `word:word` in it is searched by its words again.** Without a meaning model,
   `search all`, `search notes` and `events search` sent "When is the steering committee? Answer as HH:MM" to strict
   search, which needs every word in one record, so it found nothing. The quoting that keeps `HH:MM` and `10:30`

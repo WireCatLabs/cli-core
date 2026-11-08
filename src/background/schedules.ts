@@ -6,6 +6,7 @@ import { type AppIdentity, mailHolderVariable, readOnlyLockOf } from "../ports/a
 import { recordLogFor } from "../runs/record-log.js"
 import { childTrace } from "../runs/scope.js"
 import { type Delivery, deliver } from "./deliver.js"
+import { prepareReport, type ReportRun } from "./report/render.js"
 import type { ServerSystem } from "./system.js"
 
 /** Minutes between runs, a daily local time, or one local moment. */
@@ -135,6 +136,8 @@ export interface LastRun {
   skipped?: { at: string; why: string; reason?: SkipReason }
   /** How the result went along each of the schedule's routes; a failed delivery never fails the run. */
   deliveries?: Delivery[]
+  /** An agent's answer that was a `wirecat.report/1` document: its language, leaks, and what went wrong. */
+  report?: ReportRun
 }
 
 /** Why a timer left a run out, as an id a translation can key on; `why` stays the English sentence. */
@@ -207,10 +210,9 @@ export const recordRun = (
   return last
 }
 
-const recordDeliveries = (path: string, last: LastRun, deliveries: Delivery[]): LastRun => {
-  const delivered = { ...last, deliveries }
-  writeSecurely(path, `${JSON.stringify(delivered, null, 2)}\n`, 0o600)
-  return delivered
+const rewriteRun = (path: string, last: LastRun): LastRun => {
+  writeSecurely(path, `${JSON.stringify(last, null, 2)}\n`, 0o600)
+  return last
 }
 
 /** Notes on the last run that the timer left this one out, keeping that run's result. */
@@ -608,6 +610,7 @@ export const runSchedule = async (
     wait = pause,
     agentRuns = [],
     agentInput,
+    ownerLanguage = async () => "ru",
   }: {
     now?: () => Date
     timer?: Timer
@@ -618,6 +621,8 @@ export const runSchedule = async (
     /** The other CLIs an agent may run; each runs under its own read-only lock and knows it runs from a schedule. */
     agentRuns?: readonly AgentCli[]
     agentInput?: AgentInput
+    /** The owner's first language, read only when the answer is a report; Russian when the host cannot say. */
+    ownerLanguage?: (env: NodeJS.ProcessEnv) => Promise<string>
   } = {},
 ): Promise<LastRun> => {
   const schedule = readSchedule(file)
@@ -652,6 +657,18 @@ export const runSchedule = async (
   const { exitCode, output } = last
   const errors = agent ? output.replace(/\.md$/, ".log") : output
   if (agent && exitCode === 0) copyFileSync(output, join(folder, "latest.md"))
+  const prepared =
+    agent && exitCode === 0
+      ? await prepareReport(readFileSync(output, "utf8"), {
+          language: await ownerLanguage({ ...env, ...schedule.environment }).catch(() => "ru"),
+          now: now().getTime(),
+        })
+      : undefined
+  const latestText = join(folder, "latest.txt")
+  if (prepared) {
+    writeFileSync(latestText, `${prepared.text}\n`, { mode: 0o600 })
+    last = rewriteRun(join(folder, "last.json"), { ...last, report: prepared.run })
+  } else if (agent && exitCode === 0) rmSync(latestText, { force: true })
 
   const stampOf = (file: string) => file.split(".")[0] ?? file
   const kept = new Set([...new Set(readdirSync(runs).map(stampOf))].sort().slice(-KEEP_RUNS))
@@ -659,7 +676,9 @@ export const runSchedule = async (
 
   const title = `${app.command} ${schedule.name}`
   const mode = notifyOf(schedule)
-  if (agent && exitCode === 0 && mode === "always") {
+  if (prepared && mode === "always") {
+    await notify(system, env, title, `${prepared.notice.slice(0, 180)}\n${latestText}`)
+  } else if (agent && exitCode === 0 && mode === "always") {
     const first =
       readFileSync(output, "utf8")
         .split("\n")
@@ -682,6 +701,7 @@ export const runSchedule = async (
         ? {
             title: `${title} · ${at}`,
             file: { path: output, name: `${schedule.name}-${at.replace(/[ :]/g, "-")}.${agent ? "md" : "txt"}` },
+            ...(prepared ? { rendered: prepared } : {}),
           }
         : {
             title: `${title} failed · ${at}`,
@@ -696,7 +716,7 @@ export const runSchedule = async (
         ...(locked ? { locked } : {}),
       },
     )
-    last = recordDeliveries(join(folder, "last.json"), last, deliveries)
+    last = rewriteRun(join(folder, "last.json"), { ...last, deliveries })
     const lost = deliveries.filter((one) => !one.ok)
     if (lost.length > 0 && mode !== "never") {
       await notify(system, env, title, lost.map((one) => `not delivered to ${one.to}: ${one.reason}`).join("\n"))
