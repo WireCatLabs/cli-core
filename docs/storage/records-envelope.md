@@ -253,8 +253,9 @@ exported from the package, gives `{ envelope, issues }`. `isVcard(text)` tells a
 and `ingestVcard(store, text, { account, provider, batchId, region })` (`@wirecat/cli-core/services`) converts and
 imports it in one call, its receipt with the converter's `vcard` issues beside the import's.
 
-- vCard 2.1, 3.0 and 4.0: folded lines, quoted-printable (with 2.1's soft breaks), `CHARSET` (UTF-8,
-  windows-1251, KOI8-R), `\,` `\;` `\n` escapes, `item1.` groups.
+- vCard 2.1, 3.0 and 4.0: folded lines, quoted-printable (with 2.1's soft breaks) decoded in its `CHARSET`
+  (UTF-8, windows-1251, KOI8-R), `\,` `\;` `\n` escapes, `item1.` groups. The converter takes text: a file whose
+  plain values are in another charset than UTF-8 is decoded by the caller first.
 - One `person` record per card: `FN`, else `N` as given then family name; `TEL` read to E.164, `EMAIL`.
 - A number with `+` or `00` is read as is. A national number is read only with `region` (a country of
   `phone_countries`); without it, it stays in `fields.phone_unread`, is no identifier, and is reported in `issues`.
