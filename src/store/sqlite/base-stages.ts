@@ -3,6 +3,7 @@ import { DEAL_KINDS, type DealKind, STAGE_OUTCOMES, type StageOutcome } from "..
 import type { CacheDatabase } from "../driver.js"
 import { fold } from "../normalize.js"
 import type { AccountKey } from "../types.js"
+import { basePipelineOf, baseSettingKey, baseStagesOf, suggestBaseStages } from "./base-suggest.js"
 import { dealOperationsOver } from "./deals.js"
 import type { StoreContext } from "./open.js"
 import { ownerLanguages } from "./owner-languages.js"
@@ -37,8 +38,6 @@ const namesFor = (database: CacheDatabase) =>
   NAMES[ownerLanguages(database)[0] ?? "en"] ?? (NAMES.en as (typeof NAMES)[string])
 
 const MAX_BASE_STAGES = 30
-
-export const baseSettingKey = (kind: DealKind) => `stages.base.${kind}`
 
 export interface StageName {
   /** `stage:<id>`: a stage of any pipeline, as these commands name it. */
@@ -124,24 +123,6 @@ const ITEM_TABLES = { deal: "deals", lead: "leads" } as const
 
 const stageRef = (id: unknown) => `stage:${id}`
 
-const storedPipeline = (value: unknown): number | undefined => {
-  if (typeof value !== "string") return undefined
-  const match = /^"pipeline:(\d+)"$/.exec(value)
-  return match ? Number(match[1]) : undefined
-}
-
-/** The set's pipeline, while the setting names an own, live pipeline of the kind. */
-const basePipelineOf = (database: CacheDatabase, kind: DealKind): number | undefined => {
-  const id = storedPipeline(
-    database.prepare("SELECT value FROM store_settings WHERE key = ?").get(baseSettingKey(kind))?.value,
-  )
-  if (id === undefined) return undefined
-  const row = database
-    .prepare("SELECT 1 FROM pipelines WHERE id = ? AND kind = ? AND account_id IS NULL AND deleted_at IS NULL")
-    .get(id, kind)
-  return row ? id : undefined
-}
-
 /** `(p.account_id IS NULL OR …)`: the owner's own pipelines pass, as a group lock lets them. */
 const scopeSql = (scope: BaseScope | undefined, alias = "p") => {
   const accounts = scope?.accounts
@@ -152,53 +133,6 @@ const scopeSql = (scope: BaseScope | undefined, alias = "p") => {
       `(${alias}.account_id IS NULL OR ${alias}.account_id IN (SELECT id FROM accounts WHERE ` +
       `${accounts.map(() => "(provider = ? AND external_id = ?)").join(" OR ")}))`,
     params: accounts.flatMap(({ provider, account }) => [provider, account]),
-  }
-}
-
-const baseStagesOf = (database: CacheDatabase, pipeline: number): Row[] =>
-  database.prepare("SELECT * FROM pipeline_stages WHERE pipeline_id = ? ORDER BY position, id").all(pipeline)
-
-/**
- * Suggests a base stage for every unconfirmed live stage of `pipelines` (every CRM pipeline of the kind when absent): won and lost by outcome; an open one by its relative place among its pipeline's open stages, and when that
- * falls between two base stages, the one of the same name, else the nearer. Does nothing before the set exists.
- */
-export const suggestBaseStages = (database: CacheDatabase, kind: DealKind, pipelines?: readonly number[]): void => {
-  const base = basePipelineOf(database, kind)
-  if (base === undefined) return
-  const stages = baseStagesOf(database, base)
-  const byOutcome = (outcome: StageOutcome) => stages.filter((stage) => stage.outcome === outcome)
-  const open = byOutcome("open")
-  const ends = { won: byOutcome("won")[0], lost: byOutcome("lost")[0] }
-  const ids =
-    pipelines ??
-    database
-      .prepare("SELECT id FROM pipelines WHERE kind = ? AND account_id IS NOT NULL AND deleted_at IS NULL")
-      .all(kind)
-      .map((row) => Number(row.id))
-  const update = database.prepare(
-    "UPDATE pipeline_stages SET base_stage_id = ? WHERE id = ? AND base_confirmed = 0 AND base_stage_id IS NOT ?",
-  )
-  for (const pipeline of ids) {
-    if (pipeline === base) continue
-    const own = database
-      .prepare("SELECT * FROM pipeline_stages WHERE pipeline_id = ? AND deleted_at IS NULL ORDER BY position, id")
-      .all(pipeline)
-    const ownOpen = own.filter((stage) => stage.outcome === "open")
-    for (const stage of own) {
-      let chosen: Row | undefined
-      if (stage.outcome === "open" && open.length > 0) {
-        const at = ownOpen.indexOf(stage)
-        const place = ownOpen.length === 1 ? 0 : (at / (ownOpen.length - 1)) * (open.length - 1)
-        const [below, above] = [open[Math.floor(place)], open[Math.ceil(place)]] as [Row, Row]
-        chosen =
-          below === above
-            ? below
-            : ([below, above].find((one) => one.name_folded === stage.name_folded) ??
-              (place - Math.floor(place) < 0.5 ? below : above))
-      } else if (stage.outcome !== "open") chosen = ends[stage.outcome as "won" | "lost"]
-      const target = chosen === undefined ? null : Number(chosen.id)
-      update.run(target, Number(stage.id), target)
-    }
   }
 }
 
@@ -233,6 +167,12 @@ export const baseStagesOver = (context: StoreContext) => {
     const outcomes = new Set(baseStagesOf(database, id).map((stage) => stage.outcome))
     return STAGE_OUTCOMES.every((outcome) => outcomes.has(outcome)) ? id : undefined
   }
+
+  /** Every pipeline but the base sets, and the one a first use would take: what maps onto them. */
+  const notBaseSql = () => ({
+    sql: "p.id NOT IN (?, ?)",
+    params: DEAL_KINDS.map((kind) => basePipelineOf(database, kind) ?? adoptable(kind) ?? -1),
+  })
 
   /** The set's pipeline, adopted or made with the defaults on first use; each base stage maps to itself, confirmed. */
   const ensure = (kind: DealKind): number => {
@@ -375,9 +315,9 @@ export const baseStagesOver = (context: StoreContext) => {
     const crm = database
       .prepare(
         "SELECT count(*) AS n FROM pipeline_stages s JOIN pipelines p ON p.id = s.pipeline_id WHERE p.kind = ? " +
-          `AND p.account_id IS NOT NULL AND s.deleted_at IS NULL AND p.deleted_at IS NULL AND ${sql}`,
+          `AND p.id <> ? AND s.deleted_at IS NULL AND p.deleted_at IS NULL AND ${sql}`,
       )
-      .get(kind, ...params)
+      .get(kind, adopted ?? -1, ...params)
     const own = stages.reduce((sum, stage) => sum + stage.open, 0)
     return {
       kind,
@@ -403,10 +343,10 @@ export const baseStagesOver = (context: StoreContext) => {
     const mapped = database
       .prepare(
         "SELECT CASE WHEN s.base_confirmed = 1 THEN s.base_stage_id END AS base, count(*) AS stages " +
-          "FROM pipeline_stages s JOIN pipelines p ON p.id = s.pipeline_id WHERE p.kind = ? AND p.account_id IS NOT NULL " +
+          "FROM pipeline_stages s JOIN pipelines p ON p.id = s.pipeline_id WHERE p.kind = ? AND p.id <> ? " +
           `AND s.deleted_at IS NULL AND p.deleted_at IS NULL AND ${sql} GROUP BY base`,
       )
-      .all(kind, ...params)
+      .all(kind, pipeline, ...params)
     const countOf = (rows: Row[], base: unknown, field: string) =>
       Number(rows.find((row) => (row.base ?? null) === (base ?? null))?.[field] ?? 0)
     return {
@@ -448,7 +388,7 @@ export const baseStagesOver = (context: StoreContext) => {
     open: Number(row.open),
   })
 
-  /** Live stages of CRM pipelines in scope: what the owner maps. */
+  /** Live stages of every pipeline in scope but the base sets: what the owner maps. */
   const mappableRows = (filter: MappingFilter, extra = "1", extraParams: number[] = []): Row[] => {
     const kinds = filter.kind === undefined ? DEAL_KINDS : [kindOf(filter.kind)]
     const pipeline =
@@ -456,14 +396,15 @@ export const baseStagesOver = (context: StoreContext) => {
         ? null
         : Number(deals.pipeline(filter.pipeline, filter.kind === undefined ? {} : { kind: filter.kind }).id)
     const { sql, params } = scopeSql(filter)
+    const bases = notBaseSql()
     return database
       .prepare(
         `${mappingSql} WHERE p.kind IN (${kinds.map(() => "?").join(", ")}) ` +
-          "AND p.account_id IS NOT NULL AND s.deleted_at IS NULL AND p.deleted_at IS NULL " +
+          `AND ${bases.sql} AND s.deleted_at IS NULL AND p.deleted_at IS NULL ` +
           `AND (? IS NULL OR p.id = ?) AND (? = 0 OR s.base_confirmed = 0) AND ${sql} AND ${extra} ` +
           "ORDER BY p.kind, p.name_folded, p.id, s.position, s.id",
       )
-      .all(...kinds, pipeline, pipeline, filter.unconfirmed ? 1 : 0, ...params, ...extraParams)
+      .all(...kinds, ...bases.params, pipeline, pipeline, filter.unconfirmed ? 1 : 0, ...params, ...extraParams)
   }
 
   return {

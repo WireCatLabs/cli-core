@@ -78,7 +78,7 @@ const position = (value: string) => {
 const kindArgument = () => new Argument("<kind>", "deal or lead: which base set").choices(DEAL_KINDS)
 
 /**
- * `stages …`: the owner's base stages of deals and of leads, and the CRM stages mapped onto them. memo mounts it; a CRM
+ * `stages …`: the owner's base stages of deals and of leads, and the stages of every other pipeline mapped onto them. memo mounts it; a CRM
  * CLI moves a card to a base stage with `deals move <ref> stage:<id>`.
  */
 export const baseStagesCommand = (app: AppIdentity, options: BaseStagesCommandOptions): Command => {
@@ -106,9 +106,9 @@ export const baseStagesCommand = (app: AppIdentity, options: BaseStagesCommandOp
   const stages = annotate(new Command("stages"), { effects: LOCAL_READ })
     .description(
       "the owner's base stages of deals and of leads, the columns of a board across every pipeline and CRM, and " +
-        "how each CRM stage maps onto them",
+        "how each other pipeline's stage maps onto them",
     )
-    .summary("base stages and the CRM stages mapped onto them")
+    .summary("base stages and the stages mapped onto them")
   const leaf = (name: string, effects: typeof LOCAL_READ, summary: string, ...examples: string[]) =>
     annotate(stages.command(name), {
       effects,
@@ -128,7 +128,7 @@ export const baseStagesCommand = (app: AppIdentity, options: BaseStagesCommandOp
     baseSet,
   )
     .description(
-      "the base set in order, with the open rows and CRM stages each column holds, and what is unsorted (unmapped " +
+      "the base set in order, with the open rows and mapped stages each column holds, and what is unsorted (unmapped " +
         "or only suggested); the first use takes the owner's only own pipeline of the kind, or makes the default set in " +
         "the owner's language; a read-only store shows that set without making it",
     )
@@ -183,14 +183,14 @@ export const baseStagesCommand = (app: AppIdentity, options: BaseStagesCommandOp
       leaf(
         "list",
         LOCAL_READ,
-        "every CRM stage with its base stage, confirmed or suggested",
+        "every mapped stage with its base stage, confirmed or suggested",
         "list confirmed:false",
         "list kind:deal pipeline:pipeline:3 --json",
       ),
       "stage_mapping",
       stageMapping,
     ).description(
-      "every CRM stage in scope with the base stage it maps to, and whether the owner confirmed that or it is the " +
+      "every stage outside the base sets in scope, a CRM's or an own pipeline's, with the base stage it maps to, and whether the owner confirmed that or it is the " +
         "store's suggestion",
     ),
     MAPPING_QUERY,
@@ -215,15 +215,15 @@ export const baseStagesCommand = (app: AppIdentity, options: BaseStagesCommandOp
   })
 
   answerEntity(
-    leaf("set", LOCAL_WRITE, "map one CRM stage onto a base stage, confirmed", "set stage:41 Proposal"),
+    leaf("set", LOCAL_WRITE, "map one stage onto a base stage, confirmed", "set stage:41 Proposal"),
     "stage_mapping",
     stageMapping,
   )
     .description(
-      "map one CRM stage onto a base stage of its kind, confirmed, so a later sync keeps it; an agent's run records " +
+      "map one stage of a CRM or own pipeline onto a base stage of its kind, confirmed, so a later sync keeps it; an agent's run records " +
         "it as a suggestion the owner confirms",
     )
-    .argument("<stage>", "the CRM stage, by its stage:<id> as stages list shows it")
+    .argument("<stage>", "the stage, by its stage:<id> as stages list shows it")
     .argument("<base-stage>", baseStage)
     .action(async (stage: string, target: string, _opts: unknown, command: Command) => {
       await run(command, async (store, scope) =>

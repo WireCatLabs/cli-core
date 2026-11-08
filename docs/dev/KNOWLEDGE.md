@@ -253,11 +253,12 @@ mappings of every account. An agent's run may suggest a mapping (`stages set` re
 and editing the set are the owner's (`stage.owner-only`), a guard against a change by mistake as the owner-only store
 settings are. `pipeline_stages.base_stage_id` is the base stage a stage maps to and
 `base_confirmed` whether the owner confirmed it; a base stage maps to itself, confirmed. The store suggests a mapping
-at the first use and at every sync of a CRM pipeline (`suggestBaseStages`): won and lost by outcome; an open stage by
+at the first use, at every sync of a CRM pipeline and when an own pipeline is made (`suggestBaseStages`): won and lost by outcome; an open stage by
 its relative place among its pipeline's open stages, and where that falls between two base stages, the one of the
 same name, else the nearer. A suggestion never replaces a confirmed row, so a stage the CRM adds after the confirm
 waits as a suggestion. A deal's or lead's `baseStage` is set only once its stage is confirmed; otherwise a board
-shows it unsorted. Only CRM stages are mapped: an own row in an own pipeline other than the set stays unsorted.
+shows it unsorted. Every pipeline but the base sets is mapped alike: a CRM's (suggested at each sync) and the owner's
+own (suggested when it is made, `account` `null`); the set's own stages are the columns and map to themselves.
 `resolve(row, base)` gives the one stage of the row's pipeline confirmed onto the base stage, the stage itself when it
 is a `stage:<id>` of that pipeline, `stage.choice-required` with `candidates` when several are, and `stage.unmapped`
 when none is. Editing keeps a stage of each outcome (`stage.base-outcome`) and refuses to remove a stage the owner's own

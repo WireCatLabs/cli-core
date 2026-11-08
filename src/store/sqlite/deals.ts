@@ -16,6 +16,7 @@ import { notOverriddenSql } from "../../domain/relations.js"
 import { fold } from "../normalize.js"
 import type { AccountKey } from "../types.js"
 import { type ProposedByFilter, proposedBySql } from "./actors.js"
+import { suggestBaseStages } from "./base-suggest.js"
 import { linkKind } from "./link-kinds.js"
 import { type Author, authorActor, authorOf, evidenceOf, linkEvidence, projectId, projectOf } from "./memories.js"
 import { requiredThing } from "./notes.js"
@@ -559,6 +560,7 @@ export const dealOperationsOver = (context: StoreContext) => {
         kept.forEach((stage, index) => {
           insert.run(made, stage.name, fold(stage.name), index + 1, stage.outcome, at, at)
         })
+        suggestBaseStages(database, pipelineKind, [made])
         return made
       })
       return pipelinesOf(

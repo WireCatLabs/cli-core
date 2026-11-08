@@ -139,7 +139,36 @@ it("makes a deal set of its own beside several own deal pipelines", async () => 
     "Won",
     "Lost",
   ])
-  expect(deals.unsorted).toEqual({ open: 0, stages: 0 })
+  expect(deals.unsorted).toEqual({ open: 0, stages: 4 })
+})
+
+it("maps an own pipeline beside the set as it maps a CRM's, and leaves the set's own stages out", async () => {
+  const store = await open()
+  const base = await store.baseStages.show("deal")
+  const partners = await store.deals.addPipeline({
+    by: "owner",
+    name: "Partners",
+    stages: ["Intro", "Pilot", { name: "Signed", outcome: "won" }, { name: "Dropped", outcome: "lost" }],
+  })
+  const card = await store.deals.add({ by: "owner", title: "Reseller", stage: "Pilot", pipeline: partners.ref })
+  expect(card.baseStage).toBeNull()
+  const listed = await store.baseStages.mappings({ kind: "deal" })
+  expect(listed.map(({ account, name, baseStage }) => `${account}:${name}>${baseStage?.name}`)).toEqual([
+    "null:Intro>New",
+    "null:Pilot>Negotiation",
+    "null:Signed>Won",
+    "null:Dropped>Lost",
+  ])
+  expect(listed.every(({ pipeline }) => pipeline === partners.ref)).toBe(true)
+  await store.baseStages.map(listed[1]?.ref as string, base.stages[2]?.ref as string)
+  expect(await store.baseStages.confirm({ all: true })).toBe(3)
+  expect((await store.deals.get(card.ref)).baseStage).toEqual({ ref: base.stages[2]?.ref, name: "Proposal" })
+  expect(await store.baseStages.resolve(card.ref, base.stages[4]?.ref as string)).toMatchObject({
+    stage: { name: "Signed" },
+  })
+  const board = await store.baseStages.show("deal")
+  expect(board.stages[2]).toMatchObject({ name: "Proposal", open: 1, mapped: 1 })
+  expect(board.unsorted).toEqual({ open: 0, stages: 0 })
 })
 
 it("between two base stages without a name in common, takes the nearer, and suggests on every later sync", async () => {
