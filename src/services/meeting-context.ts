@@ -28,11 +28,14 @@ const checkCancelled = (signal?: AbortSignal): void => {
   throw new CliError(timeout ? "timeout" : "cancelled", "meeting context was interrupted")
 }
 
-/** Reuses the owner's records; scoped meeting references are checked again by each native write. */
+/**
+ * Reuses the owner's records; scoped meeting references are checked again by each native write. `author` says who
+ * runs it: an agent's participant link waits for the owner as a proposal.
+ */
 export const createMeetingContextService = async (
   store: MeetingContextServiceStore,
   input: AccountKey,
-  options: { now?: () => number } = {},
+  options: { now?: () => number; author: "owner" | "agent" },
 ) => {
   const now = options.now ?? Date.now
   const scope = snapshotMeetingScope(input)
@@ -111,7 +114,7 @@ export const createMeetingContextService = async (
             participantId: change.participantId,
             personUid: change.personUid,
             now: now(),
-            author: "owner",
+            author: options.author,
             ...(change.expectedPersonUid === undefined ? {} : { expectedPersonUid: change.expectedPersonUid }),
             ...(change.targetAccountIds === undefined ? {} : { targetAccountIds: change.targetAccountIds }),
             ...(operation.signal ? { signal: operation.signal } : {}),

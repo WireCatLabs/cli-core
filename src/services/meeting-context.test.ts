@@ -38,7 +38,7 @@ const fixture = async () => {
 
 it("shares meeting notes, tags and memories with existing records and retains original cue evidence", async () => {
   const { store, details, root, cue, input, accountId, path, env } = await fixture()
-  const service = await createMeetingContextService(store, account, { now: () => 5000 })
+  const service = await createMeetingContextService(store, account, { now: () => 5000, author: "owner" })
   const id = details.meeting.id
   expect((await service.change(id, { action: "note.add", text: "Invented memo", title: "Example note" })).applied).toBe(
     false,
@@ -107,7 +107,7 @@ it("denies foreign/deleted meeting and memory evidence before writing", async ()
   const otherInput = sampleMeeting()
   otherInput.meeting.accountId = otherId
   const foreign = await store.meetings.saveMeeting(otherInput)
-  const service = await createMeetingContextService(store, account)
+  const service = await createMeetingContextService(store, account, { author: "owner" })
   await expect(
     service.change(foreign.meeting.id, { action: "note.add", text: "Example" }, { apply: true }),
   ).rejects.toMatchObject({ code: "not_found" })
@@ -147,7 +147,7 @@ it("denies foreign/deleted meeting and memory evidence before writing", async ()
 it("captures account and approval, preserves cancellation and dispatches scoped links", async () => {
   const { store, accountId, details } = await fixture()
   const mutable = { ...account }
-  const service = await createMeetingContextService(store, mutable, { now: () => 7000 })
+  const service = await createMeetingContextService(store, mutable, { now: () => 7000, author: "owner" })
   mutable.account = "foreign"
   expect(service.scope.account).toBe("AliceExample")
   const event = await store.meetings.createEvent(
@@ -212,7 +212,7 @@ it("captures account and approval, preserves cancellation and dispatches scoped 
       },
     },
   }
-  const captured = await createMeetingContextService(wrapped, account)
+  const captured = await createMeetingContextService(wrapped, account, { author: "owner" })
   expect((await captured.change(details.meeting.id, { action: "note.add", text: "Example" }, options)).applied).toBe(
     false,
   )
@@ -226,6 +226,27 @@ it("captures account and approval, preserves cancellation and dispatches scoped 
         },
       },
       account,
+      { author: "owner" },
     ),
   ).rejects.toMatchObject({ code: "not_found" })
+})
+
+it("lets an agent's participant link wait for the owner as a proposal, and moves nothing", async () => {
+  const { store, accountId, details } = await fixture()
+  await store.people.savePeople(account, [{ id: "bob-sample", name: "Bob Sample" }])
+  const bob = (await store.people.personOf({ provider: "example", id: "bob-sample" }))?.uid as string
+  const participantId = details.participants[0]?.id ?? 0
+  const before = await store.meetings.participantPerson({ accountId, meetingId: details.meeting.id, participantId })
+  const service = await createMeetingContextService(store, account, { now: () => 7000, author: "agent" })
+
+  const { result } = await service.change(
+    details.meeting.id,
+    { action: "person.link", participantId, personUid: bob, targetAccountIds: [accountId] },
+    { apply: true },
+  )
+
+  expect(result).toMatchObject({ changed: false, personUid: before.personUid, proposal: expect.any(String) })
+  expect(
+    (await store.meetings.participantPerson({ accountId, meetingId: details.meeting.id, participantId })).personUid,
+  ).toBe(before.personUid)
 })
