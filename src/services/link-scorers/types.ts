@@ -45,6 +45,8 @@ export interface ScorerInput {
   /** The owner's `person:` reference, never a candidate. */
   owner: string | null
   signal?: AbortSignal
+  /** One scan's memory of a read: a spreading scorer runs again each pass and would read the same chats again. */
+  remember?: <T>(key: string, read: () => Promise<T>) => Promise<T>
 }
 
 export interface LinkScorer {

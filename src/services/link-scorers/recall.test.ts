@@ -1,7 +1,7 @@
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { afterEach, expect, it } from "vitest"
+import { afterEach, expect, it, vi } from "vitest"
 import type { Chat, Message } from "../../domain/models.js"
 import { type MessageStore, openStore } from "../../store/store.js"
 import type { AccountKey } from "../../store/types.js"
@@ -207,4 +207,16 @@ it("reaches the project's Telegram dialogs and people from its MAX group within 
   expect(missed).toEqual(["chat:telegram/2/208"])
   expect(proposed.has(f.namesake)).toBe(false)
   expect(proposed.size - (f.gold.size - missed.length)).toBeLessThanOrEqual(5)
+})
+
+it("reads each chat and each member's chats once in a scan, however many times it spreads", async () => {
+  const f = await fixture()
+  const pages = vi.spyOn(f.store.messages, "messages")
+  const chatsWith = vi.spyOn(f.store.chats, "chatsWith")
+  const result = await scanProjectLinks(f.store, { project: "LKM", sources: [MAX, TG], since: SINCE, write: false })
+  expect(result.proposals.length).toBeGreaterThan(0)
+  const once = (calls: unknown[][]) => new Set(calls.map((call) => JSON.stringify(call.slice(0, 2)))).size
+  expect(pages.mock.calls.length).toBeGreaterThan(1)
+  expect(pages.mock.calls.length).toBe(once(pages.mock.calls))
+  expect(chatsWith.mock.calls.length).toBe(once(chatsWith.mock.calls))
 })
