@@ -874,6 +874,11 @@ pushed skip with `unread: true` and `messages: 0`, since how much was not read i
 `limited` and judges a chat the store lacks by the kind and size the chat list gives. A lifted chat and
 `--full-history` read without limits.
 
+`--all` also leaves out a chat the list reports muted, unless the run passes `--with-muted`, the profile sets
+`history_muted` true, or the chat is lifted (`fetchAll`, `mutedSkips`); a mute whose `mutedUntil` has passed does not count. It counts them as
+`limited.muted`, outside `chats`, `items` and the progress total, and records no skip: a muted chat named on its own
+is read as any other.
+
 Every store-read answer that could pass for the whole archive says so: `store status`, `search messages`,
 `search all` and `messages list --offline` add `missing` (`field: "history_limits"`, the chats and counts),
 `next` (`messages.sync` with `full_history`) and `meta.complete: false`; `messages sync` adds the same `next` step

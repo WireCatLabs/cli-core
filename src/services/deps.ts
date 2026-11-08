@@ -47,6 +47,8 @@ export interface ServiceDeps {
   searchCatchUp?: boolean
   /** How far back `messages sync` reads each kind of chat, and which groups it does not read at all. */
   historyLimits?: HistoryLimits
+  /** `messages sync --all` reads muted chats too (`history_muted`); it leaves them out when unset. */
+  historyMuted?: boolean
   /** This account has picture search on (`pictureSearch`): its images are embedded and searched by their pixels. */
   pictures?: boolean
   /** Which reranker orders `--discover`'s first hits (`searchReranker`), or `off`; the default when unset. */

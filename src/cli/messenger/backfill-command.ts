@@ -52,20 +52,29 @@ const ALL_SINCE = "90d"
 const ALL_CHATS = "--all"
 
 /** Says where the history limits (history_* settings) stopped the read, so an agent does not take it for all. */
-const limitedLine = (result: Fetched | FetchedAll, status: string): string | undefined => {
+const limitedLines = (result: Fetched | FetchedAll, status: string): string[] => {
   if ("items" in result) {
-    const { groupTooLarge = 0, olderThanWindow = 0 } = result.limited ?? {}
-    if (groupTooLarge + olderThanWindow === 0) return undefined
-    return (
-      `the history limits (history_* settings) left ${groupTooLarge} big group(s) unread and read ${olderThanWindow} ` +
-      `chat(s) only to the window's start — \`${status}\` lists them; \`messages sync <chat> --full-history\` reads one in full`
-    )
+    const { groupTooLarge = 0, olderThanWindow = 0, muted = 0 } = result.limited ?? {}
+    const lines: string[] = []
+    if (groupTooLarge + olderThanWindow > 0)
+      lines.push(
+        `the history limits (history_* settings) left ${groupTooLarge} big group(s) unread and read ${olderThanWindow} ` +
+          `chat(s) only to the window's start — \`${status}\` lists them; \`messages sync <chat> --full-history\` reads one in full`,
+      )
+    if (muted > 0)
+      lines.push(
+        `${muted} muted chat(s) not read — --with-muted or history_muted true reads them; \`messages sync <chat>\` reads one, and ` +
+          "`--full-history` keeps it in every --all",
+      )
+    return lines
   }
   if (result.limited === "group_too_large")
-    return "not read: a group above history_group_members_max — `--full-history` reads it and keeps it in full"
+    return ["not read: a group above history_group_members_max — `--full-history` reads it and keeps it in full"]
   if (result.limited === "older_than_window")
-    return "read to the history window's start (history_dialog_days / history_group_days) — `--full-history` reads further"
-  return undefined
+    return [
+      "read to the history window's start (history_dialog_days / history_group_days) — `--full-history` reads further",
+    ]
+  return []
 }
 
 export const syncCommand = (messenger: Messenger): Command => {
@@ -84,7 +93,8 @@ export const syncCommand = (messenger: Messenger): Command => {
     .argument("[chat]", messenger.chatArgument)
     .option(
       "--all",
-      `every chat, most recently active first — what search needs; the last ${ALL_SINCE} unless --since-time or --last`,
+      `every chat, most recently active first — what search needs; the last ${ALL_SINCE} unless --since-time or --last; ` +
+        "muted chats only with --with-muted or history_muted true",
     )
     .option(
       "--limit <n>",
@@ -110,6 +120,7 @@ export const syncCommand = (messenger: Messenger): Command => {
       "--full-history",
       "read and keep this chat's history in full from now on, past the history limits (history_* settings)",
     )
+    .option("--with-muted", "with --all: also read the chats the owner muted, as history_muted true does")
     .option("--background", "run as a job that outlives this command; `store jobs show` follows it")
     .option(
       "--dry-run",
@@ -128,9 +139,11 @@ export const syncCommand = (messenger: Messenger): Command => {
         catchUpMessages,
         catchUpTime,
         fullHistory: include,
+        withMuted,
         ...sizes
       } = this.opts<{
         fullHistory?: boolean
+        withMuted?: boolean
         all?: boolean
         limit?: number
         pageSize?: number
@@ -149,6 +162,8 @@ export const syncCommand = (messenger: Messenger): Command => {
       if (all && estimate) throw new CliError("validation_error", "--dry-run prices one chat; not with --all")
       if (include && chat === undefined)
         throw new CliError("validation_error", "--full-history keeps one chat: name it")
+      if (withMuted && all !== true)
+        throw new CliError("validation_error", "--with-muted is for --all; a chat named is read even when muted")
       if (all && messenger.history === "store") {
         throw new CliError(
           "validation_error",
@@ -213,6 +228,7 @@ export const syncCommand = (messenger: Messenger): Command => {
           pageSize,
           pause,
           catchUp: prepare,
+          ...(withMuted ? { withMuted } : {}),
           ...(catchUpChunks === undefined ? {} : { catchUpChunks }),
           ...(catchUpMessages === undefined ? {} : { catchUpMessages }),
           ...(catchUpTime === undefined ? {} : { catchUpTime }),
@@ -247,6 +263,7 @@ export const syncCommand = (messenger: Messenger): Command => {
           pageSize,
           pauseMs,
           ...(include ? { fullHistory: true } : {}),
+          ...(withMuted ? { withMuted } : {}),
           catchUp: prepare ? preparation : (false as const),
           ...(sinceMs === undefined ? {} : { sinceMs }),
           ...(last === undefined ? {} : { last }),
@@ -307,8 +324,7 @@ export const syncCommand = (messenger: Messenger): Command => {
             },
           ),
         )
-        const limitedNote = limitedLine(result, lineOf(this, "store status"))
-        if (limitedNote) context.renderer.note(limitedNote)
+        for (const line of limitedLines(result, lineOf(this, "store status"))) context.renderer.note(line)
         if (tasks?.held)
           context.renderer.note(
             `the first sync left ${tasks.held} possible task(s) in ${tasks.heldChats ?? 0} chat(s) unopened ` +
@@ -501,6 +517,7 @@ const fetchArgv = (
     since,
     last,
     catchUp,
+    withMuted,
     catchUpChunks,
     catchUpMessages,
     catchUpTime,
@@ -512,6 +529,7 @@ const fetchArgv = (
     since?: string
     last?: number
     catchUp?: boolean
+    withMuted?: boolean
     catchUpChunks?: number
     catchUpMessages?: number
     catchUpTime?: string
@@ -531,6 +549,7 @@ const fetchArgv = (
     ...(since === undefined ? [] : ["--since-time", since]),
     ...(last === undefined ? [] : ["--last", String(last)]),
     ...(catchUp === undefined ? [] : [catchUp ? "--catch-up" : "--no-catch-up"]),
+    ...(withMuted ? ["--with-muted"] : []),
     ...(catchUpChunks === undefined ? [] : ["--catch-up-chunks", String(catchUpChunks)]),
     ...(catchUpMessages === undefined ? [] : ["--catch-up-messages", String(catchUpMessages)]),
     ...(catchUpTime === undefined ? [] : ["--catch-up-time", catchUpTime]),

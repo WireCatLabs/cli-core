@@ -143,6 +143,7 @@ const SHARED_PROFILE_ENTRIES = {
   history_dialog_days: v.optional(historyDays),
   history_group_days: v.optional(historyDays),
   history_group_members_max: v.optional(count),
+  history_muted: v.optional(flag),
   picture_search: v.optional(flag),
   search_reranker: v.optional(
     v.picklist(
@@ -178,6 +179,7 @@ export const MESSENGER_ONLY_SETTINGS: readonly string[] = [
   "history_dialog_days",
   "history_group_days",
   "history_group_members_max",
+  "history_muted",
   "read_other_bots",
   "speech_model",
   "picture_search",
@@ -237,6 +239,7 @@ const SHARED_SETTINGS: readonly DeclaredSetting[] = [
     default: DEFAULT_HISTORY_LIMITS.groupMembersMax,
     description: "a group with more people than this keeps no pushed history",
   },
+  { key: "history_muted", default: false, description: "messages sync --all reads muted chats too" },
   {
     key: "picture_search",
     default: false,
@@ -340,6 +343,8 @@ export interface Settings extends AISettings {
   searchCatchUp?: boolean
   /** How much pushed history the store keeps, by chat kind; a messenger that answers history on request ignores it. */
   historyLimits?: HistoryLimits
+  /** `messages sync --all` reads muted chats too. Off until set. */
+  historyMuted?: boolean
   /** Search and `images embed` read the pictures themselves, with a model on this machine. Off until set. */
   pictureSearch?: boolean
   /** The reranker that orders `search messages --discover`'s first hits once it is downloaded, or `off`. */
@@ -683,6 +688,7 @@ export const settingsFor = <T extends object = Record<never, never>>(
     const historyDialogDays = fromLayers("history_dialog_days", DEFAULT_HISTORY_LIMITS.dialogDays)
     const historyGroupDays = fromLayers("history_group_days", DEFAULT_HISTORY_LIMITS.groupDays)
     const historyGroupMembersMax = fromLayers("history_group_members_max", DEFAULT_HISTORY_LIMITS.groupMembersMax)
+    const historyMuted = fromLayers("history_muted", false)
     const pictureSearch = fromLayers("picture_search", false)
     const searchReranker = fromLayers<string>("search_reranker", DEFAULT_RERANK_MODEL)
     const recordInput = fromLayers<RecordInput>("record_input", true)
@@ -752,6 +758,7 @@ export const settingsFor = <T extends object = Record<never, never>>(
         groupDays: historyGroupDays.value,
         groupMembersMax: historyGroupMembersMax.value,
       },
+      historyMuted: historyMuted.value,
       pictureSearch: pictureSearch.value,
       searchReranker: searchReranker.value,
       limit: limit.value,
@@ -795,6 +802,7 @@ export const settingsFor = <T extends object = Record<never, never>>(
         historyDialogDays: historyDialogDays.from,
         historyGroupDays: historyGroupDays.from,
         historyGroupMembersMax: historyGroupMembersMax.from,
+        historyMuted: historyMuted.from,
         pictureSearch: pictureSearch.from,
         searchReranker: searchReranker.from,
         record: record.from,

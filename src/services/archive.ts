@@ -68,6 +68,8 @@ export interface FetchOptions {
   onChat?: (progress: { chats: number; done: number; fetched: number }) => void
   /** Past the history limits for this chat (`--full-history`). */
   fullHistory?: boolean
+  /** `fetchAll` only: read muted chats too (`--with-muted`); `history_muted` decides when unset. */
+  withMuted?: boolean
   /** The chat's kind and size as the messenger lists it, for a chat the store does not hold yet. */
   shape?: ChatShape
 }
@@ -111,8 +113,11 @@ export type FetchedAll = {
     issue?: ActionableError
     limited?: "group_too_large" | "older_than_window"
   }[]
-  /** How many chats the history limits left unread (big groups) or read only to the window's start. */
-  limited?: { groupTooLarge: number; olderThanWindow: number }
+  /**
+   * How many chats the history limits left unread (big groups) or read only to the window's start, and how many muted
+   * chats were not read (`history_muted`); those are not in `chats` or `items`.
+   */
+  limited?: { groupTooLarge: number; olderThanWindow: number; muted?: number }
 }
 
 /** The local store of messages: what it holds, filling it from the messenger, and reading it out. */
@@ -295,16 +300,19 @@ export const archiveService = (deps: ServiceDeps): ArchiveService => {
       pushed(deps, "`messages sync --all`")
       const connection = await deps.connection()
       const list = capability(connection, "chats", "list its chats")
-      const chats: Chat[] = []
+      const listed: Chat[] = []
       for (let offset = 0; ; ) {
         const page = await patiently(() => list({ offset, limit: 100 }), options.note, options.stop)
-        chats.push(...page.items)
+        listed.push(...page.items)
         offset += page.items.length
         if (!page.hasMore || page.items.length === 0) break
       }
-      chats.sort((one, other) => (other.lastMessageAt ?? "").localeCompare(one.lastMessageAt ?? ""))
+      listed.sort((one, other) => (other.lastMessageAt ?? "").localeCompare(one.lastMessageAt ?? ""))
+      const muted = await mutedSkips(deps, listed, options.withMuted ?? deps.historyMuted ?? false)
+      const chats = listed.filter((chat) => !muted.has(chat.id))
       const own = archiveService({ ...deps, withConnection: undefined, connection: async () => connection })
       const answer: FetchedAll = { chats: chats.length, fetched: 0, complete: false, items: [] }
+      if (muted.size > 0) answer.limited = { groupTooLarge: 0, olderThanWindow: 0, muted: muted.size }
       const batch = batchProgress(deps.env)
       const catchingUp = Boolean(options.catchUp ?? deps.searchCatchUp)
       const upToDate = heldToNewest(await deps.store(), await deps.account(), deps.messenger.fetching ?? FETCHING, {
@@ -364,6 +372,19 @@ export const archiveService = (deps: ServiceDeps): ArchiveService => {
       return answer
     },
   }
+}
+
+const mutedNow = (chat: Chat, now: number) =>
+  chat.muted === true && (chat.mutedUntil == null || Date.parse(chat.mutedUntil) > now)
+
+/** The muted chats `--all` leaves out unless asked to read them; a chat kept in full (`--full-history`) is read. */
+const mutedSkips = async (deps: ServiceDeps, chats: Chat[], readMuted: boolean): Promise<Set<Id>> => {
+  if (readMuted) return new Set()
+  const now = Date.now()
+  const muted = chats.filter((chat) => mutedNow(chat, now)).map((chat) => chat.id)
+  if (muted.length === 0) return new Set()
+  const shapes = await (await deps.store()).chats.historyShapes(await deps.account(), muted)
+  return new Set(muted.filter((id) => shapes.get(id)?.included !== true))
 }
 
 /**

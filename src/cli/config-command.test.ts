@@ -104,6 +104,7 @@ describe("config", () => {
       "read_other_bots",
       "speech_model",
       "picture_search",
+      "history_muted",
     ]
     for (const setting of messengers) expect(offered).not.toContain(setting)
     expect(offered.some((setting) => setting.startsWith("task_") || setting.startsWith("account_groups"))).toBe(false)

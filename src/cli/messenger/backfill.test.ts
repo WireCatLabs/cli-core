@@ -486,6 +486,40 @@ describe("messages sync progress", () => {
     expect(stderr).not.toMatch(/Secret title|900[123]/)
   })
 
+  it("**--all leaves out muted chats and says how to read them**; history_muted true and a named chat read them", async () => {
+    clock()
+    const base = setup()
+    const listed = chatsOf({ "9001": 2, "9002": 3 }, 1_000)
+    const adapter = {
+      ...listed,
+      chats: async () => {
+        const { items, hasMore } = await listed.chats({ offset: 0, limit: 100 })
+        return { items: items.map((one) => (one.id === "9002" ? { ...one, muted: true } : one)), hasMore }
+      },
+    } as MessengerAdapter
+
+    const skipped = await call([...sync, "--all", "--json"], adapter, base)
+
+    expect(skipped.answer).toMatchObject({ chats: 1, fetched: 2, limited: { muted: 1 } })
+    expect(skipped.answer.items.map((one: { chat: string }) => one.chat)).toEqual(["9001"])
+    expect(progressLines(skipped.stderr)[0]).toMatchObject({ chats: 1 })
+    expect(skipped.stderr).toContain("1 muted chat(s) not read — --with-muted or history_muted true reads them")
+    expect((await call([...sync, "9002", "--json"], adapter, base)).answer).toMatchObject({ fetched: 3 })
+
+    const config = join(dirname(base.MESSAGING_STORE), "config")
+    mkdirSync(config)
+    writeFileSync(join(config, "config.json"), JSON.stringify({ profiles: { default: { history_muted: true } } }))
+    const opted = await call([...sync, "--all", "--json"], adapter, { ...base, CHAT_CONFIG_DIR: config })
+    expect(opted.answer).toMatchObject({ chats: 2 })
+    expect(opted.answer).not.toHaveProperty("limited")
+    const flagged = await call([...sync, "--all", "--with-muted", "--json"], adapter, base)
+    expect(flagged.answer).toMatchObject({ chats: 2 })
+    expect(flagged.answer).not.toHaveProperty("limited")
+    const named = await call([...sync, "9002", "--with-muted", "--json"], adapter, base)
+    expect(named.code).toBe(2)
+    expect(named.stderr).toContain("--with-muted is for --all")
+  })
+
   it("**one chat prints a line per page** with the running count and no chat totals", async () => {
     clock()
     const { stderr } = await call([...sync, "9002", "--json"], chatsOf({ "9002": 5 }, 1_000), setup())
@@ -562,6 +596,9 @@ describe("store fetch in the background", () => {
     expect(Date.now() - Date.parse(since)).toBeLessThan(91 * 86_400_000)
     expect([neither.code, both.code]).toEqual([2, 2])
     expect(neither.stderr).toContain("name a chat, or --all for every chat")
+    await call(["messages", "sync", "--all", "--with-muted", "--background", "--json"], idle, setup(), { spawnJob })
+    expect(calls[1]?.argv).toContain("--with-muted")
+    expect(calls[0]?.argv).not.toContain("--with-muted")
   })
 
   it("**starts a job that runs the same fetch apart, pinned to the profile, with no shell timeout**", async () => {
