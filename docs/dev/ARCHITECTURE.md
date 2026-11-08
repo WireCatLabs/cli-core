@@ -462,6 +462,17 @@ kinds fail with both names. Searches skip the accounts of a provider nobody regi
 that opens each kind of reference (`{ document: "documents show" }`); the tg, max and wa seeds open chats, messages
 and contacts. `openOf` builds a ref's open command from it, so a new CLI's refs open in memo with no change here.
 
+**Source records and the type registry.** `records` holds what a source sent through the records envelope, by
+`(account_id, type, external_id)`, and points at the entity made from it (`entity_type`/`entity_id`). One registry,
+`RECORD_TYPES` (`src/domain/record-types.ts`), gives each envelope type its table, review rule, update rule, typed
+`fields` schema and roles; the JSON Schema file, the refs, `ENTITY_TABLES` and the owner's review read it. The store
+side has one projector per type (`src/store/sqlite/record-projectors.ts`: money types in `record-projectors-money.ts`,
+direct ones in `record-projectors-direct.ts`), and person, organization and project are matched or made from their
+identifiers (`record-matching.ts`). `store.records.run` writes a stream of records per chunk, checks duplicates in a
+`TEMP` table and reads the receipt's lists from `records` at the end, so memory holds one chunk; a dry run is one
+rolled-back transaction (`rehearse`, `src/store/sqlite/transaction.ts`). The contract is
+[`docs/storage/records-envelope.md`](../storage/records-envelope.md).
+
 **Ref summaries.** `store.refs.summaries(refs)` (`src/store/sqlite/ref-summaries.ts`) names a page of refs in one
 statement per kind present: a `VALUES` list of the wanted refs joined to the kind's table. It never throws: a bad ref
 is `unknown`, one the store lacks `unavailable`. Titles never hold a message body; `{ excerpt: true }` adds at most 280
