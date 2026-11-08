@@ -47,7 +47,8 @@ export interface StoredMention {
   written: string
 }
 
-export const MENTION_STATUSES = ["found", "linked", "dismissed"] as const
+/** `proposed`: an agent's link of the value to a person waits for the owner as an `identity_link` proposal. */
+export const MENTION_STATUSES = ["found", "linked", "proposed", "dismissed"] as const
 export type MentionStatus = (typeof MENTION_STATUSES)[number]
 
 /** The fields of `mentions list`; a bare word is a `value`. */
@@ -378,7 +379,8 @@ export const confirmMention = (
     )
     if ("person" in owner) {
       const proposal = linkOrPropose(context, identity, owner.person, { method: "mention", by: by.by })
-      const decided = decide(database, mention, "linked", { type: "identity", id: identity }, by, now)
+      const status = proposal === undefined ? "linked" : "proposed"
+      const decided = decide(database, mention, status, { type: "identity", id: identity }, by, now)
       return proposal === undefined ? decided : { ...decided, proposal }
     }
     database

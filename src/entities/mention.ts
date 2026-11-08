@@ -2,7 +2,7 @@ import * as v from "valibot"
 import { count, reference, text, time } from "./fields.js"
 
 const kind = v.picklist(["phone", "email", "url", "document", "person-name", "place"])
-const status = v.picklist(["found", "linked", "dismissed"])
+const status = v.picklist(["found", "linked", "proposed", "dismissed"])
 
 /** Mention and place IDs retain the numeric identifiers returned by the local store. */
 export const mention = v.strictObject({
@@ -35,6 +35,7 @@ export const mentionDecision = v.strictObject({
   status,
   target: v.nullable(reference),
   mentions: count,
+  proposal: v.optional(text),
 })
 export const mentionRebuild = v.strictObject({
   messages: count,
