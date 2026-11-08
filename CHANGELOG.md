@@ -7,24 +7,8 @@ shape of this file.
 
 ## Unreleased
 
-## 0.611.0 — 08.11.2026
-
-### Fixed
-
-- **In `search all`, a hit only words found keeps its place next to the hits around it.** It takes the cosine of the
-  hit above it in its own source, so an exact word's second hit no longer sorts behind every hit meaning found.
-- **cli-core accepts `@wirecat/cli-base` up to 0.85.x.** Its peer range stopped at `<0.83.0`, so a CLI could not take
-  cli-base 0.85.0's `hostFetch` and the `network.hosts` manifest next to cli-core. Nothing else changes for a caller.
-
-## 0.610.0 — 08.11.2026
-
 ### Added
 
-- **A scan's group senders can be found and decided together.** `chat-senders@3` names the chat and its size in its
-  reason ("wrote 40 messages in «Sales» (25 people) since 2026-08-10"), and its evidence leads with the chat's ref.
-  `ProposalFilter.via` keeps the proposals whose evidence holds a reference, and `store.proposedActions.list` takes
-  `evidence` to filter in the query, so `via` pages stored relationship proposals in full. A pending `chat-senders@2`
-  proposal takes the new reason and evidence on the next scan, under the same id.
 - **Write-time enrichment, off by default.** With the owner's consent, a hosted model reads each note, document and
   email and writes standalone facts and two questions in other words; search finds the record by them and still cites
   the record. `models consents show` gives the state, the records covered and the cost estimate;
@@ -43,10 +27,24 @@ shape of this file.
   stays 56.
 - The model gateway's answer carries `usage` (input and output tokens) for OpenAI and Anthropic.
 
+## 0.611.0 — 08.11.2026
+
+### Fixed
+
+- **In `search all`, a hit only words found keeps its place next to the hits around it.** It takes the cosine of the
+  hit above it in its own source, so an exact word's second hit no longer sorts behind every hit meaning found.
+- **cli-core accepts `@wirecat/cli-base` up to 0.85.x.** Its peer range stopped at `<0.83.0`, so a CLI could not take
+  cli-base 0.85.0's `hostFetch` and the `network.hosts` manifest next to cli-core. Nothing else changes for a caller.
+
 ## 0.610.0 — 08.11.2026
 
 ### Added
 
+- **A scan's group senders can be found and decided together.** `chat-senders@3` names the chat and its size in its
+  reason ("wrote 40 messages in «Sales» (25 people) since 2026-08-10"), and its evidence leads with the chat's ref.
+  `ProposalFilter.via` keeps the proposals whose evidence holds a reference, and `store.proposedActions.list` takes
+  `evidence` to filter in the query, so `via` pages stored relationship proposals in full. A pending `chat-senders@2`
+  proposal takes the new reason and evidence on the next scan, under the same id.
 - **`search all` has a `business` lane.** `searchAll` finds invoices, payments, orders, contracts, subscriptions,
   products and wallets by the words of their numbers and names (an invoice's counterparty, a payment's payer or payee,
   an order's shop and lines), each word where a word starts, folded in memory like the `crm` lane, with no index.
