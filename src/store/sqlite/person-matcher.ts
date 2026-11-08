@@ -1,31 +1,6 @@
-import { typedPhone } from "../../domain/mentions.js"
-import { nationalPhone } from "../../domain/phones.js"
+export { e164Of, storedPhone } from "../../domain/phones.js"
+
 import type { CacheDatabase } from "../driver.js"
-
-/**
- * A phone as E.164, `null` for a number written without `+` or `00` when the envelope names no `phone_region`, or
- * nothing when it is no phone. Only the envelope says which country a national number is from: the store's
- * `phone_countries` setting reads `4155550100` as Russian, so it never decides an identifier.
- */
-export const e164Of = (phone: string, region: string | undefined): string | null | undefined => {
-  if (/^\s*(\+|00)/.test(phone)) return typedPhone(phone)?.value
-  if (typedPhone(phone) === undefined) return undefined
-  if (region === undefined) return null
-  const digits = phone.replace(/\(0\)/, "").replace(/\D/g, "")
-  return nationalPhone(digits, [region], { anyType: true })?.value
-}
-
-/**
- * The E.164 number a stored phone stands for. A `phone` identity keeps the number whole; a messenger keeps it as bare
- * digits without the `+`; a CRM contact keeps it as the CRM shows it, formatted. A number written with `+` or `00` is
- * read whatever its spacing; bare digits only as an international number; a national number names no country, so it
- * matches nothing.
- */
-export const storedPhone = (raw: string): string | undefined => {
-  if (/^\s*(\+|00)/.test(raw)) return typedPhone(raw)?.value
-  const found = /^([1-9]\d{6,14})$/.exec(raw.trim())
-  return found ? `+${found[1]}` : undefined
-}
 
 /** The spellings of an E.164 number `storedPhone` reads back as it. */
 const spellingsOf = (value: string): [string, string] => [value, value.slice(1)]
