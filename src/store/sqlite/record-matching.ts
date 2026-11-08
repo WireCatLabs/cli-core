@@ -1,5 +1,3 @@
-import { typedPhone } from "../../domain/mentions.js"
-import { nationalPhone } from "../../domain/phones.js"
 import { isObject } from "../../domain/record-fields.js"
 import { type IdentityType, RECORD_TABLES } from "../../domain/record-types.js"
 import type { EnvelopeOptions, EnvelopeSource } from "../../domain/records.js"
@@ -9,6 +7,7 @@ import { fold } from "../normalize.js"
 import { crmIdentityId } from "./crm.js"
 import { insertProject } from "./knowledge.js"
 import type { StoreContext } from "./open.js"
+import { e164Of, personsByIdentifiers } from "./person-matcher.js"
 import { identitySeparated } from "./person-separation.js"
 import { type Row, refusal } from "./record-projection.js"
 
@@ -50,19 +49,6 @@ const domainOf = (value: string) =>
     .trim()
     .toLowerCase()
     .replace(/^www\./, "")
-
-/**
- * A phone as E.164, `null` for a number written without `+` or `00` when the envelope names no `phone_region`, or
- * nothing when it is no phone. Only the envelope says which country a national number is from: the store's
- * `phone_countries` setting reads `4155550100` as Russian, so it never decides an identifier.
- */
-export const e164Of = (phone: string, region: string | undefined): string | null | undefined => {
-  if (/^\s*(\+|00)/.test(phone)) return typedPhone(phone)?.value
-  if (typedPhone(phone) === undefined) return undefined
-  if (region === undefined) return null
-  const digits = phone.replace(/\(0\)/, "").replace(/\D/g, "")
-  return nationalPhone(digits, [region], { anyType: true })?.value
-}
 
 /**
  * A record's identifiers. What does not read as an e-mail, a phone or a `{scheme, value}` of a known scheme is no
@@ -118,38 +104,16 @@ export const identifiersOf = (
   return found
 }
 
-const PERSON_BY = {
-  // UNION, not OR: each branch reads its own index.
-  email:
-    "SELECT l.person_id FROM identities i JOIN identity_links l ON l.identity_id = i.id " +
-    "WHERE i.provider = 'email' AND i.external_id = ? UNION " +
-    "SELECT l.person_id FROM identities i JOIN identity_links l ON l.identity_id = i.id WHERE i.email = ?",
-  // A messenger or CRM contact keeps its number raw in identities.phone, with or without the +.
-  phone:
-    "SELECT l.person_id FROM identities i JOIN identity_links l ON l.identity_id = i.id " +
-    "WHERE i.provider = 'phone' AND i.external_id = ? UNION " +
-    "SELECT l.person_id FROM identities i JOIN identity_links l ON l.identity_id = i.id WHERE i.phone IN (?, ?)",
-  contact:
-    "SELECT l.person_id FROM identities i JOIN identity_links l ON l.identity_id = i.id " +
-    "WHERE i.provider = ? AND i.external_id = ?",
-}
-
 /**
- * The entities the identifiers point at, each once. The one lookup an import matches by: the Memory workstream's
- * shared matcher (D5) takes it over as it is, so it reads the store and nothing else.
+ * The entities the identifiers point at, each once. A person is matched by the people matcher's lookup, which
+ * `people.scanMatches` reads phones and addresses with too.
  */
 export const entitiesByIdentifiers = (database: CacheDatabase, type: IdentityType, ids: Identifiers): number[] => {
   const found = new Set<number>()
   const add = (rows: Row[], column: string) => {
     for (const row of rows) found.add(Number(row[column]))
   }
-  if (type === "person") {
-    for (const email of ids.emails) add(database.prepare(PERSON_BY.email).all(email, email), "person_id")
-    for (const value of ids.phones)
-      add(database.prepare(PERSON_BY.phone).all(value, value, value.slice(1)), "person_id")
-    if (ids.contact)
-      add(database.prepare(PERSON_BY.contact).all(ids.contact.provider, ids.contact.externalId), "person_id")
-  }
+  if (type === "person") for (const person of personsByIdentifiers(database, ids)) found.add(person)
   if (type === "organization") {
     const organization = database.prepare(
       "SELECT o.id FROM identities i JOIN organization_identities oi ON oi.identity_id = i.id " +
