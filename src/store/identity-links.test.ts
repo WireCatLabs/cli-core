@@ -192,10 +192,22 @@ describe("an agent's link through a mention", () => {
 
     const decided = await store.mentions.confirmMention(TG, phone, `person:${person}`, { by: "claude-code" })
 
-    expect(decided.proposal).toBeDefined()
+    expect(decided).toMatchObject({ status: "proposed", proposal: expect.any(String) })
     expect(await uidOf(store, { provider: "phone", id: "+79000000001" })).not.toBe(person)
     await store.people.decideLink(decided.proposal as string, { confirm: true, by: "owner" })
     expect(await uidOf(store, { provider: "phone", id: "+79000000001" })).toBe(person)
+    expect((await store.mentions.mention(TG, phone))?.status).toBe("linked")
+  })
+
+  it("goes back to undecided when the owner rejects the link it proposed", async () => {
+    const store = await open()
+    const phone = await phoneMention(store)
+    const person = await uidOf(store, ana)
+    const decided = await store.mentions.confirmMention(TG, phone, `person:${person}`, { by: "claude-code" })
+
+    await store.people.decideLink(decided.proposal as string, { confirm: false, by: "owner" })
+
+    expect((await store.mentions.mention(TG, phone))?.status).toBe("found")
   })
 
   it("never replaces the owner's link of the identity", async () => {
