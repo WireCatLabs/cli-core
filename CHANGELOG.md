@@ -5,7 +5,7 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
-## Unreleased
+## 0.610.0 — 08.11.2026
 
 ### Added
 
@@ -14,11 +14,6 @@ shape of this file.
   `ProposalFilter.via` keeps the proposals whose evidence holds a reference, and `store.proposedActions.list` takes
   `evidence` to filter in the query, so `via` pages stored relationship proposals in full. A pending `chat-senders@2`
   proposal takes the new reason and evidence on the next scan, under the same id.
-
-## 0.610.0 — 08.11.2026
-
-### Added
-
 - **`search all` has a `business` lane.** `searchAll` finds invoices, payments, orders, contracts, subscriptions,
   products and wallets by the words of their numbers and names (an invoice's counterparty, a payment's payer or payee,
   an order's shop and lines), each word where a word starts, folded in memory like the `crm` lane, with no index.
@@ -52,7 +47,6 @@ shape of this file.
 - **`MessageStore.business` is a new required member**: a hand-made store object or test double needs it.
 - **`SearchedResource`, `ResourceWithMeetings` and `SearchAllRequest.scope` take `business`**, and the strict `hit`
   entity takes `review` and `source_record`; an exhaustive switch or a copy of the schema needs them.
-
 
 ### Fixed
 
