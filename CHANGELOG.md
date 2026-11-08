@@ -15,7 +15,7 @@ shape of this file.
   [query...]` narrows by `key`, `channel`, `language` and `source` (`templates list channel:telegram source:stored`)
   and answers the `template` entity, every command has a short summary, and `<tool> commands` lists the group under
   Automate, not Other. The shared commands' lint now covers the group, so `cli-dev lint` passes on a tool that mounts
-  it with cli-base 0.88.0 (`preview`, `--locale`, `--undo`, `--channel <channel>`).
+  it with cli-base 0.89.0 (`preview`, `--locale`, `--undo`, `--channel <channel>`).
 
 ### Fixed
 
@@ -30,6 +30,8 @@ shape of this file.
   when the next input is the same and that run exited 0, its mark did not move, so the run is left out with
   `skipped.reason` `mail.same-input` (`SKIP_REASONS.mailSameInput`). New mail changes the input and runs normally;
   `schedule run` by hand always runs. `runSchedule(…, { skipRepeatedInput: true })` turns it on for another timer.
+- **`account remove` is in the messenger parity manifest** (`parity.json`), with `--keep-data`, `--delete-data`
+  and `--dry-run`, so tg, max and wa can adopt it without failing `parity:check`.
 
 ### Added
 
@@ -66,11 +68,6 @@ shape of this file.
 - **`store.notes.addedSource(ref)` reads an added source back with what it is and what was kept**: `kind`, the `url`
   as given, `fileName`, `mime`, `size`, `kept` and the `copy` path, beside its document; `undefined` for any other
   document or a removed source. The `AddedSourceDetails` type is exported.
-
-### Fixed
-
-- **`account remove` is in the messenger parity manifest** (`parity.json`), with `--keep-data`, `--delete-data`
-  and `--dry-run`, so tg, max and wa can adopt it without failing `parity:check`.
 
 ## 0.614.0 — 08.11.2026
 
