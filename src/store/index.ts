@@ -326,6 +326,7 @@ export type {
 } from "./sqlite/notes.js"
 export type { Order, OrderDetail, OrderFilter, OrderInput, OrdersStore } from "./sqlite/orders.js"
 export { DEFAULT_OWNER_LANGUAGES, ownerLanguages } from "./sqlite/owner-languages.js"
+export { mergeId, type PersonMerge, parseMergeId } from "./sqlite/person-merges.js"
 export type { PrivateContact, PrivateContactNote } from "./sqlite/private-people.js"
 export type { Product, ProductFilter, ProductInput, ProductsStore, ProductUpdate } from "./sqlite/products.js"
 export {

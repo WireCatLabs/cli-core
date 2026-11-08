@@ -75,6 +75,8 @@ export interface PersonRecord {
   uid: string
   name: string | null
   identities: LinkedIdentity[]
+  /** Set when the uid asked for was merged away: the uid of the person its identities are now, the same as `uid`. */
+  mergedInto?: string
 }
 
 /** What a search of one account's messages takes, the account given apart. */

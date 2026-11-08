@@ -18,6 +18,7 @@ import { LABELLED, type LabelledType } from "./labelled.js"
 import { linkKind, RELATION_KINDS } from "./link-kinds.js"
 import { type MeetingProjectsStore, meetingProjectsStoreOver } from "./meeting-projects.js"
 import type { Author } from "./memories.js"
+import { idsOf } from "./merged-persons.js"
 import { holdingText } from "./note-index.js"
 import { insertLink, type Link, linkOf } from "./notes.js"
 import type { StoreContext } from "./open.js"
@@ -281,6 +282,8 @@ const DEALS = ["deal", "lead"]
 
 export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
   const { database, now } = context
+  const ids = (thing: { type: string; id: number } | undefined) =>
+    thing ? idsOf(database, thing.type, thing.id) : null
   const account = (key: AccountKey) => {
     const row = database
       .prepare("SELECT id FROM accounts WHERE provider=? AND external_id=?")
@@ -571,10 +574,10 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
       const text = options.search === undefined ? undefined : holdingText("note", "id", options.search)
       const rows = database
         .prepare(
-          "SELECT * FROM notes WHERE deleted_at IS NULL AND (? IS NULL OR (notable_type = ? AND notable_id = ?)) " +
+          "SELECT * FROM notes WHERE deleted_at IS NULL AND (? IS NULL OR (notable_type = ? AND notable_id IN (SELECT value FROM json_each(?)))) " +
             `${text ? `AND ${text.sql} ` : ""}ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`,
         )
-        .all(thing?.type ?? null, thing?.type ?? null, thing?.id ?? null, ...(text?.params ?? []), limit + 1, offset)
+        .all(thing?.type ?? null, thing?.type ?? null, ids(thing), ...(text?.params ?? []), limit + 1, offset)
       const items = rows.slice(0, limit).flatMap((row) => annotationOf(row) ?? [])
       return { items, hasMore: rows.length > limit }
     },
@@ -786,9 +789,9 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
       return database
         .prepare(
           // Live ones first: a long history of withdrawn links never pushes them past the cap.
-          `${RELATIONS} AND ${notOverriddenSql("links")} AND (? IS NULL OR (from_type=? AND from_id=?) OR (to_type=? AND to_id=?)) ORDER BY deleted_at IS NOT NULL, created_at, id LIMIT 500`,
+          `${RELATIONS} AND ${notOverriddenSql("links")} AND (? IS NULL OR (from_type=? AND from_id IN (SELECT value FROM json_each(?))) OR (to_type=? AND to_id IN (SELECT value FROM json_each(?)))) ORDER BY deleted_at IS NOT NULL, created_at, id LIMIT 500`,
         )
-        .all(thing?.type ?? null, thing?.type ?? null, thing?.id ?? null, thing?.type ?? null, thing?.id ?? null)
+        .all(thing?.type ?? null, thing?.type ?? null, ids(thing), thing?.type ?? null, ids(thing))
         .map((row) => relationOf(linkOf(database, row)))
     },
     removeRelation: async (key, id, by) => {

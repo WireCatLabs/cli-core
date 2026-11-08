@@ -3,6 +3,7 @@ import type { Id, Page } from "../../domain/models.js"
 import type { IdentityRef, LinkedIdentity, LinkOptions, PersonRecord, StoredAccount, StoredHit } from "../types.js"
 import { and, eq, inArray, isNull, type SQL, sql } from "./drizzle/core.js"
 import { identityOf } from "./identities.js"
+import { currentPerson } from "./merged-persons.js"
 import type { StoreContext } from "./open.js"
 import { resolvePersonLinks } from "./person-resolution.js"
 import { identitySeparated, separated } from "./person-separation.js"
@@ -26,13 +27,13 @@ const identityRow = ({ orm }: StoreContext, { provider, id }: IdentityRef) =>
     .where(and(eq(identities.provider, provider), eq(identities.externalId, id)))
     .get()
 
-const required = (context: StoreContext, ref: IdentityRef) => {
+export const required = (context: StoreContext, ref: IdentityRef) => {
   const found = identityRow(context, ref)
   if (!found) throw new CliError("not_found", `no ${ref.provider} person ${ref.id} in the store`)
   return found
 }
 
-const recordOf = ({ orm }: StoreContext, personPk: number): PersonRecord => {
+export const recordOf = ({ orm }: StoreContext, personPk: number): PersonRecord => {
   const person = orm.select().from(persons).where(eq(persons.id, personPk)).get()
   if (!person) throw new CliError("not_found", "that person is not in the store")
   const rows = orm
@@ -78,11 +79,17 @@ const recordOf = ({ orm }: StoreContext, personPk: number): PersonRecord => {
   return { uid: String(person.id), name: person.name, identities: identitiesOf }
 }
 
-/** A person by the uid a `person:` reference holds, with every identity linked to them. */
+/**
+ * A person by the uid a `person:` reference holds, with every identity linked to them. A uid merged into someone
+ * else answers with that person, and `mergedInto` says so.
+ */
 export const personByUid = (context: StoreContext, uid: string): PersonRecord | undefined => {
   if (!/^[1-9]\d*$/.test(uid) || !Number.isSafeInteger(Number(uid))) return undefined
   const found = context.database.prepare("SELECT id AS pk FROM persons WHERE id = ?").get(uid)
-  return found ? recordOf(context, Number(found.pk)) : undefined
+  if (!found) return undefined
+  const current = currentPerson(context.database, Number(found.pk))
+  const record = recordOf(context, current)
+  return current === Number(found.pk) ? record : { ...record, mergedInto: String(current) }
 }
 
 /** The person an identity belongs to, with every identity linked to them. */
@@ -91,7 +98,13 @@ export const personOf = (context: StoreContext, ref: IdentityRef): PersonRecord 
   return found ? recordOf(context, found.personPk) : undefined
 }
 
-const move = (context: StoreContext, identityPk: number, from: number, to: number, { method, by }: LinkOptions) => {
+export const move = (
+  context: StoreContext,
+  identityPk: number,
+  from: number,
+  to: number,
+  { method, by }: LinkOptions,
+) => {
   const at = context.now()
   context.orm
     .update(identityLinks)
@@ -233,7 +246,7 @@ export const unlinkIdentity = (context: StoreContext, ref: IdentityRef, options:
       .returning({ pk: persons.id })
       .get()?.pk,
   )
-  move(context, found.pk, found.personPk, alone, options)
+  move(context, found.pk, found.personPk, alone, { ...options, method: "unlink" })
   return recordOf(context, alone)
 }
 

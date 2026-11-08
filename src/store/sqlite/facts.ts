@@ -20,6 +20,7 @@ import {
   projectOf,
   subjectOf,
 } from "./memories.js"
+import { idsOf } from "./merged-persons.js"
 import { requiredThing } from "./notes.js"
 import type { StoreContext } from "./open.js"
 import { closeSourceReviews, eraseSourceReviews, sourceReviewOf } from "./source-review-marks.js"
@@ -295,7 +296,7 @@ export const factOperationsOver = (context: StoreContext): FactOperations => {
       return database
         .prepare(
           `${NAMED} WHERE f.deleted_at IS NULL AND (? IS NULL OR f.type = ?) AND (? IS NULL OR f.project_id = ?) ` +
-            "AND (? IS NULL OR (f.subject_type = ? AND f.subject_id = ?)) AND (? IS NULL OR f.status = ?) " +
+            "AND (? IS NULL OR (f.subject_type = ? AND f.subject_id IN (SELECT value FROM json_each(?)))) AND (? IS NULL OR f.status = ?) " +
             `AND ${by.sql} ORDER BY ${order} DESC, f.id DESC LIMIT ?`,
         )
         .all(
@@ -305,7 +306,7 @@ export const factOperationsOver = (context: StoreContext): FactOperations => {
           project?.id ?? null,
           subject?.type ?? null,
           subject?.type ?? null,
-          subject?.id ?? null,
+          subject ? idsOf(database, subject.type, subject.id) : null,
           options.status ?? null,
           options.status ?? null,
           ...by.params,

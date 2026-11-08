@@ -162,7 +162,7 @@ A real person, whatever accounts they write from: their identities point here. `
 |---|---|---|---|---|
 | `identity_id` | integer | PK | → `identities.id` |  |
 | `person_id` | integer | not null | → `persons.id` | the `person` it belongs to |
-| `method` | text | not null |  | How the identity was assigned to its person: `initial` when first seen, or a caller's label such as `manual` or `same-email`. |
+| `method` | text | not null |  | How the identity was assigned to its person: `initial` when first seen, `unlink`, `split` or `undo-merge` when the owner took it apart, or a caller's label such as `manual` or `same-email`. |
 | `confidence` | real | not null |  | How sure the link is, from 0 to 1; 1 for every link the store writes. |
 | `created_at` | integer | not null |  | when this row was saved here |
 | `author` | text | not null |  | Who decided the link: `ingest` for the automatic first link, otherwise `owner` or the name of a program. |
@@ -179,7 +179,7 @@ A real person, whatever accounts they write from: their identities point here. `
 | `identity_id` | integer | not null | → `identities.id` | the `identity` it belongs to |
 | `from_person_id` | integer |  | → `persons.id` | the `person` it belongs to |
 | `to_person_id` | integer | not null | → `persons.id` | the `person` it belongs to |
-| `method` | text | not null |  | How this move of an identity between persons was decided (`initial`, `manual`, `same-email`…), kept so a bad link can be undone. |
+| `method` | text | not null |  | How this move of an identity between persons was decided (`initial`, `manual`, `same-email`, `unlink`, `split`, `undo-merge`…). A move that emptied its person is a merge; `unlink`, `split` and `undo-merge` never are. A person with no identity and a merge out of it is merged away: its row stays, readers skip it, and its uid means the person of its latest merge, so `undoMerge` can give it back. |
 | `created_at` | integer | not null |  | when this row was saved here |
 | `author` | text | not null |  | Who made this move: `ingest`, `owner`, or a program's name. |
 

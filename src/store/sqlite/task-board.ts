@@ -12,6 +12,8 @@ import {
 import { TASK_TYPES } from "../../domain/knowledge.js"
 import { taskWordsOf } from "../../search/task-similarity.js"
 import { PRIORITY_LABELS, type PriorityLabel, priorityBand, TASK_STATES } from "../../tasks/index.js"
+import type { CacheDatabase } from "../driver.js"
+import { currentPerson, idsOf, mergedAwaySql } from "./merged-persons.js"
 import type { ColumnMap, Where } from "./query-filter.js"
 import { INBOX_KEY_LENGTH } from "./task-keys.js"
 
@@ -92,7 +94,7 @@ const projectWhere = (node: Predicate): Where => {
   }
 }
 
-const assigneeWhere = (node: Predicate): Where => {
+const assigneeWhere = (database: CacheDatabase, node: Predicate): Where => {
   const value = node.value.trim().toLowerCase()
   if (value === "any" || (node.operator === "wildcard" && value === "*"))
     return { sql: `EXISTS (${ASSIGNED})`, params: [] }
@@ -100,7 +102,10 @@ const assigneeWhere = (node: Predicate): Where => {
   const id = /^(?:person:)?(\d+)$/.exec(value)?.[1]
   if (id === undefined)
     throw new CliError("validation_error", `assignee: takes any, none or "person:<id>", not "${node.value}"`)
-  return { sql: `EXISTS (${ASSIGNED} AND a.assignee_id = ?)`, params: [Number(id)] }
+  return {
+    sql: `EXISTS (${ASSIGNED} AND a.assignee_id IN (SELECT value FROM json_each(?)))`,
+    params: [idsOf(database, "person", Number(id))],
+  }
 }
 
 const bound = (value: string, side: "from" | "to", node: Predicate): number | undefined => {
@@ -207,11 +212,11 @@ export const dueGroups = (now: number, zone: string) => {
 export type DueGroup = keyof ReturnType<typeof dueGroups>
 
 /** `now` and `zone` place today; one value per answer, so the list and its counts agree. */
-export const projectTaskColumns = (now: number, zone: string): ColumnMap => ({
+export const projectTaskColumns = (now: number, zone: string, database: CacheDatabase): ColumnMap => ({
   state: { type: "enum", sql: "t.status" },
   kind: { type: "enum", sql: "t.type" },
   project: { where: projectWhere },
-  assignee: { where: assigneeWhere },
+  assignee: { where: (node) => assigneeWhere(database, node) },
   priority: { where: priorityWhere },
   agent: { where: agentWhere },
   parent: { where: parentWhere },
@@ -274,3 +279,25 @@ export const withoutField = (query: QueryAst | undefined, name: string): QueryAs
   const root = strip(query.root)
   return root === undefined ? undefined : { ...query, root }
 }
+
+/** The people tasks name; a merged-away person is left out and its tasks count for the person it is now. */
+export const TASK_PEOPLE =
+  "WITH merged AS (SELECT json_extract(value, '$[0]') AS id, json_extract(value, '$[1]') AS now FROM json_each(?)), " +
+  "counts AS (SELECT coalesce(m.now, a.assignee_id) AS person, count(DISTINCT t.id) AS n FROM task_assignments a " +
+  "JOIN tasks t ON t.id = a.task_id AND t.deleted_at IS NULL LEFT JOIN merged m ON m.id = a.assignee_id " +
+  "WHERE a.assignee_type = 'person' GROUP BY 1) " +
+  "SELECT p.id, p.name, p.owner, coalesce(c.n, 0) AS n FROM persons p LEFT JOIN counts c ON c.person = p.id " +
+  `WHERE NOT ${mergedAwaySql("p")} ` +
+  "ORDER BY p.owner DESC, n DESC, p.name IS NULL, p.name COLLATE NOCASE, p.id LIMIT ?"
+
+/** Merged-away people a task is assigned to, with the person each is now, as JSON pairs for `TASK_PEOPLE`. */
+export const mergedAssignees = (database: CacheDatabase): string =>
+  JSON.stringify(
+    database
+      .prepare(
+        "SELECT DISTINCT a.assignee_id AS id FROM task_assignments a JOIN persons p ON p.id = a.assignee_id " +
+          `WHERE a.assignee_type = 'person' AND ${mergedAwaySql("p")}`,
+      )
+      .all()
+      .map(({ id }) => [Number(id), currentPerson(database, Number(id))]),
+  )

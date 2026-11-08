@@ -26,6 +26,7 @@ import { PREFERRED_FILE, syncFile } from "./files.js"
 import { type ImportedDocuments, importedDocumentWhere } from "./imported-documents.js"
 import { LINK_KINDS, LINK_ORIGINS, type LINK_SOURCES, linkKind } from "./link-kinds.js"
 import { reviewLink } from "./link-reviews.js"
+import { currentPerson, idsOf } from "./merged-persons.js"
 import { dateFileNotes } from "./note-dates.js"
 import { holdingText } from "./note-index.js"
 import type { NoteSearch } from "./note-search.js"
@@ -313,7 +314,7 @@ const personsNamed = (database: CacheDatabase, key: string): Set<number> => {
         "WHERE a.name_folded = ? OR a.name = ?",
     )
     .all(key, key)
-  for (const row of aliases) if (row.person_id != null) found.add(Number(row.person_id))
+  for (const row of aliases) if (row.person_id != null) found.add(currentPerson(database, Number(row.person_id)))
   return found
 }
 
@@ -832,7 +833,7 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
       const documentText = options.search === undefined ? undefined : holdingText("document", "d.id", options.search)
       const noteText = options.search === undefined ? undefined : holdingText("note", "n.id", options.search)
       const aboutType = about?.type ?? null
-      const aboutId = about?.id ?? null
+      const aboutId = about ? idsOf(database, about.type, about.id) : null
       const files =
         options.source === "internal"
           ? []
@@ -847,7 +848,7 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
                     "JOIN documents d ON d.id = f.document_id JOIN accounts a ON a.id = f.account_id " +
                     "WHERE f.deleted_at IS NULL AND d.deleted_at IS NULL AND f.account_id = ? AND ? IS NOT NULL ") +
                   "AND coalesce(json_extract(d.metadata, '$.catalog.active'), 1)=1 " +
-                  `AND (? IS NULL OR EXISTS (SELECT 1 FROM links l WHERE l.from_type = 'document' AND l.from_id = d.id AND l.kind = ${linkKind("about")} AND l.to_type = ? AND l.to_id = ?)) ` +
+                  `AND (? IS NULL OR EXISTS (SELECT 1 FROM links l WHERE l.from_type = 'document' AND l.from_id = d.id AND l.kind = ${linkKind("about")} AND l.to_type = ? AND l.to_id IN (SELECT value FROM json_each(?)))) ` +
                   `${documentText ? `AND ${documentText.sql} ` : ""}ORDER BY d.created_at DESC, d.id DESC LIMIT ?`,
               )
               .all(folder, folder, aboutType, aboutType, aboutId, ...(documentText?.params ?? []), limit + offset + 1)
@@ -858,7 +859,7 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
           : database
               .prepare(
                 "SELECT n.* FROM notes n WHERE n.deleted_at IS NULL " +
-                  `AND (? IS NULL OR (n.notable_type = ? AND n.notable_id = ?) OR EXISTS (SELECT 1 FROM links l WHERE l.from_type = 'note' AND l.from_id = n.id AND l.kind = ${linkKind("about")} AND l.to_type = ? AND l.to_id = ?)) ` +
+                  `AND (? IS NULL OR (n.notable_type = ? AND n.notable_id IN (SELECT value FROM json_each(?))) OR EXISTS (SELECT 1 FROM links l WHERE l.from_type = 'note' AND l.from_id = n.id AND l.kind = ${linkKind("about")} AND l.to_type = ? AND l.to_id IN (SELECT value FROM json_each(?)))) ` +
                   `${noteText ? `AND ${noteText.sql} ` : ""}ORDER BY n.created_at DESC, n.id DESC LIMIT ?`,
               )
               .all(aboutType, aboutType, aboutId, aboutType, aboutId, ...(noteText?.params ?? []), limit + offset + 1)

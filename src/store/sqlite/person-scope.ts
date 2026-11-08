@@ -1,4 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
+import { currentPerson } from "./merged-persons.js"
 import type { StoreContext } from "./open.js"
 
 export const personSeenInAccounts = (
@@ -23,6 +24,6 @@ export const personSeenInAccounts = (
       .prepare(
         "SELECT 1 FROM persons p JOIN identity_links l ON l.person_id=p.id JOIN account_identities a ON a.identity_id=l.identity_id WHERE p.id=? AND a.account_id IN (SELECT value FROM json_each(?)) LIMIT 1",
       )
-      .get(id, JSON.stringify(accountIds)),
+      .get(currentPerson(database, id), JSON.stringify(accountIds)),
   )
 }

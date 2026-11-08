@@ -516,8 +516,25 @@ one (`EntryEventType`, `ParticipantResponse`, `CalendarAccessRole` in `src/meeti
 translates its provider's words.
 
 **Contacts.** A contact is an `identities` row (`schema.ts:134`): one person as one source knows them, linked to a
-`persons` row through `identity_links`, every change logged in `identity_link_events` (`schema.ts:152-191`).
-**Not built yet:** an `identities.email` column, so contacts with one address join one person.
+`persons` row through `identity_links`, every move logged in `identity_link_events` (`schema.ts:152-191`). Contacts
+with one exact address join one person (`joinByAddress`), unless the owner separated those people
+(`person-separation.ts`): an owner's move out of a person keeps the whole people apart from then on.
+
+- **A merge never deletes the person it empties.** A move is a merge by what it did (`mergeSql` in
+  `merged-persons.ts`): it emptied its person, where an unlink leaves the rest behind. A person with no identity and
+  a merge out of it is merged away: `taskPeople` (memo's `people list` and `search people`) skips it and counts its
+  tasks for the person it is now, the person of its latest merge. `personByUid` (with `mergedInto`),
+  `personSeenInAccounts` and name resolution follow that merge. Rows naming the old uid are never rewritten; the
+  readers that filter by a person take `idsOf`, the person with everyone merged into them: memories, facts, notes,
+  relationships, the task board's `assignee:` and `preparation`; `syncReported` withdraws a source's rows on the old
+  uid once it reports them on the current one. A person added by name has no move, so it stays
+  listed. Only an account purge deletes persons; it keeps one any row points at, with the identities that moved out
+  of it, so it stays merged away.
+- **`merges`, `undoMerge` and `split`** (`person-merges.ts`, on `PeopleStore`) read and write the same log.
+  `merges(uid)` groups the identities now on the person by the merge that brought each there, as
+  `merge:<to>-<from>`; an undo that brought one back restores the merge it had. `undoMerge` and `split` are the
+  owner's moves (`undo-merge`, `split`), so the separation guard keeps the people apart afterwards. `undoMerge` leaves
+  identities the owner split or unlinked off since, and refuses with `identity.stale` when one was merged on.
 
 **Links and the review list.** A link records its method, confidence, author and time; an owner's link is never
 replaced by a rule. Today only contacts have that shape. **Not built yet:** `entity_link_events`, the same log for
