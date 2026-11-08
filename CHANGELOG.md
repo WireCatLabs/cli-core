@@ -5,7 +5,7 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
-## Unreleased
+## 0.607.0 — 08.11.2026
 
 ### Added
 
@@ -24,19 +24,6 @@ shape of this file.
   chat whose membership is not `imported` (`record.chat`), and an SMS moved to another thread is refused
   (`record.moved`). A deleted SMS or call record tombstones its message or event, and
   sending it again brings them back.
-
-### Changed — may break callers
-
-- **`EntryEventType` has `call`**, and `events list event_type:` takes it. A switch over the kinds needs a branch.
-- **`kindIn` and `ListedAccount.kind` name a provider's first kind only.** A provider may hold several (`kindsIn`,
-  `ListedAccount.kinds`, `holdsKind`); code that tests `kindIn(provider) === kind` misses the others.
-- **`calendarAccounts`, `inSource(..., "events")` and `events list person:` now return phone accounts and calls**:
-  a phone account holds events, and a call's other side is found by its `related-to` link.
-
-## 0.607.0 — 08.11.2026
-
-### Added
-
 - **`deals list --format csv` and `leads list --format csv`: a page of deals or leads as a table for a spreadsheet.**
   stdout carries the CSV (RFC 4180, CRLF) and nothing else; the way to the next page goes to stderr. The columns are
   the built-in fields, `amount` and `currency` apart, then every CRM field by its label as `fields list` shows it — a
@@ -158,6 +145,11 @@ shape of this file.
 
 ### Changed — may break callers
 
+- **`EntryEventType` has `call`**, and `events list event_type:` takes it. A switch over the kinds needs a branch.
+- **`kindIn` and `ListedAccount.kind` name a provider's first kind only.** A provider may hold several (`kindsIn`,
+  `ListedAccount.kinds`, `holdsKind`); code that tests `kindIn(provider) === kind` misses the others.
+- **`calendarAccounts`, `inSource(..., "events")` and `events list person:` now return phone accounts and calls**:
+  a phone account holds events, and a call's other side is found by its `related-to` link.
 - **`run()` refuses `--offline` for a command annotated `offline: false`, or under a group that is**, before its
   action and before the first-run questions: `permission_error`, reason `offline.refused`. A command's own
   `--dry-run` still runs. cli-core's own such commands answered `validation_error` (`upgrade`, `topics`,
