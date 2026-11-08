@@ -23,6 +23,11 @@ shape of this file.
 
 ### Added
 
+- **`saveAddedSource` takes an optional `sourceKey`** (`<namespace>:<id>`, as `google-drive:<fileId>`). A source
+  saved again under the same key is the same document: changed text becomes its next revision, so a memory or fact
+  citing it gets a "source changed" review from `knowledge.checkSources` instead of a second copy beside it, and the
+  same text changes nothing. Different keys stay separate. The answer has a new `changed` field: whether text was
+  written. No store migration.
 - **The weekly gaps message (`report/weekly-gaps`).** A morning digest may keep what it found on its own, which the
   agenda did not show, in `internal.gaps` (`{ what, refs | ref, section }`); the digest never shows it. Once a week a
   delivered digest run also sends those gaps along the same routes as one message: on Monday, or on the first digest
