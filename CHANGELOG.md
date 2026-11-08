@@ -44,8 +44,21 @@ shape of this file.
   (`identity.owner-only`; pass `"owner"` only from a path that established the owner ran it), and an automatic match
   by the same address does not join those people again. `undoMerge` refuses with `identity.stale` when one of the
   identities was merged on into another person since.
+- **`identity_link` proposals: "these two are one person", which only the owner decides.** `people.proposeLink`
+  opens one, at most one open per pair of people, and refuses a pair the owner separated (`identity.separated`) or
+  rejected before (`identity.rejected`). `people.decideLink` and the proposal registry decide it: an agent is refused
+  whatever `agent_decisions` says (`proposal.owner-only`), and a confirm after either person changed is refused with
+  `identity.stale`. The generic `proposedActions` paths refuse to stage or approve the kind.
+- **`people.scanMatches()`, one pass of the people matcher.** The same address joins people in every scope, a phone
+  number exactly two people have joins them, and a number three to six people share, or a meeting guest's typed
+  address, opens an `identity_link` proposal. It reads phones the one way the records import does (`person-matcher.ts`),
+  never over the owner's separation or rejection, and records its merges as the rule's.
 
 ### Changed — may break callers
+
+- **An agent's mention confirm or meeting participant association no longer moves an identity.** Unless `by` is
+  `"owner"`, `confirmMention` to a person and `linkParticipantPerson` open an `identity_link` proposal and return its
+  id as `proposal` (the association's `changed` is `false`), so an owner's link is never replaced.
 
 - **`people.personByUid` of a person merged into someone else answers with that person.** Its `uid` is the
   current person's, not the one asked for, and `mergedInto` is set; `personSeenInAccounts` follows the same merge.

@@ -535,6 +535,19 @@ with one exact address join one person (`joinByAddress`), unless the owner separ
   `merge:<to>-<from>`; an undo that brought one back restores the merge it had. `undoMerge` and `split` are the
   owner's moves (`undo-merge`, `split`), so the separation guard keeps the people apart afterwards. `undoMerge` leaves
   identities the owner split or unlinked off since, and refuses with `identity.stale` when one was merged on.
+- **What only the owner decides waits as an `identity_link` proposal** (`identity-proposals.ts`, kind in
+  `identity-links.ts`): a `proposed_actions` row with the two people, each one's identities when proposed (`sides`),
+  the signal (`agent`, `phone`, `guest-email`) and whether it joins the people or moves one identity. It is
+  owner-only (`isOwnerOnlyKind`) and a dedicated review, at most one open per pair; a pair the owner separated or
+  rejected is never proposed again. A confirm is the owner's link (method `proposal`), refused with `identity.stale`
+  once `sides` no longer hold. An agent's mention confirm and meeting association go through `linkOrPropose`, which
+  links only for the owner.
+- **One matcher** (`person-matcher.ts`) is the records import's person lookup and the phone reading
+  (`e164Of` for what a source typed, `storedPhone` for a stored column: the E.164 number, with or without the `+`).
+  `scanMatches` (`person-match-scan.ts`) uses it over the whole store: the same address joins people (NEED-2382), a
+  number exactly two people have joins them, three to six on one number and a meeting guest's typed address
+  (`meeting_participants.email`) become proposals. Its merges are authored `rule`: a move the owner authored counts
+  as a separation, so an automatic one must never be.
 
 **Links and the review list.** A link records its method, confidence, author and time; an owner's link is never
 replaced by a rule. Today only contacts have that shape. **Not built yet:** `entity_link_events`, the same log for
