@@ -52,8 +52,10 @@ export interface CrmCursor {
   pass: PendingPass | null
   /** When the last complete id pass started; 0 before the first. */
   passAt: number
-  /** Of a deal or lead: the scope the copy holds, `all` or `mine:<user ids>`; absent, `all`, as before scopes. */
+  /** Of a deal or lead: the scope the copy is read under, `all` or `mine:<user ids>`; absent, `all`, as before scopes. */
   scope?: string
+  /** The copy still holds stored rows outside `scope`: a held narrowing, done once the owner sets the scope. */
+  narrowing?: true
 }
 
 const isToken = (value: unknown): value is string | null => value === null || typeof value === "string"
@@ -83,6 +85,7 @@ export const parseCrmCursor = (value: string | null | undefined): CrmCursor | nu
       pass: pass ?? null,
       passAt: typeof cursor.passAt === "number" ? cursor.passAt : 0,
       ...(typeof cursor.scope === "string" ? { scope: cursor.scope } : {}),
+      ...(cursor.narrowing === true ? { narrowing: true as const } : {}),
     }
   } catch {
     return null
@@ -382,31 +385,42 @@ const syncKind = async (run: Run, kind: CrmKind, options: CrmSyncOptions, result
     cursor = { ...cursor, round: { from: null, page: null, reset: false }, done: 0, pass: null, passAt: 0 }
   const scope = scopeKey(run.scope)
   const ids = isItemKind(kind) ? scopeIds(run.scope) : null
-  const before = idsOfKey(cursor.scope ?? "all")
+  const listedUnder = cursor.scope ?? "all"
+  const before = idsOfKey(listedUnder)
+  const changed = isItemKind(kind) && listedUnder !== scope
   let held = false
-  if (isItemKind(kind) && (cursor.scope ?? "all") !== scope) {
-    // Narrowing is done here, by each stored row's assignee, so no list from the CRM can empty the copy.
-    if (ids && (before === null || before.some((id) => !ids?.includes(id)))) {
-      const leaving = await store.crm.removeOutOfScope(account, kind, ids, { dryRun: true })
-      const stored = await store.crm.count(account, kind)
-      // A default `mine` whose own user holds few of the copy's rows is more likely a wrong sign-in than the owner's
-      // wish: the stored rows wait for the owner to set the scope. New pages are still read under `mine`.
-      held = !run.scopeSet && leaving > stored * MOST_UNLISTED
-      if (held) {
-        result.held = true
-        run.report.issues.push({
-          kind,
-          reason: "crm.narrowing-held",
-          message:
-            `scope mine keeps the ${kind}s of user ${ids.join(", ")}: ${leaving} of the ${stored} stored would be ` +
-            `marked deleted; none was, and none will be until the owner sets ${crmSettingKey(account, "scope")} ` +
-            "to mine or all",
-        })
-      } else result.outOfScope += await store.crm.removeOutOfScope(account, kind, ids)
-    }
-    if (!held) {
-      const widened = before !== null && (ids === null || ids.some((id) => !before.includes(id)))
-      cursor = { ...cursor, ...(widened ? { round: { from: null, page: null, reset: false }, done: 0 } : {}), scope }
+  // Narrowing is done here, by each stored row's assignee, so no list from the CRM can empty the copy.
+  if (
+    isItemKind(kind) &&
+    ids &&
+    (cursor.narrowing === true || (changed && (before === null || before.some((id) => !ids.includes(id)))))
+  ) {
+    const leaving = await store.crm.removeOutOfScope(account, kind, ids, { dryRun: true })
+    const stored = await store.crm.count(account, kind)
+    // A default `mine` whose own user holds few of the copy's rows is more likely a wrong sign-in than the owner's
+    // wish: the stored rows wait for the owner to set the scope. New pages are still read under `mine`.
+    held = !run.scopeSet && leaving > stored * MOST_UNLISTED
+    if (held) {
+      result.held = true
+      run.report.issues.push({
+        kind,
+        reason: "crm.narrowing-held",
+        message:
+          `scope mine keeps the ${kind}s of user ${ids.join(", ")}: ${leaving} of the ${stored} stored would be ` +
+          `marked deleted; none was, and none will be until the owner sets ${crmSettingKey(account, "scope")} ` +
+          "to mine or all",
+      })
+    } else result.outOfScope += await store.crm.removeOutOfScope(account, kind, ids)
+  }
+  if (changed || cursor.narrowing) {
+    // The cursor takes the new scope even while held: pages are read under it, so a later wider scope lists in full.
+    const widened = changed && before !== null && (ids === null || ids.some((id) => !before.includes(id)))
+    const { narrowing: _done, ...rest } = cursor
+    cursor = {
+      ...rest,
+      ...(widened ? { round: { from: null, page: null, reset: false }, done: 0 } : {}),
+      scope,
+      ...(held ? { narrowing: true as const } : {}),
     }
   }
   let round: PendingRound = cursor.round ?? { from: cursor.token, page: null, reset: false }

@@ -333,8 +333,10 @@ the kind in full again and runs no id pass. A narrowing under the default `mine`
 would mark more than half of a kind deleted is held as `crm.narrowing-held` (and `held: true` on the kind), naming
 the own user and the count, until the owner sets the `scope` setting; `--rescan` does not lift it. While it is held,
 new pages are still read under `mine`, and only the stored rows outside it are kept: a sign-in whose user holds few of
-the copy's deals is more likely the wrong one than the owner's wish. An agent cannot set `scope`, `self` or
-`unassigned`, in its own shell or over MCP: the owner sets them in a terminal. `self()` must answer a numeric user id (else `invalid_response`), and a source
+the copy's deals is more likely the wrong one than the owner's wish. `config set` of `scope`, `self` or
+`unassigned` stops an agent's run (its own shell, or MCP with `mcp.authority`) with `permission_error`: the owner sets
+them in a terminal. It guards against a change by mistake and is not a boundary: an agent that drops its markers or
+writes the store file directly is not stopped. `self()` must answer a numeric user id (else `invalid_response`), and a source
 with it fills every deal's and lead's `assignee` (a source contract case checks it). One account's copy belongs to one user: the first sync stores it as
 `crm.<provider>:<account>.self`, a sign-in of another user is refused with the setting named, and
 `settings unset` of it gives the copy to the next sign-in. Out of scope is a deleted mark, as for a row the CRM

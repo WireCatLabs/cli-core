@@ -358,7 +358,7 @@ describe("config", () => {
     expect((await call(["config", "show", "--json"], env)).code).toBe(0)
   })
 
-  it("**whose deals a CRM copy holds is the owner's**: an agent cannot set a CRM account's scope, self or unassigned", async () => {
+  it("**whose deals a CRM copy holds is the owner's**: an agent's run is stopped from setting a CRM account's scope, self or unassigned by mistake", async () => {
     const tool = { ...app, messenger: false }
     const own = settingsFor(tool)
     const root = mkdtempSync(join(tmpdir(), "config-"))
@@ -384,7 +384,7 @@ describe("config", () => {
     ] as const) {
       const refused = await call({ AI_AGENT: "hermes-agent" }, "set", `${key}.${name}`, value)
       expect(refused.code).toBe(5)
-      expect(refused.stderr).toContain(`an agent cannot change ${key}.${name}`)
+      expect(refused.stderr).toContain(`${key}.${name} is the owner's to set`)
       expect((await call({ CLAUDECODE: "1" }, "unset", `${key}.${name}`)).code).toBe(5)
       expect((await call({}, "set", `${key}.${name}`, value)).code).toBe(0)
     }

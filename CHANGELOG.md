@@ -21,8 +21,9 @@ shape of this file.
   and the answer offers no retry.
 - **A default `mine` that would mark most of a kind deleted is held** (`crm.narrowing-held`, naming the own user and
   the count, and `held: true` on the kind) until the owner sets the `scope` setting; `--rescan` does not lift it.
-  While held, new pages are read under `mine` and the stored rows are kept. An agent cannot set a CRM account's
-  `scope`, `self` or `unassigned` (`permission_error`): the owner sets them in a terminal. `self()` must answer a numeric user id
+  While held, new pages are read under `mine` and the stored rows are kept; a later `scope all` lists every deal
+  and lead again. `config set` of a CRM account's `scope`, `self` or `unassigned` stops an agent's run
+  (`permission_error`), a guard against a change by mistake rather than a boundary. `self()` must answer a numeric user id
   (`invalid_response` otherwise), and `crmSourceContract` checks that such a source gives every deal and lead an
   assignee.
 - **One account's copy belongs to one CRM user.** The first sync of a source with `self()` stores it as

@@ -89,7 +89,7 @@ export const storeSettingsOf = (app: Pick<AppIdentity, "messenger">): string[] =
 export const offersStoreSetting = (app: Pick<AppIdentity, "messenger">, setting: string): boolean =>
   app.messenger !== false || setting in SCRIPTS || setting === OWNER_LANGUAGES || parseCrmSetting(setting) !== undefined
 
-/** Whose deals a CRM copy holds: an agent may not decide it, even one the owner let change other settings. */
+/** Whose deals a CRM copy holds: the owner's to set; an agent's run is stopped from changing it by mistake. */
 export const isOwnerOnlyStoreSetting = (setting: string): boolean => {
   const name = parseCrmSetting(setting)?.name
   return name === "scope" || name === "self" || name === "unassigned"

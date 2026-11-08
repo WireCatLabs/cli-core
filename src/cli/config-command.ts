@@ -151,10 +151,11 @@ export const configCommand = (
           `no setting called "${setting}" here — it belongs to the messenger CLIs; one of: ${[...config.allSettings, ...storeSettingsOf(app)].join(", ")}`,
         )
       if (isStoreSetting(setting)) {
+        // A guard against a change by mistake, not a boundary: an agent can drop its markers or write the store file.
         if (isOwnerOnlyStoreSetting(setting) && (environmentOf(this).agent || agentOf(env)))
           throw new CliError(
             "permission_error",
-            `an agent cannot change ${setting} — the owner sets it in a terminal`,
+            `${setting} is the owner's to set, in a terminal: an agent's run is stopped from changing it by mistake`,
             {
               setting,
             },

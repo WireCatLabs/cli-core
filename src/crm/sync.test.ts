@@ -218,6 +218,29 @@ it("holds the default mine's deletions of the stored copy, still reading new pag
   expect(await deals()).toEqual(["d0", "d5"])
 })
 
+it("after a held narrowing, scope all lists in full: deals made or given away during the hold arrive", async () => {
+  const { source, set, raw, sync, deals, store } = await scoped()
+  source().put("deal", exampleDeal("d0", { assignee: "7" }))
+  for (let at = 1; at <= 20; at += 1) source().put("deal", exampleDeal(`d${at}`, { assignee: "9" }))
+  await set("scope", "all")
+  await sync()
+  await raw("scope", undefined)
+  expect(dealOf(await sync())).toMatchObject({ held: true })
+  source().put("deal", exampleDeal("x1", { assignee: "9" }))
+  source().put("deal", exampleDeal("x2", { assignee: "9" }))
+  source().put("deal", exampleDeal("d1", { assignee: "8", title: "Moved on" }))
+  expect(dealOf(await sync())).toMatchObject({ held: true })
+  expect(await deals()).toHaveLength(21)
+
+  await set("scope", "all")
+  expect(dealOf(await sync())).toMatchObject({ round: "full" })
+  expect(await deals()).toHaveLength(23)
+  const [moved] = (await store.deals.list({ account: PORTAL, kind: "deal" })).filter(
+    ({ externalId }) => externalId === "d1",
+  )
+  expect(moved?.title).toBe("Moved on")
+})
+
 it("narrows at once when the owner set scope mine, however much it removes", async () => {
   const { source, set, sync, deals } = await scoped()
   source().put("deal", exampleDeal("d0", { assignee: "7" }))
