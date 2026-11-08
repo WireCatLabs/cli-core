@@ -5,7 +5,7 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
-## Unreleased
+## 0.614.0 — 08.11.2026
 
 ### Added
 
@@ -24,11 +24,6 @@ shape of this file.
   falls back to the shipped template for that channel and records `report.template-failed`. The email template is
   stored and previewed, but mail still sends the plain-text rendering. `store.templates` and
   `storedTemplateBodies(database, key, language)` from `@wirecat/cli-core/store`.
-
-## 0.614.0 — 08.11.2026
-
-### Added
-
 - **`account remove`, built once for every tool.** `<tool> <profile> account remove --keep-data|--delete-data` signs
   the profile out with the tool's own `signOut` hook, then forgets it here: its keyring entries, its
   `state/accounts/<profile>.json`, the tool's own state files and its sections in the config file; other profiles stay.
