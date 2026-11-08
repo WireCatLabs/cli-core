@@ -76,6 +76,13 @@ shape of this file.
 
 - **`account remove` is in the messenger parity manifest** (`parity.json`), with `--keep-data`, `--delete-data`
   and `--dry-run`, so tg, max and wa can adopt it without failing `parity:check`.
+||||||| parent of 9f77ce696 (feat(findings): quoted evidence and owner-only evidence findings batches)
+- **Quoted evidence and owner-only batches in evidence findings.** A finding's evidence may carry `quote`: staging
+  refuses it unless the words are in the cited text (`finding.quote-not-found`), and an accepted fact or task keeps
+  the quote on its evidence link. `evidenceFindings.stage(input, agent, { ownerOnly: true })` stages a batch only the
+  owner decides, even with `agent_decisions` on, and the batch says `ownerOnly`. `evidenceFindings.citable(ref)` reads
+  a record with the fingerprint to cite it, and `./store` exports `quoteKept`, the quote check itself. Findings without
+  a quote keep their fingerprints.
 
 ## 0.614.0 — 08.11.2026
 

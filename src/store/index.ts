@@ -78,6 +78,7 @@ export { applyDocumentTransfer, previewDocumentTransfer } from "./document-trans
 export type { CacheDatabase, CacheStatement, OpenDatabase, SqlValue } from "./driver.js"
 export { PRAGMAS } from "./driver.js"
 export {
+  type CitableRecord,
   EVIDENCE_FINDINGS_KIND,
   type EvidenceFindingsBatch,
   type EvidenceFindingsDecider,
@@ -253,6 +254,7 @@ export {
   type NearestEvent,
 } from "./sqlite/event-search.js"
 export type { EvidenceInput, EvidenceMetadata } from "./sqlite/evidence-signature.js"
+export { QUOTE_LIMIT, quoteKept } from "./sqlite/evidence-signature.js"
 export type { EvidenceSource } from "./sqlite/evidence-sources.js"
 export type { Fact, FactInput, FactsStore } from "./sqlite/facts.js"
 export type { FileListQuery, FilesStore, StoredFile } from "./sqlite/files.js"
