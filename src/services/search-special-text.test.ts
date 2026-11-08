@@ -150,6 +150,14 @@ describe("free text with special characters", () => {
     expect(new Set(holding.map(({ kind }) => kind))).toEqual(new Set(["message", "mail", "note"]))
   })
 
+  it("names the word no record holds when every word is needed and nothing is found", async () => {
+    const found = await searchAll(store, ME, { text: "steering review xyzzy", limit: 50 })
+    expect(found.items).toEqual([])
+    expect(found.unmatched).toEqual(["xyzzy"])
+    const some = await searchAll(store, ME, { text: "steering review", limit: 50 })
+    expect(some.unmatched).toBeUndefined()
+  })
+
   it.each([" \t ", '""', "?", "🎉", "()"])(
     "refuses %j, which holds no letter or digit, with an error",
     async (text) => {

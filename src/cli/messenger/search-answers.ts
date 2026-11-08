@@ -463,6 +463,15 @@ export const allAnswer = (
       ...archive.missing,
       ...limited.missing,
       ...leftOut.map(({ why }) => ({ field: "items", why })),
+      ...(found.unmatched && !found.items.length
+        ? [
+            {
+              field: "items",
+              // Meetings are searched apart, so the words were looked up only in the other sources.
+              why: `every word must be in one record, and nothing in ${found.searched.filter((one) => one !== "meetings").join(", ")} holds ${found.unmatched.map((word) => `"${word}"`).join(", ")}`,
+            },
+          ]
+        : []),
     ],
     meta: metaOf(found.accounts, found.skipped, archive.missing.length > 0 || skips.length > 0),
   })

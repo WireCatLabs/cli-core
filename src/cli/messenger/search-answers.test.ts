@@ -56,6 +56,15 @@ describe("allAnswer", () => {
     expect(JSON.stringify(answer)).toContain("searched by words only: no message has a vector yet")
   })
 
+  it("says which word no record holds when all the words found nothing", () => {
+    const answer = allAnswer("search all", { ...found(undefined), unmatched: ["xyzzy"] }, { limit: 10 })
+
+    expect(answer.missing).toContainEqual({
+      field: "items",
+      why: 'every word must be in one record, and nothing in messages holds "xyzzy"',
+    })
+  })
+
   it("asks for the model once when neither notes nor messages could use it", () => {
     const answer = allAnswer(
       "search all",
