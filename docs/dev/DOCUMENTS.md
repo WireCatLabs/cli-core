@@ -57,6 +57,50 @@ history. Extraction tests cover preview, evidence, proposed saves and source cha
 write boundaries. Drive's integration tests exercise its actual adapters against the packed Core
 candidate. Tests do not contact a real provider or measure model accuracy.
 
+## Sources added by hand
+
+`store.notes.saveAddedSource` (`src/store/sqlite/added-sources.ts`) keeps what the owner hands memo himself: pasted
+text, a file, or a page read from a link. Each is a `documents` row of the one account of provider `added`
+(`external_id` `owner`), created with the first source, so word search, notes search, `search all` and meaning search
+find it with no code of their own. The caller reads the file or page first (through the reader registry)
+and passes the text with `read: "extracted"`, or an empty text with `read: "no-text"` (an image: found by its title
+and subjects).
+
+| Column | Holds |
+| --- | --- |
+| `external_id` | `sha256:<hash>`: of a file's bytes; of the normalized text (NFC, whitespace folded) of pasted text or a page; of a page's address when it has no text |
+| `content_hash` | the same hash, bare hex, as folder imports keep it |
+| `kind` | `text`, `file` or `page` |
+| `storage` | `text`, only the text; `copy` only when the caller passed `keepCopy` with the path of the copy it keeps (`local_path`) |
+| `extraction` | `text`, or `none` for a source read as `no-text` |
+
+1. **A repeat is the same document.** The unique key `(account_id, external_id)` finds it; only the new subjects are
+   linked, and a `keepCopy` turns `storage` to `copy`.
+2. **A live folder or Drive document with the same content is answered as `duplicateOf`**, and only the subjects are
+   linked to it; nothing new is stored and `kept` is `null`. This holds when a removed added row of that content is
+   still there; with no such document, the removed row is restored with the new read. A file matches a folder file by
+   its bytes. Pasted text or a page matches a Drive document whose exported text it equals (Drive hashes that text as
+   is). A Drive document never matches an uploaded PDF or Word file: Drive keeps no hash of the original file.
+3. **The account is not a folder.** It is in `filesAccountSql` (so `account:` refs resolve and summarise), not in
+   `FOLDER_PROVIDERS` or `DOCUMENT_ACCOUNT_PROVIDERS`: `saveFileNote`, `renameFileNote`, `dateFileNotes` and
+   `deleteFileNotes` refuse it, so no folder sync can delete a source whose file is gone. A folder file of the same
+   content does not join an added source either, since that file's removal would delete it. Its `files` row is named
+   by `fileName`, else `title`, else the key.
+4. **Subjects** are `about` links from the document. `by` names who adds it. The owner's links are confirmed, and an
+   agent's proposal of the same subject becomes the owner's when he adds it. An agent's links are written
+   unconfirmed (`origin` `suggested`), with the bot's name in `links.author` and its reason and model in
+   `links.metadata`. The answer lists every subject the document is about.
+5. **Removal** is `removeAddedSource(ref, "owner")`, the owner's alone: like a folder file's removal, the text goes and
+   the row stays as deleted, so knowledge citing it sees its source gone. It answers the copy's path, if one was kept,
+   for the caller to delete. Purging the account (`store.accounts.purge`) deletes its documents with it.
+6. **Document transfer** does not carry the account: a transferred annotation that points at an added source is a
+   missing binding.
+
+**A copy is written only after asking.** `addedSourceKeyOf(content)` is the key, computed without the store;
+`findAddedSource(content)` answers the live added source it repeats (`existing`) or the document it duplicates
+(`duplicateOf`), writing nothing. The caller writes its copy of the file only when both are null, then saves with
+`keepCopy`. Nothing says a copy is kept unless the row says `copy`.
+
 <a id="push-local-files-to-a-provider"></a>
 
 ## Sync local files with a provider

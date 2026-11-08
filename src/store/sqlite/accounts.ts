@@ -190,6 +190,11 @@ export const purgeAccount = ({ orm, database, now }: StoreContext, accountKey: n
   // The inbox project and its tasks are the owner's; only the tie to the account goes.
   orm.update(projects).set({ accountId: null }).where(eq(projects.accountId, accountKey)).run()
   orm.run(sql`DELETE FROM files WHERE account_id = ${accountKey}`)
+  // Deleting a document clears its pieces, words, revisions, tags and own links (trigger document_bd).
+  const documentsOf = sql`(SELECT id FROM documents WHERE account_id = ${accountKey})`
+  orm.run(sql`DELETE FROM links WHERE to_type = 'document' AND to_id IN ${documentsOf}`)
+  orm.run(sql`UPDATE files SET document_id = NULL WHERE document_id IN ${documentsOf}`)
+  orm.run(sql`DELETE FROM documents WHERE account_id = ${accountKey}`)
   orm.run(sql`DELETE FROM crm_fields WHERE account_id = ${accountKey}`)
   // An entity made from a record is the owner's and stays; only what the source said goes.
   const recordsOf = sql`(SELECT id FROM records WHERE account_id = ${accountKey})`

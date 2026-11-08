@@ -46,6 +46,17 @@ shape of this file.
   `source.unreadable` and `source.engine-missing`; a private Google document is `source.needs-sign-in`.
   `isPublicAddress` is exported too. A redirect from `https` to `http` is refused, the reader is stopped at the same
   30 s, and the answer gives `requestedUrl` (the address to keep) beside `finalUrl` (never to be stored).
+- **`store.notes.saveAddedSource` keeps a source the owner adds by hand**: pasted text, a file, or a page read from a
+  link, in the new `added` account. It is a document like a folder's, found by notes search, by `search all` and by
+  meaning. A repeat of the same file or text is the same document (`created: false`); a live folder or Drive document
+  with the same content is answered as `duplicateOf`, and only the new subjects are linked to it. `by` names who
+  adds it: an agent's subjects are linked unconfirmed. Only the text is kept unless the caller passes `keepCopy` with
+  the path of its copy (`kept: "text" | "copy"`). The account is no folder, so `saveFileNote` and `deleteFileNotes`
+  refuse it, and a folder file of the same content never joins an added source. `store.notes.addedAccount()` names
+  the account; `ADDED_PROVIDER` and `ADDED_ACCOUNT` are exported.
+- **`store.notes.findAddedSource` and `addedSourceKeyOf` say what saving would find, writing nothing**, so a caller
+  that keeps a copy of a file writes it only when the source is new. **`store.notes.removeAddedSource(ref, "owner")`**
+  removes an added source the way a folder file's removal does and answers the path of its copy, if any.
 
 ### Changed — may break callers
 
@@ -73,6 +84,8 @@ shape of this file.
 - **A CRM field lookup's refusal names the option the name came from.** `fieldNamed`, `unknownField` and `optionOf`
   take that option as a last argument, `--field` when left out. They always answered `param: "--field"`, so a CRM
   CLI that looked up a field named in `--query` or `--json` pointed the caller at the wrong option.
+- **`store.accounts.purge` deletes the account's documents too**, with their files, pieces, words and the links to
+  them; a notes folder, Drive or added account with documents no longer stops at them.
 
 ## 0.606.0 — 08.11.2026
 

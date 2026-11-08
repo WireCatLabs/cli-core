@@ -1,6 +1,7 @@
 import { CliError, type ErrorCode } from "@wirecat/cli-base"
 import type { Provider } from "../domain/models.js"
 import {
+  ADDED_PROVIDER,
   INTERNAL_NOTES,
   isDocumentAccountProvider,
   isFolderProvider,
@@ -101,7 +102,7 @@ const heldOf = (stored: readonly StoredAccount[], running: ListContext["running"
       stored: { provider, account },
     })),
   ...stored
-    .filter(({ provider }) => isDocumentAccountProvider(provider))
+    .filter(({ provider }) => isDocumentAccountProvider(provider) || provider === ADDED_PROVIDER)
     .map(({ id, provider, account, name }) => ({
       provider: "notes",
       account: String(id),

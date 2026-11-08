@@ -847,6 +847,7 @@ export const searchNotesOf = async (
     { provider: "notes", account: INTERNAL_NOTES },
     ...(await store.notes.folders()).map(({ id }) => ({ provider: "notes", account: id })),
     ...(await store.notes.documentsAccounts()).map(({ id }) => ({ provider: "notes", account: id })),
+    ...[await store.notes.addedAccount()].flatMap((added) => (added ? [{ provider: "notes", account: added.id }] : [])),
   ]
   const named =
     list === undefined

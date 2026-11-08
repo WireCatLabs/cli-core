@@ -163,6 +163,13 @@ export {
   type SourceReviewPayload,
   type SourceReviewSource,
 } from "./source-review.js"
+export {
+  ADDED_KINDS,
+  type AddedSource,
+  type AddedSourceContent,
+  type AddedSourceInput,
+  addedSourceKeyOf,
+} from "./sqlite/added-sources.js"
 export type { AgentAction, AgentActionInput, AgentActionsStore } from "./sqlite/agent-actions.js"
 export { resetAttachmentWords } from "./sqlite/attachment-texts.js"
 export { backfillNormalized, pendingNormalization } from "./sqlite/backfill.js"

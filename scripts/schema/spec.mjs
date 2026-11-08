@@ -737,9 +737,9 @@ const NEW = {
       doc: "A file or page that stands on its own: a file in a notes folder (md, pdf, docx, xlsx…), a Notion page, a Drive file, a memo wiki page.",
       cols: [
         id(),
-        fk("account_id", "accounts", { notnull: true, note: "the folder, Notion, Drive" }),
+        fk("account_id", "accounts", { notnull: true, note: "the folder, Notion, Drive, the added sources" }),
         c("external_id", "text", { notnull: true, note: "path in the folder, page id, file id" }),
-        c("kind", "text", { notnull: true, note: "file, page, wiki" }),
+        c("kind", "text", { notnull: true, note: "file, page, wiki, text (pasted)" }),
         c("title", "text"),
         c("location", "text", {
           note: "where it lives in its source: the folder path, the Drive folder, the Notion parent page",
@@ -747,7 +747,7 @@ const NEW = {
         c("file_name", "text", { note: "with its extension; null for a page that is not a file" }),
         c("extension", "text", { note: "lower case, without the dot: md, pdf, docx" }),
         c("url", "text", { note: "where the source opens it" }),
-        c("storage", "text", { note: "local, drive, notion, web — where the bytes are" }),
+        c("storage", "text", { note: "local, drive, notion, web; text, copy (added) — where the bytes are" }),
         c("local_path", "text", {
           note: "a copy on this machine, when one is kept; for a local folder, the file itself",
         }),

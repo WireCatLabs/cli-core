@@ -950,15 +950,15 @@ A file or page that stands on its own: a file in a notes folder (md, pdf, docx, 
 | Column | Type | Constraints | References | Meaning |
 |---|---|---|---|---|
 | `id` | integer | PK |  |  |
-| `account_id` | integer | not null | → `accounts.id` | the folder, Notion, Drive |
+| `account_id` | integer | not null | → `accounts.id` | the folder, Notion, Drive, the added sources |
 | `external_id` | text | not null |  | path in the folder, page id, file id |
-| `kind` | text | not null |  | file, page, wiki |
+| `kind` | text | not null |  | file, page, wiki, text (pasted) |
 | `title` | text |  |  | from front matter, the first heading, or the file name, in that order |
 | `location` | text |  |  | where it lives in its source: the folder path, the Drive folder, the Notion parent page |
 | `file_name` | text |  |  | with its extension; null for a page that is not a file |
 | `extension` | text |  |  | lower case, without the dot: md, pdf, docx |
 | `url` | text |  |  | where the source opens it |
-| `storage` | text |  |  | local, drive, notion, web — where the bytes are |
+| `storage` | text |  |  | local, drive, notion, web; text, copy (added) — where the bytes are |
 | `local_path` | text |  |  | a copy on this machine, when one is kept; for a local folder, the file itself |
 | `mime` | text |  |  | the media type, e.g. application/pdf |
 | `size` | integer |  |  | the file's size, in bytes |

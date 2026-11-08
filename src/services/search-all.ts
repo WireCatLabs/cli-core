@@ -340,6 +340,7 @@ export const searchAll = async (
             INTERNAL_NOTES,
             ...(await store.notes.folders()).map(({ id }) => id),
             ...(await store.notes.documentsAccounts()).map(({ id }) => id),
+            ...[await store.notes.addedAccount()].flatMap((added) => (added ? [added.id] : [])),
           ]
           accounts.push(...read.map((account) => ({ resource, provider: "notes", account })))
         } else if (resource === "events") {
