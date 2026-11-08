@@ -39,7 +39,13 @@ const CASES: [label: string, query: string, record: string | null][] = [
   ["emoji", "party 🎉", "the party 🎉 starts"],
   ["question mark ending a word", "invoice?", "the invoice is paid"],
   ["question in Cyrillic", "что с бюджетом?", "Что с бюджетом на март"],
+  ["upper-case NEAR", "NEAR budget", "NEAR budget line"],
+  ["balanced quotes", 'say "hi there"', 'they say "hi there" daily'],
+  ["doubled quotes", 'a ""twice"" quoted', 'a ""twice"" quoted word'],
   ["question mark inside a word", "inv?ice", null],
+  ["brackets that group", "NEAR(alpha beta)", null],
+  ["Boolean OR alone", "OR", null],
+  ["Boolean NOT alone", "NOT", null],
   ["leading minus", "-budget", null],
   ["leading plus", "+budget", null],
   ["asterisk", "budg*", null],
@@ -55,7 +61,10 @@ beforeAll(async () => {
     { id: "7", title: "chat", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: 3 },
   ])
   const mailAccountId = await store.accounts.saveAccount({ provider: "email", account: "500" }, { name: "mail" })
-  const records = CASES.flatMap(([label, , record]) => (record === null ? [] : [[label, record] as const]))
+  const records = [
+    ...CASES.flatMap(([label, , record]) => (record === null ? [] : [[label, record] as const])),
+    ["question", "The steering review moved to Friday"] as const,
+  ]
   await store.messages.saveMessages(
     ME,
     "7",
@@ -129,6 +138,31 @@ describe("free text with special characters", () => {
       expect(mail.items).not.toEqual([])
       const notes = await searchNotes(store, query, { limit: 50 })
       expect(notes.hits.map(({ excerpt }) => excerpt).join("\n")).toContain((record as string).slice(0, 12))
+    },
+  )
+
+  it.each([
+    ["a placeholder time", "When is the steering review now? Answer as YYYY-MM-DD HH:MM in Madrid time."],
+    ["a clock time", "when is the steering review 10:30"],
+  ])("a question with %s finds records that hold its other words", async (_, question) => {
+    const found = await searchAll(store, ME, { text: question, limit: 50, only: ["messages", "mail", "notes"] })
+    const holding = found.items.filter(({ text }) => text.includes("steering review moved"))
+    expect(new Set(holding.map(({ kind }) => kind))).toEqual(new Set(["message", "mail", "note"]))
+  })
+
+  it("names the word no record holds when every word is needed and nothing is found", async () => {
+    const found = await searchAll(store, ME, { text: "steering review xyzzy", limit: 50 })
+    expect(found.items).toEqual([])
+    expect(found.unmatched).toEqual(["xyzzy"])
+    const some = await searchAll(store, ME, { text: "steering review", limit: 50 })
+    expect(some.unmatched).toBeUndefined()
+  })
+
+  it.each([" \t ", '""', "?", "🎉", "()"])(
+    "refuses %j, which holds no letter or digit, with an error",
+    async (text) => {
+      await expect(searchAll(store, ME, { text, limit: 50 })).rejects.toMatchObject({ code: "validation_error" })
+      await expect(searchNotes(store, text, { limit: 50 })).rejects.toMatchObject({ code: "validation_error" })
     },
   )
 

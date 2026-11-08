@@ -46,7 +46,6 @@ describe("plainQuery", () => {
     "budget",
     "#tag user@example.com R&D 50% C++ a|b don't O'Brien",
     "привет",
-    "🎉",
     "re-review",
     "back\\slash",
     "or not and",
@@ -81,9 +80,12 @@ describe("plainQuery", () => {
     for (const [, text] of SPECIAL_TEXT) expect(plainQuery(plainQuery(text))).toBe(plainQuery(text))
   })
 
+  it.each(["!!!", "🎉", '""', "?", "()"])("refuses %s, which holds no letter or digit", (text) => {
+    expect(() => plainQuery(text)).toThrow("search needs a letter or a digit to look for")
+  })
+
   it("leaves fuzzy search and a field's own mistakes to the search to report", () => {
     expect(plainQuery("alpha~1")).toBe("alpha~1")
-    expect(plainQuery("!!!")).toBe("!!!")
     expect(plainQuery("body:/alpha/i")).toBe("body:/alpha/i")
     expect(plainQuery("after:2026-01-01")).toBe("after:2026-01-01")
     expect(plainQuery("kind:nonsense")).toBe("kind:nonsense")

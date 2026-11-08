@@ -89,6 +89,8 @@ export interface SearchAllFound {
   server?: ServerSearched
   /** What the store held of the chats the messages were searched in; absent when messages were not searched. */
   coverage?: SearchCoverage
+  /** When nothing was found by all the words: the words that alone find nothing in `searched` either. */
+  unmatched?: string[]
 }
 
 export interface SearchAllRequest {
@@ -167,6 +169,18 @@ export const titleWords = (text: string): { words: string[]; anyWord: boolean } 
         })(),
   )
   return { words, anyWord: clauses.length > 1 && clauses.every(({ occur }) => occur === "should") }
+}
+
+/** The single words of an all-words query, when it has two to eight of them; none for OR, fields or phrases. */
+const strictWords = (text: string): string[] => {
+  try {
+    const { words, anyWord } = titleWords(text)
+    const unique = [...new Set(words)]
+    return anyWord || unique.length < 2 || unique.length > 8 || unique.some((word) => /\s/u.test(word)) ? [] : unique
+  } catch (error) {
+    if (error instanceof CliError) return []
+    throw error
+  }
 }
 
 /** The accounts of every CRM the store holds copies of. */
@@ -415,6 +429,13 @@ export const searchAll = async (
 
   const ordered = oneList(lists, cosines)
   const more = hasMore || ordered.length > window
+  const { backend: _backend, server: _server, ...local } = asked
+  const unmatched = []
+  if (!ordered.length && !offset && !discover)
+    for (const word of strictWords(request.text)) {
+      const alone = await searchAll(store, account, { ...local, text: word, limit: 1, only: searched })
+      if (!alone.items.length) unmatched.push(word)
+    }
   return {
     query: asked.text,
     items: ordered.slice(offset, window),
@@ -429,6 +450,7 @@ export const searchAll = async (
     ...(by.mail === undefined ? {} : { mail: by.mail }),
     ...(server === undefined ? {} : { server }),
     ...(coverage === undefined ? {} : { coverage }),
+    ...(unmatched.length ? { unmatched } : {}),
   }
 }
 
