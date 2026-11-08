@@ -106,6 +106,34 @@ shape of this file.
 - **`account remove` is in the messenger parity manifest** (`parity.json`), with `--keep-data`, `--delete-data`
   and `--dry-run`, so tg, max and wa can adopt it without failing `parity:check`.
 
+### Fixed
+
+- **`store recover run` no longer says nothing was lost when it cannot know.** Before the copy it compares
+  each plain index of the damaged file with its table: entries the table no longer holds are rows a stale page cut
+  off, reported per table in `lost` as `gone_at_least` with the index in `seen_in`. Rows lost from a table and its
+  indexes alike leave no trace, so the notes never say "no table lost a row": they give the lower bound, or say the
+  loss is unknown, with the last deep check that passed (`last_known_good`). On six stores the cli-testing integrity
+  harness broke, it says at least 50, 200, 50 and 265 messages are gone where 50, 241, 50 and 291 are, and "unknown"
+  on the two stores whose lost rows never reached the file.
+- **`store recover run` keeps rows that `.recover` found on pages no table claims.** It dropped them with the rest of
+  its lost-and-found table; each one now goes back into the one data table whose columns its values fit (`placed`,
+  per table), and only the rest are dropped. 9 committed messages came back on one R1 store.
+- **After `store recover run`, the next ordinary sync fetches again what the damage may have taken.** A messenger
+  sync jumps over every stretch the store marks as fetched, so a hole inside one stayed for good. The recovery now
+  forgets what was fetched from a day before the last deep check that passed (all of it when none is on record): each
+  chat's held stretches end at its last message sent before then, and each mail folder keeps as listed only the UIDs
+  up to its last email from before then. `refetch` in the answer says how many chats and mail folders per account,
+  and the notes say what cannot come back: what only the store held, and WhatsApp history the phone does not push
+  again. Nothing on any service is asked or changed by the recovery. On the T1-roles store the cli-testing harness
+  broke with a hole of 291 messages inside a chat, one ordinary sync brought all of them back; without this, 200
+  were still missing after 25 syncs.
+- **A `serve` no longer runs on after the store or the installed package moved past it.** Every minute it
+  checks whether the store's format is one its build can no longer write, or whether a newer version of its own
+  package is installed on disk; then it logs one error, `serve.outdated`, and exits 3, which its unit
+  (`Restart=on-failure`) answers by starting the installed build. A wa serve had stored nothing for a day on 0.30.0
+  after 0.33.0 moved the store to format 57. `outdatedReason`, `watchOutdated` and `ownPackageRoot` from
+  `@wirecat/cli-core/cli`, for a CLI with a serve of its own.
+
 ## 0.614.0 — 08.11.2026
 
 ### Added

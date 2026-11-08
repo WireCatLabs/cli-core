@@ -71,6 +71,8 @@ export interface BaseEnvironment {
   handled?: (event: MessageEvent) => void
   /** A test's hook into `serve`: how long it waits after connecting before its catch-up pass. */
   startSyncDelayMs?: number
+  /** A test's hook into `serve`: how often it checks for a newer store or install, and the package it checks. */
+  outdated?: { everyMs?: number; packageRoot?: string }
   /** Set by an MCP server on a command it runs for an agent (`runCommandForAgent`). */
   agent?: AgentRun
   /** Set by `run()`: the words it was given, which a run keeps as `record_input` says (`maskArgv`). */

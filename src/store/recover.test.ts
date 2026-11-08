@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process"
 import {
   closeSync,
   copyFileSync,
@@ -11,12 +12,21 @@ import {
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import { describe, expect, it } from "vitest"
+import { recoveryNotes } from "../cli/store-recover.js"
 import { explainDamage } from "./damage.js"
 import { storeHealth } from "./health.js"
 import { readHealthMark } from "./marks.js"
 import { migrate } from "./migrations.js"
 import { openCache } from "./open.js"
-import { danglingRows, recoverStore, runningRecovery, sqlite3Program, storeHolders, tableRows } from "./recover.js"
+import {
+  danglingRows,
+  placeLostRows,
+  recoverStore,
+  runningRecovery,
+  sqlite3Program,
+  storeHolders,
+  tableRows,
+} from "./recover.js"
 import { openSqlite } from "./sqlite/open.js"
 
 const seeded = async () => {
@@ -80,6 +90,22 @@ const copyOf = (clean: string) => async (_path: string, target: string) => {
   copyFileSync(clean, target)
   return { errors: [], read: { chats: 2, accounts: 1 } }
 }
+
+const withMessages = async (count: number) => {
+  const { path } = await seeded()
+  const database = await openCache(path)
+  const insert = database.prepare(
+    "INSERT INTO messages (chat_id, account_id, external_id, sent_at, text, created_at, source, updated_at) " +
+      "VALUES (1, 1, ?, ?, ?, 0, 'chat', 0)",
+  )
+  for (let id = 1; id <= count; id++) insert.run(String(id), id * 1000, `message ${id}`)
+  database.exec("PRAGMA wal_checkpoint(TRUNCATE)")
+  database.close()
+  return path
+}
+
+const shell = (path: string, sql: string) =>
+  execFileSync("sqlite3", ["-cmd", ".dbconfig defensive off", path, sql], { stdio: ["ignore", "ignore", "pipe"] })
 
 describe("store recovery", () => {
   it("rebuilds every index from the copied rows, checks it, and keeps the damaged file beside it", async () => {
@@ -218,6 +244,31 @@ describe("store recovery", () => {
     expect(Object.keys(rows).some((table) => table.startsWith("chats_fts_"))).toBe(false)
   })
 
+  it("puts a row found on no table's page back into the one table its values fit, and leaves the rest out", async () => {
+    const path = await withMessages(1)
+    const database = await openCache(path)
+    const names = database
+      .prepare("SELECT name FROM pragma_table_info('messages')")
+      .all()
+      .map((row) => String(row.name))
+    const fields = names.map((_, at) => `c${at}`)
+    database.exec(`CREATE TABLE recover_lost_and_found (rootpgno, pgno, nfield, id, ${fields.join(", ")})`)
+    database.exec(
+      `INSERT INTO recover_lost_and_found SELECT 9, 9, ${names.length}, id, ` +
+        `${names.map((name) => (name === "id" ? "NULL" : `"${name}"`)).join(", ")} FROM messages`,
+    )
+    database.exec(
+      "INSERT INTO recover_lost_and_found (rootpgno, pgno, nfield, id, c0, c1) VALUES (9, 9, 2, 5, 'x', 'y')",
+    )
+    database.exec("DELETE FROM messages")
+    expect(placeLostRows(database)).toEqual({ messages: 1 })
+    expect(database.prepare("SELECT external_id, text FROM messages").all()).toEqual([
+      { external_id: "1", text: "message 1" },
+    ])
+    expect(database.prepare("SELECT count(*) AS n FROM recover_lost_and_found").get()?.n).toBe(1)
+    database.close()
+  })
+
   it("lists rows that point at a row the store does not hold", async () => {
     const { path } = await seeded()
     const database = await openCache(path)
@@ -229,6 +280,58 @@ describe("store recovery", () => {
 })
 
 describe.skipIf(!sqlite3Program().usable)("store recovery with the sqlite3 program", () => {
+  it("counts the rows an index of the damaged file lists and its table lost, and never says nothing was lost", async () => {
+    const path = await withMessages(5)
+    const entry = execFileSync(
+      "sqlite3",
+      [path, "SELECT rootpage, sql FROM sqlite_master WHERE name = 'messages_by_account'"],
+      {
+        encoding: "utf8",
+      },
+    )
+      .trim()
+      .split("|")
+    shell(
+      path,
+      "PRAGMA writable_schema = ON; DELETE FROM sqlite_master WHERE name = 'messages_by_account'; " +
+        "PRAGMA schema_version = 900;",
+    )
+    shell(path, "DELETE FROM messages WHERE external_id IN ('4', '5')")
+    shell(
+      path,
+      "PRAGMA writable_schema = ON; INSERT INTO sqlite_master VALUES " +
+        `('index', 'messages_by_account', 'messages', ${entry[0]}, '${String(entry.slice(1).join("|")).replaceAll("'", "''")}'); ` +
+        "PRAGMA schema_version = 901;",
+    )
+    const recovery = await recoverStore({ path, command: "chat" })
+    expect(recovery.lost).toContainEqual(
+      expect.objectContaining({ table: "messages", kept: 3, goneAtLeast: 2, seenIn: "messages_by_account" }),
+    )
+    const notes = recoveryNotes({ ...recovery, copyErrors: 0, checkedOk: true, next: [] })
+    expect(notes).toContainEqual(expect.stringContaining("messages: 3 kept of 3; at least 2 rows are gone"))
+    expect(notes.at(-1)).toMatch(/^more rows may be gone: /)
+  })
+
+  it("puts back rows cut off their table onto pages no table claims", async () => {
+    const path = await withMessages(3)
+    const holder = execFileSync(
+      "sqlite3",
+      [path, "CREATE TABLE holder (a); SELECT rootpage FROM sqlite_master WHERE name = 'holder';"],
+      { encoding: "utf8" },
+    ).trim()
+    shell(
+      path,
+      `PRAGMA writable_schema = ON; UPDATE sqlite_master SET rootpage = ${holder} WHERE name = 'messages'; ` +
+        "DELETE FROM sqlite_master WHERE name = 'holder'; PRAGMA schema_version = 900;",
+    )
+    const recovery = await recoverStore({ path, command: "chat" })
+    expect(recovery.placed).toEqual({ messages: 3 })
+    expect(recovery.health.ok).toBe(true)
+    const database = await openCache(path)
+    expect(database.prepare("SELECT count(*) AS n FROM messages").get()?.n).toBe(3)
+    database.close()
+  })
+
   it("copies the readable rows of a damaged store with .recover", async () => {
     const { path, root, pageSize } = await seeded()
     damage(path, root, pageSize)

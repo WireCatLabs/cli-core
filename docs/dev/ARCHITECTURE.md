@@ -426,10 +426,14 @@ the schema's pages; milliseconds) for `doctor`, deep (`PRAGMA quick_check` and e
 under a rolled-back transaction; about 30 s for 6 GB) for `store recover` and a CLI's own `doctor --deep` (memo's). `explainDamage`
 (`src/store/damage.ts`) turns a failed check into the plain-words answer every surface shows. `recoverStore`
 (`src/store/recover.ts`) copies the readable rows with the `sqlite3` program's `.recover` (node:sqlite has no recovery
-API; free pages are skipped so deleted rows stay deleted), migrates, drops and refills every fts5 and vec0 index
+API; free pages are skipped so deleted rows stay deleted), puts back the rows `.recover` found on pages no table
+claims into the one table whose columns their values fit (`placeLostRows`), migrates, drops and refills every fts5 and vec0 index
 through the normal fill code (`FILLERS` names the recipe of each index outside the corpora), rebuilds mentions and
 involvements, checks the result deeply, and swaps it in only if no process holds the store and the file did not
-change meanwhile. A new search index needs a line in `FILLERS` unless it belongs to a corpus.
+change meanwhile. A new search index needs a line in `FILLERS` unless it belongs to a corpus. Its loss report is a
+lower bound, never "nothing lost": before the copy, `indexedButGone` compares each plain index of the damaged file
+with its table, and the entries the table no longer holds are rows a stale page cut off (`goneAtLeast`, `seenIn`).
+Rows lost from a table and its indexes alike leave no trace, so the report names the last known good instead.
 
 Two marks sit beside the store, never in it, since the store may be what cannot be read (`src/store/marks.ts`). The
 damage mark `<store>.damaged.json` (`at`, `command`, `cli_version`, `run_id`, SQLite's message, the file's inode) is
@@ -440,6 +444,19 @@ reads still open. A deep check that passes, a recovery, or a file replaced at th
 inode) lifts it. The health mark `<store>.health.json` (`checked_at`, `ok`, `problems`, `schema`, `cli`, `cli_version`,
 `last_ok_at`) is written by every deep check (`doctor --deep`, `store recover`, the check after `store recover run`);
 `last_ok_at` is the last known good that `store recover` reports.
+
+After the copy, `store recover run` forgets what the store says was fetched from a day before `last_ok_at` on
+(`forgetCoverageSince`, `src/store/refill.ts`; everything when no deep check ever passed), so the next ordinary sync
+or serve fetches it again instead of jumping over a hole: each chat's `sync_ranges` end at its last message sent
+before then (by message id, or by send time for a messenger that keys by time, which shows as keys of 10^12 and up),
+its `fetched:` mark goes and its `history_start:` mark too when no stretch reaching it is left; each mail folder's
+`mail_resume:` point keeps only the UIDs up to the last located email from before then (none when the folder has no
+located email), and an mbox point written since is dropped. The answer says per account how many chats and folders
+(`refetch`). WhatsApp history comes back only as the phone pushes it.
+
+A `serve` checks every minute whether the store moved past what its build may write, or whether a newer version of
+its own package is installed on disk, and then ends with `serve.outdated` (exit 3), so its unit, which restarts on
+failure, starts the installed build (`src/cli/messenger/serve-outdated.ts`).
 
 ### Entities and source records
 
