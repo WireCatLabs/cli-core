@@ -148,7 +148,7 @@ const setup = async (
     }
     return envelope as Record<string, unknown> & { item: Record<string, unknown>; items: Record<string, unknown>[] }
   }
-  return { path, store, source, cli, printed, journal, alsoChecks }
+  return { path, store, source, cli, printed, journal, alsoChecks, run: runOf }
 }
 
 describe("CRM commands", () => {
@@ -398,6 +398,14 @@ describe("CRM write commands", () => {
     expect([...moveDenied.source.writes, ...closeDenied.source.writes]).toEqual([])
     const moved = await closeDenied.cli("deals", "update", closeDenied.ref, "--stage", "Quote sent")
     expect(moved.item.deal).toMatchObject({ stage: "Quote sent" })
+  })
+
+  it("refuses to move a row of another account than the profile's live one, and writes nothing", async () => {
+    const { cli, ref, source, run } = await synced()
+    Object.assign(run, { account: { provider: "example-crm", account: "other-portal" } })
+    await expect(cli("deals", "move", ref, "Quote sent")).rejects.toMatchObject({ code: "not_found" })
+    await expect(cli("deals", "move", "d1", "Quote sent")).rejects.toMatchObject({ code: "validation_error" })
+    expect(source.writes).toEqual([])
   })
 
   it("giving a record to another CRM user checks crm.assign-others, denied by default", async () => {

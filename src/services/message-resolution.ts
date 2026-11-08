@@ -1,6 +1,7 @@
 import { CliError, singleLine } from "@wirecat/cli-base"
 import type { Chat, Id, Page, Provider } from "../domain/models.js"
 import { chatReferenceOf, ensureAccount, type ProfilesOn } from "../domain/ref-arguments.js"
+import { profilesOn } from "../domain/ref-summaries.js"
 import type { MessengerTraits } from "../ports/traits.js"
 import { isId, pickChat, pickPerson } from "../resolve.js"
 import { codeOf } from "../sends/guarded.js"
@@ -106,9 +107,7 @@ export const profilesOnAccount =
   (store: Pick<MessageStore, "accounts">, app: string | undefined, provider: Provider): ProfilesOn =>
   async (account) => {
     if (app === undefined) return undefined
-    return Object.entries((await store.accounts.profiles())[app] ?? {})
-      .filter(([, key]) => key.provider === provider && key.account === account)
-      .map(([name]) => name)
+    return profilesOn(await store.accounts.profiles(), app, { provider, account })
   }
 
 /** `left` is given where a left chat is refused; it lets a numeric id the store does not hold through as typed. */

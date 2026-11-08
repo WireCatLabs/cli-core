@@ -13,9 +13,13 @@ export {
   openOf,
   PROFILE_PLACEHOLDER,
   type ProfilesFor,
+  profilesOn,
   type RefOpen,
   type RefSummary,
   refLabel,
+  storedProfilesFor,
+  type WritesWith,
+  writesWithOf,
 } from "../domain/ref-summaries.js"
 /** The shared entities `person_context`, `organization_context`, `deal_context` and `deal_context.brief`. */
 export {

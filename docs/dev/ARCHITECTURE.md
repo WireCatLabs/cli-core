@@ -507,7 +507,9 @@ which the `business` search lane reads for scope and provenance.
 statement per kind present: a `VALUES` list of the wanted refs joined to the kind's table. It never throws: a bad ref
 is `unknown`, one the store lacks `unavailable`. Titles never hold a message body; `{ excerpt: true }` adds at most 280
 characters of it. Evidence sources (`evidence-sources.ts`) read through it. `refLabel` and `openOf`
-(`src/domain/ref-summaries.ts`) are the one label and the one open command every caller prints.
+(`src/domain/ref-summaries.ts`) are the one label and the one open command every caller prints. `writesWithOf` answers which
+CLI and profile change a CRM copy on its server, from the provider entry's `command` and the store's own record of
+profiles (`storedProfilesFor`); like `openOf`, it never picks a profile.
 
 **Documents and files — not built yet.** A new `files` table holds one row per item in one place: a local file, a
 Drive file or folder, later a Notion page. A folder is a `files` row; children point at it with `parent_id`, and
