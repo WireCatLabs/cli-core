@@ -2280,7 +2280,7 @@ Every connection between two things that no column holds. Kinds: `blocked-by` (a
 | `target_folded` | text |  |  | target_text case- and accent-folded with any leading `@` removed, matched against new person names and aliases to resolve the link. |
 | `role` | text |  |  | The role the relation states, such as a job title in a `member-of` link; free text up to 200 characters. |
 | `evidence` | text |  |  | Free text saying why the relation holds (up to 2000 characters). |
-| `metadata` | text |  |  | JSON: what the source sends that has no column of its own and is not searched |
+| `metadata` | text |  |  | JSON: a suggestion's `provenance`; an `evidence` link's `{v, sig, rev, cited_rev, quote?, gone?}` |
 | `confirmed` | integer | not null |  | 1 if the owner stands behind the link, 0 if it is only a weak, unconfirmed proposal. |
 | `created_at` | integer | not null |  | when this row was saved here |
 | `author` | text |  |  | `owner`, `agent`, `rule` |

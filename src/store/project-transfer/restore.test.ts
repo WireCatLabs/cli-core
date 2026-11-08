@@ -147,6 +147,13 @@ it("atomically restores selected history through the public port with explicit d
   expect(actual.fingerprint).toBe(projectAnnotationSnapshotFingerprint(JSON.stringify(expected)))
   expect(actual.snapshot.facts.map((fact) => fact.status)).toEqual(["proposed", "accepted"])
   expect(actual.snapshot.facts[0]?.author).not.toBe(original.facts[0].author)
+  const restoredEvidence = f.db
+    .prepare(
+      "SELECT metadata FROM links WHERE kind = 'evidence' AND from_type = 'fact' AND from_id IN (SELECT id FROM facts WHERE project_id = ?)",
+    )
+    .all(Number(f.project.id))
+  expect(restoredEvidence.length).toBeGreaterThan(0)
+  for (const link of restoredEvidence) expect(JSON.parse(String(link.metadata))).toMatchObject({ v: 1 })
   await expect(api.restore({ ...input, fingerprint: preview.fingerprint })).rejects.toMatchObject({
     code: "validation_error",
   })
@@ -232,4 +239,26 @@ it("maps a snapshot relationship onto the one the target holds, confirming it wh
       )
       .all(Number(f.project.ref.slice("project:".length))),
   ).toEqual([{ id: Number(held.id), confirmed: 1 }])
+})
+
+it("restores evidence whose source was deleted for good as a missing source", async () => {
+  const f = await fixture(),
+    api = port(f)
+  const note = await f.source.store.notes.addNote({ text: "Removed later" })
+  const fact = await f.source.store.facts.add({
+    type: "statement",
+    statement: "Rests on a removed note",
+    by: "owner",
+    project: f.source.project.ref,
+    evidence: [note.ref],
+  })
+  await f.source.store.notes.removeNote(note.ref)
+  expect(await f.source.store.facts.sources(fact.ref)).toEqual([expect.objectContaining({ missing: true })])
+  const source = await snapshotProjectAnnotations({ source: f.source.path, project: f.source.project.ref })
+  const input = { ...request(f), snapshot: JSON.stringify(source.snapshot) }
+  const preview = await api.preview(input),
+    receipt = await api.restore({ ...input, fingerprint: preview.fingerprint })
+  expect(await f.store.facts.sources(receipt.mappings[fact.ref] ?? "missing")).toEqual([
+    expect.objectContaining({ ref: null, missing: true }),
+  ])
 })

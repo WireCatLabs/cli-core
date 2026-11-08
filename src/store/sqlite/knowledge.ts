@@ -12,6 +12,7 @@ import { fold } from "../normalize.js"
 import type { AccountKey } from "../types.js"
 import { ulid } from "../ulid.js"
 import { ownerPerson } from "./actors.js"
+import { forgetEvidenceToRow } from "./evidence-signature.js"
 import { linkKind, RELATION_KINDS } from "./link-kinds.js"
 import { type MeetingProjectsStore, meetingProjectsStoreOver } from "./meeting-projects.js"
 import type { Author } from "./memories.js"
@@ -600,7 +601,10 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
     },
     removeAnnotation: async (key, id) => {
       annotation(key, id)
-      database.prepare("DELETE FROM notes WHERE id=?").run(Number(id))
+      write(database, () => {
+        forgetEvidenceToRow(database, { type: "note", id: Number(id) }, now())
+        database.prepare("DELETE FROM notes WHERE id=?").run(Number(id))
+      })
       return { id, removed: true }
     },
     tags: async (key, target, tag) => {

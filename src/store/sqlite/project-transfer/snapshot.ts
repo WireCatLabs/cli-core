@@ -14,7 +14,9 @@ const flag = (value: unknown) => {
   if (value !== 0 && value !== 1) return unsupported()
   return value === 1
 }
-const provenance = (raw: unknown) => {
+/** An evidence link's signature describes a row of this store, so it does not travel; the restore signs it anew. */
+const SIGNATURE_KEYS = new Set(["v", "sig", "rev", "cited_rev", "quote", "checked_at", "gone"])
+const provenance = (raw: unknown, kind: unknown) => {
   if (raw === null) return null
   let value: unknown
   try {
@@ -26,7 +28,7 @@ const provenance = (raw: unknown) => {
     !value ||
     typeof value !== "object" ||
     Array.isArray(value) ||
-    Object.keys(value).some((key) => key !== "provenance")
+    Object.keys(value).some((key) => key !== "provenance" && !(kind === "evidence" && SIGNATURE_KEYS.has(key)))
   )
     return unsupported()
   const text = (value as { provenance?: unknown }).provenance
@@ -197,7 +199,7 @@ export const projectAnnotationSnapshot = (database: CacheDatabase, projectId: nu
         role: nullableText(row.role),
         evidence: nullableText(row.evidence),
         confirmed: flag(row.confirmed),
-        provenance: provenance(row.metadata),
+        provenance: provenance(row.metadata, row.kind),
         created_at: row.created_at,
         updated_at: row.updated_at,
         author: nullableText(row.author),

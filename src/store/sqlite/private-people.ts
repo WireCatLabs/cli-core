@@ -1,6 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import { fold } from "../normalize.js"
 import type { AccountKey } from "../types.js"
+import { forgetEvidenceToRow } from "./evidence-signature.js"
 import type { StoreContext } from "./open.js"
 import { resolvePersonLinks } from "./person-resolution.js"
 import { toIso } from "./values.js"
@@ -121,6 +122,7 @@ export const editNote = (
 
 export const removeNote = (context: StoreContext, key: AccountKey, personId: string, id: string) => {
   note(context, key, personId, id)
+  forgetEvidenceToRow(context.database, { type: "note", id: Number(id) }, context.now())
   context.database.prepare("DELETE FROM note_revisions WHERE note_id=?").run(id)
   context.database.prepare("DELETE FROM notes WHERE id=?").run(id)
   return { id, personId, removed: true }

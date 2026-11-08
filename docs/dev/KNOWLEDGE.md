@@ -98,7 +98,13 @@ superseded (accepting one that replaces another ends the older) or reversed; a q
 holds what agents concluded — summary, digest, preference — with author bot and model, confidence,
 status and a scope that has no default: a memory without scope or evidence is refused. A memory that `supersedes`
 another retires it when it is confirmed, not when it is proposed, and a memory is superseded once only. Memories have
-their own words index. `proposedActions` keeps what an agent wants done outside the store until the owner
+their own words index. A memory's or fact's evidence is a reference, or `{ ref, quote }` with up to 500 characters of
+the source the claim rests on; a quote the source's text does not hold is refused (`evidence.quote-not-found`). Each
+`evidence` link keeps `metadata = { v: 1, sig, rev, cited_rev, quote?, checked_at }`. `sig` is read from the
+source's columns, never its text, and includes its deletion (`SOURCE_KINDS` in `evidence-signature.ts` lists each
+kind's columns, text and revision lookup). `cited_rev` names the version cited and never changes; `rev` is the version
+last signed. A cited row deleted for good leaves its links in place with no pointer and no quote, marked `gone`.
+`proposedActions` keeps what an agent wants done outside the store until the owner
 approves or rejects it; `list` filters by status. `approveAsTask` (`./services`) approves one as a `request`
 task in the account that would act, with source `proposed-action:<id>`, and records `{ task }` as its result;
 a retry finds the same task. A messenger adapter could instead execute an approved one and report `executed`

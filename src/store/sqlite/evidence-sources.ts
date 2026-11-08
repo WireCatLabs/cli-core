@@ -38,16 +38,19 @@ const GONE_KIND: Record<string, string> = { meeting_transcript: "meeting", meeti
 
 /**
  * Every `evidence` link from a memory or fact, in the order they were written, including one whose target was
- * deleted since: `evidenceOf` drops those, so a reader would never learn the record lost a source.
+ * deleted since, or deleted for good and so kept with no pointer: `evidenceOf` drops those, so a reader would never
+ * learn the record lost a source.
  */
 export const evidenceSourcesOf = (database: CacheDatabase, from: { type: string; id: number }): EvidenceSource[] => {
   const cited = database
     .prepare(
-      `SELECT to_type, to_id FROM links WHERE from_type = ? AND from_id = ? AND kind = ${linkKind("evidence")} ` +
-        "AND to_id IS NOT NULL ORDER BY id",
+      `SELECT to_type, to_id, CASE WHEN json_valid(metadata) THEN json_extract(metadata, '$.gone') END AS gone ` +
+        `FROM links WHERE from_type = ? AND from_id = ? AND kind = ${linkKind("evidence")} ` +
+        "AND (to_id IS NOT NULL OR gone IS NOT NULL) ORDER BY id",
     )
     .all(from.type, from.id)
     .map((link) => {
+      if (link.to_id == null) return { type: String(link.gone), ref: undefined }
       const thing = storedThing(link.to_type, link.to_id)
       return { type: thing.type, ref: referenceOfThing(database, thing) }
     })

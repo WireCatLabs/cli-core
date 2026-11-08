@@ -114,7 +114,8 @@ export const accountPeopleOver = (context: StoreContext): AccountPeople => {
     editContactNote: async (key, person, id, text, revision) => {
       return write(database, () => privatePeople.editNote(context, key, person, id, text, revision))
     },
-    removeContactNote: async (key, person, id) => privatePeople.removeNote(context, key, person, id),
+    removeContactNote: async (key, person, id) =>
+      write(database, () => privatePeople.removeNote(context, key, person, id)),
   }
 }
 
