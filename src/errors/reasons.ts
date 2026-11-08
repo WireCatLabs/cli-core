@@ -198,6 +198,8 @@ const OTHERS: Entry[] = [
   ["store.vector-extension-failed", "configuration_error", "the sqlite-vec extension did not load; reinstall the CLI"],
   validation("store.vector-invalid", "a vector to store had a non-finite value"),
   validation("catalog.scope-limit", "the selected catalog exceeds its entry limit"),
+  validation("evidence.quote-length", "a quote from the evidence is empty or over 500 characters"),
+  validation("evidence.quote-not-found", "the cited source does not say the quoted words"),
   validation("evidence.row-too-large", "one evidence row is over its size limit"),
   validation("index.not-ready", "the search index is still being built"),
   validation("input.closed", "the input closed before the answer"),

@@ -1,5 +1,6 @@
 import type { CacheDatabase } from "../driver.js"
 import { dropOrphanPeople, unreferenced } from "./accounts.js"
+import { forgetDanglingEvidence, forgetEvidenceTo } from "./evidence-signature.js"
 import { dropUnusedVectors } from "./vector-index.js"
 
 const distinctIds = (rows: Record<string, unknown>[]): number[] => [...new Set(rows.map((row) => Number(row.id)))]
@@ -57,6 +58,7 @@ export const forgetCalendarRows = (
   database
     .prepare("UPDATE meetings SET event_id = NULL, updated_at = ? WHERE event_id IN (SELECT value FROM json_each(?))")
     .run(now, gone(goneEvents))
+  forgetEvidenceTo(database, "event", { sql: "SELECT value FROM json_each(?)", params: [gone(goneEvents)] }, now)
   dropAround("event", goneEvents)
   database.prepare("DELETE FROM events WHERE id IN (SELECT value FROM json_each(?))").run(gone(goneEvents))
   for (const table of ["meeting_series", "events"])
@@ -73,6 +75,7 @@ export const forgetCalendarRows = (
   database.prepare("DELETE FROM sync_cursors WHERE account_id = ? AND key = ?").run(accountId, cursorKey)
   database.prepare("DELETE FROM calendars WHERE id = ?").run(calendarId)
   dropOrphanPeople(database, unseenBefore)
+  forgetDanglingEvidence(database, now)
   dropUnusedVectors(database, hashes)
   return { entries: entryIds.length, events: goneEvents.length }
 }

@@ -2,8 +2,36 @@ import { CliError } from "@wirecat/cli-base"
 import type { CacheDatabase } from "../../driver.js"
 import { fold } from "../../normalize.js"
 import type { ProjectAnnotationSnapshot } from "../../project-transfer/snapshot-model.js"
+import { isEntityType } from "../entity-types.js"
+import { type EvidenceMetadata, evidenceMetadata, evidenceSignature } from "../evidence-signature.js"
 import { nextId } from "../memories.js"
 import { type Thing, thingOf } from "../things.js"
+
+type SnapshotLink = ProjectAnnotationSnapshot["links"][number]
+
+const metadataOf = (database: CacheDatabase, link: SnapshotLink, to: Thing | null): string | null => {
+  const provenance = link.provenance === null ? {} : { provenance: link.provenance }
+  if (link.kind === "evidence" && to)
+    return JSON.stringify({
+      ...provenance,
+      ...evidenceMetadata(evidenceSignature(database, to), link.updated_at, undefined),
+    })
+  if (link.kind === "evidence") return JSON.stringify({ ...provenance, ...goneEvidence(link) })
+  return link.provenance === null ? null : JSON.stringify(provenance)
+}
+
+/** Evidence whose source was deleted for good travels with only its old reference, and stays gone. */
+const goneEvidence = (link: SnapshotLink): EvidenceMetadata => {
+  const kind = link.target_text?.split(":")[0] ?? ""
+  return {
+    v: 1,
+    sig: "gone",
+    rev: null,
+    cited_rev: null,
+    checked_at: link.updated_at,
+    gone: isEntityType(kind) ? kind : "source",
+  }
+}
 
 export const restoreAnnotationRecords = (
   database: CacheDatabase,
@@ -106,10 +134,10 @@ export const restoreAnnotationRecords = (
         link.anchor,
         link.origin,
         link.target_text,
-        link.target_text === null ? null : fold(link.target_text),
+        link.target_text === null || (link.kind === "evidence" && to === null) ? null : fold(link.target_text),
         link.role,
         link.evidence,
-        link.provenance === null ? null : JSON.stringify({ provenance: link.provenance }),
+        metadataOf(database, link, to),
         Number(link.confirmed),
         link.created_at,
         link.author,

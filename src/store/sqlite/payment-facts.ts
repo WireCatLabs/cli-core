@@ -84,7 +84,7 @@ export const movePaymentFacts = (context: StoreContext): number => {
     if (moved.size) keepHighestId(database, "facts", now())
     for (const id of moved.keys()) {
       database.prepare("UPDATE facts SET supersedes_id = NULL WHERE supersedes_id = ?").run(id)
-      dropLinksOf(database, { type: "fact", id })
+      dropLinksOf(database, { type: "fact", id }, now())
       database.prepare("DELETE FROM links WHERE from_type = 'fact' AND from_id = ?").run(id)
       database.prepare("DELETE FROM taggings WHERE taggable_type = 'fact' AND taggable_id = ?").run(id)
       database.prepare("DELETE FROM facts WHERE id = ?").run(id)

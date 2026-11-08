@@ -18,6 +18,13 @@ shape of this file.
   `<app>:<config folder>` entry. `write(profile, token, "file")` also forgets the keyring copy. `need(profile)`
   throws the new reason `session.missing` (`authentication_error`, naming `session start`), the one "not signed in"
   every token CLI gives; `signedIn(profile)` is `appMcpCommand`'s hook.
+- **Evidence can carry the quote a memory or fact rests on, and every evidence link records what its source looked
+  like.** `store.memories.add` and `store.facts.add` take each piece of evidence as a reference, as before, or as
+  `{ ref, quote }` with up to 500 characters (`evidence.quote-length` otherwise); a quote the source's text does not
+  hold is refused (`evidence.quote-not-found`). The link's `metadata` keeps `{ v: 1, sig, rev, cited_rev, quote?,
+  checked_at }`, read from the source's columns and never its text, deletion included, so a later check can tell that
+  a cited source changed or went. Reads still return evidence as references. A project snapshot leaves the signature
+  behind and the restore signs each evidence link against the target store; a quote does not travel.
 
 ### Changed — may break callers
 
@@ -27,6 +34,13 @@ shape of this file.
   `chats inspect`, `chats send-as`) or `busy.offline` (`calendars busy`); they now all answer `offline.refused`, exit
   code 5 instead of 2. `refuseOffline(command, service)` in `@wirecat/cli-core/cli` is the same refusal for a command
   whose need depends on a flag, such as `session status --check`, so b24, beeline, gcal and cli-template drop theirs.
+- **A cited source deleted for good leaves the citing evidence in place.** Removing a fact, memory, note, document,
+  calendar event, chat or account kept rows whose ids a later row could take, or deleted the links that cited them, so
+  a memory could lose a source without a trace or rest on someone else's text. Now each evidence link to the removed
+  row stays with no pointer and no quote, marked `gone`, and `sources` shows it `missing`; `memories.remove` and
+  `facts.remove` no longer count it among the links they removed. A message's tombstone drops quotes of it too. A
+  purged account or chat forgets evidence to every row it took, chats included, and a chat merge re-signs the
+  evidence it moves onto the kept chat and messages.
 
 ### Fixed
 

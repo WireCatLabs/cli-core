@@ -3,6 +3,7 @@ import type { ChannelTagMatch } from "../../domain/channel-tags.js"
 import type { Chat, ChatUpdate, Id, Member, Page, ProviderMetadata } from "../../domain/models.js"
 import type { AccountKey, StoredChatFilter } from "../types.js"
 import { and, eq, inArray, or, sql } from "./drizzle/core.js"
+import { forgetDanglingEvidence, forgetEvidenceTo } from "./evidence-signature.js"
 import { folded } from "./folded.js"
 import { withoutHistory } from "./history-skips.js"
 import { identityPk } from "./identities.js"
@@ -360,8 +361,17 @@ export const leftChats = (
 }
 
 /** These chats and everything under them, children before parents: the foreign keys are enforced. */
-export const purgeChats = ({ orm, database }: StoreContext, pks: number[]): void => {
+export const purgeChats = ({ orm, database, now }: StoreContext, pks: number[]): void => {
   if (pks.length === 0) return
+  const at = now()
+  const chatIds = { sql: "SELECT value FROM json_each(?)", params: [JSON.stringify(pks)] }
+  forgetEvidenceTo(
+    database,
+    "message",
+    { ...chatIds, sql: `SELECT id FROM messages WHERE chat_id IN (${chatIds.sql})` },
+    at,
+  )
+  forgetEvidenceTo(database, "chat", chatIds, at)
   const messagesOf = orm.select({ pk: messages.id }).from(messages).where(inArray(messages.chatId, pks))
   const chatPks = sql`(SELECT value FROM json_each(${JSON.stringify(pks)}))`
   const released = orm
@@ -410,6 +420,7 @@ export const purgeChats = ({ orm, database }: StoreContext, pks: number[]): void
   orm.delete(messageRevisions).where(inArray(messageRevisions.messageId, messagesOf)).run()
   orm.delete(messages).where(inArray(messages.chatId, pks)).run()
   orm.delete(chats).where(inArray(chats.id, pks)).run()
+  forgetDanglingEvidence(database, at)
   dropUnusedVectors(
     database,
     released.map(({ hash }) => hash),

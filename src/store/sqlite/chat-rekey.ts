@@ -4,6 +4,7 @@ import type { Id } from "../../domain/models.js"
 import type { AccountKey } from "../types.js"
 import { purgeChats, revisedBy, stricterPrivacy } from "./chats.js"
 import { pointerPairs } from "./entity-types.js"
+import { evidenceSignature, resignEvidence, storedEvidenceMetadata } from "./evidence-signature.js"
 import { tombstone, writeDerivedReactions } from "./messages.js"
 import { targetKey } from "./notes.js"
 import type { StoreContext } from "./open.js"
@@ -41,11 +42,19 @@ const pointerMover = (context: StoreContext, type: "chat" | "message") => {
         context.database.prepare(`DELETE FROM ${table} ${where}`),
       ] as const
     })
+  const cited = context.database.prepare(
+    "SELECT id, metadata FROM links WHERE kind = 'evidence' AND to_type = ? AND to_id = ?",
+  )
   return (from: number, to: number): void => {
+    const evidence = cited.all(type, from)
     for (const [move, drop] of statements) {
       move.run(to, from)
       drop.run(from)
     }
+    // The kept row is the same source under another id; signed as it is, the next check sees no change.
+    const signature = evidenceSignature(context.database, { type, id: to })
+    for (const link of evidence)
+      resignEvidence(context.database, Number(link.id), signature, context.now(), storedEvidenceMetadata(link.metadata))
   }
 }
 

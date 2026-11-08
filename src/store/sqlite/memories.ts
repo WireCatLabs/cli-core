@@ -4,6 +4,14 @@ import type { Stemmer, Stemmers } from "../../search/stem.js"
 import { assertMayDecide, assertMayWithdraw, type Decider } from "../decisions.js"
 import { normalize } from "../normalize.js"
 import { type Actor, botNamed, ownerPerson, type ProposedByFilter, proposedBySql, proposerOf } from "./actors.js"
+import {
+  assertQuoted,
+  type EvidenceInput,
+  evidenceInputOf,
+  evidenceMetadata,
+  evidenceSignature,
+  forgetEvidenceToRow,
+} from "./evidence-signature.js"
 import { type EvidenceSource, evidenceSourcesOf } from "./evidence-sources.js"
 import { linkKind } from "./link-kinds.js"
 import { CORPORA, corpusIndexState, drainCorpus, type NoteIndexState } from "./note-index.js"
@@ -49,8 +57,8 @@ export interface MemoryInput {
   body: string
   /** Required, with no default: a memory read for the wrong purpose leaks, so its writer says which. */
   scope: Memory["scope"]
-  /** At least one reference the memory rests on. */
-  evidence: string[]
+  /** At least one reference the memory rests on, each with the words of it the memory rests on if given. */
+  evidence: EvidenceInput[]
   author: Author
   subject?: string
   project?: string
@@ -79,8 +87,9 @@ export interface MemoriesStore {
   /** Its evidence no longer holds; for an agent's memory this is how it is turned down, so `by` must be allowed. */
   markStale(reference: string, by: Decider): Promise<Memory>
   /**
-   * Erases the memory: its row, its text in the search and meaning indexes, and every link from or to it. A memory
-   * that replaced it no longer names it. A backup made before keeps it.
+   * Erases the memory: its row, its text in the search and meaning indexes, and every link from or to it, except the
+   * evidence of memories and facts that cited it, which stays with no pointer and shows as a missing source. A memory
+   * that replaced it no longer names it. `links` counts the links erased. A backup made before keeps it.
    */
   remove(reference: string, by: Decider): Promise<{ ref: string; removed: true; links: number }>
   /** Each reference it rests on, read back; one deleted since is `missing`. */
@@ -116,21 +125,36 @@ export const authorOf = (row: Row): Memory["author"] => ({
   kind: row.author_type !== "bot" ? null : row.author_kind === "rule" || row.author_name === "rule" ? "rule" : "agent",
 })
 
-/** Writes `evidence` links from a row to each reference, refusing one the store does not hold. */
+/**
+ * Writes `evidence` links from a row to each reference, refusing one the store does not hold. Each link keeps the
+ * source's signature and the quote it was given, so a later check sees whether the source still says it.
+ */
 export const linkEvidence = (
   context: StoreContext,
   from: { type: string; id: number },
-  references: string[],
+  references: readonly EvidenceInput[],
   author: "owner" | "agent",
 ) => {
   const at = context.now()
   const insert = context.database.prepare(
-    "INSERT INTO links (from_type, from_id, to_type, to_id, kind, source, confirmed, created_at, author, updated_at) " +
-      `VALUES (?, ?, ?, ?, ${linkKind("evidence")}, ?, 1, ?, ?, ?)`,
+    "INSERT INTO links (from_type, from_id, to_type, to_id, kind, source, metadata, confirmed, created_at, author, updated_at) " +
+      `VALUES (?, ?, ?, ?, ${linkKind("evidence")}, ?, ?, 1, ?, ?, ?)`,
   )
-  for (const reference of references) {
-    const thing = requiredThing(context.database, reference, "the evidence")
-    insert.run(from.type, from.id, thing.type, thing.id, author === "owner" ? "owner" : "suggested", at, author, at)
+  for (const { ref, quote } of references.map(evidenceInputOf)) {
+    const thing = requiredThing(context.database, ref, "the evidence")
+    assertQuoted(context.database, thing, ref, quote)
+    const metadata = evidenceMetadata(evidenceSignature(context.database, thing), at, quote)
+    insert.run(
+      from.type,
+      from.id,
+      thing.type,
+      thing.id,
+      author === "owner" ? "owner" : "suggested",
+      JSON.stringify(metadata),
+      at,
+      author,
+      at,
+    )
   }
 }
 
@@ -203,15 +227,23 @@ export const keepHighestId = (database: StoreContext["database"], table: Numbere
     .run(highestKey(table), String(highest), at)
 }
 
-/** Counts every link from or to a row and drops the ones its delete trigger does not: those pointing at it. */
-export const dropLinksOf = (database: StoreContext["database"], thing: { type: string; id: number }): number => {
+/**
+ * Counts every link from or to a row and drops the ones its delete trigger does not: those pointing at it. Evidence
+ * that cites it stays, with no pointer, so a memory or fact that rested on it still shows a source that went.
+ */
+export const dropLinksOf = (
+  database: StoreContext["database"],
+  thing: { type: string; id: number },
+  at: number,
+): number => {
   const count = Number(
     database
       .prepare("SELECT count(*) AS n FROM links WHERE (from_type = ? AND from_id = ?) OR (to_type = ? AND to_id = ?)")
       .get(thing.type, thing.id, thing.type, thing.id)?.n,
   )
+  const kept = forgetEvidenceToRow(database, storedThing(thing.type, thing.id), at).length
   database.prepare("DELETE FROM links WHERE to_type = ? AND to_id = ?").run(thing.type, thing.id)
-  return count
+  return count - kept
 }
 
 /**
@@ -433,7 +465,7 @@ export const memoriesStoreOver = (
       const links = erase(database, () => {
         keepHighestId(database, "memories", now())
         database.prepare("UPDATE memories SET supersedes_id = NULL WHERE supersedes_id = ?").run(id)
-        const count = dropLinksOf(database, { type: "memory", id })
+        const count = dropLinksOf(database, { type: "memory", id }, now())
         database.prepare("DELETE FROM memories WHERE id = ?").run(id)
         return count
       })

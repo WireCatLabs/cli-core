@@ -3,6 +3,7 @@ import type { CacheDatabase } from "../driver.js"
 import type { AccountKey, StoredAccount } from "../types.js"
 import { and, asc, eq, inArray, sql } from "./drizzle/core.js"
 import { pointerPairs } from "./entity-types.js"
+import { forgetDanglingEvidence, forgetEvidenceTo } from "./evidence-signature.js"
 import type { StoreContext } from "./open.js"
 import {
   accountIdentities,
@@ -99,8 +100,24 @@ export const storedAccount = ({ orm }: StoreContext, { provider, account }: Acco
 }
 
 /** Everything the account holds, children before parents: the foreign keys are enforced. */
-export const purgeAccount = ({ orm, database }: StoreContext, accountKey: number): void => {
+export const purgeAccount = ({ orm, database, now }: StoreContext, accountKey: number): void => {
   const unseenBefore = unreferenced(database, "identities")
+  const at = now()
+  const meetingIds = "SELECT id FROM meetings WHERE account_id = ?"
+  const transcriptIds = `SELECT id FROM meeting_transcripts WHERE meeting_id IN (${meetingIds})`
+  for (const [type, sql] of [
+    ["message", "SELECT id FROM messages WHERE account_id = ?"],
+    ["chat", "SELECT id FROM chats WHERE account_id = ?"],
+    ["email", "SELECT id FROM emails WHERE account_id = ?"],
+    ["email_thread", "SELECT id FROM email_threads WHERE account_id = ?"],
+    ["meeting", meetingIds],
+    ["meeting_transcript", transcriptIds],
+    [
+      "meeting_transcript_row",
+      `SELECT id FROM meeting_transcript_rows WHERE meeting_transcript_id IN (${transcriptIds})`,
+    ],
+  ] as const)
+    forgetEvidenceTo(database, type, { sql, params: [accountKey] }, at)
   const chatsOf = orm.select({ pk: chats.id }).from(chats).where(eq(chats.accountId, accountKey))
   const messagesOf = orm.select({ pk: messages.id }).from(messages).where(eq(messages.accountId, accountKey))
   orm.delete(botUpdates).where(eq(botUpdates.accountId, accountKey)).run()
@@ -180,6 +197,7 @@ export const purgeAccount = ({ orm, database }: StoreContext, accountKey: number
   orm.run(sql`DELETE FROM records WHERE account_id = ${accountKey}`)
   orm.delete(accounts).where(eq(accounts.id, accountKey)).run()
   dropOrphanPeople(database, unseenBefore)
+  forgetDanglingEvidence(database, at)
   dropUnusedVectors(database, hashes)
 }
 

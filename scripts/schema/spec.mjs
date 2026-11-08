@@ -335,7 +335,10 @@ const EDITS = {
       ["to_id", "integer", { note: "null while the link names nobody yet" }],
     ],
     cols: { origin: "source", provenance: "metadata" },
-    colNotes: { kind: "the connection; the kinds are listed in the table's description" },
+    colNotes: {
+      kind: "the connection; the kinds are listed in the table's description",
+      metadata: "JSON: a suggestion's `provenance`; an `evidence` link's `{v, sig, rev, cited_rev, quote?, gone?}`",
+    },
     add: [
       ["author", "text", { note: "`owner`, `agent`, `rule`" }],
       ["updated_at", "integer", { notnull: true }],

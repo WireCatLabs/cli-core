@@ -4,6 +4,8 @@ import { join } from "node:path"
 import { describe, expect, it } from "vitest"
 import type { Chat, Message } from "../domain/models.js"
 import { openCache } from "./open.js"
+import { evidenceSignature, storedEvidenceMetadata } from "./sqlite/evidence-signature.js"
+import { referenceOfThing, storedThing } from "./sqlite/things.js"
 import { type AccountKey, historyStartKey, openStore } from "./store.js"
 
 const fresh = () => join(mkdtempSync(join(tmpdir(), "rekey-")), "wirecat.db")
@@ -591,5 +593,55 @@ describe("re-keying a run of chats in one pass", () => {
     expect(pass.taken).toBe(1)
     expect((await store.chats.chats(OWNER, {})).items.map((one) => one.id).sort()).toEqual([GROUP_PHONE, LID].sort())
     await store.close()
+  })
+})
+
+describe("evidence through a merge", () => {
+  it("moves with the chat and its messages and is signed as the kept rows are", async () => {
+    const path = fresh()
+    const store = await openStore({ path })
+    await store.chats.saveChats(OWNER, [chat(PHONE, null), chat(LID, "Ana García")])
+    await store.messages.saveMessages(OWNER, PHONE, [message("A2", PHONE, "the message held twice")], {
+      via: "history",
+    })
+    await store.messages.saveMessages(
+      OWNER,
+      LID,
+      [message("A2", LID, "the message held twice"), message("A3", LID, "newer under the lid")],
+      { via: "update" },
+    )
+    const database = await openCache(path)
+    try {
+      const gone = Number(database.prepare("SELECT id FROM chats WHERE external_id = ?").get(LID)?.id)
+      const refs = (
+        database.prepare("SELECT id FROM messages WHERE chat_id = ? ORDER BY external_id").all(gone) as { id: number }[]
+      ).map(({ id }) => referenceOfThing(database, { type: "message", id }) as string)
+      await store.memories.add({
+        kind: "summary",
+        body: "Ana wrote twice",
+        scope: "work",
+        evidence: [
+          referenceOfThing(database, { type: "chat", id: gone }) as string,
+          { ref: refs[0] as string, quote: "held twice" },
+          refs[1] as string,
+        ],
+        author: "owner",
+        status: "confirmed",
+      })
+      await store.chats.rekeyChat(OWNER, PHONE, LID)
+      const links = database
+        .prepare("SELECT to_type, to_id, metadata FROM links WHERE kind = 'evidence' ORDER BY id")
+        .all() as { to_type: string; to_id: number; metadata: string }[]
+      expect(links).toHaveLength(3)
+      for (const link of links) {
+        const thing = storedThing(link.to_type, link.to_id)
+        expect(referenceOfThing(database, thing)).toBeDefined()
+        expect(storedEvidenceMetadata(link.metadata)?.sig).toBe(evidenceSignature(database, thing).sig)
+      }
+      expect(storedEvidenceMetadata(links[1]?.metadata)).toMatchObject({ quote: "held twice", cited_rev: 0 })
+    } finally {
+      database.close()
+      await store.close()
+    }
   })
 })

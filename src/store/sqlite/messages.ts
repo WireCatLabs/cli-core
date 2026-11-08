@@ -17,6 +17,7 @@ import type { AccountKey, DeletionScope } from "../types.js"
 import { findChatPk } from "./chats.js"
 import { applyCounterObservations } from "./counters.js"
 import { and, eq, isNull, type Placeholder, sql } from "./drizzle/core.js"
+import { forgetEvidenceToRow } from "./evidence-signature.js"
 import { folded } from "./folded.js"
 import { identityPk } from "./identities.js"
 import type { Orm, StoreContext } from "./open.js"
@@ -320,6 +321,7 @@ export const tombstone = (context: StoreContext, pk: number): number => {
     )
     .run(now(), pk)
   orm.delete(messageRevisions).where(eq(messageRevisions.messageId, pk)).run()
+  forgetEvidenceToRow(context.database, { type: "message", id: pk }, now(), { keepPointer: true })
   context.database
     .prepare("DELETE FROM poll_votes WHERE chat_id=? AND message_external_id=?")
     .run(row.chatId, row.externalId)

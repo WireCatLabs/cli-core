@@ -3,6 +3,7 @@ import { type FACT_STATUSES, FACT_TYPES, MEMORY_SCOPES } from "../../domain/know
 import { calendarMoment } from "../../domain/moment.js"
 import { assertMayDecide, assertMayWithdraw, type Decider, deciderAuthor } from "../decisions.js"
 import { type Actor, type ProposedByFilter, proposedBySql, proposerOf } from "./actors.js"
+import type { EvidenceInput } from "./evidence-signature.js"
 import { type EvidenceSource, evidenceSourcesOf } from "./evidence-sources.js"
 import { linkKind } from "./link-kinds.js"
 import {
@@ -57,7 +58,7 @@ export interface FactInput {
   subject?: string
   /** When it happened, as the evidence shows (ISO). */
   occurredAt?: string
-  evidence?: string[]
+  evidence?: EvidenceInput[]
   scope?: Fact["scope"] & string
   /** The proposed or accepted fact this one corrects, `superseded` once this one is accepted. */
   supersedes?: string
@@ -91,7 +92,8 @@ export interface FactsStore {
   reject(reference: string, by: Decider, reason?: string): Promise<Fact>
   /**
    * Erases the fact: its row, its links, its tags, and the memory it was migrated from, which still held its text.
-   * A decision that replaced it no longer names it. A backup made before keeps it.
+   * Evidence of memories and facts that cited it stays with no pointer and shows as a missing source; `links` counts
+   * the links erased. A decision that replaced it no longer names it. A backup made before keeps it.
    */
   remove(reference: string, by: Decider): Promise<{ ref: string; removed: true; links: number }>
   /** Each reference it rests on, read back; one deleted since is `missing`. */
@@ -380,7 +382,7 @@ export const factOperationsOver = (context: StoreContext): FactOperations => {
         keepHighestId(database, "facts", now())
         if (twin !== undefined) keepHighestId(database, "memories", now())
         database.prepare("UPDATE facts SET supersedes_id = NULL WHERE supersedes_id = ?").run(id)
-        const count = dropLinksOf(database, { type: "fact", id })
+        const count = dropLinksOf(database, { type: "fact", id }, now())
         database.prepare("DELETE FROM links WHERE from_type = 'fact' AND from_id = ?").run(id)
         database.prepare("DELETE FROM taggings WHERE taggable_type = 'fact' AND taggable_id = ?").run(id)
         database.prepare("DELETE FROM facts WHERE id = ?").run(id)

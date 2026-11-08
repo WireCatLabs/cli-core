@@ -271,11 +271,15 @@ describe("forgetting a memory", () => {
     })
     await store.memories.search("harbour")
 
-    expect(await store.memories.remove(wrong.ref, "owner")).toEqual({ ref: wrong.ref, removed: true, links: 2 })
+    expect(await store.memories.remove(wrong.ref, "owner")).toEqual({ ref: wrong.ref, removed: true, links: 1 })
 
     await expect(store.memories.get(wrong.ref)).rejects.toMatchObject({ code: "not_found" })
     expect(await store.memories.get(right.ref)).toMatchObject({ supersedes: null, status: "confirmed" })
     expect(await store.memories.get(kept.ref)).toMatchObject({ evidence: [note.ref] })
+    expect((await store.memories.sources(kept.ref)).map(({ kind, missing }) => [kind, missing])).toEqual([
+      ["note", false],
+      ["memory", true],
+    ])
     expect((await store.memories.search("friday")).map(({ ref }) => ref)).toEqual([right.ref])
     expect(await store.notes.note(note.ref)).toMatchObject({ ref: note.ref })
     const id = Number(wrong.id)
@@ -293,7 +297,7 @@ describe("forgetting a memory", () => {
     expect(fileHolds(path, "zanzibarcalls")).toBe(false)
     await expect(store.memories.remove(wrong.ref, "owner")).rejects.toMatchObject({ code: "not_found" })
 
-    expect(await store.memories.remove(kept.ref, "owner")).toMatchObject({ removed: true, links: 1 })
+    expect(await store.memories.remove(kept.ref, "owner")).toMatchObject({ removed: true, links: 2 })
     expect(await store.memories.search("harbour")).toEqual([])
     expect(await sql(path, "SELECT count(*) AS n FROM memory_words_vocab WHERE term LIKE 'harbour%'")).toEqual([
       { n: 0 },

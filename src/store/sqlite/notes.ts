@@ -18,6 +18,7 @@ import { fold } from "../normalize.js"
 import { ulid } from "../ulid.js"
 import { ownerPerson } from "./actors.js"
 import { type DocumentMetadata, encodeDocumentMetadata, languageOf } from "./document-metadata.js"
+import { deleteDocumentRow, forgetEvidenceToRow } from "./evidence-signature.js"
 import { PREFERRED_FILE, syncFile } from "./files.js"
 import { type ImportedDocuments, importedDocumentWhere } from "./imported-documents.js"
 import { LINK_KINDS, LINK_ORIGINS, type LINK_SOURCES, linkKind } from "./link-kinds.js"
@@ -556,7 +557,7 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
       .prepare("SELECT id, deleted_at FROM documents WHERE account_id = ? AND external_id = ? AND id <> ?")
       .get(account, path, id)
     if (blocking?.deleted_at == null && blocking !== undefined) return
-    if (blocking) database.prepare("DELETE FROM documents WHERE id = ?").run(Number(blocking.id))
+    if (blocking) deleteDocumentRow(database, Number(blocking.id), at)
     const { location, fileName, extension } = pathParts(path)
     database
       .prepare(
@@ -736,7 +737,7 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
         if (taken && taken.deleted_at == null)
           throw new CliError("validation_error", `a live note is already at ${target} in folder ${folderId}`)
         // The gone note at the target goes, as it always did; its file row goes with it or on its own.
-        if (taken) database.prepare("DELETE FROM documents WHERE id = ?").run(Number(taken.id))
+        if (taken) deleteDocumentRow(database, Number(taken.id), now())
         if (takenFile) database.prepare("DELETE FROM files WHERE id = ?").run(Number(takenFile.id))
         if (place) database.prepare("UPDATE files SET external_id = ? WHERE id = ?").run(target, Number(place.id))
         const document = documentRow(String(id))
@@ -910,6 +911,7 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
           throw new CliError("validation_error", "a file note goes when its file does; the next import notices")
         const bare = id.replace(/^note:/, "")
         noteRow(bare)
+        forgetEvidenceToRow(database, { type: "note", id: Number(bare) }, now())
         database.prepare("DELETE FROM notes WHERE id = ?").run(Number(bare))
         return { id, removed: true as const }
       }),
