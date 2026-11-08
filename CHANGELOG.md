@@ -42,6 +42,11 @@ shape of this file.
   web links, the email's body) and `document`. A quiet day with a sync problem says "Новых дел нет, но синхронизация
   требует внимания." and lists the health lines below.
 
+### Fixed
+
+- **cli-core accepts `@wirecat/cli-base` up to 0.85.x.** Its peer range stopped at `<0.83.0`, so a CLI could not take
+  cli-base 0.85.0's `hostFetch` and the `network.hosts` manifest next to cli-core. Nothing else changes for a caller.
+
 ## 0.610.0 — 08.11.2026
 
 ### Added

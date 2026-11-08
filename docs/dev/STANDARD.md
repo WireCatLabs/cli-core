@@ -189,6 +189,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `assign` | name the person responsible for work, with their task role |  |
 | `reverse` | record that an accepted decision no longer holds, without replacing it |  |
 | `invalidate` | mark a derived record whose supporting evidence no longer holds |  |
+| `challenge` | say a record no longer holds, citing what contradicts it; it only proposes, and the owner decides |  |
 | `acknowledge` | record successful delivery using the exact receipt issued when the item was claimed |  |
 | `confirm` | the owner accepts what an agent proposed | `accept`, `approve` |
 | `reject` | the owner refuses what an agent proposed | `decline`, `deny` |
@@ -280,6 +281,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `tracking` | collection | the chats whose member lists are fetched daily |  |
 | `documents` | collection | files imported from Google Drive or Docs, or linked in a chat |  |
 | `notes` | collection | text the owner writes, or files from a notes folder |  |
+| `sources` | collection | what the owner adds by hand to read from: a file, a web page or a pasted text, kept as its text |  |
 | `projects` | collection | the owner's work units with a task key |  |
 | `annotations` | collection | derived records attached to a selected entity, with explicit coverage of included and omitted facets |  |
 | `organizations` | collection | companies, teams, families or communities |  |
@@ -729,7 +731,9 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--key` | `<key>` | string | the short key, 3–4 letters and digits; made from the name when left out |  |
 | `--kind` | `<kind>` | choice | what kind of thing it is; the command lists the kinds |  |
 | `--name` | `<name>` | string | the name to give it |  |
+| `--button` | `<text=data>` | string | an inline button under a message: its text, then the data a press sends back; repeat for more in one row |  |
 | `--no-approval` |  | switch | anyone with the link joins at once |  |
+| `--no-buttons` |  | switch | take the buttons off the message |  |
 | `--notification` | `<text>` | string | a note only the person who pressed sees |  |
 | `--params` | `<json>` | string | the request's query and path parameters, as JSON |  |
 | `--payload` | `<json>` | string | the data of what to do, as JSON |  |
@@ -788,6 +792,10 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--bcc` | `<address>` | string | an e-mail address that gets a blind copy; repeat it for more |  |
 | `--reply-all` |  | switch | with --reply-to, an e-mail reply also goes to everyone the message went to |  |
 | `--trimmed` |  | switch | each e-mail's own text, without the quoted earlier mail and the signature; refused with --full |  |
+| `--quote` | `<ref=words...>` | list | the words an --evidence reference says that a record rests on, as <ref>=<words>, one per reference |  |
+| `--suggest` | `<text>` | string | wording offered for the owner to take or leave; it decides nothing |  |
+| `--keep-copy` |  | switch | keep a copy of the original file as well as its text |  |
+| `--max-chars` | `<n>` | count | at most this many characters read | characters |
 | `--pipeline` | `<pipeline>` | string | a CRM pipeline: pipeline:<id>, or a name only one pipeline has |  |
 | `--stage` | `<stage>` | string | a stage of the record's pipeline, by the CRM's id or its name |  |
 | `--amount` | `<decimal>` | string | a sum of money as a decimal, such as 1500.50, in --currency |  |
@@ -843,6 +851,8 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `identifier-name` | high | key | an identifier key is one from the glossary: `run_id`, never `execution_id` or `log_id` |
 | `log-attribute-key` | high | key | no log attribute key on the allow-list names message text, a token or a phone number |
 | `missing-run-log` | high | group | the CLI keeps a failed run and reads it back: `runs list`, `runs show`, global `--record` and `--no-record` |
+| `raw-network` | high | source | the CLI's own source reaches the network only through `hostFetch`: no `node:http`, `https`, `net`, `tls`, `undici`, `axios`, `got`, `node-fetch` or `ws`, no global `fetch` |
+| `undeclared-host` | medium | source | every `http(s)://` host in the CLI's own source is in the manifest's `network.hosts` |
 
 <!-- lint rules: end -->
 
