@@ -43,6 +43,7 @@ const personResult = v.strictObject({
   person_uid: text,
   previous_person_uid: nullableText,
   changed: flag,
+  proposal: v.optional(text),
 })
 const meetingChange = v.strictObject({
   scope,
