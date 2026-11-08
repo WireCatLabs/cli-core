@@ -212,6 +212,23 @@ describe("enrichment", () => {
     expect(unknown.estimate.usd).toBeNull()
   })
 
+  it("sends nothing without a key for the public API", async () => {
+    const { env, store } = await machine()
+    turnOn(env)
+    await store.notes.addNote({ text: "cat" })
+    const model = fakeModel(() => ({ facts: ["zebra"], questions: [] }))
+
+    const run = await enrichRecords(store, { env, ...model, key: () => undefined })
+
+    expect(run).toMatchObject({
+      status: "stopped",
+      enriched: 0,
+      left: 1,
+      reason: expect.stringMatching(/OPENAI_API_KEY/),
+    })
+    expect(model.requests).toEqual([])
+  })
+
   it("stops on a provider error and keeps the records pending", async () => {
     const { env, store } = await machine()
     turnOn(env)

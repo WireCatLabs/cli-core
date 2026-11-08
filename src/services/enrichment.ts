@@ -134,17 +134,30 @@ export const enrichRecords = async (
   const enrichment = store.enrichment
   const baseUrl = enrichmentEndpoint(setting)
   const target = { provider: setting.provider, model: setting.model, baseUrl }
-  const key = keyReader(options, setting)
+  const apiKey = keyReader(options, setting)()
+  const maxRecords = options.maxRecords ?? ENRICH_PER_RUN
+  // Without a key the public API answers 401 only after the records' text has left; a custom server may need none.
+  if (apiKey === undefined && setting.base_url === undefined)
+    return {
+      status: "stopped",
+      provider: setting.provider,
+      model: setting.model,
+      enriched: 0,
+      failed: 0,
+      left: (await enrichment.pending(Number.MAX_SAFE_INTEGER, options.narrow)).length,
+      usage: { input: 0, output: 0 },
+      cost_usd: 0,
+      reason: `no ${setting.provider} key: set ${setting.provider.toUpperCase()}_API_KEY, or the tool's own key; nothing was sent`,
+    }
   const gateway = modelGateway({
     resolve: () => target,
     // The setting exists only with the owner's yes for this provider and endpoint; the endpoint is checked again.
     consent: (_request, chosen) => chosen.provider === setting.provider && chosen.baseUrl === baseUrl,
-    key: () => key(),
+    key: () => apiKey,
     ...(options.adapters ? { adapters: options.adapters } : {}),
     ...(options.fetch ? { fetch: options.fetch } : {}),
     ...(options.signal ? { signal: options.signal } : {}),
   })
-  const maxRecords = options.maxRecords ?? ENRICH_PER_RUN
   const queue = await enrichment.pending(maxRecords, options.narrow)
   const batches: EnrichmentCandidate[][] = []
   for (let start = 0; start < queue.length; start += BATCH) batches.push(queue.slice(start, start + BATCH))
