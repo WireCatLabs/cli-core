@@ -9,7 +9,7 @@ import { guardedWrite } from "../sends/guarded.js"
 import { keyedGuard } from "../sends/keyed-guard.js"
 import { DEFAULT_PERMISSIONS, levelFor, type PermissionKey } from "../sends/permissions.js"
 import { newOperationId } from "../sends/send-id.js"
-import type { Deal, Pipeline } from "../store/sqlite/deals.js"
+import type { Deal, Pipeline, PipelineReport } from "../store/sqlite/deals.js"
 import type { MessageStore } from "../store/store.js"
 import type { AccountKey } from "../store/types.js"
 import type { CrmSource } from "./source.js"
@@ -126,20 +126,29 @@ const copyOf = async (context: CrmWriteContext, kind: DealKind, reference: strin
   return found
 }
 
-const pipelineOf = async (context: CrmWriteContext, kind: DealKind, reference: string | undefined) => {
+/** The named pipeline of this profile's CRM account, or its only one; several and none named is refused. */
+export const pipelineOf = async (
+  context: Pick<CrmWriteContext, "store" | "account">,
+  kind: DealKind | undefined,
+  reference: string | undefined,
+  param = "--pipeline",
+): Promise<PipelineReport> => {
+  const scope = { ...(kind ? { kind } : {}), account: context.account }
   if (reference !== undefined) {
-    const found = await context.store.deals.pipeline(reference, { kind, account: context.account })
+    const found = await context.store.deals.pipeline(reference, scope)
     if (found.externalId === null) throw new CliError("not_found", `${reference} is not a pipeline of this CRM account`)
     return found
   }
-  const all = await context.store.deals.pipelines({ kind, account: context.account })
-  if (all.length === 1) return all[0] as Pipeline
+  const all = await context.store.deals.pipelines(scope)
+  if (all.length === 1) return context.store.deals.pipeline((all[0] as Pipeline).ref, scope)
+  const what = kind ? `${kind} pipeline` : "pipeline"
   throw new CliError(
     "validation_error",
     all.length === 0
-      ? `no ${kind} pipeline of this CRM is stored; run sync first`
-      : `this CRM has ${all.length} ${kind} pipelines; name one with --pipeline: ${all.map(({ name }) => name).join(", ")}`,
-    { reason: "crm.pipeline-required", param: "--pipeline" },
+      ? `no ${what} of this CRM is stored; run sync first`
+      : `this CRM has ${all.length} ${what}s; name one${param.startsWith("--") ? ` with ${param}` : ""}: ` +
+          all.map(({ name, ref }) => `${name} (${ref})`).join(", "),
+    { reason: "crm.pipeline-required", param, allowed: all.map(({ ref }) => ref) },
   )
 }
 

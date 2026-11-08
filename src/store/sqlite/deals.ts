@@ -21,6 +21,7 @@ import { type Author, authorActor, authorOf, evidenceOf, linkEvidence, projectId
 import { requiredThing } from "./notes.js"
 import type { StoreContext } from "./open.js"
 import { type AuthorInfo, isoDate, limitOf, oneOf, type Party, refuse, reviewedRowsOver, text } from "./reviewed.js"
+import { type StageAmounts, stageAmountsOf } from "./stage-amounts.js"
 import { write } from "./transaction.js"
 
 export interface PipelineStage {
@@ -44,7 +45,7 @@ export interface Pipeline {
   createdAt: string
 }
 
-export interface FunnelStage extends PipelineStage {
+export interface FunnelStage extends PipelineStage, StageAmounts {
   /** Rows that got this far: entered this stage or a later one that is not lost, or were won. */
   reached: number
   /** `reached` of the next stage that is not lost over this stage's, 0–1; `null` for the last or an empty one. */
@@ -443,6 +444,12 @@ export const dealOperationsOver = (context: StoreContext) => {
       .prepare("SELECT id, position, outcome FROM pipeline_stages WHERE pipeline_id = ? ORDER BY position, id")
       .all(Number(pipeline.id))
     const order = new Map(stages.map((stage, at) => [Number(stage.id), at]))
+    const standing = stageAmountsOf(
+      context,
+      kind,
+      stages.map((stage) => Number(stage.id)),
+      cutoff,
+    )
     const lostStage = new Set(stages.filter((stage) => stage.outcome === "lost").map((stage) => Number(stage.id)))
     const entered = new Map<number, number[]>()
     for (const change of database
@@ -469,7 +476,7 @@ export const dealOperationsOver = (context: StoreContext) => {
         lostStage.has(Number(stages[at]?.id)) || next === -1 || reached === 0
           ? null
           : Math.round((reachedAt(next) / reached) * 1000) / 1000
-      return { ...stage, reached, conversion }
+      return { ...stage, reached, conversion, ...(standing[at] as StageAmounts) }
     })
     const won = items.filter((item) => item.status === "won").length
     return {

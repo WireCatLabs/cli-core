@@ -18,6 +18,13 @@ shape of this file.
   `--compact` and an agent's run are refused with `output.conflict`. `csvCell`, `csvRecords` and `writeCsv` are
   exported from `@wirecat/cli-core/cli` for a CLI's own lists.
 
+- **`pipelines show` in a CRM CLI is the pipeline's board.** Each stage now gives `items`, the deals or leads standing
+  in it, and `amounts`, their sum per currency with how many carry it. Nothing is converted, and an item with no amount
+  is counted but adds no sum. At a terminal it prints a table of the stages, then the open stages' sum and the won,
+  lost and win rate. The pipeline may be left out when the CRM account has only one; with several, the command lists
+  them as `name (pipeline:<id>)` and in `allowed` (`crm.pipeline-required`). `store.deals.pipeline` gives the same two
+  fields, counted from the rows its `since` keeps.
+
 - **`appMcpCommand`'s `signedIn` hook gets the run's keyring** as a third argument, so `mcp check` reads a test's
   `memoryKeyring()` and the CLI no longer captures it in a `preAction` hook of its own. A hook that throws, such as
   on a locked keyring, counts as not signed in. A two-argument hook still works.

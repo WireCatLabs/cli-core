@@ -77,6 +77,9 @@ const pipelineStage = v.strictObject({
   /** With a funnel: rows that got this far, and the share of them that reached the next stage. */
   reached: v.optional(count),
   conversion: v.optional(v.nullable(v.number())),
+  /** With a funnel: rows standing in it now, and their sum per currency, never converted. */
+  items: v.optional(count),
+  amounts: v.optional(v.array(v.strictObject({ amount: text, currency: text, items: count }))),
 })
 
 /** A pipeline (`pipeline:<id>`) with its stages in order; `pipelines show` adds the funnel. */

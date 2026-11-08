@@ -79,6 +79,43 @@ it("counts how far deals got through a pipeline from the stages they entered", a
   expect(report.totals).toEqual({ items: 4, open: 2, won: 1, lost: 1, winRate: 0.5 })
 })
 
+it("sums what stands in each stage per currency, from the same rows a since day counts", async () => {
+  let now = Date.parse("2026-10-01T09:00:00Z")
+  const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "deals-")), "store.db"), now: () => now })
+  stores.push(store)
+  const sales = await store.deals.addPipeline({
+    name: "Sales",
+    stages: ["Call", { name: "Won", outcome: "won" }],
+    by: "owner",
+  })
+  const add = (title: string, amount?: string, currency?: string) =>
+    store.deals.add({ by: "owner", title, stage: "Call", ...(amount && currency ? { amount, currency } : {}) })
+  await add("old", "1000", "EUR")
+  now = Date.parse("2026-11-01T09:00:00Z")
+  await add("a", "0.10", "EUR")
+  await add("b", "0.20", "EUR")
+  await add("c", "5", "JPY")
+  await add("d")
+  const all = await store.deals.pipeline(sales.ref)
+  expect(all.stages.map(({ name, items, amounts }) => ({ name, items, amounts }))).toEqual([
+    {
+      name: "Call",
+      items: 5,
+      amounts: [
+        { amount: "1000.30", currency: "EUR", items: 3 },
+        { amount: "5", currency: "JPY", items: 1 },
+      ],
+    },
+    { name: "Won", items: 0, amounts: [] },
+  ])
+  const recent = await store.deals.pipeline(sales.ref, { since: "2026-10-15" })
+  expect(recent.stages[0]).toMatchObject({
+    items: 4,
+    amounts: [{ amount: "0.30", currency: "EUR", items: 2 }, { currency: "JPY" }],
+  })
+  expect(recent.totals.items).toBe(4)
+})
+
 it("starts a lead in the seeded lead pipeline, and asks for a reference when a name is shared", async () => {
   const { store } = await fixture()
   const lead = await store.deals.add({ kind: "lead", by: { bot: "claude-code" }, title: "Звонок с сайта" })
