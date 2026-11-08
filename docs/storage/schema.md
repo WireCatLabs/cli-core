@@ -154,7 +154,7 @@ A real person, whatever accounts they write from: their identities point here. `
 | `phone` | text |  |  | the phone as the messenger showed it, whole; saved by `contacts sync` and an online profile read |
 | `name_folded` | text |  |  | `fold(name)`, which `tags list name:` compares; filled on open when NULL |
 
-*Keys and indexes:* `UNIQUE (provider, external_id)`, `INDEX (email) WHERE email IS NOT NULL`, `INDEX (id) WHERE name IS NOT NULL AND name_folded IS NULL`
+*Keys and indexes:* `UNIQUE (provider, external_id)`, `INDEX (email) WHERE email IS NOT NULL`, `INDEX (phone) WHERE phone IS NOT NULL`, `INDEX (id) WHERE name IS NOT NULL AND name_folded IS NULL`
 
 ### `identity_links`
 

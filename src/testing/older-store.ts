@@ -4,7 +4,7 @@ import type { CacheDatabase } from "../store/driver.js"
 const UNDO: Record<number, string> = {
   57: `DROP TRIGGER payments_refund_bi; DROP TRIGGER payments_refund_bu; DROP TRIGGER payment_allocations_refunded_bd;
     DROP TRIGGER payments_refund_leaves_bu; DROP TRIGGER payments_linked_bu; DROP TRIGGER payment_allocations_refund_bd;
-    DROP TRIGGER payment_allocations_void_bd;
+    DROP TRIGGER payment_allocations_void_bd; DROP INDEX identities_by_phone;
     DROP TRIGGER orders_valid_bi; DROP TRIGGER orders_valid_bu; DROP TRIGGER invoices_valid_bu;
     DROP TRIGGER payments_confirm_bu; DROP TRIGGER payment_allocations_valid_bi; DROP TRIGGER payment_allocations_valid_bu;
     DROP TABLE transaction_splits; DROP TABLE financial_transactions; DROP TABLE financial_accounts;

@@ -1093,7 +1093,7 @@ export const GENERATED: { name: string; statements: string[] }[] = [
     ]
   },
   {
-    "name": "20261108005019_version-57-business",
+    "name": "20261108010753_version-57-business",
     "statements": [
       "CREATE TABLE `catalog_items` (\n\t`id` integer PRIMARY KEY,\n\t`kind` text NOT NULL,\n\t`name` text NOT NULL,\n\t`name_folded` text NOT NULL,\n\t`sku` text,\n\t`supplier_type` text,\n\t`supplier_id` integer,\n\t`unit` text,\n\t`unit_price` integer,\n\t`currency` text,\n\t`description` text,\n\t`archived_date` text,\n\t`author_type` text NOT NULL,\n\t`author_id` integer NOT NULL,\n\t`model` text,\n\t`source` text NOT NULL,\n\t`metadata` text,\n\t`created_at` integer NOT NULL,\n\t`updated_at` integer NOT NULL,\n\t`deleted_at` integer\n);",
       "CREATE TABLE `contracts` (\n\t`id` integer PRIMARY KEY,\n\t`name` text NOT NULL,\n\t`number` text,\n\t`kind` text NOT NULL,\n\t`status` text NOT NULL,\n\t`signed_date` text,\n\t`effective_date` text,\n\t`expiration_date` text,\n\t`auto_renew` integer DEFAULT 0 NOT NULL,\n\t`renewal_count` integer,\n\t`renewal_unit` text,\n\t`notice_days` integer,\n\t`terms` text,\n\t`value` integer,\n\t`currency` text,\n\t`project_id` integer,\n\t`deal_id` integer,\n\t`review` text NOT NULL,\n\t`author_type` text NOT NULL,\n\t`author_id` integer NOT NULL,\n\t`model` text,\n\t`confirmed_by_type` text,\n\t`confirmed_by_id` integer,\n\t`source` text NOT NULL,\n\t`metadata` text,\n\t`created_at` integer NOT NULL,\n\t`updated_at` integer NOT NULL,\n\t`deleted_at` integer,\n\tCONSTRAINT `fk_contracts_project_id_projects_id_fk` FOREIGN KEY (`project_id`) REFERENCES `projects`(`id`),\n\tCONSTRAINT `fk_contracts_deal_id_deals_id_fk` FOREIGN KEY (`deal_id`) REFERENCES `deals`(`id`)\n);",
@@ -1130,6 +1130,7 @@ export const GENERATED: { name: string; statements: string[] }[] = [
       "CREATE INDEX `financial_transactions_by_project_id` ON `financial_transactions` (`project_id`);",
       "CREATE INDEX `financial_transactions_by_author_type_author_id` ON `financial_transactions` (`author_type`,`author_id`);",
       "CREATE INDEX `financial_transactions_by_confirmed_by_type_confirmed_by_id` ON `financial_transactions` (`confirmed_by_type`,`confirmed_by_id`);",
+      "CREATE INDEX `identities_by_phone` ON `identities` (`phone`) WHERE phone IS NOT NULL;",
       "CREATE INDEX `invoice_lines_by_catalog_item_id` ON `invoice_lines` (`catalog_item_id`);",
       "CREATE INDEX `invoices_by_contract_id` ON `invoices` (`contract_id`);",
       "CREATE INDEX `invoices_by_subscription_id` ON `invoices` (`subscription_id`);",
@@ -1154,7 +1155,7 @@ export const GENERATED: { name: string; statements: string[] }[] = [
     ]
   },
   {
-    "name": "20261108005023_version-57-business-rules",
+    "name": "20261108010754_version-57-business-rules",
     "statements": [
       "-- The store's code checks these first and says why; the triggers keep a stray write from another build or a hand\n-- edit from storing business data that does not add up. Paid is net: a confirmed refund's allocation counts against\n-- the payment it refunds, so an invoice refunded in full is owed again.\nCREATE TRIGGER catalog_items_valid_bi BEFORE INSERT ON catalog_items\n  WHEN new.kind NOT IN ('product', 'service') OR new.unit_price < 0\n    OR (new.unit_price IS NULL) <> (new.currency IS NULL) BEGIN\n  SELECT RAISE(ABORT, 'catalog_items: kind product or service, a price of 0 or more with its currency');\nEND;",
       "CREATE TRIGGER catalog_items_valid_bu BEFORE UPDATE ON catalog_items\n  WHEN new.kind NOT IN ('product', 'service') OR new.unit_price < 0\n    OR (new.unit_price IS NULL) <> (new.currency IS NULL) BEGIN\n  SELECT RAISE(ABORT, 'catalog_items: kind product or service, a price of 0 or more with its currency');\nEND;",
