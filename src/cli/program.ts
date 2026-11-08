@@ -405,7 +405,8 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
       machine || flags.input === false || Boolean(commandEnv.CI) || (options.tty ?? process.stdout.isTTY) !== true
     checkJson(action, requested, !flags.jsonl && (options.tty ?? process.stdout.isTTY) === true)
     control.configure({
-      ...(flags.fields === undefined ? {} : { fields: flags.fields }),
+      // Beside `--format csv`, `--json=a,b` names the table's columns: a CSV is no JSON to pick fields from.
+      ...(flags.fields === undefined || action.getOptionValue("format") === "csv" ? {} : { fields: flags.fields }),
       maxOutputBytes:
         flags.maxOutputBytes === undefined
           ? machine || (options.tty ?? process.stdout.isTTY) !== true

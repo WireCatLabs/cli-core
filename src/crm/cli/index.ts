@@ -34,6 +34,7 @@ import {
   removeCrmItem,
   updateCrmItem,
 } from "../writes.js"
+import { csvFormatOption, renderCsv } from "./csv.js"
 import { addCrmSearchAll } from "./search-all.js"
 
 /**
@@ -338,25 +339,36 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
         query,
       )
         .option("--limit <n>", `${plural} per page, 1–${MOST}`, integer(MOST), 50)
-        .option("--page <n>", "which page, starting at 1", integer(1_000_000), 1),
+        .option("--page <n>", "which page, starting at 1", integer(1_000_000), 1)
+        .addOption(csvFormatOption()),
       `${plural} list status:open --json`,
       `${plural} list stage:"Quote sent"`,
-    ).action(async (words: string[], opts: { limit: number; page: number }, command: Command) => {
+      `${plural} list status:open --format csv > ${plural}.csv`,
+    ).action(async (words: string[], opts: { limit: number; page: number; format?: "csv" }, command: Command) => {
       const terms = queryTerms(words, query, `${plural} list`)
-      await within(command, async (run) => {
-        const filter: DealFilter = {
+      const read = (run: CrmRun) =>
+        run.store.deals.list({
           kind,
           account: run.account,
           ...(terms.has("status") ? { status: terms.get("status") as DealFilter["status"] } : {}),
           ...(terms.has("stage") ? { stage: terms.get("stage") as string } : {}),
           ...(terms.has("pipeline") ? { pipeline: terms.get("pipeline") as string } : {}),
           ...(terms.has("organization") ? { organization: terms.get("organization") as string } : {}),
-        }
-        const found = await run.store.deals.list({
-          ...filter,
           limit: Math.min(opts.limit + 1, MOST),
           offset: (opts.page - 1) * opts.limit,
         })
+      if (opts.format === "csv")
+        return renderCsv(command, options.open, async (run) => {
+          const found = await read(run)
+          return {
+            items: marked(found.slice(0, opts.limit), DEAL_UNTRUSTED) as Record<string, unknown>[],
+            fields: await run.store.crm.fields(run.account, kind),
+            page: opts.page,
+            hasMore: found.length > opts.limit,
+          }
+        })
+      await within(command, async (run) => {
+        const found = await read(run)
         return listOf(pathOf(command).join(" "), {
           items: marked(found.slice(0, opts.limit), DEAL_UNTRUSTED),
           limit: opts.limit,
