@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.606.0 — 08.11.2026
+
 ### Added
 
 - **Business relationships: `reports-to`, `customer-of` and `partner-of`, role lists, and a `standing` on every
