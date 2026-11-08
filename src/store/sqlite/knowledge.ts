@@ -700,81 +700,7 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
         )
       return organizationOf(row as Row)
     },
-    addProject: async ({ name, key, type = "other", organization, scope = "personal", description }) =>
-      write(database, () => {
-        const title = textOf(name, 200)
-        const organizationId =
-          organization === undefined
-            ? null
-            : (() => {
-                const thing = thingOf(database, organization)
-                if (thing?.type !== "organization") throw new CliError("not_found", `no organization ${organization}`)
-                return thing.id
-              })()
-        const wanted = key === undefined ? projectKey(title) : key.trim().toUpperCase()
-        if (!/^[A-Z][A-Z0-9]{2,3}$/.test(wanted))
-          throw new CliError("validation_error", "a new project key is 3–4 letters and digits, starting with a letter")
-        const aliasName = (() => {
-          try {
-            return normalizeVocabularyName(title)
-          } catch {
-            return null
-          }
-        })()
-        const alias = database
-          .prepare(
-            "SELECT DISTINCT p.id,p.name FROM aliases a JOIN projects p ON p.id=a.aliasable_id " +
-              "WHERE a.aliasable_type='project' AND a.account_id IS NULL AND p.account_id IS NULL AND p.deleted_at IS NULL " +
-              "AND a.name_folded IN (?,?) LIMIT 2",
-          )
-          .all(aliasName, normalizeVocabularyName(wanted))
-        if (alias.length)
-          throw new CliError("configuration_error", "the project name or key already aliases an existing project", {
-            reason: "vocabulary.alias-conflict",
-            candidates: alias.map((row) => ({ kind: "project", id: String(row.id), name: String(row.name) })),
-          })
-        if (key !== undefined && TYPED_KEY_PREFIXES.has(wanted))
-          throw new CliError(
-            "validation_error",
-            `the project key ${wanted} is kept for the keys of tasks found in messages`,
-          )
-        let chosen = wanted
-        for (
-          let n = 2;
-          TYPED_KEY_PREFIXES.has(chosen) ||
-          database.prepare("SELECT 1 FROM projects WHERE key = ?").get(chosen) ||
-          database
-            .prepare(
-              "SELECT 1 FROM aliases a JOIN projects p ON p.id=a.aliasable_id WHERE a.aliasable_type='project' AND a.account_id IS NULL AND p.account_id IS NULL AND p.deleted_at IS NULL AND a.name_folded=? LIMIT 1",
-            )
-            .get(normalizeVocabularyName(chosen));
-          n++
-        ) {
-          if (key !== undefined) throw new CliError("validation_error", `the project key ${wanted} is taken`)
-          const suffix = String(n)
-          if (suffix.length > 3)
-            throw new CliError("validation_error", "no short project key is available; choose an explicit key")
-          chosen = `${wanted.slice(0, 4 - suffix.length)}${suffix}`
-        }
-        const at = now()
-        const row = database
-          .prepare(
-            "INSERT INTO projects (key, name, name_folded, description, type, organization_id, scope, tasks_count, status, created_at, updated_at) " +
-              "VALUES (?, ?, ?, ?, ?, ?, ?, 0, 'active', ?, ?) RETURNING *",
-          )
-          .get(
-            chosen,
-            title,
-            fold(title),
-            description === undefined ? null : textOf(description, 2000),
-            oneOf(type, PROJECT_TYPES, "a project's type"),
-            organizationId,
-            oneOf(scope, SCOPES, "a scope"),
-            at,
-            at,
-          )
-        return projectOf(row as Row)
-      }),
+    addProject: async (input) => write(database, () => projectOf(insertProject(context, input))),
     projects: async (query) => {
       const asksKind = query !== undefined && walkQuery(query.root).some((node) => node.field === "kind")
       const where =
@@ -997,6 +923,84 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
       return reminder(key, id)
     },
   }
+}
+
+type ProjectInput = Parameters<KnowledgeStore["addProject"]>[0]
+
+/** A new project row, its key made from the name when none is given; inside the caller's write. */
+export const insertProject = (
+  { database, now }: StoreContext,
+  { name, key, type = "other", organization, scope = "personal", description }: ProjectInput,
+): Row => {
+  const title = textOf(name, 200)
+  const organizationId =
+    organization === undefined
+      ? null
+      : (() => {
+          const thing = thingOf(database, organization)
+          if (thing?.type !== "organization") throw new CliError("not_found", `no organization ${organization}`)
+          return thing.id
+        })()
+  const wanted = key === undefined ? projectKey(title) : key.trim().toUpperCase()
+  if (!/^[A-Z][A-Z0-9]{2,3}$/.test(wanted))
+    throw new CliError("validation_error", "a new project key is 3–4 letters and digits, starting with a letter")
+  const aliasName = (() => {
+    try {
+      return normalizeVocabularyName(title)
+    } catch {
+      return null
+    }
+  })()
+  const alias = database
+    .prepare(
+      "SELECT DISTINCT p.id,p.name FROM aliases a JOIN projects p ON p.id=a.aliasable_id " +
+        "WHERE a.aliasable_type='project' AND a.account_id IS NULL AND p.account_id IS NULL AND p.deleted_at IS NULL " +
+        "AND a.name_folded IN (?,?) LIMIT 2",
+    )
+    .all(aliasName, normalizeVocabularyName(wanted))
+  if (alias.length)
+    throw new CliError("configuration_error", "the project name or key already aliases an existing project", {
+      reason: "vocabulary.alias-conflict",
+      candidates: alias.map((row) => ({ kind: "project", id: String(row.id), name: String(row.name) })),
+    })
+  if (key !== undefined && TYPED_KEY_PREFIXES.has(wanted))
+    throw new CliError("validation_error", `the project key ${wanted} is kept for the keys of tasks found in messages`)
+  let chosen = wanted
+  for (
+    let n = 2;
+    TYPED_KEY_PREFIXES.has(chosen) ||
+    database.prepare("SELECT 1 FROM projects WHERE key = ?").get(chosen) ||
+    database
+      .prepare(
+        "SELECT 1 FROM aliases a JOIN projects p ON p.id=a.aliasable_id WHERE a.aliasable_type='project' AND a.account_id IS NULL AND p.account_id IS NULL AND p.deleted_at IS NULL AND a.name_folded=? LIMIT 1",
+      )
+      .get(normalizeVocabularyName(chosen));
+    n++
+  ) {
+    if (key !== undefined) throw new CliError("validation_error", `the project key ${wanted} is taken`)
+    const suffix = String(n)
+    if (suffix.length > 3)
+      throw new CliError("validation_error", "no short project key is available; choose an explicit key")
+    chosen = `${wanted.slice(0, 4 - suffix.length)}${suffix}`
+  }
+  const at = now()
+  const row = database
+    .prepare(
+      "INSERT INTO projects (key, name, name_folded, description, type, organization_id, scope, tasks_count, status, created_at, updated_at) " +
+        "VALUES (?, ?, ?, ?, ?, ?, ?, 0, 'active', ?, ?) RETURNING *",
+    )
+    .get(
+      chosen,
+      title,
+      fold(title),
+      description === undefined ? null : textOf(description, 2000),
+      oneOf(type, PROJECT_TYPES, "a project's type"),
+      organizationId,
+      oneOf(scope, SCOPES, "a scope"),
+      at,
+      at,
+    )
+  return row as Row
 }
 
 /** Existing project keys stay stable; only new projects receive the short-key convention. */

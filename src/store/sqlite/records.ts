@@ -1,35 +1,56 @@
 import { CliError } from "@wirecat/cli-base"
-import { formatDecimal, minorUnits, scaleOf } from "../../domain/money.js"
-import { rolesOf } from "../../domain/record-types.js"
 import {
+  DECIDED_TABLES,
+  type IdentityType,
+  isIdentityType,
+  isRecordType,
+  RECORD_TYPES,
+  type RecordType,
+  type RecordTypeSpec,
+} from "../../domain/record-types.js"
+import {
+  type EnvelopeOptions,
   type EnvelopeRecord,
   type EnvelopeSource,
+  fieldReferences,
   type IngestError,
   pointerOf,
   type RecordRelation,
   recordFingerprint,
 } from "../../domain/records.js"
-import type { CacheDatabase } from "../driver.js"
 import { accountPk, findAccountPk } from "./accounts.js"
-import { financeOperationsOver, type PaymentDetail } from "./finance.js"
+import { contractOperationsOver } from "./business-contracts.js"
+import { crmRowsOver } from "./crm.js"
+import { financeOperationsOver } from "./finance.js"
 import type { Author } from "./memories.js"
+import { transactionOperationsOver } from "./money-transactions.js"
 import { requiredThing } from "./notes.js"
 import type { StoreContext } from "./open.js"
+import { orderOperationsOver } from "./orders.js"
+import { productOperationsOver } from "./products.js"
 import {
-  FIELD_REFERENCE_ROLES,
-  IMPORTER,
-  isProjected,
-  PROJECTED_TYPES,
-  type ProjectedType,
-  RECORD_PROJECTORS,
+  addIdentifiers,
+  createEntity,
+  type Identifiers,
+  identifiersOf,
+  matchOf,
+  renameMade,
+} from "./record-matching.js"
+import {
+  type Projection,
+  type ProjectionTools,
+  type RecordProjector,
   type Row,
   refusal,
-  type Share,
   stringField,
-} from "./record-projectors.js"
-import { netPaidSql } from "./refunds.js"
-import { referenceOfThing, storedThing } from "./things.js"
-import { read, write } from "./transaction.js"
+} from "./record-projection.js"
+import { RECORD_PROJECTORS } from "./record-projectors.js"
+import { isDerived, recordRelationsOver, statementsOf } from "./record-relations.js"
+import { recordRemapOver } from "./record-remap.js"
+import { recordSettlingOver } from "./record-settling.js"
+import { subscriptionOperationsOver } from "./subscriptions.js"
+import { read, rehearse, write } from "./transaction.js"
+import { walletOperationsOver } from "./wallets.js"
 
 export interface RecordKey {
   provider: string
@@ -38,13 +59,26 @@ export interface RecordKey {
   externalId: string
 }
 
+export interface SourceRecordRelation {
+  role: string
+  type: string
+  /** `null` when the relation names a store entity by `ref`. */
+  externalId: string | null
+  ref: string | null
+  as: string | null
+  amount: string | null
+  resolved: boolean
+}
+
 export interface SourceRecord extends RecordKey {
   fields: Record<string, unknown>
   revision: number | null
   fingerprint: string
-  relations: { role: string; type: string; externalId: string; amount: string | null; resolved: boolean }[]
-  /** The entity made from it or mapped to it by the owner; `null` while it waits or for a type without a table. */
+  relations: SourceRecordRelation[]
+  /** The entity made from it, matched to it or mapped to it by the owner; `null` while it waits or for `custom:`. */
   entity: string | null
+  /** The import made its person, organization or project: no entity had its identifiers. */
+  createdEntity: boolean
   /** The source changed or deleted it after its entity was made: the owner should look at the entity. */
   flagged: boolean
   batchId: string
@@ -53,33 +87,75 @@ export interface SourceRecord extends RecordKey {
   deletedAt: string | null
 }
 
-export interface RecordOutcome {
-  /** The record's place in the envelope's `records`. */
-  index: number
-  key: string
-  status: "created" | "updated" | "unchanged" | "deleted" | "refused"
-  error?: IngestError
+export interface MappedRecord extends SourceRecord {
+  /** The entity the import had made for it, when nothing points at it any more: the owner's to delete or merge. */
+  unused: string | null
 }
 
-export interface RecordsWritten {
-  outcomes: RecordOutcome[]
-  /** `invoice:` and `payment:` refs this import proposed, also for records of earlier imports it completed. */
+/** One line of a run: its place in the envelope or stream, the record, and why it was refused before the store. */
+export interface RunItem {
+  index: number
+  record: EnvelopeRecord
+  errors?: IngestError[]
+}
+
+export interface RunOptions {
+  dryRun?: boolean
+  /** Records per transaction, 1000 by default. */
+  chunk?: number
+  options?: EnvelopeOptions
+  /** How many entries each list keeps, 1000 by default; counts stay exact. */
+  limit?: number
+  /** Every refusal as it happens, the ones past `limit` too. */
+  onIssue?: (error: IngestError) => void
+}
+
+export interface Unmatched {
+  index: number
+  key: string
+  reason: string
+  /** The entities its identifiers point at: the owner says which one it is with `records link`. */
+  candidates: string[]
+}
+
+export interface RecordsRun {
+  created: number
+  updated: number
+  unchanged: number
+  deleted: number
+  refused: number
+  errors: IngestError[]
+  /** Proposals this run made or changed, also for records of earlier imports it completed. */
   proposed: string[]
   /** Kept, with no entity yet: the roles whose target is not imported or has no entity. */
   waiting: { index: number; key: string; missing: string[] }[]
+  /** A person, organization or project whose identifiers point at more than one entity. */
+  unmatched: Unmatched[]
   /** Changed or deleted at the source after its entity was made. */
   flagged: { index: number; key: string; entity: string }[]
-  /** A record of an earlier import this one completed, whose entity was still refused. */
-  laterErrors: IngestError[]
+  /** A list stopped at `limit`. */
+  truncated: boolean
+}
+
+export interface MatchRun {
+  linked: number
+  created: number
+  unmatched: { key: RecordKey; reason: string; candidates: string[] }[]
+  proposed: string[]
+  errors: IngestError[]
 }
 
 export interface RecordStore {
-  /** Writes validated records of one source, per chunk in one transaction; a dry run rolls everything back. */
-  write(
+  /**
+   * Writes the records of one source, per chunk in one transaction, checking duplicates and collecting the receipt's
+   * lists in the store as it goes, so a stream of any length holds one chunk in memory. A dry run is one
+   * transaction, rolled back at the end.
+   */
+  run(
     source: EnvelopeSource,
-    records: { index: number; record: EnvelopeRecord }[],
-    options?: { dryRun?: boolean; chunk?: number },
-  ): Promise<RecordsWritten>
+    items: AsyncIterable<RunItem> | Iterable<RunItem>,
+    options?: RunOptions,
+  ): Promise<RecordsRun>
   get(key: RecordKey): Promise<SourceRecord | undefined>
   list(filter: {
     provider: string
@@ -87,18 +163,26 @@ export interface RecordStore {
     type?: string
     /** Only records whose entity waits for a reference. */
     waiting?: boolean
+    /** Only persons, organizations and projects whose identifiers point at more than one entity. */
+    unmatched?: boolean
     flagged?: boolean
     /** 1–500, 100 by default. */
     limit?: number
   }): Promise<SourceRecord[]>
   /**
    * The owner says which entity a record is: `person:4` for a payer a sheet names. Never done by name. Records that
-   * waited for it get their entity, as proposals.
+   * waited for it get their entity, as proposals. A record whose entity the import made is repointed, with whatever
+   * this account's records filled from it.
    */
-  map(key: RecordKey, entity: string, by: Author): Promise<SourceRecord>
+  map(key: RecordKey, entity: string, by: Author): Promise<MappedRecord>
+  /** Matches or makes the entity of every waiting person, organization and project of one account, as an import does. */
+  match(account: { provider: string; account: string }): Promise<MatchRun>
 }
 
-const PROJECTED_TYPES_SQL = PROJECTED_TYPES.map((type) => `'${type}'`).join(", ")
+const PROJECTORS = RECORD_PROJECTORS
+
+/** v1's single roles a record may also name in `fields.<role>`: a v1 invoice whose `fields.payer` is not text is refused. */
+const FIELD_REFERENCE_ROLES = ["issuer", "counterparty", "project", "payer", "payee"]
 
 const codeOf = (error: CliError): string => {
   const reason = (error.details as { reason?: unknown } | undefined)?.reason
@@ -115,163 +199,140 @@ const unsettled = (fields: Row, relations: RecordRelation[]) =>
 
 const iso = (value: unknown) => new Date(Number(value)).toISOString()
 
+const specOf = (type: RecordType) => RECORD_TYPES[type] as RecordTypeSpec
+
+let runs = 0
+
 export const recordStoreOver = (context: StoreContext): RecordStore => {
   const { database, now } = context
+  const sql = statementsOf(database)
   const finance = financeOperationsOver(context)
-  const statements = new Map<string, ReturnType<CacheDatabase["prepare"]>>()
-  const sql = (text: string) => {
-    let statement = statements.get(text)
-    if (!statement) {
-      statement = database.prepare(text)
-      statements.set(text, statement)
+  const { entityRef, relatedOf, storedRelations, relate, missingOf } = recordRelationsOver(context, sql)
+  const { settle, resettle, checkShares } = recordSettlingOver(
+    context,
+    finance,
+    (id) => relatedOf(id, "payment").shares,
+  )
+  const { pointedAt, repoint } = recordRemapOver(context)
+  let tools: ProjectionTools | undefined
+  const toolsOf = (): ProjectionTools => {
+    tools ??= {
+      context,
+      finance,
+      orders: orderOperationsOver(context),
+      contracts: contractOperationsOver(context),
+      subscriptions: subscriptionOperationsOver(context),
+      transactions: transactionOperationsOver(context),
+      products: productOperationsOver(context),
+      wallets: walletOperationsOver(context),
+      crm: crmRowsOver(context),
+      settle,
     }
-    return statement
+    return tools
   }
 
-  const entityRef = (type: unknown, id: unknown): string | null =>
-    type == null ? null : (referenceOfThing(database, storedThing(type, id)) ?? `${String(type)}:${String(id)}`)
+  const projectionOf = (row: Row, source: EnvelopeSource, related: ReturnType<typeof relatedOf>): Projection => ({
+    externalId: String(row.external_id),
+    accountId: Number(row.account_id),
+    source,
+    fields: JSON.parse(String(row.fields)) as Row,
+    related: related.related,
+    as: related.as,
+    shares: related.shares,
+    products: related.products,
+  })
 
-  /** Roles a projection needs whose target has no entity yet, the entities of the rest, and what each invoice gets. */
-  const relatedOf = (recordId: number, type: ProjectedType) => {
-    const roles = rolesOf(type)
-    const known = roles.map(([name]) => name)
-    const many = roles.flatMap(([name, role]) => (role.many ? [name] : []))
-    const rows = sql(
-      "SELECT rr.role, rr.amount, t.entity_type, t.entity_id FROM record_relations rr " +
-        "LEFT JOIN records t ON t.id = rr.target_id AND t.deleted_at IS NULL WHERE rr.record_id = ? ORDER BY rr.id",
-    ).all(recordId)
-    const related = new Map<string, string[]>()
-    const shares: Share[] = []
-    const missing = new Set<string>()
-    for (const row of rows) {
-      const role = String(row.role)
-      if (!known.includes(role)) continue
-      const ref = entityRef(row.entity_type, row.entity_id)
-      if (ref === null) missing.add(role)
-      else related.set(role, [...(related.get(role) ?? []), ref])
-      if (ref !== null && role === "settles")
-        shares.push({ invoice: ref, amount: row.amount == null ? null : String(row.amount) })
-    }
-    for (const [role, refs] of related)
-      if (refs.length > 1 && !many.includes(role)) refusal(`a record has one ${role}`, "record.relation-ambiguous")
-    return { related, shares, missing: [...missing] }
+  const isProposed = (type: RecordType, id: number) => {
+    const table = (DECIDED_TABLES as Record<string, string>)[type]
+    return table !== undefined && sql(`SELECT review FROM ${table} WHERE id = ?`).get(id)?.review === "proposed"
   }
 
-  /** Makes the proposal a waiting record stands for, once every reference it names has an entity. */
-  const project = (row: Row, source: EnvelopeSource): { proposed?: string; missing: string[] } => {
-    const type = row.type as ProjectedType
-    const { related, shares, missing } = relatedOf(Number(row.id), type)
-    if (missing.length > 0) return { missing }
-    const fields = JSON.parse(String(row.fields)) as Row
-    for (const name of FIELD_REFERENCE_ROLES) stringField(fields, name)
-    const ref = RECORD_PROJECTORS[type](fields, { related, shares }, source, { finance, settle })
+  const setEntity = (recordId: number, ref: string, created: boolean) => {
     const entity = requiredThing(database, ref)
-    sql("UPDATE records SET entity_type = ?, entity_id = ?, projected_fingerprint = fingerprint WHERE id = ?").run(
-      entity.type,
-      entity.id,
-      Number(row.id),
-    )
-    return { proposed: ref, missing: [] }
+    sql(
+      "UPDATE records SET entity_type = ?, entity_id = ?, created_entity = ?, projected_fingerprint = fingerprint " +
+        "WHERE id = ?",
+    ).run(entity.type, entity.id, created ? 1 : 0, recordId)
+    return entity
   }
 
-  /**
-   * What other payments leave open on an invoice. Proposed ones count too: the owner confirms them later, so payments
-   * of one batch would otherwise each take the whole invoice.
-   */
-  const freeOn = (invoice: string, payment: string): number => {
-    const [target, own] = [requiredThing(database, invoice), requiredThing(database, payment)]
-    const row = sql(
-      `SELECT i.total - ${netPaidSql("i.id", { counted: "pending", excluding: "?" })} AS free FROM invoices i WHERE i.id = ?`,
-    ).get(own.id, target.id)
-    return Number(row?.free ?? 0)
+  interface Projected {
+    /** The entity it now has. */
+    made?: string
+    /** Made as a proposal. */
+    proposed?: string
+    missing: string[]
+    unmatched?: { reason: string; candidates: string[] }
   }
 
-  /** A payment settles each invoice it names by the amount the source gives, then the rest as far as both allow. */
-  const settle = (made: PaymentDetail, shares: Share[]): string => {
-    const units = (amount: string) => minorUnits(amount, made.currency)
-    let left = units(made.unallocated)
-    const given = shares.filter((one) => one.amount !== null)
-    for (const { invoice, amount } of [...given, ...shares.filter((one) => one.amount === null)]) {
-      const share = amount === null ? Math.min(left, freeOn(invoice, made.ref)) : units(amount)
-      if (share <= 0) continue
-      finance.allocate({
-        payment: made.ref,
-        invoice,
-        amount: formatDecimal(share, scaleOf(made.currency)),
-        by: IMPORTER,
-      })
-      left -= share
-    }
-    return made.ref
-  }
-
-  /** A payment the import proposed and the owner has not decided yet takes its record's settles relations again. */
-  const resettle = (recordId: number, ref: string): boolean => {
-    const payment = finance.payment(ref)
-    if (payment.review !== "proposed" || payment.author.type !== "bot" || payment.author.name !== IMPORTER.bot)
-      return false
-    for (const { invoice } of payment.allocations) finance.unallocate({ payment: ref, invoice, by: IMPORTER })
-    settle(finance.payment(ref), relatedOf(recordId, "payment").shares)
-    return true
-  }
-
-  /** The settles amounts a payment record gives, refused at the first one that is not money or goes past the payment. */
-  const checkShares = (record: EnvelopeRecord) => {
-    const relations = record.relations ?? []
-    if (record.type !== "payment" || !relations.some((relation) => relation.amount !== undefined)) return
-    const fields = record.fields ?? {}
-    if (typeof fields.currency !== "string") return
-    const currency = fields.currency
-    let left: number
-    try {
-      left = minorUnits(fields.amount, currency)
-    } catch {
-      return
-    }
-    for (const [index, { amount }] of relations.entries()) {
-      if (amount === undefined) continue
-      const at = ["relations", index, "amount"]
-      let units = 0
-      try {
-        units = minorUnits(amount, currency, "a settles amount")
-      } catch (error) {
-        if (!(error instanceof CliError)) throw error
-        refusal(error.message, codeOf(error), at)
+  /** A person, organization or project: linked by a strong identifier, or made when none matches. */
+  const identify = (row: Row, type: IdentityType, source: EnvelopeSource): Projected => {
+    const fields = JSON.parse(String(row.fields)) as Row
+    const ids = identifiersOf(database, type, fields, source, String(row.external_id))
+    const match = matchOf(database, type, ids)
+    if (match.outcome === "ambiguous")
+      return {
+        missing: [],
+        unmatched: { reason: match.reason, candidates: match.ids.map((id) => entityRef(type, id) as string) },
       }
-      if (units <= 0) refusal("a settles amount is more than 0", "money.amount", at)
-      left -= units
-      if (left < 0)
-        refusal(
-          `the settles amounts add up to more than the payment's ${String(fields.amount)} ${currency}`,
-          "record.over-payment",
-          at,
-        )
+    if (match.outcome === "one") {
+      const ref = entityRef(type, match.id) as string
+      setEntity(Number(row.id), ref, false)
+      return { made: ref, missing: [] }
     }
+    const related = relatedOf(Number(row.id), type)
+    if (related.missing.length > 0) return { missing: related.missing }
+    const organization = related.related.get("organization")?.[0]
+    const id = createEntity(
+      context,
+      type,
+      fields,
+      ids,
+      { organization: organization === undefined ? null : requiredThing(database, organization).id },
+      source,
+      String(row.external_id),
+    )
+    const ref = entityRef(type, id) as string
+    setEntity(Number(row.id), ref, true)
+    return { made: ref, missing: [] }
+  }
+
+  /** Gives a record its entity once every reference it names has one: a proposal, a direct row, or a match. */
+  const project = (row: Row, source: EnvelopeSource): Projected => {
+    const type = row.type as RecordType
+    if (isIdentityType(type)) return identify(row, type, source)
+    const projector = PROJECTORS[type] as RecordProjector
+    const related = relatedOf(Number(row.id), type)
+    if (related.missing.length > 0) return { missing: related.missing }
+    const projection = projectionOf(row, source, related)
+    if (type === "invoice" || type === "payment")
+      for (const name of FIELD_REFERENCE_ROLES) stringField(projection.fields, name)
+    const ref = projector.create(projection, toolsOf())
+    const entity = setEntity(Number(row.id), ref, false)
+    return { made: ref, missing: [], ...(isProposed(type, entity.id) ? { proposed: ref } : {}) }
   }
 
   /** Records that waited on `target` and may now have their entity, and theirs in turn. */
   const completeDependents = (
     target: number,
     source: EnvelopeSource,
-    proposed: string[],
-    laterErrors: IngestError[],
+    proposed: (ref: string) => void,
+    laterError: (error: IngestError) => void,
   ) => {
     const queue = [target]
     while (queue.length > 0) {
       const rows = sql(
         "SELECT DISTINCT r.* FROM record_relations rr JOIN records r ON r.id = rr.record_id WHERE rr.target_id = ? " +
-          `AND r.entity_id IS NULL AND r.deleted_at IS NULL AND r.type IN (${PROJECTED_TYPES_SQL})`,
+          "AND r.entity_id IS NULL AND r.deleted_at IS NULL AND r.type NOT LIKE 'custom:%'",
       ).all(queue.shift() as number)
       for (const row of rows) {
         try {
           const done = write(database, () => project(row, source))
-          if (done.proposed) {
-            proposed.push(done.proposed)
-            queue.push(Number(row.id))
-          }
+          if (done.proposed) proposed(done.proposed)
+          if (done.made) queue.push(Number(row.id))
         } catch (error) {
           if (!(error instanceof CliError)) throw error
-          laterErrors.push({
+          laterError({
             pointer: "",
             code: codeOf(error),
             message: `${String(row.type)} ${String(row.external_id)} waits: ${error.message}`,
@@ -281,41 +342,61 @@ export const recordStoreOver = (context: StoreContext): RecordStore => {
     }
   }
 
-  const storedRelations = (recordId: number): RecordRelation[] =>
-    sql("SELECT role, target_type, target_external_id FROM record_relations WHERE record_id = ?")
-      .all(recordId)
-      .map((row) => ({
-        role: String(row.role),
-        type: String(row.target_type),
-        external_id: String(row.target_external_id),
-      }))
+  /** Whether a deleted record's entity still counts: a rejected proposal does not. */
+  const liveEntity = (stored: Row): boolean => {
+    if (stored.entity_id == null) return false
+    const table = (DECIDED_TABLES as Record<string, string>)[String(stored.entity_type)]
+    return (
+      table === undefined ||
+      sql(`SELECT review FROM ${table} WHERE id = ?`).get(Number(stored.entity_id))?.review !== "rejected"
+    )
+  }
 
-  const relate = (recordId: number, accountId: number, relations: RecordRelation[], at: number) => {
-    sql("DELETE FROM record_relations WHERE record_id = ?").run(recordId)
-    for (const relation of relations)
-      sql(
-        "INSERT OR IGNORE INTO record_relations (record_id, role, target_type, target_external_id, target_id, " +
-          "created_at, amount) VALUES (?, ?, ?, ?, (SELECT id FROM records WHERE account_id = ? AND type = ? " +
-          "AND external_id = ?), ?, ?)",
-      ).run(
-        recordId,
-        relation.role,
-        relation.type,
-        relation.external_id,
-        accountId,
-        relation.type,
-        relation.external_id,
-        at,
-        relation.amount ?? null,
+  interface Written {
+    status: "created" | "updated" | "unchanged" | "deleted"
+    id: number
+    flagged?: boolean
+    complete?: boolean
+    unmatched?: { reason: string; candidates: string[] }
+  }
+
+  /** Takes a changed record into the entity it already has, as its type's registry entry says. */
+  const updateEntity = (stored: Row, id: number, source: EnvelopeSource, proposed: (ref: string) => void): boolean => {
+    const type = stored.type as RecordType
+    const ref = entityRef(stored.entity_type, stored.entity_id) as string
+    const row = sql("SELECT * FROM records WHERE id = ?").get(id) as Row
+    const fields = JSON.parse(String(row.fields)) as Row
+    if (isIdentityType(type)) {
+      if (Number(stored.created_entity) !== 1) return false
+      const before = (JSON.parse(String(stored.fields)) as Row).name
+      renameMade(context, type, Number(stored.entity_id), fields.name, before)
+      const ids: Identifiers = identifiersOf(database, type, fields, source, String(row.external_id))
+      addIdentifiers(
+        context,
+        type,
+        Number(stored.entity_id),
+        ids,
+        typeof fields.name === "string" ? fields.name : null,
+        source,
       )
+      return true
+    }
+    const projector = PROJECTORS[type]
+    if (!projector?.update || specOf(type).update === "flag") return false
+    const related = relatedOf(id, type)
+    if (related.missing.length > 0) return false
+    if (!projector.update(ref, projectionOf(row, source, related), toolsOf())) return false
+    if (isProposed(type, Number(stored.entity_id))) proposed(ref)
+    return true
   }
 
   const writeOne = (
     accountId: number,
     source: EnvelopeSource,
-    { record }: { index: number; record: EnvelopeRecord },
-    proposed: string[],
-  ): { status: RecordOutcome["status"]; id?: number; flagged?: boolean; complete?: boolean } => {
+    record: EnvelopeRecord,
+    options: EnvelopeOptions,
+    proposed: (ref: string) => void,
+  ): Written => {
     const stored = sql("SELECT * FROM records WHERE account_id = ? AND type = ? AND external_id = ?").get(
       accountId,
       record.type,
@@ -344,11 +425,23 @@ export const recordStoreOver = (context: StoreContext): RecordStore => {
         source.batch_id,
         Number(stored.id),
       )
-      return { status: "deleted", id: Number(stored.id), flagged: stored.entity_id != null }
+      return { status: "deleted", id: Number(stored.id), flagged: liveEntity(stored) }
     }
     const fields = JSON.stringify(record.fields)
-    if (stored && stored.fingerprint === fingerprint && stored.deleted_at == null)
+    const typed = isRecordType(record.type)
+    if (stored && stored.fingerprint === fingerprint && stored.deleted_at == null) {
+      // A person, organization or project an earlier version left waiting for the owner is matched or made now.
+      if (stored.entity_id == null && isIdentityType(record.type)) {
+        const done = project(stored, source)
+        return {
+          status: "unchanged",
+          id: Number(stored.id),
+          complete: done.made !== undefined,
+          unmatched: done.unmatched,
+        }
+      }
       return { status: "unchanged", id: Number(stored.id) }
+    }
     checkShares(record)
     // Whether the payment the record stands for differs in more than whom it settles, against the stored version.
     const beyondSettles =
@@ -375,93 +468,226 @@ export const recordStoreOver = (context: StoreContext): RecordStore => {
         "UPDATE record_relations SET target_id = ? WHERE target_id IS NULL AND target_type = ? AND target_external_id = ? " +
           "AND record_id IN (SELECT id FROM records WHERE account_id = ?)",
       ).run(id, record.type, record.external_id, accountId)
-    relate(id, accountId, relations, time)
-    let projected = false
+    relate(id, accountId, [...relations, ...fieldReferences(record, options)], time)
+    let made = false
+    let unmatched: Written["unmatched"]
     let flagged = stored?.entity_id != null && stored.projected_fingerprint !== fingerprint
-    if (isProjected(record.type) && stored?.entity_id == null) {
-      const done = project({ id, type: record.type, fields, account_id: accountId }, source)
-      if (done.proposed) proposed.push(done.proposed)
-      projected = done.proposed !== undefined
+    if (typed && stored?.entity_id == null) {
+      const done = project({ ...(sql("SELECT * FROM records WHERE id = ?").get(id) as Row) }, source)
+      if (done.proposed) proposed(done.proposed)
+      made = done.made !== undefined
+      unmatched = done.unmatched
     } else if (record.type === "payment" && stored?.entity_type === "payment" && stored.deleted_at == null) {
       const ref = `payment:${Number(stored.entity_id)}`
       if (resettle(id, ref)) {
-        proposed.push(ref)
+        proposed(ref)
         if (!beyondSettles) {
           sql("UPDATE records SET projected_fingerprint = fingerprint WHERE id = ?").run(id)
           flagged = false
         }
+      }
+    } else if (typed && stored?.entity_id != null && stored.deleted_at == null && flagged) {
+      if (updateEntity(stored, id, source, proposed)) {
+        sql("UPDATE records SET projected_fingerprint = fingerprint WHERE id = ?").run(id)
+        flagged = false
       }
     }
     return {
       status: stored ? "updated" : "created",
       id,
       flagged,
+      unmatched,
       // Records waiting on this one move only when it has an entity: made now, or back from a delete.
-      complete: projected || (stored?.deleted_at != null && stored.entity_id != null),
+      complete: made || (stored?.deleted_at != null && stored.entity_id != null),
     }
   }
 
-  const missingOf = (id: number): string[] | null => {
-    const row = sql("SELECT type, entity_id, deleted_at FROM records WHERE id = ?").get(id)
-    if (!row || row.entity_id != null || row.deleted_at != null || !isProjected(row.type)) return null
-    const { missing } = relatedOf(id, row.type)
-    return missing.length > 0 ? missing : null
+  /** The receipt's lists, as far as `limit`: counts are kept exactly beside them. */
+  const capped = <T>(limit: number, flag: () => void) => {
+    const list: T[] = []
+    return {
+      list,
+      push: (item: T) => {
+        if (list.length < limit) list.push(item)
+        else flag()
+      },
+    }
   }
 
-  const ingest = (
+  const runOver = async (
     source: EnvelopeSource,
-    records: { index: number; record: EnvelopeRecord }[],
-    chunk: number,
-  ): RecordsWritten => {
-    const outcomes: RecordOutcome[] = []
-    const proposed: string[] = []
-    const flagged: RecordsWritten["flagged"] = []
-    const laterErrors: IngestError[] = []
-    const kept: { index: number; key: string; id: number }[] = []
-    for (let start = 0; start < records.length; start += chunk) {
-      write(database, () => {
-        const accountId = accountPk(context, { provider: source.provider, account: source.account })
-        const complete: number[] = []
-        for (const item of records.slice(start, start + chunk)) {
-          try {
-            const done = isProjected(item.record.type)
-              ? write(database, () => writeOne(accountId, source, item, proposed))
-              : writeOne(accountId, source, item, proposed)
-            outcomes.push({ index: item.index, key: item.record.key, status: done.status })
-            if (done.id === undefined) continue
-            kept.push({ index: item.index, key: item.record.key, id: done.id })
-            if (done.flagged) {
-              const row = sql("SELECT entity_type, entity_id FROM records WHERE id = ?").get(done.id)
-              flagged.push({
-                index: item.index,
-                key: item.record.key,
-                entity: entityRef(row?.entity_type, row?.entity_id) as string,
+    items: AsyncIterable<RunItem> | Iterable<RunItem>,
+    { chunk = 1000, options = {}, limit = 1000, onIssue }: RunOptions,
+  ): Promise<RecordsRun> => {
+    runs += 1
+    const table = `temp.records_run_${runs}`
+    const proposedTable = `temp.records_run_${runs}_proposed`
+    database.exec(
+      `CREATE TEMP TABLE ${table.slice(5)} (idx INTEGER NOT NULL, key TEXT NOT NULL UNIQUE, ` +
+        "identity TEXT NOT NULL UNIQUE, record_id INTEGER, flagged INTEGER NOT NULL DEFAULT 0, unmatched TEXT)",
+    )
+    database.exec(`CREATE TEMP TABLE ${proposedTable.slice(5)} (ref TEXT PRIMARY KEY)`)
+    try {
+      let truncated = false
+      const flag = () => {
+        truncated = true
+      }
+      const errors = capped<IngestError>(limit, flag)
+      const counts = { created: 0, updated: 0, unchanged: 0, deleted: 0, refused: 0 }
+      const issue = (error: IngestError) => {
+        errors.push(error)
+        onIssue?.(error)
+      }
+      const proposed = (ref: string) => {
+        database.prepare(`INSERT OR IGNORE INTO ${proposedTable} (ref) VALUES (?)`).run(ref)
+      }
+      const takeChunk = (batch: RunItem[]) =>
+        write(database, () => {
+          const accountId = accountPkOf(source)
+          const complete: number[] = []
+          for (const item of batch) {
+            const { index, record } = item
+            const refused = (error: IngestError) => {
+              counts.refused += 1
+              issue(error)
+            }
+            if (item.errors?.length) {
+              counts.refused += 1
+              for (const error of item.errors) issue(error)
+              continue
+            }
+            const identity = `${record.type}\0${record.external_id}`
+            if (database.prepare(`SELECT 1 FROM ${table} WHERE key = ?`).get(record.key)) {
+              refused({
+                pointer: pointerOf("records", index, "key"),
+                code: "record.duplicate-key",
+                message: "another record of this envelope has this key",
+                key: record.key,
+              })
+              continue
+            }
+            if (database.prepare(`SELECT 1 FROM ${table} WHERE identity = ?`).get(identity)) {
+              refused({
+                pointer: pointerOf("records", index, "external_id"),
+                code: "record.duplicate",
+                message: `another record of this envelope is ${record.type} ${record.external_id}`,
+                key: record.key,
+              })
+              continue
+            }
+            database
+              .prepare(`INSERT INTO ${table} (idx, key, identity) VALUES (?, ?, ?)`)
+              .run(index, record.key, identity)
+            try {
+              const done = write(database, () => writeOne(accountId, source, record, options, proposed))
+              counts[done.status] += 1
+              database
+                .prepare(`UPDATE ${table} SET record_id = ?, flagged = ?, unmatched = ? WHERE key = ?`)
+                .run(
+                  done.id,
+                  done.flagged ? 1 : 0,
+                  done.unmatched === undefined ? null : JSON.stringify(done.unmatched),
+                  record.key,
+                )
+              if (done.complete) complete.push(done.id)
+            } catch (error) {
+              if (!(error instanceof CliError)) throw error
+              const at = (error.details as { at?: string | (string | number)[] } | undefined)?.at ?? "fields"
+              refused({
+                pointer: pointerOf("records", index, ...[at].flat()),
+                code: codeOf(error),
+                message: error.message,
+                key: record.key,
               })
             }
-            if (done.complete) complete.push(done.id)
-          } catch (error) {
-            if (!(error instanceof CliError)) throw error
-            const at = (error.details as { at?: string | (string | number)[] } | undefined)?.at ?? "fields"
-            const pointer = pointerOf("records", item.index, ...[at].flat())
-            outcomes.push({
-              index: item.index,
-              key: item.record.key,
-              status: "refused",
-              error: { pointer, code: codeOf(error), message: error.message, key: item.record.key },
-            })
           }
+          for (const id of complete) completeDependents(id, source, proposed, issue)
+        })
+      let batch: RunItem[] = []
+      for await (const item of items) {
+        batch.push(item)
+        if (batch.length >= chunk) {
+          takeChunk(batch)
+          batch = []
         }
-        for (const id of complete) completeDependents(id, source, proposed, laterErrors)
+      }
+      if (batch.length > 0) takeChunk(batch)
+      return read(database, () => {
+        const listed = <T>(rows: Iterable<Row>, of: (row: Row) => T | null): T[] => {
+          const kept: T[] = []
+          for (const row of rows) {
+            const item = of(row)
+            if (item === null) continue
+            if (kept.length === limit) {
+              flag()
+              break
+            }
+            kept.push(item)
+          }
+          return kept
+        }
+        const waiting = listed(
+          database
+            .prepare(
+              `SELECT run.idx, run.key, run.record_id FROM ${table} run JOIN records r ON r.id = run.record_id ` +
+                "WHERE r.entity_id IS NULL AND r.deleted_at IS NULL AND r.type NOT LIKE 'custom:%' " +
+                "AND run.unmatched IS NULL ORDER BY run.idx",
+            )
+            .all(),
+          (row) => {
+            const missing = missingOf(Number(row.record_id))
+            return missing === null ? null : { index: Number(row.idx), key: String(row.key), missing }
+          },
+        )
+        const unmatched = listed(
+          database
+            .prepare(
+              `SELECT run.idx, run.key, run.unmatched FROM ${table} run JOIN records r ON r.id = run.record_id ` +
+                "WHERE run.unmatched IS NOT NULL AND r.entity_id IS NULL ORDER BY run.idx",
+            )
+            .all(),
+          (row) => ({
+            index: Number(row.idx),
+            key: String(row.key),
+            ...(JSON.parse(String(row.unmatched)) as { reason: string; candidates: string[] }),
+          }),
+        )
+        const flagged = listed(
+          database
+            .prepare(
+              `SELECT run.idx, run.key, r.entity_type, r.entity_id FROM ${table} run JOIN records r ` +
+                "ON r.id = run.record_id WHERE run.flagged = 1 ORDER BY run.idx",
+            )
+            .all(),
+          (row) => ({
+            index: Number(row.idx),
+            key: String(row.key),
+            entity: entityRef(row.entity_type, row.entity_id) as string,
+          }),
+        )
+        const proposedRows = database
+          .prepare(`SELECT ref FROM ${proposedTable} ORDER BY rowid LIMIT ?`)
+          .all(limit + 1)
+          .map((row) => String(row.ref))
+        if (proposedRows.length > limit) flag()
+        return {
+          ...counts,
+          errors: errors.list.sort((a, b) => a.pointer.localeCompare(b.pointer, "en", { numeric: true })),
+          proposed: proposedRows.slice(0, limit),
+          waiting,
+          unmatched,
+          flagged,
+          truncated,
+        }
       })
+    } finally {
+      database.exec(`DROP TABLE IF EXISTS ${table}`)
+      database.exec(`DROP TABLE IF EXISTS ${proposedTable}`)
     }
-    const waiting = read(database, () =>
-      kept.flatMap(({ index, key, id }) => {
-        const missing = missingOf(id)
-        return missing === null ? [] : [{ index, key, missing }]
-      }),
-    )
-    return { outcomes, proposed: [...new Set(proposed)], waiting, flagged, laterErrors }
   }
+
+  const accountPkOf = (source: EnvelopeSource) =>
+    accountPk(context, { provider: source.provider, account: source.account })
 
   const sourceRecordOf = (row: Row): SourceRecord => ({
     provider: String(row.provider),
@@ -472,18 +698,26 @@ export const recordStoreOver = (context: StoreContext): RecordStore => {
     revision: row.revision == null ? null : Number(row.revision),
     fingerprint: String(row.fingerprint),
     relations: sql(
-      "SELECT role, target_type, target_external_id, target_id, amount FROM record_relations WHERE record_id = ? " +
-        "ORDER BY id",
+      "SELECT role, target_type, target_external_id, target_id, amount, as_role FROM record_relations " +
+        "WHERE record_id = ? ORDER BY id",
     )
       .all(Number(row.id))
-      .map((relation) => ({
-        role: String(relation.role),
-        type: String(relation.target_type),
-        externalId: String(relation.target_external_id),
-        amount: relation.amount == null ? null : String(relation.amount),
-        resolved: relation.target_id != null,
-      })),
+      .filter((relation) => !isDerived(String(relation.role)))
+      .map((relation) => {
+        const byRef = relation.target_type === "ref"
+        const target = String(relation.target_external_id)
+        return {
+          role: String(relation.role),
+          type: byRef ? target.slice(0, target.indexOf(":")) : String(relation.target_type),
+          externalId: byRef ? null : target,
+          ref: byRef ? target : null,
+          as: relation.as_role == null ? null : String(relation.as_role),
+          amount: relation.amount == null ? null : String(relation.amount),
+          resolved: byRef || relation.target_id != null,
+        }
+      }),
     entity: entityRef(row.entity_type, row.entity_id),
+    createdEntity: Number(row.created_entity) === 1,
     flagged: row.entity_id != null && (row.deleted_at != null || row.projected_fingerprint !== row.fingerprint),
     batchId: String(row.batch_id),
     createdAt: iso(row.created_at),
@@ -503,26 +737,14 @@ export const recordStoreOver = (context: StoreContext): RecordStore => {
     )
 
   return {
-    write: async (source, records, { dryRun = false, chunk = 1000 } = {}) => {
-      if (!dryRun) return ingest(source, records, chunk)
-      let result: RecordsWritten | undefined
-      const rollback = new Error("dry run")
-      try {
-        write(database, () => {
-          result = ingest(source, records, chunk)
-          throw rollback
-        })
-      } catch (error) {
-        if (error !== rollback) throw error
-      }
-      return result as RecordsWritten
-    },
+    run: async (source, items, options = {}) =>
+      options.dryRun ? rehearse(database, () => runOver(source, items, options)) : runOver(source, items, options),
     get: async (key) =>
       read(database, () => {
         const row = rowOf(key)
         return row ? sourceRecordOf(row) : undefined
       }),
-    list: async ({ provider, account, type, waiting, flagged, limit = 100 }) => {
+    list: async ({ provider, account, type, waiting, unmatched, flagged, limit = 100 }) => {
       if (!Number.isSafeInteger(limit) || limit < 1 || limit > 500)
         throw new CliError("validation_error", "a record list takes 1–500 items")
       return read(database, () => {
@@ -530,11 +752,23 @@ export const recordStoreOver = (context: StoreContext): RecordStore => {
         const rows = database
           .prepare(
             `${SELECT}WHERE a.provider = ? AND a.external_id = ? AND (? IS NULL OR r.type = ?) ` +
-              `AND (? IS NULL OR (r.entity_id IS NULL AND r.deleted_at IS NULL AND r.type IN (${PROJECTED_TYPES_SQL}))) ` +
+              "AND (? IS NULL OR (r.entity_id IS NULL AND r.deleted_at IS NULL AND r.type NOT LIKE 'custom:%' " +
+              "AND r.type NOT IN ('person', 'organization', 'project'))) " +
+              "AND (? IS NULL OR (r.entity_id IS NULL AND r.deleted_at IS NULL " +
+              "AND r.type IN ('person', 'organization', 'project'))) " +
               "AND (? IS NULL OR (r.entity_id IS NOT NULL AND (r.deleted_at IS NOT NULL " +
               "OR r.projected_fingerprint IS NOT r.fingerprint))) ORDER BY r.updated_at DESC, r.id DESC LIMIT ?",
           )
-          .all(provider, account, type ?? null, type ?? null, waiting ? 1 : null, flagged ? 1 : null, limit)
+          .all(
+            provider,
+            account,
+            type ?? null,
+            type ?? null,
+            waiting ? 1 : null,
+            unmatched ? 1 : null,
+            flagged ? 1 : null,
+            limit,
+          )
         return rows.map(sourceRecordOf)
       })
     },
@@ -543,8 +777,7 @@ export const recordStoreOver = (context: StoreContext): RecordStore => {
         throw new CliError("permission_error", "only the owner says which entity a record is", {
           reason: "record.map-owner-only",
         })
-      const proposed: string[] = []
-      const laterErrors: IngestError[] = []
+      let unused: string | null = null
       write(database, () => {
         const row = rowOf(key)
         if (!row || row.deleted_at != null)
@@ -552,20 +785,73 @@ export const recordStoreOver = (context: StoreContext): RecordStore => {
         const thing = requiredThing(database, entity, "the entity")
         if (thing.type !== key.type)
           refusal(`a ${key.type} record maps to a ${key.type}:, not ${entity}`, "record.map-type")
-        if (row.entity_id != null && !(row.entity_type === thing.type && Number(row.entity_id) === thing.id))
-          refusal(
-            `${key.type} ${key.externalId} is already ${entityRef(row.entity_type, row.entity_id)}`,
-            "record.mapped",
-          )
-        sql("UPDATE records SET entity_type = ?, entity_id = ?, projected_fingerprint = fingerprint WHERE id = ?").run(
-          thing.type,
-          thing.id,
-          Number(row.id),
-        )
+        const same = row.entity_type === thing.type && Number(row.entity_id) === thing.id
+        const from =
+          row.entity_id != null && !same ? { type: String(row.entity_type), id: Number(row.entity_id) } : null
+        if (from !== null) {
+          if (Number(row.created_entity) !== 1)
+            refusal(
+              `${key.type} ${key.externalId} is already ${entityRef(row.entity_type, row.entity_id)}`,
+              "record.mapped",
+            )
+          repoint(row, from, thing)
+        }
+        sql(
+          "UPDATE records SET entity_type = ?, entity_id = ?, created_entity = 0, projected_fingerprint = fingerprint " +
+            "WHERE id = ?",
+        ).run(thing.type, thing.id, Number(row.id))
+        if (from !== null && !pointedAt(from.type, from.id)) unused = entityRef(from.type, from.id)
         const source = { provider: key.provider, account: key.account, batch_id: String(row.batch_id) }
-        completeDependents(Number(row.id), source, proposed, laterErrors)
+        completeDependents(
+          Number(row.id),
+          source,
+          () => undefined,
+          () => undefined,
+        )
       })
-      return read(database, () => sourceRecordOf(rowOf(key) as Row))
+      return read(database, () => ({ ...sourceRecordOf(rowOf(key) as Row), unused }))
+    },
+    match: async ({ provider, account }) => {
+      const result: MatchRun = { linked: 0, created: 0, unmatched: [], proposed: [], errors: [] }
+      write(database, () => {
+        const accountId = findAccountPk(context, { provider, account })
+        if (accountId === undefined) return
+        const rows = database
+          .prepare(
+            "SELECT * FROM records WHERE account_id = ? AND entity_id IS NULL AND deleted_at IS NULL " +
+              "AND type IN ('person', 'organization', 'project') ORDER BY id",
+          )
+          .all(accountId)
+        for (const row of rows) {
+          const source = { provider, account, batch_id: String(row.batch_id) }
+          const recordKey = { provider, account, type: String(row.type), externalId: String(row.external_id) }
+          try {
+            const done = write(database, () => project(row, source))
+            if (done.unmatched) result.unmatched.push({ key: recordKey, ...done.unmatched })
+            if (!done.made) continue
+            const created = Number(
+              sql("SELECT created_entity FROM records WHERE id = ?").get(Number(row.id))?.created_entity,
+            )
+            if (created === 1) result.created += 1
+            else result.linked += 1
+            completeDependents(
+              Number(row.id),
+              source,
+              (ref) => result.proposed.push(ref),
+              (error) => result.errors.push(error),
+            )
+          } catch (error) {
+            if (!(error instanceof CliError)) throw error
+            result.errors.push({
+              pointer: "",
+              code: codeOf(error),
+              message: `${recordKey.type} ${recordKey.externalId}: ${error.message}`,
+            })
+          }
+        }
+      })
+      result.proposed = [...new Set(result.proposed)]
+      return result
     },
   }
 }

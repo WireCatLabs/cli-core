@@ -101,6 +101,23 @@ const transact = <T>(database: CacheDatabase, body: () => T, drain: boolean, bef
   }
 }
 
+/**
+ * Async work in one write transaction that is always rolled back: a dry run over a stream, whose later chunks must see
+ * what earlier ones would write. Writes inside become savepoints. It holds the write lock for the whole run.
+ */
+export const rehearse = async <T>(database: CacheDatabase, body: () => Promise<T>): Promise<T> => {
+  const connection = connectionOf(database)
+  if (connection.depth > 0 || connection.reading) throw new Error("a rehearsal starts outside any transaction")
+  beginImmediate(database)
+  connection.depth += 1
+  try {
+    return await body()
+  } finally {
+    connection.depth -= 1
+    database.exec("ROLLBACK")
+  }
+}
+
 /** Several queries that must see one state of the file. Never drains: that is the outer write's work, or nobody's. */
 export const read = <T>(database: CacheDatabase, body: () => T): T => {
   const connection = connectionOf(database)

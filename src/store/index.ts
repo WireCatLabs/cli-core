@@ -333,11 +333,16 @@ export {
   proposerOfAction,
 } from "./sqlite/proposed-actions.js"
 export type {
+  MappedRecord,
+  MatchRun,
   RecordKey,
-  RecordOutcome,
   RecordStore,
-  RecordsWritten,
+  RecordsRun,
+  RunItem,
+  RunOptions,
   SourceRecord,
+  SourceRecordRelation,
+  Unmatched,
 } from "./sqlite/records.js"
 export type { RelationFilter, RelationList, RelationListItem } from "./sqlite/relation-list.js"
 export type { LinkDecision, RelationUpdate } from "./sqlite/relation-proposals.js"

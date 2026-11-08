@@ -75,7 +75,7 @@ it("refuses a stale revision and keeps the newer one", async () => {
   expect((await store.records.get({ ...SOURCE, type: "payment", externalId: "1" }))?.fields.amount).toBe("10.00")
 })
 
-it("never links an organization by its name: the invoice waits until the owner maps the record", async () => {
+it("never links an organization by its name: it makes one, which the owner may remap to his own", async () => {
   const { store, romashka } = await fixture()
   const records: EnvelopeRecord[] = [
     {
@@ -106,16 +106,20 @@ it("never links an organization by its name: the invoice waits until the owner m
   ]
 
   const receipt = await take(store, envelope(records))
-  expect(receipt).toMatchObject({ created: 3, proposed: [] })
-  expect(receipt.waiting).toEqual([
-    { key: "invoice", pointer: "/records/1/relations", missing: ["counterparty"] },
-    { key: "payment-п-2", pointer: "/records/2/relations", missing: ["settles"] },
-  ])
-  expect(await store.finance.invoices()).toEqual([])
-
-  await store.records.map({ ...SOURCE, type: "organization", externalId: "клиент-7" }, romashka.ref, "owner")
+  expect(receipt).toMatchObject({ created: 3, waiting: [], unmatched: [] })
+  const made = await store.records.get({ ...SOURCE, type: "organization", externalId: "клиент-7" })
+  expect(made).toMatchObject({ createdEntity: true, entity: expect.stringMatching(/^organization:\d+$/) })
+  expect(made?.entity).not.toBe(romashka.ref)
   const [invoice] = await store.finance.invoices()
-  expect(invoice).toMatchObject({ review: "proposed", total: "50000.00", counterparty: { ref: romashka.ref } })
+  expect(invoice).toMatchObject({ review: "proposed", total: "50000.00", counterparty: { ref: made?.entity } })
+
+  const remapped = await store.records.map(
+    { ...SOURCE, type: "organization", externalId: "клиент-7" },
+    romashka.ref,
+    "owner",
+  )
+  expect(remapped).toMatchObject({ entity: romashka.ref, createdEntity: false, unused: made?.entity })
+  expect(await store.finance.invoice(invoice?.ref as string)).toMatchObject({ counterparty: { ref: romashka.ref } })
   const [paid] = await store.finance.payments()
   expect(await store.finance.payment(paid?.ref as string)).toMatchObject({
     review: "proposed",
