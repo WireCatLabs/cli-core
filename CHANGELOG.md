@@ -51,8 +51,9 @@ shape of this file.
   `identity.stale`. The generic `proposedActions` paths refuse to stage or approve the kind.
 - **`people.scanMatches()`, one pass of the people matcher.** The same address joins people in every scope, a phone
   number exactly two people have joins them, and a number three to six people share, or a meeting guest's typed
-  address, opens an `identity_link` proposal. It reads phones the one way the records import does (`person-matcher.ts`),
-  never over the owner's separation or rejection, and records its merges as the rule's.
+  address, opens an `identity_link` proposal. It reads a stored phone written with `+` or `00` however it is spaced,
+  and bare international digits; it never guesses a national number's country. It never acts over the owner's
+  separation or rejection, never moves the owner's person away, and records its merges as the rule's.
 
 ### Changed — may break callers
 
