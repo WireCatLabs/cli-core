@@ -1,0 +1,9 @@
+{%- comment -%}
+Plain text: the email's plain part and the terminal.
+{%- endcomment -%}
+{%- capture nl %}
+{% endcapture -%}
+⚠️ {% if schedule == "morning-digest" %}The morning digest could not be built{% else %}The schedule “{{ tool }} {{ schedule }}” is failing{% endif %}
+{{- nl }}{% if failures > 1 %}Failing since {{ since.date }}{% if since.time %}, {{ since.time }}{% endif %} · {{ failures }} runs in a row{% else %}Failed {% if at.day == "today" %}today{% elsif at.day == "yesterday" %}yesterday{% else %}on {{ at.date }}{% endif %}{% if at.time %} at {{ at.time }}{% endif %}{% endif %}
+{{- nl }}Why: {% case cause %}{% when "locked" %}the keyring was locked; unlock the computer{% when "sign-in" %}the account needs a new sign-in{% when "network" %}the service could not be reached{% when "provider" %}the service answered with an error{% when "setup" %}something is wrong in the settings{% when "stopped" %}the run was stopped{% else %}the program ended with an error{% endcase %}
+{%- for link in links %}{{ nl }}{{ link.label }}: {{ link.url }}{% endfor -%}

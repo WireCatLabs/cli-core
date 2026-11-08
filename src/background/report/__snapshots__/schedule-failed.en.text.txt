@@ -1,0 +1,4 @@
+⚠️ The morning digest could not be built
+Failing since November 7, 08:31 · 3 runs in a row
+Why: the account needs a new sign-in
+fix: https://wirecat.dev/o#/v1/sync/memo

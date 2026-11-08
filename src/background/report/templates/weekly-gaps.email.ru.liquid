@@ -1,0 +1,19 @@
+{%- comment -%}
+Email HTML with inline CSS: only div, p, b, i, a, br and span survive, with a style attribute and an href to a link
+of the view model. No colour on the body: the grey (#8a8a8a) and the link blue (#3b82c4) read on white and on dark.
+{%- endcomment -%}
+{%- capture nl %}
+{% endcapture -%}
+{%- assign muted = "color:#8a8a8a;font-size:13px" -%}
+<div style="max-width:600px;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:15px">
+{{- nl }}<p style="margin:0 0 4px;font-size:19px"><b>🔍 Что сводка нашла сама за неделю</b></p>
+{{- nl }}<p style="margin:0 0 12px;{{ muted }}">Этого не было в подборке дня · {{ runs }} {% case plural %}{% when "one" %}сводка{% when "few" %}сводки{% else %}сводок{% endcase %} с {{ from.date }} по {{ to.date }}</p>
+{%- if items.size == 0 %}{{ nl }}<p style="margin:0 0 12px">Пропусков не было.</p>{% endif -%}
+{%- for item in items -%}
+  {{ nl }}<p style="margin:0 0 10px">• {{ item.what }}<br><span style="{{ muted }}">
+  {%- if item.seen > 1 %}в {{ item.seen }} {% if item.plural == "one" %}сводке{% else %}сводках{% endif %}, последний раз {% endif %}{{ item.last.date }}
+  {%- for link in item.links %} · <a href="{{ link.url }}" style="color:#3b82c4">{{ link.label }}</a>{% endfor -%}
+  </span></p>
+{%- endfor -%}
+{%- if more > 0 %}{{ nl }}<p style="margin:0;{{ muted }}">ещё {{ more }}</p>{% endif -%}
+{{ nl }}</div>
