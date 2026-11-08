@@ -97,30 +97,19 @@ const linkArm = (linkFrom: string, linkTo: string) => `
     WHERE l.to_type IN ('person','identity') AND l.to_id IS NOT NULL AND ${usableLinkSql("l")} AND (l.from_type<>'message' OR m.deleted_at IS NULL) AND (l.from_type<>'email' OR e.deleted_at IS NULL) AND (l.from_type<>'meeting' OR mt.deleted_at IS NULL) AND (l.from_type<>'task' OR t.deleted_at IS NULL) AND (l.from_type<>'document' OR d.deleted_at IS NULL)
 `
 
-/** A thing whose rows are recomputed: its kind as `involvement_pending` names it, and its id. */
-interface Subject {
-  type: string
-  id: number
-}
-
-/**
- * Every way of taking part, or only the ones about `subject`, each filtered by its own key so SQLite reads
- * that one row by index. The kind and id are checked before they are written into the SQL.
- */
 /** Names the columns once: a UNION takes them from its first SELECT, and a subject's own arms may not lead. */
 const COLUMNS =
   "SELECT NULL AS person_id, NULL AS identity_id, NULL AS subject_type, NULL AS subject_id, NULL AS role, " +
   "NULL AS occurred_at, NULL AS scope, NULL AS account_id, NULL AS project_id WHERE 0"
 
-export const sourcesOf = (subject?: Subject): string => {
-  if (subject === undefined) return [COLUMNS, ...ARMS.map(([, , sql]) => sql), linkArm("1", "1")].join(" UNION ")
-  if (!/^[a-z_]+$/.test(subject.type) || !Number.isSafeInteger(subject.id))
-    throw new CliError("configuration_error", `the involvement queue holds ${subject.type} ${subject.id}`)
-  const { type, id } = subject
+/** Every way of taking part, or, given a subject's kind, only the ones about the id bound at each `?`. */
+export const sourcesOf = (type?: string): string => {
+  if (type === undefined) return [COLUMNS, ...ARMS.map(([, , sql]) => sql), linkArm("1", "1")].join(" UNION ")
+  if (!/^[a-z_]+$/.test(type)) throw new CliError("configuration_error", `the involvement queue holds a ${type}`)
   return [
     COLUMNS,
-    ...ARMS.filter(([of]) => of === type).map(([, key, sql]) => `${sql} AND ${key}=${id}`),
-    linkArm(`from_type='${type}' AND from_id=${id}`, `to_type='${type}' AND to_id=${id}`),
+    ...ARMS.filter(([of]) => of === type).map(([, key, sql]) => `${sql} AND ${key}=?`),
+    linkArm(`from_type='${type}' AND from_id=?`, `to_type='${type}' AND to_id=?`),
   ].join(" UNION ")
 }
 
@@ -145,9 +134,10 @@ export const drainInvolvementQueue = (database: CacheDatabase, cap = QUEUE_CAP):
     if (subjects.length === 0) break
     for (const subject of subjects) {
       drop.run(subject.type, subject.id)
-      database
-        .prepare(`${INSERT} SELECT s.*, ? FROM (${sourcesOf(subject)}) s JOIN persons p ON p.id=s.person_id`)
-        .run(at)
+      // One `?` per use of the id: Node 22.16's node:sqlite cannot bind a numbered `?2` by position.
+      const sql = `${INSERT} SELECT s.*, ? FROM (${sourcesOf(subject.type)}) s JOIN persons p ON p.id=s.person_id`
+      const ids = Array<number>(sql.split("?").length - 2).fill(subject.id)
+      database.prepare(sql).run(at, ...ids)
       done.run(subject.type, subject.id)
     }
     recomputed += subjects.length

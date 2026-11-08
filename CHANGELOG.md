@@ -5,6 +5,15 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Fixed
+
+- **A large CRM sync takes a third less time and a sixth of the memory** (#2682). Keeping the involvement index
+  current built a new SQL text for every item it recomputed, so SQLite prepared each one again and the process kept
+  them all. The item's id is now a bound parameter, one statement per kind of item. On the same synthetic data, the
+  20,000 sync peaks at 0.6 GB instead of 3.7 GB and takes 19 s instead of 30 s, its `--rescan` 13 s instead of 21 s.
+
 ## 0.609.0 — 08.11.2026
 
 ### Added
