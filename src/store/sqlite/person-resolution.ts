@@ -1,5 +1,6 @@
 import type { CacheDatabase } from "../driver.js"
 import { fold } from "../normalize.js"
+import { currentPerson } from "./merged-persons.js"
 
 const keyOf = (name: string) => fold(name).trim().replace(/^@/, "")
 
@@ -20,7 +21,7 @@ export const resolvePersonLinks = (database: CacheDatabase, names: (string | nul
         "SELECT a.name, il.person_id FROM aliases a JOIN identity_links il ON il.identity_id=a.aliasable_id WHERE a.aliasable_type='identity' UNION ALL SELECT name, aliasable_id AS person_id FROM aliases WHERE aliasable_type='person'",
       )
       .all())
-      if (keyOf(String(row.name)) === key) people.add(Number(row.person_id))
+      if (keyOf(String(row.name)) === key) people.add(currentPerson(database, Number(row.person_id)))
     if (people.size === 1)
       database
         .prepare("UPDATE links SET to_type='person', to_id=? WHERE to_id IS NULL AND target_folded=?")
