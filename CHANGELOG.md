@@ -7,6 +7,47 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- **`store recover run` no longer says nothing was lost when it cannot know.** Before the copy it compares
+  each plain index of the damaged file with its table: entries the table no longer holds are rows a stale page cut
+  off, reported per table in `lost` as `gone_at_least` with the index in `seen_in`. Rows lost from a table and its
+  indexes alike leave no trace, so the notes never say "no table lost a row": they give the lower bound, or say the
+  loss is unknown, with the last deep check that passed (`last_known_good`). On six stores the cli-testing integrity
+  harness broke, it says at least 50, 200, 50 and 265 messages are gone where 50, 241, 50 and 291 are, and "unknown"
+  on the two stores whose lost rows never reached the file.
+- **`store recover run` keeps rows that `.recover` found on pages no table claims.** It dropped them with the rest of
+  its lost-and-found table; each one now goes back into the one data table whose columns its values fit (`placed`,
+  per table), and only the rest are dropped. 9 committed messages came back on one R1 store.
+- **After `store recover run`, the next ordinary sync fetches again what the damage may have taken.** A messenger
+  sync jumps over every stretch the store marks as fetched, so a hole inside one stayed for good. The recovery now
+  forgets what was fetched from a day before the last deep check that passed (all of it when none is on record): each
+  chat's held stretches end at its last message sent before then, and each mail folder keeps as listed only the UIDs
+  up to its last email from before then. `refetch` in the answer says how many chats and mail folders per account,
+  and the notes say what cannot come back: what only the store held, and WhatsApp history the phone does not push
+  again. Nothing on any service is asked or changed by the recovery. On the T1-roles store the cli-testing harness
+  broke with a hole of 291 messages inside a chat, one ordinary sync brought all of them back; without this, 200
+  were still missing after 25 syncs.
+- **A `serve` no longer runs on after the store or the installed package moved past it.** Every minute it
+  checks whether the store's format is one its build can no longer write, or whether a newer version of its own
+  package is installed on disk; then it logs one error, `serve.outdated`, and exits 3, which its unit
+  (`Restart=on-failure`) answers by starting the installed build. A wa serve had stored nothing for a day on 0.30.0
+  after 0.33.0 moved the store to format 57. `outdatedReason`, `watchOutdated` and `ownPackageRoot` from
+  `@wirecat/cli-core/cli`, for a CLI with a serve of its own.
+- **Busy sync runs no longer fail with "database is locked".** Each writable open read the schema version under the
+  write lock, without the retry other writes use, so with several tools syncing at once it gave up after 5 s. A
+  current store is now checked without the lock, and a migration takes it with the retry. Listing mail pieces to
+  embed (`mail.chunksToEmbed`, and mail search) wrote its queue bookkeeping outside a transaction; it now reads
+  first and writes through the store's transaction only when there is work. A write that had to wait for the lock
+  leaves it free for 2 ms after it commits, so a waiter gets in between one process's back-to-back writes.
+- **The real error of a failed write is shown.** When SQLite had already rolled a transaction back itself (an I/O
+  error, a full disk), the store's own rollback failed with "cannot rollback - no transaction is active", and that
+  message replaced the real one.
+- **`relationships scan` reads each chat once, however many times it spreads.** Each of its up to 4 passes read every
+  chat found so far again (up to 2 000 messages each) and looked up every sender's person again, so a project with
+  confirmed links took about three times longer than one without: 4.9–5.8 s against 1.6–1.9 s on a synthetic store
+  of 2 600 chats. A scan now keeps what it read until it ends: 0.6–0.8 s on the same store, with the same proposals.
+
 ## 0.617.0 — 08.11.2026
 
 ### Security
