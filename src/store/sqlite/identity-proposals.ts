@@ -84,6 +84,16 @@ const knownProposals = (context: StoreContext) =>
     .all(IDENTITY_LINK_KIND)
     .map((row) => ({ id: String(row.id), status: String(row.status), payload: JSON.parse(String(row.payload)) }))
 
+/** The proposal the owner rejected for these two people, or else the one open for them. */
+export const knownPair = (context: StoreContext, a: number, b: number): { id: string; status: string } | undefined => {
+  const pair = pairOf(a, b)
+  const found = knownProposals(context).filter(({ payload }) => {
+    const named = payload as IdentityLinkPayload
+    return pairOf(...named.persons) === pair || currentPair(context, named) === pair
+  })
+  return found.find(({ status }) => status === "rejected") ?? found[0]
+}
+
 /**
  * Opens an `identity_link` proposal for two people, unless the owner separated them, rejected the pair before, or one
  * is already open for it: then it says which. At most one proposal is open per pair of people.
@@ -95,15 +105,10 @@ export const openIdentityLink = (context: StoreContext, opening: Opening): Opene
     const apart =
       opening.joins === "identity" ? identitySeparated(context, opening.identity, to) : separated(context, from, to)
     if (apart) return { outcome: "skipped", reason: "identity.separated" }
-    const pair = pairOf(from, to)
     const operations = proposalOperationsOver(context)
-    for (const known of knownProposals(context)) {
-      const payload = known.payload as IdentityLinkPayload
-      const same = pairOf(...payload.persons) === pair || currentPair(context, payload) === pair
-      if (!same) continue
-      if (known.status === "rejected") return { outcome: "skipped", reason: "identity.rejected" }
-      return { outcome: "open", action: operations.get(known.id) }
-    }
+    const known = knownPair(context, from, to)
+    if (known?.status === "rejected") return { outcome: "skipped", reason: "identity.rejected" }
+    if (known) return { outcome: "open", action: operations.get(known.id) }
     const payload: IdentityLinkPayload = {
       identity: refOf(context, opening.identity),
       with: opening.with === null ? null : refOf(context, opening.with),
