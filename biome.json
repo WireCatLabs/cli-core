@@ -12,6 +12,7 @@
       "!src/store/sqlite/migrations.generated.ts",
       "!src/search/snowball",
       "!.worktrees",
+      "!.claude",
       "!config/wirecat"
     ]
   },
