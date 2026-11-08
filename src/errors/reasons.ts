@@ -255,7 +255,6 @@ const OTHERS: Entry[] = [
     "record.provider-not-imported",
     "SMS and calls are imported only under an import-only provider, such as phone",
   ),
-  validation("record.calendar-deleted", "the owner deleted the calls calendar: calls wait until it is restored"),
   validation("record.chat", "the chat an SMS names is not an imported one: a sync owns it"),
   validation("record.moved", "an SMS stays in its thread: delete it and send it again under a new external_id"),
   validation("record.phone-region", "a phone without + is read only in the envelope's phone_region; kept as data"),

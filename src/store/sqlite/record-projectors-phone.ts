@@ -156,22 +156,11 @@ const DESCRIPTIONS: Record<(typeof CALL_DIRECTIONS)[number], string> = {
   missed: "missed call",
 }
 
-/**
- * The account's calls calendar, made on its first call. One the owner deleted stays deleted: an import, often an
- * agent's, never undoes the owner's decision, so its calls are refused until the owner restores it. One indexed read
- * per call: the calendar is written only on the first.
- */
+/** The account's calls calendar, made on its first call; looked up by its account each time, never by a held id. */
 const callsCalendar = (context: StoreContext, account: AccountKey & { pk: number }): number => {
   const row = context.database
-    .prepare("SELECT id, deleted_at FROM calendars WHERE account_id = ? AND external_id = ?")
+    .prepare("SELECT id FROM calendars WHERE account_id = ? AND external_id = ?")
     .get(account.pk, CALLS_CALENDAR)
-  if (row && row.deleted_at != null)
-    refusal(
-      `the owner deleted the calls calendar of ${account.provider}:${account.account}; ` +
-        `store.calendar.restoreCalendar(${Number(row.id)}) brings it back, then import the calls again`,
-      "record.calendar-deleted",
-      "type",
-    )
   return row !== undefined
     ? Number(row.id)
     : calendarWritesOver(context).saveCalendar(

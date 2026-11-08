@@ -248,10 +248,7 @@ and its counterpart's identity is under the import's own provider.
 - MMS attachments are out of scope: a record's other fields are kept in the record only.
 
 **Calls → events.** One calendar `calls` in the account, made on the first call. No sync reads it, and
-`events list` does not report an import-only account as incomplete. Once the owner deletes it, it stays deleted: an
-import (often an agent's) never undoes the owner's decision, so every call record is refused
-(`record.calendar-deleted`, its message naming the calendar) until `store.calendar.restoreCalendar(<id>)` brings it
-back; SMS are taken as before, and the refused calls are taken when the import runs again. Each call is a calendar
+`events list` does not report an import-only account as incomplete. Each call is a calendar
 entry (`event_type: call`, `transparency: transparent`, so it never counts as busy or overlapping) and the event it
 makes: start `started_at`, end start plus `duration` seconds, title `fields.name` or the number, description
 `incoming call`, `outgoing call` or `missed call`. Direction, duration and number are in the entry's metadata.
