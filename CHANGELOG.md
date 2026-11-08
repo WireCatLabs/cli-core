@@ -7,6 +7,15 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- **A mail's vector names its sender at the end, not first.** Every mail piece began "Name: Subject", so search by
+  meaning took the sender for the topic of each email they wrote; the piece now ends "From: Name". Every store cuts its
+  mail again once (`mail_pieces_cut`), and the next syncs re-embed it: about 3 minutes for 10,000 mail pieces with
+  e5-small and about 20 with EmbeddingGemma on an 8-thread laptop.
+- **EmbeddingGemma's catalogued speed is 5 chunks a second, not 2.** A memo sync bounds its chunks by this speed, so
+  one sync embedded 39 chunks and a five-minute timer run did seconds of work; it now takes 97.
+
 ## 0.618.0 — 09.11.2026
 
 ### Added
