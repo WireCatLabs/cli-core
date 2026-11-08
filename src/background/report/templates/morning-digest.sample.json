@@ -146,5 +146,12 @@
     ],
     "counts": { "chats": 31, "mail": 12, "tasks": 17, "meetings": 1 }
   },
-  "tasks": { "overdue": 5, "today": 3, "tomorrow": 2, "new": 4, "new_since": "2026-11-05T08:30:00+03:00" }
+  "tasks": {
+    "overdue": 5,
+    "today": 3,
+    "tomorrow": 2,
+    "new": 4,
+    "new_since": "2026-11-05T08:30:00+03:00",
+    "undated": 91
+  }
 }

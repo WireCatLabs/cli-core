@@ -8,7 +8,7 @@ export type DeepLinkTarget =
   | { type: "message"; provider: string; account: string; chat: string; message: string }
   | { type: "chat"; provider: string; account: string; chat: string }
   | { type: "task"; id: string }
-  | { type: "tasks"; filter: "overdue" | "today" | "tomorrow" }
+  | { type: "tasks"; filter: "overdue" | "today" | "tomorrow" | "undated" }
   | { type: "tasks"; filter: "new"; since: string }
   /** A review id as `memo review` shows it (`17070`, `fact:512`): not a reference, so it is one encoded part. */
   | { type: "proposal"; id: string }
@@ -28,7 +28,7 @@ export const DEFAULT_LINK_CONFIG: LinkConfig = { base: "https://wirecat.dev/o", 
 const APP_PREFIX = "wirecat://open"
 const MAX_PATH = 512
 const MAX_SEGMENTS = 6
-const TASK_FILTERS = ["overdue", "today", "tomorrow"] as const
+const TASK_FILTERS = ["overdue", "today", "tomorrow", "undated"] as const
 const DATE = /^\d{4}-\d{2}-\d{2}$/
 const DATE_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})$/
 

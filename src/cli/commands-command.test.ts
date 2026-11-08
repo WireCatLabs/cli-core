@@ -215,10 +215,11 @@ describe("commands as text", () => {
     const program = new Command("memo")
       .addCommand(new Command("people").addCommand(leaf("show", "one person")))
       .addCommand(new Command("mcp").addCommand(leaf("serve", "serve memo to an agent")))
+      .addCommand(new Command("templates").addCommand(leaf("list", "every template")))
 
     const listed = commandsText(program, describeProgram(program))
 
-    expect(listed).toContain("Automate\n  memo mcp serve")
+    expect(listed).toMatch(/Automate\n {2}memo mcp serve .*\n {2}memo templates list /)
     expect(listed).toContain("Other\n  memo people show")
   })
 

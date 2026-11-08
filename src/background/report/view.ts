@@ -56,6 +56,8 @@ export interface ViewSection {
   more: number
   /** The task group links, on the section that holds the task items only; zero groups left out. */
   groups: ViewTaskGroup[]
+  /** The open tasks with no due date, a line after the groups on the same section; null when there are none. */
+  undated: { count: number; link: ViewLink | null } | null
 }
 
 export interface ViewHealth {
@@ -285,10 +287,18 @@ export const reportView = (
         items: items.slice(0, cap).map(itemOf),
         more: more + Math.max(items.length - cap, 0),
         groups: [],
+        undated: null,
       },
     ]
   })
   const groups = taskGroups(report.tasks, linkOf, words.open)
+  const undatedLink = linkOf("tasks:undated")
+  const undated = report.tasks?.undated
+    ? {
+        count: report.tasks.undated,
+        link: undatedLink === null ? null : { kind: "open" as const, url: undatedLink, label: words.open },
+      }
+    : null
   const holder =
     sections.find((section) => section.items.some((item) => item.type === "task")) ??
     sections.find((section) => section.kind === "today") ??
@@ -304,7 +314,7 @@ export const reportView = (
     emoji: "☀️",
     date: momentFor(report.date, now, language, timeZone),
     summary: report.summary,
-    sections: sections.map((section) => (section === holder ? { ...section, groups } : section)),
+    sections: sections.map((section) => (section === holder ? { ...section, groups, undated } : section)),
     health: {
       emoji: "🛠",
       items: stale.slice(0, SECTION_CAPS.health).map((entry) => ({

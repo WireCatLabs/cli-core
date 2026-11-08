@@ -44,9 +44,21 @@ shape of this file.
   (`identity.owner-only`; pass `"owner"` only from a path that established the owner ran it), and an automatic match
   by the same address does not join those people again. `undoMerge` refuses with `identity.stale` when one of the
   identities was merged on into another person since.
+- **The digest says how many open tasks have no due date.** A report may give `tasks.undated` (a whole number; absent
+  is 0), and the section with the task group links gets one line after them, "без срока: 91 · открыть" or "no due
+  date: 91 · open", in every channel's Russian and English template, linking `tasks/undated`. The line is left out
+  when the count is 0. The v1 link grammar takes `tasks/undated` beside `overdue`, `today`, `tomorrow` and
+  `new/<since>`; the bounce page and WireCat Desktop need it too before such a link opens there.
 
 ### Changed — may break callers
 
+- **`templates` takes the language as `--locale <code>`, not `--language <code>`, and its words come from the shared
+  vocabulary.** `--language` is the query language in every other command (`<lucene|legacy>`); the template's
+  language keeps its field name, `language`. `--file <file>` names the file as the vocabulary does, `templates list
+  [query...]` narrows by `key`, `channel`, `language` and `source` (`templates list channel:telegram source:stored`)
+  and answers the `template` entity, every command has a short summary, and `<tool> commands` lists the group under
+  Automate, not Other. The shared commands' lint now covers the group, so `cli-dev lint` passes on a tool that mounts
+  it with cli-base 0.89.0 (`preview`, `--locale`, `--undo`, `--channel <channel>`).
 - **`people.personByUid` of a person merged into someone else answers with that person.** Its `uid` is the
   current person's, not the one asked for, and `mergedInto` is set; `personSeenInAccounts` follows the same merge.
   A caller that compares the answer's `uid` with the one it passed reads `mergedInto` instead.
