@@ -1,4 +1,5 @@
 import { afterEach, expect, it } from "vitest"
+import { calendarStatus } from "../calendar/index.js"
 import { ingestVcard } from "../services/ingest.js"
 import { personContext } from "../services/person-context.js"
 import { searchAll } from "../services/search-all.js"
@@ -175,6 +176,8 @@ it("makes calls, missed ones too, events of the calls calendar that list by pers
   const theirs = await store.calendar.events({ personId: anna, from: 0, accountId })
   expect(theirs.map(({ description }) => description)).toEqual(["incoming call", "missed call"])
   expect(await store.calendar.events({ eventType: "call", from: 0 })).toHaveLength(3)
+  const status = await calendarStatus(store.calendar, accountId, { profile: "calls:pixel", now: Date.now() })
+  expect(status.items.map(({ external_id, state }) => [external_id, state])).toEqual([["calls", "complete"]])
   expect(
     await take(store, phoneEnvelope([call("c-2", ANNA, "missed", "2026-11-03T12:30:00Z")]), { account: "pixel" }),
   ).toMatchObject({ unchanged: 1 })
@@ -214,14 +217,57 @@ it("waits with the candidates when the number names two people, and never links 
   ).run(identity, other)
   const receipt = await take(
     store,
-    phoneEnvelope(thread.filter((one) => one.external_id !== OLEG && one.external_id !== "s-3")),
+    phoneEnvelope([
+      ...thread.filter((one) => one.external_id !== OLEG && one.external_id !== "s-3"),
+      call("c-1", ANNA, "in", "2026-11-03T10:00:00Z", 30),
+    ]),
     { account: PHONE.account },
   )
   expect(receipt.unmatched).toEqual([
     expect.objectContaining({ key: `person-${ANNA}`, reason: "record.ambiguous", candidates: expect.any(Array) }),
   ])
-  expect(receipt.waiting.map(({ key }) => key)).toEqual(["message-s-1", "message-s-2"])
+  expect(receipt.waiting.map(({ key }) => key)).toEqual(["message-s-1", "message-s-2", "event-c-1"])
   expect(db.prepare("SELECT count(*) AS n FROM messages").get()?.n).toBe(0)
+
+  await store.records.map({ ...PHONE, type: "person", externalId: ANNA }, `person:${other}`, "owner")
+  const linked = db
+    .prepare(
+      "SELECT DISTINCT l.person_id FROM messages m JOIN identity_links l ON l.identity_id = m.sender_identity_id",
+    )
+    .all()
+  expect(linked).toEqual([{ person_id: other }])
+  expect(db.prepare("SELECT count(*) AS n FROM messages").get()?.n).toBe(2)
+  const relations = await store.knowledge.relations(null, `person:${other}`)
+  expect(relations).toEqual([
+    expect.objectContaining({
+      from: (await store.records.get({ ...PHONE, type: "event", externalId: "c-1" }))?.entity,
+      to: `person:${other}`,
+      kind: "related-to",
+      role: "counterpart",
+    }),
+  ])
+})
+
+it("refuses one record whose moment does not exist, and writes the rest", async () => {
+  const { store, sql } = await recordsFixture(handles)
+  const receipt = await take(
+    store,
+    phoneEnvelope([
+      person(ANNA, "Анна"),
+      sms("s-1", ANNA, "in", "ok", "2026-11-01T09:00:00Z"),
+      sms("s-2", ANNA, "in", "bad", "2026-13-01T10:00:00Z"),
+      call("c-1", ANNA, "in", "2026-11-01T25:00:00Z"),
+    ]),
+    { account: PHONE.account },
+  )
+  expect(receipt.errors.map(({ code, key, pointer }) => [code, key, pointer])).toEqual([
+    ["record.invalid", "message-s-2", "/records/2/fields/sent_at"],
+    ["record.invalid", "event-c-1", "/records/3/fields/started_at"],
+  ])
+  expect(receipt).toMatchObject({ created: 2, refused: 2 })
+  const db = sql()
+  expect(db.prepare("SELECT count(*) AS n FROM messages").get()?.n).toBe(1)
+  expect(db.prepare("SELECT count(*) AS n FROM events").get()?.n).toBe(0)
 })
 
 it("keeps each phone account apart: the same number and ids in two accounts are two threads", async () => {

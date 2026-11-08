@@ -20,6 +20,8 @@ import {
   type Projection,
   type ProjectionTools,
   type RecordProjector,
+  type Row,
+  refusal,
 } from "./record-projection.js"
 
 export const SMS_PROVIDER = "sms"
@@ -52,11 +54,16 @@ const counterpartOf = (projection: Projection, { context }: ProjectionTools): nu
   return ref === undefined ? undefined : requiredThing(context.database, ref).id
 }
 
-const millis = (value: unknown) => Date.parse(String(value))
+/** The schema checks the shape only: a 13th month passes it, and must refuse this record, not the run. */
+const millis = (fields: Row, name: string): number => {
+  const at = Date.parse(String(fields[name]))
+  return Number.isNaN(at) ? refusal(`fields.${name} is no moment`, "record.invalid", ["fields", name]) : at
+}
 
 const saveSms = (projection: Projection, tools: ProjectionTools): string => {
   const { context } = tools
   const { fields, externalId, source } = projection
+  const sentAt = millis(fields, "sent_at")
   const account = kindAccount(tools, SMS_PROVIDER, projection)
   const phone = numberOf(context, String(fields.phone))
   const name = given<string>(fields, "name") ?? null
@@ -82,7 +89,6 @@ const saveSms = (projection: Projection, tools: ProjectionTools): string => {
   context.database
     .prepare("INSERT OR IGNORE INTO chat_members (chat_id, identity_id, created_at) VALUES (?, ?, ?)")
     .run(chatKey, identity, at)
-  const sentAt = millis(fields.sent_at)
   const read = given<boolean>(fields, "read")
   const message: Message = {
     id: externalId,
@@ -146,13 +152,13 @@ const callsCalendar = (context: StoreContext, accountId: number, writes: ReturnT
 const saveCall = (projection: Projection, tools: ProjectionTools): string => {
   const { context } = tools
   const { fields, externalId } = projection
+  const startsAt = millis(fields, "started_at")
   const account = kindAccount(tools, CALLS_PROVIDER, projection)
   const writes = calendarWritesOver(context)
   const calendarId = callsCalendar(context, account.pk, writes)
   const phone = numberOf(context, String(fields.phone))
   const direction = fields.direction as (typeof CALL_DIRECTIONS)[number]
   const seconds = given<number>(fields, "duration") ?? 0
-  const startsAt = millis(fields.started_at)
   const entry: EntryInput = {
     externalId,
     kind: "single",
