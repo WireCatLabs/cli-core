@@ -125,7 +125,8 @@ export const peopleStoreOver = (context: StoreContext, keyed: AccountPeople): Pe
     ...keyed,
     people: async (provider, options = {}) => identities.people(context, provider, options),
     personOf: async (identity) => personLinks.personOf(context, identity),
-    personSeenInAccounts: async (uid, accountIds) => personSeenInAccounts(context, uid, accountIds),
+    personSeenInAccounts: async (uid, accountIds) =>
+      personSeenInAccounts(context, personLinks.liveUid(context, uid), accountIds),
     personByUid: async (uid) => personLinks.personByUid(context, uid),
     add: async ({ name }) => {
       const text = typeof name === "string" ? name.trim() : ""
@@ -148,7 +149,7 @@ export const peopleStoreOver = (context: StoreContext, keyed: AccountPeople): Pe
         throw error
       }
     },
-    preparation: async (uid, options) => personPreparation(context, uid, options),
+    preparation: async (uid, options) => personPreparation(context, personLinks.liveUid(context, uid), options),
     linkIdentities: async (person, other, options) => {
       return write(database, () => personLinks.linkIdentities(context, person, other, options))
     },

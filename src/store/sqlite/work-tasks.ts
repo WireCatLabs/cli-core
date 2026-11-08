@@ -967,7 +967,7 @@ export const workTaskOperationsOver = (context: StoreContext): WorkTaskOperation
         .prepare(
           "SELECT p.id, p.name, p.owner, count(DISTINCT t.id) AS n FROM persons p " +
             "LEFT JOIN task_assignments a ON a.assignee_type = 'person' AND a.assignee_id = p.id " +
-            "LEFT JOIN tasks t ON t.id = a.task_id AND t.deleted_at IS NULL " +
+            "LEFT JOIN tasks t ON t.id = a.task_id AND t.deleted_at IS NULL WHERE p.merged_into IS NULL " +
             "GROUP BY p.id ORDER BY p.owner DESC, n DESC, p.name IS NULL, p.name COLLATE NOCASE, p.id LIMIT ?",
         )
         .all(Math.min(Math.max(limit, 1), 5000))

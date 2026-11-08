@@ -1208,5 +1208,21 @@ export const GENERATED: { name: string; statements: string[] }[] = [
       "CREATE TRIGGER enrichments_note_gone AFTER DELETE ON notes BEGIN\n  DELETE FROM enrichments WHERE subject_type = 'note' AND subject_id = OLD.id;\nEND;",
       "CREATE TRIGGER enrichments_email_gone AFTER DELETE ON emails BEGIN\n  DELETE FROM enrichments WHERE subject_type = 'email' AND subject_id = OLD.id;\n  DELETE FROM chunks WHERE chunkable_type = 'email_enrichment' AND chunkable_id = OLD.id;\nEND;"
     ]
+  },
+  {
+    "name": "20261108163105_version-59-merged-persons",
+    "statements": [
+      "ALTER TABLE `persons` ADD `merged_into` integer;",
+      "CREATE INDEX `persons_by_merged_into` ON `persons` (`merged_into`) WHERE merged_into IS NOT NULL;"
+    ]
+  },
+  {
+    "name": "20261108163109_version-59-merged-persons-marks",
+    "statements": [
+      "-- A person whose last identity moved to another person is merged into that one. The triggers mark it on any build's\n-- write, so an older build's merges are marked too, and keep every mark one hop from a live person.\nCREATE TRIGGER persons_merged_au AFTER UPDATE OF person_id ON identity_links\n  WHEN old.person_id <> new.person_id BEGIN\n  UPDATE persons SET merged_into = NULL WHERE id = new.person_id AND merged_into IS NOT NULL;\n  UPDATE persons SET merged_into = new.person_id\n    WHERE (id = old.person_id OR merged_into = old.person_id)\n      AND (SELECT owner FROM persons WHERE id = old.person_id) = 0\n      AND NOT EXISTS (SELECT 1 FROM identity_links WHERE person_id = old.person_id);\nEND;",
+      "CREATE TRIGGER persons_merged_ai AFTER INSERT ON identity_links BEGIN\n  UPDATE persons SET merged_into = NULL WHERE id = new.person_id AND merged_into IS NOT NULL;\nEND;",
+      "UPDATE persons SET merged_into = (\n    SELECT e.to_person_id FROM identity_link_events e WHERE e.from_person_id = persons.id ORDER BY e.id DESC LIMIT 1\n  )\n  WHERE owner = 0 AND NOT EXISTS (SELECT 1 FROM identity_links l WHERE l.person_id = persons.id)\n    AND EXISTS (SELECT 1 FROM identity_link_events e WHERE e.from_person_id = persons.id);",
+      "WITH RECURSIVE hop(id, target, depth) AS (\n    SELECT id, merged_into, 0 FROM persons WHERE merged_into IS NOT NULL\n    UNION ALL\n    SELECT hop.id, p.merged_into, hop.depth + 1 FROM hop JOIN persons p ON p.id = hop.target\n      WHERE p.merged_into IS NOT NULL AND hop.depth < 64\n  )\n  UPDATE persons SET merged_into = (SELECT target FROM hop WHERE hop.id = persons.id ORDER BY depth DESC LIMIT 1)\n  WHERE merged_into IS NOT NULL;"
+    ]
   }
 ]

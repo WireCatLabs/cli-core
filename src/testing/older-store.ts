@@ -2,6 +2,8 @@ import type { CacheDatabase } from "../store/driver.js"
 
 // What a migration created that replaying it would create again; a migration that only updates rows needs nothing.
 const UNDO: Record<number, string> = {
+  59: `DROP TRIGGER persons_merged_au; DROP TRIGGER persons_merged_ai; DROP INDEX persons_by_merged_into;
+    ALTER TABLE persons DROP COLUMN merged_into;`,
   58: `DROP TRIGGER enrichments_document_gone; DROP TRIGGER enrichments_note_gone; DROP TRIGGER enrichments_email_gone;
     DROP TABLE enrichments;`,
   57: `DROP TRIGGER payments_refund_bi; DROP TRIGGER payments_refund_bu; DROP TRIGGER payment_allocations_refunded_bd;

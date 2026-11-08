@@ -5,6 +5,20 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Fixed
+
+- **A merge no longer leaves an empty person behind in lists.** When every identity of a person moves to another
+  person, as joining a CRM or Drive contact to the mail contact of its address does, the emptied person is marked
+  merged into the other one. A 20,000-contact CRM sync left about 40,000 persons; the 20,000 emptied ones
+  are now marked. `tasks.taskPeople()` leaves them out; `people.personByUid`, `personSeenInAccounts`, `preparation`
+  and person meeting context read an old id as the person it was merged into; a person alias on it names that person.
+  `identity_link_events` still names the old person, so the history reads as before.
+- Store version 59: `persons.merged_into`. Triggers on `identity_links` set it, so a merge by an older build is
+  marked too; the migration marks persons an earlier merge already emptied. A person known by name only and the
+  owner are never marked. Additive; `minCompatible` stays 56.
+
 ## 0.612.0 — 08.11.2026
 
 ### Changed — may break callers

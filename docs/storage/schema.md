@@ -134,6 +134,9 @@ A real person, whatever accounts they write from: their identities point here. `
 | `owner` | integer | not null |  | 1 for the person who owns the store; a new store creates that row, so it always exists. |
 | `created_at` | integer | not null |  | when this row was saved here |
 | `updated_at` | integer | not null |  | when this row last changed here |
+| `merged_into` | integer |  |  | the person a merge moved all its identities to; triggers set it |
+
+*Keys and indexes:* `INDEX (merged_into) WHERE merged_into IS NOT NULL`
 
 ### `identities`
 

@@ -124,13 +124,19 @@ export const syncs = sqliteTable(
   (table) => [index("syncs_by_account_id").on(table.accountId)],
 )
 
-export const persons = sqliteTable("persons", {
-  id: integer("id").primaryKey(),
-  name: text("name"),
-  owner: integer("owner").notNull().default(0),
-  createdAt: integer("created_at").notNull(),
-  updatedAt: integer("updated_at").notNull(),
-})
+export const persons = sqliteTable(
+  "persons",
+  {
+    id: integer("id").primaryKey(),
+    name: text("name"),
+    owner: integer("owner").notNull().default(0),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+    // No foreign key: an account purge counts every key that points at a person as a reason to keep them.
+    mergedInto: integer("merged_into"),
+  },
+  (table) => [index("persons_by_merged_into").on(table.mergedInto).where(sql`merged_into IS NOT NULL`)],
+)
 
 export const identities = sqliteTable(
   "identities",

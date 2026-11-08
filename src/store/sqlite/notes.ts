@@ -308,8 +308,9 @@ const personsNamed = (database: CacheDatabase, key: string): Set<number> => {
   }
   const aliases = database
     .prepare(
-      "SELECT coalesce(il.person_id, CASE WHEN a.aliasable_type = 'person' THEN a.aliasable_id END) AS person_id " +
-        "FROM aliases a LEFT JOIN identity_links il ON a.aliasable_type = 'identity' AND il.identity_id = a.aliasable_id " +
+      "SELECT coalesce(il.person_id, CASE WHEN a.aliasable_type = 'person' THEN coalesce(p.merged_into, a.aliasable_id) END) " +
+        "AS person_id FROM aliases a LEFT JOIN identity_links il ON a.aliasable_type = 'identity' " +
+        "AND il.identity_id = a.aliasable_id LEFT JOIN persons p ON a.aliasable_type = 'person' AND p.id = a.aliasable_id " +
         "WHERE a.name_folded = ? OR a.name = ?",
     )
     .all(key, key)

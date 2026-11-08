@@ -81,7 +81,9 @@ export const personMeetingContext = async (
   const person = await store.people.personByUid(uid)
   checkMeetingCancelled(signal)
   if (!person) throw new CliError("not_found", "the person is unavailable")
-  if (person.uid !== uid) throw new CliError("invalid_response", "the person lookup returned another identity")
+  // A merged person reads as the one it was merged into; that one must pass the same account check.
+  if (person.uid !== uid && !(await store.people.personSeenInAccounts(person.uid, accountIds)))
+    throw new CliError("invalid_response", "the person lookup returned another identity")
   const pending = store.involvements.pending()
   const rows = store.involvements.forPerson(Number(person.uid), {
     limit: scanLimit,

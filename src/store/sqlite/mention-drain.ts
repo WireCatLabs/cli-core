@@ -89,7 +89,7 @@ export const knownPeople = (database: CacheDatabase): KnownPerson[] => {
         "SELECT p.id, p.name, 0 AS alias FROM persons p JOIN met ON met.id = p.id WHERE p.name IS NOT NULL " +
         "UNION SELECT l.person_id, i.name, 0 FROM identity_links l JOIN identities i ON i.id = l.identity_id " +
         `JOIN met ON met.id = l.person_id WHERE i.name IS NOT NULL AND i.provider <> 'email' AND NOT ${own} ` +
-        "UNION SELECT a.aliasable_id, a.name, 1 FROM aliases a JOIN persons p ON p.id = a.aliasable_id " +
+        "UNION SELECT coalesce(p.merged_into, p.id), a.name, 1 FROM aliases a JOIN persons p ON p.id = a.aliasable_id " +
         "WHERE a.aliasable_type = 'person' AND p.owner = 0 " +
         "UNION SELECT l.person_id, a.name, 1 FROM aliases a JOIN identity_links l ON l.identity_id = a.aliasable_id " +
         "JOIN met ON met.id = l.person_id WHERE a.aliasable_type = 'identity'",

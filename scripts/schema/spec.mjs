@@ -49,6 +49,8 @@ const EDITS = {
   persons: {
     cols: { is_self: "owner" },
     drop: ["uid"],
+    add: [["merged_into", "integer", { note: "the person a merge moved all its identities to; triggers set it" }]],
+    keys: ["INDEX (merged_into) WHERE merged_into IS NOT NULL"],
     note: "`uid` goes: `id` everywhere (owner).",
     doc: "A real person, whatever accounts they write from: their identities point here. `owner` marks the owner.",
   },

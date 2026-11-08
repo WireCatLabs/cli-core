@@ -78,11 +78,30 @@ const recordOf = ({ orm }: StoreContext, personPk: number): PersonRecord => {
   return { uid: String(person.id), name: person.name, identities: identitiesOf }
 }
 
-/** A person by the uid a `person:` reference holds, with every identity linked to them. */
+const livePk = ({ database }: StoreContext, pk: number | string): number | undefined => {
+  const found = database
+    .prepare(
+      "SELECT coalesce(m.id, p.id) AS pk FROM persons p LEFT JOIN persons m ON m.id = p.merged_into WHERE p.id = ?",
+    )
+    .get(pk)
+  return found ? Number(found.pk) : undefined
+}
+
+/** The uid of the person a merge moved this one into, or the uid itself; a uid that names no person stays as it is. */
+export const liveUid = (context: StoreContext, uid: string): string => {
+  if (!/^[1-9]\d*$/.test(uid) || !Number.isSafeInteger(Number(uid))) return uid
+  const pk = livePk(context, uid)
+  return pk === undefined ? uid : String(pk)
+}
+
+/**
+ * A person by the uid a `person:` reference holds, with every identity linked to them. A person merged into another
+ * reads as that other one, so a reference written before the merge still finds them.
+ */
 export const personByUid = (context: StoreContext, uid: string): PersonRecord | undefined => {
   if (!/^[1-9]\d*$/.test(uid) || !Number.isSafeInteger(Number(uid))) return undefined
-  const found = context.database.prepare("SELECT id AS pk FROM persons WHERE id = ?").get(uid)
-  return found ? recordOf(context, Number(found.pk)) : undefined
+  const pk = livePk(context, uid)
+  return pk === undefined ? undefined : recordOf(context, pk)
 }
 
 /** The person an identity belongs to, with every identity linked to them. */
@@ -111,9 +130,10 @@ const move = (context: StoreContext, identityPk: number, from: number, to: numbe
 export const linkIdentityToPerson = (
   context: StoreContext,
   identityPk: number,
-  target: number,
+  asked: number,
   options: LinkOptions,
 ): void => {
+  const target = livePk(context, asked) ?? asked
   const found = context.orm
     .select({ personId: identityLinks.personId })
     .from(identityLinks)
