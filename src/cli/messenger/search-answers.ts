@@ -2,6 +2,7 @@ import type { ErrorCode } from "@wirecat/cli-base"
 import type { Meta, Missing, NextStep } from "@wirecat/cli-base/standards"
 import type { InferOutput } from "valibot"
 import { hitFiles } from "../../domain/attachments.js"
+import { BUSINESS_KINDS, type BusinessKind } from "../../domain/business.js"
 import { formatLocator, parseLocator } from "../../domain/locator.js"
 import { senderIsMe } from "../../domain/models.js"
 import { chosenTextModel } from "../../embeddings/models.js"
@@ -332,6 +333,11 @@ const DOCUMENT_HIT_UNTRUSTED = ["title", "excerpt"]
 export const noteHitItem = (hit: FoundNote): NoteHitItem =>
   defined({ ...hit, untrusted: hit.kind === "document" ? DOCUMENT_HIT_UNTRUSTED : undefined })
 
+// Numbers and names come from the other side's documents or an import.
+const BUSINESS_UNTRUSTED = Object.fromEntries(
+  BUSINESS_KINDS.map((kind) => [kind, ["title", "excerpt", "source_record.external_id"]]),
+) as Record<BusinessKind, string[]>
+
 /** The text of each kind of `search all` hit that someone other than the owner may have written. */
 const ALL_HIT_UNTRUSTED: Record<HitItem["kind"], string[] | undefined> = {
   message: ["title", "excerpt", "sender_name", "attachments.name"],
@@ -343,6 +349,7 @@ const ALL_HIT_UNTRUSTED: Record<HitItem["kind"], string[] | undefined> = {
   // A CRM's copy is typed by the CRM's users; the owner's own deal is his, but one rule keeps a hit's marking simple.
   deal: ["title", "excerpt"],
   lead: ["title", "excerpt"],
+  ...BUSINESS_UNTRUSTED,
 }
 
 export const allHitItem = (item: SearchAllItem | MeetingSearchItem): HitItem =>
@@ -381,6 +388,15 @@ export const allHitItem = (item: SearchAllItem | MeetingSearchItem): HitItem =>
         sender_is_me: item.senderIsMe,
         sender_ref: item.from?.ref,
         found_by: item.foundBy,
+        review: item.review,
+        source_record:
+          item.sourceRecord === undefined
+            ? undefined
+            : {
+                provider: item.sourceRecord.provider,
+                account: item.sourceRecord.account,
+                external_id: item.sourceRecord.externalId,
+              },
         attachments: item.attachments === undefined ? undefined : nonEmpty(item.attachments),
         untrusted: ALL_HIT_UNTRUSTED[item.kind],
       })

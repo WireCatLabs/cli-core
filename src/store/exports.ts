@@ -1,3 +1,4 @@
+export { BUSINESS_KINDS, type BusinessKind } from "../domain/business.js"
 export type { CounterField, CounterObservations, CounterState } from "../domain/counters.js"
 export type { RetentionOptions } from "../domain/retention.js"
 export type { AccountAccounts, AccountsStore } from "./accounts.js"
@@ -24,6 +25,13 @@ export {
   type TextOrigin,
 } from "./sqlite/attachment-texts.js"
 export { pendingNormalization } from "./sqlite/backfill.js"
+export {
+  BUSINESS_FIND_MAX,
+  type BusinessHit,
+  type BusinessSearch,
+  type BusinessSearchStore,
+  type BusinessSource,
+} from "./sqlite/business-search.js"
 export type { ChatRekey, ChatRekeys } from "./sqlite/chat-rekey.js"
 export { CHAT_COLUMNS, TRACKED_CHAT_COLUMNS, titlePart } from "./sqlite/chats.js"
 export { storeClients } from "./sqlite/clients.js"

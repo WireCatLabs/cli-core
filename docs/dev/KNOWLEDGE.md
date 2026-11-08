@@ -237,6 +237,54 @@ write alike, with no review; only the author is kept. Triggers write each stage 
 `pipeline_stage_changes`, and `pipeline(ref)` counts from it how many rows reached each stage and the conversion to
 the next. The migration seeds the lead pipeline `Leads` (`new`, `contacted`, `qualified`, `won`, `lost`).
 
+Store version 57 adds the rest of a small business; the columns are in [schema.md](../storage/schema.md).
+`store.products` keeps what the owner or a supplier sells (`catalog_items`, `product:<id>`), with an optional price.
+An order now has lines (`order_lines`, `addLine`), and an order's or an invoice's line may name its product.
+`store.contracts` keeps contracts (`contract:<id>`) with their dates, renewal and notice days. `store.subscriptions`
+keeps subscriptions the owner bills or pays (`direction`), with a price history in `subscription_prices`: a new price
+is a new row from its `effective_from` day, never an edit, and the price in force is the latest confirmed one already
+effective. `store.wallets` keeps bank accounts, cards and cash (`financial_accounts`, `wallet:<id>`), one currency
+each. `store.transactions` keeps what a statement says moved (`financial_transactions`, `transaction:<id>`), split by
+category (`transaction_splits`, never more than the amount; the rest is `uncategorized`).
+
+**Refunds and net paid.** A refund is a payment with `refund_of` set: the other direction, the same currency, never a
+refund of a refund (`finance.refund`). Confirmed refunds never exceed the payment, and a refund's allocation to an
+invoice never exceeds the payment's own allocation there (`finance.over-refund`). A refund is confirmed only after
+its payment, and a payment with a live refund is neither rejected nor deleted (`finance.refunded`). An invoice's paid
+amount is net: confirmed payments' allocations minus confirmed refunds' (`netPaidSql`, the same sum in code and
+triggers), so a fully refunded invoice is `issued` again until the owner voids it, and `openTotals` counts it open.
+
+**The bank.** A transaction is the statement and a payment is the settlement; they meet only through a transaction's
+`payment`, which needs the same currency, direction and amount, and one transaction per payment
+(`transaction.payment`). A payment without a transaction (cash) and a transaction without a payment (a fee, a transfer
+between own wallets) are both normal. A wallet's balance on a day is its opening balance plus the confirmed, booked
+transactions after the opening day up to that day; pending and proposed ones are shown beside it as `pending`, never
+in it. It is summed each time; no running balance is stored. Nothing is converted: totals are per currency.
+
+**Who writes what.** The owner's invoice, payment, refund, order, contract with a value, subscription, price and
+transaction are confirmed at once; an agent's or an import's are proposals only the owner confirms or rejects
+(`finance.owner-only`). A bot adds lines, allocations and splits only on its own still-proposed row. Products,
+wallets, deals, leads, pipelines and a contract without a value are written directly by anyone; a wallet's opening
+balance is the owner's only.
+
+**Search.** `search all`'s `business` lane (`store.business.find`, `src/store/sqlite/business-search.ts`) finds
+invoices, payments, orders, contracts, subscriptions, products and wallets by words of their numbers and names, each
+matched where a word starts ("get" never finds "Widget"):
+an invoice's number and counterparty, a payment's reference and payer or payee, an order's number, shop and line
+descriptions, a contract's name and number, a subscription's name, a product's name and SKU, a wallet's name and
+bank. It folds them in memory per query, as `deals.find` folds titles (about 0.1 s for 10,000 rows of each type);
+there is no index. Transactions are left out (a statement gives tens of thousands a year; `transactions list`
+filters them), and so are `custom:` records, rejected rows and deleted ones. Each hit carries its `review`.
+Whether an import made a row is the row's own `source` (`import:<provider>`), not whether records point at it: the
+owner's and agents' rows are `business:internal`, even when the owner mapped a record onto one. An imported row's
+account is decided by one record, the oldest live record that maps to it, else the oldest deleted one; a record
+mapped onto it later never moves it. That record is the hit's `source_record` (`provider`, `account`,
+`external_id`). An imported row whose records all moved to other entities keeps its provider with an empty account.
+A scope keeps the imported rows whose deciding record is in it; the rest are read only without one.
+`store.business.accounts()` and `--source` skip an account whose records are all deleted. A profile that denies
+`business.list` (or `business`) leaves the lane out of `search all`, which names it under `missing`, as `deals.list`
+does for deals.
+
 ### Relationships a source reports
 
 `store.relations.syncReported(account, relationships, scope)` writes what a source account says as a diff keyed by the

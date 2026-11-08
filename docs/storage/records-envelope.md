@@ -127,6 +127,12 @@ nothing points at it any more. Its `proposed` and `errors` are those of the reco
 store deletes nothing. A record linked by an identifier or mapped before refuses a remap (`record.mapped`), and only
 the owner maps (`record.map-owner-only`).
 
+**Reading records back.** `store.records.list({ provider, account, … })` narrows one account's records by `type`,
+`entity` (a ref: the records mapped to it), `batch` (the `batch_id` that last wrote it), `deleted` (`true` only deleted,
+`false` only live, left out both), and `waiting`, `unmatched` or `flagged`. `store.records.incoming(target)` lists the
+relations of live records pointing at a record (a key) or at an entity (`{ entity: ref }`): those naming it by `ref`,
+from any account, and those resolved to a record mapped to it. Relations a record's fields make are left out of both.
+
 ## Deletes and revisions
 
 `operation: "delete"` is soft: the record is marked, its entity stays, and a proposed or confirmed entity is reported

@@ -1,10 +1,14 @@
 import * as v from "valibot"
+import { BUSINESS_KINDS } from "../domain/business.js"
 import { hitFile } from "./attachment.js"
 import { count, reference, text, time, untrusted } from "./fields.js"
 
-/** One result of `search all`: a message, a mail, a note, a calendar event, a meeting passage, a deal or a lead. */
+/**
+ * One result of `search all`: a message, a mail, a note, a calendar event, a meeting passage, a deal, a lead, or an
+ * invoice, payment, order, contract, subscription, product or wallet.
+ */
 export const hit = v.strictObject({
-  kind: v.picklist(["message", "mail", "note", "document", "event", "meeting", "deal", "lead"]),
+  kind: v.picklist(["message", "mail", "note", "document", "event", "meeting", "deal", "lead", ...BUSINESS_KINDS]),
   ref: reference,
   provider: text,
   url: v.optional(text),
@@ -34,6 +38,10 @@ export const hit = v.strictObject({
   lines_total: v.optional(count),
   /** A meeting passage's stored line, so two passages of one meeting stay apart; `search meetings` gives the same. */
   id: v.optional(v.pipe(v.string(), v.minLength(1))),
+  /** A business hit's: `proposed` waits for the owner; a product or a wallet has no review and is `confirmed`. */
+  review: v.optional(v.picklist(["proposed", "confirmed"])),
+  /** A business hit's record in the import that made it; absent for one the owner or an agent wrote. */
+  source_record: v.optional(v.strictObject({ provider: text, account: text, external_id: text })),
   /** A message's files; absent when it has none. */
   attachments: v.optional(v.array(hitFile)),
   /** Absent on a note hit: the owner wrote it. */

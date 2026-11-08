@@ -1,7 +1,8 @@
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { expect, it } from "vitest"
+import { DatabaseSync } from "node:sqlite"
+import { expect, it, vi } from "vitest"
 import { openCache } from "./open.js"
 import { openStore } from "./store.js"
 
@@ -219,5 +220,46 @@ it("keeps a task of another account's project off a person's timeline in this ac
   } finally {
     database.close()
     await store.close()
+  }
+})
+
+it("prepares the recompute of a subject once per kind, not once per subject", async () => {
+  const path = join(mkdtempSync(join(tmpdir(), "involvements-")), "store.db")
+  const store = await openStore({ path, now: () => 1000 })
+  const account = { provider: "synthetic", account: "owner" }
+  const prepare = vi.spyOn(DatabaseSync.prototype, "prepare")
+  try {
+    await store.chats.saveChats(account, [
+      { id: "room", title: "Synthetic room", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: 1 },
+    ])
+    const messages = ["1", "2", "3"].map((id) => ({
+      id,
+      chatId: "room",
+      senderId: "alice",
+      senderName: "Alice Example",
+      timestamp: new Date(Number(id) * 100).toISOString(),
+      editedAt: null,
+      text: "Synthetic text",
+      outgoing: false,
+      attachments: [],
+      replyTo: null,
+      forwardedFrom: null,
+      reactions: null,
+    }))
+    await store.messages.saveMessages(account, "room", messages, { via: "history" })
+    const recomputes = prepare.mock.calls
+      .map(([sql]) => sql)
+      .filter((sql) => sql.startsWith("INSERT INTO involvements") && sql.includes("from_type='message'"))
+    expect(recomputes).toHaveLength(1)
+    expect(store.involvements.pending()).toBe(0)
+  } finally {
+    prepare.mockRestore()
+    await store.close()
+  }
+  const database = await openCache(path)
+  try {
+    expect(database.prepare("SELECT count(*) AS n FROM involvements WHERE role='sender'").get()?.n).toBe(3)
+  } finally {
+    database.close()
   }
 })

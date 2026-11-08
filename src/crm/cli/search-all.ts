@@ -44,7 +44,7 @@ export const addCrmSearchAll = (
   example(all, "search all Example LLC", "search all website --only crm --json")
   all.action(async (words: string[], _opts: unknown, leaf: Command) => {
     const opts = leaf.opts<{
-      only?: ResourceWithMeetings[]
+      only?: Exclude<ResourceWithMeetings, "business">[]
       source?: string
       maxMeetings?: number | "all"
       limit?: number

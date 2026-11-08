@@ -3,9 +3,10 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { DatabaseSync } from "node:sqlite"
 import { afterEach, expect, it, vi } from "vitest"
-import { isUsable, usableLinkSql } from "../domain/relations.js"
+import { isUsable, RELATION_KINDS, usableLinkSql } from "../domain/relations.js"
 import { openCache } from "./open.js"
 import { crmSettingKey, parseCrmSetting, parseCrmSettingValue } from "./sqlite/crm-settings.js"
+import { KEYED } from "./sqlite/reported-relations.js"
 import { type MessageStore, openStore } from "./store.js"
 
 const stores: MessageStore[] = []
@@ -166,4 +167,19 @@ it("finds a reported relationship by its unique key, not by every link of its bu
   } finally {
     database.close()
   }
+})
+
+it("repeats the relationship key's index condition exactly, over every relationship kind (RISK-2204)", async () => {
+  const { path } = await fixture()
+  const database = new DatabaseSync(path, { readOnly: true })
+  try {
+    const index = String(
+      database.prepare("SELECT sql FROM sqlite_master WHERE name='links_relationship_key'").get()?.sql,
+    )
+    expect(index.slice(index.indexOf(" WHERE ") + " WHERE ".length)).toBe(KEYED)
+  } finally {
+    database.close()
+  }
+  const kinds = [...(KEYED.match(/kind IN \(([^)]*)\)/)?.[1] ?? "").matchAll(/'([^']+)'/g)].map(([, kind]) => kind)
+  expect(kinds.sort()).toEqual([...RELATION_KINDS].sort())
 })

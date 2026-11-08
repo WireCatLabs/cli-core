@@ -358,6 +358,8 @@ const holdingMeetings = async (store: MessageStore, named: AccountKey[]): Promis
   return holding.length ? holding : named
 }
 
+const keyOf = ({ provider, account }: AccountKey) => `${provider}\u0000${account}`
+
 const searchAllOfSource = async (
   store: MessageStore,
   account: AccountKey,
@@ -369,12 +371,21 @@ const searchAllOfSource = async (
 ): Promise<SearchAllIncludingMeetingsFound> => {
   const only = request.only ?? RESOURCES_SEARCHED_WITH_MEETINGS
   const entries = entriesOfList(source, await listContextOf(store, account, messenger.app))
-  const { skipped } = fitting(entries, only, "search all", (kind) => `--only leaves ${kind} out`)
+  // Any provider's import may write business data, so its accounts are the ones that hold some, whatever their kind.
+  const imported = only.includes("business") ? new Set((await store.business.accounts()).map(keyOf)) : new Set<string>()
+  const holdsBusiness = (one: AccountKey) => imported.has(keyOf(one))
+  const { skipped } = fitting(
+    entries,
+    only.filter((one): one is Exclude<ResourceWithMeetings, "business"> => one !== "business"),
+    "search all",
+    (kind) => `--only leaves ${kind} out`,
+    holdsBusiness,
+  )
   const named = (resource: ResourceWithMeetings): AccountKey[] => [
     ...new Map(
       entries
         .flatMap(({ accounts }) => accounts)
-        .filter((one) => listedHolds(one, resource))
+        .filter((one) => (resource === "business" ? holdsBusiness(one) : listedHolds(one, resource)))
         .map(({ provider, account }) => [`${provider}\u0000${account}`, { provider, account }] as const),
     ).values(),
   ]
@@ -406,6 +417,7 @@ const searchAllOfSource = async (
         notes: named("notes"),
         events: named("events"),
         crm: named("crm"),
+        business: named("business"),
       },
       ...(meetings[0] ? { meetingAccount: meetings[0] } : {}),
     },

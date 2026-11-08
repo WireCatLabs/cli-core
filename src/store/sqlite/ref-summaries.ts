@@ -3,9 +3,16 @@ import { dealLine } from "../../domain/deals.js"
 import { invoiceLine, paymentLine } from "../../domain/finance.js"
 import { orderLine } from "../../domain/orders.js"
 import { filesAccountSql, providerLabel, providerNamed } from "../../domain/providers.js"
-import { oneLine, type RefState, type RefSummary, type RefSummaryKind } from "../../domain/ref-summaries.js"
+import {
+  oneLine,
+  type RefState,
+  type RefSummary,
+  type RefSummaryKind,
+  type RefsStore,
+} from "../../domain/ref-summaries.js"
 import { formatReference, parseReference, type Reference } from "../../domain/references.js"
 import type { CacheDatabase, SqlValue } from "../driver.js"
+import type { StoreContext } from "./open.js"
 
 /** A summary plus what an evidence reader shows beside it; `summaries` drops the extra fields. */
 export interface RefRead extends RefSummary {
@@ -606,3 +613,7 @@ export const refSummariesOf = (
   new Map(
     [...refReadsOf(database, texts, options)].map(([text, read]) => [text, summaryOf(read, options.excerpt === true)]),
   )
+
+export const refsStoreOver = (context: StoreContext): RefsStore => ({
+  summaries: async (texts, options) => refSummariesOf(context.database, texts, { ...options, now: context.now() }),
+})

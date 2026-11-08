@@ -14,6 +14,47 @@ shape of this file.
   `ProposalFilter.via` keeps the proposals whose evidence holds a reference, and `store.proposedActions.list` takes
   `evidence` to filter in the query, so `via` pages stored relationship proposals in full. A pending `chat-senders@2`
   proposal takes the new reason and evidence on the next scan, under the same id.
+- **`search all` has a `business` lane.** `searchAll` finds invoices, payments, orders, contracts, subscriptions,
+  products and wallets by the words of their numbers and names (an invoice's counterparty, a payment's payer or payee,
+  an order's shop and lines), each word where a word starts, folded in memory like the `crm` lane, with no index.
+  Each hit carries its `review` (`proposed` or `confirmed`). A row an import made (its `source` is
+  `import:<provider>`) carries `source_record` (`provider`, `account`, `external_id`): the oldest live record that
+  maps to it, else the oldest deleted one, which also decides its account; the owner's and agents' rows are
+  `business:internal`. `scope.business` and `--source` read the import accounts they name. Transactions, `custom:`
+  records and rejected rows are left out. `store.business.find` and `store.business.accounts` back it.
+- **Permission key `business.list`** (or `business`): a profile that denies it leaves the `business` lane out of
+  `search all` and says so under `missing`, as `deals.list` does for deals (`deniedKinds`). memo reads the lane by
+  default once it takes this release; that key turns it off.
+- **`store.finance.addInvoiceLine` and `removeInvoiceLine` change an invoice's lines, as `store.orders` does an
+  order's.** A `product` reference copies the product's name and price, and a later price change leaves the line as it
+  is. The owner changes any invoice's lines but a void, rejected or deleted one's; a bot only those of an invoice it
+  proposed that is still proposed (`finance.owner-only`). The total follows the lines, and the status follows the total
+  against what confirmed payments settled. Refused: removing the last line (`finance.line`), a position with no line
+  (`finance.no-line`), and lines totalling less than is paid (`finance.below-paid`).
+- **`store.records.list` takes `entity`, `batch` and `deleted`, and `store.records.incoming` lists what points at a
+  record or an entity**, for a `records show` that shows relations both ways. `entity` is a ref and lists the records
+  mapped to it; `batch` is a `batch_id`; `deleted: true` lists only deleted records, `false` only live ones, and left
+  out lists both, as before. `incoming(key)` gives the live records whose relations resolve to that record;
+  `incoming({ entity })` those naming the entity by ref, from every account, and those resolved to a record mapped to
+  it. Each names its record's provider, account, type and id, with the role, `as` and `amount`.
+
+### Changed — may break callers
+
+- **`RESOURCES_SEARCHED` ends with `business`**, so `searchAll` and `searchAllWithMeetings` read it when `only` is
+  left out, and `SearchAllItem.kind` and the `hit` entity's `kind` take `invoice`, `payment`, `order`, `contract`,
+  `subscription`, `product` and `wallet`. A switch over hit kinds needs those branches; pass `only` to keep the old
+  lanes. The source tools' `search all` (`SOURCE_SEARCHED`) is unchanged.
+- **`MessageStore.business` is a new required member**: a hand-made store object or test double needs it.
+- **`SearchedResource`, `ResourceWithMeetings` and `SearchAllRequest.scope` take `business`**, and the strict `hit`
+  entity takes `review` and `source_record`; an exhaustive switch or a copy of the schema needs them.
+
+
+### Fixed
+
+- **A large CRM sync takes a third less time and a sixth of the memory** (#2682). Keeping the involvement index
+  current built a new SQL text for every item it recomputed, so SQLite prepared each one again and the process kept
+  them all. The item's id is now a bound parameter, one statement per kind of item. On the same synthetic data, the
+  20,000 sync peaks at 0.6 GB instead of 3.7 GB and takes 19 s instead of 30 s, its `--rescan` 13 s instead of 21 s.
 
 ## 0.609.0 — 08.11.2026
 
