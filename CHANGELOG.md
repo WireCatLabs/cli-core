@@ -37,6 +37,15 @@ shape of this file.
   again. Superseding, invalidating, reversing or rejecting the memory or fact closes its review as executed; removing
   it erases its reviews. When a cited source is erased, every review naming it loses that reference and the words of
   each challenge and suggestion that cited it.
+- **`fetchPage(url)` in `@wirecat/cli-core/documents` reads one web page** for a link the owner adds by hand: `http`
+  or `https` only, 50 MiB, 30 s, at most 5 redirects followed by hand, no cookies or credentials. Every hop's name must
+  resolve to public addresses only, and the connection goes to the address that was checked, so a link cannot reach
+  this computer, the local network or a cloud metadata address, even by DNS rebinding or an IPv4-mapped form. The
+  reader is chosen by content type. Refusals carry `source.url-refused`, `source.url-status`, `source.url-timeout`,
+  `source.url-redirects`, `source.url-unreachable`, `source.too-large`, `source.unsupported`, `source.no-text`,
+  `source.unreadable` and `source.engine-missing`; a private Google document is `source.needs-sign-in`.
+  `isPublicAddress` is exported too. A redirect from `https` to `http` is refused, the reader is stopped at the same
+  30 s, and the answer gives `requestedUrl` (the address to keep) beside `finalUrl` (never to be stored).
 
 ### Changed — may break callers
 

@@ -25,6 +25,10 @@ export const trimUrl = (url: string): string => {
   return url.slice(0, end)
 }
 
+/** Whether the host serves Google Docs, Sheets, Slides or Drive files. */
+export const isGoogleDocumentHost = (hostname: string): boolean =>
+  /^(?:docs|drive|sheets|slides)\.google\.com$/.test(hostname.toLowerCase())
+
 /** The Google file id a Docs, Sheets, Slides, Forms or Drive URL carries; `null` for any other URL. */
 export const googleDocumentId = (url: string): string | null => {
   let parsed: URL
@@ -33,7 +37,7 @@ export const googleDocumentId = (url: string): string | null => {
   } catch {
     return null
   }
-  if (!/^(?:docs|drive|sheets|slides)\.google\.com$/.test(parsed.hostname.toLowerCase())) return null
+  if (!isGoogleDocumentHost(parsed.hostname)) return null
   const segments = parsed.pathname.split("/")
   const at = segments.indexOf("d")
   const candidate = at < 0 ? parsed.searchParams.get("id") : segments[segments[at + 1] === "e" ? at + 2 : at + 1]

@@ -66,7 +66,7 @@ alias, keyword and person lanes and returns cited evidence with a resume checkpo
 | Export | Directory | What it holds |
 |---|---|---|
 | `.` | `src/domain/`, `src/render/`, `src/resolve.ts`, `src/terminal/` | the domain model (`models.ts`, types only), message locators, message rendering, name resolution that refuses rather than guesses, the secret prompt, the terminal QR code |
-| `./documents` | `src/documents/`, `src/services/documents/` | Provider-neutral file contracts, scoped ingestion/sync, document knowledge and evidence-backed extraction; existing readers remain available — see [Document workflows](DOCUMENTS.md) |
+| `./documents` | `src/documents/`, `src/services/documents/`, `src/fetch/` | Provider-neutral file contracts, scoped ingestion/sync, document knowledge and evidence-backed extraction, and the one-page fetch for a link the owner adds; existing readers remain available — see [Document workflows](DOCUMENTS.md) and [Reading one page](#reading-one-page) |
 | `./store` | `src/store/` | the SQLite seam and the shared message store |
 | `./sends` | `src/sends/` | the send guard: the permission levels, the read-only lock, the recipient list, the hourly limit, the journal (never the text), the send id |
 | `./speech` | `src/speech/` | the pinned catalogue, shared model directories, verified installer, installed-only bounded PCM recognizer, per-channel decoding, timed local pieces and OpenAI transcription; import alone loads no engine |
@@ -947,6 +947,45 @@ metadata. Stable `document:<id>` references reuse tags, notes and relationships;
 hierarchies remain distinct from notes collections. Reconciliation marks absent entries inactive
 without deleting annotations. Reads use explicit account IDs with bounded pages and metadata;
 provider adapters own hierarchy navigation. No migration or provider dependency is added.
+
+## Reading one page
+
+`fetchPage(url)` (`src/fetch/page.ts`, exported from `./documents`) reads one page for a source the owner adds by
+hand, and nothing else may reach a private address through it.
+
+- **Address.** `http` or `https` only, with no user or password. Every hop resolves its name with
+  `dns.lookup({ all: true })`; one non-public address among the answers refuses the link (`isPublicAddress` in
+  `src/fetch/addresses.ts`: loopback, private, link-local, CGNAT `100.64/10`, ULA, multicast, unspecified,
+  documentation and reserved blocks, and IPv4 carried as mapped `::ffff:0:0/96`, NAT64 `64:ff9b::/96` or 6to4
+  `2002::/16`). An IP literal is checked as written; the URL parser has already turned decimal, octal and hex forms
+  into dotted ones. The connection goes to the checked address: node's own `http(s).request` with a `lookup` that
+  answers that address, so a second DNS answer (rebinding) is never used, and TLS still checks the page's own name.
+- **Limits.** 50 MiB of body, counted as it streams (and refused at once when `Content-Length` says more), with no
+  compression asked for; 30 s for all hops, the body and the reader, which gets the same abort signal; at most 5
+  redirects, followed by hand and each checked again. A redirect from `https` to plain `http` is refused
+  (`source.url-refused`, `kind: "downgrade"`).
+- **Nothing of the owner's is sent.** No cookie is kept or sent, no credential, and the User-Agent is
+  `Mozilla/5.0 (compatible; WireCat)`. Errors name the host only, never the address, which may carry a token.
+- **Addresses in the answer.** `requestedUrl` is the address as given, and the one a caller stores as the source's
+  address. `finalUrl` is where the redirects ended; a redirect may have signed a token into it, so it is never stored
+  and its query never logged.
+- **Reading.** The registry (`readWithRegistry`) picks the reader by content type and the first bytes. Tests inject
+  `lookup` and `transport`; the transport is tested on its own against a local server.
+
+| What happened | Answer |
+| --- | --- |
+| text extracted | `read: "extracted"`, the text, `extractor`, `truncated` when the reader kept only the first part, `metadata` and `sections` when it gives them |
+| an image or a scan (`needs-agent`) | `read: "no-text"`, empty text: saved by its title and subjects |
+| extracted but blank | `source.no-text` |
+| `unsupported`, `unreadable`, `engine-missing`, `too-large` | `source.unsupported`, `source.unreadable`, `source.engine-missing` (configuration), `source.too-large` |
+| scheme, login or address refused | `source.url-refused` |
+| a status other than 2xx | `source.url-status`, with `status` |
+| more than 5 redirects | `source.url-redirects` |
+| 30 s passed | `source.url-timeout` |
+| the name does not resolve, the connection fails | `source.url-unreachable` (network) |
+| a Docs, Sheets, Slides or Drive address that redirects to `accounts.google.com`, answers 401/403, or answers 200 with Google's sign-in form (a form posting to `accounts.google.com` and a sign-in path, both) | `source.needs-sign-in`, which says to read it through Drive |
+
+The answer is `{ requestedUrl, finalUrl, status, contentType, bytes, text, extractor, read, truncated }`.
 
 ## Meeting read batches
 
