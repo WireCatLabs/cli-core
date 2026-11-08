@@ -92,6 +92,12 @@ describe("templates", () => {
     expect(rows).toContainEqual(
       expect.objectContaining({ key: "report/weekly-gaps", channel: "text", language: "ru", source: "default" }),
     )
+
+    await run("list", "source:stored", "channel:telegram")
+    expect((answers.at(-1) as { items: Record<string, unknown>[] }).items).toEqual([
+      expect.objectContaining({ key: KEY, channel: "telegram", language: "ru", source: "stored" }),
+    ])
+    await expect(run("list", "updated_by:fixture")).rejects.toThrow(/updated_by/)
   })
 
   it.each([
@@ -145,7 +151,7 @@ describe("templates", () => {
     onEdit((path) => {
       seen = readFileSync(path, "utf8")
     })
-    await run("edit", KEY, "--channel", "email", "--language", "en")
+    await run("edit", KEY, "--channel", "email", "--locale", "en")
     expect(seen).toBe(shipped("email", "en"))
     expect(item()).toMatchObject({ changed: false })
     expect(lines.at(-1)).toMatch(/unchanged; nothing saved/)
@@ -155,7 +161,7 @@ describe("templates", () => {
       draft = path
       writeFileSync(path, "<script>x</script>{{ summary }}")
     })
-    await expect(run("edit", KEY, "--channel", "email", "--language", "en")).rejects.toThrow(
+    await expect(run("edit", KEY, "--channel", "email", "--locale", "en")).rejects.toThrow(
       /not saved — sample: the email rules would remove <script> and its content\. Your text is in .*--file/,
     )
     expect(readFileSync(draft, "utf8")).toMatch(/<script>/)
@@ -171,7 +177,7 @@ describe("templates", () => {
 
     const { run } = fixture()
     await expect(run("show", "report/nope", "--channel", "text")).rejects.toThrow(/no template report\/nope/)
-    await expect(run("show", KEY, "--channel", "text", "--language", "de")).rejects.toThrow(
+    await expect(run("show", KEY, "--channel", "text", "--locale", "de")).rejects.toThrow(
       /en, ru; a de one would never/,
     )
   })

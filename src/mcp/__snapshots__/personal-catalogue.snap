@@ -122,6 +122,9 @@ read  tasks related
 read  tasks review
 read  tasks show
 read  tasks status
+read  templates list
+read  templates preview
+read  templates show
 read  topics icons list
 read  topics list
 write account privacy set
@@ -281,6 +284,8 @@ write tasks release
 write tasks scan
 write tasks unmerge
 write tasks update
+write templates edit
+write templates reset
 write topics create
 write topics delete
 write topics edit

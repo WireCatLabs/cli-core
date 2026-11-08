@@ -13,6 +13,7 @@
 📌 Договор с подрядчиком — Пётр Белов
    wirecat://open/v1/task/81
 Все просроченные (5) wirecat://open/v1/tasks/overdue · на сегодня (3) wirecat://open/v1/tasks/today · на завтра (2) wirecat://open/v1/tasks/tomorrow · новые (4) wirecat://open/v1/tasks/new/2026-11-05T08%3A30%3A00%2B03%3A00
+без срока: 91 · открыть wirecat://open/v1/tasks/undated
 
 🗳 Ждут вашего решения
 ☑️ Находки из почты — 12 ждут проверки
