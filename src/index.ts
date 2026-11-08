@@ -32,10 +32,14 @@ export {
   type CrmPerson,
   type CrmPipeline,
   type CrmRecords,
+  type CrmScope,
+  type CrmScopeSetting,
   type CrmStage,
   type CrmUser,
   type CrmValue,
+  isCrmUserId,
   isItemKind,
+  normalCrmUserId,
 } from "./domain/crm.js"
 export {
   DEAL_KINDS,

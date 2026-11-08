@@ -1,4 +1,4 @@
-import type { CrmDepartment, CrmField, CrmKind, CrmPipeline, CrmRecords, CrmUser } from "../domain/crm.js"
+import type { CrmDepartment, CrmField, CrmKind, CrmPipeline, CrmRecords, CrmScope, CrmUser } from "../domain/crm.js"
 import type { DealKind } from "../domain/deals.js"
 
 export interface CrmSourceTraits {
@@ -51,6 +51,11 @@ export interface CrmCallContext {
   spend(): void
   /** Says what the call could not read without failing it, such as e-mails a missing scope hides. */
   gap(gap: { kind: CrmGap["kind"]; message: string; scope?: string }): void
+  /**
+   * Which deals and leads the engine keeps; absent, every one. The engine applies it to what a source lists, so a
+   * source may also filter by it to read less, and must still list every assignee's changes.
+   */
+  scope?: CrmScope
 }
 
 /** One CRM account, as an adapter reads it. The engine never sees a provider word. */
@@ -58,6 +63,12 @@ export interface CrmSource {
   /** The registry name: `bitrix24`, `pipedrive`, `hubspot`, `amocrm`. */
   readonly provider: string
   readonly traits: CrmSourceTraits
+  /**
+   * The sign-in's own user id in the CRM, what a `mine` scope keeps besides `unassigned`. A source with it fills every
+   * deal's and lead's `assignee`, since `mine` keeps one without as nobody's; a source without it is copied whole. One
+   * account's copy belongs to one user: another sign-in's user is refused.
+   */
+  self?(): string | Promise<string>
   /** One kind's pipelines with their stages; a CRM whose leads have no pipelines answers one of its own making. */
   pipelines(kind: DealKind, context?: CrmCallContext): Promise<CrmPipeline[]>
   /**

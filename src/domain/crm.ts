@@ -146,4 +146,22 @@ export interface CrmRecords {
   organization: CrmOrganization
 }
 
+/** The account's scope settings: `also` are the users whose deals the owner counts as nobody's. */
+export type CrmScopeSetting = { mode: "all" } | { mode: "mine"; also: readonly string[]; explicit: boolean }
+
+/**
+ * Which deals and leads a sync copies: all, or those with no assignee or assigned to the sign-in's own user (`self`)
+ * or to one of `also`. Contacts and companies are always copied whole. Ids are normalised (`normalCrmUserId`).
+ */
+export type CrmScope = { mode: "all" } | { mode: "mine"; self: string; also: readonly string[] }
+
+/** A CRM's user id as `unassigned` takes it: digits, as every CRM core syncs numbers its users. */
+export const isCrmUserId = (id: string): boolean => /^\d{1,20}$/.test(id)
+
+/** One spelling per user id, so `015`, ` 15` and `15` are one user wherever they come from. */
+export const normalCrmUserId = (id: string): string => {
+  const text = id.trim()
+  return /^\d+$/.test(text) ? text.replace(/^0+(?=\d)/, "") : text
+}
+
 export const isItemKind = (kind: CrmKind): kind is DealKind => kind === "deal" || kind === "lead"

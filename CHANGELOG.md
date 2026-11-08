@@ -5,6 +5,42 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Added
+
+- **A CRM sync copies only the owner's deals and leads by default.** The account setting
+  `crm.<provider>:<account>.scope` is `mine` (the default) or `all`; `crm.<provider>:<account>.unassigned` lists the
+  CRM's numeric user ids whose deals and leads count as nobody's, which `mine` also keeps, as it keeps those with no
+  assignee. Both are set with `settings set`, which refuses a malformed `unassigned` entry by name. Contacts and
+  companies are copied whole as before. A source opts in with `self()`, its sign-in's own user; the engine applies
+  the scope to every page (`CrmScope`: `{ mode: "all" }` or `{ mode: "mine", self, also }`, ids normalised by
+  `normalCrmUserId`), so a deal given to another user leaves the copy at the next sync. A narrower scope is applied in
+  the store by each row's assignee, with no list from the CRM; a wider one lists deals and leads in full again. The
+  sync answer carries `scope` and each kind's `out_of_scope`; a kind that failed on a setting names it (`setting`)
+  and the answer offers no retry.
+- **A default `mine` that would mark most of a kind deleted is held** (`crm.narrowing-held`, naming the own user and
+  the count, and `held: true` on the kind) until the owner sets the `scope` setting; `--rescan` does not lift it.
+  While held, new pages are read under `mine` and the stored rows are kept. An agent cannot set a CRM account's
+  `scope`, `self` or `unassigned` (`permission_error`): the owner sets them in a terminal. `self()` must answer a numeric user id
+  (`invalid_response` otherwise), and `crmSourceContract` checks that such a source gives every deal and lead an
+  assignee.
+- **One account's copy belongs to one CRM user.** The first sync of a source with `self()` stores it as
+  `crm.<provider>:<account>.self`; a sync signed in as another user is refused (`validation_error`, the setting in
+  `details.setting`) until the owner unsets it.
+
+### Changed — may break callers
+
+- **The sync of an account whose source names its own user narrows to `mine` on its first run after the upgrade**,
+  unless that would mark more than half of a kind deleted (then it is held until the owner sets the scope):
+  other users' deals and leads are marked deleted in the local copy. They leave lists and search, but their earlier
+  copy stays in the store file. `settings set crm.<provider>:<account>.scope all` brings them back.
+- **An id list that is empty is held whatever the copy's size**: a small copy is no longer emptied by it without
+  `--rescan`.
+- **`CrmCopies.scope`, `ownUser`, `saveOwnUser` and `removeOutOfScope` are new required members**, and
+  `CrmSyncReport.scope` and `CrmSyncResult.outOfScope` are new required fields: a hand-made store object or a strict
+  reader of the answer needs them.
+
 ## 0.610.0 — 08.11.2026
 
 ### Added

@@ -69,8 +69,13 @@ export const STORE_SETTINGS = [
 ]
 
 const GROUP_PREFIX = `${ACCOUNT_GROUPS_SETTING}.`
-/** A CRM account's: whether what it reports is a relationship or waits for review, and what its company types mean. */
-const CRM_SETTINGS = ["crm.<provider>:<account>.links", "crm.<provider>:<account>.company-types"]
+/**
+ * A CRM account's: whether what it reports is a relationship or waits for review, what its company types mean, and
+ * whose deals and leads its sync copies.
+ */
+const CRM_SETTINGS = ["links", "company-types", "scope", "unassigned", "self"].map(
+  (name) => `crm.<provider>:<account>.${name}`,
+)
 
 /**
  * The store settings a CLI offers. Phone countries, task rules and account groups belong to messages; a CLI that is
@@ -83,6 +88,12 @@ export const storeSettingsOf = (app: Pick<AppIdentity, "messenger">): string[] =
 
 export const offersStoreSetting = (app: Pick<AppIdentity, "messenger">, setting: string): boolean =>
   app.messenger !== false || setting in SCRIPTS || setting === OWNER_LANGUAGES || parseCrmSetting(setting) !== undefined
+
+/** Whose deals a CRM copy holds: an agent may not decide it, even one the owner let change other settings. */
+export const isOwnerOnlyStoreSetting = (setting: string): boolean => {
+  const name = parseCrmSetting(setting)?.name
+  return name === "scope" || name === "self" || name === "unassigned"
+}
 
 export const isStoreSetting = (setting: string): boolean =>
   setting in SCRIPTS ||
@@ -295,9 +306,32 @@ const changeGroup = async (app: AppIdentity, env: NodeJS.ProcessEnv, setting: st
 const crmValueText = (value: unknown): string =>
   typeof value === "string"
     ? value
-    : Object.entries(value as Record<string, string>)
-        .map(([type, meaning]) => `${type}=${meaning}`)
-        .join(",")
+    : Array.isArray(value)
+      ? value.join(",")
+      : Object.entries(value as Record<string, string>)
+          .map(([type, meaning]) => `${type}=${meaning}`)
+          .join(",")
+
+const CRM_DEFAULTS = { links: "reported", "company-types": {}, scope: "mine", unassigned: [], self: "" } as const
+
+const crmNote = (name: keyof typeof CRM_DEFAULTS, now: unknown): string => {
+  if (name === "links")
+    return `store-wide — the next sync of that account writes what it reports as ${
+      now === "review" ? "proposals for the owner to review" : "reported relationships"
+    }; relationships already stored stay`
+  if (name === "company-types")
+    return "store-wide — a company of a mapped type becomes a customer, supplier or partner of the own company"
+  if (name === "scope")
+    return now === "all"
+      ? "store-wide — the next sync of that account copies every deal and lead, listing them all again"
+      : "store-wide — the next sync of that account copies only the deals and leads of the sign-in's own user and " +
+          "of the unassigned users, and marks the others deleted here; contacts and companies stay whole"
+  if (name === "unassigned")
+    return "store-wide — with scope mine, the next sync also copies the deals and leads of these users"
+  return now === ""
+    ? "store-wide — the next sync gives the account's copy to its sign-in's user, and narrows it to that user's deals"
+    : "store-wide — the account's copy holds this user's deals; a sync signed in as another user is refused"
+}
 
 const changeCrm = async (env: NodeJS.ProcessEnv, setting: string, value: string | undefined) => {
   const { name } = parseCrmSetting(setting) as NonNullable<ReturnType<typeof parseCrmSetting>>
@@ -309,15 +343,10 @@ const changeCrm = async (env: NodeJS.ProcessEnv, setting: string, value: string 
   } finally {
     database.close()
   }
-  const now = parsed ?? (name === "links" ? "reported" : {})
+  const now = parsed ?? CRM_DEFAULTS[name]
   return {
     result: { store: storePath(env), scope: "store", setting, value: crmValueText(now) },
-    note:
-      name === "links"
-        ? `store-wide — the next sync of that account writes what it reports as ${
-            now === "review" ? "proposals for the owner to review" : "reported relationships"
-          }; relationships already stored stay`
-        : "store-wide — a company of a mapped type becomes a customer, supplier or partner of the own company",
+    note: crmNote(name, now),
   }
 }
 
