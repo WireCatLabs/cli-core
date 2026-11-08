@@ -43,6 +43,8 @@ export const consentWording = (
   `(${new URL(enrichmentEndpoint(setting)).host}), model ${setting.model}: ${state.pending} records now, and every ` +
   "record added or changed later, at each sync. The model writes facts and questions about each record; they are " +
   "kept in the store, and search finds the record by them. " +
+  "A question in other words finds its record more often in the top 5 and 10, but a question in the record's own " +
+  "words gets that record first a little less often (measured on synthetic data: 0.54 to 0.48). " +
   `Enriching what is here now costs about ${usd(state.estimate.usd)} ` +
   `(${state.estimate.input_tokens} input and ${state.estimate.output_tokens} output tokens). ` +
   `\`${command} models consents revoke\` turns it off and deletes what the model wrote.`

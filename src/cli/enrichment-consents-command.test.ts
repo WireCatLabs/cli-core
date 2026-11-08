@@ -41,6 +41,7 @@ describe("models consents", () => {
     expect(item(0)).toMatchObject({ on: false, records: 1, pending: 1 })
     expect(item(1)).toMatchObject({ on: false, changed: false })
     expect(String(item(1).consent)).toMatch(/to openai \(api\.openai\.com\), model gpt-4o-mini: 1 records now/)
+    expect(String(item(1).consent)).toMatch(/in the record's own words gets that record first a little less often/)
     expect(lines.join("\n")).toMatch(/Nothing changed — add --yes/)
     expect(readEnrichmentSetting(env)).toBeUndefined()
   })
