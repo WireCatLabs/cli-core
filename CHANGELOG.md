@@ -7,15 +7,20 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- **cli-core accepts `@wirecat/cli-base` up to 0.86.x.** Its peer range stopped at `<0.86.0`, so a CLI could not take
+  cli-base 0.86.0, whose `hostFetch` no longer holds a finished request's memory for 30 seconds. Nothing else changes
+  for a caller.
+
 ## 0.611.0 — 08.11.2026
 
 ### Fixed
 
 - **In `search all`, a hit only words found keeps its place next to the hits around it.** It takes the cosine of the
   hit above it in its own source, so an exact word's second hit no longer sorts behind every hit meaning found.
-- **cli-core accepts `@wirecat/cli-base` up to 0.86.x.** Its peer range stopped at `<0.83.0`, so a CLI could not take
-  cli-base 0.85.0's `hostFetch` and the `network.hosts` manifest, or 0.86.0's vocabulary words `groups`, `roles`,
-  `--position` and `--label`, next to cli-core. Nothing else changes for a caller.
+- **cli-core accepts `@wirecat/cli-base` up to 0.85.x.** Its peer range stopped at `<0.83.0`, so a CLI could not take
+  cli-base 0.85.0's `hostFetch` and the `network.hosts` manifest next to cli-core. Nothing else changes for a caller.
 
 ## 0.610.0 — 08.11.2026
 
