@@ -56,7 +56,7 @@ const domainOf = (value: string) =>
  * nothing when it is no phone. Only the envelope says which country a national number is from: the store's
  * `phone_countries` setting reads `4155550100` as Russian, so it never decides an identifier.
  */
-const e164Of = (phone: string, region: string | undefined): string | null | undefined => {
+export const e164Of = (phone: string, region: string | undefined): string | null | undefined => {
   if (/^\s*(\+|00)/.test(phone)) return typedPhone(phone)?.value
   if (typedPhone(phone) === undefined) return undefined
   if (region === undefined) return null

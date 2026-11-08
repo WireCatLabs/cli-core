@@ -70,13 +70,13 @@ const EVERY_TYPE = [
   upsert(
     "message",
     "sms-1",
-    { kind: "sms", direction: "in", phone: "+7 900 000-00-01", body: "Счёт получил", sent_at: "2026-11-01T10:00:00Z" },
+    { kind: "sms", direction: "in", phone: "+44 7700 900001", body: "Счёт получил", sent_at: "2026-11-01T10:00:00Z" },
     { relations: [{ role: "counterpart", type: "person", external_id: "p-1" }] },
   ),
   upsert(
     "event",
     "call-1",
-    { kind: "call", direction: "missed", phone: "+7 900 000-00-01", started_at: "2026-11-01T11:00:00Z" },
+    { kind: "call", direction: "missed", phone: "+44 7700 900001", started_at: "2026-11-01T11:00:00Z" },
     { relations: [{ role: "counterpart", type: "person", external_id: "p-1" }] },
   ),
 ]

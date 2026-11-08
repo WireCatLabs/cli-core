@@ -1,4 +1,3 @@
-import { typedPhone } from "../../domain/mentions.js"
 import type { Message } from "../../domain/models.js"
 import type { CALL_DIRECTIONS, SMS_DIRECTIONS } from "../../domain/record-types.js"
 import { formatReference } from "../../domain/references.js"
@@ -10,8 +9,7 @@ import { COUNTERPART_ROLE, linkKind } from "./link-kinds.js"
 import { upsertMessage } from "./messages.js"
 import { requiredThing } from "./notes.js"
 import type { StoreContext } from "./open.js"
-import { storePhoneCountries } from "./phone-countries.js"
-import { importedIdentity, linkToPerson } from "./record-matching.js"
+import { e164Of, importedIdentity, linkToPerson } from "./record-matching.js"
 import {
   entityOf,
   given,
@@ -25,11 +23,9 @@ import {
 
 const CALLS_CALENDAR = "calls"
 
-/** E.164 when the number reads as one with the store's countries; as written otherwise (a short code, a name). */
-const numberOf = ({ database }: StoreContext, typed: string): string => {
-  const value = typedPhone(typed, { phoneCountries: storePhoneCountries(database) })?.value
-  return value?.startsWith("+") ? value : typed.trim()
-}
+/** E.164 as a person record's phone reads, so the thread and the person agree; as written otherwise (a short code). */
+const numberOf = ({ options }: Projection, typed: string): string =>
+  e164Of(typed, options.phone_region?.toLowerCase()) ?? typed.trim()
 
 /** The import's own account holds its SMS and calls too, so one `provider:account` in a group reaches all of it. */
 const sourceAccount = ({ source, accountId }: Projection): AccountKey & { pk: number } => ({
@@ -54,7 +50,7 @@ const saveSms = (projection: Projection, tools: ProjectionTools): string => {
   const { fields, externalId, source } = projection
   const sentAt = millis(fields, "sent_at")
   const account = sourceAccount(projection)
-  const phone = numberOf(context, String(fields.phone))
+  const phone = numberOf(projection, String(fields.phone))
   const name = given<string>(fields, "name") ?? null
   const incoming = (fields.direction as (typeof SMS_DIRECTIONS)[number]) === "in"
   const identity = importedIdentity(context, {
@@ -145,7 +141,7 @@ const saveCall = (projection: Projection, tools: ProjectionTools): string => {
   const account = sourceAccount(projection)
   const writes = calendarWritesOver(context)
   const calendarId = callsCalendar(context, account.pk, writes)
-  const phone = numberOf(context, String(fields.phone))
+  const phone = numberOf(projection, String(fields.phone))
   const direction = fields.direction as (typeof CALL_DIRECTIONS)[number]
   const seconds = given<number>(fields, "duration") ?? 0
   const entry: EntryInput = {

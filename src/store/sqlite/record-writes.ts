@@ -121,10 +121,16 @@ export const recordWritesOver = (context: StoreContext) => {
     return tools
   }
 
-  const projectionOf = (row: Row, source: EnvelopeSource, related: ReturnType<typeof relatedOf>): Projection => ({
+  const projectionOf = (
+    row: Row,
+    source: EnvelopeSource,
+    related: ReturnType<typeof relatedOf>,
+    options: EnvelopeOptions,
+  ): Projection => ({
     externalId: String(row.external_id),
     accountId: Number(row.account_id),
     source,
+    options,
     fields: JSON.parse(String(row.fields)) as Row,
     related: related.related,
     as: related.as,
@@ -187,7 +193,7 @@ export const recordWritesOver = (context: StoreContext) => {
     if (projector === null) return { missing: [] }
     const related = relatedOf(Number(row.id), type)
     if (related.missing.length > 0) return { missing: related.missing }
-    const projection = projectionOf(row, source, related)
+    const projection = projectionOf(row, source, related, options)
     if (hasV1Roles(type)) for (const name of FIELD_REFERENCE_ROLES) stringField(projection.fields, name)
     const ref = projector.create(projection, toolsOf())
     const entity = setEntity(Number(row.id), ref, false)
@@ -269,7 +275,7 @@ export const recordWritesOver = (context: StoreContext) => {
     if (kind === "re-propose" && !stamps.untouched(type, entityId)) return {}
     const related = relatedOf(id, type)
     if (related.missing.length > 0) return {}
-    if (!projector.update(ref, projectionOf(row, source, related), toolsOf())) return {}
+    if (!projector.update(ref, projectionOf(row, source, related, options), toolsOf())) return {}
     if (kind === "re-propose") stamps.stamp(type, entityId)
     if (isProposed(type, entityId)) proposed(ref)
     return undefined

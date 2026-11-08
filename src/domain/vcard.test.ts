@@ -14,19 +14,19 @@ describe("envelopeOfVcard", () => {
       "VERSION:2.1",
       "N;CHARSET=UTF-8;ENCODING=QUOTED-PRINTABLE:=D0=9F=D0=B5=D1=82=D1=80=D0=BE=D0=B2;=D0=98=D0=B2=",
       "=D0=B0=D0=BD;=D0=A1=D0=B5=D1=80=D0=B3=D0=B5=D0=B5=D0=B2=D0=B8=D1=87;;",
-      "TEL;CELL;PREF:+7 (900) 000-00-01",
-      "TEL;HOME:8 (495) 123-45-67",
-      "TEL;WORK;VOICE:+7 495 765-43-21",
+      "TEL;CELL;PREF:+44 (7700) 900-001",
+      "TEL;HOME:07700 900002",
+      "TEL;WORK;VOICE:+44 7700 900 003",
       "PHOTO;ENCODING=BASE64;TYPE=JPEG:/9j/4AAQSkZJRgABAQAAAQ",
       " ABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDA",
       "END:VCARD",
     ].join("\r\n")
-    const [person] = people(text, { region: "ru" })
+    const [person] = people(text, { region: "gb" })
     expect(person?.fields).toEqual({
       name: "Иван Сергеевич Петров",
-      phone: ["+79000000001", "+74951234567", "+74957654321"],
+      phone: ["+447700900001", "+447700900002", "+447700900003"],
     })
-    expect(cards(text, { region: "ru" }).issues).toEqual([])
+    expect(cards(text, { region: "gb" }).issues).toEqual([])
   })
 
   it("decodes a windows-1251 quoted-printable name", () => {
@@ -35,12 +35,12 @@ describe("envelopeOfVcard", () => {
   })
 
   it("keeps a national number as text and reports it when no region is given: it is never guessed", () => {
-    const text = "BEGIN:VCARD\nVERSION:3.0\nFN:Мария\nTEL;TYPE=CELL:8 900 000-00-02\nTEL:+34 600 111 222\nEND:VCARD"
+    const text = "BEGIN:VCARD\nVERSION:3.0\nFN:Мария\nTEL;TYPE=CELL:07700 900004\nTEL:+44 7700 900111\nEND:VCARD"
     const { envelope, issues } = cards(text)
     expect(envelope.records[0]?.fields).toEqual({
       name: "Мария",
-      phone: ["+34600111222"],
-      phone_unread: ["8 900 000-00-02"],
+      phone: ["+447700900111"],
+      phone_unread: ["07700 900004"],
     })
     expect(issues).toEqual([{ card: 0, message: expect.stringContaining("no region was given") }])
   })
@@ -51,7 +51,7 @@ describe("envelopeOfVcard", () => {
       "VERSION:4.0",
       "UID:urn:uuid:4fbe8971-0bc3-424c-9c26-36c3e1eff6b1",
       "FN:Анна Иванова\\, ИП",
-      'item1.TEL;VALUE=uri;TYPE="voice,cell":tel:+34-600-111-222;ext=7',
+      'item1.TEL;VALUE=uri;TYPE="voice,cell":tel:+44-7700-900-111;ext=7',
       "EMAIL;TYPE=work:Anna@Example.COM",
       "ORG:ООО Ромашка;Отдел прода",
       " ж",
@@ -74,7 +74,7 @@ describe("envelopeOfVcard", () => {
         operation: "upsert",
         fields: {
           name: "Анна Иванова, ИП",
-          phone: ["+34600111222"],
+          phone: ["+447700900111"],
           email: ["anna@example.com"],
           organization: "ООО Ромашка",
           title: "Главный бухгалтер",
@@ -85,7 +85,7 @@ describe("envelopeOfVcard", () => {
   })
 
   it("gives a card without UID the same id each time, from its name, numbers and addresses", () => {
-    const text = "BEGIN:VCARD\nVERSION:3.0\nFN:Олег\nTEL:+34600333444\nEND:VCARD"
+    const text = "BEGIN:VCARD\nVERSION:3.0\nFN:Олег\nTEL:+447700900333\nEND:VCARD"
     const first = people(text)[0]?.external_id
     expect(first).toMatch(/^vcard:[0-9a-f]{32}$/)
     expect(people(text)[0]?.external_id).toBe(first)

@@ -212,13 +212,13 @@ names is skipped, as any unknown provider is. A call's calendar entry has `event
 
 ```json
 { "key": "sms-1", "type": "message", "external_id": "sms-1",
-  "fields": { "kind": "sms", "direction": "in", "phone": "+34600111222", "name": "Иван Петров",
+  "fields": { "kind": "sms", "direction": "in", "phone": "+447700900111", "name": "Иван Петров",
               "body": "Буду в 10", "sent_at": "2026-11-01T09:12:00+01:00", "read": true },
-  "relations": [{ "role": "counterpart", "type": "person", "external_id": "+34600111222" }] }
+  "relations": [{ "role": "counterpart", "type": "person", "external_id": "+447700900111" }] }
 { "key": "call-1", "type": "event", "external_id": "call-1",
-  "fields": { "kind": "call", "direction": "missed", "phone": "+34600111222", "started_at": "2026-11-01T10:00:00Z",
+  "fields": { "kind": "call", "direction": "missed", "phone": "+447700900111", "started_at": "2026-11-01T10:00:00Z",
               "duration": 0 },
-  "relations": [{ "role": "counterpart", "type": "person", "external_id": "+34600111222" }] }
+  "relations": [{ "role": "counterpart", "type": "person", "external_id": "+447700900111" }] }
 ```
 
 **SMS → chats and messages.**
@@ -258,7 +258,8 @@ imports it in one call, its receipt with the converter's `vcard` issues beside t
   plain values are in another charset than UTF-8 is decoded by the caller first.
 - One `person` record per card: `FN`, else `N` as given then family name; `TEL` read to E.164, `EMAIL`.
 - A number with `+` or `00` is read as is. A national number is read only with `region` (a country of
-  `phone_countries`); without it, it stays in `fields.phone_unread`, is no identifier, and is reported in `issues`.
+  `phone_countries`), which the envelope also carries as `options.phone_region`; without it, it stays in
+  `fields.phone_unread`, is no identifier, and is reported in `issues`.
 - `ORG` is one `organization` record per name in the file (`external_id` `org:<folded name>`), and the person is
   `member-of` it; `TITLE` is kept in `fields.title`, and is the relation's `as` when it reads as a word (`cto`).
   Each account gets its own organization for an `ORG` name: a name never matches across accounts or entities.

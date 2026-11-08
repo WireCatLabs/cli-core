@@ -65,6 +65,22 @@ const FIXTURES: Record<string, unknown[]> = {
     { name: "Sales", stages: [], kind: "deal" },
   ],
   order: [{ direction: "sale", lines: [{ quantity: "2", product: "sku" }] }, { status: "lost" }],
+  message: [
+    {
+      kind: "sms",
+      direction: "in",
+      phone: "+447700900111",
+      body: "",
+      sent_at: "2026-11-01T09:00:00+01:00",
+      read: true,
+    },
+    { kind: "sms", direction: "in", phone: "+447700900111", body: "a", sent_at: "2026-11-01 09:00" },
+    { kind: "mms", direction: "out", phone: "x", body: "a", sent_at: "2026-11-01T09:00Z" },
+  ],
+  event: [
+    { kind: "call", direction: "missed", phone: "+447700900111", started_at: "2026-11-01T10:00:00Z", duration: 0 },
+    { kind: "call", direction: "in", phone: "+447700900111", started_at: "2026-11-01T10:00:00Z", duration: -1 },
+  ],
 }
 
 it("checks every type's fields as a standard JSON Schema 2020-12 validator does", () => {

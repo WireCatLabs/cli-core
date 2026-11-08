@@ -1143,13 +1143,13 @@
           "description": "The other side's number as the phone shows it: read to E.164 with the store's phone_countries"
         },
         "name": {
-          "type": "string",
+          "type": ["string", "null"],
           "minLength": 1,
           "maxLength": 200,
           "description": "The other side's name as the phone shows it"
         },
         "thread": {
-          "type": "string",
+          "type": ["string", "null"],
           "minLength": 1,
           "maxLength": 512,
           "description": "The phone's thread id; the number when left out"
@@ -1165,7 +1165,7 @@
           "description": "When it was sent"
         },
         "read": {
-          "type": "boolean",
+          "type": ["boolean", "null"],
           "description": "An incoming message the owner opened"
         }
       },
@@ -1192,7 +1192,7 @@
           "description": "The other side's number as the phone shows it: read to E.164 with the store's phone_countries"
         },
         "name": {
-          "type": "string",
+          "type": ["string", "null"],
           "minLength": 1,
           "maxLength": 200,
           "description": "The other side's name as the phone shows it"
@@ -1203,7 +1203,7 @@
           "description": "When it rang"
         },
         "duration": {
-          "type": "integer",
+          "type": ["integer", "null"],
           "minimum": 0,
           "maximum": 604800,
           "description": "Seconds talked; 0 when missed"
