@@ -120,6 +120,15 @@ shape of this file.
 
 ### Added
 
+- **`deals list --format csv` and `leads list --format csv`: a page of deals or leads as a table for a spreadsheet.**
+  stdout carries the CSV (RFC 4180, CRLF) and nothing else; the way to the next page goes to stderr. The columns are
+  the built-in fields, `amount` and `currency` apart, then every CRM field by its label as `fields list` shows it — a
+  money field as `<label> amount` and `<label> currency`, a label two fields share told apart by its code.
+  `--json=a,b` beside it picks the columns, a CRM field as `provider_metadata.<code>`. A cell that would start a
+  formula (`=`, `+`, `-`, `@`, tab, CR) gets a leading `'`, a plain number excepted. `--jsonl`, a bare `--json`,
+  `--compact` and an agent's run are refused with `output.conflict`. `csvCell`, `csvRecords` and `writeCsv` are
+  exported from `@wirecat/cli-core/cli` for a CLI's own lists.
+
 - **Business relationships: `reports-to`, `customer-of` and `partner-of`, role lists, and a `standing` on every
   relationship.** `knowledge.relate` takes a person reporting to a person, a person or organization buying from an
   organization, and two partner organizations (stored once, the lower id first, whichever way they are named). A deal
