@@ -131,12 +131,18 @@ export const canonicalPersonContext = async (
   if (!record) throw new CliError("not_found", `no person:${uid} in the store`)
   const scope = scopeOf(accounts, deniedKinds)
   const stored = await store.accounts.storedAccounts()
-  const reads = readsIn(stored, record, scope)
+  // The scope is the caller's: every stored account it holds is readable, whatever its personal or work scope.
+  const readable = stored.filter((one) => scope.has(one))
+  const scopes = new Map(stored.map((one) => [keyOf(one), one.scope]))
+  const reads = readsIn(stored, record, scope).map((one) => ({
+    ...one,
+    scope: scopes.get(keyOf(one.key)) as (typeof stored)[number]["scope"],
+  }))
   const calendars = (await calendarsOf(store, stored)).filter((one) => scope.has(one))
   const read = [...reads.map(({ key }) => keyOf(key)), ...calendars.map(keyOf)]
   return {
     person: record,
-    ...(await recordContext(store, record, reads, {
+    ...(await recordContext(store, record, reads, readable, {
       ...options,
       ...(accounts === undefined ? {} : { calendarIds: calendars.map(({ id }) => id) }),
     })),

@@ -95,10 +95,6 @@ export interface Link extends RelationshipColumns {
   provenance: string | null
   confirmed: boolean
   createdAt: string
-  /** The source account that reported it, `<provider>:<account>`. */
-  account?: string
-  /** How a source made the relationship when it stated none, such as `department-head`. */
-  derived?: string
 }
 
 export interface LinkListFilter {
