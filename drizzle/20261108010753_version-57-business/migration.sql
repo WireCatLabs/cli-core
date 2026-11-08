@@ -222,6 +222,7 @@ CREATE INDEX `financial_transactions_by_counterparty_type_counterparty_id` ON `f
 CREATE INDEX `financial_transactions_by_project_id` ON `financial_transactions` (`project_id`);--> statement-breakpoint
 CREATE INDEX `financial_transactions_by_author_type_author_id` ON `financial_transactions` (`author_type`,`author_id`);--> statement-breakpoint
 CREATE INDEX `financial_transactions_by_confirmed_by_type_confirmed_by_id` ON `financial_transactions` (`confirmed_by_type`,`confirmed_by_id`);--> statement-breakpoint
+CREATE INDEX `identities_by_phone` ON `identities` (`phone`) WHERE phone IS NOT NULL;--> statement-breakpoint
 CREATE INDEX `invoice_lines_by_catalog_item_id` ON `invoice_lines` (`catalog_item_id`);--> statement-breakpoint
 CREATE INDEX `invoices_by_contract_id` ON `invoices` (`contract_id`);--> statement-breakpoint
 CREATE INDEX `invoices_by_subscription_id` ON `invoices` (`subscription_id`);--> statement-breakpoint

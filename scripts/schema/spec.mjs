@@ -68,7 +68,11 @@ const EDITS = {
       ],
       ["name_folded", "text", { note: "`fold(name)`, which `tags list name:` compares; filled on open when NULL" }],
     ],
-    keys: ["INDEX (email) WHERE email IS NOT NULL", "INDEX (id) WHERE name IS NOT NULL AND name_folded IS NULL"],
+    keys: [
+      "INDEX (email) WHERE email IS NOT NULL",
+      "INDEX (phone) WHERE phone IS NOT NULL",
+      "INDEX (id) WHERE name IS NOT NULL AND name_folded IS NULL",
+    ],
   },
   identity_links: {
     cols: { linked_at: "created_at", linked_by: "author" },

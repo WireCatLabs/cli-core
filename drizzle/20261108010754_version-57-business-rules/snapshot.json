@@ -1,7 +1,7 @@
 {
-  "id": "6ed36362-a85b-4d92-a060-74f1748ba3c7",
+  "id": "4733d7fb-3459-41a8-a1c4-7d347be9caf5",
   "prevIds": [
-    "5b284990-9a62-4b4b-9ee7-f0faaf440d30"
+    "d41052db-bc6c-4b0f-b0f1-21f85ffba8b3"
   ],
   "version": "7",
   "dialect": "sqlite",
@@ -16325,6 +16325,20 @@
       ],
       "isUnique": false,
       "where": "email IS NOT NULL",
+      "origin": "manual",
+      "entityType": "indexes"
+    },
+    {
+      "table": "identities",
+      "name": "identities_by_phone",
+      "columns": [
+        {
+          "value": "phone",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": "phone IS NOT NULL",
       "origin": "manual",
       "entityType": "indexes"
     },
