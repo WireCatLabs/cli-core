@@ -475,6 +475,8 @@ const addressIdentity = (
 }
 
 const identityOf = (database: CacheDatabase, { address, name }: EmailAddress, now: number): number => {
+  // Every writer of an e-mail identity (and of identities.email) stores trim().toLowerCase(): the records import
+  // matches addresses by plain equality on it, through the index.
   const key = address.trim().toLowerCase()
   const found = database
     .prepare("SELECT id, name FROM identities WHERE provider = 'email' AND external_id = ?")

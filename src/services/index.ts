@@ -19,7 +19,14 @@ export type {
 } from "./context-evidence.js"
 export { contextEvidenceFingerprint, createContextEvidenceReader } from "./context-evidence.js"
 export { excerpt } from "./excerpt.js"
-export { type IngestOptions, type IngestReceipt, ingest } from "./ingest.js"
+export {
+  type IngestLinesOptions,
+  type IngestOptions,
+  type IngestReceipt,
+  ingest,
+  ingestLines,
+  jsonlLines,
+} from "./ingest.js"
 export {
   aliasHits,
   chatSenders,

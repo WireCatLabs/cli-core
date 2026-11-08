@@ -53,7 +53,8 @@ export const pointerPairs = (database: CacheDatabase): { table: string; pointer:
     .prepare(
       "SELECT m.name AS tbl, substr(c.name, 1, length(c.name) - 5) AS pointer FROM sqlite_master m " +
         "JOIN pragma_table_info(m.name) c ON c.name LIKE '%\\_type' ESCAPE '\\' " +
-        "WHERE m.type = 'table' AND EXISTS (SELECT 1 FROM pragma_table_info(m.name) i " +
+        // record_relations' target_type and target_id name a record of a source, not an entity.
+        "WHERE m.type = 'table' AND m.name <> 'record_relations' AND EXISTS (SELECT 1 FROM pragma_table_info(m.name) i " +
         "WHERE i.name = substr(c.name, 1, length(c.name) - 5) || '_id') ORDER BY m.name, c.cid",
     )
     .all()

@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, expect, it } from "vitest"
-import { type EnvelopeRecord, envelopeOfJsonl, RECORDS_ENVELOPE_SCHEMA } from "../domain/records.js"
+import { type EnvelopeRecord, envelopeOfJsonl, RECORDS_ENVELOPE_SCHEMA, recordErrors } from "../domain/records.js"
 import { ingest } from "../services/ingest.js"
 import { proposalRegistry } from "../services/proposals/registry.js"
 import { openStore } from "./store.js"
@@ -75,7 +75,7 @@ it("refuses a stale revision and keeps the newer one", async () => {
   expect((await store.records.get({ ...SOURCE, type: "payment", externalId: "1" }))?.fields.amount).toBe("10.00")
 })
 
-it("never links an organization by its name: the invoice waits until the owner maps the record", async () => {
+it("never links an organization by its name: it makes one, which the owner may remap to his own", async () => {
   const { store, romashka } = await fixture()
   const records: EnvelopeRecord[] = [
     {
@@ -106,16 +106,20 @@ it("never links an organization by its name: the invoice waits until the owner m
   ]
 
   const receipt = await take(store, envelope(records))
-  expect(receipt).toMatchObject({ created: 3, proposed: [] })
-  expect(receipt.waiting).toEqual([
-    { key: "invoice", pointer: "/records/1/relations", missing: ["counterparty"] },
-    { key: "payment-п-2", pointer: "/records/2/relations", missing: ["settles"] },
-  ])
-  expect(await store.finance.invoices()).toEqual([])
-
-  await store.records.map({ ...SOURCE, type: "organization", externalId: "клиент-7" }, romashka.ref, "owner")
+  expect(receipt).toMatchObject({ created: 3, waiting: [], unmatched: [] })
+  const made = await store.records.get({ ...SOURCE, type: "organization", externalId: "клиент-7" })
+  expect(made).toMatchObject({ createdEntity: true, entity: expect.stringMatching(/^organization:\d+$/) })
+  expect(made?.entity).not.toBe(romashka.ref)
   const [invoice] = await store.finance.invoices()
-  expect(invoice).toMatchObject({ review: "proposed", total: "50000.00", counterparty: { ref: romashka.ref } })
+  expect(invoice).toMatchObject({ review: "proposed", total: "50000.00", counterparty: { ref: made?.entity } })
+
+  const remapped = await store.records.map(
+    { ...SOURCE, type: "organization", externalId: "клиент-7" },
+    romashka.ref,
+    "owner",
+  )
+  expect(remapped).toMatchObject({ entity: romashka.ref, createdEntity: false, unused: made?.entity })
+  expect(await store.finance.invoice(invoice?.ref as string)).toMatchObject({ counterparty: { ref: romashka.ref } })
   const [paid] = await store.finance.payments()
   expect(await store.finance.payment(paid?.ref as string)).toMatchObject({
     review: "proposed",
@@ -343,4 +347,44 @@ it("refuses an invoice whose fields.payer is not text, though payer is a payment
   expect(result.errors).toEqual([
     expect.objectContaining({ pointer: "/records/0/fields", code: "record.invalid", message: "fields.payer is text" }),
   ])
+})
+
+it("refuses unknown options, a relation with both a ref and a type, and `as` on a role that is no relationship", async () => {
+  const { store } = await fixture()
+  const odd = await take(store, { ...envelope([]), options: { lines: "pictures" } })
+  expect(odd.errors).toEqual([expect.objectContaining({ pointer: "/options/lines", code: "envelope.invalid" })])
+  const result = await take(
+    store,
+    envelope([
+      payment("r-1", { amount: "1.00" }, { relations: [{ role: "payer", ref: "organization:1", type: "x" } as never] }),
+      payment(
+        "r-2",
+        { amount: "1.00" },
+        { relations: [{ role: "payer", ref: "organization:1", as: "boss" } as never] },
+      ),
+    ]),
+  )
+  expect(result.errors.map(({ pointer, code }) => `${pointer} ${code}`)).toEqual([
+    "/records/0/relations/0/ref record.invalid",
+    "/records/1/relations/0/as record.invalid",
+  ])
+})
+
+it("still takes every record shape v1 kept, junk included, before the store sees it", () => {
+  const kept = [
+    payment("j-1", { amount: "1.00", payer: "organization:1", reference: "x".repeat(400), note: { any: [1] } }),
+    invoice("j-2", "5.00"),
+    { ...client, fields: { name: "x".repeat(500), email: "n/a", phone: "-", inn: 7700000000 } },
+    {
+      key: "p",
+      type: "person",
+      external_id: "p",
+      operation: "upsert",
+      fields: { name: 42, phone: "12", email: ["", 5] },
+    },
+    { key: "pr", type: "project", external_id: "pr", operation: "upsert", fields: { name: "", key: 7 } },
+    { key: "c", type: "custom:row", external_id: "c", operation: "upsert", fields: { deep: { a: [{ b: null }] } } },
+    { key: "d", type: "invoice", external_id: "d", operation: "delete" },
+  ]
+  expect(kept.flatMap((record, index) => recordErrors(record, index))).toEqual([])
 })

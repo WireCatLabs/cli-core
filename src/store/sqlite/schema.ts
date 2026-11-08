@@ -153,7 +153,6 @@ export const identities = sqliteTable(
   (table) => [
     unique().on(table.provider, table.externalId),
     index("identities_by_email").on(table.email).where(sql`email IS NOT NULL`),
-    index("identities_by_phone").on(table.phone).where(sql`phone IS NOT NULL`),
     index("identities_name_to_fold").on(table.id).where(sql`name IS NOT NULL AND name_folded IS NULL`),
   ],
 )

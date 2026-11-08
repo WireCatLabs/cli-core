@@ -294,26 +294,38 @@ read `MAIL_FINDING_FIELDS`, which `mailFindingFieldsHelp()` prints for a host's 
 
 ## Source records and imports
 
-`ingest(store, envelope, { account, dryRun })` (`./services`) takes what a source sends: the v1 envelope
-(`RECORDS_ENVELOPE_SCHEMA`, written out as `schemas/records-envelope.v1.schema.json`, JSON Schema 2020-12), or a JSONL
-file through `envelopeOfJsonl` (a header line with `schema_version` and `source`, then one record per line). Each
-record lands in `records` (store version 47), unique per account, type and external id, with its fields as untrusted
-JSON and a fingerprint of fields and relations: the same import twice writes nothing. A revision below the stored one,
-or the same revision with other content, is refused (`record.stale-revision`); a delete is soft. A field named like a
-secret or holding a known credential shape is refused (`record.secret-field`). Every refusal carries a JSON pointer
-and a stable code; the receipt counts created, updated, unchanged, deleted and refused records. A dry run writes in a
-transaction it rolls back.
+`ingest(store, envelope, { account, dryRun })` and `ingestLines(store, jsonlLines(stream), options)` (`./services`) take
+what a source sends: the v1 records envelope (`RECORDS_ENVELOPE_SCHEMA`, written out as
+`schemas/records-envelope.v1.schema.json` and generated from `RECORD_TYPES`), as one JSON object or as JSONL streamed
+line by line. [`docs/storage/records-envelope.md`](../storage/records-envelope.md) is the full contract: every type,
+its fields and roles, the error codes and the example. Each record lands in `records`, unique per account, type and
+external id, with its fields as untrusted JSON and a fingerprint of fields and relations: the same import twice
+writes nothing. A revision below the stored one, or the same revision with other content, is refused
+(`record.stale-revision`); a delete is soft. A field named like a secret or holding a known credential shape is
+refused (`record.secret-field`). Every refusal carries a JSON pointer and a stable code.
 
-An `invoice` or `payment` record becomes an `invoice:` or `payment:` proposal by the bot `import`, never a confirmed
-row. Its `counterparty`, `issuer`, `payer`, `payee` and `project` come from a store ref in its fields or from a
-relation to another record of the account; a payment's `settles` relations allocate it to those invoices: by the
-relation's `amount` when it has one (amounts past the payment are `record.over-payment`), else as far as the payment
-and what other payments, confirmed or proposed, leave open on the invoice allow. A changed record of a payment the
-import proposed and the owner has not decided takes its allocations again (`store.finance.unallocate`, then the
-relations) and is flagged only when more than its `settles` relations changed. A relation whose target is not imported, or has no entity, keeps the record waiting (`waiting` in the
-receipt); it gets its entity when the target does. A `person`, `organization` or `project` record gets its entity
-only from the owner (`store.records.map`), never by name. A record changed or deleted at the source after its entity
-was made leaves the entity alone and is `flagged`.
+A record becomes its entity as the registry says. What feeds a money total (an invoice, a payment, an order, a
+contract with a value, a subscription and its prices, a bank transaction and its splits) is a proposal by the bot
+`import`, never a confirmed row; a product, a pipeline, a deal or lead (on the `(account, external_id)` row CRM sync
+writes), a wallet and a contract without a value are written directly. A payment's `settles` relations allocate it:
+by the relation's `amount` when it has one (`record.over-payment` past the payment), else as far as the payment and
+what other payments, confirmed or proposed, leave open on the invoice allow. A relation, a line's product or a deal's
+pipeline whose target has no entity keeps the record waiting until it gets one.
+
+A `person`, `organization` or `project` record is linked by one exact strong identifier: an e-mail, an E.164 phone
+(without `+`, only one valid in the envelope's `phone_region`; otherwise kept as data and listed as `ignored`) or the
+source's contact identity for a person, a `{scheme, value}` identity of a known scheme for an organization (an
+e-mail under `org-email`, never a person's, also matching the `email` identity mail gave a company), the key for a
+project. No match makes the entity (`records.created_entity = 1`) with the record's
+identifiers; two or more leave it `unmatched`, with the candidates, for the owner's `store.records.map`; a name never
+matches. The lookup is one function, `entitiesByIdentifiers` (`src/store/sqlite/record-matching.ts`), for the shared
+matcher to take over. `store.records.match` runs it for a whole account. The owner may remap a record whose entity the
+import made: what the account's records filled from it follows, and the old entity is answered as `unused`.
+
+A changed record re-proposes a proposal the import made while nobody else changed or decided it (a digest of what the
+import wrote is kept in the row's metadata), updates a direct row and an entity the import made in place, and is
+otherwise `flagged`, the entity untouched. Invoices keep v1's rule: a change after projection is flagged. A dry run
+holds one transaction across the stream; every other statement on the same handle is refused until it ends.
 
 ## Link proposals from scorers
 

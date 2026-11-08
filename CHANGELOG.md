@@ -99,6 +99,34 @@ shape of this file.
   `subscription.interval`, `subscription.price`, `subscription.no-price`, `subscription.ref`; `wallet.field`,
   `wallet.number`, `wallet.ref`; `transaction.field`, `transaction.payment`, `transaction.ref`, `transaction.split`,
   `transaction.no-split`.
+- **The records envelope takes every business type.** Beside v1's five, `deal`, `lead`, `pipeline`, `order` (with
+  `lines`), `contract`, `subscription` (with `prices`), `product`, `wallet` and `transaction` (with `splits`), each with
+  typed `fields` and roles in `RECORD_TYPES`; `pnpm schema:envelope` writes the shipped JSON Schema from it. A relation
+  names a store entity by `ref` (`organization:12`), a relationship role carries `as` (`decision-maker`), `payment`
+  takes `refund_of`, a line names its `product` or `product_ref`, and `options.lines: "products"` reads an invoice
+  line's product. Money types are proposals of the bot `import`; deals and leads land on the row CRM sync writes for
+  the same account. A changed record re-proposes the import's own proposal while nobody else touched it, and is
+  flagged once the owner edited or decided it. See
+  [`docs/storage/records-envelope.md`](docs/storage/records-envelope.md).
+- **Streaming JSONL.** `ingestLines(store, jsonlLines(stream), { account, dryRun, chunk, onIssue })` (`./services`)
+  writes per chunk as lines arrive; the receipt's lists keep 1000 entries and set `truncated`, the counts stay exact,
+  and `onIssue` (also on `ingest`) gets every refusal. A dry run is one transaction rolled back at the end: it holds
+  the write lock, and any other statement on the store handle meanwhile is refused (`store.dry-run`). A leading
+  byte-order mark is skipped; `envelopeOfText(text)` reads a file's text as JSON or JSONL.
+- **Receipt `unmatched[{key, pointer, reason, candidates}]`** and a flagged entry's `reason` and `candidates`,
+  `store.records.match({ provider, account })`, `store.records.list({ unmatched })`, `SourceRecord.createdEntity` and
+  a relation's `ref` and `as`. The owner's `store.records.map` moves a record whose entity the import made, with the
+  account's records linked to it, and answers the old one as `unused`, beside the records it completed.
+- **`options.phone_region`**: a person's phone without `+` is an identifier only when the envelope names this country
+  and the number is valid there; the `phone_countries` setting never decides it. Without it the number stays data and
+  the receipt lists it under `ignored` (`record.phone-region`).
+- **An envelope deal's and lead's people stay as record relations** (with `as`) until imports report relationships to
+  the store; they no longer write the deal's person links.
+- **`orders.revise(order, input)`** replaces an order's columns and lines: the owner on any order, a bot on its own
+  proposed one. New reasons `record.identifier`, `record.ambiguous`, `record.separated`, `record.phone-region` and
+  `store.dry-run`.
+- **An example import, one synthetic customer end to end**, ships as
+  `@wirecat/cli-core/schemas/examples/records-business.jsonl`.
 
 ### Changed — may break callers
 
@@ -123,6 +151,18 @@ shape of this file.
 - **An invoice's paid amount is net of confirmed refunds.** `paid`, `open`, the status, `openTotals` and the void check
   read one figure, the confirmed allocations of payments less those of their refunds: an invoice refunded in full is
   `issued` again and may be voided. An older memo computes paid gross; update memo before writing refunds.
+- **A person, organization or project record is matched or made on import**, in every file, v1 files included. One
+  exact e-mail, E.164 phone, organization identifier or project key links it; none makes the entity (marked
+  `createdEntity`) with the record's identifiers; two or more leave it `unmatched` (`record.ambiguous`). A record
+  that waited for the owner's `records.map` is matched or made on its next import, so dry-run an old file before
+  importing it again. An organization's `email` identifier is kept under the provider `org-email`.
+- **`store.records.write` is `store.records.run`**, taking an iterable of `{ index, record, errors? }` and answering
+  counts and capped lists instead of one outcome per record; `RecordOutcome` and `RecordsWritten` are gone. A
+  `SourceRecord` relation's `externalId` is `null` when it names a `ref`. `ingest` checks a record's fields against
+  its type's schema first, so a broken v1 invoice or payment field is refused with `record.invalid` at the field's
+  pointer.
+- **A CRM contact identity escapes a `/` or `%`** in its account or id (`%2F`, `%25`), so two accounts never share
+  one; ids without them, every CRM's so far, keep their identity.
 
 ### Fixed
 

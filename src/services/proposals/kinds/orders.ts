@@ -5,8 +5,7 @@ import { reviewedKind, reviewedRow } from "./shared.js"
 /** An agent's order, by its own ref (`order:12`) as invoices are; only the owner decides it. */
 export const orderKind = (store: Pick<MessageStore, "orders">): ProposalKind =>
   reviewedKind<Order>({
-    kind: "order",
-    prefix: "order",
+    type: "order",
     list: (options) => store.orders.list(options),
     get: (id) => store.orders.get(id),
     row: (order) => reviewedRow("order", order, order.supplier?.ref ?? null),

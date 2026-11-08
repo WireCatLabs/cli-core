@@ -1,3 +1,5 @@
+import { AsyncLocalStorage } from "node:async_hooks"
+import { CliError } from "@wirecat/cli-base"
 import { sqliteCode } from "../../errors/failures.js"
 import type { Stemmer, Stemmers } from "../../search/stem.js"
 import type { CacheDatabase } from "../driver.js"
@@ -6,6 +8,8 @@ import { drainMentions } from "./mention-drain.js"
 import { drainStems, stemmerCache } from "./stems.js"
 
 type Connection = { depth: number; reading: boolean; stemmerFor: (stemmers: Stemmers) => Stemmer }
+
+const rehearsal = new AsyncLocalStorage<CacheDatabase>()
 
 const SQLITE_BUSY = 5
 const pause = new Int32Array(new SharedArrayBuffer(4))
@@ -98,6 +102,63 @@ const transact = <T>(database: CacheDatabase, body: () => T, drain: boolean, bef
     throw error
   } finally {
     connection.depth -= 1
+  }
+}
+
+let rehearsals = 0
+
+/** Whether a dry run holds a connection of this process now. */
+export const rehearsing = (): boolean => rehearsals > 0
+
+/** Calls `call` outside any dry run: a statement it runs is refused while one holds the connection. */
+export const outsideRehearsal = <T>(call: () => T): T => rehearsal.exit(call)
+
+type Methods = Record<string, unknown>
+
+/**
+ * Async work in one write transaction that is always rolled back: a dry run over a stream, whose later chunks must see
+ * what earlier ones would write. Writes inside become savepoints. It holds the write lock for the whole run, and any
+ * statement from outside its own async work meanwhile is refused (`store.dry-run`): on the `CacheDatabase` seam and on
+ * the SQLite client under it, which Drizzle queries go through. Not a second connection: this process's other writers
+ * would then wait on the lock with the event loop blocked, and the dry run could not go on meanwhile.
+ */
+export const rehearse = async <T>(
+  { database, client }: { database: CacheDatabase; client?: unknown },
+  body: () => Promise<T>,
+): Promise<T> => {
+  const connection = connectionOf(database)
+  if (connection.depth > 0 || connection.reading) throw new Error("a rehearsal starts outside any transaction")
+  // Anything else on the connection would land inside the dry run: its write rolled back with it, its read seeing
+  // rows that never exist.
+  const kept: [Methods, string, unknown, boolean][] = []
+  const guard = (target: Methods, names: string[]) => {
+    for (const name of names) {
+      const call = target[name]
+      if (typeof call !== "function") continue
+      kept.push([target, name, call, Object.hasOwn(target, name)])
+      target[name] = function (this: unknown, ...args: unknown[]) {
+        if (rehearsal.getStore() !== database)
+          throw new CliError("conflict", "a dry run of an import holds the store; try again once it ends", {
+            reason: "store.dry-run",
+          })
+        return (call as (...args: unknown[]) => unknown).apply(this, args)
+      }
+    }
+  }
+  beginImmediate(database)
+  connection.depth += 1
+  guard(database as unknown as Methods, ["prepare", "exec"])
+  if (client !== undefined && client !== null) guard(client as Methods, ["prepare", "exec", "query", "run"])
+  rehearsals += 1
+  try {
+    return await rehearsal.run(database, body)
+  } finally {
+    rehearsals -= 1
+    for (const [target, name, call, own] of kept.reverse())
+      if (own) target[name] = call
+      else delete target[name]
+    connection.depth -= 1
+    database.exec("ROLLBACK")
   }
 }
 

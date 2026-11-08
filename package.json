@@ -37,6 +37,7 @@
   ],
   "exports": {
     "./schemas/records-envelope.v1.schema.json": "./schemas/records-envelope.v1.schema.json",
+    "./schemas/examples/records-business.jsonl": "./schemas/examples/records-business.jsonl",
     "./documents": {
       "types": "./dist/documents.d.ts",
       "default": "./dist/documents.js"
@@ -211,6 +212,7 @@
     "prepublishOnly": "pnpm build",
     "schema:check": "scripts/schema/check.sh",
     "schema:render": "node scripts/schema/render.mjs",
+    "schema:envelope": "pnpm build && node scripts/records-envelope-schema.mjs && biome format --write schemas/records-envelope.v1.schema.json",
     "parity:seed": "tsc --build && node --experimental-strip-types scripts/parity-seed.ts",
     "parity:render": "node --experimental-strip-types scripts/parity-render.ts",
     "parity:audit": "tsc --build && node --experimental-strip-types scripts/parity-audit.ts",
@@ -278,6 +280,7 @@
     "@vitest/coverage-v8": "^5.0.5",
     "@wirecat/cli-base": "0.82.0",
     "@wirecat/cli-core-legacy-tags": "npm:@wirecat/cli-core@0.414.0",
+    "ajv": "8.17.1",
     "commander": "15.0.0",
     "cspell": "10.4.0",
     "drizzle-kit": "1.0.0-rc.5",

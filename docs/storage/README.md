@@ -8,6 +8,7 @@ built today is in [ARCHITECTURE, "The store"](../dev/ARCHITECTURE.md#the-store).
 | [`requirements.md`](requirements.md) | what the owner asked for, verbatim |
 | [`decisions.md`](decisions.md) | the storage rulings in force |
 | [`schema.md`](schema.md) | every table and column of the store, and what each one means |
+| [`records-envelope.md`](records-envelope.md) | how a source imports records: every type, its roles, matching, streaming, the error codes |
 | [`messaging.md`](messaging.md) | the messaging store APIs: scopes, nested chats, threads, retention evidence |
 | [`search-indexes.md`](search-indexes.md) | how search works: the word indexes, search by meaning — chunks, vectors, the scan, the merge with words |
 | [`../../bench/search/`](../../bench/search/) | the benchmark fixture and its results |
