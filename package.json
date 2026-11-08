@@ -37,6 +37,7 @@
   ],
   "exports": {
     "./schemas/records-envelope.v1.schema.json": "./schemas/records-envelope.v1.schema.json",
+    "./schemas/examples/records-business.jsonl": "./schemas/examples/records-business.jsonl",
     "./documents": {
       "types": "./dist/documents.d.ts",
       "default": "./dist/documents.js"

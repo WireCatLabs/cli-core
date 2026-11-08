@@ -348,3 +348,24 @@ it("refuses an invoice whose fields.payer is not text, though payer is a payment
     expect.objectContaining({ pointer: "/records/0/fields", code: "record.invalid", message: "fields.payer is text" }),
   ])
 })
+
+it("refuses unknown options, a relation with both a ref and a type, and `as` on a role that is no relationship", async () => {
+  const { store } = await fixture()
+  const odd = await take(store, { ...envelope([]), options: { lines: "pictures" } })
+  expect(odd.errors).toEqual([expect.objectContaining({ pointer: "/options/lines", code: "envelope.invalid" })])
+  const result = await take(
+    store,
+    envelope([
+      payment("r-1", { amount: "1.00" }, { relations: [{ role: "payer", ref: "organization:1", type: "x" } as never] }),
+      payment(
+        "r-2",
+        { amount: "1.00" },
+        { relations: [{ role: "payer", ref: "organization:1", as: "boss" } as never] },
+      ),
+    ]),
+  )
+  expect(result.errors.map(({ pointer, code }) => `${pointer} ${code}`)).toEqual([
+    "/records/0/relations/0/ref record.invalid",
+    "/records/1/relations/0/as record.invalid",
+  ])
+})
