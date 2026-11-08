@@ -25,6 +25,24 @@ shape of this file.
   `ProposalFilter.via` keeps the proposals whose evidence holds a reference, and `store.proposedActions.list` takes
   `evidence` to filter in the query, so `via` pages stored relationship proposals in full. A pending `chat-senders@2`
   proposal takes the new reason and evidence on the next scan, under the same id.
+- **Write-time enrichment, off by default.** With the owner's consent, a hosted model reads each note, document and
+  email and writes standalone facts and two questions in other words; search finds the record by them and still cites
+  the record. `models consents show` gives the state, the records covered and the cost estimate;
+  `models consents set openai --model gpt-4o-mini` says what would be sent and changes nothing until `--yes`;
+  `models consents revoke` turns it off and deletes what was written. One setting for every WireCat CLI, the
+  `enrichment` section of the shared settings file. `embedNotes` and `embedMail` enrich up to 600 records a run before
+  they embed, each record once per text; a failed batch leaves its records for the next sync. The text goes into the
+  stems and a chunk of its own, never into `--exact`, the trigrams or the record's own chunks. An agent cannot turn it
+  on. `enrichRecords`, `enrichmentState`, `readEnrichmentSetting` and `writeEnrichmentSetting` from
+  `@wirecat/cli-core/services`; `store.enrichment`.
+- Store version 58: `enrichments`, one row per enriched record, deleted with the record. Additive; `minCompatible`
+  stays 56.
+- The model gateway's answer carries `usage` (input and output tokens) for OpenAI and Anthropic.
+
+## 0.610.0 — 08.11.2026
+
+### Added
+
 - **`search all` has a `business` lane.** `searchAll` finds invoices, payments, orders, contracts, subscriptions,
   products and wallets by the words of their numbers and names (an invoice's counterparty, a payment's payer or payee,
   an order's shop and lines), each word where a word starts, folded in memory like the `crm` lane, with no index.

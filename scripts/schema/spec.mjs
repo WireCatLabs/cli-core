@@ -5,6 +5,7 @@ import { actor, c, del, fk, fts, id, meta, poly, queue, ts } from "./columns.mjs
 import { crmTables } from "./crm.mjs"
 import { decisionRequestTables } from "./decision-requests.mjs"
 import { annotationTransferTable, documentRevisionsTable } from "./document-transfers.mjs"
+import { enrichmentTables } from "./enrichments.mjs"
 import { financeTables } from "./finance.mjs"
 import { recordTables } from "./records.mjs"
 import { linkRevisionsTable, RELATIONSHIP_KEY, relationshipColumns } from "./relationships.mjs"
@@ -1725,6 +1726,13 @@ const GROUPS = [
     "The buttons of a message that asks the owner to decide a batch. A press is the owner's proof; the table only keeps the one-time keys.",
     [],
     decisionRequestTables,
+  ],
+  [
+    "enrichments",
+    "Enrichment",
+    "Text a hosted model wrote about a record so search finds it in other words. Off until the owner turns it on; never the record's own text.",
+    [],
+    enrichmentTables,
   ],
   [
     "records",

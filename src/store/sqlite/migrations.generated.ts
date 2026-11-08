@@ -1194,5 +1194,19 @@ export const GENERATED: { name: string; statements: string[] }[] = [
       "CREATE TRIGGER payment_allocations_refund_bd BEFORE DELETE ON payment_allocations\n  WHEN (SELECT refund_of IS NOT NULL AND review = 'confirmed' AND deleted_at IS NULL FROM payments WHERE id = old.payment_id)\n    AND (SELECT review FROM invoices WHERE id = old.invoice_id) <> 'rejected'\n    AND (SELECT coalesce(sum(CASE WHEN np.refund_of IS NULL THEN na.amount ELSE -na.amount END), 0) FROM payment_allocations na JOIN payments np ON np.id = na.payment_id WHERE na.invoice_id = old.invoice_id AND np.review = 'confirmed' AND np.deleted_at IS NULL) + old.amount\n      > (SELECT total FROM invoices WHERE id = old.invoice_id) BEGIN\n  SELECT RAISE(ABORT, 'payment_allocations: taking a refund''s share back would pay the invoice beyond its total');\nEND;",
       "-- A void invoice keeps what was settled on it; a rejected one lets its allocations go, as reject sets review first.\nCREATE TRIGGER payment_allocations_void_bd BEFORE DELETE ON payment_allocations\n  WHEN (SELECT status = 'void' AND review <> 'rejected' FROM invoices WHERE id = old.invoice_id) BEGIN\n  SELECT RAISE(ABORT, 'payment_allocations: a void invoice keeps its allocations');\nEND;"
     ]
+  },
+  {
+    "name": "20261108104659_version-58-enrichments",
+    "statements": [
+      "CREATE TABLE `enrichments` (\n\t`subject_type` text NOT NULL,\n\t`subject_id` integer NOT NULL,\n\t`source_hash` text NOT NULL,\n\t`provider` text NOT NULL,\n\t`model` text NOT NULL,\n\t`text` text NOT NULL,\n\t`tokens` integer NOT NULL,\n\t`created_at` integer NOT NULL,\n\tCONSTRAINT `enrichments_pk` PRIMARY KEY(`subject_type`, `subject_id`)\n);"
+    ]
+  },
+  {
+    "name": "20261108104701_version-58-enrichments-deletes",
+    "statements": [
+      "CREATE TRIGGER enrichments_document_gone AFTER DELETE ON documents BEGIN\n  DELETE FROM enrichments WHERE subject_type = 'document' AND subject_id = OLD.id;\nEND;",
+      "CREATE TRIGGER enrichments_note_gone AFTER DELETE ON notes BEGIN\n  DELETE FROM enrichments WHERE subject_type = 'note' AND subject_id = OLD.id;\nEND;",
+      "CREATE TRIGGER enrichments_email_gone AFTER DELETE ON emails BEGIN\n  DELETE FROM enrichments WHERE subject_type = 'email' AND subject_id = OLD.id;\n  DELETE FROM chunks WHERE chunkable_type = 'email_enrichment' AND chunkable_id = OLD.id;\nEND;"
+    ]
   }
 ]

@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-base"
+import { CliError, type KeyringStore } from "@wirecat/cli-base"
 import { dateRange, parseLucene, type QueryNode, timezoneOf } from "@wirecat/cli-base/query"
 import { INTERNAL_NOTES } from "../domain/providers.js"
 import { normalizeTag } from "../domain/tags.js"
@@ -24,9 +24,10 @@ import { questionLookup, questionText } from "../search/question-plan.js"
 import { createStemmer, DEFAULT_STEMMERS, type Stemmer } from "../search/stem.js"
 import { type SearchTotal, TOTAL_CAP, totalOf } from "../search/total.js"
 import type { Link, NearestNote, Note, NoteHit } from "../store/index.js"
-import type { AccountKey, MessageStore } from "../store/store.js"
+import type { AccountKey, EnrichmentSubject, MessageStore } from "../store/store.js"
 import { openPictureEmbedderFor } from "./document-pictures.js"
 import { documentSource } from "./document-source.js"
+import { type EnrichOptions, type EnrichRun, enrichRecords } from "./enrichment.js"
 import { plainQueryWords, titleQuery, titleTiers } from "./notes-title-tier.js"
 import { PICTURE_FLOOR, plainWords } from "./pictures.js"
 import { listContextOf } from "./search-kind.js"
@@ -125,13 +126,20 @@ export interface NotesEmbedOptions {
   maxChunks?: number
   env?: NodeJS.ProcessEnv
   threads?: number
+  /** Whose keyring entry holds the enrichment provider's key; without it only the environment's key is read. */
+  app?: AppIdentity
+  keyring?: KeyringStore
+  /** Tests give a fake model here; nothing in the suite reaches a provider. */
+  enrichWith?: Pick<EnrichOptions, "adapters" | "fetch" | "key">
 }
 
 export interface NotesEmbedded {
   model: string
   embedded: number
-  /** Chunks still without a vector, when `maxChunks` stopped the run. */
+  /** Chunks still without a vector, when `maxChunks` stopped the run, or records still to enrich. */
   left: boolean
+  /** What the owner's enrichment did first; absent when it is off. */
+  enrichment?: Exclude<EnrichRun, { status: "off" }> | { status: "failed"; reason: string }
 }
 
 /** Chunks one batch embeds: one short transaction writes each, as for conversations. */
@@ -225,8 +233,37 @@ const embedChunks = async (
   })
 }
 
+/**
+ * With enrichment on, the records of these types are enriched before their chunks are embedded, so the same run
+ * embeds the new text. A failed enrichment never fails the embed; it is reported and the next run tries again.
+ */
+const enrichedFirst = async (
+  store: MessageStore,
+  types: readonly EnrichmentSubject[],
+  options: NotesEmbedOptions & { command?: string },
+  embed: () => Promise<NotesEmbedded>,
+): Promise<NotesEmbedded> => {
+  let enrichment: NotesEmbedded["enrichment"]
+  try {
+    const run = await enrichRecords(store, {
+      env: options.env ?? process.env,
+      narrow: { types },
+      ...(options.app ? { app: options.app } : {}),
+      ...(options.keyring ? { keyring: options.keyring } : {}),
+      ...options.enrichWith,
+    })
+    if (run.status !== "off") enrichment = run
+  } catch (error) {
+    enrichment = { status: "failed", reason: error instanceof Error ? error.message : "enrichment failed" }
+  }
+  const embedded = await embed()
+  if (!enrichment) return embedded
+  const more = enrichment.status !== "failed" && enrichment.left > 0 && enrichment.enriched > 0
+  return { ...embedded, left: embedded.left || more, enrichment }
+}
+
 export const embedNotes = (store: MessageStore, options: NotesEmbedOptions & { command?: string } = {}) =>
-  embedChunks(store, store.notes, options)
+  enrichedFirst(store, ["document", "note"], options, () => embedChunks(store, store.notes, options))
 
 /** Embeds calendar events' pieces as notes' are embedded; the occurrences of a series share one vector. */
 export const embedEvents = (store: MessageStore, options: NotesEmbedOptions & { command?: string } = {}) =>
@@ -234,7 +271,7 @@ export const embedEvents = (store: MessageStore, options: NotesEmbedOptions & { 
 
 /** Embeds mail's chunks as notes' are embedded: same model and key, so search by meaning reads both. */
 export const embedMail = (store: MessageStore, options: NotesEmbedOptions & { command?: string } = {}) =>
-  embedChunks(store, store.mail, options)
+  enrichedFirst(store, ["email"], options, () => embedChunks(store, store.mail, options))
 
 /** Notes nearest in meaning to the query, best first; only notes already embedded can be found. */
 export const nearestNotes = async (

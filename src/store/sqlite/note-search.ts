@@ -15,6 +15,7 @@ import type { SqlValue } from "../driver.js"
 import { normalize } from "../normalize.js"
 import { contextDocumentTime } from "./context-document-source.js"
 import { type DocumentPictureStore, documentPicturesOver } from "./document-pictures.js"
+import { ENRICHMENT_POSITION, enrichmentText } from "./enrichments.js"
 import { linkKind } from "./link-kinds.js"
 import { prefixOf } from "./lucene.js"
 import { drainNoteIndex, type NoteIndexState, noteIndexState, noteIndexText } from "./note-index.js"
@@ -562,7 +563,8 @@ export const noteSearchOver = (context: StoreContext): NoteSearch => {
       }
       return database
         .prepare(
-          `SELECT k.content_hash AS hash, min(k.chunkable_type || ':' || k.chunkable_id) AS owner, k.start_offset AS start, k.end_offset AS end
+          `SELECT k.content_hash AS hash, min(k.chunkable_type || ':' || k.chunkable_id) AS owner, k.start_offset AS start, k.end_offset AS end,
+                  k.position
              FROM chunks k
             WHERE k.content_hash > ?${scope.sql}
               AND NOT EXISTS (SELECT 1 FROM embeddings v WHERE v.model = ? AND v.content_hash = k.content_hash)
@@ -570,6 +572,11 @@ export const noteSearchOver = (context: StoreContext): NoteSearch => {
         )
         .all(after ?? "", ...scope.params, model, limit)
         .flatMap((row) => {
+          if (Number(row.position) === ENRICHMENT_POSITION) {
+            const [type, id] = String(row.owner).split(":")
+            const text = enrichmentText(database, String(type), Number(id))
+            return text === undefined ? [] : [{ hash: String(row.hash), text }]
+          }
           const text = textOf(String(row.owner))
           return text === undefined
             ? []

@@ -206,6 +206,20 @@ export type { ServiceDeps, ServiceMessenger } from "./deps.js"
 export { accountStore, crossAccount, OFFLINE, onlineDeps, storedDeps, storeOnlyDeps } from "./deps.js"
 export type { Embedded, EmbeddingsService, EmbedStatus, FoundConversation } from "./embeddings.js"
 export { embeddingsService } from "./embeddings.js"
+export {
+  ENRICH_PER_RUN,
+  type EnrichmentState,
+  type EnrichOptions,
+  type EnrichRun,
+  enrichmentState,
+  enrichRecords,
+} from "./enrichment.js"
+export {
+  type EnrichmentSetting,
+  estimateEnrichment,
+  readEnrichmentSetting,
+  writeEnrichmentSetting,
+} from "./enrichment-setting.js"
 export type { EvidenceKind, EvidenceMessage, EvidencePacket, EvidencePacketInput, EvidenceSource } from "./evidence.js"
 export { prepareEvidencePacket } from "./evidence.js"
 export type { EvidenceReadQuery, StoredEvidencePacket } from "./evidence-read.js"

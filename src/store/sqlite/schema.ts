@@ -2421,6 +2421,8 @@ export const transactionSplits = sqliteTable(
 
 export { decisionRequests } from "./schema/decision-requests.js"
 
+export { enrichments } from "./schema/enrichments.js"
+
 /** What a source said about one of its records, as it said it: the layer under the entity an import makes. */
 export const records = sqliteTable(
   "records",

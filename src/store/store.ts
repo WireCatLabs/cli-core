@@ -38,6 +38,7 @@ import { type CrmCopies, crmCopiesOver } from "./sqlite/crm.js"
 import { type DealsStore, dealsStoreOver } from "./sqlite/deals.js"
 import { type DecisionRequestStore, decisionRequestStoreOver } from "./sqlite/decision-requests.js"
 import { type MailStore, mailStoreOver } from "./sqlite/emails.js"
+import { type EnrichmentStore, enrichmentsOver } from "./sqlite/enrichments.js"
 import { type EventSearch, eventSearchOver } from "./sqlite/event-search.js"
 import { evidenceFindingsStoreOver } from "./sqlite/evidence-findings.js"
 import { type FactsStore, factsStoreOver } from "./sqlite/facts.js"
@@ -170,6 +171,8 @@ export interface MessageStore {
   readonly meetings: StoredMeetings
   /** Email threads, emails, recipients and mailboxes. */
   readonly mail: MailStore
+  /** What a hosted model wrote about notes, documents and mail, with the owner's consent; off by default. */
+  readonly enrichment?: EnrichmentStore
   /** The same store with this account bound — what a service of one account reads and writes through. */
   forAccount(key: AccountKey): AccountStore
   close(): Promise<void>
@@ -283,8 +286,12 @@ const storeOver = (context: StoreContext): MessageStore => {
   const proposedActions = once(() => proposedActionsStoreOver(context))
   const agentActions = once(() => agentActionsStoreOver(context, pruneLogsWhenDue))
   const meetings = once(() => meetingStoreOver(context))
+  const enrichment = once(() => enrichmentsOver(context))
 
   const store: MessageStore = {
+    get enrichment() {
+      return enrichment()
+    },
     get projectAnnotations() {
       return projectAnnotations()
     },

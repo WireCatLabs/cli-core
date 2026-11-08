@@ -12,6 +12,7 @@ import { install, installedBytes, isInstalled, modelsDirectory } from "../speech
 import { DEFAULT_ORDER, orderedModels, speechModel } from "../speech/models.js"
 import { stepLines } from "../terminal/step-lines.js"
 import { FETCH, grantsAuthority, LOCAL_READ, LOCAL_WRITE, NO_EFFECTS } from "./effects.js"
+import { enrichmentConsentsCommand } from "./enrichment-consents-command.js"
 import { type Body, itemOf, listOf } from "./envelope.js"
 import { listQuery, nativeTerms, termField, typedQuery, withQuery } from "./list-query.js"
 
@@ -158,7 +159,10 @@ export const modelCatalogueCommand = (app: AppIdentity, options: ModelCatalogueO
         options.output(itemOf(textModelItem(model, env)), this)
       })
   }
-  if (options.jsonOption) for (const command of models.commands) command.option("--json", "print JSON")
+  if (options.kinds.includes("text")) models.addCommand(enrichmentConsentsCommand(app, options))
+  if (options.jsonOption)
+    for (const command of models.commands.flatMap((one) => (one.commands.length ? one.commands : [one])))
+      command.option("--json", "print JSON")
   return models
 }
 
