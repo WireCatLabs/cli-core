@@ -130,7 +130,6 @@ shape of this file.
   current built a new SQL text for every item it recomputed, so SQLite prepared each one again and the process kept
   them all. The item's id is now a bound parameter, one statement per kind of item. On the same synthetic data, the
   20,000 sync peaks at 0.6 GB instead of 3.7 GB and takes 19 s instead of 30 s, its `--rescan` 13 s instead of 21 s.
-||||||| 3bfe5f660
 
 ## 0.609.0 — 08.11.2026
 
