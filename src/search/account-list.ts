@@ -72,12 +72,13 @@ export interface ListContext {
  */
 export interface ListedAccount extends AccountKey {
   kind: Kind | undefined
-  /** Every kind it holds, `kind` first: a phone account holds messages and events. Empty when `kind` is unknown. */
-  kinds: readonly Kind[]
+  /** Only when it holds more than `kind`: a phone account holds messages and events. */
+  kinds?: readonly Kind[]
 }
 
 /** Whether a listed account holds `kind`. */
-export const listedHolds = (account: Pick<ListedAccount, "kinds">, kind: Kind): boolean => account.kinds.includes(kind)
+export const listedHolds = (account: Pick<ListedAccount, "kind" | "kinds">, kind: Kind): boolean =>
+  (account.kinds ?? (account.kind === undefined ? [] : [account.kind])).includes(kind)
 
 /** One entry of the list as written, a group's member included, and the accounts it named. */
 export interface ListedEntry {
@@ -94,17 +95,14 @@ const kindHere = (provider: Provider, running: ListContext["running"]): Kind | u
 
 const kindsOfHere = (provider: Provider, running: ListContext["running"]) => {
   const kinds = kindsIn(provider)
-  return {
-    kind: kindHere(provider, running),
-    kinds: kinds.length === 0 && provider === running.provider ? [kindOf(provider)] : kinds,
-  }
+  return { kind: kindHere(provider, running), ...(kinds.length > 1 ? { kinds } : {}) }
 }
 
 const heldOf = (stored: readonly StoredAccount[], running: ListContext["running"]): Held[] => [
   ...stored
     .filter(({ provider }) => kindIn(provider) !== "notes" && !isDocumentAccountProvider(provider))
     .map(({ provider, account, name }) => ({ provider, account, name, ...kindsOfHere(provider, running) })),
-  { provider: "notes", account: INTERNAL_NOTES, name: null, kind: "notes", kinds: ["notes"] },
+  { provider: "notes", account: INTERNAL_NOTES, name: null, kind: "notes" },
   ...stored
     .filter(({ provider }) => isFolderProvider(provider))
     .map(({ id, name, provider, account }) => ({
@@ -112,7 +110,6 @@ const heldOf = (stored: readonly StoredAccount[], running: ListContext["running"
       account: String(id),
       name,
       kind: "notes" as const,
-      kinds: ["notes"] as const,
       stored: { provider, account },
     })),
   ...stored
@@ -122,7 +119,6 @@ const heldOf = (stored: readonly StoredAccount[], running: ListContext["running"
       account: String(id),
       name,
       kind: "notes" as const,
-      kinds: ["notes"] as const,
       stored: { provider, account },
     })),
 ]
@@ -265,7 +261,12 @@ export const entriesOfList = (value: string, context: ListContext): ListedEntry[
   for (const item of itemsOf(value)) entry(item)
   return entries.map(({ entry, accounts }) => ({
     entry,
-    accounts: accounts.map(({ provider, account, kind, kinds }) => ({ provider, account, kind, kinds })),
+    accounts: accounts.map(({ provider, account, kind, kinds }) => ({
+      provider,
+      account,
+      kind,
+      ...(kinds === undefined ? {} : { kinds }),
+    })),
   }))
 }
 
