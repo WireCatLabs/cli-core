@@ -508,3 +508,33 @@ it("leaves an import-only account out of the coverage a message search reports",
   expect(found.coverage?.chats).toMatchObject({ neverFetched: 0 })
   expect(found.coverage?.attention).toEqual([])
 })
+
+it("refuses calls while the owner has deleted the calls calendar, keeps the SMS, and takes them once restored", async () => {
+  const { store, sql } = await recordsFixture(handles)
+  await take(store, phoneEnvelope([person(ANNA, "Анна"), call("c-1", ANNA, "in", "2026-11-03T10:00:00Z", 30)]), {
+    account: PHONE.account,
+  })
+  const db = sql()
+  const calendar = Number(db.prepare("SELECT id FROM calendars WHERE external_id = 'calls'").get()?.id)
+  db.prepare("UPDATE calendars SET deleted_at = 1 WHERE id = ?").run(calendar)
+  const later = [
+    call("c-2", ANNA, "missed", "2026-11-04T10:00:00Z"),
+    sms("s-9", ANNA, "in", "Перезвоню", "2026-11-04T10:01:00Z"),
+  ]
+  const refused = await take(store, phoneEnvelope(later), { account: PHONE.account })
+  expect(refused.errors).toEqual([
+    expect.objectContaining({
+      code: "record.calendar-deleted",
+      key: "event-c-2",
+      message: expect.stringContaining(`store.calendar.restoreCalendar(${calendar})`),
+    }),
+  ])
+  expect(refused.created).toBe(1)
+  expect(db.prepare("SELECT deleted_at FROM calendars WHERE id = ?").get(calendar)).toEqual({ deleted_at: 1 })
+  expect(db.prepare("SELECT count(*) AS n FROM calendar_entries WHERE external_id = 'c-2'").get()?.n).toBe(0)
+
+  await store.calendar.restoreCalendar(calendar, Date.now())
+  const again = await take(store, phoneEnvelope(later), { account: PHONE.account })
+  expect(again).toMatchObject({ created: 1, unchanged: 1, errors: [] })
+  expect(db.prepare("SELECT count(*) AS n FROM calendars").get()?.n).toBe(1)
+})

@@ -143,32 +143,36 @@ const DESCRIPTIONS: Record<(typeof CALL_DIRECTIONS)[number], string> = {
   missed: "missed call",
 }
 
-/** Each account's calls calendar, ensured once per store handle and again only if the owner forgot it since. */
-const calendars = new WeakMap<StoreContext, Map<number, number>>()
-
-const callsCalendar = (context: StoreContext, accountId: number): number => {
-  const known = calendars.get(context) ?? new Map<number, number>()
-  calendars.set(context, known)
-  const held = known.get(accountId)
-  if (
-    held !== undefined &&
-    context.database.prepare("SELECT 1 FROM calendars WHERE id = ? AND deleted_at IS NULL").get(held)
-  )
-    return held
-  const { id } = calendarWritesOver(context).saveCalendar(
-    accountId,
-    {
-      externalId: CALLS_CALENDAR,
-      title: "Calls",
-      timezone: null,
-      accessRole: "owner",
-      primary: true,
-      syncByDefault: false,
-    },
-    context.now(),
-  )
-  known.set(accountId, id)
-  return id
+/**
+ * The account's calls calendar, made on its first call. One the owner deleted stays deleted: an import, often an
+ * agent's, never undoes the owner's decision, so its calls are refused until the owner restores it. One indexed read
+ * per call: the calendar is written only on the first.
+ */
+const callsCalendar = (context: StoreContext, account: AccountKey & { pk: number }): number => {
+  const row = context.database
+    .prepare("SELECT id, deleted_at FROM calendars WHERE account_id = ? AND external_id = ?")
+    .get(account.pk, CALLS_CALENDAR)
+  if (row && row.deleted_at != null)
+    refusal(
+      `the owner deleted the calls calendar of ${account.provider}:${account.account}; ` +
+        `store.calendar.restoreCalendar(${Number(row.id)}) brings it back, then import the calls again`,
+      "record.calendar-deleted",
+      "type",
+    )
+  return row !== undefined
+    ? Number(row.id)
+    : calendarWritesOver(context).saveCalendar(
+        account.pk,
+        {
+          externalId: CALLS_CALENDAR,
+          title: "Calls",
+          timezone: null,
+          accessRole: "owner",
+          primary: true,
+          syncByDefault: false,
+        },
+        context.now(),
+      ).id
 }
 
 const relinkCounterpart = (context: StoreContext, eventId: number, person: number | undefined) => {
@@ -193,7 +197,7 @@ const saveCall = (projection: Projection, tools: ProjectionTools): string => {
   const { context } = tools
   const { fields, externalId } = projection
   const startsAt = millis(fields, "started_at")
-  const calendarId = callsCalendar(context, sourceAccount(projection).pk)
+  const calendarId = callsCalendar(context, sourceAccount(projection))
   const phone = numberOf(projection, String(fields.phone))
   const direction = fields.direction as (typeof CALL_DIRECTIONS)[number]
   const seconds = given<number>(fields, "duration") ?? 0

@@ -742,6 +742,11 @@ export const eventStoreOver = (context: StoreContext): EventStore => {
           .prepare("UPDATE calendars SET synced = ?, updated_at = ? WHERE id = ?")
           .run(flag(synced), now, calendarId)
       }),
+    restoreCalendar: async (calendarId, now) =>
+      write(database, () => {
+        calendarRow(calendarId)
+        database.prepare("UPDATE calendars SET deleted_at = NULL, updated_at = ? WHERE id = ?").run(now, calendarId)
+      }),
     forgetCalendar: async (calendarId, now) =>
       write(database, () => {
         const accountId = Number(calendarRow(calendarId).account_id)

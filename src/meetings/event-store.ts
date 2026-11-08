@@ -275,6 +275,8 @@ export interface EventStore {
   saveCalendars(accountId: number, calendars: CalendarInput[], now: number): Promise<StoredCalendar[]>
   calendars(accountId: number): Promise<StoredCalendar[]>
   setCalendarSynced(calendarId: number, synced: boolean, now: number): Promise<void>
+  /** Brings back a calendar the owner deleted: an import refuses to write into one until then. */
+  restoreCalendar(calendarId: number, now: number): Promise<void>
   /**
    * The calendar and everything stored from it go, for a calendar that is not the owner's data (a followed feed): its
    * entries, the events and series only it held, what was built from them (links, tags, search pieces, people seen
