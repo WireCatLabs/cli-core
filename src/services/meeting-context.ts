@@ -30,12 +30,13 @@ const checkCancelled = (signal?: AbortSignal): void => {
 
 /**
  * Reuses the owner's records; scoped meeting references are checked again by each native write. `author` says who
- * runs it: an agent's participant link waits for the owner as a proposal.
+ * runs it: an agent's participant link waits for the owner as a proposal. Left out, the run is taken for an agent's,
+ * so a caller that never said who runs it cannot move an identity as the owner.
  */
 export const createMeetingContextService = async (
   store: MeetingContextServiceStore,
   input: AccountKey,
-  options: { now?: () => number; author: "owner" | "agent" },
+  options: { now?: () => number; author?: "owner" | "agent" } = {},
 ) => {
   const now = options.now ?? Date.now
   const scope = snapshotMeetingScope(input)
@@ -114,7 +115,7 @@ export const createMeetingContextService = async (
             participantId: change.participantId,
             personUid: change.personUid,
             now: now(),
-            author: options.author,
+            author: options.author ?? "agent",
             ...(change.expectedPersonUid === undefined ? {} : { expectedPersonUid: change.expectedPersonUid }),
             ...(change.targetAccountIds === undefined ? {} : { targetAccountIds: change.targetAccountIds }),
             ...(operation.signal ? { signal: operation.signal } : {}),
