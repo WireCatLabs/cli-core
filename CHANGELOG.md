@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.610.0 — 08.11.2026
+
 ### Added
 
 - **`search all` has a `business` lane.** `searchAll` finds invoices, payments, orders, contracts, subscriptions,
