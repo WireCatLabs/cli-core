@@ -9,9 +9,9 @@ shape of this file.
 
 ### Fixed
 
-- **cli-core accepts `@wirecat/cli-base` up to 0.86.x.** Its peer range stopped at `<0.86.0`, so a CLI could not take
-  cli-base 0.86.0, whose `hostFetch` no longer holds a finished request's memory for 30 seconds. Nothing else changes
-  for a caller.
+- **cli-core accepts any `@wirecat/cli-base` from 0.80.7 on.** Its peer range stopped at `<0.86.0`, so a CLI could not
+  take cli-base 0.86.0, whose `hostFetch` no longer holds a finished request's memory for 30 seconds. The range stays
+  open until 1.0, when it is pinned again. Nothing else changes for a caller.
 
 ## 0.611.0 — 08.11.2026
 
