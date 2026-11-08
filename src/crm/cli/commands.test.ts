@@ -316,9 +316,14 @@ describe("CRM commands", () => {
     }
     const streams = captureStreams()
     expect(await run(["commands", "--json"], definition, { streams, tty: false, env: {} })).toBe(0)
-    const document = join(mkdtempSync(join(tmpdir(), "crm-lint-")), "commands.json")
+    const folder = mkdtempSync(join(tmpdir(), "crm-lint-"))
+    const document = join(folder, "commands.json")
     writeFileSync(document, streams.stdout.join(""))
-    const lint = spawnSync("node_modules/.bin/cli-dev", ["lint", "--commands", document], { encoding: "utf8" })
+    // Run from an empty folder: from the repository, cli-dev also reads cli-core's src and its baseline.
+    const lint = spawnSync(join(process.cwd(), "node_modules/.bin/cli-dev"), ["lint", "--commands", document], {
+      cwd: folder,
+      encoding: "utf8",
+    })
     const rules = [...`${lint.stdout}${lint.stderr}`.matchAll(/^(?:high|medium|low)\s+(\S+.*)$/gmu)].map(
       ([, rule]) => rule,
     )
