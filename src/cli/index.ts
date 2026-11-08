@@ -159,6 +159,14 @@ export {
   type SignInStepsOptions,
   signInSteps,
 } from "../terminal/sign-in-steps.js"
+export {
+  type AccountRemoval,
+  type AccountRemovalContext,
+  type AccountRemoveOptions,
+  type AccountSecrets,
+  accountRemoveCommand,
+  type SignedOut,
+} from "./account-remove.js"
 export { liftOptionsAfterDashes } from "./after-dashes.js"
 export {
   type AgentPolicy,
@@ -612,6 +620,7 @@ export {
   tagsCommand,
   tasksCommand,
   tasksStatsCommand,
+  templatesCommand,
   topicsCommand,
   unpinCommand,
   upgradeCommand,
@@ -637,4 +646,5 @@ export {
   storeRecoveryRun,
 } from "./store-recover.js"
 export { changeStoreSetting, isStoreSetting, STORE_SETTINGS, storeSettings } from "./store-settings.js"
+export type { TemplatesOptions } from "./templates-command.js"
 export { restartServers, type UpgradeContext } from "./upgrade-command.js"

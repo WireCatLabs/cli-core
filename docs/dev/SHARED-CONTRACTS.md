@@ -42,6 +42,9 @@ with its own program shell installs `addContractInfo` and calls `assertSharedCon
 composition. Projection-only declarations remain labelled in `field_only`; they do not claim
 that a payload's types were validated.
 
+Use `templatesCommand` for the `templates` group: the owner's own templates of the messages sent to him, in the
+shared store, checked before a save; `edit` and `reset` are owner-only.
+
 Use `modelCatalogueCommand` for a standalone CLI's `models list` and `models download`.
 Choose its supported kinds and inject environment, output, diagnostics and offline policy.
 The factory owns native queries, receipts and verified installation. With `--json`, `models download` writes

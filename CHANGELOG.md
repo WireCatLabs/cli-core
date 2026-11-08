@@ -14,6 +14,47 @@ shape of this file.
   confirmed links took about three times longer than one without: 4.9–5.8 s against 1.6–1.9 s on a synthetic store
   of 2 600 chats. A scan now keeps what it read until it ends: 0.6–0.8 s on the same store, with the same proposals.
 
+## 0.614.0 — 08.11.2026
+
+### Added
+
+- **The owner's own message templates, in the shared store (store version 59).** `templatesCommand(app, { env,
+  output, diagnostic })` gives a tool `templates list | show | edit | preview | reset <key> --channel
+  telegram|email|text [--language <code>]`. Keys: `report/morning-digest`; `report/weekly-gaps` and
+  `notice/schedule-failed` are listed, but nothing renders them yet, so they cannot be edited. `edit` opens
+  `$VISUAL`/`$EDITOR` on the template that applies, or takes `--file`; a save is checked first against a synthetic
+  report and the tool's last real `<run>.report.json`: it must render, the channel's rules may remove nothing (a tag
+  outside the list, an `href` that is not a link of the report, a `style` with `url(`), and a Telegram text must fit
+  4 096 characters once the size fit dropped what it could. A failed check saves nothing and says why, and keeps an
+  editor draft for `--file`. Every save and reset keeps the replaced body in `templates_history`; `edit --undo` puts
+  back the last one. `reset` deletes the row, so the shipped template applies again. `edit` and `reset` change what
+  later runs send (`grantsAuthority`), and an agent is refused (`template.owner-only`). A scheduled report renders
+  with the stored templates of the owner's language; a stored body that fails, or a store that cannot be read,
+  falls back to the shipped template for that channel and records `report.template-failed`. The email template is
+  stored and previewed, but mail still sends the plain-text rendering. `store.templates` and
+  `storedTemplateBodies(database, key, language)` from `@wirecat/cli-core/store`.
+- **`account remove`, built once for every tool.** `<tool> <profile> account remove --keep-data|--delete-data` signs
+  the profile out with the tool's own `signOut` hook, then forgets it here: its keyring entries, its
+  `state/accounts/<profile>.json`, the tool's own state files and its sections in the config file; other profiles stay.
+  `--delete-data` also purges the account from the shared store (`store.accounts.purge`) and deletes the tool's data
+  files; `--keep-data` leaves its messages in the store, still searchable, and says so under `kept`. It asks first, or
+  `--yes`; under `--json` without `--yes` it answers `confirmation_required`; `--dry-run` lists every entry, section and
+  file. It refuses while a serve or a sync holds the profile, a path outside the tool's own folders, and runs neither
+  over MCP nor under `<PREFIX>_READ_ONLY`. The answer is the entity `account_removal`; reasons `account-remove.*`.
+  A messenger opts in with `Messenger.accountRemoval`; any other CLI mounts `accountRemoveCommand(app, hooks)`
+  ([guide](docs/dev/ACCOUNT-REMOVAL.md)). `store.accounts.forgetProfile` forgets which account a profile was.
+  It also removes what cli-core keeps for the profile, so no tool lists it: its flood, pace, recipients, moderation,
+  provider log, MCP HTTP tokens, replies state and rules, `--new` points and checkpoints, its serve unit (by its exact
+  name) and the schedules whose environment names it. The sends journal stays, under `kept`. A tool whose files live
+  outside its cli-core folders names them with the `ownFolders` hook; each must be absolute and inside the home folder
+  (`account-remove.folder-outside`).
+
+### Fixed
+
+- **cli-core accepts any `@wirecat/cli-base` 0.x from 0.80.7 (`>=0.80.7 <1.0.0`).** Its peer range stopped at
+  `<0.86.0`, so a CLI could not take cli-base 0.86.0 or 0.87.0 beside it. The range is pinned again at 1.0. Nothing
+  else changes for a caller.
+
 ## 0.612.0 — 08.11.2026
 
 ### Changed — may break callers
@@ -43,6 +84,41 @@ shape of this file.
 - The model gateway's answer carries `usage` (input and output tokens) for OpenAI and Anthropic.
 
 ## 0.611.0 — 08.11.2026
+
+### Added
+
+- **Deep links into WireCat Desktop.** `linkFor(ref, { form: "web" | "app" })` builds
+  `https://wirecat.dev/o#/v1/<kind>/<parts>` or `wirecat://open/v1/<kind>/<parts>`; `parseLink` reads either form or
+  the bare `/v1/…` path, and `formatLink` writes the path. Kinds: `msg/<provider>/<account>/<chat>/<message>`,
+  `chat/<provider>/<account>/<chat>` (an email thread too), `task/<id>`, `tasks/overdue|today|tomorrow`,
+  `tasks/new/<ISO time>`, `proposal/<review id>`, `digest/<date>`, `sync/<tool>[/<account>]`. Each part is
+  percent-encoded as one segment; another version, an unknown kind, a part too many or empty, more than 6 segments or a
+  path over 512 characters is not a link, and a query is ignored. A ref is a store reference (`msg:`, `chat:`,
+  `task:`) or, for the kinds that are no reference, the path with a colon after the kind (`proposal:fact%3A512`,
+  `tasks:overdue`, `sync:telegram/1001`). The shared config's `links` section sets `base` and `enabled`;
+  `WIRECAT_LINKS=off` turns links off for one run, and `linkFor` then answers `null`. A link only opens a screen.
+  `test/fixtures/links-v1.json` holds the cases Desktop and the bounce page check their own parsers against.
+- **A report links its items, its task groups and its sync problems.** The renderer fills each item's `links` from its
+  `refs` ("открыть"), and a health entry's from its `sync:` ref ("исправить"): the web form for Telegram and mail, the
+  app form in `latest.txt`. Links an agent wrote are still dropped, and with links off the words stay without a link.
+- **`wirecat.report/1` takes `scope`, `tasks` and named accounts in `health`.** `scope` (`from`, `to`, `sources[]` of
+  `kind` and `accounts`, `counts` of `chats`, `mail`, `tasks`, `meetings`) becomes the last line of all three
+  templates: "Просмотрено за 24 ч: Telegram, MAX, WhatsApp, почта (4 ящика) · 31 чат, 12 писем, 17 задач", zero
+  counts left out. `tasks` (`overdue`, `today`, `tomorrow`, `new`, `new_since`) becomes one line of `tasks/<filter>`
+  links after the section that holds the task items: "Все просроченные (5) · на сегодня (3) · на завтра (2) · новые
+  (4)", zero groups left out. A `health[]` entry takes `account`, `reason` (`sync-failed`, `no-schedule`, `quiet`) and
+  `since`: "🛠 Telegram (@owner): синхронизация падает с 6 ноября · исправить". An entry with a reason is shown
+  whatever its `stale_hours`; a document without the new fields reads as before.
+- **A `task` item needs only its `topic`.** A task created since the last digest may have no due date; it shows no
+  deadline phrase, and its person goes on the first line: "📌 Договор с подрядчиком — Пётр Белов".
+- **Each report run keeps its checked document** as `runs/<time>.report.json` beside the run's `.md`, with refs and
+  without `links` or `internal`, for Desktop to render.
+
+### Changed — may break callers
+
+- `PreparedReport` has `terminal` (plain text with app links, written to `latest.txt`) beside `text` (plain text with
+  web links, the email's body) and `document`. A quiet day with a sync problem says "Новых дел нет, но синхронизация
+  требует внимания." and lists the health lines below.
 
 ### Fixed
 
