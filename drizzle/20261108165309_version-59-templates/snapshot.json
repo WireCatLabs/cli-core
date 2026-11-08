@@ -1,10 +1,10 @@
 {
-  "id": "8ef17a22-409d-4306-9192-bccb86481643",
+  "version": "7",
+  "dialect": "sqlite",
+  "id": "7746157e-8783-4d43-8650-7b6fd3d8b06e",
   "prevIds": [
     "a785babe-572a-403e-8342-59d4dbce8021"
   ],
-  "version": "7",
-  "dialect": "sqlite",
   "ddl": [
     {
       "name": "account_identities",
@@ -504,6 +504,14 @@
     },
     {
       "name": "tasks",
+      "entityType": "tables"
+    },
+    {
+      "name": "templates",
+      "entityType": "tables"
+    },
+    {
+      "name": "templates_history",
       "entityType": "tables"
     },
     {
@@ -14773,6 +14781,146 @@
       "entityType": "columns"
     },
     {
+      "table": "templates",
+      "name": "key",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "templates",
+      "name": "channel",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "templates",
+      "name": "language",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "templates",
+      "name": "body",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "templates",
+      "name": "updated_at",
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "templates",
+      "name": "updated_by",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "templates_history",
+      "name": "id",
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "templates_history",
+      "name": "key",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "templates_history",
+      "name": "channel",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "templates_history",
+      "name": "language",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "templates_history",
+      "name": "body",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "templates_history",
+      "name": "saved_at",
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "templates_history",
+      "name": "saved_by",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "templates_history",
+      "name": "replaced_at",
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
       "table": "transaction_splits",
       "name": "id",
       "type": "integer",
@@ -19021,6 +19169,32 @@
       "entityType": "indexes"
     },
     {
+      "table": "templates_history",
+      "name": "templates_history_by_key_channel_language_id",
+      "columns": [
+        {
+          "value": "key",
+          "isExpression": false
+        },
+        {
+          "value": "channel",
+          "isExpression": false
+        },
+        {
+          "value": "language",
+          "isExpression": false
+        },
+        {
+          "value": "id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "entityType": "indexes"
+    },
+    {
       "table": "transaction_splits",
       "name": "transaction_splits_by_category_folded",
       "columns": [
@@ -21940,6 +22114,17 @@
       "entityType": "pks"
     },
     {
+      "table": "templates",
+      "name": "templates_pk",
+      "columns": [
+        "key",
+        "channel",
+        "language"
+      ],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
       "table": "transcript_index_pending",
       "name": "transcript_index_pending_pk",
       "columns": [
@@ -22843,6 +23028,15 @@
     {
       "table": "tasks",
       "name": "tasks_pk",
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "table": "templates_history",
+      "name": "templates_history_pk",
       "columns": [
         "id"
       ],

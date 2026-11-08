@@ -304,6 +304,9 @@
     "--defaults": {
       "meaning": "change what every profile gets, rather than this profile"
     },
+    "--delete-data": {
+      "meaning": "also delete the account's messages and files on this computer"
+    },
     "--deliver-to": {
       "value": "<route>",
       "meaning": "where a schedule's result also goes, when --notify-on says so: telegram-bot:<profile>/<chat>, email:<profile>/<address>; repeat it for more"
@@ -498,6 +501,9 @@
     },
     "--jsonl": {
       "meaning": "machine-readable output: one JSON object per line, for streaming and jq"
+    },
+    "--keep-data": {
+      "meaning": "keep the account's messages on this computer; search still finds them"
     },
     "--kind": {
       "value": "<kind>",
@@ -1291,6 +1297,19 @@
       "planned": {
         "tg": "tg-cli TG-22: account privacy",
         "wa": "wa backlog: account privacy"
+      }
+    },
+    "account remove": {
+      "in": [],
+      "options": {
+        "--delete-data": "all",
+        "--dry-run": "all",
+        "--keep-data": "all"
+      },
+      "planned": {
+        "max": "account remove: adopt Messenger.accountRemoval (WireCat Desktop removal)",
+        "tg": "account remove: adopt Messenger.accountRemoval (WireCat Desktop removal)",
+        "wa": "account remove: adopt Messenger.accountRemoval (WireCat Desktop removal)"
       }
     },
     "account sessions": {

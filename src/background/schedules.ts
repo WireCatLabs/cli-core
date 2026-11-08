@@ -1,15 +1,23 @@
 import { spawn } from "node:child_process"
+import { createHash } from "node:crypto"
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { basename, join } from "node:path"
 import { CliError, errorCodes, writeSecurely } from "@wirecat/cli-base"
-import { linkConfigOf } from "../domain/links.js"
+import { linkConfigOf, linkFor } from "../domain/links.js"
 import { type AppIdentity, mailHolderVariable, readOnlyLockOf } from "../ports/app.js"
 import { recordLogFor } from "../runs/record-log.js"
 import { childTrace } from "../runs/scope.js"
 import { storePath } from "../store/path.js"
 import { readSharedSection, sharedConfigPath } from "../store/shared-config.js"
-import { type Delivery, deliver } from "./deliver.js"
-import { prepareReport, type ReportRun } from "./report/render.js"
+import { type Delivery, deliver, type Parcel } from "./deliver.js"
+import { causeOf, gapsView, noticeView, weeklyGapsOf } from "./report/messages.js"
+import {
+  type PreparedMessage,
+  prepareMessage,
+  prepareReport,
+  type ReportRun,
+  type StoredTemplates,
+} from "./report/render.js"
 import type { ServerSystem } from "./system.js"
 
 /** Minutes between runs, a daily local time, or one local moment. */
@@ -135,6 +143,8 @@ export interface LastRun {
   failures?: number
   /** What the run cost, as the harness reported it; absent when it reports none. */
   costUsd?: number
+  /** The SHA-256 of a mail-gated agent's input, so a timer can tell the next input is the same one. */
+  inputHash?: string
   /** The last time the timer did not start it, and why; a run after it clears this. */
   skipped?: { at: string; why: string; reason?: SkipReason }
   /** How the result went along each of the schedule's routes; a failed delivery never fails the run. */
@@ -148,6 +158,7 @@ export const SKIP_REASONS = {
   costDayCap: "cost.day-cap",
   mailNone: "mail.none-new",
   mailBelowThreshold: "mail.below-threshold",
+  mailSameInput: "mail.same-input",
 } as const
 export type SkipReason = (typeof SKIP_REASONS)[keyof typeof SKIP_REASONS]
 
@@ -195,6 +206,7 @@ export const recordRun = (
     reason?: string
     errorCode?: string
     costUsd?: number
+    inputHash?: string
   },
 ): LastRun => {
   const before = readRun(path)
@@ -516,6 +528,25 @@ const sharedLinks = (env: NodeJS.ProcessEnv) => {
   }
 }
 
+/**
+ * WireCat Desktop, while it runs, writes `<state>/schedules/desktop.json` with its pid and the schedules whose new
+ * runs it announces itself; a marker whose pid is gone (a crash) announces nothing.
+ */
+const announcedByDesktop = (schedulesFolder: string, name: string): boolean => {
+  try {
+    const { pid, announces } = JSON.parse(readFileSync(join(schedulesFolder, "desktop.json"), "utf8")) as {
+      pid?: unknown
+      announces?: unknown
+    }
+    if (!Number.isInteger(pid) || !Array.isArray(announces) || !announces.includes(name)) return false
+    process.kill(pid as number, 0)
+    return true
+  } catch (error) {
+    // EPERM: the process is there, under another user.
+    return (error as NodeJS.ErrnoException).code === "EPERM"
+  }
+}
+
 /** A desktop notification; a machine without one loses only the notice, never the run. */
 export const notify = async (system: ServerSystem, env: NodeJS.ProcessEnv, title: string, body: string) => {
   const argv =
@@ -623,6 +654,8 @@ export const runSchedule = async (
     agentRuns = [],
     agentInput,
     ownerLanguage = async () => "ru",
+    reportTemplates,
+    skipRepeatedInput = false,
   }: {
     now?: () => Date
     timer?: Timer
@@ -635,6 +668,13 @@ export const runSchedule = async (
     agentInput?: AgentInput
     /** The owner's first language, read only when the answer is a report; Russian when the host cannot say. */
     ownerLanguage?: (env: NodeJS.ProcessEnv) => Promise<string>
+    /** The owner's stored report templates; the shipped ones when the host gives none. */
+    reportTemplates?: (env: NodeJS.ProcessEnv) => StoredTemplates
+    /**
+     * Leave out a mail-gated agent whose input is the one its last run ended well on. The mark did not move, so the
+     * run would only meet the same input again and pay for it; new mail changes the input.
+     */
+    skipRepeatedInput?: boolean
   } = {},
 ): Promise<LastRun> => {
   const schedule = readSchedule(file)
@@ -644,13 +684,24 @@ export const runSchedule = async (
   const agent = schedule.kind === "agent"
   const retries = untilUnlocked && !("every" in schedule.when)
   const firstAt = now().getTime()
-  let last = await attemptSchedule(app, system, env, schedule, folder, {
+  const first = await attemptSchedule(app, system, env, schedule, folder, {
     now,
     signal,
     killAfterMs,
     agentRuns,
     agentInput,
+    skipRepeatedInput,
   })
+  if ("repeated" in first) {
+    recordSkip(
+      file,
+      "the input is the same as the last run's, which moved no mark; it runs again once new mail comes",
+      SKIP_REASONS.mailSameInput,
+      now(),
+    )
+    return lastRun(file) ?? first.repeated
+  }
+  let last = first
   for (
     let delay = LOCKED_FIRST_WAIT_MS;
     retries && lockedOut(last) && !signal?.aborted && now().getTime() - firstAt + delay <= LOCKED_GIVE_UP_MS;
@@ -658,13 +709,15 @@ export const runSchedule = async (
   ) {
     await wait(delay, signal)
     if (signal?.aborted) break
-    last = await attemptSchedule(app, system, env, schedule, folder, {
+    const again = await attemptSchedule(app, system, env, schedule, folder, {
       now,
       signal,
       killAfterMs,
       agentRuns,
       agentInput,
     })
+    if ("repeated" in again) break
+    last = again
   }
   const { exitCode, output } = last
   const errors = agent ? output.replace(/\.md$/, ".log") : output
@@ -677,6 +730,7 @@ export const runSchedule = async (
           now: now().getTime(),
           links: sharedLinks(runEnv),
           env: runEnv,
+          ...(reportTemplates ? { templates: reportTemplates(runEnv) } : {}),
         })
       : undefined
   const latestText = join(folder, "latest.txt")
@@ -692,50 +746,83 @@ export const runSchedule = async (
 
   const title = `${app.command} ${schedule.name}`
   const mode = notifyOf(schedule)
-  if (prepared && mode === "always") {
-    await notify(system, env, title, `${prepared.notice.slice(0, 180)}\n${latestText}`)
-  } else if (agent && exitCode === 0 && mode === "always") {
-    const first =
-      readFileSync(output, "utf8")
-        .split("\n")
-        .find((line) => line.trim()) ?? "report ready"
-    await notify(system, env, title, `${first.trim().slice(0, 180)}\n${join(folder, "latest.md")}`)
+  if (agent && exitCode === 0) {
+    if (mode === "always" && !announcedByDesktop(join(folder, ".."), schedule.name)) {
+      const first =
+        readFileSync(output, "utf8")
+          .split("\n")
+          .find((line) => line.trim()) ?? "report ready"
+      await notify(
+        system,
+        env,
+        title,
+        prepared
+          ? `${prepared.notice.slice(0, 180)}\n${latestText}`
+          : `${first.trim().slice(0, 180)}\n${join(folder, "latest.md")}`,
+      )
+    }
   } else if (exitCode !== 0 && mode !== "never") {
     await notify(system, env, title, `failed (exit ${exitCode}) — ${errors}`)
   }
 
   const routes = schedule.to ?? []
+  const locked = readOnlyLockOf(app, runEnv)
+  const sendAlong = async (parcel: Parcel) => {
+    const deliveries = await deliver(system, runEnv, routes, parcel, {
+      find: (name, on) => findProgram(name, on, system.platform),
+      errorOf: reasonOf,
+      ...(locked ? { locked } : {}),
+    })
+    const lost = deliveries.filter((one) => !one.ok)
+    if (lost.length > 0 && mode !== "never") {
+      await notify(system, env, title, lost.map((one) => `not delivered to ${one.to}: ${one.reason}`).join("\n"))
+    }
+    return deliveries
+  }
+  const messageOptions = async () => ({
+    language: await ownerLanguage(runEnv).catch(() => "ru"),
+    linkOf: (ref: string) => linkFor(ref, { form: "web", config: sharedLinks(runEnv), env: runEnv }),
+    ...(reportTemplates ? { templates: reportTemplates(runEnv) } : {}),
+  })
   if (routes.length > 0 && (exitCode === 0 ? mode === "always" : mode !== "never")) {
     const at = shortTime(last.at)
-    const locked = readOnlyLockOf(app, runEnv)
-    const deliveries = await deliver(
-      system,
-      runEnv,
-      routes,
+    const notice = exitCode === 0 ? undefined : await failureNotice(app, schedule, last, now(), await messageOptions())
+    const deliveries = await sendAlong(
       exitCode === 0
         ? {
             title: `${title} · ${at}`,
             file: { path: output, name: `${schedule.name}-${at.replace(/[ :]/g, "-")}.${agent ? "md" : "txt"}` },
             ...(prepared ? { rendered: prepared } : {}),
           }
-        : {
-            title: `${title} failed · ${at}`,
-            line:
-              `${title} failed at ${at} (exit ${exitCode}` +
-              `${last.failures && last.failures > 1 ? `, ${last.failures} runs in a row` : ""})` +
-              `${last.reason ? `: ${last.reason}` : ""} — ${errors}`,
-          },
-      {
-        find: (name, on) => findProgram(name, on, system.platform),
-        errorOf: reasonOf,
-        ...(locked ? { locked } : {}),
-      },
+        : notice
+          ? { title: notice.subject, rendered: notice }
+          : {
+              title: `${title} failed · ${at}`,
+              line:
+                `${title} failed at ${at} (exit ${exitCode}` +
+                `${last.failures && last.failures > 1 ? `, ${last.failures} runs in a row` : ""})` +
+                `${last.reason ? `: ${last.reason}` : ""} — ${errors}`,
+            },
     )
     last = rewriteRun(join(folder, "last.json"), { ...last, deliveries })
-    const lost = deliveries.filter((one) => !one.ok)
-    if (lost.length > 0 && mode !== "never") {
-      await notify(system, env, title, lost.map((one) => `not delivered to ${one.to}: ${one.reason}`).join("\n"))
-    }
+  }
+  if (routes.length > 0 && mode === "always" && prepared && !prepared.invalid && gapsDue(folder, now())) {
+    const gaps = weeklyGapsOf(runs, now().getTime())
+    const options = await messageOptions()
+    const message =
+      gaps.gaps.length === 0
+        ? undefined
+        : await prepareMessage(
+            "weekly-gaps",
+            (language) => gapsView(gaps, { language, now: now().getTime(), linkOf: options.linkOf }),
+            options,
+          ).catch(() => undefined)
+    const deliveries = message ? await sendAlong({ title: message.subject, rendered: message }) : []
+    writeSecurely(
+      join(folder, WEEKLY_GAPS_FILE),
+      `${JSON.stringify({ at: now().toISOString(), gaps: gaps.gaps.length, runs: gaps.runs, deliveries }, null, 2)}\n`,
+      0o600,
+    )
   }
 
   if ("once" in schedule.when) {
@@ -743,6 +830,57 @@ export const runSchedule = async (
     rmSync(file, { force: true })
   }
   return last
+}
+
+/**
+ * The rendered notice of a failed run: which schedule, since when, the cause, and one link to the tool's sync
+ * screen; undefined when even the shipped template fails, and the run's one line goes instead.
+ */
+const failureNotice = async (
+  app: AppIdentity,
+  schedule: Schedule,
+  last: LastRun,
+  at: Date,
+  options: { language: string; linkOf: (ref: string) => string | null; templates?: StoredTemplates },
+): Promise<PreparedMessage | undefined> => {
+  const failure = {
+    kind: "schedule-failed" as const,
+    tool: app.command,
+    schedule: schedule.name,
+    at: last.at,
+    since: last.failingSince ?? last.at,
+    failures: last.failures ?? 1,
+    cause: lockedOut(last) ? ("locked" as const) : causeOf(last.errorCode, last.exitCode),
+    refs: [`sync:${app.command}`],
+  }
+  return prepareMessage(
+    "schedule-failed",
+    (language) => noticeView(failure, { language, now: at.getTime(), linkOf: options.linkOf }),
+    options,
+  ).catch(() => undefined)
+}
+
+/** When the weekly gaps went last, how many, and along which routes. */
+const WEEKLY_GAPS_FILE = "weekly-gaps.json"
+
+/** Monday 00:00, local time, of the week `at` falls in. */
+const weekStart = (at: Date): number => {
+  const day = new Date(at)
+  day.setHours(0, 0, 0, 0)
+  day.setDate(day.getDate() - ((day.getDay() + 6) % 7))
+  return day.getTime()
+}
+
+/**
+ * Whether this digest run also sends the week's gaps: on a Monday, or on the first run of a week whose Monday run
+ * did not send them. A schedule that never sent any waits for its first Monday, so it never sends one day's gaps.
+ */
+const gapsDue = (folder: string, now: Date): boolean => {
+  let sent: number | undefined
+  try {
+    sent = Date.parse((JSON.parse(readFileSync(join(folder, WEEKLY_GAPS_FILE), "utf8")) as { at: string }).at)
+  } catch {}
+  return sent === undefined || Number.isNaN(sent) ? now.getDay() === 1 : sent < weekStart(now)
 }
 
 /** The agent's input, or none: a host read that fails leaves the agent to fetch what it needs itself. */
@@ -779,14 +917,16 @@ const attemptSchedule = async (
     killAfterMs,
     agentRuns,
     agentInput,
+    skipRepeatedInput = false,
   }: {
     now: () => Date
     signal: AbortSignal | undefined
     killAfterMs: number
     agentRuns: readonly AgentCli[]
     agentInput: AgentInput | undefined
+    skipRepeatedInput?: boolean
   },
-): Promise<LastRun> => {
+): Promise<LastRun | { repeated: LastRun }> => {
   const runs = join(folder, "runs")
   const stamp = now()
     .toISOString()
@@ -821,6 +961,14 @@ const attemptSchedule = async (
   const began = now().getTime()
   log.info({ event: "schedule.start", ...facts })
   const input = agent && agentInput ? await inputOf(agentInput, system, childEnv, schedule, log) : undefined
+  const inputHash =
+    input === undefined || !schedule.onNewMail ? undefined : createHash("sha256").update(input).digest("hex")
+  const before = skipRepeatedInput && inputHash !== undefined ? readRun(join(folder, "last.json")) : undefined
+  if (before?.exitCode === 0 && before.inputHash === inputHash) {
+    // A skip every few minutes would otherwise push the kept runs' files out of runs/.
+    rmSync(join(runs, `${stamp}.jsonl`), { force: true })
+    return { repeated: before }
+  }
   let costUsd: number | undefined
   const exitCode = await new Promise<number>((resolve) => {
     const child = spawn(program, args, { env: childEnv, cwd: folder, stdio: ["pipe", "pipe", "pipe"] })
@@ -868,6 +1016,7 @@ const attemptSchedule = async (
     output,
     traceId: trace.traceId,
     ...(costUsd === undefined ? {} : { costUsd }),
+    ...(inputHash === undefined ? {} : { inputHash }),
     ...(exitCode === 0 ? {} : failureOf(readFileSync(errors, "utf8"), exitCode)),
   })
 }

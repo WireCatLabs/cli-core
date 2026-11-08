@@ -101,6 +101,10 @@ and subjects).
 (`duplicateOf`), writing nothing. The caller writes its copy of the file only when both are null, then saves with
 `keepCopy`. Nothing says a copy is kept unless the row says `copy`.
 
+**Reading one back.** `addedSource(ref)` answers a live added source: its document, `kind`, `url` as given, `fileName`,
+`mime`, `size`, `kept` and the `copy` path when one was kept. Any other document, a removed source or another
+reference is `undefined`, so a caller tells an added source from a folder document with it.
+
 <a id="push-local-files-to-a-provider"></a>
 
 ## Sync local files with a provider

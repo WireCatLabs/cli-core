@@ -228,6 +228,47 @@ describe("a source added by hand", () => {
     expect(found.accounts).toContainEqual({ resource: "notes", provider: "notes", account: account?.id })
   })
 
+  it("reads back what a source is and what was kept of it, and nothing for another document", async () => {
+    const { store } = await setup()
+    const saved = await store.notes.saveAddedSource({
+      ...file,
+      fileName: "runner-notes.pdf",
+      mime: "application/pdf",
+      keepCopy: { path: "/copies/abc" },
+    })
+    expect(await store.notes.addedSource(saved.note.ref)).toEqual({
+      note: saved.note,
+      kind: "file",
+      url: null,
+      fileName: "runner-notes.pdf",
+      mime: "application/pdf",
+      size: pdf.byteLength,
+      kept: "copy",
+      copy: "/copies/abc",
+    })
+    const page = await store.notes.saveAddedSource({
+      kind: "page",
+      read: "extracted",
+      text: "A public page",
+      url: "https://example.org/a",
+      mime: "text/html",
+      size: 120,
+      by: "owner",
+    })
+    expect(await store.notes.addedSource(page.note.ref)).toMatchObject({
+      kind: "page",
+      url: "https://example.org/a",
+      size: 120,
+      kept: "text",
+      copy: null,
+    })
+    const note = await store.notes.addNote({ text: "A note of the owner's" })
+    expect(await store.notes.addedSource(note.ref)).toBeUndefined()
+    expect(await store.notes.addedSource("document:999")).toBeUndefined()
+    await store.notes.removeAddedSource(page.note.ref, "owner")
+    expect(await store.notes.addedSource(page.note.ref)).toBeUndefined()
+  })
+
   it("refuses what it cannot name or would misstate", async () => {
     const { store } = await setup()
     const refused = [

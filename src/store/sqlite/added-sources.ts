@@ -61,6 +61,8 @@ export interface AddedSources {
   saveAddedSource(input: AddedSourceInput): Promise<AddedSource>
   /** The account of the sources added by hand, once one was saved. */
   addedAccount(): Promise<NoteFolder | undefined>
+  /** A live source added by hand, with what was kept of it; `undefined` for any other document or reference. */
+  addedSource(reference: string): Promise<AddedSourceDetails | undefined>
   /**
    * What saving this content would find, read only: the live added source it repeats, or the folder or Drive document
    * it duplicates. A caller that keeps a copy of the file asks this first, and writes the copy only when both are null.
@@ -83,6 +85,21 @@ export interface AddedSource {
   kept: "text" | "copy" | null
   /** Every subject the document is about now, the ones linked before included. */
   subjects: string[]
+}
+
+/** What a source added by hand is, beyond the document every reader shows. */
+export interface AddedSourceDetails {
+  note: Note
+  kind: (typeof ADDED_KINDS)[number]
+  /** The page's address as given, or where a file came from. */
+  url: string | null
+  fileName: string | null
+  mime: string | null
+  /** Bytes of the file or the page as read. */
+  size: number | null
+  kept: "text" | "copy"
+  /** Where the caller keeps the copy, when one was kept. */
+  copy: string | null
 }
 
 type Row = Record<string, unknown>
@@ -213,6 +230,30 @@ export const addedSourcesOver = (context: StoreContext): AddedSources => {
     addedAccount: async () => {
       const row = accountRow()
       return row ? folderOf(row) : undefined
+    },
+    addedSource: async (reference) => {
+      const id = /^document:[1-9]\d*$/.test(reference) ? Number(reference.slice("document:".length)) : undefined
+      const row =
+        id === undefined
+          ? undefined
+          : database
+              .prepare(
+                "SELECT d.* FROM documents d JOIN accounts a ON a.id = d.account_id WHERE d.id = ? AND a.provider = ? " +
+                  "AND d.deleted_at IS NULL",
+              )
+              .get(id, ADDED_PROVIDER)
+      if (!row) return undefined
+      const copy = row.storage === "copy" && row.local_path != null ? String(row.local_path) : null
+      return {
+        note: documentOf(row),
+        kind: oneOf(String(row.kind), ADDED_KINDS, "an added source's kind"),
+        url: row.url == null ? null : String(row.url),
+        fileName: row.file_name == null ? null : String(row.file_name),
+        mime: row.mime == null ? null : String(row.mime),
+        size: row.size == null ? null : Number(row.size),
+        kept: copy === null ? "text" : "copy",
+        copy,
+      }
     },
     findAddedSource: async (content) => {
       const key = addedSourceKeyOf(content)

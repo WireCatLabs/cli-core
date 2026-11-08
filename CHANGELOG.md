@@ -7,6 +7,26 @@ shape of this file.
 
 ## Unreleased
 
+### Fixed
+
+- **A free-text role from before the role lists no longer blocks an update.** Store version 61 moves a person's role
+  on a project or an organization that is not on its list (the built-in roles and the owner's own) into `roleNote`
+  and leaves the role unset, so a later update can set a listed role and no words are lost. The old role stays in
+  the relationship's history. Of two such rows of one relationship, the oldest moves; none moves beside a row of
+  the same relationship with no role. The change is additive: `minCompatible` stays 56, and an older build reads the
+  link with no role.
+- **One notification per digest while WireCat Desktop runs.** Desktop announces a new morning digest itself, so a
+  finished run showed two system notices. A schedule's run now leaves its own success notice out when
+  `<state>/schedules/desktop.json` names a live pid and lists the schedule in `announces` (Desktop writes it while it
+  runs, wirecat-desktop#214). A marker whose pid is gone counts for nothing; failure notices and deliveries do not
+  change.
+- **A mail-gated agent no longer runs again on the input its last run ended on.** One refusal the agent could not
+  get past (a findings key already taken) turned into a paid run every 5 minutes until the day's cost cap. The
+  timer (`schedule exec`) now keeps the SHA-256 of a `--on-new-mail` agent's input in `last.json` (`inputHash`);
+  when the next input is the same and that run exited 0, its mark did not move, so the run is left out with
+  `skipped.reason` `mail.same-input` (`SKIP_REASONS.mailSameInput`). New mail changes the input and runs normally;
+  `schedule run` by hand always runs. `runSchedule(…, { skipRepeatedInput: true })` turns it on for another timer.
+
 ### Added
 
 - **A person's engagement on a project.** `engagement` on a person's `member-of` a project: `none`, `low`,
@@ -17,15 +37,79 @@ shape of this file.
   none; `ENGAGEMENT_LEVELS` lists the levels.
 - **A role note beside the role.** `roleNote`, up to 200 characters, says what the role means on this link in the
   owner's words, while the role itself stays one of its list. `relate` and `updateRelation` take it; `null` clears it.
+- **The weekly gaps message (`report/weekly-gaps`).** A morning digest may keep what it found on its own, which the
+  agenda did not show, in `internal.gaps` (`{ what, refs | ref, section }`); the digest never shows it. Once a week a
+  delivered digest run also sends those gaps along the same routes as one message: on Monday, or on the first digest
+  of a week whose Monday run did not send them, and never before a schedule's first Monday. It reads the run files
+  of the last 7 days, says a gap that several runs found once (the same ref, or the same words but for case and
+  punctuation) with how many digests found it, the most frequent first, and sends nothing for a week without gaps.
+  No agent runs for it. When it went, how many gaps and the deliveries are in the schedule's `weekly-gaps.json`.
+- **A failed scheduled run sends a rendered notice (`notice/schedule-failed`).** In place of the one English line,
+  every route of a schedule that notifies on failures gets which schedule failed, since when and how many runs in a
+  row, the cause in the owner's language (keyring locked, sign-in needed, service unreachable, service error,
+  settings, stopped, crashed: from the error code, never its message) and one "fix" link to the tool's sync screen
+  (`sync/<tool>`). A notice whose templates fail sends the old line. The desktop notice is unchanged.
+- Default templates for both, for Telegram, email and text in Russian and English, with the digest's escaping and
+  platform rules; `templates edit | preview` now take both keys, checked against their own synthetic samples.
+- **A source check names what changed, and a source review's text can be read.** `knowledge.checkSources` also
+  answers `changedRefs`: the sources found changed in that run, whether they raised a review or still said the
+  quoted words, that no open `evidence_findings` batch cites, leaving out deleted sources and cited memories or facts.
+  An agent reads those again for new facts. `knowledge.sourceReviewTexts(id)` gives each source of a
+  `memory_source_review` with its quote, its text as cited (notes, documents and messages keep history) and its text
+  now, so a reader compares them while the review itself holds no source text. The shared `memory` and `fact`
+  entities take an optional `source_review: { id, cause } | null`, the marker reads already carry.
+  `knowledge.changedSources({ since })` reads the cited sources a check found changed since then and that differ
+  from the version cited, with the same exclusions, so a change the timer's check already took still reaches an
+  agent.
+- **`store.notes.addedSource(ref)` reads an added source back with what it is and what was kept**: `kind`, the `url`
+  as given, `fileName`, `mime`, `size`, `kept` and the `copy` path, beside its document; `undefined` for any other
+  document or a removed source. The `AddedSourceDetails` type is exported.
 
 ### Fixed
 
-- **A free-text role from before the role lists no longer blocks an update.** Store version 59 moves a person's role
-  on a project or an organization that is not on its list (the built-in roles and the owner's own) into `roleNote`
-  and leaves the role unset, so a later update can set a listed role and no words are lost. The old role stays in
-  the relationship's history. Of two such rows of one relationship, the oldest moves; none moves beside a row of
-  the same relationship with no role. The change is additive: `minCompatible` stays 56, and an older build reads the
-  link with no role.
+- **`account remove` is in the messenger parity manifest** (`parity.json`), with `--keep-data`, `--delete-data`
+  and `--dry-run`, so tg, max and wa can adopt it without failing `parity:check`.
+
+## 0.614.0 — 08.11.2026
+
+### Added
+
+- **The owner's own message templates, in the shared store (store version 59).** `templatesCommand(app, { env,
+  output, diagnostic })` gives a tool `templates list | show | edit | preview | reset <key> --channel
+  telegram|email|text [--language <code>]`. Keys: `report/morning-digest`; `report/weekly-gaps` and
+  `notice/schedule-failed` are listed, but nothing renders them yet, so they cannot be edited. `edit` opens
+  `$VISUAL`/`$EDITOR` on the template that applies, or takes `--file`; a save is checked first against a synthetic
+  report and the tool's last real `<run>.report.json`: it must render, the channel's rules may remove nothing (a tag
+  outside the list, an `href` that is not a link of the report, a `style` with `url(`), and a Telegram text must fit
+  4 096 characters once the size fit dropped what it could. A failed check saves nothing and says why, and keeps an
+  editor draft for `--file`. Every save and reset keeps the replaced body in `templates_history`; `edit --undo` puts
+  back the last one. `reset` deletes the row, so the shipped template applies again. `edit` and `reset` change what
+  later runs send (`grantsAuthority`), and an agent is refused (`template.owner-only`). A scheduled report renders
+  with the stored templates of the owner's language; a stored body that fails, or a store that cannot be read,
+  falls back to the shipped template for that channel and records `report.template-failed`. The email template is
+  stored and previewed, but mail still sends the plain-text rendering. `store.templates` and
+  `storedTemplateBodies(database, key, language)` from `@wirecat/cli-core/store`.
+- **`account remove`, built once for every tool.** `<tool> <profile> account remove --keep-data|--delete-data` signs
+  the profile out with the tool's own `signOut` hook, then forgets it here: its keyring entries, its
+  `state/accounts/<profile>.json`, the tool's own state files and its sections in the config file; other profiles stay.
+  `--delete-data` also purges the account from the shared store (`store.accounts.purge`) and deletes the tool's data
+  files; `--keep-data` leaves its messages in the store, still searchable, and says so under `kept`. It asks first, or
+  `--yes`; under `--json` without `--yes` it answers `confirmation_required`; `--dry-run` lists every entry, section and
+  file. It refuses while a serve or a sync holds the profile, a path outside the tool's own folders, and runs neither
+  over MCP nor under `<PREFIX>_READ_ONLY`. The answer is the entity `account_removal`; reasons `account-remove.*`.
+  A messenger opts in with `Messenger.accountRemoval`; any other CLI mounts `accountRemoveCommand(app, hooks)`
+  ([guide](docs/dev/ACCOUNT-REMOVAL.md)). `store.accounts.forgetProfile` forgets which account a profile was.
+  It also removes what cli-core keeps for the profile, so no tool lists it: its flood, pace, recipients, moderation,
+  provider log, MCP HTTP tokens, replies state and rules, `--new` points and checkpoints, its serve unit (by its exact
+  name) and the schedules whose environment names it. The sends journal stays, under `kept`. A tool whose files live
+  outside its cli-core folders names them with the `ownFolders` hook; each must be absolute and inside the home folder
+  (`account-remove.folder-outside`).
+
+### Fixed
+
+- **cli-core accepts any `@wirecat/cli-base` 0.x from 0.80.7 (`>=0.80.7 <1.0.0`).** Its peer range stopped at
+  `<0.86.0`, so a CLI could not take cli-base 0.86.0 or 0.87.0 beside it. The range is pinned again at 1.0. Nothing
+  else changes for a caller.
 
 ## 0.612.0 — 08.11.2026
 

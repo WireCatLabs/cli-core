@@ -1,0 +1,10 @@
+{
+  "kind": "schedule-failed",
+  "tool": "memo",
+  "schedule": "morning-digest",
+  "at": "2026-11-06T08:31:00+03:00",
+  "since": "2026-11-05T08:31:00+03:00",
+  "failures": 2,
+  "cause": "sign-in",
+  "refs": ["sync:memo"]
+}

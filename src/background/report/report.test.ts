@@ -311,7 +311,7 @@ describe("the platform rules", () => {
     const broken = await renderReport(view, "telegram", { template: "{{ sections[0].nothing_here }}" })
     expect(broken.templateFailed).toBe(true)
     expect(broken.text).toBe((await renderReport(view, "telegram")).text)
-    const prepared = await prepareReport(digest(), { ...options, templates: { telegram: "{% if %}" } })
+    const prepared = await prepareReport(digest(), { ...options, templates: async () => ({ telegram: "{% if %}" }) })
     expect(prepared?.run.reasons).toEqual(["report.template-failed"])
     expect(prepared?.text).toBe((await renderReport(view, "text")).text)
   })

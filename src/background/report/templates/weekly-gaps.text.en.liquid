@@ -1,0 +1,14 @@
+{%- comment -%}
+Plain text: the email's plain part and the terminal. Line 2 of an item is indented by two spaces.
+{%- endcomment -%}
+{%- capture nl %}
+{% endcapture -%}
+🔍 What the digest found on its own this week
+{{- nl }}Not in the day's selection · {{ runs }} {% if plural == "one" %}digest{% else %}digests{% endif %}, {{ from.date }} to {{ to.date }}
+{%- if items.size == 0 %}{{ nl }}{{ nl }}Nothing was missed.{% endif -%}
+{%- for item in items -%}
+  {{ nl }}{{ nl }}• {{ item.what }}
+  {{- nl }}  {% if item.seen > 1 %}in {{ item.seen }} digests, last on {% endif %}{{ item.last.date }}
+  {%- for link in item.links %} · {{ link.url }}{% endfor -%}
+{%- endfor -%}
+{%- if more > 0 %}{{ nl }}{{ nl }}{{ more }} more{% endif -%}

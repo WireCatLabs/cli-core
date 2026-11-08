@@ -271,6 +271,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `topics` | collection | forum topics in a group |  |
 | `models` | collection | local or remote models |  |
 | `tags` | collection | labels the owner puts on things |  |
+| `groups` | collection | account groups: the accounts a run in a group reads, such as work and personal (WC-ACCT-13) |  |
 | `searches` | collection | the owner's saved searches |  |
 | `copies` | collection | tables kept aside by a repair |  |
 | `tables` | collection | the tables of the local store, with their kind, row count and size |  |
@@ -307,6 +308,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `facts` | collection | what happened, with evidence |  |
 | `memories` | collection | what an agent concluded, with evidence and scope |  |
 | `relationships` | collection | confirmed or suggested links between people, organizations and projects |  |
+| `roles` | collection | the parts a person plays in a relationship, built in or the owner's own |  |
 | `sheets` | collection | remote spreadsheets and their cell ranges, read or changed through a provider |  |
 | `files` | collection | files in the source, such as Google Drive, read and changed there |  |
 | `comments` | collection | comments people left on a thing in the source: a channel post or a file |  |
@@ -743,6 +745,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--reason` | `<text>` | string | why, in a few words; kept with it |  |
 | `--remind-time` | `<time>` | time | when to look at it again |  |
 | `--role` | `<role>` | string | the part it plays, in a word or two |  |
+| `--label` | `<label>` | string | a human-readable label for an id, such as the name shown for a custom relationship role |  |
 | `--scope` | `<scope>` | choice | personal or work: which side of the owner's life it belongs to |  |
 | `--solution` | `<text>` | string | with --quiz, what people see once they answered |  |
 | `--spoiler` |  | switch | hide the photo or video behind a spoiler until tapped |  |
@@ -801,6 +804,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--amount` | `<decimal>` | string | a sum of money as a decimal, such as 1500.50, in --currency |  |
 | `--currency` | `<code>` | string | an ISO 4217 code, such as EUR |  |
 | `--close-date` | `<date>` | time | the day a deal or lead is expected to close, YYYY-MM-DD |  |
+| `--position` | `<title>` | string | a person's job title on a relationship, stored as position; never the role |  |
 | `--owner` | `<user>` | id | the CRM user a record is assigned to, by the CRM's id |  |
 | `--status` | `<state>` | choice | the state to put it in; the command lists the states |  |
 | `--product` | `<product>` | string | a product or service the owner sells or buys: product:<id> |  |
@@ -1022,6 +1026,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--debug` |  | on a failure, its whole record — cause and stack — in place of the short line |  | every command |
 | `--deep` | `<n>` | also check the top n in full — profile, photos, everything they wrote, and the public ban lists, which are sent their ids — one person a second. **TG specializes the SDK help with the bounded Telegram audit; MAX retains the generic SDK wording. Align the shared help with provider capabilities separately; SDK adoption alone does not remove the difference.** |  | `chats members check` |
 | `--defaults` |  | change what every profile gets, rather than this profile |  | `config set`, `config unset` |
+| `--delete-data` |  | also delete the account's messages and files on this computer |  | `account remove` |
 | `--deliver-to` | `<route>` | where a schedule's result also goes, when --notify-on says so: telegram-bot:<profile>/<chat>, email:<profile>/<address>; repeat it for more |  | `schedule agent` (planned), `schedule command` (planned) |
 | `--deny-chats` | `<ids>` | replace denied chat ids, comma-separated; empty clears; deny wins |  | `replies audience`, `replies edit` |
 | `--deny-people` | `<ids>` | replace denied sender ids, comma-separated; empty clears; deny wins |  | `replies audience`, `replies edit` |
@@ -1032,7 +1037,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--do` | `<actions>` | actions: reply, task, or both, comma-separated |  | `replies edit` |
 | `--download` |  | first save, from the messenger, the files no download saved yet |  | `attachments extract` |
 | `--draft` |  | save the text as a draft for the owner to review and send |  | `messages send` (planned) |
-| `--dry-run` |  | judge and plan; do nothing. **A command-specific dry run keeps its richer plan; otherwise the shared shell previews arguments and permissions without running the action. Targets remain unresolved unless that command provides a preview.** |  | every command, `attachments move`, `bot chats moderate` (planned), `chats moderate`, `config repair`, `messages sync`, `stats messages counters sync`, `store clear`, `store repair`, `store reset`, `tags rebuild` |
+| `--dry-run` |  | judge and plan; do nothing. **A command-specific dry run keeps its richer plan; otherwise the shared shell previews arguments and permissions without running the action. Targets remain unresolved unless that command provides a preview.** |  | every command, `account remove`, `attachments move`, `bot chats moderate` (planned), `chats moderate`, `config repair`, `messages sync`, `stats messages counters sync`, `store clear`, `store repair`, `store reset`, `tags rebuild` |
 | `--due` | `<time>` | when a task must be done: an ISO 8601 time or a duration from now; none clears it |  | `tasks add`, `tasks update` |
 | `--due-within` | `<duration>` | list tasks due within this: 30m, 2h, 1d | `1d` | `tasks agenda` |
 | `--embedding-provider` | `<provider>` | embedding provider: local or openai; flags override profile settings |  | `conversations embed`, `conversations embeddings clear`, `conversations embeddings status`, `conversations related`, `conversations status`, `search conversations` |
@@ -1073,6 +1078,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--join-approval` | `<on\|off>` | people ask to join, and an admin lets them in |  | `chats update` (tg, wa only) |
 | `--json` |  | machine-readable output: one JSON value on stdout, nothing else |  | every command |
 | `--jsonl` |  | machine-readable output: one JSON object per line, for streaming and jq |  | every command |
+| `--keep-data` |  | keep the account's messages on this computer; search still finds them |  | `account remove` |
 | `--kind` | `<kind>` | the kind of link to record; the command lists the supported task and evidence relations |  | `tasks link` |
 | `--kinds` | `<kinds>` | chat kinds: dialog, group; comma-separated, empty for any |  | `replies edit` |
 | `--last` | `<n>` | stop once the newest n messages are held; not with --since. **max's own copy is worded differently until T6 moves the command onto the shared one (e13)** |  | `bot messages sync` (max, tg only), `messages sync`, `tasks scan` |

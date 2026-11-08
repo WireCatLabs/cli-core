@@ -1,5 +1,6 @@
 import { isoTime, reference } from "@wirecat/cli-base/standards"
 import * as v from "valibot"
+import { SOURCE_REVIEW_CAUSES } from "../store/source-review.js"
 
 export { reference }
 
@@ -26,6 +27,9 @@ export const evidenceSource = v.strictObject({
   tool: v.nullable(text),
   missing: v.boolean(),
 })
+
+/** The open review of a memory's or fact's sources, when one waits for the owner (`memory_source_review`). */
+export const sourceReview = v.nullable(v.strictObject({ id, cause: v.picklist(SOURCE_REVIEW_CAUSES) }))
 
 export const author = v.strictObject({
   type: v.picklist(["person", "bot"]),

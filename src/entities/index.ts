@@ -2,7 +2,13 @@ import { jsonSchemaOf } from "@wirecat/cli-base/standards"
 import * as v from "valibot"
 import { MEETING_RESULT_ENTITIES } from "../meetings/index.js"
 import { account } from "./account.js"
-import { accountChange, accountPrivacy, accountPrivacyChange, endedAccountSessions } from "./account-change.js"
+import {
+  accountChange,
+  accountPrivacy,
+  accountPrivacyChange,
+  accountRemoval,
+  endedAccountSessions,
+} from "./account-change.js"
 import { accountProfile } from "./account-profile.js"
 import { accountSession } from "./account-session.js"
 import { adminReport } from "./admin-report.js"
@@ -475,6 +481,7 @@ export const ENTITIES = {
   account_session: accountSession,
   account_change: accountChange,
   ended_account_sessions: endedAccountSessions,
+  account_removal: accountRemoval,
   account_privacy: accountPrivacy,
   account_privacy_change: accountPrivacyChange,
   account_profile: accountProfile,

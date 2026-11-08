@@ -48,3 +48,15 @@ export const saveProfile = (
     .prepare("INSERT OR REPLACE INTO store_settings (key, value, at) VALUES (?, ?, ?)")
     .run(PROFILES, JSON.stringify(profiles), now)
 }
+
+export const forgetProfile = (database: CacheDatabase, app: string, profile: string, now: number): void => {
+  const profiles = profilesOf(database)
+  const own = profiles[app]
+  if (own?.[profile] === undefined) return
+  const { [profile]: _, ...rest } = own
+  if (Object.keys(rest).length === 0) delete profiles[app]
+  else profiles[app] = rest
+  database
+    .prepare("INSERT OR REPLACE INTO store_settings (key, value, at) VALUES (?, ?, ?)")
+    .run(PROFILES, JSON.stringify(profiles), now)
+}

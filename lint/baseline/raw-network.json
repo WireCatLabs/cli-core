@@ -1,10 +1,1 @@
-[
-  "src/background/relay.ts node:net",
-  "src/cli/effects.ts fetch",
-  "src/fetch/addresses.ts node:net",
-  "src/fetch/page.ts node:http",
-  "src/fetch/page.ts node:https",
-  "src/fetch/page.ts node:net",
-  "src/http/listen.ts node:http",
-  "src/oauth/authorize.ts node:http"
-]
+["src/background/relay.ts node:net", "src/fetch/page.ts node:http", "src/fetch/page.ts node:https"]
