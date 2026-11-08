@@ -203,6 +203,7 @@ export const upsertChat = (context: StoreContext, accountKey: number, chat: Chat
       metadata: mergedMetadata(stored?.metadata ?? null, chat.providerMetadata),
       membershipState: chat.membershipState === "member" ? null : (chat.membershipState ?? null),
       ...stateOf(chat, now()),
+      ...(chat.searchable === false ? { searchable: 0 } : {}),
       createdAt: now(),
       updatedAt: now(),
     })
@@ -210,6 +211,7 @@ export const upsertChat = (context: StoreContext, accountKey: number, chat: Chat
       target: [chats.accountId, chats.externalId],
       set: {
         kind: sql`excluded.kind`,
+        ...(chat.searchable === false ? { searchable: 0 } : {}),
         ...(chat.parentChatId === undefined ? {} : { parentChatId: sql`excluded.parent_chat_id` }),
         scope: sql`coalesce(excluded.scope, ${chats.scope})`,
         ...(chat.title === undefined ? {} : { title: sql`excluded.title`, titleFolded: sql`excluded.title_folded` }),

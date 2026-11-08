@@ -18,6 +18,21 @@ shape of this file.
 - **A role note beside the role.** `roleNote`, up to 200 characters, says what the role means on this link in the
   owner's words, while the role itself stays one of its list. `relate` and `updateRelation` take it; `null` clears it.
 
+## 0.617.0 — 08.11.2026
+
+### Security
+
+- **Messenger bot tokens are masked in the store.** A Telegram bot token (`<bot id>:<secret>`, as BotFather sends
+  it) in a message's text or caption, in the quote of a reply, or in an edit is saved as `<bot id>:<bot token
+  hidden>`, before the search copy and the vectors are made, for every messenger. Messages already stored, and those
+  an older build saves later, are masked the next time a store is opened for writing, from the newest message checked
+  last time (`store_settings.bot_tokens_masked_through`): the text, the search copy, the quote and the edit history,
+  and the vectors of the conversation pieces they were in are dropped, to be made again. No store version.
+- **`Chat.searchable: false`**: a messenger saves a chat whose messages hold credentials as not searchable. Search
+  over all chats, search by meaning and context evidence leave it out (as for any chat with `chats.searchable = 0`);
+  a read that names the chat still sees it. A later save without the
+  field keeps the mark, and nothing a messenger saves unhides a chat.
+
 ## 0.616.0 — 08.11.2026
 
 ### Added

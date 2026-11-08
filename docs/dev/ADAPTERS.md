@@ -195,6 +195,10 @@ chat: a count of 0 does not, since a push may carry 0 for a chat that is marked 
 archived chats unless they mention the owner, and takes in a chat marked unread, muted or not, with its newest
 message from someone else.
 
+Save a chat whose messages hold credentials, such as Telegram's BotFather, with `searchable: false`. Search over all chats,
+search by meaning and context evidence leave it out; a read that names it still sees it. Left out keeps the stored mark: nothing an adapter
+saves unhides a chat. Bot tokens (`<bot id>:<secret>`) in any message's text or quote are masked by the store itself.
+
 `membershipState` follows the same rule: left out keeps it, a value sets it, `null` clears it. A chat marked left
 stays left through a save that leaves membership out, such as a community notice. Any page of your adapter's `chats`
 rejoins the chats it names, since the messenger lists only chats the account is in; a complete one also marks the
