@@ -105,6 +105,11 @@ const transact = <T>(database: CacheDatabase, body: () => T, drain: boolean, bef
   }
 }
 
+let rehearsals = 0
+
+/** Whether a dry run holds a connection of this process now. */
+export const rehearsing = (): boolean => rehearsals > 0
+
 /** Calls `call` outside any dry run: a statement it runs is refused while one holds the connection. */
 export const outsideRehearsal = <T>(call: () => T): T => rehearsal.exit(call)
 
@@ -144,9 +149,11 @@ export const rehearse = async <T>(
   connection.depth += 1
   guard(database as unknown as Methods, ["prepare", "exec"])
   if (client !== undefined && client !== null) guard(client as Methods, ["prepare", "exec", "query", "run"])
+  rehearsals += 1
   try {
     return await rehearsal.run(database, body)
   } finally {
+    rehearsals -= 1
     for (const [target, name, call, own] of kept.reverse())
       if (own) target[name] = call
       else delete target[name]
