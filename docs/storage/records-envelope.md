@@ -75,10 +75,10 @@ allocation on it is the import's own.
   (`record.relation-ambiguous`). v1's roles (`issuer`, `counterparty`, `project`, `payer`, `payee`, `settles`) keep v1's
   rules: their target type is not checked, and `fields.<role>` may hold a store ref instead.
 - `as` is the part a relationship target plays (`decision-maker`, `customer`), kept in `record_relations.as_role`. One
-  `as` per role and target. A deal's `person` becomes the deal's person link, `as` its part (`contact` when left
-  out); `member-of`, `customer-of`, `partner-of` and a contract's `party` and `document` are kept in the record only
-  until relationships reach `links` (PR 5). Until then an envelope deal for a CRM's own provider and account replaces
-  that deal's people and organization, and the CRM's next sync writes its own back.
+  `as` per role and target. A deal's or lead's `person`, `member-of`, `customer-of`, `partner-of` and a contract's
+  `party` and `document` are kept in the record only until an import reports relationships to the store (PR 5). Until
+  then an envelope deal for a CRM's own provider and account replaces that deal's organization, and the CRM's next
+  sync writes its own back.
 - A role word the type does not list is the source's own: kept, resolved record to record, never projected.
 - `amount` only on `settles`: the payment's share of that invoice.
 - A relation, a line's `product` or a deal's `pipeline` whose target has no entity yet keeps the record **waiting**; it
@@ -108,8 +108,8 @@ Every file, v1 files included. A name alone never matches.
   exactly one of them reads it as a valid number. Otherwise it stays in the fields and never matches.
 - A person record changed later that names another person's e-mail or phone gives its entity nothing and is
   `flagged`, with `reason: "record.ambiguous"` and that person among the `candidates`.
-- `record.separated` instead of `record.ambiguous`: the one person the identifiers match is one the owner told apart
-  from them. (Wired once this stack is on main; until then no separation is read.)
+- `record.separated` instead of `record.ambiguous`: the one person the identifiers match is one the owner separated
+  from an identity the record brings, so linking would join two people he told apart.
 - Phone counts as e-mail does, by the owner's choice; the Memory workstream's own linker treats a phone-only match as a
   proposal.
 - A record an earlier version left waiting is matched or made on the next import that sends it, unchanged or not, or
@@ -117,7 +117,7 @@ Every file, v1 files included. A name alone never matches.
 
 **Owner remapping.** `store.records.map(key, ref, "owner")` on a record whose entity the import made moves it, and
 every record of the account linked to that entity, to `ref`; repoints what their records filled from them (the columns
-their roles name, a deal's people) and the identities the import gave it; and answers the old entity as `unused` when
+their roles name) and the identities the import gave it; and answers the old entity as `unused` when
 nothing points at it any more. Its `proposed` and `errors` are those of the records that waited on it. The owner deletes or merges it; the
 store deletes nothing. A record linked by an identifier or mapped before refuses a remap (`record.mapped`), and only
 the owner maps (`record.map-owner-only`).

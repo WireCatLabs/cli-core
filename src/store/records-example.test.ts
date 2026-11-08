@@ -32,8 +32,11 @@ it("takes the plan's example file end to end, and a second run changes nothing",
     stage: "New",
     amount: "120000.00",
     organization: { ref: org?.entity },
-    people: [expect.objectContaining({ ref: anna?.entity, role: "decision-maker" })],
   })
+  // The deal's people reach the store's relationships with PR 5; until then the record keeps the part.
+  expect(deal?.relations).toContainEqual(
+    expect.objectContaining({ role: "person", externalId: "P-1", as: "decision-maker", resolved: true }),
+  )
 
   const refOf = async (type: string, externalId: string) =>
     (await store.records.get({ ...KEY, type, externalId }))?.entity as string
