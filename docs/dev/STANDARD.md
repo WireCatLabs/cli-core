@@ -271,6 +271,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `topics` | collection | forum topics in a group |  |
 | `models` | collection | local or remote models |  |
 | `tags` | collection | labels the owner puts on things |  |
+| `groups` | collection | account groups: the accounts a run in a group reads, such as work and personal (WC-ACCT-13) |  |
 | `searches` | collection | the owner's saved searches |  |
 | `copies` | collection | tables kept aside by a repair |  |
 | `tables` | collection | the tables of the local store, with their kind, row count and size |  |
@@ -307,6 +308,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `facts` | collection | what happened, with evidence |  |
 | `memories` | collection | what an agent concluded, with evidence and scope |  |
 | `relationships` | collection | confirmed or suggested links between people, organizations and projects |  |
+| `roles` | collection | the parts a person plays in a relationship, built in or the owner's own |  |
 | `sheets` | collection | remote spreadsheets and their cell ranges, read or changed through a provider |  |
 | `files` | collection | files in the source, such as Google Drive, read and changed there |  |
 | `comments` | collection | comments people left on a thing in the source: a channel post or a file |  |
@@ -743,6 +745,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--reason` | `<text>` | string | why, in a few words; kept with it |  |
 | `--remind-time` | `<time>` | time | when to look at it again |  |
 | `--role` | `<role>` | string | the part it plays, in a word or two |  |
+| `--label` | `<label>` | string | a human-readable label for an id, such as the name shown for a custom relationship role |  |
 | `--scope` | `<scope>` | choice | personal or work: which side of the owner's life it belongs to |  |
 | `--solution` | `<text>` | string | with --quiz, what people see once they answered |  |
 | `--spoiler` |  | switch | hide the photo or video behind a spoiler until tapped |  |
@@ -801,6 +804,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--amount` | `<decimal>` | string | a sum of money as a decimal, such as 1500.50, in --currency |  |
 | `--currency` | `<code>` | string | an ISO 4217 code, such as EUR |  |
 | `--close-date` | `<date>` | time | the day a deal or lead is expected to close, YYYY-MM-DD |  |
+| `--position` | `<title>` | string | a person's job title on a relationship, stored as position; never the role |  |
 | `--owner` | `<user>` | id | the CRM user a record is assigned to, by the CRM's id |  |
 | `--status` | `<state>` | choice | the state to put it in; the command lists the states |  |
 | `--product` | `<product>` | string | a product or service the owner sells or buys: product:<id> |  |

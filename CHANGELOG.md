@@ -25,6 +25,12 @@ shape of this file.
   outside its cli-core folders names them with the `ownFolders` hook; each must be absolute and inside the home folder
   (`account-remove.folder-outside`).
 
+### Fixed
+
+- **cli-core accepts any `@wirecat/cli-base` 0.x from 0.80.7 (`>=0.80.7 <1.0.0`).** Its peer range stopped at
+  `<0.86.0`, so a CLI could not take cli-base 0.86.0 or 0.87.0 beside it. The range is pinned again at 1.0. Nothing
+  else changes for a caller.
+
 ## 0.612.0 — 08.11.2026
 
 ### Changed — may break callers
