@@ -247,7 +247,7 @@ read `MAIL_FINDING_FIELDS`, which `mailFindingFieldsHelp()` prints for a host's 
 
 ## Source records and imports
 
-`ingest(store, envelope, { account, dryRun })` and `ingestLines(store, linesOf(stream), options)` (`./services`) take
+`ingest(store, envelope, { account, dryRun })` and `ingestLines(store, jsonlLines(stream), options)` (`./services`) take
 what a source sends: the v1 records envelope (`RECORDS_ENVELOPE_SCHEMA`, written out as
 `schemas/records-envelope.v1.schema.json` and generated from `RECORD_TYPES`), as one JSON object or as JSONL streamed
 line by line. [`docs/storage/records-envelope.md`](../storage/records-envelope.md) is the full contract: every type,
@@ -266,16 +266,18 @@ what other payments, confirmed or proposed, leave open on the invoice allow. A r
 pipeline whose target has no entity keeps the record waiting until it gets one.
 
 A `person`, `organization` or `project` record is linked by one exact strong identifier: an e-mail, an E.164 phone
-(as `phone_countries` reads it) or the source's contact identity for a person, a `{scheme, value}` identity for an
-organization, the key for a project. No match makes the entity (`records.created_entity = 1`) with the record's
+(without `+`, only one the envelope's `phone_region` or exactly one `phone_countries` country reads as valid) or the
+source's contact identity for a person, a `{scheme, value}` identity of a known scheme for an organization (an
+e-mail under `org-email`, never a person's), the key for a project. No match makes the entity (`records.created_entity = 1`) with the record's
 identifiers; two or more leave it `unmatched`, with the candidates, for the owner's `store.records.map`; a name never
 matches. The lookup is one function, `entitiesByIdentifiers` (`src/store/sqlite/record-matching.ts`), for the shared
 matcher to take over. `store.records.match` runs it for a whole account. The owner may remap a record whose entity the
 import made: what the account's records filled from it follows, and the old entity is answered as `unused`.
 
-A changed record re-proposes a proposal the import made while the owner has not decided it, updates a direct row and
-an entity the import made in place, and is otherwise `flagged`, the entity untouched. Invoices keep v1's rule: a
-change after projection is flagged.
+A changed record re-proposes a proposal the import made while nobody else changed or decided it (a digest of what the
+import wrote is kept in the row's metadata), updates a direct row and an entity the import made in place, and is
+otherwise `flagged`, the entity untouched. Invoices keep v1's rule: a change after projection is flagged. A dry run
+holds one transaction across the stream; every other statement on the same handle is refused until it ends.
 
 ## Link proposals from scorers
 
