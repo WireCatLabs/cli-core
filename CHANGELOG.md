@@ -60,7 +60,6 @@ shape of this file.
 - **An agent's mention confirm or meeting participant association no longer moves an identity.** Unless `by` is
   `"owner"`, `confirmMention` to a person and `linkParticipantPerson` open an `identity_link` proposal and return its
   id as `proposal` (the association's `changed` is `false`), so an owner's link is never replaced.
-
 - **`people.personByUid` of a person merged into someone else answers with that person.** Its `uid` is the
   current person's, not the one asked for, and `mergedInto` is set; `personSeenInAccounts` follows the same merge.
   A caller that compares the answer's `uid` with the one it passed reads `mergedInto` instead.
