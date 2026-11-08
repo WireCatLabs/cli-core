@@ -1,5 +1,13 @@
 export { AI_ENTRIES, AI_SETTING_KEYS, type AISettings, resolveAISettings } from "../analysis/settings.js"
-export { AGENT_INPUT_MAX_CHARS, type AgentCli, type AgentInput } from "../background/schedules.js"
+export {
+  AGENT_INPUT_MAX_CHARS,
+  type AgentCli,
+  type AgentInput,
+  readSchedule,
+  SCHEDULE_DEFAULTS,
+  scheduleFile,
+  spentToday,
+} from "../background/schedules.js"
 export { parseDuration } from "../domain/duration.js"
 export {
   openOf,
@@ -532,6 +540,7 @@ export {
 export { STATUS_ROWS, STATUS_SIGNAL_ROWS } from "./project-status-rows.js"
 export { fieldsOf, projectFields } from "./result-fields.js"
 export {
+  backfillScheduleRun,
   SCHEDULE_SETTINGS,
   type ScheduleHost,
   type ScheduleLimits,
