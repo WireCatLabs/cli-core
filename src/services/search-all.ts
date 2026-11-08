@@ -17,8 +17,9 @@ import { excerpt } from "./excerpt.js"
 import type { FoundMessage, SearchFound, SearchQuery } from "./messages.js"
 import { MAX_SEARCH_OFFSET, searchStore } from "./messages-archive-search.js"
 import { type MeaningLane, type MeaningSkipped, nearEligible } from "./messages-discovery.js"
+import { meaningText } from "./messages-meaning.js"
 import type { SearchCoverage } from "./messages-search.js"
-import { notesScopeOf, RRF_K, searchNotes } from "./notes-search.js"
+import { localModel, notesScopeOf, RRF_K, searchNotes, withLocal } from "./notes-search.js"
 import { BUSINESS_WORDS_ONLY, searchBusiness } from "./search-all-business.js"
 import type { Backend, ServerOptions, ServerSearched } from "./server-search.js"
 
@@ -231,6 +232,10 @@ export const searchAll = async (
   const discover = !request.exact && questionLookup(request.text) !== undefined
   /** Each hit found by meaning, by its cosine: one model for every source, so these compare across them. */
   const cosines = new Map<string, number>()
+  /** The cosines computed for hits words alone found: they rank the hit, and leave `foundBy` as the lanes set it. */
+  const scored = new Map<string, number>()
+  /** Each hit's place in its source's words list, 0 the best: the words half of the one list's fusion. */
+  const wordsRank = new Map<string, number>()
   let coverage: SearchCoverage | undefined
 
   const messagesOf = async (kind: "messages" | "mail") => {
@@ -287,6 +292,9 @@ export const searchAll = async (
       }
     }
     const byWords = found.items.map((hit) => itemOf(hit, ["words"]))
+    byWords.forEach(({ ref }, rank) => {
+      if (!wordsRank.has(ref)) wordsRank.set(ref, rank)
+    })
     // Server hits are only those the server returned; the local vectors would add others.
     if (!meaning || request.exact || (kind === "messages" && request.backend === "server")) return byWords
     const filters = filtersBeside(request.text)
@@ -345,6 +353,9 @@ export const searchAll = async (
             ...(found.meaning_skipped === undefined ? {} : { meaningSkipped: found.meaning_skipped }),
           }
           for (const hit of found.hits) if (hit.meaning_score !== undefined) cosines.set(hit.ref, hit.meaning_score)
+          found.words_order.forEach((ref, rank) => {
+            if (!wordsRank.has(ref)) wordsRank.set(ref, rank)
+          })
           lists.push(
             found.hits.map((hit) => ({
               kind: hit.kind ?? "note",
@@ -442,11 +453,14 @@ export const searchAll = async (
         skipped.push({ resource, code: error.code, reason: error.message, ...refusal(error, request.text) })
       }
     }
+    if (cosines.size > 0 && !request.exact)
+      for (const [ref, cosine] of await wordsOnlyCosines(store, lists.flat(), cosines, request, command, embedders))
+        scored.set(ref, cosine)
   } finally {
     await embedders.close()
   }
 
-  const ordered = oneList(lists, cosines)
+  const ordered = oneList(lists, wordsRank, (ref) => cosines.get(ref) ?? scored.get(ref))
   const more = hasMore || ordered.length > window
   const { backend: _backend, server: _server, ...local } = asked
   const unmatched = []
@@ -474,23 +488,109 @@ export const searchAll = async (
 }
 
 /**
- * Every source's hits as one list: each source's best hit first, then every other hit by cosine, then by its rank in
- * its source. Taking turns by rank (MEMO-37) gave each of two sources half of a ten-hit page however weak its hits;
- * one model scores every source, so cosine compares across them (IDEA-249). A hit only words found takes the cosine of
- * the hit above it in its source: its source ranked it there, and with none it would follow every hit meaning found.
+ * The cosine of each note and mail words alone found, against the vector the lanes asked with: one model scores
+ * every source, so a hit meaning did not reach still gets the meaning rank its own vector earns. A hit with no vector
+ * of the model (not embedded yet) gets none.
  */
-const oneList = (lists: SearchAllItem[][], cosines: Map<string, number>): SearchAllItem[] => {
-  const place = new Map<string, { item: SearchAllItem; rank: number; cosine: number }>()
-  for (const list of lists) {
-    let above = Number.NEGATIVE_INFINITY
-    list.forEach((item, rank) => {
-      above = cosines.get(item.ref) ?? above
-      const held = place.get(item.ref)
-      if (!held || rank < held.rank) place.set(item.ref, { item, rank, cosine: above })
-    })
+const wordsOnlyCosines = async (
+  store: MessageStore,
+  items: SearchAllItem[],
+  cosines: Map<string, number>,
+  request: SearchAllRequest,
+  command: string | undefined,
+  embedders: ReturnType<typeof runEmbedders>,
+): Promise<Map<string, number>> => {
+  const scored = new Map<string, number>()
+  const open = items.filter(({ ref }) => !cosines.has(ref))
+  const notes = open.filter(({ kind }) => kind === "note" || kind === "document").map(({ ref }) => ref)
+  const mail = open.filter(({ kind }) => kind === "mail").map(({ ref }) => ref)
+  const text = meaningText(request.text)
+  if (!text || notes.length + mail.length === 0) return scored
+  let local: ReturnType<typeof localModel>
+  try {
+    local = localModel(undefined, request.env, command)
+  } catch {
+    return scored
   }
-  const head = (rank: number) => Math.min(rank, 1)
-  return [...place.values()]
-    .sort((a, b) => head(a.rank) - head(b.rank) || b.cosine - a.cosine || a.rank - b.rank)
+  const [query] = await withLocal(
+    local.model,
+    local.directory,
+    undefined,
+    (embedder) => embedder.embed([text], "query"),
+    embedders,
+  )
+  const vector = query as Float32Array
+  if (notes.length)
+    for (const { ref, score } of await store.notes.scoreNotes(local.key, vector, notes)) scored.set(ref, score)
+  const stored = mail.length ? await store.accounts.storedAccounts() : []
+  for (const ref of mail) {
+    const at = parseLocator(ref)
+    const accountId = stored.find(({ provider, account }) => provider === at.provider && account === at.account)?.id
+    if (accountId === undefined) continue
+    const near = await store.mail.nearest(local.key, vector, {
+      accountId: Number(accountId),
+      threadExternalId: at.chat,
+      limit: MAIL_THREAD_DEPTH,
+    })
+    const own = near.find(({ externalId }) => externalId === at.message)
+    if (own) scored.set(ref, own.score)
+  }
+  return scored
+}
+
+/** Enough of one thread's emails to hold the hit's own; a thread is read whole when its index is scanned. */
+const MAIL_THREAD_DEPTH = 200
+
+/** How the one list fuses its two ranks: RRF's constant, and whether each source's best hit comes first. */
+export interface FusionRule {
+  k: number
+  head: boolean
+}
+
+/** k = 3 and no head start measured best on the knowledge-graph benchmark; 60, 10 and 5, and a head start, lost. */
+export const FUSION: FusionRule = { k: 3, head: false }
+
+/**
+ * Every source's hits as one list, by reciprocal rank fusion of two ranks each record has: its place in its own
+ * source's words list, and its place among every hit of every source by cosine (one model scores them all, so
+ * cosine compares across sources; IDEA-249). An exact word at words rank 1 stays near the top with a middling
+ * cosine, and a hit with no vector keeps its words rank alone. A source with no words order (one ranked list) takes
+ * its list's order as its words rank.
+ */
+export const oneList = (
+  lists: SearchAllItem[][],
+  wordsRank: Map<string, number>,
+  cosine: (ref: string) => number | undefined,
+  { k, head }: FusionRule = FUSION,
+): SearchAllItem[] => {
+  const place = new Map<string, { item: SearchAllItem; rank: number; words?: number; cos?: number }>()
+  for (const list of lists)
+    list.forEach((item, rank) => {
+      const held = place.get(item.ref)
+      if (held && held.rank <= rank) return
+      const words = wordsRank.get(item.ref) ?? (item.foundBy.some((by) => by !== "meaning") ? rank : undefined)
+      const cos = cosine(item.ref)
+      place.set(item.ref, {
+        item,
+        rank,
+        ...(words === undefined ? {} : { words }),
+        ...(cos === undefined ? {} : { cos }),
+      })
+    })
+  const all = [...place.values()]
+  const byCosine = all.filter(({ cos }) => cos !== undefined).sort((a, b) => (b.cos as number) - (a.cos as number))
+  const meaningRank = new Map(byCosine.map(({ item }, rank) => [item.ref, rank]))
+  const score = ({ item, words }: (typeof all)[number]) =>
+    (words === undefined ? 0 : 1 / (k + words + 1)) +
+    (meaningRank.has(item.ref) ? 1 / (k + (meaningRank.get(item.ref) as number) + 1) : 0)
+  const fused = new Map(all.map((one) => [one.item.ref, score(one)]))
+  const first = (rank: number) => (head ? Math.min(rank, 1) : 0)
+  return all
+    .sort(
+      (a, b) =>
+        first(a.rank) - first(b.rank) ||
+        (fused.get(b.item.ref) as number) - (fused.get(a.item.ref) as number) ||
+        a.rank - b.rank,
+    )
     .map(({ item }) => item)
 }

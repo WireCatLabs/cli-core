@@ -385,6 +385,8 @@ export interface NotesFound {
   pictures?: { ref: string; score: number }[]
   /** Why pictures were asked for and none were searched. */
   pictures_skipped?: string
+  /** The notes words found, best first, title matches ahead: `search all` ranks across sources by it. */
+  words_order: string[]
 }
 
 export interface NotesQuery {
@@ -845,6 +847,10 @@ export const searchNotes = async (
     by: meaning === undefined ? "words" : "words and meaning",
     ...(meaningSkipped === undefined ? {} : { meaning_skipped: meaningSkipped }),
     hits,
+    words_order: [
+      ...tier.map(({ ref }) => ref),
+      ...matched.items.map(({ ref }) => ref).filter((ref) => !tierRefs.has(ref)),
+    ],
     total,
     has_more: hasMore,
     ...(hasMore && window <= MAX_NOTES_OFFSET ? { next_offset: window } : {}),

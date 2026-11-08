@@ -13,7 +13,7 @@ import { MEANING_DEPTH, type MeaningLane, type MeaningRanked } from "./messages-
 import { plainWords } from "./pictures.js"
 
 // The text notes embed: `search all` compares cosines across sources, so all must embed one text (IDEA-249).
-const meaningText = (question: string): string => {
+export const meaningText = (question: string): string => {
   try {
     const text = questionLookup(question) === undefined ? question : questionText(question)
     const root = validateFields(parseLucene(text, { ...SEARCH_QUERY, defaultField: "text" })).root

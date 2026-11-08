@@ -62,7 +62,7 @@ const search = (store: MessageStore, text: string, lane: MeaningLane) =>
   )
 
 describe("search all's one list of mail and notes", () => {
-  it("**gives the page to the hits meaning scored**: mail at its rank 3 to 6 goes ahead of notes it did not", async () => {
+  it("ranks a note with no vector by its words rank among the mail meaning ranks, each source in its own order", async () => {
     const mails = ["Ana Lee", "Ben Ash", "Cal Moss", "Dee Rook", "Eve Hart", "Tess Ng"].map(
       (name) => `${name}: the team retreat deposit is paid.`,
     )
@@ -72,9 +72,11 @@ describe("search all's one list of mail and notes", () => {
     const found = await search(store, "harbour", nearest([0, 1, 2, 3, 4, 5]))
 
     const kinds = found.items.map(({ kind }) => kind)
-    expect(kinds.filter((kind) => kind === "mail")).toHaveLength(6)
-    expect(kinds.slice(0, 2).sort()).toEqual(["mail", "note"])
-    expect(kinds.slice(2, 7)).toEqual(Array(5).fill("mail"))
+    expect(kinds.slice(0, 6).filter((kind) => kind === "mail")).toHaveLength(3)
+    const mail = found.items
+      .filter(({ kind }) => kind === "mail")
+      .map(({ text }) => text.split(":")[0]?.replace(/^Update \d+ /, ""))
+    expect(mail).toEqual(["Ana Lee", "Ben Ash", "Cal Moss", "Dee Rook", "Eve Hart"])
   })
 
   it("keeps a rare word that only words find on the page, above every hit meaning found", async () => {

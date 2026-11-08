@@ -9,6 +9,7 @@ shape of this file.
 
 ### Added
 
+- **`searchNotes` answers `words_order`**: the notes words found, best first, title matches ahead.
 - **The weekly gaps message (`report/weekly-gaps`).** A morning digest may keep what it found on its own, which the
   agenda did not show, in `internal.gaps` (`{ what, refs | ref, section }`); the digest never shows it. Once a week a
   delivered digest run also sends those gaps along the same routes as one message: on Monday, or on the first digest
@@ -33,6 +34,14 @@ shape of this file.
   `knowledge.changedSources({ since })` reads the cited sources a check found changed since then and that differ
   from the version cited, with the same exclusions, so a change the timer's check already took still reaches an
   agent.
+
+### Fixed
+
+- **`search all` ranks every source's hits by reciprocal rank fusion of a words rank and a meaning rank.** Each record
+  keeps its place in its own source's words list and gets its place among all hits by cosine; a note or mail words
+  alone found has its own cosine computed, about 26 ms a search. An exact word at words rank 1 stays near the top
+  with a middling cosine; a hit with no vector keeps its words rank. It replaces giving such a hit the cosine of the
+  hit above it.
 
 ## 0.614.0 — 08.11.2026
 
