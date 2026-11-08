@@ -164,7 +164,13 @@ describe("writesWithOf over the store's profiles", () => {
       ["work", portal],
       ["south", other],
     ])
-    expect(writesWithOf(portal, profilesFor)).toEqual({ tool: "b24", profile: "work", profiles: ["work"], why: null })
+    expect(writesWithOf(portal, profilesFor)).toEqual({
+      tool: "b24",
+      account: portal,
+      profile: "work",
+      profiles: ["work"],
+      why: null,
+    })
   })
 
   it("**never picks between two profiles** on one account", async () => {
@@ -174,6 +180,7 @@ describe("writesWithOf over the store's profiles", () => {
     ])
     expect(writesWithOf(portal, profilesFor)).toEqual({
       tool: "b24",
+      account: portal,
       profile: null,
       profiles: ["work", "sales"],
       why: "2 b24 profiles are on bitrix24:northstar.example: work, sales; the owner chooses one",
@@ -184,6 +191,7 @@ describe("writesWithOf over the store's profiles", () => {
     const profilesFor = await withStore([["south", other]])
     expect(writesWithOf(portal, profilesFor)).toEqual({
       tool: "b24",
+      account: portal,
       profile: null,
       profiles: [],
       why: "no b24 profile has run on bitrix24:northstar.example here; run `b24 <profile>` with it once",
@@ -195,9 +203,54 @@ describe("writesWithOf over the store's profiles", () => {
     expect(writesWithOf(null, profilesFor)).toBeNull()
     expect(writesWithOf({ provider: "amocrm", account: "x.example" }, profilesFor)).toEqual({
       tool: null,
+      account: { provider: "amocrm", account: "x.example" },
       profile: null,
       profiles: [],
       why: "no CLI has registered amocrm in this store yet; run its CLI once",
     })
+  })
+
+  it("names a profile re-pointed to another portal only for its new portal's rows", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "writes-with-"))
+    const store = await openStore({ path: join(directory, "store.db") })
+    try {
+      await store.accounts.registerProvider({ name: "bitrix24", kind: "crm", aliases: ["b24"], command: "b24" })
+      await store.accounts.saveProfile("b24", "work", portal)
+      await store.accounts.saveProfile("b24", "work", other)
+      const profilesFor = storedProfilesFor(await store.accounts.profiles())
+      expect(writesWithOf(portal, profilesFor)).toMatchObject({ profile: null, profiles: [] })
+      expect(writesWithOf(other, profilesFor)).toMatchObject({ account: other, profile: "work" })
+    } finally {
+      await store.close()
+      rmSync(directory, { recursive: true, force: true })
+    }
+  })
+
+  it("never names a profile the caller's lock forbids, and answers the one it leaves", async () => {
+    const profilesFor = await withStore([
+      ["work", portal],
+      ["sales", portal],
+    ])
+    const only = (allowed: string[]) => ({ allowed: (_tool: string, profile: string) => allowed.includes(profile) })
+    expect(writesWithOf(portal, profilesFor, only(["sales"]))).toEqual({
+      tool: "b24",
+      account: portal,
+      profile: "sales",
+      profiles: ["sales"],
+      why: null,
+    })
+    expect(writesWithOf(portal, profilesFor, only([]))).toEqual({
+      tool: "b24",
+      account: portal,
+      profile: null,
+      profiles: [],
+      why: "no b24 profile on bitrix24:northstar.example is allowed in this run",
+    })
+    expect(writesWithOf(portal, profilesFor, only(["work", "sales"]))).toMatchObject({
+      profile: null,
+      profiles: ["work", "sales"],
+    })
+    const one = await withStore([["work", portal]])
+    expect(writesWithOf(portal, one, only(["sales"]))).toMatchObject({ profile: null, profiles: [] })
   })
 })

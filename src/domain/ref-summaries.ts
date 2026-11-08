@@ -74,23 +74,50 @@ export const storedProfilesFor =
     }
   }
 
-/** Which CLI changes a CRM copy on its server, and as which profile; `profile` is `null` unless exactly one fits. */
+/**
+ * Which CLI changes a CRM copy on its server, and as which profile; `profile` is `null` unless exactly one fits.
+ * `account` is the row's: the write refuses a row of any other account than its profile's live one.
+ */
 export interface WritesWith {
   tool: string | null
+  account: AccountKey
   profile: string | null
   profiles: string[]
   why: string | null
 }
 
-/** `null` for the owner's own row: memo itself writes it. */
-export const writesWithOf = (account: AccountKey | null, profilesFor: ProfilesFor): WritesWith | null => {
+const keyText = (key: AccountKey) => `${key.provider}:${key.account}`
+
+/**
+ * `null` for the owner's own row: memo itself writes it. `allowed` is the caller's profile or group lock: a profile it
+ * forbids is never named, and the one profile it leaves is the answer.
+ */
+export const writesWithOf = (
+  account: AccountKey | null,
+  profilesFor: ProfilesFor,
+  { allowed }: { allowed?: (tool: string, profile: string) => boolean } = {},
+): WritesWith | null => {
   if (account === null) return null
   const tool = providerNamed(account.provider)?.command ?? null
-  if (tool === null) return { tool, profile: null, profiles: [], why: unregistered(account.provider) }
+  if (tool === null) return { tool, account, profile: null, profiles: [], why: unregistered(account.provider) }
   const asked = profilesFor(account.provider, account.account)
-  return "profile" in asked
-    ? { tool, profile: asked.profile, profiles: [asked.profile], why: null }
-    : { tool, profile: null, profiles: asked.profiles, why: asked.why }
+  const named = "profile" in asked ? [asked.profile] : asked.profiles
+  const kept = allowed ? named.filter((profile) => allowed(tool, profile)) : named
+  if (kept.length === 1 && ("profile" in asked || allowed))
+    return { tool, account, profile: kept[0] as string, profiles: kept, why: null }
+  if (kept.length === named.length && !("profile" in asked))
+    return { tool, account, profile: null, profiles: asked.profiles, why: asked.why }
+  return {
+    tool,
+    account,
+    profile: null,
+    profiles: kept,
+    why:
+      kept.length === 0
+        ? `no ${tool} profile on ${keyText(account)} is allowed in this run`
+        : `${kept.length} ${tool} profiles allowed in this run are on ${keyText(account)}: ${kept.join(", ")}; ` +
+          "the owner chooses one",
+  }
 }
 
 /** A title from someone else's text, as one line: a newline in it would break every row it is printed in. */

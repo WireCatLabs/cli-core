@@ -11,11 +11,14 @@ shape of this file.
 
 - **`writesWithOf(account, profilesFor)` and `storedProfilesFor(profiles)`** (`./cli`): which CLI and profile change a
   CRM copy on its server, so memo's `deals list`, `leads list` and `pipelines list` can name the writer of each row as
-  `writes_with: { tool, profile, profiles, why }`. `tool` is the command that registered the row's provider;
+  `writes_with: { tool, account, profile, profiles, why }`. `tool` is the command that registered the row's provider;
   `profile` is set only when exactly one of that CLI's profiles is recorded on the row's account, otherwise it is
   `null` and `profiles` and `why` say what there is to choose. The owner's own row answers `null`. The profiles come
   from the store's record, which every run of a CLI saves, so a profile appears once it has run with that account.
   `profilesOn(profiles, app, key)` is the filter both use.
+  `writesWithOf(…, { allowed })` takes the caller's profile or group lock: a profile it forbids is never named, and
+  the one it leaves is the answer. A write already refuses a row of another account than its profile's live one
+  (`not_found`), so a profile re-pointed to another portal cannot change the old portal's rows.
 
 ## 0.610.0 — 08.11.2026
 
