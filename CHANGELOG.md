@@ -25,6 +25,15 @@ shape of this file.
   stored and previewed, but mail still sends the plain-text rendering. `store.templates` and
   `storedTemplateBodies(database, key, language)` from `@wirecat/cli-core/store`.
 
+### Fixed
+
+- **A mail-gated agent no longer runs again on the input its last run ended on.** One refusal the agent could not
+  get past (a findings key already taken) turned into a paid run every 5 minutes until the day's cost cap. The
+  timer (`schedule exec`) now keeps the SHA-256 of a `--on-new-mail` agent's input in `last.json` (`inputHash`);
+  when the next input is the same and that run exited 0, its mark did not move, so the run is left out with
+  `skipped.reason` `mail.same-input` (`SKIP_REASONS.mailSameInput`). New mail changes the input and runs normally;
+  `schedule run` by hand always runs. `runSchedule(…, { skipRepeatedInput: true })` turns it on for another timer.
+
 ## 0.614.0 — 08.11.2026
 
 ### Added
