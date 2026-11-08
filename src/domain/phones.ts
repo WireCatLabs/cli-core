@@ -71,3 +71,56 @@ export const nationalPhone = (
   }
   return undefined
 }
+
+export interface PhoneOptions {
+  /** Where a number written without `+` is read, first match first: the store's `phone_countries`. */
+  phoneCountries?: readonly string[]
+}
+
+/**
+ * A number typed into a search, read as if a phone word stood before it, and the national number every stored
+ * spelling of it ends with — at least 8 digits, so a short tail does not match unrelated numbers.
+ */
+export const typedPhone = (
+  typed: string,
+  { phoneCountries = DEFAULT_PHONE_COUNTRIES }: PhoneOptions = {},
+): { value: string; national: string | null } | undefined => {
+  const text = typed.trim()
+  if (!/^\+?[\d\s().\-–]+$/.test(text)) return undefined
+  const digits = text.replace(/\(0\)/, "").replace(/\D/g, "").replace(/^00/, "")
+  if (digits.length < 7 || digits.length > 15) return undefined
+  const national = nationalPhone(digits, phoneCountries, { anyType: true })
+  const tail = national?.national ?? digits.replace(/^0+/, "")
+  return {
+    value: text.startsWith("+") || /^00/.test(text) ? `+${digits}` : (national?.value ?? digits),
+    national: tail.length >= 8 ? tail : null,
+  }
+}
+
+/**
+ * A phone as a source typed it, as E.164: `null` for a number written without `+` or `00` when no region is given,
+ * nothing when it is no phone. Only the source says which country a national number is from: the store's
+ * `phone_countries` setting reads `4155550100` as Russian, so it never decides an identifier.
+ */
+export const e164Of = (phone: string, region: string | undefined): string | null | undefined => {
+  if (/^\s*(\+|00)/.test(phone)) return typedPhone(phone)?.value
+  if (typedPhone(phone) === undefined) return undefined
+  if (region === undefined) return null
+  const digits = phone.replace(/\(0\)/, "").replace(/\D/g, "")
+  return nationalPhone(digits, [region], { anyType: true })?.value
+}
+
+/** The messengers that keep a contact's number as bare international digits, the `+` left off. */
+export const BARE_INTERNATIONAL_PROVIDERS: readonly string[] = ["telegram", "max", "whatsapp"]
+
+/**
+ * The E.164 number a stored phone column stands for. A number written with `+` or `00` is read however it is spaced;
+ * a `phone` identity keeps it whole. Bare digits are international only from a messenger that stores them so; from a
+ * CRM or a card they are a national number, whose country nothing names, so they match nothing.
+ */
+export const storedPhone = (raw: string, provider: string): string | undefined => {
+  if (/^\s*(\+|00)/.test(raw)) return typedPhone(raw)?.value
+  if (!BARE_INTERNATIONAL_PROVIDERS.includes(provider)) return undefined
+  const found = /^([1-9]\d{6,14})$/.exec(raw.trim())
+  return found ? `+${found[1]}` : undefined
+}

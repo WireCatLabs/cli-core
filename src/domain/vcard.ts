@@ -1,6 +1,5 @@
 import { createHash } from "node:crypto"
-import { typedPhone } from "./mentions.js"
-import type { PhoneCountry } from "./phones.js"
+import { e164Of, type PhoneCountry } from "./phones.js"
 import { WORD_BODY } from "./record-types.js"
 import type { EnvelopeRecord, RecordRelation, RecordsEnvelope } from "./records.js"
 
@@ -134,13 +133,8 @@ const components = (value: string): string[] => {
 const textOf = (property: Property, report: Report) => components(decoded(property, report)).join(";").trim()
 
 /** E.164, or `undefined` when the number has no country of its own and none is given. */
-const e164 = (typed: string, region: PhoneCountry | undefined): string | undefined => {
-  const text = typed.replace(/^tel:/i, "").replace(/;.*$/, "").trim()
-  const international = /^(\+|00)/.test(text)
-  if (!international && region === undefined) return undefined
-  const value = typedPhone(text, region === undefined ? {} : { phoneCountries: [region] })?.value
-  return value?.startsWith("+") ? value : undefined
-}
+const e164 = (typed: string, region: PhoneCountry | undefined): string | undefined =>
+  e164Of(typed.replace(/^tel:/i, "").replace(/;.*$/, "").trim(), region) ?? undefined
 
 const foldedName = (name: string) => name.normalize("NFKC").toLowerCase().replace(/\s+/g, " ").trim()
 
