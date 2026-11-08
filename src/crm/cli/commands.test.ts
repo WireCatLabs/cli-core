@@ -18,7 +18,14 @@ import type { AppIdentity } from "../../ports/app.js"
 import { SendJournal, sendsPathFor } from "../../sends/journal.js"
 import type { Level } from "../../sends/permissions.js"
 import { type MessageStore, openStore } from "../../store/store.js"
-import { exampleDeal, exampleLead, exampleOrganization, examplePerson, fakeCrmSource } from "../testing/index.js"
+import {
+  exampleDeal,
+  exampleLead,
+  exampleOrganization,
+  examplePerson,
+  fakeCrmSource,
+  SALES_PIPELINE,
+} from "../testing/index.js"
 import { type CrmWriteCapabilities, crmAlsoChecks } from "../writer.js"
 import { addCrmCommands, type CrmCommandOptions, type CrmRun } from "./index.js"
 
@@ -102,8 +109,9 @@ const setup = async (
   source.put("lead", exampleLead("l1"))
   const runOf: CrmRun = { profile: "work", account: PORTAL, store, source: () => source, writes, ...extra }
   let data = ""
-  const cli = async (...args: string[]) => {
-    const root = new Command("crm")
+  let root = new Command("crm")
+  const printed = async (args: string[], tty = false) => {
+    root = new Command("crm")
       .exitOverride()
       .configureOutput({ writeErr: () => undefined, writeOut: () => undefined })
       .option("--json")
@@ -117,10 +125,14 @@ const setup = async (
     addCrmCommands(root, { app: APP, open: async () => runOf, ...mount })
     provide(root, {
       streams: { data: (text: string) => (data += text), diagnostic: () => undefined },
-      tty: false,
+      tty,
     } as never)
     data = ""
-    await root.parseAsync([...args, "--json"], { from: "user" })
+    await root.parseAsync(args, { from: "user" })
+    return data
+  }
+  const cli = async (...args: string[]) => {
+    await printed([...args, "--json"])
     const envelope = JSON.parse(data) as Record<string, unknown> & { item?: unknown; items?: unknown[] }
     const schema = answerEntitySchema(commandAt(root, args))
     if (!schema) throw new Error(`${args.join(" ")} declares no answer entity`)
@@ -134,7 +146,7 @@ const setup = async (
     }
     return envelope as Record<string, unknown> & { item: Record<string, unknown>; items: Record<string, unknown>[] }
   }
-  return { store, source, cli, journal, alsoChecks }
+  return { store, source, cli, printed, journal, alsoChecks }
 }
 
 describe("CRM commands", () => {
@@ -205,6 +217,57 @@ describe("CRM commands", () => {
     const own = await store.deals.add({ by: "owner", kind: "lead", title: "Owner's own lead" })
     await expect(cli("leads", "show", own.ref)).rejects.toMatchObject({ code: "not_found" })
     await expect(cli("deals", "show", "12")).rejects.toMatchObject({ code: "validation_error" })
+  })
+
+  it("pipelines show is the board: each stage's deals and their sum per currency, exact and apart", async () => {
+    const { cli, printed, source } = await setup()
+    source.setPipelines("lead", [])
+    source.put("deal", exampleDeal("d3", { amount: "0.10", currency: "EUR" }))
+    source.put("deal", exampleDeal("d4", { amount: "0.20", currency: "EUR" }))
+    source.put("deal", exampleDeal("d5", { stage: "quote", amount: "200", currency: "USD" }))
+    source.put("deal", exampleDeal("d6"))
+    await cli("sync")
+    const board = await cli("pipelines", "show")
+    expect(board.item).toMatchObject({ name: "Example sales", kind: "deal", account: PORTAL })
+    expect(board.item.stages).toEqual([
+      expect.objectContaining({
+        name: "New",
+        outcome: "open",
+        items: 4,
+        amounts: [{ amount: "1500.80", currency: "EUR", items: 3 }],
+      }),
+      expect.objectContaining({
+        name: "Quote sent",
+        items: 1,
+        amounts: [{ amount: "200.00", currency: "USD", items: 1 }],
+      }),
+      expect.objectContaining({ name: "Won", outcome: "won", items: 1, amounts: [] }),
+      expect.objectContaining({ name: "Lost", outcome: "lost", items: 0, amounts: [] }),
+    ])
+    const text = await printed(["pipelines", "show"], true)
+    expect(text).toContain("Example sales (pipeline:")
+    expect(text).toContain("1 500.80 EUR")
+    expect(text).toContain("in open stages: 5 · 1 500.80 EUR, 200.00 USD")
+    expect(text).toContain("won: 1 · lost: 0 · win rate 100%")
+  })
+
+  it("pipelines show names the pipeline when the CRM has several, and never reads the owner's own", async () => {
+    const { cli, source, store } = await setup()
+    source.setPipelines("deal", [SALES_PIPELINE, { ...SALES_PIPELINE, externalId: "deal-2", name: "Example repairs" }])
+    source.put("deal", exampleDeal("d3", { pipeline: "deal-2", amount: "50", currency: "EUR" }))
+    await cli("sync")
+    const refused = cli("pipelines", "show")
+    await expect(refused).rejects.toMatchObject({
+      code: "validation_error",
+      details: { reason: "crm.pipeline-required", param: "pipeline", allowed: expect.any(Array) },
+    })
+    await expect(refused).rejects.toThrow(/3 pipelines; name one: Example leads \(pipeline:\d+\), Example repairs/)
+    const repairs = await cli("pipelines", "show", "example repairs")
+    expect(repairs.item.stages).toContainEqual(
+      expect.objectContaining({ name: "New", items: 1, amounts: [{ amount: "50.00", currency: "EUR", items: 1 }] }),
+    )
+    await store.deals.addPipeline({ by: "owner", kind: "deal", name: "Own", stages: ["Lead"] })
+    await expect(cli("pipelines", "show", "Own")).rejects.toMatchObject({ code: "not_found" })
   })
 
   it("a sync its page budget stops answers partial, with the step that goes on", async () => {

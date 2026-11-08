@@ -277,7 +277,7 @@ const OTHERS: Entry[] = [
   ["pipeline.not-found", "not_found", "no stored pipeline has that name or reference"],
   validation("crm.stage-unknown", "a CRM item stands in a stage the store does not hold; it was not kept"),
   validation("crm.item-invalid", "a CRM item has a field the store refuses, such as a currency it does not keep"),
-  validation("crm.pipeline-required", "the CRM has more than one pipeline of the kind; the write names one"),
+  validation("crm.pipeline-required", "the CRM has more than one pipeline of the kind; the command names one"),
   validation("field.unknown", "no custom field of the kind has that code or label; `fields list` lists them"),
   validation("field.ambiguous", "more than one custom field has that label; name one by its code"),
   validation("field.unknown-option", "the list field has no option with that id or label"),

@@ -31,10 +31,12 @@ import {
   createCrmItem,
   fieldPairsOf,
   moveCrmItem,
+  pipelineOf,
   removeCrmItem,
   updateCrmItem,
 } from "../writes.js"
 import { csvFormatOption, renderCsv } from "./csv.js"
+import { pipelineView } from "./pipeline-view.js"
 import { addCrmSearchAll } from "./search-all.js"
 
 /**
@@ -207,11 +209,15 @@ const dealKeys = snakeKeysKeeping(["providerMetadata"])
 const marked = <T extends object>(items: T[], untrusted: string[]) =>
   items.map((item) => ({ ...(dealKeys(item) as object), untrusted }))
 
-export type CrmWithin = (command: Command, work: (run: CrmRun) => Promise<Body>) => Promise<void>
+export type CrmWithin = (
+  command: Command,
+  work: (run: CrmRun) => Promise<Body>,
+  view?: (body: Body) => string,
+) => Promise<void>
 
 const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions): void => {
   const now = () => options.now?.() ?? Date.now()
-  const within: CrmWithin = (command, work) =>
+  const within: CrmWithin = (command, work, view) =>
     inCommandRun(command, async () => {
       const run = await options.open(command, { readOnly: metaOf(command).effects?.local !== "write" })
       let body: Body
@@ -220,7 +226,7 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
       } finally {
         await run.close?.()
       }
-      renderAnswer(command, outputFor(command), body)
+      renderAnswer(command, outputFor(command), body, view)
     })
   const example = (command: Command, ...lines: string[]) =>
     annotate(command, { examples: lines.map((line) => `${options.app.command} work ${line}`) })
@@ -586,14 +592,25 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
   })
   example(
     annotate(pipelines.command("show"), { effects: LOCAL_READ, output: { entity: "pipeline" } })
-      .description("one pipeline with its funnel: how many reached each stage, how many went on, and the win rate")
-      .argument("<pipeline>", "pipeline:<id>, or a name only one of the CRM's pipelines has"),
+      .description(
+        "one pipeline as a board and a funnel: how many stand in each stage and their sum per currency, never " +
+          "converted, how many reached it and went on, and the win rate; won and lost stages are marked by outcome",
+      )
+      .argument(
+        "[pipeline]",
+        "pipeline:<id>, or a name only one of the CRM's pipelines has; needed unless the CRM has one pipeline in all",
+      ),
     "pipelines show pipeline:3",
-  ).action(async (reference: string, _opts: unknown, command: Command) => {
-    await within(command, async (run) => {
-      const report = await run.store.deals.pipeline(reference, { account: run.account })
-      return itemOf({ ...(snakeKeys(report) as object), untrusted: PIPELINE_UNTRUSTED })
-    })
+    "pipelines show Sales --json",
+  ).action(async (reference: string | undefined, _opts: unknown, command: Command) => {
+    await within(
+      command,
+      async (run) => {
+        const report = await pipelineOf(run, undefined, reference, "pipeline")
+        return itemOf({ ...(snakeKeys(report) as object), untrusted: PIPELINE_UNTRUSTED })
+      },
+      (body) => pipelineView(body, outputFor(command).color),
+    )
   })
 
   const stages = annotate(program.command("stages"), { effects: NO_EFFECTS }).description(
