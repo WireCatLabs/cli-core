@@ -7,6 +7,19 @@ shape of this file.
 
 ## 0.612.0 — 08.11.2026
 
+### Added
+
+- **`account remove`, built once for every tool.** `<tool> <profile> account remove --keep-data|--delete-data` signs
+  the profile out with the tool's own `signOut` hook, then forgets it here: its keyring entries, its
+  `state/accounts/<profile>.json`, the tool's own state files and its sections in the config file; other profiles stay.
+  `--delete-data` also purges the account from the shared store (`store.accounts.purge`) and deletes the tool's data
+  files; `--keep-data` leaves its messages in the store, still searchable, and says so under `kept`. It asks first, or
+  `--yes`; under `--json` without `--yes` it answers `confirmation_required`; `--dry-run` lists every entry, section and
+  file. It refuses while a serve or a sync holds the profile, a path outside the tool's own folders, and runs neither
+  over MCP nor under `<PREFIX>_READ_ONLY`. The answer is the entity `account_removal`; reasons `account-remove.*`.
+  A messenger opts in with `Messenger.accountRemoval`; any other CLI mounts `accountRemoveCommand(app, hooks)`
+  ([guide](docs/dev/ACCOUNT-REMOVAL.md)). `store.accounts.forgetProfile` forgets which account a profile was.
+
 ### Changed — may break callers
 
 - **`models consents` is offered only when the tool asks for it** with `modelCatalogueCommand(app, { enrichment:

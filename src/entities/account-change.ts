@@ -1,7 +1,7 @@
 import * as v from "valibot"
 import { account } from "./account.js"
 import { accountSession } from "./account-session.js"
-import { id } from "./fields.js"
+import { id, text } from "./fields.js"
 
 export const accountChange = v.strictObject({ operation_id: id, account: v.omit(account, ["provider", "scope"]) })
 export const endedAccountSessions = v.strictObject({ operation_id: id, sessions: v.array(accountSession) })
@@ -20,3 +20,15 @@ export const accountPrivacy = v.strictObject({
   last_seen: v.optional(shownAudience),
 })
 export const accountPrivacyChange = v.strictObject({ operation_id: id, privacy: accountPrivacy })
+
+const removalKind = v.picklist(["sign_in", "keyring", "config", "file", "store"])
+export const accountRemoval = v.strictObject({
+  profile: text,
+  data: v.picklist(["kept", "deleted"]),
+  dry_run: v.boolean(),
+  account: v.nullable(v.strictObject({ provider: text, account: text })),
+  revoked: v.nullable(v.boolean()),
+  config_file: text,
+  removed: v.array(v.strictObject({ kind: removalKind, target: text })),
+  kept: v.array(v.strictObject({ kind: removalKind, target: text, reason: text })),
+})
