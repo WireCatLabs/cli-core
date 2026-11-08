@@ -1300,11 +1300,16 @@
       }
     },
     "account remove": {
-      "in": "all",
+      "in": [],
       "options": {
         "--delete-data": "all",
         "--dry-run": "all",
         "--keep-data": "all"
+      },
+      "planned": {
+        "max": "account remove: adopt Messenger.accountRemoval (WireCat Desktop removal)",
+        "tg": "account remove: adopt Messenger.accountRemoval (WireCat Desktop removal)",
+        "wa": "account remove: adopt Messenger.accountRemoval (WireCat Desktop removal)"
       }
     },
     "account sessions": {
