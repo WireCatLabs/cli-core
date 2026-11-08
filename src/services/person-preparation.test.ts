@@ -193,3 +193,71 @@ describe("contacts prepare, meetings", () => {
     expect(found.prepare.coverage.notes.withheld).toBe("contacts.notes.list")
   })
 })
+
+describe("contacts prepare across personal and work", () => {
+  const scoped = async () => {
+    db.prepare("UPDATE accounts SET scope='work' WHERE provider='telegram' AND external_id='501'").run()
+    const project = async (name: string, scope: "personal" | "work") => {
+      const made = await store.knowledge.addProject({ name })
+      db.prepare("UPDATE projects SET scope=? WHERE id=?").run(scope, Number(made.id))
+      await store.knowledge.relate(null, {
+        by: "owner",
+        from: `person:${uid}`,
+        to: made.ref,
+        kind: "member-of",
+        confirmed: true,
+      })
+      return made
+    }
+    const home = await project("Home Example", "personal")
+    const office = await project("Office Example", "work")
+    const about = `person:${uid}`
+    await store.facts.add({ type: "fact", statement: "Personal fact", subject: about, scope: "personal", by: "owner" })
+    await store.facts.add({ type: "fact", statement: "Work fact", subject: about, scope: "work", by: "owner" })
+    await store.facts.add({ type: "fact", statement: "Unscoped fact", subject: about, by: "owner" })
+    await store.facts.add({ type: "fact", statement: "Office fact", subject: office.ref, by: "owner" })
+    await store.notes.addNote({ text: "Personal note", about: [about] })
+    await store.notes.addNote({ text: "Office note", about: [office.ref, about] })
+    for (const [made, title] of [
+      [home, "Home task"],
+      [office, "Office task"],
+    ] as const) {
+      const task = await store.tasks.create({ project: made.ref, title, type: "chore" }, "owner")
+      await store.tasks.assign(task.ref, { to: about, role: "assignee" }, "owner")
+    }
+  }
+  const sections = (found: Awaited<ReturnType<typeof personPreparation>>) => ({
+    facts: found.prepare.facts.map((fact) => fact.statement).sort(),
+    notes: found.prepare.notes.map((note) => note.text).sort(),
+    tasks: found.prepare.tasks.map((task) => task.title).sort(),
+  })
+
+  it("shows a personal account no work fact, note or task", async () => {
+    await scoped()
+    const found = await personPreparation(store, tg, "11")
+    expect(sections(found)).toEqual({
+      facts: ["Personal fact", "Unscoped fact"],
+      notes: ["Personal note"],
+      tasks: ["Home task"],
+    })
+    expect(found.prepare.coverage.facts.scopes).toEqual(["personal"])
+  })
+
+  it("shows a work account no personal fact, note or task", async () => {
+    await scoped()
+    const found = await personPreparation(store, otherTg, "11")
+    expect(sections(found)).toEqual({
+      facts: ["Office fact", "Work fact"],
+      notes: ["Office note"],
+      tasks: ["Office task"],
+    })
+    expect(found.prepare.coverage.notes.scopes).toEqual(["work"])
+  })
+
+  it("reads both and says so when the caller allows both scopes", async () => {
+    await scoped()
+    const found = await personPreparation(store, tg, "11", { scopes: ["personal", "work"] })
+    expect(sections(found).facts).toEqual(["Office fact", "Personal fact", "Unscoped fact", "Work fact"])
+    expect(found.prepare.coverage.tasks.scopes).toEqual(["personal", "work"])
+  })
+})

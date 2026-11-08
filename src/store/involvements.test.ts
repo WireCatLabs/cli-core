@@ -58,11 +58,11 @@ it("rebuilds a person's ordered timeline across sources and uses the person inde
       )
       .run(identity)
     expect(store.involvements.rebuild(person)).toBe(2)
-    expect(store.involvements.forPerson(person, { scope: "work" })).toMatchObject([
+    expect(store.involvements.forPerson(person, { scopes: ["work"] })).toMatchObject([
       { subjectType: "email", role: "recipient", occurredAt: 200 },
       { subjectType: "message", role: "sender", occurredAt: 100 },
     ])
-    expect(store.involvements.forPerson(person, { scope: "personal" })).toEqual([])
+    expect(store.involvements.forPerson(person, { scopes: ["personal"] })).toEqual([])
     expect(store.involvements.rebuild()).toBe(2)
     expect(
       database

@@ -266,7 +266,8 @@ export const contactsCommand = (messenger: Messenger): Command => {
       .summary("one person's activity across their linked identities")
       .description(
         "everything one person took part in, in every messenger linked to them — messages they wrote or were " +
-          "mentioned in, chats, mail, meetings, tasks — newest first, from the store; never connects",
+          "mentioned in, chats, mail, meetings, tasks — newest first, from the store; only in this account's scope, " +
+          "personal or work, and scope: of the other one is refused; never connects",
       )
       .argument("<person>", "their id, @username, or part of their name"),
     CONTACT_ACTIVITY_QUERY,

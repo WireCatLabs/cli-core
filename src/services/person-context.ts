@@ -179,19 +179,30 @@ const eventsOnce = async (
 
 const nameOf = ({ provider, account }: AccountKey) => `${provider}:${account}`
 
+const readable = async (store: MessageStore, asked: AccountKey, scopes?: readonly AccountScope[]) => {
+  const stored = await store.accounts.storedAccounts()
+  const own = stored.find((one) => nameOf(one) === nameOf(asked))
+  if (!own || (asked.scope !== undefined && asked.scope !== own.scope))
+    throw new CliError("not_found", `no ${asked.provider} account ${asked.account} in the store`)
+  return { stored, allowed: scopes ?? [own.scope] }
+}
+
 /** The stored accounts of `scopes`, or of the asked account's own scope; the asked account must be stored. */
 export const readableAccounts = async (
   store: MessageStore,
   asked: AccountKey,
   scopes?: readonly AccountScope[],
 ): Promise<StoredAccount[]> => {
-  const stored = await store.accounts.storedAccounts()
-  const own = stored.find((one) => nameOf(one) === nameOf(asked))
-  if (!own || (asked.scope !== undefined && asked.scope !== own.scope))
-    throw new CliError("not_found", `no ${asked.provider} account ${asked.account} in the store`)
-  const allowed = scopes ?? [own.scope]
+  const { stored, allowed } = await readable(store, asked, scopes)
   return stored.filter((one) => allowed.includes(one.scope))
 }
+
+/** `scopes`, or the asked account's own scope: what a read that belongs to no account may show. */
+export const readableScopes = async (
+  store: MessageStore,
+  asked: AccountKey,
+  scopes?: readonly AccountScope[],
+): Promise<readonly AccountScope[]> => (await readable(store, asked, scopes)).allowed
 
 /**
  * The accounts each identity is read in, among `readable` only: for the messenger asked, only the account asked

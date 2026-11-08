@@ -1,6 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import { notOverriddenSql, usableLinkSql } from "../../domain/relations.js"
-import type { AccountKey } from "../types.js"
+import type { AccountKey, StoredAccount } from "../types.js"
 import { linkKind } from "./link-kinds.js"
 import type { StoreContext } from "./open.js"
 import { taskIdOf } from "./things.js"
@@ -37,21 +37,30 @@ export interface PersonPreparationRead {
 }
 
 const GLOBAL_PROJECT = "SELECT id FROM main.projects WHERE account_id IS NULL AND deleted_at IS NULL"
+const IN_SCOPES = "IN (SELECT value FROM json_each(?))"
+const projectScope = (id: string) => `(SELECT p.scope FROM main.projects p WHERE p.id=${id})`
 const iso = (value: unknown) => (value == null ? null : new Date(Number(value)).toISOString())
 
 /**
  * The accepted facts, the owner's notes and the open tasks about one person. A project bound to an account is that
- * account's: its facts never come along, and its tasks only when `accounts` holds it.
+ * account's: its facts never come along, and its tasks only when `accounts` holds it. What belongs to no account
+ * comes only in `scopes`: a fact in its own scope, else its project's, a note in its project's, a global project's
+ * task in that project's. Anything else unscoped is personal, the side a work view never reads.
  */
 export const personPreparation = (
   { database, now }: Pick<StoreContext, "database" | "now">,
   uid: string,
-  { accounts, limit }: { accounts: readonly AccountKey[]; limit: number },
+  {
+    accounts,
+    scopes,
+    limit,
+  }: { accounts: readonly AccountKey[]; scopes: readonly StoredAccount["scope"][]; limit: number },
 ): PersonPreparationRead => {
   const person = Number(uid)
   if (!/^[1-9]\d*$/.test(uid) || !Number.isSafeInteger(person) || !Number.isSafeInteger(limit) || limit < 1)
     throw new CliError("validation_error", "person preparation takes a person id and a positive limit")
   const page = <T>(rows: T[]) => ({ items: rows.slice(0, limit), hasMore: rows.length > limit })
+  const inScopes = JSON.stringify(scopes)
   return read(database, () => {
     const projects = `SELECT l.to_id FROM links l WHERE l.from_type='person' AND l.from_id=? AND l.to_type='project'
       AND l.kind=${linkKind("member-of")} AND ${usableLinkSql("l", now())} AND ${notOverriddenSql("l")} AND l.to_id IN (${GLOBAL_PROJECT})`
@@ -63,9 +72,10 @@ export const personPreparation = (
           OR f.project_id IN (${projects}))
         AND (f.subject_type IS NOT 'project' OR f.subject_id IN (${GLOBAL_PROJECT}))
         AND (f.project_id IS NULL OR f.project_id IN (${GLOBAL_PROJECT}))
+        AND coalesce(f.scope,${projectScope("coalesce(f.project_id,CASE WHEN f.subject_type='project' THEN f.subject_id END)")},'personal') ${IN_SCOPES}
         ORDER BY f.updated_at DESC, f.id DESC LIMIT ?`,
       )
-      .all(person, person, person, limit + 1)
+      .all(person, person, person, inScopes, limit + 1)
       .map((row) => ({
         ref: `fact:${row.id}`,
         type: String(row.type),
@@ -82,9 +92,10 @@ export const personPreparation = (
         AND ((n.notable_type='person' AND n.notable_id=?) OR EXISTS(SELECT 1 FROM links l WHERE l.from_type='note'
           AND l.from_id=n.id AND l.to_type='person' AND l.to_id=? AND l.kind=${linkKind("about")} AND l.confirmed=1))
         AND (n.notable_type='person' OR (n.notable_type='project' AND n.notable_id IN (${GLOBAL_PROJECT})))
+        AND CASE WHEN n.notable_type='project' THEN ${projectScope("n.notable_id")} ELSE 'personal' END ${IN_SCOPES}
         ORDER BY n.updated_at DESC, n.id DESC LIMIT ?`,
       )
-      .all(person, person, limit + 1)
+      .all(person, person, inScopes, limit + 1)
       .map((row) => ({
         ref: `note:${row.id}`,
         title: row.title == null ? null : String(row.title),
@@ -97,12 +108,17 @@ export const personPreparation = (
         `SELECT t.id,t.title,t.due_at,t.project_id,t.source_locator,t.created_at,group_concat(DISTINCT ta.role) AS role
         FROM task_assignments ta JOIN tasks t ON t.id=ta.task_id JOIN main.projects p ON p.id=t.project_id
         WHERE ta.assignee_type='person' AND ta.assignee_id=? AND t.deleted_at IS NULL AND t.status NOT IN ('done','dismissed')
-        AND p.deleted_at IS NULL AND (p.account_id IS NULL OR p.account_id IN (SELECT a.id FROM accounts a
+        AND p.deleted_at IS NULL AND ((p.account_id IS NULL AND p.scope ${IN_SCOPES}) OR p.account_id IN (SELECT a.id FROM accounts a
           JOIN json_each(?) k ON a.provider=json_extract(k.value,'$.provider')
           AND a.external_id=json_extract(k.value,'$.account')))
         GROUP BY t.id ORDER BY t.due_at IS NULL, t.due_at, t.created_at, t.id LIMIT ?`,
       )
-      .all(person, JSON.stringify(accounts.map(({ provider, account }) => ({ provider, account }))), limit + 1)
+      .all(
+        person,
+        inScopes,
+        JSON.stringify(accounts.map(({ provider, account }) => ({ provider, account }))),
+        limit + 1,
+      )
       .map((row) => ({
         ref: `task:${taskIdOf(database, Number(row.id))}`,
         title: String(row.title),

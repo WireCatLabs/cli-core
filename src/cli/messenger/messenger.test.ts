@@ -3724,7 +3724,18 @@ describe("the shared read commands", () => {
     const rest = await timeline("--limit", "1", "--cursor", cut.page.next_cursor)
     expect(rest.items.map((item: { locator: string }) => item.locator)).toEqual(["msg:telegram/500/31/1"])
     expect(rest.page.has_more).toBe(false)
-    expect((await timeline("scope:work")).items).toEqual([])
+    const otherScope = await call(
+      ["contacts", "events", "21", "scope:work", "--offline", "--json"],
+      never,
+      env,
+      {},
+      { provider: "telegram" },
+    )
+    expect(otherScope.code).not.toBe(0)
+    expect(JSON.parse(otherScope.stderr.at(-1) ?? "").error).toMatchObject({
+      code: "permission_error",
+      reason: "selection.out-of-scope",
+    })
   })
 
   it("contacts show adds the messenger's profile and their stored activity per shared chat, the phone whole unless --hide-phone", async () => {
