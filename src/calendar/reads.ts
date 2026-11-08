@@ -131,6 +131,7 @@ export const EVENT_TYPES: readonly EntryEventType[] = [
   "working-location",
   "birthday",
   "from-mail",
+  "call",
 ]
 
 const oneSided = (field: string, example: string) => (node: Predicate) => {

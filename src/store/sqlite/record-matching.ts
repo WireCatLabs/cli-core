@@ -201,7 +201,7 @@ export const matchOf = (context: StoreContext, type: IdentityType, ids: Identifi
 const IMPORT = "import"
 
 /** The identity of `(provider, externalId)`, made when the store has none; never another person's. */
-const identityPk = (
+export const importedIdentity = (
   { database, now }: StoreContext,
   identity: { provider: string; externalId: string; name: string | null; email?: string; phone?: string },
 ): number => {
@@ -230,7 +230,7 @@ const identityPk = (
 }
 
 /** Gives a person the record brought these identifiers; an identity another person already has stays theirs. */
-const linkToPerson = (context: StoreContext, person: number, identity: number, source: EnvelopeSource) => {
+export const linkToPerson = (context: StoreContext, person: number, identity: number, source: EnvelopeSource) => {
   const { database, now } = context
   if (database.prepare("SELECT 1 FROM identity_links WHERE identity_id = ?").get(identity)) return
   if (identitySeparated(context, identity, person)) return
@@ -262,25 +262,26 @@ export const addIdentifiers = (
   if (type === "person") {
     const [email] = ids.emails
     const [phone] = ids.phones
-    if (ids.contact) linkToPerson(context, id, identityPk(context, { ...ids.contact, name, email, phone }), source)
+    if (ids.contact)
+      linkToPerson(context, id, importedIdentity(context, { ...ids.contact, name, email, phone }), source)
     for (const address of ids.emails)
       linkToPerson(
         context,
         id,
-        identityPk(context, { provider: "email", externalId: address, name, email: address }),
+        importedIdentity(context, { provider: "email", externalId: address, name, email: address }),
         source,
       )
     for (const value of ids.phones)
       linkToPerson(
         context,
         id,
-        identityPk(context, { provider: "phone", externalId: value, name, phone: value }),
+        importedIdentity(context, { provider: "phone", externalId: value, name, phone: value }),
         source,
       )
   }
   if (type === "organization")
     for (const { provider, value } of ids.organization) {
-      const identity = identityPk(context, { provider, externalId: value, name })
+      const identity = importedIdentity(context, { provider, externalId: value, name })
       const at = now()
       database
         .prepare(

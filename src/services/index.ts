@@ -23,8 +23,10 @@ export {
   type IngestLinesOptions,
   type IngestOptions,
   type IngestReceipt,
+  type IngestVcardOptions,
   ingest,
   ingestLines,
+  ingestVcard,
   jsonlLines,
 } from "./ingest.js"
 export {

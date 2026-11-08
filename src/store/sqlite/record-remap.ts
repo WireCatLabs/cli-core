@@ -57,6 +57,14 @@ export const recordRemapOver = ({ database, now }: StoreContext) => {
               `AND ${role.column}_type = ? AND ${role.column}_id = ?`,
           )
           .run(to.type, to.id, at, entityId, from.type, from.id)
+      // An SMS's identity link moves with the person's identities below; a call's link to the person moves here.
+      if (role.linked && type === "event")
+        database
+          .prepare(
+            "UPDATE OR IGNORE links SET to_id = ?, updated_at = ? WHERE from_type = 'event' AND from_id = ? " +
+              "AND to_type = ? AND to_id = ? AND source = 'import'",
+          )
+          .run(to.id, at, entityId, from.type, from.id)
     }
   }
 
