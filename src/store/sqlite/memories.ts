@@ -15,6 +15,7 @@ import {
 } from "./evidence-signature.js"
 import { type EvidenceSource, evidenceSourcesOf } from "./evidence-sources.js"
 import { linkKind } from "./link-kinds.js"
+import { idsOf } from "./merged-persons.js"
 import { CORPORA, corpusIndexState, drainCorpus, type NoteIndexState } from "./note-index.js"
 import { requiredThing } from "./notes.js"
 import type { StoreContext } from "./open.js"
@@ -435,14 +436,14 @@ export const memoriesStoreOver = (
       const by = proposedBySql("m.author_type", "m.author_id", options.proposedBy)
       return database
         .prepare(
-          `${NAMED} WHERE m.deleted_at IS NULL AND (? IS NULL OR (m.subject_type = ? AND m.subject_id = ?)) ` +
+          `${NAMED} WHERE m.deleted_at IS NULL AND (? IS NULL OR (m.subject_type = ? AND m.subject_id IN (SELECT value FROM json_each(?)))) ` +
             "AND (? IS NULL OR m.project_id = ?) AND (? IS NULL OR m.kind = ?) AND (? IS NULL OR m.status = ?) AND (? IS NULL OR m.scope = ?) " +
             `AND ${by.sql} ORDER BY m.created_at DESC, m.id DESC LIMIT ?`,
         )
         .all(
           subject?.type ?? null,
           subject?.type ?? null,
-          subject?.id ?? null,
+          subject ? idsOf(database, subject.type, subject.id) : null,
           project,
           project,
           options.kind ?? null,
@@ -513,14 +514,14 @@ export const memoriesStoreOver = (
         .prepare(
           "SELECT m.*, b.name AS author_name, b.kind AS author_kind FROM memory_words w JOIN memories m ON m.id = w.rowid " +
             "LEFT JOIN bots b ON m.author_type = 'bot' AND b.id = m.author_id WHERE memory_words MATCH ? " +
-            "AND m.deleted_at IS NULL AND (? IS NULL OR (m.subject_type = ? AND m.subject_id = ?)) " +
+            "AND m.deleted_at IS NULL AND (? IS NULL OR (m.subject_type = ? AND m.subject_id IN (SELECT value FROM json_each(?)))) " +
             "AND (? IS NULL OR m.scope = ?) ORDER BY bm25(memory_words), m.id LIMIT ?",
         )
         .all(
           match,
           subject?.type ?? null,
           subject?.type ?? null,
-          subject?.id ?? null,
+          subject ? idsOf(database, subject.type, subject.id) : null,
           scope ?? null,
           scope ?? null,
           Math.min(Math.max(limit, 1), 200),

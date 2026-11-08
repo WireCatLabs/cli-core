@@ -10,6 +10,7 @@ import { findNames, findUnknownNames, type KnownPerson, nameIndex } from "../../
 import { createStemmer } from "../../search/stem.js"
 import type { CacheDatabase } from "../driver.js"
 import { mentionField, mentionText } from "./lucene-fields.js"
+import { currentPerson } from "./merged-persons.js"
 import { storePhoneCountries } from "./phone-countries.js"
 import { placeOf } from "./place-key.js"
 
@@ -96,8 +97,16 @@ export const knownPeople = (database: CacheDatabase): KnownPerson[] => {
     )
     .all()
   const people = new Map<number, KnownPerson>()
+  const owners = new Set(
+    database
+      .prepare("SELECT id FROM persons WHERE owner = 1")
+      .all()
+      .map((row) => Number(row.id)),
+  )
   for (const row of rows) {
-    const id = Number(row.id)
+    // Only a person's own alias can sit on a merged-away person; it names whoever that person is now.
+    const id = Number(row.alias) ? currentPerson(database, Number(row.id)) : Number(row.id)
+    if (owners.has(id)) continue
     const person = people.get(id) ?? { id, names: [], aliases: [] }
     ;(Number(row.alias) ? (person.aliases as string[]) : person.names).push(String(row.name))
     people.set(id, person)
