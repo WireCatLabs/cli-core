@@ -174,6 +174,17 @@ export {
 export type { AgentAction, AgentActionInput, AgentActionsStore } from "./sqlite/agent-actions.js"
 export { resetAttachmentWords } from "./sqlite/attachment-texts.js"
 export { backfillNormalized, pendingNormalization } from "./sqlite/backfill.js"
+export {
+  type BaseColumn,
+  type BaseScope,
+  type BaseSet,
+  type BaseStagesStore,
+  baseSettingKey,
+  DEFAULT_BASE_STAGES,
+  type MappingFilter,
+  type StageMapping,
+  type StageName,
+} from "./sqlite/base-stages.js"
 export type { BotUpdate, BotUpdateStore } from "./sqlite/bot-updates.js"
 export type {
   Contract,

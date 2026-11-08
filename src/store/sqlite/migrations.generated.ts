@@ -1216,5 +1216,13 @@ export const GENERATED: { name: string; statements: string[] }[] = [
       "CREATE TABLE `templates_history` (\n\t`id` integer PRIMARY KEY,\n\t`key` text NOT NULL,\n\t`channel` text NOT NULL,\n\t`language` text NOT NULL,\n\t`body` text NOT NULL,\n\t`saved_at` integer NOT NULL,\n\t`saved_by` text NOT NULL,\n\t`replaced_at` integer NOT NULL\n);",
       "CREATE INDEX `templates_history_by_key_channel_language_id` ON `templates_history` (`key`,`channel`,`language`,`id`);"
     ]
+  },
+  {
+    "name": "20261108170238_version-60-base-stages",
+    "statements": [
+      "ALTER TABLE `pipeline_stages` ADD `base_stage_id` integer REFERENCES pipeline_stages(id);",
+      "ALTER TABLE `pipeline_stages` ADD `base_confirmed` integer DEFAULT 0 NOT NULL;",
+      "CREATE INDEX `pipeline_stages_by_base_stage_id` ON `pipeline_stages` (`base_stage_id`);"
+    ]
   }
 ]
