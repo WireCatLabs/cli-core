@@ -22,12 +22,26 @@ On a pull request parity builds each CLI at the branch with the same name as the
 that CLI has one, and at its `main` otherwise, so a change paired with adoption branches in the CLIs can pass
 before they merge ([`scripts/parity/app-ref.sh`](../../scripts/parity/app-ref.sh)).
 Parity's `downstream` job builds every CLI listed in
-[`scripts/parity/downstream.json`](../../scripts/parity/downstream.json) against the branch, in parallel, and runs what
-that CLI's own pull request runs first: `pnpm typecheck`, `pnpm lint:commands`, and `pnpm generate && pnpm docs:check`
-(the pages are regenerated first: that they differ from the pinned release's is not a break). A release also runs
-each CLI's `pnpm test` there, and publishes nothing when one fails. One check, `validation / parity / downstream`,
-sums the matrix. A new CLI on cli-core is one line in that file; a private repository cannot be listed (the job
-checks out without a token).
+[`scripts/parity/downstream.json`](../../scripts/parity/downstream.json) against the branch, in parallel. One required
+check, `validation / parity / downstream`, sums the matrix
+([`scripts/parity/downstream-result.sh`](../../scripts/parity/downstream-result.sh)); its summary has a row per CLI.
+A new CLI on cli-core is one line in that file; a private repository cannot be listed (the job checks out without a
+token).
+
+What a CLI's failure does:
+
+- **Blocks:** the CLI no longer builds against the branch, fails `pnpm typecheck`, or fails to start (`<cli> --help`,
+  with a throwaway home and no D-Bus, so no real profile or keyring). A release also runs each CLI's `pnpm test`, and
+  a failing test blocks too: nothing is published.
+- **Warns:** `pnpm lint:commands --allow-stale` and `pnpm generate && pnpm docs:check`. A stale lint entry or a docs
+  difference is cleanup the CLI owes on its next bump, not a broken CLI; the check stays green and names it.
+- **Breaking on purpose:** a pull request may break a CLI when it means to. Add the label `breaks-downstream`, say in
+  the body which CLIs break and why, then re-run the `downstream` job (the label is read when the job runs). The check
+  passes and its summary names the broken CLIs. Each CLI then adopts the change before it bumps cli-core.
+- **At release** no label applies: the release commit is bin/release's own, not the pull request that broke a CLI.
+  A release whose CLIs still break on `main` builds their adoption branches instead (`bin/release --app-ref
+  <branch>`), or waits until those CLIs have adopted.
+
 A pull request that changes only `CHANGELOG.md` and `package.json`'s version against a `main` whose pull request
 passed every required check on the same tree (bin/release's fold and version pull requests) runs `pnpm docs:check`
 and the changelog shape test instead, and reports the other required checks as passed, saying why
