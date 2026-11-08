@@ -5,6 +5,37 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Added
+
+- **`people.merges(uid)`, `people.undoMerge(to, from, by)` and `people.split(uid, identities, by)`.** `merges` lists
+  the people merged into a person, each with the identities from it that are still there, the method, who and when,
+  under an id `merge:<to>-<from>` (`parseMergeId` reads it back). `undoMerge` moves those identities back to the old
+  person, whose uid stays the same, and leaves any the owner split or unlinked off since; a chain of merges undoes
+  newest first. `split` moves the chosen identities to one new person. Both are the owner's only
+  (`identity.owner-only`; pass `"owner"` only from a path that established the owner ran it), and an automatic match
+  by the same address does not join those people again. `undoMerge` refuses with `identity.stale` when one of the
+  identities was merged on into another person since.
+
+### Changed — may break callers
+
+- **`people.personByUid` of a person merged into someone else answers with that person.** Its `uid` is the
+  current person's, not the one asked for, and `mergedInto` is set; `personSeenInAccounts` follows the same merge.
+  A caller that compares the answer's `uid` with the one it passed reads `mergedInto` instead.
+- **`unlinkIdentity` records its move with method `unlink`, whatever method the caller passes,** so a separation is
+  never listed as a merge.
+
+### Fixed
+
+- **A person shows once after a merge.** The person a merge emptied stayed in `taskPeople`, so memo's `people list`
+  and `search people` showed the same person two or three times. It is skipped now and its tasks count for the person
+  it was merged into. Rows that name the old uid keep it, so undoing loses nothing, and the filters by a person read
+  them with the current person: memories, facts, notes, documents' `person:`, relationships, the task board's
+  `assignee:` and preparation, and assigning the old uid to a task the current person holds is a no-op.
+  A source's sync that reports a relationship on the current person withdraws what it reported on the old one, so
+  the relationship shows once.
+
 ## 0.612.0 — 08.11.2026
 
 ### Changed — may break callers

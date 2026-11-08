@@ -5,6 +5,7 @@ import { accountPk } from "./accounts.js"
 import { crmLinkMode } from "./crm-settings.js"
 import { linkKind } from "./link-kinds.js"
 import type { Author } from "./memories.js"
+import { idsOf } from "./merged-persons.js"
 import type { StoreContext } from "./open.js"
 import { relationProposalsOver } from "./relation-proposals.js"
 import { checkStoredRole } from "./relation-roles.js"
@@ -209,17 +210,19 @@ export const syncReportedIn = (
   for (const [end, ref] of kinds ? ends : []) {
     const thing = thingOf(database, ref)
     if (!thing) continue
+    // What the source said about a person since merged into this one is withdrawn too, or it would show twice.
+    const ids = idsOf(database, thing.type, thing.id)
     // A partnership is stored once, either way round, so either end covers it.
     const match =
       end === "from"
-        ? `((from_type = ? AND from_id = ?) OR (kind = ${linkKind("partner-of")} AND to_type = ? AND to_id = ?))`
-        : `((to_type = ? AND to_id = ?) OR (kind = ${linkKind("partner-of")} AND from_type = ? AND from_id = ?))`
+        ? `((from_type = ? AND from_id IN (SELECT value FROM json_each(?))) OR (kind = ${linkKind("partner-of")} AND to_type = ? AND to_id IN (SELECT value FROM json_each(?))))`
+        : `((to_type = ? AND to_id IN (SELECT value FROM json_each(?))) OR (kind = ${linkKind("partner-of")} AND from_type = ? AND from_id IN (SELECT value FROM json_each(?))))`
     const rows: Row[] = database
       .prepare(
         `SELECT id FROM links WHERE account_id = ? AND confirmed = 0 AND deleted_at IS NULL AND kind IN (${kinds}) ` +
           `AND ${match}${roles ? ` AND ifnull(role, '') IN (${roles})` : ""}`,
       )
-      .all(accountId, thing.type, thing.id, thing.type, thing.id, ...(scope.roles ?? []))
+      .all(accountId, thing.type, ids, thing.type, ids, ...(scope.roles ?? []))
     for (const row of rows)
       if (!seen.has(Number(row.id))) {
         seen.add(Number(row.id))

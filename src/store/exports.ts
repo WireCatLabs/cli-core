@@ -93,6 +93,7 @@ export {
   savedOwnerLanguages,
   saveOwnerLanguages,
 } from "./sqlite/owner-languages.js"
+export { mergeId, type PersonMerge, parseMergeId } from "./sqlite/person-merges.js"
 export type {
   PersonPreparationRead,
   PreparationFact,

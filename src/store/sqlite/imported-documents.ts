@@ -1,6 +1,7 @@
 import { defineQuery, type QueryAst, validateQuery } from "@wirecat/cli-base/query"
 import { normalizeTag } from "../../domain/tags.js"
 import type { CacheDatabase } from "../driver.js"
+import { idsOf } from "./merged-persons.js"
 import type { Note } from "./notes.js"
 import { type ColumnMap, queryFilter, type Where } from "./query-filter.js"
 import { canonicalTagNamed } from "./tags.js"
@@ -60,8 +61,8 @@ export const importedDocumentWhere = (database: CacheDatabase, query: QueryAst):
         return {
           sql:
             "EXISTS (SELECT 1 FROM links l WHERE l.from_type = 'document' AND l.from_id = d.id " +
-            "AND l.to_type = ? AND l.to_id = ?)",
-          params: [found.type, found.id],
+            "AND l.to_type = ? AND l.to_id IN (SELECT value FROM json_each(?)))",
+          params: [found.type, idsOf(database, found.type, found.id)],
         }
       },
     },
