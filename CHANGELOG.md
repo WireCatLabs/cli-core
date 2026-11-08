@@ -17,6 +17,10 @@ shape of this file.
 ### Fixed
 
 - **A CSV cell prints a phone or an e-mail by its value**, where an object without a `name` was printed as JSON.
+- **A CRM sync no longer slows down with every deal it saves** (#2623). Looking up a reported relationship read every
+  link of its busier end, such as a deal owner with thousands of deals, because SQLite could not use the
+  relationship's unique key. On synthetic data with 10 deal owners, a first sync of 20,000 deals, 10,000 leads and
+  20,000 contacts takes 30 s instead of 61 s, and a `--rescan` 21 s instead of 71 s.
 
 ## 0.608.0 — 08.11.2026
 
