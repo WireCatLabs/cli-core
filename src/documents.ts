@@ -5,5 +5,20 @@ export { attachmentMaxBytes } from "./attachments/limits.js"
 export type { Sheet, SheetCell } from "./attachments/sheets.js"
 export { columnName, sheetText } from "./attachments/sheets.js"
 export * from "./documents/index.js"
+export { isPublicAddress } from "./fetch/addresses.js"
+export {
+  type FetchedPage,
+  type FetchPageOptions,
+  fetchPage,
+  nodeTransport,
+  PAGE_LIMITS,
+  PAGE_USER_AGENT,
+  type PageLimits,
+  type PageLookup,
+  type PageRequest,
+  type PageResponse,
+  type PageTransport,
+  type ResolvedAddress,
+} from "./fetch/page.js"
 export { registerReader } from "./readers/registry.js"
 export type { ReadContext, Reader, Section } from "./readers/types.js"
