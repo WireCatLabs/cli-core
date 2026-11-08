@@ -9,12 +9,6 @@ shape of this file.
 
 ### Fixed
 
-- **A free-text role from before the role lists no longer blocks an update.** Store version 61 moves a person's role
-  on a project or an organization that is not on its list (the built-in roles and the owner's own) into `roleNote`
-  and leaves the role unset, so a later update can set a listed role and no words are lost. The old role stays in
-  the relationship's history. Of two such rows of one relationship, the oldest moves; none moves beside a row of
-  the same relationship with no role. The change is additive: `minCompatible` stays 56, and an older build reads the
-  link with no role.
 - **One notification per digest while WireCat Desktop runs.** Desktop announces a new morning digest itself, so a
   finished run showed two system notices. A schedule's run now leaves its own success notice out when
   `<state>/schedules/desktop.json` names a live pid and lists the schedule in `announces` (Desktop writes it while it
@@ -26,6 +20,8 @@ shape of this file.
   when the next input is the same and that run exited 0, its mark did not move, so the run is left out with
   `skipped.reason` `mail.same-input` (`SKIP_REASONS.mailSameInput`). New mail changes the input and runs normally;
   `schedule run` by hand always runs. `runSchedule(…, { skipRepeatedInput: true })` turns it on for another timer.
+- **`account remove` is in the messenger parity manifest** (`parity.json`), with `--keep-data`, `--delete-data`
+  and `--dry-run`, so tg, max and wa can adopt it without failing `parity:check`.
 
 ### Added
 
@@ -64,11 +60,6 @@ shape of this file.
 - **`store.notes.addedSource(ref)` reads an added source back with what it is and what was kept**: `kind`, the `url`
   as given, `fileName`, `mime`, `size`, `kept` and the `copy` path, beside its document; `undefined` for any other
   document or a removed source. The `AddedSourceDetails` type is exported.
-
-### Fixed
-
-- **`account remove` is in the messenger parity manifest** (`parity.json`), with `--keep-data`, `--delete-data`
-  and `--dry-run`, so tg, max and wa can adopt it without failing `parity:check`.
 
 ## 0.614.0 — 08.11.2026
 
