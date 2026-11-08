@@ -1,0 +1,15 @@
+{%- comment -%}
+Telegram HTML: only <b>, <i> and <a href> survive, and an href only to a link of the view model.
+Every string is already escaped. Lines are written with {{ nl }}; tags trim the source's own.
+{%- endcomment -%}
+{%- capture nl %}
+{% endcapture -%}
+🔍 <b>What the digest found on its own this week</b>
+{{- nl }}<i>Not in the day's selection · {{ runs }} {% if plural == "one" %}digest{% else %}digests{% endif %}, {{ from.date }} to {{ to.date }}</i>
+{%- if items.size == 0 %}{{ nl }}{{ nl }}Nothing was missed.{% endif -%}
+{%- for item in items -%}
+  {{ nl }}{{ nl }}• {{ item.what }}
+  {{- nl }}<i>{% if item.seen > 1 %}in {{ item.seen }} digests, last on {% endif %}{{ item.last.date }}</i>
+  {%- for link in item.links %} · <a href="{{ link.url }}">{{ link.label }}</a>{% endfor -%}
+{%- endfor -%}
+{%- if more > 0 %}{{ nl }}{{ nl }}{{ more }} more{% endif -%}

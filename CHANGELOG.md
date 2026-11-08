@@ -9,6 +9,17 @@ shape of this file.
 
 ### Fixed
 
+- **One notification per digest while WireCat Desktop runs.** Desktop announces a new morning digest itself, so a
+  finished run showed two system notices. A schedule's run now leaves its own success notice out when
+  `<state>/schedules/desktop.json` names a live pid and lists the schedule in `announces` (Desktop writes it while it
+  runs, wirecat-desktop#214). A marker whose pid is gone counts for nothing; failure notices and deliveries do not
+  change.
+- **A mail-gated agent no longer runs again on the input its last run ended on.** One refusal the agent could not
+  get past (a findings key already taken) turned into a paid run every 5 minutes until the day's cost cap. The
+  timer (`schedule exec`) now keeps the SHA-256 of a `--on-new-mail` agent's input in `last.json` (`inputHash`);
+  when the next input is the same and that run exited 0, its mark did not move, so the run is left out with
+  `skipped.reason` `mail.same-input` (`SKIP_REASONS.mailSameInput`). New mail changes the input and runs normally;
+  `schedule run` by hand always runs. `runSchedule(…, { skipRepeatedInput: true })` turns it on for another timer.
 - **Busy sync runs no longer fail with "database is locked".** Each writable open read the schema version under the
   write lock, without the retry other writes use, so with several tools syncing at once it gave up after 5 s. A
   current store is now checked without the lock, and a migration takes it with the retry. Listing mail pieces to
@@ -18,6 +29,41 @@ shape of this file.
 - **The real error of a failed write is shown.** When SQLite had already rolled a transaction back itself (an I/O
   error, a full disk), the store's own rollback failed with "cannot rollback - no transaction is active", and that
   message replaced the real one.
+
+### Added
+
+- **The weekly gaps message (`report/weekly-gaps`).** A morning digest may keep what it found on its own, which the
+  agenda did not show, in `internal.gaps` (`{ what, refs | ref, section }`); the digest never shows it. Once a week a
+  delivered digest run also sends those gaps along the same routes as one message: on Monday, or on the first digest
+  of a week whose Monday run did not send them, and never before a schedule's first Monday. It reads the run files
+  of the last 7 days, says a gap that several runs found once (the same ref, or the same words but for case and
+  punctuation) with how many digests found it, the most frequent first, and sends nothing for a week without gaps.
+  No agent runs for it. When it went, how many gaps and the deliveries are in the schedule's `weekly-gaps.json`.
+- **A failed scheduled run sends a rendered notice (`notice/schedule-failed`).** In place of the one English line,
+  every route of a schedule that notifies on failures gets which schedule failed, since when and how many runs in a
+  row, the cause in the owner's language (keyring locked, sign-in needed, service unreachable, service error,
+  settings, stopped, crashed: from the error code, never its message) and one "fix" link to the tool's sync screen
+  (`sync/<tool>`). A notice whose templates fail sends the old line. The desktop notice is unchanged.
+- Default templates for both, for Telegram, email and text in Russian and English, with the digest's escaping and
+  platform rules; `templates edit | preview` now take both keys, checked against their own synthetic samples.
+- **A source check names what changed, and a source review's text can be read.** `knowledge.checkSources` also
+  answers `changedRefs`: the sources found changed in that run, whether they raised a review or still said the
+  quoted words, that no open `evidence_findings` batch cites, leaving out deleted sources and cited memories or facts.
+  An agent reads those again for new facts. `knowledge.sourceReviewTexts(id)` gives each source of a
+  `memory_source_review` with its quote, its text as cited (notes, documents and messages keep history) and its text
+  now, so a reader compares them while the review itself holds no source text. The shared `memory` and `fact`
+  entities take an optional `source_review: { id, cause } | null`, the marker reads already carry.
+  `knowledge.changedSources({ since })` reads the cited sources a check found changed since then and that differ
+  from the version cited, with the same exclusions, so a change the timer's check already took still reaches an
+  agent.
+- **`store.notes.addedSource(ref)` reads an added source back with what it is and what was kept**: `kind`, the `url`
+  as given, `fileName`, `mime`, `size`, `kept` and the `copy` path, beside its document; `undefined` for any other
+  document or a removed source. The `AddedSourceDetails` type is exported.
+
+### Fixed
+
+- **`account remove` is in the messenger parity manifest** (`parity.json`), with `--keep-data`, `--delete-data`
+  and `--dry-run`, so tg, max and wa can adopt it without failing `parity:check`.
 
 ## 0.614.0 — 08.11.2026
 

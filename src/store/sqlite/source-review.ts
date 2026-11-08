@@ -1,11 +1,20 @@
 import { CliError } from "@wirecat/cli-base"
 import { assertMayDecide, type Decider, deciderAuthor } from "../decisions.js"
-import { SOURCE_REVIEW_KIND, type SourceCheck, type SourceReviewSource } from "../source-review.js"
+import { EVIDENCE_FINDINGS_KIND } from "../evidence-findings.js"
+import {
+  type ChangedSource,
+  SOURCE_REVIEW_KIND,
+  type SourceCheck,
+  type SourceReviewPayload,
+  type SourceReviewSource,
+  type SourceReviewText,
+} from "../source-review.js"
 import {
   type EvidenceSignature,
   evidenceSignature,
   resignEvidence,
   sourceHolds,
+  sourceTextAt,
   storedEvidenceMetadata,
 } from "./evidence-signature.js"
 import { linkKind } from "./link-kinds.js"
@@ -147,6 +156,19 @@ export const sourceReviewOver = (context: StoreContext) => {
       )
   }
 
+  /** Every reference an open evidence findings batch cites, so a changed source already being read is not offered. */
+  const inExtraction = (): Set<string> =>
+    new Set(
+      database
+        .prepare(
+          "SELECT DISTINCT json_extract(e.value, '$.reference') AS ref FROM proposed_actions p, " +
+            "json_each(p.payload, '$.findings') f, json_each(f.value, '$.evidence') e " +
+            "WHERE p.kind = ? AND p.status = 'proposed' AND json_valid(p.payload)",
+        )
+        .all(EVIDENCE_FINDINGS_KIND)
+        .flatMap((row) => (typeof row.ref === "string" ? [row.ref] : [])),
+    )
+
   const cursor = (): number =>
     Number(database.prepare("SELECT value FROM store_settings WHERE key = ?").get(CURSOR)?.value ?? 0)
 
@@ -170,7 +192,8 @@ export const sourceReviewOver = (context: StoreContext) => {
         throw new CliError("validation_error", "a source check takes 1–10000 evidence links")
       return write(database, () => {
         const at = now()
-        const counts: SourceCheck = { checked: 0, baselined: 0, raised: 0, refreshed: 0, closed: 0 }
+        const counts: SourceCheck = { checked: 0, baselined: 0, raised: 0, refreshed: 0, closed: 0, changedRefs: [] }
+        const changed = new Set<string>()
         const raised = new Map<string, { target: ReviewTarget; sources: SourceReviewSource[] }>()
         const retired = new Map<string, ReviewTarget>()
         const { links, next } = nextLinks(limit)
@@ -187,6 +210,14 @@ export const sourceReviewOver = (context: StoreContext) => {
           const verdict = judged(link, thing, signature)
           if (verdict.outcome === "same") continue
           resignEvidence(database, Number(link.id), signature, at, storedEvidenceMetadata(link.metadata))
+          if (
+            verdict.outcome !== "baselined" &&
+            !signature.deleted &&
+            asReviewTarget(thing.type, thing.id) === undefined
+          ) {
+            const ref = referenceOfThing(database, thing)
+            if (ref !== undefined) changed.add(ref)
+          }
           if (verdict.outcome === "baselined") counts.baselined++
           else if (verdict.outcome === "refreshed") counts.refreshed++
           else if (verdict.outcome === "raised") {
@@ -203,6 +234,10 @@ export const sourceReviewOver = (context: StoreContext) => {
         database
           .prepare("INSERT OR REPLACE INTO store_settings (key, value, at) VALUES (?, ?, ?)")
           .run(CURSOR, String(next), at)
+        if (changed.size > 0) {
+          const read = inExtraction()
+          counts.changedRefs = [...changed].filter((ref) => !read.has(ref))
+        }
         return counts
       })
     },
@@ -237,6 +272,57 @@ export const sourceReviewOver = (context: StoreContext) => {
           at,
         })
         return operations.get(id)
+      })
+    },
+
+    changedSince: ({ since, limit = DEFAULT_LIMIT }: { since: number; limit?: number }): ChangedSource[] => {
+      if (!Number.isFinite(since)) throw new CliError("validation_error", "changed sources take a start time")
+      if (!Number.isSafeInteger(limit) || limit < 1 || limit > 10_000)
+        throw new CliError("validation_error", "changed sources take 1–10000 references")
+      const rows = database
+        .prepare(
+          "SELECT to_type, to_id, max(json_extract(metadata, '$.checked_at')) AS at FROM links " +
+            `WHERE kind = ${linkKind("evidence")} AND from_type IN ('memory', 'fact') AND to_id IS NOT NULL ` +
+            "AND to_type NOT IN ('memory', 'fact') AND json_valid(metadata) " +
+            "AND json_extract(metadata, '$.checked_at') >= ? AND json_extract(metadata, '$.gone') IS NULL " +
+            "AND json_extract(metadata, '$.rev') IS NOT json_extract(metadata, '$.cited_rev') " +
+            "GROUP BY to_type, to_id ORDER BY at DESC",
+        )
+        .all(since)
+      const read = inExtraction()
+      const changed: ChangedSource[] = []
+      for (const row of rows) {
+        if (changed.length === limit) break
+        const thing = storedThing(row.to_type, row.to_id)
+        if (evidenceSignature(database, thing).deleted) continue
+        const ref = referenceOfThing(database, thing)
+        if (ref !== undefined && !read.has(ref)) changed.push({ ref, checkedAt: iso(Number(row.at)) })
+      }
+      return changed
+    },
+
+    texts: (id: string): SourceReviewText[] => {
+      const proposal = operations.get(id)
+      if (proposal.kind !== SOURCE_REVIEW_KIND)
+        throw new CliError("validation_error", `${id} is a ${proposal.kind} proposal, not a source review`)
+      const link = database.prepare(
+        `SELECT to_type, to_id, metadata FROM links WHERE id = ? AND kind = ${linkKind("evidence")}`,
+      )
+      return (proposal.payload as SourceReviewPayload).sources.map((source) => {
+        const row = link.get(source.link)
+        const quote = row ? (storedEvidenceMetadata(row.metadata)?.quote ?? null) : null
+        if (!row || row.to_id == null || source.ref === null)
+          return { link: source.link, ref: source.ref, quote, cited: null, now: null }
+        const thing = storedThing(row.to_type, row.to_id)
+        const signature = evidenceSignature(database, thing)
+        const at = (rev: number | null) => (rev === null ? null : (sourceTextAt(database, thing, rev) ?? null))
+        return {
+          link: source.link,
+          ref: source.ref,
+          quote,
+          cited: at(source.citedRev),
+          now: signature.deleted ? null : at(signature.rev),
+        }
       })
     },
 
@@ -290,6 +376,17 @@ export interface SourceReviewStore {
    * reject dismisses the review. Both sign its sources again as they are now.
    */
   decideSourceReview(id: string, decision: SourceReviewDecision): Promise<ProposedAction>
+  /**
+   * Each source of a `memory_source_review`, as it was cited and as it is now, with the quote the claim rested on.
+   * The review itself never holds source text; this reads it when the owner looks.
+   */
+  sourceReviewTexts(id: string): Promise<SourceReviewText[]>
+  /**
+   * Cited sources a check found changed since `since` (ms) that differ from the version cited, newest first, at most
+   * `limit` (500): what `checkSources` reported once as `changedRefs`, still there after another run took it.
+   * Deleted sources, cited memories or facts, and what an open `evidence_findings` batch cites are left out.
+   */
+  changedSources(options: { since: number; limit?: number }): Promise<ChangedSource[]>
 }
 
 export const sourceReviewStoreOver = (context: StoreContext): SourceReviewStore => {
@@ -298,5 +395,7 @@ export const sourceReviewStoreOver = (context: StoreContext): SourceReviewStore 
     checkSources: async (options) => sourceReview.checkSources(options),
     challenge: async (reference, input) => sourceReview.challenge(reference, input),
     decideSourceReview: async (id, decision) => sourceReview.decide(id, decision),
+    sourceReviewTexts: async (id) => sourceReview.texts(id),
+    changedSources: async (options) => sourceReview.changedSince(options),
   }
 }
