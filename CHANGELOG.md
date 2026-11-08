@@ -5,6 +5,26 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Added
+
+- **The owner's own message templates, in the shared store (store version 59).** `templatesCommand(app, { env,
+  output, diagnostic })` gives a tool `templates list | show | edit | preview | reset <key> --channel
+  telegram|email|text [--language <code>]`. Keys: `report/morning-digest`; `report/weekly-gaps` and
+  `notice/schedule-failed` are listed, but nothing renders them yet, so they cannot be edited. `edit` opens
+  `$VISUAL`/`$EDITOR` on the template that applies, or takes `--file`; a save is checked first against a synthetic
+  report and the tool's last real `<run>.report.json`: it must render, the channel's rules may remove nothing (a tag
+  outside the list, an `href` that is not a link of the report, a `style` with `url(`), and a Telegram text must fit
+  4 096 characters once the size fit dropped what it could. A failed check saves nothing and says why, and keeps an
+  editor draft for `--file`. Every save and reset keeps the replaced body in `templates_history`; `edit --undo` puts
+  back the last one. `reset` deletes the row, so the shipped template applies again. `edit` and `reset` change what
+  later runs send (`grantsAuthority`), and an agent is refused (`template.owner-only`). A scheduled report renders
+  with the stored templates of the owner's language; a stored body that fails, or a store that cannot be read,
+  falls back to the shipped template for that channel and records `report.template-failed`. The email template is
+  stored and previewed, but mail still sends the plain-text rendering. `store.templates` and
+  `storedTemplateBodies(database, key, language)` from `@wirecat/cli-core/store`.
+
 ## 0.614.0 — 08.11.2026
 
 ### Added

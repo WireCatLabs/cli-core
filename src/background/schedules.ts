@@ -9,7 +9,7 @@ import { childTrace } from "../runs/scope.js"
 import { storePath } from "../store/path.js"
 import { readSharedSection, sharedConfigPath } from "../store/shared-config.js"
 import { type Delivery, deliver } from "./deliver.js"
-import { prepareReport, type ReportRun } from "./report/render.js"
+import { prepareReport, type ReportRun, type StoredTemplates } from "./report/render.js"
 import type { ServerSystem } from "./system.js"
 
 /** Minutes between runs, a daily local time, or one local moment. */
@@ -623,6 +623,7 @@ export const runSchedule = async (
     agentRuns = [],
     agentInput,
     ownerLanguage = async () => "ru",
+    reportTemplates,
   }: {
     now?: () => Date
     timer?: Timer
@@ -635,6 +636,8 @@ export const runSchedule = async (
     agentInput?: AgentInput
     /** The owner's first language, read only when the answer is a report; Russian when the host cannot say. */
     ownerLanguage?: (env: NodeJS.ProcessEnv) => Promise<string>
+    /** The owner's stored report templates; the shipped ones when the host gives none. */
+    reportTemplates?: (env: NodeJS.ProcessEnv) => StoredTemplates
   } = {},
 ): Promise<LastRun> => {
   const schedule = readSchedule(file)
@@ -677,6 +680,7 @@ export const runSchedule = async (
           now: now().getTime(),
           links: sharedLinks(runEnv),
           env: runEnv,
+          ...(reportTemplates ? { templates: reportTemplates(runEnv) } : {}),
         })
       : undefined
   const latestText = join(folder, "latest.txt")
