@@ -537,19 +537,26 @@ with one exact address join one person (`joinByAddress`), unless the owner separ
   identities the owner split or unlinked off since, and refuses with `identity.stale` when one was merged on.
 - **What only the owner decides waits as an `identity_link` proposal** (`identity-proposals.ts`, kind in
   `identity-links.ts`): a `proposed_actions` row with the two people, each one's identities when proposed (`sides`),
-  the signal (`agent`, `phone`, `guest-email`) and whether it joins the people or moves one identity. It is
+  the signal (`agent`, `phone`, `email`, `guest-email`) and whether it joins the people or moves one identity. It is
   owner-only (`isOwnerOnlyKind`) and a dedicated review, at most one open per pair; a pair the owner separated or
-  rejected is never proposed again. A confirm is the owner's link (method `proposal`), refused with `identity.stale`
-  once `sides` no longer hold. An agent's mention confirm and meeting association go through `linkOrPropose`, which
-  links only for the owner.
-- **One matcher** (`person-matcher.ts`) is the records import's person lookup and the phone reading: `e164Of` for
-  what a source typed, `storedPhone` for a stored column (a number with `+` or `00` however it is spaced, or bare
-  international digits; a national number names no country and matches nothing). The import's lookup still matches
-  only the E.164 number with or without the `+`. `scanMatches` (`person-match-scan.ts`) uses it over the whole
-  store: the same address joins people (NEED-2382), a number exactly two people have joins them, never moving the
-  owner's person away, and three to six on one number and a meeting guest's typed address
-  (`meeting_participants.email`) become proposals. Its merges are authored `rule`: a move the owner authored counts
-  as a separation, so an automatic one must never be.
+  rejected is never proposed or joined again. A confirm is the owner's link (method `proposal`), refused with
+  `identity.stale` once `sides` no longer hold. An agent's mention confirm and meeting association go through
+  `linkOrPropose`, which links only for the owner; the mention waits as `proposed`.
+- **Proposals follow the people** (`identity-link-rows.ts`, which `person-links.ts` may import without a cycle).
+  `mergePerson` keeps the owner's person whichever side it is on and calls `settleLinks`: a proposal whose two people
+  are one now, or a second for the same pair, is deleted, and a live one takes its current people and sides. A purge
+  deletes every proposal naming an identity it erased (`forgetErasedLinks`), since the payload names a phone or an
+  address. No proposal is keyed by `target_type`: `referencesTo` would then count it as a reference and keep the
+  identity from being purged.
+- **One matcher** (`person-matcher.ts`) is the records import's person lookup, unchanged; the phone readings are in
+  `domain/phones.ts`: `e164Of` for what a source typed, `storedPhone(raw, provider)` for a stored column (a number
+  with `+` or `00` however it is spaced; bare digits only from telegram, max or whatsapp; a national number names no
+  country and matches nothing). `scanMatches` (`person-match-scan.ts`) reads the holders of each phone and address and
+  one `linkIndex` of the proposals outside any transaction, then writes each group in its own short `write`; its
+  cursor (`store_settings` `people.scan`: the newest identity, move, revision, guest row and update time) limits a
+  later pass to what changed. The owner's pending rulings are one predicate each: `phonePairJoins` (NEED-2445),
+  `addressGroupJoins` (NEED-2446), and the rejection check in `join` (NEED-2444). Its merges are authored `rule`: a
+  move the owner authored counts as a separation, so an automatic one must never be.
 
 **Links and the review list.** A link records its method, confidence, author and time; an owner's link is never
 replaced by a rule. Today only contacts have that shape. **Not built yet:** `entity_link_events`, the same log for
