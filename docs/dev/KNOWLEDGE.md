@@ -391,6 +391,11 @@ counted under `skipped.nameOnly`, and the owner is never one. A candidate may ca
 configured list (`chat-title` reads one the title names). With `write: false` nothing is written. `project: null`
 runs `PERSON_SCORERS`, today `email-domain`, the shared-domain rule `relationships scan` used, at 0.3.
 
+`chat-senders` proposes the frequent senders of a project's chats. Its reason names the chat's title and size, and
+its evidence starts with the chat's ref, so `proposalRegistry(store).list({ via: "<chat ref>", … })` returns one
+group's senders together, for the owner to confirm or reject as a batch apart from the people they work with directly.
+A chat's title is the one text a reason carries; it is cut to 60 characters.
+
 ## Document extraction
 
 `./documents` exposes `extractText`, `importEngine`, limits and extraction types. Markdown/TXT/CSV/TSV

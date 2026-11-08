@@ -29,6 +29,8 @@ export interface ProposalFilter {
   kinds?: string[]
   by?: "agent" | "rule" | { bot: string }
   status?: ProposalRow["status"] | "all"
+  /** A reference among the proposal's evidence, such as the chat a scan found a group's senders in. */
+  via?: string
   limit: number
   offset: number
 }

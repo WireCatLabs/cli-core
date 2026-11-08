@@ -83,6 +83,7 @@ export const relationshipKind = (store: RelationshipStore): ProposalKind => {
         kinds: ["relationship"],
         ...(status === undefined ? {} : { status }),
         ...pushed(filter),
+        ...(filter.via === undefined ? {} : { evidence: filter.via }),
       })
       const links = (filter.status ?? "proposed") === "rejected" ? [] : await legacy()
       return kept([...stored.map(storedRow), ...links.map(linkRow)], filter)

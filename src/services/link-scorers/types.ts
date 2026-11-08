@@ -11,7 +11,7 @@ export interface LinkCandidate {
   kind: "member-of" | "related-to"
   /** 0..1. */
   weight: number
-  /** Ids and counts only, never message text. */
+  /** Ids, counts and at most a chat's title, never message text. */
   why: string
   evidence: string[]
   /**

@@ -7,6 +7,14 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **A scan's group senders can be found and decided together.** `chat-senders@3` names the chat and its size in its
+  reason ("wrote 40 messages in «Sales» (25 people) since 2026-08-10"), and its evidence leads with the chat's ref.
+  `ProposalFilter.via` keeps the proposals whose evidence holds a reference, and `store.proposedActions.list` takes
+  `evidence` to filter in the query, so `via` pages stored relationship proposals in full. A pending `chat-senders@2`
+  proposal takes the new reason and evidence on the next scan, under the same id.
+
 ## 0.610.0 — 08.11.2026
 
 ### Added
