@@ -28,6 +28,10 @@ shape of this file.
 
 ### Changed — may break callers
 
+- **The meeting context service writes an agent's `memory.add` and `fact.add` as proposals.** It stored both as the
+  owner's, the memory confirmed and the fact accepted, whoever ran it. With `author: "agent"`, or no `author`, the
+  memory waits as `proposed` and the fact as `proposed`, as the memory and fact stores keep every agent's; pass
+  `author: "owner"` when the owner runs the command.
 - **An agent's mention confirm or meeting participant association no longer moves an identity.** Unless `by` is
   `"owner"`, `confirmMention` to a person and `linkParticipantPerson` open an `identity_link` proposal and return its
   id as `proposal`, so an owner's link is never replaced. Such a mention has the new status `proposed` (in

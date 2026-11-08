@@ -266,3 +266,35 @@ it("takes a run that names no author for an agent's, so its participant link is 
 
   expect(result).toMatchObject({ changed: false, proposal: expect.any(String) })
 })
+
+it("keeps an agent's memory and fact from a meeting as proposals for the owner", async () => {
+  const { store, details, cue } = await fixture()
+  const service = await createMeetingContextService(store, account, { author: "agent" })
+
+  const fact = await service.change(
+    details.meeting.id,
+    { action: "fact.add", statement: "Invented decision", type: "decision", scope: "work", evidence: [cue] },
+    { apply: true },
+  )
+  const memory = await service.change(
+    details.meeting.id,
+    { action: "memory.add", body: "Prefers short meetings", kind: "preference", scope: "work", evidence: [cue] },
+    { apply: true },
+  )
+
+  expect(fact.result).toMatchObject({ status: "proposed", author: { type: "bot" } })
+  expect(memory.result).toMatchObject({ status: "proposed", author: { type: "bot" } })
+})
+
+it("takes a run that names no author for an agent's, so its memory waits for the owner", async () => {
+  const { store, details, cue } = await fixture()
+  const service = await createMeetingContextService(store, account)
+
+  const memory = await service.change(
+    details.meeting.id,
+    { action: "memory.add", body: "Prefers short meetings", kind: "preference", scope: "work", evidence: [cue] },
+    { apply: true },
+  )
+
+  expect(memory.result).toMatchObject({ status: "proposed" })
+})

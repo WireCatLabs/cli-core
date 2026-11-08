@@ -30,8 +30,8 @@ const checkCancelled = (signal?: AbortSignal): void => {
 
 /**
  * Reuses the owner's records; scoped meeting references are checked again by each native write. `author` says who
- * runs it: an agent's participant link waits for the owner as a proposal. Left out, the run is taken for an agent's,
- * so a caller that never said who runs it cannot move an identity as the owner.
+ * runs it: an agent's participant link, memory and fact wait for the owner as proposals. Left out, the run is taken
+ * for an agent's, so a caller that never said who runs it cannot write as the owner.
  */
 export const createMeetingContextService = async (
   store: MeetingContextServiceStore,
@@ -39,6 +39,9 @@ export const createMeetingContextService = async (
   options: { now?: () => number; author?: "owner" | "agent" } = {},
 ) => {
   const now = options.now ?? Date.now
+  const author = options.author ?? "agent"
+  // An agent's memory or fact waits as proposed, as the memory and fact stores keep any agent's.
+  const writer = author === "owner" ? ("owner" as const) : { bot: "agent" }
   const scope = snapshotMeetingScope(input)
   const key: AccountKey = Object.freeze({ ...scope, ...(input.scope === undefined ? {} : { scope: input.scope }) })
   const account = await store.accounts.storedAccount(key)
@@ -87,8 +90,8 @@ export const createMeetingContextService = async (
             scope: change.scope,
             evidence: meetingReferences(change.evidence),
             subject: change.subject === undefined ? reference : meetingReferences([change.subject])[0],
-            status: "confirmed",
-            author: "owner",
+            status: writer === "owner" ? "confirmed" : "proposed",
+            author: writer,
           })
         case "fact.add":
           return store.facts.add({
@@ -97,7 +100,7 @@ export const createMeetingContextService = async (
             scope: change.scope,
             evidence: meetingReferences(change.evidence),
             subject: change.subject === undefined ? reference : meetingReferences([change.subject])[0],
-            by: "owner",
+            by: writer,
           })
         case "event.link":
           return store.meetings.linkMeetingEvent({
@@ -115,7 +118,7 @@ export const createMeetingContextService = async (
             participantId: change.participantId,
             personUid: change.personUid,
             now: now(),
-            author: options.author ?? "agent",
+            author,
             ...(change.expectedPersonUid === undefined ? {} : { expectedPersonUid: change.expectedPersonUid }),
             ...(change.targetAccountIds === undefined ? {} : { targetAccountIds: change.targetAccountIds }),
             ...(operation.signal ? { signal: operation.signal } : {}),
