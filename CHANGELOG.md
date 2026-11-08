@@ -22,6 +22,14 @@ shape of this file.
   `latest.md` and `latest.txt` as they are; its cost counts in today's `spend.json`. The count of runs a schedule keeps
   (30) no longer removes a backfilled run, which is older than the runs around it. `readSchedule`, `scheduleFile`,
   `spentToday` and `SCHEDULE_DEFAULTS` are exported from `@wirecat/cli-core/cli` for a host's own checks.
+- **A person's engagement on a project.** `engagement` on a person's `member-of` a project: `none`, `low`,
+  `medium` or `high`, how much the owner deals with that person himself, not how active the person is; absent means
+  unknown. `relate` and `updateRelation` take it (`null` clears it), an agent's change is a `relationship_update`
+  proposal as for a role, and every relationship read carries it. It is refused on any other relationship
+  (`relationship.engagement-ends`). `byEngagement` and `engagementRank` order links high, medium, unknown, low,
+  none; `ENGAGEMENT_LEVELS` lists the levels.
+- **A role note beside the role.** `roleNote`, up to 200 characters, says what the role means on this link in the
+  owner's words, while the role itself stays one of its list. `relate` and `updateRelation` take it; `null` clears it.
 
 ### Fixed
 

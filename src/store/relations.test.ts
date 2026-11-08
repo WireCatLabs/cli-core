@@ -2,7 +2,7 @@ import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, expect, it } from "vitest"
-import { inverseOf, standingOf } from "../domain/relations.js"
+import { byEngagement, inverseOf, standingOf } from "../domain/relations.js"
 import { openCache } from "./open.js"
 import { type MessageStore, openStore } from "./store.js"
 
@@ -241,4 +241,51 @@ it("refuses to approve a proposal whose role left the lists since it was made", 
   await expect(store.knowledge.decideLinkProposal(proposal.id, { confirm: true, by: "owner" })).rejects.toMatchObject({
     details: { reason: "relationship.role-unknown" },
   })
+})
+
+it("keeps a person's engagement on a project and a role note beside the role, and refuses engagement elsewhere", async () => {
+  const { store, acme, alice } = await fixture()
+  const project = (await store.knowledge.addProject({ name: "Harbour" })).ref
+  const member = await store.knowledge.relate(null, {
+    by: "owner",
+    from: alice,
+    to: project,
+    kind: "member-of",
+    role: "approver",
+    roleNote: " signs the acts ",
+    engagement: "high",
+  })
+  expect(member).toMatchObject({ role: "approver", roleNote: "signs the acts", engagement: "high" })
+  await expect(
+    store.knowledge.updateRelation(null, member.id, { engagement: "rarely" as never, by: "owner" }),
+  ).rejects.toMatchObject({ details: { reason: "relationship.engagement-unknown" } })
+  const proposal = await store.knowledge.updateRelation(null, member.id, { engagement: "low", by: { bot: "claude" } })
+  expect(proposal).toMatchObject({ payload: { changes: { engagement: "low" }, before: { engagement: "high" } } })
+  await store.knowledge.decideRelationUpdate(proposal.id, { confirm: true, by: "owner" })
+  expect(
+    await store.knowledge.updateRelation(null, member.id, { roleNote: null, position: "PM", by: "owner" }),
+  ).toMatchObject({ engagement: "low", roleNote: null, position: "PM" })
+  expect(await store.knowledge.updateRelation(null, member.id, { engagement: null, by: "owner" })).toMatchObject({
+    engagement: null,
+    position: "PM",
+  })
+  const employee = await store.knowledge.relate(null, { by: "owner", from: alice, to: acme, kind: "member-of" })
+  await expect(
+    store.knowledge.updateRelation(null, employee.id, { engagement: "low", by: "owner" }),
+  ).rejects.toMatchObject({ details: { reason: "relationship.engagement-ends" } })
+  await expect(
+    store.knowledge.relate(null, { by: "owner", from: alice, to: acme, kind: "member-of", engagement: "low" }),
+  ).rejects.toMatchObject({ details: { reason: "relationship.engagement-ends" } })
+})
+
+it("orders links by engagement: high, medium, unknown, low, none, the rest in their order", () => {
+  const links = [
+    { id: 1, engagement: "none" as const },
+    { id: 2, engagement: null },
+    { id: 3, engagement: "low" as const },
+    { id: 4, engagement: "high" as const },
+    { id: 5 },
+    { id: 6, engagement: "medium" as const },
+  ]
+  expect(byEngagement(links).map(({ id }) => id)).toEqual([4, 6, 2, 5, 3, 1])
 })

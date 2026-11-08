@@ -157,6 +157,10 @@ export {
   type RefKindSpec,
 } from "./domain/references.js"
 export {
+  byEngagement,
+  ENGAGEMENT_LEVELS,
+  type Engagement,
+  engagementRank,
   inverseOf,
   isUsable,
   ORGANIZATION_ROLES,

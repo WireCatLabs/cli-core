@@ -417,6 +417,8 @@ const OTHERS: Entry[] = [
   validation("relationship.role-built-in", "a built-in role stays on its list"),
   validation("relationship.role-in-use", "relationships still hold that role; change them first (details.count)"),
   validation("relationship.role-unknown", "the role is not one the relationship takes; the message lists them"),
+  validation("relationship.engagement-ends", "only a person's member-of a project takes an engagement level"),
+  validation("relationship.engagement-unknown", "the engagement level is not none, low, medium or high"),
   validation("ranking.invalid", "the ranking is not valid"),
   validation("ref.malformed", "the reference has a known kind but not its shape"),
   validation("ref.unknown-kind", "the text names no kind of reference"),

@@ -13,6 +13,38 @@ export const ORGANIZATION_ROLES = [
 ] as const
 export const PROJECT_ROLES = ["owner", "manager", "contributor", "client-contact", "approver"] as const
 
+/** How much the owner deals with a person on a project himself, not how active the person is; absent is unknown. */
+export const ENGAGEMENT_LEVELS = ["none", "low", "medium", "high"] as const
+export type Engagement = (typeof ENGAGEMENT_LEVELS)[number]
+
+export const isEngagement = (value: unknown): value is Engagement =>
+  typeof value === "string" && (ENGAGEMENT_LEVELS as readonly string[]).includes(value)
+
+/** Only a person's membership of a project takes an engagement level. */
+export const checkEngagement = (kind: string, from: string, to: string, level: string): Engagement => {
+  if (kind !== "member-of" || from !== "person" || to !== "project")
+    throw new CliError("validation_error", "an engagement level is set only on a person's member-of a project", {
+      reason: "relationship.engagement-ends",
+    })
+  if (!isEngagement(level))
+    throw new CliError("validation_error", `an engagement level is one of ${ENGAGEMENT_LEVELS.join(", ")}`, {
+      reason: "relationship.engagement-unknown",
+    })
+  return level
+}
+
+/** Who the owner deals with most comes first: high, medium, unknown, low, none. */
+const ENGAGEMENT_ORDER: Record<Engagement | "unknown", number> = { high: 0, medium: 1, unknown: 2, low: 3, none: 4 }
+
+export const engagementRank = (level: Engagement | null | undefined): number => ENGAGEMENT_ORDER[level ?? "unknown"]
+
+/** A stable sort by `engagementRank`; links without a level keep their order among themselves. */
+export const byEngagement = <T extends { engagement?: Engagement | null }>(items: readonly T[]): T[] =>
+  items
+    .map((item, index) => ({ item, index }))
+    .sort((a, b) => engagementRank(a.item.engagement) - engagementRank(b.item.engagement) || a.index - b.index)
+    .map(({ item }) => item)
+
 type End = "person" | "organization" | "project" | "task" | "chat" | "email_thread" | "deal" | "lead"
 
 interface RelationSpec {
@@ -145,6 +177,10 @@ export interface RelationshipColumns {
   deletedAt?: number
   /** A job title beside it (`metadata.position`), never its role. */
   position?: string
+  /** What the role means here, in the owner's words, beside a role from a list (`metadata.roleNote`). */
+  roleNote?: string
+  /** A person's on a project (`metadata.engagement`). */
+  engagement?: Engagement
   /** The source's link this owner link overrides (`metadata.overrides`). */
   overrides?: number
 }
