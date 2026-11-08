@@ -37,14 +37,23 @@ vi.mock("../embeddings/models.js", async (original) => {
   return { ...real, textModel: (id: string) => (id === "e5-small" ? tiny : real.textModel(id)) }
 })
 
-const opened = vi.hoisted(() => ({ models: 0 }))
+const opened = vi.hoisted(() => ({ models: 0, queries: [] as string[], readAs: undefined as string | undefined }))
 vi.mock("../embeddings/embed.js", async (original) => {
   const real = await original<typeof import("../embeddings/embed.js")>()
   return {
     ...real,
-    openEmbedder: (...args: Parameters<typeof real.openEmbedder>) => {
+    openEmbedder: async (...args: Parameters<typeof real.openEmbedder>) => {
       opened.models++
-      return real.openEmbedder(...args)
+      const embedder = await real.openEmbedder(...args)
+      return {
+        ...embedder,
+        embed: (texts: string[], kind: "query" | "passage") => {
+          if (kind !== "query") return embedder.embed(texts, kind)
+          opened.queries.push(...texts)
+          // The fixture model reads only a few words; a test that records a whole question gives it one of them.
+          return embedder.embed(opened.readAs === undefined ? texts : texts.map(() => opened.readAs as string), kind)
+        },
+      }
     },
   }
 })
@@ -111,6 +120,7 @@ const setUp = async () => {
 }
 
 beforeEach(() => {
+  opened.readAs = undefined
   models = mkdtempSync(join(tmpdir(), "models-"))
   vi.stubEnv("WIRECAT_STATE_DIR", models)
 })
@@ -332,10 +342,8 @@ describe("search all by meaning", () => {
     expect(found.messages).toEqual({ by: "words and meaning" })
   })
 
-  it("**finds mail in other words**, as it finds messages", async () => {
-    download()
-    const { store } = await setUp()
-    const mail = { provider: "email", account: "owner@example.com" }
+  const mail = { provider: "email", account: "owner@example.com" }
+  const withMail = async (store: MessageStore) => {
     const accountId = await store.accounts.saveAccount(mail, { name: null })
     const sent = Date.parse("2026-10-01T00:00:00Z")
     await store.mail.saveThread({
@@ -361,12 +369,44 @@ describe("search all by meaning", () => {
       const [vector] = await embedder.embed(["kitten"], "passage")
       await store.vectors.saveVectors(key, model.dims, [{ hash: chunk?.hash ?? "", vector: vector as Float32Array }])
     })
-    const lane = meaningLane({ env: process.env, store: async () => store, messenger: { app: { command: "memo" } } })
+    return meaningLane({ env: process.env, store: async () => store, messenger: { app: { command: "memo" } } })
+  }
+
+  it("**finds mail in other words**, as it finds messages", async () => {
+    download()
+    const { store } = await setUp()
+    const lane = await withMail(store)
 
     const found = await searchAll(store, mail, { text: "cat", limit: 10, only: ["mail"] }, {}, undefined, lane)
 
     expect(found.mail).toEqual({ by: "words and meaning" })
     expect(found.items.map(({ kind, foundBy }) => [kind, foundBy])).toEqual([["mail", ["meaning"]]])
+  })
+
+  it("**asks mail and notes the same question**, its time and question mark kept, so their cosines compare", async () => {
+    download()
+    const { store } = await setUp()
+    const lane = await withMail(store)
+    await store.notes.addNote({ text: "kitten" })
+    await embedNotes(store, { threads: 1 })
+    opened.queries = []
+    opened.readAs = "kitten"
+
+    const question = "When is the kitten call? Answer as HH:MM, like 10:30."
+    const found = await searchAll(
+      store,
+      mail,
+      { text: question, limit: 10, only: ["mail", "notes"] },
+      {},
+      undefined,
+      lane,
+    )
+
+    expect(found.mail?.by).toBe("words and meaning")
+    expect(found.notes?.by).toBe("words and meaning")
+    expect(opened.queries).toHaveLength(2)
+    expect(new Set(opened.queries).size).toBe(1)
+    expect(opened.queries[0]).toContain("call? Answer as HH:MM, like 10:30")
   })
 
   it("leaves --exact and the server's own hits to words, with no note", async () => {

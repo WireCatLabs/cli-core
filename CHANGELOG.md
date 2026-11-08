@@ -33,6 +33,12 @@ shape of this file.
 
 ### Fixed
 
+- **`search all` no longer gives each source half of a ten-hit page.** Each source's best hit comes first, then every
+  other hit by its cosine to the question, then by its rank in its source. Ordered by rank first, the sources took
+  turns, so a mail at its third to fifth place fell off the page behind notes that matched far less.
+- **Mail looks up by meaning with the text notes embed for the same question.** It embedded the words a picture
+  search keeps, which drop a question mark and a time (`10:30`), so mail and note cosines did not compare. A query
+  that leaves notes nothing to embed (`content:invoice`, `budg*`) keeps the old words for mail.
 - **A question with a time or a `word:word` in it is searched by its words again.** Without a meaning model,
   `search all`, `search notes` and `events search` sent "When is the steering committee? Answer as HH:MM" to strict
   search, which needs every word in one record, so it found nothing. The quoting that keeps `HH:MM` and `10:30`
