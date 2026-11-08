@@ -23,6 +23,8 @@ shape of this file.
   (30) no longer removes a backfilled run, which is older than the runs around it. `readSchedule`, `scheduleFile`,
   `spentToday` and `SCHEDULE_DEFAULTS` are exported from `@wirecat/cli-core/cli` for a host's own checks.
 
+## 0.617.0 — 08.11.2026
+
 ### Security
 
 - **Messenger bot tokens are masked in the store.** A Telegram bot token (`<bot id>:<secret>`, as BotFather sends
