@@ -8,7 +8,7 @@ import { openStore } from "./store.js"
 
 const PORTAL = { provider: "example-crm", account: "acme.example" }
 
-it("adds base stages to a version 58 file's CRM pipelines, unmapped, and suggests them on first use", async () => {
+it("adds base stages to a version 59 file's CRM pipelines, unmapped, and suggests them on first use", async () => {
   const path = join(mkdtempSync(join(tmpdir(), "version-60-")), "wirecat.db")
   const seeded = await openStore({ path })
   await seeded.crm.savePipelines(PORTAL, "deal", [
