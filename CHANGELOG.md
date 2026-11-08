@@ -29,7 +29,10 @@ shape of this file.
   email and writes standalone facts and two questions in other words; search finds the record by them and still cites
   the record. `models consents show` gives the state, the records covered and the cost estimate;
   `models consents set openai --model gpt-4o-mini` says what would be sent and changes nothing until `--yes`;
-  `models consents revoke` turns it off and deletes what was written. One setting for every WireCat CLI, the
+  `models consents revoke` turns it off and deletes what was written. Every answer carries `target` (the provider,
+  model and endpoint the estimate is about: the setting in force, the one `set` proposes, or the default offer while
+  off) with `key: {present, source, env_var}` (never the key), `per_sync`, `syncs_needed`, `offered` (provider and
+  model pairs with their prices), `measured` and `off_command`, so a window can write the consent in its own words. One setting for every WireCat CLI, the
   `enrichment` section of the shared settings file. `embedNotes` and `embedMail` enrich up to 600 records a run before
   they embed, each record once per text; a failed batch leaves its records for the next sync. The text goes into the
   stems and a chunk of its own, never into `--exact`, the trigrams or the record's own chunks. An agent cannot turn it

@@ -68,6 +68,27 @@ const PRICES: Record<string, { input: number; output: number; source: string }> 
   },
 }
 
+/** What `show` estimates while enrichment is off and nothing is proposed: the measured model. */
+export const DEFAULT_OFFER = { provider: "openai", model: "gpt-4o-mini" } as const satisfies Pick<
+  EnrichmentSetting,
+  "provider" | "model"
+>
+
+/** The provider and model pairs offered, each with its price; another model is allowed, with no price. */
+export const offeredModels = () =>
+  Object.entries(PRICES).map(([key, price]) => {
+    const [provider, model] = key.split("/") as [string, string]
+    return {
+      provider,
+      model,
+      default: provider === DEFAULT_OFFER.provider && model === DEFAULT_OFFER.model,
+      usd_per_million: {
+        input: Math.round(price.input * 1e8) / 100,
+        output: Math.round(price.output * 1e8) / 100,
+      },
+    }
+  })
+
 export const enrichmentPrice = (provider: string, model: string, baseUrl?: string) =>
   baseUrl === undefined ? PRICES[`${provider}/${model}`] : undefined
 

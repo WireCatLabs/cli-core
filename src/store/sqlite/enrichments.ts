@@ -48,6 +48,7 @@ export interface EnrichmentCounts {
   enriched: number
   /** Characters of the records still to enrich, for a cost estimate. */
   pendingChars: number
+  pendingByType: Record<EnrichmentSubject, number>
 }
 
 export interface EnrichmentStore {
@@ -133,12 +134,20 @@ export const enrichmentsOver = ({ database, now }: StoreContext): EnrichmentStor
     return found
   },
   counts: async () => {
-    const counts: EnrichmentCounts = { records: 0, enriched: 0, pendingChars: 0 }
+    const counts: EnrichmentCounts = {
+      records: 0,
+      enriched: 0,
+      pendingChars: 0,
+      pendingByType: { document: 0, note: 0, email: 0 },
+    }
     for (const type of ENRICHMENT_SUBJECTS)
       for (const one of scan(database, type)) {
         counts.records += 1
         if (one.enriched) counts.enriched += 1
-        else counts.pendingChars += one.text.length
+        else {
+          counts.pendingChars += one.text.length
+          counts.pendingByType[type] += 1
+        }
       }
     return counts
   },

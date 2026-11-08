@@ -1,5 +1,5 @@
 import { join } from "node:path"
-import { CliError } from "@wirecat/cli-base"
+import { CliError, type KeyringStore } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { defineQuery } from "@wirecat/cli-base/query"
 import { Command } from "commander"
@@ -29,6 +29,8 @@ export const MODEL_CATALOGUE_QUERY = defineQuery({
 export interface ModelCatalogueOptions {
   kinds: readonly ("audio" | "text")[]
   env: () => NodeJS.ProcessEnv
+  /** Where `models consents` looks for the enrichment provider's key; the system keyring when absent. */
+  keyring?: KeyringStore
   output: (answer: Body, command: Command) => void
   diagnostic: (line: string) => void
   jsonOption?: boolean

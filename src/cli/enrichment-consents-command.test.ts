@@ -1,6 +1,7 @@
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { memoryKeyring } from "@wirecat/cli-base"
 import { Command } from "commander"
 import { describe, expect, it } from "vitest"
 import { readEnrichmentSetting } from "../services/enrichment-setting.js"
@@ -21,6 +22,7 @@ const fixture = async (extra: NodeJS.ProcessEnv = {}) => {
   const models = modelCatalogueCommand(app, {
     kinds: ["text"],
     env: () => env,
+    keyring: memoryKeyring(),
     output: (body) => answers.push(body),
     diagnostic: (line) => lines.push(line),
   })
@@ -38,12 +40,49 @@ describe("models consents", () => {
     await run("show")
     await run("set", "openai", "--model", "gpt-4o-mini")
 
-    expect(item(0)).toMatchObject({ on: false, records: 1, pending: 1 })
+    expect(item(0)).toMatchObject({
+      on: false,
+      provider: null,
+      records: 1,
+      pending: 1,
+      per_sync: 600,
+      syncs_needed: 1,
+      target: {
+        provider: "openai",
+        model: "gpt-4o-mini",
+        endpoint_host: "api.openai.com",
+        key: { present: false, source: null, env_var: "OPENAI_API_KEY" },
+      },
+      offered: expect.arrayContaining([
+        expect.objectContaining({ provider: "anthropic", model: "claude-haiku-5-5", default: false }),
+      ]),
+      off_command: "fixture models consents revoke",
+    })
+    expect((item(0).estimate as { usd: number }).usd).toBeGreaterThan(0)
     expect(item(1)).toMatchObject({ on: false, changed: false })
     expect(String(item(1).consent)).toMatch(/to openai \(api\.openai\.com\), model gpt-4o-mini: 1 records now/)
     expect(String(item(1).consent)).toMatch(/in the record's own words gets that record first a little less often/)
     expect(lines.join("\n")).toMatch(/Nothing changed — add --yes/)
     expect(readEnrichmentSetting(env)).toBeUndefined()
+  })
+
+  it("previews the proposed provider as fields, and says when its key is found, never the key", async () => {
+    const { run, item } = await fixture({ ANTHROPIC_API_KEY: "test-key" })
+
+    await run("set", "anthropic", "--model", "claude-haiku-5-5")
+
+    expect(item(0)).toMatchObject({
+      on: false,
+      provider: null,
+      target: {
+        provider: "anthropic",
+        model: "claude-haiku-5-5",
+        endpoint_host: "api.anthropic.com",
+        key: { present: true, source: "env", env_var: "ANTHROPIC_API_KEY" },
+        price_known: true,
+      },
+    })
+    expect(JSON.stringify(item(0))).not.toContain("test-key")
   })
 
   it("turns on with --yes, and revoke turns it off", async () => {

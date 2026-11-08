@@ -6,9 +6,12 @@ import type { AppIdentity } from "../ports/app.js"
 import type { EnrichmentCandidate, EnrichmentNarrowing, EnrichmentStore, SavedEnrichment } from "../store/store.js"
 import {
   costOf,
+  DEFAULT_OFFER,
   type EnrichmentSetting,
   enrichmentEndpoint,
+  enrichmentPrice,
   estimateEnrichment,
+  offeredModels,
   readEnrichmentSetting,
 } from "./enrichment-setting.js"
 
@@ -113,17 +116,35 @@ const recordsData = (batch: readonly EnrichmentCandidate[]) =>
     })),
   )
 
-const keyReader = (options: EnrichOptions, setting: EnrichmentSetting) => {
-  if (options.key) return () => options.key?.(setting.provider)
+export type KeySource = "keyring" | "file" | "env" | "given"
+
+/** The provider's key and where it came from; it never leaves this process. */
+const keyLookup = (
+  options: Pick<EnrichOptions, "env" | "app" | "keyring" | "key">,
+  setting: Pick<EnrichmentSetting, "provider" | "base_url">,
+): { key: string; source: KeySource } | undefined => {
+  if (options.key) {
+    const key = options.key(setting.provider)
+    return key === undefined ? undefined : { key, source: "given" }
+  }
   const name = setting.base_url === undefined ? setting.provider : endpointKeyName(setting.base_url)
   if (options.app) {
     const keys = embeddingKeys(options.app, options.env, options.keyring)
     // The tool's `embeddings:<provider>` entry or the environment, then an entry named after the provider alone.
-    return () => keys.read(name)?.key ?? (setting.base_url === undefined ? keys.readPlain(setting.provider) : undefined)
+    const stored = keys.read(name)
+    if (stored)
+      return {
+        key: stored.key,
+        source: stored.source === "file" ? "file" : stored.source === "keyring" ? "keyring" : "env",
+      }
+    const plain = setting.base_url === undefined ? keys.readPlain(setting.provider) : undefined
+    return plain === undefined ? undefined : { key: plain, source: "keyring" }
   }
-  const variable = `${setting.provider.toUpperCase()}_API_KEY`
-  return () => (setting.base_url === undefined ? options.env[variable]?.trim() || undefined : undefined)
+  const key = setting.base_url === undefined ? options.env[keyVariable(setting.provider)]?.trim() : undefined
+  return key ? { key, source: "env" } : undefined
 }
+
+export const keyVariable = (provider: string): string => `${provider.toUpperCase()}_API_KEY`
 
 /**
  * Sends records with no enrichment of their current text to the provider the owner consented to, in batches, and
@@ -138,7 +159,7 @@ export const enrichRecords = async (
   const enrichment = store.enrichment
   const baseUrl = enrichmentEndpoint(setting)
   const target = { provider: setting.provider, model: setting.model, baseUrl }
-  const apiKey = keyReader(options, setting)()
+  const apiKey = keyLookup(options, setting)?.key
   const maxRecords = options.maxRecords ?? ENRICH_PER_RUN
   // Without a key the public API answers 401 only after the records' text has left; a custom server may need none.
   if (apiKey === undefined && setting.base_url === undefined)
@@ -238,37 +259,96 @@ export const enrichRecords = async (
   }
 }
 
+export interface EnrichmentTarget {
+  provider: string
+  model: string
+  endpoint: string
+  endpoint_host: string
+  /** Whether a key for this provider is found, and where; never the key. */
+  key: { present: boolean; source: KeySource | null; env_var: string }
+  price_known: boolean
+}
+
 export interface EnrichmentState {
   on: boolean
+  /** The setting in force; `null` while off. */
   provider: string | null
   model: string | null
   endpoint: string | null
   consented_at: string | null
+  /**
+   * What the estimate and the consent are about: the setting in force, else the one `set` proposes, else the
+   * default offer. A window shows its price while enrichment is off.
+   */
+  target: EnrichmentTarget
   records: number
   enriched: number
   pending: number
-  /** What enriching the pending records would cost with the chosen model, or with `estimateFor` when given. */
   estimate: ReturnType<typeof estimateEnrichment>
+  /** Records one sync enriches of notes and documents, and as many of mail. */
+  per_sync: number
+  /** Syncs to enrich what is pending now. */
+  syncs_needed: number
+  /** Every record added or changed later is sent too, at the next sync. */
+  sends_new_records: true
+  offered: readonly {
+    provider: string
+    model: string
+    default: boolean
+    usd_per_million: { input: number; output: number }
+  }[]
+  /** What the measurement on synthetic data found; the consent text quotes it. */
+  measured: typeof MEASURED
 }
+
+/** cli-testing write-time-enrichment, 10,444 synthetic records, memo with e5-small, gpt-4o-mini, 2026-11-08. */
+export const MEASURED = {
+  reworded_at_10: { off: 0.62, on: 0.79 },
+  own_words_first: { off: 0.54, on: 0.48 },
+  source: "https://github.com/WireCatLabs/cli-testing/pull/322",
+} as const
 
 /** The setting and how far the store is enriched: what a window shows beside the switch. */
 export const enrichmentState = async (
   store: { enrichment?: EnrichmentStore | undefined },
   env: NodeJS.ProcessEnv,
   estimateFor?: Pick<EnrichmentSetting, "provider" | "model" | "base_url">,
+  keys: Pick<EnrichOptions, "app" | "keyring"> = {},
 ): Promise<EnrichmentState> => {
   const setting = readEnrichmentSetting(env)
-  const counts = (await store.enrichment?.counts()) ?? { records: 0, enriched: 0, pendingChars: 0 }
+  const counts = (await store.enrichment?.counts()) ?? {
+    records: 0,
+    enriched: 0,
+    pendingChars: 0,
+    pendingByType: { document: 0, note: 0, email: 0 },
+  }
   const pending = counts.records - counts.enriched
+  const chosen: Pick<EnrichmentSetting, "provider" | "model" | "base_url"> = estimateFor ?? setting ?? DEFAULT_OFFER
+  const endpoint = enrichmentEndpoint(chosen)
+  const found = keyLookup({ env, ...keys }, chosen)
+  const notes = counts.pendingByType.document + counts.pendingByType.note
   return {
     on: setting !== undefined,
     provider: setting?.provider ?? null,
     model: setting?.model ?? null,
     endpoint: setting ? enrichmentEndpoint(setting) : null,
     consented_at: setting?.consented_at ?? null,
+    target: {
+      provider: chosen.provider,
+      model: chosen.model,
+      endpoint,
+      endpoint_host: new URL(endpoint).host,
+      key: { present: found !== undefined, source: found?.source ?? null, env_var: keyVariable(chosen.provider) },
+      price_known: enrichmentPrice(chosen.provider, chosen.model, chosen.base_url) !== undefined,
+    },
     records: counts.records,
     enriched: counts.enriched,
     pending,
-    estimate: estimateEnrichment(pending, counts.pendingChars, estimateFor ?? setting),
+    estimate: estimateEnrichment(pending, counts.pendingChars, chosen),
+    per_sync: ENRICH_PER_RUN,
+    syncs_needed: Math.ceil(Math.max(notes, counts.pendingByType.email) / ENRICH_PER_RUN),
+    sends_new_records: true,
+    offered: offeredModels(),
+    measured: MEASURED,
   }
 }

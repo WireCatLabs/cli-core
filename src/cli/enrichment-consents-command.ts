@@ -1,4 +1,4 @@
-import { CliError } from "@wirecat/cli-base"
+import { CliError, type KeyringStore } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import type { AppIdentity } from "../ports/app.js"
@@ -18,6 +18,8 @@ import { type Body, itemOf } from "./envelope.js"
 
 export interface EnrichmentConsentsOptions {
   env: () => NodeJS.ProcessEnv
+  /** Where the provider key is looked for; the system keyring when absent. Tests pass memoryKeyring(). */
+  keyring?: KeyringStore
   output: (answer: Body, command: Command) => void
   diagnostic: (line: string) => void
 }
@@ -33,21 +35,20 @@ const withStore = async <T>(env: NodeJS.ProcessEnv, work: (store: Awaited<Return
 
 const usd = (value: number | null) => (value === null ? "an unknown amount (no price for this model)" : `$${value}`)
 
-/** What the owner agrees to, in the words the window shows above the switch. */
-export const consentWording = (
-  command: string,
-  setting: Pick<EnrichmentSetting, "provider" | "model" | "base_url">,
-  state: EnrichmentState,
-): string =>
-  `Enrichment sends the text of every note, document and email in this store to ${setting.provider} ` +
-  `(${new URL(enrichmentEndpoint(setting)).host}), model ${setting.model}: ${state.pending} records now, and every ` +
+/** What the owner agrees to, from the answer's own fields: a window can write the same text in its language. */
+export const consentWording = (command: string, state: EnrichmentState): string =>
+  `Enrichment sends the text of every note, document and email in this store to ${state.target.provider} ` +
+  `(${state.target.endpoint_host}), model ${state.target.model}: ${state.pending} records now, and every ` +
   "record added or changed later, at each sync. The model writes facts and questions about each record; they are " +
   "kept in the store, and search finds the record by them. " +
   "A question in other words finds its record more often in the top 5 and 10, but a question in the record's own " +
-  "words gets that record first a little less often (measured on synthetic data: 0.54 to 0.48). " +
+  "words gets that record first a little less often (measured on synthetic data: " +
+  `${state.measured.own_words_first.off} to ${state.measured.own_words_first.on}). ` +
   `Enriching what is here now costs about ${usd(state.estimate.usd)} ` +
   `(${state.estimate.input_tokens} input and ${state.estimate.output_tokens} output tokens). ` +
-  `\`${command} models consents revoke\` turns it off and deletes what the model wrote.`
+  `\`${offCommand(command)}\` turns it off and deletes what the model wrote.`
+
+const offCommand = (command: string) => `${command} models consents revoke`
 
 /**
  * Write-time enrichment: the owner's consent that notes, documents and mail go to a hosted model, which writes facts
@@ -61,8 +62,10 @@ export const enrichmentConsentsCommand = (app: AppIdentity, options: EnrichmentC
     .description("whether enrichment is on, with which provider and model, how many records it covers and the cost")
     .action(async function (this: Command) {
       const env = options.env()
-      const state = await withStore(env, (store) => enrichmentState(store, env))
-      options.output(itemOf(state), this)
+      const state = await withStore(env, (store) =>
+        enrichmentState(store, env, undefined, { app, ...(options.keyring ? { keyring: options.keyring } : {}) }),
+      )
+      options.output(itemOf({ ...state, off_command: offCommand(app.command) }), this)
     })
   grantsAuthority(
     annotate(consents.command("set"), {
@@ -98,11 +101,13 @@ export const enrichmentConsentsCommand = (app: AppIdentity, options: EnrichmentC
         model: given.model,
         ...(given.baseUrl === undefined ? {} : { base_url: given.baseUrl }),
       }
-      const state = await withStore(env, (store) => enrichmentState(store, env, chosen))
-      const consent = consentWording(app.command, chosen, state)
+      const state = await withStore(env, (store) =>
+        enrichmentState(store, env, chosen, { app, ...(options.keyring ? { keyring: options.keyring } : {}) }),
+      )
+      const consent = consentWording(app.command, state)
       if (!given.yes) {
         options.diagnostic(`${consent}\nNothing changed — add --yes to turn it on.`)
-        options.output(itemOf({ ...state, changed: false, consent }), this)
+        options.output(itemOf({ ...state, changed: false, consent, off_command: offCommand(app.command) }), this)
         return
       }
       const setting: EnrichmentSetting = { ...chosen, consented_at: new Date().toISOString() }
@@ -118,6 +123,7 @@ export const enrichmentConsentsCommand = (app: AppIdentity, options: EnrichmentC
           consented_at: setting.consented_at,
           changed: true,
           consent,
+          off_command: offCommand(app.command),
         }),
         this,
       )
@@ -135,7 +141,10 @@ export const enrichmentConsentsCommand = (app: AppIdentity, options: EnrichmentC
       writeEnrichmentSetting(env, undefined)
       const { deleted, state } = await withStore(env, async (store) => ({
         deleted: (await store.enrichment?.clear()) ?? 0,
-        state: await enrichmentState(store, env),
+        state: await enrichmentState(store, env, undefined, {
+          app,
+          ...(options.keyring ? { keyring: options.keyring } : {}),
+        }),
       }))
       options.diagnostic(
         `enrichment is off${was ? ` (was ${was.provider} ${was.model})` : ""}; deleted the text written for ${deleted} records`,
