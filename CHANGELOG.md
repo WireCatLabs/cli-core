@@ -7,8 +7,6 @@ shape of this file.
 
 ## Unreleased
 
-## 0.610.0 — 08.11.2026
-
 ### Added
 
 - **A scan's group senders can be found and decided together.** `chat-senders@3` names the chat and its size in its
@@ -16,6 +14,11 @@ shape of this file.
   `ProposalFilter.via` keeps the proposals whose evidence holds a reference, and `store.proposedActions.list` takes
   `evidence` to filter in the query, so `via` pages stored relationship proposals in full. A pending `chat-senders@2`
   proposal takes the new reason and evidence on the next scan, under the same id.
+
+## 0.610.0 — 08.11.2026
+
+### Added
+
 - **`search all` has a `business` lane.** `searchAll` finds invoices, payments, orders, contracts, subscriptions,
   products and wallets by the words of their numbers and names (an invoice's counterparty, a payment's payer or payee,
   an order's shop and lines), each word where a word starts, folded in memory like the `crm` lane, with no index.
