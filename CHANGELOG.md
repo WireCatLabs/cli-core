@@ -44,22 +44,42 @@ shape of this file.
   (`identity.owner-only`; pass `"owner"` only from a path that established the owner ran it), and an automatic match
   by the same address does not join those people again. `undoMerge` refuses with `identity.stale` when one of the
   identities was merged on into another person since.
-- **`identity_link` proposals: "these two are one person", which only the owner decides.** `people.proposeLink`
-  opens one, at most one open per pair of people, and refuses a pair the owner separated (`identity.separated`) or
-  rejected before (`identity.rejected`). `people.decideLink` and the proposal registry decide it: an agent is refused
-  whatever `agent_decisions` says (`proposal.owner-only`), and a confirm after either person changed is refused with
-  `identity.stale`. The generic `proposedActions` paths refuse to stage or approve the kind.
-- **`people.scanMatches()`, one pass of the people matcher.** The same address joins people in every scope, a phone
-  number exactly two people have joins them, and a number three to six people share, or a meeting guest's typed
-  address, opens an `identity_link` proposal. It reads a stored phone written with `+` or `00` however it is spaced,
-  and bare international digits; it never guesses a national number's country. It never acts over the owner's
-  separation or rejection, never moves the owner's person away, and records its merges as the rule's.
+- **`identity_link` proposals: "these two are one person", which only the owner decides.** `people.proposeLink` opens
+  one, at most one open per pair of people, and refuses a pair the owner separated (`identity.separated`) or rejected
+  before (`identity.rejected`). `people.decideLink` and the proposal registry decide it: an agent is refused whatever
+  `agent_decisions` says (`proposal.owner-only`), and a confirm after the owner took an identity off either person is
+  refused with `identity.stale`. A merge keeps open proposals up to date: one whose two people became one, or a second
+  for the same pair, is deleted, and a live one takes the people and identities it names now. The generic
+  `proposedActions` paths refuse to stage or approve the kind. `people.linkProposals({ person, status, limit, offset
+  })` reads them, newest first, naming the people as they are now, with `hasMore`.
+- **`people.scanMatches({ full })`, one pass of the people matcher.** The same email address joins people in every
+  scope. A phone number two people share joins them when a messenger (telegram, max, whatsapp) holds it and no
+  proposal ever named the pair, and otherwise opens an `identity_link` proposal; so do three to six people on one
+  number or one address, and a meeting guest's typed address. More than six is a shared line or mailbox and proposes
+  no one. It never acts over the owner's separation or rejection and records its merges as the rule's. It reads
+  outside any transaction and takes the write lock only per group; after the first pass it looks only at identities
+  changed since the last one, unless `full`. On 51,000 identities and 1,100 proposals a first pass takes 1.3–3.7 s and
+  a repeat 0.15–0.6 s, where a repeat took 20 s in one transaction before.
 
 ### Changed — may break callers
 
 - **An agent's mention confirm or meeting participant association no longer moves an identity.** Unless `by` is
   `"owner"`, `confirmMention` to a person and `linkParticipantPerson` open an `identity_link` proposal and return its
-  id as `proposal` (the association's `changed` is `false`), so an owner's link is never replaced.
+  id as `proposal`, so an owner's link is never replaced. Such a mention has the new status `proposed` (in
+  `MENTION_STATUSES`, `status:` and the `mention_decision` answer) until the owner decides: `linked` on confirm,
+  `found` again on reject. The association's `changed` is `false` and its `person_uid` the participant's current
+  person.
+- **`createMeetingContextService(store, account, { author })` takes who runs it, required: `"owner"` or `"agent"`.**
+  It linked every participant as the owner's; an agent's `person.link` now opens a proposal. Pass `"agent"` whenever
+  an agent runs the command (`actorOf`).
+- **`mergePerson` keeps the owner's person whichever side it is on, and gives the person that stays.**
+  `linkIdentities`, the same-address join at import, a confirmed proposal and the scan could each move every identity
+  of the owner onto a contact; the owner's uid now always stays.
+- **One email address pattern: a local part, `@` and a dotted domain (`isEmailAddress`).** The same-address join at
+  import took an address with no dot in its domain; it no longer does.
+- **At import, an address two or more other people have joins no one, and neither does a pair the owner rejected.**
+  The whole batch of `savePeople` is noted before any join, so one `office@` on many contacts stays shared; the scan
+  proposes those people instead.
 - **`people.personByUid` of a person merged into someone else answers with that person.** Its `uid` is the
   current person's, not the one asked for, and `mergedInto` is set; `personSeenInAccounts` follows the same merge.
   A caller that compares the answer's `uid` with the one it passed reads `mergedInto` instead.
