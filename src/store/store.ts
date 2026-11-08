@@ -30,6 +30,7 @@ import { type AgentActionsStore, agentActionsStoreOver } from "./sqlite/agent-ac
 import * as attachmentTexts from "./sqlite/attachment-texts.js"
 import { type BotUpdateStore, botUpdateStoreOver } from "./sqlite/bot-updates.js"
 import { type ContractsStore, contractsStoreOver } from "./sqlite/business-contracts.js"
+import { type BusinessSearchStore, businessSearchOver } from "./sqlite/business-search.js"
 import { eventStoreOver } from "./sqlite/calendar.js"
 import { type CatalogStore, catalogStoreOver } from "./sqlite/catalog.js"
 import { contextEvidenceOver, contextIndexOver, contextRecordsOver } from "./sqlite/context-evidence.js"
@@ -61,7 +62,7 @@ import { type ProductsStore, productsStoreOver } from "./sqlite/products.js"
 import { projectAnnotationStoreOver } from "./sqlite/project-transfer/store.js"
 import { type ProposedActionsStore, proposedActionsStoreOver } from "./sqlite/proposed-actions.js"
 import { type RecordStore, recordStoreOver } from "./sqlite/records.js"
-import { refSummariesOf } from "./sqlite/ref-summaries.js"
+import { refsStoreOver } from "./sqlite/ref-summaries.js"
 import { type RelationsStore, relationsStoreOver } from "./sqlite/reported-relations.js"
 import * as stems from "./sqlite/stems.js"
 import { type SubscriptionsStore, subscriptionsStoreOver } from "./sqlite/subscriptions.js"
@@ -147,6 +148,7 @@ export interface MessageStore {
   readonly wallets: WalletsStore
   /** What statements say moved on the wallets, split by category; an agent's or an import's wait for the owner. */
   readonly transactions: TransactionsStore
+  readonly business: BusinessSearchStore
   /** A CRM account's pipelines, deals, leads, contacts and companies, written as the CRM has them. */
   readonly crm: CrmCopies
   /** Relationships a source account reports, written as a diff that never overrides the owner's. */
@@ -263,9 +265,7 @@ const storeOver = (context: StoreContext): MessageStore => {
   const meetingFindings = once(() => meetingFindingsStoreOver(context))
   const evidenceFindings = once(() => evidenceFindingsStoreOver(context))
   const mailFindings = once(() => mailFindingsStoreOver(context))
-  const refs: RefsStore = {
-    summaries: async (texts, options) => refSummariesOf(context.database, texts, { ...options, now: context.now() }),
-  }
+  const refs = refsStoreOver(context)
   const facts = once(() => factsStoreOver(context))
   const finance = once(() => financeStoreOver(context))
   const orders = once(() => ordersStoreOver(context))
@@ -374,6 +374,7 @@ const storeOver = (context: StoreContext): MessageStore => {
       return meetingFindings()
     },
     refs,
+    business: businessSearchOver(context),
     get evidenceFindings() {
       return evidenceFindings()
     },
