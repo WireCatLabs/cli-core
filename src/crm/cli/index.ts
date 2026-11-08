@@ -39,6 +39,16 @@ import { csvFormatOption, renderCsv } from "./csv.js"
 import { pipelineView } from "./pipeline-view.js"
 import { addCrmSearchAll } from "./search-all.js"
 
+export {
+  type CsvField,
+  type CsvPage,
+  csvColumnPaths,
+  csvFormatOption,
+  DEAL_CSV_COLUMNS,
+  printCsv,
+  refuseCsvConflict,
+} from "./csv.js"
+
 /**
  * The selected profile's CRM account, opened by the app for one command and closed once its answer is built, before
  * anything is printed (WC-LIFE-4).
