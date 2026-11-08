@@ -5,7 +5,7 @@ Every table of the shared store (tg, max, memo, zm) as its migrations create it.
 `drizzle/` must agree with it. `pnpm schema:check` fails when they do not, and `src/store/sqlite/schema.test.ts`
 checks every table and column of a new store against this page.
 
-131 tables, 25 full-text indexes.
+132 tables, 25 full-text indexes.
 
 ## Conventions
 
@@ -2376,6 +2376,27 @@ One button of a message that asks the owner to decide a batch. The button carrie
 | `cancelled_at` | integer |  |  | a sibling was used, or the owner turned the feature off |
 
 *Keys and indexes:* `INDEX (channel, bot_profile, chat_id, message_id)`
+
+## Enrichment
+
+Text a hosted model wrote about a record so search finds it in other words. Off until the owner turns it on; never the record's own text.
+
+### `enrichments`
+
+What a hosted model wrote about one note, document or email when the owner turned enrichment on: standalone facts and questions in other words. Search reads it beside the record, so a hit still cites the record. Written only with the owner's consent; deleted with the record, and all of it when enrichment is turned off.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `subject_type` | text | not null |  | `document`, `note` or `email` |
+| `subject_id` | integer | not null |  | the row of that table |
+| `source_hash` | text | not null |  | hash of the record's indexed text the model read; a record whose text changed is enriched again |
+| `provider` | text | not null |  | `openai` or `anthropic` |
+| `model` | text | not null |  | the provider's model name |
+| `text` | text | not null |  | the facts and questions, one a line |
+| `tokens` | integer | not null |  | this record's share of the provider's reported tokens |
+| `created_at` | integer | not null |  | when this row was saved here |
+
+*Keys and indexes:* `PRIMARY KEY (subject_type, subject_id)`
 
 ## Source records
 

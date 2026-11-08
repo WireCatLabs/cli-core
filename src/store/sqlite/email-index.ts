@@ -11,16 +11,18 @@ export const titleOf = (subject: string | null): string | null =>
   subject?.replace(/^\s*((re|fwd?|aw|wg)\s*:\s*)+/i, "").trim() || null
 
 /**
- * Every piece of mail: a stretch of a thread, or of one email's attachment. A thread piece holds no email of its
+ * Every piece of mail: a stretch of a thread, one email's attachment, or the text a model wrote about one email. A thread piece holds no email of its
  * own; `threadPieces` cuts the thread again to find which emails it spans.
  */
 export const MAIL_PIECES = `(SELECT k.id, k.content_hash, k.chunkable_type AS type, k.chunkable_id AS owner, k.position,
-    k.start_offset, k.end_offset, k.account_id, k.occurred_at, a.attachable_id AS email_id,
+    k.start_offset, k.end_offset, k.account_id, k.occurred_at,
+    CASE k.chunkable_type WHEN 'email_enrichment' THEN k.chunkable_id ELSE a.attachable_id END AS email_id,
     CASE k.chunkable_type WHEN 'email_thread' THEN k.chunkable_id
-      ELSE (SELECT email_thread_id FROM emails WHERE id = a.attachable_id) END AS thread_id
+      ELSE (SELECT email_thread_id FROM emails
+        WHERE id = CASE k.chunkable_type WHEN 'email_enrichment' THEN k.chunkable_id ELSE a.attachable_id END) END AS thread_id
     FROM chunks k LEFT JOIN attachments a ON k.chunkable_type = 'attachment' AND a.id = k.chunkable_id
       AND a.attachable_type = 'email'
-   WHERE k.chunkable_type = 'email_thread' OR a.id IS NOT NULL) p`
+   WHERE k.chunkable_type IN ('email_thread', 'email_enrichment') OR a.id IS NOT NULL) p`
 
 interface ThreadText {
   lines: ChunkLine[]
