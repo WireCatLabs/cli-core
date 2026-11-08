@@ -84,6 +84,9 @@ of the view model. No colour on the body: the grey (#8a8a8a) and the link blue (
       {%- if group.link %}<a href="{{ group.link.url }}" style="color:#3b82c4">{{ words }}</a>{% else %}{{ words }}{% endif -%}
     {%- endfor -%}
   </p>{%- endif -%}
+  {%- if section.undated %}{{ nl }}<p style="margin:0 0 12px;{{ muted }}">no due date: {{ section.undated.count }}
+    {%- if section.undated.link %} · <a href="{{ section.undated.link.url }}" style="color:#3b82c4">open</a>{% endif -%}
+  </p>{%- endif -%}
 {%- endfor -%}
 {%- for source in health.items -%}
   {{ nl }}<p style="margin:20px 0 0;{{ muted }}">{{ health.emoji }} {{ source.source }}

@@ -4,6 +4,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { CliError, resolvePaths } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
+import { type QueryRegistry, queryFieldsOf } from "@wirecat/cli-base/query"
 import { Command, Option } from "commander"
 import type { MessageKind } from "../background/report/messages.js"
 import {
@@ -20,11 +21,13 @@ import {
   TEMPLATE_KEYS,
   templateKeyOf,
 } from "../background/report/stored-templates.js"
+import { template } from "../entities/index.js"
 import type { AppIdentity } from "../ports/app.js"
 import { agentOf } from "../runs/run-context.js"
 import { type MessageStore, openStore, type TemplateAddress } from "../store/store.js"
 import { grantsAuthority, LOCAL_READ, LOCAL_WRITE } from "./effects.js"
 import { type Body, itemOf, listOf } from "./envelope.js"
+import { type QueryWords, queryTerms, withQuery } from "./list-query.js"
 import { ownerLanguageOf } from "./schedule/schedule-command.js"
 
 export interface TemplatesOptions {
@@ -61,13 +64,29 @@ const channelOption = () =>
     .choices(REPORT_CHANNELS)
     .makeOptionMandatory()
 
-const languageOption = () =>
-  new Option("--language <code>", "the template's language, ISO 639-1; the owner's first language if not given")
+const localeOption = () =>
+  new Option("--locale <code>", "the template's language, ISO 639-1; the owner's first language if not given")
+
+const TEMPLATES_QUERY: QueryRegistry = {
+  entity: "template",
+  backend: "native",
+  fields: queryFieldsOf(template, {
+    native: ["key", "channel", "language", "source"],
+    exclude: ["about", "renders", "updated_at", "updated_by"],
+    examples: { key: 'key:"report/morning-digest"', channel: "channel:telegram", language: "language:en" },
+  }).map((field) => ({
+    ...field,
+    operators: field.operators.filter((operator) => operator === "term" || operator === "phrase"),
+  })),
+}
+
+const matching = <T extends Record<string, unknown>>(rows: T[], terms: Map<string, string>): T[] =>
+  rows.filter((row) => [...terms].every(([field, value]) => String(row[field]).toLowerCase() === value.toLowerCase()))
 
 /** The key, its message kind and the language, refused when cli-core ships no template in that language. */
 const addressOf = async (
   key: string,
-  given: { channel: ReportChannel; language?: string },
+  given: { channel: ReportChannel; locale?: string },
   env: NodeJS.ProcessEnv,
 ): Promise<{ address: TemplateAddress; kind: MessageKind; channel: ReportChannel }> => {
   const known = templateKeyOf(key)
@@ -79,7 +98,7 @@ const addressOf = async (
         reason: "template.unknown-key",
       },
     )
-  const language = (given.language ?? (await ownerLanguageOf(env))).trim().toLowerCase()
+  const language = (given.locale ?? (await ownerLanguageOf(env))).trim().toLowerCase()
   const languages = shippedLanguages(known.kind)
   if (!languages.includes(language))
     throw new CliError(
@@ -117,16 +136,23 @@ const historyOf = (store: MessageStore, address: TemplateAddress) =>
  */
 export const templatesCommand = (app: AppIdentity, options: TemplatesOptions): Command => {
   const editor = options.editor ?? systemEditor
-  const templates = annotate(new Command("templates"), { effects: LOCAL_READ }).description(
-    "the templates of the digest and the other messages sent to you, per channel and language; edit, preview, reset",
-  )
+  const templates = annotate(new Command("templates"), { effects: LOCAL_READ })
+    .summary("the templates of the messages sent to you; edit, preview, reset")
+    .description(
+      "the templates of the digest and the other messages sent to you, per channel and language; edit, preview, reset",
+    )
 
-  annotate(templates.command("list"), {
-    effects: LOCAL_READ,
-    examples: [`${app.command} templates list`],
-  })
+  withQuery(
+    annotate(templates.command("list"), {
+      effects: LOCAL_READ,
+      examples: [`${app.command} templates list`, `${app.command} templates list channel:telegram language:en`],
+    }),
+    TEMPLATES_QUERY,
+  )
+    .summary("every template, and whether yours or the shipped one applies")
     .description("every template key, channel and language, and whether yours or the shipped one applies")
-    .action(async function (this: Command) {
+    .action(async function (this: Command, words: QueryWords) {
+      const terms = queryTerms(words, TEMPLATES_QUERY, "templates list")
       const env = options.env()
       const stored = await withStore(env, (store) => store.templates.list())
       const items = TEMPLATE_KEYS.flatMap((known) =>
@@ -148,18 +174,20 @@ export const templatesCommand = (app: AppIdentity, options: TemplatesOptions): C
           }),
         ),
       )
-      options.output(listOf("templates list", { items, limit: items.length, has_more: false }), this)
+      const found = matching(items, terms)
+      options.output(listOf("templates list", { items: found, limit: found.length, has_more: false }), this)
     })
 
   annotate(templates.command("show"), {
     effects: LOCAL_READ,
     examples: [`${app.command} templates show report/morning-digest --channel telegram`],
   })
+    .summary("the template that applies, and the bodies your changes replaced")
     .description("the template that applies, yours or the shipped one, and the bodies your changes replaced")
     .argument("<key>", "the template, such as report/morning-digest")
     .addOption(channelOption())
-    .addOption(languageOption())
-    .action(async function (this: Command, key: string, given: { channel: ReportChannel; language?: string }) {
+    .addOption(localeOption())
+    .action(async function (this: Command, key: string, given: { channel: ReportChannel; locale?: string }) {
       const env = options.env()
       const { address, kind, channel } = await addressOf(key, given, env)
       const item = await withStore(env, (store) => {
@@ -186,13 +214,14 @@ export const templatesCommand = (app: AppIdentity, options: TemplatesOptions): C
       ],
     }),
   )
+    .summary("change a template in $EDITOR or from --file; checked before it is saved")
     .description(
       "change a template in $EDITOR or from --file; it is checked first, and a failed check saves nothing and says why",
     )
     .argument("<key>", "the template, such as report/morning-digest")
     .addOption(channelOption())
-    .addOption(languageOption())
-    .option("--file <path>", "take the new template from this file instead of opening an editor")
+    .addOption(localeOption())
+    .option("--file <file>", "take the new template from this file instead of opening an editor")
     .addOption(
       new Option("--undo", "put back the body your last change replaced; twice is back where you were").conflicts(
         "file",
@@ -201,7 +230,7 @@ export const templatesCommand = (app: AppIdentity, options: TemplatesOptions): C
     .action(async function (
       this: Command,
       key: string,
-      given: { channel: ReportChannel; language?: string; file?: string; undo?: boolean },
+      given: { channel: ReportChannel; locale?: string; file?: string; undo?: boolean },
     ) {
       const env = options.env()
       refuseAgent(env)
@@ -281,17 +310,18 @@ export const templatesCommand = (app: AppIdentity, options: TemplatesOptions): C
       `${app.command} templates preview report/morning-digest --channel email --file draft.liquid`,
     ],
   })
+    .summary("what would be sent on that channel; saves nothing")
     .description(
       "what would be sent on that channel, from the last real report or a synthetic one when there is none; saves nothing",
     )
     .argument("<key>", "the template, such as report/morning-digest")
     .addOption(channelOption())
-    .addOption(languageOption())
-    .option("--file <path>", "preview this draft instead of the template that applies")
+    .addOption(localeOption())
+    .option("--file <file>", "preview this draft instead of the template that applies")
     .action(async function (
       this: Command,
       key: string,
-      given: { channel: ReportChannel; language?: string; file?: string },
+      given: { channel: ReportChannel; locale?: string; file?: string },
     ) {
       const env = options.env()
       const { address, kind, channel } = await addressOf(key, given, env)
@@ -320,11 +350,12 @@ export const templatesCommand = (app: AppIdentity, options: TemplatesOptions): C
       examples: [`${app.command} templates reset report/morning-digest --channel telegram`],
     }),
   )
+    .summary("go back to the shipped template; edit --undo brings yours back")
     .description("go back to the shipped template; yours is kept in the history, and edit --undo brings it back")
     .argument("<key>", "the template, such as report/morning-digest")
     .addOption(channelOption())
-    .addOption(languageOption())
-    .action(async function (this: Command, key: string, given: { channel: ReportChannel; language?: string }) {
+    .addOption(localeOption())
+    .action(async function (this: Command, key: string, given: { channel: ReportChannel; locale?: string }) {
       const env = options.env()
       refuseAgent(env)
       const { address } = await addressOf(key, given, env)

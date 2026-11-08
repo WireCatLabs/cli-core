@@ -185,6 +185,7 @@ import {
   taskSimilar,
   taskUnmerge,
 } from "./task-results.js"
+import { template } from "./template.js"
 import { topic } from "./topic.js"
 
 /**
@@ -385,6 +386,7 @@ export {
   taskSimilar,
   taskStats,
   taskUnmerge,
+  template,
   topic,
   topicIcon,
   trackedChat,
@@ -675,6 +677,7 @@ export const ENTITIES = {
   tracked_chat_history: trackedChatHistory,
   chat_tracking: chatTracking,
   task_stats: taskStats,
+  template,
 } as const
 
 export type EntityName = keyof typeof ENTITIES
