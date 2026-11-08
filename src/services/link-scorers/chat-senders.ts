@@ -1,6 +1,9 @@
 import { formatReference, parseReference } from "../../domain/references.js"
-import { contactRef, personRefOf, sameAccount } from "./shared.js"
-import type { LinkCandidate, LinkScorer } from "./types.js"
+import type { AccountKey } from "../../store/types.js"
+import { contactRef, personRefOf, remembered, sameAccount } from "./shared.js"
+import type { LinkCandidate, LinkScorer, ScorerInput } from "./types.js"
+
+type ChatReference = Extract<ReturnType<typeof parseReference>, { type: "chat" }>
 
 const WEIGHT = 0.5
 const LARGE_GROUP_WEIGHT = 0.2
@@ -26,7 +29,8 @@ export const chatSenders: LinkScorer = {
   id: "chat-senders",
   version: 3,
   spreads: true,
-  candidates: async ({ store, project, confirmed, sources, since, owner, signal }) => {
+  candidates: async (input) => {
+    const { project, confirmed, sources, signal } = input
     if (!project) return []
     const found: LinkCandidate[] = []
     for (const chat of confirmed.chats) {
@@ -35,31 +39,47 @@ export const chatSenders: LinkScorer = {
       const key = sources.find((source) => sameAccount(source, reference))
       if (!key) continue
       signal?.throwIfAborted()
-      const page = await store.messages.messages(key, reference.chat, { limit: READ_LIMIT, since, outgoing: false })
-      const senders = new Map<string, { count: number; last: string }>()
-      for (const message of page.items) {
-        if (message.senderId === null || message.senderIsChat) continue
-        const id = String(message.senderId)
-        senders.set(id, { count: (senders.get(id)?.count ?? 0) + 1, last: String(message.id) })
-      }
-      const size = Math.max((await store.roster.members(key, reference.chat)).length, senders.size)
-      const weight = size > LARGE_GROUP ? LARGE_GROUP_WEIGHT : WEIGHT
-      const where = named(await store.chats.chatTitle(key, reference.chat), chat)
-      for (const [id, { count, last }] of senders) {
-        if (size > SMALL_CHAT && count < MIN_MESSAGES) continue
-        const person = await personRefOf(store, key.provider, id)
-        if (!person || person === owner) continue
-        found.push({
-          from: person,
-          to: project.ref,
-          kind: "member-of",
-          weight,
-          why: `wrote ${count} message${count === 1 ? "" : "s"} in ${where} (${size} people) since ${since.slice(0, 10)}`,
-          evidence: [chat, formatReference({ ...reference, type: "message", message: last })],
-          identity: contactRef(key.provider, id),
-        })
-      }
+      for (const one of await remembered(input, `chat-senders\u0000${chat}`, () =>
+        sendersOf(input, chat, reference, key),
+      ))
+        found.push(one)
     }
     return found
   },
+}
+
+const sendersOf = async (
+  input: ScorerInput,
+  chat: string,
+  reference: ChatReference,
+  key: AccountKey,
+): Promise<LinkCandidate[]> => {
+  const { store, project, since, owner } = input
+  if (!project) return []
+  const found: LinkCandidate[] = []
+  const page = await store.messages.messages(key, reference.chat, { limit: READ_LIMIT, since, outgoing: false })
+  const senders = new Map<string, { count: number; last: string }>()
+  for (const message of page.items) {
+    if (message.senderId === null || message.senderIsChat) continue
+    const id = String(message.senderId)
+    senders.set(id, { count: (senders.get(id)?.count ?? 0) + 1, last: String(message.id) })
+  }
+  const size = Math.max((await store.roster.members(key, reference.chat)).length, senders.size)
+  const weight = size > LARGE_GROUP ? LARGE_GROUP_WEIGHT : WEIGHT
+  const where = named(await store.chats.chatTitle(key, reference.chat), chat)
+  for (const [id, { count, last }] of senders) {
+    if (size > SMALL_CHAT && count < MIN_MESSAGES) continue
+    const person = await personRefOf(input, key.provider, id)
+    if (!person || person === owner) continue
+    found.push({
+      from: person,
+      to: project.ref,
+      kind: "member-of",
+      weight,
+      why: `wrote ${count} message${count === 1 ? "" : "s"} in ${where} (${size} people) since ${since.slice(0, 10)}`,
+      evidence: [chat, formatReference({ ...reference, type: "message", message: last })],
+      identity: contactRef(key.provider, id),
+    })
+  }
+  return found
 }

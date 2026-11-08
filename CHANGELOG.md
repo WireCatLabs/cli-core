@@ -5,6 +5,15 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Fixed
+
+- **`relationships scan` reads each chat once, however many times it spreads.** Each of its up to 4 passes read every
+  chat found so far again (up to 2 000 messages each) and looked up every sender's person again, so a project with
+  confirmed links took about four times longer than one without: 7.7 s against 1.8 s on a synthetic store of 2 600
+  chats. A scan now keeps what it read until it ends: 1.6 s on the same store, with the same proposals.
+
 ## 0.612.0 — 08.11.2026
 
 ### Changed — may break callers
