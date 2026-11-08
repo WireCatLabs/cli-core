@@ -254,6 +254,8 @@ takes only an existing calendar's `id`), so the CLI reads the feed itself.
   same (`fetchFeedIfChanged`). A `304` returns a page with `unchanged: true`: the engine saves nothing and marks
   nothing unseen, and `feeds` says `unchanged`. A moved window (once a day, `calendarSyncWindow`) or `sync --rescan`
   reads the feed in full, since events and slots entering the window are found only by a read.
+- **Restoring:** `EventStore.restoreCalendar` clears a calendar's `deleted_at`. A records import refuses calls into a
+  phone account's deleted `calls` calendar until then ([records envelope](../storage/records-envelope.md)).
 - **Removing:** `calendars remove` forgets the address, then `EventStore.forgetCalendar` deletes the calendar, its
   entries, the events and series only it held, their links, tags, search words and vectors, its cursor, and the
   people only it had seen. An event another calendar also holds (the same iCalUID) stays, with that copy's fields; a
