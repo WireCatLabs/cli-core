@@ -25,6 +25,17 @@ shape of this file.
   stored and previewed, but mail still sends the plain-text rendering. `store.templates` and
   `storedTemplateBodies(database, key, language)` from `@wirecat/cli-core/store`.
 
+### Fixed
+
+- **Busy sync runs no longer fail with "database is locked".** Each writable open read the schema version under the
+  write lock, without the retry other writes use, so with several tools syncing at once it gave up after 5 s. A
+  current store is now checked without the lock, and a migration takes it with the retry. Listing mail pieces to
+  embed (`mail.chunksToEmbed`, and mail search) wrote its queue bookkeeping outside a transaction; it now reads
+  first and writes through the store's transaction only when there is work.
+- **The real error of a failed write is shown.** When SQLite had already rolled a transaction back itself (an I/O
+  error, a full disk), the store's own rollback failed with "cannot rollback - no transaction is active", and that
+  message replaced the real one.
+
 ## 0.614.0 — 08.11.2026
 
 ### Added

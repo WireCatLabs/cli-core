@@ -50,23 +50,25 @@ export const storeClients = (database: CacheDatabase): StoreClient[] => {
   }
 }
 
-/** Writes only when the CLI's version, cli-core or schema changed, or a day passed: every run calls it. */
-export const recordClient = (
-  database: CacheDatabase,
-  { command, version, speaks }: { command: string; version: string; speaks: number },
-  now: number,
-): void => {
-  if (!hasSettings(database)) return
-  const stored = storeClients(database)
-  const same = stored.find((one) => one.command === command)
-  if (
-    same &&
+type Client = { command: string; version: string; speaks: number }
+
+/** Whether `recordClient` would write nothing: the CLI's version, cli-core and schema are unchanged within a day. */
+export const clientRecorded = (database: CacheDatabase, { command, version, speaks }: Client, now: number): boolean => {
+  if (!hasSettings(database)) return true
+  const same = storeClients(database).find((one) => one.command === command)
+  return (
+    same !== undefined &&
     same.version === version &&
     same.core === coreVersion &&
     same.speaks === speaks &&
     now - same.seenAt < 86_400_000
   )
-    return
+}
+
+/** Writes only when the CLI's version, cli-core or schema changed, or a day passed: every run calls it. */
+export const recordClient = (database: CacheDatabase, { command, version, speaks }: Client, now: number): void => {
+  if (clientRecorded(database, { command, version, speaks }, now)) return
+  const stored = storeClients(database)
   const entry: StoreClient = { command, version, core: coreVersion, speaks, seenAt: now }
   database
     .prepare("INSERT OR REPLACE INTO store_settings (key, value, at) VALUES (?, ?, ?)")

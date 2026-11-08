@@ -1,6 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import type { CacheDatabase } from "./driver.js"
-import { lockedOutNotice, recordClient, refusalAdvice, storeClients } from "./sqlite/clients.js"
+import { clientRecorded, lockedOutNotice, recordClient, refusalAdvice, storeClients } from "./sqlite/clients.js"
 import { generatedMigrations } from "./sqlite/manifest.js"
 import {
   discardRollbackCopy,
@@ -9,6 +9,7 @@ import {
   recordRollbackCopy,
   takeRollbackCopy,
 } from "./sqlite/rollback-copy.js"
+import { beginImmediate, rollBack } from "./sqlite/transaction.js"
 
 export interface Migration {
   version: number
@@ -61,6 +62,44 @@ const fileState = (database: CacheDatabase): { version: number; minCompatible: n
   return { version: Number(row?.version ?? 0), minCompatible: Number(row?.min_compatible ?? 0) }
 }
 
+const refuseForeignOrNewer = (
+  database: CacheDatabase,
+  file: { version: number; minCompatible: number },
+  { ours, ownTable, command }: { ours: number; ownTable: string | null; command: string | undefined },
+): void => {
+  if (file.version > 0 && ownTable !== null && !hasTable(database, ownTable)) {
+    throw new CliError(
+      "configuration_error",
+      `the message store was written by another, incompatible tool (schema ${file.version} by its own numbering, ` +
+        "with no meetings table) — this tool will not open or change it; move it aside to start a new store",
+    )
+  }
+  if (file.version > ours && file.minCompatible > ours) {
+    throw new CliError(
+      "configuration_error",
+      `the message store was written by a newer version (schema ${file.version}, needs at least ` +
+        `${file.minCompatible}; this one speaks ${ours}) — ${refusalAdvice(storeClients(database), command, file.version)}`,
+    )
+  }
+}
+
+/**
+ * Every writable open runs `migrate`, and most find the file current. Taking the write lock just to learn that queues
+ * each open behind the sync writers, so a current file is checked without it.
+ */
+const current = (
+  database: CacheDatabase,
+  ours: number,
+  client: { command: string; version: string } | undefined,
+  now: () => number,
+): { version: number; minCompatible: number } | undefined => {
+  if (!hasTable(database, "schema_migrations")) return undefined
+  const file = fileState(database)
+  if (file.version < ours) return undefined
+  if (client && !clientRecorded(database, { ...client, speaks: ours }, now())) return undefined
+  return file
+}
+
 /** The tables every pending migration that raises `minCompatible` names; none for a new file or a foreign one. */
 const copyBeforeBreaking = (
   database: CacheDatabase,
@@ -84,7 +123,7 @@ const copyBeforeBreaking = (
 
 /**
  * Brings the file up to this version, or opens a newer one it can still write to, or refuses.
- * Inside `BEGIN IMMEDIATE`, so two processes opening an old file at once migrate it once. A migration
+ * A file that needs work is migrated inside `BEGIN IMMEDIATE`, so two processes opening an old file at once migrate it once. A migration
  * that fails names `store reset` when the app has one: without it the owner is stuck until a build that can migrate
  * the file. An app without that command (drive) passes no `command`, and the advice names none.
  */
@@ -109,8 +148,13 @@ export const migrate = (
   } = {},
 ): string | undefined => {
   const ours = latest(migrations)
+  const settled = current(database, ours, command && version ? { command, version } : undefined, now)
+  if (settled) {
+    refuseForeignOrNewer(database, settled, { ours, ownTable, command })
+    return undefined
+  }
   let copy = rollback ? copyBeforeBreaking(database, migrations, { ownTable, now }, rollback) : undefined
-  database.exec("BEGIN IMMEDIATE")
+  beginImmediate(database)
   try {
     database.exec(HISTORY)
     const file = fileState(database)
@@ -119,20 +163,7 @@ export const migrate = (
       discardRollbackCopy(copy)
       copy = undefined
     }
-    if (file.version > 0 && ownTable !== null && !hasTable(database, ownTable)) {
-      throw new CliError(
-        "configuration_error",
-        `the message store was written by another, incompatible tool (schema ${file.version} by its own numbering, ` +
-          "with no meetings table) — this tool will not open or change it; move it aside to start a new store",
-      )
-    }
-    if (file.version > ours && file.minCompatible > ours) {
-      throw new CliError(
-        "configuration_error",
-        `the message store was written by a newer version (schema ${file.version}, needs at least ` +
-          `${file.minCompatible}; this one speaks ${ours}) — ${refusalAdvice(storeClients(database), command, file.version)}`,
-      )
-    }
+    refuseForeignOrNewer(database, file, { ours, ownTable, command })
     const raisedTo = migrations
       .filter((migration) => migration.version > file.version)
       .reduce((highest, { minCompatible }) => Math.max(highest, minCompatible), file.minCompatible)
@@ -157,7 +188,7 @@ export const migrate = (
     database.exec("COMMIT")
     return notice
   } catch (error) {
-    database.exec("ROLLBACK")
+    rollBack(database)
     if (error instanceof CliError) throw error
     const cause = error instanceof Error ? error.message : String(error)
     throw new CliError(

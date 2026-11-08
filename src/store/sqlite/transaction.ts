@@ -22,7 +22,7 @@ export const isBusy = (error: unknown): boolean => sqliteCode(error) === SQLITE_
  * with "database is locked" after the full timeout. Trying every millisecond sees a gap of a fraction of a
  * millisecond between two writes; a writer that leaves none still starves it, hence `writeBatch`'s pause.
  */
-const beginImmediate = (database: CacheDatabase): void => {
+export const beginImmediate = (database: CacheDatabase): void => {
   const timeout = Number(database.prepare("PRAGMA busy_timeout").get()?.timeout ?? 0)
   const deadline = Date.now() + timeout
   database.exec("PRAGMA busy_timeout = 0")
@@ -39,6 +39,16 @@ const beginImmediate = (database: CacheDatabase): void => {
   } finally {
     database.exec(`PRAGMA busy_timeout = ${timeout}`)
   }
+}
+
+/**
+ * On some errors (a full disk, an I/O error) SQLite has already rolled the transaction back, and the ROLLBACK then
+ * fails with "no transaction is active". That failure must not take the place of the error that ended it.
+ */
+export const rollBack = (database: CacheDatabase, sql = "ROLLBACK"): void => {
+  try {
+    database.exec(sql)
+  } catch {}
 }
 
 const connections = new WeakMap<CacheDatabase, Connection>()
@@ -98,7 +108,7 @@ const transact = <T>(database: CacheDatabase, body: () => T, drain: boolean, bef
     database.exec(outer ? "COMMIT" : `RELEASE ${name}`)
     return result
   } catch (error) {
-    database.exec(outer ? "ROLLBACK" : `ROLLBACK TO ${name}; RELEASE ${name}`)
+    rollBack(database, outer ? "ROLLBACK" : `ROLLBACK TO ${name}; RELEASE ${name}`)
     throw error
   } finally {
     connection.depth -= 1
@@ -158,7 +168,7 @@ export const rehearse = async <T>(
       if (own) target[name] = call
       else delete target[name]
     connection.depth -= 1
-    database.exec("ROLLBACK")
+    rollBack(database)
   }
 }
 
@@ -175,7 +185,7 @@ export const read = <T>(database: CacheDatabase, body: () => T): T => {
     database.exec(`RELEASE ${name}`)
     return result
   } catch (error) {
-    database.exec(`ROLLBACK TO ${name}; RELEASE ${name}`)
+    rollBack(database, `ROLLBACK TO ${name}; RELEASE ${name}`)
     throw error
   } finally {
     connection.depth -= 1
