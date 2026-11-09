@@ -3,10 +3,10 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { DatabaseSync } from "node:sqlite"
 import { afterEach, expect, it, vi } from "vitest"
-import { isUsable, RELATION_KINDS, usableLinkSql } from "../domain/relations.js"
+import { isUsable, KEYED, notOverriddenSql, RELATION_KINDS, usableLinkSql } from "../domain/relations.js"
 import { openCache } from "./open.js"
 import { crmSettingKey, parseCrmSetting, parseCrmSettingValue } from "./sqlite/crm-settings.js"
-import { KEYED, type ReportedOutcome } from "./sqlite/reported-relations.js"
+import type { ReportedOutcome } from "./sqlite/reported-relations.js"
 import { type MessageStore, openStore } from "./store.js"
 
 const stores: MessageStore[] = []
@@ -164,6 +164,24 @@ it("finds a reported relationship by its unique key, not by every link of its bu
           .all()
           .map((row) => row.detail),
       ).toEqual([expect.stringContaining("USING INDEX links_relationship_key (kind=? AND from_type=? AND from_id=?")])
+  } finally {
+    database.close()
+  }
+})
+
+it("looks an owner's override up by the relationship key, not by every link of the busier end", async () => {
+  const { path } = await fixture()
+  const database = new DatabaseSync(path, { readOnly: true })
+  try {
+    const plan = database
+      .prepare(`EXPLAIN QUERY PLAN SELECT id FROM links WHERE kind = 'related-to' AND ${notOverriddenSql("links")}`)
+      .all()
+      .map((row) => String(row.detail))
+    expect(plan).toContainEqual(
+      expect.stringMatching(
+        /^SEARCH override USING INDEX links_relationship_key \(kind=\? AND from_type=\? AND from_id=\? AND to_type=\? AND to_id=\?/,
+      ),
+    )
   } finally {
     database.close()
   }

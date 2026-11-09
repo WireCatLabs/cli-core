@@ -216,12 +216,18 @@ export const isUsable = (standing: Standing): boolean => standing === "confirmed
 
 export const usableLink = (link: StandingFields, now: number): boolean => isUsable(standingOf(link, now))
 
+// links_relationship_key's WHERE, word for word: without it SQLite cannot use that partial index, picks
+// (to_type, to_id) and reads every link of a busy end, such as a deal owner's, for each relationship (#2623).
+export const KEYED =
+  "kind IN ('member-of', 'related-to', 'reports-to', 'customer-of', 'partner-of') AND to_id IS NOT NULL"
+
 /**
  * The `links` row aliased `alias` has no owner link overriding it (`metadata.overrides`, an owner's edit of a link a
  * source reported): where one does, the override is the answer.
  */
 export const notOverriddenSql = (alias: string): string =>
-  `NOT EXISTS (SELECT 1 FROM links override WHERE override.kind = ${alias}.kind AND override.from_type = ${alias}.from_type ` +
+  `NOT EXISTS (SELECT 1 FROM links override WHERE ${KEYED} AND override.kind = ${alias}.kind ` +
+  `AND override.from_type = ${alias}.from_type ` +
   `AND override.from_id = ${alias}.from_id AND override.to_type = ${alias}.to_type AND override.to_id = ${alias}.to_id ` +
   `AND json_extract(override.metadata, '$.overrides') = ${alias}.id)`
 

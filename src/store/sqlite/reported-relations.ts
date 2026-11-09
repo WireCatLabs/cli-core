@@ -1,5 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
-import { checkEnds, isSymmetric, type RelationKind } from "../../domain/relations.js"
+import { checkEnds, isSymmetric, KEYED, type RelationKind } from "../../domain/relations.js"
 import type { AccountKey } from "../types.js"
 import { accountPk } from "./accounts.js"
 import { crmLinkMode } from "./crm-settings.js"
@@ -94,11 +94,6 @@ export interface RelationsStore {
 }
 
 type Row = Record<string, unknown>
-
-// links_relationship_key's WHERE, word for word: without it SQLite cannot use that partial index, picks
-// (to_type, to_id) and reads every link of a busy end, such as a deal owner's, for each relationship (#2623).
-export const KEYED =
-  "kind IN ('member-of', 'related-to', 'reports-to', 'customer-of', 'partner-of') AND to_id IS NOT NULL"
 
 const metadataOf = (relation: ReportedRelation) =>
   relation.metadata && Object.keys(relation.metadata).length ? JSON.stringify(relation.metadata) : null
