@@ -27,6 +27,16 @@ shape of this file.
   citing it gets a "source changed" review from `knowledge.checkSources` instead of a second copy beside it, and the
   same text changes nothing. Different keys stay separate. The answer has a new optional `changed` field: whether
   text was written; a host store that wraps `saveAddedSource` may leave it out. No store migration.
+- **`searchAll` takes `harder`: a hosted model reorders the first 30 hits (off by default).** Claude Haiku reads the
+  question with the hits and puts the ones that answer it first; in the search lab, over a first stage with Haiku
+  rewrites, it lifted LifeBench recall@10 from 0.49 to 0.55 for about $0.0004 a question. It sends only when a search asks, the owner has agreed with
+  `models search-consents set anthropic --yes` (memo), and a key is found. Any failure or a 5 s wait keeps the plain
+  order, and the answer's `harder` field says why. See
+  [AI providers, "Search harder"](docs/search/ai-providers.md#search-harder-a-hosted-model-reorders-search-all-off-by-default).
+- **The Anthropic model adapter takes `thinking` and `output_config` (effort, JSON schema format).**
+- **`templates edit` and `templates preview` take `--file -` to read the template from stdin.** It matches
+  `digest brief edit --file -`, and lets a caller on Windows, where `/dev/stdin` does not exist, pass a template
+  without a temporary file.
 
 ### Changed — may break callers
 
@@ -79,6 +89,11 @@ shape of this file.
   `scope`. `contacts context`, `contacts prepare` and calendar preparation also leave out a chat pinned to a scope
   that is not read, even in a readable account: its shared chat, messages and mentions.
   `store.chats.chatScopes(key, chatIds)` answers each chat's scope, its own or else its account's.
+- **The CRM's `deals` and `leads` commands name their argument `<deal>` and `<lead>`, not `<ref>`** (WC-CMD-13).
+  `show`, `update`, `move`, `close` and `delete` take the same `deal:<id>` or `lead:<id>` as before; only the name
+  changes. Through MCP the argument is now `deal` or `lead`, so a call that sends `ref` is refused. Under
+  `<PREFIX>_GROUP_LOCK` a bare id such as `deals show 12` is now read as `deal:12` and checked against the group. A
+  CRM CLI runs `pnpm generate` and `pnpm exec cli-contract contracts/plan.json --update` on the bump that brings this.
 
 ### Fixed
 
@@ -88,6 +103,9 @@ shape of this file.
 - **`bin/release` publishes when main has only `changes/` fragments and no `## Unreleased`.** With the version taken on
   npm it looked for `## Unreleased` to put the next version under, found none and stopped before publishing 0.620.0.
   It now adds the new version's heading above the newest one and collects the fragments into it.
+- **Help and docs name EmbeddingGemma as the default text model.** `conversations embed --model` said
+  "default: e5-small" and now reads the name from `DEFAULT_TEXT_MODEL`. `docs/search/ai-providers.md` no longer
+  says e5-small is the default. e5-small stays a choice and the fallback on a machine that has only it.
 
 ## 0.619.0 — 09.11.2026
 
