@@ -49,7 +49,13 @@ export {
   type TaskState,
 } from "../tasks/index.js"
 export type { AccountMail, AccountMeetings, AccountStore } from "./account-store.js"
-export { type DamageExplanation, explainDamage } from "./damage.js"
+export {
+  type DamageCause,
+  type DamageFindings,
+  type RecoveryStep,
+  type StoreDamageReport,
+  storeDamageReport,
+} from "./damage.js"
 export {
   CALLBACK_PREFIX,
   callbackDataOf,
@@ -125,9 +131,12 @@ export {
   damageMarkPath,
   type HealthMark,
   healthMarkPath,
+  type JournalMark,
+  journalMarkPath,
   markStoreDamaged,
   readDamageMark,
   readHealthMark,
+  readJournalMark,
   recordDeepCheck,
 } from "./marks.js"
 export type { MeetingFindingsBatch, MeetingFindingsStore } from "./meeting-findings.js"

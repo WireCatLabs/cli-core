@@ -423,8 +423,12 @@ with `normalize()`, and its `identity` names what built an index.
 
 `storeHealth` (`src/store/health.ts`) checks the file without changing it: quick (header, size against page count,
 the schema's pages; milliseconds) for `doctor`, deep (`PRAGMA quick_check` and each fts5 index's `integrity-check`
-under a rolled-back transaction; about 30 s for 6 GB) for `store recover` and a CLI's own `doctor --deep` (memo's). `explainDamage`
-(`src/store/damage.ts`) turns a failed check into the plain-words answer every surface shows. `recoverStore`
+under a rolled-back transaction; about 30 s for 6 GB) for `store recover` and a CLI's own `doctor --deep` (memo's). `storeDamageReport`
+(`src/store/damage.ts`) turns what was found (the check, the marks, the processes and timers that hold the store) into
+the one report every surface shows: what happened, the likely causes each with the command that tells more, the
+impact, that the services keep the originals, the last known good and what may be lost, and the steps
+(`{command, why, destructive}`, the first stopping the writers, the last the deep check). `store recover` prints it
+and answers it as `report` under `--json`; `doctor` carries it as `store.damage`. `recoverStore`
 (`src/store/recover.ts`) copies the readable rows with the `sqlite3` program's `.recover` (node:sqlite has no recovery
 API; free pages are skipped so deleted rows stay deleted), puts back the rows `.recover` found on pages no table
 claims into the one table whose columns their values fit (`placeLostRows`), migrates, drops and refills every fts5 and vec0 index
@@ -443,7 +447,12 @@ writable `openStoreContext` refuses with `store.damaged`, so timers fail fast in
 reads still open. A deep check that passes, a recovery, or a file replaced at that path (restore, reset: another
 inode) lifts it. The health mark `<store>.health.json` (`checked_at`, `ok`, `problems`, `schema`, `cli`, `cli_version`,
 `last_ok_at`) is written by every deep check (`doctor --deep`, `store recover`, the check after `store recover run`);
-`last_ok_at` is the last known good that `store recover` reports.
+`last_ok_at` is the last known good that `store recover` reports. The journal mark `<store>.journal.json` (`at`,
+`command`, `seen`) records that the store's `-wal` file went away or was swapped while a run held the store open, or
+that a `-shm` stood without it at a writable open (`src/store/journal.ts`): another program deleted or replaced the
+journal. A connection would go on writing into the unlinked file while the next process starts a fresh one, so the
+outermost commit stats `-wal` and refuses (`store.journal-replaced`) once its inode changed. The report names the mark
+as the first likely cause; a deep check that passes removes it.
 
 After the copy, `store recover run` forgets what the store says was fetched from a day before `last_ok_at` on
 (`forgetCoverageSince`, `src/store/refill.ts`; everything when no deep check ever passed), so the next ordinary sync

@@ -209,6 +209,11 @@ const OTHERS: Entry[] = [
     "configuration_error",
     "the store file is damaged; store recover says what is lost and recovers it",
   ],
+  [
+    "store.journal-replaced",
+    "conflict",
+    "another program deleted or replaced the store's journal file while it was open; store recover says what to do",
+  ],
   validation("store.file-damaged", "the named store file is damaged or not a database"),
   [
     "store.unreadable",

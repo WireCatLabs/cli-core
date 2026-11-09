@@ -137,7 +137,9 @@ describe("the health mark", () => {
 
     const quick = await storeSummary(env, { command: "app" })
     expect(quick).toMatchObject({ health: { ok: true }, damageMark: { command: "app sync" } })
-    expect((quick as { damage?: { what: string } }).damage?.what).toMatch(/`app sync` found the store damaged/)
+    expect((quick as { damage?: { whatHappened: string } }).damage?.whatHappened).toMatch(
+      /`app sync` found the store damaged/,
+    )
 
     const deep = await storeSummary(env, { deep: true, command: "app", version: "1.2.3" })
     expect(deep).toMatchObject({ health: { ok: true }, damageMarkCleared: { command: "app sync" } })

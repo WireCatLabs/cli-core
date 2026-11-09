@@ -55,15 +55,20 @@ describe("store recover", () => {
     const { item } = JSON.parse(streams.stdout[0] ?? "null")
     expect(item).toMatchObject({ exists: true, ok: false })
     expect(item.damaged_search_indexes.map((index: { name: string }) => index.name)).toContain("email_words")
-    expect(Object.keys(item.explanation)).toEqual([
-      "what",
-      "causes",
-      "investigate",
+    expect(Object.keys(item.report)).toEqual([
+      "what_happened",
+      "likely_causes",
       "impact",
-      "external_unaffected",
+      "external_data_safe",
+      "last_ok_at",
+      "loss",
       "steps",
     ])
-    expect(item.next.at(-1)).toBe("chat store recover run")
+    expect(item.report.steps[0].command).toMatch(/^systemctl --user stop /)
+    expect(item.report.steps.at(-2)).toMatchObject({ command: "chat store recover run", destructive: true })
+    expect(item.report.steps.at(-1)).toMatchObject({ command: "chat store recover", destructive: false })
+    expect(item.report.likely_causes.every((cause: { check: string }) => cause.check.length > 0)).toBe(true)
+    expect(item.next).toEqual(item.report.steps.map((step: { command: string }) => step.command))
   })
 
   it("says a missing store is fine and a healthy one needs nothing", async () => {
@@ -73,7 +78,7 @@ describe("store recover", () => {
     expect(recoveryNotes(missing)).toEqual(["no store yet"])
     const { env, clean } = await damagedStore()
     const healthy = await storeRecoveryCheck({ ...env, MESSAGING_STORE: clean }, "chat")
-    expect(healthy).toMatchObject({ ok: true, next: [], explanation: null })
+    expect(healthy).toMatchObject({ ok: true, next: [], report: null })
     expect(recoveryNotes(healthy)[0]).toMatch(/healthy/)
   })
 
