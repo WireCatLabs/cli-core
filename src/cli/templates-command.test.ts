@@ -2,12 +2,22 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { Command } from "commander"
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import { defaultTemplate, prepareReport } from "../background/report/render.js"
 import { openCache } from "../store/open.js"
 import { openStore, storedTemplateBodies } from "../store/store.js"
 import type { Body } from "./envelope.js"
 import { templatesCommand } from "./templates-command.js"
+
+const stdin = vi.hoisted(() => ({ text: "" }))
+vi.mock("node:fs", async (original) => {
+  const fs = await original<typeof import("node:fs")>()
+  const readFileSync = ((path: unknown, ...rest: unknown[]) =>
+    path === 0
+      ? stdin.text
+      : (fs.readFileSync as (...a: unknown[]) => unknown)(path, ...rest)) as typeof fs.readFileSync
+  return { ...fs, default: { ...fs, readFileSync }, readFileSync }
+})
 
 const app = { command: "fixture", appName: "fixture", envPrefix: "FIXTURE", description: "synthetic", version: "1.0.0" }
 const KEY = "report/morning-digest"
@@ -55,6 +65,19 @@ const shipped = (channel: "telegram" | "email" | "text", language = "ru") =>
   defaultTemplate("morning-digest", channel, language)
 
 describe("templates", () => {
+  it("reads the template from stdin when --file is -", async () => {
+    const { run, item } = fixture()
+    stdin.text = `<b>From stdin</b>\n${shipped("telegram")}`
+
+    await run("edit", KEY, "--channel", "telegram", "--file", "-")
+    expect(item()).toMatchObject({ changed: true })
+    await run("show", KEY, "--channel", "telegram")
+    expect(item()).toMatchObject({ source: "stored", body: stdin.text })
+
+    await run("preview", KEY, "--channel", "telegram", "--file", "-")
+    expect(item()).toMatchObject({ template: "-", template_failed: false })
+  })
+
   it("saves a checked template, keeps the replaced body, and undo and reset bring the old ones back", async () => {
     const { run, item, file, answers } = fixture()
     const mine = `<b>Мой дайджест</b> {{ date.date }}\n${shipped("telegram")}`
