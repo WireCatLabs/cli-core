@@ -69,7 +69,8 @@ export interface CacheEvent {
 /** Rows one committed write transaction changed in one table: a count, never a row. */
 export interface StoreEvent {
   event: "store"
-  operation: "store.write"
+  /** Always `store.write`; typed wide so an object spread into a request event still narrows by `event`. */
+  operation: string
   kind: "store"
   table: string
   op: "insert" | "update" | "delete"
