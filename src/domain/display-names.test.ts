@@ -15,6 +15,12 @@ describe("displayName", () => {
     expect(displayName("!", {})).toBe("!")
     expect(displayName("   ", {})).toBeNull()
   })
+
+  it("reads a messenger's placeholder for a missing name as no name", () => {
+    expect(displayName("Без имени", { username: "kkkslav" })).toBe("@kkkslav")
+    expect(displayName("null", {})).toBeNull()
+    expect(displayName("Room #2", {})).toBe("Room #2")
+  })
 })
 
 describe("nameKey", () => {

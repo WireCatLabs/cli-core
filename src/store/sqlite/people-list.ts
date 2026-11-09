@@ -1,18 +1,33 @@
 import { CliError } from "@wirecat/cli-base"
-import { displayName, nameKey } from "../../domain/display-names.js"
+import { isNoReplyAddress, isRoleAddress } from "../../domain/addresses.js"
+import { displayName, isReadable, nameKey } from "../../domain/display-names.js"
+import {
+  isAutomatedName,
+  isCompanyName,
+  type KindSignal,
+  PERSON_KINDS,
+  type PersonKind,
+} from "../../domain/person-kinds.js"
+import { foldName } from "../../resolve.js"
 import type { CacheDatabase, SqlValue } from "../driver.js"
 import { fold } from "../normalize.js"
 import { mergedAwaySql } from "./merged-persons.js"
-import { type ShownBecause, shownReasons } from "./person-ties.js"
+import { ALWAYS_SHOWN, type ShownBecause, shownReasons } from "./person-ties.js"
 import { mergedAssignees } from "./task-board.js"
+
+export const PEOPLE_SORTS = ["interactions", "recent", "name", "tasks"] as const
+export type PeopleSort = (typeof PEOPLE_SORTS)[number]
 
 export interface PeopleListOptions {
   /** Part of a name or username, at least 3 characters. */
   query?: string
-  /** Also the people with no tie to the owner. */
-  all?: boolean
-  /** `tasks`: the owner, then by how many tasks name them, then by name. */
-  sort?: "tasks" | "name"
+  /** One kind, `person` by default, or `all`. */
+  kind?: PersonKind | "all"
+  /**
+   * The owner first, then `interactions`: most messages and mail from them; `recent`: newest contact; `name`; `tasks`:
+   * how many tasks name them. Equal rows by name.
+   */
+  sort?: PeopleSort
   limit: number
   offset?: number
 }
@@ -22,11 +37,20 @@ export interface ListedPerson {
   /** As stored; `displayName` is what to show. */
   name: string | null
   displayName: string | null
+  kind: PersonKind
+  /** What decided the kind: the ties for a `person`, else the signal. */
+  kindSignals: (ShownBecause | KindSignal)[]
   owner: boolean
   tasks: number
+  /** The one to show beside the name: the phone, else the email, else `@username`. */
+  contact: string | null
   username: string | null
   phone: string | null
   email: string | null
+  /** Messages and mail this person sent, every account together. */
+  messagesFrom: number
+  /** The newest of their messages, their mail and their one-to-one chat's last message, as ISO time. */
+  lastContact: string | null
   /** Why they are shown; empty for someone hidden by default. */
   ties: ShownBecause[]
 }
@@ -34,10 +58,10 @@ export interface ListedPerson {
 export interface PeopleList {
   items: ListedPerson[]
   hasMore: boolean
-  /** Everyone the list holds over every page. */
+  /** The people of the kind asked over every page. */
   total: number
-  /** The people matching that have no tie to the owner, shown only with `all`. */
-  hidden: number
+  /** How many of each kind match the query. */
+  counts: Record<PersonKind, number>
 }
 
 export interface SimilarPerson extends ListedPerson {
@@ -62,89 +86,247 @@ const matching = (query: string | undefined): { sql: string; params: SqlValue[] 
   }
 }
 
-const firstOf = (column: string, provider: string) =>
-  `(SELECT coalesce(i.${column}, CASE WHEN i.provider = '${provider}' THEN i.external_id END) FROM identity_links l ` +
-  `JOIN identities i ON i.id = l.identity_id WHERE l.person_id = p.id ` +
-  `AND (i.${column} IS NOT NULL OR i.provider = '${provider}') ORDER BY i.id LIMIT 1)`
-
-const ROW =
-  "p.id, p.name, p.owner, " +
-  "(SELECT i.username FROM identity_links l JOIN identities i ON i.id = l.identity_id " +
-  "WHERE l.person_id = p.id AND i.username IS NOT NULL ORDER BY i.id LIMIT 1) AS username, " +
-  `${firstOf("phone", "phone")} AS phone, ${firstOf("email", "email")} AS email`
-
 const TASK_COUNTS =
-  "WITH merged AS (SELECT json_extract(value, '$[0]') AS id, json_extract(value, '$[1]') AS now FROM json_each(?)), " +
-  "counts AS (SELECT coalesce(m.now, a.assignee_id) AS person, count(DISTINCT t.id) AS n FROM task_assignments a " +
+  "WITH merged AS (SELECT json_extract(value, '$[0]') AS id, json_extract(value, '$[1]') AS now FROM json_each(?)) " +
+  "SELECT coalesce(m.now, a.assignee_id) AS person, count(DISTINCT t.id) AS n FROM task_assignments a " +
   "JOIN tasks t ON t.id = a.task_id AND t.deleted_at IS NULL LEFT JOIN merged m ON m.id = a.assignee_id " +
-  "WHERE a.assignee_type = 'person' GROUP BY 1)"
+  "WHERE a.assignee_type = 'person' GROUP BY 1"
 
-/** Sorted as read: wrapping quotes and spaces do not decide a name's place. */
-const BY_NAME = "p.name IS NULL, ltrim(p.name, ' \"''«“„‘`') COLLATE NOCASE, p.id"
+/** The people a query covers: everyone, or the ones in its one JSON parameter. */
+type Scope = readonly number[] | "all"
 
-const listedOf = (row: Record<string, unknown>, ties: Map<number, ShownBecause[]>): ListedPerson => {
-  const text = (value: unknown) => (value == null ? null : String(value))
-  const id = Number(row.id)
-  const name = text(row.name)
-  const contact = { username: text(row.username), phone: text(row.phone), email: text(row.email) }
-  return {
-    person: `person:${id}`,
-    name,
-    displayName: displayName(name, contact),
-    owner: Number(row.owner) === 1,
-    tasks: Number(row.n ?? 0),
-    ...contact,
-    ties: ties.get(id) ?? [],
-  }
+const IN_SCOPE = (scope: Scope, column: string) =>
+  scope === "all" ? "1" : `${column} IN (SELECT value FROM json_each(?))`
+const scopeParams = (scope: Scope): SqlValue[] => (scope === "all" ? [] : [JSON.stringify(scope)])
+const SCOPED_IDENTITIES = (scope: Scope) =>
+  `SELECT identity_id FROM identity_links WHERE ${IN_SCOPE(scope, "person_id")}`
+
+/** Counted over `messages_by_sender_identity_id` alone: no message row is read. */
+const MESSAGE_COUNTS = (scope: Scope) =>
+  "SELECT l.person_id AS person, sum(x.n) AS n FROM (SELECT sender_identity_id AS identity, count(*) AS n FROM " +
+  `messages WHERE sender_identity_id ${scope === "all" ? "IS NOT NULL" : `IN (${SCOPED_IDENTITIES(scope)})`} ` +
+  "GROUP BY 1) x JOIN identity_links l ON l.identity_id = x.identity GROUP BY 1"
+
+const MAIL_COUNTS = (scope: Scope) =>
+  "SELECT l.person_id AS person, count(*) AS n, sum(EXISTS (SELECT 1 FROM email_mailboxes m " +
+  "JOIN mailboxes b ON b.id = m.mailbox_id WHERE m.email_id = e.id AND b.kind = 'bulk')) AS bulk " +
+  "FROM emails e JOIN identity_links l ON l.identity_id = e.from_identity_id " +
+  `WHERE e.outgoing IS NOT 1 AND e.deleted_at IS NULL AND ${IN_SCOPE(scope, "l.person_id")} GROUP BY 1`
+
+const IDENTITIES = (scope: Scope) =>
+  "SELECT l.person_id AS person, i.id, i.provider, i.external_id, i.username, i.phone, i.email, i.bot " +
+  `FROM identity_links l JOIN identities i ON i.id = l.identity_id WHERE ${IN_SCOPE(scope, "l.person_id")} ORDER BY i.id`
+
+/** Few identities have these; one pass each beats a lookup per identity. */
+const NEVER_REPLIED = "SELECT identity_id FROM account_identities WHERE mail_signals LIKE '%bulk_never_replied%'"
+const OWNED = "SELECT identity_id FROM organization_identities"
+
+const LAST_CONTACTS = (identities: string) =>
+  `SELECT l.person_id AS person, max(t) AS at FROM (` +
+  `SELECT sender_identity_id AS identity, max(sent_at) AS t FROM messages WHERE sender_identity_id IN (${identities}) ` +
+  "GROUP BY 1 UNION ALL " +
+  `SELECT from_identity_id, max(coalesce(sent_at, received_at)) FROM emails WHERE from_identity_id IN (${identities}) ` +
+  "AND deleted_at IS NULL GROUP BY 1 UNION ALL " +
+  `SELECT identity_id, max(last_messaged_at) FROM account_identities WHERE identity_id IN (${identities}) GROUP BY 1` +
+  ") x JOIN identity_links l ON l.identity_id = x.identity GROUP BY 1"
+
+/** Everything a person's kind and row are made from, gathered once for every person. */
+interface Facts {
+  username: string | null
+  phone: string | null
+  email: string | null
+  emails: string[]
+  bot: boolean
+  neverReplied: boolean
+  organization: boolean
 }
 
-/** Each person's row with their contact and task count, in the order given. */
-const rowsOf = (database: CacheDatabase, people: readonly number[]): Record<string, unknown>[] => {
-  if (people.length === 0) return []
-  const byId = new Map(
+const factsOf = (database: CacheDatabase, scope: Scope): Map<number, Facts> => {
+  const facts = new Map<number, Facts>()
+  const text = (value: unknown) => (value == null || value === "" ? null : String(value))
+  const ids = (sql: string) =>
+    new Set(
+      database
+        .prepare(sql)
+        .all()
+        .map((row) => Number(row.identity_id)),
+    )
+  const neverReplied = ids(NEVER_REPLIED)
+  const owned = ids(OWNED)
+  for (const row of database.prepare(IDENTITIES(scope)).all(...scopeParams(scope))) {
+    const person = Number(row.person)
+    const one = facts.get(person) ?? {
+      username: null,
+      phone: null,
+      email: null,
+      emails: [],
+      bot: false,
+      neverReplied: false,
+      organization: false,
+    }
+    const email = text(row.email) ?? (row.provider === "email" ? text(row.external_id) : null)
+    one.username ??= text(row.username)
+    one.phone ??= text(row.phone) ?? (row.provider === "phone" ? text(row.external_id) : null)
+    one.email ??= email
+    if (email !== null) one.emails.push(email)
+    one.bot ||= Number(row.bot) === 1
+    one.neverReplied ||= neverReplied.has(Number(row.id))
+    one.organization ||= owned.has(Number(row.id))
+    facts.set(person, one)
+  }
+  return facts
+}
+
+const countsOf = (database: CacheDatabase, sql: string, ...params: SqlValue[]): Map<number, number> =>
+  new Map(
     database
-      .prepare(
-        `${TASK_COUNTS} SELECT ${ROW}, coalesce(c.n, 0) AS n FROM persons p LEFT JOIN counts c ON c.person = p.id ` +
-          "WHERE p.id IN (SELECT value FROM json_each(?))",
-      )
-      .all(mergedAssignees(database), JSON.stringify(people))
-      .map((row) => [Number(row.id), row]),
+      .prepare(sql)
+      .all(...params)
+      .map((row) => [Number(row.person), Number(row.n)]),
   )
-  return people.flatMap((person) => {
-    const row = byId.get(person)
-    return row === undefined ? [] : [row]
+
+const lastContacts = (database: CacheDatabase, scope: Scope): Map<number, number> =>
+  new Map(
+    database
+      .prepare(LAST_CONTACTS(SCOPED_IDENTITIES(scope)))
+      .all(...scopeParams(scope), ...scopeParams(scope), ...scopeParams(scope))
+      .filter((row) => row.at != null)
+      .map((row) => [Number(row.person), Number(row.at)]),
+  )
+
+interface Candidate {
+  id: number
+  name: string | null
+  owner: boolean
+}
+
+interface Classified extends Omit<ListedPerson, "lastContact"> {
+  id: number
+  /** Worked out once: a collator over 50,000 names takes most of a list's time. */
+  nameOrder: string
+}
+
+/** The first rule that holds; the list's contract in the people-clients-digests plan names the same order. */
+const kindOf = (
+  shown: string | null,
+  facts: Facts | undefined,
+  ties: ShownBecause[],
+  mail: { n: number; bulk: number } | undefined,
+): { kind: PersonKind; signals: (ShownBecause | KindSignal)[] } => {
+  const always = ties.filter((tie) => (ALWAYS_SHOWN as readonly string[]).includes(tie))
+  if (always.length > 0) return { kind: "person", signals: ties }
+  const emails = facts?.emails ?? []
+  const automated: KindSignal[] = [
+    ...(facts?.bot ? (["bot"] as const) : []),
+    ...(emails.some(isNoReplyAddress) ? (["no-reply"] as const) : []),
+    ...(mail !== undefined && mail.bulk * 2 > mail.n ? (["bulk-mail"] as const) : []),
+    ...(facts?.neverReplied ? (["bulk-never-replied"] as const) : []),
+    ...(isAutomatedName(shown) ? (["automated-name"] as const) : []),
+  ]
+  if (automated.length > 0) return { kind: "automated", signals: automated }
+  const organization: KindSignal[] = [
+    ...(facts?.organization ? (["organization"] as const) : []),
+    ...(emails.some(isRoleAddress) ? (["role-address"] as const) : []),
+    ...(isCompanyName(shown) ? (["company-name"] as const) : []),
+  ]
+  if (organization.length > 0) return { kind: "organization", signals: organization }
+  if (!isReadable(shown)) return { kind: "unsorted", signals: ["no-name"] }
+  if (ties.length === 0) return { kind: "unsorted", signals: ["no-tie"] }
+  return { kind: "person", signals: ties }
+}
+
+/** Each person with their kind, contact and counts; the last contact is added for the page alone. */
+const classified = (database: CacheDatabase, people: readonly Candidate[], scope: Scope): Classified[] => {
+  const facts = factsOf(database, scope)
+  const reasons = shownReasons(database)
+  const tasks = countsOf(database, TASK_COUNTS, mergedAssignees(database))
+  const messages = countsOf(database, MESSAGE_COUNTS(scope), ...scopeParams(scope))
+  const mail = new Map(
+    database
+      .prepare(MAIL_COUNTS(scope))
+      .all(...scopeParams(scope))
+      .map((row) => [Number(row.person), { n: Number(row.n), bulk: Number(row.bulk) }]),
+  )
+  return people.map(({ id, name, owner }) => {
+    const own = facts.get(id)
+    const contact = { username: own?.username ?? null, phone: own?.phone ?? null, email: own?.email ?? null }
+    const shown = displayName(name, contact)
+    const ties = reasons.get(id) ?? []
+    const { kind, signals } = kindOf(shown, own, ties, mail.get(id))
+    return {
+      id,
+      nameOrder: nameOrderOf(shown),
+      person: `person:${id}`,
+      name,
+      displayName: shown,
+      kind,
+      kindSignals: signals,
+      owner,
+      tasks: tasks.get(id) ?? 0,
+      contact:
+        contact.phone ?? contact.email ?? (contact.username === null ? null : `@${contact.username.replace(/^@/, "")}`),
+      ...contact,
+      messagesFrom: (messages.get(id) ?? 0) + (mail.get(id)?.n ?? 0),
+      ties,
+    }
   })
 }
 
-/** People by name or by task count, the owner first; by default only those with a tie to the owner. */
+const withLastContact = (
+  database: CacheDatabase,
+  people: Classified[],
+  known?: Map<number, number>,
+): ListedPerson[] => {
+  const at =
+    known ??
+    lastContacts(
+      database,
+      people.map(({ id }) => id),
+    )
+  return people.map(({ id, nameOrder: _, ...person }) => {
+    const time = at.get(id)
+    return { ...person, lastContact: time === undefined ? null : new Date(time).toISOString() }
+  })
+}
+
+/** Sorted as read, case and accents aside; a name with nothing to read goes last. */
+const nameOrderOf = (shown: string | null) => `${isReadable(shown) ? 0 : 1}${foldName(shown ?? "")}`
+
+const byName = (a: Classified, b: Classified) =>
+  a.nameOrder < b.nameOrder ? -1 : a.nameOrder > b.nameOrder ? 1 : a.id - b.id
+
+/** People of one kind, the owner first, in the order asked; `counts` says how many each kind holds. */
 export const listPeople = (database: CacheDatabase, options: PeopleListOptions): PeopleList => {
-  const { all = false, sort = "tasks", limit, offset = 0 } = options
+  const { kind = "person", sort = "interactions", limit, offset = 0 } = options
   const filter = matching(options.query)
-  const reasons = shownReasons(database)
-  const shown = JSON.stringify([...reasons.keys()])
-  const live = `NOT ${mergedAwaySql("p")}${filter.sql}`
-  const counted = database
-    .prepare(
-      "SELECT count(*) AS total, coalesce(sum(p.id NOT IN (SELECT value FROM json_each(?))), 0) AS hidden " +
-        `FROM persons p WHERE ${live}`,
-    )
-    .get(shown, ...filter.params)
-  const order = sort === "name" ? `p.owner DESC, ${BY_NAME}` : `p.owner DESC, n DESC, ${BY_NAME}`
-  // Ids first: the contact columns are worked out for the page only, not for every row the sort reads.
-  const ids = database
-    .prepare(
-      `${TASK_COUNTS} SELECT p.id, coalesce(c.n, 0) AS n FROM persons p LEFT JOIN counts c ON c.person = p.id ` +
-        `WHERE ${live}${all ? "" : " AND p.id IN (SELECT value FROM json_each(?))"} ORDER BY ${order} LIMIT ? OFFSET ?`,
-    )
-    .all(mergedAssignees(database), ...filter.params, ...(all ? [] : [shown]), limit + 1, offset)
-    .map((row) => Number(row.id))
-  const page = ids.slice(0, limit)
-  const hidden = Number(counted?.hidden ?? 0)
+  const candidates = database
+    .prepare(`SELECT p.id, p.name, p.owner FROM persons p WHERE NOT ${mergedAwaySql("p")}${filter.sql}`)
+    .all(...filter.params)
+    .map((row) => ({
+      id: Number(row.id),
+      name: row.name == null ? null : String(row.name),
+      owner: Number(row.owner) === 1,
+    }))
+  const everyone = classified(database, candidates, "all")
+  const counts = Object.fromEntries(PERSON_KINDS.map((one) => [one, 0])) as Record<PersonKind, number>
+  for (const person of everyone) counts[person.kind] += 1
+  const chosen = kind === "all" ? everyone : everyone.filter((person) => person.kind === kind)
+  // The newest contact of every person reads every message; only this order needs it.
+  const recent = sort === "recent" ? lastContacts(database, "all") : undefined
+  const order: (a: Classified, b: Classified) => number =
+    sort === "name"
+      ? byName
+      : sort === "tasks"
+        ? (a, b) => b.tasks - a.tasks || byName(a, b)
+        : sort === "recent"
+          ? (a, b) => (recent?.get(b.id) ?? 0) - (recent?.get(a.id) ?? 0) || byName(a, b)
+          : (a, b) => b.messagesFrom - a.messagesFrom || byName(a, b)
+  const sorted = chosen.sort((a, b) => Number(b.owner) - Number(a.owner) || order(a, b))
   return {
-    items: rowsOf(database, page).map((row) => listedOf(row, reasons)),
-    hasMore: ids.length > limit,
-    total: Number(counted?.total ?? 0) - (all ? 0 : hidden),
-    hidden,
+    items: withLastContact(database, sorted.slice(offset, offset + limit), recent),
+    hasMore: sorted.length > offset + limit,
+    total: sorted.length,
+    counts,
   }
 }
 
@@ -214,8 +396,18 @@ export const similarPeople = (database: CacheDatabase, typed: string, limit: num
     )
     .slice(0, limit)
   const sameName = new Map(chosen.map(({ person, same }) => [person, same]))
-  return rowsOf(database, [...sameName.keys()]).map((row) => ({
-    ...listedOf(row, ties),
-    sameName: sameName.get(Number(row.id)) === true,
+  const people = database
+    .prepare("SELECT id, name, owner FROM persons WHERE id IN (SELECT value FROM json_each(?))")
+    .all(JSON.stringify([...sameName.keys()]))
+    .map((row) => ({
+      id: Number(row.id),
+      name: row.name == null ? null : String(row.name),
+      owner: Number(row.owner) === 1,
+    }))
+  const byId = new Map(people.map((person) => [person.id, person]))
+  const ordered = [...sameName.keys()].flatMap((id) => byId.get(id) ?? [])
+  return withLastContact(database, classified(database, ordered, [...sameName.keys()])).map((person) => ({
+    ...person,
+    sameName: sameName.get(Number(person.person.slice("person:".length))) === true,
   }))
 }

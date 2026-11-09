@@ -117,9 +117,9 @@ export interface PeopleStore extends AccountPeople {
   /** A person known by name only, with no identity yet: someone to assign a task to before any message names them. */
   add(input: { name: string }): Promise<PersonRecord>
   /**
-   * People with their shown name, contact and ties to the owner, a page at a time. By default only those with a tie
-   * (a one-to-one chat, a small group, mail the owner wrote, a meeting, a CRM, the address book), the owner, people
-   * added by hand and people assigned a task; `all` adds the rest.
+   * People of one kind with their shown name, contact, interactions and ties, a page at a time. `person` (the default)
+   * is the owner, people added by hand, task assignees, and named people with a tie (a one-to-one chat, a small group,
+   * mail the owner wrote, a meeting, a CRM, the address book); `automated`, `organization` and `unsorted` hold the rest.
    */
   list(options: PeopleListOptions): Promise<PeopleList>
   /** People whose names start like the typed one, the same name first: for a form that adds a person. */

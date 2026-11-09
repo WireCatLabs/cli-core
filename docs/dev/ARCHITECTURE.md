@@ -594,14 +594,16 @@ proposes them instead. A no-reply address (`isNoReplyAddress`) is no one's: it n
   (`domain/display-names.ts`: case, quotes, punctuation and word order set aside) are proposed, never joined, when
   they share a trace (`name-traces.ts`): a phone, an address, a chat, or a company's domain, never a free mailbox's
   (`FREE_MAIL`) or a role address's. More than six on one name is skipped as too common.
-- **Who is shown** (`person-ties.ts`, `people-list.ts`): `people.list` hides a person with no tie to the owner unless
-  `all`. A tie is a one-to-one chat, a group of at most `SMALL_GROUP_MEMBERS` (10; a group of unknown size counts as
-  large), mail the owner wrote to them (NEED-2342 A), a meeting or calendar entry, a CRM identity or `person` record,
-  or the address book (`account_identities.address_book`, written by `contacts sync` through `saveAddressBook`,
-  version 61). The owner, people added by hand and task assignees are always shown. Ties are read on every list, one
-  pass over the tie tables; on 51,000 identities a first page with its hidden count takes about 100 ms, so no ties
-  table is kept (cli-testing `performance/people/ties`). `people.similar` serves a form that adds a person: names
-  starting like the typed words, the same `nameKey` first.
+- **Who is shown** (`person-ties.ts`, `people-list.ts`, `domain/person-kinds.ts`): `people.list` gives each person
+  one kind and lists one kind at a time. The owner, people added by hand and task assignees are a `person`; then
+  `automated` (a bot, a no-reply address, mostly bulk mail, memo's `bulk_never_replied`, a notification name); then
+  `organization` (`organization_identities`, a role address, a legal form or company word in the name); then a named
+  `person` with a tie; everyone else is `unsorted`. A tie is a one-to-one chat, a group of at most
+  `SMALL_GROUP_MEMBERS` (10; a group of unknown size counts as large), mail the owner wrote to them (NEED-2342 A), a
+  meeting or calendar entry, a CRM identity or `person` record, or the address book (`account_identities.address_book`,
+  written by `contacts sync` through `saveAddressBook`, version 61). Kinds, ties and the messages and mail each person
+  sent are read on every list (the message counts over `messages_by_sender_identity_id` alone); no table keeps them.
+  `people.similar` serves a form that adds a person: names starting like the typed words, the same `nameKey` first.
 
 **Links and the review list.** A link records its method, confidence, author and time; an owner's link is never
 replaced by a rule. Today only contacts have that shape. **Not built yet:** `entity_link_events`, the same log for

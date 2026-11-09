@@ -16,6 +16,7 @@ export {
   TASK_TYPES,
   WORK_TASK_TYPES,
 } from "../domain/knowledge.js"
+export { type KindSignal, PERSON_KINDS, type PersonKind } from "../domain/person-kinds.js"
 export type { RefState, RefSummary, RefSummaryKind, RefsStore } from "../domain/ref-summaries.js"
 export type {
   TagConsolidationApplyOptions,
@@ -363,7 +364,14 @@ export type {
 export type { Order, OrderDetail, OrderFilter, OrderInput, OrdersStore } from "./sqlite/orders.js"
 export type { OrganizationFilter } from "./sqlite/organization-categories.js"
 export { DEFAULT_OWNER_LANGUAGES, ownerLanguages } from "./sqlite/owner-languages.js"
-export type { ListedPerson, PeopleList, PeopleListOptions, SimilarPerson } from "./sqlite/people-list.js"
+export {
+  type ListedPerson,
+  PEOPLE_SORTS,
+  type PeopleList,
+  type PeopleListOptions,
+  type PeopleSort,
+  type SimilarPerson,
+} from "./sqlite/people-list.js"
 export { mergeId, type PersonMerge, parseMergeId } from "./sqlite/person-merges.js"
 export {
   ALWAYS_SHOWN,

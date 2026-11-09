@@ -19,6 +19,9 @@ const QUOTES: readonly [string, string][] = [
 
 const READABLE = /[\p{L}\p{N}]/u
 
+/** What a source writes when it has no name: no name at all. */
+const PLACEHOLDERS = new Set(["null", "undefined", "none", "без имени", "deleted account", "удалённый аккаунт"])
+
 const unquoted = (text: string): string => {
   let at = text.replace(/\s+/gu, " ").trim()
   for (;;) {
@@ -34,11 +37,13 @@ const given = (value: string | null | undefined): string | undefined => {
 }
 
 /**
- * A name as it is shown: no wrapping quotes, no repeated or edge spaces. One with no letter or digit (`!`, `!$`) gives
- * way to the username, then the phone, then the email; the stored name stays as it came.
+ * A name as it is shown: no wrapping quotes, no repeated or edge spaces. One with no letter or digit (`!`, `!$`), or a
+ * placeholder such as `null` or «Без имени», gives way to the username, then the phone, then the email; the stored name
+ * stays as it came.
  */
 export const displayName = (name: string | null | undefined, fallbacks: NameFallbacks = {}): string | null => {
-  const cleaned = typeof name === "string" ? unquoted(name) : ""
+  const unwrapped = typeof name === "string" ? unquoted(name) : ""
+  const cleaned = PLACEHOLDERS.has(unwrapped.toLowerCase()) ? "" : unwrapped
   if (READABLE.test(cleaned)) return cleaned
   const username = given(fallbacks.username)
   return (
@@ -60,3 +65,6 @@ export const nameKey = (name: string | null | undefined): string | null => {
     .filter((word) => word !== "")
   return words.length === 0 ? null : words.sort().join(" ")
 }
+
+/** Whether a shown name has anything to read: not null, not only punctuation. */
+export const isReadable = (shown: string | null): boolean => shown !== null && READABLE.test(shown)
