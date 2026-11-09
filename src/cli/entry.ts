@@ -5,6 +5,7 @@ import type { Command } from "commander"
 import { type AppIdentity, envName, readOnlyLockOf } from "../ports/app.js"
 import { ensureSqlite } from "../sqlite-runtime.js"
 import { logVersion } from "./argv-log.js"
+import { isCommandServer } from "./command-server-argv.js"
 
 export type { AppIdentity }
 
@@ -81,6 +82,10 @@ export const startCli = async (entry: CliEntry): Promise<void> => {
   const io = { ...processIo(), ...entry.io }
   const args = io.argv.slice(2)
   if (args.length === 1 && (args[0] === "--version" || args[0] === "-V")) return printVersion(entry.app, io)
+  if (isCommandServer(args)) {
+    const { serveEntry } = await import("./command-server-entry.js")
+    return serveEntry(entry, io, { firstRunAt, commanderExit })
+  }
   const tty = io.stdout.isTTY === true
   const release = catchCrashes({
     cli: entry.app.command,
@@ -115,23 +120,7 @@ export const startCli = async (entry: CliEntry): Promise<void> => {
     env: io.env,
     tty,
     signal: controller.signal,
-    atStart: async (command) => {
-      // The first-run questions write the shared config; a dry run writes nothing.
-      if (command.optsWithGlobals<{ dryRun?: boolean }>().dryRun === true) return
-      const [{ setupAtStart }, { commandPathOf }] = await Promise.all([
-        import("./first-run.js"),
-        import("./command-contract.js"),
-      ])
-      await setupAtStart({
-        command: entry.app.command,
-        env: io.env,
-        contentLanguages: entry.app.contentLanguages,
-        path: commandPathOf(command),
-        headless: headless(command),
-        readOnlyLock: readOnlyLockOf(entry.app, io.env),
-        input: io.stdin,
-      })
-    },
+    atStart: firstRunAt(entry, io, headless),
     ask: async (question, command) => {
       if (headless(command) || io.stdin.isTTY !== true) return false
       const { readSecret } = await import("../terminal/prompt.js")
@@ -167,6 +156,26 @@ export const startCli = async (entry: CliEntry): Promise<void> => {
   else if (unwritable) io.setExitCode(3)
   else if (code !== undefined) io.setExitCode(code)
 }
+
+/** The first-run questions, before the command acts. A dry run writes nothing, and these write the shared config. */
+export const firstRunAt =
+  (entry: CliEntry, io: EntryIo, headless: (command: Command) => boolean) =>
+  async (command: Command): Promise<void> => {
+    if (command.optsWithGlobals<{ dryRun?: boolean }>().dryRun === true) return
+    const [{ setupAtStart }, { commandPathOf }] = await Promise.all([
+      import("./first-run.js"),
+      import("./command-contract.js"),
+    ])
+    await setupAtStart({
+      command: entry.app.command,
+      env: io.env,
+      contentLanguages: entry.app.contentLanguages,
+      path: commandPathOf(command),
+      headless: headless(command),
+      readOnlyLock: readOnlyLockOf(entry.app, io.env),
+      input: io.stdin,
+    })
+  }
 
 /**
  * Answered before the program loads, which is most of a start: an agent asks for the version to learn whether the

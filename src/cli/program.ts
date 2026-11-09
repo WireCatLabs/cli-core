@@ -28,6 +28,7 @@ import { liftOptionsAfterDashes } from "./after-dashes.js"
 import { logParsedArgv, logVersion } from "./argv-log.js"
 import { commandAvailability } from "./command-availability.js"
 import { commandPathOf } from "./command-contract.js"
+import { refuseInCommandServer } from "./command-server.js"
 import { entityRows, type RowTable } from "./compact.js"
 import { type BaseEnvironment, outputFor, provide } from "./context.js"
 import { refuseByCommandPermissions, refuseOfflineCommand, refuseWriteBeforeConnecting } from "./early-refusal.js"
@@ -426,6 +427,7 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
     if (flags.dryRun && localPreview) action.setOptionValue("dryRun", true)
     refuseOfflineCommand(action, definition.app, flags.offline === true, flags.dryRun === true && localPreview)
     const path = commandPathOf(action)
+    refuseInCommandServer(action, command)
     const lock = readOnlyLockOf(definition.app, commandEnv)
     const input = options.stdin ?? process.stdin
     // The first-run questions write the shared config; a dry run writes nothing.

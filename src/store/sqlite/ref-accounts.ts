@@ -25,15 +25,18 @@ const accountKeys = (database: CacheDatabase, ids: readonly number[]): AccountKe
     )
 }
 
-const hasAccountColumn = new Map<string, boolean>()
+// Per connection: a long-lived process (`commands --serve`) outlives a migration another CLI runs on the store.
+const hasAccountColumn = new WeakMap<CacheDatabase, Map<string, boolean>>()
 const accountColumnIn = (database: CacheDatabase, table: string): boolean => {
-  const known = hasAccountColumn.get(table)
+  const tables = hasAccountColumn.get(database) ?? new Map<string, boolean>()
+  hasAccountColumn.set(database, tables)
+  const known = tables.get(table)
   if (known !== undefined) return known
   const has = database
     .prepare(`PRAGMA table_info(${table})`)
     .all()
     .some((column) => column.name === "account_id")
-  hasAccountColumn.set(table, has)
+  tables.set(table, has)
   return has
 }
 

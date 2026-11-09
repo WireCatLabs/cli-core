@@ -308,6 +308,29 @@ cases; `openBrowser(url, browser?)` starts the system opener detached; `outputCl
 What only one tool needs — zm's batch input file and keyring — the tool builds inside `run`, with `entry.signal`.
 Import the program lazily, as above: the compile cache and the SQLite swap only help what loads after them.
 
+### The command server
+
+`<cli> commands --serve` is in every CLI that starts through `startCli` (tg, max, wa and memo among them), for
+WireCat Desktop, which otherwise pays a whole Node start (about 0.6 s) for each read on a page. It is matched before
+the program loads, so it is in no help, no `commands --json` and no MCP catalogue. Protocol 1, one JSON object per
+line:
+
+- On start, stdout gets `{"ready":true,"protocol":1,"version":"<the CLI's version>"}`.
+- A request on stdin is `{"id":<number>,"argv":[...]}`; its answer on stdout is
+  `{"id":<same>,"code":<exit code>,"stdout":"…","stderr":"…"}` — what a spawned run with no input and no terminal
+  would have printed. Requests run one at a time, in order: two runs in one process would open the store twice,
+  and on Linux closing either descriptor drops the other's locks.
+- A line that is not such a request gets code 2 and the error on `stderr`; its `id` is the request's when it has a
+  numeric one, else `null`. The server goes on.
+- A command that runs until stopped (`serve`, `watch`, `mcp serve`), waits on a person (`lifetime: "interactive"`:
+  logins, `setup`) or declares that it reads stdin (`readsStdin`) is refused with code 2. Any other command that
+  reads stdin finds it closed; questions get no answer, as without a terminal.
+- Each request is a run of its own, recorded as a spawned one is, with `WIRECAT_CALLER` and the rest of the
+  environment the server was started with. Settings, keys and the store are read again on each request, and the store
+  is closed between them.
+- It exits 0 when stdin closes, on SIGINT or SIGTERM, or after 10 minutes with no request. Nothing but these lines
+  reaches stdout; anything written between requests goes to stderr.
+
 Such a program keeps its own runs ([WC-LIFE-15](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/lifecycle.md#wc-life-15--keep-a-run-log-through-cli-core-and-read-it-back-with-runs)):
 `recordRuns(program, { app, content, settings, profile?, agent?, recognise? })` adds `--record` and `--no-record`,
 and keeps every command as a run — a usage error before any action too, named by the command words it can read and
