@@ -2090,6 +2090,33 @@ describe("the shared read commands", () => {
     ])
   })
 
+  it("**refuses to press a button whose data starts with wcr**, with a reason id, and never prints the data", async () => {
+    const root = mkdtempSync(join(tmpdir(), "messenger-"))
+    const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
+    const pressed: unknown[] = []
+    const keyboard: MessengerAdapter = {
+      ...fake,
+      buttons: async () => [
+        [
+          { kind: "callback", text: "Confirm", data: "wcr1:abc" },
+          { kind: "callback", text: "Other", data: "order:1" },
+        ],
+      ],
+      pressButton: async (...args) => {
+        pressed.push(args)
+      },
+    }
+    const bots = { personalBots: true }
+
+    const refused = await call(["messages", "press", "Book", "3", "1", "--json"], async () => keyboard, env, {}, bots)
+    const allowed = await call(["messages", "press", "Book", "3", "2", "--json"], async () => keyboard, env, {}, bots)
+
+    expect(refused.code).toBe(5)
+    expect(refused.stderr.join("\n")).toContain("press.owner-hand-only")
+    expect(pressed).toEqual([["7", "3", 0, 1]])
+    expect(allowed.stdout.join("")).not.toContain("order:1")
+  })
+
   it("**starts a bot like a message, and prints its mini app's address** only where the messenger has bots", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
     const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }

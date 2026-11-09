@@ -426,6 +426,7 @@ const OTHERS: Entry[] = [
   validation("output.unknown-field", "the answer has no field by that name"),
   validation("name.taken", "the name is already used"),
   validation("period.ambiguous", "the period can be read more than one way"),
+  ["press.owner-hand-only", "permission_error", "this button decides something for the owner; only a hand presses it"],
   validation("proposal.wrong-state", "the proposal is not in a state that allows this"),
   validation("proposal.reason-required", "an agent deciding for the owner, or proposing a link, gives a reason"),
   validation(

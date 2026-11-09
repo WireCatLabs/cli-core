@@ -28,6 +28,7 @@ let botId: string
 let calls: string[]
 let sent: { chat: string; text: string; options: BotSendOptions }[]
 let next: number
+let edits: { id: string; text: string; options: Parameters<NonNullable<BotAdapter["edit"]>>[3] }[]
 
 const message = (chatId: string, id: string, text: string): Message => ({
   id,
@@ -56,7 +57,14 @@ const adapterFor = ({ history = true, edit = true } = {}): BotAdapter => ({
     sent.push({ chat, text, options })
     return message(chat.startsWith("user:") ? "500" : chat, String(next++), text)
   },
-  ...(edit ? { edit: async (chat: string, id: string, text: string) => message(chat, id, text) } : {}),
+  ...(edit
+    ? {
+        edit: async (chat: string, id: string, text: string, options) => {
+          edits.push({ id, text, options })
+          return message(chat, id, text)
+        },
+      }
+    : {}),
   delete: async (chat, ids) => {
     calls.push(`delete ${chat} ${ids.join(",")}`)
   },
@@ -136,6 +144,7 @@ beforeEach(() => {
   botId = `bot${Math.floor(Math.random() * 1e9)}`
   calls = []
   sent = []
+  edits = []
   next = 100
   adapter = adapterFor()
   new BotTokenStore({ app, profile: "sales", env: {}, configDir: join(root, "config"), keyring }).write("token")
@@ -165,6 +174,22 @@ describe("bot messages send", () => {
     expect(sent).toMatchObject([{ chat: "user:7", text: "big", options: { formatting: [expect.any(Object)] } }])
 
     expect((await call(["sales", "bot", "messages", "send", "-100", "x", "--md", "--html"])).code).toBe(2)
+  })
+
+  it("**sends inline buttons in one row**, and refuses data over 64 bytes or a malformed button before anything goes", async () => {
+    await call(["sales", "bot", "messages", "send", "Team", "Pick", "--button", "Yes=wcr1:a=b", "--button", "No=n"])
+    expect(sent[0]?.options.buttons).toEqual([
+      [
+        { text: "Yes", data: "wcr1:a=b" },
+        { text: "No", data: "n" },
+      ],
+    ])
+
+    const long = await call(["sales", "bot", "messages", "send", "Team", "x", "--button", `Go=${"é".repeat(33)}`])
+    const bare = await call(["sales", "bot", "messages", "send", "Team", "x", "--button", "Go"])
+    expect([long.code, bare.code]).toEqual([2, 2])
+    expect(long.stderr).toContain("1 to 64 bytes, got 66")
+    expect(sent).toHaveLength(1)
   })
 
   it("**refuses a chat that is not on the bot's recipient list**, before anything goes", async () => {
@@ -241,6 +266,19 @@ describe("bot messages edit, delete, pin", () => {
     const refused = await call(["sales", "bot", "messages", "edit", "Team", "5", "new", "--json"])
     expect(refused.code).toBe(2)
     expect(refused.stderr).toContain("a Chat bot cannot edit messages")
+  })
+})
+
+describe("bot messages edit buttons", () => {
+  it("**replaces the buttons, takes them off, or leaves them to the messenger**", async () => {
+    await call(["sales", "bot", "messages", "edit", "Team", "5", "a", "--button", "Yes=y"])
+    await call(["sales", "bot", "messages", "edit", "Team", "5", "b", "--no-buttons"])
+    await call(["sales", "bot", "messages", "edit", "Team", "5", "c"])
+
+    expect(edits.map((edit) => edit.options.buttons)).toEqual([[[{ text: "Yes", data: "y" }]], [], undefined])
+    const both = await call(["sales", "bot", "messages", "edit", "Team", "5", "d", "--button", "A=a", "--no-buttons"])
+    expect(both.code).toBe(2)
+    expect(edits).toHaveLength(3)
   })
 })
 
