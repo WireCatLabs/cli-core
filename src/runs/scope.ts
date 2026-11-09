@@ -20,6 +20,11 @@ export interface RunScope {
 const scopes = new AsyncLocalStorage<RunScope>()
 
 let processScope: RunScope | undefined
+// A command server's request is a process of its own, and several run at once.
+const ownProcesses = new AsyncLocalStorage<{ scope?: RunScope }>()
+
+/** Runs `body` as if in a fresh process: the process's run starts unset, apart from the one around it. */
+export const asOwnProcess = <T>(body: () => T): T => ownProcesses.run({}, body)
 
 /**
  * The run a log line written now belongs to, for a writer that is not handed one — the send journal,
@@ -28,12 +33,18 @@ let processScope: RunScope | undefined
 export const currentRun = (): RunScope => {
   const scope = scopes.getStore()
   if (scope) return scope
-  processScope ??= {
+  const own = ownProcesses.getStore()
+  const fresh = (): RunScope => ({
     runId: newRunId(new Date(), "process"),
     command: "",
     startedAt: Date.now(),
     ...traceOf(process.env),
+  })
+  if (own) {
+    own.scope ??= fresh()
+    return own.scope
   }
+  processScope ??= fresh()
   return processScope
 }
 
@@ -54,11 +65,16 @@ export const typedCommand = (tool: string, words: string, profile = currentRun()
  * cannot wrap the action — so its answers' `meta.run_id` names the run `runs show` finds. Never in a server.
  */
 export const useAsProcessRun = (scope: RunScope | undefined): void => {
-  processScope = scope
+  const own = ownProcesses.getStore()
+  if (own) own.scope = scope
+  else processScope = scope
 }
 
 /** The run `useAsProcessRun` named, if any: a command run in-process puts it back when it ends. */
-export const processRun = (): RunScope | undefined => processScope
+export const processRun = (): RunScope | undefined => {
+  const own = ownProcesses.getStore()
+  return own ? own.scope : processScope
+}
 
 /** The trace of the run this one is opened inside — an MCP call's command keeps its caller's trace. */
 export const enclosingTraceId = (): string | undefined => scopes.getStore()?.traceId

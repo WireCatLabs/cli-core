@@ -12,6 +12,7 @@ import { recorded } from "../runs/recording.js"
 import { currentCaller, keepsSuccess, type RunCaller, runContextOf } from "../runs/run-context.js"
 import type { OpenRecognizer } from "../speech/transcribe.js"
 import type { SecretInput } from "../terminal/prompt.js"
+import { commandServerRequest } from "./command-server-request.js"
 import { type Closeable, withDeadline } from "./deadline.js"
 import { withAbort } from "./execution.js"
 import { rootOf } from "./profile.js"
@@ -139,7 +140,9 @@ export const runBudgetOf = (command: Command, requests?: number): RunBudget => {
 /** A partial answer's exit code, for this run alone. */
 export const setExitCode = (command: Command, code: number): void => {
   const slot = environmentOf(command).exit
+  const request = commandServerRequest()
   if (slot) slot.code = code
+  else if (request) request.exitCode = code
   else process.exitCode = code
 }
 

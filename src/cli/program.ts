@@ -28,7 +28,8 @@ import { liftOptionsAfterDashes } from "./after-dashes.js"
 import { logParsedArgv, logVersion } from "./argv-log.js"
 import { commandAvailability } from "./command-availability.js"
 import { commandPathOf } from "./command-contract.js"
-import { refuseInCommandServer } from "./command-server.js"
+import { enterCommandServer } from "./command-server.js"
+import { exitCodeSet } from "./command-server-request.js"
 import { entityRows, type RowTable } from "./compact.js"
 import { type BaseEnvironment, outputFor, provide } from "./context.js"
 import { refuseByCommandPermissions, refuseOfflineCommand, refuseWriteBeforeConnecting } from "./early-refusal.js"
@@ -430,7 +431,7 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
     if (flags.dryRun && localPreview) action.setOptionValue("dryRun", true)
     refuseOfflineCommand(action, definition.app, flags.offline === true, flags.dryRun === true && localPreview)
     const path = commandPathOf(action)
-    refuseInCommandServer(action, command)
+    await enterCommandServer(action, command)
     const lock = readOnlyLockOf(definition.app, commandEnv)
     const input = options.stdin ?? process.stdin
     // The first-run questions write the shared config; a dry run writes nothing.
@@ -663,7 +664,7 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
 
   try {
     await control.race(() => program.parseAsync(rest, { from: "user" }))
-    const code = exit.code ?? (process.exitCode === undefined ? 0 : Number(process.exitCode))
+    const code = exit.code ?? exitCodeSet() ?? 0
     const refreshed = code === 0 ? refreshFor(definition, program, rest, options) : undefined
     if (refreshed && !rest.includes("--quiet")) streams.diagnostic(refreshed)
     const hint =

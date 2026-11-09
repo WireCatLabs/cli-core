@@ -30,6 +30,8 @@ export interface EntryContext {
   openBrowser: (url: string, browser?: string, command?: Command) => Promise<void>
   /** True once a reader closed the output (`| head`): nothing more reaches the terminal. */
   outputClosed: () => boolean
+  /** The exit code of an answer that is not a failure, a partial one; under `commands --serve`, of this request alone. */
+  setExitCode: (code: number) => void
 }
 
 /** The parts of the process `startCli` touches, replaced in tests. */
@@ -136,6 +138,7 @@ export const startCli = async (entry: CliEntry): Promise<void> => {
       if (!headless(command)) await openBrowser(url, browser, io)
     },
     outputClosed: () => closed,
+    setExitCode: io.setExitCode,
   }
   let code: number | undefined
   try {
