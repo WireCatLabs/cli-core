@@ -1250,6 +1250,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--waiting` | `<duration>` | only chats where the owner wrote last at least this long ago | `7d` | `tasks agenda` |
 | `--weights` | `<json>` | the complete ranking component weights; replaces preset weights when --score is given |  | `stats contacts top`, `stats messages top` |
 | `--who` | `<side>` | whose replies are timed: the owner's (me) or the other side's (others) | `me` | `stats messages responses` |
+| `--with-muted` |  | with --all: also read the chats the owner muted, as history_muted true does |  | `messages sync` |
 | `--with-notes` |  | include your private notes, subject to contacts.notes.list permission |  | `contacts show` |
 | `--within` | `<duration>` | the observation window after a known join; each report names what it measures |  | `stats chats newcomers`, `stats chats retention`, `tasks agenda` |
 | `--words` | `<words>` | match any of these whole words, comma-separated; empty clears |  | `replies edit` |

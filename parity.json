@@ -1154,6 +1154,9 @@
       "default": "me",
       "meaning": "whose replies are timed: the owner's (me) or the other side's (others)"
     },
+    "--with-muted": {
+      "meaning": "with --all: also read the chats the owner muted, as history_muted true does"
+    },
     "--with-notes": {
       "meaning": "include your private notes, subject to contacts.notes.list permission"
     },
@@ -3581,7 +3584,8 @@
         "--no-catch-up": "all",
         "--page-size": "all",
         "--pause": "all",
-        "--since-time": "all"
+        "--since-time": "all",
+        "--with-muted": "all"
       }
     },
     "messages transcribe": {
