@@ -687,6 +687,9 @@
     "--no-mentions-me": {
       "meaning": "do not require a mention of you or a reply to you"
     },
+    "--no-notify": {
+      "meaning": "keep the result here: send it along none of its routes"
+    },
     "--no-preview": {
       "meaning": "no preview card for a link in the text"
     },
@@ -4111,7 +4114,19 @@
         "wa": "wa backlog: mount the shared schedule command"
       }
     },
+    "schedule pause": {
+      "in": ["max", "tg"],
+      "planned": {
+        "wa": "wa backlog: mount the shared schedule command"
+      }
+    },
     "schedule remove": {
+      "in": ["max", "tg"],
+      "planned": {
+        "wa": "wa backlog: mount the shared schedule command"
+      }
+    },
+    "schedule resume": {
       "in": ["max", "tg"],
       "planned": {
         "wa": "wa backlog: mount the shared schedule command"
@@ -4121,6 +4136,20 @@
       "in": ["max", "tg"],
       "planned": {
         "wa": "wa backlog: mount the shared schedule command"
+      },
+      "options": {
+        "--deliver-to": {
+          "in": ["max", "tg"],
+          "planned": {
+            "wa": "wa backlog: mount the shared schedule command"
+          }
+        },
+        "--no-notify": {
+          "in": ["max", "tg"],
+          "planned": {
+            "wa": "wa backlog: mount the shared schedule command"
+          }
+        }
       }
     },
     "search": {

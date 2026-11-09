@@ -19,9 +19,24 @@ import {
   type StoredTemplates,
 } from "./report/render.js"
 import type { ServerSystem } from "./system.js"
-import { clockOf, describeWhen, localStamp, onCalendar, WEEKDAYS, type When, WINDOWS_DAYS } from "./when.js"
+import type { Timer } from "./timers.js"
+import type { When } from "./when.js"
 
-export { describeWhen, WEEKDAYS, type Weekday, type When } from "./when.js"
+export { launchdTimer, systemdTimer, type Timer, timerFor, windowsTimer } from "./timers.js"
+export {
+  type CalendarWhen,
+  calendarOf,
+  describeWhen,
+  isCalendar,
+  nextRun,
+  previousRun,
+  runsBetween,
+  type Slot,
+  slotsOf,
+  WEEKDAYS,
+  type Weekday,
+  type When,
+} from "./when.js"
 
 export interface Schedule {
   name: string
@@ -43,6 +58,8 @@ export interface Schedule {
   notify?: Notify
   /** `--deliver-to`'s routes (`telegram-bot:<profile>/<chat>`, `email:<profile>/<address>`), answered as `deliver_to`. */
   to?: string[]
+  /** Kept with no timer: `schedule run` still runs it, and `schedule resume` puts the timer back. */
+  paused?: true
 }
 
 export const NOTIFY_WHEN = ["always", "failures", "never"] as const
@@ -315,200 +332,6 @@ export const listSchedules = (state: string, filter: Partial<Pick<Schedule, "nam
         .sort((a, b) => a.name.localeCompare(b.name))
     : []
 
-/** How one operating system starts `argv` at the schedule's times. Every timer runs the same thing: `<cli> schedule exec <file>`. */
-export interface Timer {
-  install: (schedule: Schedule, argv: string[]) => Promise<void>
-  remove: (name: string) => Promise<void>
-  /** Where the timer lives, for the owner to look at. */
-  where: (name: string) => string
-}
-
-const systemdQuote = (value: string) =>
-  `"${value.replaceAll("\\", "\\\\").replaceAll('"', '\\"').replaceAll("%", "%%").replaceAll("$", "$$$$")}"`
-
-const xml = (value: string) => value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")
-
-const checked = async (system: ServerSystem, env: NodeJS.ProcessEnv, argv: string[], allowFailure = false) => {
-  const ran = await system.run(argv, env)
-  if (ran.code !== 0 && !allowFailure) {
-    throw new CliError("configuration_error", `${argv[0]} failed: ${(ran.stderr || ran.stdout).trim()}`)
-  }
-  return ran
-}
-
-export const systemdTimer = (app: AppIdentity, system: ServerSystem, env: NodeJS.ProcessEnv, home: string): Timer => {
-  const folder = join(env.XDG_CONFIG_HOME ?? join(home, ".config"), "systemd", "user")
-  const unit = (name: string) => `${app.command}-schedule-${name}`
-  return {
-    where: (name) => join(folder, `${unit(name)}.timer`),
-    install: async (schedule, argv) => {
-      const { when } = schedule
-      writeSecurely(
-        join(folder, `${unit(schedule.name)}.service`),
-        [
-          "[Unit]",
-          `Description=${app.command} schedule ${schedule.name}`,
-          "",
-          "[Service]",
-          "Type=oneshot",
-          `ExecStart=${argv.map(systemdQuote).join(" ")}`,
-          "",
-        ].join("\n"),
-        0o644,
-      )
-      writeSecurely(
-        join(folder, `${unit(schedule.name)}.timer`),
-        [
-          "[Unit]",
-          `Description=${app.command} schedule ${schedule.name} — ${describeWhen(when)}`,
-          "",
-          "[Timer]",
-          ...("every" in when
-            ? // From when a run ends: counted from its start, a run longer than the interval left no next run.
-              [`OnActiveSec=${when.every}min`, `OnUnitInactiveSec=${when.every}min`]
-            : // Persistent: a run missed while the machine slept happens when it wakes.
-              [`OnCalendar=${onCalendar(when)}`, "Persistent=true"]),
-          "",
-          "[Install]",
-          "WantedBy=timers.target",
-          "",
-        ].join("\n"),
-        0o644,
-      )
-      await checked(system, env, ["systemctl", "--user", "daemon-reload"])
-      await checked(system, env, ["systemctl", "--user", "enable", "--now", `${unit(schedule.name)}.timer`])
-    },
-    remove: async (name) => {
-      await checked(system, env, ["systemctl", "--user", "disable", "--now", `${unit(name)}.timer`], true)
-      rmSync(join(folder, `${unit(name)}.timer`), { force: true })
-      rmSync(join(folder, `${unit(name)}.service`), { force: true })
-      await checked(system, env, ["systemctl", "--user", "daemon-reload"])
-    },
-  }
-}
-
-export const launchdTimer = (app: AppIdentity, system: ServerSystem, env: NodeJS.ProcessEnv, home: string): Timer => {
-  const folder = join(home, "Library", "LaunchAgents")
-  const label = (name: string) => `${app.appName}.schedule.${name}`
-  const plist = (name: string) => join(folder, `${label(name)}.plist`)
-  const domain = `gui/${system.uid}`
-  const calendar = (when: When) => {
-    if ("every" in when) return [`  <key>StartInterval</key><integer>${when.every * 60}</integer>`]
-    const [hour, minute] = ("once" in when ? localStamp(when.once).slice(11, 16) : clockOf(when)).split(":").map(Number)
-    const once = "once" in when ? new Date(when.once) : undefined
-    return [
-      "  <key>StartCalendarInterval</key>",
-      "  <dict>",
-      // launchd has no year: a one-off is a yearly date, and the run removes it.
-      ...(once
-        ? [
-            `    <key>Month</key><integer>${once.getMonth() + 1}</integer>`,
-            `    <key>Day</key><integer>${once.getDate()}</integer>`,
-          ]
-        : []),
-      // launchd counts Sunday as 0.
-      ...("weekly" in when ? [`    <key>Weekday</key><integer>${(WEEKDAYS.indexOf(when.on) + 1) % 7}</integer>`] : []),
-      `    <key>Hour</key><integer>${hour}</integer>`,
-      `    <key>Minute</key><integer>${minute}</integer>`,
-      "  </dict>",
-    ]
-  }
-  return {
-    where: plist,
-    install: async (schedule, argv) => {
-      await checked(system, env, ["launchctl", "bootout", `${domain}/${label(schedule.name)}`], true)
-      writeSecurely(
-        plist(schedule.name),
-        [
-          '<?xml version="1.0" encoding="UTF-8"?>',
-          '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">',
-          '<plist version="1.0">',
-          "<dict>",
-          `  <key>Label</key><string>${xml(label(schedule.name))}</string>`,
-          "  <key>ProgramArguments</key>",
-          "  <array>",
-          ...argv.map((word) => `    <string>${xml(word)}</string>`),
-          "  </array>",
-          ...calendar(schedule.when),
-          "</dict>",
-          "</plist>",
-          "",
-        ].join("\n"),
-        0o644,
-      )
-      await checked(system, env, ["launchctl", "bootstrap", domain, plist(schedule.name)])
-    },
-    remove: async (name) => {
-      await checked(system, env, ["launchctl", "bootout", `${domain}/${label(name)}`], true)
-      rmSync(plist(name), { force: true })
-    },
-  }
-}
-
-/**
- * Task Scheduler through PowerShell's ScheduledTasks module. The values travel in variables, never in
- * the script, so nothing needs quoting for PowerShell; Windows has no per-task environment, which is why
- * the runner reads its variables from the schedule file.
- */
-export const windowsTimer = (app: AppIdentity, system: ServerSystem, env: NodeJS.ProcessEnv): Timer => {
-  const path = `\\${app.appName}\\`
-  const powershell = (script: string, values: Record<string, string>, allowFailure = false) =>
-    checked(
-      system,
-      { ...env, ...values },
-      ["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script],
-      allowFailure,
-    )
-  return {
-    where: (name) => `Task Scheduler ${path}${name}`,
-    install: async (schedule, [exe = "", ...args]) => {
-      const { when } = schedule
-      await powershell(
-        [
-          "$ErrorActionPreference = 'Stop'",
-          "$action = New-ScheduledTaskAction -Execute $env:WIRECAT_EXE -Argument $env:WIRECAT_ARGS",
-          "$trigger = switch ($env:WIRECAT_KIND) {",
-          "  'every' { New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes ([int]$env:WIRECAT_MINUTES)) }",
-          "  'daily' { New-ScheduledTaskTrigger -Daily -At $env:WIRECAT_AT }",
-          "  'weekly' { New-ScheduledTaskTrigger -Weekly -DaysOfWeek $env:WIRECAT_DAY -At $env:WIRECAT_AT }",
-          "  'once' { New-ScheduledTaskTrigger -Once -At ([datetime]::ParseExact($env:WIRECAT_AT, 'yyyy-MM-dd HH:mm:ss', $null)) }",
-          "}",
-          "$settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -MultipleInstances IgnoreNew",
-          "Register-ScheduledTask -TaskName $env:WIRECAT_NAME -TaskPath $env:WIRECAT_PATH -Action $action -Trigger $trigger -Settings $settings -Force | Out-Null",
-        ].join("\n"),
-        {
-          WIRECAT_EXE: exe,
-          WIRECAT_ARGS: args.map((word) => `"${word.replaceAll('"', '\\"')}"`).join(" "),
-          WIRECAT_KIND: "every" in when ? "every" : "daily" in when ? "daily" : "weekly" in when ? "weekly" : "once",
-          WIRECAT_MINUTES: "every" in when ? String(when.every) : "",
-          WIRECAT_AT: "every" in when ? "" : "once" in when ? localStamp(when.once) : clockOf(when),
-          WIRECAT_DAY: "weekly" in when ? WINDOWS_DAYS[when.on] : "",
-          WIRECAT_NAME: schedule.name,
-          WIRECAT_PATH: path,
-        },
-      )
-    },
-    remove: async (name) => {
-      await powershell(
-        "Unregister-ScheduledTask -TaskName $env:WIRECAT_NAME -TaskPath $env:WIRECAT_PATH -Confirm:$false",
-        { WIRECAT_NAME: name, WIRECAT_PATH: path },
-        true,
-      )
-    },
-  }
-}
-
-export const timerFor = (app: AppIdentity, system: ServerSystem, env: NodeJS.ProcessEnv): Timer => {
-  if (system.platform === "win32") return windowsTimer(app, system, env)
-  if (!env.HOME) throw new CliError("configuration_error", "HOME is not set, so there is nowhere to put the timer")
-  if (system.platform === "linux") return systemdTimer(app, system, env, env.HOME)
-  if (system.platform === "darwin") return launchdTimer(app, system, env, env.HOME)
-  throw new CliError(
-    "validation_error",
-    `${app.command} schedule knows Linux, macOS and Windows, not ${system.platform}`,
-  )
-}
-
 /** The shared `links` settings; a config file that cannot be read keeps the default rather than stop a digest. */
 export const sharedLinks = (env: NodeJS.ProcessEnv) => {
   try {
@@ -646,6 +469,7 @@ export const runSchedule = async (
     ownerLanguage = async () => "ru",
     reportTemplates,
     skipRepeatedInput = false,
+    routes: chosen,
   }: {
     now?: () => Date
     timer?: Timer
@@ -659,12 +483,14 @@ export const runSchedule = async (
     /** The owner's first language, read only when the answer is a report; Russian when the host cannot say. */
     ownerLanguage?: (env: NodeJS.ProcessEnv) => Promise<string>
     /** The owner's stored report templates; the shipped ones when the host gives none. */
-    reportTemplates?: (env: NodeJS.ProcessEnv) => StoredTemplates
+    reportTemplates?: (env: NodeJS.ProcessEnv, schedule: string) => StoredTemplates
     /**
      * Leave out a mail-gated agent whose input is the one its last run ended well on. The mark did not move, so the
      * run would only meet the same input again and pay for it; new mail changes the input.
      */
     skipRepeatedInput?: boolean
+    /** Where this run goes instead of the schedule's own routes; `[]` keeps it here. */
+    routes?: readonly string[]
   } = {},
 ): Promise<LastRun> => {
   const schedule = readSchedule(file)
@@ -720,7 +546,7 @@ export const runSchedule = async (
           now: now().getTime(),
           links: sharedLinks(runEnv),
           env: runEnv,
-          ...(reportTemplates ? { templates: reportTemplates(runEnv) } : {}),
+          ...(reportTemplates ? { templates: reportTemplates(runEnv, schedule.name) } : {}),
         })
       : undefined
   const latestText = join(folder, "latest.txt")
@@ -737,7 +563,8 @@ export const runSchedule = async (
   for (const file of readdirSync(runs)) if (!kept.has(stampOf(file))) rmSync(join(runs, file), { force: true })
 
   const title = `${app.command} ${schedule.name}`
-  const mode = notifyOf(schedule)
+  // Routes the owner named for this run go whatever the schedule's notify says; none named, nobody is told.
+  const mode = chosen === undefined ? notifyOf(schedule) : chosen.length ? "always" : "never"
   if (agent && exitCode === 0) {
     if (mode === "always" && !announcedByDesktop(join(folder, ".."), schedule.name)) {
       const first =
@@ -757,7 +584,7 @@ export const runSchedule = async (
     await notify(system, env, title, `failed (exit ${exitCode}) — ${errors}`)
   }
 
-  const routes = schedule.to ?? []
+  const routes = chosen ?? schedule.to ?? []
   const locked = readOnlyLockOf(app, runEnv)
   const sendAlong = async (parcel: Parcel) => {
     const deliveries = await deliver(system, runEnv, routes, parcel, {
@@ -774,7 +601,7 @@ export const runSchedule = async (
   const messageOptions = async () => ({
     language: await ownerLanguage(runEnv).catch(() => "ru"),
     linkOf: (ref: string) => linkFor(ref, { form: "web", config: sharedLinks(runEnv), env: runEnv }),
-    ...(reportTemplates ? { templates: reportTemplates(runEnv) } : {}),
+    ...(reportTemplates ? { templates: reportTemplates(runEnv, schedule.name) } : {}),
   })
   if (routes.length > 0 && (exitCode === 0 ? mode === "always" : mode !== "never")) {
     const at = shortTime(last.at)

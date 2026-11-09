@@ -34,7 +34,7 @@ import type { Messenger } from "../messenger/context.js"
 import { scheduleCommand } from "../messenger/schedule-command.js"
 import { run } from "../program.js"
 import { settingsFor } from "../settings.js"
-import { type ScheduleLimits, scheduleCommandFor, scheduleLimitsOf } from "./schedule-command.js"
+import { agentSchedule, type ScheduleLimits, scheduleCommandFor, scheduleLimitsOf } from "./schedule-command.js"
 
 const app = { command: "chat", appName: "chat-cli", envPrefix: "CHAT", description: "A test", version: "1.0.0" }
 const messenger: Messenger = {
@@ -414,6 +414,55 @@ describe.runIf(posix)("schedule on Linux", () => {
     const bare = await call(["command", "w", "--at", "mon", "--", "review"], env, system)
     expect(bare.err).toContain("--at takes HH:MM")
   })
+
+  it("puts several times of a day on one timer, and lists them so", async () => {
+    const { env } = setup()
+    const { system } = machine("linux")
+    const added = await call(
+      ["command", "twice", "--at", "18:00", "--at", "08:30", "--json", "--", "review"],
+      env,
+      system,
+    )
+    expect(JSON.parse(added.out).item.when).toEqual({ calendar: [{ at: "08:30" }, { at: "18:00" }] })
+    const timer = readFileSync(join(env.XDG_CONFIG_HOME, "systemd", "user", "chat-schedule-twice.timer"), "utf8")
+    expect(timer).toContain("OnCalendar=*-*-* 08:30:00\nOnCalendar=*-*-* 18:00:00\nPersistent=true")
+    const listed = JSON.parse((await call(["list", "--json"], env, system)).out)
+    expect(listed.items[0]).toMatchObject({ name: "twice", when: "daily at 08:30, 18:00" })
+  })
+
+  it("puts several weekdays on one timer, from one --at or several", async () => {
+    const { env } = setup()
+    const { system } = machine("linux")
+    await call(["command", "week", "--at", "mon,fri 09:00", "--at", "wed 09:00", "--", "review"], env, system)
+    const timer = readFileSync(join(env.XDG_CONFIG_HOME, "systemd", "user", "chat-schedule-week.timer"), "utf8")
+    expect(timer.match(/^OnCalendar=.*$/gm)).toEqual([
+      "OnCalendar=Mon *-*-* 09:00:00",
+      "OnCalendar=Wed *-*-* 09:00:00",
+      "OnCalendar=Fri *-*-* 09:00:00",
+    ])
+    const listed = JSON.parse((await call(["list", "--json"], env, system)).out)
+    expect(listed.items[0]).toMatchObject({ when: "weekly on Mon, Wed, Fri at 09:00" })
+  })
+
+  it("keeps one --at in the shape schedules were saved in before, and the same --at twice as one", async () => {
+    const { env } = setup()
+    const { system } = machine("linux")
+    const once = await call(["command", "one", "--at", "08:30", "--at", "08:30", "--json", "--", "review"], env, system)
+    expect(JSON.parse(once.out).item.when).toEqual({ daily: "08:30" })
+  })
+
+  it("refuses several times with --every or --at-time", async () => {
+    const { env } = setup()
+    const { system } = machine("linux")
+    const every = await call(
+      ["command", "w", "--at", "08:30", "--at", "18:00", "--every", "1d", "--", "r"],
+      env,
+      system,
+    )
+    expect(every.err).toContain("leave out --every")
+    const atTime = await call(["command", "w", "--at", "08:30", "--at-time", "2h", "--", "r"], env, system)
+    expect(atTime.err).toContain("say when")
+  })
 })
 
 describe.runIf(posix)("schedule under the read-only lock", () => {
@@ -573,6 +622,19 @@ describe.runIf(posix)("schedule agent", () => {
     expect(plist).toContain("<key>Weekday</key><integer>0</integer>")
     expect(plist).toContain("<key>Hour</key><integer>9</integer>")
   })
+
+  it("on macOS gives several times as an array of calendar intervals", async () => {
+    const { env } = setup()
+    const { system } = machine("darwin")
+    await call(["agent", "twice", "claude", "review", "--at", "mon 08:30", "--at", "mon 18:00"], env, system)
+    const plist = readFileSync(join(env.HOME, "Library", "LaunchAgents", "chat-cli.schedule.twice.plist"), "utf8")
+    expect(plist).toContain("<key>StartCalendarInterval</key>\n  <array>\n    <dict>")
+    expect(plist.match(/<key>Weekday<\/key><integer>1<\/integer>/g)).toHaveLength(2)
+    expect(plist.match(/<key>Hour<\/key><integer>(\d+)<\/integer>/g)).toEqual([
+      "<key>Hour</key><integer>8</integer>",
+      "<key>Hour</key><integer>18</integer>",
+    ])
+  })
 })
 
 describe("schedule on Windows", () => {
@@ -597,6 +659,14 @@ describe("schedule on Windows", () => {
     const { system, ran } = machine("win32", ["C:\\node\\node.exe", "C:\\chat\\chat.js"])
     await call(["command", "week", "--at", "wed 07:45", "--", "review", "--new"], env, system)
     expect(ran[0]?.env).toMatchObject({ WIRECAT_KIND: "weekly", WIRECAT_DAY: "Wednesday", WIRECAT_AT: "07:45" })
+  })
+
+  it("on Windows registers one trigger per time, the times in a variable", async () => {
+    const { env } = setup()
+    const { system, ran } = machine("win32", ["C:\\node\\node.exe", "C:\\chat\\chat.js"])
+    await call(["command", "twice", "--at", "fri 09:00", "--at", "07:45", "--", "review"], env, system)
+    expect(ran[0]?.env).toMatchObject({ WIRECAT_KIND: "calendar", WIRECAT_SLOTS: "|07:45;Friday|09:00" })
+    expect(ran[0]?.argv.at(-1)).toContain("$env:WIRECAT_SLOTS.Split(';')")
   })
 })
 
@@ -1628,5 +1698,104 @@ describe("delivery after a run", () => {
     )
     expect(bad.code).toBe(2)
     expect(bad.err).toContain("never a title")
+  })
+})
+
+describe("a schedule kept without its timer", () => {
+  it("pauses, still runs by hand, skips its timer's start, and resumes", async () => {
+    const { env } = setup()
+    const { system, ran } = machine("linux")
+    expect((await call(["command", "keep", "--at", "08:30", "--", "review"], env, system)).code).toBe(0)
+    const units = join(env.XDG_CONFIG_HOME, "systemd", "user")
+    const file = scheduleFile(env.CHAT_STATE_DIR, "keep")
+
+    ran.length = 0
+    const paused = await call(["pause", "keep", "--json"], env, system)
+    expect(JSON.parse(paused.out).item).toMatchObject({ name: "keep", paused: true })
+    expect(existsSync(join(units, "chat-schedule-keep.timer"))).toBe(false)
+    expect(ran.map(({ argv }) => argv.join(" "))).toContain("systemctl --user disable --now chat-schedule-keep.timer")
+    expect(JSON.parse(readFileSync(file, "utf8")).paused).toBe(true)
+    expect(JSON.parse((await call(["list", "--json"], env, system)).out).items[0]).toMatchObject({ paused: true })
+    const listed = JSON.parse((await call(["list", "--json"], env, system)).out).items[0]
+    expect(v.safeParse(scheduledJob, listed).success).toBe(true)
+
+    expect((await call(["resume", "keep"], env, system)).code).toBe(0)
+    expect(existsSync(join(units, "chat-schedule-keep.timer"))).toBe(true)
+    expect(JSON.parse(readFileSync(file, "utf8")).paused).toBeUndefined()
+
+    expect((await call(["pause", "nothing"], env, system)).code).not.toBe(0)
+  })
+})
+
+describe("schedule run, sent where the owner says", () => {
+  const routes = ["telegram-bot:personal/user:42", "email:work/me@example.com"]
+  const added = async () => {
+    const { env } = setup()
+    const { system } = machine("linux")
+    const args = routes.flatMap((route) => ["--deliver-to", route])
+    await call(["agent", "digest", "claude", "p", "--at", "08:30", ...args], env, system)
+    return { env, system }
+  }
+
+  it("refuses a route the schedule does not have, and a route with --no-notify", async () => {
+    const { env, system } = await added()
+    const other = await call(["run", "digest", "--deliver-to", "telegram-bot:personal/user:7"], env, system)
+    expect(other.code).toBe(2)
+    expect(other.err).toContain("--deliver-to takes only digest's own routes")
+    const both = await call(["run", "digest", "--no-notify", "--deliver-to", routes[0] ?? ""], env, system)
+    expect(both.err).toContain("--no-notify sends nothing")
+  })
+
+  it("sends along only the routes it is given, and none when told so", async () => {
+    const { env, root } = setup()
+    for (const name of ["tg", "mail"]) {
+      writeFileSync(join(root, "bin", name), "#!/bin/sh\n")
+      chmodSync(join(root, "bin", name), 0o755)
+    }
+    const sent: string[][] = []
+    const system: ServerSystem = {
+      platform: "linux",
+      uid: 501,
+      entry: [process.execPath],
+      spawn: () => 0,
+      pause: async () => {},
+      run: async (argv) => {
+        if (argv[0] !== "notify-send") sent.push(argv)
+        return { code: 0, stdout: "", stderr: "" }
+      },
+    }
+    const file = scheduleFile(env.CHAT_STATE_DIR, "digest")
+    mkdirSync(join(file, ".."), { recursive: true })
+    writeFileSync(
+      file,
+      JSON.stringify({
+        name: "digest",
+        kind: "agent",
+        when: { daily: "08:30" },
+        environment: { CHAT_PROFILE: "work", PATH: env.PATH },
+        createdAt: "",
+        to: routes,
+        argv: [process.execPath, "-e", 'console.log("ok")'],
+      }),
+    )
+    const kept = await runSchedule(app, system, env, file, { routes: [] })
+    expect(kept.deliveries).toBeUndefined()
+    expect(sent).toEqual([])
+    writeFileSync(file, JSON.stringify({ ...JSON.parse(readFileSync(file, "utf8")), notify: "failures" }))
+    const one = await runSchedule(app, system, env, file, { routes: [routes[1] ?? ""] })
+    expect(one.deliveries?.map((delivery) => delivery.to)).toEqual([routes[1]])
+  })
+})
+
+describe("an agent schedule another tool builds", () => {
+  it("refuses times a timer cannot keep, and an agent repeating more often than hourly", () => {
+    const { env } = setup()
+    const site = { app, system: machine("linux").system, env, profile: "default" }
+    const spec = { name: "x", harness: "claude" as const, prompt: "p" }
+    expect(() => agentSchedule(site, { ...spec, when: { calendar: [] } })).toThrow("HH:MM")
+    expect(() => agentSchedule(site, { ...spec, when: { every: 5 } })).toThrow("at least every 60 minutes")
+    expect(agentSchedule(site, { ...spec, when: { calendar: [{ at: "08:30" }, { at: "18:00" }] } }).when).toEqual({
+      calendar: [{ at: "08:30" }, { at: "18:00" }],
+    })
   })
 })

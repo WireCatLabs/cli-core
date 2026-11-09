@@ -1034,7 +1034,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--deep` | `<n>` | also check the top n in full — profile, photos, everything they wrote, and the public ban lists, which are sent their ids — one person a second. **TG specializes the SDK help with the bounded Telegram audit; MAX retains the generic SDK wording. Align the shared help with provider capabilities separately; SDK adoption alone does not remove the difference.** |  | `chats members check` |
 | `--defaults` |  | change what every profile gets, rather than this profile |  | `config set`, `config unset` |
 | `--delete-data` |  | also delete the account's messages and files on this computer |  | `account remove` |
-| `--deliver-to` | `<route>` | where a schedule's result also goes, when --notify-on says so: telegram-bot:<profile>/<chat>, email:<profile>/<address>; repeat it for more |  | `schedule agent` (planned), `schedule command` (planned) |
+| `--deliver-to` | `<route>` | where a schedule's result also goes, when --notify-on says so: telegram-bot:<profile>/<chat>, email:<profile>/<address>; repeat it for more |  | `schedule agent` (planned), `schedule command` (planned), `schedule run` (planned) |
 | `--deny-chats` | `<ids>` | replace denied chat ids, comma-separated; empty clears; deny wins |  | `replies audience`, `replies edit` |
 | `--deny-people` | `<ids>` | replace denied sender ids, comma-separated; empty clears; deny wins |  | `replies audience`, `replies edit` |
 | `--description` | `<text>` | the new about text — of a chat or of your account. **tasks add and tasks update use Markdown for task details, completion criteria and next steps** |  | `account update`, `chats update`, `tasks add`, `tasks update` |
@@ -1132,6 +1132,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--no-hours` |  | clear the working window |  | `replies edit` |
 | `--no-input` |  | never prompt or open an interactive login; piped input remains available |  | every command |
 | `--no-mentions-me` |  | do not require a mention of you or a reply to you |  | `replies edit` |
+| `--no-notify` |  | keep the result here: send it along none of its routes |  | `schedule run` (planned) |
 | `--no-preview` |  | no preview card for a link in the text |  | `messages send` |
 | `--no-question` |  | do not require a question |  | `replies edit` |
 | `--no-record` |  | do not keep it, whatever the configuration says |  | every command |

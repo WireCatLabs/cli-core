@@ -19,6 +19,39 @@ export type TemplateKey = (typeof TEMPLATE_KEYS)[number]["key"]
 
 export const templateKeyOf = (key: string) => TEMPLATE_KEYS.find((one) => one.key === key)
 
+const DIGEST_KEY = "report/morning-digest"
+
+/** The key of one schedule's own digest templates. */
+export const scheduleReportKey = (schedule: string) => `report/${schedule}`
+
+/**
+ * A key of `TEMPLATE_KEYS`, or `report/<schedule>` for a schedule the tool has: that schedule's own digest templates,
+ * which `schedule` names.
+ */
+export const reportKeyOf = (
+  key: string,
+  schedules: readonly string[],
+): { key: string; kind: MessageKind; about: string; schedule?: string } | undefined => {
+  const known = templateKeyOf(key)
+  if (known) return known
+  const schedule = key.startsWith("report/") ? key.slice("report/".length) : ""
+  return schedule && schedules.includes(schedule)
+    ? { key, kind: "morning-digest", about: `the ${schedule} digest`, schedule }
+    : undefined
+}
+
+/**
+ * Where a digest's template comes from, first stored one wins: the schedule's own, then the owner's morning-digest
+ * template (a digest schedule made before names existed may be called anything), then the shipped one.
+ */
+export const reportKeysOf = (kind: MessageKind, schedule?: string): string[] => {
+  const key = keyOfKind(kind)
+  // A schedule named after another message's key (weekly-gaps) has no key of its own.
+  return kind === "morning-digest" && schedule && !templateKeyOf(scheduleReportKey(schedule))
+    ? [scheduleReportKey(schedule), DIGEST_KEY]
+    : [key]
+}
+
 export const keyOfKind = (kind: MessageKind): TemplateKey =>
   (TEMPLATE_KEYS.find((one) => one.kind === kind) as (typeof TEMPLATE_KEYS)[number]).key
 
@@ -58,10 +91,15 @@ export const sampleView = (kind: MessageKind, language: string, now: number): Me
 }
 
 /** The newest `<run>.report.json` of `kind` the tool's schedules wrote, or undefined; only the digest keeps one. */
-export const lastReport = (state: string, kind: MessageKind): { path: string; document: string } | undefined => {
+export const lastReport = (
+  state: string,
+  kind: MessageKind,
+  schedule?: string,
+): { path: string; document: string } | undefined => {
   const folder = schedulesDir(state)
   if (kind !== "morning-digest" || !existsSync(folder)) return undefined
-  const files = readdirSync(folder).flatMap((name) => {
+  const names = schedule === undefined ? readdirSync(folder) : [schedule]
+  const files = names.flatMap((name) => {
     const runs = join(folder, name, "runs")
     return existsSync(runs)
       ? readdirSync(runs)
@@ -95,6 +133,7 @@ export const checkTemplateSave = async ({
   body,
   state,
   now,
+  schedule,
 }: {
   kind: MessageKind
   channel: ReportChannel
@@ -102,8 +141,9 @@ export const checkTemplateSave = async ({
   body: string
   state: string
   now: number
+  schedule?: string
 }): Promise<TemplateCheck[]> => {
-  const last = lastReport(state, kind)
+  const last = lastReport(state, kind, schedule)
   const views: [string, MessageView | undefined][] = [
     ["sample", sampleView(kind, language, now)],
     ...(last ? [[last.path, viewOf(last.document, language, now)] as [string, MessageView | undefined]] : []),
@@ -116,8 +156,8 @@ export const checkTemplateSave = async ({
 }
 
 /** The view a preview renders: the last real report when there is one, else the sample. */
-export const previewView = (state: string, kind: MessageKind, language: string, now: number) => {
-  const last = lastReport(state, kind)
+export const previewView = (state: string, kind: MessageKind, language: string, now: number, schedule?: string) => {
+  const last = lastReport(state, kind, schedule)
   const view = last && viewOf(last.document, language, now)
   return view ? { against: last.path, view } : { against: "sample", view: sampleView(kind, language, now) }
 }
