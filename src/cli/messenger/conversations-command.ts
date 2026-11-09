@@ -4,6 +4,7 @@ import { Command, Option } from "commander"
 import { analysisConsents } from "../../analysis/consents.js"
 import { openAnalysis, providerIdentity } from "../../analysis/provider.js"
 import { runAnalysis } from "../../analysis/runner.js"
+import { DEFAULT_TEXT_MODEL } from "../../embeddings/models.js"
 import { isLocal } from "../../embeddings/remote.js"
 import { renderMessages } from "../../render/messages.js"
 import { BATCH_SIZE, CONVERSATION_QUERY, type ConversationItem } from "../../services/conversations.js"
@@ -608,7 +609,10 @@ const chatOf = ({ chat }: { chat?: string }): string => {
 
 const withModelOptions = (command: Command): Command =>
   command
-    .option("--model <model>", "local: a model id from `models list` (default: e5-small); remote: the provider's model")
+    .option(
+      "--model <model>",
+      `local: a model id from \`models list\` (default: ${DEFAULT_TEXT_MODEL}); remote: the provider's model`,
+    )
     .addOption(
       new Option(
         "--embedding-provider <provider>",
