@@ -169,3 +169,42 @@ then an entry of the tool's service named after the provider alone (`cli-memo` /
 says that a question in the record's own words finds that record first a little less often.
 An agent's shell cannot turn it on, and over MCP `models consents set` needs `mcp.authority`. Prices for the
 estimate are known for `openai/gpt-4o-mini` and `anthropic/claude-haiku-5-5`; another model gets `usd: null`.
+
+## Search harder: a hosted model reorders `search all` (off by default)
+
+`searchAll` with `harder` (memo's `search all --harder`) sends the question and the first 30 merged hits to
+Anthropic (`api.anthropic.com`, model `claude-haiku-5-5` unless the owner chose another). Each hit goes as its number,
+date, title and at most 400 characters of the excerpt search already shows, as untrusted data; the model answers with
+the numbers of the hits that answer the question, best first, and nothing else. Those come first, then the rest of
+the 30 in their plain order, then everything below. Only the first page is reordered.
+
+What gets sent, and when:
+
+- **Nothing without `harder`.** A search that does not ask reads neither the consent nor the key.
+- **Nothing without the owner's consent**: the `search_harder` section of the shared settings file (`provider`,
+  `model`, `consented_at`), separate from enrichment's, because it sends other text at another time.
+- **Nothing without a key**, found as enrichment finds it (`models keys set anthropic`, then `ANTHROPIC_API_KEY` and
+  the tool's own variable, then the tool's entry named `anthropic`).
+
+```sh
+memo models search-consents show --json            # allowed or not, model, whether the key is found
+memo models search-consents set anthropic          # what a --harder search sends; changes nothing
+memo models search-consents set anthropic --yes    # allowed; each search still has to ask with --harder
+memo models search-consents revoke
+memo models keys set anthropic < key.txt
+```
+
+The search never fails because of it. Without consent or a key, with a settings section it cannot read, after 5 s with
+no answer, or on any provider error, the plain order stays and the answer's `harder` field says why (`applied: false`,
+a `reason` and a `reason_id`: `harder.no-consent`, `no-key`, `bad-setting`, `later-page`, `too-few`, `timeout`,
+`key-rejected`, `unreachable`, `rate-limited`, `bad-reply`, `error`), with `sent` (hits sent, 0 when nothing left),
+`cost_usd` and `ms`.
+
+The request is the cli-testing search lab's: its prompt, the JSON list of record numbers as structured output,
+thinking off, effort low. Only the records moved from the prompt into the gateway's untrusted-data message. In the lab
+the rerank ran over a first stage that already used two Haiku rewrites of the question ("stack C"), which cli-core does
+not do. Over it, the rerank lifted LifeBench recall@10 from 0.49 to 0.55 and hit@10 from 0.90 to 0.93, for about
+$0.0004 and 1 to 2 s per question. The 0.41 to 0.55 often quoted counts the rewrites too. The gain over memo's own
+ranking was not measured. No local reranker came close
+([search lab](https://github.com/WireCatLabs/cli-testing/tree/main/performance/agents/knowledge-graph-memory/search-lab)).
+An agent's shell cannot give the consent, and over MCP `models search-consents set` needs `mcp.authority`.

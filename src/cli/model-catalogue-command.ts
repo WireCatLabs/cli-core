@@ -17,6 +17,7 @@ import { FETCH, grantsAuthority, LOCAL_READ, LOCAL_WRITE, NO_EFFECTS } from "./e
 import { enrichmentConsentsCommand } from "./enrichment-consents-command.js"
 import { type Body, itemOf, listOf } from "./envelope.js"
 import { listQuery, nativeTerms, termField, typedQuery, withQuery } from "./list-query.js"
+import { harderConsentsCommand } from "./search-harder-consents-command.js"
 
 export const MODEL_CATALOGUE_QUERY = defineQuery({
   entity: "model",
@@ -172,6 +173,7 @@ export const modelCatalogueCommand = (app: AppIdentity, options: ModelCatalogueO
   }
   if (options.enrichment === true) {
     models.addCommand(enrichmentConsentsCommand(app, options))
+    models.addCommand(harderConsentsCommand(app, options))
     models.addCommand(providerKeysCommand(app, options))
   }
   if (options.jsonOption)
@@ -191,7 +193,9 @@ const providerOf = (given: string): string => {
 
 /** The enrichment provider's key in the tool's keyring entry `embeddings:<provider>`; never printed, never an argument. */
 const providerKeysCommand = (app: AppIdentity, options: ModelCatalogueOptions): Command => {
-  const keys = new Command("keys").description("the API key write-time enrichment sends with each request")
+  const keys = new Command("keys").description(
+    "the API key write-time enrichment and search all --harder send with each request",
+  )
   const store = () => embeddingKeys(app, options.env(), options.keyring)
   grantsAuthority(
     annotate(keys.command("set"), {

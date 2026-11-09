@@ -6,6 +6,13 @@ import { type ModelAdapter, messagesFor, systemFor } from "./types.js"
 // API version 2026-10-21 refuses temperature, top_p and top_k on every model.
 const options = v.strictObject({
   stop_sequences: v.optional(v.array(v.string())),
+  thinking: v.optional(v.strictObject({ type: v.picklist(["disabled", "adaptive"]) })),
+  output_config: v.optional(
+    v.strictObject({
+      effort: v.optional(v.picklist(["low", "medium", "high"])),
+      format: v.optional(v.strictObject({ type: v.literal("json_schema"), schema: v.record(v.string(), v.unknown()) })),
+    }),
+  ),
 })
 
 export const anthropic: ModelAdapter = {

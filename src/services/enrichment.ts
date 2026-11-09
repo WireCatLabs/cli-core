@@ -149,7 +149,7 @@ const recordsData = (batch: readonly EnrichmentCandidate[]) =>
 export type KeySource = "keyring" | "file" | "env" | "given"
 
 /** The provider's key and where it came from; it never leaves this process. */
-const keyLookup = (
+export const keyLookup = (
   options: Pick<EnrichOptions, "env" | "app" | "keyring" | "key">,
   setting: Pick<EnrichmentSetting, "provider" | "base_url">,
 ): { key: string; source: KeySource } | undefined => {
