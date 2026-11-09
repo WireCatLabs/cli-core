@@ -63,20 +63,8 @@ export const HARDER_REASON_IDS = [
   "harder.rate-limited",
   "harder.bad-reply",
   "harder.error",
-  "harder.not-a-question",
 ] as const
 export type HarderReasonId = (typeof HARDER_REASON_IDS)[number]
-
-/** The rewrite step of `--harder`: `applied` when the model's rewrites were searched too. */
-export interface HarderRewrite {
-  applied: boolean
-  /** The texts searched besides the question. */
-  texts: number
-  cost_usd: number | null
-  ms: number
-  reason?: string
-  reason_id?: HarderReasonId
-}
 
 /** What `--harder` did: `applied` only when the model's order replaced the plain one. */
 export interface HarderResult {
@@ -91,8 +79,6 @@ export interface HarderResult {
   ms: number
   reason?: string
   reason_id?: HarderReasonId
-  /** Absent when no rewrite was asked: a later page, or nothing could be sent. */
-  rewrite?: HarderRewrite
 }
 
 export interface HarderOptions {
@@ -147,45 +133,6 @@ const jsonOf = (text: string): unknown => {
   }
 }
 
-// The search lab's "dated rewrites" prompt (rewrite.py, mqdate), word for word.
-const REWRITE_PROMPT =
-  "A person searches their own archive of chat messages, mails, notes, calendar entries and phone records. " +
-  "Today is {as_of}.\n" +
-  'Rewrite the question below for that search. Replace every relative time ("last week", "in January", ' +
-  '"recently") with calendar dates or months and the year. Write exactly three lines and nothing else:\n' +
-  "1. the question in other words, with dates made absolute\n" +
-  "2. the question as the record itself might phrase it\n" +
-  "3. keywords only: names, objects, synonyms, and the dates or months, separated by spaces\n\n" +
-  "Question: {question}"
-
-/** Two rewrites and a line of keywords; as in the lab, a line's numbering and quotes are dropped. */
-export interface Rewrites {
-  phrasings: string[]
-  keywords: string[]
-}
-
-const rewritesOf = (text: string): Rewrites | undefined => {
-  const lines = text
-    .split("\n")
-    .map((line) =>
-      line
-        .replace(/^\s*\d+[.)]\s*/u, "")
-        .trim()
-        .replace(/^"|"$/gu, ""),
-    )
-    .filter(Boolean)
-  if (lines.length !== 3) return undefined
-  const keywords = [
-    ...new Set(
-      (lines[2] as string)
-        .split(/\s+/u)
-        .map((word) => word.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, ""))
-        .filter(Boolean),
-    ),
-  ]
-  return { phrasings: lines.slice(0, 2), keywords }
-}
-
 const recordLine = (hit: HarderHit, i: number) =>
   `[${i}] (${hit.timestamp?.slice(0, 10) ?? "undated"}) ${`${hit.title ? `${hit.title}\n` : ""}${hit.text.slice(0, HARDER_CHARS)}`.replace(/\s*\n\s*/g, " ")}`
 
@@ -201,7 +148,6 @@ const REASON_TEXT: Record<HarderReasonId, string> = {
   "harder.rate-limited": "the provider's rate limit was reached",
   "harder.bad-reply": "the model's answer could not be read",
   "harder.error": "the provider failed",
-  "harder.not-a-question": "only a question in words, with no NOT, is rewritten; the rerank ran alone",
 }
 
 const reasonOf = (error: unknown, timedOut: boolean): HarderReasonId => {
@@ -215,7 +161,7 @@ const reasonOf = (error: unknown, timedOut: boolean): HarderReasonId => {
 
 type Asking = HarderOptions & { env: NodeJS.ProcessEnv; now: number; command?: string }
 
-/** Consent and key, read once for both calls; or why nothing may be sent. */
+/** The consent and key a call needs, or why nothing may be sent. */
 export type HarderAccess =
   | { ready: true; provider: EnrichmentProvider; model: string; endpoint: string; custom: boolean; key?: string }
   | { ready: false; provider: string; model: string; endpoint: string; reason_id: HarderReasonId; reason: string }
@@ -310,52 +256,6 @@ const ask = async (
     return { reason_id: reasonOf(error, limit.signal.aborted) }
   } finally {
     clearTimeout(timer)
-  }
-}
-
-/** A search that may send but is not a question in words: only the rerank runs. */
-export const notRewritten = (): HarderRewrite => ({
-  applied: false,
-  texts: 0,
-  cost_usd: 0,
-  ms: 0,
-  reason: REASON_TEXT["harder.not-a-question"],
-  reason_id: "harder.not-a-question",
-})
-
-/**
- * The rewrite step of `search all --harder`: the model rewrites the question twice, with relative dates made absolute,
- * and lists its keywords; the search then runs for each too. Only the question is sent, no record.
- */
-export const rewriteHarder = async (
-  question: string,
-  access: HarderAccess,
-  { now, ...options }: HarderOptions & { now: number },
-): Promise<{ rewrites?: Rewrites; rewrite: HarderRewrite }> => {
-  const started = Date.now()
-  const plain = (reason_id: HarderReasonId, cost_usd: number | null = 0, reason = REASON_TEXT[reason_id]) => ({
-    rewrite: { applied: false, texts: 0, cost_usd, ms: Date.now() - started, reason, reason_id },
-  })
-  if (!access.ready) return plain(access.reason_id, 0, access.reason)
-  const answer = await ask(access, options, {
-    purpose: "search-harder-rewrite",
-    prompt: REWRITE_PROMPT.replace("{as_of}", new Date(now).toISOString().slice(0, 10)).replace(
-      "{question}",
-      () => question,
-    ),
-    maxTokens: 400,
-  })
-  if ("reason_id" in answer) return plain(answer.reason_id, null)
-  const rewrites = rewritesOf(answer.text)
-  if (!rewrites) return plain("harder.bad-reply", answer.cost)
-  return {
-    rewrites,
-    rewrite: {
-      applied: true,
-      texts: rewrites.phrasings.length + (rewrites.keywords.length ? 1 : 0),
-      cost_usd: answer.cost,
-      ms: Date.now() - started,
-    },
   }
 }
 

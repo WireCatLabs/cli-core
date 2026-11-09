@@ -141,6 +141,21 @@ describe("search all --harder", () => {
     expect(request?.options).toMatchObject({ thinking: { type: "disabled" }, output_config: { effort: "low" } })
   })
 
+  it("**sends the question as typed**, not escaped for the query parser, with `$&` kept as written", async () => {
+    const { env, store } = await seeded()
+    consent(env)
+    const model = fakeModel('{"records":[]}')
+    await searchAll(store, MAIL, {
+      text: "which deposit is due, $&?",
+      limit: 3,
+      only: ["mail"],
+      now: NOW,
+      env,
+      harder: model.harder,
+    })
+    expect(model.requests[0]?.prompt).toContain("Question: which deposit is due, $&?\n")
+  })
+
   it.each([
     ["an error", fakeModel(new Error("overloaded")), "harder.error"],
     ["an answer that is not the list", fakeModel("the third one"), "harder.bad-reply"],
@@ -172,117 +187,6 @@ describe("search all --harder", () => {
     const found = await search(store, env, model.harder, 1)
     expect(model.requests).toEqual([])
     expect(found.harder).toMatchObject({ applied: false, reason_id: "harder.later-page" })
-  })
-
-  describe("with a question, the model rewrites it first", () => {
-    const QUESTION = "what is due for the flat deposit?"
-    const REWRITES = "1. Which deposit for the flat is due?\n2. The flat deposit is due\n3. bond apartment flat 2026-11"
-
-    /** The rewrite and the rerank answer apart; "hang" waits until the call's own time limit. */
-    const twoCalls = (answers: { rewrite: string | Error | "hang"; rerank: string }) => {
-      const requests: ModelRequest[] = []
-      const adapter: ModelAdapter = {
-        baseUrl: "https://api.anthropic.com",
-        validate: (options) => options,
-        complete: async (_target, request, _options, _key, fetcher) => {
-          requests.push(request)
-          const reply = request.purpose === "search-harder-rewrite" ? answers.rewrite : answers.rerank
-          if (reply === "hang") await fetcher("https://api.anthropic.com/v1/messages", {})
-          if (reply instanceof Error) throw reply
-          return { text: reply as string, tokens: 1_000, usage: { input: 900, output: 100 } }
-        },
-      }
-      const hanging: typeof fetch = (_input, init) =>
-        new Promise((_resolve, reject) => init?.signal?.addEventListener("abort", () => reject(new Error("aborted"))))
-      return {
-        requests,
-        harder: { adapters: { anthropic: adapter }, key: () => "test-key", fetch: hanging, timeoutMs: 50 },
-      }
-    }
-
-    const withBond = async () => {
-      const seededStore = await seeded()
-      const [accountId] = (await seededStore.store.accounts.storedAccounts()).map(({ id }) => Number(id))
-      await seededStore.store.mail.saveThread({
-        accountId: accountId as number,
-        externalId: "thread-bond",
-        now: NOW,
-        emails: [
-          {
-            externalId: "<bond@example.com>",
-            subject: "Apartment bond",
-            from: { address: "landlord@example.com", name: "Landlord" },
-            to: [{ address: "owner@example.com", name: null }],
-            sentAt: NOW - 5 * 86_400_000,
-            receivedAt: NOW - 5 * 86_400_000,
-            bodyText: "The bond for the apartment: please pay it by Friday.",
-          },
-        ],
-      })
-      return seededStore
-    }
-
-    const ask = (store: MessageStore, env: NodeJS.ProcessEnv, harder?: HarderOptions) =>
-      searchAll(store, MAIL, {
-        text: QUESTION,
-        limit: 10,
-        only: ["mail"],
-        now: NOW,
-        env,
-        ...(harder ? { harder } : {}),
-      })
-
-    it("**finds what only a rewrite's words find**, sends the question alone, then reranks", async () => {
-      const { env, store } = await withBond()
-      consent(env)
-      expect(titles(await ask(store, env))).not.toContain("Apartment bond")
-      const model = twoCalls({ rewrite: REWRITES, rerank: '{"records":[]}' })
-      const found = await ask(store, env, model.harder)
-      expect(titles(found)).toContain("Apartment bond")
-      const [rewrite, rerank] = model.requests
-      expect(rewrite?.purpose).toBe("search-harder-rewrite")
-      expect(rewrite?.prompt).toContain(`Question: ${QUESTION}`)
-      expect(rewrite?.prompt).toContain("Today is 2026-11-09")
-      expect(rewrite?.data).toBeUndefined()
-      expect(rerank?.data).toContain("Apartment bond")
-      expect(found.harder).toMatchObject({
-        applied: true,
-        cost_usd: 0.00028,
-        rewrite: { applied: true, texts: 3, cost_usd: 0.00014 },
-      })
-    })
-
-    it.each([
-      ["does not answer in time", "hang" as const, "harder.timeout"],
-      ["fails", new Error("overloaded"), "harder.error"],
-      ["answers in another shape", "Which deposit is due?", "harder.bad-reply"],
-    ])("**a rewrite that %s searches the question alone** and still reranks", async (_name, rewrite, reason) => {
-      const { env, store } = await withBond()
-      consent(env)
-      const plain = titles(await ask(store, env))
-      const model = twoCalls({ rewrite, rerank: '{"records":[]}' })
-      const found = await ask(store, env, model.harder)
-      expect(titles(found)).toEqual(plain)
-      expect(found.harder).toMatchObject({ applied: true, rewrite: { applied: false, texts: 0, reason_id: reason } })
-    })
-
-    it("**without the owner's consent neither call is made**", async () => {
-      const { env, store } = await withBond()
-      const model = twoCalls({ rewrite: REWRITES, rerank: '{"records":[]}' })
-      const found = await ask(store, env, model.harder)
-      expect(model.requests).toEqual([])
-      expect(found.harder).toMatchObject({ applied: false, reason_id: "harder.no-consent" })
-      expect(found.harder?.rewrite).toBeUndefined()
-    })
-
-    it("**words that are no question are not rewritten**; the rerank runs alone", async () => {
-      const { env, store } = await seeded()
-      consent(env)
-      const model = twoCalls({ rewrite: REWRITES, rerank: '{"records":[]}' })
-      const found = await search(store, env, model.harder)
-      expect(model.requests.map(({ purpose }) => purpose)).toEqual(["search-harder"])
-      expect(found.harder?.rewrite).toMatchObject({ applied: false, reason_id: "harder.not-a-question" })
-    })
   })
 
   describe("with another provider", () => {

@@ -34,11 +34,10 @@ type Choice = Pick<HarderSetting, "provider" | "model" | "base_url">
 
 /** What the owner agrees to; a window can write the same text from the answer's fields. */
 export const harderConsentWording = (command: string, chosen: Choice): string =>
-  `\`${command} search all --harder\` sends the question to ${chosen.provider} ` +
-  `(${new URL(enrichmentEndpoint(chosen)).host}), model ${chosen.model}, which rewrites it for the search; then the ` +
-  `question and its first ${HARDER_CANDIDATES} hits (each one's title, date and up to ${HARDER_CHARS} characters of ` +
-  "its text), and the model puts the hits that answer it first. Only a search with --harder sends anything; with " +
-  `claude-haiku-5-5 one costs about $0.0004 and adds 1 to 3 seconds. ` +
+  `\`${command} search all --harder\` sends the question and its first ${HARDER_CANDIDATES} hits (each one's title, ` +
+  `date and up to ${HARDER_CHARS} characters of its text) to ${chosen.provider} ` +
+  `(${new URL(enrichmentEndpoint(chosen)).host}), model ${chosen.model}, which puts the hits that answer it first. ` +
+  "Only a search with --harder sends anything; with claude-haiku-5-5 one costs about $0.0003 and adds 1 to 2 seconds. " +
   `\`${command} models search-consents revoke\` turns it off.`
 
 const state = (app: AppIdentity, options: HarderConsentsOptions, given?: Choice) => {

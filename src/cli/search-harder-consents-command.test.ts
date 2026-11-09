@@ -45,7 +45,7 @@ describe("models search-consents", () => {
       candidates: 30,
       key: { present: false },
     })
-    expect(lines.join("\n")).toContain("then the question and its first 30 hits")
+    expect(lines.join("\n")).toContain("sends the question and its first 30 hits")
     expect(readHarderSetting(env)).toBeUndefined()
   })
 
