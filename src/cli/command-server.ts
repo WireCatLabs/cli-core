@@ -141,22 +141,32 @@ export const serveCommands = async ({
     const start = (line: string) => {
       active += 1
       running += 1
+      let holdsPlace = true
+      let ended = false
+      let turn: Promise<void> | undefined
       let release: (() => void) | undefined
+      // A request that ended while it waited (its --timeout, a signal) gives its turn up without taking it.
       const alone = () => {
-        if (release) return Promise.resolve()
+        if (turn) return turn
+        holdsPlace = false
         running -= 1
-        const turn = turns.then(
+        turn = turns.then(
           () =>
             new Promise<void>((go) => {
+              if (ended) return go()
               gated = true
               drained = () => {
-                running += 1
+                if (ended) gated = false
+                else {
+                  holdsPlace = true
+                  running += 1
+                }
                 go()
               }
               settle()
             }),
         )
-        turns = turn.then(() => new Promise<void>((free) => (release = free)))
+        turns = turn.then(() => (ended && !holdsPlace ? undefined : new Promise<void>((free) => (release = free))))
         return turn
       }
       const answer = async () => {
@@ -169,8 +179,9 @@ export const serveCommands = async ({
       answer()
         .catch(finish)
         .finally(() => {
+          ended = true
           active -= 1
-          running -= 1
+          if (holdsPlace) running -= 1
           if (release) {
             gated = false
             release()

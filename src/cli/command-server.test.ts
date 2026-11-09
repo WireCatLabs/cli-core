@@ -95,6 +95,28 @@ describe("serveCommands", () => {
     expect(log.indexOf("start read2")).toBeGreaterThan(log.indexOf("end store"))
   })
 
+  it("**gives up the turn of a request that ends while it waits to run alone**, and keeps serving", async () => {
+    const { input, lines, done } = serving(async (argv, alone) => {
+      if (argv[0] === "store") {
+        // As a --timeout ends a run that still waits.
+        void alone()
+        await new Promise((resolve) => setTimeout(resolve, 2))
+      } else await new Promise((resolve) => setTimeout(resolve, argv[0] === "slow" ? 20 : 0))
+      return echo(argv)
+    })
+    input.write('{"id":1,"argv":["slow"]}\n{"id":2,"argv":["store"]}\n')
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    input.end('{"id":3,"argv":["after"]}\n{"id":4,"argv":["store"]}\n{"id":5,"argv":["last"]}\n')
+
+    expect(await done).toBe(0)
+    expect(
+      lines
+        .slice(1)
+        .map((line) => line.id)
+        .sort(),
+    ).toEqual([1, 2, 3, 4, 5])
+  })
+
   it("answers a line it cannot read with code 2 and keeps going", async () => {
     const { input, lines, done } = serving(echo)
     input.end(

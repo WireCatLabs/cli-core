@@ -325,8 +325,9 @@ line:
   write inside the process never waits: the driver is synchronous, so one request's transaction ends before another's
   code runs. The gain is in the waiting a run does (files, settings, imports). A write lock held by another process
   stops the whole server for up to the busy timeout (5 s), not only the request that waits.
-- A `store` command (backup, restore, recover, vacuum and the rest) runs alone: it waits until the requests under way
-  end, and the ones after it wait for it, since it may swap the file the others hold open.
+- A `store` command (backup, restore, reset, repair, recover, and reads such as `store info` too) runs alone: it
+  waits until the requests under way end, and the ones after it wait for it, since it may swap the file the others
+  hold open.
 - A line that is not such a request gets code 2 and the error on `stderr`; its `id` is the request's when it has a
   numeric one, else `null`. The server goes on.
 - A command that runs until stopped (`serve`, `watch`, `mcp serve`), waits on a person (`lifetime: "interactive"`:
