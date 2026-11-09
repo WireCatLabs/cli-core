@@ -221,7 +221,7 @@ export const templatesCommand = (app: AppIdentity, options: TemplatesOptions): C
     .argument("<key>", "the template, such as report/morning-digest")
     .addOption(channelOption())
     .addOption(localeOption())
-    .option("--file <file>", "take the new template from this file instead of opening an editor")
+    .option("--file <file>", "take the new template from this file instead of opening an editor; - reads stdin")
     .addOption(
       new Option("--undo", "put back the body your last change replaced; twice is back where you were").conflicts(
         "file",
@@ -253,7 +253,7 @@ export const templatesCommand = (app: AppIdentity, options: TemplatesOptions): C
           )
         body = previous
       } else if (given.file !== undefined) {
-        body = readFileSync(given.file, "utf8")
+        body = readFileSync(given.file === "-" ? 0 : given.file, "utf8")
       } else {
         draft = join(
           mkdtempSync(join(tmpdir(), "wirecat-template-")),
@@ -317,7 +317,7 @@ export const templatesCommand = (app: AppIdentity, options: TemplatesOptions): C
     .argument("<key>", "the template, such as report/morning-digest")
     .addOption(channelOption())
     .addOption(localeOption())
-    .option("--file <file>", "preview this draft instead of the template that applies")
+    .option("--file <file>", "preview this draft instead of the template that applies; - reads stdin")
     .action(async function (
       this: Command,
       key: string,
@@ -327,7 +327,7 @@ export const templatesCommand = (app: AppIdentity, options: TemplatesOptions): C
       const { address, kind, channel } = await addressOf(key, given, env)
       const stored =
         given.file === undefined ? await withStore(env, (store) => store.templates.get(address)?.body) : undefined
-      const body = given.file === undefined ? stored : readFileSync(given.file, "utf8")
+      const body = given.file === undefined ? stored : readFileSync(given.file === "-" ? 0 : given.file, "utf8")
       const { against, view } = previewView(stateOf(app, env), kind, address.language, Date.now())
       const rendering = await renderReport(view, channel, body === undefined ? {} : { template: body })
       const problems = body === undefined ? [] : (await checkTemplate(view, channel, body)).problems
