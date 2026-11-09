@@ -1,13 +1,15 @@
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { metaSchema } from "@wirecat/cli-base/standards"
+import * as v from "valibot"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import type { ModelAdapter, ModelRequest } from "../models/index.js"
 import { writeSharedSection } from "../store/shared-config.js"
 import { type AccountKey, type MessageStore, openStore } from "../store/store.js"
 import { enrichmentSettingPath } from "./enrichment-setting.js"
 import { searchAll } from "./search-all.js"
-import { type HarderOptions, writeHarderSetting } from "./search-harder.js"
+import { type HarderOptions, type HarderResult, harderRanking, writeHarderSetting } from "./search-harder.js"
 
 const MAIL: AccountKey = { provider: "email", account: "owner@example.com" }
 const NOW = Date.parse("2026-11-09T12:00:00Z")
@@ -103,6 +105,16 @@ describe("search all --harder", () => {
     expect(model.requests).toEqual([])
     expect(titles(found)).toEqual(plain)
     expect(found.harder).toMatchObject({ applied: false, sent: 0, reason_id: "harder.no-consent" })
+    expect(harderRanking(found.harder as HarderResult)).toEqual({
+      applied: false,
+      provider: "anthropic",
+      model: "claude-haiku-5-5",
+      endpoint: "https://api.anthropic.com",
+      sent: 0,
+      cost_usd: 0,
+      ms: expect.any(Number),
+      reason_id: "harder.no-consent",
+    })
     expect(found.harder?.reason).toContain("models search-consents set <provider> --yes")
   })
 
@@ -133,7 +145,15 @@ describe("search all --harder", () => {
     const model = fakeModel('{"records":[2, 7, 2]}')
     const found = await search(store, env, model.harder)
     expect(titles(found)).toEqual([third, first, second])
-    expect(found.harder).toMatchObject({ applied: true, sent: 3, model: "claude-haiku-5-5", cost_usd: 0.00014 })
+    expect(found.harder).toMatchObject({
+      applied: true,
+      sent: 3,
+      model: "claude-haiku-5-5",
+      cost_usd: 0.00014,
+      usage: { input: 900, output: 100 },
+    })
+    const ranking = harderRanking(found.harder as HarderResult)
+    expect(v.is(metaSchema, { run_id: "r", duration_ms: 1, complete: true, ranking })).toBe(true)
     const [request] = model.requests
     expect(request?.prompt).toContain("Today is 2026-11-09")
     expect(request?.prompt).toContain("Question: deposit")

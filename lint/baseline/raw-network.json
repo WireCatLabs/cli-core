@@ -1,1 +1,7 @@
-["src/background/relay.ts node:net", "src/fetch/page.ts node:http", "src/fetch/page.ts node:https"]
+[
+  "src/background/relay.ts node:net",
+  "src/fetch/page.ts node:http",
+  "src/fetch/page.ts node:https",
+  "src/models/index.ts fetch",
+  "src/speech/openai.ts fetch"
+]

@@ -29,6 +29,31 @@ import {
 const MATCHES = 8
 const ANSWER = answerSchema()
 
+// The listing shows an agent only what it acts on; the server still checks every answer against the full envelope,
+// and tools_search gives each command's full answer. meta.ranking alone took 2,800 characters of every connect.
+const agentAnswer = (prefix: string, writes: boolean) => {
+  const meta = v.pipe(v.looseObject({}), v.description(`run facts; ${prefix}_tools_search shows the full answer`))
+  const next = v.optional(v.pipe(v.array(v.looseObject({})), v.description("steps to run next: command and args")))
+  return v.looseObject(
+    writes
+      ? { item: v.optional(v.unknown()), next, meta }
+      : {
+          items: v.optional(v.array(v.unknown())),
+          item: v.optional(v.unknown()),
+          page: v.optional(v.looseObject({ has_more: v.boolean() })),
+          next,
+          missing: v.optional(v.array(v.looseObject({ field: v.string(), why: v.string() }))),
+          meta,
+        },
+  )
+}
+
+const listedAs = (prefix: string, writes: boolean) => {
+  const checked = toStandardJsonSchema(ANSWER)
+  const shown = toStandardJsonSchema(agentAnswer(prefix, writes))["~standard"].jsonSchema
+  return { "~standard": { ...checked["~standard"], jsonSchema: shown } }
+}
+
 type Input = v.ObjectSchema<v.ObjectEntries, undefined> | v.StrictObjectSchema<v.ObjectEntries, undefined>
 
 /** One command an agent can find and run: its arguments are checked against `input` before `run`. */
@@ -235,7 +260,7 @@ export const registerCommands = (
   server.registerTool(
     `${prefix}_read`,
     {
-      outputSchema: toStandardJsonSchema(ANSWER),
+      outputSchema: listedAs(prefix, false),
       title: "Run a reading command",
       description: `Run one command that only reads, with the arguments ${prefix}_tools_search showed. ${untrusted}`,
       inputSchema: toStandardJsonSchema(call),
@@ -247,7 +272,7 @@ export const registerCommands = (
     server.registerTool(
       `${prefix}_write`,
       {
-        outputSchema: toStandardJsonSchema(ANSWER),
+        outputSchema: listedAs(prefix, true),
         title: "Run a writing command",
         description: `Run one command that changes something — ${messenger ? "sends, edits, deletes, joins" : "creates, edits, deletes"} — with the arguments ${prefix}_tools_search showed. ${untrusted}`,
         inputSchema: toStandardJsonSchema(call),

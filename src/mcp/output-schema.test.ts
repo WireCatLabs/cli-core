@@ -45,3 +45,45 @@ describe("the answer a command declares", () => {
     expect(await searched()).toEqual(toJsonSchema(answerSchema()))
   })
 })
+
+describe("the answer read and write list", () => {
+  const served = async (body: object) => {
+    const server = new McpServer({ name: "chat", version: "0" })
+    registerCommands(server, "chat", {
+      "chats show": {
+        title: "Show a chat",
+        description: "one chat",
+        writes: false,
+        input: v.object({}),
+        run: async () => answered(body),
+      },
+    })
+    const [serverSide, clientSide] = InMemoryTransport.createLinkedPair()
+    await server.connect(serverSide)
+    const client = new Client({ name: "fixture", version: "0" })
+    await client.connect(clientSide)
+    return client
+  }
+
+  it("is short, and points at tools_search for the full answer", async () => {
+    const client = await served(itemOf({ id: "2" }))
+    const { tools } = await client.listTools()
+    const read = tools.find(({ name }) => name === "chat_read")?.outputSchema as { properties: Record<string, unknown> }
+
+    expect(Object.keys(read.properties)).toEqual(["items", "item", "page", "next", "missing", "meta"])
+    expect(read.properties.meta).toEqual(
+      expect.objectContaining({ description: expect.stringContaining("chat_tools_search") }),
+    )
+    expect((await client.callTool({ name: "chat_read", arguments: { command: "chats show" } })).isError).toBeFalsy()
+    await client.close()
+  })
+
+  it("still checks every answer against the full envelope, which the short listing would let through", async () => {
+    const client = await served({ ...itemOf({ id: "2" }), meta: { ...itemOf({ id: "2" }).meta, unknown: true } })
+    const result = await client.callTool({ name: "chat_read", arguments: { command: "chats show" } })
+
+    expect(result.isError).toBe(true)
+    expect(JSON.stringify(result.content)).toContain("Output validation")
+    await client.close()
+  })
+})

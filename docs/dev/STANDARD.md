@@ -237,6 +237,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `categories` | the categories a thing takes, with what each means |
 | `domains` | the internet domains links point to, most linked first |
 | `places` | the street addresses confirmed as places, most mentioned first |
+| `mentions` | the people and organizations named in a selected thing's text |
 | `comments` | replies attached to a selected source item |
 | `links` | links held for a selected thing |
 | `voters` | people whose recorded votes are visible for a selected poll |
@@ -442,7 +443,6 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--meeting-project-candidates` |  | switch | expose read-only project suggestions from selected meeting evidence and the global project vocabulary |  |
 | `--meeting-preparation` |  | switch | expose meeting preparation tools, including their remote schedule reads |  |
 | `--dry-run` |  | switch | judge and plan; do nothing |  |
-| `--accept-terms` |  | switch | accept the model's licence terms |  |
 | `--as-owner` |  | switch | record the action as the owner's although an agent's terminal runs the tool |  |
 | `--from-app` |  | switch | the owner acted in the app; its word, not a check |  |
 | `--allow-any-file` |  | switch | send a file even from a credential folder or the tool's own folders |  |
@@ -799,6 +799,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--bcc` | `<address>` | string | an e-mail address that gets a blind copy; repeat it for more |  |
 | `--reply-all` |  | switch | with --reply-to, an e-mail reply also goes to everyone the message went to |  |
 | `--trimmed` |  | switch | each e-mail's own text, without the quoted earlier mail and the signature; refused with --full |  |
+| `--accept-terms` |  | switch | no longer needed; kept so older scripts still run |  |
 | `--quote` | `<ref=words...>` | list | the words an --evidence reference says that a record rests on, as <ref>=<words>, one per reference |  |
 | `--suggest` | `<text>` | string | wording offered for the owner to take or leave; it decides nothing |  |
 | `--keep-copy` |  | switch | keep a copy of the original file as well as its text |  |
