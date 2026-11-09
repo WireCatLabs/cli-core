@@ -69,6 +69,11 @@ export interface CrmSource {
    * account's copy belongs to one user: another sign-in's user is refused.
    */
   self?(): string | Promise<string>
+  /**
+   * Which of the `unassigned` users this sign-in may count as nobody's, asked at every sync under `mine`; absent, all
+   * of them. The engine copies no deal or lead of a user left out, and names them with `message`, the CRM's reason.
+   */
+  unassigned?(users: readonly string[]): Promise<{ kept: string[]; message?: string }>
   /** One kind's pipelines with their stages; a CRM whose leads have no pipelines answers one of its own making. */
   pipelines(kind: DealKind, context?: CrmCallContext): Promise<CrmPipeline[]>
   /**

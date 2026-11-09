@@ -126,6 +126,34 @@ it("copies the own user's, the unassigned users' and nobody's deals by default, 
   expect(await deals()).toEqual(["d1", "d3", "d4"])
 })
 
+it("copies no deal of an unassigned user the CRM refuses, says so, and narrows once it does", async () => {
+  const { source, set, sync, deals } = await scoped()
+  source().put("deal", exampleDeal("d1", { assignee: "7" }))
+  source().put("deal", exampleDeal("d2", { assignee: "9" }))
+  source().put("deal", exampleDeal("d3", { assignee: "15" }))
+  await set("scope", "mine")
+  await set("unassigned", "9,15")
+  let refused: string[] = []
+  Object.assign(source(), {
+    unassigned: async (users: readonly string[]) => ({
+      kept: users.filter((id) => !refused.includes(id)),
+      message: "an active employee",
+    }),
+  })
+  expect((await sync()).scope).toEqual({ mode: "mine", self: "7", also: ["9", "15"] })
+  expect(await deals()).toEqual(["d1", "d2", "d3"])
+
+  refused = ["9"]
+  const report = await sync()
+  expect(report.scope).toEqual({ mode: "mine", self: "7", also: ["15"] })
+  expect(report.issues).toContainEqual({
+    kind: "deal",
+    reason: "crm.unassigned-dropped",
+    message: `${KEY}.unassigned names user 9, not counted as nobody's: an active employee; their deals and leads are not copied`,
+  })
+  expect(await deals()).toEqual(["d1", "d3"])
+})
+
 it("narrows in the store with no list from the CRM, widens by a full round, and keeps confirmed links", async () => {
   const { store, source, set, sync, deals } = await scoped()
   source().put("person", examplePerson("p1"))
