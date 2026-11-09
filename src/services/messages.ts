@@ -80,6 +80,8 @@ export interface SearchQuery {
   timezone?: string
   ast?: unknown
   signal?: AbortSignal
+  /** Longer than the 2 s default when the caller set the run's time limit itself (`searchTimeLimit`). */
+  timeLimitMs?: number
   chat?: string
   /** A messenger the store holds, or `all` — the same as `in:` in the query. The account it runs as when unset. */
   source?: string

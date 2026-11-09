@@ -943,13 +943,16 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
         const id = Number(documentRow(documentId).id)
         database.prepare("DELETE FROM links WHERE from_type = 'document' AND from_id = ? AND source = 'file'").run(id)
         const written = links.map((link) => insertLink(context, { ...link, from: `document:${id}`, origin: "file" }))
-        // What a file's source says, such as a Drive owner, is reported by its account, not waiting for review.
+        // What a file's source says, such as a Drive owner (`google-drive:files.get`), is reported by its account,
+        // not waiting for review. A program's guess (`scan`) or an agent's (`agent:…`) still waits.
         database
           .prepare(
             "UPDATE links SET account_id = (SELECT account_id FROM documents WHERE id = ?) WHERE from_type = 'document' " +
-              `AND from_id = ? AND source = 'file' AND confirmed = 0 AND account_id IS NULL AND kind IN (${RELATIONSHIPS})`,
+              `AND from_id = ? AND source = 'file' AND confirmed = 0 AND account_id IS NULL AND kind IN (${RELATIONSHIPS}) ` +
+              "AND (SELECT substr(json_extract(links.metadata, '$.provenance'), 1, length(a.provider) + 1) = " +
+              "a.provider || ':' FROM documents d JOIN accounts a ON a.id = d.account_id WHERE d.id = ?)",
           )
-          .run(id, id)
+          .run(id, id, id)
         const reread = database.prepare("SELECT * FROM links WHERE id = ?")
         return written.map((link) => linkOf(database, reread.get(Number(link.id)) as Row))
       }),

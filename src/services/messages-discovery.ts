@@ -152,7 +152,8 @@ export const searchDiscovery = async (
   const check = () => {
     if (request.signal?.aborted)
       throw new CliError("validation_error", "search was aborted", { reason: "query.aborted", complete: false })
-    if (performance.now() - started > QUERY_LIMITS.milliseconds) outOfTime()
+    const limitMs = request.timeLimitMs ?? QUERY_LIMITS.milliseconds
+    if (performance.now() - started > limitMs) outOfTime(limitMs)
   }
   const union = new Map<string, FoundMessage & { fused: number }>()
   let truncated = false

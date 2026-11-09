@@ -711,6 +711,8 @@ Detector сообщает **кандидата**, а не подтверждён
 `query.too-large` — reason внутри `validation_error`, с `budget` и `complete:false`;
 сузьте чат/дату/pattern. Для `term expansions` сужать надо сам pattern — см. выше. Timeout/abort освобождает worker и timer. Предел времени
 (`milliseconds`) — не ошибка запроса: `timeout` с reason `query.time-limit`, `budget: "time"`, `limit_ms` и `complete:false`.
+С явным `--timeout` (или `<PREFIX>_TIMEOUT`) `search messages` получает этот срок минус секунду на ответ, но не меньше 2 с;
+`limit_ms` называет предел, который действовал. Без него, у агентов и в MCP, предел 2 с.
 Он проверяется между SQLite calls и bounded batches, а под Node ещё и на каждой строке statement поиска сообщений
 (SQL-функция `wc_time_limit`), так что долгий statement останавливается; под Bun SQL-функций нет, и statement доходит до конца.
 NFA work budget ограничивает один match.

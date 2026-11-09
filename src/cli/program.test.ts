@@ -421,6 +421,22 @@ describe("the deadline a command sees", () => {
     expect(seen).toEqual([60_000, 25])
   })
 
+  it("says whether the caller set it, so a search may use the time it was given", async () => {
+    const explicitOf = async (argv: string[]) => {
+      let explicit: boolean | undefined
+      await run(
+        ["chats", "list", ...argv],
+        definition(async (command) => {
+          explicit = environmentOf(command).deadline?.()?.explicit
+        }),
+        { streams: captureStreams(), tty: false, env: { ...process.env } },
+      )
+      return explicit
+    }
+    expect(await explicitOf(["--timeout", "30s"])).toBe(true)
+    expect(await explicitOf([])).toBeUndefined()
+  })
+
   it("is 30 s for a one-shot command, 5 minutes for a cooperative one, 15 minutes for a cooperative sync, 45 s for a cooperative one over MCP", async () => {
     const deadlineOf = async (meta: CommandMeta, extra: Record<string, unknown> = {}, argv: string[] = []) => {
       let ms: number | undefined

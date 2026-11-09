@@ -179,15 +179,29 @@ describe("a file's own links", () => {
       text: "plan",
     })
     await store.accounts.saveAccount(drive, { name: "Google Drive" })
-    await store.people.savePeople(drive, [{ id: "g-1", name: "Alex Example" }])
+    await store.people.savePeople(drive, [
+      { id: "g-1", name: "Alex Example" },
+      { id: "g-2", name: "Sam Example" },
+    ])
     const person = await store.people.personOf({ provider: "google-drive", id: "g-1" })
-    const [owner, text] = await store.notes.replaceFileLinks(note.id, [
-      { kind: "related-to", to: `person:${person?.uid}`, role: "owner", confirmed: false },
+    const other = await store.people.personOf({ provider: "google-drive", id: "g-2" })
+    const [owner, text, guessed] = await store.notes.replaceFileLinks(note.id, [
+      {
+        kind: "related-to",
+        to: `person:${person?.uid}`,
+        role: "owner",
+        provenance: "google-drive:files.get",
+        confirmed: false,
+      },
       { kind: "links-to", targetText: "Elsewhere" },
+      { kind: "related-to", to: `person:${other?.uid}`, provenance: "scan", confirmed: false },
     ])
     expect(owner?.accountId).toBeDefined()
     expect(text?.accountId).toBeUndefined()
-    expect((await store.knowledge.listRelations({ standing: "proposed" })).items).toEqual([])
+    expect(guessed?.accountId).toBeUndefined()
+    expect((await store.knowledge.listRelations({ standing: "proposed" })).items).toEqual([
+      expect.objectContaining({ from: `document:${note.id}`, provenance: "scan" }),
+    ])
     expect((await store.knowledge.listRelations({ standing: "reported" })).items).toEqual([
       expect.objectContaining({ from: `document:${note.id}`, role: "owner" }),
     ])

@@ -22,6 +22,7 @@ export interface QueryExecution {
   limit: number
   newest?: boolean
   signal?: AbortSignal
+  timeLimitMs?: number
   /** Internal conversation eligibility, applied before lexical ranking. */
   conversationIds?: string[]
   conversationSince?: number
