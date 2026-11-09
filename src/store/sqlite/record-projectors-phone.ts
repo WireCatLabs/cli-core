@@ -12,7 +12,8 @@ import { COUNTERPART_ROLE, linkKind } from "./link-kinds.js"
 import { tombstone, upsertMessage } from "./messages.js"
 import { requiredThing } from "./notes.js"
 import type { StoreContext } from "./open.js"
-import { e164Of, importedIdentity, linkToPerson } from "./record-matching.js"
+import { e164Of } from "./person-matcher.js"
+import { importedIdentity, linkToPerson } from "./record-matching.js"
 import {
   entityOf,
   given,
