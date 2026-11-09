@@ -15,12 +15,20 @@ import * as identities from "./sqlite/identities.js"
 import * as identityProposals from "./sqlite/identity-proposals.js"
 import type { StoreContext } from "./sqlite/open.js"
 import { linkToOwner } from "./sqlite/own-identities.js"
+import {
+  listPeople,
+  type PeopleList,
+  type PeopleListOptions,
+  type SimilarPerson,
+  similarPeople,
+} from "./sqlite/people-list.js"
 import * as personLinks from "./sqlite/person-links.js"
 import { RULE, scanMatches } from "./sqlite/person-match-scan.js"
 import type { PersonMerge } from "./sqlite/person-merges.js"
 import * as personMerges from "./sqlite/person-merges.js"
 import { type PersonPreparationRead, personPreparation } from "./sqlite/person-preparation.js"
 import { personSeenInAccounts } from "./sqlite/person-scope.js"
+import { type ShownBecause, shownReasons } from "./sqlite/person-ties.js"
 import type { PrivateContact, PrivateContactNote } from "./sqlite/private-people.js"
 import * as privatePeople from "./sqlite/private-people.js"
 import type { ProposedAction } from "./sqlite/proposed-actions.js"
@@ -29,6 +37,11 @@ import type { AccountKey, IdentityRef, LinkOptions, PersonFacts, PersonRecord, S
 
 export interface AccountPeople {
   savePeople(key: AccountKey, people: PersonFacts[]): Promise<void>
+  /**
+   * The account's whole address book: saves them as `savePeople` does and marks them as in the book, a tie to the
+   * owner; someone no longer in it loses the mark.
+   */
+  saveAddressBook(key: AccountKey, people: PersonFacts[]): Promise<void>
   /**
    * The people this account has a one-to-one chat with — as far as the saved member lists go —
    * newest conversation first or by name.
@@ -93,8 +106,8 @@ export interface PeopleStore extends AccountPeople {
   decideLink(id: string, decision: IdentityLinkDecision): Promise<ProposedAction>
   /**
    * One pass of the people matcher: the same address joins people in every scope, a phone exactly two people have
-   * joins them, a phone more people share, a role address such as `info@` and a meeting guest's typed address become
-   * proposals. Never over the owner's separation; a pair the owner rejected is proposed again only on new evidence.
+   * joins them, a phone more people share, a role address such as `info@`, a meeting guest's typed address, and one
+   * name with a shared phone, address, chat or company domain become proposals. Never over the owner's separation; a pair the owner rejected is proposed again only on new evidence.
    */
   scanMatches(options?: { full?: boolean }): Promise<MatchScan>
   /** The `identity_link` proposals, newest first, naming the people as they are now; `proposed` unless `status` says. */
@@ -103,30 +116,55 @@ export interface PeopleStore extends AccountPeople {
   linkToOwner(identity: IdentityRef): Promise<PersonRecord>
   /** A person known by name only, with no identity yet: someone to assign a task to before any message names them. */
   add(input: { name: string }): Promise<PersonRecord>
+  /**
+   * People with their shown name, contact and ties to the owner, a page at a time. By default only those with a tie
+   * (a one-to-one chat, a small group, mail the owner wrote, a meeting, a CRM, the address book), the owner, people
+   * added by hand and people assigned a task; `all` adds the rest.
+   */
+  list(options: PeopleListOptions): Promise<PeopleList>
+  /** People whose names start like the typed one, the same name first: for a form that adds a person. */
+  similar(name: string, options?: { limit?: number }): Promise<SimilarPerson[]>
+  /** Why each `person:<uid>` is shown by default, as `list` gives it; an empty list for one with no tie. */
+  ties(people: readonly string[]): Promise<Record<string, ShownBecause[]>>
 }
 
 export const accountPeopleOver = (context: StoreContext): AccountPeople => {
   const { database } = context
   const { accountPk, findAccountPk, identityPk } = keysOver(context)
+  const save = (key: AccountKey, people: PersonFacts[]): number[] => {
+    const accountKey = accountPk(key)
+    const saved: number[] = []
+    for (const person of people) {
+      saved.push(identityPk(accountKey, key.provider, person.id, person.name, person))
+      if (person.email) personLinks.noteAddress(context, { provider: key.provider, id: person.id }, person.email)
+    }
+    // Every address of the batch is noted before any joins, so one shared by the whole batch is seen as shared.
+    for (const person of people) {
+      if (!person.email) continue
+      const held = personLinks.joinByAddress(
+        context,
+        { provider: key.provider, id: person.id },
+        person.email,
+        key.provider,
+      )
+      if (held) identityProposals.openIdentityLink(context, { ...held, joins: "person", signal: "email", by: RULE })
+    }
+    return saved
+  }
   return {
-    savePeople: async (key, people) =>
+    savePeople: async (key, people) => {
+      write(database, () => save(key, people))
+    },
+
+    saveAddressBook: async (key, people) =>
       write(database, () => {
-        const accountKey = accountPk(key)
-        for (const person of people) {
-          identityPk(accountKey, key.provider, person.id, person.name, person)
-          if (person.email) personLinks.noteAddress(context, { provider: key.provider, id: person.id }, person.email)
-        }
-        // Every address of the batch is noted before any joins, so one shared by the whole batch is seen as shared.
-        for (const person of people) {
-          if (!person.email) continue
-          const held = personLinks.joinByAddress(
-            context,
-            { provider: key.provider, id: person.id },
-            person.email,
-            key.provider,
+        const saved = JSON.stringify(save(key, people))
+        database
+          .prepare(
+            "UPDATE account_identities SET address_book = CASE WHEN identity_id IN (SELECT value FROM json_each(?)) " +
+              "THEN 1 END WHERE account_id = ? AND (address_book = 1 OR identity_id IN (SELECT value FROM json_each(?)))",
           )
-          if (held) identityProposals.openIdentityLink(context, { ...held, joins: "person", signal: "email", by: RULE })
-        }
+          .run(saved, accountPk(key), saved)
       }),
 
     contacts: async (key, options) => {
@@ -212,5 +250,11 @@ export const peopleStoreOver = (context: StoreContext, keyed: AccountPeople): Pe
     scanMatches: async (options) => scanMatches(context, options),
     linkProposals: async (filter) => identityProposals.identityLinkRows(context, filter),
     linkToOwner: async (identity) => linkToOwner(context, identity),
+    list: async (options) => listPeople(database, options),
+    similar: async (name, { limit = 8 } = {}) => similarPeople(database, name, limit),
+    ties: async (people) => {
+      const reasons = shownReasons(database)
+      return Object.fromEntries(people.map((ref) => [ref, reasons.get(Number(ref.replace(/^person:/, ""))) ?? []]))
+    },
   }
 }

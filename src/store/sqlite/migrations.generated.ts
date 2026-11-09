@@ -1224,5 +1224,12 @@ export const GENERATED: { name: string; statements: string[] }[] = [
       "ALTER TABLE `pipeline_stages` ADD `base_confirmed` integer DEFAULT 0 NOT NULL;",
       "CREATE INDEX `pipeline_stages_by_base_stage_id` ON `pipeline_stages` (`base_stage_id`);"
     ]
+  },
+  {
+    "name": "20261109170741_version-61-people-ties",
+    "statements": [
+      "ALTER TABLE `account_identities` ADD `address_book` integer;",
+      "CREATE INDEX `account_identities_in_address_book` ON `account_identities` (`identity_id`) WHERE address_book = 1;"
+    ]
   }
 ]

@@ -5,10 +5,10 @@ import type { IdentityRef } from "./types.js"
 export const IDENTITY_LINK_KIND = "identity_link"
 
 /**
- * Why two people may be one: an agent said so, they share a phone or an address with others, or a meeting guest typed
- * an address another person has.
+ * Why two people may be one: an agent said so, they share a phone or an address with others, a meeting guest typed
+ * an address another person has, or they have one name and share a phone, an address, a chat or a company's domain.
  */
-export const IDENTITY_LINK_SIGNALS = ["agent", "phone", "email", "guest-email"] as const
+export const IDENTITY_LINK_SIGNALS = ["agent", "phone", "email", "guest-email", "name"] as const
 
 export type IdentityLinkSignal = (typeof IDENTITY_LINK_SIGNALS)[number]
 

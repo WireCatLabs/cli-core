@@ -235,10 +235,13 @@ export const accountIdentities = sqliteTable(
     mailScoredAt: integer("mail_scored_at"),
     /** 1 when search ranks this sender's mail lower: signs of fraud, not one of the owner's own. */
     mailDemoted: integer("mail_demoted"),
+    /** 1 while in this account's address book: a tie to the owner. */
+    addressBook: integer("address_book"),
   },
   (table) => [
     primaryKey({ columns: [table.accountId, table.identityId] }),
     index("account_identities_by_identity_id").on(table.identityId),
+    index("account_identities_in_address_book").on(table.identityId).where(sql`address_book = 1`),
   ],
 )
 

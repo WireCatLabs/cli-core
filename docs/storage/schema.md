@@ -214,8 +214,9 @@ Each profile a person was seen with, a row when it differs from the one before; 
 | `mail_signals` | text |  |  | JSON array of the signals behind `mail_score`, such as `brand_spoof` |
 | `mail_scored_at` | integer |  |  | when `mail_score` was worked out |
 | `mail_demoted` | integer |  |  | 1 when search ranks this sender's mail lower: signs of fraud, not one of the owner's own |
+| `address_book` | integer |  |  | 1 while in this account's address book: a tie to the owner |
 
-*Keys and indexes:* `PRIMARY KEY (account_id, identity_id)`, `INDEX (identity_id)`
+*Keys and indexes:* `PRIMARY KEY (account_id, identity_id)`, `INDEX (identity_id)`, `INDEX (identity_id) WHERE address_book = 1`
 
 ### `aliases`
 

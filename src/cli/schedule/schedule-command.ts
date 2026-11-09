@@ -28,6 +28,8 @@ import {
   scheduleName,
   spentToday,
   timerFor,
+  WEEKDAYS,
+  type Weekday,
   type When,
 } from "../../background/schedules.js"
 import { type ServerSystem, thisMachine } from "../../background/system.js"
@@ -76,7 +78,7 @@ const whenOf = ({ every, at, atTime }: WhenOptions, minimum: number): When => {
   if ([every ?? at, atTime].filter(Boolean).length !== 1) {
     throw new CliError(
       "validation_error",
-      "say when: --every <30m|2h|1d>, --at HH:MM (daily), or --at-time <30m|2d|ISO time>",
+      "say when: --every <30m|2h|1d>, --at HH:MM (daily) or --at 'mon HH:MM' (weekly), or --at-time <30m|2d|ISO time>",
     )
   }
   if (atTime) {
@@ -85,11 +87,24 @@ const whenOf = ({ every, at, atTime }: WhenOptions, minimum: number): When => {
     return { once: new Date(time).toISOString() }
   }
   if (at) {
-    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(at)) throw new CliError("validation_error", `--at takes HH:MM, not "${at}"`)
-    if (every && parseDuration(every, "--every") !== 86_400_000) {
-      throw new CliError("validation_error", "--at runs once a day; leave out --every, or use --every 1d")
+    const [, word, clock = ""] = /^\s*(?:([a-z]+)\s+)?(\S+)\s*$/i.exec(at) ?? []
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(clock))
+      throw new CliError(
+        "validation_error",
+        `--at takes HH:MM, or a weekday and HH:MM such as 'mon 09:00'; not "${at}"`,
+      )
+    const day = word?.toLowerCase().slice(0, 3)
+    if (word !== undefined && !(WEEKDAYS as readonly string[]).includes(day ?? ""))
+      throw new CliError("validation_error", `--at takes a weekday, ${WEEKDAYS.join(", ")}; not "${word}"`)
+    if (every && (day !== undefined || parseDuration(every, "--every") !== 86_400_000)) {
+      throw new CliError(
+        "validation_error",
+        day === undefined
+          ? "--at runs once a day; leave out --every, or use --every 1d"
+          : "a weekday in --at runs once a week; leave out --every",
+      )
     }
-    return { daily: at }
+    return day === undefined ? { daily: clock } : { weekly: clock, on: day as Weekday }
   }
   const minutes = parseDuration(every ?? "", "--every") / 60_000
   if (!Number.isInteger(minutes) || minutes < minimum) {
@@ -127,7 +142,7 @@ const scheduleAnswer = ({ environment, createdAt, to, ...schedule }: Schedule, e
 const withWhen = (command: Command) =>
   command
     .option("--every <duration>", "repeat: 30m, 2h, 1d")
-    .option("--at <HH:MM>", "every day at this local time")
+    .option("--at <HH:MM>", `every day at this local time; 'mon 09:00' once a week (${WEEKDAYS.join(", ")})`)
     .option("--at-time <time>", "one run: 30m, 2d from now, or an ISO time; the schedule removes itself after it")
     .addOption(
       new Option(

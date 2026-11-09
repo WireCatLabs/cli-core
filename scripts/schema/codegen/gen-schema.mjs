@@ -85,6 +85,7 @@ const NAMES = {
   "mailboxes:id WHERE name_folded IS NULL": "mailboxes_name_to_fold",
   "projects:id WHERE name_folded IS NULL": "projects_name_to_fold",
   "meetings:id WHERE join_url IS NOT NULL AND join_key IS NULL": "meetings_join_key_to_fill",
+  "account_identities:identity_id WHERE address_book = 1": "account_identities_in_address_book",
 }
 
 const parseKey = (k) => {

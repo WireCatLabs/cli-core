@@ -363,7 +363,15 @@ export type {
 export type { Order, OrderDetail, OrderFilter, OrderInput, OrdersStore } from "./sqlite/orders.js"
 export type { OrganizationFilter } from "./sqlite/organization-categories.js"
 export { DEFAULT_OWNER_LANGUAGES, ownerLanguages } from "./sqlite/owner-languages.js"
+export type { ListedPerson, PeopleList, PeopleListOptions, SimilarPerson } from "./sqlite/people-list.js"
 export { mergeId, type PersonMerge, parseMergeId } from "./sqlite/person-merges.js"
+export {
+  ALWAYS_SHOWN,
+  PERSON_TIES,
+  type PersonTie,
+  type ShownBecause,
+  SMALL_GROUP_MEMBERS,
+} from "./sqlite/person-ties.js"
 export type { PrivateContact, PrivateContactNote } from "./sqlite/private-people.js"
 export type { Product, ProductFilter, ProductInput, ProductsStore, ProductUpdate } from "./sqlite/products.js"
 export {

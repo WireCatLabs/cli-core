@@ -238,7 +238,7 @@ export const peopleService = (deps: ServiceDeps): PeopleService => {
         if (!known) added += 1
         else if (known.name !== person.name || known.username !== person.username) changed += 1
       }
-      await store.people.savePeople(account, people)
+      await store.people.saveAddressBook(account, people)
       return {
         added,
         changed,
