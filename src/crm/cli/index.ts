@@ -427,7 +427,7 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
     example(
       annotate(group.command("show"), { effects: LOCAL_READ, output: { entity: kind } })
         .description(`one ${kind} with its pipeline, stage, status, amount and the people on it`)
-        .argument("<ref>", `${kind}:<id>, as a list shows it`),
+        .argument(`<${kind}>`, `${kind}:<id>, as a list shows it`),
       `${plural} show ${kind}:12`,
     ).action(async (reference: string, _opts: unknown, command: Command) => {
       await within(command, async (run) => {
@@ -485,7 +485,7 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
         )
       return command
     }
-    const reference = (command: Command) => command.argument("<ref>", `${kind}:<id>, as a list shows it`)
+    const reference = (command: Command) => command.argument(`<${kind}>`, `${kind}:<id>, as a list shows it`)
     const fields = (command: Command) =>
       command
         .option("--title <title>", `the ${kind}'s title`)

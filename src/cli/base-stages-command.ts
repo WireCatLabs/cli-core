@@ -80,7 +80,7 @@ const kindArgument = () => new Argument("<kind>", "deal or lead: which base set"
 
 /**
  * `stages …`: the owner's base stages of deals and of leads, and the stages of every other pipeline mapped onto them. memo mounts it; a CRM
- * CLI moves a card to a base stage with `deals move <ref> stage:<id>`.
+ * CLI moves a card to a base stage with `deals move <deal> stage:<id>`.
  */
 export const baseStagesCommand = (app: AppIdentity, options: BaseStagesCommandOptions): Command => {
   const isAgent = (command: Command) => Boolean(environmentOf(command).agent || agentOf(options.env()))
