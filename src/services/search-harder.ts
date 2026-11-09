@@ -1,6 +1,7 @@
 import { CliError, type KeyringStore } from "@wirecat/cli-base"
+import type { Ranking } from "@wirecat/cli-base/standards"
 import * as v from "valibot"
-import { type ModelAdapter, type ModelRequest, modelGateway } from "../models/index.js"
+import { type ModelAdapter, type ModelRequest, type ModelUsage, modelGateway } from "../models/index.js"
 import type { AppIdentity } from "../ports/app.js"
 import { readSharedSection, writeSharedSection } from "../store/shared-config.js"
 import { keyLookup, keyVariable } from "./enrichment.js"
@@ -76,10 +77,15 @@ export interface HarderResult {
   /** Hits sent to the model; 0 when nothing left this machine. */
   sent: number
   cost_usd: number | null
+  /** Tokens as the provider reported them; absent when nothing came back. */
+  usage?: ModelUsage
   ms: number
   reason?: string
   reason_id?: HarderReasonId
 }
+
+/** The result as the answer's `meta.ranking`: the same facts, with the reason as its code alone. */
+export const harderRanking = ({ reason: _reason, ...rest }: HarderResult): Ranking => rest
 
 export interface HarderOptions {
   /** The tool whose keyring entry holds the key; without it only the environment's key is read. */
@@ -221,7 +227,7 @@ const ask = async (
   access: Extract<HarderAccess, { ready: true }>,
   options: HarderOptions,
   request: Omit<ModelRequest, "options"> & { format?: typeof FORMAT },
-): Promise<{ text: string; cost: number | null } | { reason_id: HarderReasonId }> => {
+): Promise<{ text: string; cost: number | null; usage?: ModelUsage } | { reason_id: HarderReasonId }> => {
   const limit = new AbortController()
   const timer = setTimeout(() => limit.abort(), options.timeoutMs ?? TIMEOUT_MS)
   const gateway = modelGateway({
@@ -251,7 +257,7 @@ const ask = async (
       model: access.model,
       ...(access.custom ? { base_url: access.endpoint } : {}),
     })
-    return { text: answer.text, cost }
+    return { text: answer.text, cost, ...(answer.usage ? { usage: answer.usage } : {}) }
   } catch (error) {
     return { reason_id: reasonOf(error, limit.signal.aborted) }
   } finally {
@@ -305,7 +311,11 @@ export const reorderHarder = async <T extends HarderHit>(
   try {
     picked = v.parse(Reply, jsonOf(answer.text)).records
   } catch {
-    return plain("harder.bad-reply", { ...sent, cost_usd: answer.cost })
+    return plain("harder.bad-reply", {
+      ...sent,
+      cost_usd: answer.cost,
+      ...(answer.usage ? { usage: answer.usage } : {}),
+    })
   }
   const first = [...new Set(picked.filter((i) => i >= 0 && i < candidates.length))]
   const chosen = new Set(first)
@@ -322,6 +332,7 @@ export const reorderHarder = async <T extends HarderHit>(
       endpoint: access.endpoint,
       ...sent,
       cost_usd: answer.cost,
+      ...(answer.usage ? { usage: answer.usage } : {}),
       ms: Date.now() - started,
     },
   }

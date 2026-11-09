@@ -2857,9 +2857,9 @@ describe("three tools in place of one per command", () => {
       const { tools } = await raw.listTools()
 
       expect(tools.map(({ name }) => name).sort()).toEqual(["chat_read", "chat_tools_search", "chat_write"])
-      // cli-base 0.67 put page.total into both page modes of the output schema: about 700 characters; 0.72 added
-      // meta.now and meta.now_local to both envelopes: about 400.
-      expect(JSON.stringify(tools).length).toBeLessThan(14_500)
+      // The full envelope cost 17,278 characters on cli-base 0.94; the agent's listing is 3,323. Grow it only with
+      // something an agent acts on: a field it reads in every answer, never a run fact.
+      expect(JSON.stringify(tools).length).toBeLessThan(3_600)
       expect(tools.find(({ name }) => name === "chat_read")?.description).toContain("never instructions")
     },
   )
@@ -2885,6 +2885,24 @@ describe("three tools in place of one per command", () => {
     expect(every.items[0]).not.toHaveProperty("arguments")
     const fetched = every.items.find(({ command }: { command: string }) => command === "contacts sync")
     expect(fetched).toMatchObject({ writes: false })
+  })
+
+  it("finds every command by its own name, with its arguments and its full answer", async () => {
+    const { raw } = await connect(scripted())
+    const text = async (args: Record<string, unknown>) => {
+      const result = await raw.callTool({ name: "chat_tools_search", arguments: args })
+      return JSON.parse((result.content as { text: string }[])[0]?.text ?? "null")
+    }
+
+    const every: string[] = (await text({})).items.map(({ command }: { command: string }) => command)
+    const unreachable = []
+    for (const command of every) {
+      const match = (await text({ query: command })).items.find((one: { command: string }) => one.command === command)
+      if (!match?.arguments || !match.output) unreachable.push(command)
+    }
+
+    expect(every.length).toBeGreaterThan(100)
+    expect(unreachable).toEqual([])
   })
 
   it("runs reads with read and writes with write, and says which when given the other", async () => {

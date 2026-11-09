@@ -616,6 +616,7 @@ export {
   type HarderOptions,
   type HarderReasonId,
   type HarderResult,
+  harderRanking,
   readHarderSetting,
   writeHarderSetting,
 } from "./search-harder.js"

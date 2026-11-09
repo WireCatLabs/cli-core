@@ -2,7 +2,7 @@ import { existsSync } from "node:fs"
 import { dirname, resolve } from "node:path"
 import { CliError, configFilePath, resolvePaths } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
-import type { FetchLike } from "@wirecat/cli-base/http"
+import { type FetchLike, hostFetch } from "@wirecat/cli-base/http"
 import { timezoneOf } from "@wirecat/cli-base/query"
 import { clockMeta } from "@wirecat/cli-base/standards"
 import { isNewer, latestVersion } from "@wirecat/cli-base/update"
@@ -181,7 +181,7 @@ export const appDoctorCommand = (app: AppIdentity, configuration: Configuration,
       const local = localCheck(env, options)
       const answer = async () => {
         const online = this.opts<{ online?: boolean }>().online
-          ? await onlineCheck(app, env, environment.fetch ?? fetch, options)
+          ? await onlineCheck(app, env, environment.fetch ?? hostFetch({ hosts: ["registry.npmjs.org"] }), options)
           : undefined
         const output = outputFor(this)
         renderAnswer(
