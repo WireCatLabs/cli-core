@@ -277,7 +277,12 @@ export const calendarEventPreparation = v.strictObject({
   untrusted,
 })
 
-export const calendarLinkedPerson = v.strictObject({ person: text, name: nullableText, identities: v.array(text) })
+export const calendarLinkedPerson = v.strictObject({
+  person: text,
+  name: nullableText,
+  identities: v.array(text),
+  proposal: v.optional(text),
+})
 
 export const calendarLinkReview = v.strictObject({
   id,

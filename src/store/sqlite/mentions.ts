@@ -4,6 +4,7 @@ import { type Decider, MENTION_KINDS, type MentionKind, siteOf } from "../../dom
 import { findNames, nameIndex } from "../../domain/person-names.js"
 import { createStemmer } from "../../search/stem.js"
 import type { CacheDatabase, SqlValue } from "../driver.js"
+import { linkOrPropose } from "./identity-proposals.js"
 import { mentionText } from "./lucene-fields.js"
 import {
   knownPeople,
@@ -16,7 +17,7 @@ import {
   writer,
 } from "./mention-drain.js"
 import type { StoreContext } from "./open.js"
-import { linkIdentityToPerson, personByUid } from "./person-links.js"
+import { personByUid } from "./person-links.js"
 import { valueMatch } from "./phone-countries.js"
 import { placeOf } from "./place-key.js"
 import { type ColumnMap, queryFilter } from "./query-filter.js"
@@ -46,7 +47,8 @@ export interface StoredMention {
   written: string
 }
 
-export const MENTION_STATUSES = ["found", "linked", "dismissed"] as const
+/** `proposed`: an agent's link of the value to a person waits for the owner as an `identity_link` proposal. */
+export const MENTION_STATUSES = ["found", "linked", "proposed", "dismissed"] as const
 export type MentionStatus = (typeof MENTION_STATUSES)[number]
 
 /** The fields of `mentions list`; a bare word is a `value`. */
@@ -285,6 +287,8 @@ export interface MentionDecision {
   target: string | null
   /** Every stored mention of this value that now carries the decision. */
   mentions: number
+  /** An agent's link of the identity to a person waits for the owner as this `identity_link` proposal. */
+  proposal?: string
 }
 
 /** A mention found and allowed to its caller; `chat` is `null` for a text outside a chat. */
@@ -373,14 +377,18 @@ export const confirmMention = (
         .prepare("SELECT id FROM identities WHERE provider = ? AND external_id = ?")
         .get(mention.kind, mention.value)?.id,
     )
-    if ("person" in owner) linkIdentityToPerson(context, identity, owner.person, { method: "mention", by: by.by })
-    else
-      database
-        .prepare(
-          "INSERT INTO organization_identities (identity_id, organization_id, method, author, created_at, updated_at) " +
-            "VALUES (?, ?, 'mention', ?, ?, ?) ON CONFLICT (identity_id, organization_id) DO NOTHING",
-        )
-        .run(identity, owner.organization, by.by, now, now)
+    if ("person" in owner) {
+      const proposal = linkOrPropose(context, identity, owner.person, { method: "mention", by: by.by })
+      const status = proposal === undefined ? "linked" : "proposed"
+      const decided = decide(database, mention, status, { type: "identity", id: identity }, by, now)
+      return proposal === undefined ? decided : { ...decided, proposal }
+    }
+    database
+      .prepare(
+        "INSERT INTO organization_identities (identity_id, organization_id, method, author, created_at, updated_at) " +
+          "VALUES (?, ?, 'mention', ?, ?, ?) ON CONFLICT (identity_id, organization_id) DO NOTHING",
+      )
+      .run(identity, owner.organization, by.by, now, now)
     return decide(database, mention, "linked", { type: "identity", id: identity }, by, now)
   }
   if (mention.kind === "document") {

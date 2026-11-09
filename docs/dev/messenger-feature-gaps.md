@@ -47,7 +47,7 @@ from this plan. Slices 3, 5, 6, 7 and 8 have no other owner.
   user pages at the same depth (max in Russian, tg in English).
 - Code PR: command and MCP tool call one service; service calls a port group; a new port method
   goes in a named optional group in `src/ports/messenger.ts`, never the core. Tests go through
-  the command and include a failure path. `## Unreleased` changelog entry. The manifest row turns
+  the command and include a failure path. A changelog fragment in `changes/`. The manifest row turns
   `in` only when the command is on that CLI's `main`.
 - Every write: a `SendKind` or `AccountAction` (`src/sends/journal.ts:11,32`), a key in
   `src/sends/permissions.ts` (26-38, 173-185), the one-key-per-command test

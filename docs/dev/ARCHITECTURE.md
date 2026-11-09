@@ -552,6 +552,30 @@ with one exact address join one person (`joinByAddress`), unless the owner separ
   `merge:<to>-<from>`; an undo that brought one back restores the merge it had. `undoMerge` and `split` are the
   owner's moves (`undo-merge`, `split`), so the separation guard keeps the people apart afterwards. `undoMerge` leaves
   identities the owner split or unlinked off since, and refuses with `identity.stale` when one was merged on.
+- **What only the owner decides waits as an `identity_link` proposal** (`identity-proposals.ts`, kind in
+  `identity-links.ts`): a `proposed_actions` row with the two people, each one's identities when proposed (`sides`),
+  the signal (`agent`, `phone`, `email`, `guest-email`) and whether it joins the people or moves one identity. It is
+  owner-only (`isOwnerOnlyKind`) and a dedicated review, at most one open per pair; a pair the owner separated or
+  rejected is never proposed or joined again. A confirm is the owner's link (method `proposal`), refused with
+  `identity.stale` once `sides` no longer hold. An agent's mention confirm and meeting association go through
+  `linkOrPropose`, which links only for the owner; the mention waits as `proposed`.
+  `linkPeople` (tg/max `contacts link`, a calendar's `people link`) takes who runs it from `actorOf`: an agent's link
+  becomes a proposal with its `--reason`; only the owner links an identity to `me` or unlinks one.
+- **Proposals follow the people** (`identity-link-rows.ts`, which `person-links.ts` may import without a cycle).
+  `mergePerson` keeps the owner's person whichever side it is on and calls `settleLinks`: a proposal whose two people
+  are one now, or a second for the same pair, is deleted, and a live one takes its current people and sides. A purge
+  deletes every proposal naming an identity it erased (`forgetErasedLinks`), since the payload names a phone or an
+  address. No proposal is keyed by `target_type`: `referencesTo` would then count it as a reference and keep the
+  identity from being purged.
+- **One matcher** (`person-matcher.ts`) is the records import's person lookup, unchanged; the phone readings are in
+  `domain/phones.ts`: `e164Of` for what a source typed, `storedPhone(raw, provider)` for a stored column (a number
+  with `+` or `00` however it is spaced; bare digits only from telegram, max or whatsapp; a national number names no
+  country and matches nothing). `scanMatches` (`person-match-scan.ts`) reads the holders of each phone and address and
+  one `linkIndex` of the proposals outside any transaction, then writes each group in its own short `write`; its
+  cursor (`store_settings` `people.scan`: the newest identity, move, revision, guest row and update time) limits a
+  later pass to what changed. The owner's pending rulings are one predicate each: `phonePairJoins` (NEED-2445),
+  `addressGroupJoins` (NEED-2446), and the rejection check in `join` (NEED-2444). Its merges are authored `rule`: a
+  move the owner authored counts as a separation, so an automatic one must never be.
 
 **Links and the review list.** A link records its method, confidence, author and time; an owner's link is never
 replaced by a rule. Today only contacts have that shape. **Not built yet:** `entity_link_events`, the same log for
@@ -616,8 +640,8 @@ it by editing that line in a PR of its own, merged before the migration.
    version 1, with every migration and keeps its rows. `src/store/sqlite/schema.test.ts` opens a new store and compares
    every table and column with [`schema.md`](../storage/schema.md), and compiles every trigger:
    change the page with the schema.
-9. **CHANGELOG**: an entry under `## Unreleased` that names the store version, as "Poll votes in the
-   store (store version 20)" does.
+9. **CHANGELOG**: an entry in the pull request's `changes/<branch>.md` fragment that names the store version, as
+   "Poll votes in the store (store version 20)" does.
 
 A migration is frozen once released: fix a mistake with the next version, never by editing a folder.
 `upgrade.test.ts` pins version 1 by hash, and `bin/regen-initial-migration` refuses once a `v*` tag holds it.

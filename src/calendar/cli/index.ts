@@ -16,7 +16,6 @@ import { secretInput } from "../../runs/run-context.js"
 import { searchEvents } from "../../services/events-search.js"
 import { dateWindow } from "../../services/moment.js"
 import { embedEvents } from "../../services/notes-search.js"
-import { linkPeople } from "../../services/people.js"
 import type { AccountKey, MessageStore } from "../../store/store.js"
 import { BUSY_QUERY, BUSY_QUERY_NOTE, busyAnswer, busyQuery, workingHoursOf } from "../busy.js"
 import { type CalendarFeeds, isFeedCalendar, isPlainHttp, syncWithFeeds } from "../feeds.js"
@@ -67,6 +66,7 @@ import { CALENDARS_QUERY, declareCalendarAnswers, PEOPLE_QUERY } from "./answers
 import { hitsBody, itemBody, listBody, messagesOf, pathOf } from "./bodies.js"
 import { ICS_MAX_BYTES, readIcsFile, writeIcsFile } from "./files.js"
 import { localTimesView } from "./local-times.js"
+import { addPeopleLink } from "./people-link.js"
 import { addRemind } from "./remind.js"
 import { addSearchAll } from "./search-all.js"
 
@@ -708,22 +708,7 @@ const addCalendarCommandsDefinition = (program: Command, options: CalendarComman
       return listBody(command, eachMarked(found, ATTENDEE_UNTRUSTED))
     })
   })
-  example(
-    annotate(people.command("link"), { effects: LOCAL_WRITE })
-      .description("join an attendee to a person the owner knows elsewhere")
-      .argument("<person>", "an attendee's address as email:<address>, or a person:<id>")
-      .argument("<other>", "the same person in another tool, as <provider>:<person>, or me"),
-    "people link email:ana@example.com telegram:12345",
-  ).action(async (person: string, other: string, _opts: unknown, command: Command) => {
-    await within(command, async (run) => {
-      const linked = await linkPeople(messagesOf(run, "people link"), run.account, person, other)
-      return itemBody({
-        person: `person:${linked.uid}`,
-        name: linked.name,
-        identities: linked.identities.map(({ provider, id }) => `${provider}:${id}`),
-      })
-    })
-  })
+  addPeopleLink(people, { within, example })
 
   const links = annotate(program.command("links").description("calendar copies the rules could not join alone"), {
     effects: GROUP,

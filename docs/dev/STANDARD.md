@@ -1181,7 +1181,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--quiet` |  | diagnostics off. **max's own copy is worded differently until T6 moves the command onto the shared one (e13)** |  | every command |
 | `--quiz` |  | a quiz: one answer is right, and a vote is final |  | `polls create` (tg-only) |
 | `--read-receipts` | `<on\|off>` | send read receipts |  | `account privacy set` (planned) |
-| `--reason` | `<text>` | why a task was closed, kept with it — no-reply-needed, for example |  | `tasks close` |
+| `--reason` | `<text>` | why, kept with what it records: a task's close (no-reply-needed, for example), an agent's proposed link |  | `contacts link`, `tasks close` |
 | `--record` |  | keep this run under `runs`, with the command as typed and secrets hidden; record_input false leaves the typed words out. **max's own copy is worded differently until T6 moves the command onto the shared one (e13)** |  | every command |
 | `--remind-time` | `<time>` | when to look at it again: an ISO 8601 time or a duration from now; none clears it |  | `tasks add`, `tasks update` |
 | `--remove` | `<chat>` | take a chat out of a folder; repeat it for more |  | `chats folders update` |
