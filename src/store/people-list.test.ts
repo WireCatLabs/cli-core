@@ -80,7 +80,12 @@ describe("people's ties to the owner", () => {
 
     expect(await shownOf(store)).toEqual({ Dina: ["chat"], Gala: ["small-group"] })
     expect(listed.items[0]).toMatchObject({ owner: true, ties: ["owner", "chat", "small-group"] })
-    expect(listed).toMatchObject({ total: 3, hasMore: false, counts: { person: 3, stranger: 2 } })
+    expect(listed).toMatchObject({ total: 3, hasMore: false })
+    expect(listed.counts).toEqual({ person: 3, organization: 0, automated: 0, stranger: 2, unsorted: 0 })
+    expect((await store.people.list({ limit: 100, kind: "stranger" })).items.map(({ name }) => name)).toEqual([
+      "Hugo",
+      "Ugo",
+    ])
     const everyone = await store.people.list({ limit: 100, kind: "all" })
     expect(everyone.items.find(({ displayName }) => displayName === "Hugo")).toMatchObject({
       ties: [],
