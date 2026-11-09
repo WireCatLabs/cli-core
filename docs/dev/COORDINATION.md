@@ -46,8 +46,9 @@ nothing now.
     (rule 5, owner's rule 2026-11-08): the next session in the queue posts "taking main (stale: <holder> since HH:MM
     UTC)" and goes ahead, and the old holder queues again at the end.
 - **Changelog entries are fragments.** A pull request adds `changes/<branch>.md` with the changelog's `###` headings
-  and its entries, and never edits `## Unreleased` in `CHANGELOG.md`: that is what made every open pull request
-  conflict at each merge and release. `bin/release` collects the fragments into the version's section and deletes
+  and its entries, and never edits `CHANGELOG.md`: only `bin/release` does, on its `release/*` branches, and the
+  `standards` check fails any other pull request that changes it. An edit there made the release pull request
+  conflict, and `bin/release` waited on it forever. `bin/release` collects the fragments into the version's section and deletes
   them in its release pull request ([CLAUDE.md, "Committing"](../../CLAUDE.md#committing)).
 - Release only through `bin/release`: `gh workflow run release.yml` started by hand skips the lock below.
   When you must start it by hand, pass the `main` you checked: `-f commit=<its full 40-character sha>`.
@@ -65,8 +66,8 @@ nothing now.
   even before npm visibility and tagging finish. New work goes into `changes/`, never into that section.
   After rebasing, inspect the actual headings around every new note: a clean rebase or green PR
   does not prove the note belongs to the captured release. Keep the captured section identical to
-  its checked source; when a tagged section needs historical correction, restore the exact tag
-  section and describe the correction in a `changes/` fragment. Never rewrite an immutable release tag.
+  its checked source; when a tagged section needs historical correction, describe it in a `changes/`
+  fragment (`bin/release` restores a tagged section that drifted). Never rewrite an immutable release tag.
 - `bin/release` in every repository takes a lock per npm package
   (`$XDG_RUNTIME_DIR/leemour-release-<package>.lock`, e.g. `leemour-release-wirecat-cli-core.lock`), so two
   releases of one package never run at once on this machine, from any checkout; different packages release

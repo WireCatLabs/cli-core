@@ -48,8 +48,9 @@ Conventional commits. The pre-commit hook checks staged lint and secrets; no oth
 A branch off `main`, in a worktree, and a pull request. A user-visible change gets a changelog fragment: a new file
 `changes/<branch>.md` (lower case, `/` as `-`) with one or more of the changelog's `###` headings and the entries
 under them, written as they will read in [`CHANGELOG.md`](CHANGELOG.md), with links relative to `changes/`
-(`../docs/…`). Do not edit `## Unreleased` in `CHANGELOG.md`: every open pull request edits the same lines there and
-conflicts at each merge. `pnpm docs:check` checks the fragments, and a breaking title (`feat!:`) fails the changelog
+(`../docs/…`). Only `bin/release` edits `CHANGELOG.md`, on its `release/*` branches: the `standards` check fails any
+other pull request that changes it, because a hand edit made the release pull request conflict and `bin/release` then
+waited forever. `pnpm docs:check` checks the fragments, and a breaking title (`feat!:`) fails the changelog
 guard without one. `bin/release` collects them into the version's section, grouped by heading, and deletes them in
 the release pull request; when the version is already taken it moves to the next free one and renames the changelog
 heading with it.
@@ -63,8 +64,8 @@ heading with it.
 ## Development check budget
 
 Local commits check only staged lint and secrets. There is no pre-push check.
-Every pull request runs three checks. The fast standards job (`standards.yml`) checks config integrity,
-lint, Markdown, `ci:quick` (the typecheck and the command lint) and the new commits for secrets.
+Every pull request runs three checks. The fast standards job (`standards.yml`) checks that only a `release/*` branch edits
+`CHANGELOG.md`, config integrity, lint, Markdown, `ci:quick` (the typecheck and the command lint) and the new commits for secrets.
 The pull request validation (`pr.yml`) runs the full Linux validation, `ci.yml`: lint, typecheck, the tests
 on two runners with the coverage floor checked on their merged report, build, `docs:check`, the schema and
 dist checks, Bun, old Node, the SQLite restart and parity, which builds tg-cli, max-cli, whatsapp-cli and
