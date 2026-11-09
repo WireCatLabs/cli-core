@@ -39,7 +39,7 @@ export interface AgentAction {
 export interface AgentActionsStore {
   record(input: AgentActionInput): Promise<AgentAction>
   /** Newest first; `agent` is a bot's name, such as `tg-mcp`. */
-  list(options?: { tool?: string; agent?: string; limit?: number }): Promise<AgentAction[]>
+  list(options?: { tool?: string; agent?: string; limit?: number; offset?: number }): Promise<AgentAction[]>
 }
 
 const CODE = /^[a-z][a-z0-9_]{0,63}$/
@@ -96,12 +96,19 @@ export const agentActionsStoreOver = (context: StoreContext, afterRecord: () => 
       afterRecord()
       return actionOf(database.prepare(`${NAMED} WHERE a.id = ?`).get(Number(row?.id)) as Record<string, unknown>)
     },
-    list: async ({ tool, agent, limit = 100 } = {}) =>
+    list: async ({ tool, agent, limit = 100, offset = 0 } = {}) =>
       database
         .prepare(
-          `${NAMED} WHERE (? IS NULL OR a.tool = ?) AND (? IS NULL OR b.name = ?) ORDER BY a.started_at DESC, a.id DESC LIMIT ?`,
+          `${NAMED} WHERE (? IS NULL OR a.tool = ?) AND (? IS NULL OR b.name = ?) ORDER BY a.started_at DESC, a.id DESC LIMIT ? OFFSET ?`,
         )
-        .all(tool ?? null, tool ?? null, agent ?? null, agent ?? null, Math.min(Math.max(limit, 1), 500))
+        .all(
+          tool ?? null,
+          tool ?? null,
+          agent ?? null,
+          agent ?? null,
+          Math.min(Math.max(limit, 1), 500),
+          Math.max(offset, 0),
+        )
         .map(actionOf),
   }
 }

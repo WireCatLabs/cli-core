@@ -83,6 +83,8 @@ export interface FactsStore {
     /** `created` lists the newest written first; by default the newest by when it happened. */
     order?: "occurred" | "created"
     limit?: number
+    /** Rows to skip, for the next page in the same order, ties by id. */
+    offset?: number
   }): Promise<Fact[]>
   /** The owner, or an agent for the owner, accepts a proposed fact; the fact it supersedes stops holding. */
   accept(reference: string, by: Decider, reason?: string): Promise<Fact>
@@ -297,7 +299,7 @@ export const factOperationsOver = (context: StoreContext): FactOperations => {
         .prepare(
           `${NAMED} WHERE f.deleted_at IS NULL AND (? IS NULL OR f.type = ?) AND (? IS NULL OR f.project_id = ?) ` +
             "AND (? IS NULL OR (f.subject_type = ? AND f.subject_id IN (SELECT value FROM json_each(?)))) AND (? IS NULL OR f.status = ?) " +
-            `AND ${by.sql} ORDER BY ${order} DESC, f.id DESC LIMIT ?`,
+            `AND ${by.sql} ORDER BY ${order} DESC, f.id DESC LIMIT ? OFFSET ?`,
         )
         .all(
           options.type ?? null,
@@ -311,6 +313,7 @@ export const factOperationsOver = (context: StoreContext): FactOperations => {
           options.status ?? null,
           ...by.params,
           Math.min(Math.max(options.limit ?? 100, 1), 500),
+          Math.max(options.offset ?? 0, 0),
         )
         .map(factOf)
     },

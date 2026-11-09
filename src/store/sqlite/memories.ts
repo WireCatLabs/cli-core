@@ -84,6 +84,8 @@ export interface MemoriesStore {
     scope?: Memory["scope"]
     proposedBy?: ProposedByFilter
     limit?: number
+    /** Rows to skip, for the next page: newest first, ties by id, so pages do not overlap. */
+    offset?: number
   }): Promise<Memory[]>
   /** Moves it to another project, or to none with `null`. */
   update(reference: string, change: { project: string | null }): Promise<Memory>
@@ -440,7 +442,7 @@ export const memoriesStoreOver = (
         .prepare(
           `${NAMED} WHERE m.deleted_at IS NULL AND (? IS NULL OR (m.subject_type = ? AND m.subject_id IN (SELECT value FROM json_each(?)))) ` +
             "AND (? IS NULL OR m.project_id = ?) AND (? IS NULL OR m.kind = ?) AND (? IS NULL OR m.status = ?) AND (? IS NULL OR m.scope = ?) " +
-            `AND ${by.sql} ORDER BY m.created_at DESC, m.id DESC LIMIT ?`,
+            `AND ${by.sql} ORDER BY m.created_at DESC, m.id DESC LIMIT ? OFFSET ?`,
         )
         .all(
           subject?.type ?? null,
@@ -456,6 +458,7 @@ export const memoriesStoreOver = (
           options.scope ?? null,
           ...by.params,
           Math.min(Math.max(options.limit ?? 100, 1), 500),
+          Math.max(options.offset ?? 0, 0),
         )
         .map(memoryOf)
     },
