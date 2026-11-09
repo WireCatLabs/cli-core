@@ -1411,8 +1411,16 @@ describe("delivery after a run", () => {
     expect(bot?.argv.at(-1)).toMatch(
       /^⚠️ <b>Расписание «chat digest» не работает<\/b>\nСбой сегодня в \d\d:\d\d\nПричина: нужно заново войти в аккаунт\n<a href="https:\/\/wirecat\.dev\/o#\/v1\/sync\/chat">исправить<\/a>$/,
     )
-    expect(mail?.argv.slice(-2)).toEqual(["--subject", "⚠️ Расписание «chat digest» не работает"])
-    expect(mail?.input).toMatch(/^⚠️ Расписание «chat digest» не работает\n.+\nПричина: нужно заново войти в аккаунт\n/)
+    expect(mail?.argv.slice(-6)).toEqual([
+      "send",
+      "--html",
+      "--to",
+      "me@example.com",
+      "--subject",
+      "⚠️ Расписание «chat digest» не работает",
+    ])
+    expect(mail?.input).toMatch(/^<div style=/)
+    expect(mail?.input).toContain("Причина: нужно заново войти в аккаунт")
     for (const sent of [bot?.argv.join(" "), mail?.input]) {
       expect(sent).not.toContain("half a report")
       expect(sent).not.toContain("Анна")

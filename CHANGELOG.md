@@ -9,10 +9,11 @@ shape of this file.
 
 ### Added
 
-- **A report goes to an email route as HTML.** The `email` template's rendering is sent on stdin with
-  `mail <profile> messages send --html` and the title as the subject; mail-cli 0.21.0 adds the plain-text part. A
-  mail-cli older than 0.21.0 refuses the flag, and the report then goes as the `text` rendering, as before, with
-  `delivery.html-fallback` in `last.json`. A report that failed its check still mails its one line as text.
+- **A report or message (the digest, the weekly gaps, a failed schedule's notice) goes to an email route as
+  HTML.** The `email` template's rendering is sent on stdin with `mail <profile> messages send --html` and the title
+  as the subject; mail-cli 0.21.0 adds the plain-text part. A mail-cli older than 0.21.0 refuses the flag, and the
+  message then goes as the `text` rendering, as before, with `delivery.html-fallback` in `last.json`. A report that
+  failed its check still mails its one line as text.
 
 ## 0.618.0 — 09.11.2026
 
