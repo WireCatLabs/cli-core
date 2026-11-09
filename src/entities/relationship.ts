@@ -22,5 +22,9 @@ export const relationship = v.strictObject({
   position: v.nullable(text),
   starts_at: v.nullable(time),
   ends_at: v.nullable(time),
+  /** The source account that reported it, `<provider>:<account>`. */
+  account: v.optional(text),
+  /** How a source made it when it stated none, such as `department-head`. */
+  derived: v.optional(text),
   created_at: time,
 })

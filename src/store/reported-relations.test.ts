@@ -6,7 +6,7 @@ import { afterEach, expect, it, vi } from "vitest"
 import { isUsable, RELATION_KINDS, usableLinkSql } from "../domain/relations.js"
 import { openCache } from "./open.js"
 import { crmSettingKey, parseCrmSetting, parseCrmSettingValue } from "./sqlite/crm-settings.js"
-import { KEYED } from "./sqlite/reported-relations.js"
+import { KEYED, type ReportedOutcome } from "./sqlite/reported-relations.js"
 import { type MessageStore, openStore } from "./store.js"
 
 const stores: MessageStore[] = []
@@ -182,4 +182,121 @@ it("repeats the relationship key's index condition exactly, over every relations
   }
   const kinds = [...(KEYED.match(/kind IN \(([^)]*)\)/)?.[1] ?? "").matchAll(/'([^']+)'/g)].map(([, kind]) => kind)
   expect(kinds.sort()).toEqual([...RELATION_KINDS].sort())
+})
+
+it.each([
+  ["confirmed", "board-member"],
+  ["confirmed", ["chair", "board-member"]],
+  ["overrode", ["board-member"]],
+])("keeps the owner's link when the owner %s the no-role link its source called %j", async (how, sourceRole) => {
+  const { store, acme, alice } = await fixture()
+  const scope = { from: [alice], kinds: ["member-of" as const] }
+  const bare = { from: alice, to: acme, kind: "member-of" as const, metadata: { source_role: sourceRole } }
+  await store.relations.syncReported(SOURCE, [bare], scope)
+  const [reported] = await store.knowledge.relations(null, alice)
+  if (how === "confirmed") await store.knowledge.confirmRelation(null, reported?.id as string, "owner")
+  else await store.knowledge.updateRelation(null, reported?.id as string, { role: "adviser", by: "owner" })
+  await store.knowledge.addRole("organization", "board-member")
+  const done = await store.relations.syncReported(SOURCE, [{ ...bare, role: "board-member" }], scope)
+  expect(done).toMatchObject({ added: 0, proposed: 0, withdrawn: 0 })
+  expect((await store.knowledge.relations(null, alice)).filter(({ role }) => role === "board-member")).toEqual([])
+})
+
+it("withdraws only the links its own writer wrote, so a CRM sync and an import on one account keep apart", async () => {
+  const { store, acme, northstar, alice } = await fixture()
+  const scope = { from: [alice], kinds: ["member-of" as const] }
+  const crm = { source: "crm" }
+  const imported = { source: "import:example" }
+  await store.relations.syncReported(
+    SOURCE,
+    [{ from: alice, to: acme, kind: "member-of", role: "contact" }],
+    scope,
+    crm,
+  )
+  await store.relations.syncReported(
+    SOURCE,
+    [{ from: alice, to: northstar, kind: "member-of", role: "adviser" }],
+    scope,
+    imported,
+  )
+  expect(await store.relations.syncReported(SOURCE, [], scope, crm)).toMatchObject({ withdrawn: 1 })
+  expect(await store.relations.syncReported(SOURCE, [], scope, imported)).toMatchObject({ withdrawn: 1 })
+  expect((await store.knowledge.relations(null, alice)).map(({ to, standing }) => [to, standing])).toEqual([
+    [acme, "ended"],
+    [northstar, "ended"],
+  ])
+})
+
+it("lets the owner remove a role that only withdrawn links still hold", async () => {
+  const { store, acme, alice } = await fixture()
+  const scope = { from: [alice], kinds: ["member-of" as const] }
+  await store.knowledge.addRole("organization", "board-member")
+  await store.relations.syncReported(
+    SOURCE,
+    [{ from: alice, to: acme, kind: "member-of", role: "board-member" }],
+    scope,
+  )
+  await expect(store.knowledge.removeRole("organization", "board-member")).rejects.toMatchObject({
+    details: { reason: "relationship.role-in-use" },
+  })
+  await store.relations.syncReported(SOURCE, [], scope)
+  await expect(store.knowledge.removeRole("organization", "board-member")).resolves.toBeDefined()
+})
+
+it("writes the caller's author on a reported link, and leaves an unchanged one untouched", async () => {
+  const { path, store, acme, northstar, alice } = await fixture()
+  const scope = { from: [alice], kinds: ["member-of" as const] }
+  const contact = { from: alice, to: acme, kind: "member-of" as const, role: "contact" }
+  const adviser = { from: alice, to: northstar, kind: "member-of" as const, role: "adviser" }
+  await store.relations.syncReported(SOURCE, [contact], scope)
+  await store.relations.syncReported(SOURCE, [contact, adviser], scope, { by: { bot: "importer", kind: "agent" } })
+  const database = await openCache(path)
+  try {
+    const authors = database.prepare("SELECT role, author FROM links WHERE kind = 'member-of' ORDER BY id").all()
+    expect(authors).toEqual([
+      { role: "contact", author: "rule" },
+      { role: "adviser", author: "agent" },
+    ])
+    database.prepare("UPDATE links SET updated_at = 1").run()
+    expect(await store.relations.syncReported(SOURCE, [contact, adviser], scope)).toMatchObject({ kept: 2 })
+    expect(database.prepare("SELECT DISTINCT updated_at AS at FROM links").all()).toEqual([{ at: 1 }])
+  } finally {
+    database.close()
+  }
+})
+
+it("tells the caller what it did to each relationship once, by its key and link", async () => {
+  const { store, acme, northstar, alice } = await fixture()
+  const scope = { from: [alice], kinds: ["member-of" as const] }
+  const contact = { from: alice, to: acme, kind: "member-of" as const, role: "contact" }
+  const adviser = { from: alice, to: northstar, kind: "member-of" as const, role: "adviser" }
+  const outcomes: ReportedOutcome[] = []
+  const sync = (relationships: (typeof contact)[]) =>
+    store.relations.syncReported(SOURCE, relationships, scope, { onOutcome: (one) => outcomes.push(one) })
+  await sync([contact, adviser])
+  const [added, other] = outcomes.splice(0)
+  expect(added).toMatchObject({
+    outcome: "added",
+    key: expect.stringMatching(/^member-of\|person:\d+\|organization:\d+\|contact$/),
+  })
+  await sync([contact])
+  expect(outcomes.splice(0)).toEqual([
+    { ...added, outcome: "kept" },
+    { ...other, outcome: "withdrawn" },
+  ])
+  await store.knowledge.confirmRelation(null, added?.id as string, "owner")
+  await store.knowledge.removeRelation(null, other?.id as string, "owner")
+  const done = await sync([contact, adviser])
+  expect(done).toMatchObject({ kept: 1, skippedOwnerRejected: 1 })
+  expect(outcomes.map(({ outcome, id }) => [outcome, id])).toEqual([
+    ["kept", added?.id],
+    ["skipped", null],
+  ])
+})
+
+it("gives an older row's single source_role word to readers as a list", async () => {
+  const { store, acme, alice } = await fixture()
+  const bare = { from: alice, to: acme, kind: "member-of" as const, metadata: { source_role: "rainmaker" } }
+  await store.relations.syncReported(SOURCE, [bare], { from: [alice], kinds: ["member-of"] })
+  expect(await store.knowledge.relations(null, alice)).toMatchObject([{ role: null, sourceRoles: ["rainmaker"] }])
 })

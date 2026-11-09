@@ -2004,6 +2004,8 @@ export const pipelineStages = sqliteTable(
     createdAt: integer("created_at").notNull(),
     updatedAt: integer("updated_at").notNull(),
     deletedAt: integer("deleted_at"),
+    baseStageId: integer("base_stage_id").references((): AnySQLiteColumn => pipelineStages.id),
+    baseConfirmed: integer("base_confirmed").notNull().default(0),
   },
   (table) => [
     unique().on(table.pipelineId, table.nameFolded),
@@ -2011,6 +2013,7 @@ export const pipelineStages = sqliteTable(
       .on(table.pipelineId, table.externalId)
       .where(sql`external_id IS NOT NULL`),
     index("pipeline_stages_by_pipeline_id_position").on(table.pipelineId, table.position),
+    index("pipeline_stages_by_base_stage_id").on(table.baseStageId),
   ],
 )
 

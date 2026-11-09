@@ -2014,8 +2014,10 @@ One stage of a pipeline, such as a first call or a sent quote.
 | `created_at` | integer | not null |  | when this row was saved here |
 | `updated_at` | integer | not null |  | when this row last changed here |
 | `deleted_at` | integer |  |  | the CRM no longer lists it; kept, since deals may still stand in it |
+| `base_stage_id` | integer |  | → `pipeline_stages.id` | the stage of the owner's base set of its kind this stage maps to; null when none is suggested yet |
+| `base_confirmed` | integer | not null |  | 1 once the owner confirmed `base_stage_id`; 0 while it is a suggestion, which a sync may change |
 
-*Keys and indexes:* `UNIQUE (pipeline_id, name_folded)`, `UNIQUE (pipeline_id, external_id) WHERE external_id IS NOT NULL`, `INDEX (pipeline_id, position)`
+*Keys and indexes:* `UNIQUE (pipeline_id, name_folded)`, `UNIQUE (pipeline_id, external_id) WHERE external_id IS NOT NULL`, `INDEX (pipeline_id, position)`, `INDEX (base_stage_id)`
 
 ### `deals`
 

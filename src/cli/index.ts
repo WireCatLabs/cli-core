@@ -13,10 +13,21 @@ export {
   openOf,
   PROFILE_PLACEHOLDER,
   type ProfilesFor,
+  profilesOn,
   type RefOpen,
   type RefSummary,
   refLabel,
+  storedProfilesFor,
+  type WritesWith,
+  writesWithOf,
 } from "../domain/ref-summaries.js"
+/** The shared entities `person_context`, `organization_context`, `deal_context` and `deal_context.brief`. */
+export {
+  dealBrief as dealBriefSchema,
+  dealContext as dealContextSchema,
+  organizationContext as organizationContextSchema,
+  personContext as personContextSchema,
+} from "../entities/business-context.js"
 export { botTemplate } from "../entities/list-results.js"
 export { syncProgress } from "../entities/store-records.js"
 export { isCliFailure, isCommanderFailure, storeDamaged } from "../errors/failures.js"
@@ -187,6 +198,7 @@ export { answerEntity } from "./answer-entity.js"
 export { type AppDoctorOptions, appDoctorReport } from "./app-doctor-command.js"
 export type { AppMcpOptions } from "./app-mcp-command.js"
 export { actorOf } from "./author.js"
+export { type BaseStagesCommandOptions, baseStagesCommand } from "./base-stages-command.js"
 export type { ApiCommandInput, ApiCommands } from "./bot/api.js"
 export {
   apiFlagOf,
@@ -371,6 +383,7 @@ export {
   setupAtStart,
   systemLanguage,
 } from "./first-run.js"
+export { groupAware, isGroupAware, type RefKind, referencesIn, refKinds, refuseOutsideGroup } from "./group-lock.js"
 export {
   checkGuide,
   checkStep,
@@ -517,6 +530,7 @@ export {
   profileFree,
   refuseCommandName,
   rootOf,
+  runGroup,
   takesProfile,
   usableProfileName,
 } from "./profile.js"
@@ -547,6 +561,7 @@ export {
   type ScheduleLimits,
   scheduleLimitsOf,
 } from "./schedule/schedule-command.js"
+export { deniedKinds, deniedKindsOf, type LeftOut, type SearchedKind } from "./search-left-out.js"
 export { type DeclaredSetting, type SettingRow, settingRows, withSettingDefaults } from "./setting-defaults.js"
 export {
   type Config,

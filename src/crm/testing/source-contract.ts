@@ -44,6 +44,17 @@ const listAll = async (source: CrmSource, kind: CrmKind, cursor: string | null) 
 export const crmSourceContract = (make: () => CrmSourceFixture | Promise<CrmSourceFixture>): ContractCase[] => {
   const cases: ContractCase[] = [
     {
+      name: "self: a source that names its own user gives it as a user id, and every deal and lead an assignee",
+      async run() {
+        const { source } = await make()
+        if (!source.self) return
+        assert.match(String(await source.self()), /^\d{1,20}$/, "self() answers a numeric user id")
+        for (const kind of DEAL_KINDS.filter((one) => source.traits.kinds.includes(one)))
+          for (const item of (await listAll(source, kind, null)).items as CrmItem[])
+            assert.ok(item.assignee, `${kind} ${item.externalId} has an assignee: mine would keep it as nobody's`)
+      },
+    },
+    {
       name: "pipelines: unique ids in each kind, stages with a known outcome and unique ids",
       async run() {
         const { source } = await make()

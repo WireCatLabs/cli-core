@@ -22,6 +22,8 @@ export const deal = v.strictObject({
   pipeline: reference,
   pipeline_name: text,
   stage: text,
+  /** The base stage `stage` maps to, once the owner confirmed it; `null` while unsorted. */
+  base_stage: v.nullable(v.strictObject({ ref: reference, name: text })),
   status: outcome,
   organization: v.nullable(party),
   currency: nullableText,

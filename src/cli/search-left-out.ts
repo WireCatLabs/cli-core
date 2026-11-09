@@ -1,6 +1,6 @@
 import type { Command } from "commander"
 import type { AppIdentity } from "../ports/app.js"
-import { levelFor, type PermissionKey } from "../sends/permissions.js"
+import { type Level, levelFor, type PermissionKey } from "../sends/permissions.js"
 import { environmentOf, withAgentLevels } from "./context.js"
 import { settingsFor } from "./settings.js"
 
@@ -27,6 +27,21 @@ export interface LeftOut<K extends SearchedKind> {
 }
 
 /**
+ * The kinds whose list `permissions` deny, for a CLI with levels of its own, such as memo's: `by` names who denies in
+ * `why` (`memo's permissions`).
+ */
+export const deniedKindsOf = <K extends SearchedKind>(
+  permissions: Readonly<Record<PermissionKey, Level>>,
+  kinds: readonly K[],
+  by: string,
+  defaults?: Readonly<Record<PermissionKey, Level>>,
+): LeftOut<K>[] =>
+  kinds
+    .map((kind) => ({ kind, key: LIST_KEYS[kind] as PermissionKey }))
+    .filter(({ key }) => levelFor(permissions, key, defaults).level === "deny")
+    .map((one) => ({ ...one, why: `${one.kind} left out: ${by} denies ${one.key}` }))
+
+/**
  * The kinds whose list the profile denies, so `search all` leaves them out rather than show their titles and excerpts
  * under another key (SEC-144). Levels as the run judged the command: the profile's, `--permission`, and an MCP
  * server's own stricter ones.
@@ -43,8 +58,5 @@ export const deniedKinds = <K extends SearchedKind>(
     needsProfile: false,
     readOnly: true,
   })
-  return kinds
-    .map((kind) => ({ kind, key: LIST_KEYS[kind] as PermissionKey }))
-    .filter(({ key }) => levelFor(permissions, key, environment.permissionDefaults).level === "deny")
-    .map((one) => ({ ...one, why: `${one.kind} left out: profile ${profile} denies ${one.key}` }))
+  return deniedKindsOf(permissions, kinds, `profile ${profile}`, environment.permissionDefaults)
 }

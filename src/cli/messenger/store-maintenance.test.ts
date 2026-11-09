@@ -903,6 +903,9 @@ describe("the stems", () => {
     const nested = await call(["config", "set", "account_groups.all-work", "group:work", "--json"], env)
     expect(nested.code).not.toBe(0)
     expect(nested.stderr.join("\n")).toContain("not other groups")
+    const reserved = await call(["config", "set", "account_groups.all", "telegram:102", "--json"], env)
+    expect(reserved.code).not.toBe(0)
+    expect(reserved.stderr.join("\n")).toContain("cannot name a group")
   })
 
   it("**refuses the camelCase store setting names** as unknown settings", async () => {

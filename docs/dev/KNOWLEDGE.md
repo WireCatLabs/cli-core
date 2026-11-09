@@ -247,6 +247,34 @@ write alike, with no review; only the author is kept. Triggers write each stage 
 `pipeline_stage_changes`, and `pipeline(ref)` counts from it how many rows reached each stage and the conversion to
 the next. The migration seeds the lead pipeline `Leads` (`new`, `contacted`, `qualified`, `won`, `lost`).
 
+**Base stages (store version 60).** The owner keeps one base set of stages per kind, and every CRM stage maps onto one
+stage of its kind's set, so a board shows deals or leads from every pipeline and CRM in the same columns
+(`store.baseStages`). A base set is an own pipeline named by the store setting `stages.base.<kind>`
+(`"pipeline:<id>"`). Its first use takes the owner's only own pipeline of the kind when it has a stage of every
+outcome (the seeded `Leads`, so `leads add` without a stage still finds one pipeline; its lower-case stage names get a
+capital, `new` → `New`, and keep their folded names), and otherwise makes a set with the defaults in the owner's first
+language (`owner_languages`: Russian while unset, Spanish, else English; deals New, Qualification, Proposal,
+Negotiation, Won, Lost; leads New, Contacted, Qualified, Converted, Rejected). An owner with exactly one own deal
+pipeline that has every outcome gets that pipeline as his deal set, and editing the set edits it. After creation the
+names are data the owner renames. On a read-only store before the first use, `show` answers the set it would take or
+make, in memory: the defaults then have no `pipeline` and no stage `ref`, and everything is unsorted. There is one set
+per kind for the owner across every account group: a group-locked run may edit it, and its edits re-suggest the
+mappings of every account. An agent's run may suggest a mapping (`stages set` records it unconfirmed), but confirming
+and editing the set are the owner's (`stage.owner-only`), a guard against a change by mistake as the owner-only store
+settings are. `pipeline_stages.base_stage_id` is the base stage a stage maps to and
+`base_confirmed` whether the owner confirmed it; a base stage maps to itself, confirmed. The store suggests a mapping
+at the first use, at every sync of a CRM pipeline and when an own pipeline is made (`suggestBaseStages`): won and lost by outcome; an open stage by
+its relative place among its pipeline's open stages, and where that falls between two base stages, the one of the
+same name, else the nearer. A suggestion never replaces a confirmed row, so a stage the CRM adds after the confirm
+waits as a suggestion. A deal's or lead's `baseStage` is set only once its stage is confirmed; otherwise a board
+shows it unsorted. Every pipeline but the base sets is mapped alike: a CRM's (suggested at each sync) and the owner's
+own (suggested when it is made, `account` `null`); the set's own stages are the columns and map to themselves.
+`resolve(row, base)` gives the one stage of the row's pipeline confirmed onto the base stage, the stage itself when it
+is a `stage:<id>` of that pipeline, `stage.choice-required` with `candidates` when several are, and `stage.unmapped`
+when none is. Editing keeps a stage of each outcome (`stage.base-outcome`) and refuses to remove a stage the owner's own
+rows stood in (`stage.base-in-use`); removing one sends what was confirmed onto it back to a suggestion. `stage:<id>`
+names a stage only in these commands and answers; it is not a ref type of its own.
+
 Store version 57 adds the rest of a small business; the columns are in [schema.md](../storage/schema.md).
 `store.products` keeps what the owner or a supplier sells (`catalog_items`, `product:<id>`), with an optional price.
 An order now has lines (`order_lines`, `addLine`), and an order's or an invoice's line may name its product.
@@ -295,15 +323,25 @@ A scope keeps the imported rows whose deciding record is in it; the rest are rea
 `business.list` (or `business`) leaves the lane out of `search all`, which names it under `missing`, as `deals.list`
 does for deals.
 
+What a person, an organization or a deal amounts to across these relationships, their deals, money and messages
+is one read each: [BUSINESS-CONTEXT.md](BUSINESS-CONTEXT.md).
+
 ### Relationships a source reports
 
 `store.relations.syncReported(account, relationships, scope)` writes what a source account says as a diff keyed by the
 relationship's unique key: one it newly reports is a `reported` link with the account (`confirmed = 0`,
 `account_id`), or a `relationship` proposal when the account's setting `crm.<provider>:<account>.links` is `review`
 (that setting governs new relationships only; links already stored stay usable); one it still reports is kept (no
-history row); one inside `scope` it no longer reports is withdrawn (`deleted_at`), never deleted. A link the owner
+history row, and no write when nothing changed); one inside `scope` it no longer reports is withdrawn (`deleted_at`),
+never deleted, and only by the writer that wrote it (`links.source`, the call's `source`), so a CRM sync and an
+import on one account never withdraw each other's links. A link the owner
 confirmed is never withdrawn and stays `confirmed`, and once confirmed the sync takes it as present. Another role on
-a pair is another relationship, never a conflict. The only case where the owner's word stops the source: the owner
+a pair is another relationship, never a conflict, except for a no-role link the owner confirmed or overrode whose
+`metadata.source_role` (one word or a list) names the reported role: that is the same relationship, and the owner's
+link stays the answer; either counts as `kept`. `metadata.source_role` is a list of the source's words (a row
+written as one word reads as a list), and a relationship answers it as `sourceRoles`. `onOutcome` hears each
+relationship once: `{ outcome, key, id }`. A link it writes carries the caller's `by.kind` as its author (`rule` when
+absent). The only case where the owner's word stops the source: the owner
 removed or rejected that very relationship, role included (every removal leaves a rejected `relationship`
 proposal); the answer counts those in `skippedOwnerRejected`. A ref the store does not hold is an issue in the
 answer, not an error.
@@ -328,6 +366,33 @@ a source reports through `context.gap`), which `crmGapsOf` reads. Every source c
 source that makes more requests than the one the engine counts takes each with `context.spend()`, which stops the run
 as `partial` once the budget is spent (WC-LIFE-16). A contact whose email
 belongs to two people is named in the sync's issues until the owner separates it.
+
+Which deals and leads a sync copies is the account's `crm.<provider>:<account>.scope`: `mine` (the default) keeps
+those with no assignee and those assigned to the sign-in's own user or to a user in
+`crm.<provider>:<account>.unassigned` (the CRM's numeric user ids whose items the owner counts as nobody's, such as an
+integration's; `settings set` refuses any other entry); `all` keeps every one. Contacts and companies are always
+copied whole. A source names its own user with `self()`; a source without it is copied whole, and the answer's
+`scope` (`{ mode, self, also }`) says what was applied. User ids are normalised once in core (`normalCrmUserId`:
+`015` is `15`). The engine applies the scope to every page it gets, so a row a round of changes finds outside it,
+such as a deal given to another user, is marked deleted at once (`outOfScope`); a source may also filter by
+`context.scope` to read less, but lists every assignee's changes. Each deal and lead cursor keeps the scope it holds:
+a narrower one is applied in the store, by each stored row's assignee, with no list from the CRM; a wider one lists
+the kind in full again and runs no id pass. A narrowing under the default `mine` (no `scope` setting stored) that
+would mark more than half of a kind deleted is held as `crm.narrowing-held` (and `held: true` on the kind), naming
+the own user and the count, until the owner sets the `scope` setting; `--rescan` does not lift it. While it is held,
+new pages are still read under `mine`, and only the stored rows outside it are kept: a sign-in whose user holds few of
+the copy's deals is more likely the wrong one than the owner's wish. `config set` of `scope`, `self` or
+`unassigned` stops an agent's run (its own shell, or MCP with `mcp.authority`) with `permission_error`: the owner sets
+them in a terminal. It guards against a change by mistake and is not a boundary: an agent that drops its markers or
+writes the store file directly is not stopped. `self()` must answer a numeric user id (else `invalid_response`), and a source
+with it fills every deal's and lead's `assignee` (a source contract case checks it). One account's copy belongs to one user: the first sync stores it as
+`crm.<provider>:<account>.self`, a sign-in of another user is refused with the setting named, and
+`settings unset` of it gives the copy to the next sign-in. Out of scope is a deleted mark, as for a row the CRM
+deleted: `mine` hides those rows from lists and search, but their earlier copy stays in the store file. Deleting a
+copy touches no relationship, so the owner's confirmed links stay and return with the row. An id list that is empty
+never marks rows deleted without `--rescan`, whatever the copy's size. `store status` reads both without a sync: each deal and lead row's
+`scope` gives the setting, the scope its cursor reads new pages under (`all` under a source without `self()`),
+and `held` while the cursor's `narrowing` keeps stored rows outside it.
 
 A mail findings batch (`store.mailFindings`) also takes `invoice`, `payment`, `order` and `order_update` findings.
 Staging runs what accepting would write through `store.finance` or `store.orders` and rolls it back, so a batch the

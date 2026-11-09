@@ -4,7 +4,7 @@ import type { AppIdentity } from "../ports/app.js"
 import { provide } from "./context.js"
 import { allAnswer } from "./messenger/search-answers.js"
 import { commandPermissions } from "./permission-keys.js"
-import { deniedKinds } from "./search-left-out.js"
+import { deniedKinds, deniedKindsOf } from "./search-left-out.js"
 import { settingsFor } from "./settings.js"
 
 const APP: AppIdentity = {
@@ -47,4 +47,10 @@ it("leaves the business lane out under business: deny, beside deals, and the ans
   )
   expect(answer.missing).toContainEqual({ field: "items", why: denied[0]?.why })
   expect(deniedKinds(leafUnder([]), APP, ["business"])).toEqual([])
+})
+
+it("leaves out the kinds a CLI's own permission levels deny, naming who denies them", () => {
+  expect(
+    deniedKindsOf({ "deals.list": "deny", "leads.list": "allow" }, ["deal", "lead"], "memo's permissions", {}),
+  ).toEqual([{ kind: "deal", key: "deals.list", why: "deal left out: memo's permissions denies deals.list" }])
 })

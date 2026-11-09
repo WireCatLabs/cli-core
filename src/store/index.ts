@@ -189,6 +189,16 @@ export {
 export type { AgentAction, AgentActionInput, AgentActionsStore } from "./sqlite/agent-actions.js"
 export { resetAttachmentWords } from "./sqlite/attachment-texts.js"
 export { backfillNormalized, pendingNormalization } from "./sqlite/backfill.js"
+export type {
+  BaseColumn,
+  BaseScope,
+  BaseSet,
+  BaseStagesStore,
+  MappingFilter,
+  StageMapping,
+  StageName,
+} from "./sqlite/base-stages.js"
+export { baseSettingKey } from "./sqlite/base-suggest.js"
 export type { BotUpdate, BotUpdateStore } from "./sqlite/bot-updates.js"
 export type {
   Contract,
@@ -223,6 +233,7 @@ export type {
   PipelineInput,
   PipelineReport,
   PipelineStage,
+  StageChange,
 } from "./sqlite/deals.js"
 export type {
   DecisionMessage,
@@ -341,6 +352,7 @@ export type {
   NoteTag,
 } from "./sqlite/notes.js"
 export type { Order, OrderDetail, OrderFilter, OrderInput, OrdersStore } from "./sqlite/orders.js"
+export type { OrganizationFilter } from "./sqlite/organization-categories.js"
 export { DEFAULT_OWNER_LANGUAGES, ownerLanguages } from "./sqlite/owner-languages.js"
 export { mergeId, type PersonMerge, parseMergeId } from "./sqlite/person-merges.js"
 export type { PrivateContact, PrivateContactNote } from "./sqlite/private-people.js"
@@ -452,6 +464,7 @@ export {
   type AccountAccounts,
   type AccountAttachments,
   type AccountCounters,
+  type AccountGroupChange,
   type AccountKey,
   type AccountMentions,
   type AccountMessageFilter,

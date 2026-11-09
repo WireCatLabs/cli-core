@@ -11,11 +11,13 @@ import {
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
+import { Command } from "commander"
 import * as v from "valibot"
 import { describe, expect, it } from "vitest"
 import { openCache, ownerLanguages } from "../store/index.js"
 import { commandsCommand } from "./commands-command.js"
 import { configCommand } from "./config-command.js"
+import { changesAuthorityAt } from "./effects.js"
 import { run } from "./program.js"
 import { settingsFor } from "./settings.js"
 
@@ -354,6 +356,41 @@ describe("config", () => {
     expect((await call(["config", "unset", "permissions.messages.send"], env)).code).toBe(5)
     expect(existsSync(join(root, "config"))).toBe(false)
     expect((await call(["config", "show", "--json"], env)).code).toBe(0)
+  })
+
+  it("**whose deals a CRM copy holds is the owner's**: an agent's run is stopped from setting a CRM account's scope, self or unassigned by mistake", async () => {
+    const tool = { ...app, messenger: false }
+    const own = settingsFor(tool)
+    const root = mkdtempSync(join(tmpdir(), "config-"))
+    const env = {
+      CHAT_CONFIG_DIR: join(root, "config"),
+      CHAT_STATE_DIR: join(root, "state"),
+      MESSAGING_STORE: join(root, "w.db"),
+    }
+    const call = async (more: NodeJS.ProcessEnv, ...argv: string[]) => {
+      const streams = captureStreams()
+      const code = await run(
+        ["work", "config", ...argv, "--json"],
+        { app: tool, commands: () => [configCommand(tool, own)] },
+        { streams, tty: false, env: { ...env, ...more } },
+      )
+      return { code, stderr: streams.stderr.join("\n") }
+    }
+    const key = "crm.example-crm:portal"
+    for (const [name, value] of [
+      ["scope", "all"],
+      ["self", "7"],
+      ["unassigned", "15"],
+    ] as const) {
+      const refused = await call({ AI_AGENT: "hermes-agent" }, "set", `${key}.${name}`, value)
+      expect(refused.code).toBe(5)
+      expect(refused.stderr).toContain(`${key}.${name} is the owner's to set`)
+      expect((await call({ CLAUDECODE: "1" }, "unset", `${key}.${name}`)).code).toBe(5)
+      expect((await call({}, "set", `${key}.${name}`, value)).code).toBe(0)
+    }
+    expect((await call({ AI_AGENT: "hermes-agent" }, "set", `${key}.links`, "review")).code).toBe(0)
+    const program = new Command("chat").addCommand(configCommand(tool, own))
+    expect(changesAuthorityAt(program)(["config", "set"])).toBe(true)
   })
 
   it("**an agent's shell may tighten a permission but never loosen it** (SEC-116)", async () => {

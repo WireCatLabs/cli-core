@@ -1,7 +1,7 @@
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { afterEach, describe, it } from "vitest"
+import { afterEach, describe, expect, it } from "vitest"
 import { type MessageStore, openStore } from "../../store/store.js"
 import {
   crmSourceContract,
@@ -44,6 +44,26 @@ describe("fake CRM source", () => {
       return { source, deadCursor: { kind: "deal", cursor } }
     }))
       it(`${c.name} (removedInChanges: ${removedInChanges})`, c.run)
+})
+
+describe("the source contract's self case", () => {
+  const selfCase = (assignee?: string) => {
+    const found = crmSourceContract(() => {
+      const source = fakeCrmSource({ self: "7" })
+      source.put("deal", exampleDeal("d1", assignee ? { assignee } : {}))
+      return { source }
+    }).find(({ name }) => name.startsWith("self:"))
+    if (!found) throw new Error("the contract has no self case")
+    return found.run()
+  }
+
+  it("fails a source that names its own user but leaves a deal without an assignee", async () => {
+    await expect(selfCase()).rejects.toThrow(/d1 has an assignee/)
+  })
+
+  it("passes one that gives every deal an assignee", async () => {
+    await expect(selfCase("9")).resolves.toBeUndefined()
+  })
 })
 
 describe("fake CRM writer", () => {

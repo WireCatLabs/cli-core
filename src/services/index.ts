@@ -198,10 +198,15 @@ export type {
   ExtractStatus,
 } from "./attachments.js"
 export { attachmentsService } from "./attachments.js"
+export type { Category, Coverage, Related, RelationRole, Section } from "./business-context.js"
+export { CATEGORIES, organizationCategories, SECTION_LIMIT } from "./business-context.js"
 export type { ChatsService, MarkedRead, PageWindow } from "./chats.js"
 export { chatsService, EVENTS_DAYS } from "./chats.js"
+export type { Communications, Touch } from "./communications.js"
 export type { BatchStatus, Built, ConversationsService, MessageLinks } from "./conversations.js"
 export { BATCH_SIZE, conversationsService } from "./conversations.js"
+export type { DealBrief, DealContext, DealContextOptions, DealTouch } from "./deal-context.js"
+export { dealBrief, dealContext } from "./deal-context.js"
 export type { ServiceDeps, ServiceMessenger } from "./deps.js"
 export { accountStore, crossAccount, OFFLINE, onlineDeps, storedDeps, storeOnlyDeps } from "./deps.js"
 export type { Embedded, EmbeddingsService, EmbedStatus, FoundConversation } from "./embeddings.js"
@@ -264,8 +269,19 @@ export { DELETE_AT_ONCE, messagesService } from "./messages.js"
 export { searchStore } from "./messages-archive-search.js"
 export type { ModerateOptions, ModerationService, ShownRules } from "./moderation.js"
 export { moderationService } from "./moderation.js"
+export type { FinanceTotal, InvoiceLine, LinkedBy, MoneySection, OrderLine, PaymentLine } from "./money-context.js"
+export type {
+  DealLine,
+  OrganizationContext,
+  OrganizationContextOptions,
+  ProjectLine,
+  TaskLine,
+} from "./organization-context.js"
+export { organizationContext } from "./organization-context.js"
 export type { ContactSync, PeopleService } from "./people.js"
 export { linkPeople, peopleService, phoneOf } from "./people.js"
+export type { CanonicalContextOptions, CanonicalPersonContext, PersonBusiness } from "./person-business.js"
+export { canonicalPersonContext, personBusiness } from "./person-business.js"
 export type {
   AccountScope,
   ContextEvent,
@@ -376,13 +392,44 @@ export const servicesFor = (deps: ServiceDeps): Services => {
   return deps.messenger.services ? { ...base, ...deps.messenger.services(base, deps) } : base
 }
 
-export { entriesOfList, type ListContext, type ListedEntry } from "../search/account-list.js"
+export {
+  entriesOfList,
+  keyOf,
+  type ListContext,
+  type ListedEntry,
+  sameAs,
+  sourceOf,
+} from "../search/account-list.js"
+export {
+  ALL,
+  type GroupContext,
+  type GroupMember,
+  type GroupMembership,
+  type GroupReason,
+  type GroupRequest,
+  type GroupSuggestion,
+  groupMembership,
+  inGroupOf,
+  NOT_GROUP_NAMES,
+  OWNER_NOTES,
+  type RunGroup,
+  scopeToGroup,
+} from "../search/groups.js"
 export { plainQuery } from "../search/lucene/plain.js"
 export { FIELD_VERSION, QUERY_FIELDS, QUERY_OPERATORS, validateAst } from "../search/lucene/registry.js"
 export { QUERY_LIMITS, QUERY_VERSION } from "../search/lucene/types.js"
 export { questionLookup } from "../search/question-plan.js"
 export { type SearchTotal, TOTAL_CAP } from "../search/total.js"
 export { TASK_KINDS, TASK_ORIGINS, type TaskKind, type TaskOrigin } from "../tasks/index.js"
+export {
+  addGroupMember,
+  type GroupMemberChange,
+  type GroupMemberMove,
+  type GroupStore,
+  listAccountGroups,
+  moveGroupMember,
+  removeGroupMember,
+} from "./account-groups.js"
 export type { AdminFound, AdminQuery, AdminSelection, AdminStatisticsService } from "./admin-statistics.js"
 export { adminStatisticsService } from "./admin-statistics.js"
 export { GAP_BOUNDS, type GapPlan, type GapRepair, gapsService, type RepairOptions } from "./archive-gaps.js"
@@ -404,6 +451,7 @@ export {
   foundEvent,
   searchEvents,
 } from "./events-search.js"
+export { type GroupGuard, groupGuardOf, lockedRegistry } from "./group-guard.js"
 export { createMeetingBatchReader } from "./meeting-batch.js"
 export {
   type MeetingCombinedHit,
@@ -560,7 +608,7 @@ export {
   catchUpSearch,
   validateCatchUp,
 } from "./search-catchup.js"
-export { accountsOfKind, listContextOf, type SearchKind } from "./search-kind.js"
+export { accountsOfKind, groupLockOf, listContextOf, type SearchKind } from "./search-kind.js"
 export type { SearchRefreshed, SyncOptions } from "./search-refresh.js"
 export { SYNC_BOUNDS, SYNC_KEY } from "./search-refresh.js"
 export {

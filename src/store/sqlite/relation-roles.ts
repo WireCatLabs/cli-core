@@ -68,7 +68,7 @@ const usedBy = (database: CacheDatabase, list: RoleList, role: string): number =
   return Number(
     database
       .prepare(
-        `SELECT (SELECT count(*) FROM links WHERE role = ? AND ${links}) + (SELECT count(*) FROM proposed_actions ` +
+        `SELECT (SELECT count(*) FROM links WHERE role = ? AND deleted_at IS NULL AND ${links}) + (SELECT count(*) FROM proposed_actions ` +
           `WHERE status = 'proposed' AND ${proposals} AND ((kind = 'relationship' AND json_extract(payload, '$.role') = ?) ` +
           "OR (kind = 'relationship_update' AND json_extract(payload, '$.changes.role') = ?))) AS n",
       )
