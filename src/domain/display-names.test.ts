@@ -20,6 +20,7 @@ describe("displayName", () => {
     expect(displayName("Без имени", { username: "kkkslav" })).toBe("@kkkslav")
     expect(displayName("null", {})).toBeNull()
     expect(displayName("Room #2", {})).toBe("Room #2")
+    expect(nameKey("Deleted Account")).toBeNull()
   })
 })
 

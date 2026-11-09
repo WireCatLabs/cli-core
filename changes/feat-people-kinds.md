@@ -11,6 +11,10 @@
 - `sort` takes `interactions` (the default: most messages and mail from them first), `recent`, `name` or `tasks`.
 - Each listed person has `kind`, `kindSignals`, `contact` (the phone, else the email, else `@username`),
   `messagesFrom` and `lastContact`. On a synthetic store of 51,000 people and 1.5 million messages a list takes about
-  0.3–0.5 s; `recent` reads every message's time and takes about 0.2 s more.
+  0.5–0.6 s on a loaded machine and 1.9 s sorted by `recent`; a name search reads only the people it found
+  ([cli-testing `performance/people/kinds`](https://github.com/WireCatLabs/cli-testing/tree/main/performance/people/kinds)).
+- An unknown `kind` or `sort` is refused. A sender counts as bulk mail from 3 letters on; a role address makes an
+  `organization` only when every address of the person is one.
 - `displayName` reads a messenger's placeholder for a missing name (`null`, «Без имени», `Deleted Account`) as no
-  name, so the username, phone or email shows instead.
+  name, so the username, phone or email shows instead; `nameKey` gives such a name no key, so two deleted
+  accounts are never proposed as one person.

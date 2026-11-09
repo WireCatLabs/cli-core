@@ -602,7 +602,8 @@ proposes them instead. A no-reply address (`isNoReplyAddress`) is no one's: it n
   `SMALL_GROUP_MEMBERS` (10; a group of unknown size counts as large), mail the owner wrote to them (NEED-2342 A), a
   meeting or calendar entry, a CRM identity or `person` record, or the address book (`account_identities.address_book`,
   written by `contacts sync` through `saveAddressBook`, version 61). Kinds, ties and the messages and mail each person
-  sent are read on every list (the message counts over `messages_by_sender_identity_id` alone); no table keeps them.
+  sent are read on every list (the message counts over `messages_by_sender_identity_id` alone); no table keeps them
+  (cli-testing `performance/people/ties` and `performance/people/kinds`).
   `people.similar` serves a form that adds a person: names starting like the typed words, the same `nameKey` first.
 
 **Links and the review list.** A link records its method, confidence, author and time; an owner's link is never

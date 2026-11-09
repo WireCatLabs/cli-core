@@ -8,7 +8,6 @@ import {
   PERSON_KINDS,
   type PersonKind,
 } from "../../domain/person-kinds.js"
-import { foldName } from "../../resolve.js"
 import type { CacheDatabase, SqlValue } from "../driver.js"
 import { fold } from "../normalize.js"
 import { mergedAwaySql } from "./merged-persons.js"
@@ -124,7 +123,7 @@ const OWNED = "SELECT identity_id FROM organization_identities"
 const LAST_CONTACTS = (identities: string) =>
   `SELECT l.person_id AS person, max(t) AS at FROM (` +
   `SELECT sender_identity_id AS identity, max(sent_at) AS t FROM messages WHERE sender_identity_id IN (${identities}) ` +
-  "GROUP BY 1 UNION ALL " +
+  "AND deleted_at IS NULL GROUP BY 1 UNION ALL " +
   `SELECT from_identity_id, max(coalesce(sent_at, received_at)) FROM emails WHERE from_identity_id IN (${identities}) ` +
   "AND deleted_at IS NULL GROUP BY 1 UNION ALL " +
   `SELECT identity_id, max(last_messaged_at) FROM account_identities WHERE identity_id IN (${identities}) GROUP BY 1` +
@@ -206,6 +205,9 @@ interface Classified extends Omit<ListedPerson, "lastContact"> {
   nameOrder: string
 }
 
+/** One misfiled letter is no newsletter. */
+const BULK_MIN = 3
+
 /** The first rule that holds; the list's contract in the people-clients-digests plan names the same order. */
 const kindOf = (
   shown: string | null,
@@ -219,14 +221,14 @@ const kindOf = (
   const automated: KindSignal[] = [
     ...(facts?.bot ? (["bot"] as const) : []),
     ...(emails.some(isNoReplyAddress) ? (["no-reply"] as const) : []),
-    ...(mail !== undefined && mail.bulk * 2 > mail.n ? (["bulk-mail"] as const) : []),
+    ...(mail !== undefined && mail.n >= BULK_MIN && mail.bulk * 2 > mail.n ? (["bulk-mail"] as const) : []),
     ...(facts?.neverReplied ? (["bulk-never-replied"] as const) : []),
     ...(isAutomatedName(shown) ? (["automated-name"] as const) : []),
   ]
   if (automated.length > 0) return { kind: "automated", signals: automated }
   const organization: KindSignal[] = [
     ...(facts?.organization ? (["organization"] as const) : []),
-    ...(emails.some(isRoleAddress) ? (["role-address"] as const) : []),
+    ...(emails.length > 0 && emails.every(isRoleAddress) ? (["role-address"] as const) : []),
     ...(isCompanyName(shown) ? (["company-name"] as const) : []),
   ]
   if (organization.length > 0) return { kind: "organization", signals: organization }
@@ -236,9 +238,13 @@ const kindOf = (
 }
 
 /** Each person with their kind, contact and counts; the last contact is added for the page alone. */
-const classified = (database: CacheDatabase, people: readonly Candidate[], scope: Scope): Classified[] => {
+const classified = (
+  database: CacheDatabase,
+  people: readonly Candidate[],
+  scope: Scope,
+  reasons = shownReasons(database),
+): Classified[] => {
   const facts = factsOf(database, scope)
-  const reasons = shownReasons(database)
   const tasks = countsOf(database, TASK_COUNTS, mergedAssignees(database))
   const messages = countsOf(database, MESSAGE_COUNTS(scope), ...scopeParams(scope))
   const mail = new Map(
@@ -290,7 +296,7 @@ const withLastContact = (
 }
 
 /** Sorted as read, case and accents aside; a name with nothing to read goes last. */
-const nameOrderOf = (shown: string | null) => `${isReadable(shown) ? 0 : 1}${foldName(shown ?? "")}`
+const nameOrderOf = (shown: string | null) => `${isReadable(shown) ? 0 : 1}${fold(shown ?? "")}`
 
 const byName = (a: Classified, b: Classified) =>
   a.nameOrder < b.nameOrder ? -1 : a.nameOrder > b.nameOrder ? 1 : a.id - b.id
@@ -298,6 +304,10 @@ const byName = (a: Classified, b: Classified) =>
 /** People of one kind, the owner first, in the order asked; `counts` says how many each kind holds. */
 export const listPeople = (database: CacheDatabase, options: PeopleListOptions): PeopleList => {
   const { kind = "person", sort = "interactions", limit, offset = 0 } = options
+  if (kind !== "all" && !PERSON_KINDS.includes(kind))
+    throw new CliError("validation_error", `a person's kind is one of ${PERSON_KINDS.join(", ")} or all, got "${kind}"`)
+  if (!PEOPLE_SORTS.includes(sort))
+    throw new CliError("validation_error", `people sort by ${PEOPLE_SORTS.join(", ")}, got "${sort}"`)
   const filter = matching(options.query)
   const candidates = database
     .prepare(`SELECT p.id, p.name, p.owner FROM persons p WHERE NOT ${mergedAwaySql("p")}${filter.sql}`)
@@ -307,7 +317,12 @@ export const listPeople = (database: CacheDatabase, options: PeopleListOptions):
       name: row.name == null ? null : String(row.name),
       owner: Number(row.owner) === 1,
     }))
-  const everyone = classified(database, candidates, "all")
+  // A search reads only the people it found; a whole list reads everyone once rather than per person.
+  const everyone = classified(
+    database,
+    candidates,
+    options.query === undefined ? "all" : candidates.map(({ id }) => id),
+  )
   const counts = Object.fromEntries(PERSON_KINDS.map((one) => [one, 0])) as Record<PersonKind, number>
   for (const person of everyone) counts[person.kind] += 1
   const chosen = kind === "all" ? everyone : everyone.filter((person) => person.kind === kind)
@@ -406,8 +421,7 @@ export const similarPeople = (database: CacheDatabase, typed: string, limit: num
     }))
   const byId = new Map(people.map((person) => [person.id, person]))
   const ordered = [...sameName.keys()].flatMap((id) => byId.get(id) ?? [])
-  return withLastContact(database, classified(database, ordered, [...sameName.keys()])).map((person) => ({
-    ...person,
-    sameName: sameName.get(Number(person.person.slice("person:".length))) === true,
-  }))
+  const rows = classified(database, ordered, [...sameName.keys()], ties)
+  const same = rows.map(({ id }) => sameName.get(id) === true)
+  return withLastContact(database, rows).map((person, at) => ({ ...person, sameName: same[at] === true }))
 }

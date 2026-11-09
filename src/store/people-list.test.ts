@@ -221,6 +221,9 @@ describe("the people list", () => {
       '"Zed Quoted "',
     ])
     await expect(store.people.list({ limit: 10, query: "ab" })).rejects.toThrow("at least 3 characters")
+    await expect(store.people.list({ limit: 10, kind: "people" as "person" })).rejects.toThrow(
+      "a person's kind is one of",
+    )
   })
 })
 
@@ -284,7 +287,7 @@ describe("the kind of a person", () => {
         )
         .get(account, NOW, NOW)?.id,
     )
-    for (const n of [1, 2]) {
+    for (const n of [1, 2, 3]) {
       const email = Number(
         db
           .prepare(
@@ -303,8 +306,8 @@ describe("the kind of a person", () => {
     const [lena] = (await store.people.list({ limit: 10, kind: "automated" })).items
     expect(lena).toMatchObject({
       kindSignals: ["bulk-mail"],
-      messagesFrom: 2,
-      lastContact: new Date(NOW + 2).toISOString(),
+      messagesFrom: 3,
+      lastContact: new Date(NOW + 3).toISOString(),
       contact: "lena@example.test",
     })
   })

@@ -60,7 +60,9 @@ export const displayName = (name: string | null | undefined, fallbacks: NameFall
  */
 export const nameKey = (name: string | null | undefined): string | null => {
   if (typeof name !== "string") return null
-  const words = foldName(unquoted(name))
+  const unwrapped = unquoted(name)
+  if (PLACEHOLDERS.has(unwrapped.toLowerCase())) return null
+  const words = foldName(unwrapped)
     .split(/[^\p{L}\p{N}]+/u)
     .filter((word) => word !== "")
   return words.length === 0 ? null : words.sort().join(" ")
