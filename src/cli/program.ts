@@ -270,7 +270,10 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
   let afterPhase: number | undefined
   let running: { endsAt: number; ms: number } | undefined
   const startDeadline = (ms: number | undefined) => {
-    running = ms === undefined ? undefined : { endsAt: Date.now() + ms, ms }
+    running =
+      ms === undefined
+        ? undefined
+        : { endsAt: Date.now() + ms, ms, ...(explicitEnd === undefined ? {} : { explicit: true as const }) }
     control.start(ms)
   }
   let finished = false
@@ -565,10 +568,10 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
       )
       throw new Relayed(code)
     }
+    if (timeout !== undefined && deadline !== undefined) explicitEnd = Date.now() + deadline
     startDeadline(deadline)
     oneShot = deadline
     afterPhase = timeout !== undefined || persistent || job || interactiveLogin ? deadline : DEFAULT_COMMAND_MS
-    if (timeout !== undefined && deadline !== undefined) explicitEnd = Date.now() + deadline
     // An agent's run shares this process's directory; a chat folder's name is not a path to resolve.
     if (options.relayed && !options.agent) absolutePaths(action, options.relayed.cwd)
     const cooperative = persistent || stopsAtItsPace === true

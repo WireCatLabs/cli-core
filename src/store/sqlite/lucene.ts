@@ -82,16 +82,18 @@ export const matchingPks = (context: StoreContext, execution: QueryExecution, ca
       .all(...ranked.params, ...where.params, cap + 1)
     check()
     return rows.map(({ id }) => Number(id))
-  })
-const timeLimited = (error: unknown): never => {
-  if (error instanceof TimeLimitReached) outOfTime()
-  throw error
-}
-const inTime = <T>(work: () => T): T => {
+  }, execution.timeLimitMs)
+const timeLimited =
+  (limitMs?: number) =>
+  (error: unknown): never => {
+    if (error instanceof TimeLimitReached) outOfTime(limitMs)
+    throw error
+  }
+const inTime = <T>(work: () => T, limitMs?: number): T => {
   try {
     return work()
   } catch (error) {
-    return timeLimited(error)
+    return timeLimited(limitMs)(error)
   }
 }
 const compileQuery = (context: StoreContext, execution: QueryExecution, boundedAttachments = false) => {
@@ -101,7 +103,8 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
   if (mail && (execution.conversationIds || execution.conversationSince !== undefined))
     throw new CliError("validation_error", "mail has no conversations to search within")
   const started = context.now()
-  const until = Date.now() + QUERY_LIMITS.milliseconds
+  const limitMs = execution.timeLimitMs ?? QUERY_LIMITS.milliseconds
+  const until = Date.now() + limitMs
   const budget: MatchBudget = { work: 0 }
   let states = 0,
     expansions = 0
@@ -110,7 +113,7 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
   const check = () => {
     if (execution.signal?.aborted)
       throw new CliError("validation_error", "search was aborted", { reason: "query.aborted", complete: false })
-    if (context.now() - started > QUERY_LIMITS.milliseconds) outOfTime()
+    if (context.now() - started > limitMs) outOfTime(limitMs)
   }
   const patternOf = (pattern: string, node: ResolvedPredicate) => {
     check()
@@ -480,63 +483,65 @@ export const withQuerySelection = <T>(
   consume: (selection: QuerySelection, check: () => void) => T,
 ): T => {
   const { database } = context
-  return inTime(() =>
-    read(database, () => {
-      const query = compileQuery(context, execution, true)
-      const { check, leaves, where, from, withRanking, ranked } = query
-      check()
-      let selection: QuerySelection
-      if (leaves.every(({ test }) => !test)) {
-        selection = {
-          sql: `${withRanking}SELECT DISTINCT m.id AS id ${from} WHERE ${where.sql}`,
-          params: [...ranked.params, ...where.params],
-        }
-      } else {
-        const candidates = database
-          .prepare(
-            `${withRanking}SELECT m.id AS id, length(cast(m.text AS BLOB)) AS bytes ${from} WHERE ${where.sql} ORDER BY m.id LIMIT ?`,
-          )
-          .all(...ranked.params, ...where.params, QUERY_LIMITS.candidates + 1)
+  return inTime(
+    () =>
+      read(database, () => {
+        const query = compileQuery(context, execution, true)
+        const { check, leaves, where, from, withRanking, ranked } = query
         check()
-        if (candidates.length > QUERY_LIMITS.candidates) exhausted("candidate rows")
-        if (candidates.reduce((sum, row) => sum + Number(row.bytes), 0) > QUERY_LIMITS.bodyBytes)
-          exhausted("body bytes")
-        const matched: number[] = []
-        for (let offset = 0; offset < candidates.length; offset += 500) {
-          check()
-          const pks = candidates.slice(offset, offset + 500).map(({ id }) => Number(id))
-          const rows = database
-            .prepare(
-              `SELECT m.id AS id, m.text AS body${query.projection ? `,${query.projection}` : ""},(SELECT json_group_array(att.kind) FROM attachments att WHERE att.attachable_type='${query.corpus.item}' AND att.attachable_id=m.id) AS attachment_kinds ${query.joinedFrom} WHERE m.id IN (${pks.map(() => "?").join(",")})`,
-            )
-            .all(...query.projectionParams, ...pks)
-          for (const row of rows) {
-            check()
-            const attachments: unknown = JSON.parse(String(row.attachment_kinds))
-            if (
-              query.evaluate(
-                execution.root,
-                row,
-                String(row.body),
-                Array.isArray(attachments) ? attachments.map(String) : [],
-              )
-            )
-              matched.push(Number(row.id))
+        let selection: QuerySelection
+        if (leaves.every(({ test }) => !test)) {
+          selection = {
+            sql: `${withRanking}SELECT DISTINCT m.id AS id ${from} WHERE ${where.sql}`,
+            params: [...ranked.params, ...where.params],
           }
+        } else {
+          const candidates = database
+            .prepare(
+              `${withRanking}SELECT m.id AS id, length(cast(m.text AS BLOB)) AS bytes ${from} WHERE ${where.sql} ORDER BY m.id LIMIT ?`,
+            )
+            .all(...ranked.params, ...where.params, QUERY_LIMITS.candidates + 1)
+          check()
+          if (candidates.length > QUERY_LIMITS.candidates) exhausted("candidate rows")
+          if (candidates.reduce((sum, row) => sum + Number(row.bytes), 0) > QUERY_LIMITS.bodyBytes)
+            exhausted("body bytes")
+          const matched: number[] = []
+          for (let offset = 0; offset < candidates.length; offset += 500) {
+            check()
+            const pks = candidates.slice(offset, offset + 500).map(({ id }) => Number(id))
+            const rows = database
+              .prepare(
+                `SELECT m.id AS id, m.text AS body${query.projection ? `,${query.projection}` : ""},(SELECT json_group_array(att.kind) FROM attachments att WHERE att.attachable_type='${query.corpus.item}' AND att.attachable_id=m.id) AS attachment_kinds ${query.joinedFrom} WHERE m.id IN (${pks.map(() => "?").join(",")})`,
+              )
+              .all(...query.projectionParams, ...pks)
+            for (const row of rows) {
+              check()
+              const attachments: unknown = JSON.parse(String(row.attachment_kinds))
+              if (
+                query.evaluate(
+                  execution.root,
+                  row,
+                  String(row.body),
+                  Array.isArray(attachments) ? attachments.map(String) : [],
+                )
+              )
+                matched.push(Number(row.id))
+            }
+          }
+          selection = { sql: "SELECT value AS id FROM json_each(?)", params: [JSON.stringify(matched)] }
         }
-        selection = { sql: "SELECT value AS id FROM json_each(?)", params: [JSON.stringify(matched)] }
-      }
-      const result = consume(selection, check)
-      if (
-        result !== null &&
-        (typeof result === "object" || typeof result === "function") &&
-        "then" in result &&
-        typeof result.then === "function"
-      )
-        throw new Error("query selection consumers must run synchronously")
-      check()
-      return result
-    }),
+        const result = consume(selection, check)
+        if (
+          result !== null &&
+          (typeof result === "object" || typeof result === "function") &&
+          "then" in result &&
+          typeof result.then === "function"
+        )
+          throw new Error("query selection consumers must run synchronously")
+        check()
+        return result
+      }),
+    execution.timeLimitMs,
   )
 }
 
@@ -546,9 +551,9 @@ const runQuery = (
   by?: QueryGrouping | "pks",
 ): Promise<Page<ScoredHit> | QueryGroup[] | number[]> => {
   try {
-    return runCompiled(context, execution, by).catch(timeLimited)
+    return runCompiled(context, execution, by).catch(timeLimited(execution.timeLimitMs))
   } catch (error) {
-    return timeLimited(error)
+    return timeLimited(execution.timeLimitMs)(error)
   }
 }
 

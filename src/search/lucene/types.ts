@@ -23,6 +23,14 @@ export const MOST_WORDS_APART = 50
 export function searchError(reason: string, span: Span, alternative?: string): never {
   queryError(reason, span, alternative, SEARCH_QUERY)
 }
+/** Time to print a search's own time-limit answer before the run's deadline cuts it. */
+const ANSWER_MS = 1000
+/**
+ * A search's time limit: the default keeps agents and MCP to 2 s; a run whose caller set a time limit itself
+ * (Desktop's `--timeout 30s`) may use it, less the time to answer.
+ */
+export const searchTimeLimit = (deadline: { endsAt: number; explicit?: true } | undefined, now = Date.now()) =>
+  deadline?.explicit ? Math.max(QUERY_LIMITS.milliseconds, deadline.endsAt - now - ANSWER_MS) : undefined
 /**
  * The search ran out of time, not the query out of bounds: a valid query over a large store. `timeout`, so a caller
  * does not tell the person to fix what they typed.

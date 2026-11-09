@@ -2,6 +2,7 @@ import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, expect, it, vi } from "vitest"
+import { QUERY_LIMITS, searchTimeLimit } from "../search/lucene/types.js"
 import { type MessageStore, openStore } from "../store/store.js"
 import { searchStore } from "./messages-archive-search.js"
 
@@ -62,4 +63,28 @@ it("answers in time with the limit in every statement", async () => {
   const { store, account } = await storeWith(30)
   const found = await searchStore(store, account, { text: "in:max", limit: 50 })
   expect(found.items).toHaveLength(30)
+})
+
+it("gives a search its caller's longer time limit, and names that limit when it runs out", async () => {
+  const { store, account } = await storeWith(30)
+  const start = Date.now()
+  let leap = 5_000
+  vi.spyOn(Date, "now").mockImplementation(() =>
+    new Error().stack?.includes("beforeTimeLimit") ? start + leap : start,
+  )
+  const found = await searchStore(store, account, { text: "in:max", limit: 50, timeLimitMs: 30_000 })
+  expect(found.items).toHaveLength(30)
+  leap = 60_000
+  await expect(searchStore(store, account, { text: "in:max", limit: 50, timeLimitMs: 30_000 })).rejects.toMatchObject({
+    message: expect.stringContaining("time limit of 30s"),
+    details: { reason: "query.time-limit", limit_ms: 30_000 },
+  })
+})
+
+it("raises the 2 s limit only for a time limit the caller set", () => {
+  const now = 1_000_000
+  expect(searchTimeLimit({ endsAt: now + 30_000 }, now)).toBeUndefined()
+  expect(searchTimeLimit({ endsAt: now + 30_000, explicit: true }, now)).toBe(29_000)
+  expect(searchTimeLimit({ endsAt: now + 1_500, explicit: true }, now)).toBe(QUERY_LIMITS.milliseconds)
+  expect(searchTimeLimit(undefined, now)).toBeUndefined()
 })

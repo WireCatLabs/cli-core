@@ -5,6 +5,8 @@ export type BudgetStop = "requests" | "deadline" | "cancelled"
 export interface Deadline {
   endsAt: number
   ms: number
+  /** A person or a script set it (`--timeout`, `<PREFIX>_TIMEOUT`), not the command's default. */
+  explicit?: true
 }
 
 /**

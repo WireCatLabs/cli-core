@@ -6,6 +6,7 @@ import { SAVE_HELP } from "../../meetings/index.js"
 import { syncsOneChat } from "../../ports/traits.js"
 import { renderMessages } from "../../render/messages.js"
 import { renderThreadLinks } from "../../render/thread-context.js"
+import { searchTimeLimit } from "../../search/lucene/types.js"
 import type { SearchFound } from "../../services/messages.js"
 import { environmentOf } from "../context.js"
 import { REMOTE_READ } from "../effects.js"
@@ -113,6 +114,7 @@ const searchAction = (messenger: Messenger) =>
     context.track({ close: async () => controller.abort() })
     const external = environmentOf(this).signal
     const signal = external ? AbortSignal.any([external, controller.signal]) : controller.signal
+    const timeLimitMs = searchTimeLimit(environmentOf(this).deadline?.())
     const typed = {
       ...(source === undefined ? {} : { source }),
       ...(discover === undefined ? {} : { discover }),
@@ -135,6 +137,7 @@ const searchAction = (messenger: Messenger) =>
           limit,
           ...withOffset(page, limit),
           signal,
+          ...(timeLimitMs === undefined ? {} : { timeLimitMs }),
           newest: newest === true,
           context: around ?? (context.format === "pretty" ? 2 : 0),
         })
@@ -154,6 +157,7 @@ const searchAction = (messenger: Messenger) =>
         limit,
         ...withOffset(page, limit),
         signal,
+        ...(timeLimitMs === undefined ? {} : { timeLimitMs }),
         newest: params.newest === true,
         ...(params.discover === undefined ? {} : { discover: params.discover }),
         ...(params.exact ? { exact: true } : {}),
