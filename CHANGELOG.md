@@ -5,16 +5,6 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
-## Unreleased
-
-### Fixed
-
-- **A file's own relationship, such as a Drive document's owner, no longer waits for review.** `replaceFileLinks`
-  writes an unconfirmed relationship from a document with the document's account, so it is `reported` (what the
-  source says) instead of `proposed`. Before, every Drive document's owner and last editor stood in the owner's review
-  list. Links the file states that are not relationships, and the owner's own links, are unchanged. A source re-writes
-  its links on its next import: `drive <profile> catalog import --offline` moves the stored ones.
-
 ## 0.620.0 — 09.11.2026
 
 ### Added
