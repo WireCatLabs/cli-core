@@ -189,6 +189,12 @@ shape of this file.
   (`Order O-55 · owner, …`); its title and ref summary now read `Order O-55 · to <customer>, …`, and its review row's
   `object` is the customer. A purchase still names its supplier.
 
+### Fixed
+
+- **A private Google document's refusal names the drive command that adds it.** `source.needs-sign-in` now says
+  `drive documents add <url> --profiles <names|all>` instead of only "through Drive". The reason and its code are
+  unchanged.
+
 ## 0.614.0 — 08.11.2026
 
 ### Added
