@@ -34,7 +34,7 @@ jobs:
         with:
           fetch-depth: 2
           persist-credentials: false
-      # Only CHANGELOG.md and the version changed against a main proven green: nothing to analyse, as in pr.yml.
+      # Only the changelog and the version changed against a main proven green: nothing to analyse, as in pr.yml.
       - id: decide
         env:
           GH_TOKEN: ${{ github.token }}
@@ -99,9 +99,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           REQUIRED_PREFIX: "security / "
-          TITLE: Not run — only CHANGELOG.md and the version changed
+          TITLE: Not run — only the changelog and the version changed
           SUMMARY: >-
-            Apart from CHANGELOG.md and package.json's version, this pull request's tree is
+            Apart from CHANGELOG.md, the changes/ fragments and package.json's version, this pull request's tree is
             ${{ needs.languages.outputs.fingerprint }}, the same as main at ${{ needs.languages.outputs.base }},
             whose pull request #${{ needs.languages.outputs.pr }} passed every required check on that tree.
         if: needs.languages.outputs.reuse == 'true'
