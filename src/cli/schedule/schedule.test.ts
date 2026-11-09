@@ -393,6 +393,34 @@ describe.runIf(posix)("schedule on Linux", () => {
     expect(timer).toContain("OnCalendar=*-*-* 08:30:00")
     expect(timer).toContain("Persistent=true")
   })
+
+  it("puts a weekly run on its weekday, and lists it so", async () => {
+    const { env } = setup()
+    const { system } = machine("linux")
+    await call(["command", "week", "--on", "Monday", "--at", "09:00", "--", "review", "--new"], env, system)
+    const timer = readFileSync(join(env.XDG_CONFIG_HOME, "systemd", "user", "chat-schedule-week.timer"), "utf8")
+    expect(timer).toContain("OnCalendar=Mon *-*-* 09:00:00")
+    const listed = JSON.parse((await call(["list", "--json"], env, system)).out)
+    expect(listed.items[0]).toMatchObject({ name: "week", when: "weekly on Mon at 09:00" })
+  })
+
+  it("refuses --on without --at, with --every, or on a word that is no weekday", async () => {
+    const { env } = setup()
+    const { system } = machine("linux")
+    const alone = await call(["command", "w", "--on", "mon", "--", "review"], env, system)
+    expect(alone.code).not.toBe(0)
+    expect(alone.err).toContain("say when")
+    const every = await call(["command", "w", "--on", "mon", "--every", "2h", "--", "review"], env, system)
+    expect(every.err).toContain("--on takes a time too")
+    const daily = await call(
+      ["command", "w", "--on", "mon", "--at", "09:00", "--every", "1d", "--", "review"],
+      env,
+      system,
+    )
+    expect(daily.err).toContain("--on runs once a week")
+    const odd = await call(["command", "w", "--on", "someday", "--at", "09:00", "--", "review"], env, system)
+    expect(odd.err).toContain("--on takes a weekday")
+  })
 })
 
 describe.runIf(posix)("schedule under the read-only lock", () => {
@@ -543,6 +571,15 @@ describe.runIf(posix)("schedule agent", () => {
     expect(plist).toContain("<key>Minute</key><integer>30</integer>")
     expect(ran.at(-1)?.argv).toEqual(["launchctl", "bootstrap", "gui/501", expect.stringContaining("follow-ups.plist")])
   })
+
+  it("on macOS puts a weekly run on its weekday, Sunday as 0", async () => {
+    const { env } = setup()
+    const { system } = machine("darwin")
+    await call(["agent", "week", "claude", "review", "--on", "sun", "--at", "09:15"], env, system)
+    const plist = readFileSync(join(env.HOME, "Library", "LaunchAgents", "chat-cli.schedule.week.plist"), "utf8")
+    expect(plist).toContain("<key>Weekday</key><integer>0</integer>")
+    expect(plist).toContain("<key>Hour</key><integer>9</integer>")
+  })
 })
 
 describe("schedule on Windows", () => {
@@ -560,6 +597,13 @@ describe("schedule on Windows", () => {
       WIRECAT_PATH: "\\chat-cli\\",
     })
     expect(registered?.env.WIRECAT_ARGS).toMatch(/^"C:\\chat\\chat.js" "schedule" "exec" ".*schedule.json"$/)
+  })
+
+  it("on Windows registers a weekly trigger on its day", async () => {
+    const { env } = setup()
+    const { system, ran } = machine("win32", ["C:\\node\\node.exe", "C:\\chat\\chat.js"])
+    await call(["command", "week", "--on", "wed", "--at", "07:45", "--", "review", "--new"], env, system)
+    expect(ran[0]?.env).toMatchObject({ WIRECAT_KIND: "weekly", WIRECAT_DAY: "Wednesday", WIRECAT_AT: "07:45" })
   })
 })
 

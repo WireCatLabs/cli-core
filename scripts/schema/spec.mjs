@@ -83,6 +83,7 @@ const EDITS = {
   identity_revisions: { cols: { captured_at: "created_at" }, keys: ["INDEX (identity_id, created_at)"] },
   account_identities: {
     cols: { first_seen_at: "created_at" },
+    keys: ["INDEX (identity_id)", "INDEX (identity_id) WHERE address_book = 1"],
     add: [
       ["updated_at", "integer", { notnull: true }],
       [
@@ -99,6 +100,7 @@ const EDITS = {
         "integer",
         { note: "1 when search ranks this sender's mail lower: signs of fraud, not one of the owner's own" },
       ],
+      ["address_book", "integer", { note: "1 while in this account's address book: a tie to the owner" }],
     ],
   },
   contact_aliases: {

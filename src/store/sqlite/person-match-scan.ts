@@ -5,6 +5,7 @@ import type { IdentityLinkSignal, MatchScan } from "../identity-links.js"
 import { type LinkIndex, linkIndex, settleLinks } from "./identity-link-rows.js"
 import { type Opening, openIdentityLink } from "./identity-proposals.js"
 import type { Author } from "./memories.js"
+import { peopleByNameKey, sharedTrace } from "./name-traces.js"
 import type { StoreContext } from "./open.js"
 import { mergePerson } from "./person-links.js"
 import { personsByIdentifiers } from "./person-matcher.js"
@@ -244,6 +245,36 @@ const sameEmail = (pass: Pass, address: string, holders: Holder[]) => {
       into = join(pass, { from, into, identity: people.get(from) as number, with: intoIdentity }, "email")
 }
 
+const peopleOfIdentities = (context: StoreContext, identities: Set<number>): Set<number> =>
+  new Set([...identities].flatMap((identity) => personOf(context, identity) ?? []))
+
+/**
+ * One name and a shared trace (a phone, an address, a chat, a company's domain) only proposes: a name is common, so
+ * the owner decides every merge. More than `MOST_SHARING` people on one name is too common to propose from.
+ */
+const sameName = (pass: Pass, people: number[], name: string) => {
+  if (people.length > MOST_SHARING) {
+    pass.result.skipped.push({ persons: people.map(String), signal: "name", reason: "identity.common-name" })
+    return
+  }
+  const sorted = [...people].sort((a, b) => a - b)
+  for (const [at, from] of sorted.entries())
+    for (const to of sorted.slice(at + 1)) {
+      const trace = sharedTrace(pass.context.database, from, to, name)
+      if (trace === undefined) continue
+      propose(pass, {
+        identity: trace.identity,
+        with: trace.with,
+        from,
+        to,
+        joins: "person",
+        signal: "name",
+        evidence: trace.evidence,
+        reason: trace.reason,
+      })
+    }
+}
+
 /** What a meeting guest typed is their word only: it is proposed, and only when it names exactly one person. */
 const guestEmail = (pass: Pass, row: { identity: number; email: unknown; meeting: number }) => {
   const { context } = pass
@@ -305,6 +336,10 @@ export const scanMatches = (context: StoreContext, { full = false }: { full?: bo
   for (const row of guestRows(database))
     if ((changed === undefined || changed.has(row.identity)) && !pass.index.names(row.ref))
       write(database, () => guestEmail(pass, row))
+  const changedPeople = changed === undefined ? undefined : peopleOfIdentities(context, changed)
+  for (const { people, name } of peopleByNameKey(database).values())
+    if (people.length > 1 && (changedPeople === undefined || people.some((one) => changedPeople.has(one))))
+      write(database, () => sameName(pass, people, name))
   write(database, () =>
     database
       .prepare("INSERT OR REPLACE INTO store_settings (key, value, at) VALUES (?, ?, ?)")

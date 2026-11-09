@@ -28,6 +28,8 @@ import {
   scheduleName,
   spentToday,
   timerFor,
+  WEEKDAYS,
+  type Weekday,
   type When,
 } from "../../background/schedules.js"
 import { type ServerSystem, thisMachine } from "../../background/system.js"
@@ -67,18 +69,20 @@ const LEAN_CLAUDE = ["--tools", "Bash", "--strict-mcp-config", "--disable-slash-
 interface WhenOptions {
   every?: string
   at?: string
+  on?: string
   atTime?: string
   notifyOn?: Notify
   deliverTo?: string[]
 }
 
-const whenOf = ({ every, at, atTime }: WhenOptions, minimum: number): When => {
+const whenOf = ({ every, at, on, atTime }: WhenOptions, minimum: number): When => {
   if ([every ?? at, atTime].filter(Boolean).length !== 1) {
     throw new CliError(
       "validation_error",
-      "say when: --every <30m|2h|1d>, --at HH:MM (daily), or --at-time <30m|2d|ISO time>",
+      "say when: --every <30m|2h|1d>, --at HH:MM (daily, or weekly with --on), or --at-time <30m|2d|ISO time>",
     )
   }
+  if (on !== undefined && !at) throw new CliError("validation_error", "--on takes a time too: --on mon --at 09:00")
   if (atTime) {
     const time = aheadOf(atTime, "--at-time")
     if (time <= Date.now()) throw new CliError("validation_error", "--at-time is in the past")
@@ -89,7 +93,12 @@ const whenOf = ({ every, at, atTime }: WhenOptions, minimum: number): When => {
     if (every && parseDuration(every, "--every") !== 86_400_000) {
       throw new CliError("validation_error", "--at runs once a day; leave out --every, or use --every 1d")
     }
-    return { daily: at }
+    if (on === undefined) return { daily: at }
+    if (every) throw new CliError("validation_error", "--on runs once a week; leave out --every")
+    const day = on.trim().toLowerCase().slice(0, 3)
+    if (!(WEEKDAYS as readonly string[]).includes(day))
+      throw new CliError("validation_error", `--on takes a weekday, ${WEEKDAYS.join(", ")}; not "${on}"`)
+    return { weekly: at, on: day as Weekday }
   }
   const minutes = parseDuration(every ?? "", "--every") / 60_000
   if (!Number.isInteger(minutes) || minutes < minimum) {
@@ -127,7 +136,8 @@ const scheduleAnswer = ({ environment, createdAt, to, ...schedule }: Schedule, e
 const withWhen = (command: Command) =>
   command
     .option("--every <duration>", "repeat: 30m, 2h, 1d")
-    .option("--at <HH:MM>", "every day at this local time")
+    .option("--at <HH:MM>", "every day at this local time; with --on, that weekday only")
+    .option("--on <weekday>", `with --at, once a week on this day: ${WEEKDAYS.join(", ")}`)
     .option("--at-time <time>", "one run: 30m, 2d from now, or an ISO time; the schedule removes itself after it")
     .addOption(
       new Option(

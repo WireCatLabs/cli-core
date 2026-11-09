@@ -5873,6 +5873,8 @@ describe("the guard, account and mcp config commands", () => {
     const store = await openStore({ path: env.MESSAGING_STORE })
     expect(await store.people.phoneOf({ provider: "chat", account: "500" }, "21")).toBe("+34600000021")
     expect(await store.people.phoneOf({ provider: "chat", account: "500" }, "22")).toBeNull()
+    const inBook = (await store.people.list({ limit: 10 })).items.filter(({ ties }) => ties.includes("phone-book"))
+    expect(inBook.map(({ name }) => name).sort()).toEqual(["Adam", "Bea"])
     await store.close()
   })
 

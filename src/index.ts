@@ -52,6 +52,7 @@ export {
   STAGE_OUTCOMES,
   type StageOutcome,
 } from "./domain/deals.js"
+export { displayName, type NameFallbacks, nameKey } from "./domain/display-names.js"
 export {
   FINANCE_REVIEWS,
   type FinanceReview,

@@ -177,3 +177,67 @@ describe("a meeting guest's typed address", () => {
     expect(await uidOf(store, "example", "alice-example")).toBe(alice)
   })
 })
+
+describe("the same name and a shared trace", () => {
+  const TG: AccountKey = { provider: "telegram", account: "1" }
+  const MAIL: AccountKey = { provider: "email", account: "me@example.test" }
+  const nameProposals = async (store: MessageStore) =>
+    (await store.people.linkProposals({ limit: 50, offset: 0 })).items.filter(({ signal }) => signal === "name")
+
+  it("proposes two people with one name in a chat they share, and never joins them", async () => {
+    const store = await open()
+    await store.people.savePeople(TG, [
+      { id: "1", name: "OpenWeather Team" },
+      { id: "2", name: '"openweather team"' },
+    ])
+    await store.chats.saveChats(TG, [
+      { id: "g", title: "g", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: 400 },
+    ])
+    await store.roster.saveMembers(TG, "g", ["1", "2"])
+
+    const scan = await store.people.scanMatches({ full: true })
+
+    expect(scan.merged).toEqual([])
+    const [proposal] = await nameProposals(store)
+    expect(proposal).toMatchObject({ joins: "person", reason: expect.stringContaining("a chat they are both in") })
+    expect(proposal?.evidence).toHaveLength(1)
+    expect(await uidOf(store, "telegram", "1")).not.toBe(await uidOf(store, "telegram", "2"))
+  })
+
+  it("proposes on a company's domain, but not on a free mailbox or a role address", async () => {
+    const store = await open()
+    await store.people.savePeople(MAIL, [
+      { id: "ana@acme.example", name: "Ana Diaz" },
+      { id: "a.diaz@acme.example", name: "Diaz Ana" },
+      { id: "bo@gmail.com", name: "Bo Lind" },
+      { id: "bo.lind@gmail.com", name: "Bo Lind" },
+      { id: "info@shop.example", name: "Cy Moss" },
+      { id: "sales@shop.example", name: "Cy Moss" },
+    ])
+
+    await store.people.scanMatches({ full: true })
+
+    const found = await nameProposals(store)
+    expect(found).toHaveLength(1)
+    expect(found[0]?.reason).toContain("acme.example")
+  })
+
+  it("leaves one name alone without a trace, and skips a name more than six people have", async () => {
+    const store = await open()
+    await store.people.savePeople(TG, [
+      { id: "10", name: "Ivan Petrov" },
+      { id: "11", name: "Petrov Ivan" },
+    ])
+    await store.people.savePeople(
+      MAIL,
+      Array.from({ length: 7 }, (_, n) => ({ id: `al${n}@acme.example`, name: "Al Common" })),
+    )
+
+    const scan = await store.people.scanMatches({ full: true })
+
+    expect(await nameProposals(store)).toEqual([])
+    expect(scan.skipped).toEqual(
+      expect.arrayContaining([expect.objectContaining({ signal: "name", reason: "identity.common-name" })]),
+    )
+  })
+})

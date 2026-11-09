@@ -19,9 +19,9 @@ import {
   type StoredTemplates,
 } from "./report/render.js"
 import type { ServerSystem } from "./system.js"
+import { clockOf, describeWhen, localStamp, onCalendar, WEEKDAYS, type When, WINDOWS_DAYS } from "./when.js"
 
-/** Minutes between runs, a daily local time, or one local moment. */
-export type When = { every: number } | { daily: string } | { once: string }
+export { describeWhen, WEEKDAYS, type Weekday, type When } from "./when.js"
 
 export interface Schedule {
   name: string
@@ -315,20 +315,6 @@ export const listSchedules = (state: string, filter: Partial<Pick<Schedule, "nam
         .sort((a, b) => a.name.localeCompare(b.name))
     : []
 
-export const describeWhen = (when: When): string =>
-  "every" in when
-    ? `every ${when.every % 1440 === 0 ? `${when.every / 1440}d` : when.every % 60 === 0 ? `${when.every / 60}h` : `${when.every}m`}`
-    : "daily" in when
-      ? `daily at ${when.daily}`
-      : `once at ${when.once}`
-
-/** A local wall-clock time, as both systemd's `OnCalendar=` and PowerShell's parser take it. */
-const localStamp = (iso: string) => {
-  const at = new Date(iso)
-  const two = (n: number) => String(n).padStart(2, "0")
-  return `${at.getFullYear()}-${two(at.getMonth() + 1)}-${two(at.getDate())} ${two(at.getHours())}:${two(at.getMinutes())}:${two(at.getSeconds())}`
-}
-
 /** How one operating system starts `argv` at the schedule's times. Every timer runs the same thing: `<cli> schedule exec <file>`. */
 export interface Timer {
   install: (schedule: Schedule, argv: string[]) => Promise<void>
@@ -381,7 +367,7 @@ export const systemdTimer = (app: AppIdentity, system: ServerSystem, env: NodeJS
             ? // From when a run ends: counted from its start, a run longer than the interval left no next run.
               [`OnActiveSec=${when.every}min`, `OnUnitInactiveSec=${when.every}min`]
             : // Persistent: a run missed while the machine slept happens when it wakes.
-              [`OnCalendar=${"daily" in when ? `*-*-* ${when.daily}:00` : localStamp(when.once)}`, "Persistent=true"]),
+              [`OnCalendar=${onCalendar(when)}`, "Persistent=true"]),
           "",
           "[Install]",
           "WantedBy=timers.target",
@@ -408,7 +394,7 @@ export const launchdTimer = (app: AppIdentity, system: ServerSystem, env: NodeJS
   const domain = `gui/${system.uid}`
   const calendar = (when: When) => {
     if ("every" in when) return [`  <key>StartInterval</key><integer>${when.every * 60}</integer>`]
-    const [hour, minute] = ("daily" in when ? when.daily : localStamp(when.once).slice(11, 16)).split(":").map(Number)
+    const [hour, minute] = ("once" in when ? localStamp(when.once).slice(11, 16) : clockOf(when)).split(":").map(Number)
     const once = "once" in when ? new Date(when.once) : undefined
     return [
       "  <key>StartCalendarInterval</key>",
@@ -420,6 +406,8 @@ export const launchdTimer = (app: AppIdentity, system: ServerSystem, env: NodeJS
             `    <key>Day</key><integer>${once.getDate()}</integer>`,
           ]
         : []),
+      // launchd counts Sunday as 0.
+      ...("weekly" in when ? [`    <key>Weekday</key><integer>${(WEEKDAYS.indexOf(when.on) + 1) % 7}</integer>`] : []),
       `    <key>Hour</key><integer>${hour}</integer>`,
       `    <key>Minute</key><integer>${minute}</integer>`,
       "  </dict>",
@@ -482,6 +470,7 @@ export const windowsTimer = (app: AppIdentity, system: ServerSystem, env: NodeJS
           "$trigger = switch ($env:WIRECAT_KIND) {",
           "  'every' { New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes ([int]$env:WIRECAT_MINUTES)) }",
           "  'daily' { New-ScheduledTaskTrigger -Daily -At $env:WIRECAT_AT }",
+          "  'weekly' { New-ScheduledTaskTrigger -Weekly -DaysOfWeek $env:WIRECAT_DAY -At $env:WIRECAT_AT }",
           "  'once' { New-ScheduledTaskTrigger -Once -At ([datetime]::ParseExact($env:WIRECAT_AT, 'yyyy-MM-dd HH:mm:ss', $null)) }",
           "}",
           "$settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -MultipleInstances IgnoreNew",
@@ -490,9 +479,10 @@ export const windowsTimer = (app: AppIdentity, system: ServerSystem, env: NodeJS
         {
           WIRECAT_EXE: exe,
           WIRECAT_ARGS: args.map((word) => `"${word.replaceAll('"', '\\"')}"`).join(" "),
-          WIRECAT_KIND: "every" in when ? "every" : "daily" in when ? "daily" : "once",
+          WIRECAT_KIND: "every" in when ? "every" : "daily" in when ? "daily" : "weekly" in when ? "weekly" : "once",
           WIRECAT_MINUTES: "every" in when ? String(when.every) : "",
-          WIRECAT_AT: "daily" in when ? when.daily : "once" in when ? localStamp(when.once) : "",
+          WIRECAT_AT: "every" in when ? "" : "once" in when ? localStamp(when.once) : clockOf(when),
+          WIRECAT_DAY: "weekly" in when ? WINDOWS_DAYS[when.on] : "",
           WIRECAT_NAME: schedule.name,
           WIRECAT_PATH: path,
         },
