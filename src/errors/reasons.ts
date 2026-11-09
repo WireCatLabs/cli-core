@@ -342,6 +342,10 @@ const OTHERS: Entry[] = [
     "the default scope mine would mark most of a kind's stored rows deleted; none is, until the owner sets the scope",
   ),
   validation(
+    "crm.unassigned-dropped",
+    "the CRM does not let this sign-in count a user in unassigned as nobody's; that user's deals are not copied",
+  ),
+  validation(
     "crm.not-reported",
     "the CRM did not list users or departments; what they would say is unknown, nothing withdrawn",
   ),

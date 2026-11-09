@@ -116,6 +116,7 @@ export interface CrmSyncIssue {
     | CrmRelationIssue["reason"]
     | "crm.unlisted-held"
     | "crm.narrowing-held"
+    | "crm.unassigned-dropped"
     | "crm.not-reported"
     | "crm.pending-dropped"
   message: string
@@ -563,9 +564,15 @@ export const syncCrm = async (
       )
     }
   }
+  const listed = setting.mode === "mine" ? setting.also.map(normalCrmUserId) : []
+  const allowed =
+    self !== undefined && source.unassigned && listed.length && listed.every(isCrmUserId)
+      ? await source.unassigned(listed)
+      : { kept: listed }
+  const dropped = listed.filter((id) => !allowed.kept.includes(id))
   const scope: CrmScope =
     self !== undefined && setting.mode === "mine"
-      ? { mode: "mine", self, also: setting.also.map(normalCrmUserId) }
+      ? { mode: "mine", self, also: listed.filter((id) => !dropped.includes(id)) }
       : { mode: "all" }
   const report: CrmSyncReport = {
     provider: source.provider,
@@ -579,6 +586,14 @@ export const syncCrm = async (
     state: "complete",
     progress: { requests: 0, saved: 0, steps: 0 },
   }
+  if (dropped.length)
+    report.issues.push({
+      kind: "deal",
+      reason: "crm.unassigned-dropped",
+      message:
+        `${crmSettingKey(account, "unassigned")} names user ${dropped.join(", ")}, not counted as nobody's: ` +
+        `${allowed.message ?? `${source.provider} refused them`}; their deals and leads are not copied`,
+    })
   let steps = 0
   const run: Run = {
     source,
