@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.619.0 — 09.11.2026
+
 ### Added
 
 - **`identity_link` proposals: "these two are one person", which only the owner decides.** `people.proposeLink` opens
