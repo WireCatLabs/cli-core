@@ -4,6 +4,7 @@ import { join } from "node:path"
 import { memoryKeyring } from "@wirecat/cli-base"
 import { Command } from "commander"
 import { describe, expect, it } from "vitest"
+import { writeEnrichmentSetting } from "../services/enrichment-setting.js"
 import { readHarderSetting } from "../services/search-harder.js"
 import type { Body } from "./envelope.js"
 import { modelCatalogueCommand } from "./model-catalogue-command.js"
@@ -44,7 +45,7 @@ describe("models search-consents", () => {
       candidates: 30,
       key: { present: false },
     })
-    expect(lines.join("\n")).toContain("sends the question and its first 30 hits")
+    expect(lines.join("\n")).toContain("then the question and its first 30 hits")
     expect(readHarderSetting(env)).toBeUndefined()
   })
 
@@ -60,10 +61,32 @@ describe("models search-consents", () => {
     expect(readHarderSetting(env)).toBeUndefined()
   })
 
-  it("refuses an agent and another provider", async () => {
+  it("refuses an agent, a provider it cannot call, and another API without a model", async () => {
     const { run } = fixture({ AI_AGENT: "claude-code" })
 
     await expect(run("set", "anthropic", "--yes")).rejects.toThrow(/only the owner/)
-    await expect(run("set", "openai")).rejects.toThrow(/anthropic only/)
+    await expect(run("set", "mistral")).rejects.toThrow(/openai or anthropic, not mistral/)
+    await expect(run("set", "openai", "--base-url", "https://openrouter.ai/api/v1")).rejects.toThrow(/needs --model/)
+  })
+
+  it("takes OpenAI with its own default model, or an OpenAI-compatible API with the model named", async () => {
+    const { env, run, item, lines } = fixture()
+
+    await run("set", "openai", "--yes")
+    expect(readHarderSetting(env)).toMatchObject({ provider: "openai", model: "gpt-4o-mini" })
+    expect(item(0)).toMatchObject({ endpoint: "https://api.openai.com/v1", usd_per_million: { input: 0.15 } })
+
+    await run("set", "openai", "--base-url", "https://openrouter.ai/api/v1", "--model", "deepseek/deepseek-chat")
+    expect(item(1)).toMatchObject({ model: "deepseek/deepseek-chat", usd_per_million: null, changed: false })
+    expect(lines.join("\n")).toContain("openrouter.ai), model deepseek/deepseek-chat")
+  })
+
+  it("proposes enrichment's provider without giving the consent", async () => {
+    const { env, run, item } = fixture()
+    writeEnrichmentSetting(env, { provider: "openai", model: "gpt-4o-mini", consented_at: "2026-11-09T10:00:00.000Z" })
+
+    await run("show")
+    expect(item(0)).toMatchObject({ on: false, provider: "openai", model: "gpt-4o-mini", proposed_from: "enrichment" })
+    expect(readHarderSetting(env)).toBeUndefined()
   })
 })

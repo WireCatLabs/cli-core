@@ -23,7 +23,15 @@ import type { SearchCoverage } from "./messages-search.js"
 import { notesScopeOf, RRF_K, searchNotes } from "./notes-search.js"
 import { BUSINESS_WORDS_ONLY, searchBusiness } from "./search-all-business.js"
 import { type MeetingAccountCoverage, type MeetingSearchItem, meetingLane } from "./search-all-meetings.js"
-import { HARDER_CANDIDATES, type HarderOptions, type HarderResult, reorderHarder } from "./search-harder.js"
+import {
+  HARDER_CANDIDATES,
+  type HarderOptions,
+  type HarderResult,
+  harderAccess,
+  notRewritten,
+  reorderHarder,
+  rewriteHarder,
+} from "./search-harder.js"
 import { listContextOf } from "./search-kind.js"
 import type { Backend, ServerOptions, ServerSearched } from "./server-search.js"
 
@@ -296,119 +304,139 @@ export const searchAll = async (
       : await sourceScope(store, account, request.source, request.only ?? RESOURCES_SEARCHED, messenger)
   const { only, scope } = chosen
   const command = messenger.hintCommand === undefined ? messenger.app?.command : (messenger.hintCommand ?? undefined)
-  const lists: SearchAllItem[][] = []
-  const searched: SearchedResource[] = []
-  const accounts: SearchedAccount[] = []
-  const skipped: SearchAllFound["skipped"] = [...chosen.skipped]
-  let hasMore = false
-  let notes: SearchAllFound["notes"]
-  let events: SearchAllFound["events"]
-  const by: { messages?: SearchAllFound["messages"]; mail?: SearchAllFound["mail"] } = {}
-  let server: ServerSearched | undefined
   // Every word of a sentence is rarely in one record: a question finds what holds some of them, as `--discover` does.
   const discover = !request.exact && questionLookup(request.text) !== undefined
   /** Each hit found by meaning, by its cosine: one model for every source, so these compare across them. */
   const cosines = new Map<string, number>()
-  let coverage: SearchCoverage | undefined
-  let meetings: MeetingAccountCoverage[] | undefined
-
-  const messagesOf = async (kind: "messages" | "mail") => {
-    const given = scope?.[kind]
-    // The server still gets the question as typed: a query that is not a sentence still finds what it holds.
-    const discovers = discover && (kind === "mail" || request.backend !== "server")
-    const query: SearchQuery = {
-      text: request.text,
-      kind,
-      ...(given ? { accounts: given } : {}),
-      ...(kind === "messages"
-        ? {
-            // Server hits are matched by chat and message id, which another account can share.
-            ...(request.backend === "server" || given ? {} : { source: "all" }),
-            ...(request.backend === undefined ? {} : { backend: request.backend }),
-            ...(request.server === undefined ? {} : { server: request.server }),
-          }
-        : {}),
-      limit: depth,
-      ...(request.exact ? { exact: true } : {}),
-      ...(discovers ? { discover: true } : {}),
-      ...(request.timezone === undefined ? {} : { timezone: request.timezone }),
-      ...(request.signal === undefined ? {} : { signal: request.signal }),
-    }
-    // Messages go the way `search messages` goes, server included, so `search all` finds whatever it finds.
-    const found =
-      kind === "messages" ? await searchMessages(query) : await searchStore(store, account, query, messenger)
-    if (found.server) server = found.server
-    if (kind === "messages" && found.coverage) coverage = found.coverage
-    hasMore ||= found.hasMore
-    const read =
-      found.coverage?.accounts ??
-      given ??
-      (await store.accounts.accounts()).filter(({ provider }) => holdsKind(provider, kind))
-    for (const one of found.skipped ?? []) if (!skipped.some(({ source }) => source === one.source)) skipped.push(one)
-    accounts.push(...read.map(({ provider, account }) => ({ resource: kind, provider, account })))
-    const itemOf = (hit: FoundMessage, foundBy: SearchAllRecordItem["foundBy"]): SearchAllRecordItem => {
-      const at = parseLocator(hit.locator)
-      return {
-        kind: kind === "mail" ? "mail" : "message",
-        ref: hit.locator,
-        provider: at.provider,
-        account: at.account,
-        title: hit.chatTitle,
-        timestamp: hit.timestamp,
-        text: hit.excerpt ?? excerpt(hit.text ?? "", request.text),
-        from: hit.email?.from
-          ? { name: hit.email.from.name ?? hit.email.from.address, ref: hit.email.from.ref }
-          : { name: hit.senderName, ref: null },
-        senderIsMe: senderIsMe(hit, at.account),
-        ...(hit.email ? { email: hit.email } : {}),
-        attachments: hitFiles(hit.attachments),
-        foundBy,
-      }
-    }
-    const byWords = found.items.map((hit) => itemOf(hit, ["words"]))
-    // Server hits are only those the server returned; the local vectors would add others.
-    if (!meaning || request.exact || (kind === "messages" && request.backend === "server")) return byWords
-    const filters = filtersBeside(request.text)
-    const lane =
-      filters === undefined
-        ? {
-            skipped: {
-              reason: "the query uses NOT, or a filter under OR or in a group, which meaning cannot follow",
-              model: chosenTextModel(request.env).id,
-            },
-          }
-        : await meaning(request.text, read, embedders)
-    if ("skipped" in lane) {
-      by[kind] = { by: "words", meaningSkipped: lane.skipped }
-      return byWords
-    }
-    by[kind] = { by: "words and meaning", ...(lane.partly ? { meaningSkipped: lane.partly } : {}) }
-    const near = await nearEligible(store, account, query, messenger, lane.ranked, filters ? { text: filters } : {})
-    // One list per resource, as notes give theirs, so messages get no second vote against mail.
-    const fused = new Map<string, { item: SearchAllRecordItem; score: number }>()
-    byWords.forEach((item, rank) => {
-      fused.set(item.ref, { item, score: 1 / (RRF_K + rank + 1) })
-    })
-    near.forEach((hit, rank) => {
-      cosines.set(hit.locator, hit.cosine)
-      const held = fused.get(hit.locator)
-      if (held) held.item.foundBy = ["words", "meaning"]
-      const vote = 1 / (RRF_K + rank + 1)
-      // As in notes: a question's any-word list holds most of what meaning finds, so a second vote would bury the rest.
-      if (held && discovers) held.score = Math.max(held.score, vote)
-      else fused.set(hit.locator, { item: held?.item ?? itemOf(hit, ["meaning"]), score: (held?.score ?? 0) + vote })
-    })
-    return [...fused.values()].sort((a, b) => b.score - a.score).map(({ item }) => item)
+  // A rewrite's cosine is to the rewrite: a hit keeps the best it got.
+  const near = (ref: string, cosine: number) => cosines.set(ref, Math.max(cosines.get(ref) ?? cosine, cosine))
+  const harderAsk = request.harder && {
+    ...request.harder,
+    env: request.env ?? process.env,
+    now: request.now ?? Date.now(),
+    ...(command === undefined ? {} : { command }),
   }
+  const access = harderAsk && offset === 0 ? harderAccess(harderAsk) : undefined
+  // Only a question in words is rewritten; its fields go with every rewrite, so a typed filter still holds.
+  const fields = access?.ready && discover ? filtersBeside(request.text) : undefined
+  // Asked before the question's own search, so the model writes while the store is read.
+  const rewriting =
+    harderAsk && access?.ready && fields !== undefined ? rewriteHarder(asked.text, access, harderAsk) : undefined
 
-  // Messages, notes and events all look up by meaning with the same model: loading it costs most of a second.
-  const embedders = runEmbedders()
-  try {
+  /** One search of the question or of a rewrite: its hits per resource, and what it read and skipped. */
+  const pass = async (text: string, rewrite = false) => {
+    // A rewrite reads the local archive only: the messenger's server gets nothing but the question as typed.
+    const backend = rewrite ? "archive" : request.backend
+    const p = {
+      lists: new Map<SearchedResource, SearchAllItem[]>(),
+      searched: [] as SearchedResource[],
+      accounts: [] as SearchedAccount[],
+      skipped: [] as SearchAllFound["skipped"],
+      hasMore: false,
+      notes: undefined as SearchAllFound["notes"],
+      events: undefined as SearchAllFound["events"],
+      by: {} as { messages?: SearchAllFound["messages"]; mail?: SearchAllFound["mail"] },
+      server: undefined as ServerSearched | undefined,
+      coverage: undefined as SearchCoverage | undefined,
+      meetings: undefined as MeetingAccountCoverage[] | undefined,
+    }
+    const discover = !request.exact && questionLookup(text) !== undefined
+
+    const messagesOf = async (kind: "messages" | "mail") => {
+      const given = scope?.[kind]
+      // The server still gets the question as typed: a query that is not a sentence still finds what it holds.
+      const discovers = discover && (kind === "mail" || backend !== "server")
+      const query: SearchQuery = {
+        text,
+        kind,
+        ...(given ? { accounts: given } : {}),
+        ...(kind === "messages"
+          ? {
+              // Server hits are matched by chat and message id, which another account can share.
+              ...(backend === "server" || given ? {} : { source: "all" }),
+              ...(backend === undefined ? {} : { backend }),
+              ...(request.server === undefined || rewrite ? {} : { server: request.server }),
+            }
+          : {}),
+        limit: depth,
+        ...(request.exact ? { exact: true } : {}),
+        ...(discovers ? { discover: true } : {}),
+        ...(request.timezone === undefined ? {} : { timezone: request.timezone }),
+        ...(request.signal === undefined ? {} : { signal: request.signal }),
+      }
+      // Messages go the way `search messages` goes, server included, so `search all` finds whatever it finds.
+      const found =
+        kind === "messages" ? await searchMessages(query) : await searchStore(store, account, query, messenger)
+      if (found.server) p.server = found.server
+      if (kind === "messages" && found.coverage) p.coverage = found.coverage
+      p.hasMore ||= found.hasMore
+      const read =
+        found.coverage?.accounts ??
+        given ??
+        (await store.accounts.accounts()).filter(({ provider }) => holdsKind(provider, kind))
+      for (const one of found.skipped ?? [])
+        if (!p.skipped.some(({ source }) => source === one.source)) p.skipped.push(one)
+      p.accounts.push(...read.map(({ provider, account }) => ({ resource: kind, provider, account })))
+      const itemOf = (hit: FoundMessage, foundBy: SearchAllRecordItem["foundBy"]): SearchAllRecordItem => {
+        const at = parseLocator(hit.locator)
+        return {
+          kind: kind === "mail" ? "mail" : "message",
+          ref: hit.locator,
+          provider: at.provider,
+          account: at.account,
+          title: hit.chatTitle,
+          timestamp: hit.timestamp,
+          text: hit.excerpt ?? excerpt(hit.text ?? "", text),
+          from: hit.email?.from
+            ? { name: hit.email.from.name ?? hit.email.from.address, ref: hit.email.from.ref }
+            : { name: hit.senderName, ref: null },
+          senderIsMe: senderIsMe(hit, at.account),
+          ...(hit.email ? { email: hit.email } : {}),
+          attachments: hitFiles(hit.attachments),
+          foundBy,
+        }
+      }
+      const byWords = found.items.map((hit) => itemOf(hit, ["words"]))
+      // Server hits are only those the server returned; the local vectors would add others.
+      if (!meaning || request.exact || (kind === "messages" && backend === "server")) return byWords
+      const filters = filtersBeside(text)
+      const lane =
+        filters === undefined
+          ? {
+              skipped: {
+                reason: "the query uses NOT, or a filter under OR or in a group, which meaning cannot follow",
+                model: chosenTextModel(request.env).id,
+              },
+            }
+          : await meaning(text, read, embedders)
+      if ("skipped" in lane) {
+        p.by[kind] = { by: "words", meaningSkipped: lane.skipped }
+        return byWords
+      }
+      p.by[kind] = { by: "words and meaning", ...(lane.partly ? { meaningSkipped: lane.partly } : {}) }
+      const nearby = await nearEligible(store, account, query, messenger, lane.ranked, filters ? { text: filters } : {})
+      // One list per resource, as notes give theirs, so messages get no second vote against mail.
+      const fused = new Map<string, { item: SearchAllRecordItem; score: number }>()
+      byWords.forEach((item, rank) => {
+        fused.set(item.ref, { item, score: 1 / (RRF_K + rank + 1) })
+      })
+      nearby.forEach((hit, rank) => {
+        near(hit.locator, hit.cosine)
+        const held = fused.get(hit.locator)
+        if (held) held.item.foundBy = ["words", "meaning"]
+        const vote = 1 / (RRF_K + rank + 1)
+        // As in notes: a question's any-word list holds most of what meaning finds, so a second vote would bury the rest.
+        if (held && discovers) held.score = Math.max(held.score, vote)
+        else fused.set(hit.locator, { item: held?.item ?? itemOf(hit, ["meaning"]), score: (held?.score ?? 0) + vote })
+      })
+      return [...fused.values()].sort((a, b) => b.score - a.score).map(({ item }) => item)
+    }
+
     for (const resource of only) {
       try {
         if (resource === "notes") {
           const chosen = scope?.notes
-          const found = await searchNotes(store, request.text, {
+          const found = await searchNotes(store, text, {
             limit: depth,
             command,
             embedders,
@@ -418,13 +446,14 @@ export const searchAll = async (
             ...(request.timezone === undefined ? {} : { timezone: request.timezone }),
             ...(request.env === undefined ? {} : { env: request.env }),
           })
-          hasMore ||= found.has_more
-          notes = {
+          p.hasMore ||= found.has_more
+          p.notes = {
             by: found.by,
             ...(found.meaning_skipped === undefined ? {} : { meaningSkipped: found.meaning_skipped }),
           }
-          for (const hit of found.hits) if (hit.meaning_score !== undefined) cosines.set(hit.ref, hit.meaning_score)
-          lists.push(
+          for (const hit of found.hits) if (hit.meaning_score !== undefined) near(hit.ref, hit.meaning_score)
+          p.lists.set(
+            resource,
             found.hits.map((hit) => ({
               kind: hit.kind ?? "note",
               ref: hit.ref,
@@ -443,11 +472,11 @@ export const searchAll = async (
             ...(await store.notes.documentsAccounts()).map(({ id }) => id),
             ...[await store.notes.addedAccount()].flatMap((added) => (added ? [added.id] : [])),
           ]
-          accounts.push(...read.map((account) => ({ resource, provider: "notes", account })))
+          p.accounts.push(...read.map((account) => ({ resource, provider: "notes", account })))
         } else if (resource === "events") {
           const read = scope?.events ?? (await calendarAccounts(store))
           if (!read.length) continue
-          const found = await searchEvents(store, request.text, {
+          const found = await searchEvents(store, text, {
             limit: depth,
             accounts: read,
             embedders,
@@ -458,13 +487,14 @@ export const searchAll = async (
             ...(request.timezone === undefined ? {} : { timezone: request.timezone }),
             ...(request.signal === undefined ? {} : { signal: request.signal }),
           })
-          hasMore ||= found.has_more
-          events = {
+          p.hasMore ||= found.has_more
+          p.events = {
             by: found.by,
             ...(found.meaning_skipped === undefined ? {} : { meaningSkipped: found.meaning_skipped }),
           }
-          for (const hit of found.hits) if (hit.meaning_score !== undefined) cosines.set(hit.ref, hit.meaning_score)
-          lists.push(
+          for (const hit of found.hits) if (hit.meaning_score !== undefined) near(hit.ref, hit.meaning_score)
+          p.lists.set(
+            resource,
             found.hits.map((hit) => ({
               kind: "event",
               ref: hit.ref,
@@ -477,9 +507,9 @@ export const searchAll = async (
               foundBy: hit.found_by,
             })),
           )
-          accounts.push(...read.map(({ provider, account }) => ({ resource, provider, account })))
+          p.accounts.push(...read.map(({ provider, account }) => ({ resource, provider, account })))
         } else if (resource === "crm") {
-          const { words, anyWord } = titleWords(request.text)
+          const { words, anyWord } = titleWords(text)
           const chosen = scope?.crm
           const found = await store.deals.find({
             words,
@@ -488,8 +518,9 @@ export const searchAll = async (
             limit: Math.min(depth + 1, 500),
             ...(chosen === undefined ? {} : { accounts: chosen }),
           })
-          hasMore ||= found.length > depth
-          lists.push(
+          p.hasMore ||= found.length > depth
+          p.lists.set(
+            resource,
             found.slice(0, depth).map((deal) => ({
               kind: deal.kind,
               ref: deal.ref,
@@ -502,22 +533,22 @@ export const searchAll = async (
             })),
           )
           const read = chosen ?? [...(await crmAccounts(store)), { provider: "crm", account: INTERNAL_NOTES }]
-          for (const { provider, account } of read) accounts.push({ resource, provider, account })
+          for (const { provider, account } of read) p.accounts.push({ resource, provider, account })
         } else if (resource === "business") {
-          const { words, anyWord } = titleWords(request.text, BUSINESS_WORDS_ONLY)
+          const { words, anyWord } = titleWords(text, BUSINESS_WORDS_ONLY)
           const found = await searchBusiness(store, {
             words,
             anyWord: anyWord || discover,
             window: depth,
             accounts: scope?.business,
           })
-          hasMore ||= found.hasMore
-          lists.push(found.items)
-          for (const { provider, account } of found.read) accounts.push({ resource, provider, account })
+          p.hasMore ||= found.hasMore
+          p.lists.set(resource, found.items)
+          for (const { provider, account } of found.read) p.accounts.push({ resource, provider, account })
         } else if (resource === "meetings") {
           const found = await meetingLane(store, account, {
             // A question finds passages that hold some of its words, as every other source does.
-            text: (discover ? questionLookup(request.text) : undefined) ?? request.text,
+            text: (discover ? questionLookup(text) : undefined) ?? text,
             ...(discover ? { question: true } : {}),
             window: depth,
             ...(scope?.meetings === undefined ? {} : { accounts: scope.meetings }),
@@ -527,35 +558,67 @@ export const searchAll = async (
             ...(request.timezone === undefined ? {} : { timezone: request.timezone }),
             ...(request.signal === undefined ? {} : { signal: request.signal }),
           })
-          for (const one of found.skipped) skipped.push(one)
+          for (const one of found.skipped) p.skipped.push(one)
           if (!found.read.length) continue
-          hasMore ||= found.hasMore
-          meetings = found.coverage
-          lists.push(found.items)
-          for (const { provider, account } of found.read) accounts.push({ resource, provider, account })
-        } else lists.push(await messagesOf(resource))
-        searched.push(resource)
+          p.hasMore ||= found.hasMore
+          p.meetings = found.coverage
+          p.lists.set(resource, found.items)
+          for (const { provider, account } of found.read) p.accounts.push({ resource, provider, account })
+        } else p.lists.set(resource, await messagesOf(resource))
+        p.searched.push(resource)
       } catch (error) {
         if (!skippable(error)) throw error
-        skipped.push({ resource, code: error.code, reason: error.message, ...refusal(error, request.text) })
+        p.skipped.push({ resource, code: error.code, reason: error.message, ...refusal(error, text) })
       }
     }
+    return p
+  }
+
+  // Messages, notes and events all look up by meaning with the same model: loading it costs most of a second.
+  const embedders = runEmbedders()
+  let main: Awaited<ReturnType<typeof pass>>
+  const extra: Awaited<ReturnType<typeof pass>>[] = []
+  let rewritten: Awaited<NonNullable<typeof rewriting>> | undefined
+  try {
+    main = await pass(request.text)
+    rewritten = await rewriting
+    const { phrasings = [], keywords = [] } = rewritten?.rewrites ?? {}
+    const scope = fields ? ` ${fields}` : ""
+    const texts = [
+      ...phrasings.map((one) => plainQuery(one)),
+      ...(keywords.length ? [`(${keywords.map((word) => JSON.stringify(word)).join(" OR ")})`] : []),
+    ]
+    for (const text of texts) extra.push(await pass(`${text}${scope}`, true))
   } finally {
     await embedders.close()
   }
+  const { searched, accounts, notes, events, by, server, coverage, meetings } = main
+  const skipped = [...chosen.skipped, ...main.skipped]
+  const hasMore = main.hasMore
+  const lists = searched.flatMap((resource) => {
+    const own = main.lists.get(resource)
+    return own ? [fused([own, ...extra.map((one) => one.lists.get(resource) ?? [])])] : []
+  })
 
   let ordered = insidePeriodFirst(oneList(lists, cosines), period)
   let harder: HarderResult | undefined
-  if (request.harder) {
-    const asking = {
-      ...request.harder,
-      env: request.env ?? process.env,
-      now: request.now ?? Date.now(),
-      ...(command === undefined ? {} : { command }),
-    }
-    const done = await reorderHarder(request.text, ordered, { ...asking, laterPage: offset > 0 })
+  if (harderAsk) {
+    // The model reads the question as typed, not escaped for the query parser.
+    const done = await reorderHarder(asked.text, ordered, {
+      ...harderAsk,
+      laterPage: offset > 0,
+      ...(access ? { access } : {}),
+    })
     ordered = done.items
-    harder = done.harder
+    const rewrite = rewritten?.rewrite ?? (access?.ready ? notRewritten() : undefined)
+    harder = rewrite
+      ? {
+          ...done.harder,
+          cost_usd:
+            done.harder.cost_usd === null || rewrite.cost_usd === null ? null : done.harder.cost_usd + rewrite.cost_usd,
+          rewrite,
+        }
+      : done.harder
   }
   const more = hasMore || ordered.length > window
   const { backend: _backend, server: _server, harder: _harder, ...local } = asked
@@ -583,6 +646,19 @@ export const searchAll = async (
     ...(meetings === undefined ? {} : { meetings }),
     ...(harder === undefined ? {} : { harder }),
   }
+}
+
+/** One resource's hits for the question and for each rewrite, merged by rank; the question's alone stay as they are. */
+const fused = (lists: SearchAllItem[][]): SearchAllItem[] => {
+  if (lists.length === 1) return lists[0] as SearchAllItem[]
+  const score = new Map<string, { item: SearchAllItem; score: number }>()
+  for (const list of lists)
+    list.forEach((item, rank) => {
+      const key = hitKey(item)
+      const held = score.get(key)
+      score.set(key, { item: held?.item ?? item, score: (held?.score ?? 0) + 1 / (RRF_K + rank + 1) })
+    })
+  return [...score.values()].sort((a, b) => b.score - a.score).map(({ item }) => item)
 }
 
 /** Passages of one meeting share its `ref`, the reference evidence cites; each is still a hit of its own. */

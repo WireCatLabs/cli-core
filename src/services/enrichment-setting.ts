@@ -14,7 +14,8 @@ const DEFAULT_BASE_URLS: Record<EnrichmentProvider, string> = {
   anthropic: "https://api.anthropic.com",
 }
 
-const Setting = v.strictObject({
+/** A hosted model the owner chose: the provider, its model and, for an OpenAI-compatible API, its address. */
+export const MODEL_CHOICE = {
   provider: v.picklist(ENRICHMENT_PROVIDERS),
   model: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(200)),
   base_url: v.optional(
@@ -23,6 +24,10 @@ const Setting = v.strictObject({
       v.check((value) => endpoint(value), "use an HTTP/S endpoint without credentials, query or fragment"),
     ),
   ),
+}
+
+const Setting = v.strictObject({
+  ...MODEL_CHOICE,
   /** When the owner agreed that records go to this provider and endpoint; the setting exists only with it. */
   consented_at: v.pipe(v.string(), v.isoTimestamp()),
 })

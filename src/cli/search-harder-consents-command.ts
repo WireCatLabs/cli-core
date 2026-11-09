@@ -5,11 +5,17 @@ import type { AppIdentity } from "../ports/app.js"
 import { agentOf } from "../runs/run-context.js"
 import { keyLookup, keyVariable } from "../services/enrichment.js"
 import {
-  DEFAULT_HARDER_MODEL,
+  ENRICHMENT_PROVIDERS,
+  enrichmentEndpoint,
+  enrichmentPrice,
+  isEnrichmentProvider,
+  readEnrichmentSetting,
+} from "../services/enrichment-setting.js"
+import {
   HARDER_CANDIDATES,
   HARDER_CHARS,
-  HARDER_ENDPOINT,
-  HARDER_PROVIDER,
+  HARDER_MODELS,
+  type HarderSetting,
   readHarderSetting,
   writeHarderSetting,
 } from "../services/search-harder.js"
@@ -24,30 +30,47 @@ export interface HarderConsentsOptions {
   diagnostic: (line: string) => void
 }
 
-/** What the owner agrees to; a window can write the same text from the answer's fields. */
-export const harderConsentWording = (command: string, model: string): string =>
-  `\`${command} search all --harder\` sends the question and its first ${HARDER_CANDIDATES} hits (each one's title, ` +
-  `date and up to ${HARDER_CHARS} characters of its text) to ${HARDER_PROVIDER} (${new URL(HARDER_ENDPOINT).host}), ` +
-  `model ${model}, which puts the hits that answer it first. Only a search with --harder sends anything; one costs ` +
-  `about $0.0004 with claude-haiku-5-5 and adds 1 to 2 seconds. \`${command} models search-consents revoke\` turns it off.`
+type Choice = Pick<HarderSetting, "provider" | "model" | "base_url">
 
-const state = (app: AppIdentity, options: HarderConsentsOptions, model?: string) => {
+/** What the owner agrees to; a window can write the same text from the answer's fields. */
+export const harderConsentWording = (command: string, chosen: Choice): string =>
+  `\`${command} search all --harder\` sends the question to ${chosen.provider} ` +
+  `(${new URL(enrichmentEndpoint(chosen)).host}), model ${chosen.model}, which rewrites it for the search; then the ` +
+  `question and its first ${HARDER_CANDIDATES} hits (each one's title, date and up to ${HARDER_CHARS} characters of ` +
+  "its text), and the model puts the hits that answer it first. Only a search with --harder sends anything; with " +
+  `claude-haiku-5-5 one costs about $0.0004 and adds 1 to 3 seconds. ` +
+  `\`${command} models search-consents revoke\` turns it off.`
+
+const state = (app: AppIdentity, options: HarderConsentsOptions, given?: Choice) => {
   const env = options.env()
   const setting = readHarderSetting(env)
-  const found = keyLookup(
-    { env, app, ...(options.keyring ? { keyring: options.keyring } : {}) },
-    { provider: HARDER_PROVIDER },
-  )
-  const chosen = model ?? setting?.model ?? DEFAULT_HARDER_MODEL
+  // Enrichment's choice is only proposed: this consent is the owner's own, given here.
+  const enrichment = setting === undefined && given === undefined ? readEnrichmentSetting(env) : undefined
+  const chosen: Choice =
+    given ??
+    setting ??
+    (enrichment
+      ? {
+          provider: enrichment.provider,
+          model: enrichment.base_url === undefined ? HARDER_MODELS[enrichment.provider] : enrichment.model,
+          ...(enrichment.base_url === undefined ? {} : { base_url: enrichment.base_url }),
+        }
+      : { provider: "anthropic", model: HARDER_MODELS.anthropic })
+  const found = keyLookup({ env, app, ...(options.keyring ? { keyring: options.keyring } : {}) }, chosen)
+  const price = enrichmentPrice(chosen.provider, chosen.model, chosen.base_url)
   return {
     on: setting !== undefined,
-    provider: HARDER_PROVIDER,
-    model: chosen,
-    endpoint: HARDER_ENDPOINT,
+    provider: chosen.provider,
+    model: chosen.model,
+    endpoint: enrichmentEndpoint(chosen),
+    ...(enrichment ? { proposed_from: "enrichment" } : {}),
     consented_at: setting?.consented_at ?? null,
     candidates: HARDER_CANDIDATES,
     chars_per_hit: HARDER_CHARS,
-    key: { present: found !== undefined, source: found?.source ?? null, env_var: keyVariable(HARDER_PROVIDER) },
+    usd_per_million: price
+      ? { input: Math.round(price.input * 1e8) / 100, output: Math.round(price.output * 1e8) / 100 }
+      : null,
+    key: { present: found !== undefined, source: found?.source ?? null, env_var: keyVariable(chosen.provider) },
     consent: harderConsentWording(app.command, chosen),
     off_command: `${app.command} models search-consents revoke`,
   }
@@ -69,30 +92,48 @@ export const harderConsentsCommand = (app: AppIdentity, options: HarderConsentsO
   grantsAuthority(
     annotate(consents.command("set"), {
       effects: LOCAL_WRITE,
-      examples: [`${app.command} models search-consents set anthropic --yes`],
+      examples: [
+        `${app.command} models search-consents set anthropic --yes`,
+        `${app.command} models search-consents set openai --base-url https://openrouter.ai/api/v1 --model deepseek/deepseek-chat`,
+      ],
     }),
   )
     .description("allow search all --harder to call the model; without --yes, say what it sends and change nothing")
-    .argument("<provider>", "the provider that receives the question and hits: anthropic")
-    .option("--model <model>", "the provider's model name", DEFAULT_HARDER_MODEL)
+    .argument("<provider>", `the provider that receives the question and hits: ${ENRICHMENT_PROVIDERS.join(" or ")}`)
+    .option(
+      "--model <model>",
+      `the provider's model; ${HARDER_MODELS.anthropic} or ${HARDER_MODELS.openai} if left out`,
+    )
+    .option("--base-url <url>", "the address of an OpenAI-compatible model API (OpenRouter…); needs --model")
     .option("--yes", "agree that a --harder search sends its question and hits, and allow it")
-    .action(function (this: Command, provider: string, given: { model: string; yes?: boolean }) {
-      if (provider !== HARDER_PROVIDER)
-        throw new CliError("validation_error", `search all --harder calls ${HARDER_PROVIDER} only, not ${provider}`)
+    .action(function (this: Command, provider: string, given: { model?: string; baseUrl?: string; yes?: boolean }) {
+      if (!isEnrichmentProvider(provider))
+        throw new CliError(
+          "validation_error",
+          `search all --harder calls ${ENRICHMENT_PROVIDERS.join(" or ")}, not ${provider}`,
+        )
+      // Another API's models have other names: a default from this list would be a guess.
+      if (given.baseUrl !== undefined && given.model === undefined)
+        throw new CliError("validation_error", "--base-url needs --model: name the model that API serves")
       const env = options.env()
       // An agent that turned this on would decide for the owner that his records may leave the machine.
       if (agentOf(env) && given.yes)
         throw new CliError("permission_error", "only the owner allows search all --harder, not an agent", {
           reason: "search-harder.owner-only",
         })
+      const chosen: Choice = {
+        provider,
+        model: given.model ?? HARDER_MODELS[provider],
+        ...(given.baseUrl === undefined ? {} : { base_url: given.baseUrl }),
+      }
       if (!given.yes) {
-        const now = state(app, options, given.model)
+        const now = state(app, options, chosen)
         options.diagnostic(`${now.consent}\nNothing changed — add --yes to allow it.`)
         options.output(itemOf({ ...now, changed: false }), this)
         return
       }
-      writeHarderSetting(env, { provider: HARDER_PROVIDER, model: given.model, consented_at: new Date().toISOString() })
-      options.diagnostic(`search all --harder may now call ${HARDER_PROVIDER} ${given.model}`)
+      writeHarderSetting(env, { ...chosen, consented_at: new Date().toISOString() })
+      options.diagnostic(`search all --harder may now call ${provider} ${chosen.model}`)
       options.output(itemOf({ ...state(app, options), changed: true }), this)
     })
   grantsAuthority(
