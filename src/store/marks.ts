@@ -10,6 +10,7 @@ import { refuseOwnerStoreInTests } from "./path.js"
  */
 export const damageMarkPath = (store: string): string => `${store}.damaged.json`
 export const healthMarkPath = (store: string): string => `${store}.health.json`
+export const journalMarkPath = (store: string): string => `${store}.journal.json`
 
 /** A run saw SQLite say the store is damaged. Every writable open refuses while it names the file in place. */
 export interface DamageMark {
@@ -31,6 +32,16 @@ export interface HealthMark {
   cli: string
   cli_version?: string
   last_ok_at: string | null
+}
+
+/**
+ * The store's `-wal` file went away or was swapped while a run held the store open, or a `-shm` stood without it at
+ * open: another program deleted or replaced the journal. Evidence for the damage report, not a refusal.
+ */
+export interface JournalMark {
+  at: string
+  command: string
+  seen: "missing" | "replaced" | "shm-without-wal"
 }
 
 const inodeOf = (store: string) => statSync(store, { throwIfNoEntry: false })?.ino
@@ -122,6 +133,26 @@ export const refuseDamagedStore = (store: string, cli?: string): void => {
   )
 }
 
+/** Keeps the first sighting; never throws. */
+export const markJournalLost = (
+  store: string,
+  { seen, command, now = Date.now }: { seen: JournalMark["seen"]; command: string; now?: () => number },
+): void => {
+  if (ownerStoreInTests(store)) return
+  const mark: JournalMark = { at: new Date(now()).toISOString(), command, seen }
+  try {
+    writeFileSync(journalMarkPath(store), `${JSON.stringify(mark, null, 2)}\n`, { flag: "wx", mode: 0o600 })
+  } catch {}
+}
+
+export const readJournalMark = (store: string): JournalMark | null => {
+  try {
+    return readJson<JournalMark>(journalMarkPath(store))
+  } catch {
+    return null
+  }
+}
+
 export const readHealthMark = (store: string): HealthMark | null => {
   try {
     return readJson<HealthMark>(healthMarkPath(store))
@@ -132,7 +163,8 @@ export const readHealthMark = (store: string): HealthMark | null => {
 
 /**
  * Records a deep check of the store. One that passed also removes the damage mark: the file reads whole. Returns the
- * mark it replaced, whose `last_ok_at` is the last known good before this check, and the damage mark it removed.
+ * mark it replaced, whose `last_ok_at` is the last known good before this check, and the damage mark it removed. A pass
+ * also removes the journal mark: whatever the lost journal held is gone or was never needed.
  */
 export const recordDeepCheck = (
   store: string,
@@ -161,5 +193,6 @@ export const recordDeepCheck = (
     writeFileSync(healthMarkPath(store), `${JSON.stringify(mark, null, 2)}\n`, { mode: 0o600 })
   } catch {}
   if (cleared) clearDamageMark(store)
+  if (health.ok) rmSync(journalMarkPath(store), { force: true })
   return { previous, cleared }
 }

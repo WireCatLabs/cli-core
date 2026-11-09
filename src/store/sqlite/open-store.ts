@@ -2,6 +2,7 @@ import { accessSync, constants, existsSync, mkdirSync, statSync, writeFileSync }
 import { dirname } from "node:path"
 import { CliError } from "@wirecat/cli-base"
 import { DEFAULT_DECISION_POLICY, type DecisionPolicy } from "../decisions.js"
+import { noteShmWithoutWal, watchJournal } from "../journal.js"
 import { refuseDamagedStore } from "../marks.js"
 import { migrate } from "../migrations.js"
 import { storeCapable } from "../open.js"
@@ -106,11 +107,13 @@ export const openStoreContext = async (options: StoreOptions = {}): Promise<Stor
   } else {
     createWritable(file)
     refuseDamagedStore(file, command)
+    noteShmWithoutWal(file, command ?? "unknown")
   }
   const opened = readOnly ? await openReadable(file, options) : await openSqlite(file, { readOnly })
   const database = opened.database
   try {
     if (!readOnly) {
+      watchJournal(database, file, command ?? "unknown")
       const notice = migrate(database, {
         now,
         command,
