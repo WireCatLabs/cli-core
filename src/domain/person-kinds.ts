@@ -1,5 +1,5 @@
 /** What a person in the store is, for a list that shows the useful ones and keeps the noise apart. */
-export const PERSON_KINDS = ["person", "organization", "automated", "unsorted"] as const
+export const PERSON_KINDS = ["person", "organization", "automated", "stranger", "unsorted"] as const
 export type PersonKind = (typeof PERSON_KINDS)[number]
 
 /** What decided a kind, besides the ties that make someone a `person`. */

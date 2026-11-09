@@ -119,7 +119,8 @@ export interface PeopleStore extends AccountPeople {
   /**
    * People of one kind with their shown name, contact, interactions and ties, a page at a time. `person` (the default)
    * is the owner, people added by hand, task assignees, and named people with a tie (a one-to-one chat, a small group,
-   * mail the owner wrote, a meeting, a CRM, the address book); `automated`, `organization` and `unsorted` hold the rest.
+   * mail the owner wrote, a meeting, a CRM, the address book); `automated`, `organization`, `stranger` (a
+   * name, no tie) and `unsorted` (nothing to show as a name) hold the rest.
    */
   list(options: PeopleListOptions): Promise<PeopleList>
   /** People whose names start like the typed one, the same name first: for a form that adds a person. */

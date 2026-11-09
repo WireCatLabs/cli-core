@@ -233,7 +233,7 @@ const kindOf = (
   ]
   if (organization.length > 0) return { kind: "organization", signals: organization }
   if (!isReadable(shown)) return { kind: "unsorted", signals: ["no-name"] }
-  if (ties.length === 0) return { kind: "unsorted", signals: ["no-tie"] }
+  if (ties.length === 0) return { kind: "stranger", signals: ["no-tie"] }
   return { kind: "person", signals: ties }
 }
 

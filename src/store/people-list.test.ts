@@ -80,11 +80,16 @@ describe("people's ties to the owner", () => {
 
     expect(await shownOf(store)).toEqual({ Dina: ["chat"], Gala: ["small-group"] })
     expect(listed.items[0]).toMatchObject({ owner: true, ties: ["owner", "chat", "small-group"] })
-    expect(listed).toMatchObject({ total: 3, hasMore: false, counts: { person: 3, unsorted: 2 } })
+    expect(listed).toMatchObject({ total: 3, hasMore: false })
+    expect(listed.counts).toEqual({ person: 3, organization: 0, automated: 0, stranger: 2, unsorted: 0 })
+    expect((await store.people.list({ limit: 100, kind: "stranger" })).items.map(({ name }) => name)).toEqual([
+      "Hugo",
+      "Ugo",
+    ])
     const everyone = await store.people.list({ limit: 100, kind: "all" })
     expect(everyone.items.find(({ displayName }) => displayName === "Hugo")).toMatchObject({
       ties: [],
-      kind: "unsorted",
+      kind: "stranger",
       kindSignals: ["no-tie"],
     })
     expect(everyone.total).toBe(5)
@@ -189,7 +194,7 @@ describe("people's ties to the owner", () => {
     const listed = await store.people.list({ limit: 100 })
 
     expect(listed.items.filter(({ owner }) => !owner).map(({ ties }) => ties)).toEqual([["chat"]])
-    expect(listed.counts.unsorted).toBe(0)
+    expect(listed.counts.stranger).toBe(0)
   })
 })
 
@@ -340,14 +345,15 @@ describe("the kind of a person", () => {
       "Acme LLC": ["person", "added"],
       "!": ["unsorted", "no-name"],
       "@kkkslav": ["person", "chat"],
-      Stranger: ["unsorted", "no-tie"],
+      Stranger: ["stranger", "no-tie"],
       "Front Desk": ["organization", "organization"],
     })
     expect((await store.people.list({ limit: 1, kind: "unsorted" })).counts).toEqual({
       person: 3,
       organization: 1,
       automated: 0,
-      unsorted: 2,
+      stranger: 1,
+      unsorted: 1,
     })
   })
 
