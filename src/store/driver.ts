@@ -56,10 +56,16 @@ export type OpenDatabase = (path: string) => CacheDatabase
  * a writer that finds the database busy fails immediately instead of waiting the moment out.
  *
  * `foreign_keys` is off by default in SQLite, which surprises everyone once.
+ *
+ * Without `journal_size_limit` the `-wal` file keeps the size of the biggest write it ever held: a 106k-row CRM
+ * sync left 2.2 GB behind. With it, SQLite cuts the file back to the limit each time a checkpoint resets it.
  */
+export const JOURNAL_SIZE_LIMIT = 64 * 1024 * 1024
+
 export const PRAGMAS = `
   PRAGMA busy_timeout = 5000;
   PRAGMA journal_mode = WAL;
+  PRAGMA journal_size_limit = ${JOURNAL_SIZE_LIMIT};
   PRAGMA foreign_keys = ON;
 `
 

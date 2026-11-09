@@ -3,7 +3,9 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
 import type { CacheDatabase } from "./driver.js"
+import { JOURNAL_SIZE_LIMIT } from "./driver.js"
 import { openCache } from "./open.js"
+import { openSqlite } from "./sqlite/open.js"
 
 const open = async () => {
   const database = await openCache(join(mkdtempSync(join(tmpdir(), "max-cache-")), "cache.db"))
@@ -45,6 +47,14 @@ describe("the SQLite seam", () => {
   it("**is in write-ahead mode**, so a reader never waits for a writer", async () => {
     const database = await open()
     expect(database.prepare("PRAGMA journal_mode").get()).toEqual({ journal_mode: "wal" })
+  })
+
+  it("**caps the write-ahead file**, so one big write does not leave it at its peak size", async () => {
+    const limit = { journal_size_limit: JOURNAL_SIZE_LIMIT }
+    expect((await open()).prepare("PRAGMA journal_size_limit").get()).toEqual(limit)
+    const { database } = await openSqlite(join(mkdtempSync(join(tmpdir(), "store-")), "store.db"))
+    opened.push(database)
+    expect(database.prepare("PRAGMA journal_size_limit").get()).toEqual(limit)
   })
 
   it("reports how many rows a write changed, which is what the fetch lease rests on", async () => {

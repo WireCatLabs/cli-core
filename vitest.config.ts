@@ -34,6 +34,8 @@ export default defineConfig({
         // A child process run from dist; `pnpm check:dist` drives it under Node and Bun.
         "src/embeddings/child.ts",
         "src/embeddings/process.ts",
+        // Reroutes the process's own streams; command-server.test.ts drives it in a spawned CLI.
+        "src/cli/command-server-entry.ts",
         // stdin, argv and an exit code around parityProblems, which the parity tests cover.
         "src/parity/bin.ts",
       ],
