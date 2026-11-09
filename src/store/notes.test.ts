@@ -167,6 +167,33 @@ describe("the notes store", () => {
   })
 })
 
+describe("a file's own links", () => {
+  it("are reported by the file's account, so a Drive owner never waits for review", async () => {
+    const store = await open(fresh())
+    const drive = { provider: "google-drive", account: "synthetic@example.com" }
+    const account = await store.notes.documentsAccount(drive, true)
+    const { note } = await store.notes.saveFileNote({
+      folderId: account?.id ?? "",
+      path: "file-1",
+      title: "Plan",
+      text: "plan",
+    })
+    await store.accounts.saveAccount(drive, { name: "Google Drive" })
+    await store.people.savePeople(drive, [{ id: "g-1", name: "Alex Example" }])
+    const person = await store.people.personOf({ provider: "google-drive", id: "g-1" })
+    const [owner, text] = await store.notes.replaceFileLinks(note.id, [
+      { kind: "related-to", to: `person:${person?.uid}`, role: "owner", confirmed: false },
+      { kind: "links-to", targetText: "Elsewhere" },
+    ])
+    expect(owner?.accountId).toBeDefined()
+    expect(text?.accountId).toBeUndefined()
+    expect((await store.knowledge.listRelations({ standing: "proposed" })).items).toEqual([])
+    expect((await store.knowledge.listRelations({ standing: "reported" })).items).toEqual([
+      expect.objectContaining({ from: `document:${note.id}`, role: "owner" }),
+    ])
+  })
+})
+
 describe("people named in notes, over rows written directly", () => {
   it("resolves a written name to the one person holding it, and leaves a shared name open", async () => {
     const path = fresh()
