@@ -618,8 +618,8 @@ it by editing that line in a PR of its own, merged before the migration.
    version 1, with every migration and keeps its rows. `src/store/sqlite/schema.test.ts` opens a new store and compares
    every table and column with [`schema.md`](../storage/schema.md), and compiles every trigger:
    change the page with the schema.
-9. **CHANGELOG**: an entry under `## Unreleased` that names the store version, as "Poll votes in the
-   store (store version 20)" does.
+9. **CHANGELOG**: an entry in the pull request's `changes/<branch>.md` fragment that names the store version, as
+   "Poll votes in the store (store version 20)" does.
 
 A migration is frozen once released: fix a mistake with the next version, never by editing a folder.
 `upgrade.test.ts` pins version 1 by hash, and `bin/regen-initial-migration` refuses once a `v*` tag holds it.

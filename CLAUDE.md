@@ -21,8 +21,9 @@ vulnerabilities are reported as the [security policy](SECURITY.md) says.
 3. **Other sessions work here at the same time.** Work in a worktree off `origin/main`, rebase before
    pushing, and take a migration number in [COORDINATION.md](docs/dev/COORDINATION.md#store-migrations) before writing it.
 4. **A change reaches tg-cli and max-cli only through a release.** Both pin an exact version.
-5. **Release when a consumer needs the merged code, at any time** ([WC-REL-8](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/releases.md#wc-rel-8--any-package-may-release-at-any-time)) —
-   [README, "How often, and what may break"](docs/REFERENCE.md#how-often-and-what-may-break).
+5. **Merge when green, release in batches** ([COORDINATION.md, "Releases"](docs/dev/COORDINATION.md#releases)).
+   Squash merge your green pull request yourself and comment `merged #NNN` on
+   [issue #849](https://github.com/WireCatLabs/cli-core/issues/849); never release only for your own pull request.
    `bin/release` publishes the next free version through GitHub; a change that may break a
    caller goes under "Changed — may break callers" in the changelog.
 
@@ -44,9 +45,20 @@ date — and do the removals in one batch after the owner confirms. Never kill a
 
 Conventional commits. The pre-commit hook checks staged lint and secrets; no other local checks are required by default.
 
-A branch off `main`, in a worktree, and a pull request. A user-visible change gets a line under
-`## Unreleased` in [`CHANGELOG.md`](CHANGELOG.md). `bin/release` publishes; when the version is
-already taken it moves to the next free one and renames the changelog heading with it.
+A branch off `main`, in a worktree, and a pull request. A user-visible change gets a changelog fragment: a new file
+`changes/<branch>.md` (lower case, `/` as `-`) with one or more of the changelog's `###` headings and the entries
+under them, written as they will read in [`CHANGELOG.md`](CHANGELOG.md), with links relative to `changes/`
+(`../docs/…`). Do not edit `## Unreleased` in `CHANGELOG.md`: every open pull request edits the same lines there and
+conflicts at each merge. `pnpm docs:check` checks the fragments, and a breaking title (`feat!:`) fails the changelog
+guard without one. `bin/release` collects them into the version's section, grouped by heading, and deletes them in
+the release pull request; when the version is already taken it moves to the next free one and renames the changelog
+heading with it.
+
+```md
+### Fixed
+
+- **`store recover run` names what it could not check.** Why it matters and what a caller does about it.
+```
 
 ## Development check budget
 
@@ -58,9 +70,9 @@ on two runners with the coverage floor checked on their merged report, build, `d
 dist checks, Bun, old Node, the SQLite restart and parity, which builds tg-cli, max-cli, whatsapp-cli and
 cli-template against the branch. The security checks (`security.yml`) run CodeQL, zizmor and gitleaks; CodeQL
 analyses python, c-cpp and java-kotlin only when a file of theirs changes.
-A pull request that changes only `CHANGELOG.md` and the version against a `main` already proven green (bin/release's
-fold and version pull requests) runs only `docs:check` and the changelog shape test, and reports the other required
-checks as passed ([`docs/dev/TESTING.md`](docs/dev/TESTING.md)). The same `ci.yml` runs again in full on each merge
-to `main` (no publishing).
+A pull request that changes only `CHANGELOG.md`, the `changes/` fragments and the version against a `main` already
+proven green (bin/release's fold and version pull requests) runs only `docs:check` and the changelog shape tests,
+and reports the other required checks as passed ([`docs/dev/TESTING.md`](docs/dev/TESTING.md)). The same `ci.yml`
+runs again in full on each merge to `main` (no publishing).
 Browser and platform suites run for releases, explicit manual validation, and monthly nonpublishing validation. See the
 [shared policy](https://github.com/WireCatLabs/community/blob/main/standards/README.md#ci-and-hooks).

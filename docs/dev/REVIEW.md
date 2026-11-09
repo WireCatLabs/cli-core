@@ -49,8 +49,8 @@ design guidance or our policy; record justified deviations instead of claiming b
    it) in the next cli-core release; `pnpm parity:check` is green in the CLI.
 4. **Tests.** A test drives the new behaviour through the command, and a failure path is tested;
    max-cli's test matrix lists every new command and option.
-5. **Changelog.** An entry under `## Unreleased` with the fixed headings, saying what changed for a
-   user or a caller and what to do if it breaks them; no internal ids.
+5. **Changelog.** A fragment `changes/<branch>.md` with the fixed headings, saying what changed for a
+   user or a caller and what to do if it breaks them; no internal ids. Not an edit under `## Unreleased`.
 6. **Safety.** Nothing sends, marks read or deletes unless the command asked for it; in machine
    mode stdout carries data alone; the process exits on every path; no message, token or phone
    number reaches a log, a fixture or a document.
