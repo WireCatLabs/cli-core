@@ -4,6 +4,7 @@ import { join } from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
 import type { EntryInput, EventStore } from "../meetings/index.js"
 import { type MessageStore, openStore } from "../store/store.js"
+import * as calendar from "./index.js"
 import { eventsAnswer, eventsFilter, peopleAnswer } from "./reads.js"
 import { memoryEventStore } from "./testing/index.js"
 
@@ -158,4 +159,43 @@ describe("people list", () => {
     const all = await peopleAnswer(store, accountId, { filter: { ...filter, to: Date.UTC(2026, 10, 2, 16) } })
     expect(all).not.toHaveProperty("meta")
   })
+})
+
+it("lists the events of several accounts through the package's calendar entry, as a cross-account list does", async () => {
+  const store = memoryEventStore()
+  for (const [accountId, title] of [
+    [1, "work call"],
+    [2, "phone call"],
+  ] as const) {
+    const [held] = await store.saveCalendars(
+      accountId,
+      [
+        {
+          externalId: `c${accountId}`,
+          title: "C",
+          timezone: "UTC",
+          accessRole: "owner",
+          primary: true,
+          syncByDefault: true,
+        },
+      ],
+      0,
+    )
+    await store.saveEntries(held?.id ?? 0, [timed("2026-11-02T09:00:00Z", title)], 0)
+  }
+  expect(calendar.EVENT_TYPES).toContain("call")
+  expect(calendar.EVENTS_QUERY.entity).toBe("event")
+  const filter = await calendar.eventsFilter("starts_at:2026-11-02", {
+    store,
+    accountId: 1,
+    accountIds: [1, 2],
+    zone: "UTC",
+    now: 0,
+  })
+  const answer = await calendar.eventsAnswer(store, filter)
+  expect(answer.items.map(({ title }) => title).sort()).toEqual(["phone call", "work call"])
+  const first = answer.items.find(({ title }) => title === "work call")
+  const shown = await calendar.eventAnswer(await calendar.eventOf(store, 1, Number(first?.id)))
+  expect(shown.ref).toBe(`event:${first?.id}`)
+  expect(typeof calendar.sourceAccounts).toBe("function")
 })
