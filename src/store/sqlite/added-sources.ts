@@ -12,6 +12,7 @@ import {
   documentOf,
   folderOf,
   insertLink,
+  keepRevision,
   type Note,
   type NoteFolder,
   pathParts,
@@ -46,10 +47,16 @@ export interface AddedSourceInput {
   keepCopy?: { path: string }
   metadata?: DocumentMetadata
   sections?: Section[]
+  /**
+   * What names it where it came from, `<namespace>:<id>` (`google-drive:<fileId>`). A source saved again under the
+   * same key is that source: changed text becomes its next revision, so what cites it is reviewed, never a second
+   * copy. Without a key a source is named by its content.
+   */
+  sourceKey?: string
 }
 
 /** What names an added source: enough to find it before anything is written. */
-export type AddedSourceContent = Pick<AddedSourceInput, "kind" | "text" | "url" | "bytes">
+export type AddedSourceContent = Pick<AddedSourceInput, "kind" | "text" | "url" | "bytes" | "sourceKey">
 
 /** The part of `store.notes` that keeps the sources added by hand. */
 export interface AddedSources {
@@ -83,6 +90,11 @@ export interface AddedSource {
   duplicateOf: string | null
   /** What is kept of the source: its text, or its text and a copy; `null` for a duplicate. */
   kept: "text" | "copy" | null
+  /**
+   * Whether its text was written now: a new source, a revived one, or a new revision under its source key. Optional
+   * because a host store that wraps this one (drive-cli) may not report it; absent means not reported.
+   */
+  changed?: boolean
   /** Every subject the document is about now, the ones linked before included. */
   subjects: string[]
 }
@@ -106,9 +118,23 @@ type Row = Record<string, unknown>
 
 const sha256 = (value: Uint8Array | string) => createHash("sha256").update(value).digest("hex")
 
+// `sha256:` is the content's own name, so no key may take it.
+const SOURCE_KEY = /^(?!sha256:)[a-z][a-z0-9-]{0,39}:[A-Za-z0-9._~-]{1,200}$/
+
+const sourceKeyOf = (key: string) => {
+  if (!SOURCE_KEY.test(key))
+    throw new CliError(
+      "validation_error",
+      "a source key is <namespace>:<id>: a lower-case namespace other than sha256, then letters, digits, . _ ~ or -",
+      { param: "sourceKey" },
+    )
+  return key
+}
+
 /**
- * The key an added source is stored under, `sha256:<hash>` (a file's bytes; pasted text or a page by its normalized
- * text, or its address when it has none), and every hash a folder or Drive document of the same content may carry.
+ * The key an added source is stored under: its source key, else `sha256:<hash>` (a file's bytes; pasted text or a page
+ * by its normalized text, or its address when it has none), and every hash a folder or Drive document of the same
+ * content may carry.
  */
 export const addedSourceKeyOf = (
   content: AddedSourceContent,
@@ -123,7 +149,8 @@ export const addedSourceKeyOf = (
   const hash = kind === "file" ? sha256(content.bytes as Uint8Array) : sha256(normalized || (url as string))
   // Drive keeps the sha256 of the text it exported, as is: pasted text or a page with that text is that file.
   const hashes = [...new Set(kind === "file" || !text ? [hash] : [hash, sha256(content.text)])]
-  return { externalId: `sha256:${hash}`, hash, hashes }
+  const externalId = content.sourceKey === undefined ? `sha256:${hash}` : sourceKeyOf(content.sourceKey)
+  return { externalId, hash, hashes }
 }
 
 /** The input checked. */
@@ -297,6 +324,33 @@ export const addedSourcesOver = (context: StoreContext): AddedSources => {
         const own = ownRow(source.externalId)
         if (own !== undefined && own.deleted_at == null) {
           const id = Number(own.id)
+          const revised = input.sourceKey !== undefined && own.content_hash !== source.hash
+          if (revised) {
+            keepRevision(database, own, at)
+            database
+              .prepare(
+                "UPDATE documents SET kind = ?, title = ?, file_name = ?, extension = ?, url = ?, mime = ?, size = ?, " +
+                  "content_hash = ?, body = ?, extraction = ?, metadata = ?, language = ?, revision = revision + 1, " +
+                  "updated_at = ? WHERE id = ?",
+              )
+              .run(
+                source.kind,
+                source.title,
+                source.fileName,
+                source.extension,
+                source.url,
+                input.mime ?? null,
+                input.size ?? input.bytes?.byteLength ?? null,
+                source.hash,
+                source.text,
+                source.read === "extracted" ? "text" : "none",
+                metadata,
+                languageOf(input.metadata),
+                at,
+                id,
+              )
+            placeFile(id, at, source.fileName ?? source.title ?? source.externalId)
+          }
           if (source.copy !== null && own.storage !== "copy")
             database
               .prepare("UPDATE documents SET storage = 'copy', local_path = ?, updated_at = ? WHERE id = ?")
@@ -307,6 +361,7 @@ export const addedSourcesOver = (context: StoreContext): AddedSources => {
             created: false,
             duplicateOf: null,
             kept,
+            changed: revised,
             subjects: about(id, subjects, input.by),
           }
         }
@@ -314,7 +369,7 @@ export const addedSourcesOver = (context: StoreContext): AddedSources => {
         if (duplicate !== undefined) {
           const linked = about(duplicate, subjects, input.by)
           const note = documentAt(duplicate)
-          return { note, created: false, duplicateOf: note.ref, kept: null, subjects: linked }
+          return { note, created: false, duplicateOf: note.ref, kept: null, changed: false, subjects: linked }
         }
         const values = [
           source.kind,
@@ -367,6 +422,7 @@ export const addedSourcesOver = (context: StoreContext): AddedSources => {
           created: !own,
           duplicateOf: null,
           kept: source.copy === null ? "text" : "copy",
+          changed: true,
           subjects: about(id, subjects, input.by),
         }
       })

@@ -213,6 +213,15 @@ const optionalIso = (value: unknown) => (value == null ? null : iso(value))
 /** What a link's written target is matched by: case, accents and a leading `@` do not count. */
 export const targetKey = (text: string): string => fold(text).trim().replace(/^@/, "")
 
+/**
+ * Keeps a document's text under its current revision before the caller writes the new text with `revision + 1`, so
+ * a citation reads back the words it cited and the source check sees the change.
+ */
+export const keepRevision = (database: CacheDatabase, row: Row, at: number) =>
+  database
+    .prepare("INSERT INTO document_revisions (document_id, body, revision, created_at) VALUES (?, ?, ?, ?)")
+    .run(Number(row.id), String(row.body ?? ""), Number(row.revision), at)
+
 export const documentOf = (row: Row): Note => ({
   id: String(row.id),
   ref: `document:${row.id}`,
@@ -663,10 +672,7 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
           (found.content_hash ?? null) === hash &&
           found.deleted_at == null
         if (!same) {
-          if ((found.body ?? "") !== text)
-            database
-              .prepare("INSERT INTO document_revisions (document_id, body, revision, created_at) VALUES (?, ?, ?, ?)")
-              .run(id, String(found.body ?? ""), Number(found.revision), at)
+          if ((found.body ?? "") !== text) keepRevision(database, found, at)
           database
             .prepare(
               "UPDATE documents SET title = ?, body = ?, front_matter = ?, content_hash = ?, metadata = ?, language = ?, " +
@@ -891,7 +897,9 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
       const pair = (reference: string | undefined) => {
         if (reference === undefined) return { known: true, type: null, id: null }
         const thing = thingOf(database, reference)
-        return thing ? { known: true, type: thing.type, id: thing.id } : { known: false, type: null, id: null }
+        return thing
+          ? { known: true, type: thing.type, id: idsOf(database, thing.type, thing.id) }
+          : { known: false, type: null, id: null }
       }
       const from = pair(options.from)
       const to = pair(options.to)
@@ -905,7 +913,8 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
       ]
       return database
         .prepare(
-          "SELECT * FROM links WHERE (? IS NULL OR (from_type = ? AND from_id = ?)) AND (? IS NULL OR (to_type = ? AND to_id = ?)) " +
+          "SELECT * FROM links WHERE (? IS NULL OR (from_type = ? AND from_id IN (SELECT value FROM json_each(?)))) " +
+            "AND (? IS NULL OR (to_type = ? AND to_id IN (SELECT value FROM json_each(?)))) " +
             `AND (? = 0 OR to_id IS NULL)${filters.map(({ sql }) => ` AND (${sql})`).join("")} ORDER BY created_at, id LIMIT 5000`,
         )
         .all(

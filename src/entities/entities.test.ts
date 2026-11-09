@@ -388,9 +388,13 @@ const samples: Record<EntityName, unknown> = {
       limits: { items: 10, bytes: 1024 },
       coverage: {
         waiting: { ...sectionCoverage, rule: "their message is the newest the store holds in a one-to-one chat" },
-        tasks: { ...sectionCoverage, selection: "open, assigned to them in any role", accounts: [] },
-        facts: { ...sectionCoverage, selection: "accepted, about them or a project they are a member of" },
-        notes: { ...sectionCoverage, selection: "written by you, about them" },
+        tasks: { ...sectionCoverage, selection: "open, assigned to them in any role", accounts: [], scopes: ["work"] },
+        facts: {
+          ...sectionCoverage,
+          selection: "accepted, about them or a project they are a member of",
+          scopes: ["work"],
+        },
+        notes: { ...sectionCoverage, selection: "written by you, about them", scopes: ["work"] },
         meetings: { ...sectionCoverage, read: "every account of the store that saw them", accounts: [], pending: 0 },
       },
     },

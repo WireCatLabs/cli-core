@@ -316,3 +316,27 @@ export const matchMeetingText = (
   }
   return check(tree)
 }
+
+/**
+ * The words of `text` the query's positive terms matched, as the text spells them: by the typed beginning, by stem or
+ * as a garbled spelling. A word only under NOT is never one, so an excerpt centred on these shows why it is a hit.
+ */
+export const matchedMeetingWords = (tree: Resolved, text: string, stemmer: Stemmer | null): string[] => {
+  const tokens: string[] = normalize(text).match(/[\p{L}\p{N}]+/gu) ?? []
+  let stemmed: { word: string; stem: string }[] | undefined
+  const stemsOf = () => (stemmed ??= stemmer ? stemmer.explain(meetingStemmableText(text)) : [])
+  const found = new Set<string>()
+  const word = (term: Word) => {
+    for (const token of tokens)
+      if (term.whole ? token === term.literal : token.startsWith(term.literal)) found.add(token)
+    for (const { word, stem } of stemsOf()) if (term.stems.includes(stem)) found.add(word)
+    for (const widened of term.widened) if (tokens.includes(widened)) found.add(widened)
+  }
+  const visit = (node: Resolved): void => {
+    if (node.kind === "speaker") return
+    if (node.kind === "boolean") for (const part of [...node.must, ...node.should]) visit(part)
+    else for (const term of node.words) word(term)
+  }
+  visit(tree)
+  return [...found]
+}

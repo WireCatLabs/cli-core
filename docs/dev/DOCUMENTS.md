@@ -68,14 +68,18 @@ and subjects).
 
 | Column | Holds |
 | --- | --- |
-| `external_id` | `sha256:<hash>`: of a file's bytes; of the normalized text (NFC, whitespace folded) of pasted text or a page; of a page's address when it has no text |
+| `external_id` | the caller's `sourceKey` when it gives one (`google-drive:<fileId>`); else `sha256:<hash>`: of a file's bytes; of the normalized text (NFC, whitespace folded) of pasted text or a page; of a page's address when it has no text |
 | `content_hash` | the same hash, bare hex, as folder imports keep it |
 | `kind` | `text`, `file` or `page` |
 | `storage` | `text`, only the text; `copy` only when the caller passed `keepCopy` with the path of the copy it keeps (`local_path`) |
 | `extraction` | `text`, or `none` for a source read as `no-text` |
 
 1. **A repeat is the same document.** The unique key `(account_id, external_id)` finds it; only the new subjects are
-   linked, and a `keepCopy` turns `storage` to `copy`.
+   linked, and a `keepCopy` turns `storage` to `copy`. Under a `sourceKey`, changed text is the same document's next
+   revision: the old text goes to `document_revisions` under its revision and `revision` goes up by one (`keepRevision`,
+   the path folder files take), so the evidence signature changes and `knowledge.checkSources` reviews what cites it.
+   The same text again changes nothing. `changed` says whether text was written. A key is `<namespace>:<id>`, a
+   lower-case namespace other than `sha256`, and different keys never join, whatever their text.
 2. **A live folder or Drive document with the same content is answered as `duplicateOf`**, and only the subjects are
    linked to it; nothing new is stored and `kept` is `null`. This holds when a removed added row of that content is
    still there; with no such document, the removed row is restored with the new read. A file matches a folder file by

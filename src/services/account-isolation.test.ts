@@ -22,7 +22,6 @@ import { servicesFor, storedDeps } from "./index.js"
 import { searchNotesQuery } from "./notes-search.js"
 import { personTimeline } from "./person-timeline.js"
 import { searchAll } from "./search-all.js"
-import { searchAllIncludingMeetings } from "./search-all-meetings.js"
 
 const alpha = twinAccount("alpha")
 const messenger = { provider: "synthetic", app: { command: "chat" }, serverSearch: true } as Messenger
@@ -158,18 +157,6 @@ const BOUND: [string, Read][] = [
   ["bound: mail email by id", ({ store }) => store.forAccount(twinMail("alpha")).mail.email(EMAIL)],
   ["bound: meetings list", ({ store }) => store.forAccount(twinMeetings("alpha")).meetings.meetings()],
   ["bound: meetings search", ({ store }) => store.forAccount(twinMeetings("alpha")).meetings.search(SHARED_WORD)],
-  [
-    "search all with meetings: the meeting hits",
-    async ({ store }) => {
-      const found = await searchAllIncludingMeetings(store, alpha, {
-        text: SHARED_WORD,
-        limit: 50,
-        only: ["meetings"],
-        meetingAccount: twinMeetings("alpha"),
-      })
-      return found.items
-    },
-  ],
 ]
 
 /** Reads that span accounts on purpose: each must find both twins, so this list says which ones do. */

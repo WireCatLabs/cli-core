@@ -33,11 +33,6 @@ import { rerankLane } from "./messages-rerank.js"
 import type { MessageStats, QueryMetadata, SearchCoverage, StatsGrouping } from "./messages-search.js"
 import type { PictureHit } from "./pictures.js"
 import { type SearchAllFound, type SearchAllRequest, searchAll } from "./search-all.js"
-import {
-  type SearchAllIncludingMeetingsFound,
-  type SearchAllWithMeetingsRequest,
-  searchAllWithMeetings,
-} from "./search-all-meetings.js"
 import type { SearchKind } from "./search-kind.js"
 import { type SearchParams, searchRecordOf } from "./search-record.js"
 import { refreshSearch, type SearchRefreshed, type SyncOptions, withRefresh } from "./search-refresh.js"
@@ -262,10 +257,8 @@ export interface MessagesService {
   keepDownloaded(chat: string, message: Id, files: readonly DownloadedFile[]): Promise<number>
   /** From the local store only; never asks the messenger. */
   search(query: SearchQuery): Promise<SearchFound>
-  /** Messages, mail and notes at once; messages with the same server step `search` takes. */
+  /** Every kind the store holds at once; messages with the same server step `search` takes. */
   searchAll(request: SearchAllRequest): Promise<SearchAllFound>
-  /** `searchAll` plus one meeting account's transcripts, chat and summaries. */
-  searchAllWithMeetings(request: SearchAllWithMeetingsRequest): Promise<SearchAllIncludingMeetingsFound>
   /** Counts of what a strict query matches, by chat, sender, day or hour; from the local store only. */
   stats(query: SearchQuery & { by: StatsGrouping }): Promise<MessageStats>
   saveDraft?(request: DraftRequest): Promise<Operated<{ chatId: Id; saved: true }>>
@@ -598,18 +591,6 @@ export const messagesService = (deps: ServiceDeps): MessagesService => {
     searchAll: (request) =>
       inStore((store, account) =>
         searchAll(store, account, request, deps.messenger, unifiedMessages(store, account), meaningLane(deps)),
-      ),
-
-    searchAllWithMeetings: (request) =>
-      inStore((store, account) =>
-        searchAllWithMeetings(
-          store,
-          account,
-          request,
-          deps.messenger,
-          unifiedMessages(store, account),
-          meaningLane(deps),
-        ),
       ),
 
     stats: (query) =>

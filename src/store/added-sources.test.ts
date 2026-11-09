@@ -406,3 +406,84 @@ describe("a source added by hand, with others at work", () => {
     expect(preview.conflicts).toEqual([])
   })
 })
+
+describe("a source added by hand under a source key", () => {
+  const page = (text: string, sourceKey = "google-drive:SyntheticDoc_1") =>
+    ({
+      kind: "page",
+      read: "extracted",
+      text,
+      url: "https://docs.google.com/document/d/SyntheticDoc_1/edit",
+      title: "Harbour budget",
+      sourceKey,
+      by: "owner",
+    }) as const
+
+  it("is updated in place when its text changed, and a confirmed memory citing the old words gets a review", async () => {
+    const { store, sql } = await setup()
+    const first = await store.notes.saveAddedSource(page("Hosting costs 120 a month."))
+    expect(first).toMatchObject({ created: true, changed: true })
+    expect(first.note.path).toBe("google-drive:SyntheticDoc_1")
+    const memory = await store.memories.add({
+      kind: "preference",
+      body: "Hosting is 120 a month",
+      scope: "work",
+      evidence: [{ ref: first.note.ref, quote: "costs 120 a month" }],
+      author: "owner",
+      status: "confirmed",
+    })
+    const again = await store.notes.saveAddedSource(page("Hosting costs 150 a month."))
+    expect(again).toMatchObject({ created: false, changed: true, duplicateOf: null, kept: "text" })
+    expect(again.note).toMatchObject({ ref: first.note.ref, revision: 2, text: "Hosting costs 150 a month." })
+    expect(await sql("SELECT count(*) AS n FROM documents")).toEqual([{ n: 1 }])
+    expect(await sql("SELECT body, revision FROM document_revisions")).toEqual([
+      { body: "Hosting costs 120 a month.", revision: 1 },
+    ])
+    expect(await store.knowledge.checkSources()).toMatchObject({ raised: 1 })
+    expect(await store.memories.get(memory.ref)).toMatchObject({
+      status: "confirmed",
+      sourceReview: { cause: "changed" },
+    })
+  })
+
+  it("changes nothing when it is added again with the same text", async () => {
+    const { store, sql } = await setup()
+    const first = await store.notes.saveAddedSource(page("Hosting costs 120 a month."))
+    const again = await store.notes.saveAddedSource(page("Hosting  costs 120 a month."))
+    expect(again).toMatchObject({ created: false, changed: false })
+    expect(again.note).toMatchObject({ ref: first.note.ref, revision: 1, updatedAt: first.note.updatedAt })
+    expect(await sql("SELECT count(*) AS n FROM document_revisions")).toEqual([{ n: 0 }])
+  })
+
+  it("keeps two keys apart even with the same text, and a key apart from the same text without one", async () => {
+    const { store, sql } = await setup()
+    const one = await store.notes.saveAddedSource(page("Same words.", "google-drive:SyntheticDoc_1"))
+    const two = await store.notes.saveAddedSource(page("Same words.", "google-drive:SyntheticDoc_2"))
+    const plain = await store.notes.saveAddedSource({
+      by: "owner",
+      kind: "text",
+      read: "extracted",
+      text: "Same words.",
+    })
+    expect(new Set([one.note.ref, two.note.ref, plain.note.ref]).size).toBe(3)
+    expect(await sql("SELECT count(*) AS n FROM documents")).toEqual([{ n: 3 }])
+    expect(await store.notes.findAddedSource(page("Other words.", "google-drive:SyntheticDoc_2"))).toEqual({
+      existing: two.note.ref,
+      duplicateOf: null,
+    })
+  })
+
+  it.each([
+    "sha256:abc",
+    "no-namespace",
+    "Google Drive:x",
+    "google-drive:",
+    "google-drive:a/b",
+    `x:${"a".repeat(201)}`,
+  ])("refuses the source key %s", async (sourceKey) => {
+    const { store } = await setup()
+    await expect(store.notes.saveAddedSource(page("Words.", sourceKey))).rejects.toMatchObject({
+      code: "validation_error",
+    })
+  })
+})

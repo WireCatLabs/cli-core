@@ -14,7 +14,7 @@ import type { StoreContext } from "./sqlite/open.js"
 import type { Where } from "./sqlite/query-filter.js"
 import * as reads from "./sqlite/reads.js"
 import { write } from "./sqlite/transaction.js"
-import type { AccountKey, ChatActivity, ChatStats, StoredChatFilter } from "./types.js"
+import type { AccountKey, ChatActivity, ChatStats, StoredAccount, StoredChatFilter } from "./types.js"
 
 export type { LeftChat }
 
@@ -32,6 +32,8 @@ export interface ChatsStore {
   countChats(key: AccountKey, filter?: StoredChatFilter): Promise<number>
   /** The chats a person is in, newest first — as far as the saved member lists go. */
   chatsWith(key: AccountKey, memberId: Id): Promise<Chat[]>
+  /** Each stored chat's scope, its own or else its account's; a chat the store lacks is left out. */
+  chatScopes(key: AccountKey, chatIds: readonly Id[]): Promise<Map<Id, StoredAccount["scope"]>>
   /**
    * Given every chat the account is in, marks the rest `left`, takes the mark off those it names, and says how many
    * it marked. Only ever from a complete list: a page or a cut list says nothing about the chats it leaves out.
@@ -122,6 +124,13 @@ export const chatsStoreOver = (context: StoreContext): ChatsStore => {
     chatsWith: async (key, memberId) => {
       const accountKey = findAccountPk(key)
       return accountKey === undefined ? [] : chatQueries.chatsWith(context, accountKey, key, memberId)
+    },
+
+    chatScopes: async (key, chatIds) => {
+      const accountKey = findAccountPk(key)
+      return accountKey === undefined
+        ? new Map()
+        : (chatQueries.chatScopes(context, accountKey, chatIds) as Map<Id, StoredAccount["scope"]>)
     },
 
     markChatsLeft: async (key, present) => {

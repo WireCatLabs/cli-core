@@ -10,9 +10,9 @@ import { agentBody } from "../../mcp/text.js"
 import type { FoundMessage, SearchFound } from "../../services/messages.js"
 import { searchStore } from "../../services/messages-archive-search.js"
 import type { FoundNote, NotesFoundOf } from "../../services/notes-search.js"
-import type { SearchAllItem } from "../../services/search-all.js"
+import type { SearchAllFound, SearchAllRecordItem } from "../../services/search-all.js"
 import { searchAll } from "../../services/search-all.js"
-import type { MeetingSearchItem, SearchAllIncludingMeetingsFound } from "../../services/search-all-meetings.js"
+import type { MeetingSearchItem } from "../../services/search-all-meetings.js"
 import { type MessageStore, openStore } from "../../store/store.js"
 import { allAnswer, messagesAnswer, notesAnswer, shownOf } from "./search-answers.js"
 
@@ -31,7 +31,7 @@ const mail = {
   flagged: false,
 }
 
-const found = (messages: SearchAllIncludingMeetingsFound["messages"]): SearchAllIncludingMeetingsFound => ({
+const found = (messages: SearchAllFound["messages"]): SearchAllFound => ({
   query: "cat",
   items: [],
   hasMore: false,
@@ -83,6 +83,27 @@ describe("allAnswer", () => {
     )
 
     expect(answer.next?.filter(({ step }) => step === "models.download")).toHaveLength(1)
+  })
+
+  it("names each meeting account whose search index is still being built", () => {
+    const answer = allAnswer(
+      "search all",
+      {
+        ...found(undefined),
+        meetings: [
+          { provider: "zoom", account: "ready-one", indexing: "ready", hasMore: false },
+          { provider: "zoom", account: "pending-one", indexing: "pending", hasMore: false },
+        ],
+      },
+      { limit: 10 },
+    )
+
+    expect(answer.missing).toEqual([
+      {
+        field: "items",
+        why: "zoom:pending-one: meetings saved since its search index was last built are not found yet",
+      },
+    ])
   })
 
   it("names the chat the messages were searched in when the store holds it only in part", () => {
@@ -195,7 +216,7 @@ describe("history the limits left out", () => {
 })
 
 describe("untrusted text in search answers", () => {
-  const hitOf = (kind: SearchAllItem["kind"], account: string): SearchAllItem => ({
+  const hitOf = (kind: SearchAllRecordItem["kind"], account: string): SearchAllRecordItem => ({
     kind,
     ref: `${kind}:1`,
     provider: kind === "note" ? "notes" : kind,
@@ -221,6 +242,7 @@ describe("untrusted text in search answers", () => {
     startMs: 0,
     cueRef: "meeting:1/2/4/5",
     speakerName: injected,
+    foundBy: ["words"],
   }
 
   it("search all marks every kind of hit others write, escaped as an agent reads it, and leaves the owner's note", () => {
@@ -263,14 +285,14 @@ describe("untrusted text in search answers", () => {
   })
 
   it("search all gives a business hit its review and source record, and marks the import's words untrusted", () => {
-    const imported: SearchAllItem = {
+    const imported: SearchAllRecordItem = {
       ...hitOf("invoice", "books"),
       provider: "sheet",
       foundBy: ["title"],
       review: "proposed",
       sourceRecord: { provider: "sheet", account: "books", externalId: "INV-9" },
     }
-    const own: SearchAllItem = { ...hitOf("wallet", "internal"), provider: "business", review: "confirmed" }
+    const own: SearchAllRecordItem = { ...hitOf("wallet", "internal"), provider: "business", review: "confirmed" }
     const answer = allAnswer(
       "search all",
       { query: "budget", items: [imported, own], hasMore: false, searched: ["business"], accounts: [], skipped: [] },

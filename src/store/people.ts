@@ -25,7 +25,7 @@ import type { PrivateContact, PrivateContactNote } from "./sqlite/private-people
 import * as privatePeople from "./sqlite/private-people.js"
 import type { ProposedAction } from "./sqlite/proposed-actions.js"
 import { write } from "./sqlite/transaction.js"
-import type { AccountKey, IdentityRef, LinkOptions, PersonFacts, PersonRecord } from "./types.js"
+import type { AccountKey, IdentityRef, LinkOptions, PersonFacts, PersonRecord, StoredAccount } from "./types.js"
 
 export interface AccountPeople {
   savePeople(key: AccountKey, people: PersonFacts[]): Promise<void>
@@ -67,8 +67,14 @@ export interface PeopleStore extends AccountPeople {
   personByUid(uid: string): Promise<PersonRecord | undefined>
   /** The person marked as the owner, with every identity linked to them; `undefined` when none is. */
   owner(): Promise<PersonRecord | undefined>
-  /** Accepted facts, the owner's notes and open tasks about them; tasks of an account only if `accounts` holds it. */
-  preparation(uid: string, options: { accounts: readonly AccountKey[]; limit: number }): Promise<PersonPreparationRead>
+  /**
+   * Accepted facts, the owner's notes and open tasks about them; tasks of an account only if `accounts` holds it,
+   * and what belongs to no account only in `scopes`.
+   */
+  preparation(
+    uid: string,
+    options: { accounts: readonly AccountKey[]; scopes: readonly StoredAccount["scope"][]; limit: number },
+  ): Promise<PersonPreparationRead>
   /** Records the decision in `identity_link_events`; `unlinkIdentity` undoes it. */
   linkIdentities(person: IdentityRef, other: IdentityRef, options: LinkOptions): Promise<PersonRecord>
   unlinkIdentity(identity: IdentityRef, options: LinkOptions): Promise<PersonRecord>

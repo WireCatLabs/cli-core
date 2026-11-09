@@ -3,7 +3,7 @@ import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { SAVE_HELP } from "../../meetings/index.js"
 import { searchNotesOf } from "../../services/notes-search.js"
-import type { SearchAllIncludingMeetingsFound } from "../../services/search-all-meetings.js"
+import type { SearchAllFound, SearchAllItem } from "../../services/search-all.js"
 import { LOCAL_READ, REMOTE_READ } from "../effects.js"
 import { renderAnswer } from "../envelope.js"
 import { withOptionHints } from "../option-hints.js"
@@ -35,25 +35,15 @@ export const searchAllOnlyOf = (value: string, allowed: readonly string[] = SOUR
     )
   const unknown = chosen.find((one) => !allowed.includes(one))
   if (unknown !== undefined || chosen.length === 0)
-    throw new CliError(
-      "validation_error",
-      `--only takes ${allowed.join(", ")}, separated by commas; meetings when --source names a meeting account`,
-    )
+    throw new CliError("validation_error", `--only takes ${allowed.join(", ")}, separated by commas`)
   return [...new Set(chosen)] as SourceSearched[]
 }
 
 /** One `search all` hit as a person reads it. */
-export const searchAllLine = (item: SearchAllIncludingMeetingsFound["items"][number]): string =>
+export const searchAllLine = (item: SearchAllItem): string =>
   item.kind === "meeting"
     ? `meeting · ${item.provider} · ${singleLine(item.title ?? "")}  ${item.ref}\n  ${item.timestamp ?? "time unknown"}  ${singleLine(item.text).slice(0, 200)}\n`
     : `${item.kind} · ${item.provider} · ${singleLine(item.title ?? "")}  ${item.ref}${item.url ? `\n  ${singleLine(item.url)}` : ""}\n  ${item.timestamp}${item.from?.name ? `  ${singleLine(item.from.name)}` : ""}  ${singleLine(item.text)}\n`
-
-const maxMeetingsOf = (value: string): number | "all" => {
-  if (value === "all") return "all"
-  if (!/^[1-9]\d*$/.test(value))
-    throw new CliError("validation_error", "--max-meetings takes a whole number from 1, or all")
-  return Number(value)
-}
 
 /**
  * `search all`'s scope, paging and matching options, the same in every CLI that mounts it (WC-ACCT-8): a messenger's
@@ -62,21 +52,13 @@ const maxMeetingsOf = (value: string): number | "all" => {
 /** `allowed`: the resources `--only` takes, a CRM CLI's with `crm`. */
 export const searchAllOptions = (command: Command, allowed: readonly string[] = SOURCE_SEARCHED): Command =>
   command
-    .option(
-      "--only <resources>",
-      `only these resources, separated by commas: ${allowed.filter((one) => one !== "meetings").join(", ")}; ` +
-        "meetings when --source names a meeting account",
-      (value: string) => searchAllOnlyOf(value, allowed),
+    .option("--only <resources>", `only these resources, separated by commas: ${allowed.join(", ")}`, (value: string) =>
+      searchAllOnlyOf(value, allowed),
     )
     .option(
       "--source <accounts>",
       "only these accounts, separated by commas: provider:account as a hit shows it, a provider, a kind or " +
-        "group:<name>; each resource reads the ones of its kind, and meetings only when it names one",
-    )
-    .option(
-      "--max-meetings <n>",
-      "how many of the meeting account's meetings to look through, newest first, or all for every one (default 100)",
-      maxMeetingsOf,
+        "group:<name>; each resource reads the ones of its kind",
     )
     .option("--limit <n>", "how many", positiveCount("--limit"))
     .option("--page <n>", "which page, starting at 1", positiveCount("--page"))
@@ -85,14 +67,14 @@ export const searchAllOptions = (command: Command, allowed: readonly string[] = 
 
 const allCommand = (messenger: Messenger): Command => {
   const command = annotate(new Command("all"), { effects: REMOTE_READ, partial: true })
-    .summary("search stored messages, notes, calendar events and selected meeting transcripts")
+    .summary("search stored messages, notes, calendar events and meetings")
     .description(
       (messenger.serverSearch
         ? "search messenger messages and notes in the local store, and by default the messenger's server for " +
           "messages too (notes and events are local only; --backend archive or --offline keeps it to the local store)"
         : "search messenger messages and notes in the local store") +
         ", calendar events when the store holds a calendar" +
-        ", and a meeting account's transcripts when --source names one — best match first; not mail (the separate memo CLI searches it: memo search mail), " +
+        ", and meeting transcripts, chat and summaries when it holds a meeting account — best match first; not mail (the separate memo CLI searches it: memo search mail), " +
         "tasks, people, memories or projects. Use it when you do not know where something was written; search messages " +
         "or notes reads one kind with all its fields",
     )
@@ -110,7 +92,6 @@ const allCommand = (messenger: Messenger): Command => {
       const {
         only,
         source,
-        maxMeetings,
         limit: typed,
         page,
         exact,
@@ -118,7 +99,6 @@ const allCommand = (messenger: Messenger): Command => {
       } = this.opts<{
         only?: SourceSearched[]
         source?: string
-        maxMeetings?: number | "all"
         limit?: number
         page?: number
         exact?: boolean
@@ -126,8 +106,8 @@ const allCommand = (messenger: Messenger): Command => {
       }>()
       const limit = typed ?? context.settings.limit
       const offset = offsetOf(page, limit)
-      const found = await context.withServices<SearchAllIncludingMeetingsFound>((services) =>
-        services.messages.searchAllWithMeetings({
+      const found = await context.withServices<SearchAllFound>((services) =>
+        services.messages.searchAll({
           text: words.join(" "),
           limit,
           ...(offset === undefined ? {} : { offset }),
@@ -136,8 +116,8 @@ const allCommand = (messenger: Messenger): Command => {
           ...backendRequest(this),
           env: context.env,
           only: only ?? SOURCE_SEARCHED,
+          ...(only?.includes("meetings") ? { meetingsAsked: true } : {}),
           ...(source === undefined ? {} : { source }),
-          ...(maxMeetings === undefined ? {} : { maxMeetings }),
         }),
       )
       noteServer(context, found.server)
@@ -155,7 +135,6 @@ const allCommand = (messenger: Messenger): Command => {
         query: words.join(" "),
         ...(only === undefined ? {} : { only: only.join(",") }),
         ...(source === undefined ? {} : { source }),
-        ...(maxMeetings === undefined ? {} : { max_meetings: maxMeetings }),
         ...(exact ? { exact: true } : {}),
         ...(timezone === undefined ? {} : { timezone }),
       }

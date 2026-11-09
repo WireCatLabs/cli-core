@@ -91,6 +91,9 @@ export interface MeetingHitSource {
   url: string | null
 }
 
+/** `searchHits`' refusal of a page whose stored text passes `maxReadBytes`; a reader may ask for fewer rows. */
+export const READ_BUDGET_EXCEEDED = "Meeting search exceeds its stored text byte budget"
+
 export interface SearchHit {
   source?: MeetingHitSource
   /** A retained cue reference for transcript hits, or the parent meeting for other sources. */
@@ -111,6 +114,8 @@ export interface SearchHit {
   match?: "words" | "corrected"
   /** For a `corrected` hit, the stored words each such query word matched in this passage. */
   corrections?: { from: string; to: string[] }[]
+  /** The words of `text` the query's positive terms matched, as the text spells them. */
+  matchedWords?: string[]
 }
 export interface ContractCase {
   name: string

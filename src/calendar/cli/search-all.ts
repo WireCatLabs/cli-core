@@ -12,7 +12,7 @@ import { commandAt, rootOf } from "../../cli/steps.js"
 import { SAVE_HELP } from "../../meetings/index.js"
 import type { AppIdentity } from "../../ports/app.js"
 import { meaningLane } from "../../services/messages-meaning.js"
-import { searchAllWithMeetings } from "../../services/search-all-meetings.js"
+import { searchAll } from "../../services/search-all.js"
 import { messagesOf } from "./bodies.js"
 import type { CommandHelpers } from "./index.js"
 
@@ -24,16 +24,16 @@ const DEFAULT_LIMIT = 20
 
 /**
  * `search all` beside `search events`: the messenger's shared search over the store, without a messenger server.
- * Events are the calendar's own kind and always read; meeting transcripts only when `--source` names a meeting account.
+ * Events are the calendar's own kind and always read.
  */
 export const addSearchAll = (searches: Command, { within, app, zone, example }: SearchAllHelpers): void => {
   const all = annotate(new Command("all"), { effects: LOCAL_READ, partial: true, output: { entity: "hit" } })
-    .summary("search stored messages, notes, calendar events and selected meeting transcripts")
+    .summary("search stored messages, notes, calendar events and meetings")
     .description(
-      "search calendar events, messages from the other WireCat tools and notes in the local store, and a meeting " +
-        "account's transcripts when --source names one — best match first; not mail (the separate memo CLI " +
-        "searches it: memo search mail). Use it when you do not know where something was written; search events " +
-        "reads the calendar with all its fields",
+      "search calendar events, messages from the other WireCat tools, notes and meeting transcripts, chat and " +
+        "summaries in the local store — best match first; not mail (the separate memo CLI searches it: memo search " +
+        "mail). Use it when you do not know where something was written; search events reads the calendar with all " +
+        "its fields",
     )
     .argument("<query...>", 'strict Lucene query: words, "phrases", AND/OR/NOT, field groups and date ranges')
     .addHelpText("after", SAVE_HELP)
@@ -44,7 +44,6 @@ export const addSearchAll = (searches: Command, { within, app, zone, example }: 
     const opts = leaf.opts<{
       only?: SourceSearched[]
       source?: string
-      maxMeetings?: number | "all"
       limit?: number
       page?: number
       exact?: boolean
@@ -72,7 +71,7 @@ export const addSearchAll = (searches: Command, { within, app, zone, example }: 
         const limit = opts.limit ?? DEFAULT_LIMIT
         const offset = offsetOf(opts.page, limit)
         const env = run.env ?? process.env
-        const found = await searchAllWithMeetings(
+        const found = await searchAll(
           store,
           run.account,
           {
@@ -83,8 +82,8 @@ export const addSearchAll = (searches: Command, { within, app, zone, example }: 
             timezone: opts.timezone ?? zone(),
             env,
             only,
+            ...(opts.only?.includes("meetings") ? { meetingsAsked: true } : {}),
             ...(opts.source === undefined ? {} : { source: opts.source }),
-            ...(opts.maxMeetings === undefined ? {} : { maxMeetings: opts.maxMeetings }),
             ...(run.locked ? { scope: { events: [run.account] } } : {}),
           },
           { app, hintCommand: commandAt(rootOf(leaf), "models download") ? app.command : null },
@@ -105,7 +104,6 @@ export const addSearchAll = (searches: Command, { within, app, zone, example }: 
           query: words.join(" "),
           ...(opts.only === undefined ? {} : { only: opts.only.join(",") }),
           ...(opts.source === undefined ? {} : { source: opts.source }),
-          ...(opts.maxMeetings === undefined ? {} : { max_meetings: opts.maxMeetings }),
           ...(opts.exact ? { exact: true } : {}),
           ...(opts.timezone === undefined ? {} : { timezone: opts.timezone }),
         }

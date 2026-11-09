@@ -2,7 +2,8 @@ import { afterEach, describe, expect, it } from "vitest"
 import { sampleMeeting } from "../meetings/testing/index.js"
 import type { MessageStore } from "../store/store.js"
 import { openTwinStore, SHARED_WORD, type TwinStore, twinAccount } from "../testing/twin-accounts.js"
-import { type SearchAllWithMeetingsRequest, searchAllWithMeetings } from "./search-all-meetings.js"
+import { refreshMeetingIndex } from "./meeting-hit-search.js"
+import { type SearchAllRequest, searchAll } from "./search-all.js"
 
 const alpha = twinAccount("alpha")
 const opened: MessageStore[] = []
@@ -18,8 +19,8 @@ const twinStore = async (): Promise<TwinStore & { noteId: string }> => {
   return { ...twin, noteId: String(note.id) }
 }
 
-const search = (store: MessageStore, extra: Partial<SearchAllWithMeetingsRequest> = {}) =>
-  searchAllWithMeetings(store, alpha, { text: SHARED_WORD, limit: 50, only: ["messages", "mail", "notes"], ...extra })
+const search = (store: MessageStore, extra: Partial<SearchAllRequest> = {}) =>
+  searchAll(store, alpha, { text: SHARED_WORD, limit: 50, only: ["messages", "mail", "notes"], ...extra })
 
 const keys = (accounts: { resource: string; provider: string; account: string }[]) =>
   accounts.map(({ resource, provider, account }) => `${resource} ${provider}:${account}`)
@@ -74,31 +75,24 @@ describe("search all --source", () => {
     )
   })
 
-  it("reads meetings only from a meeting account the list names, and one at a time", async () => {
+  it("reads every meeting account the list names, and only those", async () => {
     const { store } = await twinStore()
-    const zoom = { provider: "zoom", account: "z1" }
-    const meeting = sampleMeeting()
-    meeting.meeting.accountId = await store.accounts.saveAccount(zoom, { name: null })
-    const [row] = meeting.transcripts?.[0]?.rows ?? []
-    if (row) row.text = `${SHARED_WORD} on the call`
-    await store.meetings.saveMeeting(meeting)
+    for (const account of ["z1", "z2"]) {
+      const meeting = sampleMeeting()
+      meeting.meeting.accountId = await store.accounts.saveAccount({ provider: "zoom", account }, { name: null })
+      const [row] = meeting.transcripts?.[0]?.rows ?? []
+      if (row) row.text = `${SHARED_WORD} on the call of ${account}`
+      await store.meetings.saveMeeting(meeting)
+      await refreshMeetingIndex(store.meetings, meeting.meeting.accountId)
+    }
     const found = await search(store, { only: undefined, source: "synthetic:500,meetings" })
     expect(found.searched).toEqual(["messages", "meetings"])
-    expect(keys(found.accounts)).toEqual(["messages synthetic:500", "meetings zoom:z1"])
-    expect(found.items.some(({ kind }) => kind === "meeting")).toBe(true)
-    const other = sampleMeeting()
-    other.meeting.accountId = await store.accounts.saveAccount({ provider: "zoom", account: "z2" }, { name: null })
-    const narrowed = await search(store, { only: undefined, source: "zoom" })
-    expect(keys(narrowed.accounts)).toEqual(["meetings zoom:z1"])
-    expect(narrowed.skipped).toContainEqual({
-      source: "zoom:z2",
-      code: "not_found",
-      reason: "no meetings stored for it",
-    })
-    await store.meetings.saveMeeting(other)
-    await expect(search(store, { only: undefined, source: "zoom" })).rejects.toThrow(
-      "--source names several meeting accounts; search all reads one: zoom:z1, zoom:z2",
-    )
+    expect(keys(found.accounts)).toEqual(["messages synthetic:500", "meetings zoom:z1", "meetings zoom:z2"])
+    const meetingAccounts = found.items.filter(({ kind }) => kind === "meeting").map(({ account }) => account)
+    expect(new Set(meetingAccounts)).toEqual(new Set(["z1", "z2"]))
+    const narrowed = await search(store, { only: undefined, source: "zoom:z2" })
+    expect(keys(narrowed.accounts)).toEqual(["meetings zoom:z2"])
+    expect(narrowed.items.map(({ account }) => account)).toEqual(["z2"])
   })
 
   it("answers the accounts it read without --source too", async () => {

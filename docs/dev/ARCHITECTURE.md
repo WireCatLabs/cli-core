@@ -361,8 +361,8 @@ matched by `instr(lower(...))`, as before version 40.
 `src/cli/messenger/search-command.ts` mounts `search all|messages|mail|notes|conversations` (and
 `topics` where the messenger has forum topics); `bot search messages` sits under `bot`. Each leaf calls
 the service the old command called, and the MCP tools are the leaves themselves. `searchAll` (`src/services/search-all.ts`) runs messages (every
-messenger account, never mail), mail and notes in turn and merges their lists by reciprocal rank, so
-no resource's own scores are compared with another's. A resource that cannot answer the query — a
+messenger account, never mail), mail, notes, events, CRM records and meetings in turn and merges their lists by rank,
+so no resource's own scores are compared with another's. A resource that cannot answer the query — a
 field it lacks, or nothing stored — is listed in `skipped` with the reason instead of failing the search.
 Its messages take the same server step as `search messages` (`--backend`, default `both`, through
 `messages.searchAll`); mail and notes are always the local store's. The `crm` and `business` lanes fold short
@@ -374,17 +374,15 @@ only for a row whose `source` is `import:<provider>`; under `--source` the lane 
 whatever their provider (`fitting`'s `alsoFits`). The `search all` of tg, max and a calendar CLI (`SOURCE_SEARCHED`)
 reads neither lane; a CRM CLI's reads `crm`.
 
-`searchAllIncludingMeetings` (`src/services/search-all-meetings.ts`) is a separate opt-in service.
-It delegates the legacy search unchanged, then blends its ordered result with one explicit meeting
-account's prefix matches. Meeting hits carry their numeric source identities and `ref`, the
-`meeting:<accountId>/<meetingId>` reference of `formatMeetingReference` that memo takes as evidence. It resolves the account through `storedAccount` and never registers one.
-Because `MeetingStore.search` pages meetings before matching their rows, the service visits
-candidate meetings serially and keeps a source cursor inside a meeting's hit list. Sparse pages
-can report unknown `hasMore` at the scan limit. The candidate bound does not bound the store's raw
-hit allocation, and offsets do not give a snapshot. `search all --source` and the `search_all`
-tool's `source` reach it through `messages.searchAllWithMeetings`, which never lets the meeting account
-default to the messenger's own: it reads meetings only from the one meeting account the list names (of
-several a bare `zoom` names, the one that holds meetings), and otherwise answers `skipped` for meetings. No meeting reference resolver or vector index is introduced.
+Meetings are one resource of `searchAll`. `meetingLane` (`src/services/search-all-meetings.ts`) parses the query once
+with the meeting query language, so a field meetings lack skips the whole resource, then pages
+`store.meetings.searchHits` for each meeting account in scope and keeps at most three hits of a meeting. Titles match
+through `title_folded` with a `meetings list` query (`store.meetings.meetings`, newest first through
+`meetings_by_time`), so they need no index, and rank with the passages by tier and start. A failure
+of one account is that account's skip. The lane never refreshes the index, since search all only reads; each account
+reports `indexing` and `hasMore`. `oneList` keeps one hit per passage (`hitKey`: meeting, scope, row), since every
+passage of a meeting shares its `ref`. `--source` is resolved inside `searchAll` (`sourceScope`) into the accounts
+each kind reads.
 
 **Server search beside the archive.** `messages.search` with `backend: both|server` first runs
 `searchServer` (`src/services/server-search.ts`): it turns the resolved query into at most three

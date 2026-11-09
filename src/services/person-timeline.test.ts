@@ -83,3 +83,49 @@ describe("personTimeline paging", () => {
     expect(await personTimeline(queued, tg, "21", { limit: 10 })).toMatchObject({ hasMore: false, pending: 2 })
   })
 })
+
+describe("personTimeline across personal and work", () => {
+  const work = { provider: "max", account: "900", scope: "work" as const }
+  const merged = async () => {
+    const store = await fixture()
+    await store.accounts.saveAccount(work, { name: null })
+    await store.chats.saveChats(work, [
+      { id: "m1", title: "Alice Example", kind: "dialog", unreadCount: 0, lastMessageAt: null, participantsCount: 2 },
+    ])
+    await store.messages.saveMessages(
+      work,
+      "m1",
+      [{ ...said("w1", "2026-09-07T10:00:00.000Z"), chatId: "m1", senderId: "m21" }],
+      { via: "test" },
+    )
+    await store.people.linkIdentities(
+      { provider: "telegram", id: "21" },
+      { provider: "max", id: "m21" },
+      { method: "manual", by: "owner" },
+    )
+    store.involvements.rebuild()
+    return store
+  }
+  const scopesOf = (found: Awaited<ReturnType<typeof personTimeline>>) => [
+    ...new Set(found.items.map((item) => item.scope)),
+  ]
+
+  it("reads only the asked account's scope and names it", async () => {
+    const found = await personTimeline(await merged(), tg, "21")
+    expect(scopesOf(found)).toEqual(["personal"])
+    expect(found.scopes).toEqual(["personal"])
+    const fromWork = await personTimeline(await merged(), work, "m21")
+    expect(scopesOf(fromWork)).toEqual(["work"])
+  })
+
+  it("refuses a scope the profile does not read, and reads both when the caller allows both", async () => {
+    const store = await merged()
+    await expect(personTimeline(store, tg, "21", { scope: "work" })).rejects.toMatchObject({
+      code: "permission_error",
+      details: { reason: "selection.out-of-scope" },
+    })
+    const both = await personTimeline(store, tg, "21", { scopes: ["personal", "work"] })
+    expect(scopesOf(both).sort()).toEqual(["personal", "work"])
+    expect(both.scopes).toEqual(["personal", "work"])
+  })
+})

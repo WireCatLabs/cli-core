@@ -36,3 +36,12 @@ it("keeps a standalone source shell explicit and exposes its exact deviations", 
   source.option("--undocumented", "a silent change")
   expect(() => assertSharedContracts(root)).toThrow("without an explicit override")
 })
+it("keeps the search template's `search all` as cli-memo, zoom-cli and drive-cli reviewed it", () => {
+  const all = sharedCommandTemplate(app, "search").commands.find((command) => command.name() === "all")
+  expect(all?.options.map(({ flags }) => flags).slice(0, 3)).toEqual([
+    "--only <resources>",
+    "--source <accounts>",
+    "--max-meetings <n>",
+  ])
+  expect(all?.summary()).toBe("search stored messages, notes, calendar events and selected meeting transcripts")
+})

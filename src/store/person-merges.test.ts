@@ -400,11 +400,50 @@ describe("a merged-away person", () => {
     )
     const alice = await uidOf(store, "telegram", "201")
 
-    const read = await store.people.preparation(alice, { accounts: [TG, CRM], limit: 10 })
+    const read = await store.people.preparation(alice, { accounts: [TG, CRM], scopes: ["personal"], limit: 10 })
 
     expect(alice).not.toBe(crm)
     expect(read.facts.items.map(({ statement }) => statement)).toEqual(["Prefers written examples"])
     expect(read.notes.items.map(({ text }) => text)).toEqual(["Asked about the invoice"])
+  })
+
+  it("is in the links list of the person it became, both ways", async () => {
+    const store = await open()
+    const { telegram, alice } = await linkedAlice(store)
+    const note = await store.notes.addNote({ text: "Met at the harbour" })
+    await store.notes.addLink({ by: "owner", from: note.ref, to: `person:${telegram}`, kind: "about" })
+    const acme = (await store.knowledge.addOrganization({ kind: "company", name: "Acme Ltd" })).ref
+    await store.knowledge.relate(null, { by: "owner", from: `person:${telegram}`, to: acme, kind: "member-of" })
+
+    const into = await store.notes.links({ to: `person:${alice}` })
+    const out = await store.notes.links({ from: `person:${alice}` })
+
+    expect(into.map(({ from, kind }) => [from, kind])).toEqual([[note.ref, "about"]])
+    expect(out.map(({ to, kind }) => [to, kind])).toEqual([[acme, "member-of"]])
+  })
+
+  it("keeps the direction of its relationships in the list of the person it became", async () => {
+    const store = await open()
+    const { telegram, alice } = await linkedAlice(store)
+    const acme = (await store.knowledge.addOrganization({ kind: "company", name: "Acme Ltd" })).ref
+    const bob = (await store.people.add({ name: "Bob Example" })).uid
+    await store.knowledge.relate(null, { by: "owner", from: `person:${telegram}`, to: acme, kind: "member-of" })
+    await store.knowledge.relate(null, {
+      by: "owner",
+      from: `person:${bob}`,
+      to: `person:${telegram}`,
+      kind: "reports-to",
+    })
+
+    const listed = await store.knowledge.listRelations({ about: `person:${alice}` })
+
+    expect(listed.items.map(({ kind, direction }) => [kind, direction])).toEqual([
+      ["member-of", "outgoing"],
+      ["reports-to", "incoming"],
+    ])
+    expect((await store.knowledge.listRelations({ from: `person:${alice}` })).items.map(({ kind }) => kind)).toEqual([
+      "member-of",
+    ])
   })
 
   it("is kept by a purge while anything still points at it, and goes with the account when nothing does", async () => {

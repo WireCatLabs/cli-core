@@ -39,7 +39,7 @@ import { conversationsService } from "../services/conversations.js"
 import { storedDeps } from "../services/deps.js"
 import { embeddingsService } from "../services/embeddings.js"
 import { servicesFor } from "../services/index.js"
-import { MEETINGS_UNNAMED } from "../services/search-all-meetings.js"
+import { refreshMeetingIndex } from "../services/meeting-hit-search.js"
 import { openStore } from "../store/store.js"
 import { pdf } from "../testing/files.js"
 import { freePort, mcpHttpClient as httpClient } from "../testing/mcp-http-client.js"
@@ -1122,10 +1122,7 @@ describe("the MCP server", () => {
     const all = await call("search all", { query: "chapter" })
     expect(all.body.items.map((item: { kind: string }) => item.kind)).toContain("message")
     expect(all.body.meta.accounts).toEqual(["chat:500", "notes:internal"])
-    expect(all.body.meta).toMatchObject({
-      complete: false,
-      issues: [{ code: "validation_error", source: "meetings" }],
-    })
+    expect(all.body.meta).not.toHaveProperty("issues")
     const notes = await call("search notes", { query: "chapter" })
     expect(notes.body).toMatchObject({ items: [], page: { has_more: false } })
     const mail = await call("search mail", { query: "chapter" })
@@ -1135,7 +1132,7 @@ describe("the MCP server", () => {
     expect(telegram.opened()).toBe(1)
   })
 
-  it("search_all reads meetings only from a meeting account source names; never without asking", async () => {
+  it("search_all reads every meeting account of the profile's scope beside the messages; source narrows them", async () => {
     const telegram = scripted()
     const { call, env } = await connect(telegram)
     await call("messages list", { chat: "7" })
@@ -1153,30 +1150,35 @@ describe("the MCP server", () => {
           { ...sample.transcripts[0], rows: [{ ...sample.transcripts[0].rows[0], text: "Bob Sample on the chapter" }] },
         ],
       })
+      await refreshMeetingIndex(store.meetings, accountId)
     } finally {
       await store.close()
     }
 
-    const plain = await call("search all", { query: "chapter" })
-    expect(plain.body.items.map((item: { kind: string }) => item.kind)).not.toContain("meeting")
-    expect(plain.body.meta.issues).toContainEqual({ code: "validation_error", source: "meetings" })
-    for (const source of ["all", "zoom:zm-profile:alice", "meetings"]) {
-      const found = await call("search all", { query: "chapter", source })
+    for (const source of [undefined, "all", "zoom:zm-profile:alice", "meetings"]) {
+      const found = await call("search all", { query: "chapter", ...(source === undefined ? {} : { source }) })
       expect(found.isError, JSON.stringify(found.body)).toBe(false)
       expect(found.body.meta.accounts).toContain("zoom:zm-profile:alice")
       expect(found.body.items).toContainEqual(
         expect.objectContaining({ kind: "meeting", provider: "zoom", excerpt: "Bob Sample on the chapter" }),
       )
     }
-    const unasked = await call("search all", { query: "chapter", only: ["meetings"] })
-    expect(unasked.isError).toBe(true)
-    expect(JSON.stringify(unasked.body)).toContain(MEETINGS_UNNAMED)
-    const every = await call("search all", { query: "chapter", source: "zoom", max_meetings: 1000 })
-    expect(every.isError).toBe(false)
-    expect(every.body).not.toHaveProperty("missing")
-    const bounded = await call("search all", { query: "chapter", max_meetings: 5 })
-    expect(bounded.isError).toBe(true)
-    expect(JSON.stringify(bounded.body)).toContain(MEETINGS_UNNAMED)
+    const meetings = await call("search all", { query: "chapter", only: ["meetings"] })
+    expect(new Set(meetings.body.items.map((item: { kind: string }) => item.kind))).toEqual(new Set(["meeting"]))
+    const gone = await call("search all", { query: "chapter", max_meetings: 5 })
+    expect(gone.isError).toBe(true)
+
+    const scoped = await openStore({ path: env.MESSAGING_STORE })
+    try {
+      await scoped.accounts.saveAccount({ provider: "chat", account: "500", scope: "work" }, { name: null })
+    } finally {
+      await scoped.close()
+    }
+    const work = await call("search all", { query: "chapter" })
+    expect(work.body.items.some((item: { kind: string }) => item.kind === "meeting")).toBe(false)
+    expect(work.body.meta).not.toHaveProperty("issues")
+    const asked = await call("search all", { query: "chapter", only: ["meetings"] })
+    expect(asked.body.meta.issues).toEqual([{ code: "not_found", source: "meetings" }])
   })
 
   it("search all and search messages mark what others wrote untrusted and escape its control characters", async () => {
