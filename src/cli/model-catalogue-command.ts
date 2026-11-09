@@ -13,6 +13,7 @@ import { install, installedBytes, isInstalled, modelsDirectory } from "../speech
 import { DEFAULT_ORDER, orderedModels, speechModel } from "../speech/models.js"
 import { readSecret } from "../terminal/prompt.js"
 import { stepLines } from "../terminal/step-lines.js"
+import { aiModelCommand } from "./ai-model-command.js"
 import { FETCH, grantsAuthority, LOCAL_READ, LOCAL_WRITE, NO_EFFECTS } from "./effects.js"
 import { enrichmentConsentsCommand } from "./enrichment-consents-command.js"
 import { type Body, itemOf, listOf } from "./envelope.js"
@@ -175,6 +176,7 @@ export const modelCatalogueCommand = (app: AppIdentity, options: ModelCatalogueO
     models.addCommand(enrichmentConsentsCommand(app, options))
     models.addCommand(harderConsentsCommand(app, options))
     models.addCommand(providerKeysCommand(app, options))
+    models.addCommand(aiModelCommand(app, options))
   }
   if (options.jsonOption)
     for (const command of models.commands.flatMap((one) => (one.commands.length ? one.commands : [one])))
