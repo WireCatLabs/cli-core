@@ -3,10 +3,25 @@ export {
   AGENT_INPUT_MAX_CHARS,
   type AgentCli,
   type AgentInput,
+  type CalendarWhen,
+  calendarOf,
+  describeWhen,
+  isCalendar,
+  lastRun,
+  nextRun,
+  previousRun,
   readSchedule,
+  runsBetween,
   SCHEDULE_DEFAULTS,
+  type Schedule,
+  type Slot,
   scheduleFile,
+  scheduleName,
+  slotsOf,
   spentToday,
+  WEEKDAYS,
+  type Weekday,
+  type When,
 } from "../background/schedules.js"
 export { parseDuration } from "../domain/duration.js"
 export {
@@ -555,11 +570,18 @@ export {
 export { STATUS_ROWS, STATUS_SIGNAL_ROWS } from "./project-status-rows.js"
 export { fieldsOf, projectFields } from "./result-fields.js"
 export {
+  type AgentScheduleSpec,
+  agentSchedule,
   backfillScheduleRun,
+  type Harness,
+  removeSchedule,
+  runScheduleNow,
   SCHEDULE_SETTINGS,
   type ScheduleHost,
   type ScheduleLimits,
+  type ScheduleSite,
   scheduleLimitsOf,
+  writeSchedule,
 } from "./schedule/schedule-command.js"
 export { deniedKinds, deniedKindsOf, type LeftOut, type SearchedKind } from "./search-left-out.js"
 export { type DeclaredSetting, type SettingRow, settingRows, withSettingDefaults } from "./setting-defaults.js"

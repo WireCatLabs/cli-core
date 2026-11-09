@@ -37,6 +37,8 @@ export const scheduledJob = v.strictObject({
   name: text,
   kind: v.picklist(["command", "agent"]),
   when: text,
+  /** Kept without its timer: `schedule run` runs it, `schedule resume` puts it back on its timer. */
+  paused: v.optional(v.literal(true)),
   /** When a finished run shows a desktop notice: `always`, `failures` or `never`; the default is shown, not left out. */
   notify: v.optional(v.picklist(["always", "failures", "never"])),
   /** Where a run's result is sent after it: `telegram-bot:<profile>/<chat>` or `email:<profile>/<address>`. */

@@ -6,10 +6,11 @@ import { Argument, Command, Option } from "commander"
 import { backfillSchedule } from "../../background/backfill.js"
 import { parseRoute, ROUTE_HELP, routeText } from "../../background/deliver.js"
 import { REPORT_CHANNELS, type StoredTemplates } from "../../background/report/render.js"
-import { keyOfKind } from "../../background/report/stored-templates.js"
+import { reportKeysOf } from "../../background/report/stored-templates.js"
 import {
   type AgentCli,
   type AgentInput,
+  calendarOf,
   describeWhen,
   findProgram,
   lastRun,
@@ -24,6 +25,7 @@ import {
   type Schedule,
   SKIP_REASONS,
   type SkipReason,
+  type Slot,
   scheduleFile,
   scheduleName,
   spentToday,
@@ -55,7 +57,7 @@ const AGENT_MINIMUM_MINUTES = 60
 const GATED_AGENT_MINIMUM_MINUTES = 5
 const COMMAND_MINIMUM_MINUTES = 1
 const HARNESSES = ["claude", "codex"] as const
-type Harness = (typeof HARNESSES)[number]
+export type Harness = (typeof HARNESSES)[number]
 /** A mid-tier model by default; codex has no alias of that tier, so it takes its own default. Empty: the harness's own. */
 const AGENT_MODELS: Record<Harness, string> = { claude: "sonnet", codex: "" }
 /** An alias or a model id; a leading dash would read as the harness's next flag. */
@@ -68,17 +70,36 @@ const LEAN_CLAUDE = ["--tools", "Bash", "--strict-mcp-config", "--disable-slash-
 
 interface WhenOptions {
   every?: string
-  at?: string
+  at?: string[]
   atTime?: string
   notifyOn?: Notify
   deliverTo?: string[]
 }
 
-const whenOf = ({ every, at, atTime }: WhenOptions, minimum: number): When => {
-  if ([every ?? at, atTime].filter(Boolean).length !== 1) {
+const CLOCK = /^([01]\d|2[0-3]):[0-5]\d$/
+
+/** One `--at`: `HH:MM` every day, or weekdays and a time, `mon 09:00` or `mon,fri 09:00`. */
+const slotsOfAt = (at: string): Slot[] => {
+  const [, words, clock = ""] = /^\s*(?:([a-z,]+)\s+)?(\S+)\s*$/i.exec(at) ?? []
+  if (!CLOCK.test(clock))
     throw new CliError(
       "validation_error",
-      "say when: --every <30m|2h|1d>, --at HH:MM (daily) or --at 'mon HH:MM' (weekly), or --at-time <30m|2d|ISO time>",
+      `--at takes HH:MM, or a weekday and HH:MM such as 'mon 09:00' or 'mon,fri 09:00'; not "${at}"`,
+    )
+  if (words === undefined) return [{ at: clock }]
+  return words.split(",").map((word) => {
+    const day = word.toLowerCase().slice(0, 3)
+    if (!(WEEKDAYS as readonly string[]).includes(day))
+      throw new CliError("validation_error", `--at takes a weekday, ${WEEKDAYS.join(", ")}; not "${word}"`)
+    return { at: clock, on: day as Weekday }
+  })
+}
+
+const whenOf = ({ every, at = [], atTime }: WhenOptions, minimum: number): When => {
+  if ([every ?? at[0], atTime].filter(Boolean).length !== 1 || (atTime && at.length > 0)) {
+    throw new CliError(
+      "validation_error",
+      "say when: --every <30m|2h|1d>, --at HH:MM (daily) or --at 'mon HH:MM' (weekly), repeated for more times, or --at-time <30m|2d|ISO time>",
     )
   }
   if (atTime) {
@@ -86,25 +107,19 @@ const whenOf = ({ every, at, atTime }: WhenOptions, minimum: number): When => {
     if (time <= Date.now()) throw new CliError("validation_error", "--at-time is in the past")
     return { once: new Date(time).toISOString() }
   }
-  if (at) {
-    const [, word, clock = ""] = /^\s*(?:([a-z]+)\s+)?(\S+)\s*$/i.exec(at) ?? []
-    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(clock))
+  if (at.length > 0) {
+    const when = calendarOf(at.flatMap(slotsOfAt))
+    if (every && ("calendar" in when || "weekly" in when || parseDuration(every, "--every") !== 86_400_000)) {
       throw new CliError(
         "validation_error",
-        `--at takes HH:MM, or a weekday and HH:MM such as 'mon 09:00'; not "${at}"`,
-      )
-    const day = word?.toLowerCase().slice(0, 3)
-    if (word !== undefined && !(WEEKDAYS as readonly string[]).includes(day ?? ""))
-      throw new CliError("validation_error", `--at takes a weekday, ${WEEKDAYS.join(", ")}; not "${word}"`)
-    if (every && (day !== undefined || parseDuration(every, "--every") !== 86_400_000)) {
-      throw new CliError(
-        "validation_error",
-        day === undefined
+        "daily" in when
           ? "--at runs once a day; leave out --every, or use --every 1d"
-          : "a weekday in --at runs once a week; leave out --every",
+          : "weekly" in when
+            ? "a weekday in --at runs once a week; leave out --every"
+            : "--at sets the times; leave out --every",
       )
     }
-    return day === undefined ? { daily: clock } : { weekly: clock, on: day as Weekday }
+    return when
   }
   const minutes = parseDuration(every ?? "", "--every") / 60_000
   if (!Number.isInteger(minutes) || minutes < minimum) {
@@ -142,7 +157,11 @@ const scheduleAnswer = ({ environment, createdAt, to, ...schedule }: Schedule, e
 const withWhen = (command: Command) =>
   command
     .option("--every <duration>", "repeat: 30m, 2h, 1d")
-    .option("--at <HH:MM>", `every day at this local time; 'mon 09:00' once a week (${WEEKDAYS.join(", ")})`)
+    .option(
+      "--at <HH:MM>",
+      `every day at this local time; 'mon 09:00' once a week, 'mon,fri 09:00' on several days (${WEEKDAYS.join(", ")}); repeat it for more times`,
+      (at: string, all: string[] = []) => [...all, at],
+    )
     .option("--at-time <time>", "one run: 30m, 2d from now, or an ISO time; the schedule removes itself after it")
     .addOption(
       new Option(
@@ -291,13 +310,18 @@ export const ownerLanguageOf = async (env: NodeJS.ProcessEnv): Promise<string> =
 
 /** The templates the owner saved for a report, read without migrating the store; none when there is no store. */
 const reportTemplatesOf =
-  (env: NodeJS.ProcessEnv): StoredTemplates =>
+  (env: NodeJS.ProcessEnv, schedule?: string): StoredTemplates =>
   async (kind, language) => {
     const path = storePath(env)
     if (!existsSync(path)) return {}
     const database = await openCache(path)
     try {
-      const bodies = storedTemplateBodies(database, keyOfKind(kind), language)
+      const bodies = Object.assign(
+        {},
+        ...reportKeysOf(kind, schedule)
+          .reverse()
+          .map((key) => storedTemplateBodies(database, key, language)),
+      ) as Record<string, string>
       return Object.fromEntries(
         REPORT_CHANNELS.flatMap((channel) => (channel in bodies ? [[channel, bodies[channel]]] : [])),
       )
@@ -334,6 +358,172 @@ export const backfillScheduleRun = (
     ),
   )
 
+/** Where a schedule is written and for whom: the CLI, the machine, the run's variables and its profile. */
+export interface ScheduleSite {
+  app: AppIdentity
+  system: ServerSystem
+  env: NodeJS.ProcessEnv
+  profile: string
+  /** Other CLIs an agent may run besides this one, each under its own read-only lock. */
+  agentRuns?: readonly AgentCli[]
+  /** The config file's agent-schedule settings. */
+  limits?: ScheduleLimits
+}
+
+const stateOf = ({ app, env }: Pick<ScheduleSite, "app" | "env">) =>
+  resolvePaths({ appName: app.appName, prefix: app.envPrefix, env }).state
+
+/** The variables a run gets on top of the timer's: the profile, where the files are, PATH. Never a credential. */
+const scheduleEnvironment = ({ app, env, profile }: ScheduleSite): Record<string, string> => {
+  // The command line refuses a schedule under the lock; a caller that gets here still passes the lock on.
+  const readOnly = readOnlyLockOf(app, env)
+  return {
+    [`${app.envPrefix}_PROFILE`]: profile,
+    ...locationVariables(app, env),
+    // The timer starts with almost no PATH; an agent runs the CLI and its own tools by name.
+    ...(env.PATH ? { PATH: env.PATH } : {}),
+    ...(readOnly ? { [readOnly]: "1" } : {}),
+  }
+}
+
+/** An agent schedule as `schedule agent` makes it; the caller has checked the flags it was given. */
+export interface AgentScheduleSpec {
+  name: string
+  harness: Harness
+  prompt: string
+  when: When
+  /** An alias or a model id; "" for the harness's own default; absent for the config file's, else ours. */
+  model?: string
+  /** Claude only: a run that costs more is stopped, in US dollars. */
+  maxCost?: number
+  maxCostPerDay?: number
+  onNewMail?: string
+  mailWaitMinutes?: number
+  mailBatch?: number
+  notify?: Notify
+  to?: string[]
+  paused?: boolean
+}
+
+/** The schedule `spec` describes, with the harness's argv built here, never by the caller: its limits live in it. */
+export const agentSchedule = (site: ScheduleSite, spec: AgentScheduleSpec): Schedule => {
+  const { app, system, env, agentRuns = [], limits = {} } = site
+  const { harness, prompt } = spec
+  if (spec.model !== undefined && !isModel(spec.model))
+    throw new CliError("validation_error", `--model takes an alias such as sonnet or a model id, not "${spec.model}"`)
+  const model = spec.model ?? limits.models?.[harness] ?? AGENT_MODELS[harness]
+  const modelFlag = model ? ["--model", model] : []
+  const program = findProgram(harness, env, system.platform)
+  if (!program) throw new CliError("not_found", `${harness} is not on PATH`)
+  const agentClis = [app, ...agentRuns]
+  const folders = agentClis.flatMap((one) => {
+    const paths = resolvePaths({ appName: one.appName, prefix: one.envPrefix, env })
+    return [paths.state, paths.config, paths.cache]
+  })
+  const argv =
+    harness === "claude"
+      ? [
+          program,
+          "-p",
+          prompt,
+          // The owner's own settings may let every tool run (bypassPermissions); here only the CLI may.
+          "--permission-mode",
+          "dontAsk",
+          "--allowedTools",
+          ...agentClis.map((one) => `Bash(${one.command}:*)`),
+          "--no-session-persistence",
+          ...modelFlag,
+          ...((limits.leanStart ?? true) ? LEAN_CLAUDE : []),
+          ...(spec.maxCost ? ["--max-budget-usd", String(spec.maxCost)] : []),
+        ]
+      : [
+          program,
+          "exec",
+          "--skip-git-repo-check",
+          "--ephemeral",
+          "--sandbox",
+          "workspace-write",
+          // The CLIs reach their provider and write the store and their own state, and nothing else.
+          "-c",
+          "sandbox_workspace_write.network_access=true",
+          ...modelFlag,
+          ...[dirname(storePath(env)), ...folders].flatMap((dir) => ["--add-dir", dir]),
+          prompt,
+        ]
+  return {
+    name: scheduleName(spec.name),
+    kind: "agent",
+    argv,
+    when: spec.when,
+    environment: scheduleEnvironment(site),
+    createdAt: new Date().toISOString(),
+    ...(spec.onNewMail ? { onNewMail: spec.onNewMail } : {}),
+    ...(spec.mailWaitMinutes === undefined ? {} : { mailWaitMinutes: spec.mailWaitMinutes }),
+    ...(spec.mailBatch === undefined ? {} : { mailBatch: spec.mailBatch }),
+    ...(spec.maxCostPerDay === undefined ? {} : { maxCostPerDay: spec.maxCostPerDay }),
+    ...(spec.notify ? { notify: spec.notify } : {}),
+    ...(spec.to?.length ? { to: spec.to } : {}),
+    ...(spec.paused ? { paused: true } : {}),
+  }
+}
+
+/**
+ * Writes the schedule's file and puts it on its timer, or takes it off when it is paused. A name another profile's
+ * schedule holds is refused.
+ */
+export const writeSchedule = async (
+  site: ScheduleSite,
+  schedule: Schedule,
+): Promise<{ file: string; timer: string; replaced: boolean }> => {
+  const { app, system, env, profile } = site
+  const file = scheduleFile(stateOf(site), schedule.name)
+  const replaced = existsSync(file)
+  if (replaced) {
+    const owner = readSchedule(file).environment[`${app.envPrefix}_PROFILE`]
+    if (owner && owner !== profile) {
+      throw new CliError(
+        "validation_error",
+        `schedule ${schedule.name} already runs for profile ${owner}; name this one for ${profile}, e.g. ${schedule.name}-${profile}`,
+      )
+    }
+  }
+  writeSecurely(file, `${JSON.stringify(schedule, null, 2)}\n`, 0o600)
+  const timer = timerFor(app, system, env)
+  if (schedule.paused) await timer.remove(schedule.name)
+  else await timer.install(schedule, [...system.entry, "schedule", "exec", file])
+  return { file, timer: timer.where(schedule.name), replaced }
+}
+
+/** Takes the schedule off its timer and removes its file; its past runs stay. */
+export const removeSchedule = async (site: ScheduleSite, name: string): Promise<void> => {
+  const file = scheduleFile(stateOf(site), scheduleName(name))
+  if (!existsSync(file)) throw new CliError("not_found", `no schedule ${name}`)
+  await timerFor(site.app, site.system, site.env).remove(name)
+  rmSync(file, { force: true })
+}
+
+/**
+ * Runs the schedule in `file` now, as `schedule run` does: its report rendered with the owner's language and templates
+ * and sent along `routes` (its own when absent, none when empty). A stop of the command stops the agent.
+ */
+export const runScheduleNow = (
+  command: Command,
+  site: ScheduleSite,
+  file: string,
+  { routes, agentInput }: { routes?: readonly string[]; agentInput?: AgentInput } = {},
+) =>
+  untilChildEnds(command, (signal) =>
+    runSchedule(site.app, site.system, site.env, file, {
+      timer: timerFor(site.app, site.system, site.env),
+      agentRuns: site.agentRuns ?? [],
+      ownerLanguage: ownerLanguageOf,
+      reportTemplates: reportTemplatesOf,
+      ...(agentInput ? { agentInput } : {}),
+      ...(routes ? { routes } : {}),
+      ...(signal ? { signal } : {}),
+    }),
+  )
+
 /**
  * Runs the CLI's own commands, or an agent, later or on a timer — through systemd (Linux), launchd
  * (macOS) or Task Scheduler (Windows). Every timer runs `schedule exec <file>`; the schedule file holds
@@ -355,39 +545,27 @@ export const scheduleCommandFor = ({
   const prepare = (self: Command, resolving: { needsProfile?: boolean } = {}) => {
     const context = contextOf(self, resolving)
     const system = environmentOf<BaseEnvironment & { system?: ServerSystem }>(self).system ?? thisMachine()
-    const state = resolvePaths({ appName: app.appName, prefix: app.envPrefix, env: context.env }).state
+    const site: ScheduleSite = {
+      app,
+      system,
+      env: context.env,
+      profile: context.profile,
+      agentRuns,
+      limits: configured?.(self) ?? {},
+    }
+    const state = stateOf(site)
     const say = (value: object, lines: string[]) => renderAnswer(self, context, itemOf(value), () => lines.join("\n"))
     const timer = () => timerFor(app, system, context.env)
-    // The command line refuses a schedule under the lock; a caller that gets here still passes the lock on.
-    const readOnly = readOnlyLockOf(app, context.env)
-    const environment = (): Record<string, string> => ({
-      [`${app.envPrefix}_PROFILE`]: context.profile,
-      ...locationVariables(app, context.env),
-      // The timer starts with almost no PATH; an agent runs `max` and its own tools by name.
-      ...(context.env.PATH ? { PATH: context.env.PATH } : {}),
-      ...(readOnly ? { [readOnly]: "1" } : {}),
-    })
+    const environment = () => scheduleEnvironment(site)
     const save = async (schedule: Schedule) => {
-      const file = scheduleFile(state, schedule.name)
-      const replaced = existsSync(file)
-      if (replaced) {
-        const owner = readSchedule(file).environment[`${app.envPrefix}_PROFILE`]
-        if (owner && owner !== context.profile) {
-          throw new CliError(
-            "validation_error",
-            `schedule ${schedule.name} already runs for profile ${owner}; name this one for ${context.profile}, e.g. ${schedule.name}-${context.profile}`,
-          )
-        }
-      }
-      writeSecurely(file, `${JSON.stringify(schedule, null, 2)}\n`, 0o600)
-      await timer().install(schedule, [...system.entry, "schedule", "exec", file])
-      say(scheduleAnswer(schedule, { file, timer: timer().where(schedule.name), replaced }), [
-        `${replaced ? "Replaced" : "Added"} ${schedule.name}: ${describeWhen(schedule.when)}.`,
+      const { file, timer: where, replaced } = await writeSchedule(site, schedule)
+      say(scheduleAnswer(schedule, { file, timer: where, replaced }), [
+        `${replaced ? "Replaced" : "Added"} ${schedule.name}: ${describeWhen(schedule.when)}${schedule.paused ? ", paused" : ""}.`,
         `It runs: ${schedule.kind === "agent" ? shown(schedule.argv) : `${app.command} ${shown(schedule.argv)}`}`,
         `Output: ${join(dirname(file), "runs")} · now: ${lineOf(self, `schedule run ${schedule.name}`)} · stop: ${lineOf(self, `schedule remove ${schedule.name}`)}`,
       ])
     }
-    return { context, system, state, say, timer, environment, save }
+    return { context, system, state, say, timer, environment, save, site }
   }
   /**
    * Why a run does not start now, or nothing: an agent whose runs reached the day's cost cap waits for tomorrow, and
@@ -500,7 +678,7 @@ export const scheduleCommandFor = ({
         ).argParser(Number),
       ),
   ).action(async function (this: Command, name: string, harness: Harness, prompt: string) {
-    const { context, system, environment, save } = prepare(this)
+    const { site, save } = prepare(this)
     const options = this.opts<
       WhenOptions & {
         model?: string
@@ -522,63 +700,21 @@ export const scheduleCommandFor = ({
       throw new CliError("validation_error", "--mail-batch takes a count of emails, 1 or more")
     const mailWaitMinutes =
       options.mailWait === undefined ? undefined : Math.ceil(parseDuration(options.mailWait, "--mail-wait") / 60_000)
-    if (options.model !== undefined && !isModel(options.model))
-      throw new CliError(
-        "validation_error",
-        `--model takes an alias such as sonnet or a model id, not "${options.model}"`,
-      )
-    const settings = configured?.(this) ?? {}
-    const model = options.model ?? settings.models?.[harness] ?? AGENT_MODELS[harness]
-    const modelFlag = model ? ["--model", model] : []
-    const program = findProgram(harness, context.env, system.platform)
-    if (!program) throw new CliError("not_found", `${harness} is not on PATH`)
-    const folders = agentClis.flatMap((one) => {
-      const paths = resolvePaths({ appName: one.appName, prefix: one.envPrefix, env: context.env })
-      return [paths.state, paths.config, paths.cache]
-    })
-    const argv =
-      harness === "claude"
-        ? [
-            program,
-            "-p",
-            prompt,
-            // The owner's own settings may let every tool run (bypassPermissions); here only the CLI may.
-            "--permission-mode",
-            "dontAsk",
-            "--allowedTools",
-            ...agentClis.map((one) => `Bash(${one.command}:*)`),
-            "--no-session-persistence",
-            ...modelFlag,
-            ...((settings.leanStart ?? true) ? LEAN_CLAUDE : []),
-            ...(options.maxCost ? ["--max-budget-usd", String(options.maxCost)] : []),
-          ]
-        : [
-            program,
-            "exec",
-            "--skip-git-repo-check",
-            "--ephemeral",
-            "--sandbox",
-            "workspace-write",
-            // The CLIs reach their provider and write the store and their own state, and nothing else.
-            "-c",
-            "sandbox_workspace_write.network_access=true",
-            ...modelFlag,
-            ...[dirname(storePath(context.env)), ...folders].flatMap((dir) => ["--add-dir", dir]),
-            prompt,
-          ]
-    await save({
-      name: scheduleName(name),
-      kind: "agent",
-      argv,
-      when: whenOf(options, options.onNewMail ? GATED_AGENT_MINIMUM_MINUTES : AGENT_MINIMUM_MINUTES),
-      environment: environment(),
-      createdAt: new Date().toISOString(),
-      ...(options.onNewMail ? { onNewMail: options.onNewMail } : {}),
-      ...(mailWaitMinutes === undefined ? {} : { mailWaitMinutes }),
-      ...(mailBatch === undefined ? {} : { mailBatch }),
-      ...(options.maxCostPerDay === undefined ? {} : { maxCostPerDay: options.maxCostPerDay }),
-      ...deliveryOf(options),
-    })
+    await save(
+      agentSchedule(site, {
+        name,
+        harness,
+        prompt,
+        when: whenOf(options, options.onNewMail ? GATED_AGENT_MINIMUM_MINUTES : AGENT_MINIMUM_MINUTES),
+        ...(options.model === undefined ? {} : { model: options.model }),
+        ...(options.maxCost ? { maxCost: options.maxCost } : {}),
+        ...(options.maxCostPerDay === undefined ? {} : { maxCostPerDay: options.maxCostPerDay }),
+        ...(options.onNewMail ? { onNewMail: options.onNewMail } : {}),
+        ...(mailWaitMinutes === undefined ? {} : { mailWaitMinutes }),
+        ...(mailBatch === undefined ? {} : { mailBatch }),
+        ...deliveryOf(options),
+      }),
+    )
   })
   if (newMail)
     command.commands
@@ -611,6 +747,7 @@ export const scheduleCommandFor = ({
         name: schedule.name,
         kind: schedule.kind,
         when: describeWhen(schedule.when),
+        ...(schedule.paused ? { paused: true } : {}),
         notify: notifyOf(schedule),
         ...(schedule.to?.length ? { deliverTo: schedule.to } : {}),
         last: lastRun(scheduleFile(state, schedule.name)) ?? null,
@@ -633,11 +770,11 @@ export const scheduleCommandFor = ({
           return ""
         }
         return rows
-          .map(({ name, kind, when, notify, deliverTo, last, spentTodayUsd, maxCostPerDayUsd }) =>
+          .map(({ name, kind, when, paused, notify, deliverTo, last, spentTodayUsd, maxCostPerDayUsd }) =>
             [
               name,
               kind,
-              when,
+              paused ? `${when}, paused` : when,
               `notify ${notify}`,
               ...(deliverTo ? [`to ${deliverTo.join(", ")}`] : []),
               last
@@ -666,24 +803,41 @@ export const scheduleCommandFor = ({
     effects: REMOTE_WRITE,
     examples: [`${app.command} personal schedule run health`],
   })
-    .description("run a schedule now, as its timer would, and wait for it")
+    .description("run a schedule now, as its timer would, and wait for it; a paused one runs too")
     .argument("<name>", "the schedule's name, as `schedule list` shows it")
-    .action(async function (this: Command, name: string) {
-      const { context, system, state, say, timer } = prepare(this)
-      const skip = await waits(this, scheduleFile(state, scheduleName(name)), { timed: false })
+    .option("--no-notify", "keep the result here: send it along none of its routes")
+    .option(
+      "--deliver-to <route>",
+      "send it along only this one of its own routes; repeat it for more",
+      (route: string, routes: string[] = []) => [...routes, routeText(parseRoute(route))],
+    )
+    .action(async function (this: Command, name: string, given: { notify: boolean; deliverTo?: string[] }) {
+      const { state, say, site } = prepare(this)
+      const file = scheduleFile(state, scheduleName(name))
+      const routes = given.notify ? given.deliverTo : []
+      if (!given.notify && given.deliverTo)
+        throw new CliError(
+          "validation_error",
+          "--no-notify sends nothing; leave out --deliver-to, or leave out --no-notify",
+        )
+      if (routes?.length && existsSync(file)) {
+        const own = readSchedule(file).to ?? []
+        const other = routes.filter((route) => !own.includes(route))
+        // Any other route would send the owner's report somewhere the schedule was never told to.
+        if (other.length)
+          throw new CliError(
+            "validation_error",
+            `--deliver-to takes only ${name}'s own routes (${own.join(", ") || "it has none"}); not ${other.join(", ")}`,
+          )
+      }
+      const skip = await waits(this, file, { timed: false })
       if (skip !== undefined) {
         return say({ name, skipped: true, why: skip.why, reason: skip.reason }, [`${name}: skipped — ${skip.why}`])
       }
-      const last = await untilChildEnds(this, (signal) =>
-        runSchedule(app, system, context.env, scheduleFile(state, scheduleName(name)), {
-          timer: timer(),
-          agentRuns,
-          ownerLanguage: ownerLanguageOf,
-          reportTemplates: reportTemplatesOf,
-          ...(agentInput ? { agentInput } : {}),
-          ...(signal ? { signal } : {}),
-        }),
-      )
+      const last = await runScheduleNow(this, site, file, {
+        ...(agentInput ? { agentInput } : {}),
+        ...(routes ? { routes } : {}),
+      })
       say(snakeKeys({ name, ...last }) as object, [`${name}: exit ${last.exitCode} — ${last.output}`])
       if (last.exitCode !== 0) setExitCode(this, 1)
     })
@@ -697,14 +851,45 @@ export const scheduleCommandFor = ({
     .description("stop a schedule and remove its timer; its past output stays")
     .argument("<name>", "the schedule's name, as `schedule list` shows it")
     .action(async function (this: Command, name: string) {
-      const { state, say, timer } = prepare(this)
+      const { state, say, site } = prepare(this)
+      if (!existsSync(scheduleFile(state, scheduleName(name))))
+        throw new CliError("not_found", `no schedule ${name} — \`${lineOf(this, "schedule list")}\``)
+      await removeSchedule(site, name)
+      say({ name, removed: true }, [`Removed ${name}.`])
+    })
+
+  const setPaused = (paused: boolean) =>
+    async function (this: Command, name: string) {
+      const { state, say, site } = prepare(this)
       const file = scheduleFile(state, scheduleName(name))
       if (!existsSync(file))
         throw new CliError("not_found", `no schedule ${name} — \`${lineOf(this, "schedule list")}\``)
-      await timer().remove(name)
-      rmSync(file, { force: true })
-      say({ name, removed: true }, [`Removed ${name}.`])
-    })
+      const { paused: _, ...schedule } = readSchedule(file)
+      const { timer } = await writeSchedule(site, paused ? { ...schedule, paused: true } : schedule)
+      say({ name, paused, timer }, [
+        paused
+          ? `Paused ${name}: no timer starts it; ${lineOf(this, `schedule run ${name}`)} still does.`
+          : `Resumed ${name}: ${describeWhen(schedule.when)}.`,
+      ])
+    }
+  grantsAuthority(
+    annotate(command.command("pause"), {
+      effects: LOCAL_WRITE,
+      examples: [`${app.command} personal schedule pause health`],
+    }),
+  )
+    .description("take a schedule off its timer and keep it; run runs it, resume puts it back")
+    .argument("<name>", "the schedule's name, as `schedule list` shows it")
+    .action(setPaused(true))
+  grantsAuthority(
+    annotate(command.command("resume"), {
+      effects: LOCAL_WRITE,
+      examples: [`${app.command} personal schedule resume health`],
+    }),
+  )
+    .description("put a paused schedule back on its timer")
+    .argument("<name>", "the schedule's name, as `schedule list` shows it")
+    .action(setPaused(false))
 
   annotate(command.command("exec"), {
     effects: REMOTE_WRITE,
@@ -715,6 +900,8 @@ export const scheduleCommandFor = ({
     .action(async function (this: Command, file: string) {
       // A timer starts it with no profile named; the schedule's own environment carries the profile.
       const { context, system, timer } = prepare(this, { needsProfile: false })
+      // A timer left behind by a pause that could not remove it must not run the schedule.
+      if (existsSync(file) && readSchedule(file).paused) return
       if ((await waits(this, file, { timed: true })) !== undefined) return
       const last = await untilChildEnds(this, (signal) =>
         runSchedule(app, system, context.env, file, {

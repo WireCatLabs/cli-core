@@ -17,10 +17,12 @@ import {
 import {
   checkTemplateSave,
   previewView,
+  reportKeyOf,
+  reportKeysOf,
   shippedLanguages,
   TEMPLATE_KEYS,
-  templateKeyOf,
 } from "../background/report/stored-templates.js"
+import { listSchedules } from "../background/schedules.js"
 import { template } from "../entities/index.js"
 import type { AppIdentity } from "../ports/app.js"
 import { agentOf } from "../runs/run-context.js"
@@ -88,12 +90,16 @@ const addressOf = async (
   key: string,
   given: { channel: ReportChannel; locale?: string },
   env: NodeJS.ProcessEnv,
-): Promise<{ address: TemplateAddress; kind: MessageKind; channel: ReportChannel }> => {
-  const known = templateKeyOf(key)
+  state: string,
+): Promise<{ address: TemplateAddress; kind: MessageKind; channel: ReportChannel; schedule?: string }> => {
+  const known = reportKeyOf(
+    key,
+    listSchedules(state, { kind: "agent" }).map((one) => one.name),
+  )
   if (!known)
     throw new CliError(
       "validation_error",
-      `no template ${key}; the keys are ${TEMPLATE_KEYS.map((one) => one.key).join(", ")}`,
+      `no template ${key}; the keys are ${TEMPLATE_KEYS.map((one) => one.key).join(", ")}, or report/<schedule> for an agent schedule's digest`,
       {
         reason: "template.unknown-key",
       },
@@ -106,8 +112,19 @@ const addressOf = async (
       `${key} has templates in ${languages.join(", ")}; a ${language} one would never be used`,
       { reason: "template.unknown-language" },
     )
-  return { address: { key, channel: given.channel, language }, kind: known.kind, channel: given.channel }
+  return {
+    address: { key, channel: given.channel, language },
+    kind: known.kind,
+    channel: given.channel,
+    ...(known.schedule ? { schedule: known.schedule } : {}),
+  }
 }
+
+/** The stored body that applies to `address`: its own, else the one its digest falls back to; undefined for shipped. */
+const appliedBody = (store: MessageStore, address: TemplateAddress, kind: MessageKind, schedule?: string) =>
+  reportKeysOf(kind, schedule)
+    .map((key) => store.templates.get({ ...address, key })?.body)
+    .find((body) => body !== undefined)
 
 const refuseAgent = (env: NodeJS.ProcessEnv) => {
   // A template decides what every later digest says to the owner; an agent could make it hide or invent things.
@@ -155,7 +172,12 @@ export const templatesCommand = (app: AppIdentity, options: TemplatesOptions): C
       const terms = queryTerms(words, TEMPLATES_QUERY, "templates list")
       const env = options.env()
       const stored = await withStore(env, (store) => store.templates.list())
-      const items = TEMPLATE_KEYS.flatMap((known) =>
+      const agents = listSchedules(stateOf(app, env), { kind: "agent" }).map((one) => one.name)
+      const own = [...new Set(stored.map((one) => one.key))].flatMap((key) => {
+        const known = reportKeyOf(key, agents)
+        return known?.schedule ? [known] : []
+      })
+      const items = [...TEMPLATE_KEYS, ...own].flatMap((known) =>
         REPORT_CHANNELS.flatMap((channel) =>
           shippedLanguages(known.kind).map((language) => {
             const row = stored.find(
@@ -189,13 +211,14 @@ export const templatesCommand = (app: AppIdentity, options: TemplatesOptions): C
     .addOption(localeOption())
     .action(async function (this: Command, key: string, given: { channel: ReportChannel; locale?: string }) {
       const env = options.env()
-      const { address, kind, channel } = await addressOf(key, given, env)
+      const { address, kind, channel, schedule } = await addressOf(key, given, env, stateOf(app, env))
       const item = await withStore(env, (store) => {
         const row = store.templates.get(address)
+        const applied = appliedBody(store, address, kind, schedule)
         return {
           ...address,
-          source: row ? "stored" : "default",
-          body: row?.body ?? defaultTemplate(kind, channel, address.language),
+          source: row ? "stored" : applied === undefined ? "default" : "inherited",
+          body: applied ?? defaultTemplate(kind, channel, address.language),
           updated_at: row ? new Date(row.updatedAt).toISOString() : null,
           updated_by: row?.updatedBy ?? null,
           history: historyOf(store, address),
@@ -234,9 +257,9 @@ export const templatesCommand = (app: AppIdentity, options: TemplatesOptions): C
     ) {
       const env = options.env()
       refuseAgent(env)
-      const { address, kind, channel } = await addressOf(key, given, env)
+      const { address, kind, channel, schedule } = await addressOf(key, given, env, stateOf(app, env))
       const { current, previous } = await withStore(env, (store) => ({
-        current: store.templates.get(address)?.body,
+        current: appliedBody(store, address, kind, schedule),
         previous: store.templates.history(address, 1)[0]?.body,
       }))
       const effective = current ?? defaultTemplate(kind, channel, address.language)
@@ -276,6 +299,7 @@ export const templatesCommand = (app: AppIdentity, options: TemplatesOptions): C
         body,
         state: stateOf(app, env),
         now: Date.now(),
+        ...(schedule ? { schedule } : {}),
       })
       const problems = checks.flatMap((check) => check.problems.map((problem) => `${check.against}: ${problem}`))
       if (problems.length > 0)
@@ -324,11 +348,13 @@ export const templatesCommand = (app: AppIdentity, options: TemplatesOptions): C
       given: { channel: ReportChannel; locale?: string; file?: string },
     ) {
       const env = options.env()
-      const { address, kind, channel } = await addressOf(key, given, env)
+      const { address, kind, channel, schedule } = await addressOf(key, given, env, stateOf(app, env))
       const stored =
-        given.file === undefined ? await withStore(env, (store) => store.templates.get(address)?.body) : undefined
+        given.file === undefined
+          ? await withStore(env, (store) => appliedBody(store, address, kind, schedule))
+          : undefined
       const body = given.file === undefined ? stored : readFileSync(given.file === "-" ? 0 : given.file, "utf8")
-      const { against, view } = previewView(stateOf(app, env), kind, address.language, Date.now())
+      const { against, view } = previewView(stateOf(app, env), kind, address.language, Date.now(), schedule)
       const rendering = await renderReport(view, channel, body === undefined ? {} : { template: body })
       const problems = body === undefined ? [] : (await checkTemplate(view, channel, body)).problems
       options.output(
@@ -358,7 +384,7 @@ export const templatesCommand = (app: AppIdentity, options: TemplatesOptions): C
     .action(async function (this: Command, key: string, given: { channel: ReportChannel; locale?: string }) {
       const env = options.env()
       refuseAgent(env)
-      const { address } = await addressOf(key, given, env)
+      const { address } = await addressOf(key, given, env, stateOf(app, env))
       const changed = await withStore(env, (store) => store.templates.reset(address))
       options.diagnostic(
         changed

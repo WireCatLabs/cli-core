@@ -268,3 +268,44 @@ describe("templates", () => {
     expect(failing?.run.reasons).toEqual(["report.template-failed"])
   })
 })
+
+describe("templates of one digest schedule", () => {
+  const withSchedule = (name: string) => {
+    const made = fixture()
+    const file = join(made.env.FIXTURE_STATE_DIR ?? "", "schedules", name, "schedule.json")
+    mkdirSync(join(file, ".."), { recursive: true })
+    writeFileSync(file, JSON.stringify({ name, kind: "agent", argv: [], when: { daily: "08:30" }, environment: {} }))
+    return made
+  }
+
+  it("takes report/<schedule> for an agent schedule, falls back to the morning digest's, and keeps them apart", async () => {
+    const { run, item, file, env, answers } = withSchedule("weekly")
+    const morning = `<b>Morning</b>\n${shipped("telegram")}`
+    await run("edit", KEY, "--channel", "telegram", "--file", file("m.liquid", morning))
+    await run("show", "report/weekly", "--channel", "telegram")
+    expect(item()).toMatchObject({ key: "report/weekly", source: "inherited", body: morning })
+
+    const weekly = `<b>Week</b>\n${shipped("telegram")}`
+    await run("edit", "report/weekly", "--channel", "telegram", "--file", file("w.liquid", weekly))
+    expect(item()).toMatchObject({ changed: true })
+    await run("show", KEY, "--channel", "telegram")
+    expect(item()).toMatchObject({ body: morning })
+    await run("list", "channel:telegram")
+    const listed = answers.at(-1) as { items: { key: string; language: string; source: string }[] }
+    expect(listed.items).toContainEqual(
+      expect.objectContaining({ key: "report/weekly", language: "ru", source: "stored" }),
+    )
+
+    const database = await openCache(env.MESSAGING_STORE ?? "")
+    try {
+      expect(storedTemplateBodies(database, "report/weekly", "ru").telegram).toBe(weekly)
+    } finally {
+      database.close()
+    }
+  })
+
+  it("refuses report/<name> when no agent schedule has that name", async () => {
+    const { run } = withSchedule("weekly")
+    await expect(run("show", "report/daily", "--channel", "telegram")).rejects.toThrow("no template report/daily")
+  })
+})

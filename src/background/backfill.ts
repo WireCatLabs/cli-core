@@ -35,7 +35,7 @@ export const backfillSchedule = async (
     killAfterMs?: number
     agentRuns?: readonly AgentCli[]
     ownerLanguage?: (env: NodeJS.ProcessEnv) => Promise<string>
-    reportTemplates?: (env: NodeJS.ProcessEnv) => StoredTemplates
+    reportTemplates?: (env: NodeJS.ProcessEnv, schedule: string) => StoredTemplates
   },
 ): Promise<LastRun> => {
   const schedule = readSchedule(file)
@@ -61,7 +61,7 @@ export const backfillSchedule = async (
     now: at.getTime(),
     links: sharedLinks(runEnv),
     env: runEnv,
-    ...(reportTemplates ? { templates: reportTemplates(runEnv) } : {}),
+    ...(reportTemplates ? { templates: reportTemplates(runEnv, schedule.name) } : {}),
   })
   if (!prepared) return last
   if (prepared.document)
