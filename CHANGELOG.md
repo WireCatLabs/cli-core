@@ -188,6 +188,32 @@ shape of this file.
   `EVENTS_QUERY_NOTE`, `eventsFilter` (with `accountIds` for several accounts), `eventsAnswer`, `eventOf`,
   `eventAnswer`, `sourceAccounts` and the `ReadAccount` type, so a tool that lists the events of several calendar
   accounts reads the same query and answer as `events list` instead of copying them.
+- **A records import reports its relationships as links of its account.** A deal's or lead's people, a contract's
+  parties, a person's `member-of` and an organization's `customer-of` and `partner-of` go through
+  `relations.syncReported` per chunk, so a re-import keeps them, a changed role adds a link and withdraws the old one,
+  a delete withdraws them, `records map` moves them with the entity, and rejecting a proposed contract withdraws its
+  parties at once. A role comes only from its list: any other word is kept on a link without a role, in the list
+  `metadata.source_role`, and named in the receipt's new `notices` (`relationship.role-unlisted`). A person's
+  `fields.position` is `metadata.position`, never the role. The receipt adds `relationships` (`added`, `kept`,
+  `restored`, `withdrawn`, `proposed`, `skippedOwnerRejected`), each link counted once per run, and a relationship's
+  issue is an error coded `relationship.*`, naming its `record` when that record came in an earlier batch. The
+  links' `source` is `import:<provider>`, so an import and a CRM sync on the same account keep each other's.
+- **A contract may be related to a person or an organization,** with the roles `customer`, `supplier`, `signatory`
+  and `guarantor` (`CONTRACT_ROLES`), a `contract` list the owner may add to like the others.
+- **One damage report for every surface (`storeDamageReport`).** `store recover` prints what happened, the likely
+  causes each with the one command that tells more, the impact, that the services keep the originals, the last known
+  good and what may be lost, and the steps as `{command, why, destructive}`: the first stops the writers, the last is
+  the deep check. `--json` answers it as `report`, and `next` lists the steps' commands.
+- **A deleted or replaced journal file is seen.** A writable open notes a `-shm` without its `-wal`, and the outermost
+  commit refuses (`store.journal-replaced`) once the `-wal` it opened with is gone or is another file, since writing
+  on into an unlinked journal while another process starts a fresh one damages the store. Both leave
+  `<store>.journal.json`, which the report names as the first likely cause and a deep check that passes removes.
+- **Runs say what they wrote to the store.** Each outermost write transaction that commits logs one `store.write`
+  event per table and change, `{kind: "store", table, op, n}`: counts only, read from the statement text and SQLite's
+  change count, so every writer is covered and no CLI passes anything. A success that wrote the store is kept for
+  `keep_store_runs_for_days` (default 3) even where `record: false`, Desktop or a server would not keep it
+  (`kept_because_store`). Past 100 in a run, they are summed by table and change into one event each at its end; the
+  run lists its `tables`. `search runs kind:store table:emails` finds them.
 
 ### Changed — may break callers
 
@@ -249,6 +275,31 @@ shape of this file.
 - **`CrmCopies.scope`, `ownUser`, `saveOwnUser` and `removeOutOfScope` are new required members**, and
   `CrmSyncReport.scope` and `CrmSyncResult.outOfScope` are new required fields: a hand-made store object or a strict
   reader of the answer needs them.
+- **Only `bin/release` edits `CHANGELOG.md`.** The `standards` check fails a pull request that changes it unless its
+  branch is one of bin/release's `release/*` branches, so a release pull request can no longer conflict and stall
+  `bin/release`. Move an entry to `changes/<branch>.md` (lower case, `/` as `-`) under the changelog's `###` headings
+  ([CLAUDE.md, "Committing"](CLAUDE.md#committing)).
+- **`explainDamage` is now `storeDamageReport(findings)`**, with the shape above; `store recover --json` answers
+  `report` instead of `explanation`, and `doctor`'s `store.damage` takes the same shape, keeping `what` beside it
+  for now.
+- **A pair of people the owner rejected is proposed again on new evidence.** It is still never joined
+  automatically, and the evidence the owner rejected never proposes it again. New evidence is a signal and pair of
+  identities none of its rejected proposals had: a phone-based proposal rejected, and later the same email on both
+  people, opens a fresh `identity_link` proposal from `scanMatches`, from `savePeople`'s same-address join, or from
+  `proposeLink`. Rejecting that one adds its evidence to the rejected set. A pair the owner separated stays blocked.
+  `identity.rejected` now means "rejected on this evidence".
+- **A role address (`info@`, `hello@`, `support@`…) never joins people automatically**, at import or in a scan, even
+  when only two people have it: `scanMatches` proposes the pair instead, so results move from `merged` to `proposed`.
+  A no-reply address (`noreply@`, `mailer-daemon@`, `bounces@`…) neither joins nor proposes anyone. The whole local
+  part must be a role word, any case, past a `+tag` and `.`, `-` or `_`. `ROLE_ADDRESS_WORDS`, `isRoleAddress` and
+  `isNoReplyAddress` are exported from `@wirecat/cli-core`.
+- **`messages sync --all` leaves out muted chats.** A chat the messenger reports muted (`muted`, with no
+  `mutedUntil` or one still ahead) is not read, so a sync of an account with many muted groups no longer downloads
+  them all. The answer counts them in `limited.muted` and leaves them out of `chats`, `items` and the progress total;
+  a note says how to read them. Messages already stored stay. A chat named (`messages sync <chat>`) is read as
+  before, and one kept in full with `--full-history` is read by `--all` too. To read them again, pass the new
+  `--with-muted` to `messages sync --all` for one run (a background job keeps it), or set the new profile setting
+  `history_muted` to true.
 
 ### Fixed
 
