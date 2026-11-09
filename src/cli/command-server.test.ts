@@ -126,7 +126,9 @@ describe("chat commands --serve, as a process", () => {
   beforeAll(async () => {
     const out = join(root, "cli")
     await build({
-      entryPoints: [fileURLToPath(new URL("../testing/command-server-cli.ts", import.meta.url))],
+      entryPoints: ["command-server-cli.ts", "command-server-own-program.ts"].map((name) =>
+        fileURLToPath(new URL(`../testing/${name}`, import.meta.url)),
+      ),
       outdir: out,
       bundle: true,
       // The store's drivers are imported only on the runtime that has them.
@@ -167,8 +169,8 @@ describe("chat commands --serve, as a process", () => {
     for (const child of servers.splice(0)) child.stdin?.end()
   })
 
-  const server = async () => {
-    const child = spawn(process.execPath, [cli, "commands", "--serve"], { env, stdio: ["pipe", "pipe", "pipe"] })
+  const server = async (bin = cli) => {
+    const child = spawn(process.execPath, [bin, "commands", "--serve"], { env, stdio: ["pipe", "pipe", "pipe"] })
     servers.push(child)
     const lines = createInterface({ input: child.stdout })[Symbol.asyncIterator]()
     const next = async () => JSON.parse((await lines.next()).value as string)
@@ -274,5 +276,33 @@ describe("chat commands --serve, as a process", () => {
       expect(JSON.parse(answer.stderr).error.message).toContain("runs until it is stopped")
     }
     expect((await ask(["work", "config", "show", "--json"])).code).toBe(0)
+  }, 30_000)
+
+  it("**adds nothing per request**: the twentieth answer is still what a spawned run prints, with no warning", async () => {
+    const { ask } = await server()
+    const argv = ["work", "config", "show", "--json"]
+    const answers = []
+    for (let time = 0; time < 20; time++) answers.push(await ask(argv))
+    for (const answer of answers) expect(answer.stderr).not.toContain("MaxListeners")
+    const { id: _, ...last } = answers.at(-1) as CommandAnswer & { id: number }
+    const alone = await spawned(argv)
+    expect({ ...last, stdout: steady(last.stdout) }).toEqual({ ...alone, stdout: steady(alone.stdout) })
+  }, 30_000)
+
+  it("ends with 0 on SIGTERM while stdin is still open", async () => {
+    const { child } = await server()
+    child.kill("SIGTERM")
+    const [code] = await once(child, "close")
+    expect(code).toBe(0)
+  }, 30_000)
+
+  it("**serves a CLI with its own program**: refuses through atStart, and a request's exit code is its own", async () => {
+    const { ask } = await server(join(cli, "..", "command-server-own-program.js"))
+    expect(await ask(["serve"])).toMatchObject({ code: 2, stdout: "" })
+    expect(await ask(["partial"])).toMatchObject({ code: 6, stdout: "half\n", stderr: "" })
+    expect(await ask(["ok"])).toMatchObject({ code: 0, stdout: "fine\n", stderr: "" })
+    const broken = await ask(["broken"])
+    expect(broken).toMatchObject({ code: 15, stdout: "" })
+    expect(JSON.parse(broken.stderr).error).toMatchObject({ code: "conflict", message: "it broke" })
   }, 30_000)
 })
