@@ -323,13 +323,15 @@ export const memoriesStoreOver = (
     return row
   }
   /**
-   * A correction retired the memory if it was ever confirmed. An older store let an agent's proposal retire it at
-   * once, so a memory superseded only by the one being confirmed is not refused.
+   * Another correction retired the memory once it left `proposed`: confirmed, and maybe since then stale or corrected
+   * itself. Not `last_verified_at`: the owner's source review sets it on a proposal too. An older store let an agent's
+   * proposal retire the memory at once, so a memory superseded only by proposals is not refused.
    */
-  const retiredByAnother = (replaced: number, by: number): boolean =>
+  const retiredByAnother = (replaced: Row, by: number): boolean =>
+    replaced.status === "superseded" &&
     database
-      .prepare("SELECT 1 FROM memories WHERE supersedes_id = ? AND id <> ? AND last_verified_at IS NOT NULL LIMIT 1")
-      .get(replaced, by) !== undefined
+      .prepare("SELECT 1 FROM memories WHERE supersedes_id = ? AND id <> ? AND status <> 'proposed' LIMIT 1")
+      .get(Number(replaced.id), by) !== undefined
   const setStatus = (reference: string, status: Memory["status"], verified: boolean) => {
     const row = rowOf(reference)
     const at = now()
@@ -414,9 +416,9 @@ export const memoriesStoreOver = (
       const row = rowOf(reference)
       const replaced =
         row.status === "confirmed" || row.supersedes_id == null ? undefined : rowOf(`memory:${row.supersedes_id}`)
-      decided(reference, by, replaced?.status === "confirmed")
+      decided(reference, by, replaced?.status === "confirmed" || replaced?.status === "superseded")
       if (replaced !== undefined) {
-        if (retiredByAnother(Number(replaced.id), Number(row.id))) throw alreadySuperseded(replaced.id)
+        if (retiredByAnother(replaced, Number(row.id))) throw alreadySuperseded(replaced.id)
         database
           .prepare("UPDATE memories SET status = 'superseded', updated_at = ? WHERE id = ?")
           .run(now(), Number(replaced.id))
