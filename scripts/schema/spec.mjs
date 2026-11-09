@@ -60,7 +60,7 @@ const EDITS = {
         "email",
         "text",
         {
-          note: "the contact's address, lower case: a mail contact's own `external_id`, a Drive owner's or a calendar attendee's address; contacts with one address are one person unless the owner says otherwise",
+          note: "the contact's address, lower case: a mail contact's own `external_id`, a Drive owner's or a calendar attendee's address; contacts with one address are one person unless the owner says otherwise or it is a role address such as `info@`",
         },
       ],
       [

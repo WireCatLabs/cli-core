@@ -1,4 +1,4 @@
-import { isEmailAddress } from "../../domain/addresses.js"
+import { isEmailAddress, isNoReplyAddress, isRoleAddress } from "../../domain/addresses.js"
 import { BARE_INTERNATIONAL_PROVIDERS, storedPhone } from "../../domain/phones.js"
 import type { CacheDatabase } from "../driver.js"
 import type { IdentityLinkSignal, MatchScan } from "../identity-links.js"
@@ -15,7 +15,7 @@ import { write } from "./transaction.js"
 
 /** Who an automatic link is recorded as: never the owner, whose moves count as separations. */
 const BY = "rule"
-const RULE: Author = { bot: "rule", kind: "rule" }
+export const RULE: Author = { bot: "rule", kind: "rule" }
 
 /** More people than this on one number or address is a shared line or mailbox: nobody is proposed from it. */
 const MOST_SHARING = 6
@@ -29,8 +29,11 @@ const CURSOR = "people.scan"
 const phonePairJoins = (holders: Holder[]): boolean =>
   holders.some(({ provider }) => BARE_INTERNATIONAL_PROVIDERS.includes(provider))
 
-/** NEED-2446, safe option until the owner rules: an address more than two people have is shared, so it proposes. */
-const addressGroupJoins = (people: number): boolean => people <= 2
+/**
+ * NEED-2446, safe option until the owner rules: an address more than two people have is shared, so it proposes. So is
+ * a role address such as `info@` or `hello@`, even when two people have it.
+ */
+const addressGroupJoins = (address: string, people: number): boolean => people <= 2 && !isRoleAddress(address)
 
 interface Holder {
   identity: number
@@ -153,22 +156,30 @@ interface Pass {
   result: MatchScan
 }
 
-/** Joins two people unless the owner separated them or rejected the pair (NEED-2444); gives the person that stays. */
-const join = (pass: Pass, from: number, into: number, signal: "same-email" | "same-phone"): number => {
+/**
+ * Joins two people unless the owner separated them, or rejected the pair (NEED-2444): then the pair is proposed when
+ * this evidence is new to the owner. Gives the person that stays.
+ */
+const join = (
+  pass: Pass,
+  sides: { from: number; into: number; identity: number; with: number },
+  signal: "email" | "phone",
+): number => {
   const { context, index, result } = pass
-  const persons = [String(from), String(into)]
+  const { from, into } = sides
+  const method = signal === "email" ? "same-email" : "same-phone"
   if (separated(context, from, into)) {
-    result.skipped.push({ persons, signal, reason: "identity.separated" })
+    result.skipped.push({ persons: [String(from), String(into)], signal: method, reason: "identity.separated" })
     return into
   }
-  if (index.known(from, into)?.status === "rejected") {
-    result.skipped.push({ persons, signal, reason: "identity.rejected" })
+  if (index.rejected(from, into) !== undefined) {
+    propose(pass, { identity: sides.identity, with: sides.with, from, to: into, joins: "person", signal })
     return into
   }
-  const kept = mergePerson(context, from, into, { method: signal, by: BY })
+  const kept = mergePerson(context, from, into, { method, by: BY })
   index.merged(kept === into ? from : into, kept)
   resolveNames(context, kept)
-  result.merged.push({ into: String(kept), from: String(kept === into ? from : into), signal })
+  result.merged.push({ into: String(kept), from: String(kept === into ? from : into), signal: method })
   return kept
 }
 
@@ -209,20 +220,28 @@ const samePhone = (pass: Pass, holders: Holder[]) => {
   const people = peopleOf(pass.context, holders)
   if (people.size < 2 || tooMany(pass, people, "identity.shared-phone", "phone")) return
   const [into, from] = [...people.keys()].sort((a, b) => a - b) as [number, number]
-  if (people.size === 2 && phonePairJoins(holders) && pass.index.known(from, into) === undefined)
-    join(pass, from, into, "same-phone")
+  if (people.size === 2 && phonePairJoins(holders) && !pass.index.known(from, into))
+    join(pass, { from, into, identity: people.get(from) as number, with: people.get(into) as number }, "phone")
   else proposeEachPair(pass, people, "phone")
 }
 
-/** One address is one person in any scope (NEED-2382), unless more than two people have it (NEED-2446). */
-const sameEmail = (pass: Pass, holders: Holder[]) => {
+/**
+ * One address is one person in any scope (NEED-2382), unless more than two people have it or it is a role address
+ * (NEED-2446). A no-reply address is no one's.
+ */
+const sameEmail = (pass: Pass, address: string, holders: Holder[]) => {
+  if (isNoReplyAddress(address)) return
   const people = peopleOf(pass.context, holders)
   if (people.size < 2 || tooMany(pass, people, "identity.shared-email", "email")) return
-  if (!addressGroupJoins(people.size)) return proposeEachPair(pass, people, "email")
+  if (!addressGroupJoins(address, people.size)) return proposeEachPair(pass, people, "email")
   const contact = holders.find(({ provider }) => provider === "email")
   const held = contact === undefined ? undefined : personOf(pass.context, contact.identity)
   let into = held !== undefined && people.has(held) ? held : [...people.keys()].reduce((a, b) => Math.min(a, b))
-  for (const from of people.keys()) if (from !== into) into = join(pass, from, into, "same-email")
+  // The mail contact stands for its person, as at import, so both paths name the same evidence to the owner.
+  const intoIdentity = contact !== undefined && held === into ? contact.identity : (people.get(into) as number)
+  for (const from of people.keys())
+    if (from !== into)
+      into = join(pass, { from, into, identity: people.get(from) as number, with: intoIdentity }, "email")
 }
 
 /** What a meeting guest typed is their word only: it is proposed, and only when it names exactly one person. */
@@ -230,7 +249,7 @@ const guestEmail = (pass: Pass, row: { identity: number; email: unknown; meeting
   const { context } = pass
   const address = addressOf(row.email)
   const from = personOf(context, row.identity)
-  if (address === undefined || from === undefined) return
+  if (address === undefined || from === undefined || isNoReplyAddress(address)) return
   const others = personsByIdentifiers(context.database, { emails: [address], phones: [] }).filter((one) => one !== from)
   if (others.length !== 1) return
   const meeting = referenceOfThing(context.database, { type: "meeting", id: row.meeting })
@@ -279,8 +298,8 @@ export const scanMatches = (context: StoreContext, { full = false }: { full?: bo
     index: linkIndex(database),
     result: { full: changed === undefined, merged: [], proposed: [], skipped: [] },
   }
-  for (const holders of emailHolders(database).values())
-    if (holders.length > 1 && touched(holders)) write(database, () => sameEmail(pass, holders))
+  for (const [address, holders] of emailHolders(database))
+    if (holders.length > 1 && touched(holders)) write(database, () => sameEmail(pass, address, holders))
   for (const holders of phoneHolders(database).values())
     if (holders.length > 1 && touched(holders)) write(database, () => samePhone(pass, holders))
   for (const row of guestRows(database))

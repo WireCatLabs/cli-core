@@ -397,7 +397,11 @@ const OTHERS: Entry[] = [
     "conflict",
     "the people a merge or a proposed link names changed since; undo the later merge, or propose the link again",
   ],
-  ["identity.rejected", "conflict", "the owner rejected linking these people; nothing proposes the pair again"],
+  [
+    "identity.rejected",
+    "conflict",
+    "the owner rejected linking these people on this evidence; only a new signal or identity proposes them again",
+  ],
   validation("identity.same", "the two identities are one person already"),
   validation("identity.shared-phone", "more than six people share the phone number, so it proposes no one"),
   validation("identity.shared-email", "more than six people share the address, so it proposes no one"),
