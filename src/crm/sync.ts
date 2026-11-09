@@ -370,6 +370,13 @@ const scopeKey = (scope: CrmScope): string => {
 }
 const idsOfKey = (key: string): string[] | null => (key.startsWith("mine:") ? key.slice(5).split(",") : null)
 
+/** The scope new pages are read under; `null` before the first sync. A held narrowing is `held`, not this. */
+const appliedScope = (cursor: CrmCursor | null) => {
+  if (cursor === null) return null
+  const users = idsOfKey(cursor.scope ?? "all")
+  return users === null ? { mode: "all" as const } : { mode: "mine" as const, users }
+}
+
 /** Under `mine`, a row with no assignee is nobody's, so it is in scope. */
 const inScope = (ids: readonly string[] | null, item: CrmItem) =>
   ids === null || item.assignee == null || ids.includes(item.assignee)
@@ -692,6 +699,8 @@ export const crmStatus = async (
   account: AccountKey,
   { profile, now, kinds = CRM_KINDS }: { profile: string; now: number; kinds?: readonly CrmKind[] },
 ) => {
+  const saved = await store.crm.scope(account)
+  const setting = { setting: saved.mode, explicit: saved.mode === "all" || saved.explicit }
   const items = []
   for (const kind of kinds) {
     const cursor = parseCrmCursor((await store.sync.syncState(account, cursorName(kind)))?.value)
@@ -708,6 +717,9 @@ export const crmStatus = async (
       round: cursor?.round ? (cursor.round.from === null ? "full" : "changes") : null,
       id_pass: cursor?.pass ? "partial" : cursor?.passAt ? new Date(cursor.passAt).toISOString() : null,
       stored: await store.crm.count(account, kind),
+      ...(isItemKind(kind)
+        ? { scope: { ...setting, applied: appliedScope(cursor), ...(cursor?.narrowing ? { held: true } : {}) } }
+        : {}),
       ...progress,
       line: progressLine(progress),
     })
