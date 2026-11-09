@@ -29,6 +29,8 @@ describe("the entity types a pointer may hold", () => {
             if (/^indexable_type\b/.test(match[0]) && Object.hasOwn(INDEX_CODES, type)) continue
             // A calendar entry's `event_type` is Google's kind of event, not a pointer.
             if (/^(event_type|eventType)\b/.test(match[0])) continue
+            // A record relation's `target_type` of `ref` is the envelope's external id not matched yet, not a pointer.
+            if (type === "ref" && /^target_type\b/.test(match[0])) continue
             written.add(type)
           }
 
