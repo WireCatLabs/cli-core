@@ -156,7 +156,8 @@ export const storeSummary = async (
     ...(mark ? { damageMark: withoutInode(mark) } : {}),
     ...(journal ? { journalMark: journal } : {}),
     ...(recorded?.cleared ? { damageMarkCleared: withoutInode(recorded.cleared) } : {}),
-    ...(damage ? { damage } : {}),
+    // `what` keeps memo's doctor, which reads it, compiling until it moves to `whatHappened`.
+    ...(damage ? { damage: { what: damage.whatHappened, ...damage } } : {}),
   }
   try {
     return await reading(path, (database) => {

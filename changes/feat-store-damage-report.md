@@ -12,5 +12,6 @@
 ### Changed — may break callers
 
 - **`explainDamage` is now `storeDamageReport(findings)`**, with the shape above; `store recover --json` answers
-  `report` instead of `explanation`, and `doctor`'s `store.damage` takes the same shape.
+  `report` instead of `explanation`, and `doctor`'s `store.damage` takes the same shape, keeping `what` beside it
+  for now.
 
