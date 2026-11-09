@@ -46,6 +46,9 @@ None open.
 - **CORE-40** · P2 · 🚩 Start a command without loading every command: `./cli` still loads ~880 files (~400 ms) for
   any command but a bare `--version`, and no single cut frees more than 119 of them. Owner chooses: lazy action bodies
   in waves, or a per-tool bundle. [Evidence and the two options](BACKLOG-NOTES.md#core-40).
+- **CORE-53** · P2 · 🚩 One shared AI model setting (Anthropic, OpenAI or compatible through a base URL, Ollama
+  beta) that every CLI and Desktop read, and that can replace the agent where a model can do the job. Draft plan
+  waits for the owner: [plans/2026-11-09-ai-model-setting.md](plans/2026-11-09-ai-model-setting.md).
 - **CORE-3** · P2 · 🚩 A smaller install: a fresh `npm i @wirecat/cli-core` is 238 MB. Draft plan waits for the
   owner: [plans/2026-10-18-install-size.md](plans/2026-10-18-install-size.md).
 - **CORE-4** · P2 · 🟡 🚧 `fix/standards-vocabulary-paths` The audited personal-account result entities,
