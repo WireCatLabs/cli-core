@@ -18,6 +18,7 @@ import {
 import type { AppIdentity } from "../ports/app.js"
 import { agentOf } from "../runs/run-context.js"
 import { readSecret } from "../terminal/prompt.js"
+import { environmentOf } from "./context.js"
 import { FETCH, grantsAuthority, LOCAL_READ, LOCAL_WRITE, NO_EFFECTS } from "./effects.js"
 import { type Body, itemOf } from "./envelope.js"
 
@@ -46,7 +47,7 @@ const view = (app: AppIdentity, options: AiModelCommandOptions, setting: AiSetti
       images: false,
       key: { stored: false, source: null },
     }
-  const key = aiNeedsKey(setting) ? aiKeys(options.env(), options.keyring).read(aiOrigin(setting), app) : undefined
+  const key = aiNeedsKey(setting) ? aiKeys(app, options.env(), options.keyring).read(aiOrigin(setting)) : undefined
   return {
     provider: setting.provider,
     model: setting.model,
@@ -59,11 +60,21 @@ const view = (app: AppIdentity, options: AiModelCommandOptions, setting: AiSetti
 }
 
 // An agent that pointed the model elsewhere, or spent the owner's credit, would act for the owner; only they may.
+// --from-app is Desktop saying the owner clicked; like the other owner-only guards, it stops mistakes, not attacks.
 const ownerOnly = (command: Command, env: NodeJS.ProcessEnv, what: string) => {
-  if (agentOf(env) && !command.opts<{ fromApp?: boolean }>().fromApp)
+  if ((environmentOf(command).agent || agentOf(env)) && !command.opts<{ fromApp?: boolean }>().fromApp)
     throw new CliError("permission_error", `only the owner runs models ai ${what}, not an agent`, {
       reason: "ai.owner-only",
     })
+}
+
+// A broken or newer section must not stop the owner from replacing or clearing it.
+const previous = (path: string): AiSetting | undefined => {
+  try {
+    return readAiSetting(path)
+  } catch {
+    return undefined
+  }
 }
 
 /** `models ai`: the one model every WireCat tool may use in place of an agent, kept in the shared config. */
@@ -100,6 +111,7 @@ export const aiModelCommand = (app: AppIdentity, options: AiModelCommandOptions)
     .option("--base-url <url>", "the service's address; https, or http only on this computer")
     .option("--key-stdin", "read the API key from stdin and keep it for this address only")
     .option("--images", "let images you add to memory go to this model to be read; they leave this computer")
+    .option("--no-images", "stop sending images to it; without either flag an earlier yes for this model stays")
     .option("--from-app", "you did this in WireCat Desktop")
     .action(async function (
       this: Command,
@@ -108,20 +120,27 @@ export const aiModelCommand = (app: AppIdentity, options: AiModelCommandOptions)
     ) {
       const env = options.env()
       ownerOnly(this, env, "set")
-      const setting = aiSettingOf({ provider, model: given.model, baseUrl: given.baseUrl, images: given.images })
       const path = aiSettingPath(env)
-      const before = readAiSetting(path)
+      const before = previous(path)
+      const setting = aiSettingOf({
+        provider,
+        model: given.model,
+        baseUrl: given.baseUrl,
+        images: given.images,
+        before,
+      })
       if (given.keyStdin) {
         if (!aiNeedsKey(setting)) throw new CliError("validation_error", "Ollama on this computer takes no key")
         const input = options.stdin?.()
         const secret = (await readSecret("API key: ", input ? { input } : {})).trim()
         if (!secret) throw new CliError("validation_error", "no key was given; nothing was changed")
-        aiKeys(env, options.keyring).write(aiOrigin(setting), secret)
+        aiKeys(app, env, options.keyring).write(aiOrigin(setting), secret)
       }
       writeAiSetting(path, setting)
       if (setting.images) options.diagnostic(imagesNote(setting))
       const changed =
-        JSON.stringify({ ...before, images: undefined }) !== JSON.stringify({ ...setting, images: undefined })
+        JSON.stringify(before === undefined ? null : { ...before, images: before.images !== undefined }) !==
+        JSON.stringify({ ...setting, images: setting.images !== undefined })
       options.output(itemOf({ ...view(app, options, setting), changed }), this)
     })
   grantsAuthority(
@@ -138,7 +157,7 @@ export const aiModelCommand = (app: AppIdentity, options: AiModelCommandOptions)
       const env = options.env()
       ownerOnly(this, env, "off")
       const path = aiSettingPath(env)
-      const before = readAiSetting(path)
+      const before = previous(path)
       writeAiSetting(path, undefined)
       options.output(itemOf({ changed: before !== undefined, key_kept: true }), this)
     })
@@ -156,16 +175,21 @@ export const aiModelCommand = (app: AppIdentity, options: AiModelCommandOptions)
     .action(function (this: Command, given?: string) {
       const env = options.env()
       ownerOnly(this, env, "forget")
-      const setting = readAiSetting(aiSettingPath(env))
-      let origin: string
-      try {
-        origin = given ? new URL(given).origin : setting ? aiOrigin(setting) : ""
-      } catch {
-        throw new CliError("validation_error", "give the address as https://host")
+      const setting = given ? undefined : previous(aiSettingPath(env))
+      let origin = setting ? aiOrigin(setting) : ""
+      if (given) {
+        const url = URL.canParse(given) ? new URL(given) : undefined
+        if (!url || !["https:", "http:"].includes(url.protocol))
+          throw new CliError("validation_error", "give the address as https://host")
+        origin = url.origin
       }
       if (!origin) throw new CliError("validation_error", "no model is chosen; name the address")
-      const removed = aiKeys(env, options.keyring).remove(origin)
-      options.output(itemOf({ origin, removed: removed.length > 0 }), this)
+      const keys = aiKeys(app, env, options.keyring)
+      const removed = keys.remove(origin)
+      // An older per-tool key or OPENAI_API_KEY/ANTHROPIC_API_KEY still answers for the official addresses.
+      const still = keys.read(origin)?.source ?? null
+      if (still) options.diagnostic(`a key for ${origin} is still found in ${still}; remove it there too`)
+      options.output(itemOf({ origin, removed: removed.length > 0, still_found: still }), this)
     })
   annotate(ai.command("check"), {
     effects: FETCH,

@@ -82,6 +82,7 @@ export const aiSettingOf = (given: {
   model: string
   baseUrl?: string | undefined
   images?: boolean | undefined
+  before?: AiSetting | undefined
 }): AiSetting => {
   const draft = {
     provider: given.provider,
@@ -103,6 +104,9 @@ export const aiSettingOf = (given: {
   }
   if (checked.output.provider === "ollama" && !loopback(new URL(aiBaseUrl(checked.output)).hostname))
     throw new CliError("validation_error", "Ollama is read only on this computer", { reason: "ai.address-refused" })
+  const kept = given.images === undefined ? given.before?.images : undefined
+  if (kept && kept.origin === aiOrigin(checked.output) && kept.model === checked.output.model)
+    return { ...checked.output, images: kept }
   return given.images
     ? {
         ...checked.output,
@@ -132,22 +136,22 @@ export const aiImagesAllowed = (setting: AiSetting): boolean =>
  * One key per address, shared by every WireCat tool: service `WireCat`, account `ai:<origin>`. A key is looked up by
  * the origin it is sent to, so changing the address can never send a stored key elsewhere.
  */
-export const aiKeys = (env: NodeJS.ProcessEnv, keyring?: KeyringStore) => {
+export const aiKeys = (app: AppIdentity, env: NodeJS.ProcessEnv, keyring?: KeyringStore) => {
   const where = { appName: "WireCat", prefix: "WIRECAT", env }
   const credentials = new Credentials({
     configDir: resolvePaths(where).config,
     service: "WireCat",
-    isolated: isMovedRun(where),
+    // A tool run with its own folders moved (MEMO_CONFIG_DIR…) is a test or a sandbox, not the owner.
+    isolated: isMovedRun(where) || isMovedRun({ appName: app.appName, prefix: app.envPrefix, env }),
     env,
     ...(keyring ? { keyring } : {}),
     warn: (message) => process.stderr.write(`${message}\n`),
   })
   const account = (origin: string) => `ai:${origin}`
   return {
-    read: (origin: string, app?: AppIdentity): { key: string; source: CredentialSource } | undefined => {
+    read: (origin: string): { key: string; source: CredentialSource } | undefined => {
       const stored = credentials.read(account(origin))
       if (stored) return { key: stored.secret, source: stored.source }
-      if (!app) return undefined
       const official = OFFICIAL[origin]
       // An older per-tool key had no scheme in its name, so it counts only for https.
       const legacy = official ?? (origin.startsWith("https://") ? endpointKeyName(origin) : undefined)
@@ -169,12 +173,14 @@ export interface AiCallDeps {
   signal?: AbortSignal | undefined
 }
 
-const gatewayFor = (setting: AiSetting, deps: AiCallDeps) =>
+const keyFor = (setting: AiSetting, deps: AiCallDeps) =>
+  aiNeedsKey(setting) ? aiKeys(deps.app, deps.env, deps.keyring).read(aiOrigin(setting))?.key : undefined
+
+const gatewayFor = (setting: AiSetting, deps: AiCallDeps, key: string | undefined) =>
   modelGateway({
     resolve: () => aiTarget(setting),
     consent: () => true,
-    key: () =>
-      aiNeedsKey(setting) ? aiKeys(deps.env, deps.keyring).read(aiOrigin(setting), deps.app)?.key : undefined,
+    key: () => key,
     ...(deps.fetch ? { fetch: deps.fetch } : {}),
     ...(deps.signal ? { signal: deps.signal } : {}),
   })
@@ -191,9 +197,9 @@ export const aiImageReader = (
   const setting = readAiSetting(aiSettingPath(deps.env))
   if (!setting) return { refused: "ai.not-set" }
   if (!aiImagesAllowed(setting)) return { refused: "ai.images-not-allowed" }
-  if (aiNeedsKey(setting) && !aiKeys(deps.env, deps.keyring).read(aiOrigin(setting), deps.app))
-    return { refused: "ai.key-missing" }
-  const gateway = gatewayFor(setting, deps)
+  const key = keyFor(setting, deps)
+  if (aiNeedsKey(setting) && !key) return { refused: "ai.key-missing" }
+  const gateway = gatewayFor(setting, deps, key)
   return {
     by: `${setting.provider}/${setting.model}`,
     pipeline: {
@@ -241,15 +247,16 @@ const reasonOf = (error: unknown): AiCheckReason => {
 export const checkAi = async (deps: AiCallDeps): Promise<{ ok: boolean; reason: AiCheckReason; ms: number | null }> => {
   const setting = readAiSetting(aiSettingPath(deps.env))
   if (!setting) return { ok: false, reason: "ai.not-set", ms: null }
-  if (aiNeedsKey(setting) && !aiKeys(deps.env, deps.keyring).read(aiOrigin(setting), deps.app))
-    return { ok: false, reason: "ai.key-missing", ms: null }
+  const key = keyFor(setting, deps)
+  if (aiNeedsKey(setting) && !key) return { ok: false, reason: "ai.key-missing", ms: null }
   const started = Date.now()
   try {
-    await gatewayFor(setting, deps).complete({
+    await gatewayFor(setting, deps, key).complete({
       purpose: "check",
       system: "Reply with the word OK.",
       prompt: "OK?",
-      maxTokens: 512,
+      // Reasoning models spend tokens before they answer; too low a cap reads as a broken setup.
+      maxTokens: 2048,
     })
     return { ok: true, reason: "ai.ok", ms: Date.now() - started }
   } catch (error) {

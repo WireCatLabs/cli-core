@@ -1,6 +1,6 @@
-import { mkdtempSync, readFileSync } from "node:fs"
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
-import { join } from "node:path"
+import { dirname, join } from "node:path"
 import { Readable } from "node:stream"
 import { memoryKeyring } from "@wirecat/cli-base"
 import { Command } from "commander"
@@ -80,9 +80,9 @@ describe("models ai", () => {
       key: { stored: true, source: "keyring" },
       changed: true,
     })
-    expect(aiKeys(env, keyring).read("https://openrouter.ai")?.key).toBe(KEY)
-    expect(aiKeys(env, keyring).read("http://openrouter.ai")).toBeUndefined()
-    expect(aiKeys(env, keyring).read("https://api.openai.com")).toBeUndefined()
+    expect(aiKeys(app, env, keyring).read("https://openrouter.ai")?.key).toBe(KEY)
+    expect(aiKeys(app, env, keyring).read("http://openrouter.ai")).toBeUndefined()
+    expect(aiKeys(app, env, keyring).read("https://api.openai.com")).toBeUndefined()
     expect(JSON.stringify(answers) + lines.join("\n")).not.toContain(KEY)
   })
 
@@ -104,8 +104,36 @@ describe("models ai", () => {
     expect(last()).toMatchObject({ images: true })
     expect(lines.join("\n")).toContain("leave this computer")
 
+    await run(KEY, "set", "anthropic", "--model", "claude-haiku-4-5", "--key-stdin")
+    expect(last()).toMatchObject({ images: true, changed: false })
+
     await run(undefined, "set", "anthropic", "--model", "claude-sonnet-4-5")
-    expect(last()).toMatchObject({ images: false })
+    expect(last()).toMatchObject({ images: false, changed: true })
+
+    await run(undefined, "set", "anthropic", "--model", "claude-sonnet-4-5", "--images")
+    await run(undefined, "set", "anthropic", "--model", "claude-sonnet-4-5", "--no-images")
+    expect(last()).toMatchObject({ images: false, changed: true })
+  })
+
+  it("replaces a broken section instead of refusing to touch it", async () => {
+    const { run, last, env } = fixture()
+    mkdirSync(dirname(aiSettingPath(env)), { recursive: true })
+    writeFileSync(aiSettingPath(env), JSON.stringify({ ai: { provider: "gemini", model: "x" } }))
+
+    await expect(run(undefined, "show")).rejects.toMatchObject({ details: { reason: "ai.setting-invalid" } })
+    await run(undefined, "set", "anthropic", "--model", "m")
+    expect(last()).toMatchObject({ provider: "anthropic" })
+  })
+
+  it("forgets a key, and says when an older one still answers for that address", async () => {
+    const { run, last, lines } = fixture({ FIXTURE_ANTHROPIC_API_KEY: "synthetic-env-key" })
+    await run(KEY, "set", "anthropic", "--model", "m", "--key-stdin")
+
+    await run(undefined, "forget")
+
+    expect(last()).toMatchObject({ origin: "https://api.anthropic.com", removed: true, still_found: "environment" })
+    expect(lines.join("\n")).toContain("still found in environment")
+    await expect(run(undefined, "forget", "localhost:11434")).rejects.toMatchObject({ code: "validation_error" })
   })
 
   it("refuses an agent, unless Desktop says the owner clicked", async () => {
@@ -125,7 +153,7 @@ describe("models ai", () => {
     await run(undefined, "off")
 
     expect(last()).toMatchObject({ changed: true, key_kept: true })
-    expect(aiKeys(env, keyring).read("https://api.anthropic.com")?.key).toBe(KEY)
+    expect(aiKeys(app, env, keyring).read("https://api.anthropic.com")?.key).toBe(KEY)
     expect(JSON.parse(readFileSync(aiSettingPath(env), "utf8")).ai).toBeUndefined()
   })
 
