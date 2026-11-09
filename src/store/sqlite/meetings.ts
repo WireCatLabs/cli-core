@@ -620,7 +620,7 @@ const filtered = (filter: MeetingFilter = {}) => {
   const [limit, offset] = page(filter)
   return {
     sql: `SELECT * FROM meetings${where.length ? ` WHERE ${where.join(" AND ")}` : ""}
-      ORDER BY coalesce(started_at, 0) DESC, id LIMIT ? OFFSET ?`,
+      ORDER BY started_at DESC, id LIMIT ? OFFSET ?`,
     params: [...params, limit, offset],
   }
 }

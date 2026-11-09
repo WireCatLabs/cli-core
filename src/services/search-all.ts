@@ -504,6 +504,7 @@ export const searchAll = async (
           const found = await meetingLane(store, account, {
             // A question finds passages that hold some of its words, as every other source does.
             text: (discover ? questionLookup(request.text) : undefined) ?? request.text,
+            ...(discover ? { question: true } : {}),
             window,
             ...(scope?.meetings === undefined ? {} : { accounts: scope.meetings }),
             ...(request.meetingScopes === undefined ? {} : { scopes: request.meetingScopes }),

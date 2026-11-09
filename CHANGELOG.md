@@ -7,6 +7,17 @@ shape of this file.
 
 ## Unreleased
 
+### Added
+
+- **`search all` finds a meeting by its title.** A meeting whose title holds the words, each as the start of a word
+  as passages are matched, is a hit of its own (`scope: "title"`, `found_by: ["title"]`), within the 3 hits a meeting
+  gives. It ranks with the passages that hold the words, the newer meeting first, and before its own passages. A
+  question, whose passages need only some of its words, matches a title that holds every one. With `--exact` a title
+  must hold each word whole. The title is matched through the folded title the store already keeps, so no store
+  version is needed. A query with `from:`, `"a b"~N`, `project:` or `tag:` matches no title.
+- **`meetings list` reads an account's meetings newest first through `meetings_by_time`**, stopping at the limit
+  instead of sorting every meeting; a meeting with no start still comes last.
+
 ### Changed — may break callers
 
 - **`search all` reads meetings from every meeting account, through their search index, ranked with the other

@@ -4,11 +4,13 @@ import { holdsKind } from "../domain/providers.js"
 import {
   formatMeetingReference,
   liftMeetingFields,
+  type Meeting,
   type MeetingHitSearchRequest,
   parseMeetingQuery,
   READ_BUDGET_EXCEEDED,
   type SearchHit,
 } from "../meetings/index.js"
+import { fold } from "../store/normalize.js"
 import type { AccountKey, MessageStore, StoredAccount } from "../store/store.js"
 import { excerpt } from "./excerpt.js"
 import { resolveMeetingSelection } from "./meeting-hit-search.js"
@@ -26,7 +28,8 @@ export interface MeetingSearchItem {
   /** About 240 characters around the match. */
   text: string
   meetingId: number
-  scope: SearchHit["scope"]
+  /** `title`: the meeting's title holds the words; `id` is then the meeting's. */
+  scope: SearchHit["scope"] | "title"
   id: number
   startMs: number | null
   /** A transcript hit's cue, `meeting:<account>/<meeting>/<transcript>/<cue>`, which `meetings passage` opens. */
@@ -35,7 +38,7 @@ export interface MeetingSearchItem {
   language?: string | null
   line?: number
   linesTotal?: number
-  foundBy: "words"[]
+  foundBy: ("title" | "words")[]
   /** `corrected`: a query word matched only a spelling speech recognition may have garbled, listed in `corrections`. */
   match?: "corrected"
   corrections?: { from: string; to: string[] }[]
@@ -54,6 +57,8 @@ export interface MeetingLaneRequest {
   /** The query as `search all` reads it: fields meetings lack are refused, not read as words. */
   text: string
   exact?: boolean
+  /** `text` is a question's words, any of which finds a passage; a title must hold every one. */
+  question?: boolean
   timezone?: string
   /** How many hits the merged page needs from this lane. */
   window: number
@@ -86,6 +91,70 @@ const exactly = (node: QueryNode): QueryNode =>
     : node.field === "text"
       ? { ...node, field: "exact" }
       : node
+
+const positive = (node: QueryNode): boolean =>
+  node.kind === "predicate" || node.clauses.some(({ occur, node }) => occur !== "must_not" && positive(node))
+
+/** A word or phrase as the start of a title's word, as the passage index matches word starts. */
+const titleNode = (node: QueryNode): QueryNode | undefined => {
+  if (node.kind === "boolean") {
+    const clauses = node.clauses.map((clause) => ({ ...clause, node: titleNode(clause.node) }))
+    return clauses.every((clause) => clause.node) ? { ...node, clauses: clauses as typeof node.clauses } : undefined
+  }
+  if (
+    (node.field !== "text" && node.field !== "exact") ||
+    (node.operator !== "term" && node.operator !== "phrase") ||
+    node.slop !== undefined
+  )
+    return undefined
+  const word = node.value.replace(/[\\*?[]/gu, "\\$&")
+  const starting = (value: string): QueryNode => ({ ...node, field: "title", operator: "wildcard", value })
+  return {
+    kind: "boolean",
+    span: node.span,
+    clauses: [
+      { occur: "should", node: starting(`${word}*`) },
+      { occur: "should", node: starting(`* ${word}*`) },
+    ],
+  }
+}
+
+/** A question finds passages by any of its words; a title holding one of them is no answer, so it needs them all. */
+const everyWord = (node: QueryNode): QueryNode =>
+  node.kind === "boolean"
+    ? {
+        ...node,
+        clauses: node.clauses.map((clause) => (clause.occur === "should" ? { ...clause, occur: "must" } : clause)),
+      }
+    : node
+
+/**
+ * The query's words as a `meetings list` query over the folded title, or `undefined` when a title cannot answer it:
+ * a speaker or nearness is about what was said, and project and tag are not title filters.
+ */
+const titleQuery = (query: QueryAst, input: MeetingHitSearchRequest, question: boolean): QueryAst | undefined => {
+  if (input.projectId !== undefined || input.tagId !== undefined || !positive(query.root)) return undefined
+  const root = titleNode(question ? everyWord(query.root) : query.root)
+  return root && { ...query, root }
+}
+
+const titleWords = (title: string) => fold(title).match(/[\p{L}\p{N}]+/gu) ?? []
+
+/** The SQL matches word starts; an exact word must be a whole word of the title. */
+const holdsExactly = (node: QueryNode, words: string[]): boolean => {
+  if (node.kind === "boolean") {
+    const must = node.clauses.filter(({ occur }) => occur === "must")
+    const should = node.clauses.filter(({ occur }) => occur === "should")
+    return (
+      must.every((clause) => holdsExactly(clause.node, words)) &&
+      !node.clauses.some(({ occur, node }) => occur === "must_not" && holdsExactly(node, words)) &&
+      (must.length > 0 || should.length === 0 || should.some((clause) => holdsExactly(clause.node, words)))
+    )
+  }
+  const wanted = titleWords(node.value)
+  if (node.field !== "exact") return wanted.every((one) => words.some((word) => word.startsWith(one)))
+  return ` ${words.join(" ")} `.includes(` ${wanted.join(" ")} `)
+}
 
 const sameAccount = (one: AccountKey, other: AccountKey) =>
   one.provider === other.provider && one.account === other.account
@@ -208,18 +277,31 @@ const accountHits = async (
   account: StoredAccount,
   query: QueryAst,
   input: MeetingHitSearchRequest,
-  { text, window, signal }: MeetingLaneRequest,
+  { text, window, signal, question, exact }: MeetingLaneRequest,
 ) => {
   const ranked: Ranked[] = []
   const perMeeting = new Map<number, number>()
   const keep = (one: Ranked) => {
     const seen = perMeeting.get(one.item.meetingId) ?? 0
-    if (seen >= MOST_HITS_PER_MEETING) return
+    if (seen >= MOST_HITS_PER_MEETING) return false
     perMeeting.set(one.item.meetingId, seen + 1)
     ranked.push(one)
+    return true
   }
   let indexing: MeetingAccountCoverage["indexing"] = "ready"
   let hasMore = false
+  let passages = 0
+  const titles = titleQuery(query, input, question === true)
+  if (titles)
+    for (const meeting of await store.meetings.meetings({
+      accountId: account.id,
+      query: titles,
+      ...(input.since === undefined ? {} : { since: input.since }),
+      ...(input.until === undefined ? {} : { until: input.until }),
+      limit: window + 1,
+    }))
+      if (!exact || holdsExactly(query.root, titleWords(meeting.title ?? "")))
+        keep({ item: titleItem(account, meeting, text), tier: 1, started: meeting.startedAt ?? 0 })
   let after: string | undefined
   let rows = Math.min(PAGE_ROWS, window + 1)
   for (let page = 1; ; page++) {
@@ -240,18 +322,24 @@ const accountHits = async (
     signal?.throwIfAborted()
     if (found.coverage.indexing === "pending") indexing = "pending"
     for (const hit of found.items)
-      keep({
-        item: meetingItem(account, hit, text),
-        tier: hit.match === "corrected" ? 2 : 1,
-        started: hit.source?.startedAt ?? 0,
-      })
-    if (ranked.length > window || !found.hasMore || found.nextCursor === null) break
+      if (
+        keep({
+          item: meetingItem(account, hit, text),
+          tier: hit.match === "corrected" ? 2 : 1,
+          started: hit.source?.startedAt ?? 0,
+        })
+      )
+        passages++
+    // Titles rank among the passages, so the passages alone must reach past the page.
+    if (passages > window || !found.hasMore || found.nextCursor === null) break
     if (page === MOST_PAGES) {
       hasMore = true
       break
     }
     after = found.nextCursor
   }
+  // A title hit ranks as a passage that holds the words: by tier, then the newer meeting; sort keeps it before its own.
+  ranked.sort((one, other) => one.tier - other.tier || other.started - one.started)
   return {
     ranked: ranked.slice(0, window),
     coverage: { indexing, hasMore: hasMore || ranked.length > window },
@@ -284,4 +372,20 @@ const meetingItem = (account: StoredAccount, hit: SearchHit & { ref: string }, q
         ...(hit.line === undefined ? {} : { line: hit.line, linesTotal: hit.linesTotal }),
       }
     : {}),
+})
+
+const titleItem = (account: StoredAccount, meeting: Meeting, query: string): MeetingSearchItem => ({
+  kind: "meeting",
+  ref: formatMeetingReference({ type: "meeting", accountId: account.id, meetingId: meeting.id }),
+  provider: account.provider,
+  account: account.account,
+  accountId: account.id,
+  title: meeting.title,
+  timestamp: meeting.startedAt === null ? null : new Date(meeting.startedAt).toISOString(),
+  text: excerpt(meeting.title ?? "", query),
+  meetingId: meeting.id,
+  scope: "title",
+  id: meeting.id,
+  startMs: null,
+  foundBy: ["title"],
 })

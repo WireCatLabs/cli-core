@@ -27,8 +27,8 @@ export const hit = v.strictObject({
   found_by: v.optional(v.array(v.picklist(["title", "words", "meaning"]))),
   /** How far into the meeting the passage is. */
   offset_ms: v.optional(v.nullable(count)),
-  /** A meeting passage's place: its transcript, chat or summary. */
-  scope: v.optional(v.picklist(["transcript", "chat", "summary"])),
+  /** A meeting hit's place: its title, transcript, chat or summary. */
+  scope: v.optional(v.picklist(["title", "transcript", "chat", "summary"])),
   /** A meeting transcript hit's cue, which `meetings passage` opens with the lines around it. */
   cue_ref: v.optional(reference),
   /** A meeting transcript hit's transcript language (`ru`, `en`…), `null` when unknown. */
