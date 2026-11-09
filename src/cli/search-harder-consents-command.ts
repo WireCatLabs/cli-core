@@ -32,12 +32,22 @@ export interface HarderConsentsOptions {
 
 type Choice = Pick<HarderSetting, "provider" | "model" | "base_url">
 
+// One search: 30 hits of up to 400 characters plus the prompt, and a short list of hit numbers back.
+const SEARCH_TOKENS = { input: 3_000, output: 60 }
+
+const searchCost = (chosen: Choice): string => {
+  const price = enrichmentPrice(chosen.provider, chosen.model, chosen.base_url)
+  if (!price) return "the cost of one is unknown (no price for this model)"
+  const usd = SEARCH_TOKENS.input * price.input + SEARCH_TOKENS.output * price.output
+  return `one costs about $${Number(usd.toPrecision(1))}`
+}
+
 /** What the owner agrees to; a window can write the same text from the answer's fields. */
 export const harderConsentWording = (command: string, chosen: Choice): string =>
   `\`${command} search all --harder\` sends the question and its first ${HARDER_CANDIDATES} hits (each one's title, ` +
   `date and up to ${HARDER_CHARS} characters of its text) to ${chosen.provider} ` +
   `(${new URL(enrichmentEndpoint(chosen)).host}), model ${chosen.model}, which puts the hits that answer it first. ` +
-  "Only a search with --harder sends anything; with claude-haiku-5-5 one costs about $0.0003 and adds 1 to 2 seconds. " +
+  `Only a search with --harder sends anything; ${searchCost(chosen)}, and it adds 1 to 2 seconds. ` +
   `\`${command} models search-consents revoke\` turns it off.`
 
 const state = (app: AppIdentity, options: HarderConsentsOptions, given?: Choice) => {

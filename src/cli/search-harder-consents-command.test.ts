@@ -46,6 +46,7 @@ describe("models search-consents", () => {
       key: { present: false },
     })
     expect(lines.join("\n")).toContain("sends the question and its first 30 hits")
+    expect(lines.join("\n")).toContain("one costs about $0.0003")
     expect(readHarderSetting(env)).toBeUndefined()
   })
 
@@ -74,11 +75,15 @@ describe("models search-consents", () => {
 
     await run("set", "openai", "--yes")
     expect(readHarderSetting(env)).toMatchObject({ provider: "openai", model: "gpt-4o-mini" })
+    expect(item(0).consent).toContain(
+      "model gpt-4o-mini, which puts the hits that answer it first. Only a search with --harder sends anything; one costs about $0.0005",
+    )
     expect(item(0)).toMatchObject({ endpoint: "https://api.openai.com/v1", usd_per_million: { input: 0.15 } })
 
     await run("set", "openai", "--base-url", "https://openrouter.ai/api/v1", "--model", "deepseek/deepseek-chat")
     expect(item(1)).toMatchObject({ model: "deepseek/deepseek-chat", usd_per_million: null, changed: false })
     expect(lines.join("\n")).toContain("openrouter.ai), model deepseek/deepseek-chat")
+    expect(lines.join("\n")).toContain("the cost of one is unknown (no price for this model)")
   })
 
   it("proposes enrichment's provider without giving the consent", async () => {
