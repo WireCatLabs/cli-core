@@ -11,8 +11,9 @@ pnpm smoke:bun      # the SQLite seam, the store and run records, executed under
 ```
 
 A pull request runs the fast checks ([`.github/workflows/standards.yml`](../../.github/workflows/standards.yml)):
-`pnpm standards:check`, `pnpm lint`, `pnpm docs:lint`, `pnpm ci:quick` (the typecheck and the command lint) and a
-secret scan of the new commits, beside the changelog guard. It also runs full validation
+a check that only bin/release's `release/*` branches edit `CHANGELOG.md`, `pnpm standards:check`, `pnpm lint`,
+`pnpm docs:lint`, `pnpm ci:quick` (the typecheck and the command lint) and a secret scan of the new commits, beside
+the changelog guard. It also runs full validation
 ([`.github/workflows/pr.yml`](../../.github/workflows/pr.yml), which calls
 [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) and through it cli-base's shared `node-ci.yml`): all of
 the commands above except `test:slow`, with the coverage floor, plus `pnpm build`, the schema and dist checks, old

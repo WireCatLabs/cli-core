@@ -30,7 +30,8 @@ What differs here:
 - **The changelog** has these headings, each at most once per version: `Added`,
   `Changed — may break callers`, `Fixed`, `Security`, `Removed`. A pull request adds its entries as a fragment,
   `changes/<branch>.md`, under those headings; the release pull request collects every fragment into
-  `## <version> — DD.MM.YYYY` and deletes them. No backlog or decision ids.
+  `## <version> — DD.MM.YYYY` and deletes them. Only `bin/release` edits `CHANGELOG.md`; the `standards` check fails
+  any other pull request that changes it. No backlog or decision ids.
   An entry says what changed for a caller, why when it is not obvious, and what to do when it
   breaks something. `pnpm docs:check` checks the shape.
 - **No `docs_ai/` in this repository.** It is gitignored; a plan for open work that others need is
