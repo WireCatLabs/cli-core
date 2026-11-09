@@ -1,8 +1,10 @@
 import { CliError } from "@wirecat/cli-base"
+import { isEmailAddress } from "../../domain/addresses.js"
 import type { Id, Page } from "../../domain/models.js"
 import type { IdentityRef, LinkedIdentity, LinkOptions, PersonRecord, StoredAccount, StoredHit } from "../types.js"
 import { and, eq, inArray, isNull, type SQL, sql } from "./drizzle/core.js"
 import { identityOf } from "./identities.js"
+import { rejectedPair, settleLinks } from "./identity-link-rows.js"
 import { currentPerson } from "./merged-persons.js"
 import type { StoreContext } from "./open.js"
 import { resolvePersonLinks } from "./person-resolution.js"
@@ -182,8 +184,7 @@ export const linkIdentities = (
 ): PersonRecord => {
   const target = required(context, person)
   const moving = required(context, other)
-  mergePerson(context, moving.personPk, target.personPk, options)
-  const record = recordOf(context, target.personPk)
+  const record = recordOf(context, mergePerson(context, moving.personPk, target.personPk, options))
   // Two identities that were two people named alike are one now, so a name that was ambiguous may not be.
   resolvePersonLinks(
     context.database,
@@ -192,15 +193,51 @@ export const linkIdentities = (
   return record
 }
 
-/** Moves every identity of `from` to `to`, as `linkIdentities` does once it has found both people. */
-export const mergePerson = (context: StoreContext, from: number, to: number, options: LinkOptions): void => {
-  if (from === to) return
+const isOwner = ({ database }: StoreContext, person: number): boolean =>
+  Number(database.prepare("SELECT owner FROM persons WHERE id = ?").get(person)?.owner) === 1
+
+/** The person `mergePerson(one, other)` keeps: `other`, unless `one` is the owner's. */
+export const survivorOf = (context: StoreContext, one: number, other: number): number =>
+  isOwner(context, one) && !isOwner(context, other) ? one : other
+
+/**
+ * Moves every identity of `from` to `to`, as `linkIdentities` does once it has found both people, and gives the
+ * person that stays. The owner's person always stays: merging it away would leave the owner with no identity.
+ * Proposals naming either person are brought up to date.
+ */
+export const mergePerson = (context: StoreContext, one: number, other: number, options: LinkOptions): number => {
+  if (one === other) return other
+  const to = survivorOf(context, one, other)
+  const from = to === other ? one : other
   const together = context.orm
     .select({ identityPk: identityLinks.identityId })
     .from(identityLinks)
     .where(eq(identityLinks.personId, from))
     .all()
   for (const { identityPk } of together) move(context, identityPk, from, to, options)
+  settleLinks(context.database, [from, to])
+  return to
+}
+
+/**
+ * NEED-2446 (safe option until the owner rules): an address that two or more other people hold is a shared one, an
+ * `office@` or `info@`, and joins no one at import; the scan proposes such people instead.
+ */
+const sharedAddress = ({ database }: StoreContext, key: string, person: number): boolean =>
+  (database
+    .prepare(
+      "SELECT count(DISTINCT l.person_id) AS n FROM identities i JOIN identity_links l ON l.identity_id = i.id " +
+        "WHERE i.email = ? AND i.provider NOT IN ('email', 'org-email') AND l.person_id <> ?",
+    )
+    .get(key, person)?.n as number) >= 2
+
+/** Keeps the address an identity's source gave it, so a later contact with it counts this one. */
+export const noteAddress = (context: StoreContext, ref: IdentityRef, address: string): void => {
+  const key = address.trim().toLowerCase()
+  if (!isEmailAddress(key) || ref.provider === "email") return
+  context.database
+    .prepare("UPDATE identities SET email = ? WHERE id = ? AND email IS NOT ?")
+    .run(key, required(context, ref).pk, key)
 }
 
 /**
@@ -210,9 +247,9 @@ export const mergePerson = (context: StoreContext, from: number, to: number, opt
  */
 export const joinByAddress = (context: StoreContext, ref: IdentityRef, address: string, by: string): void => {
   const key = address.trim().toLowerCase()
-  if (!/^[^\s@]+@[^\s@]+$/.test(key) || ref.provider === "email") return
+  if (!isEmailAddress(key) || ref.provider === "email") return
   const found = required(context, ref)
-  context.database.prepare("UPDATE identities SET email = ? WHERE id = ? AND email IS NOT ?").run(key, found.pk, key)
+  noteAddress(context, ref, key)
   // The mail contact of the address, found by the address column every contact with one carries (store version 32).
   const mail = context.database
     .prepare("SELECT external_id FROM identities WHERE provider = 'email' AND email = ? LIMIT 1")
@@ -220,10 +257,12 @@ export const joinByAddress = (context: StoreContext, ref: IdentityRef, address: 
   if (!mail) identityOf(context, "email", key, null)
   const contact = required(context, { provider: "email", id: mail ? String(mail.external_id) : key })
   if (contact.personPk === found.personPk || separated(context, found.personPk, contact.personPk)) return
-  mergePerson(context, found.personPk, contact.personPk, { method: "same-email", by })
+  if (rejectedPair(context.database, found.personPk, contact.personPk)) return
+  if (sharedAddress(context, key, found.personPk)) return
+  const kept = mergePerson(context, found.personPk, contact.personPk, { method: "same-email", by })
   resolvePersonLinks(
     context.database,
-    recordOf(context, contact.personPk).identities.flatMap(({ name, username }) => [name, username]),
+    recordOf(context, kept).identities.flatMap(({ name, username }) => [name, username]),
   )
 }
 

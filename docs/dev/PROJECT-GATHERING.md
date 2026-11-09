@@ -204,10 +204,19 @@ candidates and refuses to accept one rejected before. What differs:
   text no longer blocks them. A batch staged by an earlier version still needs all of it unchanged. Rejecting a whole
   stale batch still works, so it does not stay open forever. There is no
   membership check: the project must exist, and whether the evidence belongs to it is what the reviewer decides.
+  `citable(ref)` reads a reference as staging does: its text and the fingerprint to cite it with.
+- **Quotes.** An evidence item may carry `quote`, at most 500 characters. Staging refuses the batch when the
+  quote is not in the cited text word for word, with spacing and line breaks folded (`finding.quote-not-found`;
+  `quoteKept` from `./store` is the same check). An accepted fact or task keeps the quote on its evidence link,
+  so a later source check knows which words it rests on. Evidence without a quote is read as before, and its
+  finding keeps its fingerprint.
 - **One project per batch**, held as the proposal's target, so `list({ project })` reads one project's batches.
 - **Who decides.** `review(id, { fingerprint, accept, by })` takes `by: "owner"` (the default) or
   `{ bot, model?, reason }` — an agent the host lets decide for the owner. The receipt records the decision and
   its reason, and the proposal's decider is the agent. Created facts and tasks are attributed to the authoring
   agent either way and stay editable through the usual fact and task commands.
+- **Owner-only batches.** `stage(input, agent, { ownerOnly: true })` stores the batch so that only the owner
+  decides it, whatever `agent_decisions` says (`proposal.owner-only`). A batch with a payment finding is owner-only
+  too. The batch view says so in `ownerOnly`.
 
 Generic proposal approval, rejection and staging refuse this kind (`evidence-findings.dedicated-review`).

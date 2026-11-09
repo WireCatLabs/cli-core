@@ -880,7 +880,7 @@
     },
     "--reason": {
       "value": "<text>",
-      "meaning": "why a task was closed, kept with it — no-reply-needed, for example"
+      "meaning": "why, kept with what it records: a task's close (no-reply-needed, for example), an agent's proposed link"
     },
     "--record": {
       "meaning": "keep this run under `runs`, with the command as typed and secrets hidden; record_input false leaves the typed words out",
@@ -2884,7 +2884,10 @@
       "in": "all"
     },
     "contacts link": {
-      "in": "all"
+      "in": "all",
+      "options": {
+        "--reason": "all"
+      }
     },
     "contacts list": {
       "in": "all",

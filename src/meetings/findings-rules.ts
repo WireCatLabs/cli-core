@@ -7,6 +7,8 @@ const TASK_TYPES = ["bug", "feature", "chore"] as const
 export interface FindingEvidence {
   reference: string
   fingerprint: string
+  /** The words of the cited text the finding rests on, checked word for word when it is staged. */
+  quote?: string
 }
 interface FindingBase {
   id: string
@@ -135,6 +137,8 @@ export interface FindingsRules {
   payments?: boolean
   /** A task finding may name no project: it goes in its account's inbox. */
   inboxTasks?: boolean
+  /** Evidence may carry a quote of at most this many characters. */
+  quotes?: number
 }
 
 const SUBJECT = /^(person|organization|project):[1-9]\d*$|^task:[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/
@@ -146,13 +150,19 @@ export const validEvidence = (raw: unknown, rules: FindingsRules): FindingEviden
   const evidence = raw
     .map((item) => {
       if (!item || typeof item !== "object") return invalid("finding evidence is a reference and fingerprint")
-      findingFields(item, ["reference", "fingerprint"], rules.singular)
+      findingFields(
+        item,
+        rules.quotes ? ["reference", "fingerprint", "quote"] : ["reference", "fingerprint"],
+        rules.singular,
+      )
       if (typeof item.reference !== "string" || typeof item.fingerprint !== "string")
         return invalid("evidence requires a reference and fingerprint")
       const reference = rules.reference(item.reference)
       if (!/^[a-f0-9]{64}$/.test(item.fingerprint))
         return invalid(`finding evidence requires exact ${rules.cited} references and fingerprints`)
-      return { reference, fingerprint: item.fingerprint as string }
+      // Absent, not empty: a finding without a quote keeps the fingerprint it had before quotes existed.
+      if (item.quote === undefined) return { reference, fingerprint: item.fingerprint as string }
+      return { reference, fingerprint: item.fingerprint as string, quote: findingText(item.quote, rules.quotes ?? 0) }
     })
     .sort((a, b) => a.reference.localeCompare(b.reference))
   if (new Set(evidence.map((item) => item.reference)).size !== evidence.length)
