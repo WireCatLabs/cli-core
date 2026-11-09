@@ -250,6 +250,23 @@ product, proposes the contract, order, invoice and payment, allocates the paymen
 whose `quoted-for` resolves to the deal's record. Run twice, every record is `unchanged`
 (`src/store/records-example.test.ts`).
 
+## Spreadsheets
+
+A sheet holds one type. `recordColumns(type)` lists its columns and `recordTemplate(type, "csv")` writes the header
+row to fill; `envelopeOfCsv(text, { type, source })` reads the filled sheet as an envelope, and `placeOf(pointer)`
+turns a receipt's pointer into the sheet's line and column.
+
+- **Columns.** `external_id`, then the type's fields that hold one value, then one per role, then one per key of each
+  list of items (`lines.description`, `lines.amount`). A column the type lacks is refused, naming it.
+- **Roles.** A role with one target type takes the target's external id (`wallet` = `W-1`); a role with several takes
+  `<type>:<external id>` (`counterparty` = `organization:C-1`). A role that takes many splits on `|`.
+- **Lists.** A row that repeats an earlier row's `external_id` adds one item to the record's list, as an invoice
+  exported a line a row does; its other cells may stay empty.
+- **What Excel writes.** The separator is read from the header (`;`, `,` or a tab); a byte-order mark is skipped;
+  `10 000,50` is read as `10000.50` and `09.11.2026` as `2026-11-09`; a currency is upper-cased. Anything else is left
+  for the envelope's own checks.
+- SMS and calls have no table: they come from a phone's own export.
+
 ## Phone data: SMS, calls, contacts
 
 A phone export is one envelope (JSON or JSONL) of one source account: `message` records of kind `sms`, `event`
