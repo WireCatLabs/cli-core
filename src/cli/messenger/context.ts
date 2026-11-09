@@ -812,6 +812,7 @@ export const messengerContext = (
             history: base.settings.record,
             searchCatchUp: base.settings.searchCatchUp,
             ...(base.settings.historyLimits ? { historyLimits: base.settings.historyLimits } : {}),
+            historyMuted: base.settings.historyMuted,
             pictures: base.settings.pictureSearch,
             reranker: base.settings.searchReranker,
             guard,

@@ -89,8 +89,8 @@ export const messageSyncAll = v.strictObject({
       limited: v.optional(historyLimited),
     }),
   ),
-  /** How many chats the history limits left unread (big groups) or read only to the window's start. */
-  limited: v.optional(v.strictObject({ group_too_large: count, older_than_window: count })),
+  /** How many chats the history limits left unread (big groups) or read only to the window's start; muted, unread. */
+  limited: v.optional(v.strictObject({ group_too_large: count, older_than_window: count, muted: v.optional(count) })),
   tasks,
 })
 export const messageSyncStarted = v.strictObject({ job: id, pid: count, chat: text, log: text })
