@@ -22,9 +22,9 @@ it("gives a version 60 file's people no address-book tie until contacts sync mar
 
   const store = await openStore({ path })
   try {
-    expect((await store.people.list({ limit: 10, all: true })).items.find(({ name }) => name === "Vera")?.ties).toEqual(
-      [],
-    )
+    expect(
+      (await store.people.list({ limit: 10, kind: "all" })).items.find(({ name }) => name === "Vera")?.ties,
+    ).toEqual([])
     await store.people.saveAddressBook(TG, [{ id: "7", name: "Vera" }])
     expect((await store.people.list({ limit: 10 })).items.find(({ name }) => name === "Vera")?.ties).toEqual([
       "phone-book",
