@@ -150,6 +150,7 @@ export const eventPreparation = async (details: EventDetails, options: Preparati
     const reads = readsOf(record, account.key, readable)
     for (const { key } of reads) read.set(nameOf(key), key)
     const context = await recordContext(store, record, reads, readable, {
+      ...(options.scopes === undefined ? {} : { scopes: options.scopes }),
       messages: limit,
       bytes: Math.min(left, PERSON_BYTES),
       now,

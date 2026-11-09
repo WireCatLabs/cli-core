@@ -1,29 +1,21 @@
 import { CliError } from "@wirecat/cli-base"
-import { parseLucene, type QueryNode } from "@wirecat/cli-base/query"
-import type { SearchHit } from "../meetings/index.js"
-import { formatMeetingReference } from "../meetings/index.js"
-import { entriesOfList, fitting, listedHolds } from "../search/account-list.js"
-import { SEARCH_QUERY } from "../search/lucene/types.js"
-import { codeOf } from "../sends/guarded.js"
-import type { AccountKey, MessageStore } from "../store/store.js"
-import type { SearchFound, SearchQuery } from "./messages.js"
-import { MAX_SEARCH_OFFSET } from "./messages-archive-search.js"
-import type { MeaningLane } from "./messages-discovery.js"
-import { RRF_K } from "./notes-search.js"
+import type { QueryAst, QueryNode } from "@wirecat/cli-base/query"
+import { holdsKind } from "../domain/providers.js"
 import {
-  RESOURCES_SEARCHED,
-  type SearchAllFound,
-  type SearchAllItem,
-  type SearchAllMessenger,
-  type SearchAllRequest,
-  type SearchedResource,
-  type Skipped,
-  searchAll,
-} from "./search-all.js"
-import { listContextOf } from "./search-kind.js"
+  formatMeetingReference,
+  liftMeetingFields,
+  type Meeting,
+  type MeetingHitSearchRequest,
+  parseMeetingQuery,
+  READ_BUDGET_EXCEEDED,
+  type SearchHit,
+} from "../meetings/index.js"
+import { fold } from "../store/normalize.js"
+import type { AccountKey, MessageStore, StoredAccount } from "../store/store.js"
+import { excerpt } from "./excerpt.js"
+import { resolveMeetingSelection } from "./meeting-hit-search.js"
+import type { Skipped } from "./search-all.js"
 
-export const RESOURCES_SEARCHED_WITH_MEETINGS = [...RESOURCES_SEARCHED, "meetings"] as const
-export type ResourceWithMeetings = (typeof RESOURCES_SEARCHED_WITH_MEETINGS)[number]
 export interface MeetingSearchItem {
   kind: "meeting"
   /** `meeting:<account id>/<meeting id>`, the reference memo's notes, facts and memories cite as evidence. */
@@ -33,9 +25,11 @@ export interface MeetingSearchItem {
   accountId: number
   title: string | null
   timestamp: string | null
+  /** About 240 characters around the match. */
   text: string
   meetingId: number
-  scope: SearchHit["scope"]
+  /** `title`: the meeting's title holds the words; `id` is then the meeting's. */
+  scope: SearchHit["scope"] | "title"
   id: number
   startMs: number | null
   /** A transcript hit's cue, `meeting:<account>/<meeting>/<transcript>/<cue>`, which `meetings passage` opens. */
@@ -44,389 +38,354 @@ export interface MeetingSearchItem {
   language?: string | null
   line?: number
   linesTotal?: number
-}
-export interface MeetingSearchCursor {
-  accountId: number
-  /** The supported query's words, bound to the selected account. */
-  query: string
-  meetingOffset: number
-  hitOffset: number
-}
-export interface SearchAllIncludingMeetingsRequest extends Omit<SearchAllRequest, "only"> {
-  only?: readonly ResourceWithMeetings[]
-  /** Defaults to the caller's selected account; other meeting accounts are explicit. */
-  meetingAccount?: AccountKey
-  /**
-   * Candidate meetings visited, newest first, not hit rows allocated by the store. Defaults to 100; `all` visits
-   * every one. Meetings have no search index yet, so each visit is two queries.
-   */
-  maxMeetings?: number | "all"
-  /** Source continuation only: requires only: ["meetings"]. Offsets are not a snapshot. */
-  meetingCursor?: MeetingSearchCursor
-}
-export interface MeetingSearchCoverage {
-  accountId: number
-  by: "word-prefixes"
-  meetingsScanned: number
-  complete: boolean
-  nextCursor?: MeetingSearchCursor
-}
-export interface SearchAllIncludingMeetingsFound
-  extends Omit<SearchAllFound, "items" | "searched" | "skipped" | "hasMore"> {
-  items: (SearchAllItem | MeetingSearchItem)[]
-  /** null means a bounded meeting scan did not prove whether another match exists. */
-  hasMore: boolean | null
-  searched: ResourceWithMeetings[]
-  skipped: Skipped<ResourceWithMeetings>[]
-  meetings?: MeetingSearchCoverage
+  foundBy: ("title" | "words")[]
+  /** `corrected`: a query word matched only a spelling speech recognition may have garbled, listed in `corrections`. */
+  match?: "corrected"
+  corrections?: { from: string; to: string[] }[]
 }
 
-const whole = (value: number, minimum: number, maximum: number, label: string): number => {
-  if (!Number.isSafeInteger(value) || value < minimum || value > maximum)
-    throw new CliError("validation_error", `${label} must be an integer from ${minimum} through ${maximum}`)
-  return value
+/** What one meeting account's index could answer. */
+export interface MeetingAccountCoverage {
+  provider: string
+  account: string
+  /** `pending`: passages saved since the index was last built are not found yet; `search meetings` builds it. */
+  indexing: "ready" | "pending"
+  hasMore: boolean
 }
-const cancelled = (signal?: AbortSignal) => {
-  if (signal?.aborted) throw new CliError("cancelled", "search was cancelled", { complete: false })
+
+export interface MeetingLaneRequest {
+  /** The query as `search all` reads it: fields meetings lack are refused, not read as words. */
+  text: string
+  exact?: boolean
+  /** `text` is a question's words, any of which finds a passage; a title must hold every one. */
+  question?: boolean
+  timezone?: string
+  /** How many hits the merged page needs from this lane. */
+  window: number
+  /** The meeting accounts `--source` chose; absent, every one in `scopes`. */
+  accounts?: AccountKey[]
+  /** The scopes whose meeting accounts are read; absent, the scope of the caller's stored account only. */
+  scopes?: readonly StoredAccount["scope"][]
+  /** Meetings were asked for by name (`--only meetings`): having none to read is then a skip, not silence. */
+  asked?: boolean
+  signal?: AbortSignal
 }
-const meetingQuery = (text: string, exact?: boolean): { query: string } | { reason: string } => {
-  if (exact) return { reason: "meetings use word prefixes and cannot answer --exact" }
-  try {
-    const terms: string[] = []
-    const supported = (node: QueryNode): boolean => {
-      if (node.kind === "boolean") return node.clauses.every(({ occur, node }) => occur === "must" && supported(node))
-      if (node.field !== "text" || node.operator !== "term" || !/^[\p{L}\p{N}]+$/u.test(node.value)) return false
-      terms.push(node.value)
-      return true
-    }
-    if (!supported(parseLucene(text, SEARCH_QUERY).root) || !terms.length)
-      return {
-        reason:
-          "meetings support letter/digit words joined by AND; phrases, OR/NOT, patterns and filters are unsupported",
+
+export interface MeetingLaneFound {
+  items: MeetingSearchItem[]
+  hasMore: boolean
+  read: StoredAccount[]
+  skipped: Skipped<"meetings">[]
+  coverage: MeetingAccountCoverage[]
+}
+
+/** More passages of one meeting would crowd out every other source. */
+export const MOST_HITS_PER_MEETING = 3
+/** Rows per page: the store refuses a page past 4 MB of text, which would skip the whole account. */
+const PAGE_ROWS = 200
+const MOST_PAGES = 25
+
+const exactly = (node: QueryNode): QueryNode =>
+  node.kind === "boolean"
+    ? { ...node, clauses: node.clauses.map((clause) => ({ ...clause, node: exactly(clause.node) })) }
+    : node.field === "text"
+      ? { ...node, field: "exact" }
+      : node
+
+const positive = (node: QueryNode): boolean =>
+  node.kind === "predicate" || node.clauses.some(({ occur, node }) => occur !== "must_not" && positive(node))
+
+/** A word or phrase as the start of a title's word, as the passage index matches word starts. */
+const titleNode = (node: QueryNode): QueryNode | undefined => {
+  if (node.kind === "boolean") {
+    const clauses = node.clauses.map((clause) => ({ ...clause, node: titleNode(clause.node) }))
+    return clauses.every((clause) => clause.node) ? { ...node, clauses: clauses as typeof node.clauses } : undefined
+  }
+  if (
+    (node.field !== "text" && node.field !== "exact") ||
+    (node.operator !== "term" && node.operator !== "phrase") ||
+    node.slop !== undefined
+  )
+    return undefined
+  const word = node.value.replace(/[\\*?[]/gu, "\\$&")
+  const starting = (value: string): QueryNode => ({ ...node, field: "title", operator: "wildcard", value })
+  return {
+    kind: "boolean",
+    span: node.span,
+    clauses: [
+      { occur: "should", node: starting(`${word}*`) },
+      { occur: "should", node: starting(`* ${word}*`) },
+    ],
+  }
+}
+
+/** A question finds passages by any of its words; a title holding one of them is no answer, so it needs them all. */
+const everyWord = (node: QueryNode): QueryNode =>
+  node.kind === "boolean"
+    ? {
+        ...node,
+        clauses: node.clauses.map((clause) => (clause.occur === "should" ? { ...clause, occur: "must" } : clause)),
       }
-    return { query: terms.join(" ") }
-  } catch (error) {
-    if (codeOf(error) !== "validation_error") throw error
-    return { reason: error instanceof Error ? error.message : "invalid meeting search query" }
+    : node
+
+/**
+ * The query's words as a `meetings list` query over the folded title, or `undefined` when a title cannot answer it:
+ * a speaker or nearness is about what was said, and project and tag are not title filters.
+ */
+const titleQuery = (query: QueryAst, input: MeetingHitSearchRequest, question: boolean): QueryAst | undefined => {
+  if (input.projectId !== undefined || input.tagId !== undefined || !positive(query.root)) return undefined
+  const root = titleNode(question ? everyWord(query.root) : query.root)
+  return root && { ...query, root }
+}
+
+const titleWords = (title: string) => fold(title).match(/[\p{L}\p{N}]+/gu) ?? []
+
+/** The SQL matches word starts; an exact word must be a whole word of the title. */
+const holdsExactly = (node: QueryNode, words: string[]): boolean => {
+  if (node.kind === "boolean") {
+    const must = node.clauses.filter(({ occur }) => occur === "must")
+    const should = node.clauses.filter(({ occur }) => occur === "should")
+    return (
+      must.every((clause) => holdsExactly(clause.node, words)) &&
+      !node.clauses.some(({ occur, node }) => occur === "must_not" && holdsExactly(node, words)) &&
+      (must.length > 0 || should.length === 0 || should.some((clause) => holdsExactly(clause.node, words)))
+    )
   }
+  const wanted = titleWords(node.value)
+  if (node.field !== "exact") return wanted.every((one) => words.some((word) => word.startsWith(one)))
+  return ` ${words.join(" ")} `.includes(` ${wanted.join(" ")} `)
 }
-interface CollectedMeetings {
-  items: { item: MeetingSearchItem; before: MeetingSearchCursor }[]
-  coverage: Omit<MeetingSearchCoverage, "nextCursor">
-  after: MeetingSearchCursor
+
+const sameAccount = (one: AccountKey, other: AccountKey) =>
+  one.provider === other.provider && one.account === other.account
+
+/**
+ * The caller's stored account's scope, as a person's context reads: a work profile never reads personal meetings.
+ * A caller the store does not hold reads its stated scope, or none.
+ */
+const callerScopes = async (all: readonly StoredAccount[], caller: AccountKey): Promise<StoredAccount["scope"][]> => {
+  const own = all.find((one) => sameAccount(one, caller))
+  if (own && caller.scope !== undefined && caller.scope !== own.scope)
+    throw new CliError("not_found", `no ${caller.provider} account ${caller.account} in the store`)
+  const scope = own?.scope ?? caller.scope
+  return scope === undefined ? [] : [scope]
 }
-const collectMeetings = async (
+
+/**
+ * Meetings for `search all`, from each meeting account's search index: never refreshed here, since search all only
+ * reads. A query meetings cannot answer is refused before any account is read; a failure of one account is that
+ * account's skip, and the others still answer.
+ */
+export const meetingLane = async (
   store: MessageStore,
-  account: AccountKey,
-  request: SearchAllIncludingMeetingsRequest,
-  query: string,
-): Promise<CollectedMeetings> => {
-  cancelled(request.signal)
-  const selected = await store.accounts.storedAccount(account)
-  cancelled(request.signal)
-  whole(selected.id, 1, Number.MAX_SAFE_INTEGER, "meeting account id")
-  if (account.scope !== undefined && selected.scope !== account.scope)
-    throw new CliError("not_found", "the selected meeting account has a different scope")
-  const cursor = request.meetingCursor
-  if (cursor && (cursor.accountId !== selected.id || cursor.query !== query))
-    throw new CliError("validation_error", "meeting cursor belongs to a different account or query")
-  let meetingOffset = cursor?.meetingOffset ?? 0
-  let hitOffset = cursor?.hitOffset ?? 0
-  const position = (): MeetingSearchCursor => ({ accountId: selected.id, query, meetingOffset, hitOffset })
-  const collected: CollectedMeetings = {
-    items: [],
-    coverage: { accountId: selected.id, by: "word-prefixes", meetingsScanned: 0, complete: false },
-    after: position(),
+  caller: AccountKey,
+  request: MeetingLaneRequest,
+): Promise<MeetingLaneFound> => {
+  const all = await store.accounts.storedAccounts()
+  const scopes = request.scopes ?? (await callerScopes(all, caller))
+  const unknownCaller = request.scopes === undefined && !all.some((one) => sameAccount(one, caller))
+  const meetings = all.filter((one) => holdsKind(one.provider, "meetings"))
+  const stored = meetings.filter((one) => scopes.includes(one.scope))
+  const chosen = request.accounts
+  const read = chosen ? stored.filter((one) => chosen.some((key) => sameAccount(key, one))) : stored
+  const skipped: Skipped<"meetings">[] = (chosen ?? [])
+    .filter((key) => !read.some((one) => sameAccount(key, one)))
+    .map(({ provider, account }) => {
+      const other = meetings.find((one) => sameAccount({ provider, account }, one))
+      return {
+        source: `${provider}:${account}`,
+        code: "not_found",
+        reason: !other
+          ? "no meetings stored for it"
+          : unknownCaller
+            ? "this account is not in the store yet, so no scope is read"
+            : `a ${other.scope} account; this run reads ${scopes.join(" and ")} accounts`,
+      }
+    })
+  const [first] = read
+  // Like events, meetings the store does not hold are no gap in an answer that did not ask for them.
+  if (!first) {
+    if (!skipped.length && request.asked)
+      skipped.push({
+        resource: "meetings",
+        code: "not_found",
+        reason: !meetings.length
+          ? "no meeting account stored"
+          : unknownCaller
+            ? "this account is not in the store yet"
+            : "no meeting account in this scope",
+      })
+    return { items: [], hasMore: false, read, skipped, coverage: [] }
   }
-  const seen = new Set<string>()
-  const most = request.maxMeetings === "all" ? Number.POSITIVE_INFINITY : (request.maxMeetings ?? 100)
-  while (collected.coverage.meetingsScanned < most) {
-    cancelled(request.signal)
-    const page = await store.meetings.meetings({ accountId: selected.id, limit: 2, offset: meetingOffset })
-    cancelled(request.signal)
-    const meeting = page[0]
-    if (!meeting) {
-      collected.coverage.complete = true
+
+  const lifted = liftMeetingFields(request.text, { accountId: first.id }, undefined, request.timezone)
+  const parsed = parseMeetingQuery(lifted.query)
+  const query: QueryAst = request.exact ? { ...parsed, root: exactly(parsed.root) } : parsed
+  const { input } = await resolveMeetingSelection(store, {
+    ...lifted.request,
+    ...(request.signal ? { signal: request.signal } : {}),
+  })
+
+  const lists: Ranked[][] = []
+  const coverage: MeetingAccountCoverage[] = []
+  const answered: StoredAccount[] = []
+  for (const account of read) {
+    try {
+      const found = await accountHits(store, account, query, { ...input, accountId: account.id }, request)
+      lists.push(found.ranked)
+      coverage.push({ provider: account.provider, account: account.account, ...found.coverage })
+      answered.push(account)
+    } catch (error) {
+      if (!(error instanceof CliError) || error.code === "cancelled") throw error
+      skipped.push({ source: `${account.provider}:${account.account}`, code: error.code, reason: error.message })
+    }
+  }
+  return { items: merged(lists), hasMore: coverage.some((one) => one.hasMore), read: answered, skipped, coverage }
+}
+
+/** A hit with what orders it among other accounts' hits: its tier, then how recent its meeting is. */
+interface Ranked {
+  item: MeetingSearchItem
+  tier: number
+  started: number
+}
+
+/**
+ * Every account's hits as one list, each account's own order kept: the better head goes first, so an account with
+ * many hits cannot push another's newer or closer ones off the page.
+ */
+const merged = (lists: Ranked[][]): MeetingSearchItem[] => {
+  const heads = lists.map((list) => ({ list, at: 0 }))
+  const items: MeetingSearchItem[] = []
+  for (;;) {
+    let best: { list: Ranked[]; at: number } | undefined
+    for (const one of heads) {
+      const head = one.list[one.at]
+      const leader = best?.list[best.at]
+      if (head && (!leader || head.tier < leader.tier || (head.tier === leader.tier && head.started > leader.started)))
+        best = one
+    }
+    const next = best?.list[best.at]
+    if (!best || !next) return items
+    items.push(next.item)
+    best.at++
+  }
+}
+
+const accountHits = async (
+  store: MessageStore,
+  account: StoredAccount,
+  query: QueryAst,
+  input: MeetingHitSearchRequest,
+  { text, window, signal, question, exact }: MeetingLaneRequest,
+) => {
+  const ranked: Ranked[] = []
+  const perMeeting = new Map<number, number>()
+  const keep = (one: Ranked) => {
+    const seen = perMeeting.get(one.item.meetingId) ?? 0
+    if (seen >= MOST_HITS_PER_MEETING) return false
+    perMeeting.set(one.item.meetingId, seen + 1)
+    ranked.push(one)
+    return true
+  }
+  let indexing: MeetingAccountCoverage["indexing"] = "ready"
+  let hasMore = false
+  let passages = 0
+  const titles = titleQuery(query, input, question === true)
+  if (titles)
+    for (const meeting of await store.meetings.meetings({
+      accountId: account.id,
+      query: titles,
+      ...(input.since === undefined ? {} : { since: input.since }),
+      ...(input.until === undefined ? {} : { until: input.until }),
+      limit: window + 1,
+    }))
+      if (!exact || holdsExactly(query.root, titleWords(meeting.title ?? "")))
+        keep({ item: titleItem(account, meeting, text), tier: 1, started: meeting.startedAt ?? 0 })
+  let after: string | undefined
+  let rows = Math.min(PAGE_ROWS, window + 1)
+  for (let page = 1; ; page++) {
+    let found: Awaited<ReturnType<typeof store.meetings.searchHits>>
+    try {
+      found = await store.meetings.searchHits(query, {
+        ...input,
+        limit: rows,
+        ...(after === undefined ? {} : { after }),
+      })
+    } catch (error) {
+      // Long summaries can pass the store's byte budget in a few rows; fewer rows a page still reads the account.
+      if (!(error instanceof CliError) || error.message !== READ_BUDGET_EXCEEDED || rows === 1) throw error
+      rows = Math.ceil(rows / 2)
+      page--
+      continue
+    }
+    signal?.throwIfAborted()
+    if (found.coverage.indexing === "pending") indexing = "pending"
+    for (const hit of found.items)
+      if (
+        keep({
+          item: meetingItem(account, hit, text),
+          tier: hit.match === "corrected" ? 2 : 1,
+          started: hit.source?.startedAt ?? 0,
+        })
+      )
+        passages++
+    // Titles rank among the passages, so the passages alone must reach past the page.
+    if (passages > window || !found.hasMore || found.nextCursor === null) break
+    if (page === MOST_PAGES) {
+      hasMore = true
       break
     }
-    const hits = await store.meetings.search(query, { accountId: selected.id, limit: 1, offset: meetingOffset })
-    cancelled(request.signal)
-    if (
-      meeting.accountId !== selected.id ||
-      meeting.deletedAt !== null ||
-      hits.some((hit) => hit.meetingId !== meeting.id)
-    )
-      throw new CliError("validation_error", "meeting archive changed during search; restart from the first page", {
-        complete: false,
-      })
-    if (hitOffset > hits.length)
-      throw new CliError("validation_error", "meeting cursor is past the current hit list; restart from the first page")
-    collected.coverage.meetingsScanned++
-    for (; hitOffset < hits.length; hitOffset++) {
-      const hit = hits[hitOffset] as SearchHit
-      const key = JSON.stringify([selected.id, hit.meetingId, hit.scope, hit.id])
-      if (seen.has(key)) continue
-      seen.add(key)
-      collected.items.push({
-        before: position(),
-        item: {
-          kind: "meeting",
-          ref: formatMeetingReference({ type: "meeting", accountId: selected.id, meetingId: hit.meetingId }),
-          provider: selected.provider,
-          account: selected.account,
-          accountId: selected.id,
-          title: meeting.title,
-          timestamp: meeting.startedAt === null ? null : new Date(meeting.startedAt).toISOString(),
-          text: hit.text.slice(0, 2000),
-          meetingId: hit.meetingId,
-          scope: hit.scope,
-          id: hit.id,
-          startMs: hit.startMs,
-          ...(hit.scope === "transcript" && hit.ref !== undefined
-            ? {
-                cueRef: hit.ref,
-                speakerName: hit.speakerName ?? null,
-                language: hit.language ?? null,
-                ...(hit.line === undefined ? {} : { line: hit.line, linesTotal: hit.linesTotal }),
-              }
-            : {}),
-        },
-      })
-      if (collected.items.length > request.limit) {
-        hitOffset++
-        break
-      }
-    }
-    if (hitOffset === hits.length) {
-      meetingOffset++
-      hitOffset = 0
-      if (page.length < 2) collected.coverage.complete = true
-    }
-    collected.after = position()
-    if (collected.coverage.complete || collected.items.length > request.limit) break
+    after = found.nextCursor
   }
-  return collected
-}
-
-/** Opt-in fusion of the existing unified ranking and one explicitly scoped meeting archive. */
-export const searchAllIncludingMeetings = async (
-  store: MessageStore,
-  account: AccountKey,
-  request: SearchAllIncludingMeetingsRequest,
-  messenger: SearchAllMessenger = {},
-  searchMessages?: (query: SearchQuery) => Promise<SearchFound>,
-  meaning?: MeaningLane,
-): Promise<SearchAllIncludingMeetingsFound> => {
-  whole(request.limit, 1, 1000, "limit")
-  if (request.maxMeetings !== "all") whole(request.maxMeetings ?? 100, 1, Number.MAX_SAFE_INTEGER, "maxMeetings")
-  const only = request.only ?? RESOURCES_SEARCHED_WITH_MEETINGS
-  if (
-    !only.length ||
-    only.some((resource) => !(RESOURCES_SEARCHED_WITH_MEETINGS as readonly string[]).includes(resource))
-  )
-    throw new CliError("validation_error", "only takes messages, mail, notes, events and meetings")
-  if (request.meetingCursor) {
-    if (only.length !== 1 || only[0] !== "meetings")
-      throw new CliError("validation_error", "meeting cursor requires only: [meetings]")
-    whole(request.meetingCursor.accountId, 1, Number.MAX_SAFE_INTEGER, "cursor account id")
-    whole(request.meetingCursor.meetingOffset, 0, Number.MAX_SAFE_INTEGER - 2, "cursor meeting offset")
-    whole(request.meetingCursor.hitOffset, 0, Number.MAX_SAFE_INTEGER, "cursor hit offset")
-  }
-  cancelled(request.signal)
-  const others = { ...request, only: only.filter((one): one is SearchedResource => one !== "meetings") }
-  if (!only.includes("meetings")) {
-    const found = await searchAll(store, account, others, messenger, searchMessages, meaning)
-    cancelled(request.signal)
-    return found
-  }
-  // Meetings rank with the rest, so a later page is the same merge read deeper, then cut.
-  const offset = request.offset ?? 0
-  const window = offset + request.limit
-  const legacy = await searchAll(
-    store,
-    account,
-    { ...others, offset: 0, limit: window },
-    messenger,
-    searchMessages,
-    meaning,
-  )
-  cancelled(request.signal)
-  const compiled = meetingQuery(request.text, request.exact)
-  if ("reason" in compiled)
-    return {
-      ...legacy,
-      items: legacy.items.slice(offset),
-      skipped: [...legacy.skipped, { resource: "meetings", code: "validation_error", reason: compiled.reason }],
-    }
-  let meetings: CollectedMeetings
-  const meetingAccount = request.meetingAccount ?? account
-  try {
-    meetings = await collectMeetings(store, meetingAccount, { ...request, limit: window }, compiled.query)
-  } catch (error) {
-    if (codeOf(error) !== "not_found") throw error
-    return {
-      ...legacy,
-      items: legacy.items.slice(offset),
-      skipped: [
-        ...legacy.skipped,
-        { resource: "meetings", code: "not_found", reason: "the selected meeting account is not stored" },
-      ],
-    }
-  }
-  const ranked = new Map<string, { item: SearchAllItem | MeetingSearchItem; score: number }>()
-  for (const list of [legacy.items, meetings.items.map(({ item }) => item)])
-    list.forEach((item, rank) => {
-      const key =
-        item.kind === "meeting"
-          ? JSON.stringify([item.kind, item.accountId, item.meetingId, item.scope, item.id])
-          : item.ref
-      const held = ranked.get(key) ?? { item, score: 0 }
-      held.score += 1 / (RRF_K + rank + 1)
-      ranked.set(key, held)
-    })
-  const ordered = [...ranked.values()].sort((a, b) => b.score - a.score).map(({ item }) => item)
-  const items = ordered.slice(offset, window)
-  const returnedMeetings = ordered.slice(0, window).filter((item) => item.kind === "meeting").length
-  const nextCursor =
-    meetings.items[returnedMeetings]?.before ?? (!meetings.coverage.complete ? meetings.after : undefined)
-  const more = legacy.hasMore || ordered.length > window
-  const { nextOffset: _, ...rest } = legacy
+  // A title hit ranks as a passage that holds the words: by tier, then the newer meeting; sort keeps it before its own.
+  ranked.sort((one, other) => one.tier - other.tier || other.started - one.started)
   return {
-    ...rest,
-    items,
-    hasMore: more ? true : meetings.coverage.complete ? false : null,
-    ...(more && window <= MAX_SEARCH_OFFSET ? { nextOffset: window } : {}),
-    searched: [...legacy.searched, "meetings"],
-    accounts: [
-      ...legacy.accounts,
-      { resource: "meetings", provider: meetingAccount.provider, account: meetingAccount.account },
-    ],
-    meetings: { ...meetings.coverage, ...(nextCursor ? { nextCursor } : {}) },
+    ranked: ranked.slice(0, window),
+    coverage: { indexing, hasMore: hasMore || ranked.length > window },
   }
 }
 
-export interface SearchAllWithMeetingsRequest extends Omit<SearchAllIncludingMeetingsRequest, "meetingAccount"> {
-  /**
-   * `--source`: each kind reads the accounts the list names of it and a kind it names none of is skipped.
-   * Meetings are read only when it names a meeting account; without it they are skipped.
-   */
-  source?: string
-}
-
-/** Meetings have no index to search every account at once, so they are read only when named. */
-export const MEETINGS_UNNAMED = "meetings are searched only when --source names a meeting account, zoom or meetings"
-
-/** `search all`: every kind but meetings, unless `--source` names a meeting account. */
-export const searchAllWithMeetings = async (
-  store: MessageStore,
-  account: AccountKey,
-  request: SearchAllWithMeetingsRequest,
-  messenger: SearchAllMessenger = {},
-  searchMessages?: (query: SearchQuery) => Promise<SearchFound>,
-  meaning?: MeaningLane,
-): Promise<SearchAllIncludingMeetingsFound> => {
-  if (request.source !== undefined)
-    return searchAllOfSource(store, account, request.source, request, messenger, searchMessages, meaning)
-  const only = request.only ?? RESOURCES_SEARCHED_WITH_MEETINGS
-  if (only.length === 1 && only[0] === "meetings")
-    throw new CliError("validation_error", `--only meetings: ${MEETINGS_UNNAMED}`)
-  if (request.maxMeetings !== undefined) throw new CliError("validation_error", `--max-meetings: ${MEETINGS_UNNAMED}`)
-  const found = await searchAll(
-    store,
-    account,
-    { ...request, only: only.filter((resource): resource is SearchedResource => resource !== "meetings") },
-    messenger,
-    searchMessages,
-    meaning,
-  )
-  return only.includes("meetings")
+const meetingItem = (account: StoredAccount, hit: SearchHit & { ref: string }, query: string): MeetingSearchItem => ({
+  kind: "meeting",
+  ref: formatMeetingReference({ type: "meeting", accountId: account.id, meetingId: hit.meetingId }),
+  provider: account.provider,
+  account: account.account,
+  accountId: account.id,
+  title: hit.source?.title ?? null,
+  timestamp: typeof hit.source?.startedAt === "number" ? new Date(hit.source.startedAt).toISOString() : null,
+  // Centred on the words the index matched: another form, a garbled spelling, never a word only under NOT.
+  text: hit.matchedWords?.length
+    ? excerpt(hit.text, hit.matchedWords.join(" "), 240, { literal: true })
+    : excerpt(hit.text, query),
+  meetingId: hit.meetingId,
+  scope: hit.scope,
+  id: hit.id,
+  startMs: hit.startMs,
+  foundBy: ["words"],
+  ...(hit.match === "corrected" ? { match: hit.match, corrections: hit.corrections ?? [] } : {}),
+  ...(hit.scope === "transcript"
     ? {
-        ...found,
-        skipped: [...found.skipped, { resource: "meetings", code: "validation_error", reason: MEETINGS_UNNAMED }],
+        cueRef: hit.ref,
+        speakerName: hit.speakerName ?? null,
+        language: hit.language ?? null,
+        ...(hit.line === undefined ? {} : { line: hit.line, linesTotal: hit.linesTotal }),
       }
-    : found
-}
+    : {}),
+})
 
-/** Of several meeting accounts, the ones that hold meetings: a bare `zoom` names every row, signed in or not. */
-const holdingMeetings = async (store: MessageStore, named: AccountKey[]): Promise<AccountKey[]> => {
-  if (named.length < 2) return named
-  const holding: AccountKey[] = []
-  for (const key of named) {
-    const { id } = await store.accounts.storedAccount(key)
-    if ((await store.meetings.meetings({ accountId: id, limit: 1 })).length) holding.push(key)
-  }
-  return holding.length ? holding : named
-}
-
-const keyOf = ({ provider, account }: AccountKey) => `${provider}\u0000${account}`
-
-const searchAllOfSource = async (
-  store: MessageStore,
-  account: AccountKey,
-  source: string,
-  request: SearchAllWithMeetingsRequest,
-  messenger: SearchAllMessenger,
-  searchMessages?: (query: SearchQuery) => Promise<SearchFound>,
-  meaning?: MeaningLane,
-): Promise<SearchAllIncludingMeetingsFound> => {
-  const only = request.only ?? RESOURCES_SEARCHED_WITH_MEETINGS
-  const entries = entriesOfList(source, await listContextOf(store, account, messenger.app))
-  // Any provider's import may write business data, so its accounts are the ones that hold some, whatever their kind.
-  const imported = only.includes("business") ? new Set((await store.business.accounts()).map(keyOf)) : new Set<string>()
-  const holdsBusiness = (one: AccountKey) => imported.has(keyOf(one))
-  const { skipped } = fitting(
-    entries,
-    only.filter((one): one is Exclude<ResourceWithMeetings, "business"> => one !== "business"),
-    "search all",
-    (kind) => `--only leaves ${kind} out`,
-    holdsBusiness,
-  )
-  const named = (resource: ResourceWithMeetings): AccountKey[] => [
-    ...new Map(
-      entries
-        .flatMap(({ accounts }) => accounts)
-        .filter((one) => (resource === "business" ? holdsBusiness(one) : listedHolds(one, resource)))
-        .map(({ provider, account }) => [`${provider}\u0000${account}`, { provider, account }] as const),
-    ).values(),
-  ]
-  const meetings = await holdingMeetings(store, named("meetings"))
-  const empty = named("meetings")
-    .filter((one) => !meetings.some(({ provider, account }) => provider === one.provider && account === one.account))
-    .map(({ provider, account }) => ({
-      source: `${provider}:${account}`,
-      code: "not_found" as const,
-      reason: "no meetings stored for it",
-    }))
-  if (only.includes("meetings") && meetings.length > 1)
-    throw new CliError(
-      "validation_error",
-      `--source names several meeting accounts; search all reads one: ${meetings.map(({ provider, account }) => `${provider}:${account}`).join(", ")}`,
-    )
-  const read = only.filter((resource) => named(resource).length > 0)
-  if (read.includes("meetings") && request.offset !== undefined)
-    throw new CliError("validation_error", "--offset pages messages, mail and notes; not with a meeting account yet")
-  const found = await searchAllIncludingMeetings(
-    store,
-    account,
-    {
-      ...request,
-      only: read,
-      scope: {
-        messages: named("messages"),
-        mail: named("mail"),
-        notes: named("notes"),
-        events: named("events"),
-        crm: named("crm"),
-        business: named("business"),
-      },
-      ...(meetings[0] ? { meetingAccount: meetings[0] } : {}),
-    },
-    messenger,
-    searchMessages,
-    meaning,
-  )
-  const unnamed = only
-    .filter((resource) => !read.includes(resource))
-    .map((resource) => ({ resource, code: "not_found" as const, reason: `--source names no ${resource} account` }))
-  return { ...found, skipped: [...skipped, ...empty, ...unnamed, ...found.skipped] }
-}
+const titleItem = (account: StoredAccount, meeting: Meeting, query: string): MeetingSearchItem => ({
+  kind: "meeting",
+  ref: formatMeetingReference({ type: "meeting", accountId: account.id, meetingId: meeting.id }),
+  provider: account.provider,
+  account: account.account,
+  accountId: account.id,
+  title: meeting.title,
+  timestamp: meeting.startedAt === null ? null : new Date(meeting.startedAt).toISOString(),
+  text: excerpt(meeting.title ?? "", query),
+  meetingId: meeting.id,
+  scope: "title",
+  id: meeting.id,
+  startMs: null,
+  foundBy: ["title"],
+})

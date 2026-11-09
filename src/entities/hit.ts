@@ -27,8 +27,8 @@ export const hit = v.strictObject({
   found_by: v.optional(v.array(v.picklist(["title", "words", "meaning"]))),
   /** How far into the meeting the passage is. */
   offset_ms: v.optional(v.nullable(count)),
-  /** A meeting passage's place: its transcript, chat or summary. */
-  scope: v.optional(v.picklist(["transcript", "chat", "summary"])),
+  /** A meeting hit's place: its title, transcript, chat or summary. */
+  scope: v.optional(v.picklist(["title", "transcript", "chat", "summary"])),
   /** A meeting transcript hit's cue, which `meetings passage` opens with the lines around it. */
   cue_ref: v.optional(reference),
   /** A meeting transcript hit's transcript language (`ru`, `en`…), `null` when unknown. */
@@ -36,6 +36,10 @@ export const hit = v.strictObject({
   /** A meeting transcript hit's line, from 1, of `lines_total` lines in its transcript. */
   line: v.optional(v.pipe(count, v.minValue(1))),
   lines_total: v.optional(count),
+  /** `corrected`: a meeting hit found only through a spelling speech recognition may have garbled. */
+  match: v.optional(v.picklist(["corrected"])),
+  /** For a `corrected` hit, the stored words each such query word matched. */
+  corrections: v.optional(v.array(v.strictObject({ from: text, to: v.array(text) }))),
   /** A meeting passage's stored line, so two passages of one meeting stay apart; `search meetings` gives the same. */
   id: v.optional(v.pipe(v.string(), v.minLength(1))),
   /** A business hit's: `proposed` waits for the owner; a product or a wallet has no review and is `confirmed`. */

@@ -3,6 +3,7 @@ import type { Id, Provider } from "../domain/models.js"
 import { parseMeetingReference } from "../meetings/index.js"
 import type { AccountKey, MessageStore, PreparationFact, PreparationNote, PreparationTask } from "../store/store.js"
 import {
+  type AccountScope,
   CONTEXT_BYTES,
   CONTEXT_MESSAGES,
   type ContextMessage,
@@ -10,6 +11,7 @@ import {
   type PersonContext,
   personContext,
   readableAccounts,
+  readableScopes,
   toContext,
 } from "./person-context.js"
 import { type PersonMeetingContextItem, personMeetingContext } from "./person-meeting-context.js"
@@ -46,10 +48,14 @@ export interface PersonPreparation extends PersonContext {
     limits: { items: number; bytes: number }
     coverage: {
       waiting: SectionCoverage & { rule: "their message is the newest the store holds in a one-to-one chat" }
-      tasks: SectionCoverage & { selection: "open, assigned to them in any role"; accounts: string[] }
-      facts: SectionCoverage & { selection: "accepted, about them or a project they are a member of" }
+      tasks: SectionCoverage & { selection: "open, assigned to them in any role"; accounts: string[]; scopes: Scopes }
+      facts: SectionCoverage & { selection: "accepted, about them or a project they are a member of"; scopes: Scopes }
       /** `withheld` when the profile denies `contacts.notes.list`. */
-      notes: SectionCoverage & { selection: "written by you, about them"; withheld?: "contacts.notes.list" }
+      notes: SectionCoverage & {
+        selection: "written by you, about them"
+        scopes: Scopes
+        withheld?: "contacts.notes.list"
+      }
       /** `accounts`: the ones their meetings came from. */
       meetings: SectionCoverage & {
         read: "every account of the store that saw them"
@@ -59,6 +65,8 @@ export interface PersonPreparation extends PersonContext {
     }
   }
 }
+
+type Scopes = readonly AccountScope[]
 
 const size = (value: unknown) => Buffer.byteLength(JSON.stringify(value), "utf8")
 const accountName = ({ provider, account }: AccountKey) => `${provider}:${account}`
@@ -113,7 +121,8 @@ export const personPreparation = async (
   waiting.sort((a, b) => Date.parse(b.message.timestamp) - Date.parse(a.message.timestamp))
 
   const accounts: AccountKey[] = context.accounts.map(({ provider, account }) => ({ provider, account }))
-  const held = await store.people.preparation(context.person.uid, { accounts, limit })
+  const scopes = await readableScopes(store, asked, options.scopes)
+  const held = await store.people.preparation(context.person.uid, { accounts, scopes, limit })
 
   const readable = await readableAccounts(store, asked, options.scopes)
   const meetings = await meetingsOf(store, context.person.uid, readable, options.since, () => left)
@@ -143,11 +152,17 @@ export const personPreparation = async (
           ...sections.tasks.coverage,
           selection: "open, assigned to them in any role",
           accounts: accounts.map(accountName),
+          scopes,
         },
-        facts: { ...sections.facts.coverage, selection: "accepted, about them or a project they are a member of" },
+        facts: {
+          ...sections.facts.coverage,
+          selection: "accepted, about them or a project they are a member of",
+          scopes,
+        },
         notes: {
           ...sections.notes.coverage,
           selection: "written by you, about them",
+          scopes,
           ...(options.notes === false ? { withheld: "contacts.notes.list" as const } : {}),
         },
         meetings: {

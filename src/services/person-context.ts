@@ -181,19 +181,30 @@ export const eventsOnce = async (
 
 const nameOf = ({ provider, account }: AccountKey) => `${provider}:${account}`
 
+const allowedOf = async (store: MessageStore, asked: AccountKey, scopes?: readonly AccountScope[]) => {
+  const stored = await store.accounts.storedAccounts()
+  const own = stored.find((one) => nameOf(one) === nameOf(asked))
+  if (!own || (asked.scope !== undefined && asked.scope !== own.scope))
+    throw new CliError("not_found", `no ${asked.provider} account ${asked.account} in the store`)
+  return { stored, allowed: scopes ?? [own.scope] }
+}
+
 /** The stored accounts of `scopes`, or of the asked account's own scope; the asked account must be stored. */
 export const readableAccounts = async (
   store: MessageStore,
   asked: AccountKey,
   scopes?: readonly AccountScope[],
 ): Promise<StoredAccount[]> => {
-  const stored = await store.accounts.storedAccounts()
-  const own = stored.find((one) => nameOf(one) === nameOf(asked))
-  if (!own || (asked.scope !== undefined && asked.scope !== own.scope))
-    throw new CliError("not_found", `no ${asked.provider} account ${asked.account} in the store`)
-  const allowed = scopes ?? [own.scope]
+  const { stored, allowed } = await allowedOf(store, asked, scopes)
   return stored.filter((one) => allowed.includes(one.scope))
 }
+
+/** `scopes`, or the asked account's own scope: what a read that belongs to no account may show. */
+export const readableScopes = async (
+  store: MessageStore,
+  asked: AccountKey,
+  scopes?: readonly AccountScope[],
+): Promise<readonly AccountScope[]> => (await allowedOf(store, asked, scopes)).allowed
 
 /**
  * The accounts each identity is read in, among `readable` only: for the messenger asked, only the account asked
@@ -245,9 +256,22 @@ export const recordContext = async (
   record: PersonRecord,
   reads: { key: AccountKey; scope: AccountScope; identity: LinkedIdentity }[],
   readable: readonly StoredAccount[],
-  { messages = CONTEXT_MESSAGES, bytes = CONTEXT_BYTES, since, now = Date.now(), calendarIds }: ContextOptions = {},
+  {
+    messages = CONTEXT_MESSAGES,
+    bytes = CONTEXT_BYTES,
+    since,
+    now = Date.now(),
+    calendarIds,
+    scopes,
+  }: ContextOptions = {},
 ): Promise<Omit<PersonContext, "person">> => {
   const recent = (message: ContextMessage) => since === undefined || Date.parse(message.timestamp) >= since
+  // A chat pinned to the other side of the owner's life stays out even when its account is readable.
+  const allowed = new Set<AccountScope>(scopes ?? readable.map((one) => one.scope))
+  const inScope = async <T extends { chatId: Id }>(key: AccountKey, scope: AccountScope, hits: T[]) => {
+    const pinned = await store.chats.chatScopes(key, [...new Set(hits.map((hit) => hit.chatId))])
+    return hits.filter((hit) => allowed.has(pinned.get(hit.chatId) ?? scope))
+  }
 
   const shared: SharedChat[] = []
   const notRead: PersonContext["notRead"] = []
@@ -257,8 +281,8 @@ export const recordContext = async (
   const theirs: ContextMessage[] = []
   const mentions: ContextMessage[] = []
   let cut = false
-  for (const { key, identity } of reads) {
-    const chats = await store.chats.chatsWith(key, identity.id)
+  for (const { key, scope, identity } of reads) {
+    const chats = (await store.chats.chatsWith(key, identity.id)).filter((chat) => allowed.has(chat.scope ?? scope))
     for (const chat of chats) {
       shared.push({ ...key, chatId: chat.id, title: chat.title, kind: chat.kind, lastMessageAt: chat.lastMessageAt })
     }
@@ -302,11 +326,15 @@ export const recordContext = async (
       cut ||= mail.hasMore
     }
     const written = await store.messages.find({ account: key, senders: [identity.id], limit: messages })
-    theirs.push(...written.items.map((hit) => toContext(key, hit, hit.chatTitle ?? null)).filter(recent))
+    theirs.push(
+      ...(await inScope(key, scope, written.items))
+        .map((hit) => toContext(key, hit, hit.chatTitle ?? null))
+        .filter(recent),
+    )
     cut ||= written.hasMore
     const named = await store.messages.mentioning(key, { id: identity.id, username: identity.username }, messages)
     mentions.push(
-      ...named.items
+      ...(await inScope(key, scope, named.items))
         .filter((hit) => hit.senderId !== identity.id)
         .map((hit) => toContext(key, hit, hit.chatTitle ?? null))
         .filter(recent),

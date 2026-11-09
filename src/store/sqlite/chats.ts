@@ -438,6 +438,18 @@ export const purgeChats = ({ orm, database, now }: StoreContext, pks: number[]):
   )
 }
 
+/** Each chat's scope as every reader applies it: the chat's own, or else its account's. */
+export const chatScopes = ({ database }: StoreContext, accountKey: number, chatIds: readonly Id[]): Map<Id, string> =>
+  new Map(
+    database
+      .prepare(
+        "SELECT c.external_id AS id, coalesce(c.scope, a.scope) AS scope FROM chats c JOIN accounts a ON a.id = c.account_id " +
+          "WHERE c.account_id = ? AND c.external_id IN (SELECT value FROM json_each(?))",
+      )
+      .all(accountKey, JSON.stringify(chatIds))
+      .map((row) => [String(row.id), String(row.scope)]),
+  )
+
 export const chatsWith = ({ orm, now }: StoreContext, accountKey: number, key: AccountKey, memberId: Id): Chat[] => {
   const rows = orm
     .select({ chat: chats })

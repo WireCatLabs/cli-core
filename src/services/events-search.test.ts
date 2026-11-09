@@ -8,7 +8,7 @@ import { sourceOf } from "../search/query.js"
 import { openCache } from "../store/open.js"
 import { type MessageStore, openStore } from "../store/store.js"
 import { searchEvents } from "./events-search.js"
-import { searchAllWithMeetings } from "./search-all-meetings.js"
+import { searchAll } from "./search-all.js"
 
 const DAY = 86_400_000
 const NOW = Date.UTC(2026, 9, 26, 12)
@@ -221,8 +221,8 @@ describe("searchEvents", () => {
 })
 
 describe("search all reads calendar events", () => {
-  const all = (store: MessageStore, extra: Partial<Parameters<typeof searchAllWithMeetings>[2]> = {}) =>
-    searchAllWithMeetings(
+  const all = (store: MessageStore, extra: Partial<Parameters<typeof searchAll>[2]> = {}) =>
+    searchAll(
       store,
       { provider: "telegram", account: "500" },
       { text: "budget", limit: 20, only: ["messages", "notes", "events"], ...extra },
@@ -332,7 +332,7 @@ describe("an event deleted in Google", () => {
     const found = await searchEvents(store, "offsite")
     expect(found.hits.map(({ starts_at }) => starts_at)).toEqual([new Date(NOW - DAY).toISOString()])
     expect(found.hits[0]?.account).toBe("owner-1")
-    const all = await searchAllWithMeetings(
+    const all = await searchAll(
       store,
       { provider: "telegram", account: "500" },
       { text: "offsite", limit: 20, only: ["events"] },

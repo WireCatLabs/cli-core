@@ -3,7 +3,6 @@ import { afterEach, describe, expect, it } from "vitest"
 import type { AccountKey } from "../store/store.js"
 import { envelopeOf, recordsFixture, type TestStore, take, upsert } from "../testing/records.js"
 import { RESOURCES_SEARCHED, searchAll } from "./search-all.js"
-import { searchAllWithMeetings } from "./search-all-meetings.js"
 
 const handles: { close(): unknown }[] = []
 afterEach(async () => {
@@ -201,9 +200,9 @@ describe("search all, business lane", () => {
     expect(alpha.items.map(({ ref }) => ref)).not.toContain(await refOf(store, "invoice", "i-1", BETA.account))
     expect(alpha.accounts).toEqual([{ resource: "business", provider: "sheet", account: "alpha" }])
     const beta = await business(store, "nimbus", [BETA])
-    expect(beta.items.map(({ ref, sourceRecord }) => [ref, sourceRecord?.account])).toEqual([
-      [await refOf(store, "invoice", "i-1", BETA.account), "beta"],
-    ])
+    expect(
+      beta.items.map((item) => [item.ref, item.kind === "meeting" ? undefined : item.sourceRecord?.account]),
+    ).toEqual([[await refOf(store, "invoice", "i-1", BETA.account), "beta"]])
   })
 
   it("skips the lane with its reason when the query names a field a number or a name does not have", async () => {
@@ -274,8 +273,7 @@ describe("search all, business lane", () => {
 
   it("follows --source and account groups to the import accounts they name, whatever their provider", async () => {
     const store = await fixture()
-    const search = (source: string) =>
-      searchAllWithMeetings(store, ME, { text: "nimbus", limit: 50, only: ["business"], source })
+    const search = (source: string) => searchAll(store, ME, { text: "nimbus", limit: 50, only: ["business"], source })
     const direct = await search("sheet:beta")
     expect(direct.items.map(({ account }) => account)).toEqual(["beta"])
     expect(direct.skipped).toEqual([])

@@ -96,6 +96,7 @@ export const liftMeetingFields = (
   query: string,
   request: MeetingHitSearchRequest,
   now?: number,
+  timezone?: string,
 ): { query: string; request: MeetingHitSearchRequest } => {
   let ast: QueryAst
   try {
@@ -144,7 +145,7 @@ export const liftMeetingFields = (
         node.operator === "range" ? (node.upper ?? "*") : node.value,
         node.lower_inclusive !== false,
         node.upper_inclusive !== false,
-        timezoneOf(),
+        timezoneOf(timezone),
         node.span,
         now,
       )

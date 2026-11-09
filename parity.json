@@ -588,10 +588,6 @@
       "meaning": "at most this many bytes of buffered stdin",
       "default": "16777216"
     },
-    "--max-meetings": {
-      "value": "<n>",
-      "meaning": "how many of the meeting account's meetings to look through, newest first, or all for every one (default 100)"
-    },
     "--max-messages": {
       "value": "<n>",
       "meaning": "fetch at most this many messages total (default: 500)"
@@ -728,7 +724,7 @@
     },
     "--only": {
       "value": "<resources>",
-      "meaning": "only these resources, separated by commas: messages, notes; meetings when --source names a meeting account"
+      "meaning": "only these resources, separated by commas: messages, notes, events, meetings"
     },
     "--only-admins-add": {
       "value": "<on|off>",
@@ -4118,13 +4114,6 @@
         },
         "--exact": "all",
         "--limit": "all",
-        "--max-meetings": {
-          "in": ["wa"],
-          "planned": {
-            "max": "each CLI’s next cli-core bump",
-            "tg": "each CLI’s next cli-core bump"
-          }
-        },
         "--only": "all",
         "--page": "all",
         "--server-time": {

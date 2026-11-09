@@ -151,6 +151,7 @@ export const meetingCue = v.strictObject({
   text,
   revision: v.picklist(["current", "superseded"]),
 })
+const scopes = v.array(v.picklist(["personal", "work"]))
 export const contactPreparation = v.strictObject({
   ...context.entries,
   prepare: v.strictObject({
@@ -205,14 +206,17 @@ export const contactPreparation = v.strictObject({
         ...coverage.entries,
         selection: v.literal("open, assigned to them in any role"),
         accounts: v.array(text),
+        scopes,
       }),
       facts: v.strictObject({
         ...coverage.entries,
         selection: v.literal("accepted, about them or a project they are a member of"),
+        scopes,
       }),
       notes: v.strictObject({
         ...coverage.entries,
         selection: v.literal("written by you, about them"),
+        scopes,
         withheld: v.optional(v.literal("contacts.notes.list")),
       }),
       meetings: v.strictObject({

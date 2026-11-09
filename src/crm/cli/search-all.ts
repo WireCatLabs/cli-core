@@ -13,7 +13,7 @@ import { DEAL_KINDS } from "../../domain/deals.js"
 import { SAVE_HELP } from "../../meetings/index.js"
 import type { AppIdentity } from "../../ports/app.js"
 import { meaningLane } from "../../services/messages-meaning.js"
-import { type ResourceWithMeetings, searchAllWithMeetings } from "../../services/search-all-meetings.js"
+import { type SearchedResource, searchAll } from "../../services/search-all.js"
 import type { CrmRun, CrmWithin } from "./index.js"
 
 /** What a CRM CLI's `search all` reads: its deals and leads first, then what the other tools stored. */
@@ -33,10 +33,11 @@ export const addCrmSearchAll = (
   }: { within: CrmWithin; app: AppIdentity; example: (command: Command, ...lines: string[]) => Command },
 ): void => {
   const all = annotate(new Command("all"), { effects: LOCAL_READ, partial: true, output: { entity: "hit" } })
-    .summary("search stored deals and leads, messages, notes and calendar events")
+    .summary("search stored deals and leads, messages, notes, calendar events and meetings")
     .description(
-      "search the CRM's deals and leads by the words of their title, and messages, notes and calendar events other " +
-        "WireCat tools stored — best match first. Use it when you do not know where something was written",
+      "search the CRM's deals and leads by the words of their title, and messages, notes, calendar events and " +
+        "meetings other WireCat tools stored — best match first. Use it when you do not know where something was " +
+        "written",
     )
     .argument("<query...>", 'words and "phrases"; deals and leads match the words of their title')
     .addHelpText("after", SAVE_HELP)
@@ -44,9 +45,8 @@ export const addCrmSearchAll = (
   example(all, "search all Example LLC", "search all website --only crm --json")
   all.action(async (words: string[], _opts: unknown, leaf: Command) => {
     const opts = leaf.opts<{
-      only?: Exclude<ResourceWithMeetings, "business">[]
+      only?: Exclude<SearchedResource, "business">[]
       source?: string
-      maxMeetings?: number | "all"
       limit?: number
       page?: number
       exact?: boolean
@@ -76,7 +76,7 @@ export const addCrmSearchAll = (
       const limit = opts.limit ?? DEFAULT_LIMIT
       const offset = offsetOf(opts.page, limit)
       const env = run.env ?? process.env
-      const found = await searchAllWithMeetings(
+      const found = await searchAll(
         run.store,
         run.account,
         {
@@ -87,9 +87,9 @@ export const addCrmSearchAll = (
           ...(opts.timezone === undefined ? {} : { timezone: opts.timezone }),
           env,
           only,
+          ...(opts.only?.includes("meetings") ? { meetingsAsked: true } : {}),
           ...(crmKinds.length < DEAL_KINDS.length ? { crmKinds } : {}),
           ...(opts.source === undefined ? {} : { source: opts.source }),
-          ...(opts.maxMeetings === undefined ? {} : { maxMeetings: opts.maxMeetings }),
           ...(run.locked ? { scope: { crm: [run.account] } } : {}),
         },
         { app, hintCommand: commandAt(rootOf(leaf), "models download") ? app.command : null },

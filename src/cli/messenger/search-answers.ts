@@ -14,8 +14,8 @@ import type { FoundMessage, SearchFound } from "../../services/messages.js"
 import { MAX_SEARCH_OFFSET } from "../../services/messages-archive-search.js"
 import type { MeaningSkipped } from "../../services/messages-discovery.js"
 import type { FoundNote, NotesFoundOf } from "../../services/notes-search.js"
-import type { SearchAllItem } from "../../services/search-all.js"
-import type { MeetingSearchItem, SearchAllIncludingMeetingsFound } from "../../services/search-all-meetings.js"
+import type { SearchAllFound, SearchAllItem } from "../../services/search-all.js"
+import type { SearchAllIncludingMeetingsFound } from "../../services/search-all-deprecated.js"
 import type { StoredHistorySkip } from "../../store/store.js"
 import { type ListBody, listOf } from "../envelope.js"
 import { nextStep } from "../steps.js"
@@ -352,7 +352,7 @@ const ALL_HIT_UNTRUSTED: Record<HitItem["kind"], string[] | undefined> = {
   ...BUSINESS_UNTRUSTED,
 }
 
-export const allHitItem = (item: SearchAllItem | MeetingSearchItem): HitItem =>
+export const allHitItem = (item: SearchAllItem): HitItem =>
   item.kind === "meeting"
     ? {
         kind: "meeting",
@@ -364,7 +364,9 @@ export const allHitItem = (item: SearchAllItem | MeetingSearchItem): HitItem =>
         excerpt: item.text,
         offset_ms: item.startMs,
         scope: item.scope,
+        found_by: item.foundBy,
         id: String(item.id),
+        ...(item.match === undefined ? {} : { match: item.match, corrections: item.corrections ?? [] }),
         ...(item.cueRef === undefined
           ? {}
           : {
@@ -428,10 +430,10 @@ export const notesAnswer = (
     meta: metaOf(found.accounts, found.skipped),
   })
 
-/** `search all`, CLI and MCP alike. A bounded meeting scan that could not tell whether more match says so. */
+/** `search all`, CLI and MCP alike. A meeting account whose index is still being built says so. */
 export const allAnswer = (
   command: string,
-  found: SearchAllIncludingMeetingsFound,
+  found: SearchAllFound | SearchAllIncludingMeetingsFound,
   { limit, page, again }: Paging,
   exact = false,
   skips: StoredHistorySkip[] = [],
@@ -439,7 +441,6 @@ export const allAnswer = (
   leftOut: readonly { why: string }[] = [],
 ): ListBody<HitItem> => {
   const limited = historyLimitGaps(skips)
-  const scan = found.meetings?.complete === false ? found.meetings : undefined
   const notes = meaningGap(found.notes?.meaningSkipped, exact)
   const messages = messageMeaningGap(found.messages?.meaningSkipped, "found_by")
   const archive = coverageGaps({ coverage: found.coverage }, found.items.length)
@@ -450,30 +451,18 @@ export const allAnswer = (
     page: page ?? 1,
     ...(again ? { args: again } : {}),
     next: [
-      ...(scan
-        ? [
-            nextStep("search.meetings", {
-              command,
-              args: { ...again, max_meetings: "all" },
-              values: { scanned: scan.meetingsScanned },
-            }),
-          ]
-        : []),
       ...notes.next,
       ...messages.next.filter((step) => !notes.next.some((asked) => JSON.stringify(asked) === JSON.stringify(step))),
       ...archive.next,
       ...limited.next,
     ],
     missing: [
-      ...(scan
-        ? [
-            {
-              field: "items",
-              why: `stopped after ${scan.meetingsScanned} meetings; more may match`,
-              step: "search.meetings",
-            },
-          ]
-        : []),
+      ...(Array.isArray(found.meetings) ? found.meetings : [])
+        .filter(({ indexing }) => indexing === "pending")
+        .map(({ provider, account }) => ({
+          field: "items",
+          why: `${provider}:${account}: meetings saved since its search index was last built are not found yet`,
+        })),
       ...notes.missing,
       ...messages.missing,
       ...archive.missing,

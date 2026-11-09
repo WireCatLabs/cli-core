@@ -3,6 +3,7 @@ import { formatLocator } from "../domain/locator.js"
 import type { Provider } from "../domain/models.js"
 import { pickPerson } from "../resolve.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
+import { readableScopes } from "./person-context.js"
 
 export const TIMELINE_ITEMS = 50
 export const TIMELINE_MAX = 500
@@ -25,6 +26,8 @@ export interface TimelineItem {
 
 export interface PersonTimeline {
   person: { uid: string; name: string | null }
+  /** The scopes read: the asked account's own, or the caller's `scopes`, narrowed by `scope`. */
+  scopes: Scope[]
   items: TimelineItem[]
   limits: { items: number }
   hasMore: boolean
@@ -35,6 +38,9 @@ export interface PersonTimeline {
 }
 
 export interface TimelineOptions {
+  /** The scopes the caller may read; the asked account's own scope when absent. */
+  scopes?: readonly Scope[]
+  /** Narrows the read to one of the scopes the caller may read; another is refused. */
   scope?: Scope
   /** ms, inclusive. */
   since?: number
@@ -64,19 +70,25 @@ export const personTimeline = async (
   store: MessageStore,
   asked: AccountKey,
   reference: string,
-  { scope, since, until, cursor, limit = TIMELINE_ITEMS }: TimelineOptions = {},
+  { scopes, scope, since, until, cursor, limit = TIMELINE_ITEMS }: TimelineOptions = {},
 ): Promise<PersonTimeline> => {
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > TIMELINE_MAX)
     throw new CliError("validation_error", `the limit takes 1–${TIMELINE_MAX}`)
   if (since !== undefined && until !== undefined && since > until)
     throw new CliError("validation_error", "the start of the range is after its end")
+  const allowed = await readableScopes(store, asked, scopes)
+  if (scope !== undefined && !allowed.includes(scope))
+    throw new CliError("permission_error", `this profile reads ${allowed.join(" and ")}, not ${scope}`, {
+      reason: "selection.out-of-scope",
+    })
+  const read = scope === undefined ? [...allowed] : [scope]
   const found = pickPerson(reference, await store.people.people(asked.provider, { account: asked.account }))
   const record = await store.people.personOf({ provider: asked.provider, id: found.id })
   if (!record) throw new CliError("not_found", `no person ${found.id} in the store`)
   const personId = Number(record.uid)
   const pending = store.involvements.pending()
   const rows = store.involvements.forPerson(personId, {
-    ...(scope === undefined ? {} : { scope }),
+    scopes: read,
     ...(since === undefined ? {} : { since }),
     ...(until === undefined ? {} : { until }),
     only: asked,
@@ -88,6 +100,7 @@ export const personTimeline = async (
   const hasMore = rows.length > limit
   return {
     person: { uid: record.uid, name: record.name },
+    scopes: read,
     items: shown.map((row) => ({
       at: new Date(row.occurredAt).toISOString(),
       subject: row.subjectType,

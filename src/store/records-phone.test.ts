@@ -3,7 +3,6 @@ import { accountsMeta } from "../calendar/index.js"
 import { ingestVcard } from "../services/ingest.js"
 import { personContext } from "../services/person-context.js"
 import { searchAll } from "../services/search-all.js"
-import { searchAllWithMeetings } from "../services/search-all-meetings.js"
 import { envelopeOf, recordsFixture, SOURCE, take, upsert } from "../testing/records.js"
 
 const handles: { close(): unknown }[] = []
@@ -399,7 +398,7 @@ it("keeps records, SMS and calls in the one account, which a group naming it onc
   const accounts = sql().prepare("SELECT provider, external_id FROM accounts WHERE provider <> 'internal'").all()
   expect(accounts).toEqual([{ provider: "phone", external_id: "pixel" }])
   await store.accounts.saveAccountGroup("mobile", ["phone:pixel"])
-  const found = await searchAllWithMeetings(store, ME, {
+  const found = await searchAll(store, ME, {
     text: "договор OR incoming",
     limit: 10,
     only: ["messages", "events"],

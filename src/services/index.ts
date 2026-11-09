@@ -585,6 +585,7 @@ export {
   type SearchAllFound,
   type SearchAllItem,
   type SearchAllMessenger,
+  type SearchAllRecordItem,
   type SearchAllRequest,
   type SearchedResource,
   searchAll,
@@ -592,14 +593,15 @@ export {
 export {
   type MeetingSearchCoverage,
   type MeetingSearchCursor,
-  type MeetingSearchItem,
-  RESOURCES_SEARCHED_WITH_MEETINGS,
   type ResourceWithMeetings,
   type SearchAllIncludingMeetingsFound,
   type SearchAllIncludingMeetingsRequest,
-  type SearchAllWithMeetingsRequest,
   searchAllIncludingMeetings,
-  searchAllWithMeetings,
+} from "./search-all-deprecated.js"
+export {
+  type MeetingAccountCoverage,
+  type MeetingSearchItem,
+  MOST_HITS_PER_MEETING,
 } from "./search-all-meetings.js"
 export {
   CATCH_UP_BOUNDS,

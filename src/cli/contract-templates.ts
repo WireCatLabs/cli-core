@@ -1,6 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import { annotate, sharedCommand } from "@wirecat/cli-base/commands"
-import { Command } from "commander"
+import { Command, Option } from "commander"
 import { note } from "../entities/note.js"
 import { addMeetingCommands } from "../meetings/cli/index.js"
 import type { AppIdentity } from "../ports/app.js"
@@ -12,6 +12,44 @@ import { doctorCommand } from "./messenger/doctor-command.js"
 import { mcpCommand } from "./messenger/mcp-command.js"
 import { searchCommand } from "./messenger/search-command.js"
 import { settingsFor } from "./settings.js"
+
+/**
+ * `search all` as it was before meetings became one of its sources: cli-memo, zoom-cli and drive-cli review their
+ * overrides against these exact values, and a template that moves fails their start. Drop it in the cli-core release
+ * that cli-memo#703, zoom-cli#344 and drive-cli's update land with.
+ */
+const frozenSearch = (search: Command): Command => {
+  const all = search.commands.find((command) => command.name() === "all")
+  if (!all) return search
+  all
+    .summary("search stored messages, notes, calendar events and selected meeting transcripts")
+    .description(
+      "search messenger messages and notes in the local store, calendar events when the store holds a calendar, and " +
+        "a meeting account's transcripts when --source names one — best match first; not mail (the separate memo CLI " +
+        "searches it: memo search mail), tasks, people, memories or projects. Use it when you do not know where " +
+        "something was written; search messages or notes reads one kind with all its fields",
+    )
+  const option = (flags: string) => all.options.find((one) => one.flags === flags)
+  const only = option("--only <resources>")
+  const source = option("--source <accounts>")
+  if (only)
+    only.description =
+      "only these resources, separated by commas: messages, notes, events; meetings when --source names a meeting account"
+  if (source) {
+    source.description =
+      "only these accounts, separated by commas: provider:account as a hit shows it, a provider, a kind or " +
+      "group:<name>; each resource reads the ones of its kind, and meetings only when it names one"
+    ;(all.options as Option[]).splice(
+      all.options.indexOf(source) + 1,
+      0,
+      new Option(
+        "--max-meetings <n>",
+        "how many of the meeting account's meetings to look through, newest first, or all for every one (default 100)",
+      ),
+    )
+  }
+  return search
+}
 
 /** Construction-only defaults for a CLI that explicitly binds an independent source or transport. */
 export const sharedCommandTemplate = (
@@ -34,7 +72,7 @@ export const sharedCommandTemplate = (
     if (name === "commands") return commandsCommand(app)
     if (name === "doctor") return doctorCommand(messenger)
     if (name === "mcp") return mcpCommand(messenger)
-    if (name === "search") return searchCommand(messenger)
+    if (name === "search") return frozenSearch(searchCommand(messenger))
     if (name === "meetings") {
       const root = new Command(app.command)
       addMeetingCommands(root, {

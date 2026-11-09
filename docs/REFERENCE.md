@@ -175,46 +175,51 @@ store operations to one account. The host supplies bounded file/stdin input, can
 close-before-output rendering; Base supplies correlation, budgets and serial execution. See
 [bounded read batches](dev/STANDARD.md#bounded-read-batches) for caps and partial-result semantics.
 
-`searchAll` and the two below take the messenger as `{ app, savedChatId?, hintCommand? }`: `hintCommand` is the tool a
-missing-model hint names when it is not `app.command`, and `null` names the tools with a `models` command — for a tool
-like memo that borrows tg's identity for `group:` lists.
+`searchAll` takes the messenger as `{ app, savedChatId?, hintCommand? }`: `hintCommand` is the tool a missing-model
+hint names when it is not `app.command`, and `null` names the tools with a `models` command — for a tool like memo
+that borrows tg's identity for `group:` lists.
 
-`searchAllIncludingMeetings` from `./services` adds one selected meeting account to the existing
-message, mail and notes search. It leaves `searchAll` and its item references unchanged. The CLI
-reaches it with `search all <query> --source zoom:<account>` (or `zoom`, `meetings`, `all`) and MCP with
-`search_all`'s `source`; a bare word takes the one account that holds meetings and refuses when several do.
-Choose another meeting account explicitly:
+`searchAll` reads meetings as one more resource (`only` takes `meetings`), from the search index of every meeting
+account of the caller's scope, and ranks them with the other resources. The scope is that of the caller's stored
+account (personal or work), as a person's context reads; `meetingScopes` widens it, as memo does with both. `source`
+takes `--source` as typed (`zoom:<account>`, `zoom`, `meetings`, `all`, a list or `group:<name>`) and reads the
+accounts it names of each kind; `scope` does the same with accounts already chosen. A named meeting account of
+another scope is a `skipped` entry that says its scope. A failure of one meeting account is a `skipped` entry with
+its `source`, and the other accounts still answer. With no meeting account to read, a caller that named meetings
+(`meetingsAsked`, set by `--only meetings`) gets `skipped` `meetings` with `not_found`: "no meeting account stored",
+"no meeting account in this scope" or, for a caller the store does not hold, "this account is not in the store
+yet". Otherwise the answer says nothing of meetings, as one with no calendar says nothing of events. A page whose
+stored text passes the store's 4 MB budget is asked again with half the rows, down to one, before the account is
+skipped.
 
 ```ts
-const found = await searchAllIncludingMeetings(store, account, {
-  text: "project AND plan",
+const found = await searchAll(store, account, {
+  text: '"project plan" date>=30d',
   limit: 20,
-  meetingAccount: { provider: "zoom", account: "zm-profile:example" },
-  maxMeetings: 100,
+  source: "zoom,notes",
+  timezone: "Europe/Madrid",
 })
 ```
 
-Meeting hits have `kind: "meeting"`, `ref` (the meeting, `meeting:<account>/<meeting>`), `accountId`, `meetingId`,
-`scope`, `id` and `startMs`. A transcript hit also has `cueRef`, the matched cue
-(`meeting:<account>/<meeting>/<transcript>/<cue>`, which `meetings passage` opens), `speakerName`, the transcript's
-`language` (`null` when unknown), and `line` of `linesTotal`, where in the transcript the cue is; the CLI answer names
-them `cue_ref`, `sender_name`, `language`, `line` and `lines_total`. They contain text previews of at most 2000 characters; their meeting timestamp can
-be null. The existing unified ranking and the meeting list are blended by reciprocal rank. Meeting
-order follows newest meeting first, then stored hit order; it does not claim a relevance score.
+The meeting query language applies: phrases, OR, NOT, `"a b"~N`, `from:` (who said it) and `date:` (when the meeting
+started, in `timezone`); `exact` matches words as typed. A field meetings do not have (`in:`, `chat:`, `filename:`)
+skips meetings with the reason. Meeting hits have `kind: "meeting"`, `ref` (the meeting,
+`meeting:<account>/<meeting>`, which memo takes as evidence), `accountId`, `meetingId`, `scope`, `id`, `startMs` and
+`foundBy`; a transcript hit also has `cueRef`, the matched cue (`meeting:<account>/<meeting>/<transcript>/<cue>`, which
+`meetings passage` opens), `speakerName`, the transcript's `language` (`null` when unknown), and `line` of
+`linesTotal`. The CLI answer names them `cue_ref`, `sender_name`, `language`, `line` and `lines_total`. A hit found
+only through a spelling speech recognition may have garbled has `match: "corrected"` and `corrections`, the stored
+words each query word matched. `text` is an excerpt of about 240 characters around the words the index matched
+(`searchHits` gives them as `matchedWords`: another form, a garbled spelling, never a word only under NOT), and the
+meeting's timestamp can be null. A meeting whose title holds the words (each as the start of a word of the title) is
+a hit with `scope: "title"`, `id` the meeting's and `foundBy: ["title"]`, ranked with the passages that hold the
+words; a question's title must hold every word, and `exact` a whole word. A query with `from:`, nearness,
+`project:` or `tag:` matches no title, since a title cannot answer it. One meeting gives at most
+`MOST_HITS_PER_MEETING` (3) hits; inside one account they come best match first, then newest meeting first.
 
-Meetings support letter/digit words joined by AND, including adjacent words, as word prefixes.
-Exact forms, phrases, OR/NOT, patterns and field/date filters skip only meetings with a reason.
-The meeting account defaults to `account` and is looked up without registration. Search reads
-current transcripts, chat and summaries and excludes deleted meetings.
-
-`maxMeetings` limits visited candidate meetings (1–1000, default 100), while `limit` bounds returned
-items (1–1000). The store can allocate many hit rows within one candidate meeting; this service
-cannot promise a hard query memory bound. `hasMore: null` means the scan stopped before proving
-whether another match exists. `meetings.complete` describes the selected source's scan, and
-`meetings.nextCursor` resumes with `only: ["meetings"]`, the same query and the same account. It
-retains unreturned hits even when another resource filled the result limit. This is a meeting source
-continuation, not a global cursor or a snapshot; changing archive contents can require restarting.
-
+Search all only reads: it never builds a meeting index. `meetings` in the answer has one entry per meeting account
+read, with `indexing: "ready" | "pending"` and `hasMore`. `pending` means passages saved since the index was last built
+are not found yet; `search meetings` builds it. The CLI answer names a pending account in `missing`.
 
 A **message locator** names one message across every provider and account:
 `msg:telegram/<account>/<chat>/<message>`. A message id alone does not — Telegram numbers messages
