@@ -7,6 +7,16 @@ shape of this file.
 
 ## Unreleased
 
+### Changed — may break callers
+
+- **`messages sync --all` leaves out muted chats.** A chat the messenger reports muted (`muted`, with no
+  `mutedUntil` or one still ahead) is not read, so a sync of an account with many muted groups no longer downloads
+  them all. The answer counts them in `limited.muted` and leaves them out of `chats`, `items` and the progress total;
+  a note says how to read them. Messages already stored stay. A chat named (`messages sync <chat>`) is read as
+  before, and one kept in full with `--full-history` is read by `--all` too. To read them again, pass the new
+  `--with-muted` to `messages sync --all` for one run (a background job keeps it), or set the new profile setting
+  `history_muted` to true.
+
 ### Fixed
 
 - **A mail's vector names its sender at the end, not first.** Every mail piece began "Name: Subject", so search by
@@ -82,16 +92,6 @@ shape of this file.
   chat found so far again (up to 2 000 messages each) and looked up every sender's person again, so a project with
   confirmed links took about three times longer than one without: 4.9–5.8 s against 1.6–1.9 s on a synthetic store
   of 2 600 chats. A scan now keeps what it read until it ends: 0.6–0.8 s on the same store, with the same proposals.
-
-### Changed — may break callers
-
-- **`messages sync --all` leaves out muted chats.** A chat the messenger reports muted (`muted`, with no
-  `mutedUntil` or one still ahead) is not read, so a sync of an account with many muted groups no longer downloads
-  them all. The answer counts them in `limited.muted` and leaves them out of `chats`, `items` and the progress total;
-  a note says how to read them. Messages already stored stay. A chat named (`messages sync <chat>`) is read as
-  before, and one kept in full with `--full-history` is read by `--all` too. To read them again, pass the new
-  `--with-muted` to `messages sync --all` for one run (a background job keeps it), or set the new profile setting
-  `history_muted` to true.
 
 ## 0.617.0 — 08.11.2026
 
