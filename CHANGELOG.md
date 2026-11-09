@@ -7,6 +7,8 @@ shape of this file.
 
 ## Unreleased
 
+## 0.619.0 — 09.11.2026
+
 ### Added
 
 - **A report or message (the digest, the weekly gaps, a failed schedule's notice) goes to an email route as
