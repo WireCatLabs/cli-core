@@ -10,6 +10,7 @@ import {
   validateEvidenceFindings,
 } from "../evidence-findings.js"
 import { contextRecordOf } from "./context-evidence.js"
+import { quoteKept } from "./evidence-signature.js"
 import { sourcesOfReferences } from "./evidence-sources.js"
 import { findingsAgent, findingsCoreOver } from "./findings-core.js"
 import { authorActor } from "./memories.js"
@@ -22,6 +23,7 @@ type StoredInput = FindingsInput & {
   snapshotHash: string
   snapshotParts?: Record<string, string>
   agentModel: string | null
+  ownerOnly?: true
 }
 const stale = (): never => {
   throw new CliError("validation_error", "evidence findings changed since they were read; stage a new batch", {
@@ -63,6 +65,7 @@ export const evidenceFindingsStoreOver = (context: StoreContext): EvidenceFindin
       input: { schemaVersion: 1, key: input.key, extractor: input.extractor, findings: input.findings },
       fingerprint: findingHash({ input, author: proposal.proposedBy.id }),
       status: proposal.status === "proposed" ? "proposed" : "reviewed",
+      ownerOnly: input.ownerOnly === true || input.findings.some((finding) => finding.kind === "payment"),
       author: proposal.proposedBy,
       decidedBy: proposal.decidedBy,
       decidedAt: proposal.decidedAt,
@@ -77,10 +80,17 @@ export const evidenceFindingsStoreOver = (context: StoreContext): EvidenceFindin
   }
   const cite = () => {
     let readBytes = 0
+    const texts = new Map<string, string>()
+    const quoted = (evidence: FindingEvidence) => {
+      if (evidence.quote !== undefined && !quoteKept(evidence.quote, texts.get(evidence.reference) ?? ""))
+        throw new CliError("validation_error", `the quote cited from ${evidence.reference} is not in its text`, {
+          reason: "finding.quote-not-found",
+        })
+    }
     return (evidence: FindingEvidence, _finding: unknown, _project: unknown, seen: Map<string, unknown>) => {
       if (seen.has(evidence.reference)) {
         if (seen.get(evidence.reference) !== evidence.fingerprint) return stale()
-        return
+        return quoted(evidence)
       }
       const record = contextRecordOf(database, evidence.reference)
       if (!record) return stale()
@@ -89,6 +99,8 @@ export const evidenceFindingsStoreOver = (context: StoreContext): EvidenceFindin
       const fingerprint = contextEvidenceFingerprint(record)
       if (fingerprint !== evidence.fingerprint) return stale()
       seen.set(evidence.reference, fingerprint)
+      texts.set(evidence.reference, record.text)
+      quoted(evidence)
     }
   }
   const snapshot = (input: FindingsInput) => core.snapshot(input, cite())
@@ -108,7 +120,7 @@ export const evidenceFindingsStoreOver = (context: StoreContext): EvidenceFindin
     }
   }
   return {
-    stage: async (raw, rawAgent) => {
+    stage: async (raw, rawAgent, { ownerOnly = false } = {}) => {
       const input = validateEvidenceFindings(raw)
       const projects = new Set(input.findings.flatMap((finding) => finding.project ?? []))
       if (projects.size > 1) return invalid("an evidence findings batch is about one project at most")
@@ -118,7 +130,7 @@ export const evidenceFindingsStoreOver = (context: StoreContext): EvidenceFindin
       const by = findingsAgent(rawAgent)
       return write(database, () => {
         const { actor } = authorActor(context, by)
-        const inputHash = findingHash({ input, model: by.model ?? null })
+        const inputHash = findingHash({ input, model: by.model ?? null, ...(ownerOnly ? { ownerOnly } : {}) })
         const held = database
           .prepare(
             "SELECT id FROM proposed_actions WHERE account_id IS NULL AND kind=? AND proposed_by_type=? AND proposed_by_id=? AND json_extract(payload,'$.key')=? ORDER BY id LIMIT 1",
@@ -139,12 +151,25 @@ export const evidenceFindingsStoreOver = (context: StoreContext): EvidenceFindin
             kind: EVIDENCE_FINDINGS_KIND,
             by,
             ...(target === undefined ? {} : { target }),
-            payload: { ...input, inputHash, snapshotHash, snapshotParts, agentModel: by.model ?? null },
+            payload: {
+              ...input,
+              inputHash,
+              snapshotHash,
+              snapshotParts,
+              agentModel: by.model ?? null,
+              ...(ownerOnly ? { ownerOnly: true } : {}),
+            },
           }),
         )
       })
     },
     get: async (id) => view(load(id)),
+    citable: async (reference) => {
+      const record = contextRecordOf(database, reference)
+      return record
+        ? { reference, fingerprint: contextEvidenceFingerprint(record), title: record.title, text: record.text }
+        : null
+    },
     sources: async (id) =>
       sourcesOfReferences(
         database,
@@ -201,7 +226,7 @@ export const evidenceFindingsStoreOver = (context: StoreContext): EvidenceFindin
           {
             id,
             proposedBy: proposals.proposer(id),
-            ownerOnly: batch.input.findings.some((finding) => finding.kind === "payment"),
+            ownerOnly: batch.ownerOnly,
           },
           decision.by,
           context.decisions,

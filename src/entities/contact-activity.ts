@@ -15,7 +15,13 @@ const linkedIdentity = v.strictObject({
   linked_at: time,
 })
 
-export const linkedPerson = v.strictObject({ uid: id, name: v.nullable(text), identities: v.array(linkedIdentity) })
+export const linkedPerson = v.strictObject({
+  uid: id,
+  name: v.nullable(text),
+  identities: v.array(linkedIdentity),
+  /** An agent's link: the `identity_link` proposal the owner decides; the person is still as it was. */
+  proposal: v.optional(text),
+})
 
 export const contactActivity = v.strictObject({
   at: time,

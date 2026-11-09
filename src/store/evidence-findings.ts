@@ -2,6 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import { formatLocator, parseLocator } from "../domain/locator.js"
 import { type FindingOutcome, type FindingsInput, type FindingsReceipt, validateFindings } from "../meetings/index.js"
 import type { Decider } from "./decisions.js"
+import { QUOTE_LIMIT } from "./sqlite/evidence-signature.js"
 import type { EvidenceSource } from "./sqlite/evidence-sources.js"
 import { entryAmount } from "./sqlite/payment-entries.js"
 
@@ -23,6 +24,7 @@ export const validateEvidenceFindings = (input: FindingsInput): FindingsInput =>
     reference,
     anySubject: true,
     payments: true,
+    quotes: QUOTE_LIMIT,
   })
   // Refused at staging rather than when the owner accepts, which would fail the whole batch.
   for (const finding of valid.findings) if (finding.kind === "payment") entryAmount(finding.payment)
@@ -44,6 +46,8 @@ export interface EvidenceFindingsBatch {
   input: FindingsInput
   fingerprint: string
   status: "proposed" | "reviewed"
+  /** Only the owner decides it, whatever `agent_decisions` says: it was staged so, or it records a payment. */
+  ownerOnly: boolean
   author: { type: "person" | "bot"; id: string; name: string | null; kind: "agent" | "rule" | null }
   decidedBy: { type: "person" | "bot"; id: string } | null
   decidedAt: string | null
@@ -54,8 +58,22 @@ export interface EvidenceFindingsBatch {
  * Cited facts and follow-ups about one project from stored messages, mail and documents, staged by an agent for
  * review. A sibling of meeting findings: the same rules, evidence checked against the current stored text.
  */
+/** A stored record as a findings batch cites it: the text a quote must be in, and the fingerprint staging checks. */
+export interface CitableRecord {
+  reference: string
+  fingerprint: string
+  title: string | null
+  text: string
+}
 export interface EvidenceFindingsStore {
-  stage(input: FindingsInput, agent: { bot: string; model?: string }): Promise<EvidenceFindingsBatch>
+  /** `ownerOnly` keeps every agent from deciding the batch, whatever `agent_decisions` says. */
+  stage(
+    input: FindingsInput,
+    agent: { bot: string; model?: string },
+    options?: { ownerOnly?: boolean },
+  ): Promise<EvidenceFindingsBatch>
+  /** A `msg:`, `document:` or `note:` record as staging reads it; `null` when it is not stored. */
+  citable(reference: string): Promise<CitableRecord | null>
   get(id: string): Promise<EvidenceFindingsBatch>
   list(options?: {
     project?: string
