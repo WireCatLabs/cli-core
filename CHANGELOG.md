@@ -12,6 +12,13 @@ shape of this file.
 - A CRM source may say which users in `crm.<provider>:<account>.unassigned` its sign-in may count as nobody's
   (`CrmSource.unassigned`), asked at every sync under `scope mine`. The sync copies no deal or lead of a user it
   leaves out, narrows the copy to match, and names them in an issue with the reason `crm.unassigned-dropped`.
+- **`models search-consents set` takes `openai`, `anthropic` or an OpenAI-compatible API (`--base-url`, such as
+  OpenRouter).** Each provider has its own default model for `search all --harder` (`claude-haiku-5-5`,
+  `gpt-4o-mini`); another API needs `--model`. `show` proposes enrichment's provider and model when the owner chose
+  one there, but never gives this consent by itself. The answer's `harder` field names the `endpoint` too. Anthropic's
+  `thinking` and `output_config` go to Anthropic only; OpenAI gets its JSON mode, and any reply wrapped in a code block
+  is still read. See
+  [AI providers, "Search harder"](docs/search/ai-providers.md#search-harder-a-hosted-model-reorders-search-all-off-by-default).
 
 ### Fixed
 
@@ -20,6 +27,13 @@ shape of this file.
   source says) instead of `proposed`. Before, every Drive document's owner and last editor stood in the owner's review
   list. Links the file states that are not relationships, and the owner's own links, are unchanged. A source re-writes
   its links on its next import: `drive <profile> catalog import --offline` moves the stored ones.
+- **`search all --harder` sends the question as typed.** It sent the query parser's escaped copy (`deposit\?`), and a
+  `$&` in a question was read as a replacement pattern.
+- **`relationships list include:ended` answers in about 0.2 seconds instead of minutes on a store with a busy
+  person.** The check for an owner's override of a link looked the override up by the link's target, so a person on
+  25,857 deals read every one of those links again for each relationship (325 seconds on a 108,000-link store). It now
+  looks it up by the relationship's own key. The same check runs in the deal's people, a thing's relationships and a
+  meeting's preparation, so those get faster too.
 
 ## 0.620.0 — 09.11.2026
 
