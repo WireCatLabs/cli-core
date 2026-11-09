@@ -28,6 +28,7 @@ import type { PersonMerge } from "./sqlite/person-merges.js"
 import * as personMerges from "./sqlite/person-merges.js"
 import { type PersonPreparationRead, personPreparation } from "./sqlite/person-preparation.js"
 import { personSeenInAccounts } from "./sqlite/person-scope.js"
+import { type ShownBecause, shownReasons } from "./sqlite/person-ties.js"
 import type { PrivateContact, PrivateContactNote } from "./sqlite/private-people.js"
 import * as privatePeople from "./sqlite/private-people.js"
 import type { ProposedAction } from "./sqlite/proposed-actions.js"
@@ -123,6 +124,8 @@ export interface PeopleStore extends AccountPeople {
   list(options: PeopleListOptions): Promise<PeopleList>
   /** People whose names start like the typed one, the same name first: for a form that adds a person. */
   similar(name: string, options?: { limit?: number }): Promise<SimilarPerson[]>
+  /** Why each `person:<uid>` is shown by default, as `list` gives it; an empty list for one with no tie. */
+  ties(people: readonly string[]): Promise<Record<string, ShownBecause[]>>
 }
 
 export const accountPeopleOver = (context: StoreContext): AccountPeople => {
@@ -249,5 +252,9 @@ export const peopleStoreOver = (context: StoreContext, keyed: AccountPeople): Pe
     linkToOwner: async (identity) => linkToOwner(context, identity),
     list: async (options) => listPeople(database, options),
     similar: async (name, { limit = 8 } = {}) => similarPeople(database, name, limit),
+    ties: async (people) => {
+      const reasons = shownReasons(database)
+      return Object.fromEntries(people.map((ref) => [ref, reasons.get(Number(ref.replace(/^person:/, ""))) ?? []]))
+    },
   }
 }

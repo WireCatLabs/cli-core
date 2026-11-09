@@ -69,36 +69,42 @@ const LEAN_CLAUDE = ["--tools", "Bash", "--strict-mcp-config", "--disable-slash-
 interface WhenOptions {
   every?: string
   at?: string
-  on?: string
   atTime?: string
   notifyOn?: Notify
   deliverTo?: string[]
 }
 
-const whenOf = ({ every, at, on, atTime }: WhenOptions, minimum: number): When => {
+const whenOf = ({ every, at, atTime }: WhenOptions, minimum: number): When => {
   if ([every ?? at, atTime].filter(Boolean).length !== 1) {
     throw new CliError(
       "validation_error",
-      "say when: --every <30m|2h|1d>, --at HH:MM (daily, or weekly with --on), or --at-time <30m|2d|ISO time>",
+      "say when: --every <30m|2h|1d>, --at HH:MM (daily) or --at 'mon HH:MM' (weekly), or --at-time <30m|2d|ISO time>",
     )
   }
-  if (on !== undefined && !at) throw new CliError("validation_error", "--on takes a time too: --on mon --at 09:00")
   if (atTime) {
     const time = aheadOf(atTime, "--at-time")
     if (time <= Date.now()) throw new CliError("validation_error", "--at-time is in the past")
     return { once: new Date(time).toISOString() }
   }
   if (at) {
-    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(at)) throw new CliError("validation_error", `--at takes HH:MM, not "${at}"`)
-    if (every && parseDuration(every, "--every") !== 86_400_000) {
-      throw new CliError("validation_error", "--at runs once a day; leave out --every, or use --every 1d")
+    const [, word, clock = ""] = /^\s*(?:([a-z]+)\s+)?(\S+)\s*$/i.exec(at) ?? []
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(clock))
+      throw new CliError(
+        "validation_error",
+        `--at takes HH:MM, or a weekday and HH:MM such as 'mon 09:00'; not "${at}"`,
+      )
+    const day = word?.toLowerCase().slice(0, 3)
+    if (word !== undefined && !(WEEKDAYS as readonly string[]).includes(day ?? ""))
+      throw new CliError("validation_error", `--at takes a weekday, ${WEEKDAYS.join(", ")}; not "${word}"`)
+    if (every && (day !== undefined || parseDuration(every, "--every") !== 86_400_000)) {
+      throw new CliError(
+        "validation_error",
+        day === undefined
+          ? "--at runs once a day; leave out --every, or use --every 1d"
+          : "a weekday in --at runs once a week; leave out --every",
+      )
     }
-    if (on === undefined) return { daily: at }
-    if (every) throw new CliError("validation_error", "--on runs once a week; leave out --every")
-    const day = on.trim().toLowerCase().slice(0, 3)
-    if (!(WEEKDAYS as readonly string[]).includes(day))
-      throw new CliError("validation_error", `--on takes a weekday, ${WEEKDAYS.join(", ")}; not "${on}"`)
-    return { weekly: at, on: day as Weekday }
+    return day === undefined ? { daily: clock } : { weekly: clock, on: day as Weekday }
   }
   const minutes = parseDuration(every ?? "", "--every") / 60_000
   if (!Number.isInteger(minutes) || minutes < minimum) {
@@ -136,8 +142,7 @@ const scheduleAnswer = ({ environment, createdAt, to, ...schedule }: Schedule, e
 const withWhen = (command: Command) =>
   command
     .option("--every <duration>", "repeat: 30m, 2h, 1d")
-    .option("--at <HH:MM>", "every day at this local time; with --on, that weekday only")
-    .option("--on <weekday>", `with --at, once a week on this day: ${WEEKDAYS.join(", ")}`)
+    .option("--at <HH:MM>", `every day at this local time; 'mon 09:00' once a week (${WEEKDAYS.join(", ")})`)
     .option("--at-time <time>", "one run: 30m, 2d from now, or an ISO time; the schedule removes itself after it")
     .addOption(
       new Option(

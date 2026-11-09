@@ -161,6 +161,10 @@ describe("people's ties to the owner", () => {
     await store.tasks.assign(task.id, { to: people.Tess as string, role: "assignee" }, "owner")
 
     expect(await shownOf(store)).toMatchObject({ Nora: ["added"], Tess: ["task"] })
+    expect(await store.people.ties([people.Tess as string, "person:999999"])).toEqual({
+      [people.Tess as string]: ["task"],
+      "person:999999": [],
+    })
     expect(added.uid).toBeDefined()
   })
 
