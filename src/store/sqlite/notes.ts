@@ -24,7 +24,7 @@ import { type DocumentMetadata, encodeDocumentMetadata, languageOf } from "./doc
 import { deleteDocumentRow, forgetEvidenceToRow } from "./evidence-signature.js"
 import { PREFERRED_FILE, syncFile } from "./files.js"
 import { type ImportedDocuments, importedDocumentWhere } from "./imported-documents.js"
-import { LINK_KINDS, LINK_ORIGINS, type LINK_SOURCES, linkKind } from "./link-kinds.js"
+import { LINK_KINDS, LINK_ORIGINS, type LINK_SOURCES, linkKind, RELATION_KINDS } from "./link-kinds.js"
 import { reviewLink } from "./link-reviews.js"
 import { linkOf } from "./link-row.js"
 
@@ -207,6 +207,8 @@ export interface NotesStore extends NoteSearch, ImportedDocuments, AddedSources 
 }
 
 type Row = Record<string, unknown>
+
+const RELATIONSHIPS = RELATION_KINDS.map(linkKind).join(", ")
 const iso = (value: unknown) => new Date(Number(value)).toISOString()
 const optionalIso = (value: unknown) => (value == null ? null : iso(value))
 
@@ -940,7 +942,16 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
       write(database, () => {
         const id = Number(documentRow(documentId).id)
         database.prepare("DELETE FROM links WHERE from_type = 'document' AND from_id = ? AND source = 'file'").run(id)
-        return links.map((link) => insertLink(context, { ...link, from: `document:${id}`, origin: "file" }))
+        const written = links.map((link) => insertLink(context, { ...link, from: `document:${id}`, origin: "file" }))
+        // What a file's source says, such as a Drive owner, is reported by its account, not waiting for review.
+        database
+          .prepare(
+            "UPDATE links SET account_id = (SELECT account_id FROM documents WHERE id = ?) WHERE from_type = 'document' " +
+              `AND from_id = ? AND source = 'file' AND confirmed = 0 AND account_id IS NULL AND kind IN (${RELATIONSHIPS})`,
+          )
+          .run(id, id)
+        const reread = database.prepare("SELECT * FROM links WHERE id = ?")
+        return written.map((link) => linkOf(database, reread.get(Number(link.id)) as Row))
       }),
     linkMessages: async ({ documents, since }) => {
       const after = since === undefined ? null : Date.parse(since)
