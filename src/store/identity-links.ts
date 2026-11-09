@@ -79,7 +79,7 @@ export interface IdentityLinkFilter {
 export interface MatchScan {
   /** Every identity was read, not only those changed since the last pass. */
   full: boolean
-  /** People joined without asking: same address, or a phone exactly two people have. */
+  /** People joined without asking: the same personal address, or a phone exactly two people have. */
   merged: { into: string; from: string; signal: "same-email" | "same-phone" }[]
   /** Proposals opened, or open ones met again. */
   proposed: { id: string; persons: [string, string]; signal: IdentityLinkSignal; opened: boolean }[]

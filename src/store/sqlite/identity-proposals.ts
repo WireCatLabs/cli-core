@@ -76,9 +76,13 @@ export const openIdentityLink = (context: StoreContext, opening: Opening, index?
     const links = index ?? linkIndex(context.database)
     const open = links.open(from, to)
     if (open) return { outcome: "open", action: operations.get(open.id) }
+    const identity = refOf(context, opening.identity)
+    const other = opening.with === null ? null : refOf(context, opening.with)
+    if (links.rejected(from, to)?.has(evidenceKeyOf({ signal: opening.signal, identity, with: other })))
+      return { outcome: "skipped", reason: "identity.rejected" }
     const payload: IdentityLinkPayload = {
-      identity: refOf(context, opening.identity),
-      with: opening.with === null ? null : refOf(context, opening.with),
+      identity,
+      with: other,
       persons: [String(from), String(to)],
       sides: sidesOf(context.database, from, to),
       joins: opening.joins,
@@ -87,8 +91,6 @@ export const openIdentityLink = (context: StoreContext, opening: Opening, index?
       ...(opening.candidates && opening.candidates.length > 2 ? { candidates: opening.candidates.map(String) } : {}),
       evidence: opening.evidence ?? [],
     }
-    if (links.rejected(from, to)?.has(evidenceKeyOf(payload)))
-      return { outcome: "skipped", reason: "identity.rejected" }
     const action = operations.propose({
       kind: IDENTITY_LINK_KIND,
       by: opening.by,
