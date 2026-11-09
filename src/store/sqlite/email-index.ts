@@ -45,9 +45,12 @@ const threadText = (database: CacheDatabase, threadId: number): ThreadText => {
     const core = mailCore(body, earlier)
     earlier.push(body)
     const subject = titleOf(str(row.subject))
-    const text = subject ? `${subject}\n\n${core}` : core
+    const said = subject ? `${subject}\n\n${core}` : core
+    const sender = str(row.sender)
     at.set(String(row.id), int(row.at) ?? null)
-    return { id: String(row.id), sender: str(row.sender), text }
+    // The sender at the end, not as "Name: " before the subject: there a model read the sender as the topic of every
+    // email they wrote (cli-testing knowledge-graph-memory/meaning-loss, Gemma in memo).
+    return { id: String(row.id), sender: null, text: sender ? `${said}\n\nFrom: ${sender}` : said }
   })
   return { lines, at }
 }
@@ -149,10 +152,11 @@ export const chunkAttachments = (database: CacheDatabase, accountId: number, ema
 }
 
 const MAIL_CUT = "mail_pieces_cut"
-const CUT = "email"
+// Each change to a piece's text bumps this, so every store cuts its mail again once and re-embeds it.
+const CUT = "email, sender at the end"
 
 export const drainEmailIndex = (database: CacheDatabase, stemmerFor: (stemmers: Stemmers) => Stemmer): number => {
-  // Mail was once cut without cleaning, then across the emails of a thread; a store cut either way is cut again.
+  // Mail was once cut without cleaning, then across the emails of a thread, then with its sender before the subject; a store cut any of those ways is cut again.
   if (database.prepare("SELECT value FROM store_settings WHERE key = ?").get(MAIL_CUT)?.value !== CUT)
     write(database, () => {
       const single = database

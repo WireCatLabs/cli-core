@@ -448,6 +448,26 @@ describe("mail store", () => {
     expect(database.prepare("SELECT count(*) AS n FROM embeddings").get()?.n).toBe(0)
   })
 
+  it("**embeds a mail with its sender at the end**, and a store cut with the sender first re-embeds its mail once", async () => {
+    const { database, mail } = await seeded()
+    await mail.saveThread(thread([email()]))
+    const [fresh] = await mail.chunksToEmbed("test:model:2", { limit: 10 })
+    expect(fresh?.text.startsWith("Alice Example:")).toBe(false)
+    expect(fresh?.text.endsWith("From: Alice Example")).toBe(true)
+
+    database.prepare("UPDATE chunks SET content_hash = 'sender-first' WHERE chunkable_type = 'email_thread'").run()
+    database
+      .prepare(
+        "INSERT INTO embeddings (model, content_hash, dims, vector, created_at, updated_at) VALUES ('m', 'sender-first', 2, x'00', 1, 1)",
+      )
+      .run()
+    database.prepare("UPDATE store_settings SET value = 'email' WHERE key = 'mail_pieces_cut'").run()
+    const [again] = await mail.chunksToEmbed("test:model:2", { limit: 10 })
+    expect(again?.hash).toBe(fresh?.hash)
+    expect(database.prepare("SELECT count(*) AS n FROM embeddings").get()?.n).toBe(0)
+    expect((await mail.chunksToEmbed("test:model:2", { limit: 10 })).map(({ hash }) => hash)).toEqual([fresh?.hash])
+  })
+
   it("refuses an empty key and leaves nothing behind", async () => {
     const { mail } = await seeded()
     await expect(mail.saveThread(thread([email(), email({ externalId: "" })]))).rejects.toThrow("Invalid email key")
