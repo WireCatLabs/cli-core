@@ -130,6 +130,22 @@ describe("meetings in search all", () => {
     expect(texts(found.items)).toEqual(["needle new", "needle old a"])
   })
 
+  it("moves a meeting held in the period a question names onto the page", async () => {
+    const { store, save } = await fixture()
+    await save(alice, "march", ["needle in march"], Date.parse("2026-03-17T09:00:00Z"))
+    await save(alice, "oct-a", ["needle in october"], Date.parse("2026-10-20T09:00:00Z"))
+    await save(alice, "oct-b", ["needle later"], Date.parse("2026-10-21T09:00:00Z"))
+    const asked = { now: Date.parse("2026-11-09T12:00:00Z"), timezone: "UTC", limit: 1 }
+    expect(
+      texts((await searchAll(store, caller, meetingsOnly({ ...asked, text: "what about the needle?" }))).items),
+    ).not.toEqual(["needle in march"])
+    expect(
+      texts(
+        (await searchAll(store, caller, meetingsOnly({ ...asked, text: "what about the needle in March?" }))).items,
+      ),
+    ).toEqual(["needle in march"])
+  })
+
   it("reads only the meeting accounts --source names", async () => {
     const { store, save } = await fixture()
     await save(alice, "a", ["needle from alice"])

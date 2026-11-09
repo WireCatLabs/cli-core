@@ -304,6 +304,15 @@ title contains it as a phrase, then notes whose title holds all its words in any
 accents), each group in its word order. They are followed by the merged list without repeats, and `found_by` lists
 `title` for them. A query with a field, `OR`, `NOT`, a wildcard, a regex or a group is merged as before.
 
+### search all: a period the question names
+
+When the query names a period ("in March", "June 22", "last week", "3 days ago", `2025-02-03`, «в прошлом месяце»),
+`search all` reads each source to 100 hits, merges them as above, then moves the hits dated inside the period up: each
+keeps `1 - rank/100` for its place and gains 0.5 inside the period, and the page is cut after that. A month without a
+year is its last one up to today. The period is read on the request's `timezone` and clock
+(`questionPeriod` in `src/search/question-period.ts`). Nothing is dropped: a hit inside the period passes the hits up
+to 50 places above it.
+
 ### Related to a message
 
 `conversations related <chat> <message>` (MCP `conversations_related`) answers "what else was like this":

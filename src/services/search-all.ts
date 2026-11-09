@@ -1,5 +1,5 @@
 import { CliError, type ErrorCode } from "@wirecat/cli-base"
-import { parseLucene, type QueryNode } from "@wirecat/cli-base/query"
+import { parseLucene, type QueryNode, timezoneOf } from "@wirecat/cli-base/query"
 import { type HitFile, hitFiles } from "../domain/attachments.js"
 import type { DealKind } from "../domain/deals.js"
 import { parseLocator } from "../domain/locator.js"
@@ -11,6 +11,7 @@ import type { MessengerTraits } from "../ports/traits.js"
 import { entriesOfList, fitting, listedHolds } from "../search/account-list.js"
 import { plainQuery } from "../search/lucene/plain.js"
 import { MESSAGE_PARSING, SEARCH_QUERY } from "../search/lucene/types.js"
+import { type Period, questionPeriod } from "../search/question-period.js"
 import { planQuestion, questionLookup } from "../search/question-plan.js"
 import type { AccountKey, BusinessKind, BusinessSource, MessageStore, StoredAccount } from "../store/store.js"
 import { calendarAccounts, searchEvents } from "./events-search.js"
@@ -114,6 +115,8 @@ export interface SearchAllRequest {
   only?: readonly SearchedResource[]
   exact?: boolean
   timezone?: string
+  /** The clock a question's "last week" or "in March" is read on; absent, the time of the call. */
+  now?: number
   /** For messages only; mail, notes, events and CRM copies are always the local store's. */
   backend?: Backend
   server?: ServerOptions
@@ -274,8 +277,11 @@ export const searchAll = async (
   const offset = request.offset ?? 0
   if (!Number.isInteger(offset) || offset < 0 || offset > MAX_SEARCH_OFFSET)
     throw new CliError("validation_error", `offset takes a whole number from 0 to ${MAX_SEARCH_OFFSET}`)
-  // Each resource is read deep enough for the merged page, then the merge is cut.
+  const period = questionPeriod(request.text, request.now ?? Date.now(), timezoneOf(request.timezone))
+  // Each resource is read deep enough for the merged page, then the merge is cut; a named period reads deeper, so a
+  // hit inside it can move up from below the page.
   const window = offset + request.limit
+  const depth = period ? Math.max(window, PERIOD_DEPTH) : window
   const chosen =
     request.source === undefined
       ? { only: request.only ?? RESOURCES_SEARCHED, scope: request.scope, skipped: [] }
@@ -314,7 +320,7 @@ export const searchAll = async (
             ...(request.server === undefined ? {} : { server: request.server }),
           }
         : {}),
-      limit: window,
+      limit: depth,
       ...(request.exact ? { exact: true } : {}),
       ...(discovers ? { discover: true } : {}),
       ...(request.timezone === undefined ? {} : { timezone: request.timezone }),
@@ -395,7 +401,7 @@ export const searchAll = async (
         if (resource === "notes") {
           const chosen = scope?.notes
           const found = await searchNotes(store, request.text, {
-            limit: window,
+            limit: depth,
             command,
             embedders,
             ...(chosen === undefined ? {} : notesScopeOf(chosen)),
@@ -434,7 +440,7 @@ export const searchAll = async (
           const read = scope?.events ?? (await calendarAccounts(store))
           if (!read.length) continue
           const found = await searchEvents(store, request.text, {
-            limit: window,
+            limit: depth,
             accounts: read,
             embedders,
             ...(command === undefined ? {} : { command }),
@@ -471,12 +477,12 @@ export const searchAll = async (
             words,
             anyWord: anyWord || discover,
             ...(request.crmKinds === undefined ? {} : { kinds: request.crmKinds }),
-            limit: Math.min(window + 1, 500),
+            limit: Math.min(depth + 1, 500),
             ...(chosen === undefined ? {} : { accounts: chosen }),
           })
-          hasMore ||= found.length > window
+          hasMore ||= found.length > depth
           lists.push(
-            found.slice(0, window).map((deal) => ({
+            found.slice(0, depth).map((deal) => ({
               kind: deal.kind,
               ref: deal.ref,
               provider: deal.account?.provider ?? "crm",
@@ -494,7 +500,7 @@ export const searchAll = async (
           const found = await searchBusiness(store, {
             words,
             anyWord: anyWord || discover,
-            window,
+            window: depth,
             accounts: scope?.business,
           })
           hasMore ||= found.hasMore
@@ -505,7 +511,7 @@ export const searchAll = async (
             // A question finds passages that hold some of its words, as every other source does.
             text: (discover ? questionLookup(request.text) : undefined) ?? request.text,
             ...(discover ? { question: true } : {}),
-            window,
+            window: depth,
             ...(scope?.meetings === undefined ? {} : { accounts: scope.meetings }),
             ...(request.meetingScopes === undefined ? {} : { scopes: request.meetingScopes }),
             ...(request.meetingsAsked ? { asked: true } : {}),
@@ -530,7 +536,7 @@ export const searchAll = async (
     await embedders.close()
   }
 
-  const ordered = oneList(lists, cosines)
+  const ordered = insidePeriodFirst(oneList(lists, cosines), period)
   const more = hasMore || ordered.length > window
   const { backend: _backend, server: _server, ...local } = asked
   const unmatched = []
@@ -582,5 +588,24 @@ const oneList = (lists: SearchAllItem[][], cosines: Map<string, number>): Search
   const head = (rank: number) => Math.min(rank, 1)
   return [...place.values()]
     .sort((a, b) => head(a.rank) - head(b.rank) || b.cosine - a.cosine || a.rank - b.rank)
+    .map(({ item }) => item)
+}
+
+const PERIOD_DEPTH = 100
+const PERIOD_BOOST = 0.5
+
+/**
+ * A hit dated inside the question's period gains 0.5 over its place, 1 - rank/100: by rank, because only some hits have
+ * a cosine to compare. One scale for every page, so paging past the first 100 never reorders what came before.
+ */
+const insidePeriodFirst = (ordered: SearchAllItem[], period: Period | undefined): SearchAllItem[] => {
+  if (!period) return ordered
+  const inside = ({ timestamp }: SearchAllItem) => {
+    const at = timestamp === null ? Number.NaN : Date.parse(timestamp)
+    return at >= period.from && at < period.to
+  }
+  return ordered
+    .map((item, rank) => ({ item, score: 1 - rank / PERIOD_DEPTH + (inside(item) ? PERIOD_BOOST : 0) }))
+    .sort((a, b) => b.score - a.score)
     .map(({ item }) => item)
 }
