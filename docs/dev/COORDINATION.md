@@ -29,17 +29,26 @@ nothing now.
 
 ## Releases
 
-- **Release at any time (WC-REL-8).** There is no weekly window for breaking work; when a release makes the
-  CLIs change their code, bump all six CLIs the same day.
-
-- **Announce before you merge into `main` or start a release** — in
-  [issue #849](https://github.com/WireCatLabs/cli-core/issues/849), one line, after reading its latest
-  comments and `gh run list --workflow release.yml`. Two sessions merge and release here, and on 2026-10-10
-  one released 0.219.0 from a `main` one merge short of the other's work (owner's rule, 2026-10-11).
-- **Hold `main` only while your pull request is green** (issue #849, rule 4): claim it when CI passes, merge and
-  release; if CI turns red, post "main free" and queue again at the end. **A holder silent for 45 minutes without a
-  merge loses `main`** (rule 5, owner's rule 2026-11-08): the next session in the queue posts "taking main (stale:
-  <holder> since HH:MM UTC)" and goes ahead, and the old holder queues again at the end.
+- **Merge freely, release in batches** (owner's rule, 2026-11-09, in
+  [issue #849](https://github.com/WireCatLabs/cli-core/issues/849)). Releasing one pull request at a time made every
+  session wait hours.
+  - **Merging needs no lock.** Squash merge your pull request into `main` as soon as it is green and merges cleanly,
+    then comment one line on #849: `merged #NNN`. `main` does not require a pull request to be up to date, so merge
+    `main` in only when GitHub reports a conflict.
+  - **No release per pull request.** Never release only for your own work; the next release carries everything
+    merged by then.
+  - **The lock is for running a release.** Before `bin/release`, read the latest comments on #849, `git fetch` and
+    check `gh run list --workflow release.yml`; merge every green pull request you know of; post
+    `release X.Y.Z from <sha>`; run `bin/release`; then post `main free: X.Y.Z`. Downstream CLIs bump cli-core once
+    per release, not per pull request; when a release makes them change their code, bump all six the same day.
+  - **Hold the lock only while the release is green** (#849, rule 4): if its pull request or run turns red, post
+    `main free` and queue again at the end. **A holder silent for 45 minutes without a merge or progress loses it**
+    (rule 5, owner's rule 2026-11-08): the next session in the queue posts "taking main (stale: <holder> since HH:MM
+    UTC)" and goes ahead, and the old holder queues again at the end.
+- **Changelog entries are fragments.** A pull request adds `changes/<branch>.md` with the changelog's `###` headings
+  and its entries, and never edits `## Unreleased` in `CHANGELOG.md`: that is what made every open pull request
+  conflict at each merge and release. `bin/release` collects the fragments into the version's section and deletes
+  them in its release pull request ([CLAUDE.md, "Committing"](../../CLAUDE.md#committing)).
 - Release only through `bin/release`: `gh workflow run release.yml` started by hand skips the lock below.
   When you must start it by hand, pass the `main` you checked: `-f commit=<its full 40-character sha>`.
   The run refuses any other commit, so a merge that lands after your checks is not published.
@@ -53,13 +62,11 @@ nothing now.
   path and the reason; `scripts/release-reuse.sh` decides. A `chore: release` pull request that `main` moved past
   before the merge has a different tree and takes the full path.
 - Once a publisher captures its checked commit, treat that dated changelog section as frozen,
-  even before npm visibility and tagging finish. New work starts a fresh `## Unreleased` above it.
+  even before npm visibility and tagging finish. New work goes into `changes/`, never into that section.
   After rebasing, inspect the actual headings around every new note: a clean rebase or green PR
   does not prove the note belongs to the captured release. Keep the captured section identical to
   its checked source; when a tagged section needs historical correction, restore the exact tag
-  section and describe the correction under Unreleased. Never rewrite an immutable release tag.
-- Each session releases its own merged work: `git fetch`, `npm view`, a `chore: release` pull request
-  that raises the version from what npm really has, then `bin/release`.
+  section and describe the correction in a `changes/` fragment. Never rewrite an immutable release tag.
 - `bin/release` in every repository takes a lock per npm package
   (`$XDG_RUNTIME_DIR/leemour-release-<package>.lock`, e.g. `leemour-release-wirecat-cli-core.lock`), so two
   releases of one package never run at once on this machine, from any checkout; different packages release
