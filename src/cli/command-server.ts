@@ -1,23 +1,35 @@
-import { AsyncLocalStorage } from "node:async_hooks"
 import { createInterface } from "node:readline"
 import { CliError, errorObjectOf, renderError } from "@wirecat/cli-base"
 import { metaOf } from "@wirecat/cli-base/commands"
 import type { Command } from "commander"
 import { commandPathOf } from "./command-contract.js"
 import { isCommandServer } from "./command-server-argv.js"
+import { commandServerRequest } from "./command-server-request.js"
 import { stdinFieldOf } from "./stdin-field.js"
 
 export const COMMAND_SERVER_PROTOCOL = 1
 /** An updated tool's old code must not answer for long. */
 export const COMMAND_SERVER_IDLE_MS = 10 * 60_000
+/** Requests one server runs at once; Desktop's Memory page asks for 7 reads together. */
+export const COMMAND_SERVER_CONCURRENT = 8
 
-const requests = new AsyncLocalStorage<true>()
+// They swap or rewrite the store's file, which the connections of the other requests in this process hold open.
+const runsAlone = (command: Command): boolean => commandPathOf(command)[0] === "store"
 
-export const inCommandServerRequest = <T>(work: () => T): T => requests.run(true, work)
+/**
+ * Refuses inside a request a command that never returns, waits on a person, or reads stdin; a `store` command then
+ * waits until it is the only request running.
+ */
+export const enterCommandServer = async (command: Command, cli: string): Promise<void> => {
+  const request = commandServerRequest()
+  if (!request) return
+  refuseInCommandServer(command, cli)
+  if (runsAlone(command)) await request.alone()
+}
 
 /** A command the server cannot answer like a spawned run: one that never returns, waits on a person, or reads stdin. */
 export const refuseInCommandServer = (command: Command, cli: string): void => {
-  if (requests.getStore() !== true) return
+  if (!commandServerRequest()) return
   const typed = [cli, ...commandPathOf(command)].join(" ")
   const { lifetime } = metaOf(command)
   if (lifetime)
@@ -43,11 +55,13 @@ export interface ServeOptions {
   input: NodeJS.ReadableStream
   /** One protocol line, the newline included; resolves once it may be written again. */
   write: (line: string) => Promise<void>
-  run: (argv: string[]) => Promise<CommandAnswer>
+  /** `alone` resolves once no other request runs; new requests wait until this one ends. */
+  run: (argv: string[], alone: () => Promise<void>) => Promise<CommandAnswer>
   cli: string
   version: string
   idleMs?: number
-  /** Ends the server after the request under way. */
+  concurrent?: number
+  /** Ends the server after the requests under way. */
   signal?: AbortSignal
 }
 
@@ -75,9 +89,9 @@ const requestOf = (
 }
 
 /**
- * Says it is ready, then answers each line of `input` in order, one at a time: two runs at once in one process would
- * open the store twice, and closing either descriptor drops the other's locks (BUG-557). Resolves with 0 when the
- * input ends or nothing came for `idleMs`.
+ * Says it is ready, then runs up to `concurrent` requests at once and answers each as it ends, under its `id`. SQLite
+ * keeps the requests' connections apart in one process; a `store` command, which swaps the file, runs alone. Resolves
+ * with 0 once the input ends or nothing came for `idleMs`, after the requests under way.
  */
 export const serveCommands = async ({
   input,
@@ -86,15 +100,22 @@ export const serveCommands = async ({
   cli,
   version,
   idleMs = COMMAND_SERVER_IDLE_MS,
+  concurrent = COMMAND_SERVER_CONCURRENT,
   signal,
 }: ServeOptions): Promise<number> => {
   const send = (value: object) => write(`${JSON.stringify(value)}\n`)
-  await send({ ready: true, protocol: COMMAND_SERVER_PROTOCOL, version })
+  await send({ ready: true, protocol: COMMAND_SERVER_PROTOCOL, version, concurrent })
   const lines = createInterface({ input, crlfDelay: Number.POSITIVE_INFINITY })
   return new Promise<number>((resolve) => {
-    let queue = Promise.resolve()
-    let waiting = 0
+    const waiting: string[] = []
+    // Started and not answered; `running` leaves out a request waiting to run alone, which holds no place.
+    let active = 0
+    let running = 0
+    let gated = false
+    let drained: (() => void) | undefined
+    let turns = Promise.resolve()
     let timer: NodeJS.Timeout | undefined
+    let ending = false
     let done = false
     const finish = () => {
       if (done) return
@@ -103,33 +124,87 @@ export const serveCommands = async ({
       lines.close()
       resolve(0)
     }
-    const idle = () => {
-      clearTimeout(timer)
-      timer = setTimeout(finish, idleMs)
+    const settle = () => {
+      if (running === 0 && drained) {
+        const go = drained
+        drained = undefined
+        go()
+      }
+      pump()
+      if (active > 0 || waiting.length > 0 || done) return
+      if (ending) finish()
+      else {
+        clearTimeout(timer)
+        timer = setTimeout(finish, idleMs)
+      }
     }
-    const answer = async (line: string) => {
-      const request = requestOf(line, cli)
-      if ("error" in request) return send({ id: request.id, code: 2, stdout: "", stderr: refusal(cli, request.error) })
-      const answered = await run(request.argv)
-      return send({ id: request.id, ...answered })
+    const start = (line: string) => {
+      active += 1
+      running += 1
+      let holdsPlace = true
+      let ended = false
+      let turn: Promise<void> | undefined
+      let release: (() => void) | undefined
+      // A request that ended while it waited (its --timeout, a signal) gives its turn up without taking it.
+      const alone = () => {
+        if (turn) return turn
+        holdsPlace = false
+        running -= 1
+        turn = turns.then(
+          () =>
+            new Promise<void>((go) => {
+              if (ended) return go()
+              gated = true
+              drained = () => {
+                if (ended) gated = false
+                else {
+                  holdsPlace = true
+                  running += 1
+                }
+                go()
+              }
+              settle()
+            }),
+        )
+        turns = turn.then(() => (ended && !holdsPlace ? undefined : new Promise<void>((free) => (release = free))))
+        return turn
+      }
+      const answer = async () => {
+        const request = requestOf(line, cli)
+        if ("error" in request)
+          return send({ id: request.id, code: 2, stdout: "", stderr: refusal(cli, request.error) })
+        const answered = await run(request.argv, alone)
+        return send({ id: request.id, ...answered })
+      }
+      answer()
+        .catch(finish)
+        .finally(() => {
+          ended = true
+          active -= 1
+          if (holdsPlace) running -= 1
+          if (release) {
+            gated = false
+            release()
+          }
+          settle()
+        })
+    }
+    const pump = () => {
+      while (!done && !gated && running < concurrent && waiting.length > 0) start(waiting.shift() as string)
     }
     lines.on("line", (line) => {
-      if (done || line.trim() === "") return
-      waiting += 1
+      if (done || ending || line.trim() === "") return
       clearTimeout(timer)
-      queue = queue
-        .then(() => answer(line))
-        .catch(finish)
-        .then(() => {
-          waiting -= 1
-          if (waiting === 0 && !done) idle()
-        })
+      waiting.push(line)
+      pump()
     })
-    lines.on("close", () => {
-      queue = queue.then(finish)
-    })
-    if (signal?.aborted) finish()
-    signal?.addEventListener("abort", () => (queue = queue.then(finish)), { once: true })
-    idle()
+    const end = () => {
+      ending = true
+      settle()
+    }
+    lines.on("close", end)
+    if (signal?.aborted) end()
+    signal?.addEventListener("abort", end, { once: true })
+    settle()
   })
 }

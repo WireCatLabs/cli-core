@@ -13,7 +13,18 @@ await startCli({
     annotate(program.command("serve"), { lifetime: "persistent" }).action(() => undefined)
     program.command("partial").action(() => {
       process.stdout.write("half\n")
-      process.exitCode = 6
+      entry.setExitCode(6)
+    })
+    program.command("direct").action(() => {
+      process.exitCode = 7
+    })
+    program.command("slow <name> <ms> <code>").action(async (name: string, ms: string, code: string) => {
+      process.stdout.write(`${name} begins\n`)
+      await new Promise((resolve) => setTimeout(resolve, Number(ms)))
+      process.stderr.write(`${name} note\n`)
+      await new Promise((resolve) => setImmediate(resolve))
+      process.stdout.write(`${name} ends\n`)
+      entry.setExitCode(Number(code))
     })
     program.command("ok").action(() => {
       // biome-ignore lint/suspicious/noConsole: `complete` prints through the console, which the server must catch too

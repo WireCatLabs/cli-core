@@ -722,10 +722,14 @@ entries and files, and the command forgets the profile and keeps or purges its a
 `<cli> commands --serve` (`src/cli/command-server.ts`, [protocol](../REFERENCE.md#the-command-server))
 is caught by `startCli` before the program loads (`command-server-entry.ts`), so it works for a tool on `run()` and for
 one with its own program alike. Each request calls the CLI's own `entry.run` with the request's words, as a fresh
-process would: the process's `stdout.write` and `stderr.write` go to the request's buffers (the stream objects stay,
-since the global console holds them), `process.stdin` is a closed stream, `process.exitCode` and the process run are
-reset. `refuseInCommandServer` (from `run()`'s `preAction` and from `entry.atStart`) refuses what cannot answer that
-way. Nothing is cached across requests: settings, keys and the store are opened again by each.
+process would. Up to eight run at once, each inside an `AsyncLocalStorage` scope (`CommandServerRequest`): the process's
+`stdout.write` and `stderr.write` go to the scope's buffers (the stream objects stay, since the global console holds
+them), `process.stdin` is a getter that returns the scope's closed stream, `setExitCode` writes the scope's exit code,
+and `asOwnProcess` (`src/runs/scope.ts`) gives it a process run of its own. `process.exitCode` cannot be scoped (Node
+defines it non-configurable): `exitCodeSet` takes and clears a direct write when its request ends.
+`enterCommandServer` (from `run()`'s `preAction` and from `entry.atStart`) refuses what cannot answer that way and
+makes a `store` command wait to run alone. Nothing is cached across requests: settings, keys and the store are opened
+again by each, on a connection of its own.
 
 The MCP server (`src/mcp/server.ts`) holds one connection for minutes and runs one call at a time. Its tools are
 the CLI's commands (`toolsFromCommands`, `src/mcp/agent.ts`), each run in-process through the CLI's own `run`

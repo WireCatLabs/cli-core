@@ -315,18 +315,29 @@ WireCat Desktop, which otherwise pays a whole Node start (about 0.6 s) for each 
 the program loads, so it is in no help, no `commands --json` and no MCP catalogue. Protocol 1, one JSON object per
 line:
 
-- On start, stdout gets `{"ready":true,"protocol":1,"version":"<the CLI's version>"}`.
+- On start, stdout gets `{"ready":true,"protocol":1,"version":"<the CLI's version>","concurrent":8}`.
 - A request on stdin is `{"id":<number>,"argv":[...]}`; its answer on stdout is
   `{"id":<same>,"code":<exit code>,"stdout":"…","stderr":"…"}` — what a spawned run with no input and no terminal
-  would have printed. Requests run one at a time, in order: two runs in one process would open the store twice,
-  and on Linux closing either descriptor drops the other's locks.
+  would have printed. Up to `concurrent` requests run at once and each is answered when it ends, so answers come
+  in any order: match them by `id`. Requests past that number wait their turn. A server whose ready line has no
+  `concurrent` (an older cli-core) answers one at a time, in order.
+- Each request opens the store on a connection of its own. SQLite keeps the connections of one process apart, and a
+  write inside the process never waits: the driver is synchronous, so one request's transaction ends before another's
+  code runs. The gain is in the waiting a run does (files, settings, imports). A write lock held by another process
+  stops the whole server for up to the busy timeout (5 s), not only the request that waits.
+- A `store` command (backup, restore, reset, repair, recover, and reads such as `store info` too) runs alone: it
+  waits until the requests under way end, and the ones after it wait for it, since it may swap the file the others
+  hold open.
 - A line that is not such a request gets code 2 and the error on `stderr`; its `id` is the request's when it has a
   numeric one, else `null`. The server goes on.
 - A command that runs until stopped (`serve`, `watch`, `mcp serve`), waits on a person (`lifetime: "interactive"`:
   logins, `setup`) or declares that it reads stdin (`readsStdin`) is refused with code 2. Any other command that
   reads stdin finds it closed; questions get no answer, as without a terminal.
 - Each request is a run of its own, recorded as a spawned one is, with `WIRECAT_CALLER` and the rest of the
-  environment the server was started with. Settings, keys and the store are read again on each request, and the store
+  environment the server was started with. Its output, its stdin and its exit code are its own. A command sets the
+  code of a partial answer with `setExitCode(command, code)`, or `entry.setExitCode(code)` in a CLI with its own
+  program; a direct `process.exitCode` write is one value for the whole process, so it goes to whichever request
+  ends next. Settings, keys and the store are read again on each request, and the store
   is closed between them.
 - It exits 0 when stdin closes, on SIGINT or SIGTERM, or after 10 minutes with no request. Nothing but these lines
   reaches stdout; anything written between requests goes to stderr.

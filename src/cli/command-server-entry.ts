@@ -1,8 +1,14 @@
 import { PassThrough } from "node:stream"
 import { CliError, catchCrashes } from "@wirecat/cli-base"
-import { useAsProcessRun } from "../runs/scope.js"
+import { asOwnProcess } from "../runs/scope.js"
 import { ensureSqlite } from "../sqlite-runtime.js"
-import { type CommandAnswer, inCommandServerRequest, refuseInCommandServer, serveCommands } from "./command-server.js"
+import { COMMAND_SERVER_CONCURRENT, type CommandAnswer, enterCommandServer, serveCommands } from "./command-server.js"
+import {
+  type CommandServerRequest,
+  commandServerRequest,
+  exitCodeSet,
+  inCommandServerRequest,
+} from "./command-server-request.js"
 import type { CliEntry, EntryContext, EntryIo, firstRunAt } from "./entry.js"
 
 /** What `startCli` already has, handed in so the two modules do not import each other. */
@@ -45,8 +51,23 @@ const closedStdin = () => {
   return stdin
 }
 
-const useStdin = (stdin: NodeJS.ReadableStream) =>
-  Object.defineProperty(process, "stdin", { value: stdin, configurable: true, enumerable: true, writable: true })
+// Each request reads its own stream: commands keep per-stream state, such as the input policy, under it.
+const useStdin = (outside: NodeJS.ReadableStream) =>
+  Object.defineProperty(process, "stdin", {
+    get: () => commandServerRequest()?.stdin ?? outside,
+    configurable: true,
+    enumerable: true,
+  })
+
+// Each run adds its own signal and stdout `error` listeners, so a full server passes Node's warning at 10.
+const roomFor = (runs: number): (() => void) => {
+  const emitters = [process, process.stdout, process.stderr]
+  const before = emitters.map((emitter) => emitter.getMaxListeners())
+  for (const emitter of emitters) emitter.setMaxListeners(emitter.getMaxListeners() + 2 * runs)
+  return () => {
+    for (const [at, emitter] of emitters.entries()) emitter.setMaxListeners(before[at] as number)
+  }
+}
 
 /**
  * `startCli` for `<cli> commands --serve`: each request runs the CLI's own `run` as a spawned process would, and its
@@ -71,53 +92,57 @@ export const serveEntry = async (
   const toStderr: Sink = (chunk) => {
     ownStderr(chunk)
   }
-  let current: { stdout: Buffer[]; stderr: Buffer[] } | undefined
-  const unrouteOut = route(process.stdout, () => (current ? (chunk) => current?.stdout.push(chunk) : toStderr))
-  const unrouteErr = route(process.stderr, () => (current ? (chunk) => current?.stderr.push(chunk) : toStderr))
+  const sink = (pick: (request: CommandServerRequest) => Buffer[]) => () => {
+    const request = commandServerRequest()
+    return request ? (chunk: Buffer) => pick(request).push(chunk) : toStderr
+  }
+  const unrouteOut = route(
+    process.stdout,
+    sink((request) => request.stdout),
+  )
+  const unrouteErr = route(
+    process.stderr,
+    sink((request) => request.stderr),
+  )
   const stdin = Object.getOwnPropertyDescriptor(process, "stdin")
   const requests = io.stdin
   useStdin(closedStdin())
+  const unroom = roomFor(COMMAND_SERVER_CONCURRENT)
   io.signals.on("SIGINT", stop).on("SIGTERM", stop)
   io.stdout.on("error", stop)
 
-  const run = async (argv: string[]): Promise<CommandAnswer> => {
-    const stdout: Buffer[] = []
-    const stderr: Buffer[] = []
-    current = { stdout, stderr }
-    process.exitCode = undefined
-    // Lines written outside a run name the process's run; each request is a process of its own.
-    useAsProcessRun(undefined)
-    const input = closedStdin()
-    useStdin(input)
-    const requestIo: EntryIo = { ...io, argv: [...io.argv.slice(0, 2), ...argv], stdin: input }
+  const run = async (argv: string[], alone: () => Promise<void>): Promise<CommandAnswer> => {
+    const request: CommandServerRequest = { stdout: [], stderr: [], stdin: closedStdin(), alone }
+    const requestIo: EntryIo = { ...io, argv: [...io.argv.slice(0, 2), ...argv], stdin: request.stdin }
     const context: EntryContext = {
       args: argv,
       env: io.env,
       tty: false,
       signal: stopper.signal,
       atStart: async (command) => {
-        refuseInCommandServer(command, entry.app.command)
+        await enterCommandServer(command, entry.app.command)
         await firstRunAt(entry, requestIo, () => true)(command)
       },
       ask: async () => false,
       openBrowser: async () => undefined,
       outputClosed: () => false,
+      setExitCode: (code) => {
+        request.exitCode = code
+      },
     }
-    let code: number
-    try {
-      code = await inCommandServerRequest(async () => {
+    // Lines written outside a run name the process's run; each request is a process of its own.
+    const code = await inCommandServerRequest(request, () =>
+      asOwnProcess(async () => {
         try {
           const returned = await entry.run(context)
-          return typeof returned === "number" ? returned : Number(process.exitCode ?? 0)
+          return typeof returned === "number" ? returned : (exitCodeSet() ?? 0)
         } catch (error) {
           return commanderExit(error) ?? entry.fail(error, context)
         }
-      })
-    } finally {
-      current = undefined
-      process.exitCode = undefined
-    }
-    return { code, stdout: Buffer.concat(stdout).toString("utf8"), stderr: Buffer.concat(stderr).toString("utf8") }
+      }),
+    )
+    const text = (chunks: Buffer[]) => Buffer.concat(chunks).toString("utf8")
+    return { code, stdout: text(request.stdout), stderr: text(request.stderr) }
   }
 
   try {
@@ -127,12 +152,14 @@ export const serveEntry = async (
       write: (line) => new Promise((resolve) => (protocol(line) ? resolve() : io.stdout.once("drain", resolve))),
       run,
       cli: entry.app.command,
+      concurrent: COMMAND_SERVER_CONCURRENT,
       version: entry.app.version,
       signal: stopper.signal,
     })
     io.setExitCode(0)
   } finally {
     io.signals.off("SIGINT", stop).off("SIGTERM", stop)
+    unroom()
     unrouteOut()
     unrouteErr()
     if (stdin)

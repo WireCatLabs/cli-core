@@ -10,10 +10,15 @@ import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { build } from "esbuild"
 import { afterEach, beforeAll, describe, expect, it } from "vitest"
-import { type CommandAnswer, inCommandServerRequest, refuseInCommandServer, serveCommands } from "./command-server.js"
+import { type CommandAnswer, refuseInCommandServer, serveCommands } from "./command-server.js"
+import { type CommandServerRequest, inCommandServerRequest } from "./command-server-request.js"
 import { readsStdin } from "./stdin-field.js"
 
-const serving = (run: (argv: string[]) => Promise<CommandAnswer>, idleMs?: number) => {
+const serving = (
+  run: (argv: string[], alone: () => Promise<void>) => Promise<CommandAnswer>,
+  idleMs?: number,
+  concurrent?: number,
+) => {
   const input = new PassThrough()
   const lines: Record<string, unknown>[] = []
   const done = serveCommands({
@@ -25,6 +30,7 @@ const serving = (run: (argv: string[]) => Promise<CommandAnswer>, idleMs?: numbe
     cli: "chat",
     version: "1.2.3",
     ...(idleMs === undefined ? {} : { idleMs }),
+    ...(concurrent === undefined ? {} : { concurrent }),
   })
   return { input, lines, done }
 }
@@ -32,14 +38,9 @@ const serving = (run: (argv: string[]) => Promise<CommandAnswer>, idleMs?: numbe
 const echo = async (argv: string[]): Promise<CommandAnswer> => ({ code: 0, stdout: `${argv.join(" ")}\n`, stderr: "" })
 
 describe("serveCommands", () => {
-  it("**says it is ready, then answers each request in order, one at a time**, and ends with 0 when stdin closes", async () => {
-    let running = 0
-    let most = 0
+  it("**says it is ready, then runs requests at once and answers each as it ends**, ending with 0 when stdin closes", async () => {
     const { input, lines, done } = serving(async (argv) => {
-      running += 1
-      most = Math.max(most, running)
-      await new Promise((resolve) => setTimeout(resolve, argv[0] === "slow" ? 5 : 0))
-      running -= 1
+      await new Promise((resolve) => setTimeout(resolve, argv[0] === "slow" ? 20 : 0))
       return echo(argv)
     })
     input.write('{"id":1,"argv":["slow"]}\n{"id":2,"argv":["fast","--json"]}\n')
@@ -47,11 +48,73 @@ describe("serveCommands", () => {
 
     expect(await done).toBe(0)
     expect(lines).toEqual([
-      { ready: true, protocol: 1, version: "1.2.3" },
-      { id: 1, code: 0, stdout: "slow\n", stderr: "" },
+      { ready: true, protocol: 1, version: "1.2.3", concurrent: 8 },
       { id: 2, code: 0, stdout: "fast --json\n", stderr: "" },
+      { id: 1, code: 0, stdout: "slow\n", stderr: "" },
     ])
-    expect(most).toBe(1)
+  })
+
+  it("**runs no more than `concurrent` at once**; the rest wait their turn", async () => {
+    let running = 0
+    let most = 0
+    const { input, lines, done } = serving(
+      async (argv) => {
+        running += 1
+        most = Math.max(most, running)
+        await new Promise((resolve) => setTimeout(resolve, 5))
+        running -= 1
+        return echo(argv)
+      },
+      undefined,
+      3,
+    )
+    input.end(Array.from({ length: 10 }, (_, id) => `{"id":${id},"argv":["r${id}"]}\n`).join(""))
+
+    await done
+    expect(most).toBe(3)
+    expect(lines.slice(1).map((line) => line.id)).toHaveLength(10)
+  })
+
+  it("**runs a request alone once it asks**: it waits for the others, and the ones after it wait for it", async () => {
+    const log: string[] = []
+    const { input, done } = serving(async (argv, alone) => {
+      const [name = ""] = argv
+      log.push(`start ${name}`)
+      if (name === "store") await alone()
+      log.push(`run ${name}`)
+      await new Promise((resolve) => setTimeout(resolve, name === "store" ? 5 : 10))
+      log.push(`end ${name}`)
+      return echo(argv)
+    })
+    input.write('{"id":1,"argv":["read1"]}\n{"id":2,"argv":["store"]}\n')
+    await new Promise((resolve) => setTimeout(resolve, 1))
+    input.end('{"id":3,"argv":["read2"]}\n')
+
+    await done
+    expect(log.indexOf("run store")).toBeGreaterThan(log.indexOf("end read1"))
+    expect(log.indexOf("start read2")).toBeGreaterThan(log.indexOf("end store"))
+  })
+
+  it("**gives up the turn of a request that ends while it waits to run alone**, and keeps serving", async () => {
+    const { input, lines, done } = serving(async (argv, alone) => {
+      if (argv[0] === "store") {
+        // As a --timeout ends a run that still waits.
+        void alone()
+        await new Promise((resolve) => setTimeout(resolve, 2))
+      } else await new Promise((resolve) => setTimeout(resolve, argv[0] === "slow" ? 20 : 0))
+      return echo(argv)
+    })
+    input.write('{"id":1,"argv":["slow"]}\n{"id":2,"argv":["store"]}\n')
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    input.end('{"id":3,"argv":["after"]}\n{"id":4,"argv":["store"]}\n{"id":5,"argv":["last"]}\n')
+
+    expect(await done).toBe(0)
+    expect(
+      lines
+        .slice(1)
+        .map((line) => line.id)
+        .sort(),
+    ).toEqual([1, 2, 3, 4, 5])
   })
 
   it("answers a line it cannot read with code 2 and keeps going", async () => {
@@ -97,7 +160,8 @@ describe("refuseInCommandServer", () => {
   })
 
   it("refuses inside a request what never returns, waits on a person or reads stdin", () => {
-    inCommandServerRequest(() => {
+    const request: CommandServerRequest = { stdout: [], stderr: [], stdin: new PassThrough(), alone: async () => {} }
+    inCommandServerRequest(request, () => {
       expect(() => refuseInCommandServer(serve, "chat")).toThrow("`chat serve` runs until it is stopped")
       expect(() => refuseInCommandServer(login, "chat")).toThrow("waits on a person")
       expect(() => refuseInCommandServer(add, "chat")).toThrow("reads its input on stdin")
@@ -180,7 +244,24 @@ describe("chat commands --serve, as a process", () => {
       child.stdin.write(`${JSON.stringify({ id, argv })}\n`)
       return next()
     }
-    return { child, ready: await next(), ask }
+    /** Sends every request before reading any answer; the answers come back by id. */
+    let answered: number[] = []
+    const askAll = async (argvs: string[][]): Promise<CommandAnswer[]> => {
+      answered = []
+      const first = id + 1
+      for (const argv of argvs) {
+        id += 1
+        child.stdin.write(`${JSON.stringify({ id, argv })}\n`)
+      }
+      const answers = new Map<number, CommandAnswer>()
+      while (answers.size < argvs.length) {
+        const { id: of, ...answer } = await next()
+        answered.push(of - first)
+        answers.set(of, answer)
+      }
+      return argvs.map((_, at) => answers.get(first + at) as CommandAnswer)
+    }
+    return { child, ready: await next(), ask, askAll, order: () => answered }
   }
 
   const steady = (text: string) =>
@@ -188,7 +269,7 @@ describe("chat commands --serve, as a process", () => {
 
   it("**answers as a spawned run prints**, and ends with 0 when stdin closes", async () => {
     const { child, ready, ask } = await server()
-    expect(ready).toEqual({ ready: true, protocol: 1, version: "1.0.0" })
+    expect(ready).toEqual({ ready: true, protocol: 1, version: "1.0.0", concurrent: 8 })
     for (const argv of [
       ["work", "config", "show", "--json"],
       ["work", "store", "info", "--json"],
@@ -301,8 +382,44 @@ describe("chat commands --serve, as a process", () => {
     expect(await ask(["serve"])).toMatchObject({ code: 2, stdout: "" })
     expect(await ask(["partial"])).toMatchObject({ code: 6, stdout: "half\n", stderr: "" })
     expect(await ask(["ok"])).toMatchObject({ code: 0, stdout: "fine\n", stderr: "" })
+    expect(await ask(["direct"])).toMatchObject({ code: 7, stdout: "" })
     const broken = await ask(["broken"])
     expect(broken).toMatchObject({ code: 15, stdout: "" })
     expect(JSON.parse(broken.stderr).error).toMatchObject({ code: "conflict", message: "it broke" })
+  }, 30_000)
+
+  it("**keeps each of several requests at once apart**: its own interleaved output and its own exit code", async () => {
+    const { askAll, order } = await server(join(cli, "..", "command-server-own-program.js"))
+    const names = ["a", "b", "c", "d", "e", "f"]
+    const answers = await askAll(names.map((name, at) => ["slow", name, String(120 - at * 20), String(at)]))
+
+    expect(answers).toEqual(
+      names.map((name, at) => ({ code: at, stdout: `${name} begins\n${name} ends\n`, stderr: `${name} note\n` })),
+    )
+    expect(order()).toEqual([5, 4, 3, 2, 1, 0])
+  }, 30_000)
+
+  it("**answers reads and store writes sent together**, each as a run of its own, a `store` command among them", async () => {
+    const { askAll } = await server()
+    const argvs = [
+      ...Array.from({ length: 6 }, () => ["work", "searches", "list", "--json"]),
+      ["work", "searches", "create", "together-1", "one", "--json"],
+      ["work", "store", "info", "--json"],
+      ["work", "searches", "create", "together-2", "two", "--json"],
+      ...Array.from({ length: 4 }, () => ["work", "searches", "list", "--json"]),
+    ]
+    const answers = await askAll(argvs)
+
+    for (const [at, answer] of answers.entries()) {
+      expect(answer.code, argvs[at]?.join(" ")).toBe(0)
+      expect(answer.stderr).not.toContain("MaxListeners")
+    }
+    const ids = answers.map((answer) => JSON.parse(answer.stdout).meta.run_id)
+    expect(new Set(ids).size).toBe(argvs.length)
+    const shown = await askAll([
+      ["work", "searches", "show", "together-1", "--json"],
+      ["work", "searches", "show", "together-2", "--json"],
+    ])
+    expect(shown.map((answer) => JSON.parse(answer.stdout).item.name)).toEqual(["together-1", "together-2"])
   }, 30_000)
 })
