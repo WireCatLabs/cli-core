@@ -102,8 +102,8 @@ them.
   messenger, a meeting, or a confirmed phone): the person's name, its identities' names, its aliases. E-mail-only
   persons are left out: in a mailbox they are mostly companies and mailing lists. An account's own identity (the
   account's provider and id) is the owner's: `saveAccount` links it, and whoever was linked with it, to the owner
-  person (`linkOwnIdentities`), unless the owner separated that person from themselves; `contacts link <person> me`
-  does it for an identity the account id does not name, a Zoom user.
+  person (`linkOwnIdentities`), unless the owner separated that person from themselves; the owner's
+  `contacts link <person> me` does it for an identity the account id does not name, a Zoom user.
 - **Index:** every name word of three or more letters, by its Snowball stem (if the stem has two letters or more)
   and by its lower-case written form. A Latin word is also indexed in a rough Cyrillic spelling
   (`cyrillicOf`: Valery → валерий).

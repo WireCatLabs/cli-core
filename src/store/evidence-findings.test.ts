@@ -3,6 +3,7 @@ import { parseEvidenceFindingsJson } from "../cli/findings-input.js"
 import { contextEvidenceFingerprint } from "../context/evidence.js"
 import type { FindingsInput } from "../meetings/index.js"
 import { contextEvidenceFixture } from "../testing/context-evidence.js"
+import { validateEvidenceFindings } from "./evidence-findings.js"
 
 const handles: { close(): unknown }[] = []
 afterEach(async () => {
@@ -381,4 +382,64 @@ it("reads a staged batch from snake_case JSON with msg: and document: evidence",
       }),
     ),
   ).toThrow("msg:, document: or note:")
+})
+
+it("checks a quoted finding's words against the cited text, and keeps the quote on the accepted fact's evidence", async () => {
+  const f = await fixture()
+  const note = await f.store.notes.addNote({ text: "Call notes: delivery moves to the 28th of May" })
+  const quoted = (key: string): FindingsInput => ({
+    schemaVersion: 1,
+    key,
+    extractor: "synthetic",
+    findings: [{ id: "delivery", kind: "fact", type: "fact", statement: "Delivery is on 28 May", evidence: [] }],
+  })
+  const invented = quoted("quote-1")
+  invented.findings[0]?.evidence.push({ ...(await f.cite(note.ref)), quote: "delivery moves to the 30th" })
+  await expect(f.store.evidenceFindings.stage(invented, agent)).rejects.toMatchObject({
+    details: { reason: "finding.quote-not-found" },
+  })
+
+  const kept = quoted("quote-2")
+  kept.findings[0]?.evidence.push({ ...(await f.cite(note.ref)), quote: "delivery  moves\nto the 28th" })
+  const batch = await f.store.evidenceFindings.stage(kept, agent)
+  const reviewed = await f.store.evidenceFindings.review(batch.id, {
+    fingerprint: batch.fingerprint,
+    accept: ["delivery"],
+    by: "owner",
+  })
+  const fact = String(reviewed.receipt?.items[0]?.reference).replace("fact:", "")
+  const link = f.db
+    .prepare("SELECT metadata FROM links WHERE from_type = 'fact' AND from_id = ? AND kind = 'evidence'")
+    .get(Number(fact))
+  expect(JSON.parse(String(link?.metadata)).quote).toBe("delivery  moves\nto the 28th")
+})
+
+it("reads a finding without a quote as before, so its fingerprint is unchanged", async () => {
+  const f = await fixture()
+  const plain = validateEvidenceFindings(await f.input())
+  expect(plain.findings[0]?.evidence[0]).not.toHaveProperty("quote")
+  const batch = await f.store.evidenceFindings.stage(await f.input(), agent)
+  expect(batch.input.findings[0]?.evidence[0]).toEqual(await f.cite(f.message))
+  expect(await f.store.evidenceFindings.citable(f.message)).toMatchObject(await f.cite(f.message))
+  expect(await f.store.evidenceFindings.citable("document:999999")).toBeNull()
+})
+
+it("refuses every agent on a batch staged owner-only, even with agent decisions on", async () => {
+  const f = await fixture()
+  const batch = await f.store.evidenceFindings.stage(await f.input("owner-1"), agent, { ownerOnly: true })
+  expect(batch.ownerOnly).toBe(true)
+  await expect(
+    f.store.evidenceFindings.review(batch.id, {
+      fingerprint: batch.fingerprint,
+      accept: ["launch"],
+      by: { bot: "evidence-reviewer", reason: "the message states it plainly" },
+    }),
+  ).rejects.toMatchObject({ details: { reason: "proposal.owner-only" } })
+  const reviewed = await f.store.evidenceFindings.review(batch.id, {
+    fingerprint: batch.fingerprint,
+    accept: ["launch"],
+    by: "owner",
+  })
+  expect(reviewed.receipt?.decision).toEqual({ by: "owner" })
+  expect((await f.store.evidenceFindings.stage(await f.input("plain-1"), agent)).ownerOnly).toBe(false)
 })
