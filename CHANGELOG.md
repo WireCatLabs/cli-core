@@ -5,6 +5,26 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## 0.625.0 — 09.11.2026
+
+### Added
+
+- **A records file can be a spreadsheet.** `recordColumns(type)` lists a type's columns: `external_id`, its flat
+  fields, one per role and one per key of its lists (`lines.amount`), each with whether it is required, its shape and
+  its values. `recordTemplate(type, "csv" | "json")` writes a file to fill: the CSV header with a byte-order mark, in
+  the separator asked for, or an envelope of one example record. `envelopeOfCsv(text, { type, source })` reads a sheet
+  of one type as an envelope: `;`, `,` or a tab, a byte-order mark, `10 000,50` and `09.11.2026` as Excel writes them
+  in Russian or Spanish, a role as the target's external id (`<type>:<external id>` where it takes several types), and
+  a row that repeats an external id as one more item of a list. `placeOf(pointer)` names the line and column a
+  receipt's pointer came from; a sheet it cannot read throws a `TableError` that names them too. SMS and calls have no
+  table: they come from a phone's own export.
+
+### Changed — may break callers
+
+- **`people.list` has a `stranger` kind**: a named person with no tie to the owner, such as an author seen only in a
+  big group. `unsorted` now holds only people with nothing to show as a name. `kind: "stranger"` lists them, `all`
+  includes them, and `counts` counts them.
+
 ## 0.624.0 — 09.11.2026
 
 ### Added
