@@ -191,8 +191,8 @@ should take. A chunk whose messages changed after the build waits for the next b
 
 | model | vector | size | languages | speed here |
 |---|---|---|---|---|
-| **e5-small** (default) | 384 | ~135 MB | ~100, Russian and English among them | ~31 chunks/s |
-| EmbeddingGemma | 768 | ~220 MB | 100+, better on chat | about 7× slower |
+| **EmbeddingGemma** (default) | 768 | ~220 MB | 100+, better on chat | ~5 chunks/s |
+| e5-small | 384 | ~135 MB | ~100, Russian and English among them | ~31 chunks/s |
 | an API: OpenAI `text-embedding-3-small`, or any server with OpenAI's `/v1/embeddings` (`--base-url`) | the model's | — | the model's | the API's |
 
 They run in ONNX Runtime 1.30.0 (`@wirecat/cli-core-onnx`), on Node and Bun alike:

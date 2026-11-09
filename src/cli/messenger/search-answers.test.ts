@@ -71,9 +71,13 @@ describe("allAnswer", () => {
       {
         ...found({
           by: "words",
-          meaningSkipped: { reason: "e5-small is not downloaded", step: "models.download", model: "e5-small" },
+          meaningSkipped: {
+            reason: "embeddinggemma is not downloaded",
+            step: "models.download",
+            model: "embeddinggemma",
+          },
         }),
-        notes: { by: "words", meaningSkipped: "e5-small is not downloaded" },
+        notes: { by: "words", meaningSkipped: "embeddinggemma is not downloaded" },
       },
       { limit: 10 },
     )

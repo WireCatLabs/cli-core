@@ -95,7 +95,7 @@ export const modelCatalogueCommand = (app: AppIdentity, options: ModelCatalogueO
     .description("download and verify one speech or embedding model")
     .argument("<model>", "a model id from models list")
     .option("--offline", "refuse a download that needs the network")
-    .option("--accept-terms", "accept the model's licence terms, for a model that has its own")
+    .option("--accept-terms", "no longer needed; kept so older scripts still run")
     .action(async function (this: Command, id: string, given: { acceptTerms?: boolean }) {
       if (options.offline?.() || this.optsWithGlobals<{ offline?: boolean }>().offline)
         throw new CliError("permission_error", "downloading a model needs the network; --offline was requested", {

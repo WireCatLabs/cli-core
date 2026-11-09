@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, truncateSync, writeFileSync } from "node:fs"
+import { mkdirSync, mkdtempSync, readFileSync, truncateSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import { beforeEach, describe, expect, it, vi } from "vitest"
@@ -84,9 +84,15 @@ describe("downloadTextModel", () => {
     expect(progress).toHaveBeenCalledWith("ONNX Runtime not installed (HTTP 503); models run through WebAssembly")
   })
 
-  it("refuses a model with its own terms until they are accepted, before fetching anything", async () => {
-    await expect(downloadTextModel("embeddinggemma", { env: freshEnv() })).rejects.toThrow("--accept-terms")
-    expect(fetched).toEqual([])
+  it("downloads a model under its own licence without asking, and keeps its NOTICE beside the files", async () => {
+    dims.text = textModel("embeddinggemma").dims
+    const env = freshEnv()
+    const { model, directory } = await downloadTextModel("embeddinggemma", { env })
+
+    expect(fetched).toEqual(model.files.map((file) => file.name))
+    expect(readFileSync(join(directory, "embeddinggemma", "NOTICE"), "utf8")).toContain(
+      "Gemma is provided under and subject to the Gemma Terms of Use found at ai.google.dev/gemma/terms",
+    )
   })
 
   it("fails a model that loads but gives vectors of the wrong size", async () => {

@@ -53,7 +53,7 @@ describe("provider model commands share the canonical contract", () => {
 
     expect(answers[0] && "item" in answers[0] && answers[0].item).toMatchObject({
       id: "e5-large",
-      previous: "e5-small",
+      previous: "embeddinggemma",
     })
     const listed = answers[1] && "items" in answers[1] ? answers[1].items : []
     expect(

@@ -192,7 +192,7 @@ describe("models text", () => {
 
     expect(code).toBe(0)
     const { item } = v.parse(itemEnvelopeSchema(ENTITIES["model.chosen"]), JSON.parse(stdout[0] ?? ""))
-    expect(item).toMatchObject({ id: "e5-large", size: "large", dims: 1024, default: true, previous: "e5-small" })
+    expect(item).toMatchObject({ id: "e5-large", size: "large", dims: 1024, default: true, previous: "embeddinggemma" })
     const listed = await go(["models", "list", "kind:text", "--json"])
     const { items } = v.parse(listEnvelopeSchema(modelEntity), JSON.parse(listed.stdout[0] ?? ""))
     expect(items.filter((one) => one.default).map(({ id }) => id)).toEqual(["e5-large"])
@@ -202,13 +202,13 @@ describe("models text", () => {
     const { go } = await call(["models", "set", "embeddinggemma", "--json"])
     const { code, stdout, stderr } = await go()
     expect(code).not.toBe(0)
-    expect(`${stdout.join("")}${stderr.join("")}`).toContain("chat models download embeddinggemma --accept-terms")
+    expect(`${stdout.join("")}${stderr.join("")}`).toContain("chat models download embeddinggemma")
   })
 
   it("names the download step while the default embedding model is missing", async () => {
     const { go } = await call(["models", "list", "kind:text", "--json"])
     const answer = v.parse(listEnvelopeSchema(modelEntity), JSON.parse((await go()).stdout[0] ?? ""))
-    expect(answer.next).toMatchObject([{ step: "models.download", args: { model: "e5-small" } }])
+    expect(answer.next).toMatchObject([{ step: "models.download", args: { model: "embeddinggemma" } }])
     expect(answer.items[0]).toMatchObject({ kind: "text", size_bytes: expect.any(Number) })
     expect(answer.items[0]?.path).toMatch(/e5-small$/)
   })
@@ -222,14 +222,16 @@ describe("models text", () => {
     expect(stderr.join("")).toContain("query.unknown-field")
   })
 
-  it("refuses a model with its own licence until its terms are accepted, downloading nothing", async () => {
-    const { go } = await call(["models", "download", "embeddinggemma", "--json"])
+  it("lists EmbeddingGemma's licence and its page for the app to link, with nothing to accept", async () => {
+    const { go } = await call(["models", "list", "id:embeddinggemma", "--json"])
 
-    const { code, stderr } = await go()
+    const { code, stdout } = await go()
 
-    expect(code).not.toBe(0)
-    expect(stderr.join("")).toContain("--accept-terms")
-    expect(stderr.join("")).toContain("https://ai.google.dev/gemma/terms")
+    expect(code).toBe(0)
+    expect(JSON.parse(stdout[0] ?? "null").items[0]).toMatchObject({
+      licence: "Gemma Terms of Use",
+      terms: "https://ai.google.dev/gemma/terms",
+    })
   })
 })
 

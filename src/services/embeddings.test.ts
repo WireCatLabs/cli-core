@@ -614,13 +614,18 @@ describe("catching up without --chat", () => {
   it("builds but embeds nothing when the model is not downloaded, and an embed-only run refuses naming the download", async () => {
     const { store, embeddings } = await withChats()
     const done = await embeddings.refresh({})
-    expect(done).toMatchObject({ model: "e5-small", modelAvailable: false, built: [{ chat: "10" }], embedded: [] })
+    expect(done).toMatchObject({
+      model: "embeddinggemma",
+      modelAvailable: false,
+      built: [{ chat: "10" }],
+      embedded: [],
+    })
     expect(done.left).toEqual([
       { chat: "9", needs: "embed" },
       { chat: "10", needs: "embed" },
     ])
     await expect(embeddings.refresh({ build: false })).rejects.toMatchObject({
-      details: { reason: "model.not-downloaded", model: "e5-small" },
+      details: { reason: "model.not-downloaded", model: "embeddinggemma" },
     })
     await store.close()
   })

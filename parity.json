@@ -6,7 +6,7 @@
       "meaning": "who sees the about text: everyone, contacts or nobody"
     },
     "--accept-terms": {
-      "meaning": "accept the model's licence terms, for a model that has its own"
+      "meaning": "no longer needed; kept so older scripts still run"
     },
     "--add": {
       "value": "<chat>",
