@@ -29,7 +29,7 @@ export const harderConsentWording = (command: string, model: string): string =>
   `\`${command} search all --harder\` sends the question and its first ${HARDER_CANDIDATES} hits (each one's title, ` +
   `date and up to ${HARDER_CHARS} characters of its text) to ${HARDER_PROVIDER} (${new URL(HARDER_ENDPOINT).host}), ` +
   `model ${model}, which puts the hits that answer it first. Only a search with --harder sends anything; one costs ` +
-  `about $0.0007 with claude-haiku-5-5 and adds 1 to 2 seconds. \`${command} models search-consents revoke\` turns it off.`
+  `about $0.0004 with claude-haiku-5-5 and adds 1 to 2 seconds. \`${command} models search-consents revoke\` turns it off.`
 
 const state = (app: AppIdentity, options: HarderConsentsOptions, model?: string) => {
   const env = options.env()

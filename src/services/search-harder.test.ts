@@ -3,7 +3,9 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import type { ModelAdapter, ModelRequest } from "../models/index.js"
+import { writeSharedSection } from "../store/shared-config.js"
 import { type AccountKey, type MessageStore, openStore } from "../store/store.js"
+import { enrichmentSettingPath } from "./enrichment-setting.js"
 import { searchAll } from "./search-all.js"
 import { type HarderOptions, writeHarderSetting } from "./search-harder.js"
 
@@ -102,6 +104,17 @@ describe("search all --harder", () => {
     expect(titles(found)).toEqual(plain)
     expect(found.harder).toMatchObject({ applied: false, sent: 0, reason_id: "harder.no-consent" })
     expect(found.harder?.reason).toContain("models search-consents set anthropic --yes")
+  })
+
+  it("**a broken consent setting keeps the plain order** and names the file, never failing the search", async () => {
+    const { env, store } = await seeded()
+    writeSharedSection(enrichmentSettingPath(env), "search_harder", { provider: "openai" })
+    const model = fakeModel('{"records":[2]}')
+    const found = await search(store, env, model.harder)
+    expect(model.requests).toEqual([])
+    expect(found.items).toHaveLength(3)
+    expect(found.harder).toMatchObject({ applied: false, sent: 0, reason_id: "harder.bad-setting" })
+    expect(found.harder?.reason).toContain("search_harder.provider is invalid")
   })
 
   it("**without a key sends nothing**", async () => {

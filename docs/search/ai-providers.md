@@ -194,14 +194,17 @@ memo models search-consents revoke
 memo models keys set anthropic < key.txt
 ```
 
-The search never fails because of it. Without consent or a key, after 5 s with no answer, or on any provider error,
-the plain order stays and the answer's `harder` field says why (`applied: false`, a `reason` and a `reason_id`:
-`harder.no-consent`, `no-key`, `later-page`, `too-few`, `timeout`, `key-rejected`, `unreachable`, `rate-limited`,
-`bad-reply`, `error`), with `sent` (hits sent, 0 when nothing left), `cost_usd` and `ms`.
+The search never fails because of it. Without consent or a key, with a settings section it cannot read, after 5 s with
+no answer, or on any provider error, the plain order stays and the answer's `harder` field says why (`applied: false`,
+a `reason` and a `reason_id`: `harder.no-consent`, `no-key`, `bad-setting`, `later-page`, `too-few`, `timeout`,
+`key-rejected`, `unreachable`, `rate-limited`, `bad-reply`, `error`), with `sent` (hits sent, 0 when nothing left),
+`cost_usd` and `ms`.
 
 The request is the cli-testing search lab's: its prompt, the JSON list of record numbers as structured output,
 thinking off, effort low. Only the records moved from the prompt into the gateway's untrusted-data message. In the lab
-it lifted LifeBench recall@10 from 0.41 to 0.55 and hit@10 from 0.79 to 0.93, for about $0.0007 and 1 to 2 s per
-question; no local reranker came close
+the rerank ran over a first stage that already used two Haiku rewrites of the question ("stack C"), which cli-core does
+not do. Over it, the rerank lifted LifeBench recall@10 from 0.49 to 0.55 and hit@10 from 0.90 to 0.93, for about
+$0.0004 and 1 to 2 s per question. The 0.41 to 0.55 often quoted counts the rewrites too. The gain over memo's own
+ranking was not measured. No local reranker came close
 ([search lab](https://github.com/WireCatLabs/cli-testing/tree/main/performance/agents/knowledge-graph-memory/search-lab)).
 An agent's shell cannot give the consent, and over MCP `models search-consents set` needs `mcp.authority`.

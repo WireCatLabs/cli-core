@@ -44,6 +44,7 @@ export const writeHarderSetting = (env: NodeJS.ProcessEnv, setting: HarderSettin
 export const HARDER_REASON_IDS = [
   "harder.no-consent",
   "harder.no-key",
+  "harder.bad-setting",
   "harder.later-page",
   "harder.too-few",
   "harder.timeout",
@@ -111,6 +112,7 @@ const recordLine = (hit: HarderHit, i: number) =>
 const REASON_TEXT: Record<HarderReasonId, string> = {
   "harder.no-consent": "the owner has not agreed to send searches to a hosted model",
   "harder.no-key": "no Anthropic key",
+  "harder.bad-setting": "the search_harder setting cannot be read; nothing was sent",
   "harder.later-page": "--harder reorders the first page only; nothing was sent",
   "harder.too-few": "fewer than two hits to reorder; nothing was sent",
   "harder.timeout": `the model did not answer within ${TIMEOUT_MS / 1000} s`,
@@ -147,7 +149,13 @@ export const reorderHarder = async <T extends HarderHit>(
   }: HarderOptions & { env: NodeJS.ProcessEnv; now: number; command?: string; laterPage?: boolean },
 ): Promise<{ items: T[]; harder: HarderResult }> => {
   const started = Date.now()
-  const setting = readHarderSetting(env)
+  let setting: HarderSetting | undefined
+  let unreadable: string | undefined
+  try {
+    setting = readHarderSetting(env)
+  } catch (error) {
+    unreadable = error instanceof CliError ? error.message : REASON_TEXT["harder.bad-setting"]
+  }
   const model = setting?.model ?? DEFAULT_HARDER_MODEL
   const plain = (reason_id: HarderReasonId, extra: Partial<HarderResult> = {}, reason = REASON_TEXT[reason_id]) => ({
     items: [...hits],
@@ -164,6 +172,7 @@ export const reorderHarder = async <T extends HarderHit>(
     },
   })
   if (laterPage) return plain("harder.later-page")
+  if (unreadable !== undefined) return plain("harder.bad-setting", {}, `${unreadable}; nothing was sent`)
   const tool = command ?? "memo"
   if (!setting)
     return plain(
@@ -171,7 +180,12 @@ export const reorderHarder = async <T extends HarderHit>(
       {},
       `${REASON_TEXT["harder.no-consent"]}: \`${tool} models search-consents set anthropic --yes\`; nothing was sent`,
     )
-  const apiKey = keyLookup({ env, ...options }, { provider: HARDER_PROVIDER })?.key
+  let apiKey: string | undefined
+  try {
+    apiKey = keyLookup({ env, ...options }, { provider: HARDER_PROVIDER })?.key
+  } catch {
+    return plain("harder.error", {}, "the Anthropic key could not be read; nothing was sent")
+  }
   if (apiKey === undefined)
     return plain(
       "harder.no-key",
