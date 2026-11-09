@@ -23,6 +23,9 @@ None open.
 
 ## Next (P2)
 
+- **CORE-52** · P2 · Tasks from an external task tool, Todoist first (owner, 2026-11-09: soon, not now). Import
+  the owner's tasks into the store with `external_id` and `source_url` (`src/entities/task.ts:40`), so the morning
+  digest and Desktop show them with their due dates. One-way read first; writing back is a later decision.
 - **CORE-48** · P2 · When a command can delete a phone account's calls calendar, a phone import must not bring it
   back (owner wins); add the refusal then. `src/store/sqlite/record-projectors-phone.ts` (`callsCalendar`), #2661.
 - **CORE-49** · P2 · The `crm` lane's `hasMore` is false past 500 matches: `searchAll` reads at most 500 deals and
