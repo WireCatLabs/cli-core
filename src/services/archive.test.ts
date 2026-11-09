@@ -276,6 +276,84 @@ describe("fetching every chat", () => {
   })
 })
 
+describe("muted chats in --all", () => {
+  const options = {
+    limit: 100,
+    pageSize: 100,
+    pauseMs: 0,
+    note: () => {},
+    stop: new AbortController().signal,
+    onPage: () => {},
+  }
+  const walking = async (deps: Partial<ServiceDeps> = {}) => {
+    const store = await emptyStore()
+    const muted = { ...chat, id: "8", title: "Noisy", muted: true }
+    const ended = { ...chat, id: "9", title: "Was muted", muted: true, mutedUntil: "2020-01-01T00:00:00.000Z" }
+    const kept = { ...chat, id: "10", title: "Muted, kept", muted: true, mutedUntil: "2999-01-01T00:00:00.000Z" }
+    await store.chats.saveChats(account, [kept])
+    await store.chats.setHistoryIncluded(account, "10", true)
+    const asked: string[] = []
+    const adapter = {
+      self: () => "500",
+      chats: async () => ({ items: [chat, muted, ended, kept], hasMore: false }),
+      history: async (reference: string) => {
+        asked.push(reference)
+        const items = [{ ...messageAt(1), chatId: reference }]
+        await store.messages.saveMessages(account, reference, items, { via: "history" })
+        return { items, hasMore: false }
+      },
+    } as unknown as MessengerAdapter
+    const service = archiveService({
+      ...storedDeps(messenger, store, account, guard),
+      offline: false,
+      connection: async () => adapter,
+      ...deps,
+    })
+    const totals: number[] = []
+    const all = await service.fetchAll({ ...options, onChat: ({ chats }) => totals.push(chats) })
+    return { all, asked: asked.sort(), totals }
+  }
+
+  it("leaves out a muted chat, counts it, and still reads an ended mute and a chat kept in full", async () => {
+    const { all, asked, totals } = await walking()
+
+    expect(asked).toEqual(["10", "7", "9"])
+    expect(all).toMatchObject({ chats: 3, complete: true, limited: { muted: 1 } })
+    expect(all.items.map((one) => one.chat)).not.toContain("8")
+    expect(new Set(totals)).toEqual(new Set([3]))
+  })
+
+  it("reads muted chats for one run with withMuted, whatever history_muted says", async () => {
+    const store = await emptyStore()
+    const asked: string[] = []
+    const adapter = {
+      self: () => "500",
+      chats: async () => ({ items: [{ ...chat, muted: true }], hasMore: false }),
+      history: async (reference: string) => {
+        asked.push(reference)
+        return { items: [], hasMore: false }
+      },
+    } as unknown as MessengerAdapter
+    const service = archiveService({
+      ...storedDeps(messenger, store, account, guard),
+      offline: false,
+      historyMuted: false,
+      connection: async () => adapter,
+    })
+
+    await service.fetchAll({ ...options, withMuted: true })
+
+    expect(asked).toEqual(["7"])
+  })
+
+  it("reads muted chats too with history_muted", async () => {
+    const { all, asked } = await walking({ historyMuted: true })
+
+    expect(asked).toEqual(["10", "7", "8", "9"])
+    expect(all.limited).toBeUndefined()
+  })
+})
+
 describe("what a search says about the archive", () => {
   it("counts what it searched, lists the chats a fetch would improve and names the one command", async () => {
     const store = await emptyStore()

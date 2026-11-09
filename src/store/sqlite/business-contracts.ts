@@ -15,7 +15,9 @@ import { type ProposedByFilter, proposedBySql } from "./actors.js"
 import { type Author, projectId } from "./memories.js"
 import { requiredThing } from "./notes.js"
 import type { StoreContext } from "./open.js"
+import { recordRelationshipsOver } from "./record-relationships.js"
 import { isoDate, limitOf, oneOf, type Reviewed, refuse, reviewedRowsOver, text, type Written } from "./reviewed.js"
+import { storedThing } from "./things.js"
 import { write } from "./transaction.js"
 
 export interface Contract extends Reviewed {
@@ -177,6 +179,7 @@ const columnsOf = (fields: ContractFields, base: Row) => {
 export const contractOperationsOver = (context: StoreContext): ContractOperations => {
   const { database, now } = context
   const { reviewedOf, written, keepEvidence, linkedId, decideRow, mayChangeParts } = reviewedRowsOver(context)
+  const relationships = recordRelationshipsOver(context)
 
   const contractOf = (row: Row): Contract => {
     const currency = row.currency == null ? null : String(row.currency)
@@ -224,7 +227,17 @@ export const contractOperationsOver = (context: StoreContext): ContractOperation
 
   const decide = (reference: string, by: Decider, reason: string | undefined, confirm: boolean) => {
     const row = rowOf(reference)
-    decideRow("contract", row, { by, reason, confirm })
+    decideRow(
+      "contract",
+      row,
+      { by, reason, confirm },
+      {
+        // The owner's no outweighs the source: the parties an import reported go with it now, not on the next run.
+        after: (confirmer) => {
+          if (confirmer === null) relationships.withdrawFrom(storedThing("contract", row.id))
+        },
+      },
+    )
     return contractOf(rowOf(`contract:${row.id}`))
   }
 

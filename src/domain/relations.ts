@@ -12,6 +12,8 @@ export const ORGANIZATION_ROLES = [
   "contact",
 ] as const
 export const PROJECT_ROLES = ["owner", "manager", "contributor", "client-contact", "approver"] as const
+/** A contract party's part; a party the list cannot name has none, never a catch-all `other`. */
+export const CONTRACT_ROLES = ["customer", "supplier", "signatory", "guarantor"] as const
 
 /** How much the owner deals with a person on a project himself, not how active the person is; absent is unknown. */
 export const ENGAGEMENT_LEVELS = ["none", "low", "medium", "high"] as const
@@ -45,7 +47,7 @@ export const byEngagement = <T extends { engagement?: Engagement | null }>(items
     .sort((a, b) => engagementRank(a.item.engagement) - engagementRank(b.item.engagement) || a.index - b.index)
     .map(({ item }) => item)
 
-type End = "person" | "organization" | "project" | "task" | "chat" | "email_thread" | "deal" | "lead"
+type End = "person" | "organization" | "project" | "task" | "chat" | "email_thread" | "deal" | "lead" | "contract"
 
 interface RelationSpec {
   from: readonly End[]
@@ -72,9 +74,9 @@ export const RELATIONS = {
   "customer-of": { from: ["person", "organization"], to: ["organization"], inverse: "supplier of" },
   "partner-of": { from: ["organization"], to: ["organization"], symmetric: true },
   "related-to": {
-    from: ["person", "organization", "project", "task", "deal", "lead"],
+    from: ["person", "organization", "project", "task", "deal", "lead", "contract"],
     to: ["person", "organization", "project", "task"],
-    roles: { from: { deal: DEAL_ROLES, lead: DEAL_ROLES } },
+    roles: { from: { deal: DEAL_ROLES, lead: DEAL_ROLES, contract: CONTRACT_ROLES } },
   },
 } as const satisfies Record<string, RelationSpec>
 
@@ -89,6 +91,9 @@ export const isRelationKind = (kind: string): kind is RelationKind => specOf(kin
 /** A chat or a mail thread is only ever a project's member: its reference names one account. */
 const memberOnly = (type: string) => type === "chat" || type === "email_thread"
 
+/** A contract's parties are the people and organizations that signed it. */
+const partyOnly = (from: string, to: string) => from === "contract" && to !== "person" && to !== "organization"
+
 export const checkEnds = (kind: string, from: string, to: string): RelationSpec => {
   const spec = specOf(kind)
   if (!spec) throw new CliError("validation_error", `a relationship's kind is one of ${RELATION_KINDS.join(", ")}`)
@@ -97,6 +102,8 @@ export const checkEnds = (kind: string, from: string, to: string): RelationSpec 
       "validation_error",
       `a ${from === "chat" ? "chat" : "mail thread"} is related only as member-of a project`,
     )
+  if (partyOnly(from, to))
+    throw new CliError("validation_error", "a contract is related only to a person or an organization")
   if (!spec.from.includes(from as End) || !spec.to.includes(to as End))
     throw new CliError(
       "validation_error",
@@ -116,7 +123,12 @@ export const rolesOf = (kind: string, from: string, to: string): readonly string
 }
 
 /** The role lists the owner may add to; each is a list the registry gives some relationship's ends. */
-export const ROLE_LISTS = { organization: ORGANIZATION_ROLES, project: PROJECT_ROLES, deal: DEAL_ROLES } as const
+export const ROLE_LISTS = {
+  organization: ORGANIZATION_ROLES,
+  project: PROJECT_ROLES,
+  deal: DEAL_ROLES,
+  contract: CONTRACT_ROLES,
+} as const
 export type RoleList = keyof typeof ROLE_LISTS
 
 /** Which list a relationship's role comes from, or `undefined` where a role is free text. */

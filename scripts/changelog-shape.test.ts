@@ -24,4 +24,11 @@ describe("changelogProblems", () => {
       'CHANGELOG.md:3: "## 1.1 — 13.10.2026" is not "## <version> — DD.MM.YYYY"',
     ])
   })
+
+  it("refuses a conflict marker left in any section, a tagged one too", () => {
+    const text = ["## 1.2.0 — 15.10.2026", "<<<<<<< HEAD", "||||||| parent of abc", "=======", ">>>>>>> abc (x)"]
+    expect(changelogProblems(text.join("\n"), new Set(["1.2.0"]))).toEqual(
+      [2, 3, 4, 5].map((line) => `CHANGELOG.md:${line}: a conflict marker is left over from a merge or rebase`),
+    )
+  })
 })

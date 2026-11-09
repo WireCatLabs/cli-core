@@ -79,16 +79,60 @@ settles again only while every allocation on it is the import's own.
   (`record.relation-ambiguous`). v1's roles (`issuer`, `counterparty`, `project`, `payer`, `payee`, `settles`) keep v1's
   rules: their target type is not checked, and `fields.<role>` may hold a store ref instead.
 - `as` is the part a relationship target plays (`decision-maker`, `customer`), kept in `record_relations.as_role`. One
-  `as` per role and target. A deal's or lead's `person`, `member-of`, `customer-of`, `partner-of` and a contract's
-  `party` and `document` are kept in the record only until an import reports relationships to the store (PR 5). Until
-  then an envelope deal for a CRM's own provider and account replaces that deal's organization, and the CRM's next
-  sync writes its own back.
+  `as` per role and target. A deal's or lead's `person`, a person's `member-of`, an organization's `customer-of` and
+  `partner-of` and a contract's `party` are relationships the import reports (§ Relationships); a contract's
+  `document` is kept in the record only.
 - A role word the type does not list is the source's own: kept, resolved record to record, never projected.
 - `amount` only on `settles`: the payment's share of that invoice.
 - A relation, a line's `product` or a deal's `pipeline` whose target has no entity yet keeps the record **waiting**; it
   is projected when the target gets one, in this run or a later one. The receipt names the missing roles, a field's as
   `fields.pipeline` or `fields.lines.product`, and points at the field when only fields are missing. A deal stands in a
   pipeline CRM sync wrote without waiting.
+
+## Relationships
+
+Each chunk reports the relationships of the entities its records stand for through `store.relations.syncReported`,
+under the envelope's account (`links.account_id`, `links.source = 'import:<provider>'`, proposals by the bot `import`), one call per
+entity type: the entities are the call's `scope.from` and the type's relationship kinds its `scope.kinds`. A call
+carries every relationship of the entities it lists, gathered from every live record of the account mapped to the
+entity, so a second record of the same person never withdraws what the first reports.
+
+| Role | Link | Its role list |
+| --- | --- | --- |
+| deal's or lead's `person` | `related-to` deal → person | the deal roles |
+| contract's `party` | `related-to` contract → person or organization | `customer`, `supplier`, `signatory`, `guarantor` (`contract`) |
+| person's `member-of` | `member-of` person → organization | the organization roles |
+| organization's `customer-of`, `partner-of` | organization → organization | none |
+
+- `as` is the link's role only when its list holds it, the owner's own roles of that list included. Any other word is
+  kept on a link without a role, in `metadata.source_role`, a list of every word the account's records used for
+  that pair (both sides of a partnership too); `record_relations.as_role` keeps each record's word. A word a list
+  does not hold is also a `notices` entry (`relationship.role-unlisted`), never an error, and once the owner adds it
+  to the list the next import writes the link with that role and withdraws the one without. On a relationship with
+  no list, `as` is always only `source_role`.
+- A person's `fields.position` (text, up to 200 characters) is the job title on each of its `member-of` links,
+  `metadata.position`; a title never becomes a role, and `employee` is never inferred from one. Known limit: one
+  position per person, written to every one of their `member-of` links; when two records of the account stand for
+  the same person, the most recently changed one's position is the one written.
+- A relationship whose target has no entity yet is left out until it gets one, in this run or a later one, or by
+  `records match` or `records map`; the records that point at it are reported again then. A partnership one side
+  reports is kept when the other side is imported again.
+- A record that changes reports its new set: a new role on a pair is a new link, the one no longer sent is withdrawn
+  (`deleted_at`). A deleted record's entity is reported with what its account's other live records still say, often
+  nothing, and a record whose target was deleted no longer reports the link to it.
+- The owner's word wins: a link he confirmed is never withdrawn, and one he removed or
+  rejected, role included, is never written again (`skippedOwnerRejected`). An entity he rejected, such as a proposed
+  contract, or one that is deleted reports nothing: rejecting a contract withdraws its parties at once, and a
+  re-import does not bring them back. With `crm.<provider>:<account>.links` set to `review` a new link is a
+  `relationship` proposal.
+- Each writer withdraws only its own links: a call withdraws the account's links whose `source` is its own, so a
+  CRM's links (`crm`) are never withdrawn by an import, even one sent under the CRM's own provider and account, and
+  the CRM's sync never withdraws the import's (`import:<provider>`). When both report the exact same relationship on one account they
+  share one link: only the writer that made it withdraws it, and the other's next report restores it.
+- `relationships` in the receipt counts each link once per run, however many chunks report it, and each issue or
+  notice is listed once. An issue about a record of an earlier batch, reported again because what it points at
+  changed, has the pointer `""` and names the record (`record: {type, externalId}`).
+- A dry run reports the same counts and writes none.
 
 ## Matching person, organization, project
 
@@ -122,7 +166,8 @@ Every file, v1 files included. A name alone never matches.
 
 **Owner remapping.** `store.records.map(key, ref, "owner")` on a record whose entity the import made moves it, and
 every record of the account linked to that entity, to `ref`; repoints what their records filled from them (the columns
-their roles name) and the identities the import gave it; and answers the old entity as `unused` when
+their roles name), the identities the import gave it and the relationships the account reported from it, and of the
+records that point at it; and answers the old entity as `unused` when
 nothing points at it any more. Its `proposed` and `errors` are those of the records that waited on it. The owner deletes or merges it; the
 store deletes nothing. A record linked by an identifier or mapped before refuses a remap (`record.mapped`), and only
 the owner maps (`record.map-owner-only`).
@@ -167,8 +212,9 @@ const receipt = await ingestLines(store, jsonlLines(process.stdin), { account: "
 `{ dryRun, source, created, updated, unchanged, deleted, refused, proposed, waiting, flagged, unmatched, ignored,
 errors, truncated }`. `proposed` lists the proposals made or changed; `waiting[{key, pointer, missing}]`,
 `flagged[{key, pointer, entity, reason?, candidates?}]`, `unmatched[{key, pointer, reason, candidates}]`,
-`ignored[{key, pointer, reason}]`; `errors[{pointer, code, message,
-key}]`, the pointer an RFC 6901 JSON pointer into the envelope.
+`ignored[{key, pointer, reason}]`; `relationships{added, kept, restored, withdrawn, proposed, skippedOwnerRejected}`,
+the links of § Relationships; `notices[{pointer, code, message, key}]`, taken but not as sent; `errors[{pointer, code,
+message, key, record?}]`, the pointer an RFC 6901 JSON pointer into the envelope.
 
 ## Error codes
 
@@ -189,6 +235,8 @@ key}]`, the pointer an RFC 6901 JSON pointer into the envelope.
 | `record.over-payment` | settles amounts past the payment |
 | `record.reference-not-found` | a `ref` the store lacks; a deal's stage its pipeline lacks |
 | `record.map-owner-only`, `record.map-type`, `record.mapped` | `store.records.map` |
+| `relationship.invalid`, `relationship.reference-unknown` | in `errors`, not refusals: ends the registry does not join, or a `ref` the store lacks; the pointer is the record's `relations`, or `""` with `record` named when it was not in this envelope |
+| `relationship.role-unlisted` | in `notices`: an `as` its role list does not hold, kept as `metadata.source_role` |
 | the store's own codes | `finance.*`, `order.*`, `contract.*`, `subscription.*`, `wallet.*`, `transaction.*`, `product.*`, `money.*` when an entity is refused |
 
 ## The example

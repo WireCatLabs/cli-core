@@ -365,6 +365,7 @@ export {
   type ProposedActionsStore,
   proposerOfAction,
 } from "./sqlite/proposed-actions.js"
+export type { RelationshipCounts } from "./sqlite/record-relationships.js"
 export {
   type FlaggedRecord,
   type IncomingRelation,

@@ -28,6 +28,10 @@ None open.
 - **CORE-49** · P2 · The `crm` lane's `hasMore` is false past 500 matches: `searchAll` reads at most 500 deals and
   leads, so a page deeper than that says nothing follows. Read `offset + limit + 1`, as the `business` lane does.
   `src/services/search-all.ts` (crm branch), `src/store/sqlite/deals.ts` (`find`).
+- **CORE-51** · P2 · The `business` lane of `search all` reads every row, so its time grows with the store's size,
+  not with the hits: about 250–330 ms per call at 300k records. Add an index or FTS over business titles.
+  `src/services/search-all-business.ts` (`searchBusiness`) ·
+  [measured](https://github.com/WireCatLabs/cli-testing/tree/main/performance/search/business-lane).
 - **CORE-50** · P2 · `deals.find` matches a word inside another ("get" finds "Widget"); match at a word start, as the
   `business` lane does (`startsAWord`, `src/store/sqlite/business-search.ts`). `src/store/sqlite/deals.ts` (`find`).
 - **CORE-42** · P2 · Take cli-base ≥ 0.66.1 so a bare number counts as a word of a `--discover` question: today any

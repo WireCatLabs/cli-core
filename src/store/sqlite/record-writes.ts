@@ -208,6 +208,7 @@ export const recordWritesOver = (context: StoreContext) => {
     source: EnvelopeSource,
     proposed: (ref: string) => void,
     laterError: (error: IngestError) => void,
+    made?: (id: number) => void,
   ) => {
     const queue = [target]
     while (queue.length > 0) {
@@ -219,7 +220,10 @@ export const recordWritesOver = (context: StoreContext) => {
         try {
           const done = write(database, () => project(row, source))
           if (done.proposed) proposed(done.proposed)
-          if (done.made) queue.push(Number(row.id))
+          if (done.made) {
+            queue.push(Number(row.id))
+            made?.(Number(row.id))
+          }
         } catch (error) {
           if (!(error instanceof CliError)) throw error
           laterError({

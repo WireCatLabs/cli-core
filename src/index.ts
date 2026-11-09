@@ -163,6 +163,7 @@ export {
 } from "./domain/references.js"
 export {
   byEngagement,
+  CONTRACT_ROLES,
   ENGAGEMENT_LEVELS,
   type Engagement,
   engagementRank,

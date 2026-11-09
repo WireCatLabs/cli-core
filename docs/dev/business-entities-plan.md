@@ -3,8 +3,8 @@
 For the developer and agent who build it. The user-facing pages come later (§ Docs). This file is the design and the
 build order; it is deleted when the work is merged.
 
-Status: **building, 2026-11-08.** PRs 1–4 and the phone records are merged (#2656, #2634, #2649, #2660, #2661).
-PR 5 (#2668) and PR 6 (the search lane and the docs) are open. Owner rulings of 2026-11-07 are binding and are listed in § Rulings, including the
+Status: **building, 2026-11-08.** PRs 1–4, the phone records and PR 6 are merged (#2656, #2634, #2649, #2660, #2661,
+#2676). PR 5, relationships through `syncReported`, is open. Owner rulings of 2026-11-07 are binding and are listed in § Rulings, including the
 answers to the three questions this plan raised. Code comments in this work follow the repository rule: sparse, and only *why*.
 
 ## Why
@@ -101,8 +101,8 @@ Anchors on `origin/main` 9386f1765, package 0.602.0, store version 55.
 | Memory workstream D1: person separation guard in `joinByAddress`/`linkOwnIdentities` | PR in progress, function name later | identifier matching must not rejoin two people the owner separated |
 | Memory workstream D5: one shared identity matcher | last in their order | the import's lookup lives in one self-contained function so D5 can move it unchanged |
 
-Everything in this plan that writes `links` **depends on #2628 and its follow-up, to confirm with its author.** The
-rest (tables, money rules, envelope, streaming) does not, and is built first.
+What this plan writes to `links` goes through #2628's `relations.syncReported`, on the shape agreed with the CRM
+relationships workstream (PR 5).
 
 ## Domain model
 
@@ -376,10 +376,18 @@ Trigger changes, exactly:
 | Write | Owner at a terminal | Agent or MCP | Import |
 | --- | --- | --- | --- |
 | invoice, payment, refund, order, contract with value, subscription, price, transaction | confirmed | proposed | proposed |
-| lines, allocations, splits | yes | only on its own still-proposed parent | only on its own still-proposed parent |
+| contract without value | confirmed | confirmed, written directly | confirmed, written directly |
+| change a reviewed row, its lines, allocations and splits | any row | only its own row while it is still proposed | only its own row while it is still proposed |
 | confirm, reject | yes | no (`finance.owner-only`) | no |
 | wallet opening balance | yes | no | kept in the record only |
-| product, deal, lead, pipeline, contract without value, wallet, `custom:*` | direct | direct | direct |
+| product, deal, lead, pipeline, wallet, `custom:*` (no review state) | direct | direct | direct |
+
+The confirmed-row rule holds for reviewed types only. A confirmed row is the owner's, whoever wrote it: a contract
+without value that an agent or an import wrote directly is confirmed at once, so from then on only the owner changes
+it. Direct types have no review state: an agent writes and edits a product, deal, lead, pipeline, wallet or
+`custom:*` record as the owner does (the owner's ruling for deals, leads and pipelines, B2 plan, 2026-11-06). The
+owner limits agents through memo's permission keys: the MCP defaults put writes at "ask" and deny `wallets.update`,
+which carries the opening balance that core refuses an agent anyway.
 
 ## Relationship rules
 
@@ -389,9 +397,9 @@ Trigger changes, exactly:
 | line → catalog item, order/invoice → contract, contract/order → deal, invoice/payment → subscription, subscription → contract and item, transaction → payment and wallet, refund → payment | nullable FK | structural, one target, the store's rules read it |
 | allocation (payment → invoice) | `payment_allocations` | an amount on the edge |
 | subscription supplier and customer, invoice counterparty, order customer | `_type/_id` columns | exactly one, a money rule reads it |
-| contract parties (role `customer`, `supplier`, `signatory`, `guarantor`, `other`) | relationship `related-to` from the contract, via `syncReported` | N-valued with roles; the deal-roles pattern. **Depends on #2628 follow-up**: the contract endpoints and roles join `src/domain/relations.ts` |
+| contract parties (role `customer`, `supplier`, `signatory`, `guarantor`, or one the owner added to the `contract` list) | relationship `related-to` from the contract, via `syncReported` | N-valued with roles; the deal-roles pattern; the endpoint and roles are in `src/domain/relations.ts` |
 | people on a deal or lead (owner, contact, decision-maker) | relationship `related-to` | today's CRM rows, moving to `syncReported` with #2628 |
-| person member-of organization, organization customer-of organization | relationship via `syncReported` | **depends on #2628** |
+| person member-of organization, organization customer-of organization | relationship via `syncReported` | a member's role only from the list, else `metadata.source_role`; a title is `metadata.position` |
 | contract → its document, any entity → its evidence | `links` `attached` / `evidence` | loose; documents are not business records |
 | a source's own relation with no canonical meaning (`quoted-in`, `parent-ticket`) | `record_relations` with the source's role word | kept as the source said; resolved record to record within the account |
 
@@ -596,10 +604,9 @@ Synthetic. A developer's ERP sends this JSONL (`example-erp`, account `demo`). S
 }
 ```
 
-The order is a sale, so the owner is its supplier; its total is derived from its line. Until PR 5 (relationships
-through `syncReported`) ships, `member-of` and the contract's `party` stay in `record_relations` only, and the deal's
-person is written by `saveItem`'s existing `related-to` row. The memo acceptance test asserts the relationships
-(`organizations context`, `contracts show` parties) only from the release that carries PR 5.
+The order is a sale, so the owner is its supplier; its total is derived from its line. `member-of`, the contract's
+`party` and the deal's person are reported links of the import's account (PR 5). The memo acceptance test asserts the
+relationships (`organizations context`, `contracts show` parties) only from the release that carries PR 5.
 
 What the agent runs afterwards (released commands; § CLI and MCP):
 
@@ -614,7 +621,7 @@ memo orders show order:1 --json
 memo invoices show invoice:1 --json
 memo records list type:custom:quote --account example-erp:demo --json
 memo records show custom:quote:Q-7 --account example-erp:demo --json
-memo search all "Rental fleet" --only business --json
+memo search all "Rental agreement" --only business --json
 ```
 
 Expected: one organization and one person created (`created_entity`), the deal written, the contract, order,
@@ -651,7 +658,10 @@ linesOf(stream: NodeJS.ReadableStream): AsyncIterable<string>   // readline over
   object without `records` is a JSONL header.
 - MCP passes `input` as one JSON object, so a stream reaches MCP only as a JSON envelope.
 
-Measured in cli-testing (§ Tests): peak RSS stays flat from 10k to 1M records.
+Measured in cli-testing
+([records JSONL stream](https://github.com/WireCatLabs/cli-testing/tree/main/performance/store/records-jsonl-stream)):
+peak RSS rises from 10k to 100k records, then levels off at 340–365 MB from 100k to 300k. With the heap capped at
+64 MB, 300k records still import. 1M was not run.
 
 ## CLI and MCP (memo)
 
@@ -664,7 +674,7 @@ Every list filters with query words, never flags (cli-base `FLAG_ROLES`). Every 
 | `orders lines` | `add <order> <quantity> <amount> <description...> --product`, `remove <order> <position>` | on a proposed order (its author) or by the owner |
 | `invoices lines` | same as orders | `invoices add` keeps its one-line form |
 | `contracts` | `list [status:, kind:, project:, party:, review:, expires:]`, `show`, `add <name> --kind --organization* --person* --role --start-date --end-date --auto-renew --notice-days --amount --currency --project`, `update <contract> …` | `show` gives the notice deadline |
-| `subscriptions` | `list [status:, direction:, supplier:, customer:, renews:]`, `show` (price history), `add <name> <amount> <currency> --kind --supplier --customer --product --contract --interval --start-date --trial-end`, `update <subscription> --status …`, `cancel <subscription> --occurred-time` | |
+| `subscriptions` | `list [status:, direction:, supplier:, customer:, renews:]`, `show` (price history), `add <name> <amount> <currency> --kind --supplier --customer --product --contract --period --start-date --trial-end-date`, `update <subscription> --status …`, `cancel <subscription> --occurred-time` | |
 | `subscriptions prices` | `add <subscription> <amount> <currency> --start-date` | a row, never an edit |
 | `wallets` | `list [kind:, currency:]`, `show <wallet> [--until-time]` (balance, pending), `add <name> <currency> --kind --institution`, `update <wallet> --opening-balance --opening-date --title` | opening balance owner-only |
 | `transactions` | `list [wallet:, direction:, status:, category:, project:, review:, uncategorized:]`, `show`, `add <wallet> <amount> --kind in\|out --occurred-time --description`, `update <transaction> --payment --status` | |
@@ -704,7 +714,7 @@ Also:
 | nouns, collection | `contracts`, `subscriptions`, `prices`, `wallets`, `transactions`, `splits`, `lines` |
 | noun meaning change | `products`: "goods and services the owner sells or buys, with their prices" |
 | verbs | none new. `cancel` meaning widens to "stop a job, a pending thing or a subscription". `pause`/`resume` are process words, so a subscription pauses by `update --status paused` |
-| flags, value | `--refund-of <payment>`, `--payment <payment>`, `--product <product>`, `--contract <contract>`, `--supplier <party>`, `--customer <party>`, `--wallet <wallet>`, `--status <status>`, `--interval <count-unit>` (`1-month`), `--trial-end <date>`, `--notice-days <n>`, `--auto-renew <on\|off>`, `--opening-balance <decimal>`, `--opening-date <date>`, `--institution <text>`, `--unit <text>`, `--sku <code>`, `--archived <on\|off>` |
+| flags, value | `--refund-of <payment>`, `--payment <payment>`, `--product <product>`, `--contract <contract>`, `--supplier <party>`, `--customer <party>`, `--wallet <wallet>`, `--status <status>`, `--period <count-unit>` (`1-month`), `--trial-end-date <date>`, `--notice-days <n>`, `--auto-renew <on\|off>`, `--opening-balance <decimal>`, `--opening-date <date>`, `--institution <text>`, `--unit <text>`, `--sku <code>`, `--archived <on\|off>` |
 | flag meaning change | `--start-date`, `--end-date`: "the first (last) day of something that lasts whole days, such as an all-day event or a contract" |
 
 ## Docs to update
@@ -809,7 +819,6 @@ Synthetic data only. "core" = `src/store/*.test.ts` unless named; "memo" = cli-m
 - **Re-importing an old v1 file creates entities** for records that waited for `records link` (ruling 2). A dry run
   lists them under `created` first; the owner's real payment sheet should be dry-run before its next import.
 - **Phone links differ from the Memory linker**, which proposes on a phone-only match. Owner's choice; documented.
-- **#2628's shape may still change**; PR 5 waits for it, PRs 2–4 do not touch `links`.
 
 ## Owner answers (2026-11-07)
 
