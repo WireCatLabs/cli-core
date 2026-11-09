@@ -153,6 +153,17 @@ export {
   type RecordsEnvelope,
 } from "./domain/records.js"
 export {
+  type ColumnShape,
+  envelopeOfCsv,
+  recordColumns,
+  recordTemplate,
+  TABLE_RECORD_TYPES,
+  type TableColumn,
+  type TableEnvelope,
+  TableError,
+  type TablePlace,
+} from "./domain/records-table.js"
+export {
   canonicalReference,
   formatReference,
   looksLikeReference,
