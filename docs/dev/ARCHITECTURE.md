@@ -537,7 +537,9 @@ translates its provider's words.
 **Contacts.** A contact is an `identities` row (`schema.ts:134`): one person as one source knows them, linked to a
 `persons` row through `identity_links`, every move logged in `identity_link_events` (`schema.ts:152-191`). Contacts
 with one exact address join one person (`joinByAddress`), unless the owner separated those people
-(`person-separation.ts`): an owner's move out of a person keeps the whole people apart from then on.
+(`person-separation.ts`): an owner's move out of a person keeps the whole people apart from then on. A role address
+(`info@`, `hello@`, `isRoleAddress` in `domain/addresses.ts`) joins no one, even when only two people have it; the scan
+proposes them instead. A no-reply address (`isNoReplyAddress`) is no one's: it neither joins nor proposes.
 
 - **A merge never deletes the person it empties.** A move is a merge by what it did (`mergeSql` in
   `merged-persons.ts`): it emptied its person, where an unlink leaves the rest behind. A person with no identity and
@@ -557,8 +559,9 @@ with one exact address join one person (`joinByAddress`), unless the owner separ
 - **What only the owner decides waits as an `identity_link` proposal** (`identity-proposals.ts`, kind in
   `identity-links.ts`): a `proposed_actions` row with the two people, each one's identities when proposed (`sides`),
   the signal (`agent`, `phone`, `email`, `guest-email`) and whether it joins the people or moves one identity. It is
-  owner-only (`isOwnerOnlyKind`) and a dedicated review, at most one open per pair; a pair the owner separated or
-  rejected is never proposed or joined again. A confirm is the owner's link (method `proposal`), refused with
+  owner-only (`isOwnerOnlyKind`) and a dedicated review, at most one open per pair; a pair the owner separated is never
+  proposed or joined again. A pair the owner rejected is never joined, and is proposed again only on new evidence: a
+  signal and pair of identities (`evidenceKeyOf`, in either order) that none of its rejected proposals had. A confirm is the owner's link (method `proposal`), refused with
   `identity.stale` once `sides` no longer hold. An agent's mention confirm and meeting association go through
   `linkOrPropose`, which links only for the owner; the mention waits as `proposed`.
   `linkPeople` (tg/max `contacts link`, a calendar's `people link`) takes who runs it from `actorOf`: an agent's link
@@ -576,7 +579,10 @@ with one exact address join one person (`joinByAddress`), unless the owner separ
   one `linkIndex` of the proposals outside any transaction, then writes each group in its own short `write`; its
   cursor (`store_settings` `people.scan`: the newest identity, move, revision, guest row and update time) limits a
   later pass to what changed. The owner's pending rulings are one predicate each: `phonePairJoins` (NEED-2445),
-  `addressGroupJoins` (NEED-2446), and the rejection check in `join` (NEED-2444). Its merges are authored `rule`: a
+  `addressGroupJoins` (NEED-2446, and role addresses), and the rejection check in `join` (NEED-2444), which proposes a
+  rejected pair on evidence new to the owner. `linkIndex` holds each pair's open proposal and the evidence keys of its
+  rejected ones, read once per pass. An address's mail contact stands for its person in both the scan and the import,
+  so the two paths name the same evidence. Its merges are authored `rule`: a
   move the owner authored counts as a separation, so an automatic one must never be.
 
 **Links and the review list.** A link records its method, confidence, author and time; an owner's link is never

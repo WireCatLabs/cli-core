@@ -1,3 +1,4 @@
+export { isNoReplyAddress, isRoleAddress, ROLE_ADDRESS_WORDS } from "./domain/addresses.js"
 export {
   CATALOG_KINDS,
   type CatalogKind,

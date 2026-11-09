@@ -1,10 +1,10 @@
 import { CliError } from "@wirecat/cli-base"
-import { isEmailAddress } from "../../domain/addresses.js"
+import { isEmailAddress, isRoleAddress } from "../../domain/addresses.js"
 import type { Id, Page } from "../../domain/models.js"
 import type { IdentityRef, LinkedIdentity, LinkOptions, PersonRecord, StoredAccount, StoredHit } from "../types.js"
 import { and, eq, inArray, isNull, type SQL, sql } from "./drizzle/core.js"
 import { identityOf } from "./identities.js"
-import { rejectedPair, settleLinks } from "./identity-link-rows.js"
+import { rejectedEvidence, settleLinks } from "./identity-link-rows.js"
 import { currentPerson } from "./merged-persons.js"
 import type { StoreContext } from "./open.js"
 import { resolvePersonLinks } from "./person-resolution.js"
@@ -243,13 +243,21 @@ export const noteAddress = (context: StoreContext, ref: IdentityRef, address: st
 /**
  * Joins the identity to the person of the mail contact with this exact address, making that contact when mail has
  * not seen it yet, so whichever import comes second lands on one person. The contact is seen by no account, so it is
- * no one's mail correspondent. An owner's unlink wins: two people the owner separated stay apart.
+ * no one's mail correspondent. An owner's unlink wins: two people the owner separated stay apart. A role address such
+ * as `info@` joins no one; the scan proposes its people instead. A pair the owner rejected is not joined either: it is
+ * given back, so the caller proposes it when the evidence is new to the owner.
  */
-export const joinByAddress = (context: StoreContext, ref: IdentityRef, address: string, by: string): void => {
+export const joinByAddress = (
+  context: StoreContext,
+  ref: IdentityRef,
+  address: string,
+  by: string,
+): { identity: number; with: number; from: number; to: number } | undefined => {
   const key = address.trim().toLowerCase()
   if (!isEmailAddress(key) || ref.provider === "email") return
   const found = required(context, ref)
   noteAddress(context, ref, key)
+  if (isRoleAddress(key)) return
   // The mail contact of the address, found by the address column every contact with one carries (store version 32).
   const mail = context.database
     .prepare("SELECT external_id FROM identities WHERE provider = 'email' AND email = ? LIMIT 1")
@@ -257,13 +265,15 @@ export const joinByAddress = (context: StoreContext, ref: IdentityRef, address: 
   if (!mail) identityOf(context, "email", key, null)
   const contact = required(context, { provider: "email", id: mail ? String(mail.external_id) : key })
   if (contact.personPk === found.personPk || separated(context, found.personPk, contact.personPk)) return
-  if (rejectedPair(context.database, found.personPk, contact.personPk)) return
   if (sharedAddress(context, key, found.personPk)) return
+  if (rejectedEvidence(context.database, found.personPk, contact.personPk) !== undefined)
+    return { identity: found.pk, with: contact.pk, from: found.personPk, to: contact.personPk }
   const kept = mergePerson(context, found.personPk, contact.personPk, { method: "same-email", by })
   resolvePersonLinks(
     context.database,
     recordOf(context, kept).identities.flatMap(({ name, username }) => [name, username]),
   )
+  return undefined
 }
 
 /** Gives the identity a person of its own again; the ones left keep theirs. */

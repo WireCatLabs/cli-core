@@ -51,41 +51,69 @@ export const linkRows = (database: CacheDatabase, statuses: readonly string[] = 
       return { id: String(row.id), status: String(row.status), payload, pair: currentPairOf(database, payload) }
     })
 
-/** Whether the owner turned down linking these two people, by any proposal that names them now. */
-export const rejectedPair = (database: CacheDatabase, a: number, b: number): boolean =>
-  database
-    .prepare("SELECT 1 FROM proposed_actions WHERE kind = ? AND status = 'rejected' LIMIT 1")
-    .get(IDENTITY_LINK_KIND) !== undefined &&
-  linkRows(database, ["rejected"]).some(({ pair }) => pair !== undefined && pairOf(...pair) === pairOf(a, b))
+/**
+ * What a proposal rests on: its signal and the two identities it names, in either order. The owner's rejection
+ * holds against this evidence only (NEED-2444); a new signal or identity for the same people proposes them again.
+ */
+export const evidenceKeyOf = ({
+  signal,
+  identity,
+  with: other,
+}: Pick<IdentityLinkPayload, "signal" | "identity" | "with">) => `${signal} ${[identity, other ?? ""].sort().join(" ")}`
+
+/** The evidence the owner rejected for linking these two people, by any proposal that names them now. */
+export const rejectedEvidence = (database: CacheDatabase, a: number, b: number): Set<string> | undefined => {
+  if (
+    database
+      .prepare("SELECT 1 FROM proposed_actions WHERE kind = ? AND status = 'rejected' LIMIT 1")
+      .get(IDENTITY_LINK_KIND) === undefined
+  )
+    return undefined
+  const keys = linkRows(database, ["rejected"])
+    .filter(({ pair }) => pair !== undefined && pairOf(...pair) === pairOf(a, b))
+    .map(({ payload }) => evidenceKeyOf(payload))
+  return keys.length === 0 ? undefined : new Set(keys)
+}
 
 /**
- * Every proposal by the pair of people it names now, read once, for a pass that checks many pairs. A rejection wins
- * over an open proposal for the same pair. `merged` keeps it true after the pass joins two people itself.
+ * Every proposal by the pair of people it names now, read once, for a pass that checks many pairs: the open one, and
+ * the evidence the owner rejected. `merged` keeps it true after the pass joins two people itself.
  */
 export const linkIndex = (database: CacheDatabase) => {
   const rows = linkRows(database)
-  const byPair = new Map<string, LinkRow>()
+  const open = new Map<string, LinkRow>()
+  const rejected = new Map<string, Set<string>>()
   const byIdentity = new Set<string>()
   const place = (row: LinkRow) => {
     if (row.pair === undefined) return
     const key = pairOf(...row.pair)
-    const held = byPair.get(key)
-    if (held === undefined || (held.status !== "rejected" && row.status === "rejected")) byPair.set(key, row)
+    if (row.status !== "rejected") {
+      if (!open.has(key)) open.set(key, row)
+      return
+    }
+    const keys = rejected.get(key) ?? new Set<string>()
+    keys.add(evidenceKeyOf(row.payload))
+    rejected.set(key, keys)
   }
   for (const row of rows) {
     place(row)
     byIdentity.add(row.payload.identity)
   }
   return {
-    known: (a: number, b: number): LinkRow | undefined => byPair.get(pairOf(a, b)),
+    /** Whether any proposal, open or rejected, names this pair. */
+    known: (a: number, b: number): boolean => open.has(pairOf(a, b)) || rejected.has(pairOf(a, b)),
+    open: (a: number, b: number): LinkRow | undefined => open.get(pairOf(a, b)),
+    rejected: (a: number, b: number): ReadonlySet<string> | undefined => rejected.get(pairOf(a, b)),
     /** Whether any proposal moves this identity, such as a meeting guest's that is already waiting. */
     names: (identity: string): boolean => byIdentity.has(identity),
     add: (row: LinkRow) => {
+      rows.push(row)
       place(row)
       byIdentity.add(row.payload.identity)
     },
     merged: (from: number, into: number) => {
-      byPair.clear()
+      open.clear()
+      rejected.clear()
       for (const row of rows) {
         if (row.pair !== undefined)
           row.pair = row.pair.map((person) => (person === from ? into : person)) as [number, number]
