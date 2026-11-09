@@ -54,6 +54,7 @@ export const modelGateway = (deps: GatewayDeps) => ({
     let limited = false
     let unreachable = false
     let refused = false
+    let status: number | undefined
     const cancellable: typeof fetch = async (input, init) => {
       const signal = init?.signal ?? (input instanceof Request ? input.signal : undefined)
       let response: Response
@@ -66,6 +67,7 @@ export const modelGateway = (deps: GatewayDeps) => ({
         unreachable = true
         throw error
       }
+      if (!response.ok) status = response.status
       if (response.status === 429) limited = true
       if (response.status === 401 || response.status === 403) refused = true
       return response
@@ -88,7 +90,9 @@ export const modelGateway = (deps: GatewayDeps) => ({
       throw new CliError(
         "invalid_response",
         `${request.purpose} provider failed or returned an incomplete response; no result was stored`,
-        reason === undefined ? undefined : { reason },
+        reason === undefined && status === undefined
+          ? undefined
+          : { ...(reason === undefined ? {} : { reason }), ...(status === undefined ? {} : { status }) },
       )
     }
   },

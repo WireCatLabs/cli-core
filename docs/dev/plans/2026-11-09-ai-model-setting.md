@@ -1,6 +1,26 @@
 # Plan: one "AI model" setting that can replace the agent
 
-Status: draft for the owner's review. Nothing here is built.
+Status: the first slice is built (cli-core `models ai`, memo image reading, Desktop «Модель ИИ»). The rest is open.
+
+## What is built, and where it differs from the design below
+
+Owner rulings: NEED-2463 (one third-party model setting that replaces the agent), NEED-2465…2468 (open questions
+1–4, below), NEED-2494 A (image recognition waits for this setting).
+
+- **cli-core** (`src/models/ai.ts`, `src/cli/ai-model-command.ts`): the shared `ai` section, the shared key
+  (service `WireCat`, account `ai:<origin>`, `isMovedRun`), `models ai show|set|off|forget|check` mounted in memo's
+  `models`, owner-only (`agentOf` refuses unless `--from-app`; `mcp: false`), and `aiImageReader` for images.
+- **Differs: no bottom layer of `models.default`.** Each job opts in by reading `readAiSetting` itself. That keeps
+  `analysis` and the other purposes exactly as they are, with no per-purpose gate to add (§1's gate table).
+- **Differs: the https-or-loopback rule applies to `ai.base_url` only.** The public `endpoint()` is unchanged, so no
+  caller breaks. Question 3 A holds for the new setting.
+- **Added: image consent.** `models ai set … --images` stores `images: {origin, model, at}`. Images go only to that
+  origin and model; a change of either closes it until the owner agrees again.
+- **Check** reads the HTTP status the gateway now keeps in `details.status`: 401/403, 402, 404, 429, 5xx. OpenAI's
+  "no credit" 429 codes and OpenRouter's 200-with-error body are not told apart yet; they read as rate-limited and
+  failed.
+- **Open:** the `ai-model` reader and the per-job `jobs` map (§2), enrichment following `ai` (C5), merging the two
+  `models keys` commands (C3), tg/max `personal models ai`, the full reason table (C4).
 
 ## Goal
 
@@ -28,11 +48,12 @@ What this means in practice:
 
 Refs read, so every line number below can be checked:
 
-- cli-core at `916b7eef7` (0.620.0). Paths are relative to this repository.
+- cli-core at `916b7eef7` (0.620.0), re-read at `050cd56d5` (0.624.0): the files below did not change in a way that
+  moves these lines. Paths are relative to this repository.
 - memo `origin/main` [`2ad5587`](https://github.com/WireCatLabs/cli-memo/tree/2ad55877a69611c88dc2d0d413d0c2aaf93296c2)
-  (0.131.72). The local memo checkout is one commit behind and has no `sources readers`.
+  (0.131.72), re-read at `e9873e3` (0.131.75).
 - Desktop `origin/main` [`1440371`](https://github.com/WireCatLabs/wirecat-desktop/tree/14403716f619e10c2868da9a13a47e4457883716)
-  (#232).
+  (#232), re-read at `4f1f6b09` (#255).
 
 ### Most of it already exists, in four places that do not share
 
