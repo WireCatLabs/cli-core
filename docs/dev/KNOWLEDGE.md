@@ -45,9 +45,9 @@ says which roles it takes:
 | `reports-to` | person → person (read backwards: `manages`) | none |
 | `customer-of` | person, organization → organization (read backwards: `supplier of`) | none |
 | `partner-of` | organization ↔ organization, stored once with the lower id as `from` | none |
-| `related-to` | person, organization, project, task, deal, lead → person, organization, project, task | a deal's or lead's: `owner`, `contact`, `decision-maker`, `influencer`; others free text |
+| `related-to` | person, organization, project, task, deal, lead → person, organization, project, task; contract → person, organization | a deal's or lead's: `owner`, `contact`, `decision-maker`, `influencer`; a contract's: `customer`, `supplier`, `signatory`, `guarantor`; others free text |
 
-The owner may add his own roles to the organization, project and deal lists (`knowledge.addRole`, store setting
+The owner may add his own roles to the organization, project, deal and contract lists (`knowledge.addRole`, store setting
 `relationships.roles.<list>`); `knowledge.roles(list)` answers the built-in roles and his, each with `builtIn`. A
 built-in role stays, and an owner role a relationship still holds is not removed. A job title is never a role: it is `position` beside the relationship (`metadata.position`), with `startsAt` and
 `endsAt` (when it held, UTC ms, end exclusive). What a role means on this link, in the owner's words, is `roleNote`
@@ -366,6 +366,15 @@ a source reports through `context.gap`), which `crmGapsOf` reads. Every source c
 source that makes more requests than the one the engine counts takes each with `context.spend()`, which stops the run
 as `partial` once the budget is spent (WC-LIFE-16). A contact whose email
 belongs to two people is named in the sync's issues until the owner separates it.
+
+A records import uses it too, per chunk under the envelope's account: a deal's or lead's people, a contract's
+parties, a person's `member-of` and an organization's `customer-of` and `partner-of`, each entity's set gathered from
+every live record of the account mapped to it. A role comes only from its list; any other word is kept, with every
+other word for that pair, as the list `metadata.source_role`, and the person's `fields.position` is
+`metadata.position`. A delete, `records map` and `records match` report again what they change, and rejecting a
+proposed contract withdraws its parties in the same transaction
+([records envelope, § Relationships](../storage/records-envelope.md#relationships)). Its links' `source` is
+`import:<provider>`, so it and a CRM on the same account never withdraw each other's.
 
 Which deals and leads a sync copies is the account's `crm.<provider>:<account>.scope`: `mine` (the default) keeps
 those with no assignee and those assigned to the sign-in's own user or to a user in

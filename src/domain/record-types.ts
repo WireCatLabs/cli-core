@@ -34,7 +34,7 @@ export interface RecordRoleSpec {
   amount?: boolean
   /** A business relationship between entities, by its kind: the relation may carry `as`, the part the target plays. */
   relationship?: RelationKind
-  /** Kept in `record_relations` only, never read to make the entity, so it never makes a record wait (PR 5). */
+  /** Never read to make the entity, so it never makes a record wait. */
   kept?: boolean
   /**
    * A role v1 already had: `fields.<role>` may name a store ref instead of a relation, and its target type is not
@@ -197,6 +197,7 @@ export const RECORD_TYPES = {
       name: kept("The person's name"),
       email: kept("E-mail addresses, one or a list: an exact one links the record to the one person who has it"),
       phone: kept("Phone numbers, one or a list: an exact one, read to E.164, links like an e-mail"),
+      position: kept("The job title, kept beside each member-of as its position: never the role"),
     }),
     roles: { "member-of": { targets: ORGANIZATION, relationship: "member-of", kept: true } },
   },

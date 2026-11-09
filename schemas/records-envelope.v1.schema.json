@@ -537,6 +537,9 @@
         },
         "phone": {
           "description": "Phone numbers, one or a list: an exact one, read to E.164, links like an e-mail"
+        },
+        "position": {
+          "description": "The job title, kept beside each member-of as its position: never the role"
         }
       },
       "additionalProperties": true
