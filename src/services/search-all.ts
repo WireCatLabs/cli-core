@@ -23,6 +23,7 @@ import type { SearchCoverage } from "./messages-search.js"
 import { notesScopeOf, RRF_K, searchNotes } from "./notes-search.js"
 import { BUSINESS_WORDS_ONLY, searchBusiness } from "./search-all-business.js"
 import { type MeetingAccountCoverage, type MeetingSearchItem, meetingLane } from "./search-all-meetings.js"
+import { HARDER_CANDIDATES, type HarderOptions, type HarderResult, reorderHarder } from "./search-harder.js"
 import { listContextOf } from "./search-kind.js"
 import type { Backend, ServerOptions, ServerSearched } from "./server-search.js"
 
@@ -105,6 +106,8 @@ export interface SearchAllFound {
   unmatched?: string[]
   /** What each meeting account read could answer; absent when no meeting account was read. */
   meetings?: MeetingAccountCoverage[]
+  /** What `harder` did, when it was asked: reordered, or kept the plain order and why. */
+  harder?: HarderResult
 }
 
 export interface SearchAllRequest {
@@ -138,6 +141,11 @@ export interface SearchAllRequest {
   meetingsAsked?: boolean
   /** The CRM kinds `crm` reads; absent, deals and leads. */
   crmKinds?: readonly DealKind[]
+  /**
+   * Search harder: a hosted model reorders the first 30 hits, only with the owner's consent and a key. Absent, nothing
+   * is read of the consent or the key and nothing is sent.
+   */
+  harder?: HarderOptions
 }
 
 const refusal = (error: CliError, text: string): { why?: string; token?: string } => {
@@ -281,7 +289,7 @@ export const searchAll = async (
   // Each resource is read deep enough for the merged page, then the merge is cut; a named period reads deeper, so a
   // hit inside it can move up from below the page.
   const window = offset + request.limit
-  const depth = period ? Math.max(window, PERIOD_DEPTH) : window
+  const depth = Math.max(window, period ? PERIOD_DEPTH : 0, request.harder ? HARDER_CANDIDATES : 0)
   const chosen =
     request.source === undefined
       ? { only: request.only ?? RESOURCES_SEARCHED, scope: request.scope, skipped: [] }
@@ -536,9 +544,21 @@ export const searchAll = async (
     await embedders.close()
   }
 
-  const ordered = insidePeriodFirst(oneList(lists, cosines), period)
+  let ordered = insidePeriodFirst(oneList(lists, cosines), period)
+  let harder: HarderResult | undefined
+  if (request.harder) {
+    const asking = {
+      ...request.harder,
+      env: request.env ?? process.env,
+      now: request.now ?? Date.now(),
+      ...(command === undefined ? {} : { command }),
+    }
+    const done = await reorderHarder(request.text, ordered, { ...asking, laterPage: offset > 0 })
+    ordered = done.items
+    harder = done.harder
+  }
   const more = hasMore || ordered.length > window
-  const { backend: _backend, server: _server, ...local } = asked
+  const { backend: _backend, server: _server, harder: _harder, ...local } = asked
   const unmatched = []
   if (!ordered.length && !offset && !discover)
     for (const word of strictWords(request.text)) {
@@ -561,6 +581,7 @@ export const searchAll = async (
     ...(coverage === undefined ? {} : { coverage }),
     ...(unmatched.length ? { unmatched } : {}),
     ...(meetings === undefined ? {} : { meetings }),
+    ...(harder === undefined ? {} : { harder }),
   }
 }
 

@@ -610,6 +610,14 @@ export {
   catchUpSearch,
   validateCatchUp,
 } from "./search-catchup.js"
+export {
+  HARDER_REASON_IDS,
+  type HarderOptions,
+  type HarderReasonId,
+  type HarderResult,
+  readHarderSetting,
+  writeHarderSetting,
+} from "./search-harder.js"
 export { accountsOfKind, groupLockOf, listContextOf, type SearchKind } from "./search-kind.js"
 export type { SearchRefreshed, SyncOptions } from "./search-refresh.js"
 export { SYNC_BOUNDS, SYNC_KEY } from "./search-refresh.js"
