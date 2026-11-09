@@ -42,7 +42,7 @@ What a CLI's failure does:
   A release whose CLIs still break on `main` builds their adoption branches instead (`bin/release --app-ref
   <branch>`), or waits until those CLIs have adopted.
 
-A pull request that changes only `CHANGELOG.md` and `package.json`'s version against a `main` whose pull request
+A pull request that changes only `CHANGELOG.md`, the `changes/` fragments and `package.json`'s version against a `main` whose pull request
 passed every required check on the same tree (bin/release's fold and version pull requests) runs `pnpm docs:check`
 and the changelog shape test instead, and reports the other required checks as passed, saying why
 ([`scripts/ci-unchanged.sh`](../../scripts/ci-unchanged.sh), [`scripts/ci-fingerprint.sh`](../../scripts/ci-fingerprint.sh)).

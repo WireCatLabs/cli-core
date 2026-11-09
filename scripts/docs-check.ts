@@ -1,5 +1,5 @@
 /**
- * Every relative link and anchor in every document resolves, and the changelog has its shape — on
+ * Every relative link and anchor in every document resolves, and the changelog and its fragments have their shape — on
  * every pull request, so a stale link fails the change that made it. The same checks now live in
  * `@wirecat/cli-base/release` (`cli-dev docs-check`), which max-cli runs.
  *
@@ -8,6 +8,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
 import { dirname, join, relative, resolve, sep } from "node:path"
 import { fileURLToPath } from "node:url"
+import { fragmentProblems, readFragments } from "./changelog-fragments.ts"
 import { changelogProblems, taggedVersions } from "./changelog-shape.ts"
 
 const SKIPPED = new Set(["node_modules", "dist", "coverage", ".git", ".worktrees", "docs_ai"])
@@ -102,6 +103,7 @@ const linkProblems = (base: string): string[] => {
 
 const problems = [
   ...changelogProblems(readFileSync(join(root, "CHANGELOG.md"), "utf8"), taggedVersions(root)),
+  ...readFragments(root).flatMap(fragmentProblems),
   ...linkProblems(root),
 ]
 for (const problem of problems) console.error(problem)

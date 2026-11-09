@@ -1,9 +1,9 @@
 import { execFileSync } from "node:child_process"
 
-const HEADINGS = ["Added", "Changed — may break callers", "Fixed", "Security", "Removed"]
+export const HEADINGS = ["Added", "Changed — may break callers", "Fixed", "Security", "Removed"]
 const UNRELEASED = "Unreleased"
 const VERSION_HEADING = /^## (\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?) — (\d{2})\.(\d{2})\.(\d{4})$/
-const ID = /\b(?:CLI|MAX|OPS|CORE|NEED|BUG|FIND|SEC|PERF|UX|IDEA|DEBT|RISK|ASK|TASK)-\d+\b/g
+export const ID = /\b(?:CLI|MAX|OPS|CORE|NEED|BUG|FIND|SEC|PERF|UX|IDEA|DEBT|RISK|ASK|TASK)-\d+\b/g
 
 /**
  * Versions tagged `v<version>`, as the changelog guard reads them. CI checks out without tags, so an

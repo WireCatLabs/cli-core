@@ -699,8 +699,8 @@ lock older tools out of it (its `minCompatible` is above what they speak).
 
 ## How often, and what may break
 
-**Release when a consumer needs it, at any time** ([WC-REL-8](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/releases.md#wc-rel-8--any-package-may-release-at-any-time)). Changes wait under `## Unreleased`
-until then; there is no gap to keep between releases and no weekly limit on breaking changes.
+**Release when a consumer needs it, at any time** ([WC-REL-8](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/releases.md#wc-rel-8--any-package-may-release-at-any-time)). Merged changes wait as changelog
+fragments in `changes/` until then; there is no gap to keep between releases and no weekly limit on breaking changes.
 
 **A release that makes a CLI change its code moves every CLI that uses cli-core on the same day.** The parity
 jobs build tg-cli, max-cli and whatsapp-cli from their `main` against every pull request; a change that fails

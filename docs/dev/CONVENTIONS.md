@@ -28,8 +28,9 @@ What differs here:
   vendor clients and vendor adapters stay outside Core, and `biome.json` refuses their imports.
   Persistence and CLI/MCP adapters implement shared contracts inside Core.
 - **The changelog** has these headings, each at most once per version: `Added`,
-  `Changed — may break callers`, `Fixed`, `Security`, `Removed`. The top section is
-  `## Unreleased`; a release PR renames it `## <version> — DD.MM.YYYY`. No backlog or decision ids.
+  `Changed — may break callers`, `Fixed`, `Security`, `Removed`. A pull request adds its entries as a fragment,
+  `changes/<branch>.md`, under those headings; the release pull request collects every fragment into
+  `## <version> — DD.MM.YYYY` and deletes them. No backlog or decision ids.
   An entry says what changed for a caller, why when it is not obvious, and what to do when it
   breaks something. `pnpm docs:check` checks the shape.
 - **No `docs_ai/` in this repository.** It is gitignored; a plan for open work that others need is

@@ -1,7 +1,8 @@
 #!/usr/bin/env sh
 # Publishes the version in package.json and tags it. Run on a clean `main`. When npm already has that
 # version, or a higher one, it raises it to the next free one through a pull request and publishes that.
-# An Unreleased section left above the dated, unpublished version is folded into it the same way.
+# An Unreleased section left above the dated, unpublished version is folded into it the same way. The changes/
+# fragments are collected into the version's section in the release's pull request.
 #
 #   bin/release           # publishes from GitHub Actions (.github/workflows/release.yml)
 #   bin/release --local   # publishes from this machine: NPM_TOKEN if exported, else the keyring
@@ -119,6 +120,7 @@ rerun_if_changed "$@"
 latest=$(npm view "$package" version --prefer-online 2>/dev/null || true)
 versions=$(npm view "$package" versions --json --prefer-online 2>/dev/null || true)
 next=$(node scripts/next-version.mjs "$version" "$latest" "$versions")
+fragments=$(find changes -maxdepth 1 -type f -name '*.md' ! -name README.md 2>/dev/null | wc -l)
 if [ "$next" != "$version" ]; then
   taken=""
   if published; then taken=1; why="$version is already on npm"; else why="$version is not above npm's latest $latest"; fi
@@ -131,10 +133,18 @@ if [ "$next" != "$version" ]; then
     const today = new Date().toLocaleDateString("en-GB").replaceAll("/", ".")
     if (taken) swap("CHANGELOG.md", "\n## Unreleased\n", `\n## Unreleased\n\n## ${n} — ${today}\n`)
     else swap("CHANGELOG.md", `\n## ${o} — `, `\n## ${n} — `)' "$version" "$next" "$taken"
-  body="bin/release: $why. Only the number changes: package.json and the CHANGELOG heading."
+  node scripts/changelog-fragments.ts "$next"
+  body="bin/release: $why. Only the number changes: package.json, the CHANGELOG heading, and the changes/ fragments
+collected under it."
   land "release/$next" "chore: release $next" "$body"
   rerun_if_changed "$@"
   version=$next
+elif [ "$fragments" -gt 0 ]; then
+  # The version was dated by hand; fragments merged since then still belong to it.
+  node scripts/changelog-fragments.ts "$version"
+  land "release/$version-changes" "chore(changelog): collect changes/ into $version" \
+    "bin/release: the changes/ fragments merged since $version was dated, collected into its section."
+  rerun_if_changed "$@"
 fi
 if published; then
   echo "$version is already on npm — raise the version first" >&2

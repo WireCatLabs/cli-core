@@ -9,12 +9,62 @@ shape of this file.
 
 ### Added
 
-- **Runs say what they wrote to the store.** Each outermost write transaction that commits logs one `store.write`
-  event per table and change, `{kind: "store", table, op, n}`: counts only, read from the statement text and SQLite's
-  change count, so every writer is covered and no CLI passes anything. A success that wrote the store is kept for
-  `keep_store_runs_for_days` (default 3) even where `record: false`, Desktop or a server would not keep it
-  (`kept_because_store`). Past 100 in a run, they are summed by table and change into one event each at its end; the
-  run lists its `tables`. `search runs kind:store table:emails` finds them.
+- **`identity_link` proposals: "these two are one person", which only the owner decides.** `people.proposeLink` opens
+  one, at most one open per pair of people, and refuses a pair the owner separated (`identity.separated`) or rejected
+  before (`identity.rejected`). `people.decideLink` and the proposal registry decide it: an agent is refused whatever
+  `agent_decisions` says (`proposal.owner-only`), and a confirm after the owner took an identity off either person is
+  refused with `identity.stale`. A merge keeps open proposals up to date: one whose two people became one, or a second
+  for the same pair, is deleted, and a live one takes the people and identities it names now. The generic
+  `proposedActions` paths refuse to stage or approve the kind. `people.linkProposals({ person, status, limit, offset
+  })` reads them, newest first, naming the people as they are now, with `hasMore`.
+- **`people.scanMatches({ full })`, one pass of the people matcher.** The same email address joins people in every
+  scope. A phone number two people share joins them when a messenger (telegram, max, whatsapp) holds it and no
+  proposal ever named the pair, and otherwise opens an `identity_link` proposal; so do three to six people on one
+  number or one address, and a meeting guest's typed address. More than six is a shared line or mailbox and proposes
+  no one. It never acts over the owner's separation or rejection and records its merges as the rule's. It reads
+  outside any transaction and takes the write lock only per group; after the first pass it looks only at identities
+  changed since the last one, unless `full`. On 51,000 identities and 1,100 proposals a first pass takes 1.3–3.7 s and
+  a repeat 0.15–0.6 s, where a repeat took 20 s in one transaction before.
+- **Quoted evidence and owner-only batches in evidence findings.** A finding's evidence may carry `quote`: staging
+  refuses it unless the words are in the cited text (`finding.quote-not-found`), and an accepted fact or task keeps
+  the quote on its evidence link. `evidenceFindings.stage(input, agent, { ownerOnly: true })` stages a batch only the
+  owner decides, even with `agent_decisions` on, and the batch says `ownerOnly`. `evidenceFindings.citable(ref)` reads
+  a record with the fingerprint to cite it, and `./store` exports `quoteKept`, the quote check itself. Findings without
+  a quote keep their fingerprints.
+
+### Changed — may break callers
+
+- **`contacts link` and a calendar's `people link` from an agent's terminal open an `identity_link` proposal instead
+  of linking, and an agent's `contacts unlink` is refused (`identity.owner-only`).** The run is attributed as
+  `mentions confirm` attributes it (`actorOf`: `AI_AGENT`, `CLAUDECODE` and the other agents' variables, or an MCP
+  server's run). An agent's link needs `--reason` (`proposal.reason-required`), answers with the person unchanged and
+  the proposal's id in the new `proposal` field of `linked_person` and `calendar_linked_person`, and an agent's
+  `<person> me` is refused (`identity.owner-only`). The owner's run links and unlinks at once, as before; no flag makes
+  an agent's run the owner's. `linkPeople(store, account, person, other, { by, reason?, method? })`,
+  `PeopleService.link` and `PeopleService.unlink(person, { by })` take who runs it, with no default: pass
+  `actorOf(command)`, or `"owner"` only from a path that established the owner runs it.
+- **The meeting context service writes an agent's `memory.add` and `fact.add` as proposals.** It stored both as the
+  owner's, the memory confirmed and the fact accepted, whoever ran it. With `author: "agent"`, or no `author`, the
+  memory waits as `proposed` and the fact as `proposed`, as the memory and fact stores keep every agent's; pass
+  `author: "owner"` when the owner runs the command.
+- **An agent's mention confirm or meeting participant association no longer moves an identity.** Unless `by` is
+  `"owner"`, `confirmMention` to a person and `linkParticipantPerson` open an `identity_link` proposal and return its
+  id as `proposal`, so an owner's link is never replaced. Such a mention has the new status `proposed` (in
+  `MENTION_STATUSES`, `status:` and the `mention_decision` answer) until the owner decides: `linked` on confirm,
+  `found` again on reject. The association's `changed` is `false` and its `person_uid` the participant's current
+  person.
+- **`createMeetingContextService(store, account, { author })` takes who runs it: `"owner"` or `"agent"`.** It linked
+  every participant as the owner's; an agent's `person.link` now opens a proposal. Left out, `author` is `"agent"`, so
+  a caller that does not say who runs it no longer moves an identity as the owner: pass `"owner"` when the owner runs
+  the command (`actorOf`).
+- **`mergePerson` keeps the owner's person whichever side it is on, and gives the person that stays.**
+  `linkIdentities`, the same-address join at import, a confirmed proposal and the scan could each move every identity
+  of the owner onto a contact; the owner's uid now always stays.
+- **One email address pattern: a local part, `@` and a dotted domain (`isEmailAddress`).** The same-address join at
+  import took an address with no dot in its domain; it no longer does.
+- **At import, an address two or more other people have joins no one, and neither does a pair the owner rejected.**
+  The whole batch of `savePeople` is noted before any join, so one `office@` on many contacts stays shared; the scan
+  proposes those people instead.
 
 ### Fixed
 

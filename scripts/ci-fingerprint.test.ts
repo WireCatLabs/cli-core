@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process"
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
@@ -49,6 +49,17 @@ describe("ci-fingerprint.sh", () => {
     const before = fingerprint()
     edit("package.json", (text) => text.replace('"version": "1.2.3"', '"version": "1.3.0"'))
     edit("CHANGELOG.md", (text) => text.replace("## Unreleased", "## 1.3.0 — 2026-10-26"))
+    expect(fingerprint()).toBe(before)
+  })
+
+  it("stays the same when the release collects and deletes the changelog fragments", () => {
+    mkdirSync(join(repo, "changes"))
+    writeFileSync(join(repo, "changes", "fix-a.md"), "### Fixed\n\n- a fix\n")
+    git("add", ".")
+    git("commit", "-qm", "fragment")
+    const before = fingerprint()
+    git("rm", "-q", "changes/fix-a.md")
+    edit("CHANGELOG.md", (text) => text.replace("## Unreleased", "## 1.3.0 — 2026-10-26\n\n### Fixed\n\n- a fix"))
     expect(fingerprint()).toBe(before)
   })
 

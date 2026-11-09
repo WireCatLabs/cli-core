@@ -3640,6 +3640,78 @@ describe("the shared read commands", () => {
     expect(Object.keys(JSON.parse(projected.stdout[0] ?? "null").item)).toEqual(["uid"])
   })
 
+  it("contacts link from an agent's terminal opens a proposal and its unlink is refused; the owner's links at once", async () => {
+    const root = mkdtempSync(join(tmpdir(), "contacts-link-"))
+    const env = {
+      CHAT_PROFILE: "default",
+      CHAT_STATE_DIR: join(root, "state"),
+      CHAT_CONFIG_DIR: join(root, "config"),
+      MESSAGING_STORE: join(root, "m.db"),
+    }
+    const agent = { ...env, AI_AGENT: "claude-code" }
+    rememberAccount(app, "default", "500", env)
+    const store = await openStore({ path: env.MESSAGING_STORE })
+    const at = "2026-09-02T10:00:00.000Z"
+    const dialog = { kind: "dialog" as const, unreadCount: 0, lastMessageAt: at, participantsCount: null }
+    for (const [account, chat, person] of [
+      [{ provider: "telegram", account: "500" }, "11", "11"],
+      [{ provider: "max", account: "900" }, "m1", "m5"],
+      [{ provider: "max", account: "900" }, "m2", "m6"],
+    ] as const) {
+      await store.chats.saveChats(account, [{ ...dialog, id: chat, title: "Ana" }])
+      await store.roster.saveMembers(account, chat, [person, account.account])
+    }
+    await store.close()
+    const never = async (): Promise<MessengerAdapter> => {
+      throw new Error("contacts link must never connect")
+    }
+    const link = (argv: string[], as: NodeJS.ProcessEnv) =>
+      call(["contacts", "link", ...argv, "--offline", "--json"], never, as, {}, { provider: "telegram" })
+    const providersOf = (result: { stdout: string[] }) =>
+      JSON.parse(result.stdout[0] ?? "null").item.identities.map(
+        (one: { provider: string; id: string }) => `${one.provider}:${one.id}`,
+      )
+
+    const unexplained = await link(["11", "max:m5"], agent)
+    expect(unexplained.code).toBe(2)
+    expect(unexplained.stderr.join(" ")).toContain("proposal.reason-required")
+    const itself = await link(["max:m5", "me", "--reason", "it is me"], agent)
+    expect(itself.code).not.toBe(0)
+    expect(itself.stderr.join(" ")).toContain("identity.owner-only")
+
+    const proposed = await link(["11", "max:m5", "--reason", "the same phone in both"], agent)
+    expect(proposed.code, proposed.stderr.join(" ")).toBe(0)
+    const answer = JSON.parse(proposed.stdout[0] ?? "null").item
+    expect(v.safeParse(ENTITIES.linked_person, answer).success).toBe(true)
+    expect(answer.proposal).toEqual(expect.any(String))
+    expect(providersOf(proposed)).toEqual(["telegram:11"])
+    expect((await link(["11", "max:m5", "--reason", "again"], agent)).stdout[0]).toContain(answer.proposal)
+
+    const owned = await link(["11", "max:m6"], env)
+    expect(owned.code, owned.stderr.join(" ")).toBe(0)
+    expect(JSON.parse(owned.stdout[0] ?? "null").item).not.toHaveProperty("proposal")
+    expect(providersOf(owned)).toEqual(["max:m6", "telegram:11"])
+    const unlinked = await call(
+      ["contacts", "unlink", "max:m6", "--offline", "--json"],
+      never,
+      agent,
+      {},
+      {
+        provider: "telegram",
+      },
+    )
+    expect(unlinked.code).not.toBe(0)
+    expect(unlinked.stderr.join(" ")).toContain("identity.owner-only")
+    expect(providersOf(await link(["11", "max:m6"], env))).toEqual(["max:m6", "telegram:11"])
+
+    const reopened = await openStore({ path: env.MESSAGING_STORE })
+    const proposals = await reopened.proposedActions.list({ kinds: ["identity_link"] })
+    expect(proposals).toMatchObject([
+      { id: answer.proposal, status: "proposed", reason: "the same phone in both", payload: { signal: "agent" } },
+    ])
+    await reopened.close()
+  })
+
   it("contacts events lists what a person took part in, newest first, within a time range and scope", async () => {
     const root = mkdtempSync(join(tmpdir(), "person-timeline-"))
     const env = {

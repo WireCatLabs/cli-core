@@ -1,9 +1,9 @@
 import { CliError } from "@wirecat/cli-base"
 import type { MeetingContextStore, ParticipantPersonInput } from "../../meetings/index.js"
+import { linkOrPropose } from "./identity-proposals.js"
 import { checkMeetingCancelled } from "./meeting-operation.js"
 import { positiveReadInteger } from "./meeting-reads.js"
 import type { StoreContext } from "./open.js"
-import { linkIdentityToPerson } from "./person-links.js"
 import { read, write } from "./transaction.js"
 
 const missing = (): never => {
@@ -123,12 +123,14 @@ export function meetingContextLinksOver(context: StoreContext): MeetingContextSt
               .get(target, JSON.stringify(selected))
           )
             return missing()
-          const changed = found.personUid !== input.personUid
-          if (changed)
-            linkIdentityToPerson({ ...context, now: () => input.now }, found.identityId, target, {
-              method: "manual",
-              by: input.author,
-            })
+          const moving = found.personUid !== input.personUid
+          const proposal = moving
+            ? linkOrPropose({ ...context, now: () => input.now }, found.identityId, target, {
+                method: "manual",
+                by: input.author,
+              })
+            : undefined
+          const changed = moving && proposal === undefined
           database
             .prepare(
               "INSERT INTO account_identities(account_id,identity_id,created_at,updated_at) VALUES(?,?,?,?) ON CONFLICT(account_id,identity_id) DO NOTHING",
@@ -138,9 +140,10 @@ export function meetingContextLinksOver(context: StoreContext): MeetingContextSt
           return {
             meetingId: input.meetingId,
             participantId: input.participantId,
-            personUid: input.personUid,
+            personUid: proposal === undefined ? input.personUid : (found.personUid ?? input.personUid),
             previousPersonUid: found.personUid,
             changed,
+            ...(proposal === undefined ? {} : { proposal }),
           }
         },
         { beforeCommit: () => checkMeetingCancelled(input.signal) },
