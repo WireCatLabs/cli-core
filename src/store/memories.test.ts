@@ -10,8 +10,11 @@ const live: MessageStore[] = []
 afterEach(async () => {
   for (const store of live.splice(0)) await store.close()
 })
-const open = async (path = join(mkdtempSync(join(tmpdir(), "memories-")), "store.db")) => {
-  const store = await openStore({ path })
+const open = async (path = join(mkdtempSync(join(tmpdir(), "memories-")), "store.db"), agentDecisions = false) => {
+  const store = await openStore({
+    path,
+    ...(agentDecisions ? { decisions: { agentDecisions, ruleProposalsOwnerOnly: true } } : {}),
+  })
   live.push(store)
   return store
 }
@@ -153,8 +156,8 @@ describe("a memory's project", () => {
 })
 
 describe("correcting a memory", () => {
-  const corrected = async () => {
-    const store = await open()
+  const corrected = async (path?: string, agentDecisions = false) => {
+    const store = await open(path, agentDecisions)
     const note = await store.notes.addNote({ text: "Kai Sample moved the call to Thursdays" })
     const input = { kind: "preference" as const, scope: "work" as const, evidence: [note.ref] }
     const old = await store.memories.add({
@@ -214,6 +217,74 @@ describe("correcting a memory", () => {
     await expect(
       store.memories.add({ ...input, body: "x", author: "owner", status: "confirmed", supersedes: old.ref }),
     ).rejects.toMatchObject(twice)
+  })
+
+  it("lets the owner confirm a correction while a rival proposal only had its sources verified", async () => {
+    const { store, input, old, proposal } = await corrected()
+    const rival = await store.memories.add({
+      ...input,
+      body: "Kai Sample prefers calls",
+      author: agent,
+      supersedes: old.ref,
+    })
+    const review = await store.knowledge.challenge(rival.ref, { evidence: input.evidence, reason: "check", by: agent })
+    await store.knowledge.decideSourceReview(review.id, { confirm: true, by: "owner" })
+    expect(await store.memories.get(rival.ref)).toMatchObject({
+      status: "proposed",
+      lastVerifiedAt: expect.any(String),
+    })
+    expect(await store.memories.confirm(proposal.ref, "owner")).toMatchObject({ status: "confirmed" })
+    expect(await store.memories.get(old.ref)).toMatchObject({ status: "superseded" })
+  })
+
+  it("refuses a queued proposal once a confirmed rival retired the memory, even after that rival went stale", async () => {
+    const { store, input, old, proposal } = await corrected()
+    const rival = await store.memories.add({
+      ...input,
+      body: "Kai Sample prefers calls",
+      author: "owner",
+      status: "confirmed",
+      supersedes: old.ref,
+    })
+    await store.memories.markStale(rival.ref, "owner")
+    await expect(store.memories.confirm(proposal.ref, "owner")).rejects.toMatchObject({
+      details: { reason: "memory.already-superseded" },
+    })
+    expect(await store.memories.get(proposal.ref)).toMatchObject({ status: "proposed" })
+  })
+
+  it("refuses a queued proposal once a confirmed rival retired the memory, even after that rival was corrected", async () => {
+    const { store, input, old, proposal } = await corrected()
+    const rival = await store.memories.add({
+      ...input,
+      body: "Kai Sample prefers calls",
+      author: "owner",
+      status: "confirmed",
+      supersedes: old.ref,
+    })
+    await store.memories.add({
+      ...input,
+      body: "Kai Sample prefers Tuesday calls",
+      author: "owner",
+      status: "confirmed",
+      supersedes: rival.ref,
+    })
+    expect(await store.memories.get(rival.ref)).toMatchObject({ status: "superseded" })
+    await expect(store.memories.confirm(proposal.ref, "owner")).rejects.toMatchObject({
+      details: { reason: "memory.already-superseded" },
+    })
+  })
+
+  it("leaves confirming a correction of an already superseded memory to the owner", async () => {
+    const path = join(mkdtempSync(join(tmpdir(), "memories-")), "store.db")
+    const { store, old, proposal } = await corrected(path, true)
+    await sql(path, `UPDATE memories SET status = 'superseded' WHERE id = ${old.id}`)
+    await expect(
+      store.memories.confirm(proposal.ref, { bot: "other-bot", reason: "looks right" }),
+    ).rejects.toMatchObject({
+      code: "permission_error",
+    })
+    expect(await store.memories.confirm(proposal.ref, "owner")).toMatchObject({ status: "confirmed" })
   })
 
   it("by the owner directly retires the old memory at once", async () => {

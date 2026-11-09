@@ -165,7 +165,7 @@ const OTHERS: Entry[] = [
   [
     "source.needs-sign-in",
     "authentication_error",
-    "the page asks for a sign-in; a private Google document is read through Drive",
+    "the page asks for a sign-in; add a private Google document with drive documents add <url> --profiles <names|all>",
   ],
   validation("source.too-large", "the source is larger than one read takes"),
   validation("source.unsupported", "no reader takes this kind of source"),

@@ -289,7 +289,8 @@ const READERS = {
   })),
   order: byId("order", "orders", () => ({
     title:
-      "json_object('id', x.id, 'number', x.number, 'supplierName', x.supplier_name, 'total', x.total, " +
+      "json_object('id', x.id, 'number', x.number, 'supplierName', x.supplier_name, 'direction', x.direction, " +
+      `'customerName', ${subjectName("x.customer_type", "x.customer_id")}, 'total', x.total, ` +
       "'currency', x.currency, 'status', x.status, 'review', x.review)",
     holder: "(SELECT name FROM projects WHERE id = x.project_id)",
     at: "x.created_at",

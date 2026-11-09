@@ -341,6 +341,28 @@ shape of this file.
 - **`account remove` is in the messenger parity manifest** (`parity.json`), with `--keep-data`, `--delete-data`
   and `--dry-run`, so tg, max and wa can adopt it without failing `parity:check`.
 
+### Fixed
+
+- **A proposal whose sources the owner verified no longer blocks confirming another correction.** Confirming a
+  correction refused with `memory.already-superseded` when a rival correction of the same memory was still proposed but
+  the owner had confirmed its source review, since that sets `lastVerifiedAt`. A rival now counts as having retired the
+  memory once it left `proposed`, so one confirmed and later marked stale or corrected still refuses a queued
+  proposal. Confirming a correction of a memory that is already superseded is the owner's alone.
+
+### Fixed
+
+- **A vCard's phone region is read in either case.** `envelopeOfVcard` and `ingestVcard` with `region: "GB"` left a
+  national number unmatched, as only `gb` worked; they now lowercase it as the envelope's `options.phone_region` does.
+- **A sale's title names its customer.** An order with `direction: "sale"` was titled by its supplier, the owner
+  (`Order O-55 · owner, …`); its title and ref summary now read `Order O-55 · to <customer>, …`, and its review row's
+  `object` is the customer. A purchase still names its supplier.
+
+### Fixed
+
+- **A private Google document's refusal names the drive command that adds it.** `source.needs-sign-in` now says
+  `drive documents add <url> --profiles <names|all>` instead of only "through Drive". The reason and its code are
+  unchanged.
+
 ## 0.614.0 — 08.11.2026
 
 ### Added

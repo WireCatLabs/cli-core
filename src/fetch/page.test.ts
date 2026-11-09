@@ -171,7 +171,7 @@ describe("fetchPage refuses", () => {
     const forbidden = site(() => answer(403))
     await expect(
       fetchPage("https://drive.google.com/file/d/1AbCdEfGhIjKlMnOp/view", forbidden.options),
-    ).rejects.toThrow(/Drive/)
+    ).rejects.toThrow(/drive documents add <url> --profiles <names\|all>/)
     const elsewhere = site(() => answer(403))
     await expect(fetchPage("https://example.com/", elsewhere.options)).rejects.toEqual(
       refusal("source.url-status", { status: 403 }),

@@ -140,12 +140,16 @@ export const orderOperationsOver = (context: StoreContext): OrderOperations => {
   const moneyLines = moneyLinesOver(context)
 
   const orderOf = (row: Row): Order => {
+    const customer = partyOf(row.customer_type, row.customer_id) as Party
+    const direction = row.direction as OrderDirection
     const currency = row.currency == null ? null : String(row.currency)
     const total = row.total == null || currency === null ? null : Number(row.total)
     const fields = {
       id: Number(row.id),
       number: row.number == null ? null : String(row.number),
       supplierName: String(row.supplier_name),
+      direction,
+      customerName: customer?.name ?? null,
       total,
       currency,
       status: row.status as OrderStatus,
@@ -155,7 +159,7 @@ export const orderOperationsOver = (context: StoreContext): OrderOperations => {
       id: String(row.id),
       ref: `order:${row.id}`,
       title: orderTitle(fields),
-      customer: partyOf(row.customer_type, row.customer_id) as Party,
+      customer,
       purpose: row.purpose as OrderPurpose,
       supplier: partyOf(row.supplier_type, row.supplier_id),
       supplierName: fields.supplierName,
@@ -168,7 +172,7 @@ export const orderOperationsOver = (context: StoreContext): OrderOperations => {
       invoice: row.invoice_id == null ? null : `invoice:${row.invoice_id}`,
       payment: row.payment_id == null ? null : `payment:${row.payment_id}`,
       sourceUrl: row.source_url == null ? null : String(row.source_url),
-      direction: row.direction as OrderDirection,
+      direction,
       contract: row.contract_id == null ? null : `contract:${row.contract_id}`,
       deal: row.deal_id == null ? null : `deal:${row.deal_id}`,
       ...reviewedOf(row, "order"),
