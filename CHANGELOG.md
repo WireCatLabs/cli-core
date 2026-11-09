@@ -5,7 +5,7 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
-## Unreleased
+## 0.620.0 — 09.11.2026
 
 ### Added
 
@@ -15,17 +15,6 @@ shape of this file.
   when neither is given. A bot adapter gets `buttons` (`BotButton[][]`; `[]` means none) in the options of `send` and
   `edit`; one that cannot draw buttons must refuse them. The bot MCP tools gain `button` (one button) and `no_buttons`.
 - **`Button.data`**, what a callback button sends the bot, for an adapter that can read it. It is never printed.
-
-### Security
-
-- **`messages press` refuses a callback button whose data starts with `wcr`**, the prefix of review decisions, with
-  `permission_error` and reason `press.owner-hand-only`, so an agent with the owner's account cannot press a decision
-  button. It needs the adapter to fill `Button.data`; a button without data is pressed as before.
-
-## 0.620.0 — 09.11.2026
-
-### Added
-
 - **`search all` moves up what is dated inside the period a question names.** "What did we decide in March?", "June
   22", "last week", «в прошлом месяце»: each source is read to 100 hits, and a hit dated inside the period gains 0.5 over
   its place (1 - rank/100) before the page is cut. On LifeBench, over words and meaning merged, recall@10 went from 0.44
@@ -54,6 +43,12 @@ shape of this file.
 - **`templates edit` and `templates preview` take `--file -` to read the template from stdin.** It matches
   `digest brief edit --file -`, and lets a caller on Windows, where `/dev/stdin` does not exist, pass a template
   without a temporary file.
+
+### Security
+
+- **`messages press` refuses a callback button whose data starts with `wcr`**, the prefix of review decisions, with
+  `permission_error` and reason `press.owner-hand-only`, so an agent with the owner's account cannot press a decision
+  button. It needs the adapter to fill `Button.data`; a button without data is pressed as before.
 
 ### Changed — may break callers
 
