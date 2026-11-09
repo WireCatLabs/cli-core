@@ -1,6 +1,6 @@
 # AI providers for search
 
-Search uses the local embedding model chosen with `models set`, `e5-small` until one is chosen (see
+Search uses the local embedding model chosen with `models set`, EmbeddingGemma until one is chosen (`e5-small` stays available; see
 [Choosing the local embedding model](#choosing-the-local-embedding-model)). Conversation analysis defaults to your own agent using the linking skill; ordinary `conversations links rebuild` uses stored messages and local rules. Configuration alone never starts analysis.
 
 These shared SDK settings/options reach MAX and Telegram at their next cli-core dependency bump.

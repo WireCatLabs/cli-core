@@ -442,7 +442,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--meeting-project-candidates` |  | switch | expose read-only project suggestions from selected meeting evidence and the global project vocabulary |  |
 | `--meeting-preparation` |  | switch | expose meeting preparation tools, including their remote schedule reads |  |
 | `--dry-run` |  | switch | judge and plan; do nothing |  |
-| `--accept-terms` |  | switch | accept the model's licence terms |  |
+| `--accept-terms` |  | switch | no longer needed; kept so older scripts still run |  |
 | `--as-owner` |  | switch | record the action as the owner's although an agent's terminal runs the tool |  |
 | `--from-app` |  | switch | the owner acted in the app; its word, not a check |  |
 | `--allow-any-file` |  | switch | send a file even from a credential folder or the tool's own folders |  |
