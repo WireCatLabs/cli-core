@@ -553,7 +553,8 @@ export const searchAll = async (
       now: request.now ?? Date.now(),
       ...(command === undefined ? {} : { command }),
     }
-    const done = await reorderHarder(request.text, ordered, { ...asking, laterPage: offset > 0 })
+    // The model reads the question as typed, not escaped for the query parser.
+    const done = await reorderHarder(asked.text, ordered, { ...asking, laterPage: offset > 0 })
     ordered = done.items
     harder = done.harder
   }

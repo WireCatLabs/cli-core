@@ -172,24 +172,31 @@ estimate are known for `openai/gpt-4o-mini` and `anthropic/claude-haiku-5-5`; an
 
 ## Search harder: a hosted model reorders `search all` (off by default)
 
-`searchAll` with `harder` (memo's `search all --harder`) sends the question and the first 30 merged hits to
-Anthropic (`api.anthropic.com`, model `claude-haiku-5-5` unless the owner chose another). Each hit goes as its number,
-date, title and at most 400 characters of the excerpt search already shows, as untrusted data; the model answers with
-the numbers of the hits that answer the question, best first, and nothing else. Those come first, then the rest of
-the 30 in their plain order, then everything below. Only the first page is reordered.
+`searchAll` with `harder` (memo's `search all --harder`) sends the question and the first 30 merged hits to the
+provider and model the owner chose: Anthropic (`api.anthropic.com`, `claude-haiku-5-5` unless he names another),
+OpenAI (`api.openai.com`, `gpt-4o-mini`) or an OpenAI-compatible API at a base URL he gives (OpenRouter and the like),
+where he must name the model. Each hit goes as its number, date, title and at most 400 characters of the excerpt
+search already shows, as untrusted data; the model answers with the numbers of the hits that answer the question, best
+first, and nothing else. Those come first, then the rest of the 30 in their plain order, then everything below. Only
+the first page is reordered.
 
 What gets sent, and when:
 
 - **Nothing without `harder`.** A search that does not ask reads neither the consent nor the key.
 - **Nothing without the owner's consent**: the `search_harder` section of the shared settings file (`provider`,
-  `model`, `consented_at`), separate from enrichment's, because it sends other text at another time.
-- **Nothing without a key**, found as enrichment finds it (`models keys set anthropic`, then `ANTHROPIC_API_KEY` and
-  the tool's own variable, then the tool's entry named `anthropic`).
+  `model`, optional `base_url`, `consented_at`), separate from enrichment's, because it sends other text at another
+  time. When enrichment has a provider and this has none, `show` proposes enrichment's (`proposed_from:
+  "enrichment"`); the consent is still given here, with `--yes`.
+- **Nothing without a key** for a public API, found as enrichment finds it (`models keys set <provider>`, then
+  `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` and the tool's own variable, then the tool's entry named after the
+  provider). An API at a base URL may need none.
 
 ```sh
-memo models search-consents show --json            # allowed or not, model, whether the key is found
+memo models search-consents show --json            # allowed or not, provider, model, endpoint, whether the key is found
 memo models search-consents set anthropic          # what a --harder search sends; changes nothing
 memo models search-consents set anthropic --yes    # allowed; each search still has to ask with --harder
+memo models search-consents set openai --yes       # gpt-4o-mini
+memo models search-consents set openai --base-url https://openrouter.ai/api/v1 --model deepseek/deepseek-chat --yes
 memo models search-consents revoke
 memo models keys set anthropic < key.txt
 ```
@@ -197,14 +204,24 @@ memo models keys set anthropic < key.txt
 The search never fails because of it. Without consent or a key, with a settings section it cannot read, after 5 s with
 no answer, or on any provider error, the plain order stays and the answer's `harder` field says why (`applied: false`,
 a `reason` and a `reason_id`: `harder.no-consent`, `no-key`, `bad-setting`, `later-page`, `too-few`, `timeout`,
-`key-rejected`, `unreachable`, `rate-limited`, `bad-reply`, `error`), with `sent` (hits sent, 0 when nothing left),
-`cost_usd` and `ms`.
+`key-rejected`, `unreachable`, `rate-limited`, `bad-reply`, `error`), with `provider`, `model`, `endpoint`, `sent`
+(hits sent, 0 when nothing left), `cost_usd` (`null` for a model with no known price) and `ms`.
 
-The request is the cli-testing search lab's: its prompt, the JSON list of record numbers as structured output,
-thinking off, effort low. Only the records moved from the prompt into the gateway's untrusted-data message. In the lab
-the rerank ran over a first stage that already used two Haiku rewrites of the question ("stack C"), which cli-core does
-not do. Over it, the rerank lifted LifeBench recall@10 from 0.49 to 0.55 and hit@10 from 0.90 to 0.93, for about
-$0.0004 and 1 to 2 s per question. The 0.41 to 0.55 often quoted counts the rewrites too. The gain over memo's own
-ranking was not measured. No local reranker came close
+The request is the cli-testing search lab's: its prompt, and for Anthropic the JSON list of record numbers as
+structured output, thinking off, effort low. OpenAI gets its JSON mode and temperature 0; an API at a base URL gets
+neither, since not every one takes them. Both are told the JSON shape in the prompt, and an answer wrapped in a code
+block is still read. The question goes as typed.
+
+Measured over memo's own `search all` (EmbeddingGemma vectors, synthetic data, 9 November 2026):
+
+| | v3 reworded, 17: recall@10 / hit@10 | LifeBench sample, 59: recall@10 / hit@10 | median ms | $ per question |
+| --- | ---: | ---: | ---: | ---: |
+| plain | 0.79 / 0.82 | 0.32 / 0.78 | 1,800–2,000 | 0 |
+| `claude-haiku-5-5` | 0.88 / 0.88 | 0.39 / 0.88 | 3,300–3,900 | 0.0003 |
+| `gpt-4o-mini` | 0.88 / 0.88 | 0.37 / 0.85 | 3,700–4,000 | 0.0003 |
+| `deepseek/deepseek-chat` (OpenRouter) | 0.88 / 0.88 | 0.37 / 0.86 | 3,900–4,200 | 0.0006 |
+
+The delay is the whole search on a loaded machine, not the call alone. Rewriting the question with the same model before
+the rerank was tried too and lowered LifeBench recall@10 (0.39 to 0.37), so it is not done
 ([search lab](https://github.com/WireCatLabs/cli-testing/tree/main/performance/agents/knowledge-graph-memory/search-lab)).
 An agent's shell cannot give the consent, and over MCP `models search-consents set` needs `mcp.authority`.

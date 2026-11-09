@@ -611,6 +611,7 @@ export {
   validateCatchUp,
 } from "./search-catchup.js"
 export {
+  HARDER_MODELS,
   HARDER_REASON_IDS,
   type HarderOptions,
   type HarderReasonId,

@@ -103,12 +103,12 @@ describe("search all --harder", () => {
     expect(model.requests).toEqual([])
     expect(titles(found)).toEqual(plain)
     expect(found.harder).toMatchObject({ applied: false, sent: 0, reason_id: "harder.no-consent" })
-    expect(found.harder?.reason).toContain("models search-consents set anthropic --yes")
+    expect(found.harder?.reason).toContain("models search-consents set <provider> --yes")
   })
 
   it("**a broken consent setting keeps the plain order** and names the file, never failing the search", async () => {
     const { env, store } = await seeded()
-    writeSharedSection(enrichmentSettingPath(env), "search_harder", { provider: "openai" })
+    writeSharedSection(enrichmentSettingPath(env), "search_harder", { provider: "mistral" })
     const model = fakeModel('{"records":[2]}')
     const found = await search(store, env, model.harder)
     expect(model.requests).toEqual([])
@@ -139,6 +139,21 @@ describe("search all --harder", () => {
     expect(request?.prompt).toContain("Question: deposit")
     expect(request?.data).toContain(`[2] (2026-11-07) ${third}`)
     expect(request?.options).toMatchObject({ thinking: { type: "disabled" }, output_config: { effort: "low" } })
+  })
+
+  it("**sends the question as typed**, not escaped for the query parser, with `$&` kept as written", async () => {
+    const { env, store } = await seeded()
+    consent(env)
+    const model = fakeModel('{"records":[]}')
+    await searchAll(store, MAIL, {
+      text: "which deposit is due, $&?",
+      limit: 3,
+      only: ["mail"],
+      now: NOW,
+      env,
+      harder: model.harder,
+    })
+    expect(model.requests[0]?.prompt).toContain("Question: which deposit is due, $&?\n")
   })
 
   it.each([
@@ -172,5 +187,62 @@ describe("search all --harder", () => {
     const found = await search(store, env, model.harder, 1)
     expect(model.requests).toEqual([])
     expect(found.harder).toMatchObject({ applied: false, reason_id: "harder.later-page" })
+  })
+
+  describe("with another provider", () => {
+    /** An OpenAI-shaped adapter: the gateway checks its options as it would the real one's. */
+    const openaiModel = (reply: string) => {
+      const requests: { request: ModelRequest; options: unknown; baseUrl: string }[] = []
+      const adapter: ModelAdapter = {
+        baseUrl: "https://api.openai.com/v1",
+        validate: (options) => {
+          if (options && ("thinking" in options || "output_config" in options)) throw new Error("not an OpenAI option")
+          return options
+        },
+        complete: async (target, request, options) => {
+          requests.push({ request, options, baseUrl: target.baseUrl })
+          return { text: reply, tokens: 1_000, usage: { input: 900, output: 100 } }
+        },
+      }
+      return { requests, harder: { adapters: { openai: adapter }, key: () => "test-key" } satisfies HarderOptions }
+    }
+
+    it("**OpenAI gets its own JSON option and the shape in the prompt**, and a fenced answer is still read", async () => {
+      const { env, store } = await seeded()
+      writeHarderSetting(env, { provider: "openai", model: "gpt-4o-mini", consented_at: "2026-11-09T10:00:00.000Z" })
+      const [first, second, third] = titles(await search(store, env))
+      const model = openaiModel('```json\n{"records": [2]}\n```')
+      const found = await search(store, env, model.harder)
+      expect(titles(found)).toEqual([third, first, second])
+      const [call] = model.requests
+      expect(call?.options).toEqual({ temperature: 0, response_format: { type: "json_object" } })
+      expect(call?.request.prompt).toContain('{"records": [numbers]}')
+      expect(found.harder).toMatchObject({
+        applied: true,
+        provider: "openai",
+        model: "gpt-4o-mini",
+        endpoint: "https://api.openai.com/v1",
+        cost_usd: 0.000195,
+      })
+    })
+
+    it("**an OpenAI-compatible API gets no options** and its unknown price is null", async () => {
+      const { env, store } = await seeded()
+      writeHarderSetting(env, {
+        provider: "openai",
+        model: "deepseek/deepseek-chat",
+        base_url: "https://openrouter.ai/api/v1",
+        consented_at: "2026-11-09T10:00:00.000Z",
+      })
+      const model = openaiModel('{"records": [2]}')
+      const found = await search(store, env, model.harder)
+      expect(model.requests[0]).toMatchObject({ options: {}, baseUrl: "https://openrouter.ai/api/v1" })
+      expect(found.harder).toMatchObject({
+        applied: true,
+        model: "deepseek/deepseek-chat",
+        endpoint: "https://openrouter.ai/api/v1",
+        cost_usd: null,
+      })
+    })
   })
 })
