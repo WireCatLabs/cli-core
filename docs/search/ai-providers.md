@@ -102,7 +102,7 @@ notes, mail, events and messages) and every search by meaning then uses it. A CL
 | Id | Size | On disk | Licence | Speed (chunks a second, one session) |
 |---|---|---|---|---|
 | `e5-small` (default) | small | 135 MB | MIT | about 31 |
-| `embeddinggemma` | medium | 218 MB | Gemma Terms of Use (`--accept-terms`) | about 2 |
+| `embeddinggemma` | medium | 218 MB | Gemma Terms of Use (`--accept-terms`) | about 5 |
 | `e5-large` | large | 579 MB | MIT | about 4 |
 
 `models set` refuses a model that is not downloaded and names the download. Vectors are kept per model (the

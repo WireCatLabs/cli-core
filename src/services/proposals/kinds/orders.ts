@@ -8,7 +8,8 @@ export const orderKind = (store: Pick<MessageStore, "orders">): ProposalKind =>
     type: "order",
     list: (options) => store.orders.list(options),
     get: (id) => store.orders.get(id),
-    row: (order) => reviewedRow("order", order, order.supplier?.ref ?? null),
+    row: (order) =>
+      reviewedRow("order", order, (order.direction === "sale" ? order.customer : order.supplier)?.ref ?? null),
     decide: async (id, confirm, { by, reason }) =>
       (confirm ? await store.orders.confirm(id, by, reason) : await store.orders.reject(id, by, reason)).ref,
   })

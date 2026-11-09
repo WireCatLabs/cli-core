@@ -2,7 +2,9 @@ import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, expect, it } from "vitest"
+import { proposalRegistry } from "../services/proposals/registry.js"
 import { openCache } from "./open.js"
+import { refSummariesOf } from "./sqlite/ref-summaries.js"
 import { openStore } from "./store.js"
 
 const handles: { close(): unknown }[] = []
@@ -85,6 +87,27 @@ it("totals a sale's lines, copies the product's name and price, and makes the ow
       f.store.orders.add({ by: "owner", direction: "sale", purpose: "business", currency: "RUB", total: "1.00" }),
     ),
   ).toBe("order.field")
+})
+
+it("titles a sale by its customer, not by the owner who supplies it, in the store, a ref summary and the review", async () => {
+  const f = await fixture()
+  const order = await f.store.orders.add({
+    by: claude,
+    direction: "sale",
+    purpose: "business",
+    customer: f.client.ref,
+    number: "O-55",
+    currency: "RUB",
+    total: "120000.00",
+  })
+  expect(order.title).toBe("Order O-55 · to ООО Пример, 120 000.00 RUB (placed, proposed)")
+  const cache = await openCache(f.path)
+  handles.push(cache)
+  expect(refSummariesOf(cache, [order.ref]).get(order.ref)?.title).toBe(
+    "O-55 · to ООО Пример, 120 000.00 RUB (placed, proposed)",
+  )
+  const [row] = (await proposalRegistry(f.store).list({ limit: 10, offset: 0, kinds: ["order"] })).items
+  expect(row).toMatchObject({ summary: order.title, object: f.client.ref })
 })
 
 it("keeps a line's copied price when the product's price changes, on orders and invoices alike", async () => {

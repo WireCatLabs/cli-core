@@ -87,7 +87,9 @@ export const TEXT_MODELS: TextModel[] = [
     terms: "https://ai.google.dev/gemma/terms",
     dims: 768,
     maxTokens: 2048,
-    chunksPerSecond: 2,
+    // 2026-11-08, 1,200-character chunks, 8 threads on the Ryzen AI 9 HX 470: 8.3 chunks/s against e5-small's 52.7, so
+    // 5 on the scale e5-small's 31 sets. It was 2, which held a memo sync to 39 chunks.
+    chunksPerSecond: 5,
     pooling: "sentence_embedding",
     prefix: { query: "task: search result | query: ", passage: "title: none | text: " },
     onnx: "onnx/model_q4.onnx",

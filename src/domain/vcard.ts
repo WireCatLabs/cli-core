@@ -204,8 +204,9 @@ const cardsOf = (text: string): { cards: Property[][]; issues: VcardIssue[] } =>
  */
 export const envelopeOfVcard = (
   text: string,
-  { provider, account, batchId, region }: VcardOptions,
+  { provider, account, batchId, region: given }: VcardOptions,
 ): { envelope: RecordsEnvelope; issues: VcardIssue[] } => {
+  const region = given?.toLowerCase() as PhoneCountry | undefined
   const { cards, issues } = cardsOf(text)
   const people: EnvelopeRecord[] = []
   const organizations = new Map<string, EnvelopeRecord>()
