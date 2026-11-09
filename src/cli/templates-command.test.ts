@@ -1,9 +1,10 @@
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs"
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { Command } from "commander"
 import { describe, expect, it, vi } from "vitest"
 import { defaultTemplate, prepareReport } from "../background/report/render.js"
+import { reportKeysOf } from "../background/report/stored-templates.js"
 import { openCache } from "../store/open.js"
 import { openStore, storedTemplateBodies } from "../store/store.js"
 import type { Body } from "./envelope.js"
@@ -302,6 +303,15 @@ describe("templates of one digest schedule", () => {
     } finally {
       database.close()
     }
+  })
+
+  it("keeps a removed schedule's templates reachable, and gives a schedule named after a message no key", async () => {
+    const { run, item, file, root } = withSchedule("weekly")
+    await run("edit", "report/weekly", "--channel", "text", "--file", file("w.liquid", `Week\n${shipped("text")}`))
+    rmSync(join(root, "state", "schedules", "weekly"), { recursive: true })
+    await run("reset", "report/weekly", "--channel", "text")
+    expect(item()).toMatchObject({ key: "report/weekly", changed: true })
+    expect(reportKeysOf("morning-digest", "weekly-gaps")).toEqual(["report/morning-digest"])
   })
 
   it("refuses report/<name> when no agent schedule has that name", async () => {

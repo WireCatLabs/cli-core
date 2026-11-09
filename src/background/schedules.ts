@@ -563,7 +563,8 @@ export const runSchedule = async (
   for (const file of readdirSync(runs)) if (!kept.has(stampOf(file))) rmSync(join(runs, file), { force: true })
 
   const title = `${app.command} ${schedule.name}`
-  const mode = notifyOf(schedule)
+  // Routes the owner named for this run go whatever the schedule's notify says; none named, nobody is told.
+  const mode = chosen === undefined ? notifyOf(schedule) : chosen.length ? "always" : "never"
   if (agent && exitCode === 0) {
     if (mode === "always" && !announcedByDesktop(join(folder, ".."), schedule.name)) {
       const first =

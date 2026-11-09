@@ -35,7 +35,7 @@ export const reportKeyOf = (
   const known = templateKeyOf(key)
   if (known) return known
   const schedule = key.startsWith("report/") ? key.slice("report/".length) : ""
-  return schedules.includes(schedule)
+  return schedule && schedules.includes(schedule)
     ? { key, kind: "morning-digest", about: `the ${schedule} digest`, schedule }
     : undefined
 }
@@ -46,7 +46,8 @@ export const reportKeyOf = (
  */
 export const reportKeysOf = (kind: MessageKind, schedule?: string): string[] => {
   const key = keyOfKind(kind)
-  return kind === "morning-digest" && schedule && scheduleReportKey(schedule) !== key
+  // A schedule named after another message's key (weekly-gaps) has no key of its own.
+  return kind === "morning-digest" && schedule && !templateKeyOf(scheduleReportKey(schedule))
     ? [scheduleReportKey(schedule), DIGEST_KEY]
     : [key]
 }

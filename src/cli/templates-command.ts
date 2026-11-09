@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process"
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { CliError, resolvePaths } from "@wirecat/cli-base"
+import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { type QueryRegistry, queryFieldsOf } from "@wirecat/cli-base/query"
 import { Command, Option } from "commander"
@@ -21,6 +21,7 @@ import {
   reportKeysOf,
   shippedLanguages,
   TEMPLATE_KEYS,
+  templateKeyOf,
 } from "../background/report/stored-templates.js"
 import { listSchedules } from "../background/schedules.js"
 import { template } from "../entities/index.js"
@@ -30,7 +31,7 @@ import { type MessageStore, openStore, type TemplateAddress } from "../store/sto
 import { grantsAuthority, LOCAL_READ, LOCAL_WRITE } from "./effects.js"
 import { type Body, itemOf, listOf } from "./envelope.js"
 import { type QueryWords, queryTerms, withQuery } from "./list-query.js"
-import { ownerLanguageOf } from "./schedule/schedule-command.js"
+import { ownerLanguageOf, scheduleState } from "./schedule/schedule-command.js"
 
 export interface TemplatesOptions {
   env: () => NodeJS.ProcessEnv
@@ -92,10 +93,15 @@ const addressOf = async (
   env: NodeJS.ProcessEnv,
   state: string,
 ): Promise<{ address: TemplateAddress; kind: MessageKind; channel: ReportChannel; schedule?: string }> => {
-  const known = reportKeyOf(
-    key,
-    listSchedules(state, { kind: "agent" }).map((one) => one.name),
-  )
+  const known: ReturnType<typeof reportKeyOf> =
+    templateKeyOf(key) ??
+    reportKeyOf(key, [
+      ...listSchedules(state, { kind: "agent" }).map((one) => one.name),
+      // A removed schedule's templates stay in the store, and must still be shown and reset.
+      ...(await withStore(env, (store) => store.templates.list())).flatMap((row) =>
+        row.key.startsWith("report/") ? [row.key.slice("report/".length)] : [],
+      ),
+    ])
   if (!known)
     throw new CliError(
       "validation_error",
@@ -134,8 +140,7 @@ const refuseAgent = (env: NodeJS.ProcessEnv) => {
     })
 }
 
-const stateOf = (app: AppIdentity, env: NodeJS.ProcessEnv) =>
-  resolvePaths({ appName: app.appName, prefix: app.envPrefix, env }).state
+const stateOf = (app: AppIdentity, env: NodeJS.ProcessEnv) => scheduleState({ app, env })
 
 const historyOf = (store: MessageStore, address: TemplateAddress) =>
   store.templates.history(address).map((entry) => ({
@@ -172,24 +177,25 @@ export const templatesCommand = (app: AppIdentity, options: TemplatesOptions): C
       const terms = queryTerms(words, TEMPLATES_QUERY, "templates list")
       const env = options.env()
       const stored = await withStore(env, (store) => store.templates.list())
-      const agents = listSchedules(stateOf(app, env), { kind: "agent" }).map((one) => one.name)
       const own = [...new Set(stored.map((one) => one.key))].flatMap((key) => {
-        const known = reportKeyOf(key, agents)
+        const known = reportKeyOf(key, [key.slice("report/".length)])
         return known?.schedule ? [known] : []
       })
       const items = [...TEMPLATE_KEYS, ...own].flatMap((known) =>
         REPORT_CHANNELS.flatMap((channel) =>
           shippedLanguages(known.kind).map((language) => {
-            const row = stored.find(
-              (one) => one.key === known.key && one.channel === channel && one.language === language,
-            )
+            const rowOf = (key: string) =>
+              stored.find((one) => one.key === key && one.channel === channel && one.language === language)
+            const row = rowOf(known.key)
+            const inherited =
+              !row && "schedule" in known && reportKeysOf(known.kind, known.schedule).some((key) => rowOf(key))
             return {
               key: known.key,
               channel,
               language,
               about: known.about,
               renders: true,
-              source: row ? "stored" : "default",
+              source: row ? "stored" : inherited ? "inherited" : "default",
               updated_at: row ? new Date(row.updatedAt).toISOString() : null,
               updated_by: row?.updatedBy ?? null,
             }

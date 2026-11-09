@@ -1,4 +1,5 @@
 export { AI_ENTRIES, AI_SETTING_KEYS, type AISettings, resolveAISettings } from "../analysis/settings.js"
+export { parseRoute, ROUTE_HELP, routeText } from "../background/deliver.js"
 export {
   AGENT_INPUT_MAX_CHARS,
   type AgentCli,
@@ -574,6 +575,7 @@ export {
   agentSchedule,
   backfillScheduleRun,
   type Harness,
+  pauseSchedule,
   removeSchedule,
   runScheduleNow,
   SCHEDULE_SETTINGS,
@@ -581,6 +583,8 @@ export {
   type ScheduleLimits,
   type ScheduleSite,
   scheduleLimitsOf,
+  scheduleState,
+  slotsOfAt,
   writeSchedule,
 } from "./schedule/schedule-command.js"
 export { deniedKinds, deniedKindsOf, type LeftOut, type SearchedKind } from "./search-left-out.js"

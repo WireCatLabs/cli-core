@@ -34,7 +34,7 @@ import type { Messenger } from "../messenger/context.js"
 import { scheduleCommand } from "../messenger/schedule-command.js"
 import { run } from "../program.js"
 import { settingsFor } from "../settings.js"
-import { type ScheduleLimits, scheduleCommandFor, scheduleLimitsOf } from "./schedule-command.js"
+import { agentSchedule, type ScheduleLimits, scheduleCommandFor, scheduleLimitsOf } from "./schedule-command.js"
 
 const app = { command: "chat", appName: "chat-cli", envPrefix: "CHAT", description: "A test", version: "1.0.0" }
 const messenger: Messenger = {
@@ -1747,7 +1747,6 @@ describe("schedule run, sent where the owner says", () => {
   })
 
   it("sends along only the routes it is given, and none when told so", async () => {
-    const report = (argv: string[]) => ({ argv, notify: "always" as const })
     const { env, root } = setup()
     for (const name of ["tg", "mail"]) {
       writeFileSync(join(root, "bin", name), "#!/bin/sh\n")
@@ -1776,13 +1775,27 @@ describe("schedule run, sent where the owner says", () => {
         environment: { CHAT_PROFILE: "work", PATH: env.PATH },
         createdAt: "",
         to: routes,
-        ...report([process.execPath, "-e", 'console.log("ok")']),
+        argv: [process.execPath, "-e", 'console.log("ok")'],
       }),
     )
     const kept = await runSchedule(app, system, env, file, { routes: [] })
     expect(kept.deliveries).toBeUndefined()
     expect(sent).toEqual([])
+    writeFileSync(file, JSON.stringify({ ...JSON.parse(readFileSync(file, "utf8")), notify: "failures" }))
     const one = await runSchedule(app, system, env, file, { routes: [routes[1] ?? ""] })
     expect(one.deliveries?.map((delivery) => delivery.to)).toEqual([routes[1]])
+  })
+})
+
+describe("an agent schedule another tool builds", () => {
+  it("refuses times a timer cannot keep, and an agent repeating more often than hourly", () => {
+    const { env } = setup()
+    const site = { app, system: machine("linux").system, env, profile: "default" }
+    const spec = { name: "x", harness: "claude" as const, prompt: "p" }
+    expect(() => agentSchedule(site, { ...spec, when: { calendar: [] } })).toThrow("HH:MM")
+    expect(() => agentSchedule(site, { ...spec, when: { every: 5 } })).toThrow("at least every 60 minutes")
+    expect(agentSchedule(site, { ...spec, when: { calendar: [{ at: "08:30" }, { at: "18:00" }] } }).when).toEqual({
+      calendar: [{ at: "08:30" }, { at: "18:00" }],
+    })
   })
 })

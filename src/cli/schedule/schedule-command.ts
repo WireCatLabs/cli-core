@@ -13,6 +13,8 @@ import {
   calendarOf,
   describeWhen,
   findProgram,
+  isCalendar,
+  type LastRun,
   lastRun,
   listSchedules,
   NOTIFY_WHEN,
@@ -28,6 +30,7 @@ import {
   type Slot,
   scheduleFile,
   scheduleName,
+  slotsOf,
   spentToday,
   timerFor,
   WEEKDAYS,
@@ -79,7 +82,7 @@ interface WhenOptions {
 const CLOCK = /^([01]\d|2[0-3]):[0-5]\d$/
 
 /** One `--at`: `HH:MM` every day, or weekdays and a time, `mon 09:00` or `mon,fri 09:00`. */
-const slotsOfAt = (at: string): Slot[] => {
+export const slotsOfAt = (at: string): Slot[] => {
   const [, words, clock = ""] = /^\s*(?:([a-z,]+)\s+)?(\S+)\s*$/i.exec(at) ?? []
   if (!CLOCK.test(clock))
     throw new CliError(
@@ -370,7 +373,8 @@ export interface ScheduleSite {
   limits?: ScheduleLimits
 }
 
-const stateOf = ({ app, env }: Pick<ScheduleSite, "app" | "env">) =>
+/** The tool's state folder, which holds its schedules. */
+export const scheduleState = ({ app, env }: Pick<ScheduleSite, "app" | "env">) =>
   resolvePaths({ appName: app.appName, prefix: app.envPrefix, env }).state
 
 /** The variables a run gets on top of the timer's: the profile, where the files are, PATH. Never a credential. */
@@ -408,7 +412,15 @@ export interface AgentScheduleSpec {
 /** The schedule `spec` describes, with the harness's argv built here, never by the caller: its limits live in it. */
 export const agentSchedule = (site: ScheduleSite, spec: AgentScheduleSpec): Schedule => {
   const { app, system, env, agentRuns = [], limits = {} } = site
-  const { harness, prompt } = spec
+  const { harness, prompt, when } = spec
+  const minimum = spec.onNewMail ? GATED_AGENT_MINIMUM_MINUTES : AGENT_MINIMUM_MINUTES
+  if ("every" in when && !(Number.isInteger(when.every) && when.every >= minimum))
+    throw new CliError("validation_error", `an agent repeats at least every ${minimum} minutes, in whole minutes`)
+  if (isCalendar(when)) {
+    const slots = slotsOf(when)
+    if (slots.length === 0 || slots.some((slot) => !CLOCK.test(slot.at) || (slot.on && !WEEKDAYS.includes(slot.on))))
+      throw new CliError("validation_error", "an agent's times are HH:MM, each on any day or one weekday")
+  }
   if (spec.model !== undefined && !isModel(spec.model))
     throw new CliError("validation_error", `--model takes an alias such as sonnet or a model id, not "${spec.model}"`)
   const model = spec.model ?? limits.models?.[harness] ?? AGENT_MODELS[harness]
@@ -476,7 +488,7 @@ export const writeSchedule = async (
   schedule: Schedule,
 ): Promise<{ file: string; timer: string; replaced: boolean }> => {
   const { app, system, env, profile } = site
-  const file = scheduleFile(stateOf(site), schedule.name)
+  const file = scheduleFile(scheduleState(site), schedule.name)
   const replaced = existsSync(file)
   if (replaced) {
     const owner = readSchedule(file).environment[`${app.envPrefix}_PROFILE`]
@@ -494,9 +506,43 @@ export const writeSchedule = async (
   return { file, timer: timer.where(schedule.name), replaced }
 }
 
+/** Why an agent schedule may not start today: its runs cost the day's cap. Recorded as the run's skip. */
+const dayCapReached = (file: string, schedule: Schedule, maxCostPerDay: number) => {
+  if (schedule.kind !== "agent" || maxCostPerDay <= 0) return undefined
+  const spent = spentToday(file)
+  if (spent < maxCostPerDay) return undefined
+  const why = `today's runs cost ${usd(spent)}, the ${usd(maxCostPerDay)} a day allowed; it runs again tomorrow`
+  recordSkip(file, why, SKIP_REASONS.costDayCap)
+  return { why, reason: SKIP_REASONS.costDayCap }
+}
+
+/** Refuses a route the schedule was not given: it would send the owner's report somewhere he never said. */
+const ownRoutes = (schedule: Schedule, routes: readonly string[] | undefined) => {
+  const own = schedule.to ?? []
+  const other = (routes ?? []).filter((route) => !own.includes(route))
+  if (other.length)
+    throw new CliError(
+      "validation_error",
+      `--deliver-to takes only ${schedule.name}'s own routes (${own.join(", ") || "it has none"}); not ${other.join(", ")}`,
+    )
+}
+
+/**
+ * Takes a schedule off its timer and keeps its file, or puts it back. It keeps the profile it was made for, as pausing
+ * names no new one.
+ */
+export const pauseSchedule = async (site: ScheduleSite, name: string, paused: boolean) => {
+  const file = scheduleFile(scheduleState(site), scheduleName(name))
+  if (!existsSync(file)) throw new CliError("not_found", `no schedule ${name}`)
+  const { paused: _, ...schedule } = readSchedule(file)
+  const owner = schedule.environment[`${site.app.envPrefix}_PROFILE`] ?? site.profile
+  const kept = paused ? { ...schedule, paused: true as const } : schedule
+  return { schedule: kept, ...(await writeSchedule({ ...site, profile: owner }, kept)) }
+}
+
 /** Takes the schedule off its timer and removes its file; its past runs stay. */
 export const removeSchedule = async (site: ScheduleSite, name: string): Promise<void> => {
-  const file = scheduleFile(stateOf(site), scheduleName(name))
+  const file = scheduleFile(scheduleState(site), scheduleName(name))
   if (!existsSync(file)) throw new CliError("not_found", `no schedule ${name}`)
   await timerFor(site.app, site.system, site.env).remove(name)
   rmSync(file, { force: true })
@@ -506,13 +552,18 @@ export const removeSchedule = async (site: ScheduleSite, name: string): Promise<
  * Runs the schedule in `file` now, as `schedule run` does: its report rendered with the owner's language and templates
  * and sent along `routes` (its own when absent, none when empty). A stop of the command stops the agent.
  */
-export const runScheduleNow = (
+export const runScheduleNow = async (
   command: Command,
   site: ScheduleSite,
   file: string,
   { routes, agentInput }: { routes?: readonly string[]; agentInput?: AgentInput } = {},
-) =>
-  untilChildEnds(command, (signal) =>
+): Promise<LastRun | { skipped: { why: string; reason: SkipReason } }> => {
+  const schedule = readSchedule(file)
+  ownRoutes(schedule, routes)
+  const maxCostPerDay = schedule.maxCostPerDay ?? site.limits?.maxCostPerDay ?? SCHEDULE_DEFAULTS.maxCostPerDay
+  const capped = dayCapReached(file, schedule, maxCostPerDay)
+  if (capped) return { skipped: capped }
+  return untilChildEnds(command, (signal) =>
     runSchedule(site.app, site.system, site.env, file, {
       timer: timerFor(site.app, site.system, site.env),
       agentRuns: site.agentRuns ?? [],
@@ -523,6 +574,7 @@ export const runScheduleNow = (
       ...(signal ? { signal } : {}),
     }),
   )
+}
 
 /**
  * Runs the CLI's own commands, or an agent, later or on a timer — through systemd (Linux), launchd
@@ -553,7 +605,7 @@ export const scheduleCommandFor = ({
       agentRuns,
       limits: configured?.(self) ?? {},
     }
-    const state = stateOf(site)
+    const state = scheduleState(site)
     const say = (value: object, lines: string[]) => renderAnswer(self, context, itemOf(value), () => lines.join("\n"))
     const timer = () => timerFor(app, system, context.env)
     const environment = () => scheduleEnvironment(site)
@@ -589,14 +641,8 @@ export const scheduleCommandFor = ({
     if (!existsSync(file)) return undefined
     const schedule = readSchedule(file)
     const { mailWaitMinutes, mailBatch, maxCostPerDay } = limitsOf(self, schedule)
-    if (schedule.kind === "agent" && maxCostPerDay > 0) {
-      const spent = spentToday(file)
-      if (spent >= maxCostPerDay) {
-        const why = `today's runs cost ${usd(spent)}, the ${usd(maxCostPerDay)} a day allowed; it runs again tomorrow`
-        recordSkip(file, why, SKIP_REASONS.costDayCap)
-        return { why, reason: SKIP_REASONS.costDayCap }
-      }
-    }
+    const capped = dayCapReached(file, schedule, maxCostPerDay)
+    if (capped) return capped
     const holder = schedule.onNewMail
     if (holder === undefined || !newMail) return undefined
     const waiting = await newMail(self, holder)
@@ -820,16 +866,6 @@ export const scheduleCommandFor = ({
           "validation_error",
           "--no-notify sends nothing; leave out --deliver-to, or leave out --no-notify",
         )
-      if (routes?.length && existsSync(file)) {
-        const own = readSchedule(file).to ?? []
-        const other = routes.filter((route) => !own.includes(route))
-        // Any other route would send the owner's report somewhere the schedule was never told to.
-        if (other.length)
-          throw new CliError(
-            "validation_error",
-            `--deliver-to takes only ${name}'s own routes (${own.join(", ") || "it has none"}); not ${other.join(", ")}`,
-          )
-      }
       const skip = await waits(this, file, { timed: false })
       if (skip !== undefined) {
         return say({ name, skipped: true, why: skip.why, reason: skip.reason }, [`${name}: skipped — ${skip.why}`])
@@ -838,6 +874,10 @@ export const scheduleCommandFor = ({
         ...(agentInput ? { agentInput } : {}),
         ...(routes ? { routes } : {}),
       })
+      if (!("exitCode" in last)) {
+        const { why, reason } = last.skipped
+        return say({ name, skipped: true, why, reason }, [`${name}: skipped — ${why}`])
+      }
       say(snakeKeys({ name, ...last }) as object, [`${name}: exit ${last.exitCode} — ${last.output}`])
       if (last.exitCode !== 0) setExitCode(this, 1)
     })
@@ -864,8 +904,7 @@ export const scheduleCommandFor = ({
       const file = scheduleFile(state, scheduleName(name))
       if (!existsSync(file))
         throw new CliError("not_found", `no schedule ${name} — \`${lineOf(this, "schedule list")}\``)
-      const { paused: _, ...schedule } = readSchedule(file)
-      const { timer } = await writeSchedule(site, paused ? { ...schedule, paused: true } : schedule)
+      const { schedule, timer } = await pauseSchedule(site, name, paused)
       say({ name, paused, timer }, [
         paused
           ? `Paused ${name}: no timer starts it; ${lineOf(this, `schedule run ${name}`)} still does.`

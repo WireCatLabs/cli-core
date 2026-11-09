@@ -7,7 +7,7 @@ export const template = v.strictObject({
   language: text,
   about: text,
   renders: v.boolean(),
-  source: v.picklist(["stored", "default"]),
+  source: v.picklist(["stored", "inherited", "default"]),
   updated_at: v.nullable(time),
   updated_by: v.nullable(text),
 })

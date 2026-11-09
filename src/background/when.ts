@@ -98,13 +98,18 @@ export const runsBetween = (when: CalendarWhen, from: number, to: number): numbe
   return moments.sort((a, b) => a - b)
 }
 
-const WEEK = 7 * 86_400_000
+/** `days` calendar days from `at`, at the same wall-clock time: a week across a clock change is not 168 hours. */
+const daysFrom = (at: number, days: number) => {
+  const moved = new Date(at)
+  moved.setDate(moved.getDate() + days)
+  return moved.getTime()
+}
 
-/** The run a calendar schedule has next after `now`, or the one before or at it; a week holds every slot once. */
+/** The run a calendar schedule has next after `now`, or the one before or at it; eight days hold every slot. */
 export const nextRun = (when: CalendarWhen, now: number): number | undefined =>
-  runsBetween(when, now + 1, now + WEEK + 1)[0]
+  runsBetween(when, now + 1, daysFrom(now, 8))[0]
 export const previousRun = (when: CalendarWhen, now: number): number | undefined =>
-  runsBetween(when, now - WEEK, now + 1).at(-1)
+  runsBetween(when, daysFrom(now, -8), now + 1).at(-1)
 
 /** A local wall-clock time, as both systemd's `OnCalendar=` and PowerShell's parser take it. */
 export const localStamp = (iso: string) => {
