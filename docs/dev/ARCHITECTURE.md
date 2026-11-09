@@ -598,7 +598,7 @@ proposes them instead. A no-reply address (`isNoReplyAddress`) is no one's: it n
   one kind and lists one kind at a time. The owner, people added by hand and task assignees are a `person`; then
   `automated` (a bot, a no-reply address, mostly bulk mail, memo's `bulk_never_replied`, a notification name); then
   `organization` (`organization_identities`, a role address, a legal form or company word in the name); then a named
-  `person` with a tie; everyone else is `unsorted`. A tie is a one-to-one chat, a group of at most
+  `person` with a tie; a named one with no tie is a `stranger`; one with nothing to show as a name is `unsorted`. A tie is a one-to-one chat, a group of at most
   `SMALL_GROUP_MEMBERS` (10; a group of unknown size counts as large), mail the owner wrote to them (NEED-2342 A), a
   meeting or calendar entry, a CRM identity or `person` record, or the address book (`account_identities.address_book`,
   written by `contacts sync` through `saveAddressBook`, version 61). Kinds, ties and the messages and mail each person
