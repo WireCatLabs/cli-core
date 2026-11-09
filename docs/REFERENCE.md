@@ -307,7 +307,7 @@ Such a program keeps its own runs ([WC-LIFE-15](https://github.com/WireCatLabs/c
 `recordRuns(program, { app, content, settings, profile?, agent?, recognise? })` adds `--record` and `--no-record`,
 and keeps every command as a run — a usage error before any action too, named by the command words it can read and
 never an argument. `settings()` returns the saved `record`, `recordInput`, `keepRunsForDays`,
-`keepSuccessfulRunsForDays` and `runsSizeLimitMb` (one that throws leaves the defaults); `profile()` names the run's
+`keepSuccessfulRunsForDays`, `keepStoreRunsForDays` and `runsSizeLimitMb` (one that throws leaves the defaults); `profile()` names the run's
 profile and, given at all, tells it that the first word may be a profile. Call it after the program's other
 `parseAsync` wrappers. A provider client far from the program logs into the command's run with
 `providerEvent(event)`, or `providerRequest(operation, sink?, { method, endpointTemplate, transport, attempt, waitMs,
@@ -322,7 +322,13 @@ tool on `run()` gets the flags and the failure before a command from `run()` and
 failures for `keep_runs_for_days` (30); past `runs_size_limit_mb` (200) the oldest successes go first, then the
 oldest days, checked once a day. A success that logged no events is one line in the day's `index.jsonl` and no
 folder; `runs show` reads it from there. A command that runs until stopped (`watch`, `serve`, `mcp`) and a command
-WireCat Desktop runs for its own pages (`WIRECAT_CALLER=desktop`) keep a success only under `--record`. A run holds
+WireCat Desktop runs for its own pages (`WIRECAT_CALLER=desktop`) keep a success only under `--record`. Each outermost write transaction that commits logs one `store.write` event per table and change
+(`{ kind: "store", table, op: insert|update|delete, n }`; counts only, from the statement text and SQLite's own
+change count, so every writer is covered without passing anything). Past 100 in a run the rest are summed by table
+and change and written as one event each when the run ends, so a long sync neither crowds out its requests nor pays
+for each write. The run's `tables` lists every table they named; `search runs kind:store table:emails` finds them. A success that wrote the store is kept
+for `keep_store_runs_for_days` (3) even where it would not be (`record: false`, Desktop, a server), marked
+`kept_because_store`, and for the longer of the two horizons when it was recorded anyway. A run holds
 at most 2,000 events or 1 MB; past that it counts the rest by operation in one `events.dropped` line and
 `events_dropped`. `record_input` is `true` (the words typed, secrets hidden), `false` (every value that may be
 content masked) or `"failed"` (the words typed only in a run that failed). A run says how it was asked for (`via`:

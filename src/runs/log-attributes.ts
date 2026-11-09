@@ -29,6 +29,10 @@ const diagnostic: Record<KeysOf<DiagnosticEvent>, true> = {
   detail: true,
   reason: true,
   ageMs: true,
+  kind: true,
+  table: true,
+  op: true,
+  n: true,
 }
 
 const send: Record<Exclude<keyof SendEntry, "at">, true> = {

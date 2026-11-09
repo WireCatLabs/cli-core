@@ -3,6 +3,7 @@ import type { DecisionPolicy } from "../decisions.js"
 import { type CacheDatabase, PRAGMAS } from "../driver.js"
 import { refuseOwnerStoreInTests } from "../path.js"
 import { quietSqliteWarning } from "../sqlite-warning.js"
+import { countWrites, shareCounts } from "../write-events.js"
 import type { SQLiteAsyncDatabase } from "./drizzle/core.js"
 
 /** Drizzle over the store's connection. Synchronous inside: a transaction never awaits (plan D3). */
@@ -49,7 +50,10 @@ const openUnderNode = async (path: string, readOnly: boolean): Promise<OpenedSql
   const { cacheOverNodeSqlite, nodeClient } = await import("../drivers/node-sqlite.js")
   const client = await nodeClient(path, { readOnly })
   try {
-    return { database: cacheOverNodeSqlite(client), orm: drizzle({ client }) as unknown as Orm }
+    if (!readOnly) countWrites(client, ["prepare"], () => client.isTransaction)
+    const database = cacheOverNodeSqlite(client)
+    shareCounts(client, database)
+    return { database, orm: drizzle({ client }) as unknown as Orm }
   } catch (error) {
     client.close()
     throw error
@@ -63,7 +67,11 @@ const openUnderBun = async (path: string, readOnly: boolean): Promise<OpenedSqli
   }
   const client = await bunClient(path, readOnly ? { readonly: true, create: false } : undefined)
   try {
-    return { database: cacheOverBunSqlite(client), orm: drizzle({ client }) as Orm }
+    if (!readOnly)
+      countWrites(client, ["prepare", "query"], () => (client as unknown as { inTransaction: boolean }).inTransaction)
+    const database = cacheOverBunSqlite(client)
+    shareCounts(client, database)
+    return { database, orm: drizzle({ client }) as Orm }
   } catch (error) {
     client.close()
     throw error

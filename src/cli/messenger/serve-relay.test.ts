@@ -500,9 +500,13 @@ describe("commands through serve's relay", () => {
     // serve's own run for the relayed send ends after serve does, and would write into a folder the sandbox removed.
     await vi.waitFor(
       () => {
-        const runs = globSync("state/runs/*/*/run.json", { cwd: root })
-        expect(runs).toHaveLength(2)
-        for (const file of runs) expect(JSON.parse(readFileSync(join(root, file), "utf8")).status).not.toBe("running")
+        const runs = globSync("state/runs/*/*/run.json", { cwd: root }).map((file) =>
+          JSON.parse(readFileSync(join(root, file), "utf8")),
+        )
+        // The third is serve's own stem fill, kept unrecorded because it wrote the store.
+        expect(runs).toHaveLength(3)
+        expect(runs.filter((run) => run.kept_because_store)).toHaveLength(1)
+        for (const run of runs) expect(run.status).not.toBe("running")
       },
       { interval: 5 },
     )

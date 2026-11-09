@@ -46,10 +46,14 @@ export interface RunMetadata {
   providerError?: string
   /** Written only because it failed: recording was not asked for. */
   keptBecauseFailed?: boolean
+  /** Written only because it wrote the store, so its counts say what to fetch again after a damage. */
+  keptBecauseStore?: boolean
   /** Every operation its events named, so a search by operation need not open them. */
   operations?: string[]
   /** Every `errorCode` and warning `code` its events carried, for the same reason. */
   codes?: string[]
+  /** Every table its store events wrote, for the same reason. */
+  tables?: string[]
   /** The caller's trace: the MCP client's, or the schedule's or job's that started it. */
   traceId?: string
   /** The whole command with the program's name, `max messages list`; `command` stays the run's short name. */
@@ -82,6 +86,8 @@ export interface StartRunOptions {
   keepDays?: number
   /** Successful runs older than this are removed sooner than the failures `keepDays` keeps. */
   keepSuccessDays?: number
+  /** A successful run that wrote the store is kept this long, whatever `keepSuccessDays` says. */
+  keepStoreDays?: number
   /** The runs folder's size limit in bytes: past it, the oldest successful runs go first, then the oldest days. */
   maxBytes?: number
   /**
@@ -113,6 +119,7 @@ export interface Run {
 
 export const KEEP_RUNS_FOR_DAYS = 30
 export const KEEP_SUCCESSFUL_RUNS_FOR_DAYS = 7
+export const KEEP_STORE_RUNS_FOR_DAYS = 3
 export const RUNS_SIZE_LIMIT_MB = 200
 
 /** `<state dir>/runs` — never the cache directory: a cache is deleted to fix a cache, and a run cannot be rebuilt. */
@@ -145,6 +152,7 @@ export const startRun = (options: StartRunOptions): Run => {
   pruneRuns(options.runsDir, {
     keepDays: options.keepDays ?? KEEP_RUNS_FOR_DAYS,
     keepSuccessDays: options.keepSuccessDays ?? KEEP_SUCCESSFUL_RUNS_FOR_DAYS,
+    keepStoreDays: options.keepStoreDays ?? KEEP_STORE_RUNS_FOR_DAYS,
     maxBytes: options.maxBytes ?? RUNS_SIZE_LIMIT_MB * 1024 * 1024,
     now: startedAt,
   })
@@ -192,11 +200,13 @@ export const startRun = (options: StartRunOptions): Run => {
   let finished = false
   const operations = new Set<string>()
   const codes = new Set<string>()
+  const tables = new Set<string>()
   const noted =
     (level: keyof Logger) =>
     (event: object, message?: string): void => {
-      const { operation, errorCode, error_code, code } = event as Record<string, unknown>
+      const { operation, errorCode, error_code, code, kind, table } = event as Record<string, unknown>
       if (typeof operation === "string") operations.add(operation)
+      if (kind === "store" && typeof table === "string") tables.add(table)
       for (const value of [errorCode, error_code, code]) if (typeof value === "string") codes.add(value)
       // A connection a long-running server keeps can log after the run that opened it ended: that is not this run.
       if (finished) return
@@ -221,6 +231,7 @@ export const startRun = (options: StartRunOptions): Run => {
         durationMs: completedAt.getTime() - startedAt.getTime(),
         operations: [...operations].sort(),
         codes: [...codes].sort(),
+        ...(tables.size > 0 ? { tables: [...tables].sort() } : {}),
       }
       if (file || status !== "success") {
         opened()
@@ -410,8 +421,9 @@ const eventOf = (line: Record<string, unknown>): Record<string, unknown> => {
 
 /**
  * Removes every day older than `keepDays`, then the successful runs of every day older than `keepSuccessDays`, and
- * answers how many days went. Then, once a day, the folder is measured against `maxBytes`: successful runs go first,
- * oldest day first, then whole days, until it fits.
+ * answers how many days went. A success that wrote the store is kept for `keepStoreDays` instead when that is longer,
+ * and one kept only because it wrote the store goes after `keepStoreDays`. Then, once a day, the folder is measured
+ * against `maxBytes`: successful runs go first, oldest day first, then whole days, until it fits.
  *
  * A day at a time, by the directory name and the day's index, so no run has to be opened to decide — and a directory
  * that is not a date is left alone rather than guessed at.
@@ -421,17 +433,29 @@ export const pruneRuns = (
   {
     keepDays,
     keepSuccessDays = keepDays,
+    keepStoreDays = KEEP_STORE_RUNS_FOR_DAYS,
     maxBytes,
     now,
-  }: { keepDays: number; keepSuccessDays?: number; maxBytes?: number; now: Date },
+  }: { keepDays: number; keepSuccessDays?: number; keepStoreDays?: number; maxBytes?: number; now: Date },
 ): number => {
   const cutoff = day(new Date(now.getTime() - keepDays * DAY_MS))
-  const successCutoff = day(new Date(now.getTime() - Math.min(keepSuccessDays, keepDays) * DAY_MS))
+  const before = (days: number) => day(new Date(now.getTime() - Math.min(days, keepDays) * DAY_MS))
+  const successCutoff = before(keepSuccessDays)
+  const storeCutoff = before(keepStoreDays)
+  const keptFor = (metadata: RunMetadata) =>
+    metadata.keptBecauseStore
+      ? keepStoreDays
+      : metadata.operations?.includes(STORE_WRITE)
+        ? Math.max(keepSuccessDays, keepStoreDays)
+        : keepSuccessDays
 
   let removed = 0
   for (const date of days(runsDir)) {
     if (date >= cutoff) {
-      if (date < successCutoff) dropSuccesses(join(runsDir, date))
+      if (date < storeCutoff)
+        dropSuccesses(join(runsDir, date), STORE_RUNS_DROPPED, (metadata) => keptFor(metadata) <= keepStoreDays)
+      if (date < successCutoff)
+        dropSuccesses(join(runsDir, date), SUCCESSES_DROPPED, (metadata) => keptFor(metadata) <= keepSuccessDays)
       continue
     }
     try {
@@ -446,29 +470,35 @@ export const pruneRuns = (
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000
+const STORE_WRITE = "store.write"
 const SUCCESSES_DROPPED = ".successes-dropped"
+const STORE_RUNS_DROPPED = ".store-runs-dropped"
 const SIZE_CHECKED = ".size-checked"
 
-/** A day's successful runs, out of its index and off the disk; once per day, marked by a file beside them. */
-const dropSuccesses = (dayDir: string): void => {
-  const marker = join(dayDir, SUCCESSES_DROPPED)
+/** A day's successful runs that `drops`, out of its index and off the disk; once per day and marker. */
+const dropSuccesses = (
+  dayDir: string,
+  marker = SUCCESSES_DROPPED,
+  drops: (metadata: RunMetadata) => boolean = () => true,
+): void => {
+  const done = join(dayDir, marker)
   try {
-    statSync(marker)
+    statSync(done)
     return
   } catch {}
+  const dropped = (metadata: RunMetadata | undefined) => metadata?.status === "success" && drops(metadata)
   try {
     const kept: string[] = []
     for (const [id, metadata] of indexedRuns(dayDir)) {
-      if (metadata.status === "success") rmSync(join(dayDir, id), { recursive: true, force: true })
+      if (dropped(metadata)) rmSync(join(dayDir, id), { recursive: true, force: true })
       else kept.push(JSON.stringify(runFileOf(metadata)))
     }
     for (const entry of safeReaddir(dayDir)) {
       if (entry === INDEX || entry.startsWith(".")) continue
-      if (readRun(join(dayDir, entry))?.status === "success")
-        rmSync(join(dayDir, entry), { recursive: true, force: true })
+      if (dropped(readRun(join(dayDir, entry)))) rmSync(join(dayDir, entry), { recursive: true, force: true })
     }
     writeSecurely(join(dayDir, INDEX), kept.map((line) => `${line}\n`).join(""), 0o600)
-    writeFileSync(marker, "", { mode: 0o600 })
+    writeFileSync(done, "", { mode: 0o600 })
   } catch {
     // Tried again at the next run's start.
   }

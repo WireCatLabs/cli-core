@@ -11,6 +11,7 @@ export const CORE_LOG_EVENTS = defineLogEvents([
     meaning: "a read was answered from what was kept, without asking the messenger",
     keys: ["operation", "reason"],
   },
+  { id: "store.write", meaning: "a committed write changed rows of one store table", keys: ["table", "op", "n"] },
   { id: "command.crashed", meaning: "a command failed on a bug; where, never what", keys: ["error_class", "frames"] },
   {
     id: "events.dropped",
@@ -35,4 +36,5 @@ export const DIAGNOSTIC_LOG_EVENTS: Record<DiagnosticEvent["event"], string> = {
   response: "provider.response",
   warning: "client.warning",
   cache: "cache.answered",
+  store: "store.write",
 }

@@ -8,6 +8,7 @@ import { wasSettled } from "../runs/recording.js"
 import {
   findRun,
   KEEP_RUNS_FOR_DAYS,
+  KEEP_STORE_RUNS_FOR_DAYS,
   KEEP_SUCCESSFUL_RUNS_FOR_DAYS,
   listRuns,
   RUNS_SIZE_LIMIT_MB,
@@ -289,18 +290,26 @@ describe("runSettings", () => {
     const kept = {
       keepRunsForDays: KEEP_RUNS_FOR_DAYS,
       keepSuccessfulRunsForDays: KEEP_SUCCESSFUL_RUNS_FOR_DAYS,
+      keepStoreRunsForDays: KEEP_STORE_RUNS_FOR_DAYS,
       runsSizeLimitMb: RUNS_SIZE_LIMIT_MB,
     }
     expect(runSettings(undefined)).toEqual({ record: true, keepFailedRuns: true, ...kept })
     expect(runSettings(true, { record: false })).toEqual({ record: true, keepFailedRuns: true, ...kept })
     expect(runSettings(false, { record: true })).toEqual({ record: false, keepFailedRuns: false, ...kept })
     expect(
-      runSettings(undefined, { record: false, keepRunsForDays: 9, keepSuccessfulRunsForDays: 2, runsSizeLimitMb: 5 }),
+      runSettings(undefined, {
+        record: false,
+        keepRunsForDays: 9,
+        keepSuccessfulRunsForDays: 2,
+        keepStoreRunsForDays: 1,
+        runsSizeLimitMb: 5,
+      }),
     ).toEqual({
       record: false,
       keepFailedRuns: true,
       keepRunsForDays: 9,
       keepSuccessfulRunsForDays: 2,
+      keepStoreRunsForDays: 1,
       runsSizeLimitMb: 5,
     })
     expect(runSettings(undefined, { record: true })).toMatchObject({ record: true, keepFailedRuns: true })
