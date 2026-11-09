@@ -1,7 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import { parseLucene } from "@wirecat/cli-base/query"
 import type { Embedder } from "../embeddings/embed.js"
-import { chosenTextModel } from "../embeddings/models.js"
 import { meaningWords } from "../search/lucene/meaning-parts.js"
 import { validateFields } from "../search/lucene/registry.js"
 import { SEARCH_QUERY } from "../search/lucene/types.js"
@@ -9,6 +8,7 @@ import { questionLookup, questionText } from "../search/question-plan.js"
 import type { AccountKey } from "../store/store.js"
 import type { ServiceDeps } from "./deps.js"
 import { embeddingTarget, type ModelDeps, withEmbedder } from "./embeddings-maintenance.js"
+import { meaningModel } from "./meaning-model.js"
 import { MEANING_DEPTH, type MeaningLane, type MeaningRanked } from "./messages-discovery.js"
 import { plainWords } from "./pictures.js"
 
@@ -32,13 +32,12 @@ const meaningText = (question: string): string => {
 export const meaningLane =
   (deps: ModelDeps & Pick<ServiceDeps, "store">): MeaningLane =>
   async (question, accounts, shared, within) => {
-    const model = chosenTextModel(deps.env).id
-    const target = embeddingTarget(deps, model)
+    const store = await deps.store()
+    const target = embeddingTarget(deps, await meaningModel(store, deps.env))
     const skipped = (reason: string, step?: "models.download" | "conversations.rebuild") => ({
       skipped: { reason, model: target.id, ...(step ? { step } : {}) },
     })
     if (!target.installed) return skipped(`${target.id} is not downloaded`, "models.download")
-    const store = await deps.store()
     const ready: AccountKey[] = []
     const without: AccountKey[] = []
     // Mail keeps its vectors by thread, not by message: its accounts are read through the mail store.
@@ -81,7 +80,7 @@ export const meaningLane =
           }
         }
         if (shared && !deps.embedders) await lookUp(await shared.get(target.key, () => target.open()))
-        else await withEmbedder(deps, target, model, {}, lookUp)
+        else await withEmbedder(deps, target, target.id, {}, lookUp)
       }
       if (ranked.length === 0 && without.length === accounts.length)
         return skipped("no message has a vector yet", "conversations.rebuild")

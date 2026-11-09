@@ -7,6 +7,7 @@ import { questionLookup, questionText } from "../search/question-plan.js"
 import type { EventHit, NearestEvent } from "../store/index.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
 import { excerpt } from "./excerpt.js"
+import { meaningModel } from "./meaning-model.js"
 import { localModel, RRF_K, storeQuery, withLocal } from "./notes-search.js"
 import { plainQueryWords } from "./notes-title-tier.js"
 
@@ -126,7 +127,7 @@ const nearestEvents = async (
     embedders,
   }: Pick<EventsQuery, "env" | "command" | "embedders"> & { limit: number; accountIds?: string[] },
 ): Promise<NearestEvent[]> => {
-  const { model, directory, key } = localModel(undefined, env, command)
+  const { model, directory, key } = localModel(await meaningModel(store, env), env, command)
   if (!(await store.calendar.embedded(key, accountIds ? { accountIds } : {})))
     throw new CliError("not_found", `no event has vectors of ${model.id} yet, so only words were matched`)
   const [vector] = await withLocal(

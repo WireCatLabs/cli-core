@@ -28,6 +28,7 @@ import * as accounts from "./sqlite/accounts.js"
 import { addedSourcesOver } from "./sqlite/added-sources.js"
 import { type AgentActionsStore, agentActionsStoreOver } from "./sqlite/agent-actions.js"
 import * as attachmentTexts from "./sqlite/attachment-texts.js"
+import { type BaseStagesStore, baseStagesStoreOver } from "./sqlite/base-stages.js"
 import { type BotUpdateStore, botUpdateStoreOver } from "./sqlite/bot-updates.js"
 import { type ContractsStore, contractsStoreOver } from "./sqlite/business-contracts.js"
 import { type BusinessSearchStore, businessSearchOver } from "./sqlite/business-search.js"
@@ -140,6 +141,8 @@ export interface MessageStore {
   readonly orders: OrdersStore
   /** The owner's sales pipelines and the deals in them, written directly by the owner and his agents. */
   readonly deals: DealsStore
+  /** The owner's base stages of deals and of leads, and every other pipeline's stages mapped onto them. */
+  readonly baseStages: BaseStagesStore
   /** What the owner or a supplier sells, with its price; written directly. */
   readonly products: ProductsStore
   /** The contracts the owner works under; one with a value from an agent or an import waits for the owner. */
@@ -276,6 +279,7 @@ const storeOver = (context: StoreContext): MessageStore => {
   const finance = once(() => financeStoreOver(context))
   const orders = once(() => ordersStoreOver(context))
   const deals = once(() => dealsStoreOver(context))
+  const baseStages = once(() => baseStagesStoreOver(context))
   const products = once(() => productsStoreOver(context))
   const contracts = once(() => contractsStoreOver(context))
   const subscriptions = once(() => subscriptionsStoreOver(context))
@@ -403,6 +407,9 @@ const storeOver = (context: StoreContext): MessageStore => {
     },
     get deals() {
       return deals()
+    },
+    get baseStages() {
+      return baseStages()
     },
     get products() {
       return products()

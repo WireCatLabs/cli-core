@@ -33,7 +33,6 @@ it("takes the plan's example file end to end, and a second run changes nothing",
     amount: "120000.00",
     organization: { ref: org?.entity },
   })
-  // The deal's people reach the store's relationships with PR 5; until then the record keeps the part.
   expect(deal?.relations).toContainEqual(
     expect.objectContaining({ role: "person", externalId: "P-1", as: "decision-maker", resolved: true }),
   )

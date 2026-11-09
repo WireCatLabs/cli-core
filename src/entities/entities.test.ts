@@ -141,6 +141,7 @@ const dealSample = {
   pipeline: "pipeline:2",
   pipeline_name: "Sales",
   stage: "Quote",
+  base_stage: { ref: "stage:7", name: "Proposal" },
   status: "open",
   organization: { ref: "organization:3", name: "Sample LLC", owner: false },
   currency: "EUR",
@@ -166,6 +167,39 @@ const dealSample = {
   updated_at: at,
 }
 const stageSample = { name: "Quote", position: 2, outcome: "open", external_id: "s2", open: 1 }
+
+const emptySection = { items: [], total: 0, has_more: false, next: null }
+const relatedSample = {
+  ref: "person:4",
+  name: "Ana",
+  roles: [{ link: "link:9", kind: "member-of", role: "contact", standing: "reported", account: "example-crm:portal" }],
+}
+const coverageSample = { accounts: ["telegram:1"], not_read: [{ source: "mail", reason: "no mail address" }] }
+const moneySample = {
+  invoices: {
+    items: [
+      {
+        ref: "invoice:1",
+        title: "Invoice #1",
+        direction: "receivable",
+        status: "issued",
+        review: "confirmed",
+        currency: "EUR",
+        total: "10.00",
+        open: "10.00",
+        due_date: null,
+        linked_by: ["counterparty"],
+      },
+    ],
+    total: 1,
+    has_more: false,
+    next: null,
+  },
+  payments: emptySection,
+  totals: { invoices: [{ status: "issued", currency: "EUR", rows: 1, total: "10.00", open: "10.00" }], payments: [] },
+  unconfirmed: 0,
+  complete: true,
+}
 
 const samples: Record<EntityName, unknown> = {
   deal: dealSample,
@@ -268,6 +302,81 @@ const samples: Record<EntityName, unknown> = {
     ],
   },
   contact_context: contactContextSample,
+  person_context: {
+    ...contactContextSample,
+    person: { uid: "4", name: "Ana", identities: [] },
+    events: { upcoming: [], recent: [] },
+    has_more: false,
+    business: {
+      organizations: { ...emptySection, items: [{ ...relatedSample, ref: "organization:3", categories: ["client"] }] },
+      reports_to: emptySection,
+      direct_reports: emptySection,
+      deals: emptySection,
+      projects: emptySection,
+      categories: [],
+    },
+    coverage: coverageSample,
+  },
+  organization_context: {
+    organization: {
+      id: "3",
+      ref: "organization:3",
+      kind: "company",
+      name: "Sample LLC",
+      scope: "work",
+      created_at: at,
+      own: false,
+    },
+    categories: ["client"],
+    people: { ...emptySection, items: [relatedSample], total: 1 },
+    customers: emptySection,
+    suppliers: emptySection,
+    partners: emptySection,
+    projects: emptySection,
+    deals: emptySection,
+    money: moneySample,
+    communications: { messages: 1, mail: 0, meetings: 0, has_more: false },
+    tasks: emptySection,
+    coverage: coverageSample,
+  },
+  deal_context: {
+    deal: dealSample,
+    stages: { ...emptySection, items: [{ from: null, to: "Quote", pipeline: "pipeline:2", at }], total: 1 },
+    organization: { ref: "organization:3", name: "Sample LLC", categories: [] },
+    participants: { ...emptySection, items: [relatedSample], total: 1 },
+    owner: null,
+    project: null,
+    money: moneySample,
+    window: { since: at, until: at },
+    communications: {
+      ...emptySection,
+      items: [{ kind: "meeting", ref: "event:1", title: null, at, people: ["person:4"], standing: "proposed" }],
+      total: 1,
+      counts: { messages: 0, mail: 0, meetings: 1 },
+    },
+    tasks: emptySection,
+    coverage: coverageSample,
+  },
+  "deal_context.brief": {
+    ref: "deal:1",
+    kind: "deal",
+    title: "Sample",
+    pipeline: "Sales",
+    stage: "Quote",
+    status: "open",
+    amount: null,
+    currency: null,
+    close_date: null,
+    organization: "Sample LLC",
+    owner: null,
+    people: [{ ref: "person:4", name: "Ana", roles: ["contact"], standing: "reported" }],
+    project: null,
+    stages: ["∅ → Quote"],
+    money: { invoices: [], payments: [], unconfirmed: 0, complete: true },
+    communications: { messages: 0, mail: 0, meetings: 0, standing: "proposed" },
+    open_tasks: 0,
+    not_read: [],
+  },
   contact_preparation: {
     ...contactContextSample,
     prepare: {

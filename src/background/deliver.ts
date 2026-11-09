@@ -56,8 +56,9 @@ export type DeliveryReason = (typeof DELIVERY_REASONS)[keyof typeof DELIVERY_REA
 
 /**
  * One route's outcome, kept in `last.json`. `error` is the sending CLI's error code and reason id, never its message.
- * A send that went as plain text because Telegram refused the HTML is `ok` with the `html-fallback` reason, and the
- * one line sent in place of a report that failed its check is `ok` with `report-invalid`.
+ * A send that went as plain text because Telegram refused the HTML, or a mail-cli older than `--html` refused the
+ * flag, is `ok` with the `html-fallback` reason, and the one line sent in place of a report that failed its check is
+ * `ok` with `report-invalid`.
  */
 export interface Delivery {
   to: string
@@ -88,13 +89,21 @@ export const headOf = (title: string, report: string, limit = CAPTION_CHARS): st
  */
 const REFUSED_CONTENT = "validation_error"
 
-const codeOf = (stderr: string): string | undefined => {
+const errorLineOf = (stderr: string): { code: string; message: string } | undefined => {
   for (const line of stderr.split("\n").reverse()) {
     try {
-      const { code } = (JSON.parse(line) as { error?: { code?: unknown } }).error ?? {}
-      if (typeof code === "string") return code
+      const { code, message } = (JSON.parse(line) as { error?: { code?: unknown; message?: unknown } }).error ?? {}
+      if (typeof code === "string") return { code, message: typeof message === "string" ? message : "" }
     } catch {}
   }
+}
+
+const codeOf = (stderr: string): string | undefined => errorLineOf(stderr)?.code
+
+/** A mail-cli older than 0.21.0 has no `--html`, and commander refuses the flag before anything is sent. */
+const refusesHtmlFlag = (stderr: string): boolean => {
+  const error = errorLineOf(stderr)
+  return error?.code === REFUSED_CONTENT && error.message.includes("unknown option '--html'")
 }
 
 export interface Parcel {
@@ -109,6 +118,8 @@ export interface Parcel {
 
 export interface RenderedParcel {
   telegram: string
+  /** The email's HTML; without it, or when `mail` refuses `--html`, the email is `text`. */
+  email?: string
   text: string
   subject: string
   /** The report failed its check and `text` is the one line that says so. */
@@ -126,7 +137,17 @@ const plainFit = (text: string): string => {
 /** A rendered report needs no file: Telegram's text was fitted when it was rendered, and mail has no limit. */
 const renderedArgvOf = (program: string, route: Route, rendered: RenderedParcel, plain = false) => {
   const lead = [program, route.profile, "--json", "--no-input"]
-  if (route.kind === "email") return [...lead, "messages", "send", "--to", route.address, "--subject", rendered.subject]
+  if (route.kind === "email")
+    return [
+      ...lead,
+      "messages",
+      "send",
+      ...(plain || rendered.email === undefined ? [] : ["--html"]),
+      "--to",
+      route.address,
+      "--subject",
+      rendered.subject,
+    ]
   return [
     ...lead,
     "bot",
@@ -247,24 +268,27 @@ export const deliver = async (
     try {
       if (copy && parcel.file) copyFileSync(parcel.file.path, copy)
       const { [`${prefix}_PROFILE`]: _, ...childEnv } = env
-      const options = {
+      const mailInput = (plain: boolean) =>
+        rendered ? (plain ? rendered.text : (rendered.email ?? rendered.text)) : report.trim() ? report : parcel.title
+      const options = (plain = false) => ({
         timeoutMs,
-        ...(route.kind === "email" ? { input: rendered ? rendered.text : report.trim() ? report : parcel.title } : {}),
-      }
+        ...(route.kind === "email" ? { input: mailInput(plain) } : {}),
+      })
       const argv = (plain = false) =>
         rendered
           ? renderedArgvOf(program, route, rendered, plain)
           : argvOf(program, route, parcel.title, report, copy, plain)
-      let ran = await system.run(argv(), childEnv, options)
+      let ran = await system.run(argv(), childEnv, options())
       let fellBack = ""
-      if (
-        route.kind === "telegram-bot" &&
+      const refused =
         ran.code !== 0 &&
         ran.code !== TIMED_OUT &&
-        codeOf(ran.stderr) === REFUSED_CONTENT
-      ) {
+        (route.kind === "telegram-bot"
+          ? codeOf(ran.stderr) === REFUSED_CONTENT
+          : rendered?.email !== undefined && refusesHtmlFlag(ran.stderr))
+      if (refused) {
         fellBack = errorOf(ran.stderr, ran.code)
-        ran = await system.run(argv(true), childEnv, options)
+        ran = await system.run(argv(true), childEnv, options(true))
       }
       if (ran.code === 0) {
         out.push(

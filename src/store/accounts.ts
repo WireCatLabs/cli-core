@@ -24,6 +24,12 @@ export interface AccountAccounts {
   purge(key: AccountKey): Promise<void>
 }
 
+export interface AccountGroupChange {
+  /** Read against the group's entries inside the write, so a move sees what is saved at that moment. */
+  remove?: { group: string; drop: (entry: string) => boolean }
+  add?: { group: string; entry: string }
+}
+
 export interface AccountsStore extends AccountAccounts {
   /** Every account of every messenger the file holds, by messenger then id. */
   accounts(): Promise<AccountKey[]>
@@ -33,6 +39,11 @@ export interface AccountsStore extends AccountAccounts {
   accountGroups(): Promise<AccountGroups>
   /** Saves one group's entries; `undefined` removes the group. */
   saveAccountGroup(name: string, members: string[] | undefined): Promise<void>
+  /**
+   * Takes entries out of one group and puts an entry into another in one write, so a move is never half done. A
+   * group left empty stays, to be filled again; an entry already there is not added twice.
+   */
+  changeAccountGroups(change: AccountGroupChange): Promise<{ removed: string[] }>
   /** Per app command, each profile's account: how `--source max:default` finds a profile of another app. */
   profiles(): Promise<Profiles>
   /** Records which account a profile of `app` is; a no-op when the store already says so. */
@@ -68,6 +79,10 @@ export const accountAccountsOver = (context: StoreContext): AccountAccounts => {
 
 export const accountsStoreOver = (context: StoreContext, keyed: AccountAccounts): AccountsStore => {
   const { database } = context
+  const saveGroups = (groups: AccountGroups) =>
+    database
+      .prepare("INSERT OR REPLACE INTO store_settings (key, value, at) VALUES (?, ?, ?)")
+      .run(ACCOUNT_GROUPS, JSON.stringify(groups), context.now())
   return {
     ...keyed,
     accounts: async () => accounts.heldAccounts(context),
@@ -83,9 +98,20 @@ export const accountsStoreOver = (context: StoreContext, keyed: AccountAccounts)
         const groups = accountGroupsOf(database)
         if (members === undefined) delete groups[name]
         else groups[name] = members
-        database
-          .prepare("INSERT OR REPLACE INTO store_settings (key, value, at) VALUES (?, ?, ?)")
-          .run(ACCOUNT_GROUPS, JSON.stringify(groups), context.now())
+        saveGroups(groups)
+      }),
+    changeAccountGroups: async ({ remove, add }) =>
+      write(database, () => {
+        const groups = accountGroupsOf(database)
+        const saved = remove && Object.hasOwn(groups, remove.group) ? (groups[remove.group] ?? []) : []
+        const removed = remove ? saved.filter(remove.drop) : []
+        if (remove && removed.length) groups[remove.group] = saved.filter((entry) => !removed.includes(entry))
+        if (add) {
+          const entries = Object.hasOwn(groups, add.group) ? (groups[add.group] ?? []) : []
+          groups[add.group] = entries.includes(add.entry) ? entries : [...entries, add.entry]
+        }
+        if (removed.length || add) saveGroups(groups)
+        return { removed }
       }),
   }
 }

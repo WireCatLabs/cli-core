@@ -457,6 +457,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--exact` |  | switch | bare words and quotes match their exact form only |  |
 | `--fingerprint` | `<hash>` | string | refuse if what it names has changed since it was read |  |
 | `--full-history` |  | switch | keep a chat's whole history, past its limits |  |
+| `--with-muted` |  | switch | also read the chats the owner muted |  |
 | `--for-everyone` |  | switch | delete for everyone in the chat, not only for the owner |  |
 | `--http` |  | switch | serve over HTTP on 127.0.0.1 |  |
 | `--language` | `<lucene\|legacy>` | choice | the query language |  |
@@ -724,7 +725,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--duration-minutes` | `<minutes>` | count | how long the meeting lasts, in minutes | minutes |
 | `--emoji` | `<emoji>` | string | the icon |  |
 | `--event-id` | `<id>` | id | the stored calendar event it is linked to, or none to unlink |  |
-| `--every` | `<duration>` | duration | repeat this often: a length of time for a timer (<duration>), a count and a calendar unit for a charge, such as 1-month (<count-unit>) |  |
+| `--every` | `<duration>` | duration | repeat this often |  |
 | `--evidence` | `<ref...>` | list | what shows it: msg:, note:, meeting:, person: or another reference |  |
 | `--exclude-chat` | `<chat>` | id | never show this chat in it; repeat it for more |  |
 | `--field` | `<key=value>` | string | set one named field on a write, as key=value; repeat it for more |  |
@@ -820,6 +821,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--trial-end-date` | `<date>` | time | the day a free trial ends, YYYY-MM-DD |  |
 | `--notice-days` | `<days>` | count | how many days before its end a party must say it will not go on | days |
 | `--auto-renew` | `<on\|off>` | choice | it renews by itself at its end, or it does not |  |
+| `--period` | `<count-unit>` | duration | how often a charge repeats: a count and a calendar unit, such as 1-month |  |
 | `--opening-balance` | `<decimal>` | string | the money it held on --opening-date, as a decimal such as 1500.50; later movements count from it |  |
 | `--opening-date` | `<date>` | time | the day of the opening balance, YYYY-MM-DD |  |
 | `--institution` | `<text>` | string | the bank or other company that holds it, by name |  |
@@ -951,7 +953,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | Option | Value | Meaning | Default | Commands |
 |---|---|---|---|---|
 | `--about-text` | `<who>` | who sees the about text: everyone, contacts or nobody |  | `account privacy set` (planned) |
-| `--accept-terms` |  | accept the model's licence terms, for a model that has its own |  | `models download` |
+| `--accept-terms` |  | no longer needed; kept so older scripts still run |  | `models download` |
 | `--add` | `<chat>` | put a chat into a folder; repeat it for more |  | `chats folders update` |
 | `--after-n` | `<n>` | how many messages after it |  | `messages context`, `projects evidence` |
 | `--agent` | `<agent>` | install the skill for this agent; asks at a terminal, otherwise none |  | `setup` |
@@ -1248,6 +1250,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--waiting` | `<duration>` | only chats where the owner wrote last at least this long ago | `7d` | `tasks agenda` |
 | `--weights` | `<json>` | the complete ranking component weights; replaces preset weights when --score is given |  | `stats contacts top`, `stats messages top` |
 | `--who` | `<side>` | whose replies are timed: the owner's (me) or the other side's (others) | `me` | `stats messages responses` |
+| `--with-muted` |  | with --all: also read the chats the owner muted, as history_muted true does |  | `messages sync` |
 | `--with-notes` |  | include your private notes, subject to contacts.notes.list permission |  | `contacts show` |
 | `--within` | `<duration>` | the observation window after a known join; each report names what it measures |  | `stats chats newcomers`, `stats chats retention`, `tasks agenda` |
 | `--words` | `<words>` | match any of these whole words, comma-separated; empty clears |  | `replies edit` |

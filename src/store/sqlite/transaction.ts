@@ -3,6 +3,7 @@ import { CliError } from "@wirecat/cli-base"
 import { sqliteCode } from "../../errors/failures.js"
 import type { Stemmer, Stemmers } from "../../search/stem.js"
 import type { CacheDatabase } from "../driver.js"
+import { checkJournal } from "../journal.js"
 import { committedWrites, droppedWrites } from "../write-events.js"
 import { drainInvolvementQueue } from "./involvement-queue.js"
 import { drainMentions } from "./mention-drain.js"
@@ -103,6 +104,7 @@ const transact = <T>(database: CacheDatabase, body: () => T, drain: boolean, bef
       drainInvolvementQueue(database)
     }
     beforeCommit?.()
+    if (outer) checkJournal(database)
     database.exec(outer ? "COMMIT" : `RELEASE ${name}`)
     if (outer) committedWrites(database)
     // A write that had to wait has others waiting behind it, and its caller's next write would begin before they see

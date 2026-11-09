@@ -1,5 +1,8 @@
+import { existsSync } from "node:fs"
+import { join } from "node:path"
 import { CliError } from "@wirecat/cli-base"
 import * as v from "valibot"
+import { filesPresent, sharedModelsDirectory } from "../speech/install.js"
 import type { ModelFile } from "../speech/models.js"
 import { storePath } from "../store/path.js"
 import { readSharedSection, sharedConfigPath, writeSharedSection } from "../store/shared-config.js"
@@ -19,8 +22,10 @@ export interface TextModel {
   custom?: boolean
   languages: string
   licence: string
-  /** A licence the user accepts before the model is downloaded, or nothing for an open one. */
+  /** The page of a licence with conditions of its own, or nothing for an open one. */
   terms?: string
+  /** What the licence asks a copy to carry, written beside the model's files as NOTICE. */
+  notice?: string
   dims: number
   /** What the model was trained on; a longer text is cut. */
   maxTokens: number
@@ -85,6 +90,10 @@ export const TEXT_MODELS: TextModel[] = [
     languages: "over 100 languages — the best of the two on chat, about seven times slower",
     licence: "Gemma Terms of Use",
     terms: "https://ai.google.dev/gemma/terms",
+    // Gemma Terms of Use §3.1: every copy carries this notice and the use restrictions of §3.2.
+    notice:
+      "Gemma is provided under and subject to the Gemma Terms of Use found at ai.google.dev/gemma/terms. Its use is " +
+      "restricted by the Gemma Prohibited Use Policy: https://ai.google.dev/gemma/prohibited_use_policy",
     dims: 768,
     maxTokens: 2048,
     // 2026-11-08, 1,200-character chunks, 8 threads on the Ryzen AI 9 HX 470: 8.3 chunks/s against e5-small's 52.7, so
@@ -157,7 +166,10 @@ export const TEXT_MODELS: TextModel[] = [
   },
 ]
 
-export const DEFAULT_TEXT_MODEL = "e5-small"
+export const DEFAULT_TEXT_MODEL = "embeddinggemma"
+
+/** The default until 8 Nov 2026: a machine that has it and not EmbeddingGemma keeps embedding and searching with it. */
+export const PREVIOUS_DEFAULT_TEXT_MODEL = "e5-small"
 
 const SECTION = "text_models"
 
@@ -261,10 +273,25 @@ export const textModel = (id: string, env: NodeJS.ProcessEnv = process.env): Tex
   return found
 }
 
-/** The model every embed and every search by meaning uses when none is named: the owner's `models use`, or e5-small. */
+const downloaded = (id: string, env: NodeJS.ProcessEnv): boolean => {
+  const model = TEXT_MODELS.find((one) => one.id === id)
+  const directory = sharedModelsDirectory("text", env)
+  return model !== undefined && filesPresent(model.files.map((file) => [file, join(directory, model.id, file.name)]))
+}
+
+/**
+ * The model every embed and every search by meaning uses when none is named: the owner's `models set`, else
+ * EmbeddingGemma. A machine with only e5-small downloaded, the default before, keeps using it, so its search by meaning
+ * never stops for a model it lacks; once EmbeddingGemma is downloaded the next syncs embed with it.
+ */
 export const chosenTextModel = (env: NodeJS.ProcessEnv = process.env): { id: string; from: "chosen" | "default" } => {
   const use = readTextModelsSection(env).use
-  return use === undefined ? { id: DEFAULT_TEXT_MODEL, from: "default" } : { id: use, from: "chosen" }
+  if (use !== undefined) return { id: use, from: "chosen" }
+  // The previous default's folder, not its files: a CLI may run it under its own pinned files.
+  const kept =
+    !downloaded(DEFAULT_TEXT_MODEL, env) &&
+    existsSync(join(sharedModelsDirectory("text", env), PREVIOUS_DEFAULT_TEXT_MODEL))
+  return { id: kept ? PREVIOUS_DEFAULT_TEXT_MODEL : DEFAULT_TEXT_MODEL, from: "default" }
 }
 
 /**

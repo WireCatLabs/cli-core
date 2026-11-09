@@ -12,7 +12,7 @@ export const model = v.strictObject({
   /** Which languages it reads, in words. */
   languages: text,
   licence: v.optional(text),
-  /** A text model's licence terms to accept with `models download --accept-terms`. */
+  /** A text model's licence page, for a model under conditions of its own (`NOTICE` beside its files says the same). */
   terms: v.optional(text),
   /** A text model's size next to the others: small is fastest, large reads best. */
   size: v.optional(v.picklist(["small", "medium", "large"])),

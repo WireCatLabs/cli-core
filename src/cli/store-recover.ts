@@ -3,9 +3,9 @@ import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { fileSchemaOf } from "../store/compatibility.js"
-import { type DamageExplanation, explainDamage } from "../store/damage.js"
+import { lossUnknown, type StoreDamageReport, storeDamageReport } from "../store/damage.js"
 import { type InvalidJson, storeHealth } from "../store/health.js"
-import { type DamageMark, readDamageMark, readHealthMark, recordDeepCheck } from "../store/marks.js"
+import { type DamageMark, readDamageMark, readHealthMark, readJournalMark, recordDeepCheck } from "../store/marks.js"
 import { storePath } from "../store/path.js"
 import {
   activeTimers,
@@ -46,7 +46,7 @@ export interface RecoveryCheck {
   damagedSearchIndexes?: { name: string; error?: string }[]
   invalidJson?: InvalidJson[]
   rows?: Record<string, number | null>
-  explanation?: DamageExplanation | null
+  report?: StoreDamageReport | null
   /** What the run that found the store damaged saw; writes are refused while it stands. */
   damageMark?: Omit<DamageMark, "inode"> | null
   /** When a deep check of the store last passed, as far as this computer recorded. */
@@ -54,7 +54,7 @@ export interface RecoveryCheck {
   inUse?: { pid: number; name: string }[] | null
   timers?: string[] | null
   sqlite3?: { version: string | null; usable: boolean }
-  /** The commands to run, in order. */
+  /** The report's steps, as commands to run in order. */
   next: string[]
 }
 
@@ -84,20 +84,23 @@ export const storeRecoveryCheck = async (
       database.close()
     }
   } catch {}
+  const journal = readJournalMark(path)
   recordDeepCheck(path, health, { cli: command, ...(version ? { version } : {}), schema })
   const mark = readDamageMark(path)
-  const explanation = explainDamage(health, command, mark)
+  const lastKnownGood = readHealthMark(path)?.last_ok_at ?? null
   const inUse = storeHolders(path) ?? null
   const timers = activeTimers() ?? null
   const sqlite3 = sqlite3Program()
-  const next = health.ok
-    ? []
-    : [
-        ...(timers?.length ? [stopTimers(timers)] : []),
-        ...(inUse ?? []).map(({ pid, name }) => `stop ${name} (process ${pid}): it has the store open`),
-        ...(sqlite3.usable ? [] : ["install sqlite3 3.43 or newer (apt install sqlite3, brew install sqlite)"]),
-        `${command} store recover run`,
-      ]
+  const report = storeDamageReport({
+    health,
+    command,
+    mark,
+    journal,
+    lastOkAt: lastKnownGood,
+    holders: inUse,
+    timers,
+    sqlite3Usable: sqlite3.usable,
+  })
   return {
     path,
     exists: true,
@@ -110,13 +113,13 @@ export const storeRecoveryCheck = async (
       .map(({ name, error }) => ({ name, ...(error ? { error } : {}) })),
     invalidJson: health.invalidJson ?? [],
     rows,
-    explanation,
+    report,
     damageMark: mark ? (({ inode: _, ...seen }) => seen)(mark) : null,
-    lastKnownGood: readHealthMark(path)?.last_ok_at ?? null,
+    lastKnownGood,
     inUse,
     timers,
     sqlite3: { version: sqlite3.version, usable: sqlite3.usable },
-    next,
+    next: report?.steps.map((step) => step.command) ?? [],
   }
 }
 
@@ -201,9 +204,6 @@ export const recoveryNotes = (answer: RecoveryCheck | RecoveryRun): string[] => 
         `${table}: ${kept} kept of ${before ?? "an uncountable number"}${read > kept ? `, ${read - kept} read but unusable` : ""}` +
         (goneAtLeast > 0 ? `; at least ${goneAtLeast} rows are gone (the index ${seenIn} lists them)` : ""),
     )
-    const since = answer.lastKnownGood
-      ? `since the last deep check that passed (${answer.lastKnownGood})`
-      : "since the store was made (no deep check that passed is on record)"
     return [
       `recovered in ${answer.seconds.total} s; the damaged file is kept at ${answer.keptAt}`,
       ...lost,
@@ -211,8 +211,10 @@ export const recoveryNotes = (answer: RecoveryCheck | RecoveryRun): string[] => 
         ([table, rows]) => `${table}: ${rows} rows found on pages no table claimed were put back`,
       ),
       ...refetchNotes(answer.refetch),
-      `${lost.some((line) => line.includes("are gone")) ? "more rows may be gone" : "how many rows were lost is unknown"}: ` +
-        `damage can take rows written ${since} without leaving a trace; a sync fetches again what the servers still hold`,
+      lossUnknown(
+        answer.lastKnownGood,
+        lost.some((line) => line.includes("are gone")),
+      ),
       ...answer.dangling.map(
         ({ table, parent, rows }) => `${rows} rows of ${table} point at ${parent} rows the store does not hold`,
       ),
@@ -224,14 +226,17 @@ export const recoveryNotes = (answer: RecoveryCheck | RecoveryRun): string[] => 
     ]
   }
   if (!answer.exists) return ["no store yet"]
-  if (answer.ok) return [`the store is healthy (checked every page and search index in ${answer.seconds} s)`]
-  const why = answer.explanation
+  const report = answer.report
+  if (!report) return [`the store is healthy (checked every page and search index in ${answer.seconds} s)`]
   return [
-    ...(why ? [why.what, ...why.impact, why.externalUnaffected] : []),
-    answer.lastKnownGood
-      ? `the store last passed a deep check at ${answer.lastKnownGood}`
-      : "no deep check that passed is on record for this store",
-    ...answer.next.map((line) => `next: ${line}`),
+    report.whatHappened,
+    ...report.impact,
+    report.externalDataSafe,
+    report.loss,
+    ...report.likelyCauses.map(({ cause, check }) => `maybe: ${cause} — check: ${check}`),
+    ...report.steps.map(
+      ({ command, why, destructive }) => `next: ${command}   # ${destructive ? "changes things: " : ""}${why}`,
+    ),
   ]
 }
 

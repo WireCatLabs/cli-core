@@ -60,7 +60,7 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22.16.0
-      - name: Check mail on the minimum supported Node
+      - name: Check mail and store bindings on the minimum supported Node
         run: |
           T=$(mktemp -d) && HOME=$T MESSAGING_STORE=$T/store WIRECAT_STATE_DIR=$T/state TMPDIR=$T node scripts/node22-mail.mjs "$T/mail.db"
       - name: Check reviewed tags on the minimum supported Node

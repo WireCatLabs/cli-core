@@ -74,7 +74,7 @@ export const damageNotes = (store: unknown): string[] => {
   const { damage, damage_mark_cleared: cleared } =
     (store as
       | {
-          damage?: { what: string; external_unaffected: string; steps: string[] }
+          damage?: { what_happened: string; external_data_safe: string; steps: { command: string }[] }
           damage_mark_cleared?: { at: string; command: string }
         }
       | undefined) ?? {}
@@ -84,7 +84,9 @@ export const damageNotes = (store: unknown): string[] => {
           `the deep check passed, so writes are allowed again: \`${cleared.command}\` had found the store damaged at ${cleared.at}`,
         ]
       : []),
-    ...(damage ? [damage.what, damage.external_unaffected, ...damage.steps.map((step) => `next: ${step}`)] : []),
+    ...(damage
+      ? [damage.what_happened, damage.external_data_safe, ...damage.steps.map(({ command }) => `next: ${command}`)]
+      : []),
   ]
 }
 

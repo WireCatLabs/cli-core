@@ -11,7 +11,7 @@ import {
 } from "../identity-links.js"
 import type { IdentityRef, LinkOptions } from "../types.js"
 import { ensurePerson } from "./identities.js"
-import { type LinkIndex, linkIndex, linkRows, settleLinks, sidesOf } from "./identity-link-rows.js"
+import { evidenceKeyOf, type LinkIndex, linkIndex, linkRows, settleLinks, sidesOf } from "./identity-link-rows.js"
 import type { Author } from "./memories.js"
 import { currentPerson } from "./merged-persons.js"
 import type { StoreContext } from "./open.js"
@@ -62,8 +62,8 @@ const personOfIdentity = ({ database }: StoreContext, pk: number): number | unde
 }
 
 /**
- * Opens an `identity_link` proposal for two people, unless the owner separated them, rejected the pair before, or one
- * is already open for it: then it says which. At most one proposal is open per pair of people.
+ * Opens an `identity_link` proposal for two people, unless the owner separated them, one is already open for them, or
+ * the owner rejected a proposal on this same evidence: then it says which. At most one proposal is open per pair.
  */
 export const openIdentityLink = (context: StoreContext, opening: Opening, index?: LinkIndex): Opened =>
   write(context.database, () => {
@@ -73,12 +73,16 @@ export const openIdentityLink = (context: StoreContext, opening: Opening, index?
       opening.joins === "identity" ? identitySeparated(context, opening.identity, to) : separated(context, from, to)
     if (apart) return { outcome: "skipped", reason: "identity.separated" }
     const operations = proposalOperationsOver(context)
-    const known = (index ?? linkIndex(context.database)).known(from, to)
-    if (known?.status === "rejected") return { outcome: "skipped", reason: "identity.rejected" }
-    if (known) return { outcome: "open", action: operations.get(known.id) }
+    const links = index ?? linkIndex(context.database)
+    const open = links.open(from, to)
+    if (open) return { outcome: "open", action: operations.get(open.id) }
+    const identity = refOf(context, opening.identity)
+    const other = opening.with === null ? null : refOf(context, opening.with)
+    if (links.rejected(from, to)?.has(evidenceKeyOf({ signal: opening.signal, identity, with: other })))
+      return { outcome: "skipped", reason: "identity.rejected" }
     const payload: IdentityLinkPayload = {
-      identity: refOf(context, opening.identity),
-      with: opening.with === null ? null : refOf(context, opening.with),
+      identity,
+      with: other,
       persons: [String(from), String(to)],
       sides: sidesOf(context.database, from, to),
       joins: opening.joins,
@@ -102,7 +106,11 @@ const refusalOf = (reason: "identity.same" | "identity.separated" | "identity.re
     ? new CliError("validation_error", "those identities are one person already", { reason })
     : reason === "identity.separated"
       ? new CliError("conflict", "the owner separated these people; only the owner links them again", { reason })
-      : new CliError("conflict", "the owner rejected linking these people; it is not proposed again", { reason })
+      : new CliError(
+          "conflict",
+          "the owner rejected linking these people on this evidence; only new evidence proposes them again",
+          { reason },
+        )
 
 const firstIdentityOf = ({ database }: StoreContext, person: number): number | null => {
   const row = database
@@ -186,8 +194,8 @@ const settleMentions = ({ database, now }: StoreContext, payload: IdentityLinkPa
 
 /**
  * Decides an `identity_link`, the owner's alone. Confirm links the two people as the owner's link, refused with
- * `identity.stale` when either person changed since it was proposed; reject keeps them apart and the pair is not
- * proposed again.
+ * `identity.stale` when either person changed since it was proposed; reject keeps them apart, and only new evidence
+ * proposes the pair again.
  */
 export const decideIdentityLink = (context: StoreContext, id: string, decision: IdentityLinkDecision): ProposedAction =>
   write(context.database, () => {

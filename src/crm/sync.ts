@@ -1,12 +1,22 @@
 import { CliError } from "@wirecat/cli-base"
 import { type BudgetStop, type RunBudget, runBudget } from "../background/budget.js"
 import { progressLine, progressOf } from "../background/checkpoints.js"
-import { CRM_KINDS, type CrmItem, type CrmKind, isItemKind } from "../domain/crm.js"
+import {
+  CRM_KINDS,
+  type CrmItem,
+  type CrmKind,
+  type CrmScope,
+  isCrmUserId,
+  isItemKind,
+  normalCrmUserId,
+} from "../domain/crm.js"
 import { DEAL_KINDS, type DealKind } from "../domain/deals.js"
 import { isCliFailure } from "../errors/failures.js"
 import type { CrmRelationIssue, CrmSaved, CrmSkipped } from "../store/sqlite/crm.js"
+import { crmSettingKey } from "../store/sqlite/crm-settings.js"
 import type { MessageStore } from "../store/store.js"
 import type { AccountKey } from "../store/types.js"
+import { ungroupedHint } from "./group-hint.js"
 import type { CrmCallContext, CrmGap, CrmPage, CrmSource } from "./source.js"
 
 const DAY = 86_400_000
@@ -43,6 +53,10 @@ export interface CrmCursor {
   pass: PendingPass | null
   /** When the last complete id pass started; 0 before the first. */
   passAt: number
+  /** Of a deal or lead: the scope the copy is read under, `all` or `mine:<user ids>`; absent, `all`, as before scopes. */
+  scope?: string
+  /** The copy still holds stored rows outside `scope`: a held narrowing, done once the owner sets the scope. */
+  narrowing?: true
 }
 
 const isToken = (value: unknown): value is string | null => value === null || typeof value === "string"
@@ -71,6 +85,8 @@ export const parseCrmCursor = (value: string | null | undefined): CrmCursor | nu
       updatedAt: typeof cursor.updatedAt === "number" ? cursor.updatedAt : null,
       pass: pass ?? null,
       passAt: typeof cursor.passAt === "number" ? cursor.passAt : 0,
+      ...(typeof cursor.scope === "string" ? { scope: cursor.scope } : {}),
+      ...(cursor.narrowing === true ? { narrowing: true as const } : {}),
     }
   } catch {
     return null
@@ -99,6 +115,7 @@ export interface CrmSyncIssue {
     | CrmSkipped["reason"]
     | CrmRelationIssue["reason"]
     | "crm.unlisted-held"
+    | "crm.narrowing-held"
     | "crm.not-reported"
     | "crm.pending-dropped"
   message: string
@@ -117,10 +134,16 @@ export interface CrmSyncResult {
   removed: number
   /** Rows a complete id pass did not list, now marked deleted. */
   unlisted: number
+  /** Rows that changed and left the scope, such as a deal given to another user, now marked deleted. */
+  outOfScope: number
+  /** A narrowing waits for the owner: rows outside the scope are not saved, and the stored ones are kept. */
+  held?: true
   /** `complete`: a full list of ids arrived; `partial`: it stopped and goes on next run; `held`: it would mark too many. */
   pass?: "complete" | "partial" | "held"
   /** Set when the kind failed; its cursor stays at its last saved page. */
   error?: string
+  /** Set when the kind failed on this setting's value: changing it, not running sync again, fixes it. */
+  setting?: string
 }
 
 export interface CrmSyncReport {
@@ -130,6 +153,8 @@ export interface CrmSyncReport {
   pipelines: number
   /** Users read this run; absent when the CRM cannot list them. */
   users?: number
+  /** The deals and leads this run copied, with the sign-in's own user; `all` too when the CRM names none. */
+  scope: CrmScope
   /** Relationships left out because the owner removed or rejected that very one, role included. */
   skippedOwnerRejected: number
   synced: CrmSyncResult[]
@@ -146,6 +171,11 @@ export interface CrmSyncReport {
     steps: number
   }
   hint?: string
+  /**
+   * On the first sync of an account no saved group lists: how to add it to a work group. Not `next`, which in an answer
+   * is the list of steps to run.
+   */
+  groupHint?: string
 }
 
 const CONTINUE = "run sync again to continue"
@@ -189,6 +219,9 @@ const refusal = (kind: CrmGap["kind"], consequence: string, error: unknown, prov
 
 interface Run {
   source: CrmSource
+  scope: CrmScope
+  /** The owner set `scope` (not the default): a narrowing is what they asked for, however much it removes. */
+  scopeSet: boolean
   store: MessageStore
   account: AccountKey
   now: number
@@ -335,12 +368,74 @@ const savePage = async (
   return { saved, stop }
 }
 
+const scopeIds = (scope: CrmScope): string[] | null =>
+  scope.mode === "all" ? null : [...new Set([scope.self, ...scope.also])].sort()
+const scopeKey = (scope: CrmScope): string => {
+  const ids = scopeIds(scope)
+  return ids ? `mine:${ids.join(",")}` : "all"
+}
+const idsOfKey = (key: string): string[] | null => (key.startsWith("mine:") ? key.slice(5).split(",") : null)
+
+/** The scope new pages are read under; `null` before the first sync. A held narrowing is `held`, not this. */
+const appliedScope = (cursor: CrmCursor | null) => {
+  if (cursor === null) return null
+  const users = idsOfKey(cursor.scope ?? "all")
+  return users === null ? { mode: "all" as const } : { mode: "mine" as const, users }
+}
+
+/** Under `mine`, a row with no assignee is nobody's, so it is in scope. */
+const inScope = (ids: readonly string[] | null, item: CrmItem) =>
+  ids === null || item.assignee == null || ids.includes(item.assignee)
+
+const normalAssignee = (item: CrmItem): CrmItem =>
+  item.assignee == null ? item : { ...item, assignee: normalCrmUserId(item.assignee) }
+
 const syncKind = async (run: Run, kind: CrmKind, options: CrmSyncOptions, result: CrmSyncResult) => {
   const { source, store, account, now, budget, signal } = run
   const name = cursorName(kind)
   let cursor = parseCrmCursor((await store.sync.syncState(account, name))?.value) ?? fresh()
   if (options.rescan)
     cursor = { ...cursor, round: { from: null, page: null, reset: false }, done: 0, pass: null, passAt: 0 }
+  const scope = scopeKey(run.scope)
+  const ids = isItemKind(kind) ? scopeIds(run.scope) : null
+  const listedUnder = cursor.scope ?? "all"
+  const before = idsOfKey(listedUnder)
+  const changed = isItemKind(kind) && listedUnder !== scope
+  let held = false
+  // Narrowing is done here, by each stored row's assignee, so no list from the CRM can empty the copy.
+  if (
+    isItemKind(kind) &&
+    ids &&
+    (cursor.narrowing === true || (changed && (before === null || before.some((id) => !ids.includes(id)))))
+  ) {
+    const leaving = await store.crm.removeOutOfScope(account, kind, ids, { dryRun: true })
+    const stored = await store.crm.count(account, kind)
+    // A default `mine` whose own user holds few of the copy's rows is more likely a wrong sign-in than the owner's
+    // wish: the stored rows wait for the owner to set the scope. New pages are still read under `mine`.
+    held = !run.scopeSet && leaving > stored * MOST_UNLISTED
+    if (held) {
+      result.held = true
+      run.report.issues.push({
+        kind,
+        reason: "crm.narrowing-held",
+        message:
+          `scope mine keeps the ${kind}s of user ${ids.join(", ")}: ${leaving} of the ${stored} stored would be ` +
+          `marked deleted; none was, and none will be until the owner sets ${crmSettingKey(account, "scope")} ` +
+          "to mine or all",
+      })
+    } else result.outOfScope += await store.crm.removeOutOfScope(account, kind, ids)
+  }
+  if (changed || cursor.narrowing) {
+    // The cursor takes the new scope even while held: pages are read under it, so a later wider scope lists in full.
+    const widened = changed && before !== null && (ids === null || ids.some((id) => !before.includes(id)))
+    const { narrowing: _done, ...rest } = cursor
+    cursor = {
+      ...rest,
+      ...(widened ? { round: { from: null, page: null, reset: false }, done: 0 } : {}),
+      scope,
+      ...(held ? { narrowing: true as const } : {}),
+    }
+  }
   let round: PendingRound = cursor.round ?? { from: cursor.token, page: null, reset: false }
   if (cursor.round === null) cursor = { ...cursor, done: 0 }
   let listed = false
@@ -369,10 +464,16 @@ const syncKind = async (run: Run, kind: CrmKind, options: CrmSyncOptions, result
       await save()
       continue
     }
-    const { saved, stop } = await savePage(run, kind, page)
+    const items = isItemKind(kind) ? (page.items as CrmItem[]).map(normalAssignee) : page.items
+    const kept = isItemKind(kind) ? (items as CrmItem[]).filter((item) => inScope(ids, item)) : items
+    const { saved, stop } = await savePage(run, kind, { ...page, items: kept })
     result.saved += saved
     cursor = { ...cursor, done: cursor.done + saved }
     if (page.removed?.length) result.removed += await store.crm.remove(account, kind, page.removed)
+    if (kept.length < items.length && !held) {
+      const left = (items as CrmItem[]).filter((item) => !inScope(ids, item)).map(({ externalId }) => externalId)
+      result.outOfScope += await store.crm.remove(account, kind, left)
+    }
     run.moved()
     if (page.nextPage === undefined) {
       listed = true
@@ -408,7 +509,8 @@ const syncKind = async (run: Run, kind: CrmKind, options: CrmSyncOptions, result
     const before = pass.startedAt - CLOCK_MARGIN
     const stored = await store.crm.count(account, kind)
     const unlisted = await store.crm.removeUnlisted(account, kind, pass.seen, before, { dryRun: true })
-    if (!options.rescan && stored >= GUARDED_FROM && unlisted > stored * MOST_UNLISTED) {
+    const emptied = pass.seen.length === 0 && unlisted > 0
+    if (!options.rescan && (emptied || (stored >= GUARDED_FROM && unlisted > stored * MOST_UNLISTED))) {
       result.pass = "held"
       run.report.issues.push({
         kind,
@@ -443,9 +545,32 @@ export const syncCrm = async (
 ): Promise<CrmSyncReport> => {
   const now = options.now ?? Date.now()
   const budget = options.budget ?? runBudget()
+  const setting = await store.crm.scope(account)
+  const self = source.self ? normalCrmUserId(await source.self()) : undefined
+  if (self !== undefined && !isCrmUserId(self))
+    throw new CliError("invalid_response", `${source.provider} named its sign-in's user as "${self}", not a user id`)
+  if (self !== undefined) {
+    const owner = await store.crm.ownUser(account)
+    if (owner === undefined) await store.crm.saveOwnUser(account, self)
+    else if (owner !== self) {
+      const setting = crmSettingKey(account, "self")
+      throw new CliError(
+        "validation_error",
+        `this account's copy is user ${owner}'s, and this sign-in is user ${self}: one copy holds one user's ` +
+          `deals, under scope all too, since ${setting} decides whose deals a later scope mine keeps; ` +
+          `"config unset ${setting}" gives the copy to this sign-in`,
+        { setting },
+      )
+    }
+  }
+  const scope: CrmScope =
+    self !== undefined && setting.mode === "mine"
+      ? { mode: "mine", self, also: setting.also.map(normalCrmUserId) }
+      : { mode: "all" }
   const report: CrmSyncReport = {
     provider: source.provider,
     account: account.account,
+    scope,
     pipelines: 0,
     skippedOwnerRejected: 0,
     synced: [],
@@ -457,6 +582,8 @@ export const syncCrm = async (
   let steps = 0
   const run: Run = {
     source,
+    scope,
+    scopeSet: setting.mode === "mine" && setting.explicit,
     store,
     account,
     now,
@@ -479,11 +606,16 @@ export const syncCrm = async (
       },
       gap: ({ kind, message, scope }) =>
         run.gaps.push({ kind, reason: "partial", message, ...(scope ? { scope } : {}) }),
+      scope,
     },
     unlistedUsers: 0,
     droppedPending: 0,
   }
   const kinds = CRM_KINDS.filter((kind) => source.traits.kinds.includes(kind))
+  const cursors = await Promise.all(kinds.map((kind) => store.sync.syncState(account, cursorName(kind))))
+  const first = cursors.every((cursor) => cursor === undefined)
+  const malformed =
+    scope.mode === "mine" && setting.mode === "mine" ? setting.also.find((id) => !isCrmUserId(id)) : undefined
   let stopped: BudgetStop | null = null
   for (const kind of DEAL_KINDS)
     if (!stopped && kinds.includes(kind)) {
@@ -510,9 +642,17 @@ export const syncCrm = async (
       saved: 0,
       removed: 0,
       unlisted: 0,
+      outOfScope: 0,
     }
     report.synced.push(result)
     if (stopped) continue
+    if (malformed !== undefined && isItemKind(kind)) {
+      Object.assign(result, {
+        error: `unassigned holds "${malformed}", not a numeric user id: no ${kind} was read`,
+        setting: crmSettingKey(account, "unassigned"),
+      })
+      continue
+    }
     try {
       stopped = await syncKind(run, kind, options, result)
       // After every company of the run is stored, so one listed before the own company still gets its meaning.
@@ -558,6 +698,8 @@ export const syncCrm = async (
     report.complete = false
     report.hint = CONTINUE
   }
+  const groupHint = first ? await ungroupedHint(store, account) : undefined
+  if (groupHint) report.groupHint = groupHint
   return report
 }
 
@@ -567,6 +709,8 @@ export const crmStatus = async (
   account: AccountKey,
   { profile, now, kinds = CRM_KINDS }: { profile: string; now: number; kinds?: readonly CrmKind[] },
 ) => {
+  const saved = await store.crm.scope(account)
+  const setting = { setting: saved.mode, explicit: saved.mode === "all" || saved.explicit }
   const items = []
   for (const kind of kinds) {
     const cursor = parseCrmCursor((await store.sync.syncState(account, cursorName(kind)))?.value)
@@ -583,6 +727,9 @@ export const crmStatus = async (
       round: cursor?.round ? (cursor.round.from === null ? "full" : "changes") : null,
       id_pass: cursor?.pass ? "partial" : cursor?.passAt ? new Date(cursor.passAt).toISOString() : null,
       stored: await store.crm.count(account, kind),
+      ...(isItemKind(kind)
+        ? { scope: { ...setting, applied: appliedScope(cursor), ...(cursor?.narrowing ? { held: true } : {}) } }
+        : {}),
       ...progress,
       line: progressLine(progress),
     })

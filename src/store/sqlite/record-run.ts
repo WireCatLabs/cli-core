@@ -5,6 +5,13 @@ import { accountPk } from "./accounts.js"
 import type { StoreContext } from "./open.js"
 import { codeOf, type Row } from "./record-projection.js"
 import { isDerived } from "./record-relations.js"
+import {
+  noRelationships,
+  noteError,
+  type RelationshipCounts,
+  type RelationshipNote,
+  recordRelationshipsOver,
+} from "./record-relationships.js"
 import type { Flag, recordWritesOver } from "./record-writes.js"
 import { outsideRehearsal, read, write } from "./transaction.js"
 
@@ -61,6 +68,10 @@ export interface RecordsRun {
   flagged: FlaggedRecord[]
   /** Values that look like identifiers and were kept as data only: a phone without `+` and no `phone_region`. */
   ignored: { index: number; key: string; at: (string | number)[]; reason: string }[]
+  /** What the records' relationships did to the links this account reports, each link counted once per run. */
+  relationships: RelationshipCounts
+  /** Taken, but not as the source put it: a relationship's word off its role list, kept as `source_role`. */
+  notices: IngestError[]
   /** A list stopped at `limit`. */
   truncated: boolean
 }
@@ -75,6 +86,7 @@ const PAGE = 500
 export const recordRunOver = (context: StoreContext, writes: ReturnType<typeof recordWritesOver>) => {
   const { database } = context
   const { writeOne, completeDependents, entityRef, missingOf } = writes
+  const reported = recordRelationshipsOver(context)
 
   return async (
     source: EnvelopeSource,
@@ -84,15 +96,31 @@ export const recordRunOver = (context: StoreContext, writes: ReturnType<typeof r
     runs += 1
     const table = `records_run_${runs}`
     const proposedTable = `records_run_${runs}_proposed`
+    const linksTable = `records_run_${runs}_links`
+    const notesTable = `records_run_${runs}_notes`
     database.exec(
       `CREATE TEMP TABLE ${table} (idx INTEGER NOT NULL, key TEXT NOT NULL UNIQUE, identity TEXT NOT NULL UNIQUE, ` +
         "record_id INTEGER, flagged TEXT, unmatched TEXT, ignored TEXT)",
     )
+    database.exec(`CREATE INDEX temp.${table}_by_record ON ${table} (record_id)`)
     database.exec(`CREATE TEMP TABLE ${proposedTable} (ref TEXT PRIMARY KEY)`)
+    // A link and a note are counted once per run however many chunks report them: an entity's set is whole each time.
+    database.exec(`CREATE TEMP TABLE ${linksTable} (key TEXT PRIMARY KEY, outcome TEXT NOT NULL)`)
+    database.exec(`CREATE TEMP TABLE ${notesTable} (key TEXT PRIMARY KEY)`)
     try {
       let truncated = false
       const errors: IngestError[] = []
+      const notices: IngestError[] = []
       const counts = { created: 0, updated: 0, unchanged: 0, deleted: 0, refused: 0 }
+      const outcome = database.prepare(
+        `INSERT INTO temp.${linksTable} (key, outcome) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET outcome = ` +
+          "CASE WHEN excluded.outcome = 'kept' AND outcome <> 'withdrawn' THEN outcome ELSE excluded.outcome END",
+      )
+      const noted = database.prepare(`INSERT OR IGNORE INTO temp.${notesTable} (key) VALUES (?)`)
+      const placeOf = database.prepare(
+        `SELECT run.idx, run.key, r.type, r.external_id FROM records r LEFT JOIN temp.${table} run ` +
+          "ON run.record_id = r.id WHERE r.id = ?",
+      )
       const issue = (error: IngestError) => {
         if (errors.length < limit) errors.push(error)
         else truncated = true
@@ -102,13 +130,33 @@ export const recordRunOver = (context: StoreContext, writes: ReturnType<typeof r
         counts.refused += 1
         issue(error)
       }
+      const note = (one: RelationshipNote) => {
+        if (noted.run(one.key).changes === 0) return
+        const list = one.severity === "issue" ? errors : notices
+        if (list.length >= limit && (one.severity === "notice" || !onIssue)) {
+          truncated = true
+          return
+        }
+        const row = one.record === null ? undefined : placeOf.get(one.record)
+        const place = row && {
+          ...(row.idx == null ? {} : { index: Number(row.idx), key: String(row.key) }),
+          type: String(row.type),
+          externalId: String(row.external_id),
+        }
+        if (one.severity === "issue") issue(noteError(one, place))
+        // Only this envelope's records: an earlier batch's words were noticed when it came.
+        else if (place?.index !== undefined) notices.push(noteError(one, place))
+      }
       const proposed = (ref: string) => {
         database.prepare(`INSERT OR IGNORE INTO temp.${proposedTable} (ref) VALUES (?)`).run(ref)
       }
       const takeChunk = (batch: RunItem[]) =>
         write(database, () => {
-          const accountId = accountPk(context, { provider: source.provider, account: source.account })
+          const key = { provider: source.provider, account: source.account }
+          const accountId = accountPk(context, key)
           const complete: number[] = []
+          const written: number[] = []
+          const changed: number[] = []
           for (const { index, record, errors: before } of batch) {
             if (before?.length) {
               counts.refused += 1
@@ -140,6 +188,8 @@ export const recordRunOver = (context: StoreContext, writes: ReturnType<typeof r
             try {
               const done = write(database, () => writeOne(accountId, source, record, options, proposed))
               counts[done.status] += 1
+              written.push(done.id)
+              if (done.complete || done.status === "deleted") changed.push(done.id)
               database
                 .prepare(
                   `UPDATE temp.${table} SET record_id = ?, flagged = ?, unmatched = ?, ignored = ? WHERE key = ?`,
@@ -163,7 +213,21 @@ export const recordRunOver = (context: StoreContext, writes: ReturnType<typeof r
               })
             }
           }
-          for (const id of complete) completeDependents(id, source, proposed, issue)
+          const made = (id: number) => {
+            written.push(id)
+            changed.push(id)
+          }
+          for (const id of complete) completeDependents(id, source, proposed, issue, made)
+          reported.report(
+            key,
+            accountId,
+            { records: written, changed },
+            {
+              onNote: note,
+              onOutcome: (one) =>
+                outcome.run(one.key, one.outcome === "skipped" ? "skippedOwnerRejected" : one.outcome),
+            },
+          )
         })
       let batch: RunItem[] = []
       for await (const item of items) {
@@ -220,6 +284,14 @@ export const recordRunOver = (context: StoreContext, writes: ReturnType<typeof r
           for (const one of JSON.parse(String(row.ignored)) as { at: (string | number)[]; reason: string }[])
             if (ignored.length < limit) ignored.push({ index: Number(row.idx), key: String(row.key), ...one })
             else truncated = true
+        const relationshipsOf = (): RelationshipCounts => {
+          const tally = noRelationships()
+          for (const row of database
+            .prepare(`SELECT outcome, count(*) AS n FROM temp.${linksTable} GROUP BY outcome`)
+            .all())
+            tally[String(row.outcome) as keyof RelationshipCounts] = Number(row.n)
+          return tally
+        }
         const proposedRefs = listed(
           `SELECT ref, rowid AS position FROM temp.${proposedTable}`,
           "",
@@ -234,12 +306,16 @@ export const recordRunOver = (context: StoreContext, writes: ReturnType<typeof r
           unmatched,
           flagged,
           ignored,
+          relationships: relationshipsOf(),
+          notices: notices.sort((a, b) => a.pointer.localeCompare(b.pointer, "en", { numeric: true })),
           truncated,
         }
       })
     } finally {
       database.exec(`DROP TABLE IF EXISTS temp.${table}`)
       database.exec(`DROP TABLE IF EXISTS temp.${proposedTable}`)
+      database.exec(`DROP TABLE IF EXISTS temp.${linksTable}`)
+      database.exec(`DROP TABLE IF EXISTS temp.${notesTable}`)
     }
   }
 }

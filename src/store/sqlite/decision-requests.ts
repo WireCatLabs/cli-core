@@ -205,14 +205,17 @@ export const decisionRequestStoreOver = ({ database, now }: StoreContext): Decis
       )
     },
 
-    prune: (at = now()) =>
-      write(database, () =>
+    prune: (at = now()) => {
+      const cutoff = at - PRUNE_AFTER_MS
+      // One `?` per use: Node 22.16's node:sqlite cannot bind a numbered `?1` by position.
+      return write(database, () =>
         Number(
           database
-            .prepare(`DELETE FROM decision_requests WHERE expires_at < ?1 OR used_at < ?1 OR cancelled_at < ?1`)
-            .run(at - PRUNE_AFTER_MS).changes,
+            .prepare(`DELETE FROM decision_requests WHERE expires_at < ? OR used_at < ? OR cancelled_at < ?`)
+            .run(cutoff, cutoff, cutoff).changes,
         ),
-      ),
+      )
+    },
 
     open: (message) =>
       (

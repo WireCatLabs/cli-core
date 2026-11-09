@@ -16,7 +16,7 @@ import * as identityProposals from "./sqlite/identity-proposals.js"
 import type { StoreContext } from "./sqlite/open.js"
 import { linkToOwner } from "./sqlite/own-identities.js"
 import * as personLinks from "./sqlite/person-links.js"
-import { scanMatches } from "./sqlite/person-match-scan.js"
+import { RULE, scanMatches } from "./sqlite/person-match-scan.js"
 import type { PersonMerge } from "./sqlite/person-merges.js"
 import * as personMerges from "./sqlite/person-merges.js"
 import { type PersonPreparationRead, personPreparation } from "./sqlite/person-preparation.js"
@@ -87,8 +87,8 @@ export interface PeopleStore extends AccountPeople {
   decideLink(id: string, decision: IdentityLinkDecision): Promise<ProposedAction>
   /**
    * One pass of the people matcher: the same address joins people in every scope, a phone exactly two people have
-   * joins them, a phone more people share and a meeting guest's typed address become proposals. Never over the
-   * owner's separation or rejection.
+   * joins them, a phone more people share, a role address such as `info@` and a meeting guest's typed address become
+   * proposals. Never over the owner's separation; a pair the owner rejected is proposed again only on new evidence.
    */
   scanMatches(options?: { full?: boolean }): Promise<MatchScan>
   /** The `identity_link` proposals, newest first, naming the people as they are now; `proposed` unless `status` says. */
@@ -111,9 +111,16 @@ export const accountPeopleOver = (context: StoreContext): AccountPeople => {
           if (person.email) personLinks.noteAddress(context, { provider: key.provider, id: person.id }, person.email)
         }
         // Every address of the batch is noted before any joins, so one shared by the whole batch is seen as shared.
-        for (const person of people)
-          if (person.email)
-            personLinks.joinByAddress(context, { provider: key.provider, id: person.id }, person.email, key.provider)
+        for (const person of people) {
+          if (!person.email) continue
+          const held = personLinks.joinByAddress(
+            context,
+            { provider: key.provider, id: person.id },
+            person.email,
+            key.provider,
+          )
+          if (held) identityProposals.openIdentityLink(context, { ...held, joins: "person", signal: "email", by: RULE })
+        }
       }),
 
     contacts: async (key, options) => {

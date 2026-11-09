@@ -4161,7 +4161,7 @@ describe("the shared read commands", () => {
           state: "words-only",
           graph: { outdated_rules: false },
           vectors: { current: 0 },
-          model: "e5-small",
+          model: "embeddinggemma",
         },
       ],
       page: { has_more: false },
@@ -4172,7 +4172,7 @@ describe("the shared read commands", () => {
     const words = await call(["search", "conversations", "message", "--json"], never, env)
     expect([words.code, words.stdout.length]).toEqual([0, 1])
     expect(JSON.parse(words.stdout[0] ?? "")).toMatchObject({
-      next: [{ step: "models.download", args: { model: "e5-small" } }],
+      next: [{ step: "models.download", args: { model: "embeddinggemma" } }],
       missing: [{ field: "by", step: "models.download" }],
     })
 
@@ -4225,7 +4225,7 @@ describe("the shared read commands", () => {
 
       const embed = await call(["conversations", "embed", "--json"], never, env)
       expect([embed.code, embed.stdout]).toEqual([6, []])
-      expect(embed.stderr.join("\n")).toContain("models download e5-small")
+      expect(embed.stderr.join("\n")).toContain("models download embeddinggemma")
 
       const found = await call(
         ["search", "conversations", "chapter", "--catch-up", "--max-chunks", "10", "--json"],
@@ -4236,7 +4236,7 @@ describe("the shared read commands", () => {
       expect(JSON.parse(found.stdout[0] ?? "")).toMatchObject({
         missing: [{ field: "by", step: "models.download" }],
       })
-      expect(found.stderr.join("\n")).toContain("nothing embedded: e5-small is not downloaded")
+      expect(found.stderr.join("\n")).toContain("nothing embedded: embeddinggemma is not downloaded")
       expect(sent).toEqual([])
 
       mkdirSync(env.CHAT_CONFIG_DIR, { recursive: true })

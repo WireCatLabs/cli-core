@@ -137,9 +137,9 @@ describe("discovery by meaning", () => {
 
     expect(found.items.map(({ id }) => id)).toEqual(["1"])
     expect(found.meaningSkipped).toEqual({
-      reason: "e5-small is not downloaded",
+      reason: "embeddinggemma is not downloaded",
       step: "models.download",
-      model: "e5-small",
+      model: "embeddinggemma",
     })
   })
 
@@ -295,7 +295,7 @@ describe("search all by meaning", () => {
     const { all } = await setUp()
     expect((await all("cat")).messages).toEqual({
       by: "words",
-      meaningSkipped: { reason: "e5-small is not downloaded", step: "models.download", model: "e5-small" },
+      meaningSkipped: { reason: "embeddinggemma is not downloaded", step: "models.download", model: "embeddinggemma" },
     })
     download()
     expect((await all("cat")).messages?.meaningSkipped).toMatchObject({ step: "conversations.rebuild" })

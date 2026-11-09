@@ -21,10 +21,10 @@ import { RULES_VERSION } from "../../conversations/link.js"
 import { syncsOneChat } from "../../ports/traits.js"
 import { isSealed, sealFile, unsealFile } from "../../sealed.js"
 import { fileSchemaOf, SPEAKS, writableBy } from "../../store/compatibility.js"
-import { explainDamage } from "../../store/damage.js"
+import { storeDamageReport } from "../../store/damage.js"
 import type { CacheDatabase } from "../../store/driver.js"
 import { QUICK_HEALTH_CHECKS, storeHealth } from "../../store/health.js"
-import { type DamageMark, readDamageMark, readHealthMark, recordDeepCheck } from "../../store/marks.js"
+import { type DamageMark, readDamageMark, readHealthMark, readJournalMark, recordDeepCheck } from "../../store/marks.js"
 import { migrate } from "../../store/migrations.js"
 import { openCache } from "../../store/open.js"
 import { storePath } from "../../store/path.js"
@@ -125,6 +125,7 @@ export const storeSummary = async (
   const path = storePath(env)
   if (!existsSync(path)) return { path, exists: false }
   const checked = await storeHealth(path, { deep })
+  const journal = readJournalMark(path)
   const recorded = deep
     ? recordDeepCheck(path, checked, {
         cli: command ?? "unknown",
@@ -146,13 +147,17 @@ export const storeSummary = async (
       ? { damagedSearchIndexes: checked.searchIndexes.filter((index) => !index.ok).map((index) => index.name) }
       : {}),
   }
-  const damage = command ? explainDamage(checked, command, mark) : null
+  const damage = command
+    ? storeDamageReport({ health: checked, command, mark, journal, lastOkAt: lastKnownGood })
+    : null
   const healthOf = {
     health,
     lastKnownGood,
     ...(mark ? { damageMark: withoutInode(mark) } : {}),
+    ...(journal ? { journalMark: journal } : {}),
     ...(recorded?.cleared ? { damageMarkCleared: withoutInode(recorded.cleared) } : {}),
-    ...(damage ? { damage } : {}),
+    // `what` keeps memo's doctor, which reads it, compiling until it moves to `whatHappened`.
+    ...(damage ? { damage: { what: damage.whatHappened, ...damage } } : {}),
   }
   try {
     return await reading(path, (database) => {

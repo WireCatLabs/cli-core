@@ -17,6 +17,7 @@ import { toolsFromCommands } from "../../mcp/agent.js"
 import type { AppIdentity } from "../../ports/app.js"
 import { SendJournal, sendsPathFor } from "../../sends/journal.js"
 import type { Level } from "../../sends/permissions.js"
+import { openCache } from "../../store/open.js"
 import { type MessageStore, openStore } from "../../store/store.js"
 import {
   exampleDeal,
@@ -66,7 +67,8 @@ const setup = async (
     idempotent?: boolean
   } = {},
 ) => {
-  const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "crm-cli-")), "store.db") })
+  const path = join(mkdtempSync(join(tmpdir(), "crm-cli-")), "store.db")
+  const store = await openStore({ path })
   opened.push(store)
   await store.accounts.registerProvider({
     name: "example-crm",
@@ -146,7 +148,7 @@ const setup = async (
     }
     return envelope as Record<string, unknown> & { item: Record<string, unknown>; items: Record<string, unknown>[] }
   }
-  return { store, source, cli, printed, journal, alsoChecks }
+  return { path, store, source, cli, printed, journal, alsoChecks, run: runOf }
 }
 
 describe("CRM commands", () => {
@@ -154,6 +156,10 @@ describe("CRM commands", () => {
     const { cli } = await setup()
     const synced = await cli("sync")
     expect(synced.item).toMatchObject({ state: "complete", complete: true, provider: "example-crm" })
+    const status = await cli("store", "status")
+    expect(status.items.find(({ kind }) => kind === "deal")).toMatchObject({
+      scope: { setting: "mine", explicit: false, applied: { mode: "all" } },
+    })
     const deals = await cli("deals", "list")
     expect(deals.items.map(({ external_id }) => external_id).sort()).toEqual(["d1", "d2"])
     const open = await cli("deals", "list", "status:open")
@@ -282,6 +288,24 @@ describe("CRM commands", () => {
     expect(status.items.map(({ kind, state }) => [kind, state])).toContainEqual(["deal", "partial"])
   })
 
+  it("a sync that fails on a malformed unassigned setting offers no retry and names the setting to change", async () => {
+    const scoped = fakeCrmSource({ self: "7" })
+    const { path, cli } = await setup({ source: () => scoped })
+    const database = await openCache(path)
+    database
+      .prepare("INSERT INTO store_settings (key, value, at) VALUES (?, ?, 1)")
+      .run(`crm.${PORTAL.provider}:${PORTAL.account}.unassigned`, JSON.stringify(["bot"]))
+    database.close()
+    const failed = await cli("sync")
+    expect(failed.next).toBeUndefined()
+    expect(failed.item.hint).toContain(
+      `fix the setting: crm config set crm.${PORTAL.provider}:${PORTAL.account}.unassigned`,
+    )
+    expect(failed.meta).toMatchObject({
+      issues: expect.arrayContaining([{ code: "validation_error", reason: "sync.partial", source: "crm:deal" }]),
+    })
+  })
+
   it("search all finds a deal by a word of its title", async () => {
     const { cli } = await setup()
     await cli("sync")
@@ -296,7 +320,7 @@ describe("CRM commands", () => {
     await cli("sync")
     const found = await cli("search", "all", "website")
     const hints = JSON.stringify(found.missing)
-    expect(hints).toContain("e5-small is not downloaded")
+    expect(hints).toContain("embeddinggemma is not downloaded")
     expect(hints).not.toContain("crm models download")
     expect(hints).toContain("(tg, max or wa)")
   })
@@ -376,6 +400,14 @@ describe("CRM write commands", () => {
     expect(moved.item.deal).toMatchObject({ stage: "Quote sent" })
   })
 
+  it("refuses to move a row of another account than the profile's live one, and writes nothing", async () => {
+    const { cli, ref, source, run } = await synced()
+    Object.assign(run, { account: { provider: "example-crm", account: "other-portal" } })
+    await expect(cli("deals", "move", ref, "Quote sent")).rejects.toMatchObject({ code: "not_found" })
+    await expect(cli("deals", "move", "d1", "Quote sent")).rejects.toMatchObject({ code: "validation_error" })
+    expect(source.writes).toEqual([])
+  })
+
   it("giving a record to another CRM user checks crm.assign-others, denied by default", async () => {
     const { cli, ref, source } = await synced()
     await expect(cli("deals", "update", ref, "--owner", "9")).rejects.toMatchObject({ code: "permission_error" })
@@ -389,6 +421,90 @@ describe("CRM write commands", () => {
     expect((await cli("deals", "move", ref, "quote sent")).item.deal).toMatchObject({ stage: "Quote sent" })
     const closed = await cli("deals", "close", ref, "lost", "--reason", "Example: chose another supplier")
     expect(closed.item.deal).toMatchObject({ status: "lost", closed_reason: "Example: chose another supplier" })
+  })
+
+  it("move to a base stage's stage:<id> writes the one stage mapped there, and refuses many or none", async () => {
+    const { cli, ref, store, source } = await synced()
+    await store.baseStages.confirm({ all: true })
+    const base = await store.baseStages.show("deal")
+    // The owner's language is unset, so the default names are Russian: columns by place.
+    const at = (name: "Proposal" | "Negotiation") => base.stages[name === "Proposal" ? 2 : 3]?.ref as string
+    const moved = await cli("deals", "move", ref, at("Negotiation"))
+    expect(moved.item.deal).toMatchObject({ stage: "Quote sent", base_stage: { ref: at("Negotiation") } })
+
+    const first = (await store.baseStages.mappings({ kind: "deal" })).find(({ name }) => name === "New")?.ref as string
+    await store.baseStages.map(first, at("Negotiation"))
+    const refused = cli("deals", "move", ref, at("Negotiation"))
+    await expect(refused).rejects.toMatchObject({
+      code: "validation_error",
+      details: {
+        reason: "stage.choice-required",
+        candidates: [
+          { ref: first, name: "New", external_id: "new", outcome: "open" },
+          expect.objectContaining({ name: "Quote sent" }),
+        ],
+      },
+    })
+    await expect(cli("deals", "move", ref, at("Proposal"))).rejects.toMatchObject({
+      details: { reason: "stage.unmapped" },
+    })
+    expect(source.writes).toHaveLength(1)
+    expect((await cli("deals", "move", ref, first)).item.deal).toMatchObject({ stage: "New" })
+    await store.crm.savePipelines({ provider: "example-crm", account: "portal-other" }, "deal", [
+      {
+        externalId: "x",
+        name: "Elsewhere",
+        stages: [{ externalId: "x1", name: "Open", position: 1, outcome: "open" }],
+      },
+    ])
+    await store.crm.saveItems({ provider: "example-crm", account: "portal-other" }, "deal", [
+      { externalId: "far", title: "Far", pipeline: "x", stage: "x1" },
+    ])
+    const far = (await store.crm.refOf({ provider: "example-crm", account: "portal-other" }, "deal", "far")) as string
+    await expect(cli("deals", "move", far, at("Negotiation"))).rejects.toMatchObject({ code: "not_found" })
+  })
+
+  it("a refused move to a base stage prints the candidates in its JSON error", async () => {
+    const { store } = await synced()
+    await store.baseStages.confirm({ all: true })
+    const base = await store.baseStages.show("deal")
+    const negotiation = base.stages[3]?.ref as string
+    const first = (await store.baseStages.mappings({ kind: "deal" })).find(({ name }) => name === "New")?.ref as string
+    await store.baseStages.map(first, negotiation)
+    const ref = (await store.deals.list({ status: "open" }))[0]?.ref as string
+    const definition = {
+      app: APP,
+      commands: () => {
+        const root = new Command("crm")
+        addCrmCommands(root, {
+          app: APP,
+          open: async () => ({
+            profile: "work",
+            account: PORTAL,
+            store,
+            source: () => fakeCrmSource(),
+            writes: () => ({}) as never,
+          }),
+          writes: WRITES,
+        })
+        return [...root.commands]
+      },
+    }
+    const streams = captureStreams()
+    expect(await run(["deals", "move", ref, negotiation, "--json"], definition, { streams, tty: false, env: {} })).toBe(
+      2,
+    )
+    const printed = JSON.parse([...streams.stdout, ...streams.stderr].join("").trim().split("\n").at(-1) as string)
+    expect(printed.error).toMatchObject({
+      code: "validation_error",
+      reason: "stage.choice-required",
+      details: {
+        candidates: [
+          { ref: first, name: "New", external_id: "new", outcome: "open" },
+          expect.objectContaining({ name: "Quote sent", external_id: "quote" }),
+        ],
+      },
+    })
   })
 
   it("are MCP writes, and --field takes a list", () => {

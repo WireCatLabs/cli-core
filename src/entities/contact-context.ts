@@ -224,3 +224,6 @@ export const contactPreparation = v.strictObject({
     }),
   }),
 })
+
+/** The cross-account sections of a person's context, which every person context answer shares. */
+export { context as crossAccountContext }

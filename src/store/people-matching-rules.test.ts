@@ -12,6 +12,7 @@ const OTHER_CRM: AccountKey = { provider: "amocrm", account: "acme", scope: "wor
 const PERSONAL: AccountKey = { provider: "telegram", account: "1", scope: "personal" }
 const MAX: AccountKey = { provider: "max", account: "2" }
 const agent = { bot: "claude-code" }
+const manual = { method: "manual", by: "owner" }
 const handles: { close(): unknown }[] = []
 afterEach(async () => {
   for (const handle of handles.splice(0)) await handle.close()
@@ -183,7 +184,7 @@ describe("an address more than two people share (NEED-2446, safe option)", () =>
   })
 })
 
-describe("the owner's rejection (NEED-2444, safe option)", () => {
+describe("the owner's rejection (NEED-2444)", () => {
   const rejected = async (store: MessageStore) => {
     await store.people.savePeople(PERSONAL, [{ id: "5", name: "Ana" }])
     await store.people.savePeople(MAX, [{ id: "7", name: "Ana B" }])
@@ -196,21 +197,61 @@ describe("the owner's rejection (NEED-2444, safe option)", () => {
     })
     await store.people.decideLink(proposal.id, { confirm: false, by: "owner" })
   }
+  const shareAddress = async () =>
+    (await raw()).prepare("UPDATE identities SET email = 'ana@example.com' WHERE provider IN ('telegram', 'max')").run()
 
-  it("holds against the same address in a scan", async () => {
+  it("holds against the same evidence: no join and no proposal", async () => {
     const store = await open()
     await rejected(store)
-    ;(await raw())
-      .prepare("UPDATE identities SET email = 'ana@example.com' WHERE provider IN ('telegram', 'max')")
-      .run()
+
+    await expect(
+      store.people.proposeLink({
+        identity: { provider: "max", id: "7" },
+        with: { provider: "telegram", id: "5" },
+        signal: "agent",
+        by: agent,
+      }),
+    ).rejects.toMatchObject({ details: { reason: "identity.rejected" } })
+    expect(await openLinks(store)).toEqual([])
+  })
+
+  it("proposes the pair again on a new signal in a scan, and once that is rejected too, never a third time", async () => {
+    const store = await open()
+    await rejected(store)
+    await shareAddress()
 
     const scan = await store.people.scanMatches()
 
     expect(await uidOf(store, "telegram", "5")).not.toBe(await uidOf(store, "max", "7"))
-    expect(scan.skipped).toMatchObject([{ reason: "identity.rejected" }])
+    expect(scan.merged).toEqual([])
+    expect(scan.proposed).toMatchObject([{ signal: "email", opened: true }])
+    expect((await store.people.scanMatches({ full: true })).proposed).toMatchObject([{ opened: false }])
+    await store.people.decideLink(scan.proposed[0]?.id as string, { confirm: false, by: "owner" })
+
+    const again = await store.people.scanMatches({ full: true })
+
+    expect(again.proposed).toEqual([])
+    expect(again.skipped).toMatchObject([{ reason: "identity.rejected" }])
+    expect(await openLinks(store)).toEqual([])
   })
 
-  it("holds against the same address at import", async () => {
+  it("proposes the pair again on a new identity", async () => {
+    const store = await open()
+    await rejected(store)
+    await store.people.savePeople(MAX, [{ id: "8", name: "Ana work" }])
+    await store.people.linkIdentities({ provider: "max", id: "7" }, { provider: "max", id: "8" }, manual)
+
+    const proposal = await store.people.proposeLink({
+      identity: { provider: "telegram", id: "5" },
+      with: { provider: "max", id: "8" },
+      signal: "agent",
+      by: agent,
+    })
+
+    expect(proposal.status).toBe("proposed")
+  })
+
+  it("proposes the pair again on the same address at import, and a later scan does not propose it a third time", async () => {
     const store = await open()
     await rejected(store)
 
@@ -218,6 +259,65 @@ describe("the owner's rejection (NEED-2444, safe option)", () => {
     await store.people.savePeople(MAX, [{ id: "7", name: "Ana B", email: "ana@example.com" }])
 
     expect(await uidOf(store, "telegram", "5")).not.toBe(await uidOf(store, "max", "7"))
+    const [opened] = await openLinks(store)
+    expect(opened?.payload).toMatchObject({ signal: "email" })
+    await store.people.decideLink(String(opened?.id), { confirm: false, by: "owner" })
+
+    const scan = await store.people.scanMatches({ full: true })
+
+    expect(scan.proposed).toEqual([])
+    expect(scan.merged).toEqual([])
+    expect(await openLinks(store)).toEqual([])
+  })
+
+  it("never proposes a pair the owner separated, even on new evidence", async () => {
+    const store = await open()
+    await store.people.savePeople(PERSONAL, [{ id: "5", name: "Ana" }])
+    await store.people.savePeople(MAX, [{ id: "7", name: "Ana B" }])
+    await store.people.linkIdentities({ provider: "telegram", id: "5" }, { provider: "max", id: "7" }, manual)
+    await store.people.unlinkIdentity({ provider: "max", id: "7" }, manual)
+    await shareAddress()
+
+    const scan = await store.people.scanMatches()
+
+    expect(scan.proposed).toEqual([])
+    expect(scan.skipped).toMatchObject([{ reason: "identity.separated" }])
+    expect(await openLinks(store)).toEqual([])
+  })
+})
+
+describe("a role address", () => {
+  it("two people share is proposed, never joined, at import or in a scan", async () => {
+    const store = await open()
+    await store.people.savePeople(PERSONAL, [{ id: "5", name: "Ana", email: "info@x.com" }])
+    await store.people.savePeople(MAX, [{ id: "7", name: "Bea", email: "Info@X.com" }])
+
+    const scan = await store.people.scanMatches()
+
+    expect(await uidOf(store, "telegram", "5")).not.toBe(await uidOf(store, "max", "7"))
+    expect(scan.merged).toEqual([])
+    expect(scan.proposed).toMatchObject([{ signal: "email", opened: true }])
+  })
+
+  it("from the no-reply family joins and proposes no one", async () => {
+    const store = await open()
+    await store.people.savePeople(PERSONAL, [{ id: "5", name: "Ana", email: "noreply@x.com" }])
+    await store.people.savePeople(MAX, [{ id: "7", name: "Bea", email: "no_reply@x.com" }])
+    await store.people.savePeople(OTHER_CRM, [{ id: "9", name: "Cas", email: "noreply@x.com" }])
+
+    const scan = await store.people.scanMatches()
+
+    expect(scan.merged).toEqual([])
+    expect(scan.proposed).toEqual([])
+    expect(await openLinks(store)).toEqual([])
+  })
+
+  it("is the whole local part only: a personal address that contains a role word still joins", async () => {
+    const store = await open()
+    await store.people.savePeople(PERSONAL, [{ id: "5", name: "Ivan", email: "ivan.info@x.com" }])
+    await store.people.savePeople(MAX, [{ id: "7", name: "Ivan B", email: "ivan.info@x.com" }])
+
+    expect(await uidOf(store, "telegram", "5")).toBe(await uidOf(store, "max", "7"))
   })
 })
 

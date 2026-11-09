@@ -39,11 +39,19 @@ export const crmTables = [
       c("external_id", "text", { note: "the stage's id in its pipeline's CRM" }),
       ...ts(),
       c("deleted_at", "integer", { note: "the CRM no longer lists it; kept, since deals may still stand in it" }),
+      fk("base_stage_id", "pipeline_stages", {
+        note: "the stage of the owner's base set of its kind this stage maps to; null when none is suggested yet",
+      }),
+      c("base_confirmed", "integer", {
+        notnull: true,
+        note: "1 once the owner confirmed `base_stage_id`; 0 while it is a suggestion, which a sync may change",
+      }),
     ],
     keys: [
       "UNIQUE (pipeline_id, name_folded)",
       "UNIQUE (pipeline_id, external_id) WHERE external_id IS NOT NULL",
       "INDEX (pipeline_id, position)",
+      "INDEX (base_stage_id)",
     ],
   },
   {

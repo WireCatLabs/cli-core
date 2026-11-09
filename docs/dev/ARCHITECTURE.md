@@ -423,8 +423,12 @@ with `normalize()`, and its `identity` names what built an index.
 
 `storeHealth` (`src/store/health.ts`) checks the file without changing it: quick (header, size against page count,
 the schema's pages; milliseconds) for `doctor`, deep (`PRAGMA quick_check` and each fts5 index's `integrity-check`
-under a rolled-back transaction; about 30 s for 6 GB) for `store recover` and a CLI's own `doctor --deep` (memo's). `explainDamage`
-(`src/store/damage.ts`) turns a failed check into the plain-words answer every surface shows. `recoverStore`
+under a rolled-back transaction; about 30 s for 6 GB) for `store recover` and a CLI's own `doctor --deep` (memo's). `storeDamageReport`
+(`src/store/damage.ts`) turns what was found (the check, the marks, the processes and timers that hold the store) into
+the one report every surface shows: what happened, the likely causes each with the command that tells more, the
+impact, that the services keep the originals, the last known good and what may be lost, and the steps
+(`{command, why, destructive}`, the first stopping the writers, the last the deep check). `store recover` prints it
+and answers it as `report` under `--json`; `doctor` carries it as `store.damage`. `recoverStore`
 (`src/store/recover.ts`) copies the readable rows with the `sqlite3` program's `.recover` (node:sqlite has no recovery
 API; free pages are skipped so deleted rows stay deleted), puts back the rows `.recover` found on pages no table
 claims into the one table whose columns their values fit (`placeLostRows`), migrates, drops and refills every fts5 and vec0 index
@@ -443,7 +447,12 @@ writable `openStoreContext` refuses with `store.damaged`, so timers fail fast in
 reads still open. A deep check that passes, a recovery, or a file replaced at that path (restore, reset: another
 inode) lifts it. The health mark `<store>.health.json` (`checked_at`, `ok`, `problems`, `schema`, `cli`, `cli_version`,
 `last_ok_at`) is written by every deep check (`doctor --deep`, `store recover`, the check after `store recover run`);
-`last_ok_at` is the last known good that `store recover` reports.
+`last_ok_at` is the last known good that `store recover` reports. The journal mark `<store>.journal.json` (`at`,
+`command`, `seen`) records that the store's `-wal` file went away or was swapped while a run held the store open, or
+that a `-shm` stood without it at a writable open (`src/store/journal.ts`): another program deleted or replaced the
+journal. A connection would go on writing into the unlinked file while the next process starts a fresh one, so the
+outermost commit stats `-wal` and refuses (`store.journal-replaced`) once its inode changed. The report names the mark
+as the first likely cause; a deep check that passes removes it.
 
 After the copy, `store recover run` forgets what the store says was fetched from a day before `last_ok_at` on
 (`forgetCoverageSince`, `src/store/refill.ts`; everything when no deep check ever passed), so the next ordinary sync
@@ -507,7 +516,9 @@ which the `business` search lane reads for scope and provenance.
 statement per kind present: a `VALUES` list of the wanted refs joined to the kind's table. It never throws: a bad ref
 is `unknown`, one the store lacks `unavailable`. Titles never hold a message body; `{ excerpt: true }` adds at most 280
 characters of it. Evidence sources (`evidence-sources.ts`) read through it. `refLabel` and `openOf`
-(`src/domain/ref-summaries.ts`) are the one label and the one open command every caller prints.
+(`src/domain/ref-summaries.ts`) are the one label and the one open command every caller prints. `writesWithOf` answers which
+CLI and profile change a CRM copy on its server, from the provider entry's `command` and the store's own record of
+profiles (`storedProfilesFor`); like `openOf`, it never picks a profile.
 
 **Documents and files — not built yet.** A new `files` table holds one row per item in one place: a local file, a
 Drive file or folder, later a Notion page. A folder is a `files` row; children point at it with `parent_id`, and
@@ -535,7 +546,9 @@ translates its provider's words.
 **Contacts.** A contact is an `identities` row (`schema.ts:134`): one person as one source knows them, linked to a
 `persons` row through `identity_links`, every move logged in `identity_link_events` (`schema.ts:152-191`). Contacts
 with one exact address join one person (`joinByAddress`), unless the owner separated those people
-(`person-separation.ts`): an owner's move out of a person keeps the whole people apart from then on.
+(`person-separation.ts`): an owner's move out of a person keeps the whole people apart from then on. A role address
+(`info@`, `hello@`, `isRoleAddress` in `domain/addresses.ts`) joins no one, even when only two people have it; the scan
+proposes them instead. A no-reply address (`isNoReplyAddress`) is no one's: it neither joins nor proposes.
 
 - **A merge never deletes the person it empties.** A move is a merge by what it did (`mergeSql` in
   `merged-persons.ts`): it emptied its person, where an unlink leaves the rest behind. A person with no identity and
@@ -555,8 +568,9 @@ with one exact address join one person (`joinByAddress`), unless the owner separ
 - **What only the owner decides waits as an `identity_link` proposal** (`identity-proposals.ts`, kind in
   `identity-links.ts`): a `proposed_actions` row with the two people, each one's identities when proposed (`sides`),
   the signal (`agent`, `phone`, `email`, `guest-email`) and whether it joins the people or moves one identity. It is
-  owner-only (`isOwnerOnlyKind`) and a dedicated review, at most one open per pair; a pair the owner separated or
-  rejected is never proposed or joined again. A confirm is the owner's link (method `proposal`), refused with
+  owner-only (`isOwnerOnlyKind`) and a dedicated review, at most one open per pair; a pair the owner separated is never
+  proposed or joined again. A pair the owner rejected is never joined, and is proposed again only on new evidence: a
+  signal and pair of identities (`evidenceKeyOf`, in either order) that none of its rejected proposals had. A confirm is the owner's link (method `proposal`), refused with
   `identity.stale` once `sides` no longer hold. An agent's mention confirm and meeting association go through
   `linkOrPropose`, which links only for the owner; the mention waits as `proposed`.
   `linkPeople` (tg/max `contacts link`, a calendar's `people link`) takes who runs it from `actorOf`: an agent's link
@@ -574,7 +588,10 @@ with one exact address join one person (`joinByAddress`), unless the owner separ
   one `linkIndex` of the proposals outside any transaction, then writes each group in its own short `write`; its
   cursor (`store_settings` `people.scan`: the newest identity, move, revision, guest row and update time) limits a
   later pass to what changed. The owner's pending rulings are one predicate each: `phonePairJoins` (NEED-2445),
-  `addressGroupJoins` (NEED-2446), and the rejection check in `join` (NEED-2444). Its merges are authored `rule`: a
+  `addressGroupJoins` (NEED-2446, and role addresses), and the rejection check in `join` (NEED-2444), which proposes a
+  rejected pair on evidence new to the owner. `linkIndex` holds each pair's open proposal and the evidence keys of its
+  rejected ones, read once per pass. An address's mail contact stands for its person in both the scan and the import,
+  so the two paths name the same evidence. Its merges are authored `rule`: a
   move the owner authored counts as a separation, so an automatic one must never be.
 
 **Links and the review list.** A link records its method, confidence, author and time; an owner's link is never
@@ -897,6 +914,11 @@ as `--since-time` would (`limited: "older_than_window"`, only when older history
 pushed skip with `unread: true` and `messages: 0`, since how much was not read is unknown. `--all` counts both under
 `limited` and judges a chat the store lacks by the kind and size the chat list gives. A lifted chat and
 `--full-history` read without limits.
+
+`--all` also leaves out a chat the list reports muted, unless the run passes `--with-muted`, the profile sets
+`history_muted` true, or the chat is lifted (`fetchAll`, `mutedSkips`); a mute whose `mutedUntil` has passed does not count. It counts them as
+`limited.muted`, outside `chats`, `items` and the progress total, and records no skip: a muted chat named on its own
+is read as any other.
 
 Every store-read answer that could pass for the whole archive says so: `store status`, `search messages`,
 `search all` and `messages list --offline` add `missing` (`field: "history_limits"`, the chats and counts),

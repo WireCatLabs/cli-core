@@ -17,6 +17,7 @@ import { DEAL_KINDS, DEAL_STATUSES, type DealKind } from "../../domain/deals.js"
 import { deal as dealEntity } from "../../entities/deal.js"
 import { count, text } from "../../entities/fields.js"
 import type { AppIdentity } from "../../ports/app.js"
+import { CRM_SCOPES } from "../../store/sqlite/crm-settings.js"
 import type { Deal, DealFilter, Pipeline } from "../../store/sqlite/deals.js"
 import type { MessageStore } from "../../store/store.js"
 import type { AccountKey } from "../../store/types.js"
@@ -82,6 +83,8 @@ export interface CrmCommandOptions {
 }
 
 const MOST = 500
+/** A stage by the store's reference, as memo's `stages list` and a deal's `base_stage` name it. */
+const STAGE_REF = /^stage:\d+$/
 
 const DEAL_FIELDS = [
   termField("status", "enum", "status:open", { values: DEAL_STATUSES }),
@@ -123,6 +126,10 @@ const STAGE_UNTRUSTED = ["name", "pipeline_name"]
 const crmSync = v.strictObject({
   provider: text,
   account: text,
+  scope: v.variant("mode", [
+    v.strictObject({ mode: v.literal("all") }),
+    v.strictObject({ mode: v.literal("mine"), self: text, also: v.array(text) }),
+  ]),
   pipelines: count,
   users: v.optional(count),
   skipped_owner_rejected: count,
@@ -135,8 +142,11 @@ const crmSync = v.strictObject({
       saved: count,
       removed: count,
       unlisted: count,
+      out_of_scope: count,
+      held: v.optional(v.literal(true)),
       pass: v.optional(v.picklist(["complete", "partial", "held"])),
       error: v.optional(text),
+      setting: v.optional(text),
     }),
   ),
   issues: v.array(
@@ -152,6 +162,7 @@ const crmSync = v.strictObject({
   stopped: v.optional(v.picklist(["requests", "deadline", "cancelled"])),
   progress: v.strictObject({ requests: count, saved: count, steps: count }),
   hint: v.optional(text),
+  group_hint: v.optional(text),
 })
 
 const crmSyncProgress = v.strictObject({
@@ -159,6 +170,19 @@ const crmSyncProgress = v.strictObject({
   round: v.nullable(v.picklist(["full", "changes"])),
   id_pass: v.nullable(text),
   stored: count,
+  scope: v.optional(
+    v.strictObject({
+      setting: v.picklist(CRM_SCOPES),
+      explicit: v.boolean(),
+      held: v.optional(v.literal(true)),
+      applied: v.nullable(
+        v.variant("mode", [
+          v.strictObject({ mode: v.literal("all") }),
+          v.strictObject({ mode: v.literal("mine"), users: v.array(text) }),
+        ]),
+      ),
+    }),
+  ),
   job: text,
   profile: text,
   done: count,
@@ -267,11 +291,14 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
           ...(opts.rescan ? { rescan: true } : {}),
         })
         const failed = report.synced.filter((one) => one.error !== undefined)
+        // A kind that failed on a setting fails the same way again until the owner changes it: no retry is offered.
+        const retried = failed.filter((one) => one.setting === undefined)
+        const settings = [...new Set(failed.flatMap((one) => one.setting ?? []))]
         const timeout = command.optsWithGlobals<{ timeout?: string }>().timeout
         // The same command again, never --rescan: that would drop the round this run leaves in progress.
         const stuck = report.state === "partial" && report.progress.steps === 0 && failed.length === 0
         const next: NextStep[] | undefined =
-          failed.length || (report.state === "partial" && !stuck)
+          retried.length || (report.state === "partial" && !stuck && failed.length === 0)
             ? [
                 {
                   kind: "command",
@@ -280,7 +307,7 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
                   args: Object.fromEntries(
                     Object.entries({ max_pages: opts.maxPages, timeout }).filter(([, value]) => value !== undefined),
                   ),
-                  why: failed.length
+                  why: retried.length
                     ? "a kind failed to sync; running sync again retries it"
                     : "the sync stopped before its end to answer in time; running it again goes on from there",
                   safe_to_auto_execute: true,
@@ -288,8 +315,11 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
               ]
             : undefined
         const progressAt = lineOf(command, "store status")
+        const fixes = settings.map((setting) => lineOf(command, `config set ${setting} <value>`))
         const hint = failed.length
-          ? `${failed.map((one) => `${one.kind}: ${one.error}`).join("; ")} — run sync again to retry`
+          ? `${failed.map((one) => `${one.kind}: ${one.error}`).join("; ")} — ${
+              fixes.length ? `fix the setting: ${fixes.join("; ")}` : "run sync again to retry"
+            }`
           : stuck
             ? `this run moved nothing on: raise --timeout or --max-pages, then run sync again; see progress: ${progressAt}`
             : report.state === "partial"
@@ -299,7 +329,7 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
         // What the healthy kinds brought is saved and answered; each failure and each item not kept is an issue.
         const issues = [
           ...failed.map((one) => ({
-            code: "provider_error" as const,
+            code: one.setting === undefined ? ("provider_error" as const) : ("validation_error" as const),
             reason: "sync.partial",
             source: `crm:${one.kind}`,
           })),
@@ -409,7 +439,7 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
   }
 
   /** A row of this profile's account: another account's copy, or the owner's own, is not found here. */
-  const ownCopy = async (run: CrmRun, kind: DealKind, reference: string): Promise<Deal> => {
+  const ownCopy = async (run: Pick<CrmRun, "store" | "account">, kind: DealKind, reference: string): Promise<Deal> => {
     if (!reference.startsWith(`${kind}:`))
       throw new CliError("validation_error", `${kind}s show takes a ${kind}:<id> reference, as a list shows it`, {
         reason: "ref.malformed",
@@ -525,11 +555,23 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
     )
     if (move)
       example(
-        reference(move).argument("<stage>", "the stage, by the CRM's id or a name only one stage of its pipeline has"),
+        reference(move).argument(
+          "<stage>",
+          "the stage, by the CRM's id or a name only one stage of its pipeline has; or a stage:<id>, of its pipeline " +
+            "or of the owner's base set, which moves it to the one stage of its pipeline mapped there and refuses " +
+            "several (with the candidates) or none",
+        ),
         `${plural} move ${kind}:12 "Quote sent"`,
+        `${plural} move ${kind}:12 stage:5`,
       ).action(async (ref: string, stage: string, opts: { operationId?: string }, command: Command) => {
         await run(command, async (context) => {
-          const done = await moveCrmItem(context, kind, ref, stage, idOf(opts))
+          let target = stage
+          if (STAGE_REF.test(stage.trim())) {
+            // Checked first: another account's pipeline and stage names stay out of the refusal.
+            await ownCopy(context, kind, ref)
+            target = (await context.store.baseStages.resolve(ref, stage.trim())).stage.externalId ?? stage
+          }
+          const done = await moveCrmItem(context, kind, ref, target, idOf(opts))
           return answered(done.operationId, done.item)
         })
       })

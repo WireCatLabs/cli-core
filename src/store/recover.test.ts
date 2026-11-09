@@ -13,7 +13,7 @@ import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import { describe, expect, it } from "vitest"
 import { recoveryNotes } from "../cli/store-recover.js"
-import { explainDamage } from "./damage.js"
+import { storeDamageReport } from "./damage.js"
 import { storeHealth } from "./health.js"
 import { readHealthMark } from "./marks.js"
 import { migrate } from "./migrations.js"
@@ -70,10 +70,10 @@ describe("store health", () => {
     const health = await storeHealth(path, { deep: true })
     expect(health.ok).toBe(false)
     expect(health.damagedTables?.map((one) => one.table)).toContain("email_words")
-    const explained = explainDamage(health, "chat")
-    expect(explained?.what).toContain("email_words")
-    expect(explained?.externalUnaffected).toMatch(/fetched again/)
-    expect(explained?.steps).toContain("chat store recover run")
+    const report = storeDamageReport({ health, command: "chat" })
+    expect(report?.whatHappened).toContain("email_words")
+    expect(report?.externalDataSafe).toMatch(/fetched again/)
+    expect(report?.steps.map((step) => step.command)).toContain("chat store recover run")
   })
 })
 
@@ -219,7 +219,7 @@ describe("store recovery", () => {
       { table: "chats", column: "metadata", rows: 1, required: false },
       { table: "searches", column: "params", rows: 1, required: true },
     ])
-    expect(explainDamage(health, "chat")?.what).toContain("chats.metadata")
+    expect(storeDamageReport({ health, command: "chat" })?.whatHappened).toContain("chats.metadata")
     const copying = async (from: string, target: string) => {
       copyFileSync(from, target)
       return { errors: [], read: {} }

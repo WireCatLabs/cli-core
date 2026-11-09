@@ -19,7 +19,7 @@ An image can be found three ways. Each one is a separate level and each one work
 **Level 1, context.** Every image gets a text built from its neighbours, with or without a caption. The text is the
 chat title, the earlier messages, the image line (`[photo]` and its caption) and the later messages, cut at 1,200
 characters. An image with no caption and no neighbouring text gets no context text. The text is embedded with the
-normal text model, `e5-small` by default, in the same run that embeds conversations. Each image has one chunk of
+normal text model, EmbeddingGemma by default, in the same run that embeds conversations. Each image has one chunk of
 type `image` at position 0.
 
 **Level 2, caption.** The caption is the message text. `search messages` finds it like any other word. See the

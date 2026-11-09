@@ -294,7 +294,7 @@ export const modelsCommand = (messenger: Messenger): Command => {
       "download and verify one speech, embedding or reranker model: tens to hundreds of MB, each size in models list",
     )
     .argument("<model>", "a model id from models list")
-    .option("--accept-terms", "accept the model's licence terms, for a model that has its own")
+    .option("--accept-terms", "no longer needed; kept so older scripts still run")
     .action(async function (this: Command, id: string, options: { acceptTerms?: boolean }) {
       if (orderedModels().some((model) => model.id === id)) return downloadAudioModel(this, messenger, id)
       if (textModels(environmentOf(this).env ?? process.env).some((model) => model.id === id))

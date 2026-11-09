@@ -42,7 +42,7 @@ describe("AI settings and provider selection", () => {
   })
   it("defaults locally, validates config values, and reports all sources", () => {
     const { config, settings, env, root, keyring } = setup()
-    expect(embeddingChoice({}, app, settings(), env, { keyring })).toBe("e5-small")
+    expect(embeddingChoice({}, app, settings(), env, { keyring })).toBe("embeddinggemma")
     expect(settings().models?.analysis).toBeUndefined()
     for (const [key, value] of [
       ["embedding_provider", "anthropic"],

@@ -106,7 +106,11 @@ export const prepareLucene = async (
   store: MessageStore,
   account: AccountKey,
   request: SearchQuery,
-  messenger: Partial<Pick<MessengerTraits, "savedChatId" | "app">> & { messageStars?: boolean },
+  messenger: Partial<Pick<MessengerTraits, "savedChatId" | "app">> & {
+    messageStars?: boolean
+    /** The run's environment, where a group lock is read (WC-ACCT-13). */
+    env?: NodeJS.ProcessEnv
+  },
 ): Promise<Prepared> => {
   if (!Number.isInteger(request.limit) || request.limit < 1 || request.limit > QUERY_PAGE_LIMIT)
     searchError("query.invalid-limit", { start: 0, end: 0 }, `use 1–${QUERY_PAGE_LIMIT} results`)
@@ -150,7 +154,7 @@ export const prepareLucene = async (
   const leaves = walkQuery(ast.root)
   const sources = positiveSources(ast.root).map((value) => sourceOf("in:", value, providers))
   for (const leaf of leaves.filter(({ field }) => field === "in")) sourceOf("in:", leaf.value, providers)
-  const listed = await listedAccounts(store, account, request.source, messenger.app, request.kind)
+  const listed = await listedAccounts(store, account, request.source, messenger.app, request.kind, messenger.env)
   const source = request.source === undefined || listed ? undefined : sourceOf("--source", request.source, providers)
   if (request.accounts !== undefined && (request.source !== undefined || sources.length > 0))
     throw new CliError("validation_error", "this search reads the accounts it was given — not with in: or --source")
@@ -457,7 +461,9 @@ export const searchLucene = async (
   store: MessageStore,
   account: AccountKey,
   request: SearchQuery,
-  messenger: Partial<Pick<MessengerTraits, "savedChatId" | "app" | "history" | "provider">> = {},
+  messenger: Partial<Pick<MessengerTraits, "savedChatId" | "app" | "history" | "provider">> & {
+    env?: NodeJS.ProcessEnv
+  } = {},
 ): Promise<SearchFound> => {
   const prepared = await prepareLucene(store, account, request, messenger)
   const execute = store.queries.matchQuery.bind(store.queries)

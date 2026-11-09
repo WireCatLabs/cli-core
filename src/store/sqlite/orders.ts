@@ -89,6 +89,8 @@ export interface OrderFilter {
   status?: OrderStatus
   purpose?: OrderPurpose
   customer?: string
+  /** `person:` or `organization:` the order is from. */
+  supplier?: string
   /** The shop's name in any letter case; with `number`, how a later mail finds its order. */
   supplierName?: string
   number?: string
@@ -358,6 +360,7 @@ export const orderOperationsOver = (context: StoreContext): OrderOperations => {
     list: (filter = {}) => {
       const project = filter.project === undefined ? null : projectId(database, filter.project)
       const customer = partyThing(filter.customer, "the customer")
+      const supplier = partyThing(filter.supplier, "the supplier")
       const by = proposedBySql("o.author_type", "o.author_id", filter.proposedBy)
       const status = filter.status === undefined ? null : statusOf(filter.status)
       const purpose = filter.purpose === undefined ? null : oneOf(filter.purpose, ORDER_PURPOSES, "a purpose")
@@ -370,6 +373,7 @@ export const orderOperationsOver = (context: StoreContext): OrderOperations => {
           `${ORDERS} WHERE o.deleted_at IS NULL AND (? IS NULL OR o.status = ?) AND (? IS NULL OR o.purpose = ?) ` +
             "AND (? IS NULL OR o.review = ?) AND (? IS NULL OR o.project_id = ?) AND (? IS NULL OR o.number = ?) " +
             "AND (? IS NULL OR (o.customer_type = ? AND o.customer_id = ?)) " +
+            "AND (? IS NULL OR (o.supplier_type = ? AND o.supplier_id = ?)) " +
             `AND ${by.sql} ORDER BY o.created_at DESC, o.id DESC`,
         )
         .all(
@@ -386,6 +390,9 @@ export const orderOperationsOver = (context: StoreContext): OrderOperations => {
           customer?.type ?? null,
           customer?.type ?? null,
           customer?.id ?? null,
+          supplier?.type ?? null,
+          supplier?.type ?? null,
+          supplier?.id ?? null,
           ...by.params,
         )
       return rows

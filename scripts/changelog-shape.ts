@@ -3,6 +3,7 @@ import { execFileSync } from "node:child_process"
 export const HEADINGS = ["Added", "Changed — may break callers", "Fixed", "Security", "Removed"]
 const UNRELEASED = "Unreleased"
 const VERSION_HEADING = /^## (\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?) — (\d{2})\.(\d{2})\.(\d{4})$/
+const CONFLICT_MARKER = /^(<{7}|\|{7}|={7}|>{7})( |$)/
 export const ID = /\b(?:CLI|MAX|OPS|CORE|NEED|BUG|FIND|SEC|PERF|UX|IDEA|DEBT|RISK|ASK|TASK)-\d+\b/g
 
 /**
@@ -39,6 +40,8 @@ export const changelogProblems = (text: string, tagged: Set<string>): string[] =
   let first = true
   text.split("\n").forEach((line, index) => {
     const where = `CHANGELOG.md:${index + 1}`
+    // A merge or rebase leaves these in any section, a tagged one too, and nothing else would notice them.
+    if (CONFLICT_MARKER.test(line)) problems.push(`${where}: a conflict marker is left over from a merge or rebase`)
     if (line.startsWith("## ")) {
       section = line.slice(3)
       subheadings = new Set()

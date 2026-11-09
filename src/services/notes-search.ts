@@ -14,7 +14,8 @@ import { chosenTextModel, meaningFloor, type TextModel, textModel, vectorModelKe
 import type { PictureEmbedder } from "../images/picture/embedder.js"
 import { DEFAULT_IMAGE_MODEL, imageModel } from "../images/picture/models.js"
 import type { AppIdentity } from "../ports/app.js"
-import { entriesOfList, fitting, type SkippedSource } from "../search/account-list.js"
+import { entriesOfList, fitting, type SkippedSource, sourceOf } from "../search/account-list.js"
+import { OWNER_NOTES } from "../search/groups.js"
 import { fieldsOfQuery as fieldsOf, meaningWords } from "../search/lucene/meaning-parts.js"
 import { plainQuery } from "../search/lucene/plain.js"
 import { validateFields } from "../search/lucene/registry.js"
@@ -28,9 +29,10 @@ import type { AccountKey, EnrichmentSubject, MessageStore } from "../store/store
 import { openPictureEmbedderFor } from "./document-pictures.js"
 import { documentSource } from "./document-source.js"
 import { type EnrichOptions, type EnrichRun, enrichRecords } from "./enrichment.js"
+import { meaningModel } from "./meaning-model.js"
 import { plainQueryWords, titleQuery, titleTiers } from "./notes-title-tier.js"
 import { PICTURE_FLOOR, plainWords } from "./pictures.js"
-import { listContextOf } from "./search-kind.js"
+import { groupLockOf, listContextOf } from "./search-kind.js"
 
 export interface NotesSearchRequest {
   text: string
@@ -139,7 +141,10 @@ export interface NotesEmbedded {
   /** Chunks still without a vector, when `maxChunks` stopped the run, or records still to enrich. */
   left: boolean
   /** What the owner's enrichment did first; absent when it is off. */
-  enrichment?: Exclude<EnrichRun, { status: "off" }> | { status: "failed"; reason: string }
+  /** The run, or `failed` with no counts when enrichment threw before it could count. */
+  enrichment?:
+    | Exclude<EnrichRun, { status: "off" }>
+    | { status: "failed"; reason: string; reason_id: "enrichment.error" }
 }
 
 /** Chunks one batch embeds: one short transaction writes each, as for conversations. */
@@ -254,7 +259,11 @@ const enrichedFirst = async (
     })
     if (run.status !== "off") enrichment = run
   } catch (error) {
-    enrichment = { status: "failed", reason: error instanceof Error ? error.message : "enrichment failed" }
+    enrichment = {
+      status: "failed",
+      reason: error instanceof Error ? error.message : "enrichment failed",
+      reason_id: "enrichment.error",
+    }
   }
   let embedded: NotesEmbedded
   try {
@@ -313,7 +322,7 @@ const queryVector = async (
   { model: choice, folderIds, withInternal, source, env, threads, command, embedders }: Omit<NearestOptions, "limit">,
 ): Promise<{ key: string; vector: Float32Array; floor: number }> => {
   if (!query.trim()) throw new CliError("validation_error", "say what to find in the notes")
-  const { model, directory, key } = localModel(choice, env, command)
+  const { model, directory, key } = localModel(choice ?? (await meaningModel(store, env)), env, command)
   const scope = {
     ...(folderIds ? { folderIds } : {}),
     ...(withInternal ? { withInternal: true } : {}),
@@ -882,8 +891,9 @@ export const searchNotesOf = async (
   {
     accounts: list,
     app,
+    env,
     ...query
-  }: Omit<NotesQuery, "folderIds" | "withInternal"> & { accounts?: string; app?: AppIdentity },
+  }: Omit<NotesQuery, "folderIds" | "withInternal"> & { accounts?: string; app?: AppIdentity; env?: NodeJS.ProcessEnv },
 ): Promise<NotesFoundOf> => {
   text = plainQuery(text)
   const own = app?.command ?? query.command
@@ -894,10 +904,21 @@ export const searchNotesOf = async (
     ...(await store.notes.documentsAccounts()).map(({ id }) => ({ provider: "notes", account: id })),
     ...[await store.notes.addedAccount()].flatMap((added) => (added ? [{ provider: "notes", account: added.id }] : [])),
   ]
+  const lock = groupLockOf(app, env)
+  const typedScope = list ?? (lock === undefined ? undefined : `group:${lock}`)
+  // memo's own notes are the owner's, so a group reads them beside its folders (WC-ACCT-13).
+  const notesScope =
+    typedScope !== undefined && /(^|,)\s*group:/i.test(typedScope)
+      ? `${typedScope},${sourceOf(OWNER_NOTES)}`
+      : typedScope
   const named =
-    list === undefined
+    notesScope === undefined
       ? { accounts: held, skipped: [] }
-      : fitting(entriesOfList(list, await listContextOf(store, account, app)), ["notes", "documents"], what)
+      : fitting(
+          entriesOfList(notesScope, await listContextOf(store, account, app, undefined, env)),
+          ["notes", "documents"],
+          what,
+        )
   const source = query.source ?? noteSourceOfQuery(text).source
   const typed = named.accounts.filter(
     ({ account }) => source === undefined || (account === INTERNAL_NOTES) === (source === "internal"),

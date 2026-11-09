@@ -36,3 +36,4 @@ export const linkKind = (kind: LinkKind): string => `'${kind}'`
 
 /** The `role` of the `related-to` link from a phone call's event to the person on the other end. */
 export const COUNTERPART_ROLE = "counterpart"
+export { REPORTER_SQL } from "./link-source.js"

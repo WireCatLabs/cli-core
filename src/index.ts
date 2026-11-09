@@ -1,3 +1,4 @@
+export { isNoReplyAddress, isRoleAddress, ROLE_ADDRESS_WORDS } from "./domain/addresses.js"
 export {
   CATALOG_KINDS,
   type CatalogKind,
@@ -32,10 +33,14 @@ export {
   type CrmPerson,
   type CrmPipeline,
   type CrmRecords,
+  type CrmScope,
+  type CrmScopeSetting,
   type CrmStage,
   type CrmUser,
   type CrmValue,
+  isCrmUserId,
   isItemKind,
+  normalCrmUserId,
 } from "./domain/crm.js"
 export {
   DEAL_KINDS,
@@ -158,6 +163,7 @@ export {
 } from "./domain/references.js"
 export {
   byEngagement,
+  CONTRACT_ROLES,
   ENGAGEMENT_LEVELS,
   type Engagement,
   engagementRank,
