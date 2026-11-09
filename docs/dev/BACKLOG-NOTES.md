@@ -132,6 +132,15 @@ chat kinds use query terms. CLI and MCP both accept only canonical argument name
   1,200-character document passages e5-small embedded 11–15 a second and EmbeddingGemma ~1.6, not the 31 and 2
   in the model table. Measure, in order: more sessions over all cores (~700 MB each), batched inputs, a native
   ONNX Runtime (larger install).
+- **Batched inputs measured, not built (2026-11-09).** Masked right padding, texts sorted by token count, native
+  runtime, 8 threads, 300 synthetic mixed-length texts: EmbeddingGemma 70.8 s one a run, 46.4 s in batches of 16
+  (1.53×, peak RAM 1.0 → 1.75 GB); e5-small 5.6 s, 4.8 s in batches of 32 (1.17×, 1.0 → 2.0 GB). Batched vectors
+  drift from one-at-a-time ones: lowest cosine 0.99963 for Gemma (5 of 300 below 0.9999), 0.9963 for e5 (all 300
+  below). The bar was 1.5× and 0.9999, so both fail; probably the quantized files, whose arithmetic depends on the
+  batch (not verified). The pilot also flatters batching: it sorted all 300 at once, while notes and conversations
+  hand the model 8 texts a call (`NOTE_BATCH`, `PER_SESSION`). Sorting alone gains nothing here, since one text a run
+  pads nothing. A 2,000-text sweep was stopped by memory pressure and not repeated. Page and script:
+  cli-testing `performance/agents/knowledge-graph-memory/embedding-batches/` (e5c0a53).
 
 ## CORE-23
 

@@ -30,6 +30,7 @@ Someday work: P3 items, nice-to-haves and research. Same ids, marks and one-line
 - **CORE-21** · P3 · 🚩 One registry for what gets a vector; owner direction given, design not approved.
   [embedding-registry-plan.md](embedding-registry-plan.md).
 - **CORE-22** · P3 · Embedding throughput: more sessions over all cores, batched inputs, a native ONNX Runtime.
+  Batched inputs measured and rejected 2026-11-09 (1.53× Gemma, 1.17× e5, vectors drift).
   [Notes](BACKLOG-NOTES.md#core-22).
 - **CORE-23** · P3 · Speech throughput: one recognizer per pass, then workers over files
   (`src/speech/transcribe.ts`). [Notes](BACKLOG-NOTES.md#core-23).
