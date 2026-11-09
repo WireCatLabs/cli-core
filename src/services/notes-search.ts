@@ -141,7 +141,10 @@ export interface NotesEmbedded {
   /** Chunks still without a vector, when `maxChunks` stopped the run, or records still to enrich. */
   left: boolean
   /** What the owner's enrichment did first; absent when it is off. */
-  enrichment?: Exclude<EnrichRun, { status: "off" }> | { status: "failed"; reason: string }
+  /** The run, or `failed` with no counts when enrichment threw before it could count. */
+  enrichment?:
+    | Exclude<EnrichRun, { status: "off" }>
+    | { status: "failed"; reason: string; reason_id: "enrichment.error" }
 }
 
 /** Chunks one batch embeds: one short transaction writes each, as for conversations. */
@@ -256,7 +259,11 @@ const enrichedFirst = async (
     })
     if (run.status !== "off") enrichment = run
   } catch (error) {
-    enrichment = { status: "failed", reason: error instanceof Error ? error.message : "enrichment failed" }
+    enrichment = {
+      status: "failed",
+      reason: error instanceof Error ? error.message : "enrichment failed",
+      reason_id: "enrichment.error",
+    }
   }
   let embedded: NotesEmbedded
   try {

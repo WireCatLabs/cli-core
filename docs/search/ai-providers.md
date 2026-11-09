@@ -151,16 +151,20 @@ memo models consents show --json                          # on or off, records, 
 memo models consents set openai --model gpt-4o-mini       # what would be sent and what it costs; changes nothing
 memo models consents set openai --model gpt-4o-mini --yes # on
 memo models consents revoke                               # off, and deletes what the model wrote
+memo models keys set openai < key.txt                     # the key, from stdin or a hidden prompt
+memo models keys remove openai
 ```
 
 With it on, `embedNotes` and `embedMail` (every `sync` that embeds) first enrich up to 600 records that have no
 enrichment of their current text, 20 to a request and four requests at once, then embed. A record is sent once per
 text: an edit sends it again, a re-sync does not. A batch the model answers wrongly leaves its records for the next
-sync; a rate limit or a missing key stops the run. The records go as untrusted data, never as instructions; each
+sync; a rate limit, a refused key, an unreachable provider or a missing key stops the run. A run that sent records
+and got none back is `failed`. A stopped or failed run carries `reason` and a `reason_id` from a fixed list
+(`enrichment.no-key`, `key-rejected`, `unreachable`, `rate-limited`, `bad-replies`, `cancelled`, `error`). The records go as untrusted data, never as instructions; each
 record adds at most five facts and three questions of at most 400 characters.
 
 When the tool passes its identity (memo does), the key is read from its keyring entry `embeddings:<provider>`
-(`models keys set openai` in tg and MAX), then `<PREFIX>_OPENAI_API_KEY` / `OPENAI_API_KEY` (or the Anthropic ones),
+(`models keys set openai`), then `<PREFIX>_OPENAI_API_KEY` / `OPENAI_API_KEY` (or the Anthropic ones),
 then an entry of the tool's service named after the provider alone (`cli-memo` / `anthropic`). The consent text also
 says that a question in the record's own words finds that record first a little less often.
 An agent's shell cannot turn it on, and over MCP `models consents set` needs `mcp.authority`. Prices for the

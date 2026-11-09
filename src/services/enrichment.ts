@@ -89,10 +89,39 @@ export interface EnrichOptions {
   signal?: AbortSignal
 }
 
+/** Why a run stopped or failed, from a fixed list, so a window can say it in its own words. */
+export const ENRICHMENT_REASON_IDS = [
+  "enrichment.no-key",
+  "enrichment.key-rejected",
+  "enrichment.unreachable",
+  "enrichment.rate-limited",
+  "enrichment.bad-replies",
+  "enrichment.cancelled",
+  "enrichment.error",
+] as const
+export type EnrichmentReasonId = (typeof ENRICHMENT_REASON_IDS)[number]
+
+const REASON_TEXT: Partial<Record<EnrichmentReasonId, string>> = {
+  "enrichment.key-rejected": "the provider refused the key; nothing more was sent",
+  "enrichment.unreachable": "the provider could not be reached; nothing more was sent",
+}
+
+const reasonIdOf = (error: unknown): EnrichmentReasonId => {
+  // A reply that cannot be read throws a plain error: one more bad batch.
+  if (!(error instanceof CliError)) return "enrichment.bad-replies"
+  if (error.details.reason === "model.key-rejected") return "enrichment.key-rejected"
+  if (error.details.reason === "model.unreachable") return "enrichment.unreachable"
+  if (error.code === "rate_limited") return "enrichment.rate-limited"
+  if (error.code === "cancelled") return "enrichment.cancelled"
+  if (error.code === "invalid_response") return "enrichment.bad-replies"
+  return "enrichment.error"
+}
+
 export type EnrichRun =
   | { status: "off" }
   | {
-      status: "done" | "stopped"
+      /** `failed`: records were sent and none came back enriched. */
+      status: "done" | "stopped" | "failed"
       provider: string
       model: string
       /** Records the model answered for, with or without facts. */
@@ -102,8 +131,9 @@ export type EnrichRun =
       left: number
       usage: ModelUsage
       cost_usd: number | null
-      /** Why a stopped run stopped, with no provider body or key in it. */
+      /** Why a stopped or failed run ended, with no provider body or key in it. */
       reason?: string
+      reason_id?: EnrichmentReasonId
     }
 
 const recordsData = (batch: readonly EnrichmentCandidate[]) =>
@@ -172,7 +202,8 @@ export const enrichRecords = async (
       left: (await enrichment.pending(Number.MAX_SAFE_INTEGER, options.narrow)).length,
       usage: { input: 0, output: 0 },
       cost_usd: 0,
-      reason: `no ${setting.provider} key: set ${setting.provider.toUpperCase()}_API_KEY, or the tool's own key; nothing was sent`,
+      reason: `no ${setting.provider} key: store one with \`models keys set ${setting.provider}\` or set ${keyVariable(setting.provider)}; nothing was sent`,
+      reason_id: "enrichment.no-key",
     }
   const gateway = modelGateway({
     resolve: () => target,
@@ -191,6 +222,7 @@ export const enrichRecords = async (
   let failed = 0
   let failedBatches = 0
   let reason: string | undefined
+  let reasonId: EnrichmentReasonId | undefined
   const ask = async (batch: EnrichmentCandidate[]) => {
     const answer = await gateway.complete({
       purpose: "enrichment",
@@ -236,9 +268,12 @@ export const enrichRecords = async (
         await ask(batch)
       } catch (error) {
         failed += batch.length
-        const code = error instanceof CliError ? error.code : "invalid_response"
-        if (code !== "invalid_response" || ++failedBatches >= MAX_FAILED_BATCHES)
-          reason = error instanceof CliError ? error.message : "the enrichment provider failed"
+        const id = reasonIdOf(error)
+        // A refused key or an unreachable provider fails every batch the same way; only a bad reply may be one-off.
+        if (id !== "enrichment.bad-replies" || ++failedBatches >= MAX_FAILED_BATCHES) {
+          reason = REASON_TEXT[id] ?? (error instanceof CliError ? error.message : "the enrichment provider failed")
+          reasonId = id
+        }
       }
     }
   }
@@ -246,8 +281,13 @@ export const enrichRecords = async (
     Array.from({ length: Math.min(options.concurrency ?? CONCURRENCY, batches.length) }, () => worker()),
   )
   const left = (await enrichment.pending(Number.MAX_SAFE_INTEGER, options.narrow)).length
+  const none = enriched === 0 && failed > 0
+  if (none && reason === undefined) {
+    reason = `the provider enriched none of the ${failed} records sent; they are sent again next sync`
+    reasonId = "enrichment.bad-replies"
+  }
   return {
-    status: reason === undefined ? "done" : "stopped",
+    status: none ? "failed" : reason === undefined ? "done" : "stopped",
     provider: setting.provider,
     model: setting.model,
     enriched,
@@ -256,6 +296,7 @@ export const enrichRecords = async (
     usage,
     cost_usd: costOf(usage, setting),
     ...(reason === undefined ? {} : { reason }),
+    ...(reasonId === undefined ? {} : { reason_id: reasonId }),
   }
 }
 

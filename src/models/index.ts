@@ -52,13 +52,22 @@ export const modelGateway = (deps: GatewayDeps) => ({
     if (deps.signal?.aborted) throw new CliError("cancelled", "model request cancelled")
     const fetcher = deps.fetch ?? fetch
     let limited = false
+    let unreachable = false
+    let refused = false
     const cancellable: typeof fetch = async (input, init) => {
       const signal = init?.signal ?? (input instanceof Request ? input.signal : undefined)
-      const response = await fetcher(input, {
-        ...init,
-        signal: deps.signal ? AbortSignal.any([deps.signal, ...(signal ? [signal] : [])]) : signal,
-      })
+      let response: Response
+      try {
+        response = await fetcher(input, {
+          ...init,
+          signal: deps.signal ? AbortSignal.any([deps.signal, ...(signal ? [signal] : [])]) : signal,
+        })
+      } catch (error) {
+        unreachable = true
+        throw error
+      }
       if (response.status === 429) limited = true
+      if (response.status === 401 || response.status === 403) refused = true
       return response
     }
     try {
@@ -70,9 +79,16 @@ export const modelGateway = (deps: GatewayDeps) => ({
     } catch {
       if (limited)
         throw new CliError("rate_limited", `${request.purpose} provider rate limit reached; no result was stored`)
+      // The message stays one for every failure; the reason tells a refused key and a network failure apart.
+      const reason = refused
+        ? "model.key-rejected"
+        : unreachable && !deps.signal?.aborted
+          ? "model.unreachable"
+          : undefined
       throw new CliError(
         "invalid_response",
         `${request.purpose} provider failed or returned an incomplete response; no result was stored`,
+        reason === undefined ? undefined : { reason },
       )
     }
   },

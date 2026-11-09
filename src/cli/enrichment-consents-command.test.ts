@@ -1,6 +1,7 @@
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { Readable } from "node:stream"
 import { memoryKeyring } from "@wirecat/cli-base"
 import { Command } from "commander"
 import { describe, expect, it } from "vitest"
@@ -19,19 +20,26 @@ const fixture = async (extra: NodeJS.ProcessEnv = {}) => {
   await store.close()
   const answers: Body[] = []
   const lines: string[] = []
+  const keyring = memoryKeyring()
+  let piped: string | undefined
   const models = modelCatalogueCommand(app, {
     kinds: ["text"],
     enrichment: true,
     env: () => env,
-    keyring: memoryKeyring(),
+    keyring,
+    stdin: () => (piped === undefined ? undefined : Readable.from([piped])),
     output: (body) => answers.push(body),
     diagnostic: (line) => lines.push(line),
   })
   const run = (...words: string[]) =>
     new Command("fixture").addCommand(models).parseAsync(["models", "consents", ...words], { from: "user" })
+  const keys = (stdin: string | undefined, ...words: string[]) => {
+    piped = stdin
+    return new Command("fixture").addCommand(models).parseAsync(["models", "keys", ...words], { from: "user" })
+  }
   const item = (at: number) =>
     answers[at] && "item" in answers[at] ? (answers[at].item as Record<string, unknown>) : {}
-  return { env, run, item, lines }
+  return { env, run, keys, item, lines, answers, keyring }
 }
 
 describe("models consents", () => {
@@ -114,5 +122,25 @@ describe("models consents", () => {
 
     await expect(run("set", "openai", "--model", "gpt-4o-mini", "--yes")).rejects.toThrow(/only the owner/)
     await expect(run("set", "mistral", "--model", "x")).rejects.toThrow(/openai or anthropic/)
+  })
+
+  it("stores the provider's key from stdin in the tool's own entry, says only where, and forgets it", async () => {
+    const secret = "synthetic provider key"
+    const { run, keys, item, lines, answers, keyring } = await fixture()
+
+    await keys(`${secret}\n`, "set", "openai")
+    expect(keyring.entries.get("fixture:embeddings:openai")).toBe(secret)
+    await run("show")
+    await keys(undefined, "remove", "openai")
+    await run("show")
+
+    expect(item(0)).toEqual({ provider: "openai", stored: true, source: "keyring" })
+    expect(keyring.entries.size).toBe(0)
+    expect(item(1)).toMatchObject({ target: { key: { present: true, source: "keyring" } } })
+    expect(item(2)).toEqual({ provider: "openai", removed: true, from: ["keyring"] })
+    expect(item(3)).toMatchObject({ target: { key: { present: false, source: null } } })
+    expect(JSON.stringify(answers) + lines.join("\n")).not.toContain(secret)
+    await expect(keys("", "set", "openai")).rejects.toThrow(/no key was given/)
+    await expect(keys("sk-x", "set", "open ai")).rejects.toThrow(/name the provider/)
   })
 })
