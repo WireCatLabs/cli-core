@@ -25,12 +25,50 @@ shape of this file.
   and `runScheduleNow` build, save, pause, remove and run an agent schedule as the `schedule` commands do (the routes
   and the day's cost cap checked the same way); `slotsOfAt` reads one `--at`; `parseRoute` and `routeText` read a
   route; `slotsOf`, `calendarOf`, `runsBetween`, `previousRun` and `nextRun` read a calendar schedule's times.
+- **`harderRanking(result)` gives the `--harder` outcome as cli-base 0.94.0's `meta.ranking`.** A CLI that offers
+  `search all --harder` puts it into its answer's `meta`, so a program such as WireCat Desktop reads whether the
+  model's order was used, why not (`reason_id`), which provider, model and endpoint, how many hits were sent, the cost
+  and, new in the result, the tokens (`usage`) instead of an English note. cli-base goes to 0.94.0.
 
 ### Changed — may break callers
 
 - `template.source` gains `inherited`. A schedule's `When` gains `{ calendar: Slot[] }` for more than one time; code that switches over every `When` needs
   the new case, or `slotsOf` for any calendar shape. A host's `reportTemplates` now gets the schedule's name as its
   second argument.
+- **The MCP `<app>_read` and `<app>_write` tools list a short answer schema: 3,323 characters for the three tools in
+  place of 17,278.** It names only what an agent acts on: `items` or `item`, `page.has_more`, `next`, `missing`, and
+  `meta` as an open object that points at `<app>_tools_search`, whose match still gives each command's full answer.
+  `_write` lists only `item`, `next` and `meta`, all a write answers with. The server still checks every answer
+  against the full cli-base envelope, so nothing an answer carries changes. Every client paid the full schema twice
+  on each connect, and cli-base 0.94.0's `meta.ranking` added 2,800 characters more. Watch for: a
+  client that built types from the listed `outputSchema` now gets open objects; it reads the full answer from
+  `<app>_tools_search`. An agent eval found no loss: 39 of 42 tasks with either listing, on half the input tokens
+  ([cli-testing](https://github.com/WireCatLabs/cli-testing/tree/main/performance/agents/mcp-short-listing)).
+- **`store.people.list` lists one kind of person at a time**, `person` by default, instead of hiding everyone with no
+  tie. `kind` is `person`, `organization`, `automated`, `unsorted` or `all`; the `all` option and `hidden` are gone,
+  and `counts` gives how many each kind holds. The first rule that holds decides the kind, and `kindSignals` names
+  it: the owner, people added by hand and task assignees are a `person`; a bot, a no-reply address, a sender most of
+  whose mail is in the bulk box, a sender memo scored `bulk_never_replied`, or a name such as «Notifications» or
+  «Рассылка» is `automated`; an identity an organization owns, a shared role address (`info@`) or a legal form or
+  company word in the name (ООО, LLC, Airlines, Hotel, Team…) is an `organization`; a named person with a tie is a
+  `person`; everyone else, with no tie or nothing to show as a name, is `unsorted`.
+- `sort` takes `interactions` (the default: most messages and mail from them first), `recent`, `name` or `tasks`.
+- Each listed person has `kind`, `kindSignals`, `contact` (the phone, else the email, else `@username`),
+  `messagesFrom` and `lastContact`. On a synthetic store of 51,000 people and 1.5 million messages a list takes about
+  0.5–0.6 s on a loaded machine and 1.9 s sorted by `recent`; a name search reads only the people it found
+  ([cli-testing `performance/people/kinds`](https://github.com/WireCatLabs/cli-testing/tree/main/performance/people/kinds)).
+- An unknown `kind` or `sort` is refused. A sender counts as bulk mail from 3 letters on; a role address makes an
+  `organization` only when every address of the person is one.
+- `displayName` reads a messenger's placeholder for a missing name (`null`, «Без имени», `Deleted Account`) as no
+  name, so the username, phone or email shows instead; `nameKey` gives such a name no key, so two deleted
+  accounts are never proposed as one person.
+
+### Fixed
+
+- **`doctor --online` asks npm through `hostFetch`**, which reaches only `registry.npmjs.org`. cli-base 0.94.0's
+  `raw-network` lint reported the global `fetch` it fell back to. The model gateway and OpenAI transcription keep the
+  global `fetch` in the lint baseline: they call an endpoint the owner configures (OpenRouter, a local server), so no
+  host list can be declared in advance.
 
 ## 0.623.0 — 09.11.2026
 
