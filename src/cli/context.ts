@@ -282,6 +282,7 @@ export const baseContext = (command: Command, resolveSettings: Resolve): BaseCon
           ...(settings.keepSuccessfulRunsForDays === undefined
             ? {}
             : { keepSuccessDays: settings.keepSuccessfulRunsForDays }),
+          ...(settings.keepStoreRunsForDays === undefined ? {} : { keepStoreDays: settings.keepStoreRunsForDays }),
           ...(settings.runsSizeLimitMb === undefined ? {} : { maxBytes: settings.runsSizeLimitMb * 1024 * 1024 }),
           processRun: !environment.agent,
           format,

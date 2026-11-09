@@ -24,12 +24,17 @@ export const RUN_SEARCH_QUERY = defineQuery({
     termField("error_code", "kw", "error_code:rate_limited"),
     termField("operation", "kw", "operation:messages.download"),
     termField("profile", "kw", "profile:work"),
+    termField("kind", "kw", "kind:store"),
+    termField("table", "kw", "table:emails"),
   ],
 })
 
 export const runSearchFilter = (
   words: QueryWords,
-): Pick<RunSearch, "terms" | "status" | "errorCode" | "operation" | "profile" | "since" | "until"> => {
+): Pick<
+  RunSearch,
+  "terms" | "status" | "errorCode" | "operation" | "profile" | "kind" | "table" | "since" | "until"
+> => {
   const text = typedQuery(words).trim()
   if (!text) return {}
   const context = { command: "search runs", guide: LIST_QUERY_GUIDE }
@@ -77,5 +82,7 @@ export const runSearchFilter = (
     ...(fields.has("error_code") ? { errorCode: fields.get("error_code") } : {}),
     ...(fields.has("operation") ? { operation: fields.get("operation") } : {}),
     ...(fields.has("profile") ? { profile: fields.get("profile") } : {}),
+    ...(fields.has("kind") ? { kind: fields.get("kind") } : {}),
+    ...(fields.has("table") ? { table: fields.get("table") } : {}),
   }
 }

@@ -66,7 +66,18 @@ export interface CacheEvent {
   ageMs?: number
 }
 
-export type DiagnosticEvent = RequestEvent | CacheEvent | WarningEvent
+/** Rows one committed write transaction changed in one table: a count, never a row. */
+export interface StoreEvent {
+  event: "store"
+  /** Always `store.write`; typed wide so an object spread into a request event still narrows by `event`. */
+  operation: string
+  kind: "store"
+  table: string
+  op: "insert" | "update" | "delete"
+  n: number
+}
+
+export type DiagnosticEvent = RequestEvent | CacheEvent | WarningEvent | StoreEvent
 
 export type EventSink = (event: DiagnosticEvent) => void
 
@@ -86,6 +97,8 @@ export const providerErrorKey = (value: unknown): string | undefined =>
  * ```
  */
 export const renderEvent = (event: DiagnosticEvent): string => {
+  if (event.event === "store")
+    return `${MARK.store} ${event.operation.padEnd(16)} ${event.table}  ${event.op}  ${event.n}`
   if (event.event === "warning") {
     const counts = Object.entries(event.counts ?? {}).map(([field, count]) => `${count} ${field}`)
     return [`${MARK.warning} ${(event.operation ?? "").padEnd(16)} ${event.code}`, ...counts, event.detail]
@@ -119,7 +132,7 @@ export const renderEvent = (event: DiagnosticEvent): string => {
   return `${MARK[event.event]} ${event.operation.padEnd(16)} ${parts.join("  ")}`.trimEnd()
 }
 
-const MARK = { request: "→", response: "←", cache: "•", warning: "!" } as const
+const MARK = { request: "→", response: "←", cache: "•", warning: "!", store: "+" } as const
 
 const age = (ms: number): string => (ms < 1000 ? `${ms}ms` : `${Math.round(ms / 1000)}s`)
 

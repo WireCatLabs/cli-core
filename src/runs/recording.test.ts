@@ -9,9 +9,13 @@ import { providerRequest } from "../cli/command-runs.js"
 import { type BaseContext, baseContext } from "../cli/context.js"
 import { run } from "../cli/program.js"
 import { runsCommand } from "../cli/runs/command.js"
+import { searchRuns } from "../cli/runs/search.js"
+import { runSearchFilter } from "../cli/runs/search-query.js"
 import { settingsFor } from "../cli/settings.js"
+import { openStoreContext } from "../store/sqlite/open-store.js"
+import { write } from "../store/sqlite/transaction.js"
 import { CORE_LOG_EVENTS } from "./log-events.js"
-import { EVENTS_AT_MOST } from "./recording.js"
+import { EVENTS_AT_MOST, STORE_EVENTS_AT_MOST } from "./recording.js"
 import { findRun, listRuns, readEvents, runsDirFor } from "./run.js"
 import { secretInput } from "./run-context.js"
 import { runEvent, withAttempt } from "./scope.js"
@@ -104,6 +108,34 @@ describe("a recorded run", () => {
     expect(listRuns((await call(["messages", "send", TITLE, BODY])).runsDir)).toMatchObject([{ status: "success" }])
     const off = JSON.stringify({ defaults: { record: false } })
     expect(listRuns((await call(["messages", "send", TITLE, BODY], undefined, off)).runsDir)).toEqual([])
+  })
+
+  it("is kept under record: false when it wrote the store, and found by search runs kind:store table:accounts", async () => {
+    const off = JSON.stringify({ defaults: { record: false } })
+    const store = join(mkdtempSync(join(tmpdir(), "runs-store-")), "m.db")
+    const writeAccount = async () => {
+      const { database } = await openStoreContext({ path: store, warn: () => {} })
+      write(database, () =>
+        database
+          .prepare("INSERT INTO accounts (provider, external_id, created_at, updated_at) VALUES ('chat', '1', 0, 0)")
+          .run(),
+      )
+      database.close()
+    }
+    const { runsDir } = await call(["messages", "send", TITLE, BODY], writeAccount, off)
+
+    const [metadata] = listRuns(runsDir)
+    expect(metadata).toMatchObject({
+      status: "success",
+      keptBecauseStore: true,
+      operations: expect.arrayContaining(["store.write"]),
+    })
+    const found = searchRuns(runsDir, runSearchFilter(["kind:store", "table:accounts"]))
+    expect(found.items).toHaveLength(1)
+    expect(found.items[0]?.events).toEqual([
+      expect.objectContaining({ event: "store.write", kind: "store", table: "accounts", op: "insert", n: 1 }),
+    ])
+    expect(searchRuns(runsDir, runSearchFilter(["table:emails"])).items).toEqual([])
   })
 
   it("keeps the words typed only when it fails, under record_input: failed", async () => {
@@ -451,5 +483,26 @@ describe("request lines in a run", () => {
       counts: { "messages.get": 6, "messages.send": 1 },
     })
     expect(metadata?.eventsDropped).toBe(7)
+  })
+
+  it("sum store events past their own cap into one per table and change, written as the run ends", async () => {
+    const stored = (table: string, n: number) =>
+      runEvent({ event: "store", operation: "store.write", kind: "store", table, op: "insert", n })
+    const { runsDir } = await call(["messages", "send", "777", "hi", "--record"], async () => {
+      for (let at = 0; at < STORE_EVENTS_AT_MOST; at++) stored("emails", 1)
+      stored("emails", 2)
+      stored("chunks", 3)
+      stored("emails", 4)
+      runEvent({ event: "request", operation: "messages.get" })
+    })
+    const [metadata] = listRuns(runsDir)
+    const events = readEvents(findRun(runsDir, metadata?.runId ?? "")?.dir ?? "")
+    expect(events.filter((event) => event.event === "store.write")).toHaveLength(STORE_EVENTS_AT_MOST + 2)
+    expect(events.slice(-2)).toEqual([
+      expect.objectContaining({ table: "emails", n: 6 }),
+      expect.objectContaining({ table: "chunks", n: 3 }),
+    ])
+    expect(events.some((event) => event.operation === "messages.get")).toBe(true)
+    expect(metadata).toMatchObject({ tables: ["chunks", "emails"] })
   })
 })

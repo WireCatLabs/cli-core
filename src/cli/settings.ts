@@ -5,7 +5,7 @@ import { AI_DEFAULTS, AI_ENTRIES, type AISettings, resolveAISettings } from "../
 import { parseDuration } from "../domain/duration.js"
 import { DEFAULT_RERANK_MODEL, RERANK_MODELS } from "../embeddings/models.js"
 import { type AppIdentity, envName, readOnlyLockOf } from "../ports/app.js"
-import { KEEP_SUCCESSFUL_RUNS_FOR_DAYS, RUNS_SIZE_LIMIT_MB } from "../runs/run.js"
+import { KEEP_STORE_RUNS_FOR_DAYS, KEEP_SUCCESSFUL_RUNS_FOR_DAYS, RUNS_SIZE_LIMIT_MB } from "../runs/run.js"
 import type { RecordInput } from "../runs/run-context.js"
 import {
   assertOverridesTighten,
@@ -133,6 +133,7 @@ const SHARED_PROFILE_ENTRIES = {
   record_input: v.optional(recordInputSetting),
   keep_runs_for_days: v.optional(count),
   keep_successful_runs_for_days: v.optional(count),
+  keep_store_runs_for_days: v.optional(count),
   runs_size_limit_mb: v.optional(count),
   permissions: v.optional(permissionLevels),
   sends_per_hour: v.optional(count),
@@ -220,6 +221,11 @@ const SHARED_SETTINGS: readonly DeclaredSetting[] = [
     key: "keep_successful_runs_for_days",
     default: KEEP_SUCCESSFUL_RUNS_FOR_DAYS,
     description: "days a successful run is kept",
+  },
+  {
+    key: "keep_store_runs_for_days",
+    default: KEEP_STORE_RUNS_FOR_DAYS,
+    description: "days a successful run that wrote the store is kept, even unrecorded",
   },
   { key: "runs_size_limit_mb", default: RUNS_SIZE_LIMIT_MB, description: "the most megabytes all runs may take" },
   { key: "sender_colors", default: false, description: "color each sender's name in a conversation" },
@@ -374,6 +380,8 @@ export interface Settings extends AISettings {
   keepRunsForDays: number
   /** Successful runs go sooner than failed ones. Optional so a CLI with settings of its own need not return it. */
   keepSuccessfulRunsForDays?: number
+  /** A successful run that wrote the store is kept this long, even when `record` would not keep it. */
+  keepStoreRunsForDays?: number
   /** The runs folder's size limit, in megabytes. */
   runsSizeLimitMb?: number
   /** The variable that made this process read-only, above every level and flag (`<PREFIX>_READ_ONLY`). */
@@ -695,6 +703,7 @@ export const settingsFor = <T extends object = Record<never, never>>(
     const recordInput = fromLayers<RecordInput>("record_input", true)
     const keepRunsForDays = fromLayers("keep_runs_for_days", DEFAULT_KEEP_RUNS_FOR_DAYS)
     const keepSuccessfulRunsForDays = fromLayers("keep_successful_runs_for_days", KEEP_SUCCESSFUL_RUNS_FOR_DAYS)
+    const keepStoreRunsForDays = fromLayers("keep_store_runs_for_days", KEEP_STORE_RUNS_FOR_DAYS)
     const runsSizeLimitMb = fromLayers("runs_size_limit_mb", RUNS_SIZE_LIMIT_MB)
     // Set where an agent runs unattended; the config file and `--permission` cannot undo it.
     const readOnlyLock = readOnlyLockOf(app, env)
@@ -775,6 +784,7 @@ export const settingsFor = <T extends object = Record<never, never>>(
       keepFailedRuns: record.value || record.from !== "flag",
       keepRunsForDays: keepRunsForDays.value,
       keepSuccessfulRunsForDays: keepSuccessfulRunsForDays.value,
+      keepStoreRunsForDays: keepStoreRunsForDays.value,
       runsSizeLimitMb: runsSizeLimitMb.value,
       ...(readOnlyLock ? { readOnlyLock } : {}),
       permissions: permissions.levels,
@@ -810,6 +820,7 @@ export const settingsFor = <T extends object = Record<never, never>>(
         recordInput: recordInput.from,
         keepRunsForDays: keepRunsForDays.from,
         keepSuccessfulRunsForDays: keepSuccessfulRunsForDays.from,
+        keepStoreRunsForDays: keepStoreRunsForDays.from,
         runsSizeLimitMb: runsSizeLimitMb.from,
         sendsPerHour: sendsPerHour.from,
         requestsPerMinute: requestsPerMinute.from,

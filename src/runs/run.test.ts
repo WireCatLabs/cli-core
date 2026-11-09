@@ -4,7 +4,16 @@ import { join } from "node:path"
 import { logRecordSchema } from "@wirecat/cli-base/standards"
 import * as v from "valibot"
 import { afterEach, describe, expect, it } from "vitest"
-import { findRun, listRuns, pruneRuns, readEvents, refuseRealStateInTests, runsDirFor, startRun } from "./run.js"
+import {
+  findRun,
+  listRuns,
+  pruneRuns,
+  type RunMetadata,
+  readEvents,
+  refuseRealStateInTests,
+  runsDirFor,
+  startRun,
+} from "./run.js"
 
 const runsDir = () => join(mkdtempSync(join(tmpdir(), "runs-")), "runs")
 
@@ -247,6 +256,60 @@ describe("what is kept, and for how long", () => {
     expect(listRuns(dir).map((run) => run.runId)).toEqual([recent.id, oldFailure.id])
     expect(findRun(dir, old.id)).toBeUndefined()
     expect(findRun(dir, oldQuiet.id)).toBeUndefined()
+  })
+
+  it("keeps a success that wrote the store for keepStoreDays, and one kept only for that no longer", async () => {
+    const dir = runsDir()
+    const stored = async (at: string, extra: Partial<RunMetadata> = {}) => {
+      const run = startRun({
+        runsDir: dir,
+        command: "sync",
+        service: "mail",
+        cliVersion: "0.0.0",
+        now: () => new Date(at),
+      })
+      run.logger.info({
+        event: "store.write",
+        operation: "store.write",
+        kind: "store",
+        table: "emails",
+        op: "insert",
+        n: 3,
+      })
+      await run.finish("success", extra)
+      return run
+    }
+    const onlyForStore = await stored("2026-09-15T10:00:00.000Z", { keptBecauseStore: true })
+    const recorded = await stored("2026-09-15T10:00:01.000Z")
+    const plain = await finished(dir, "2026-09-11T10:00:00.000Z", "success", true)
+    const longer = await stored("2026-09-11T10:00:01.000Z")
+    const now = new Date("2026-09-20T10:00:00.000Z")
+
+    pruneRuns(dir, { keepDays: 30, keepSuccessDays: 7, keepStoreDays: 3, now })
+    expect(listRuns(dir).map((run) => run.runId)).toEqual([recorded.id])
+    expect(findRun(dir, onlyForStore.id)).toBeUndefined()
+    expect(findRun(dir, plain.id)).toBeUndefined()
+    expect(findRun(dir, longer.id)).toBeUndefined()
+
+    const later = runsDir()
+    const kept = await startRun({
+      runsDir: later,
+      command: "sync",
+      service: "mail",
+      cliVersion: "0.0.0",
+      now: () => new Date("2026-09-11T10:00:00.000Z"),
+    })
+    kept.logger.info({
+      event: "store.write",
+      operation: "store.write",
+      kind: "store",
+      table: "emails",
+      op: "insert",
+      n: 1,
+    })
+    await kept.finish("success")
+    pruneRuns(later, { keepDays: 30, keepSuccessDays: 7, keepStoreDays: 10, now })
+    expect(listRuns(later).map((run) => run.runId)).toEqual([kept.id])
   })
 
   it("**fits the size limit once a day**, oldest successes first, then the oldest days", async () => {

@@ -4,7 +4,14 @@ import type { AppIdentity } from "../ports/app.js"
 import { markStoreDamaged } from "../store/marks.js"
 import { storePath } from "../store/path.js"
 import { endpointTemplate, errorDetailOf, framesOf } from "./error-detail.js"
-import { type DiagnosticEvent, type EventSink, providerErrorKey, type RequestEvent, renderEvent } from "./events.js"
+import {
+  type DiagnosticEvent,
+  type EventSink,
+  providerErrorKey,
+  type RequestEvent,
+  renderEvent,
+  type StoreEvent,
+} from "./events.js"
 import { DIAGNOSTIC_LOG_EVENTS } from "./log-events.js"
 import { logAttributes } from "./log-keys.js"
 import { newRunId, type Run, type RunContext, runsDirFor, startRun } from "./run.js"
@@ -27,6 +34,7 @@ export interface RecordingOptions {
   runsDir?: string
   keepDays?: number
   keepSuccessDays?: number
+  keepStoreDays?: number
   maxBytes?: number
   now?: () => Date
   /** The caller's trace; otherwise the enclosing run's, otherwise `TRACEPARENT` from `env`. */
@@ -105,6 +113,7 @@ export const startRecording = (options: RecordingOptions): Recording => {
       },
       ...(options.keepDays === undefined ? {} : { keepDays: options.keepDays }),
       ...(options.keepSuccessDays === undefined ? {} : { keepSuccessDays: options.keepSuccessDays }),
+      ...(options.keepStoreDays === undefined ? {} : { keepStoreDays: options.keepStoreDays }),
       ...(options.maxBytes === undefined ? {} : { maxBytes: options.maxBytes }),
       now,
       ...extra,
@@ -115,12 +124,14 @@ export const startRecording = (options: RecordingOptions): Recording => {
   const held: DiagnosticEvent[] | undefined = !run && options.keepFailed ? [] : undefined
   const counted = { wire: 0, operation: 0 }
   let refused: RequestEvent | undefined
+  let wroteStore = false
   const cap = capped()
   const requests = () => (counted.wire > 0 ? counted.wire : counted.operation)
 
   const events: EventSink = (event) => {
     if (event.event === "request") counted[event.level === "wire" ? "wire" : "operation"] += 1
     if (event.event === "response" && event.outcome === "error") refused = event
+    if (event.event === "store") wroteStore = true
     if (options.trace)
       streams.diagnostic(options.format === "pretty" ? renderEvent(event) : JSON.stringify(logAttributes(event)))
     if (run) cap.log(run, event)
@@ -140,12 +151,13 @@ export const startRecording = (options: RecordingOptions): Recording => {
     events,
     succeed: async (answer) => {
       const partial = partialOutcome(answer)
-      const kept = run ?? (partial && held ? keep(open({ startedAt })) : undefined)
+      const kept = run ?? ((partial || wroteStore) && held ? keep(open({ startedAt })) : undefined)
       if (kept) cap.close(kept)
       await kept?.finish(partial ? "partial" : "success", {
         requests: requests(),
         ...cap.dropped(),
         ...(partial ? { partial } : {}),
+        ...(!run && !partial && wroteStore ? { keptBecauseStore: true } : {}),
       })
     },
     fail: async (thrown) => {
@@ -184,27 +196,43 @@ const HELD_AT_MOST = 500
 /** A run of a loop that never ends must not fill the disk: past these, events are counted by operation instead. */
 export const EVENTS_AT_MOST = 2000
 export const EVENT_BYTES_AT_MOST = 1024 * 1024
+/** Past this many, store events are summed by table and change and written as one each when the run ends. */
+export const STORE_EVENTS_AT_MOST = 100
 
 const capped = () => {
   let lines = 0
   let bytes = 0
   let dropped = 0
+  let stores = 0
   const byOperation: Record<string, number> = {}
+  const summed = new Map<string, StoreEvent>()
+  const write = (run: Run, event: DiagnosticEvent): void => {
+    // The record's own envelope (time, ids of the run, resource) is about 200 bytes on top of its attributes.
+    const size = JSON.stringify(logAttributes(event)).length + 200
+    if (lines >= EVENTS_AT_MOST || bytes + size > EVENT_BYTES_AT_MOST) {
+      dropped += 1
+      const operation = "operation" in event && event.operation ? event.operation : event.event
+      byOperation[operation] = (byOperation[operation] ?? 0) + 1
+      return
+    }
+    lines += 1
+    bytes += size
+    logEvent(run, event)
+  }
   return {
     log: (run: Run, event: DiagnosticEvent): void => {
-      // The record's own envelope (time, ids of the run, resource) is about 200 bytes on top of its attributes.
-      const size = JSON.stringify(logAttributes(event)).length + 200
-      if (lines >= EVENTS_AT_MOST || bytes + size > EVENT_BYTES_AT_MOST) {
-        dropped += 1
-        const operation = "operation" in event && event.operation ? event.operation : event.event
-        byOperation[operation] = (byOperation[operation] ?? 0) + 1
+      if (event.event === "store" && ++stores > STORE_EVENTS_AT_MOST) {
+        const key = `${event.table} ${event.op}`
+        const sum = summed.get(key)
+        if (sum) sum.n += event.n
+        else summed.set(key, { ...event })
         return
       }
-      lines += 1
-      bytes += size
-      logEvent(run, event)
+      write(run, event)
     },
     close: (run: Run): void => {
+      for (const sum of summed.values()) write(run, sum)
+      summed.clear()
       if (dropped > 0) run.logger.warn({ event: "events.dropped", dropped, counts: byOperation })
     },
     dropped: (): { eventsDropped?: number } => (dropped > 0 ? { eventsDropped: dropped } : {}),
@@ -220,7 +248,8 @@ const logEvent = (run: Run, event: DiagnosticEvent): void => {
       : {}),
   }
   if (event.event === "warning") run.logger.warn(record)
-  else if (event.event !== "cache" && event.outcome === "error") run.logger.error(record)
+  else if ((event.event === "request" || event.event === "response") && event.outcome === "error")
+    run.logger.error(record)
   else run.logger.info(record)
 }
 

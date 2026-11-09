@@ -4,6 +4,7 @@ import { sqliteCode } from "../../errors/failures.js"
 import type { Stemmer, Stemmers } from "../../search/stem.js"
 import type { CacheDatabase } from "../driver.js"
 import { checkJournal } from "../journal.js"
+import { committedWrites, droppedWrites } from "../write-events.js"
 import { drainInvolvementQueue } from "./involvement-queue.js"
 import { drainMentions } from "./mention-drain.js"
 import { drainStems, stemmerCache } from "./stems.js"
@@ -92,7 +93,8 @@ const transact = <T>(database: CacheDatabase, body: () => T, drain: boolean, bef
   const outer = connection.depth === 0
   const name = `w${connection.depth + 1}`
   const waited = outer && beginImmediate(database)
-  if (!outer) database.exec(`SAVEPOINT ${name}`)
+  if (outer) droppedWrites(database)
+  else database.exec(`SAVEPOINT ${name}`)
   connection.depth += 1
   try {
     const result = body()
@@ -104,12 +106,14 @@ const transact = <T>(database: CacheDatabase, body: () => T, drain: boolean, bef
     beforeCommit?.()
     if (outer) checkJournal(database)
     database.exec(outer ? "COMMIT" : `RELEASE ${name}`)
+    if (outer) committedWrites(database)
     // A write that had to wait has others waiting behind it, and its caller's next write would begin before they see
     // the lock free. Pausing only then costs an uncontended write nothing.
     if (outer && (waited || !drain)) Atomics.wait(pause, 0, 0, BATCH_PAUSE_MS)
     return result
   } catch (error) {
     rollBack(database, outer ? "ROLLBACK" : `ROLLBACK TO ${name}; RELEASE ${name}`)
+    if (outer) droppedWrites(database)
     throw error
   } finally {
     connection.depth -= 1

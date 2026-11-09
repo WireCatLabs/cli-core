@@ -5,7 +5,12 @@ import type { Command } from "commander"
 import type { AppIdentity } from "../ports/app.js"
 import { providerErrorKey, type RequestEvent } from "../runs/events.js"
 import { type Recording, startRecording, wasSettled } from "../runs/recording.js"
-import { KEEP_RUNS_FOR_DAYS, KEEP_SUCCESSFUL_RUNS_FOR_DAYS, RUNS_SIZE_LIMIT_MB } from "../runs/run.js"
+import {
+  KEEP_RUNS_FOR_DAYS,
+  KEEP_STORE_RUNS_FOR_DAYS,
+  KEEP_SUCCESSFUL_RUNS_FOR_DAYS,
+  RUNS_SIZE_LIMIT_MB,
+} from "../runs/run.js"
 import { keepsSuccess, type RecordInput, runContextOf } from "../runs/run-context.js"
 import { currentAttempt, runEvent } from "../runs/scope.js"
 import { environmentOf } from "./context.js"
@@ -16,6 +21,7 @@ export interface SavedRunSettings {
   record?: boolean | undefined
   keepRunsForDays?: number | undefined
   keepSuccessfulRunsForDays?: number | undefined
+  keepStoreRunsForDays?: number | undefined
   runsSizeLimitMb?: number | undefined
   /** `record_input`: left out, the typed words are kept, secrets hidden. */
   recordInput?: RecordInput | undefined
@@ -26,6 +32,7 @@ export interface RunSettings {
   keepFailedRuns: boolean
   keepRunsForDays: number
   keepSuccessfulRunsForDays: number
+  keepStoreRunsForDays: number
   runsSizeLimitMb: number
 }
 
@@ -40,6 +47,7 @@ export const runSettings = (flag: boolean | undefined, saved: SavedRunSettings =
     keepFailedRuns: record || flag !== false,
     keepRunsForDays: saved.keepRunsForDays ?? KEEP_RUNS_FOR_DAYS,
     keepSuccessfulRunsForDays: saved.keepSuccessfulRunsForDays ?? KEEP_SUCCESSFUL_RUNS_FOR_DAYS,
+    keepStoreRunsForDays: saved.keepStoreRunsForDays ?? KEEP_STORE_RUNS_FOR_DAYS,
     runsSizeLimitMb: saved.runsSizeLimitMb ?? RUNS_SIZE_LIMIT_MB,
   }
 }
@@ -133,6 +141,7 @@ const tracker = (options: CommandRunOptions, typed?: readonly string[]): Tracker
       keepFailed: settings.keepFailedRuns,
       keepDays: settings.keepRunsForDays,
       keepSuccessDays: settings.keepSuccessfulRunsForDays,
+      keepStoreDays: settings.keepStoreRunsForDays,
       maxBytes: settings.runsSizeLimitMb * 1024 * 1024,
       trace: false,
       format,

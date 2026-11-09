@@ -10,11 +10,16 @@ export interface RunSearch {
   errorCode?: string
   operation?: string
   profile?: string
+  /** An event's `kind`: `store` for the writes a run made to the store. */
+  kind?: string
+  /** A store event's table. */
+  table?: string
   since?: string
   until?: string
   limit?: number
   page?: number
 }
+const STORE_WRITE = "store.write"
 const FIELDS = [
   "event",
   "operation",
@@ -32,6 +37,10 @@ const FIELDS = [
   "provider_error",
   "code",
   "reason",
+  "kind",
+  "table",
+  "op",
+  "n",
   "time",
 ]
 const safeEvent = (event: Record<string, unknown>) =>
@@ -56,7 +65,20 @@ const safeEvent = (event: Record<string, unknown>) =>
 
 export const searchRuns = (
   dir: string,
-  { query = "", terms = [], status, errorCode, operation, profile, since, until, limit = 20, page = 1 }: RunSearch = {},
+  {
+    query = "",
+    terms = [],
+    status,
+    errorCode,
+    operation,
+    profile,
+    kind,
+    table,
+    since,
+    until,
+    limit = 20,
+    page = 1,
+  }: RunSearch = {},
 ) => {
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100 || !Number.isSafeInteger(page) || page < 1)
     throw new CliError("validation_error", "run search uses a limit from 1 to 100 and a positive page")
@@ -80,6 +102,8 @@ export const searchRuns = (
         run.errorCode === errorCode ||
         run.partial?.failures.some((failure) => failure.errorCode === errorCode)) &&
       !operation &&
+      !kind &&
+      !table &&
       needles.every((needle) => JSON.stringify(run).toLowerCase().includes(needle))
     // A finished run lists its operations and codes, so a run that cannot match is never opened.
     // One still running, or killed, has no such list and is read.
@@ -87,6 +111,8 @@ export const searchRuns = (
       !metadataMatch &&
       needles.length === 0 &&
       ((operation !== undefined && run.operations !== undefined && !run.operations.includes(operation)) ||
+        (kind === "store" && run.operations !== undefined && !run.operations.includes(STORE_WRITE)) ||
+        (table !== undefined && run.operations !== undefined && !(run.tables ?? []).includes(table)) ||
         (errorCode !== undefined && run.codes !== undefined && !run.codes.includes(errorCode)))
     if (ruledOut) continue
     const found = findRun(dir, run.runId)
@@ -95,6 +121,8 @@ export const searchRuns = (
       (event) =>
         (!errorCode || event.error_code === errorCode || event.code === errorCode) &&
         (!operation || event.operation === operation) &&
+        (!kind || event.kind === kind) &&
+        (!table || event.table === table) &&
         needles.every((needle) => JSON.stringify(event).toLowerCase().includes(needle)),
     )
     if (!metadataMatch && filtered.length === 0) continue
