@@ -374,6 +374,14 @@ describe("the message store", () => {
 
     await expect(openStore({ path, readOnly: true })).rejects.toThrow("owner's real WireCat folder")
   })
+
+  // The folder does not exist, so a broken guard fails to open rather than creating a file there.
+  it("**will not open the owner's real store through openCache either**, as first-run and store settings do", async () => {
+    const home = userInfo().homedir
+    const path = join(wirecatDirectory({ HOME: home, USERPROFILE: home }), "no-such-test-dir", "wirecat.db")
+
+    await expect(openCache(path)).rejects.toThrow("owner's real WireCat folder")
+  })
 })
 
 describe("finding people and what they wrote", () => {
