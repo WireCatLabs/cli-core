@@ -5,6 +5,43 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## 0.632.0 — 10.11.2026
+
+### Added
+
+- **`PeopleStore.doubts` lists people that may be wrong**, a page at a time, the owner first, each with a plain reason,
+  the identities in doubt, the evidence and the owner's commands that would fix it: the owner's person holding an
+  identity under another name (spelling and script aside; what the owner linked by hand never counts), test data (the
+  contract seed's people, an address at a reserved domain such as `.test` or `example.com`), an identity joined by an
+  address that a person of another name has, and one person with different names and no phone or address in common.
+  It reads only the people with more than one identity and one pass over identities: about 0.1 s on a store of 150k
+  people.
+- **An agent's unlink or unmerge waits for the owner.** `PeopleStore.proposeSplit` stores an `identity_split`
+  proposal (the identities that leave, all of one person, or a `merge:<to>-<from>`) with its reason;
+  `decideSplit` is the owner's alone and carries it out as the owner's own unlink, split or undo of the merge, refused
+  with `identity.stale` when the person changed since. `splitProposals` lists them, and the shared review
+  (`proposalRegistry`) shows and decides them as kind `identity_split`, owner-only. Proposing an open split again
+  renews it after the person changed. A split the owner turned down is not proposed again while its identities stay
+  on that person, and `doubts` leaves them out. Removing a CRM contact or erasing an identity deletes the splits that
+  name it. No store migration: older builds see the kind as a plain action, and one they approve is never carried
+  out (`splitProposals` shows it as `dropped`).
+- `SEED_PEOPLE`, `RESERVED_ADDRESS_GLOBS` and `SEED_ID_GLOBS` in the domain, which the contract seed now uses.
+- **`muted:` in the query language.** `muted:true` matches messages in chats the owner muted, until the mute runs
+  out; `muted:false` matches every other chat, so `stats messages show 'muted:false date>=30d'` counts only what the
+  sync still reads. A messenger that keeps no mute state counts its chats as not muted. `stats messages responses`
+  and `stats messages waiting` take it too.
+- **`stats tasks show` can count every account at once.** A `Messenger` that sets `accountsOf(command)` gets one answer
+  across the accounts it returns, when the command names none: memo uses it so `memo stats tasks show` needs no
+  `--source`. The answer lists them in `accounts`, and each chat row's `chat` names its own account. `--chat` and a
+  `chat:` naming one chat are then refused, since a chat belongs to one account.
+
+### Fixed
+
+- **A test can no longer reach the owner's real store through `openCache` either.** The refusal of 0.560.0 covered
+  `openStore` and `openSqlite`; `openCache` and `openFile`, which first-run, store settings, schedules and store
+  backups use, opened the file without it. The check now sits in both SQLite drivers, so every opening under vitest
+  refuses a file in the owner's WireCat folder.
+
 ## 0.631.0 — 10.11.2026
 
 ### Added
