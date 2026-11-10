@@ -4,7 +4,7 @@
   listed by `people.doubts()` until one of them moves; an identity that joins later is in doubt again. It is recorded
   as a split the owner turned down, so an agent's split of them is refused (`identity.kept-together`). An agent is
   refused with `identity.owner-only`, a person with nothing in doubt with `person.no-doubt`, an unknown one with
-  `person.not-found`. The answer is `{ person: "person:<uid>", kept: ["<provider>:<id>", …] }`.
+  `person.unknown`. The answer is `{ person: "person:<uid>", kept: ["<provider>:<id>", …] }`.
 - **A person's record carries `displayName`**, the name `people.list` shows for them: their own, else the first readable
   account name, a username, phone or address. `people.personOf()` and `people.personByUid()` return it.
 

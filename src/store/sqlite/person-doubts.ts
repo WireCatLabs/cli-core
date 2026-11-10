@@ -354,7 +354,7 @@ export const keepPerson = (context: StoreContext, uid: string, by: Decider): Kep
   const known =
     asked === undefined ? undefined : context.database.prepare("SELECT id FROM persons WHERE id = ?").get(Number(asked))
   if (known === undefined)
-    throw new CliError("not_found", `the store has no person for "${uid}"`, { reason: "person.not-found" })
+    throw new CliError("not_found", `the store has no person for "${uid}"`, { reason: "person.unknown" })
   const person = currentPerson(context.database, Number(known.id))
   const held = context.database.prepare(`SELECT ${COLUMNS} WHERE l.person_id = ? ORDER BY i.id`).all(person).map(heldOf)
   const test = new Set(testData(context.database).map(({ pk }) => pk))
