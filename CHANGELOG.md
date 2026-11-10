@@ -5,6 +5,72 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## 0.635.0 — 10.11.2026
+
+### Added
+
+- **The owner sets an account's scope, personal or work, and pins or clears a chat's.** `setAccountScope` and
+  `setChatScope` (from `/services`) take an account as `--source` names it (`bitrix24:acme.bitrix24.ru`, `tg:work`),
+  refuse a run locked to a group, and are for an owner-only command (`grantsAuthority`). An account's change moves
+  what search copied of its old scope: its conversation pieces and involvements, its other search pieces, and the word
+  indexes of its documents, mail and calendar events, which are built again on the next search. A chat with its own
+  scope keeps it; memories and facts keep the scope they were written with. A chat's change is recorded in its
+  history as the owner's. The store methods are `accounts.setScope` and `chats.setChatScope`.
+- **A CLI chooses the scope its new accounts start as.** `accounts.saveAccount(key, { name, scope: "work" })` makes a
+  new account work; an account already stored keeps its scope, so a sync never undoes the owner's choice. A `scope`
+  in the `AccountKey` itself still overwrites the stored one on every save.
+- **Each member of an account group carries its account's `scope`**, so a groups view shows and switches it in place.
+- **The owner can answer a shared-mailbox proposal with "this is the company's mailbox".** `people.decideLink` with
+  `company` (`{}`, `{ organization }` or `{ name }`) gives the address to an organization: the one named, else the one
+  that holds the address or its company domain, else one of that name, else a new company named after the domain. The
+  proposal is turned down, so the two people are not joined and are not proposed again on that address. Only the
+  owner decides it; a proposal that is not about a shared mailbox is refused with `identity.not-shared`
+  ([ARCHITECTURE.md](docs/dev/ARCHITECTURE.md)).
+
+- **`IdentityLinkRow.mailbox` names the shared address**, beside `shared`, so a review can show which mailbox it is.
+
+- **`people.linkProposals({ order: "score" })` lists the highest score first**, proposals with no score last, each
+  newest first. Without `order` the list stays newest first.
+- **A shared mailbox proposes the people who have it again, scored, and still never joins them.** A role address such
+  as `info@` or `office@`, and a company's address (one an organization holds, or two people of one source list have),
+  now opens a proposal for each pair of its people instead of being skipped; a no-reply address still proposes no one,
+  and the owner is still never proposed. The proposal's `score` says what else the two share: 0.1 for the mailbox
+  alone, more for one name, a phone or another address only they hold, a chat or a company's domain
+  ([ARCHITECTURE.md](docs/dev/ARCHITECTURE.md)). The first people scan after the upgrade reads every address once,
+  so mailboxes nobody touched since are proposed too. Proposals already stored stay as they are.
+
+- **`IdentityLinkRow.shared`: `role`, `line` or `null`.** Says that the address behind an `identity_link` proposal is
+  a shared mailbox, so a review can show it as one; `null` on proposals made before this release.
+
+### Changed — may break callers
+
+- **A person with no readable name of their own is shown by an account's name before its username.** `people.list`
+  gave such a person `displayName` `@Xorlov` although their Telegram account is named «Ярослав Орлов» (a person left
+  with no name after a split, for one). The first readable account name now comes first, then the username, phone and
+  email as before; `displayName(name, { name })` takes it. The shown name also drives the sort by name and the
+  automated and company checks, so such a person may move in the list or between kinds.
+- **Taking identities off a person can name that person, and is refused when they sit on someone else.**
+  `people.unlinkIdentity(ref, { from })` and `people.proposeSplit({ identities, from })` take the uid of the person the
+  identities leave; `people.split(uid, …)` checks its `uid` the same way. An identity on another person is refused with
+  `validation_error`, reason `identity.held-elsewhere`, `param: "from"` and `reference: "person:<uid>"` of whoever holds
+  it, and the message names them, so nothing moves. Before, a script that meant to take a colleague's mailbox off the
+  owner's card took it off the colleague. `split`'s refusal for an identity of another person is now this one (it said
+  "is not an identity of person:<n>").
+- **A doubt's unlink names the person it takes the identities from.** `people.doubts()` gives each `unlink` move a
+  `from` (`person:<uid>`), and its `fix` command ends in `--from person:<uid>`, which memo's `people unlink` needs.
+
+### Fixed
+
+- **A task found in a message keeps the message's first line as its title after the message is deleted.** The line is
+  now stored as the title when the task is found, as store version 65 did for the tasks found before. A task found
+  before its message is saved still shows the line once the message arrives, and a title the finder or a person sets
+  replaces it as before.
+- **Tasks found in messages before 0.630 keep their message's first line as their title (store version 65).** Since
+  0.630 such a task showed the first line only while its message was in the store, and its title went back to
+  `question — msg:…` once the message was deleted. Store version 65 stores that line as the title of every live
+  found task still titled `<kind> — <source>`, once, on the next writable open, in batches. A title a person wrote, a
+  project task, and a task whose message is missing, deleted or empty keep their title.
+
 ## 0.634.0 — 10.11.2026
 
 ### Added
