@@ -111,6 +111,7 @@ export {
   type IdentityLinkRow,
   type IdentityLinkSignal,
   type MatchScan,
+  type SharedMailbox,
 } from "./identity-links.js"
 export {
   IDENTITY_SPLIT_KIND,

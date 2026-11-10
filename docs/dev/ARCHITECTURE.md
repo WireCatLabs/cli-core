@@ -565,7 +565,8 @@ proposes them instead. A no-reply address (`isNoReplyAddress`) is no one's: it n
   identities the owner split or unlinked off since, and refuses with `identity.stale` when one was merged on.
 - **What only the owner decides waits as an `identity_link` proposal** (`identity-proposals.ts`, kind in
   `identity-links.ts`): a `proposed_actions` row with the two people, each one's identities when proposed (`sides`),
-  the signal (`agent`, `phone`, `email`, `guest-email`, `name`) and whether it joins the people or moves one identity. It is
+  the signal (`agent`, `phone`, `email`, `guest-email`, `name`, `account`), whether the address is a shared mailbox
+  (`shared`, `null` on older proposals) and whether it joins the people or moves one identity. It is
   owner-only (`isOwnerOnlyKind`) and a dedicated review, at most one open per pair; a pair the owner separated is never
   proposed or joined again. A pair the owner rejected is never joined, and is proposed again only on new evidence: a
   signal and pair of identities (`evidenceKeyOf`, in either order) that none of its rejected proposals had. A confirm is the owner's link (method `proposal`), refused with
@@ -586,12 +587,17 @@ proposes them instead. A no-reply address (`isNoReplyAddress`) is no one's: it n
   one `linkIndex` of the proposals outside any transaction, then writes each group in its own short `write`; its
   cursor (`store_settings` `people.scan`: the newest identity, move, revision, guest row and update time) limits a
   later pass to what changed. The owner's pending rulings are one predicate each: `phonePairJoins` (NEED-2445),
-  `addressGroupJoins` (NEED-2446, and role addresses), and the rejection check in `join` (NEED-2444), which proposes a
+  `addressGroupJoins` (NEED-2446), and the rejection check in `join` (NEED-2444), which proposes a
   rejected pair on evidence new to the owner. SEC-177: a pair with the owner's person on either side is never joined
   or proposed by a rule, at import (`joinByAddress`) or in the scan (`touchesOwner`, skipped as `identity.owner`); only
-  an account under another name is proposed (signal `account`, `linkOwnIdentities`); a bot's number or address, a role
-  address and a company's line (held by an organization, or by two people of one source list such as two CRM
-  contacts) join and propose no one (`sharedLine`); a CRM never names the owner (`nameUnnamed`). `linkIndex` holds each pair's open proposal and the evidence keys of its
+  an account under another name is proposed (signal `account`, `linkOwnIdentities`); a bot's number or address and a
+  company's phone line (held by an organization, or by two people of one source list such as two CRM contacts) join and
+  propose no one (`sharedLine`); a CRM never names the owner (`nameUnnamed`). A shared mailbox, a role address such as
+  `info@` or a company's address by the same `sharedLine` test, never joins either, but proposes each pair (NEED-2526,
+  `proposeShared`) with `shared` (`role` or `line`) in the payload and a `score` from what else the two share
+  (`sharedMailboxCase`): 0.1 alone, plus 0.4 for one name (`variantKey`), plus 0.3 for a phone or another address only
+  they hold, or 0.2 for a chat or a company's domain within one source. The mailbox and other role addresses are no
+  trace for it. A no-reply address proposes no one. `linkIndex` holds each pair's open proposal and the evidence keys of its
   rejected ones, read once per pass. An address's mail contact stands for its person in both the scan and the import,
   so the two paths name the same evidence. `linkOwnIdentities` joins an account's own identity to the owner only under
   the owner's name, script and spelling aside (`domain/name-variants.ts`); under another name, a partner's mailbox or a
