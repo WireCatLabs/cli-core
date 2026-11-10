@@ -148,6 +148,7 @@ export const MANIFEST: ManifestEntry[] = [
   { name: "20261110005159_version-62-person-kinds", version: 62, minCompatible: 56 },
   { name: "20261110005200_version-62-person-kinds-triggers", version: 62, minCompatible: 56 },
   { name: "20261110020704_version-63-people-ties-messages-crm", version: 63, minCompatible: 56 },
+  { name: "20261110084658_version-64-deal-link-triggers", version: 64, minCompatible: 56 },
 ]
 
 export const generatedMigrations = (

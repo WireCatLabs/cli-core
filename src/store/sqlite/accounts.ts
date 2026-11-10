@@ -209,10 +209,19 @@ export const purgeAccount = ({ orm, database, now }: StoreContext, accountKey: n
 }
 
 /** Identity and person rows a person's own record keeps, not evidence that anyone saw them. */
-const OWN = new Set(["identity_links", "identity_link_events", "identity_revisions"])
+export const OWN = new Set(["identity_links", "identity_link_events", "identity_revisions"])
 
-/** Every row that points at `table`: foreign keys and `<name>_type` pointers, read from the store so a new one counts. */
-const referencesTo = (database: CacheDatabase, table: "identities" | "persons", skip: Set<string>): string => {
+/**
+ * Every row that points at `table`: foreign keys and `<name>_type` pointers, read from the store so a new one counts.
+ * `among`, a subquery of ids, limits each arm to them, so each reads its index rather than its whole table.
+ */
+export const referencesTo = (
+  database: CacheDatabase,
+  table: "identities" | "persons",
+  skip: Set<string>,
+  among?: string,
+): string => {
+  const within = (column: string) => (among === undefined ? "" : ` ${column} IN (${among})`)
   const keys = database
     .prepare(
       `SELECT m.name AS tbl, f."from" AS col FROM sqlite_master m JOIN pragma_foreign_key_list(m.name) f
@@ -220,10 +229,15 @@ const referencesTo = (database: CacheDatabase, table: "identities" | "persons", 
     )
     .all(table)
     .filter((row) => !skip.has(String(row.tbl)))
-    .map((row) => `SELECT "${String(row.col)}" AS id FROM "${String(row.tbl)}"`)
+    .map((row) => {
+      const column = `"${String(row.col)}"`
+      return `SELECT ${column} AS id FROM "${String(row.tbl)}"${among === undefined ? "" : ` WHERE${within(column)}`}`
+    })
   const type = table === "identities" ? "identity" : "person"
   const pointers = pointerPairs(database).map(
-    ({ table: tbl, pointer }) => `SELECT ${pointer}_id AS id FROM "${tbl}" WHERE ${pointer}_type = '${type}'`,
+    ({ table: tbl, pointer }) =>
+      `SELECT ${pointer}_id AS id FROM "${tbl}" WHERE ${pointer}_type = '${type}'` +
+      (among === undefined ? "" : ` AND${within(`${pointer}_id`)}`),
   )
   return [...keys, ...pointers].join(" UNION ")
 }

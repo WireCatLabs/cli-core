@@ -10,6 +10,7 @@ import {
   type CrmScopeSetting,
   type CrmUser,
   isItemKind,
+  normalCrmUserId,
 } from "../../domain/crm.js"
 import { DEAL_ROLES, type DealKind } from "../../domain/deals.js"
 import { recordFingerprint } from "../../domain/records.js"
@@ -18,8 +19,9 @@ import type { AccountPeople } from "../people.js"
 import type { AccountKey } from "../types.js"
 import { accountPk, findAccountPk } from "./accounts.js"
 import { suggestBaseStages } from "./base-suggest.js"
+import { type CrmContactsRemoved, removeCrmContacts } from "./crm-contacts.js"
 import { type CrmSkipped, crmAccountPrefix, crmIdentityId, crmRowsOver, SOURCE, TABLES, textOf } from "./crm-rows.js"
-import { crmCompanyTypes, crmOwnUser, crmScope, crmSettingKey, saveCrmSetting } from "./crm-settings.js"
+import { crmCompanyTypes, crmOwnUser, crmScope, crmScopeUsers, crmSettingKey, saveCrmSetting } from "./crm-settings.js"
 import type { StoreContext } from "./open.js"
 import { type ReportedRelation, type ReportedScope, syncReportedIn } from "./reported-relations.js"
 import { clearState, syncStateOf, writeState } from "./sync.js"
@@ -160,6 +162,15 @@ export interface CrmCopies {
     userIds: readonly string[],
     options?: { dryRun?: boolean },
   ): Promise<number>
+  /**
+   * Removes the contacts no kept deal, lead or company names, and the people they leave empty; see
+   * `removeCrmContacts`. A deal or lead assigned to a user outside `users` counts as gone; without `users`, outside
+   * those scope mine keeps (`self` and `unassigned`), whatever the scope is now. `dryRun` only counts.
+   */
+  removeContacts(
+    key: AccountKey,
+    options: { users?: readonly string[]; before: number; dryRun?: boolean },
+  ): Promise<CrmContactsRemoved>
   /** How many of the kind the account holds, not deleted; every contact it ever saved. */
   count(key: AccountKey, kind: CrmKind): Promise<number>
   /** The stored copy's `deal:<id>` or `lead:<id>`, deleted or not; `null` when the store holds none. */
@@ -168,6 +179,7 @@ export interface CrmCopies {
 
 type Row = Record<string, unknown>
 
+export type { CrmContactsRemoved } from "./crm-contacts.js"
 export { type CrmSkipped, crmIdentityId, crmRowsOver, type ItemWriter } from "./crm-rows.js"
 
 const tallied = (): Tally => ({ issues: [], skippedOwnerRejected: 0, unlistedUsers: 0, droppedPending: 0 })
@@ -831,6 +843,11 @@ export const crmCopiesOver = (context: StoreContext, people: AccountPeople): Crm
           .all(accountId)
           .filter((row) => row.assignee != null && !keep.has(String(row.assignee)))
         return dryRun ? rows.length : markDeleted(key, kind, rows)
+      }),
+    removeContacts: async (key, options) =>
+      removeCrmContacts(context, key, {
+        ...options,
+        users: options.users ?? crmScopeUsers(database, key).map(normalCrmUserId),
       }),
     count: async (key, kind) =>
       kind === "person"

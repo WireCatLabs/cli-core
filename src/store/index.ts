@@ -223,7 +223,14 @@ export { BUSINESS_FIND_MAX } from "./sqlite/business-search.js"
 export type { CatalogActor, CatalogEntry, CatalogInput, CatalogQuery, CatalogStore } from "./sqlite/catalog.js"
 export { CATALOG_QUERY } from "./sqlite/catalog.js"
 export type { ChatMetadata } from "./sqlite/chats.js"
-export { type CrmCopies, type CrmRelationIssue, type CrmSaved, type CrmSkipped, crmIdentityId } from "./sqlite/crm.js"
+export {
+  type CrmContactsRemoved,
+  type CrmCopies,
+  type CrmRelationIssue,
+  type CrmSaved,
+  type CrmSkipped,
+  crmIdentityId,
+} from "./sqlite/crm.js"
 export {
   COMPANY_TYPE_MEANINGS,
   type CompanyTypeMeaning,
