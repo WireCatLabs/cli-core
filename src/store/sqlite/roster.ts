@@ -1,10 +1,11 @@
 import { CliError } from "@wirecat/cli-base"
 import type { GroupMember, Id, Provider } from "../../domain/models.js"
+import { replaceMembers } from "./chats.js"
 import { and, asc, eq, gte, inArray, isNotNull, isNull, or, sql } from "./drizzle/core.js"
 import { identityPk, seenIdentity } from "./identities.js"
 import type { StoreContext } from "./open.js"
 import { bound, type Where } from "./query-filter.js"
-import { chatMembers, chats, identities, identityRevisions, memberCounts, memberStays } from "./schema.js"
+import { chats, identities, identityRevisions, memberCounts, memberStays } from "./schema.js"
 
 export interface RosterRead {
   observation?: { observedAt: string; startedAt?: string; source: "remote_fetch" | "remote_update" }
@@ -186,9 +187,7 @@ export const saveRoster = (
       orm.update(memberStays).set({ leftAt: observedAt }).where(eq(memberStays.id, pk)).run()
       change.gone.push(id)
     }
-    orm.delete(chatMembers).where(eq(chatMembers.chatId, chatKey)).run()
-    for (const person of present)
-      orm.insert(chatMembers).values({ chatId: chatKey, identityId: person, createdAt: at }).run()
+    replaceMembers(context, chatKey, [...present], at)
   }
 
   const day = new Date(at).toISOString().slice(0, 10)

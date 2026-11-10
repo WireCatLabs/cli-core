@@ -124,13 +124,25 @@ export const syncs = sqliteTable(
   (table) => [index("syncs_by_account_id").on(table.accountId)],
 )
 
-export const persons = sqliteTable("persons", {
-  id: integer("id").primaryKey(),
-  name: text("name"),
-  owner: integer("owner").notNull().default(0),
-  createdAt: integer("created_at").notNull(),
-  updatedAt: integer("updated_at").notNull(),
-})
+export const persons = sqliteTable(
+  "persons",
+  {
+    id: integer("id").primaryKey(),
+    name: text("name"),
+    owner: integer("owner").notNull().default(0),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+    kind: text("kind"),
+    nameOrder: text("name_order"),
+    messagesFrom: integer("messages_from"),
+    taskCount: integer("task_count"),
+    lastContact: integer("last_contact"),
+  },
+  (table) => [
+    index("persons_by_kind").on(table.kind),
+    index("persons_kind_to_work_out").on(table.id).where(sql`kind IS NULL`),
+  ],
+)
 
 export const identities = sqliteTable(
   "identities",

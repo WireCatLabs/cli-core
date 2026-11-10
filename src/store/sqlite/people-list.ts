@@ -8,11 +8,12 @@ import {
   PERSON_KINDS,
   type PersonKind,
 } from "../../domain/person-kinds.js"
-import type { CacheDatabase, SqlValue } from "../driver.js"
+import { type CacheDatabase, isQueryOnly, type SqlValue } from "../driver.js"
 import { fold } from "../normalize.js"
 import { mergedAwaySql } from "./merged-persons.js"
 import { ALWAYS_SHOWN, type ShownBecause, shownReasons } from "./person-ties.js"
 import { mergedAssignees } from "./task-board.js"
+import { read, writeBatch } from "./transaction.js"
 
 export const PEOPLE_SORTS = ["interactions", "recent", "name", "tasks"] as const
 export type PeopleSort = (typeof PEOPLE_SORTS)[number]
@@ -242,7 +243,7 @@ const classified = (
   database: CacheDatabase,
   people: readonly Candidate[],
   scope: Scope,
-  reasons = shownReasons(database),
+  reasons = shownReasons(database, scope === "all" ? undefined : scope),
 ): Classified[] => {
   const facts = factsOf(database, scope)
   const tasks = countsOf(database, TASK_COUNTS, mergedAssignees(database))
@@ -301,29 +302,199 @@ const nameOrderOf = (shown: string | null) => `${isReadable(shown) ? 0 : 1}${fol
 const byName = (a: Classified, b: Classified) =>
   a.nameOrder < b.nameOrder ? -1 : a.nameOrder > b.nameOrder ? 1 : a.id - b.id
 
-/** People of one kind, the owner first, in the order asked; `counts` says how many each kind holds. */
-export const listPeople = (database: CacheDatabase, options: PeopleListOptions): PeopleList => {
-  const { kind = "person", sort = "interactions", limit, offset = 0 } = options
+/**
+ * Bump when what decides a kind, a name's order or a count changes in code (the word lists, `BULK_MIN`, the ties):
+ * every stored one is worked out again on the next list.
+ */
+const KIND_RULES = "1"
+const RULES_KEY = "people.kind_rules"
+/** Past this many people to work out, one pass over everyone beats a lookup per person. */
+const WHOLE_PASS = 20_000
+/** About 0.7 s of work on 113,000 people: well inside another writer's 5 s wait for the lock. */
+const UNDER_LOCK = 5_000
+const TRIES = 3
+
+const dataVersion = (database: CacheDatabase): number =>
+  Number(Object.values(database.prepare("PRAGMA data_version").get() ?? {})[0])
+
+const rulesOf = (database: CacheDatabase): string | undefined => {
+  const row = database.prepare("SELECT value FROM store_settings WHERE key = ?").get(RULES_KEY)
+  return row === undefined ? undefined : String(row.value)
+}
+
+const candidateOf = (row: Record<string, unknown>): Candidate => ({
+  id: Number(row.id),
+  name: row.name == null ? null : String(row.name),
+  owner: Number(row.owner) === 1,
+})
+
+/** Stored for a person a merge emptied, so a list leaves them out without asking each person. */
+const MERGED = "merged"
+
+interface Worked extends Omit<Classified, "kind"> {
+  kind: PersonKind | typeof MERGED
+  lastContact: number | undefined
+}
+
+/** The people whose stored kind is not current, worked out; `undefined` when there are none. */
+const workOut = (database: CacheDatabase, all: boolean, most?: number): Worked[] | undefined => {
+  const rows = database
+    .prepare(
+      `SELECT id, name, owner, ${mergedAwaySql("p")} AS merged FROM persons p` +
+        `${all ? "" : " WHERE kind IS NULL"}${most === undefined ? "" : ` LIMIT ${most + 1}`}`,
+    )
+    .all()
+  if (rows.length === 0 && !all) return undefined
+  if (most !== undefined && rows.length > most) return undefined
+  const merged = new Set(rows.filter((row) => Number(row.merged) === 1).map((row) => Number(row.id)))
+  const stale = rows.map(candidateOf)
+  const scope: Scope = all || stale.length > WHOLE_PASS ? "all" : stale.map(({ id }) => id)
+  const contacts = lastContacts(database, scope)
+  return classified(database, stale, scope).map((person) => ({
+    ...person,
+    kind: merged.has(person.id) ? MERGED : person.kind,
+    lastContact: contacts.get(person.id),
+  }))
+}
+
+const keep = (database: CacheDatabase, worked: Worked[]): void => {
+  const row = database.prepare(
+    "UPDATE persons SET kind = ?, name_order = ?, messages_from = ?, task_count = ?, last_contact = ? WHERE id = ?",
+  )
+  for (const person of worked)
+    row.run(person.kind, person.nameOrder, person.messagesFrom, person.tasks, person.lastContact ?? null, person.id)
+  database
+    .prepare(
+      "INSERT INTO store_settings (key, value, at) VALUES (?, ?, ?) " +
+        "ON CONFLICT (key) DO UPDATE SET value = excluded.value, at = excluded.at",
+    )
+    .run(RULES_KEY, KIND_RULES, Date.now())
+}
+
+/**
+ * Works out and keeps the kind, name order and counts of every person whose stored ones the triggers cleared.
+ * A few, as a sync leaves, are worked out under the write lock. Everyone, after an upgrade, would hold the lock for
+ * seconds: that pass runs outside it and is kept only when no other process wrote meanwhile, else it runs again.
+ * Answers whether every stored one is current.
+ */
+const storeKinds = (database: CacheDatabase): boolean => {
+  if (isQueryOnly(database))
+    return (
+      rulesOf(database) === KIND_RULES &&
+      database.prepare("SELECT 1 FROM persons WHERE kind IS NULL LIMIT 1").get() === undefined
+    )
+  if (
+    rulesOf(database) === KIND_RULES &&
+    database.prepare("SELECT 1 FROM persons WHERE kind IS NULL LIMIT 1").get() === undefined
+  )
+    return true
+  const few = writeBatch(database, () => {
+    if (rulesOf(database) !== KIND_RULES) return false
+    const worked = workOut(database, false, UNDER_LOCK)
+    if (worked !== undefined) keep(database, worked)
+    return (
+      worked !== undefined || database.prepare("SELECT 1 FROM persons WHERE kind IS NULL LIMIT 1").get() === undefined
+    )
+  })
+  if (few) return true
+  for (let attempt = 0; attempt < TRIES; attempt++) {
+    const before = dataVersion(database)
+    const worked = read(database, () => workOut(database, rulesOf(database) !== KIND_RULES))
+    if (worked === undefined) return true
+    const kept = writeBatch(database, () => {
+      if (dataVersion(database) !== before) return false
+      keep(database, worked)
+      return true
+    })
+    if (kept) return true
+  }
+  return false
+}
+
+const STORED_ORDER: Record<PeopleSort, string> = {
+  interactions: "p.messages_from DESC, ",
+  tasks: "p.task_count DESC, ",
+  recent: "coalesce(p.last_contact, 0) DESC, ",
+  name: "",
+}
+
+const noCounts = (): Record<PersonKind, number> =>
+  Object.fromEntries(PERSON_KINDS.map((one) => [one, 0])) as Record<PersonKind, number>
+
+const storedCounts = (database: CacheDatabase, filter: { sql: string; params: SqlValue[] }) => {
+  const counts = noCounts()
+  for (const row of database
+    .prepare(`SELECT p.kind, count(*) AS n FROM persons p WHERE p.kind <> '${MERGED}'${filter.sql} GROUP BY 1`)
+    .all(...filter.params))
+    if ((PERSON_KINDS as readonly unknown[]).includes(row.kind)) counts[row.kind as PersonKind] = Number(row.n)
+  return counts
+}
+
+const checked = (options: PeopleListOptions) => {
+  const { kind = "person", sort = "interactions" } = options
   if (kind !== "all" && !PERSON_KINDS.includes(kind))
     throw new CliError("validation_error", `a person's kind is one of ${PERSON_KINDS.join(", ")} or all, got "${kind}"`)
   if (!PEOPLE_SORTS.includes(sort))
     throw new CliError("validation_error", `people sort by ${PEOPLE_SORTS.join(", ")}, got "${sort}"`)
-  const filter = matching(options.query)
+  return { kind, sort, filter: matching(options.query) }
+}
+
+/** How many people of each kind match the query, every kind at once. */
+export const countPeople = (database: CacheDatabase, query?: string): Record<PersonKind, number> => {
+  const filter = matching(query)
+  return storeKinds(database) ? storedCounts(database, filter) : listInMemory(database, { limit: 0, query }).counts
+}
+
+/** People of one kind, the owner first, in the order asked; `counts` says how many each kind holds. */
+export const listPeople = (database: CacheDatabase, options: PeopleListOptions): PeopleList => {
+  const { kind, sort, filter } = checked(options)
+  if (!storeKinds(database)) return listInMemory(database, options)
+  const { limit, offset = 0 } = options
+  return read(database, () => {
+    const counts = storedCounts(database, filter)
+    const total = kind === "all" ? Object.values(counts).reduce((a, b) => a + b, 0) : counts[kind]
+    const rows = database
+      .prepare(
+        `SELECT p.id, p.name, p.owner, p.last_contact FROM persons p WHERE p.kind ${kind === "all" ? "<>" : "="} ?` +
+          `${filter.sql} ORDER BY p.owner DESC, ${STORED_ORDER[sort]}p.name_order, p.id LIMIT ? OFFSET ?`,
+      )
+      .all(kind === "all" ? MERGED : kind, ...filter.params, limit, offset)
+    const page = rows.map(candidateOf)
+    const contacts = new Map(
+      rows.filter((row) => row.last_contact != null).map((row) => [Number(row.id), Number(row.last_contact)]),
+    )
+    return {
+      items: withLastContact(
+        database,
+        classified(
+          database,
+          page,
+          page.map(({ id }) => id),
+        ),
+        contacts,
+      ),
+      hasMore: total > offset + limit,
+      total,
+      counts,
+    }
+  })
+}
+
+/** The list worked out for every person on the call, for a read-only store whose stored kinds are not current. */
+const listInMemory = (database: CacheDatabase, options: PeopleListOptions): PeopleList => {
+  const { kind, sort, filter } = checked(options)
+  const { limit, offset = 0 } = options
   const candidates = database
     .prepare(`SELECT p.id, p.name, p.owner FROM persons p WHERE NOT ${mergedAwaySql("p")}${filter.sql}`)
     .all(...filter.params)
-    .map((row) => ({
-      id: Number(row.id),
-      name: row.name == null ? null : String(row.name),
-      owner: Number(row.owner) === 1,
-    }))
+    .map(candidateOf)
   // A search reads only the people it found; a whole list reads everyone once rather than per person.
   const everyone = classified(
     database,
     candidates,
     options.query === undefined ? "all" : candidates.map(({ id }) => id),
   )
-  const counts = Object.fromEntries(PERSON_KINDS.map((one) => [one, 0])) as Record<PersonKind, number>
+  const counts = noCounts()
   for (const person of everyone) counts[person.kind] += 1
   const chosen = kind === "all" ? everyone : everyone.filter((person) => person.kind === kind)
   // The newest contact of every person reads every message; only this order needs it.

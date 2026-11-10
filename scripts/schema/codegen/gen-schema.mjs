@@ -84,6 +84,7 @@ const NAMES = {
   "email_threads:id WHERE subject IS NOT NULL AND subject_folded IS NULL": "email_threads_subject_to_fold",
   "mailboxes:id WHERE name_folded IS NULL": "mailboxes_name_to_fold",
   "projects:id WHERE name_folded IS NULL": "projects_name_to_fold",
+  "persons:id WHERE kind IS NULL": "persons_kind_to_work_out",
   "meetings:id WHERE join_url IS NOT NULL AND join_key IS NULL": "meetings_join_key_to_fill",
   "account_identities:identity_id WHERE address_book = 1": "account_identities_in_address_book",
 }

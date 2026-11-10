@@ -2,6 +2,56 @@ import type { CacheDatabase } from "../store/driver.js"
 
 // What a migration created that replaying it would create again; a migration that only updates rows needs nothing.
 const UNDO: Record<number, string> = {
+  62: `${[
+    "person_au",
+    "link_ai",
+    "link_ad",
+    "link_au",
+    "identity_au",
+    "member_ai",
+    "member_ad",
+    "member_au",
+    "chat_au",
+    "member_count_ai",
+    "member_count_ad",
+    "member_count_au",
+    "email_ai",
+    "email_ad",
+    "email_au",
+    "recipient_ai",
+    "recipient_ad",
+    "recipient_au",
+    "email_mailbox_ai",
+    "email_mailbox_ad",
+    "mailbox_au",
+    "meeting_participant_ai",
+    "meeting_participant_ad",
+    "meeting_participant_au",
+    "calendar_participant_ai",
+    "calendar_participant_ad",
+    "calendar_participant_au",
+    "account_identity_ai",
+    "account_identity_ad",
+    "account_identity_au",
+    "organization_identity_ai",
+    "organization_identity_ad",
+    "organization_identity_au",
+    "record_ai",
+    "record_ad",
+    "record_au",
+    "assignment_ai",
+    "assignment_ad",
+    "assignment_au",
+    "task_au",
+    "message_ai",
+    "message_ad",
+    "message_au",
+  ]
+    .map((name) => `DROP TRIGGER person_kind_${name};`)
+    .join(" ")}
+    DROP INDEX persons_kind_to_work_out; DROP INDEX persons_by_kind; ALTER TABLE persons DROP COLUMN kind;
+    ALTER TABLE persons DROP COLUMN name_order; ALTER TABLE persons DROP COLUMN messages_from;
+    ALTER TABLE persons DROP COLUMN task_count; ALTER TABLE persons DROP COLUMN last_contact;`,
   61: "DROP INDEX account_identities_in_address_book; ALTER TABLE account_identities DROP COLUMN address_book;",
   60: `DROP INDEX pipeline_stages_by_base_stage_id; ALTER TABLE pipeline_stages DROP COLUMN base_stage_id;
     ALTER TABLE pipeline_stages DROP COLUMN base_confirmed;`,

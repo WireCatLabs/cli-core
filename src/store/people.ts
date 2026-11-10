@@ -1,5 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import type { Contact, Id, Page, PersonAlias, Provider } from "../domain/models.js"
+import type { PersonKind } from "../domain/person-kinds.js"
 import type { PeopleLookup } from "../resolve.js"
 import type {
   IdentityLinkDecision,
@@ -16,6 +17,7 @@ import * as identityProposals from "./sqlite/identity-proposals.js"
 import type { StoreContext } from "./sqlite/open.js"
 import { linkToOwner } from "./sqlite/own-identities.js"
 import {
+  countPeople,
   listPeople,
   type PeopleList,
   type PeopleListOptions,
@@ -123,6 +125,8 @@ export interface PeopleStore extends AccountPeople {
    * name, no tie) and `unsorted` (nothing to show as a name) hold the rest.
    */
   list(options: PeopleListOptions): Promise<PeopleList>
+  /** How many people of each kind match a name or username, or the whole store: `list`'s `counts` without a page. */
+  counts(query?: string): Promise<Record<PersonKind, number>>
   /** People whose names start like the typed one, the same name first: for a form that adds a person. */
   similar(name: string, options?: { limit?: number }): Promise<SimilarPerson[]>
   /** Why each `person:<uid>` is shown by default, as `list` gives it; an empty list for one with no tie. */
@@ -252,6 +256,7 @@ export const peopleStoreOver = (context: StoreContext, keyed: AccountPeople): Pe
     linkProposals: async (filter) => identityProposals.identityLinkRows(context, filter),
     linkToOwner: async (identity) => linkToOwner(context, identity),
     list: async (options) => listPeople(database, options),
+    counts: async (query) => countPeople(database, query),
     similar: async (name, { limit = 8 } = {}) => similarPeople(database, name, limit),
     ties: async (people) => {
       const reasons = shownReasons(database)
