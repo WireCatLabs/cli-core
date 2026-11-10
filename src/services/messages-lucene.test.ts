@@ -255,6 +255,24 @@ describe.each(["max", "telegram"])("strict store profile (%s)", (provider) => {
     expect(ids(await run(store, account, "date:[60d TO 7d}"))).toEqual([3])
     expect(ids(await run(store, account, "date:today OR date:yesterday", { limit: 100, timezone: "UTC" }))).toContain(1)
   })
+  it("**muted:** keeps out the chats the owner muted, until their mute runs out", async () => {
+    const store = await open()
+    const later = new Date(Date.now() + 86_400_000).toISOString()
+    const earlier = new Date(Date.now() - 86_400_000).toISOString()
+    await store.chats.saveChats(account, [
+      chat("1", "group", { muted: true }),
+      chat("2", "group", { muted: true, mutedUntil: later }),
+      chat("3", "group", { muted: true, mutedUntil: earlier }),
+      chat("4", "group", { muted: false }),
+      chat("5"),
+    ])
+    for (const id of ["1", "2", "3", "4", "5"])
+      await store.messages.saveMessages(account, id, [message(id, id, "news")], { via: "history" })
+    expect(ids(await run(store, account, "muted:true"))).toEqual([1, 2])
+    expect(ids(await run(store, account, "news muted:false"))).toEqual([3, 4, 5])
+    const counted = await statsStore(store, account, { text: "muted:false", limit: 10, by: "chat", timezone: "UTC" })
+    expect(counted.total).toBe(3)
+  })
   it("counts distinct matches by chat, sender, day and hour", async () => {
     const store = await open()
     await store.chats.saveChats(account, [chat("1"), chat("2")])
