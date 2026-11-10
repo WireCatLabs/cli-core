@@ -8,7 +8,7 @@ import { openStore } from "./store.js"
 
 const TG = { provider: "telegram", account: "1" }
 
-it("works a nameless person's kind out again when an account's name changes (RISK-2268)", async () => {
+it("clears the kinds of nameless people once, and works one out again when an account's name changes", async () => {
   const path = join(mkdtempSync(join(tmpdir(), "version-66-")), "wirecat.db")
   const first = await openStore({ path })
   await first.people.savePeople(TG, [{ id: "1", name: "Me" }])
@@ -23,11 +23,18 @@ it("works a nameless person's kind out again when an account's name changes (RIS
       "UPDATE persons SET kind = NULL WHERE kind IS NOT NULL AND id IN " +
       "(SELECT person_id FROM identity_links WHERE identity_id = NEW.id); END;",
   )
+  old.exec("UPDATE persons SET kind = 'stranger' WHERE kind IS NULL")
   rollBackTo(old, 66)
   old.close()
 
   const store = await openStore({ path })
   try {
+    const cleared = await openCache(path)
+    const nameless = cleared
+      .prepare("SELECT count(*) AS n FROM persons WHERE kind IS NOT NULL AND trim(coalesce(name, '')) = ''")
+      .get()?.n
+    cleared.close()
+    expect(nameless).toBe(0)
     await store.people.list({ limit: 50, kind: "all" })
     const database = await openCache(path)
     try {

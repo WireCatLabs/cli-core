@@ -7,7 +7,7 @@ import type { CacheDatabase } from "../driver.js"
 import { keepTogether, keptTogether } from "./identity-split-proposals.js"
 import { currentPerson } from "./merged-persons.js"
 import type { StoreContext } from "./open.js"
-import { merges } from "./person-merges.js"
+import { merges, ownerOnly } from "./person-merges.js"
 
 /** Why a person may be wrong, most urgent first: the owner's own person holding someone else matters most. */
 export const DOUBT_REASONS = ["owner-other-name", "test-data", "shared-address", "mixed-names"] as const
@@ -200,15 +200,10 @@ const doubtsOf = (held: Held[], kept: ReadonlySet<string>, test: ReadonlySet<num
   const groups = nameGroups(held.filter(({ pk }) => !test.has(pk)))
   if (groups.length < 2) return []
   const main = groups[0] as Held[]
-  // A link only moves the identities of the person joining, so the ones already here keep a rule's method; the owner
-  // saw them too. Not on the owner's own person, where linking one account says nothing of the rest.
-  const vouched = first.owner
-    ? Number.NEGATIVE_INFINITY
-    : held.reduce((newest, { by, at }) => (by === "owner" && at > newest ? at : newest), Number.NEGATIVE_INFINITY)
   const outside = groups
     .slice(1)
     .flat()
-    .filter(({ by, ref, at }) => by !== "owner" && at > vouched && !kept.has(ref))
+    .filter(({ by, ref }) => by !== "owner" && !kept.has(ref))
   const base = { person: first.person, owner: first.owner, name: first.personName }
   if (first.owner)
     return outside.length ? [{ ...base, reason: "owner-other-name", held: outside, doubted: outside }] : []
@@ -221,7 +216,11 @@ const doubtsOf = (held: Held[], kept: ReadonlySet<string>, test: ReadonlySet<num
       found.push({ ...base, reason: "shared-address", held: [one], address, doubted: [one] })
     else mixed.push(one)
   }
-  if (mixed.length) found.push({ ...base, reason: "mixed-names", held: [...main, ...mixed], doubted: mixed })
+  // A link only moves the identities of the person joining, so the ones already here keep a rule's method, though the
+  // owner saw their names beside the new one. A shared address is not something a name shows, so it stays.
+  const vouched = held.reduce((newest, { by, at }) => (by === "owner" && at > newest ? at : newest), -Infinity)
+  const unseen = mixed.filter(({ at }) => at > vouched)
+  if (unseen.length) found.push({ ...base, reason: "mixed-names", held: [...main, ...unseen], doubted: unseen })
   return found
 }
 
@@ -346,13 +345,12 @@ export interface KeptPerson {
  * when nothing about the person is in doubt.
  */
 export const keepPerson = (context: StoreContext, uid: string, by: Decider): KeptPerson => {
-  if (by !== "owner")
-    throw new CliError("permission_error", "only the owner says a person's links are right; the owner runs this", {
-      reason: "identity.owner-only",
-    })
+  ownerOnly(by, "says a person's links are right")
   const asked = /^(?:person:)?([1-9]\d*)$/u.exec(uid.trim())?.[1]
   const known =
-    asked === undefined ? undefined : context.database.prepare("SELECT id FROM persons WHERE id = ?").get(Number(asked))
+    asked === undefined || !Number.isSafeInteger(Number(asked))
+      ? undefined
+      : context.database.prepare("SELECT id FROM persons WHERE id = ?").get(Number(asked))
   if (known === undefined)
     throw new CliError("not_found", `the store has no person for "${uid}"`, { reason: "person.unknown" })
   const person = currentPerson(context.database, Number(known.id))
@@ -365,8 +363,13 @@ export const keepPerson = (context: StoreContext, uid: string, by: Decider): Kep
       ),
     ),
   ]
-  if (doubted.length === 0)
+  if (doubted.length === 0) {
+    if (held.some(({ pk }) => test.has(pk)))
+      throw new CliError("validation_error", `person:${person} is in doubt only as test data, which is not kept`, {
+        reason: "person.test-data",
+      })
     throw new CliError("not_found", `nothing about person:${person} is in doubt`, { reason: "person.no-doubt" })
+  }
   keepTogether(context, person, doubted)
   return { person: `person:${person}`, kept: doubted }
 }

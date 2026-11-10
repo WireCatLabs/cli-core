@@ -116,6 +116,55 @@ describe("people in doubt (IDEA-270)", () => {
     expect(again?.identities.map(({ identity }) => identity)).not.toContain(kept.kept[0])
   })
 
+  it("still names a shared address after the owner links someone else to the person", async () => {
+    const store = await open()
+    await store.people.savePeople(MAIL, [{ id: "ivan@acme.ru", name: "Ivan Petrov" }])
+    await store.people.savePeople(OWN, [{ id: "5", name: "Olga Smirnova", email: "ivan@acme.ru" }])
+    await new Promise((done) => setTimeout(done, 5))
+    await store.people.savePeople(MAX, [{ id: "9", name: "Ivan P" }])
+    await store.people.linkIdentities(
+      { provider: "email", id: "ivan@acme.ru" },
+      { provider: "max", id: "9" },
+      {
+        method: "manual",
+        by: "owner",
+      },
+    )
+
+    expect((await store.people.doubts(page)).items).toMatchObject([{ reason: "shared-address" }])
+  })
+
+  it("keep turns down an agent's open split of the kept identities, and refuses a person in doubt as test data", async () => {
+    const store = await open()
+    await store.people.savePeople(CRM, [
+      { id: "c/1", name: "Ivan Petrov" },
+      { id: "c/2", name: "Olga Smirnova" },
+    ])
+    const crm = (id: string) => ({ provider: "bitrix24", id })
+    await store.people.linkIdentities(crm("c/1"), crm("c/2"), { method: "same-email", by: "rules" })
+    const [doubt] = (await store.people.doubts(page)).items
+    const split = await store.people.proposeSplit({
+      identities: [crm(String(doubt?.identities.at(-1)?.identity.split(":")[1]))],
+      by: { bot: "claude-code" },
+      reason: "another name",
+    })
+
+    await store.people.keep(doubt?.person as string, "owner")
+
+    expect((await store.people.splitProposals({ status: "proposed", limit: 10, offset: 0 })).items).toEqual([])
+    expect((await store.people.splitProposals({ status: "rejected", limit: 10, offset: 0 })).items).toContainEqual(
+      expect.objectContaining({ id: split.id }),
+    )
+    await store.people.savePeople(WA, [
+      { id: "11", name: "Ann Lee" },
+      { id: "12", name: "Bob Ray" },
+    ])
+    const test = (await store.people.doubts(page)).items.find(({ reason }) => reason === "test-data")
+    await expect(store.people.keep(test?.person as string, "owner")).rejects.toMatchObject({
+      details: { reason: "person.test-data" },
+    })
+  })
+
   it("leaves out a split the owner turned down", async () => {
     const store = await open()
     await store.people.savePeople(MAX, [{ id: "2", name: "Svetlana 2" }])

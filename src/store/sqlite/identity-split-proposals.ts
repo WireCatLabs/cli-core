@@ -114,7 +114,7 @@ export const keptTogether = (database: CacheDatabase): Map<number, Set<string>> 
 
 /**
  * The owner says these identities belong on this person: recorded as a split the owner turned down, which is what
- * `keptTogether` reads, so it lapses as soon as one of them moves.
+ * `keptTogether` reads, so it lapses as soon as one of them moves. An agent's open split of any of them is turned down.
  */
 export const keepTogether = (context: StoreContext, person: number, identities: readonly string[]): ProposedAction => {
   const operations = proposalOperationsOver(context)
@@ -126,6 +126,10 @@ export const keepTogether = (context: StoreContext, person: number, identities: 
     side: sideOf(context.database, person),
     evidence: [],
   }
+  const keeping = new Set(identities)
+  for (const row of splitRows(context.database, ["proposed"]))
+    if (holder(context.database, row.payload) === person && row.payload.identities.some((ref) => keeping.has(ref)))
+      operations.reject(row.id, "owner", { reason: "the owner kept them" })
   const proposed = operations.propose({
     kind: IDENTITY_SPLIT_KIND,
     by: "owner",
