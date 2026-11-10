@@ -4,16 +4,20 @@ import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import * as v from "valibot"
 import type { Chat, Message } from "../../domain/models.js"
-import { inOwnerFolder, storePath } from "../../store/path.js"
+import { accountHome, inOwnerFolder, storePath } from "../../store/path.js"
 import { type AccountKey, type MessageStore, openStore } from "../../store/store.js"
 import { changesStore, LOCAL_WRITE } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
-import { recalledAccount, rememberAccount } from "./accounts.js"
+import { accountFileFor, recalledAccount, rememberAccount } from "./accounts.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { fill } from "./stored.js"
 
 const id = v.pipe(v.string(), v.nonEmpty())
-const time = v.pipe(v.string(), v.isoTimestamp())
+const time = v.pipe(
+  v.string(),
+  v.isoTimestamp(),
+  v.transform((at) => new Date(at).toISOString()),
+)
 const name = v.nullish(v.string(), null)
 
 const person = v.object({ id, name, username: name })
@@ -44,7 +48,7 @@ const importFile = v.object({
         timestamp: time,
         editedAt: v.nullish(time, null),
         text: v.string(),
-        outgoing: v.optional(v.nullable(v.boolean())),
+        outgoing: v.optional(v.boolean()),
         replyToId: v.optional(id),
       }),
     ),
@@ -58,8 +62,9 @@ const readImport = (path: string): ImportFile => {
   let raw: unknown
   try {
     raw = JSON.parse(readFileSync(path, "utf8"))
-  } catch (error) {
-    throw new CliError("validation_error", `cannot read ${path} as JSON: ${(error as Error).message}`)
+  } catch {
+    // The parser's message quotes the file, which may be anything its caller can read.
+    throw new CliError("validation_error", `cannot read ${path} as JSON`)
   }
   if ((raw as { synthetic?: unknown } | null)?.synthetic !== true)
     throw new CliError(
@@ -70,7 +75,7 @@ const readImport = (path: string): ImportFile => {
   if (!parsed.success) {
     const issue = parsed.issues[0]
     const at = v.getDotPath(issue) ?? "the file"
-    throw new CliError("validation_error", `${path}: ${at}: ${issue.message}`)
+    throw new CliError("validation_error", `${path}: ${at}: expected ${issue.expected ?? "another value"}`)
   }
   const file = parsed.output
   const chats = new Set(file.chats.map((chat) => chat.id))
@@ -103,9 +108,23 @@ const chatsOf = (file: ImportFile, messages: Message[]): Chat[] => {
   return file.chats.map((chat) => ({ ...chat, lastMessageAt: chat.lastMessageAt ?? newest.get(chat.id) ?? null }))
 }
 
-const heldCounts = async (store: MessageStore, key: AccountKey) => {
-  const stats = await store.chats.chatStats(key)
-  return { chats: stats.length, messages: stats.reduce((sum, chat) => sum + chat.messages, 0) }
+const heldCounts = async (store: MessageStore, key: AccountKey) => ({
+  chats: await store.chats.countChats(key),
+  messages: (await store.chats.chatStats(key)).reduce((sum, chat) => sum + chat.messages, 0),
+})
+
+const refuseOwnerFolders = (messenger: Messenger, profile: string, env: NodeJS.ProcessEnv, target: string) => {
+  const home = accountHome()
+  const ownState =
+    home !== undefined &&
+    accountFileFor(messenger.app, profile, env) === accountFileFor(messenger.app, profile, { HOME: home })
+  if (!inOwnerFolder(target, home) && !ownState) return
+  throw new CliError(
+    "permission_error",
+    `store import writes made-up data, and ${ownState ? `profile ${profile}'s state` : target} is the owner's real ` +
+      "one — run it in a sandbox (WireCat Desktop's bin/sandbox), with HOME, MESSAGING_STORE and the tool's state " +
+      "folder of its own",
+  )
 }
 
 /** `store import` — made-up chats, people and messages into a test or sandbox store, through the sync's own writes. */
@@ -126,12 +145,7 @@ export const storeImportCommand = (messenger: Messenger): Command =>
         const { command } = messenger.app
         const file = readImport(path)
         const target = storePath(env)
-        if (inOwnerFolder(target))
-          throw new CliError(
-            "permission_error",
-            `store import writes made-up data, and ${target} is the owner's real store — run it in a sandbox ` +
-              "(WireCat Desktop's bin/sandbox) or with MESSAGING_STORE pointing at a store of its own",
-          )
+        refuseOwnerFolders(messenger, profile, env, target)
         if (!context.settings.profilesHere.includes(profile))
           throw new CliError(
             "not_found",
@@ -148,7 +162,8 @@ export const storeImportCommand = (messenger: Messenger): Command =>
         const messages = messagesOf(file)
         const chats = chatsOf(file, messages)
         const people = [...file.people, ...Object.values(file.members).flat()]
-        const yes = this.optsWithGlobals<{ yes?: boolean }>().yes === true
+        // Over MCP an `ask` write goes ahead (NEED-773): nobody is there to add --yes.
+        const yes = this.optsWithGlobals<{ yes?: boolean }>().yes === true || context.agent
         const planned = {
           store: target,
           profile,
@@ -166,9 +181,17 @@ export const storeImportCommand = (messenger: Messenger): Command =>
         const answer = await context.run(async () => {
           const store = await openStore({ env, command, version: messenger.app.version })
           try {
+            const mapped = (await store.accounts.profiles())[command]?.[profile]
+            if (mapped && (mapped.provider !== key.provider || mapped.account !== key.account))
+              throw new CliError(
+                "validation_error",
+                `the store has profile ${profile} as account ${mapped.account}, and ${path} is account ` +
+                  `${key.account} — import it into a profile of its own`,
+              )
             const before = await heldCounts(store, key)
             await store.accounts.saveAccount(key, { name: file.account.name })
             await store.accounts.saveProfile(command, profile, key)
+            rememberAccount(messenger.app, profile, key.account, env)
             await store.people.savePeople(key, [file.account, ...people])
             await fill(store, key, { chats, messages })
             for (const [chatId, members] of Object.entries(file.members))
@@ -177,7 +200,6 @@ export const storeImportCommand = (messenger: Messenger): Command =>
                 chatId,
                 members.map((member) => member.id),
               )
-            rememberAccount(messenger.app, profile, key.account, env)
             const after = await heldCounts(store, key)
             return {
               ...planned,

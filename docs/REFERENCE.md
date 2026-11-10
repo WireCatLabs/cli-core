@@ -765,10 +765,13 @@ The file is the adapter kit's `Seed` (`src/kit/seed.ts`) without its test-only f
   reactions and forwards are not loaded.
 - Ids are the file's own and stay the same between loads: the same file twice adds nothing, and a message whose text
   changed is updated in place, its old text kept as a revision, as an edit from the messenger would be.
-- Without `--yes` it says what it would load and changes nothing.
-- It refuses a file without `"synthetic": true`, any store in the owner's real WireCat folder (read from the system's
-  user database, so a moved `HOME` does not hide it), a profile that does not exist, and a profile already recorded
+- Without `--yes` it says what it would load and does not open the store. Over MCP it loads, as any `ask` write does.
+- It refuses a file without `"synthetic": true`, a store in the owner's real WireCat folder or the tool's state folder
+  in the owner's real home (both read from the system's user database, so a moved `HOME` does not hide them, and a
+  link into them is followed), a profile that does not exist, and a profile that the tool or the store already holds
   as another account. Its permission key is `store.import`, `ask` by default.
+- Timestamps are kept in UTC. Each write is the sync's own transaction, so a load that fails half-way leaves what it
+  wrote; running it again finishes it.
 
 ## The store schema a version speaks
 

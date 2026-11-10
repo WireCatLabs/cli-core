@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs"
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir, userInfo } from "node:os"
 import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
@@ -159,7 +159,7 @@ describe("store import", () => {
       MESSAGING_STORE: real,
     })
     expect(refused.code).not.toBe(0)
-    expect(refused.refusal).toContain("the owner's real store")
+    expect(refused.refusal).toContain("is the owner's real one")
   })
 
   it("refuses a profile that is another account, and a profile that does not exist", async () => {
@@ -173,6 +173,11 @@ describe("store import", () => {
     const mismatch = await call(["personal", "store", "import", other, "--yes", "--json"], env)
     expect(mismatch.code).not.toBe(0)
     expect(mismatch.refusal).toContain("is account person-1")
+
+    rmSync(accountFileFor(app, "personal", env))
+    const remapped = await call(["personal", "store", "import", other, "--yes", "--json"], env)
+    expect(remapped.code).not.toBe(0)
+    expect(remapped.refusal).toContain("the store has profile personal as account person-1")
 
     const unknown = await call(["nobody", "store", "import", other, "--yes", "--json"], env)
     expect(unknown.code).not.toBe(0)
