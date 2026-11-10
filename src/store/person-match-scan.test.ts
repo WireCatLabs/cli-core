@@ -371,6 +371,56 @@ describe("a phone", () => {
     )
     expect(again.skipped).toMatchObject([{ reason: "identity.rejected" }])
     expect(await linkProposals(store)).toHaveLength(3)
+    expect((await store.people.linkProposals({ limit: 50, offset: 0 })).items.map(({ score }) => score)).toEqual([
+      0.4, 0.4,
+    ])
+  })
+})
+
+describe("scores on one scale (NEED-2529)", () => {
+  const CRM: AccountKey = { provider: "bitrix24", account: "acme.example" }
+  const CARDS: AccountKey = { provider: "amocrm", account: "acme" }
+  const crmPhonePair = async () => {
+    const store = await open()
+    await store.people.savePeople(CRM, [{ id: "c1", name: "Kai B", phone: "+7 900 555-00-00" }])
+    await store.people.savePeople(CARDS, [{ id: "c2", name: "Kai C", phone: "+79005550000" }])
+    return store
+  }
+
+  it("gives a phone two CRM contacts alone have 0.7, and lists it before a shared mailbox's 0.1", async () => {
+    const store = await crmPhonePair()
+    await store.people.savePeople(PERSONAL, [{ id: "5", name: "Ana Diaz", email: "info@shop.example" }])
+    await store.people.savePeople(MAX, [{ id: "7", name: "Bo Lind", email: "info@shop.example" }])
+
+    const scan = await store.people.scanMatches({ full: true })
+    const listed = (await store.people.linkProposals({ order: "score", limit: 50, offset: 0 })).items
+
+    expect(scan.merged).toEqual([])
+    expect(listed.map(({ signal, score }) => [signal, score])).toEqual([
+      ["phone", 0.7],
+      ["email", 0.1],
+    ])
+  })
+
+  it("fills the score of an open rule proposal made before scores, and leaves a decided one as it was", async () => {
+    const store = await crmPhonePair()
+    await store.people.savePeople(CRM, [{ id: "c3", name: "Lu D", phone: "+7 900 555-11-11" }])
+    await store.people.savePeople(CARDS, [{ id: "c4", name: "Lu E", phone: "+79005551111" }])
+    await store.people.scanMatches({ full: true })
+    const [open, decided] = (await linkProposals(store)).map(({ id }) => id)
+    await store.people.decideLink(decided as string, { confirm: false, by: "owner" })
+    const database = await raw()
+    database.prepare("UPDATE proposed_actions SET payload = json_set(payload, '$.score', json('null'))").run()
+
+    await store.people.scanMatches({ full: true })
+    const scores = Object.fromEntries(
+      (await store.people.linkProposals({ status: "all", limit: 50, offset: 0 })).items.map(({ id, score }) => [
+        id,
+        score,
+      ]),
+    )
+
+    expect(scores).toEqual({ [open as string]: 0.7, [decided as string]: null })
   })
 })
 
@@ -387,6 +437,7 @@ describe("a meeting guest's typed address", () => {
 
     expect(scan.merged).toEqual([])
     expect(scan.proposed).toMatchObject([{ signal: "guest-email", opened: true }])
+    expect((await store.people.linkProposals({ limit: 50, offset: 0 })).items).toMatchObject([{ score: 0.5 }])
     expect(await uidOf(store, "example", "alice-example")).not.toBe(alice)
     await store.people.decideLink(scan.proposed[0]?.id as string, { confirm: true, by: "owner" })
     expect(await uidOf(store, "example", "alice-example")).toBe(alice)
@@ -414,7 +465,11 @@ describe("the same name and a shared trace", () => {
 
     expect(scan.merged).toEqual([])
     const [proposal] = await nameProposals(store)
-    expect(proposal).toMatchObject({ joins: "person", reason: expect.stringContaining("a chat they are both in") })
+    expect(proposal).toMatchObject({
+      joins: "person",
+      score: 0.5,
+      reason: expect.stringContaining("a chat they are both in"),
+    })
     expect(proposal?.evidence).toHaveLength(1)
     expect(await uidOf(store, "telegram", "1")).not.toBe(await uidOf(store, "telegram", "2"))
   })
@@ -435,6 +490,7 @@ describe("the same name and a shared trace", () => {
     const found = await nameProposals(store)
     expect(found).toHaveLength(1)
     expect(found[0]?.reason).toContain("acme.example")
+    expect(found[0]?.score).toBe(0.5)
   })
 
   it("leaves one name alone without a trace, and skips a name more than six people have", async () => {

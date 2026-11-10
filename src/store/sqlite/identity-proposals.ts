@@ -88,7 +88,19 @@ export const openIdentityLink = (context: StoreContext, opening: Opening, index?
     const operations = proposalOperationsOver(context)
     const links = index ?? linkIndex(context.database)
     const open = links.open(from, to)
-    if (open) return { outcome: "open", action: operations.get(open.id) }
+    if (open) {
+      // NEED-2529: a rule's proposal from before scores were recorded takes its score when the scan meets it again.
+      if (open.payload.score === null && opening.score !== undefined && open.payload.signal === opening.signal) {
+        context.database
+          .prepare(
+            "UPDATE proposed_actions SET payload = json_set(payload, '$.score', ?), updated_at = ? " +
+              "WHERE id = ? AND status = 'proposed'",
+          )
+          .run(opening.score, context.now(), Number(open.id))
+        open.payload.score = opening.score
+      }
+      return { outcome: "open", action: operations.get(open.id) }
+    }
     const identity = refOf(context, opening.identity)
     const other = opening.with === null ? null : refOf(context, opening.with)
     if (links.rejected(from, to)?.has(evidenceKeyOf({ signal: opening.signal, identity, with: other })))
