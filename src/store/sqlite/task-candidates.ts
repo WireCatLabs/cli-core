@@ -14,6 +14,7 @@ import { CORPORA, drainCorpus } from "./note-index.js"
 import type { StoreContext } from "./open.js"
 import { stemmerCache, storeStemmers } from "./stems.js"
 import { inboxKey } from "./task-keys.js"
+import { placeholderTitleOf } from "./task-titles.js"
 import { taskRowOf, thingOf } from "./things.js"
 
 /** A task not written yet, as `tasks add` will see it: what the comparison reads from a stored one. */
@@ -86,8 +87,6 @@ type Side = {
   createdAt: Date
 }
 
-const PLACEHOLDER = (row: Row) => `${String(row.type)} — ${String(row.source_locator ?? "")}`
-
 export const taskSimilarityOver = (context: StoreContext): TaskSimilarity => {
   const { database, now } = context
   const stemmerFor = stemmerCache()
@@ -139,7 +138,7 @@ export const taskSimilarityOver = (context: StoreContext): TaskSimilarity => {
     return {
       row: Number(row.id),
       project: Number(row.project_id),
-      title: String(row.title) === PLACEHOLDER(row) ? "" : String(row.title),
+      title: String(row.title) === placeholderTitleOf(row) ? "" : String(row.title),
       description: row.description == null ? "" : String(row.description),
       ...(row.category == null ? {} : { category: String(row.category) }),
       ...(source ? { source } : {}),

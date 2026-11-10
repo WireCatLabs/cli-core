@@ -184,3 +184,45 @@ describe("similar tasks", () => {
     await store.close()
   })
 })
+
+describe("task titles read from the source message", () => {
+  const titles = async (texts: string[], edit?: string) => {
+    const { store, add } = await setup(texts.map((text, index) => said(String(index + 1), "9", text)))
+    const keys: string[] = []
+    for (const index of texts.keys()) keys.push(await add(String(index + 1)))
+    if (edit !== undefined)
+      await store.tasks.edit((await store.tasks.details(keys[0] as string)).id, { title: edit }, "owner")
+    return { store, keys }
+  }
+
+  it("shows the first non-empty line while the title is the placeholder", async () => {
+    const { store, keys } = await titles(["\n  Can you send the invoice?\nThanks, Ann"])
+    expect((await store.tasks.details(keys[0] as string)).title).toBe("Can you send the invoice?")
+    expect((await store.tasks.query("chat:500", undefined, { limit: 10, offset: 0 }))[0]?.title).toBe(
+      "Can you send the invoice?",
+    )
+    await store.close()
+  })
+
+  it("caps a long line at a word boundary with an ellipsis", async () => {
+    const { store, keys } = await titles([`${"word ".repeat(40)}end`])
+    const title = (await store.tasks.details(keys[0] as string)).title
+    expect(title.length).toBeLessThanOrEqual(121)
+    expect(title).toMatch(/ word…$/)
+    await store.close()
+  })
+
+  it("keeps the stored title when the message is gone or has no text", async () => {
+    const { store, keys } = await titles(["", "hello"])
+    await store.messages.markDeleted(account, ["2"], { chatId: "7" })
+    expect((await store.tasks.details(keys[0] as string)).title).toBe("request — msg:chat/500/7/1")
+    expect((await store.tasks.details(keys[1] as string)).title).toBe("request — msg:chat/500/7/2")
+    await store.close()
+  })
+
+  it("never replaces a title the owner wrote", async () => {
+    const { store, keys } = await titles(["Please call me"], "Call Ann back")
+    expect((await store.tasks.details(keys[0] as string)).title).toBe("Call Ann back")
+    await store.close()
+  })
+})

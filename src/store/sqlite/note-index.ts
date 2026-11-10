@@ -13,6 +13,7 @@ import { noteIndexText } from "./index-text.js"
 import { speech } from "./lucene-fields.js"
 import type { Where } from "./query-filter.js"
 import { savedStemmers } from "./stems.js"
+import { PLACEHOLDER_TITLE_SQL } from "./task-titles.js"
 import { write } from "./transaction.js"
 import { dropUnusedVectors } from "./vector-index.js"
 
@@ -126,7 +127,7 @@ export const CORPORA = {
     table: "tasks",
     // A rule names its task `<kind> — <source>`: words every rule task shares, so they say nothing about this one.
     read:
-      "SELECT CASE WHEN title = type || ' — ' || coalesce(source_locator, '') THEN NULL ELSE title END AS title, " +
+      `SELECT CASE WHEN ${PLACEHOLDER_TITLE_SQL} THEN NULL ELSE title END AS title, ` +
       "coalesce(description, '') AS body, deleted_at IS NULL AS live, 'personal' AS scope FROM tasks WHERE id = ?",
     pieces: false,
     terms: (text, stemmer) => ({ words: taskWordsOf(text), stems: [...taskStemsOf(text, stemmer)].join(" ") }),
