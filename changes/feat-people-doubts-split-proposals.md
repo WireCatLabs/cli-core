@@ -11,7 +11,9 @@
   proposal (the identities that leave, all of one person, or a `merge:<to>-<from>`) with its reason;
   `decideSplit` is the owner's alone and carries it out as the owner's own unlink, split or undo of the merge, refused
   with `identity.stale` when the person changed since. `splitProposals` lists them, and the shared review
-  (`proposalRegistry`) shows and decides them as kind `identity_split`, owner-only. A split the owner turned down is
-  not proposed again, and `doubts` leaves those identities out. No store migration: older builds see the kind as a
-  plain action, and one they approve is never carried out.
+  (`proposalRegistry`) shows and decides them as kind `identity_split`, owner-only. Proposing an open split again
+  renews it after the person changed. A split the owner turned down is not proposed again while its identities stay
+  on that person, and `doubts` leaves them out. Removing a CRM contact or erasing an identity deletes the splits that
+  name it. No store migration: older builds see the kind as a plain action, and one they approve is never carried
+  out (`splitProposals` shows it as `dropped`).
 - `SEED_PEOPLE`, `RESERVED_ADDRESS_GLOBS` and `SEED_ID_GLOBS` in the domain, which the contract seed now uses.
