@@ -129,10 +129,30 @@ describe("people's ties to the owner", () => {
     expect(await shownOf(store)).toEqual({ Ann: ["mail"] })
   })
 
-  it("shows meeting guests, CRM contacts and the address book, and drops someone the book no longer has", async () => {
+  it("shows meeting guests, the owner's CRM clients and the address book, and drops someone the book no longer has", async () => {
     const { store, db } = await opened()
     await store.accounts.registerProvider({ name: "bitrix24", kind: "crm", aliases: ["b24"], command: "b24" })
-    await store.people.savePeople(CRM, [{ id: "contact/5", name: "Carla" }])
+    await store.people.savePeople(CRM, [
+      { id: "contact/5", name: "Carla" },
+      { id: "contact/6", name: "Cora" },
+    ])
+    const personPk = (id: string) =>
+      Number(
+        db
+          .prepare(
+            "SELECT l.person_id AS p FROM identities i JOIN identity_links l ON l.identity_id = i.id " +
+              "WHERE i.provider = 'bitrix24' AND i.external_id = ?",
+          )
+          .get(id)?.p,
+      )
+    const owner = Number(db.prepare("SELECT id FROM persons WHERE owner = 1").get()?.id)
+    const dealLink = db.prepare(
+      "INSERT INTO links (from_type, from_id, to_type, to_id, kind, role, source, created_at, updated_at) " +
+        "VALUES ('deal', ?, 'person', ?, 'related-to', ?, 'crm', ?, ?)",
+    )
+    dealLink.run(1, personPk("contact/5"), "contact", NOW, NOW)
+    dealLink.run(1, owner, "owner", NOW, NOW)
+    dealLink.run(2, personPk("contact/6"), "contact", NOW, NOW)
     await store.people.saveAddressBook(TG, [
       { id: "6", name: "Bea" },
       { id: "7", name: "Bo" },
@@ -159,6 +179,7 @@ describe("people's ties to the owner", () => {
 
     await store.people.saveAddressBook(TG, [{ id: "6", name: "Bea" }])
     expect(Object.keys(await shownOf(store))).not.toContain("Bo")
+    expect(Object.keys(await shownOf(store))).not.toContain("Cora")
   })
 
   it("always shows a person added by hand and anyone assigned a task", async () => {
@@ -387,7 +408,7 @@ describe("the kind of a person", () => {
 })
 
 describe("similar people", () => {
-  it("finds names starting like the typed words in any order, the same name first", async () => {
+  it("finds names starting like the typed words in any order, the same name first, accents aside", async () => {
     const { store } = await opened()
     await store.people.savePeople(TG, [
       { id: "30", name: "Petrov Ivan" },
@@ -399,6 +420,7 @@ describe("similar people", () => {
     const found = await store.people.similar("ivan PETROV")
 
     expect(found.map(({ name, sameName }) => [name, sameName])).toEqual([
+      ["Iván Petrov", true],
       ["Petrov Ivan", true],
       ["Ivan Petrovsky", false],
     ])
@@ -406,5 +428,38 @@ describe("similar people", () => {
       expect.arrayContaining(["Petrov Ivan", "Ivan Petrovsky", "Ivana Smith"]),
     )
     expect(await store.people.similar("!!")).toEqual([])
+  })
+})
+
+describe("a name in another script (BUG-678)", () => {
+  it("is found by a people search and by the check before adding someone", async () => {
+    const { store } = await opened()
+    await store.people.savePeople(MAIL, [{ id: "sveta@example.test", name: "Svetlana Kuznetsova" }])
+    await store.people.savePeople(TG, [{ id: "20", name: "Светлана Морозова" }])
+
+    const found = await store.people.list({ limit: 10, kind: "all", query: "Светлана" })
+    expect(found.items.map(({ displayName }) => displayName).sort()).toEqual([
+      "Svetlana Kuznetsova",
+      "Светлана Морозова",
+    ])
+    expect((await store.people.list({ limit: 10, kind: "all", query: "Kuznetsova" })).items).toHaveLength(1)
+
+    expect(
+      (await store.people.similar("Светлана Кузнецова")).map(({ displayName, sameName }) => [displayName, sameName]),
+    ).toEqual([["Svetlana Kuznetsova", true]])
+    expect((await store.people.similar("Светлана")).map(({ displayName }) => displayName).sort()).toEqual([
+      "Svetlana Kuznetsova",
+      "Светлана Морозова",
+    ])
+  })
+})
+
+describe("a username", () => {
+  it("names the messenger it belongs to", async () => {
+    const { store } = await opened()
+    await store.people.savePeople(TG, [{ id: "30", name: "Ola", username: "ola_k" }])
+
+    const row = (await store.people.list({ limit: 10, kind: "all" })).items.find(({ name }) => name === "Ola")
+    expect(row).toMatchObject({ contact: "@ola_k", username: "ola_k", usernameSource: "telegram" })
   })
 })

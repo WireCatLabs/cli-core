@@ -60,6 +60,9 @@ export interface LinkOptions {
 export interface LinkedIdentity extends IdentityRef {
   name: string | null
   username: string | null
+  /** The phone and address its source gave it, when it gave one. */
+  phone?: string | null
+  email?: string | null
   isBot: boolean | null
   /** The accounts in this store that have seen it. */
   accounts: Id[]

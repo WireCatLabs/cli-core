@@ -1,6 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import { isNoReplyAddress, isRoleAddress } from "../../domain/addresses.js"
 import { displayName, isReadable, nameKey } from "../../domain/display-names.js"
+import { spellings, variantKey } from "../../domain/name-variants.js"
 import {
   isAutomatedName,
   isCompanyName,
@@ -45,6 +46,8 @@ export interface ListedPerson {
   /** The one to show beside the name: the phone, else the email, else `@username`. */
   contact: string | null
   username: string | null
+  /** Where `username` comes from, `telegram` or `max`, so `@name` is shown as that messenger's. */
+  usernameSource: string | null
   phone: string | null
   email: string | null
   /** Messages and mail this person sent, every account together. */
@@ -78,11 +81,15 @@ const matching = (query: string | undefined): { sql: string; params: SqlValue[] 
   const text = query.trim()
   if (text.length < MIN_QUERY)
     throw new CliError("validation_error", `a people search takes at least ${MIN_QUERY} characters, got "${query}"`)
+  const forms = [...new Set([text, ...spellings(text)])]
+  const like = (form: string) => `%${form.replace(/[\\%_]/g, (c) => `\\${c}`)}%`
   return {
     sql:
       " AND (p.id IN (SELECT l.person_id FROM identity_links l WHERE l.identity_id IN " +
-      "(SELECT rowid FROM identities_fts WHERE identities_fts MATCH ?)) OR p.name LIKE ? ESCAPE '\\')",
-    params: [ftsPhrase(text), `%${text.replace(/[\\%_]/g, (c) => `\\${c}`)}%`],
+      "(SELECT rowid FROM identities_fts WHERE identities_fts MATCH ?)) OR " +
+      forms.map(() => "p.name LIKE ? ESCAPE '\\'").join(" OR ") +
+      ")",
+    params: [forms.map(ftsPhrase).join(" OR "), ...forms.map(like)],
   }
 }
 
@@ -133,6 +140,7 @@ const LAST_CONTACTS = (identities: string) =>
 /** Everything a person's kind and row are made from, gathered once for every person. */
 interface Facts {
   username: string | null
+  usernameSource: string | null
   phone: string | null
   email: string | null
   emails: string[]
@@ -157,6 +165,7 @@ const factsOf = (database: CacheDatabase, scope: Scope): Map<number, Facts> => {
     const person = Number(row.person)
     const one = facts.get(person) ?? {
       username: null,
+      usernameSource: null,
       phone: null,
       email: null,
       emails: [],
@@ -165,7 +174,10 @@ const factsOf = (database: CacheDatabase, scope: Scope): Map<number, Facts> => {
       organization: false,
     }
     const email = text(row.email) ?? (row.provider === "email" ? text(row.external_id) : null)
-    one.username ??= text(row.username)
+    if (one.username === null && text(row.username) !== null) {
+      one.username = text(row.username)
+      one.usernameSource = String(row.provider)
+    }
     one.phone ??= text(row.phone) ?? (row.provider === "phone" ? text(row.external_id) : null)
     one.email ??= email
     if (email !== null) one.emails.push(email)
@@ -273,6 +285,7 @@ const classified = (
       contact:
         contact.phone ?? contact.email ?? (contact.username === null ? null : `@${contact.username.replace(/^@/, "")}`),
       ...contact,
+      usernameSource: own?.usernameSource ?? null,
       messagesFrom: (messages.get(id) ?? 0) + (mail.get(id)?.n ?? 0),
       ties,
     }
@@ -306,7 +319,7 @@ const byName = (a: Classified, b: Classified) =>
  * Bump when what decides a kind, a name's order or a count changes in code (the word lists, `BULK_MIN`, the ties):
  * every stored one is worked out again on the next list.
  */
-const KIND_RULES = "1"
+const KIND_RULES = "2"
 const RULES_KEY = "people.kind_rules"
 /** Past this many people to work out, one pass over everyone beats a lookup per person. */
 const WHOLE_PASS = 20_000
@@ -518,9 +531,12 @@ const listInMemory = (database: CacheDatabase, options: PeopleListOptions): Peop
 
 const words = (key: string | null): string[] => (key === null ? [] : key.split(" "))
 
-/** Every typed word starts a word of the name, in any order: «iv pet» finds Petrov Ivan. */
+/**
+ * Every typed word starts a word of the name, in any order: «iv pet» finds Petrov Ivan. Script and spelling aside,
+ * so «Светлана» finds Svetlana (BUG-678).
+ */
 const startsEach = (typed: string[], name: string | null) => {
-  const own = words(nameKey(name))
+  const own = words(variantKey(name))
   return typed.every((word) => own.some((one) => one.startsWith(word)))
 }
 
@@ -529,9 +545,9 @@ const startsEach = (typed: string[], name: string | null) => {
  * that adds a person: the same name first (maybe a duplicate), then those with a tie to the owner, then by name.
  */
 export const similarPeople = (database: CacheDatabase, typed: string, limit: number): SimilarPerson[] => {
-  const key = nameKey(typed)
+  const key = variantKey(typed)
   const wanted = words(key)
-  const longest = wanted.reduce((a, b) => (b.length > a.length ? b : a), "")
+  const longest = words(nameKey(typed)).reduce((a, b) => (b.length > a.length ? b : a), "")
   if (longest === "") return []
   const named = new Map<number, string[]>()
   const note = (person: number, name: unknown) => {
@@ -552,7 +568,7 @@ export const similarPeople = (database: CacheDatabase, typed: string, limit: num
             "SELECT l.person_id AS person, i.name, i.username FROM identities_fts f JOIN identities i ON i.id = f.rowid " +
               "JOIN identity_links l ON l.identity_id = i.id WHERE identities_fts MATCH ?",
           )
-          .all(ftsPhrase(longest))
+          .all(spellings(longest).map(ftsPhrase).join(" OR "))
       : database
           .prepare(
             "SELECT l.person_id AS person, i.name, i.username FROM identities i " +
@@ -568,7 +584,7 @@ export const similarPeople = (database: CacheDatabase, typed: string, limit: num
     .map(([person, names]) => ({
       person,
       name: names[0] ?? "",
-      same: names.some((name) => nameKey(name) === key),
+      same: names.some((name) => variantKey(name) === key),
     }))
   if (found.length === 0) return []
   const ties = shownReasons(database)

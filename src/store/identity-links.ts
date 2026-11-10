@@ -6,9 +6,10 @@ export const IDENTITY_LINK_KIND = "identity_link"
 
 /**
  * Why two people may be one: an agent said so, they share a phone or an address with others, a meeting guest typed
- * an address another person has, or they have one name and share a phone, an address, a chat or a company's domain.
+ * an address another person has, they have one name and share a phone, an address, a chat or a company's domain, or
+ * an account the owner connected carries another name than the owner's (`account`).
  */
-export const IDENTITY_LINK_SIGNALS = ["agent", "phone", "email", "guest-email", "name"] as const
+export const IDENTITY_LINK_SIGNALS = ["agent", "phone", "email", "guest-email", "name", "account"] as const
 
 export type IdentityLinkSignal = (typeof IDENTITY_LINK_SIGNALS)[number]
 

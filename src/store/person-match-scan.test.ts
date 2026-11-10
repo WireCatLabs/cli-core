@@ -102,7 +102,7 @@ describe("a phone", () => {
     expect(scan.merged).toHaveLength(1)
   })
 
-  it("brings a contact with the owner's number to the owner, never the owner to the contact", async () => {
+  it("neither joins nor proposes a contact with the owner's number, and the owner's own link keeps the owner", async () => {
     const store = await open()
     await store.people.savePeople(WORK, [{ id: "contact/20", name: "Slava Example", phone: "+7 900 123-45-67" }])
     await store.people.savePeople(PERSONAL, [{ id: "9", name: "Slava", phone: "79001234567" }])
@@ -112,8 +112,17 @@ describe("a phone", () => {
     database.prepare("UPDATE persons SET owner = 1 WHERE id = ?").run(Number(me.uid))
     expect(Number(me.uid)).toBeGreaterThan(Number(await uidOf(store, "bitrix24", "contact/20")))
 
-    await store.people.scanMatches()
+    const scan = await store.people.scanMatches()
 
+    expect(scan.merged).toEqual([])
+    expect(scan.proposed).toEqual([])
+    expect(scan.skipped).toMatchObject([{ reason: "identity.owner" }])
+    expect((await store.people.owner())?.identities.map(({ provider }) => provider)).toEqual(["telegram"])
+    await store.people.linkIdentities(
+      { provider: "telegram", id: "9" },
+      { provider: "bitrix24", id: "contact/20" },
+      { method: "manual", by: "owner" },
+    )
     const owner = await store.people.owner()
     expect(owner?.uid).toBe(me.uid)
     expect(owner?.identities.map(({ provider }) => provider).sort()).toEqual(["bitrix24", "telegram"])

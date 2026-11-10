@@ -300,12 +300,15 @@ export const crmCopiesOver = (context: StoreContext, people: AccountPeople): Crm
     )
   }
 
-  /** A person a CRM contact or user made has no name when it joined the mail contact of its address first. */
+  /**
+   * A person a CRM contact or user made has no name when it joined the mail contact of its address first. The owner's
+   * name is never a CRM's: a contact on the owner's person by mistake must not rename them.
+   */
   const nameUnnamed = (key: AccountKey, externalId: string, type: "contact" | "user", name: string | null) => {
     const person = personIdOf(key, externalId, type)
     if (person !== null && name)
       database
-        .prepare("UPDATE persons SET name = ?, updated_at = ? WHERE id = ? AND name IS NULL")
+        .prepare("UPDATE persons SET name = ?, updated_at = ? WHERE id = ? AND name IS NULL AND owner = 0")
         .run(name, now(), person)
     return person
   }

@@ -45,6 +45,8 @@ export const recordOf = ({ orm }: StoreContext, personPk: number): PersonRecord 
       id: identities.externalId,
       name: identities.name,
       username: identities.username,
+      phone: identities.phone,
+      email: identities.email,
       isBot: identities.bot,
       method: identityLinks.method,
       linkedBy: identityLinks.author,
@@ -193,7 +195,7 @@ export const linkIdentities = (
   return record
 }
 
-const isOwner = ({ database }: StoreContext, person: number): boolean =>
+export const isOwner = ({ database }: StoreContext, person: number): boolean =>
   Number(database.prepare("SELECT owner FROM persons WHERE id = ?").get(person)?.owner) === 1
 
 /** The person `mergePerson(one, other)` keeps: `other`, unless `one` is the owner's. */
@@ -220,16 +222,34 @@ export const mergePerson = (context: StoreContext, one: number, other: number, o
 }
 
 /**
- * NEED-2446 (safe option until the owner rules): an address that two or more other people hold is a shared one, an
- * `office@` or `info@`, and joins no one at import; the scan proposes such people instead.
+ * A company's mailbox joins no one at import: two or more other people hold it (NEED-2446), an organization holds it,
+ * or another person of the identity's own list has it, such as a second CRM contact (`sharedLine` in the scan).
  */
-const sharedAddress = ({ database }: StoreContext, key: string, person: number): boolean =>
-  (database
+const sharedAddress = ({ database }: StoreContext, key: string, found: { pk: number; personPk: number }): boolean => {
+  const others = database
     .prepare(
       "SELECT count(DISTINCT l.person_id) AS n FROM identities i JOIN identity_links l ON l.identity_id = i.id " +
         "WHERE i.email = ? AND i.provider NOT IN ('email', 'org-email') AND l.person_id <> ?",
     )
-    .get(key, person)?.n as number) >= 2
+    .get(key, found.personPk)?.n as number
+  if (others >= 2) return true
+  const self = database.prepare("SELECT provider, external_id FROM identities WHERE id = ?").get(found.pk)
+  const list = String(self?.external_id ?? "").replace(/[^/]*$/u, "")
+  return (
+    database
+      .prepare(
+        "SELECT 1 FROM identities i WHERE i.email = ? AND (EXISTS (SELECT 1 FROM organization_identities o " +
+          "WHERE o.identity_id = i.id) OR (i.provider = ? AND i.id <> ? AND substr(i.external_id, 1, ?) = ? " +
+          "AND instr(substr(i.external_id, ? + 1), '/') = 0 AND NOT EXISTS (SELECT 1 FROM identity_links l " +
+          "WHERE l.identity_id = i.id AND l.person_id = ?))) LIMIT 1",
+      )
+      .get(key, String(self?.provider), found.pk, list.length, list, list.length, found.personPk) !== undefined
+  )
+}
+
+const isBot = ({ database }: StoreContext, identity: number): boolean =>
+  database.prepare("SELECT 1 FROM identities WHERE id = ? AND (bot = 1 OR provider LIKE '%-bot')").get(identity) !==
+  undefined
 
 /** Keeps the address an identity's source gave it, so a later contact with it counts this one. */
 export const noteAddress = (context: StoreContext, ref: IdentityRef, address: string): void => {
@@ -244,8 +264,10 @@ export const noteAddress = (context: StoreContext, ref: IdentityRef, address: st
  * Joins the identity to the person of the mail contact with this exact address, making that contact when mail has
  * not seen it yet, so whichever import comes second lands on one person. The contact is seen by no account, so it is
  * no one's mail correspondent. An owner's unlink wins: two people the owner separated stay apart. A role address such
- * as `info@` joins no one; the scan proposes its people instead. A pair the owner rejected is not joined either: it is
- * given back, so the caller proposes it when the evidence is new to the owner.
+ * as `info@` and a company's mailbox join no one, here or in the scan. A pair the owner rejected is not joined either: it is
+ * given back, so the caller proposes it when the evidence is new to the owner. Nothing joins the owner, or is
+ * proposed to them, from an address: a mailbox the owner reads may be someone else's, and only the owner joins anyone
+ * to themselves (SEC-177). A bot or service account joins no one.
  */
 export const joinByAddress = (
   context: StoreContext,
@@ -265,7 +287,8 @@ export const joinByAddress = (
   if (!mail) identityOf(context, "email", key, null)
   const contact = required(context, { provider: "email", id: mail ? String(mail.external_id) : key })
   if (contact.personPk === found.personPk || separated(context, found.personPk, contact.personPk)) return
-  if (sharedAddress(context, key, found.personPk)) return
+  if (sharedAddress(context, key, found) || isBot(context, found.pk)) return
+  if (isOwner(context, found.personPk) || isOwner(context, contact.personPk)) return
   if (rejectedEvidence(context.database, found.personPk, contact.personPk) !== undefined)
     return { identity: found.pk, with: contact.pk, from: found.personPk, to: contact.personPk }
   const kept = mergePerson(context, found.personPk, contact.personPk, { method: "same-email", by })
@@ -274,6 +297,30 @@ export const joinByAddress = (
     recordOf(context, kept).identities.flatMap(({ name, username }) => [name, username]),
   )
   return undefined
+}
+
+/**
+ * A person named after an identity that left them takes the name of the oldest identity they still have, or none: the
+ * owner merged with a partner's CRM contact kept the partner's name after the split (BUG-677).
+ */
+export const renameAfterLeaving = (context: StoreContext, person: number, left: readonly number[]): void => {
+  const { database } = context
+  const current = database.prepare("SELECT name FROM persons WHERE id = ?").get(person)?.name
+  if (typeof current !== "string") return
+  const leaving = database
+    .prepare("SELECT name FROM identities WHERE id IN (SELECT value FROM json_each(?))")
+    .all(JSON.stringify(left))
+    .map(({ name }) => (typeof name === "string" ? name.trim() : ""))
+  if (!leaving.includes(current.trim())) return
+  const kept = database
+    .prepare(
+      "SELECT i.name FROM identity_links l JOIN identities i ON i.id = l.identity_id " +
+        "WHERE l.person_id = ? AND trim(coalesce(i.name, '')) <> '' ORDER BY l.created_at, i.id LIMIT 1",
+    )
+    .get(person)?.name
+  database
+    .prepare("UPDATE persons SET name = ?, updated_at = ? WHERE id = ?")
+    .run(typeof kept === "string" ? kept : null, context.now(), person)
 }
 
 /** Gives the identity a person of its own again; the ones left keep theirs. */
@@ -296,6 +343,7 @@ export const unlinkIdentity = (context: StoreContext, ref: IdentityRef, options:
       .get()?.pk,
   )
   move(context, found.pk, found.personPk, alone, { ...options, method: "unlink" })
+  renameAfterLeaving(context, found.personPk, [found.pk])
   return recordOf(context, alone)
 }
 

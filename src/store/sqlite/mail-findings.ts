@@ -454,7 +454,9 @@ export const mailFindingsStoreOver = (context: StoreContext): MailFindingsStore 
       }
       case "new_contact": {
         const person = Number(identityOfAddress(finding.address)?.person_id)
-        database.prepare("UPDATE persons SET name = ?, updated_at = ? WHERE id = ?").run(finding.name, now(), person)
+        database
+          .prepare("UPDATE persons SET name = ?, updated_at = ? WHERE id = ? AND owner = 0")
+          .run(finding.name, now(), person)
         return `person:${person}`
       }
     }

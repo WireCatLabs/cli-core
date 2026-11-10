@@ -587,23 +587,34 @@ proposes them instead. A no-reply address (`isNoReplyAddress`) is no one's: it n
   cursor (`store_settings` `people.scan`: the newest identity, move, revision, guest row and update time) limits a
   later pass to what changed. The owner's pending rulings are one predicate each: `phonePairJoins` (NEED-2445),
   `addressGroupJoins` (NEED-2446, and role addresses), and the rejection check in `join` (NEED-2444), which proposes a
-  rejected pair on evidence new to the owner. `linkIndex` holds each pair's open proposal and the evidence keys of its
+  rejected pair on evidence new to the owner. SEC-177: a pair with the owner's person on either side is never joined
+  or proposed by a rule, at import (`joinByAddress`) or in the scan (`touchesOwner`, skipped as `identity.owner`); only
+  an account under another name is proposed (signal `account`, `linkOwnIdentities`); a bot's number or address, a role
+  address and a company's line (held by an organization, or by two people of one source list such as two CRM
+  contacts) join and propose no one (`sharedLine`); a CRM never names the owner (`nameUnnamed`). `linkIndex` holds each pair's open proposal and the evidence keys of its
   rejected ones, read once per pass. An address's mail contact stands for its person in both the scan and the import,
-  so the two paths name the same evidence. Its merges are authored `rule`: a
+  so the two paths name the same evidence. `linkOwnIdentities` joins an account's own identity to the owner only under
+  the owner's name, script and spelling aside (`domain/name-variants.ts`); under another name, a partner's mailbox or a
+  spouse's messenger, it proposes with the signal `account`, and never for a bot. Its merges are authored `rule`: a
   move the owner authored counts as a separation, so an automatic one must never be. Last, people with one `nameKey`
-  (`domain/display-names.ts`: case, quotes, punctuation and word order set aside) are proposed, never joined, when
-  they share a trace (`name-traces.ts`): a phone, an address, a chat, or a company's domain, never a free mailbox's
-  (`FREE_MAIL`) or a role address's. More than six on one name is skipped as too common.
+  (`variantKey` in `domain/name-variants.ts`: case, quotes, punctuation, word order, script and transliteration set
+  aside, so `Светлана Кузнецова` is `Svetlana Kuznetsova`) are proposed, never joined, when they share a trace
+  (`name-traces.ts`): a phone or an address only these two people hold, or, between people of one source, a chat or a
+  company's domain, never a free mailbox's (`FREE_MAIL`) or a role address's. A surname change is never guessed: a
+  maiden and a married name meet only through such a trace. More than six on one name is skipped as too common.
 - **Who is shown** (`person-ties.ts`, `people-list.ts`, `domain/person-kinds.ts`): `people.list` gives each person
   one kind and lists one kind at a time. The owner, people added by hand and task assignees are a `person`; then
   `automated` (a bot, a no-reply address, mostly bulk mail, memo's `bulk_never_replied`, a notification name); then
   `organization` (`organization_identities`, a role address, a legal form or company word in the name); then a named
   `person` with a tie; a named one with no tie is a `stranger`;
   one with nothing to show as a name is `unsorted`. A tie is a one-to-one chat, a group of at most
-  `SMALL_GROUP_MEMBERS` (10; a group of unknown size counts as large), mail the owner wrote to them (NEED-2342 A), a
-  meeting or calendar entry, a CRM identity or `person` record, or the address book (`account_identities.address_book`,
+  `SMALL_GROUP_MEMBERS` (10; a group of unknown size counts as large), as a member or as someone who wrote in it, since
+  Telegram and WhatsApp keep no member list (BUG-676), mail the owner wrote to them (NEED-2342 A), a meeting or calendar
+  entry, a CRM user, a CRM contact on a deal or lead whose owner is the owner's person, through the owner's CRM user linked to
+  them, never the user a sync signs in as (NEED-2500 A), a `person` record, or the address book (`account_identities.address_book`,
   written by `contacts sync` through `saveAddressBook`, version 61). Each person's kind, name order, messages and mail
-  sent, tasks and newest contact are kept on `persons` (version 62), so a list filters, counts, sorts and pages in SQL
+  sent, tasks and newest contact are kept on `persons` (version 62; version 63 adds the triggers for message senders
+  and deal links), so a list filters, counts, sorts and pages in SQL
   and works out ties, signals and contacts only for the page it returns. Triggers on every table they are made from
   clear a person's `kind` when a value they read changes (chat members are kept row by row, so a sync that writes the
   same members clears nothing). The next list works out up to 5,000 cleared people under the write lock; more, or
@@ -611,7 +622,9 @@ proposes them instead. A no-reply address (`isNoReplyAddress`) is no one's: it n
   (`PRAGMA data_version`), else the list answers from memory. `KIND_RULES` in `people-list.ts`
   is bumped when the rules change in code, which works out everyone again; a read-only open with anything to work out
   answers from memory (cli-testing `performance/memo/people-list`).
-  `people.similar` serves a form that adds a person: names starting like the typed words, the same `nameKey` first.
+  `people.similar` serves a form that adds a person: names starting like the typed words, the same `variantKey` first;
+  a `name:` search looks for the typed text in both scripts (`spellings`). Each row's `usernameSource` names the
+  messenger its `@username` belongs to.
 
 **Links and the review list.** A link records its method, confidence, author and time; an owner's link is never
 replaced by a rule. Today only contacts have that shape. **Not built yet:** `entity_link_events`, the same log for

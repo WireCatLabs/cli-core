@@ -5,9 +5,9 @@ import type { IdentityLinkSignal, MatchScan } from "../identity-links.js"
 import { type LinkIndex, linkIndex, settleLinks } from "./identity-link-rows.js"
 import { type Opening, openIdentityLink } from "./identity-proposals.js"
 import type { Author } from "./memories.js"
-import { peopleByNameKey, sharedTrace } from "./name-traces.js"
+import { peopleByNameKey, type SharedTrace, sharedTraces } from "./name-traces.js"
 import type { StoreContext } from "./open.js"
-import { mergePerson } from "./person-links.js"
+import { isOwner, mergePerson } from "./person-links.js"
 import { personsByIdentifiers } from "./person-matcher.js"
 import { resolvePersonLinks } from "./person-resolution.js"
 import { separated } from "./person-separation.js"
@@ -30,15 +30,39 @@ const CURSOR = "people.scan"
 const phonePairJoins = (holders: Holder[]): boolean =>
   holders.some(({ provider }) => BARE_INTERNATIONAL_PROVIDERS.includes(provider))
 
-/**
- * NEED-2446, safe option until the owner rules: an address more than two people have is shared, so it proposes. So is
- * a role address such as `info@` or `hello@`, even when two people have it.
- */
-const addressGroupJoins = (address: string, people: number): boolean => people <= 2 && !isRoleAddress(address)
+/** NEED-2446, safe option until the owner rules: an address more than two people have is shared, so it proposes. */
+const addressGroupJoins = (people: number): boolean => people <= 2
 
 interface Holder {
   identity: number
   provider: string
+  /** The list it comes from: its source, and for a CRM the kind of record, `<portal>/contact/` or `<portal>/user/`. */
+  list: string
+  /** An organization holds this identity: its number or address is the company's. */
+  company: boolean
+}
+
+/** A bot or a service account shares its number or address with whoever runs it; it is nobody's person. */
+const NOT_A_BOT = "i.bot IS NOT 1 AND i.provider NOT LIKE '%-bot'"
+const COMPANY = "EXISTS (SELECT 1 FROM organization_identities o WHERE o.identity_id = i.id) AS company"
+
+/**
+ * SEC-177: a company's line or mailbox is everyone's who works there, so it never says two people are one. It is one
+ * when an organization holds it, or when two people of one list have it, such as two CRM contacts with one number. A
+ * CRM's contact and its user may be one person, so they are two lists. A messenger keeps one account per number, so
+ * two of its accounts on one number are a number that changed hands, not a company's line.
+ */
+const sharedLine = (context: StoreContext, holders: Holder[]): boolean => {
+  if (holders.some(({ company }) => company)) return true
+  const seen = new Map<string, number>()
+  for (const { identity, provider, list } of holders) {
+    if (provider === "email" || provider === "phone" || BARE_INTERNATIONAL_PROVIDERS.includes(provider)) continue
+    const person = personOf(context, identity)
+    const before = seen.get(list)
+    if (before !== undefined && person !== undefined && before !== person) return true
+    if (person !== undefined) seen.set(list, person)
+  }
+  return false
 }
 
 /** Identities by the value they share. */
@@ -82,6 +106,16 @@ const changedSince = (database: CacheDatabase, since: Cursor): Set<number> =>
       .map(({ id }) => Number(id)),
   )
 
+const holderOf = (row: Record<string, unknown>): Holder => {
+  const provider = String(row.provider)
+  return {
+    identity: Number(row.id),
+    provider,
+    list: `${provider}:${String(row.external_id).replace(/[^/]*$/u, "")}`,
+    company: row.company === 1,
+  }
+}
+
 const add = (found: Holders, key: string | undefined, holder: Holder) => {
   if (key === undefined) return
   const held = found.get(key) ?? []
@@ -93,13 +127,14 @@ const phoneHolders = (database: CacheDatabase): Holders => {
   const found: Holders = new Map()
   for (const row of database
     .prepare(
-      "SELECT i.id, i.provider, i.external_id, i.phone FROM identities i JOIN identity_links l ON l.identity_id = i.id " +
-        "WHERE i.provider = 'phone' OR i.phone IS NOT NULL ORDER BY i.id",
+      `SELECT i.id, i.provider, i.external_id, i.phone, ${COMPANY} FROM identities i ` +
+        `JOIN identity_links l ON l.identity_id = i.id WHERE (i.provider = 'phone' OR i.phone IS NOT NULL) AND ${NOT_A_BOT} ` +
+        "ORDER BY i.id",
     )
     .all()) {
     const provider = String(row.provider)
     const raw = String(provider === "phone" ? row.external_id : row.phone)
-    add(found, storedPhone(raw, provider), { identity: Number(row.id), provider })
+    add(found, storedPhone(raw, provider), holderOf(row))
   }
   return found
 }
@@ -114,11 +149,12 @@ const emailHolders = (database: CacheDatabase): Holders => {
   const found: Holders = new Map()
   for (const row of database
     .prepare(
-      "SELECT i.id, i.provider, i.external_id, i.email FROM identities i JOIN identity_links l ON l.identity_id = i.id " +
-        "WHERE i.provider <> 'org-email' AND (i.provider = 'email' OR i.email IS NOT NULL) ORDER BY i.id",
+      `SELECT i.id, i.provider, i.external_id, i.email, ${COMPANY} FROM identities i ` +
+        "JOIN identity_links l ON l.identity_id = i.id " +
+        `WHERE i.provider <> 'org-email' AND (i.provider = 'email' OR i.email IS NOT NULL) AND ${NOT_A_BOT} ORDER BY i.id`,
     )
     .all()) {
-    const holder = { identity: Number(row.id), provider: String(row.provider) }
+    const holder = holderOf(row)
     add(found, addressOf(row.email), holder)
     if (row.provider === "email") add(found, addressOf(row.external_id), holder)
   }
@@ -173,6 +209,7 @@ const join = (
     result.skipped.push({ persons: [String(from), String(into)], signal: method, reason: "identity.separated" })
     return into
   }
+  if (touchesOwner(pass, from, into, method)) return into
   if (index.rejected(from, into) !== undefined) {
     propose(pass, { identity: sides.identity, with: sides.with, from, to: into, joins: "person", signal })
     return into
@@ -184,7 +221,19 @@ const join = (
   return kept
 }
 
-const propose = ({ context, index, result }: Pass, opening: Omit<Opening, "by">) => {
+/**
+ * SEC-177: the scan never joins the owner or proposes anyone to them; a mailbox or number the owner reads may be
+ * someone else's, and only the owner joins anyone to themselves.
+ */
+const touchesOwner = ({ context, result }: Pass, from: number, to: number, signal: string): boolean => {
+  if (!isOwner(context, from) && !isOwner(context, to)) return false
+  result.skipped.push({ persons: [String(from), String(to)], signal, reason: "identity.owner" })
+  return true
+}
+
+const propose = (pass: Pass, opening: Omit<Opening, "by">) => {
+  const { context, index, result } = pass
+  if (touchesOwner(pass, opening.from, opening.to, opening.signal)) return
   const opened = openIdentityLink(context, { ...opening, by: RULE }, index)
   const persons: [string, string] = [String(opening.from), String(opening.to)]
   if (opened.outcome === "skipped") {
@@ -216,10 +265,17 @@ const tooMany = (pass: Pass, people: Map<number, number>, reason: string, signal
   return true
 }
 
-/** A number two people have joins them (NEED-2445); one that more share, or that once proposed, proposes. */
+const skipShared = (pass: Pass, people: Map<number, number>, signal: string) =>
+  pass.result.skipped.push({ persons: [...people.keys()].map(String), signal, reason: `identity.shared-${signal}` })
+
+/**
+ * A number two people have joins them (NEED-2445); one that more share, or that once proposed, proposes. A company's
+ * line does neither.
+ */
 const samePhone = (pass: Pass, holders: Holder[]) => {
   const people = peopleOf(pass.context, holders)
   if (people.size < 2 || tooMany(pass, people, "identity.shared-phone", "phone")) return
+  if (sharedLine(pass.context, holders)) return skipShared(pass, people, "phone")
   const [into, from] = [...people.keys()].sort((a, b) => a - b) as [number, number]
   if (people.size === 2 && phonePairJoins(holders) && !pass.index.known(from, into))
     join(pass, { from, into, identity: people.get(from) as number, with: people.get(into) as number }, "phone")
@@ -227,14 +283,15 @@ const samePhone = (pass: Pass, holders: Holder[]) => {
 }
 
 /**
- * One address is one person in any scope (NEED-2382), unless more than two people have it or it is a role address
- * (NEED-2446). A no-reply address is no one's.
+ * One address is one person in any scope (NEED-2382), unless more than two people have it (NEED-2446). A no-reply
+ * address is no one's; a role address such as `info@` and a company's mailbox say nothing about who is who (SEC-177).
  */
 const sameEmail = (pass: Pass, address: string, holders: Holder[]) => {
   if (isNoReplyAddress(address)) return
   const people = peopleOf(pass.context, holders)
   if (people.size < 2 || tooMany(pass, people, "identity.shared-email", "email")) return
-  if (!addressGroupJoins(address, people.size)) return proposeEachPair(pass, people, "email")
+  if (isRoleAddress(address) || sharedLine(pass.context, holders)) return skipShared(pass, people, "email")
+  if (!addressGroupJoins(people.size)) return proposeEachPair(pass, people, "email")
   const contact = holders.find(({ provider }) => provider === "email")
   const held = contact === undefined ? undefined : personOf(pass.context, contact.identity)
   let into = held !== undefined && people.has(held) ? held : [...people.keys()].reduce((a, b) => Math.min(a, b))
@@ -248,6 +305,32 @@ const sameEmail = (pass: Pass, address: string, holders: Holder[]) => {
 const peopleOfIdentities = (context: StoreContext, identities: Set<number>): Set<number> =>
   new Set([...identities].flatMap((identity) => personOf(context, identity) ?? []))
 
+const providersOf = ({ database }: StoreContext, person: number): Set<string> =>
+  new Set(
+    database
+      .prepare(
+        "SELECT DISTINCT i.provider FROM identity_links l JOIN identities i ON i.id = l.identity_id WHERE l.person_id = ?",
+      )
+      .all(person)
+      .map(({ provider }) => String(provider)),
+  )
+
+/**
+ * SEC-177: a phone or address proves only when it is these two people's alone. A chat or a company's domain is weaker,
+ * and is enough only between people of one source, whose names come from one place.
+ */
+const strongEnough = (context: StoreContext, from: number, to: number, trace: SharedTrace): boolean => {
+  if (trace.value !== undefined) {
+    const held = personsByIdentifiers(context.database, {
+      emails: trace.kind === "email" ? [trace.value] : [],
+      phones: trace.kind === "phone" ? [trace.value] : [],
+    })
+    return held.every((person) => person === from || person === to)
+  }
+  const theirs = providersOf(context, to)
+  return [...providersOf(context, from)].some((provider) => theirs.has(provider))
+}
+
 /**
  * One name and a shared trace (a phone, an address, a chat, a company's domain) only proposes: a name is common, so
  * the owner decides every merge. More than `MOST_SHARING` people on one name is too common to propose from.
@@ -260,7 +343,12 @@ const sameName = (pass: Pass, people: number[], name: string) => {
   const sorted = [...people].sort((a, b) => a - b)
   for (const [at, from] of sorted.entries())
     for (const to of sorted.slice(at + 1)) {
-      const trace = sharedTrace(pass.context.database, from, to, name)
+      let trace: SharedTrace | undefined
+      for (const one of sharedTraces(pass.context.database, from, to, name))
+        if (strongEnough(pass.context, from, to, one)) {
+          trace = one
+          break
+        }
       if (trace === undefined) continue
       propose(pass, {
         identity: trace.identity,

@@ -1,11 +1,15 @@
 import { isEmailAddress, isNoReplyAddress, isRoleAddress } from "../../domain/addresses.js"
-import { displayName, nameKey } from "../../domain/display-names.js"
+import { displayName } from "../../domain/display-names.js"
+import { variantKey } from "../../domain/name-variants.js"
 import { storedPhone } from "../../domain/phones.js"
 import { FREE_MAIL } from "../../mail/score.js"
 import type { CacheDatabase } from "../driver.js"
 import { referenceOfThing } from "./things.js"
 
-/** People, owner aside, by the name they share once case, quotes and word order are set aside. */
+/**
+ * People, owner aside, by the name they share once case, quotes, word order, script and spelling are set aside:
+ * `Светлана Кузнецова` and `Svetlana Kuznetsova` are one name here (BUG-678).
+ */
 export const peopleByNameKey = (database: CacheDatabase): Map<string, { people: number[]; name: string }> => {
   const found = new Map<string, { people: number[]; name: string }>()
   for (const row of database
@@ -15,7 +19,7 @@ export const peopleByNameKey = (database: CacheDatabase): Map<string, { people: 
     )
     .all()) {
     const name = String(row.name)
-    const key = nameKey(name)
+    const key = variantKey(name)
     if (key === null) continue
     const held = found.get(key) ?? { people: [], name: displayName(name) ?? name }
     held.people.push(Number(row.id))
@@ -30,6 +34,8 @@ export interface SharedTrace {
   identity: number
   with: number
   kind: "chat" | "email" | "email-domain" | "phone"
+  /** The phone or address, for the kinds that have one. */
+  value?: string
   evidence: string[]
   reason: string
 }
@@ -79,12 +85,14 @@ const tracesOf = (database: CacheDatabase, person: number): Traces => {
   return traces
 }
 
-const common = (a: Held[], b: Held[]): [Held, Held] | undefined => {
+function* common(a: Held[], b: Held[]): Generator<[Held, Held]> {
+  const seen = new Set<string>()
   for (const one of a) {
     const other = b.find(({ value }) => value === one.value)
-    if (other !== undefined) return [one, other]
+    if (other === undefined || seen.has(one.value)) continue
+    seen.add(one.value)
+    yield [one, other]
   }
-  return undefined
 }
 
 const commonChat = (database: CacheDatabase, a: number, b: number) =>
@@ -98,31 +106,31 @@ const commonChat = (database: CacheDatabase, a: number, b: number) =>
     )
     .get(a, b)
 
-/** The first trace two people share, strongest first: a phone, an address, a chat, a company's domain. */
-export const sharedTrace = (database: CacheDatabase, a: number, b: number, name: string): SharedTrace | undefined => {
+/** The traces two people share, strongest first: each phone, each address, a chat, a company's domain. */
+export function* sharedTraces(database: CacheDatabase, a: number, b: number, name: string): Generator<SharedTrace> {
   const [one, other] = [tracesOf(database, a), tracesOf(database, b)]
-  const phone = common(one.phones, other.phones)
-  if (phone)
-    return {
+  for (const phone of common(one.phones, other.phones))
+    yield {
       identity: phone[0].identity,
       with: phone[1].identity,
       kind: "phone",
+      value: phone[0].value,
       evidence: [],
       reason: `same name «${name}» and the same phone`,
     }
-  const email = common(one.emails, other.emails)
-  if (email)
-    return {
+  for (const email of common(one.emails, other.emails))
+    yield {
       identity: email[0].identity,
       with: email[1].identity,
       kind: "email",
+      value: email[0].value,
       evidence: [],
       reason: `same name «${name}» and the same address ${email[0].value}`,
     }
   const chat = commonChat(database, a, b)
   if (chat) {
     const ref = referenceOfThing(database, { type: "chat", id: Number(chat.chat_id) })
-    return {
+    yield {
       identity: Number(chat.one),
       with: Number(chat.other),
       kind: "chat",
@@ -130,14 +138,13 @@ export const sharedTrace = (database: CacheDatabase, a: number, b: number, name:
       reason: `same name «${name}» and a chat they are both in`,
     }
   }
-  const domain = common(one.domains, other.domains)
+  const domain = common(one.domains, other.domains).next().value
   if (domain)
-    return {
+    yield {
       identity: domain[0].identity,
       with: domain[1].identity,
       kind: "email-domain",
       evidence: [],
       reason: `same name «${name}» and mail at the same company, ${domain[0].value}`,
     }
-  return undefined
 }
