@@ -1,4 +1,5 @@
 import type { Account, Chat, Contact, Id, Member, Message } from "../domain/models.js"
+import { SEED_PEOPLE } from "../domain/test-data.js"
 
 /** What the shared cases read. An adapter's test puts it into its own fake, by whatever that fake takes. */
 export interface Seed {
@@ -43,15 +44,15 @@ const START = Date.parse("2026-09-01T09:00:00.000Z")
  */
 export const contractSeed = ({ ids = wordIds, loggedIn = true }: { ids?: IdMaker; loggedIn?: boolean } = {}): Seed => {
   const at = (minute: number) => new Date(START + minute * 60_000)
-  const owner: Contact = {
-    id: ids("person", 1, at(0)),
-    name: "Owner",
-    username: "owner",
-    description: null,
-    lastMessagedAt: null,
-  }
-  const ann: Contact = { ...owner, id: ids("person", 2, at(0)), name: "Ann Lee", username: "ann" }
-  const bob: Contact = { ...owner, id: ids("person", 3, at(0)), name: "Bob Ray", username: null }
+  const [owner, ann, bob] = SEED_PEOPLE.map(
+    ({ name, username }, index): Contact => ({
+      id: ids("person", index + 1, at(0)),
+      name,
+      username,
+      description: null,
+      lastMessagedAt: null,
+    }),
+  ) as [Contact, Contact, Contact]
 
   let messageNumber = 0
   const message = (chatId: Id, minute: number, from: Contact, text: string): Message => {

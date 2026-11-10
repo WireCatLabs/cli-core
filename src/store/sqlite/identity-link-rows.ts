@@ -129,7 +129,8 @@ export const linkIndex = (database: CacheDatabase) => {
 
 export type LinkIndex = ReturnType<typeof linkIndex>
 
-const sideOf = (database: CacheDatabase, person: number): string =>
+/** The identities on a person now, as one comparable string. */
+export const sideOf = (database: CacheDatabase, person: number): string =>
   database
     .prepare("SELECT identity_id FROM identity_links WHERE person_id = ? ORDER BY identity_id")
     .all(person)
