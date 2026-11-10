@@ -54,6 +54,7 @@ describe("projectActivity", () => {
         { ref: "chat:max/11/-900", title: "Harbour group", messages: 3 },
         { ref: "chat:max/11/-901", title: "Docks crew", messages: 1 },
       ],
+      partial: false,
     })
     const old = found.items.find((one) => one.ref === quiet)
     expect(old).toMatchObject({ chats: 1, messages: 0, lastAt: ago(60), top: [] })
@@ -89,8 +90,25 @@ describe("projectActivity", () => {
     ])
   })
 
-  it("refuses a window that ends before it starts", async () => {
+  it("refuses a window that ends before it starts, and a page that cannot move", async () => {
     const { store } = await seeded()
     await expect(projectActivity(store, { since: NOW, until: NOW, limit: 1, offset: 0 })).rejects.toThrow(/window/)
+    const since = NOW - DAY
+    for (const bad of [
+      { limit: 0, offset: 0 },
+      { limit: 2, offset: -1 },
+      { limit: 2, offset: 0, top: -1 },
+    ])
+      await expect(projectActivity(store, { since, until: NOW, ...bad })).rejects.toThrow(/limit/)
+  })
+
+  it("says a project is partial when it has more child projects than projects status reads", async () => {
+    const { store, busy } = await seeded()
+    for (let i = 0; i < 9; i++) {
+      const child = await store.knowledge.addProject({ name: `Pier ${i}`, key: `PR${i}` })
+      await store.knowledge.relate(null, { by: "owner", from: child.ref, to: busy, kind: "member-of", confirmed: true })
+    }
+    const found = await projectActivity(store, { since: NOW - 30 * DAY, until: NOW, limit: 20, offset: 0 })
+    expect(found.items.find((one) => one.ref === busy)).toMatchObject({ partial: true })
   })
 })

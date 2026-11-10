@@ -1,4 +1,5 @@
 import type { StoreContext } from "./open.js"
+import { MUTED_NOW } from "./reply-times.js"
 import { toIso } from "./values.js"
 
 export interface ChatActivityCount {
@@ -15,16 +16,14 @@ export interface ChatActivityCount {
 }
 
 const SQL =
-  "SELECT coalesce(c.title, (SELECT sender_name FROM messages WHERE chat_id = c.id AND outgoing = 0 AND " +
-  "deleted_at IS NULL ORDER BY sent_at DESC LIMIT 1)) AS title, " +
-  "(coalesce(c.muted, 0) = 1 AND (c.muted_until IS NULL OR c.muted_until > ?)) AS muted, " +
-  "(SELECT count(*) FROM messages WHERE chat_id = c.id AND deleted_at IS NULL AND sent_at >= ? AND sent_at < ?) AS messages, " +
-  "(SELECT count(*) FROM messages WHERE chat_id = c.id AND deleted_at IS NULL AND sent_at >= ? AND sent_at < ? " +
-  "AND outgoing = 1) AS sent, " +
+  "SELECT coalesce(nullif(trim(c.title), ''), (SELECT sender_name FROM messages WHERE chat_id = c.id AND " +
+  "outgoing = 0 AND deleted_at IS NULL ORDER BY sent_at DESC LIMIT 1)) AS title, " +
+  `${MUTED_NOW} AS muted, w.messages, w.sent, ` +
   "(SELECT max(sent_at) FROM messages WHERE chat_id = c.id AND deleted_at IS NULL AND sent_at < ?) AS last " +
-  "FROM chats c WHERE c.id = ?"
+  "FROM chats c, (SELECT count(*) AS messages, coalesce(sum(outgoing = 1), 0) AS sent FROM messages " +
+  "WHERE chat_id = ? AND deleted_at IS NULL AND sent_at >= ? AND sent_at < ?) w WHERE c.id = ?"
 
-/** One indexed read per chat (`messages_by_time`), so a project with a busy chat costs that chat, not the store. */
+/** The window of each chat is read once over `messages_by_time`, so a busy chat costs that chat, not the store. */
 export const chatActivityCounts = (
   { database }: StoreContext,
   chatKeys: readonly number[],
@@ -33,7 +32,7 @@ export const chatActivityCounts = (
   const statement = database.prepare(SQL)
   const found = new Map<number, ChatActivityCount>()
   for (const key of new Set(chatKeys)) {
-    const row = statement.get(now, since, until, since, until, until, key)
+    const row = statement.get(now, until, key, since, until, key)
     if (!row) continue
     found.set(key, {
       title: typeof row.title === "string" && row.title.trim() !== "" ? row.title : null,
