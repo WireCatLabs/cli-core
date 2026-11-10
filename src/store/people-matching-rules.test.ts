@@ -189,7 +189,7 @@ describe("an address more than two people share (NEED-2446, safe option)", () =>
     expect(scan.merged).toEqual([])
   })
 
-  it("two contacts of one CRM share joins and proposes no one, at import or in a scan", async () => {
+  it("two contacts of one CRM share joins no one, at import or in a scan, and proposes them", async () => {
     const store = await open()
     await store.people.savePeople(WORK, [
       { id: "contact/1", name: "Ana", email: "office@acme.example" },
@@ -202,7 +202,7 @@ describe("an address more than two people share (NEED-2446, safe option)", () =>
     expect(await uidOf(store, "bitrix24", "contact/1")).not.toBe(contact)
     expect(await uidOf(store, "bitrix24", "contact/2")).not.toBe(contact)
     expect(scan.merged).toEqual([])
-    expect(await openLinks(store)).toEqual([])
+    expect((await openLinks(store)).map(({ payload }) => payload)).toMatchObject([{ shared: "role" }])
   })
 
   it("opens a proposal for each pair when three people have it", async () => {
@@ -322,7 +322,7 @@ describe("the owner's rejection (NEED-2444)", () => {
 })
 
 describe("a role address", () => {
-  it("two people share is neither joined nor proposed, at import or in a scan", async () => {
+  it("two people share is never joined, at import or in a scan, only proposed", async () => {
     const store = await open()
     await store.people.savePeople(PERSONAL, [{ id: "5", name: "Ana", email: "info@x.com" }])
     await store.people.savePeople(MAX, [{ id: "7", name: "Bea", email: "Info@X.com" }])
@@ -331,8 +331,7 @@ describe("a role address", () => {
 
     expect(await uidOf(store, "telegram", "5")).not.toBe(await uidOf(store, "max", "7"))
     expect(scan.merged).toEqual([])
-    expect(scan.proposed).toEqual([])
-    expect(await openLinks(store)).toEqual([])
+    expect(scan.proposed).toMatchObject([{ signal: "email", opened: true }])
   })
 
   it("from the no-reply family joins and proposes no one", async () => {

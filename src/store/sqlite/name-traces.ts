@@ -62,7 +62,7 @@ const companyDomain = (address: string): string | undefined => {
   return domain === undefined || FREE_MAIL.has(domain) || isRoleAddress(address) ? undefined : domain
 }
 
-const tracesOf = (database: CacheDatabase, person: number): Traces => {
+const tracesOf = (database: CacheDatabase, person: number, except?: string): Traces => {
   const traces: Traces = { phones: [], emails: [], domains: [] }
   for (const row of database
     .prepare(
@@ -76,7 +76,7 @@ const tracesOf = (database: CacheDatabase, person: number): Traces => {
     const stored = typeof phone === "string" ? storedPhone(phone, provider) : undefined
     if (stored !== undefined) traces.phones.push({ identity, value: stored })
     for (const address of [addressOf(row.email), provider === "email" ? addressOf(row.external_id) : undefined]) {
-      if (address === undefined) continue
+      if (address === undefined || address === except) continue
       traces.emails.push({ identity, value: address })
       const domain = companyDomain(address)
       if (domain !== undefined) traces.domains.push({ identity, value: domain })
@@ -106,9 +106,18 @@ const commonChat = (database: CacheDatabase, a: number, b: number) =>
     )
     .get(a, b)
 
-/** The traces two people share, strongest first: each phone, each address, a chat, a company's domain. */
-export function* sharedTraces(database: CacheDatabase, a: number, b: number, name: string): Generator<SharedTrace> {
-  const [one, other] = [tracesOf(database, a), tracesOf(database, b)]
+/**
+ * The traces two people share, strongest first: each phone, each address, a chat, a company's domain. `except` is an
+ * address left out, with its domain, when it is the very thing being weighed.
+ */
+export function* sharedTraces(
+  database: CacheDatabase,
+  a: number,
+  b: number,
+  name: string,
+  except?: string,
+): Generator<SharedTrace> {
+  const [one, other] = [tracesOf(database, a, except), tracesOf(database, b, except)]
   for (const phone of common(one.phones, other.phones))
     yield {
       identity: phone[0].identity,

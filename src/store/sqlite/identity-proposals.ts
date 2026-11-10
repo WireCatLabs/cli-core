@@ -8,6 +8,7 @@ import {
   type IdentityLinkPayload,
   type IdentityLinkRow,
   type IdentityLinkSignal,
+  type SharedMailbox,
 } from "../identity-links.js"
 import type { IdentityRef, LinkOptions } from "../types.js"
 import { ensurePerson } from "./identities.js"
@@ -37,6 +38,7 @@ export interface Opening {
   score?: number | undefined
   evidence?: string[] | undefined
   candidates?: number[] | undefined
+  shared?: SharedMailbox | undefined
 }
 
 export type Opened =
@@ -90,6 +92,7 @@ export const openIdentityLink = (context: StoreContext, opening: Opening, index?
       score: opening.score ?? null,
       ...(opening.candidates && opening.candidates.length > 2 ? { candidates: opening.candidates.map(String) } : {}),
       evidence: opening.evidence ?? [],
+      ...(opening.shared === undefined ? {} : { shared: opening.shared }),
     }
     const action = operations.propose({
       kind: IDENTITY_LINK_KIND,
@@ -290,6 +293,7 @@ export const identityLinkRows = (
       joins: payload.joins,
       signal: payload.signal,
       score: payload.score,
+      shared: payload.shared ?? null,
       candidates: (payload.candidates ?? []).map((uid) => `person:${uid}`),
       reason: action.reason,
       evidence: payload.evidence,

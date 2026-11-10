@@ -13,6 +13,9 @@ export const IDENTITY_LINK_SIGNALS = ["agent", "phone", "email", "guest-email", 
 
 export type IdentityLinkSignal = (typeof IDENTITY_LINK_SIGNALS)[number]
 
+/** A mailbox more than one person reads: a role address such as `info@`, or a company's line (`sharedLine`). */
+export type SharedMailbox = "role" | "line"
+
 /** An `identity_link` proposal's payload. */
 export interface IdentityLinkPayload {
   /** `provider:id` of the identity that would move. */
@@ -30,6 +33,8 @@ export interface IdentityLinkPayload {
   /** Every person the signal points at, the two included, when it points at more than two. */
   candidates?: string[]
   evidence: string[]
+  /** The address both people have is a shared mailbox; absent on proposals made before it was recorded. */
+  shared?: SharedMailbox
 }
 
 export interface IdentityLinkInput {
@@ -60,6 +65,8 @@ export interface IdentityLinkRow {
   joins: IdentityLinkPayload["joins"]
   signal: IdentityLinkSignal
   score: number | null
+  /** The address the two people share is a role address (`role`) or a company's line (`line`), not one person's. */
+  shared: SharedMailbox | null
   candidates: string[]
   reason: string | null
   evidence: string[]

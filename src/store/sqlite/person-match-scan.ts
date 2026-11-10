@@ -1,7 +1,8 @@
 import { isEmailAddress, isNoReplyAddress, isRoleAddress } from "../../domain/addresses.js"
+import { variantKey } from "../../domain/name-variants.js"
 import { BARE_INTERNATIONAL_PROVIDERS, storedPhone } from "../../domain/phones.js"
 import type { CacheDatabase } from "../driver.js"
-import type { IdentityLinkSignal, MatchScan } from "../identity-links.js"
+import type { IdentityLinkSignal, MatchScan, SharedMailbox } from "../identity-links.js"
 import { type LinkIndex, linkIndex, settleLinks } from "./identity-link-rows.js"
 import { type Opening, openIdentityLink } from "./identity-proposals.js"
 import type { Author } from "./memories.js"
@@ -22,6 +23,15 @@ export const RULE: Author = { bot: "rule", kind: "rule" }
 const MOST_SHARING = 6
 
 const CURSOR = "people.scan"
+
+/** Raised when a rule changes what a pass finds in values nobody touched: the next pass then reads everything once. */
+const RULES = 2
+
+/**
+ * NEED-2526: a shared mailbox says little alone, so its proposal is scored by what else the two people have in common.
+ * The role word itself does not move the score: the list does not tell a department's inbox from a company's.
+ */
+const SHARED_SCORE = { alone: 0.1, name: 0.4, trace: 0.3, weakTrace: 0.2 }
 
 /**
  * NEED-2445, safe option until the owner rules: a number two people share joins them only when a messenger, which
@@ -75,6 +85,7 @@ interface Cursor {
   revision: number
   participant: number
   at: number
+  rules?: number
 }
 
 const maxOf = (database: CacheDatabase, sql: string): number => Number(database.prepare(sql).get()?.n ?? 0)
@@ -85,11 +96,13 @@ const cursorNow = (database: CacheDatabase): Cursor => ({
   revision: maxOf(database, "SELECT max(id) AS n FROM identity_revisions"),
   participant: maxOf(database, "SELECT max(id) AS n FROM meeting_participants"),
   at: maxOf(database, "SELECT max(updated_at) AS n FROM identities"),
+  rules: RULES,
 })
 
 const savedCursor = (database: CacheDatabase): Cursor | undefined => {
   const value = database.prepare("SELECT value FROM store_settings WHERE key = ?").get(CURSOR)?.value
-  return value === undefined ? undefined : (JSON.parse(String(value)) as Cursor)
+  const cursor = value === undefined ? undefined : (JSON.parse(String(value)) as Cursor)
+  return cursor?.rules === RULES ? cursor : undefined
 }
 
 /** The identities changed since `since`: new ones, moved ones, edited ones and ones a new meeting guest row names. */
@@ -187,10 +200,18 @@ const resolveNames = (context: StoreContext, person: number) =>
       .flatMap((row) => [row.name as string | null, row.username as string | null]),
   )
 
+interface SharedGroup {
+  address: string
+  holders: Holder[]
+  shared: SharedMailbox
+}
+
 interface Pass {
   context: StoreContext
   index: LinkIndex
   result: MatchScan
+  /** Shared mailboxes, proposed after the phones: an open proposal would keep a phone from joining the pair. */
+  shared: SharedGroup[]
 }
 
 /**
@@ -282,15 +303,75 @@ const samePhone = (pass: Pass, holders: Holder[]) => {
   else proposeEachPair(pass, people, "phone")
 }
 
+const nameOf = ({ database }: StoreContext, person: number): string | null => {
+  const name = database.prepare("SELECT name FROM persons WHERE id = ?").get(person)?.name
+  return typeof name === "string" ? name : null
+}
+
+const TRACE_WORDS: Record<SharedTrace["kind"], string> = {
+  phone: "the same phone",
+  email: "another address only they have",
+  chat: "a chat they are both in",
+  "email-domain": "mail at the same company",
+}
+
+/** What two people on one shared mailbox have in common besides it, as a score and the words that say why. */
+const sharedMailboxCase = (context: StoreContext, address: string, from: number, to: number) => {
+  const reasons = [`both have the shared mailbox ${address}`]
+  let score = SHARED_SCORE.alone
+  const name = nameOf(context, from)
+  const key = variantKey(name)
+  if (key !== null && key === variantKey(nameOf(context, to))) {
+    score += SHARED_SCORE.name
+    reasons.push(`the same name «${name}»`)
+  }
+  let evidence: string[] = []
+  for (const trace of sharedTraces(context.database, from, to, name ?? "", address))
+    if (!(trace.kind === "email" && isRoleAddress(trace.value ?? "")) && strongEnough(context, from, to, trace)) {
+      score += trace.value === undefined ? SHARED_SCORE.weakTrace : SHARED_SCORE.trace
+      reasons.push(TRACE_WORDS[trace.kind])
+      evidence = trace.evidence
+      break
+    }
+  return { score: Math.round(score * 10) / 10, reason: reasons.join("; "), evidence }
+}
+
+/**
+ * NEED-2526: a shared mailbox never joins anyone (SEC-177), but each pair on it is proposed to the owner, scored by
+ * what else they share.
+ */
+const proposeShared = (pass: Pass, { address, holders, shared }: SharedGroup) => {
+  const people = peopleOf(pass.context, holders)
+  if (people.size < 2) return
+  const persons = [...people.keys()].sort((a, b) => a - b)
+  for (const [at, from] of persons.entries())
+    for (const to of persons.slice(at + 1))
+      propose(pass, {
+        identity: people.get(from) as number,
+        with: people.get(to) as number,
+        from,
+        to,
+        joins: "person",
+        signal: "email",
+        candidates: persons,
+        shared,
+        ...sharedMailboxCase(pass.context, address, from, to),
+      })
+}
+
 /**
  * One address is one person in any scope (NEED-2382), unless more than two people have it (NEED-2446). A no-reply
- * address is no one's; a role address such as `info@` and a company's mailbox say nothing about who is who (SEC-177).
+ * address is no one's. A role address such as `info@` and a company's mailbox only propose (NEED-2526).
  */
 const sameEmail = (pass: Pass, address: string, holders: Holder[]) => {
   if (isNoReplyAddress(address)) return
   const people = peopleOf(pass.context, holders)
   if (people.size < 2 || tooMany(pass, people, "identity.shared-email", "email")) return
-  if (isRoleAddress(address) || sharedLine(pass.context, holders)) return skipShared(pass, people, "email")
+  const role = isRoleAddress(address)
+  if (role || sharedLine(pass.context, holders)) {
+    pass.shared.push({ address, holders, shared: role ? "role" : "line" })
+    return
+  }
   if (!addressGroupJoins(people.size)) return proposeEachPair(pass, people, "email")
   const contact = holders.find(({ provider }) => provider === "email")
   const held = contact === undefined ? undefined : personOf(pass.context, contact.identity)
@@ -416,11 +497,13 @@ export const scanMatches = (context: StoreContext, { full = false }: { full?: bo
     context,
     index: linkIndex(database),
     result: { full: changed === undefined, merged: [], proposed: [], skipped: [] },
+    shared: [],
   }
   for (const [address, holders] of emailHolders(database))
     if (holders.length > 1 && touched(holders)) write(database, () => sameEmail(pass, address, holders))
   for (const holders of phoneHolders(database).values())
     if (holders.length > 1 && touched(holders)) write(database, () => samePhone(pass, holders))
+  for (const group of pass.shared) write(database, () => proposeShared(pass, group))
   for (const row of guestRows(database))
     if ((changed === undefined || changed.has(row.identity)) && !pass.index.names(row.ref))
       write(database, () => guestEmail(pass, row))

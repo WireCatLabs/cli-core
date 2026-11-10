@@ -77,6 +77,114 @@ describe("the same address", () => {
   })
 })
 
+describe("a shared mailbox (NEED-2526)", () => {
+  const sharedProposals = async (store: MessageStore) =>
+    (await store.people.linkProposals({ limit: 50, offset: 0 })).items.filter(({ signal }) => signal === "email")
+
+  it("with nothing else in common is proposed with a low score and never joined", async () => {
+    const store = await open()
+    await store.people.savePeople(PERSONAL, [{ id: "5", name: "Ana Diaz", email: "info@shop.example" }])
+    await store.people.savePeople(MAX, [{ id: "7", name: "Bo Lind", email: "info@shop.example" }])
+
+    const scan = await store.people.scanMatches({ full: true })
+
+    expect(scan.merged).toEqual([])
+    expect(await uidOf(store, "telegram", "5")).not.toBe(await uidOf(store, "max", "7"))
+    expect(await sharedProposals(store)).toMatchObject([
+      { joins: "person", shared: "role", score: 0.1, reason: "both have the shared mailbox info@shop.example" },
+    ])
+  })
+
+  it("scores higher when the two people have one name, and higher again with a chat they are both in", async () => {
+    const store = await open()
+    await store.people.savePeople(PERSONAL, [
+      { id: "5", name: "Ana Diaz", email: "info@shop.example" },
+      { id: "6", name: "Diaz Ana", email: "info@shop.example" },
+      { id: "8", name: "Bo Lind", email: "hello@cafe.example" },
+      { id: "9", name: "Bo Lind", email: "hello@cafe.example" },
+    ])
+    await store.chats.saveChats(PERSONAL, [
+      { id: "g", title: "g", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: 40 },
+    ])
+    await store.roster.saveMembers(PERSONAL, "g", ["8", "9"])
+
+    await store.people.scanMatches({ full: true })
+
+    const found = await sharedProposals(store)
+    expect(found.map(({ identity, score }) => [identity, score]).sort()).toEqual([
+      ["telegram:5", 0.5],
+      ["telegram:8", 0.7],
+    ])
+    expect(found.find(({ score }) => score === 0.7)?.reason).toBe(
+      "both have the shared mailbox hello@cafe.example; the same name «Bo Lind»; a chat they are both in",
+    )
+    expect(found.find(({ score }) => score === 0.7)?.evidence).toHaveLength(1)
+  })
+
+  it("never keeps a messenger's phone from joining the two people who have it", async () => {
+    const store = await open()
+    await store.people.savePeople(PERSONAL, [
+      { id: "6", name: "Bo Lind", email: "hello@cafe.example", phone: "+34 600 000 001" },
+    ])
+    await store.people.savePeople(MAX, [
+      { id: "8", name: "Bo Lind", email: "hello@cafe.example", phone: "+34600000001" },
+    ])
+
+    const scan = await store.people.scanMatches({ full: true })
+
+    expect(scan.merged).toMatchObject([{ signal: "same-phone" }])
+    expect(await uidOf(store, "telegram", "6")).toBe(await uidOf(store, "max", "8"))
+    expect(await sharedProposals(store)).toEqual([])
+  })
+
+  it("is proposed on the first pass after an older one, which never proposed it", async () => {
+    const store = await open()
+    await store.people.savePeople(PERSONAL, [{ id: "5", name: "Ana Diaz", email: "info@shop.example" }])
+    await store.people.savePeople(MAX, [{ id: "7", name: "Bo Lind", email: "info@shop.example" }])
+    const now = await store.people.scanMatches()
+    const database = await raw()
+    const [proposal] = await sharedProposals(store)
+    database.prepare("DELETE FROM proposed_actions WHERE id = ?").run(Number(proposal?.id))
+    const cursor = JSON.parse(
+      String(database.prepare("SELECT value FROM store_settings WHERE key = 'people.scan'").get()?.value),
+    )
+    delete cursor.rules
+    database.prepare("UPDATE store_settings SET value = ? WHERE key = 'people.scan'").run(JSON.stringify(cursor))
+
+    const next = await store.people.scanMatches()
+
+    expect([now.full, next.full]).toEqual([true, true])
+    expect(await sharedProposals(store)).toHaveLength(1)
+    expect((await store.people.scanMatches()).full).toBe(false)
+  })
+
+  it("from the no-reply family proposes no one", async () => {
+    const store = await open()
+    await store.people.savePeople(PERSONAL, [{ id: "5", name: "Ana Diaz", email: "noreply@shop.example" }])
+    await store.people.savePeople(MAX, [{ id: "7", name: "Ana Diaz", email: "noreply@shop.example" }])
+
+    const scan = await store.people.scanMatches({ full: true })
+
+    expect(scan.merged).toEqual([])
+    expect(await sharedProposals(store)).toEqual([])
+  })
+
+  it("two contacts of one CRM list have is a company's line, proposed and never joined", async () => {
+    const store = await open()
+    await store.people.savePeople(WORK, [
+      { id: "contact/1", name: "Ana Diaz", email: "ana.desk@shop.example" },
+      { id: "contact/2", name: "Bo Lind", email: "ana.desk@shop.example" },
+    ])
+
+    const scan = await store.people.scanMatches({ full: true })
+
+    expect(scan.merged).toEqual([])
+    const lines = await sharedProposals(store)
+    expect(lines.length).toBeGreaterThan(0)
+    expect(lines.every(({ shared, score }) => shared === "line" && score === 0.1)).toBe(true)
+  })
+})
+
 describe("a phone", () => {
   it("joins the two people who have it, whether kept with or without the +", async () => {
     const store = await open()
