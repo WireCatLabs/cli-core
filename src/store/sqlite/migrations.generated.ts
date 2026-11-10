@@ -1321,5 +1321,11 @@ export const GENERATED: { name: string; statements: string[] }[] = [
       "DROP TRIGGER IF EXISTS person_kind_deal_owner_person_au;",
       "CREATE TRIGGER person_kind_deal_owner_person_au AFTER UPDATE OF owner ON persons\nWHEN OLD.owner IS NOT NEW.owner BEGIN\n  UPDATE persons SET kind = NULL WHERE kind IS NOT NULL AND id IN (SELECT d.to_id FROM links o JOIN links d ON d.from_type = o.from_type AND d.from_id = o.from_id AND d.kind = 'related-to' AND +d.to_type = 'person' WHERE o.to_type = 'person' AND o.role = 'owner' AND o.from_type IN ('deal', 'lead') AND o.to_id IN (SELECT NEW.id UNION SELECT e.from_person_id FROM identity_link_events e JOIN identity_links l ON l.identity_id = e.identity_id WHERE l.person_id = NEW.id));\nEND;"
     ]
+  },
+  {
+    "name": "20261110182602_version-65-found-task-titles",
+    "statements": [
+      "-- A found task's title was its message's first line only while reading, so it went blank when the message was deleted.\n-- The line comes from displayTitleOf in code, so the next writable open stores it for the tasks still titled\n-- `<kind> — <source>` and deletes this key (fillFoundTaskTitles). A store with no such task gets no key.\nINSERT OR REPLACE INTO store_settings (key, value, at)\nSELECT 'found_task_titles_to_fill', '1', unixepoch() * 1000 WHERE EXISTS (\n  SELECT 1 FROM tasks WHERE package_id IS NOT NULL AND deleted_at IS NULL AND source_locator LIKE 'msg:%'\n    AND title = type || ' — ' || source_locator\n);"
+    ]
   }
 ]
