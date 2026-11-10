@@ -36,16 +36,27 @@ import {
 } from "./schema.js"
 import { dropUnusedVectors } from "./vector-index.js"
 
-/** An account's row, made on first sight; a name only replaces what was known when there is one. */
+/**
+ * An account's row, made on first sight; a name only replaces what was known when there is one. `startScope` is the
+ * scope a new row takes; an existing row keeps its own, so a CLI's default never undoes the owner's choice.
+ */
 export const accountPk = (
   { orm, now }: StoreContext,
   { provider, account, scope }: AccountKey,
   name: string | null = null,
+  startScope?: StoredAccount["scope"],
 ) =>
   Number(
     orm
       .insert(accounts)
-      .values({ provider, externalId: account, name, scope: scope ?? "personal", createdAt: now(), updatedAt: now() })
+      .values({
+        provider,
+        externalId: account,
+        name,
+        scope: scope ?? startScope ?? "personal",
+        createdAt: now(),
+        updatedAt: now(),
+      })
       .onConflictDoUpdate({
         target: [accounts.provider, accounts.externalId],
         set: {
@@ -100,6 +111,41 @@ export const storedAccount = ({ orm }: StoreContext, { provider, account }: Acco
     .get()
   if (!found) throw new CliError("not_found", `no ${provider} account ${account} in the store`)
   return found as StoredAccount
+}
+
+/**
+ * The owner's word on which side of his life an account is. Triggers move its conversation pieces and involvements;
+ * the other search pieces copied the account's scope when they were cut, so they move here, and the word indexes of
+ * its documents, mail and calendar events are queued to be built again. A chat with its own scope keeps it; memories
+ * and facts carry the scope they were written with.
+ */
+export const setAccountScope = (
+  context: StoreContext,
+  key: AccountKey,
+  scope: StoredAccount["scope"],
+): StoredAccount => {
+  const { database, now } = context
+  const held = storedAccount(context, key)
+  if (held.scope === scope) return held
+  database.prepare("UPDATE accounts SET scope = ?, updated_at = ? WHERE id = ?").run(scope, now(), held.id)
+  database
+    .prepare(
+      "UPDATE chunks SET scope = ? WHERE account_id = ? AND chunkable_type <> 'conversation' AND scope IN ('personal', 'work')",
+    )
+    .run(scope, held.id)
+  for (const [type, ids] of [
+    ["document", "SELECT id FROM documents WHERE account_id = ?"],
+    ["email", "SELECT id FROM emails WHERE account_id = ?"],
+    [
+      "event",
+      "SELECT DISTINCT ce.event_id AS id FROM calendar_entries ce JOIN calendars c ON c.id = ce.calendar_id " +
+        "WHERE c.account_id = ? AND ce.event_id IS NOT NULL",
+    ],
+  ] as const)
+    database
+      .prepare(`INSERT OR IGNORE INTO ${type}_index_pending (indexable_type, id) SELECT '${type}', id FROM (${ids})`)
+      .run(held.id)
+  return { ...held, scope }
 }
 
 /** Everything the account holds, children before parents: the foreign keys are enforced. */

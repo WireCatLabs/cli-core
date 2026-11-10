@@ -24,6 +24,8 @@ export const NOT_GROUP_NAMES: ReadonlySet<string> = new Set([ALL, "bots"])
 export type GroupReason = "setting" | "all"
 
 export interface GroupMember extends AccountKey {
+  /** The account's scope as the store holds it, so a group view shows and switches it in place. */
+  scope?: "personal" | "work"
   /** Every saved entry that names it; its `provider:account` in `all`. */
   entries: string[]
   reason: GroupReason
@@ -115,6 +117,7 @@ export const groupMembership = (context: ListContext): GroupMembership => {
     for (const one of members) holding.set(keyOf(one), [...(holding.get(keyOf(one)) ?? []), name])
   for (const [name, members] of [...Object.entries(groups), [ALL, every] as const])
     for (const one of members) {
+      one.scope = context.held.find(sameAs(one))?.scope ?? "personal"
       one.profiles = recorded.filter(({ key }) => sameAs(key)(one)).map(({ app, profile }) => `${app} ${profile}`)
       one.also_in = (holding.get(keyOf(one)) ?? []).filter((other) => other !== name)
     }

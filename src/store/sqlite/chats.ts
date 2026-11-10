@@ -48,6 +48,16 @@ export const findChatPk = ({ orm }: StoreContext, accountKey: number, chatId: Id
     .where(and(eq(chats.accountId, accountKey), eq(chats.externalId, chatId)))
     .get()?.pk
 
+/** The owner pins a chat's scope, or with `null` lets it follow its account again; `false` for a chat not stored. */
+export const setChatScope = (context: StoreContext, accountKey: number, chatId: Id, scope: string | null): boolean => {
+  const pk = findChatPk(context, accountKey, chatId)
+  if (pk === undefined) return false
+  revisedBy(context, "owner", () =>
+    context.database.prepare("UPDATE chats SET scope = ?, updated_at = ? WHERE id = ?").run(scope, context.now(), pk),
+  )
+  return true
+}
+
 /** A chat known only from its messages, until the chat list names it. */
 export const chatPkFor = (context: StoreContext, accountKey: number, chatId: Id): number =>
   findChatPk(context, accountKey, chatId) ??
@@ -66,7 +76,16 @@ export const chatPkFor = (context: StoreContext, accountKey: number, chatId: Id)
   )
 
 /** The store write a `chat_revisions` row names; a writer that sets none is recorded as NULL. */
-export type ChatRevisionSource = "chats" | "delta" | "left" | "rejoin" | "rekey" | "merge" | "send" | "details"
+export type ChatRevisionSource =
+  | "chats"
+  | "delta"
+  | "left"
+  | "rejoin"
+  | "rekey"
+  | "merge"
+  | "send"
+  | "details"
+  | "owner"
 
 /**
  * Runs `body` with `source` as what the `chat_revisions` trigger records, inside the caller's transaction. The row is

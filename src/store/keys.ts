@@ -12,7 +12,8 @@ export const keysOver = (context: StoreContext) => {
   const findAccountPk = (key: AccountKey) => accounts.findAccountPk(context, key)
   const findChatPk = (accountKey: number, chatId: Id) => chatQueries.findChatPk(context, accountKey, chatId)
   return {
-    accountPk: (key: AccountKey, name: string | null = null) => accounts.accountPk(context, key, name),
+    accountPk: (key: AccountKey, name: string | null = null, startScope?: AccountKey["scope"]) =>
+      accounts.accountPk(context, key, name, startScope),
     findAccountPk,
     findChatPk,
     chatKeyOf: (key: AccountKey, chatId: Id) => {

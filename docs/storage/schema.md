@@ -589,7 +589,7 @@ One row per field a chat changed: its external id on a re-key, title, membership
 | `field` | text | not null |  | `external_id`, `title`, `membership_state`, `scope`, `searchable` or `parent_chat_id` |
 | `old_value` | text |  |  | as stored before, as text; `parent_chat_id` is a `chats` row id |
 | `new_value` | text |  |  | as stored after |
-| `source` | text |  |  | the store write that made it (`chats`, `delta`, `left`, `rejoin`, `rekey`, `merge`, `send`, `details`); NULL when the writer did not say: an older build or SQL by hand |
+| `source` | text |  |  | the store write that made it (`chats`, `delta`, `left`, `rejoin`, `rekey`, `merge`, `send`, `details`, `owner`); NULL when the writer did not say: an older build or SQL by hand |
 | `created_at` | integer | not null |  | when this row was saved here |
 
 *Keys and indexes:* `INDEX (chat_id, created_at)`, `INDEX (account_id, old_value) WHERE field = 'external_id'`
@@ -2850,7 +2850,7 @@ Pieces of a longer text, the unit that gets an embedding: ranges of a document, 
 | `start_offset` | integer | not null |  | where the piece starts in the parent's text, in characters |
 | `end_offset` | integer | not null |  | where it ends, exclusive |
 | `content_hash` | text | not null |  | hash of the piece's text; its embedding is the `embeddings` row with this hash, so equal text is embedded once |
-| `scope` | text |  |  | copied from the parent's account, chat or project, so a vector search filters before it compares; triggers follow a chat's or account's change |
+| `scope` | text |  |  | copied from the parent's account, chat or project, so a vector search filters before it compares; triggers follow a chat's or account's change for conversations, and the owner's change of an account's scope moves the rest |
 | `account_id` | integer |  | → `accounts.id` | copied from the parent, a filter for vector search |
 | `project_id` | integer |  | → `projects.id` | copied from the parent when it belongs to one |
 | `occurred_at` | integer |  |  | when the parent happened (sent, held, written), a filter for vector search |

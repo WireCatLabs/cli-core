@@ -32,6 +32,11 @@ export interface ChatsStore {
   countChats(key: AccountKey, filter?: StoredChatFilter): Promise<number>
   /** The chats a person is in, newest first — as far as the saved member lists go. */
   chatsWith(key: AccountKey, memberId: Id): Promise<Chat[]>
+  /**
+   * The owner pins one chat to a scope, or with `null` lets it follow its account again; `false` when the store does
+   * not know the chat. Its conversation pieces and involvements follow; its messages' search pieces keep the account's.
+   */
+  setChatScope(key: AccountKey, chatId: Id, scope: StoredAccount["scope"] | null): Promise<boolean>
   /** Each stored chat's scope, its own or else its account's; a chat the store lacks is left out. */
   chatScopes(key: AccountKey, chatIds: readonly Id[]): Promise<Map<Id, StoredAccount["scope"]>>
   /**
@@ -124,6 +129,12 @@ export const chatsStoreOver = (context: StoreContext): ChatsStore => {
     chatsWith: async (key, memberId) => {
       const accountKey = findAccountPk(key)
       return accountKey === undefined ? [] : chatQueries.chatsWith(context, accountKey, key, memberId)
+    },
+
+    setChatScope: async (key, chatId, scope) => {
+      const accountKey = findAccountPk(key)
+      if (accountKey === undefined) return false
+      return write(database, () => chatQueries.setChatScope(context, accountKey, chatId, scope))
     },
 
     chatScopes: async (key, chatIds) => {
