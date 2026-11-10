@@ -35,6 +35,7 @@ export const DEFAULT_PERMISSIONS: Readonly<Record<PermissionKey, Level>> = {
   "store.migrate": "ask",
   "store.repair": "ask",
   "store.reset": "ask",
+  "store.import": "ask",
   "store.clear": "ask",
   "store.decrypt": "ask",
   "store.copies.delete": "ask",

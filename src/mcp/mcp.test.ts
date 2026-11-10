@@ -2287,6 +2287,7 @@ describe("the MCP server", () => {
       "store export",
       "store gaps repair",
       "store gaps show",
+      "store import",
       "store info",
       "store jobs cancel",
       "store jobs clear",

@@ -4878,6 +4878,9 @@
     "store gaps show": {
       "in": "all"
     },
+    "store import": {
+      "in": "all"
+    },
     "store info": {
       "in": "all"
     },

@@ -189,6 +189,7 @@ describe("command effects", () => {
         "store clear",
         "store copies delete",
         "store decrypt",
+        "store import",
         "store migrate",
         "store recover run",
         "store repair",

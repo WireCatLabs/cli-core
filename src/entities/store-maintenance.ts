@@ -185,6 +185,16 @@ export const storeRestore = v.union([
     foreign_key_violations: count,
   }),
 ])
+const importCounts = v.strictObject({ chats: count, messages: count })
+/** Made-up data for a test store: what the file holds and, once loaded, what it added to the account. */
+export const storeImport = v.strictObject({
+  store: text,
+  profile: text,
+  account: text,
+  imported: v.boolean(),
+  file: v.strictObject({ chats: count, people: count, messages: count }),
+  added: v.optional(importCounts),
+})
 export const storeReset = v.union([
   v.strictObject({ ...absent.entries, reset: v.literal(false) }),
   v.strictObject({

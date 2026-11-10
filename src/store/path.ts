@@ -24,15 +24,20 @@ const accountHome = (): string | undefined => {
   }
 }
 
+/** Whether `file` is in the owner's real WireCat folder, whatever HOME or MESSAGING_STORE this process was given. */
+export const inOwnerFolder = (file: string, home: string | undefined = accountHome()): boolean => {
+  if (!home || file === ":memory:") return false
+  const inside = relative(wirecatDirectory({ HOME: home, USERPROFILE: home }), resolve(file))
+  return !(inside.startsWith("..") || isAbsolute(inside))
+}
+
 /** Throws when a test is about to open a file in the owner's real WireCat folder. */
 export const refuseOwnerStoreInTests = (
   file: string,
   env: NodeJS.ProcessEnv = process.env,
   home: string | undefined = accountHome(),
 ): void => {
-  if (!env.VITEST || !home || file === ":memory:") return
-  const inside = relative(wirecatDirectory({ HOME: home, USERPROFILE: home }), resolve(file))
-  if (inside.startsWith("..") || isAbsolute(inside)) return
+  if (!env.VITEST || !inOwnerFolder(file, home)) return
   throw new Error(
     `a test tried to open ${file}, in the owner's real WireCat folder; give it a MESSAGING_STORE or HOME of its own`,
   )
