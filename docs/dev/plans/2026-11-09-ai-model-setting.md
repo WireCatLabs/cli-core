@@ -9,7 +9,8 @@ Owner rulings: NEED-2463 (one third-party model setting that replaces the agent)
 
 - **cli-core** (`src/models/ai.ts`, `src/cli/ai-model-command.ts`): the shared `ai` section, the shared key
   (service `WireCat`, account `ai:<origin>`, `isMovedRun`), `models ai show|set|unset|remove|revoke|check` mounted in memo's
-  `models`, owner-only (`agentOf` refuses unless `--from-app`; `mcp: false`), and `aiImageReader` for images.
+  `models`, owner-only (`agentOf` refuses unless `--from-app`; `mcp: false`), `aiImageReader` for images, and
+  `aiTextReader` for text a tool sends on purpose (memo's `ai-model` reader).
 - **Differs: no bottom layer of `models.default`.** Each job opts in by reading `readAiSetting` itself. That keeps
   `analysis` and the other purposes exactly as they are, with no per-purpose gate to add (§1's gate table).
 - **Differs: the https-or-loopback rule applies to `ai.base_url` only.** The public `endpoint()` is unchanged, so no

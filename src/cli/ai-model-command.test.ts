@@ -8,7 +8,7 @@ import { Command } from "commander"
 import { PNG } from "pngjs"
 import { describe, expect, it, vi } from "vitest"
 import { ocrImage } from "../attachments/ocr.js"
-import { aiImageReader, aiKeys, aiSettingPath } from "../models/ai.js"
+import { aiImageReader, aiKeys, aiSettingPath, aiTextReader } from "../models/ai.js"
 import { aiModelCommand } from "./ai-model-command.js"
 import { commandsCommand } from "./commands-command.js"
 import type { Body } from "./envelope.js"
@@ -226,6 +226,26 @@ describe("aiImageReader", () => {
     expect(read).toMatchObject({ status: "extracted", text: "Invoice 42" })
     expect(String(fetch.mock.calls[0]?.[0])).toBe("https://api.openai.com/v1/chat/completions")
     expect(new Headers(fetch.mock.calls[0]?.[1]?.headers).get("authorization")).toBe(`Bearer ${KEY}`)
+  })
+})
+
+describe("aiTextReader", () => {
+  it("sends text to the chosen model with no image consent, and says when it cannot", async () => {
+    const fetch = vi.fn(async (_input: unknown, _init?: RequestInit) => chat("facts"))
+    const { run, env, keyring } = fixture()
+    expect(aiTextReader({ app, env, keyring })).toEqual({ refused: "ai.not-set" })
+    await run(undefined, "set", "anthropic", "--model", "claude-haiku-4-5")
+    expect(aiTextReader({ app, env, keyring })).toEqual({ refused: "ai.key-missing" })
+
+    await run(KEY, "set", "openai", "--model", "gpt-4o-mini", "--secret-stdin")
+    const reader = aiTextReader({ app, env, keyring, fetch })
+    if ("refused" in reader) throw new Error(reader.refused)
+
+    expect(reader).toMatchObject({ by: "openai/gpt-4o-mini", leavesComputer: true })
+    expect(await reader.complete({ purpose: "sources", system: "s", prompt: "p", maxTokens: 10 })).toBe("facts")
+
+    await run(undefined, "set", "ollama", "--model", "llama3.2")
+    expect(aiTextReader({ app, env, keyring, fetch })).toMatchObject({ leavesComputer: false })
   })
 })
 

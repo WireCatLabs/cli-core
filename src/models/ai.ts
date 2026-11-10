@@ -215,6 +215,31 @@ export const aiImageReader = (
   }
 }
 
+/** False only for a model on this computer: Ollama, or any address on loopback. */
+export const aiLeavesComputer = (setting: AiSetting): boolean => !loopback(new URL(aiBaseUrl(setting)).hostname)
+
+export type AiTextRefusal = "ai.not-set" | "ai.key-missing"
+
+export interface AiTextReader {
+  by: string
+  leavesComputer: boolean
+  complete(request: { purpose: string; system: string; prompt: string; maxTokens: number }): Promise<string>
+}
+
+/** The chosen model for text a tool sends on purpose; picking this reader by name is the owner's consent, as for images. */
+export const aiTextReader = (deps: AiCallDeps): AiTextReader | { refused: AiTextRefusal } => {
+  const setting = readAiSetting(aiSettingPath(deps.env))
+  if (!setting) return { refused: "ai.not-set" }
+  const key = keyFor(setting, deps)
+  if (aiNeedsKey(setting) && !key) return { refused: "ai.key-missing" }
+  const gateway = gatewayFor(setting, deps, key)
+  return {
+    by: `${setting.provider}/${setting.model}`,
+    leavesComputer: aiLeavesComputer(setting),
+    complete: async (request) => (await gateway.complete(request)).text,
+  }
+}
+
 export type AiCheckReason =
   | "ai.ok"
   | "ai.not-set"

@@ -143,8 +143,8 @@ export const aiModelCommand = (app: AppIdentity, options: AiModelCommandOptions)
       writeAiSetting(path, setting)
       if (setting.images) options.diagnostic(imagesNote(setting))
       const changed =
-        JSON.stringify(before === undefined ? null : { ...before, images: before.images !== undefined }) !==
-        JSON.stringify({ ...setting, images: setting.images !== undefined })
+        JSON.stringify(before === undefined ? null : { ...before, images: aiImagesAllowed(before) }) !==
+        JSON.stringify({ ...setting, images: aiImagesAllowed(setting) })
       options.output(itemOf({ ...view(app, options, setting), changed }), this)
     })
   grantsAuthority(
@@ -213,7 +213,7 @@ export const aiModelCommand = (app: AppIdentity, options: AiModelCommandOptions)
       if (!setting) throw new CliError("configuration_error", "no AI model is chosen", { reason: "ai.not-set" })
       const { images, ...kept } = setting
       if (images !== undefined) writeAiSetting(path, kept)
-      options.output(itemOf({ ...view(app, options, kept), changed: aiImagesAllowed(setting) }), this)
+      options.output(itemOf({ ...view(app, options, kept), changed: images !== undefined }), this)
     })
   annotate(ai.command("check"), {
     effects: FETCH,
