@@ -585,8 +585,8 @@ proposes them instead. A no-reply address (`isNoReplyAddress`) is no one's: it n
   with `+` or `00` however it is spaced; bare digits only from telegram, max or whatsapp; a national number names no
   country and matches nothing). `scanMatches` (`person-match-scan.ts`) reads the holders of each phone and address and
   one `linkIndex` of the proposals outside any transaction, then writes each group in its own short `write`; its
-  cursor (`store_settings` `people.scan`: the newest identity, move, revision, guest row and update time) limits a
-  later pass to what changed. The owner's pending rulings are one predicate each: `phonePairJoins` (NEED-2445),
+  cursor (`store_settings` `people.scan`: the newest identity, move, revision, guest row and update time, and `RULES`) limits a
+  later pass to what changed; a cursor of other rules makes the next pass full once. The owner's pending rulings are one predicate each: `phonePairJoins` (NEED-2445),
   `addressGroupJoins` (NEED-2446), and the rejection check in `join` (NEED-2444), which proposes a
   rejected pair on evidence new to the owner. SEC-177: a pair with the owner's person on either side is never joined
   or proposed by a rule, at import (`joinByAddress`) or in the scan (`touchesOwner`, skipped as `identity.owner`); only
@@ -597,7 +597,8 @@ proposes them instead. A no-reply address (`isNoReplyAddress`) is no one's: it n
   `proposeShared`) with `shared` (`role` or `line`) in the payload and a `score` from what else the two share
   (`sharedMailboxCase`): 0.1 alone, plus 0.4 for one name (`variantKey`), plus 0.3 for a phone or another address only
   they hold, or 0.2 for a chat or a company's domain within one source. The mailbox and other role addresses are no
-  trace for it. A no-reply address proposes no one. `linkIndex` holds each pair's open proposal and the evidence keys of its
+  trace for it. They are proposed after the phones, so an open one never keeps a phone from joining the pair. A
+  no-reply address proposes no one. `linkIndex` holds each pair's open proposal and the evidence keys of its
   rejected ones, read once per pass. An address's mail contact stands for its person in both the scan and the import,
   so the two paths name the same evidence. `linkOwnIdentities` joins an account's own identity to the owner only under
   the owner's name, script and spelling aside (`domain/name-variants.ts`); under another name, a partner's mailbox or a
