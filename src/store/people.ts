@@ -9,11 +9,18 @@ import type {
   IdentityLinkRow,
   MatchScan,
 } from "./identity-links.js"
+import type {
+  IdentitySplitDecision,
+  IdentitySplitFilter,
+  IdentitySplitInput,
+  IdentitySplitRow,
+} from "./identity-splits.js"
 import { keysOver } from "./keys.js"
 import { ownerPerson } from "./sqlite/actors.js"
 import type { ContactFilter } from "./sqlite/identities.js"
 import * as identities from "./sqlite/identities.js"
 import * as identityProposals from "./sqlite/identity-proposals.js"
+import * as identitySplits from "./sqlite/identity-split-proposals.js"
 import type { StoreContext } from "./sqlite/open.js"
 import { linkToOwner } from "./sqlite/own-identities.js"
 import {
@@ -24,6 +31,7 @@ import {
   type SimilarPerson,
   similarPeople,
 } from "./sqlite/people-list.js"
+import { type PersonDoubts, personDoubts } from "./sqlite/person-doubts.js"
 import * as personLinks from "./sqlite/person-links.js"
 import { RULE, scanMatches } from "./sqlite/person-match-scan.js"
 import type { PersonMerge } from "./sqlite/person-merges.js"
@@ -114,6 +122,21 @@ export interface PeopleStore extends AccountPeople {
   scanMatches(options?: { full?: boolean }): Promise<MatchScan>
   /** The `identity_link` proposals, newest first, naming the people as they are now; `proposed` unless `status` says. */
   linkProposals(filter: IdentityLinkFilter): Promise<{ items: IdentityLinkRow[]; hasMore: boolean }>
+  /**
+   * Proposes to take identities off their person, or to undo a merge, as an `identity_split` only the owner decides:
+   * an agent's unlink or unmerge waits for the owner beside the matches. An open one for the same identities is given
+   * back; one the owner turned down is refused.
+   */
+  proposeSplit(input: IdentitySplitInput): Promise<ProposedAction>
+  /** The owner's decision on an `identity_split`; confirm is refused with `identity.stale` when the person changed. */
+  decideSplit(id: string, decision: IdentitySplitDecision): Promise<ProposedAction>
+  /** The `identity_split` proposals, newest first; `proposed` unless `status` says. */
+  splitProposals(filter: IdentitySplitFilter): Promise<{ items: IdentitySplitRow[]; hasMore: boolean }>
+  /**
+   * People that may be wrong, the owner first: the owner's person holding another name, test data, an address people
+   * with other names share, one person with different names and nothing in common. Each says why and how to fix it.
+   */
+  doubts(page: { limit: number; offset: number }): Promise<PersonDoubts>
   /** The identity, and everyone linked with it, is the owner. */
   linkToOwner(identity: IdentityRef): Promise<PersonRecord>
   /** A person known by name only, with no identity yet: someone to assign a task to before any message names them. */
@@ -254,6 +277,10 @@ export const peopleStoreOver = (context: StoreContext, keyed: AccountPeople): Pe
     decideLink: async (id, decision) => identityProposals.decideIdentityLink(context, id, decision),
     scanMatches: async (options) => scanMatches(context, options),
     linkProposals: async (filter) => identityProposals.identityLinkRows(context, filter),
+    proposeSplit: async (input) => identitySplits.proposeIdentitySplit(context, input),
+    decideSplit: async (id, decision) => identitySplits.decideIdentitySplit(context, id, decision),
+    splitProposals: async (filter) => identitySplits.identitySplitRows(context, filter),
+    doubts: async (page) => personDoubts(context, page),
     linkToOwner: async (identity) => linkToOwner(context, identity),
     list: async (options) => listPeople(database, options),
     counts: async (query) => countPeople(database, query),

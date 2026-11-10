@@ -113,6 +113,15 @@ export {
   type MatchScan,
 } from "./identity-links.js"
 export {
+  IDENTITY_SPLIT_KIND,
+  type IdentitySplitDecision,
+  type IdentitySplitFilter,
+  type IdentitySplitInput,
+  type IdentitySplitMove,
+  type IdentitySplitPayload,
+  type IdentitySplitRow,
+} from "./identity-splits.js"
+export {
   ORGANIZATIONS_QUERY,
   organization,
   PROJECTS_QUERY,
@@ -379,6 +388,13 @@ export {
   type PeopleSort,
   type SimilarPerson,
 } from "./sqlite/people-list.js"
+export {
+  DOUBT_REASONS,
+  type DoubtIdentity,
+  type DoubtReason,
+  type PersonDoubt,
+  type PersonDoubts,
+} from "./sqlite/person-doubts.js"
 export { mergeId, type PersonMerge, parseMergeId } from "./sqlite/person-merges.js"
 export {
   ALWAYS_SHOWN,
