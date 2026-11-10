@@ -26,8 +26,12 @@ export {
   type AiImageRefusal,
   type AiProvider,
   type AiSetting,
+  type AiTextReader,
+  type AiTextRefusal,
   aiImageReader,
+  aiLeavesComputer,
   aiSettingPath,
+  aiTextReader,
   readAiSetting,
 } from "./models/ai.js"
 export { registerReader } from "./readers/registry.js"

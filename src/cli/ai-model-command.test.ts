@@ -1,15 +1,18 @@
+import { spawnSync } from "node:child_process"
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
-import { dirname, join } from "node:path"
+import { dirname, join, resolve } from "node:path"
 import { Readable } from "node:stream"
-import { memoryKeyring } from "@wirecat/cli-base"
+import { captureStreams, memoryKeyring } from "@wirecat/cli-base"
 import { Command } from "commander"
 import { PNG } from "pngjs"
 import { describe, expect, it, vi } from "vitest"
 import { ocrImage } from "../attachments/ocr.js"
-import { aiImageReader, aiKeys, aiSettingPath } from "../models/ai.js"
+import { aiImageReader, aiKeys, aiSettingPath, aiTextReader } from "../models/ai.js"
 import { aiModelCommand } from "./ai-model-command.js"
+import { commandsCommand } from "./commands-command.js"
 import type { Body } from "./envelope.js"
+import { run as runProgram } from "./program.js"
 
 const app = { command: "fixture", appName: "fixture", envPrefix: "FIXTURE", description: "synthetic", version: "1.0.0" }
 const KEY = "synthetic-owner-key"
@@ -70,7 +73,7 @@ describe("models ai", () => {
       "openai/gpt-4o-mini",
       "--base-url",
       "https://openrouter.ai/api/v1/",
-      "--key-stdin",
+      "--secret-stdin",
     )
 
     expect(last()).toMatchObject({
@@ -100,19 +103,26 @@ describe("models ai", () => {
   it("lets images go only to the model the owner agreed to, and says they leave the computer", async () => {
     const { run, last, lines } = fixture()
 
-    await run(undefined, "set", "anthropic", "--model", "claude-haiku-4-5", "--images")
+    await run(undefined, "set", "anthropic", "--model", "claude-haiku-4-5", "--allow-remote")
     expect(last()).toMatchObject({ images: true })
     expect(lines.join("\n")).toContain("leave this computer")
 
-    await run(KEY, "set", "anthropic", "--model", "claude-haiku-4-5", "--key-stdin")
-    expect(last()).toMatchObject({ images: true, changed: false })
-
-    await run(undefined, "set", "anthropic", "--model", "claude-sonnet-4-5")
+    await run(KEY, "set", "anthropic", "--model", "claude-haiku-4-5", "--secret-stdin")
     expect(last()).toMatchObject({ images: false, changed: true })
 
-    await run(undefined, "set", "anthropic", "--model", "claude-sonnet-4-5", "--images")
-    await run(undefined, "set", "anthropic", "--model", "claude-sonnet-4-5", "--no-images")
-    expect(last()).toMatchObject({ images: false, changed: true })
+    await run(undefined, "set", "anthropic", "--model", "claude-sonnet-4-5", "--allow-remote")
+    await run(undefined, "revoke")
+    expect(last()).toMatchObject({ provider: "anthropic", images: false, changed: true })
+    await run(undefined, "revoke")
+    expect(last()).toMatchObject({ changed: false })
+  })
+
+  it("revokes only for the owner, and says when no model is chosen", async () => {
+    const agent = fixture({ CLAUDECODE: "1" })
+    await agent.run(undefined, "set", "anthropic", "--model", "m", "--allow-remote", "--from-app")
+    await expect(agent.run(undefined, "revoke")).rejects.toMatchObject({ details: { reason: "ai.owner-only" } })
+
+    await expect(fixture().run(undefined, "revoke")).rejects.toMatchObject({ details: { reason: "ai.not-set" } })
   })
 
   it("replaces a broken section instead of refusing to touch it", async () => {
@@ -125,15 +135,15 @@ describe("models ai", () => {
     expect(last()).toMatchObject({ provider: "anthropic" })
   })
 
-  it("forgets a key, and says when an older one still answers for that address", async () => {
+  it("removes a key, and says when an older one still answers for that address", async () => {
     const { run, last, lines } = fixture({ FIXTURE_ANTHROPIC_API_KEY: "synthetic-env-key" })
-    await run(KEY, "set", "anthropic", "--model", "m", "--key-stdin")
+    await run(KEY, "set", "anthropic", "--model", "m", "--secret-stdin")
 
-    await run(undefined, "forget")
+    await run(undefined, "remove")
 
     expect(last()).toMatchObject({ origin: "https://api.anthropic.com", removed: true, still_found: "environment" })
     expect(lines.join("\n")).toContain("still found in environment")
-    await expect(run(undefined, "forget", "localhost:11434")).rejects.toMatchObject({ code: "validation_error" })
+    await expect(run(undefined, "remove", "localhost:11434")).rejects.toMatchObject({ code: "validation_error" })
   })
 
   it("refuses an agent, unless Desktop says the owner clicked", async () => {
@@ -146,11 +156,11 @@ describe("models ai", () => {
     expect(last()).toMatchObject({ provider: "anthropic" })
   })
 
-  it("turns off and keeps the key", async () => {
+  it("unsets the model and keeps the key", async () => {
     const { run, last, env, keyring } = fixture()
-    await run(KEY, "set", "anthropic", "--model", "m", "--key-stdin")
+    await run(KEY, "set", "anthropic", "--model", "m", "--secret-stdin")
 
-    await run(undefined, "off")
+    await run(undefined, "unset")
 
     expect(last()).toMatchObject({ changed: true, key_kept: true })
     expect(aiKeys(app, env, keyring).read("https://api.anthropic.com")?.key).toBe(KEY)
@@ -167,7 +177,7 @@ describe("models ai", () => {
   ])("check reads a %i as %s, without the provider's text", async (status, reason) => {
     const fetch = vi.fn(async () => answer(status, { error: { message: `echo ${KEY}` } }))
     const { run, last, answers } = fixture({}, fetch)
-    await run(KEY, "set", "openai", "--model", "gpt-4o-mini", "--key-stdin")
+    await run(KEY, "set", "openai", "--model", "gpt-4o-mini", "--secret-stdin")
 
     await run(undefined, "check")
 
@@ -199,14 +209,14 @@ describe("aiImageReader", () => {
     expect(aiImageReader({ app, env, keyring })).toEqual({ refused: "ai.not-set" })
     await run(undefined, "set", "openai", "--model", "gpt-4o-mini")
     expect(aiImageReader({ app, env, keyring })).toEqual({ refused: "ai.images-not-allowed" })
-    await run(undefined, "set", "openai", "--model", "gpt-4o-mini", "--images")
+    await run(undefined, "set", "openai", "--model", "gpt-4o-mini", "--allow-remote")
     expect(aiImageReader({ app, env, keyring })).toEqual({ refused: "ai.key-missing" })
   })
 
   it("reads an image's text through the chosen model, sending the key only there", async () => {
     const fetch = vi.fn(async (_input: unknown, _init?: RequestInit) => chat("Invoice 42"))
     const { run, env, keyring } = fixture()
-    await run(KEY, "set", "openai", "--model", "gpt-4o-mini", "--images", "--key-stdin")
+    await run(KEY, "set", "openai", "--model", "gpt-4o-mini", "--allow-remote", "--secret-stdin")
 
     const reader = aiImageReader({ app, env, keyring, fetch })
     if (!("pipeline" in reader)) throw new Error("no reader")
@@ -217,4 +227,53 @@ describe("aiImageReader", () => {
     expect(String(fetch.mock.calls[0]?.[0])).toBe("https://api.openai.com/v1/chat/completions")
     expect(new Headers(fetch.mock.calls[0]?.[1]?.headers).get("authorization")).toBe(`Bearer ${KEY}`)
   })
+})
+
+describe("aiTextReader", () => {
+  it("sends text to the chosen model with no image consent, and says when it cannot", async () => {
+    const fetch = vi.fn(async (_input: unknown, _init?: RequestInit) => chat("facts"))
+    const { run, env, keyring } = fixture()
+    expect(aiTextReader({ app, env, keyring })).toEqual({ refused: "ai.not-set" })
+    await run(undefined, "set", "anthropic", "--model", "claude-haiku-4-5")
+    expect(aiTextReader({ app, env, keyring })).toEqual({ refused: "ai.key-missing" })
+
+    await run(KEY, "set", "openai", "--model", "gpt-4o-mini", "--secret-stdin")
+    const reader = aiTextReader({ app, env, keyring, fetch })
+    if ("refused" in reader) throw new Error(reader.refused)
+
+    expect(reader).toMatchObject({ by: "openai/gpt-4o-mini", leavesComputer: true })
+    expect(await reader.complete({ purpose: "sources", system: "s", prompt: "p", maxTokens: 10 })).toBe("facts")
+
+    await run(undefined, "set", "ollama", "--model", "llama3.2")
+    expect(aiTextReader({ app, env, keyring, fetch })).toMatchObject({ leavesComputer: false })
+  })
+})
+
+// No messenger mounts models ai, so the shared lint never sees it; memo's does. "ai" is not yet a vocabulary noun.
+it("passes the command lint, apart from the ai noun the vocabulary lacks", async () => {
+  const streams = captureStreams()
+  const models = new Command("models").description("models")
+  models.addCommand(aiModelCommand(app, { env: () => ({}), output: () => undefined, diagnostic: () => undefined }))
+  expect(
+    await runProgram(
+      ["commands", "--json"],
+      { app, commands: () => [commandsCommand(app), models] },
+      { streams, tty: false, env: {} },
+    ),
+  ).toBe(0)
+  const folder = mkdtempSync(join(tmpdir(), "ai-lint-"))
+  writeFileSync(join(folder, "commands.json"), streams.stdout.join(""))
+  writeFileSync(join(folder, "overrides.json"), "[]")
+
+  // From an empty folder, as a consumer runs it: inside this repository cli-dev also reads cli-core's own baseline.
+  const lint = spawnSync(
+    resolve("node_modules/.bin/cli-dev"),
+    ["lint", "--commands", "commands.json", "--overrides", "overrides.json"],
+    { encoding: "utf8", cwd: folder },
+  )
+
+  const found = `${lint.stdout}${lint.stderr}`
+    .split("\n")
+    .filter((line) => /^(high|medium|low)\s+\S+\s+models\b/.test(line))
+  expect(found.map((line) => line.split(/\s+/).slice(0, 3).join(" "))).toEqual(["medium unknown-resource models"])
 })

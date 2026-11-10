@@ -72,7 +72,11 @@ const OTHERS: Entry[] = [
   ["model.offline", "permission_error", "downloading a model needs the network; --offline was requested"],
   ["model.key-rejected", "invalid_response", "the model provider refused the API key (401 or 403)"],
   ["model.unreachable", "invalid_response", "the model provider could not be reached over the network"],
-  ["ai.owner-only", "permission_error", "only the owner chooses, checks or forgets the AI model, not an agent"],
+  [
+    "ai.owner-only",
+    "permission_error",
+    "only the owner chooses, unsets, checks or removes the AI model and its key, or revokes its consent",
+  ],
   ["ai.setting-invalid", "configuration_error", "the ai section or the model given is not one WireCat can use"],
   validation("ai.address-refused", "the model address must be https, or http only on this computer"),
   ["ai.not-set", "configuration_error", "no AI model is chosen; models ai set chooses one"],

@@ -8,13 +8,14 @@ Owner rulings: NEED-2463 (one third-party model setting that replaces the agent)
 1–4, below), NEED-2494 A (image recognition waits for this setting).
 
 - **cli-core** (`src/models/ai.ts`, `src/cli/ai-model-command.ts`): the shared `ai` section, the shared key
-  (service `WireCat`, account `ai:<origin>`, `isMovedRun`), `models ai show|set|off|forget|check` mounted in memo's
-  `models`, owner-only (`agentOf` refuses unless `--from-app`; `mcp: false`), and `aiImageReader` for images.
+  (service `WireCat`, account `ai:<origin>`, `isMovedRun`), `models ai show|set|unset|remove|revoke|check` mounted in memo's
+  `models`, owner-only (`agentOf` refuses unless `--from-app`; `mcp: false`), `aiImageReader` for images, and
+  `aiTextReader` for text a tool sends on purpose (memo's `ai-model` reader).
 - **Differs: no bottom layer of `models.default`.** Each job opts in by reading `readAiSetting` itself. That keeps
   `analysis` and the other purposes exactly as they are, with no per-purpose gate to add (§1's gate table).
 - **Differs: the https-or-loopback rule applies to `ai.base_url` only.** The public `endpoint()` is unchanged, so no
   caller breaks. Question 3 A holds for the new setting.
-- **Added: image consent.** `models ai set … --images` stores `images: {origin, model, at}`. Images go only to that
+- **Added: image consent.** `models ai set … --allow-remote` stores `images: {origin, model, at}`; a `set` without it, or `models ai revoke`, drops it. Images go only to that
   origin and model; a change of either closes it until the owner agrees again.
 - **Check** reads the HTTP status the gateway now keeps in `details.status`: 401/403, 402, 404, 429, 5xx. OpenAI's
   "no credit" 429 codes and OpenRouter's 200-with-error body are not told apart yet; they read as rate-limited and
@@ -364,9 +365,9 @@ two `models keys` implementations become one. `models set` already means "choose
 |---|---|---|
 | `models ai show` | anyone, MCP read | `{provider, model, base_url, origin, beta, key: {stored, source}, from, used_by: [{job, uses: "ai"\|"agent"\|"own setting"\|"off"}]}`; `key.source` is `keyring`/`file`/`environment`/`null` and never the key |
 | `models ai list` | anyone | `{items: [{id, title?}], has_more: false}` from the provider's models list; `items: []` with `reason` when the provider does not answer. Desktop fills its picker from it |
-| `models ai set <anthropic\|openai\|ollama> --model <m> [--base-url <url>] [--key-stdin]` | owner only | `{provider, model, base_url, origin, beta, key: {stored, source}, changed}`. `--key-stdin` reads the key from stdin and saves it **under this call's origin**, so a key and its address are saved together |
+| `models ai set <anthropic\|openai\|ollama> --model <m> [--base-url <url>] [--secret-stdin]` | owner only | `{provider, model, base_url, origin, beta, key: {stored, source}, changed}`. `--secret-stdin` reads the key from stdin and saves it **under this call's origin**, so a key and its address are saved together |
 | `models ai check` | owner only (it spends a few tokens) | `{ok, reason, provider, model, origin, ms}`, see below |
-| `models ai off` | owner only | `{changed, key_kept: true}`; the key stays until `models keys remove` |
+| `models ai unset` | owner only | `{changed, key_kept: true}`; the key stays until `models ai remove` |
 | `models keys set\|remove <name>` | owner only | unchanged shape. `openai`/`anthropic` map to the official origins. A bare host means `https://<host>`. It writes the shared entry |
 
 "Owner only" means four things:
@@ -435,7 +436,7 @@ keeps any echo of the key in a provider message off the screen.
    - `redirect: "error"` on both adapters stays (`openai.ts:48`, `anthropic.ts:19`). It stops a server from
      bouncing the request, and the key, to another host.
 4. **Agents cannot change the endpoint or the key.**
-   - This is the owner-only rule in §4, for `models ai set|off|check`, `models keys set|remove` and
+   - This is the owner-only rule in §4, for `models ai set|unset|remove|revoke|check`, `models keys set|remove` and
      `config set models.*.provider|base_url`. Desktop passes `--from-app`, as it does for readers.
    - **The honest limit:** a process that sets `<PREFIX>_MODELS_*` env for its own run still changes that
      run's target, as `config-command.ts:154` already admits.
@@ -453,7 +454,7 @@ keeps any echo of the key in a provider message off the screen.
 - **Provider radio:** Anthropic · OpenAI or compatible · Ollama (beta, this computer).
 - **Address (base URL):** shown for "OpenAI or compatible" under "Advanced". For Ollama it is prefilled and
   read-only.
-- **API key:** a `SecretField`. It is sent with `models ai set … --key-stdin`, and the field is cleared before
+- **API key:** a `SecretField`. It is sent with `models ai set … --secret-stdin`, and the field is cleared before
   sending, as the readers' key form does today.
 - **Model:** a combo box filled by `models ai list`, which also accepts typed text.
 - **"Check" button,** which shows the reason text from §5.
@@ -496,7 +497,7 @@ tests included. The cli-core PRs merge as they go green, and one release carries
 |---|---|---|---|---|
 | C1 | cli-core | **Endpoint and key binding.** `endpoint()` accepts https, or http on loopback only. The key name becomes the origin, and old host names are read only when they map to the same origin. `models keys set\|remove` refuse an agent's shell and leave MCP. The changelog gets "Changed — may break callers" | the URL table (loopback lookalikes refused). A key saved for `https://a` is not sent to `http://a` or `https://b`. An agent refused | S, ~250 |
 | C2 | cli-core | **Shared `ai` section and shared key service.** Schema, read and write, the bottom layer of `models.default`, the Ollama preset, the `WireCat` keyring service with legacy read, and `isMovedRun` | resolution order (env > CLI > shared). A moved run never writes the shared entry. File fallback when the keyring throws | M, ~350 |
-| C3 | cli-core | **`models ai show\|list\|set\|off`.** One mount for memo and tg/max, the two `models keys` merged, owner-only guards, and `config set models.*.provider\|base_url` made owner-only | JSON shapes. `--key-stdin` binds the key to the origin. No key in stdout, stderr or the log. The MCP catalogue snapshot | M, ~450 |
+| C3 | cli-core | **`models ai show\|list\|set\|unset`.** One mount for memo and tg/max, the two `models keys` merged, owner-only guards, and `config set models.*.provider\|base_url` made owner-only | JSON shapes. `--secret-stdin` binds the key to the origin. No key in stdout, stderr or the log. The MCP catalogue snapshot | M, ~450 |
 | C4 | cli-core | **`models ai check` and gateway reasons.** The OpenAI adapter keeps the status and error code. The reason table of §5. The unused `src/analysis/anthropic.ts` goes through the gateway or is removed | one fixture per row of the reason table, per provider shape: Anthropic, OpenAI, OpenRouter 200-with-error, Ollama string error | M, ~300 |
 | C5 | cli-core | **Enrichment follows `ai`.** Consent keeps the origin and model, and a change pauses it | a changed origin stops sends until consent is given again | S, ~200 |
 | — | cli-core | one release with C1–C5 | — | — |
