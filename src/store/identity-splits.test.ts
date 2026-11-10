@@ -226,7 +226,11 @@ describe("taking identities off the person named (BUG-709)", () => {
 
   it("takes it off when the person named holds it", async () => {
     const { store, colleague } = await withColleague()
-    const alone = await store.people.unlinkIdentity(tg("9"), { method: "unlink", by: "owner", from: colleague })
+    const alone = await store.people.unlinkIdentity(tg("9"), {
+      method: "unlink",
+      by: "owner",
+      from: `person:${colleague}`,
+    })
     expect(alone.uid).not.toBe(colleague)
     expect((await store.people.personOf(tg("8")))?.identities.map(({ id }) => id)).toEqual(["8"])
   })

@@ -1,5 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import { isEmailAddress, isRoleAddress } from "../../domain/addresses.js"
+import { displayName } from "../../domain/display-names.js"
 import type { Id, Page } from "../../domain/models.js"
 import type {
   IdentityRef,
@@ -332,29 +333,30 @@ export const renameAfterLeaving = (context: StoreContext, person: number, left: 
 }
 
 const shownAs = (person: PersonRecord) =>
-  `${person.name ?? person.identities.find((identity) => identity.name)?.name ?? "a person with no name"} (person:${person.uid})`
+  `${displayName(person.name, { name: person.identities.find((identity) => identity.name)?.name ?? null }) ?? "a person with no name"} (person:${person.uid})`
 
 /**
- * Refuses identities that sit on anyone but `from`: a caller that guessed the person would otherwise take them off the
- * right one, as a script took a colleague's mailbox off the colleague instead of off the owner (BUG-709). The refusal
- * names who holds them, so the caller can decide, not retry blindly. Gives `from`'s current person.
+ * Refuses identities that sit on anyone but `from` (a uid, or `person:<uid>` as doubts and refusals give it), so a
+ * caller that guessed the person never takes them off someone else. The refusal names who holds them.
  */
-export const heldBy = (context: StoreContext, from: string, refs: readonly IdentityRef[]): number => {
-  const named = personByUid(context, from)
-  if (named === undefined) throw new CliError("not_found", `no person:${from} in the store`, { param: "from" })
-  const pk = Number(named.uid)
+export const heldBy = (context: StoreContext, from: string, refs: readonly IdentityRef[]): void => {
+  const uid = from.startsWith("person:") ? from.slice("person:".length) : from
+  const found = /^[1-9]\d*$/.test(uid)
+    ? context.database.prepare("SELECT id FROM persons WHERE id = ?").get(uid)
+    : undefined
+  if (found === undefined) throw new CliError("not_found", `no person:${uid} in the store`, { param: "from" })
+  const pk = currentPerson(context.database, Number(found.id))
   for (const ref of refs) {
     const row = required(context, ref)
     if (row.personPk === pk) continue
     const holder = recordOf(context, row.personPk)
     throw new CliError(
       "validation_error",
-      `${ref.provider}:${ref.id} sits on ${shownAs(holder)}, not on ${shownAs(named)}; nothing changed. ` +
-        `To take it off ${shownAs(holder)}, name person:${holder.uid}`,
+      `${ref.provider}:${ref.id} sits on ${shownAs(holder)}, not on ${shownAs(recordOf(context, pk))}; nothing changed. ` +
+        `Name person:${holder.uid} to take it off them`,
       { reason: "identity.held-elsewhere", param: "from", reference: `person:${holder.uid}` },
     )
   }
-  return pk
 }
 
 /** Gives the identity a person of its own again; the ones left keep theirs. */

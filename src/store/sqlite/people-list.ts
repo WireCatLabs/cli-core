@@ -176,7 +176,8 @@ const factsOf = (database: CacheDatabase, scope: Scope): Map<number, Facts> => {
       organization: false,
     }
     const email = text(row.email) ?? (row.provider === "email" ? text(row.external_id) : null)
-    if (one.name === null && isReadable(displayName(text(row.name)))) one.name = text(row.name)
+    const named = displayName(text(row.name))
+    if (one.name === null && isReadable(named) && !named?.startsWith("@")) one.name = named
     if (one.username === null && text(row.username) !== null) {
       one.username = text(row.username)
       one.usernameSource = String(row.provider)
@@ -322,7 +323,7 @@ const byName = (a: Classified, b: Classified) =>
  * Bump when what decides a kind, a name's order or a count changes in code (the word lists, `BULK_MIN`, the ties):
  * every stored one is worked out again on the next list.
  */
-const KIND_RULES = "2"
+const KIND_RULES = "3"
 const RULES_KEY = "people.kind_rules"
 /** Past this many people to work out, one pass over everyone beats a lookup per person. */
 const WHOLE_PASS = 20_000
