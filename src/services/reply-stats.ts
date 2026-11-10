@@ -38,17 +38,17 @@ export interface ReplyStatsService {
   waiting(query: ReplyQuery): Promise<Waiting>
 }
 
-const FIELDS = ["date", "chat", "kind"]
+const FIELDS = ["date", "chat", "kind", "muted"]
 /** Per waiting chat, how far back its unanswered messages are counted. */
 export const WAITING_TAIL = 100
 
-/** Only AND-ed `date:`, `chat:` and `kind:` terms: each becomes an index bound, so no query reads every message. */
+/** Only AND-ed `date:`, `chat:`, `kind:` and `muted:` terms: each becomes an index bound, so no query reads every message. */
 const plainOnly = (text: string | undefined, command: string) => {
   if (text === undefined) return
   const refuse = (): never => {
     throw new CliError(
       "validation_error",
-      `${command} reads date:, chat: and kind: terms, AND-ed — not words, other fields, OR or NOT`,
+      `${command} reads date:, chat:, kind: and muted: terms, AND-ed — not words, other fields, OR or NOT`,
       { reason: "query.unsupported-field" },
     )
   }
@@ -73,7 +73,14 @@ const scopeOf = (root: ResolvedNode, accounts: ChatScope["accounts"]): ChatScope
     const { chat, date } = node.resolution ?? {}
     if (chat) scope.chats.push(chat)
     else if (node.field === "kind") scope.kinds.push(node.value.toLowerCase())
-    else if (date) {
+    else if (node.field === "muted") {
+      const muted = node.value.toLowerCase() === "true"
+      if (scope.muted !== undefined && scope.muted !== muted)
+        throw new CliError("validation_error", "muted:true and muted:false cannot both hold", {
+          reason: "query.conflict",
+        })
+      scope.muted = muted
+    } else if (date) {
       if (date.lower !== undefined) {
         const lower = date.lower + (date.lower_inclusive ? 0 : 1)
         scope.since = Math.max(scope.since ?? lower, lower)

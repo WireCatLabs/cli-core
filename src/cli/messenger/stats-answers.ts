@@ -13,6 +13,7 @@ import type { MessageStats } from "../../services/messages-search.js"
 import type { RankingFound } from "../../services/rankings.js"
 import type { ReplyTimes, Waiting } from "../../services/reply-stats.js"
 import type { RetentionService } from "../../services/retention.js"
+import { taskAccount } from "../../services/task-rules.js"
 import type { TaskStats } from "../../services/task-stats.js"
 import type { AccountKey, RankedEvidence, StoredHit } from "../../store/store.js"
 import { type ItemBody, itemOf, type ListBody, listOf } from "../envelope.js"
@@ -544,16 +545,21 @@ export const chatStatsAnswer = (
 /** Said where the store has kept no join, leave or other chat event for the chat: a 0 would read as nobody joined. */
 export const MEMBERS_UNRECORDED = "joins and leaves are not recorded for this chat yet, so they are not counted"
 
-/** `stats tasks show`, CLI and MCP alike. A row of `--by chat` also names its chat as `chat`, as it always has. */
-export const taskStatsAnswer = (stats: TaskStats, account: AccountKey): ItemBody<Of<"task_stats">> =>
+/**
+ * `stats tasks show`, CLI and MCP alike. A row of `--by chat` also names its chat as `chat`, as it always has;
+ * `account` is the one account read, and an answer across several names each row's own.
+ */
+export const taskStatsAnswer = (stats: TaskStats, account: AccountKey | undefined): ItemBody<Of<"task_stats">> =>
   itemOf({
+    ...(stats.accounts ? { accounts: stats.accounts.map(taskAccount) } : {}),
     open: stats.open,
     created: stats.created,
     closed: stats.closed,
     median_close_ms: stats.medianCloseMs ?? null,
     mean_open_age_ms: stats.meanOpenAgeMs ?? null,
     rows: stats.rows.map((row) => {
-      const chat = stats.by === "chat" ? chatRef(account, row.group) : undefined
+      const own = row.account ?? account
+      const chat = stats.by === "chat" && own ? chatRef(own, row.group) : undefined
       return {
         ...(chat === undefined ? {} : { chat }),
         key: chat ?? (stats.by === "project" ? `project:${row.group}` : row.group),

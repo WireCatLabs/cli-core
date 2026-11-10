@@ -429,6 +429,7 @@ enum или unsupported сочетание дают ошибку, а не пус
 | `date` | time | ISO/calendar timezone; today, yesterday, 30m/2h/7d ago | `date:[2026-01-01 TO 2026-02-01}` | term, phrase, range |
 | `source` | enum | internal, file | `source:internal` | term, phrase |
 | `kind` | enum | private, saved, bot, service, group, channel, unknown | `kind:private` | term, phrase |
+| `muted` | enum | true, false | `muted:false` | term, phrase |
 | `has` | enum | text, attachment, link, file, photo, image, video, audio, voice, sticker, contact, location, poll, transcript | `has:file` | term, phrase |
 | `topic` | kw | string id, one chat required | `chat:7 AND topic:42` | term, phrase |
 | `in` | kw | lowercase provider/account class | `in:bots` | term, phrase |

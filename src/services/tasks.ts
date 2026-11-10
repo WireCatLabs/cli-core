@@ -293,7 +293,9 @@ export interface TasksService {
   /** The owner refuses an agent's close: the task stays open and the suggestion goes. */
   reject(id: string, by: TaskOrigin): Promise<TaskCard>
   /** `chat` narrows to one chat, by name or id; see `taskStatsOf` for what each count means. */
-  stats(request?: Omit<TaskStatsRequest, "group"> & { chat?: string }): Promise<TaskStats>
+  stats(
+    request?: Omit<TaskStatsRequest, "group"> & { chat?: string; accounts?: readonly AccountKey[] },
+  ): Promise<TaskStats>
   /** Title, description, due date and next check; `null` clears one. */
   plan(id: string, plan: TaskPlan, by: TaskOrigin): Promise<TaskCard>
   /**
@@ -743,16 +745,28 @@ export const tasksService = (deps: ServiceDeps, categories?: readonly TaskCatego
         return store.tasks.similar({ task: subject }, options)
       }),
 
-    stats: ({ chat, ...request } = {}) =>
-      inStore(async (store, account) => {
-        const group = await groupOf(store, account, chat)
-        return taskStatsOf(
-          store,
-          account,
-          { ...request, ...(group === undefined ? {} : { group }) },
-          await queryColumns(store, account, request.query),
-        )
-      }),
+    stats: ({ chat, accounts, ...request } = {}) =>
+      accounts
+        ? (async () => {
+            const store = await deps.store()
+            const named = request.query
+              ? walkQuery(request.query.root).some(({ field, operator }) => field === "chat" && operator !== "wildcard")
+              : false
+            if (chat !== undefined || named)
+              throw new CliError("validation_error", "a chat belongs to one account: name the account as well")
+            // No chat is named, so the columns need no account.
+            const columns = taskColumns(new Map(), await taskTagFilters(store, request.query))
+            return taskStatsOf(store, accounts, request, columns)
+          })()
+        : inStore(async (store, account) => {
+            const group = await groupOf(store, account, chat)
+            return taskStatsOf(
+              store,
+              account,
+              { ...request, ...(group === undefined ? {} : { group }) },
+              await queryColumns(store, account, request.query),
+            )
+          }),
   }
 }
 

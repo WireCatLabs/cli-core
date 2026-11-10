@@ -481,6 +481,16 @@ export const PEER_KIND =
 
 const kind: FieldCompiler = messengerOnly(({ value }) => always(bound(`${PEER_KIND} = ?`, value.toLowerCase())))
 
+/** A chat the owner muted, until its mute runs out; a chat whose messenger keeps no mute is not muted. */
+const muted: FieldCompiler = messengerOnly(({ value }) =>
+  always(
+    bound(
+      `${value.toLowerCase() === "true" ? "" : "NOT "}(coalesce(c.muted, 0) = 1 AND (c.muted_until IS NULL OR c.muted_until > ?))`,
+      Date.now(),
+    ),
+  ),
+)
+
 const has: FieldCompiler = ({ value }, { corpus, mail }) => {
   const wanted = value.toLowerCase()
   if (wanted === "transcript")
@@ -618,6 +628,7 @@ export const FIELD_COMPILERS: Readonly<Record<string, FieldCompiler>> = {
   tag,
   topic,
   kind,
+  muted,
   has,
   in: inSourceField,
   to: recipient,

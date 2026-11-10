@@ -644,6 +644,9 @@ same answer for a caller with a store.
 - `--by chat` (the default) groups this account's tasks by where they were found; a row keeps `chat`, and its `key`
   is the same chat reference. `--by meeting` reads only tasks found in a meeting, keyed `meeting:<account>/<meeting>`.
   `--by project` reads the owner's project tasks across every project, keyed `project:<id>`; it ignores the account.
+- A `Messenger` with `accountsOf(command)` reads every account it returns when the command names none (memo without
+  `--source`): the answer adds `accounts`, each chat row keeps its own account in `chat`, and `--chat` or a `chat:`
+  term naming one chat is refused, since a chat belongs to one account.
 - The query after `--` takes the fields of `tasks list` except `created_at` and `closed_at`, plus `created`, the
   period. `created` counts the tasks opened in the period; `closed` counts those done or dismissed in it, reading the
   same range on the close time; `open` is the tasks open now, whatever the period. Give `created` as a required term:

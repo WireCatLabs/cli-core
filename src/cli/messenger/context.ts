@@ -300,6 +300,8 @@ export interface Messenger extends ServiceMessenger {
    * profile and mounts the local task builders with `--provider --account`.
    */
   accountOf?: (command: Command) => AccountKey | undefined
+  /** Every account a read covers when the command names none: memo's `stats tasks show` without `--source`. */
+  accountsOf?: (command: Command) => readonly AccountKey[] | undefined
   /**
    * Whether a stored chat may hold a message the messenger deleted without naming its chat. When
    * unset, the store applies Telegram's rule.

@@ -144,8 +144,8 @@ Report history stores parameters and resolved selections, never result messages.
 
 ## Reply times and chats waiting on you
 
-Two answers for a dashboard, from the local store only. Both take after `--` only `date:`, `chat:` and `kind:`
-terms, AND-ed; anything else is refused. Each term becomes an index bound, so even all time on a large store reads
+Two answers for a dashboard, from the local store only. Both take after `--` only `date:`, `chat:`, `kind:` and
+`muted:` terms, AND-ed; anything else is refused. `muted:false` leaves out the chats the owner muted. Each term becomes an index bound, so even all time on a large store reads
 by index and never scans every message. Neither command keeps search history.
 
 ```sh

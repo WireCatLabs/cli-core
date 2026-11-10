@@ -494,6 +494,50 @@ describe("tasks", () => {
     database.close()
   })
 
+  it("**counts every account it is given together**, each chat row keeping its own account", async () => {
+    const call = await setup()
+    await call("tasks", "add", PROMISE, "--type", "promise", "--category", "money", "--json")
+    const other = { provider: "chat", account: "600" }
+    const store = await openStore({ path: join(call.root, "m.db") })
+    await store.chats.saveChats(other, [
+      { id: "7", title: "Bea", kind: "dialog", unreadCount: 0, lastMessageAt: null, participantsCount: null },
+    ])
+    await store.messages.saveMessages(other, "7", [said("1", "I'll call you back")], { via: "test" })
+    await store.close()
+    rememberAccount(app, "second", "600", call.env)
+    const across = async (accounts: (typeof account)[], ...argv: string[]) => {
+      const streams = captureStreams()
+      const code = await run(
+        ["stats", "tasks", "show", "--json", ...argv],
+        { app, commands: () => [statsCommand({ ...messenger, accountsOf: () => accounts })] },
+        { streams, tty: false, env: call.env },
+      )
+      return { code, stdout: streams.stdout, stderr: streams.stderr.join("\n") }
+    }
+    const second = await run(
+      ["tasks", "add", "msg:chat/600/7/1", "--type", "promise", "--category", "money", "--json"],
+      { app, commands: () => [tasksCommand(messenger)] },
+      { streams: captureStreams(), tty: false, env: { ...call.env, CHAT_PROFILE: "second" } },
+    )
+    expect(second).toBe(0)
+
+    const both = item(await across([account, other]))
+    v.parse(ENTITIES.task_stats as v.GenericSchema, both)
+    expect(both).toMatchObject({ accounts: ["chat:500", "chat:600"], open: 2, created: 2 })
+    expect(
+      both.rows.map(({ chat, name, open }: { chat: string; name: string; open: number }) => [chat, name, open]),
+    ).toEqual(
+      expect.arrayContaining([
+        ["chat:chat/500/7", "Ana", 1],
+        ["chat:chat/600/7", "Bea", 1],
+      ]),
+    )
+    expect(item(await across([other]))).toMatchObject({ accounts: ["chat:600"], open: 1 })
+    expect(item(await across([account, other], "--", "chat:*")).open).toBe(2)
+    const chat = await across([account, other], "--chat", "7")
+    expect([chat.code, chat.stderr]).toEqual([2, expect.stringContaining("name the account")])
+  })
+
   it("reads no big table whole for stats tasks show", async () => {
     const call = await setup()
     const database = await openCache(join(call.root, "m.db"))

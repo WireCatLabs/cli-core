@@ -33,7 +33,7 @@ const message = (chatId: string, id: number, at: string, outgoing: boolean, text
   attachments: [],
 })
 
-const setup = async () => {
+const setup = async (inMuted: Message[] = []) => {
   const root = mkdtempSync(join(tmpdir(), "reply-stats-"))
   const env = {
     ...process.env,
@@ -69,7 +69,7 @@ const setup = async () => {
     message("8", 2, "2026-10-08T07:30:00Z", false),
     { ...message("8", 3, "2026-10-08T08:30:00Z", false, "see this"), mentions: ["500"] },
   ])
-  await save("9", [message("9", 1, "2026-10-08T06:00:00Z", false, "Lunch?")])
+  await save("9", [message("9", 1, "2026-10-08T06:00:00Z", false, "Lunch?"), ...inMuted])
   await save("10", [message("10", 1, "2026-10-08T05:00:00Z", false, "Any news?")])
   await store.close()
   const messenger: Messenger = {
@@ -125,8 +125,20 @@ describe("stats messages responses and waiting", () => {
     expect(period.json.item).toMatchObject({ replies: 1, median_ms: 71_820_000 })
     expect((await call("stats", "messages", "responses", "--json", "--", "kind:group")).json.item.replies).toBe(0)
     const words = await call("stats", "messages", "responses", "--json", "--", "hello")
-    expect([words.code, words.stderr]).toEqual([2, expect.stringContaining("date:, chat: and kind:")])
+    expect([words.code, words.stderr]).toEqual([2, expect.stringContaining("date:, chat:, kind: and muted:")])
     expect((await call("stats", "messages", "waiting", "--json", "--", "chat:Al*")).code).toBe(2)
+  })
+
+  it("leaves muted chats out of reply times and waiting chats on muted:false", async () => {
+    const call = await setup([message("9", 2, "2026-10-08T06:10:00Z", true)])
+    const replies = async (...terms: string[]) =>
+      (await call("stats", "messages", "responses", "--json", "--", ...terms)).json.item.replies
+    expect([await replies(), await replies("muted:false"), await replies("muted:true")]).toEqual([3, 2, 1])
+    expect(await replies("muted:false", "chat:7")).toBe(2)
+    const both = await call("stats", "messages", "responses", "--json", "--", "muted:true", "muted:false")
+    expect([both.code, both.stderr]).toEqual([2, expect.stringContaining("cannot both hold")])
+    const waiting = await call("stats", "messages", "waiting", "--json", "--", "muted:true")
+    expect(waiting.json.item.chats).toBe(0)
   })
 
   it("counts chats whose newest message asks the owner, leaving out muted chats and channels", async () => {
@@ -166,7 +178,7 @@ describe("stats messages responses and waiting", () => {
       since: 1,
       until: 2,
     }
-    const plans = [replyDelaysQuery(scope, "me"), newestMessagesQuery(scope, 0), { sql: TAIL_SQL, params: [1, 100] }]
+    const plans = [replyDelaysQuery(scope, "me", 0), newestMessagesQuery(scope, 0), { sql: TAIL_SQL, params: [1, 100] }]
     for (const { sql, params } of plans) {
       const plan = sqlite.database
         .prepare(`EXPLAIN QUERY PLAN ${sql}`)

@@ -212,6 +212,17 @@ export const QUERY_FIELDS: readonly MessageField[] = [
     values: ["private", "saved", "bot", "service", "group", "channel", "unknown"],
   },
   {
+    name: "muted",
+    example: "muted:false",
+    index: "chats.muted / chats.muted_until",
+    aliases: [],
+    type: "enum",
+    operators: terms,
+    normalization: "lowercase; true is a chat the owner muted, until the mute runs out; false is every other chat",
+    support: "A1",
+    values: ["true", "false"],
+  },
+  {
     name: "has",
     example: "has:file",
     index: "attachments / messages_fts links / message_transcripts",
