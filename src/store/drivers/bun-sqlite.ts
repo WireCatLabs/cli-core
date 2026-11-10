@@ -1,4 +1,5 @@
 import type { CacheDatabase, SqlValue } from "../driver.js"
+import { refuseOwnerStoreInTests } from "../path.js"
 import { loadVectorExtension, vectorExtension } from "../vector-extension.js"
 
 interface BunStatement {
@@ -56,6 +57,7 @@ export const openWithBunSqlite = async (path: string): Promise<CacheDatabase> =>
 
 /** A connection with the vector extension loaded; it closes again when the extension does not load. */
 export const bunClient = async (path: string, options?: { readonly?: boolean; create?: boolean }) => {
+  refuseOwnerStoreInTests(path)
   const Database = await bunDatabase()
   const extension = await vectorExtension()
   const client = options ? new Database(path, options) : new Database(path)

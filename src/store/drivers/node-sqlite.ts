@@ -7,6 +7,7 @@ import {
   type SqlValue,
   TIME_LIMIT_FUNCTION,
 } from "../driver.js"
+import { refuseOwnerStoreInTests } from "../path.js"
 import { loadVectorExtension, vectorExtension } from "../vector-extension.js"
 
 /**
@@ -18,6 +19,7 @@ export const openWithNodeSqlite = async (path: string): Promise<CacheDatabase> =
 
 /** A connection with the vector extension loaded; it closes again when the extension does not load. */
 export const nodeClient = async (path: string, { readOnly = false }: { readOnly?: boolean } = {}) => {
+  refuseOwnerStoreInTests(path)
   const extension = await vectorExtension()
   const client = new DatabaseSync(path, { readOnly, allowExtension: true })
   try {
