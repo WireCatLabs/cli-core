@@ -141,13 +141,13 @@ describe("similar tasks", () => {
     await store.close()
   })
 
-  it("**reads a rule task's source message**, whose placeholder title says nothing", async () => {
+  it("**finds a rule task by its source message's first line**, stored as its title", async () => {
     const { store, add } = await setup([said("1", "9", "Could you pay the 15 000 rub invoice?"), said("2", "9", "x")])
     const rule = await add("1")
     const agent = await add("2", { title: "Pay the 15000 rub invoice" })
     expect((await store.tasks.similar({ task: agent }))[0]).toMatchObject({
       key: rule,
-      foundBy: ["person"],
+      foundBy: ["text", "person"],
       levels: { text: "high", amount: "equal" },
     })
     await store.close()
@@ -212,11 +212,19 @@ describe("task titles read from the source message", () => {
     await store.close()
   })
 
-  it("keeps the stored title when the message is gone or has no text", async () => {
+  it("keeps the first line after the message is deleted, and the source when the message has no text", async () => {
     const { store, keys } = await titles(["", "hello"])
     await store.messages.markDeleted(account, ["2"], { chatId: "7" })
     expect((await store.tasks.details(keys[0] as string)).title).toBe("request — msg:chat/500/7/1")
-    expect((await store.tasks.details(keys[1] as string)).title).toBe("request — msg:chat/500/7/2")
+    expect((await store.tasks.details(keys[1] as string)).title).toBe("hello")
+    await store.close()
+  })
+
+  it("shows the first line of a message saved after its task was found", async () => {
+    const { store, add } = await setup([])
+    const key = await add("5")
+    await store.messages.saveMessages(account, "7", [said("5", "9", "Late arrival\nmore")], { via: "test" })
+    expect((await store.tasks.details(key)).title).toBe("Late arrival")
     await store.close()
   })
 
