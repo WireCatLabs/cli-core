@@ -429,13 +429,18 @@ export { questionLookup } from "../search/question-plan.js"
 export { type SearchTotal, TOTAL_CAP } from "../search/total.js"
 export { TASK_KINDS, TASK_ORIGINS, type TaskKind, type TaskOrigin } from "../tasks/index.js"
 export {
+  type AccountScopeChange,
   addGroupMember,
+  type ChatScope,
+  type ChatScopeChange,
   type GroupMemberChange,
   type GroupMemberMove,
   type GroupStore,
   listAccountGroups,
   moveGroupMember,
   removeGroupMember,
+  setAccountScope,
+  setChatScope,
 } from "./account-groups.js"
 export type { AdminFound, AdminQuery, AdminSelection, AdminStatisticsService } from "./admin-statistics.js"
 export { adminStatisticsService } from "./admin-statistics.js"

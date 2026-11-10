@@ -1,8 +1,9 @@
 import { CliError } from "@wirecat/cli-base"
+import type { Id } from "../domain/models.js"
 import type { AppIdentity } from "../ports/app.js"
 import { accountsOfList, groupName, sameAs, sourceOf } from "../search/account-list.js"
 import { ALL, type GroupContext, type GroupMembership, hasGroup, NOT_GROUP_NAMES } from "../search/groups.js"
-import type { AccountKey, MessageStore } from "../store/store.js"
+import type { AccountKey, MessageStore, StoredAccount } from "../store/store.js"
 import { groupLockOf, listContextOf } from "./search-kind.js"
 
 /** The store, the account running and its app: what every group edit resolves members against. */
@@ -25,6 +26,38 @@ export interface GroupMemberChange {
 export interface GroupMemberMove extends Omit<GroupMemberChange, "group"> {
   from: string
   to: string
+}
+
+type Scope = StoredAccount["scope"]
+
+export interface AccountScopeChange {
+  /** One account, as `--source` names it: `bitrix24:acme.bitrix24.ru`, `tg:work`. */
+  member: string
+  scope: Scope
+}
+
+export interface ChatScopeChange {
+  member: string
+  /** The chat's id in that account. */
+  chat: Id
+  /** `null` takes the chat's own scope off, so it follows its account again. */
+  scope: Scope | null
+}
+
+export interface ChatScope extends AccountKey {
+  chat: Id
+  /** The chat's own scope; `null` when it follows its account. */
+  own: Scope | null
+  /** What every reader applies: its own, or else its account's. */
+  scope: Scope
+}
+
+const SCOPES: readonly Scope[] = ["personal", "work"]
+
+const scopeOf = (scope: string): Scope => {
+  if (!SCOPES.includes(scope as Scope))
+    throw new CliError("validation_error", `${scope} is not a scope — personal or work`, { reason: "input.invalid" })
+  return scope as Scope
 }
 
 const fail = (code: "validation_error" | "not_found", message: string): never => {
@@ -122,4 +155,27 @@ export const moveGroupMember = async (at: GroupStore, move: GroupMemberMove): Pr
     add: { group: to, entry: sourceOf(key) },
   })
   return listAccountGroups(at)
+}
+
+/**
+ * The owner's choice of which side of his life an account is on, as the store now holds it. Moving an account to work
+ * lets work views and meeting preparation read it, so a command over this is the owner's alone (`grantsAuthority`).
+ */
+export const setAccountScope = async (at: GroupStore, change: AccountScopeChange): Promise<StoredAccount> => {
+  unlocked(at)
+  const scope = scopeOf(change.scope)
+  const { provider, account } = accountOf(await contextOf(at), change.member)
+  return at.store.accounts.setScope({ provider, account }, scope)
+}
+
+/** The owner pins one chat to a scope, or with `null` lets it follow its account; the owner's alone, as above. */
+export const setChatScope = async (at: GroupStore, change: ChatScopeChange): Promise<ChatScope> => {
+  unlocked(at)
+  const scope = change.scope === null ? null : scopeOf(change.scope)
+  const { provider, account } = accountOf(await contextOf(at), change.member)
+  const key = { provider, account }
+  if (!(await at.store.chats.setChatScope(key, change.chat, scope)))
+    fail("not_found", `no chat ${change.chat} stored in ${sourceOf(key)}`)
+  const effective = (await at.store.chats.chatScopes(key, [change.chat])).get(change.chat) ?? "personal"
+  return { ...key, chat: change.chat, own: scope, scope: effective }
 }

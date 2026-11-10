@@ -11,8 +11,11 @@ import { write } from "./sqlite/transaction.js"
 import type { AccountKey, StoredAccount } from "./types.js"
 
 export interface AccountAccounts {
-  /** Answers the store's id for the account, which `meetings` and `mail` take. */
-  saveAccount(key: AccountKey, account: { name: string | null }): Promise<number>
+  /**
+   * Answers the store's id for the account, which `meetings` and `mail` take. `scope` is what a new account starts
+   * as (a CRM's `work`); an account already stored keeps the scope it has.
+   */
+  saveAccount(key: AccountKey, account: { name: string | null; scope?: StoredAccount["scope"] }): Promise<number>
   /** One account by provider and external id, never created: `not_found` when the store has none. */
   storedAccount(key: AccountKey): Promise<StoredAccount>
   /** The name the messenger last gave for this account; `null` when it never did. */
@@ -35,6 +38,11 @@ export interface AccountsStore extends AccountAccounts {
   accounts(): Promise<AccountKey[]>
   /** Every account with the store's id for it, by provider then external id. */
   storedAccounts(): Promise<StoredAccount[]>
+  /**
+   * The owner's choice of an account's scope, personal or work; what search copied of the old one follows. A
+   * missing account is `not_found`.
+   */
+  setScope(key: AccountKey, scope: StoredAccount["scope"]): Promise<StoredAccount>
   /** The account groups `--source group:<name>` reads: each group's entries as saved, store-wide. */
   accountGroups(): Promise<AccountGroups>
   /** Saves one group's entries; `undefined` removes the group. */
@@ -58,9 +66,9 @@ export const accountAccountsOver = (context: StoreContext): AccountAccounts => {
   const { database } = context
   const { accountPk, findAccountPk } = keysOver(context)
   return {
-    saveAccount: async (key, { name }) => {
+    saveAccount: async (key, { name, scope }) => {
       const pk = write(database, () => {
-        const made = accountPk(key, name)
+        const made = accountPk(key, name, scope)
         linkInbox(database, `${key.provider}:${key.account}`, made)
         return made
       })
@@ -87,6 +95,7 @@ export const accountsStoreOver = (context: StoreContext, keyed: AccountAccounts)
     ...keyed,
     accounts: async () => accounts.heldAccounts(context),
     storedAccounts: async () => accounts.storedAccounts(context),
+    setScope: async (key, scope) => write(database, () => accounts.setAccountScope(context, key, scope)),
     accountGroups: async () => accountGroupsOf(database),
     profiles: async () => profilesOf(database),
     saveProfile: async (app, profile, key) =>

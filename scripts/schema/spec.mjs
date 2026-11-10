@@ -434,7 +434,7 @@ const NEW = {
         c("old_value", "text", { note: "as stored before, as text; `parent_chat_id` is a `chats` row id" }),
         c("new_value", "text", { note: "as stored after" }),
         c("source", "text", {
-          note: "the store write that made it (`chats`, `delta`, `left`, `rejoin`, `rekey`, `merge`, `send`, `details`); NULL when the writer did not say: an older build or SQL by hand",
+          note: "the store write that made it (`chats`, `delta`, `left`, `rejoin`, `rekey`, `merge`, `send`, `details`, `owner`); NULL when the writer did not say: an older build or SQL by hand",
         }),
         c("created_at", "integer", { notnull: true }),
       ],
@@ -988,7 +988,7 @@ const NEW = {
           note: "hash of the piece's text; its embedding is the `embeddings` row with this hash, so equal text is embedded once",
         }),
         c("scope", "text", {
-          note: "copied from the parent's account, chat or project, so a vector search filters before it compares; triggers follow a chat's or account's change",
+          note: "copied from the parent's account, chat or project, so a vector search filters before it compares; triggers follow a chat's or account's change for conversations, and the owner's change of an account's scope moves the rest",
         }),
         fk("account_id", "accounts", { note: "copied from the parent, a filter for vector search" }),
         fk("project_id", "projects", { note: "copied from the parent when it belongs to one" }),

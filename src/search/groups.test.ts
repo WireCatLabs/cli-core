@@ -86,6 +86,7 @@ describe("who is in a group", () => {
     const { membership } = await contextOf(store)
     expect(membership.groups.work?.[0]).toEqual({
       ...tgWork,
+      scope: "personal",
       entries: ["telegram:102"],
       reason: "setting",
       profiles: ["tg work"],
