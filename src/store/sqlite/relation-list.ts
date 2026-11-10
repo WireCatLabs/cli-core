@@ -5,7 +5,9 @@ import {
   notOverriddenSql,
   RELATION_KINDS,
   type RelationKind,
-  rolesOf,
+  ROLE_LISTS,
+  type RoleList,
+  roleListOf,
   STANDINGS,
   type Standing,
 } from "../../domain/relations.js"
@@ -16,7 +18,7 @@ import { linkOf } from "./notes.js"
 import type { StoreContext } from "./open.js"
 import { proposalOperationsOver } from "./proposed-actions.js"
 import { type KnowledgeRelation, relationOf } from "./relation-proposals.js"
-import { extraRolesOf } from "./relation-roles.js"
+import { ownerRolesOf } from "./relation-roles.js"
 import { thingOf } from "./things.js"
 
 export interface RelationFilter {
@@ -53,6 +55,8 @@ export interface RelationListItem extends KnowledgeRelation {
   inverse?: string | null
   /** A stored role off the list its ends take, such as one written before the lists. */
   custom: boolean
+  /** The list `relationships roles list` offers for this role; `null` where it is free text. */
+  roleList: RoleList | null
 }
 
 export interface RelationList {
@@ -177,12 +181,17 @@ export const relationListOver = (context: StoreContext): RelationList => {
     },
   }
 
-  function custom(kind: string, from: string, to: string, role: string | null): boolean {
+  /** The list a relationship's role is offered from, and whether its role is off that list and the owner's own. */
+  function roleOf(kind: string, from: string, to: string, role: string | null) {
     const fromThing = thingOf(database, from)
     const toThing = thingOf(database, to)
-    const roles = fromThing && toThing ? rolesOf(kind, fromThing.type, toThing.type) : undefined
-    if (role === null || roles === undefined || roles.includes(role) || !fromThing || !toThing) return false
-    return !extraRolesOf(database, kind, fromThing.type, toThing.type).includes(role)
+    const roleList = (fromThing && toThing && roleListOf(kind, fromThing.type, toThing.type)) || null
+    const custom =
+      role !== null &&
+      roleList !== null &&
+      !(ROLE_LISTS[roleList] as readonly string[]).includes(role) &&
+      !ownerRolesOf(database, roleList).some(({ id }) => id === role)
+    return { roleList, custom }
   }
 
   function linkItem(id: number, at: number): RelationListItem {
@@ -190,7 +199,11 @@ export const relationListOver = (context: StoreContext): RelationList => {
       linkOf(database, database.prepare("SELECT * FROM links WHERE id = ?").get(id) as Row),
       at,
     )
-    return { ...relation, source: "link", custom: custom(relation.kind, relation.from, relation.to, relation.role) }
+    return {
+      ...relation,
+      source: "link",
+      ...roleOf(relation.kind, relation.from, relation.to, relation.role),
+    }
   }
 
   function proposalItem(id: string): RelationListItem {
@@ -227,7 +240,7 @@ export const relationListOver = (context: StoreContext): RelationList => {
       endsAt: iso(payload.endsAt),
       createdAt: action.createdAt,
       source: "proposal",
-      custom: custom(payload.kind, payload.from, payload.to, payload.role ?? null),
+      ...roleOf(payload.kind, payload.from, payload.to, payload.role ?? null),
     }
   }
 }

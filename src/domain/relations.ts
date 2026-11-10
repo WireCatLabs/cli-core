@@ -14,6 +14,12 @@ export const ORGANIZATION_ROLES = [
 export const PROJECT_ROLES = ["owner", "manager", "contributor", "client-contact", "approver"] as const
 /** A contract party's part; a party the list cannot name has none, never a catch-all `other`. */
 export const CONTRACT_ROLES = ["customer", "supplier", "signatory", "guarantor"] as const
+/**
+ * What a person or an organization is to another on `related-to`, offered so the same tie reads the same way. Unlike
+ * the other lists it is not enforced: roles written before it, and words a source reports, stay. Buying and partnering
+ * are the kinds `customer-of` and `partner-of`, so they are not roles here.
+ */
+export const RELATED_ROLES = ["colleague", "adviser", "investor", "mentor", "family", "friend"] as const
 
 /** How much the owner deals with a person on a project himself, not how active the person is; absent is unknown. */
 export const ENGAGEMENT_LEVELS = ["none", "low", "medium", "high"] as const
@@ -112,6 +118,8 @@ export const checkEnds = (kind: string, from: string, to: string): RelationSpec 
   return spec
 }
 
+const isParty = (type: string) => type === "person" || type === "organization"
+
 /**
  * The roles a relationship takes, or `undefined` for free text. A member's list is the organization's or the
  * project's only when the member is a person: a chat's or a sub-project's role was never one of them.
@@ -128,11 +136,13 @@ export const ROLE_LISTS = {
   project: PROJECT_ROLES,
   deal: DEAL_ROLES,
   contract: CONTRACT_ROLES,
+  related: RELATED_ROLES,
 } as const
 export type RoleList = keyof typeof ROLE_LISTS
 
 /** Which list a relationship's role comes from, or `undefined` where a role is free text. */
 export const roleListOf = (kind: string, from: string, to: string): RoleList | undefined => {
+  if (kind === "related-to" && isParty(from) && isParty(to)) return "related"
   const roles = rolesOf(kind, from, to)
   return (Object.keys(ROLE_LISTS) as RoleList[]).find((list) => ROLE_LISTS[list] === roles)
 }

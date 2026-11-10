@@ -125,7 +125,7 @@
     "source": "Where the link came from: `file` (written in a note file), `owner` (added by the owner), `suggested` (proposed, not yet confirmed), `calendar` (attached to a calendar entry) or `message` (written in a stored message's text).",
     "target_text": "The target as written (e.g. a name in a note), kept while the link resolves to nobody; up to 500 characters.",
     "target_folded": "target_text case- and accent-folded with any leading `@` removed, matched against new person names and aliases to resolve the link.",
-    "role": "The role the relation states, such as a job title in a `member-of` link; free text up to 200 characters.",
+    "role": "The role the relation states: from a fixed list where its ends have one (a person's `member-of`, a deal's, lead's or contract's `related-to`), otherwise up to 200 characters; never a job title, which is `metadata.position`.",
     "evidence": "Free text saying why the relation holds (up to 2000 characters).",
     "confirmed": "1 if the owner stands behind the link, 0 if it is only a weak, unconfirmed proposal."
   },

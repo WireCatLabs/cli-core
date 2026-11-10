@@ -173,6 +173,7 @@ export {
   type RefKindName,
   type RefKindSpec,
 } from "./domain/references.js"
+export { ROLE_LABELS, type RoleLabels } from "./domain/relation-role-labels.js"
 export {
   byEngagement,
   CONTRACT_ROLES,
@@ -183,6 +184,7 @@ export {
   isUsable,
   ORGANIZATION_ROLES,
   PROJECT_ROLES,
+  RELATED_ROLES,
   RELATION_KINDS,
   RELATIONS,
   type RelationKind,
