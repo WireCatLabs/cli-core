@@ -204,7 +204,7 @@ const doubtsOf = (held: Held[], kept: ReadonlySet<string>, test: ReadonlySet<num
   // saw them too. Not on the owner's own person, where linking one account says nothing of the rest.
   const vouched = first.owner
     ? Number.NEGATIVE_INFINITY
-    : Math.max(Number.NEGATIVE_INFINITY, ...held.filter(({ by }) => by === "owner").map(({ at }) => at))
+    : held.reduce((newest, { by, at }) => (by === "owner" && at > newest ? at : newest), Number.NEGATIVE_INFINITY)
   const outside = groups
     .slice(1)
     .flat()
