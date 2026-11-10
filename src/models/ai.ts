@@ -81,8 +81,7 @@ export const aiSettingOf = (given: {
   provider: string
   model: string
   baseUrl?: string | undefined
-  images?: boolean | undefined
-  before?: AiSetting | undefined
+  allowImages?: boolean | undefined
 }): AiSetting => {
   const draft = {
     provider: given.provider,
@@ -104,10 +103,7 @@ export const aiSettingOf = (given: {
   }
   if (checked.output.provider === "ollama" && !loopback(new URL(aiBaseUrl(checked.output)).hostname))
     throw new CliError("validation_error", "Ollama is read only on this computer", { reason: "ai.address-refused" })
-  const kept = given.images === undefined ? given.before?.images : undefined
-  if (kept && kept.origin === aiOrigin(checked.output) && kept.model === checked.output.model)
-    return { ...checked.output, images: kept }
-  return given.images
+  return given.allowImages
     ? {
         ...checked.output,
         images: { origin: aiOrigin(checked.output), model: checked.output.model, at: new Date().toISOString() },
