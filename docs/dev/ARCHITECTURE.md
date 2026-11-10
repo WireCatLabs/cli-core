@@ -602,9 +602,15 @@ proposes them instead. A no-reply address (`isNoReplyAddress`) is no one's: it n
   one with nothing to show as a name is `unsorted`. A tie is a one-to-one chat, a group of at most
   `SMALL_GROUP_MEMBERS` (10; a group of unknown size counts as large), mail the owner wrote to them (NEED-2342 A), a
   meeting or calendar entry, a CRM identity or `person` record, or the address book (`account_identities.address_book`,
-  written by `contacts sync` through `saveAddressBook`, version 61). Kinds, ties and the messages and mail each person
-  sent are read on every list (the message counts over `messages_by_sender_identity_id` alone); no table keeps them
-  (cli-testing `performance/people/ties` and `performance/people/kinds`).
+  written by `contacts sync` through `saveAddressBook`, version 61). Each person's kind, name order, messages and mail
+  sent, tasks and newest contact are kept on `persons` (version 62), so a list filters, counts, sorts and pages in SQL
+  and works out ties, signals and contacts only for the page it returns. Triggers on every table they are made from
+  clear a person's `kind` when a value they read changes (chat members are kept row by row, so a sync that writes the
+  same members clears nothing). The next list works out up to 5,000 cleared people under the write lock; more, or
+  everyone after an upgrade, are worked out outside it and kept only if no other process wrote meanwhile
+  (`PRAGMA data_version`), else the list answers from memory. `KIND_RULES` in `people-list.ts`
+  is bumped when the rules change in code, which works out everyone again; a read-only open with anything to work out
+  answers from memory (cli-testing `performance/memo/people-list`).
   `people.similar` serves a form that adds a person: names starting like the typed words, the same `nameKey` first.
 
 **Links and the review list.** A link records its method, confidence, author and time; an owner's link is never

@@ -52,6 +52,14 @@ const EDITS = {
     drop: ["uid"],
     note: "`uid` goes: `id` everywhere (owner).",
     doc: "A real person, whatever accounts they write from: their identities point here. `owner` marks the owner.",
+    add: [
+      ["kind", "text", { note: "the people list's kind; null until worked out, and nulled by triggers on its inputs" }],
+      ["name_order", "text", { note: "the shown name folded, for the order by name; kept with `kind`" }],
+      ["messages_from", "integer", { note: "messages and mail they sent; kept with `kind`" }],
+      ["task_count", "integer", { note: "tasks naming them; kept with `kind`" }],
+      ["last_contact", "integer", { note: "their newest message, mail or dialog message; kept with `kind`" }],
+    ],
+    keys: ["INDEX (kind)", "INDEX (id) WHERE kind IS NULL"],
   },
   identities: {
     cols: { is_bot: "bot", first_seen_at: "created_at" },

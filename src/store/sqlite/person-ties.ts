@@ -3,7 +3,10 @@ import type { CacheDatabase } from "../driver.js"
 import { mergedAwaySql } from "./merged-persons.js"
 import { mergedAssignees } from "./task-board.js"
 
-/** A group this small is people the owner knows; in a bigger one an author alone is background. */
+/**
+ * A group this small is people the owner knows; in a bigger one an author alone is background. Store version 62's
+ * trigger `person_kind_chat_au` holds the same number: changing it takes a migration that replaces that trigger.
+ */
 export const SMALL_GROUP_MEMBERS = 10
 
 /** What ties a person to the owner, from what the store holds about them. */
@@ -72,14 +75,15 @@ const reasonRows = (): string =>
 const ORDER: readonly ShownBecause[] = [...ALWAYS_SHOWN, ...PERSON_TIES]
 
 /**
- * Why each person is shown, in a fixed order; a person missing from the map has no tie and is hidden by default. One
- * pass over every tie: on 51,000 identities about 35 ms (cli-testing `performance/people/ties`).
+ * Why each person is shown, in a fixed order; a person missing from the map has no tie and is hidden by default.
+ * `people` narrows it to those. One pass over every tie: on 51,000 identities about 35 ms (cli-testing `performance/people/ties`).
  */
-export const shownReasons = (database: CacheDatabase): Map<number, ShownBecause[]> => {
+export const shownReasons = (database: CacheDatabase, people?: readonly number[]): Map<number, ShownBecause[]> => {
   const found = new Map<number, Set<ShownBecause>>()
+  const only = people === undefined ? "" : " WHERE person IN (SELECT value FROM json_each(?))"
   for (const row of database
-    .prepare(`SELECT DISTINCT person, tie FROM (${reasonRows()})`)
-    .all(mergedAssignees(database))) {
+    .prepare(`SELECT DISTINCT person, tie FROM (${reasonRows()})${only}`)
+    .all(mergedAssignees(database), ...(people === undefined ? [] : [JSON.stringify(people)]))) {
     const person = Number(row.person)
     const reasons = found.get(person) ?? new Set<ShownBecause>()
     reasons.add(row.tie as ShownBecause)

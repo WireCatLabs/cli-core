@@ -134,6 +134,13 @@ A real person, whatever accounts they write from: their identities point here. `
 | `owner` | integer | not null |  | 1 for the person who owns the store; a new store creates that row, so it always exists. |
 | `created_at` | integer | not null |  | when this row was saved here |
 | `updated_at` | integer | not null |  | when this row last changed here |
+| `kind` | text |  |  | the people list's kind; null until worked out, and nulled by triggers on its inputs |
+| `name_order` | text |  |  | the shown name folded, for the order by name; kept with `kind` |
+| `messages_from` | integer |  |  | messages and mail they sent; kept with `kind` |
+| `task_count` | integer |  |  | tasks naming them; kept with `kind` |
+| `last_contact` | integer |  |  | their newest message, mail or dialog message; kept with `kind` |
+
+*Keys and indexes:* `INDEX (kind)`, `INDEX (id) WHERE kind IS NULL`
 
 ### `identities`
 

@@ -285,17 +285,22 @@ export const writeMembers = (
   memberIds: Id[],
 ): void => {
   const chatKey = chatPkFor(context, accountKey, chatId)
-  context.orm.delete(chatMembers).where(eq(chatMembers.chatId, chatKey)).run()
-  for (const id of new Set(memberIds)) {
-    context.orm
-      .insert(chatMembers)
-      .values({
-        chatId: chatKey,
-        identityId: identityPk(context, accountKey, key.provider, id, null),
-        createdAt: context.now(),
-      })
-      .run()
-  }
+  const members = [...new Set(memberIds)].map((id) => identityPk(context, accountKey, key.provider, id, null))
+  replaceMembers(context, chatKey, members, context.now())
+}
+
+/** Leaves the rows of members still there alone: a rewritten row clears their stored kind (store version 62). */
+export const replaceMembers = (
+  { database }: StoreContext,
+  chatKey: number,
+  members: readonly number[],
+  at: number,
+): void => {
+  database
+    .prepare("DELETE FROM chat_members WHERE chat_id = ? AND identity_id NOT IN (SELECT value FROM json_each(?))")
+    .run(chatKey, JSON.stringify(members))
+  const add = database.prepare("INSERT OR IGNORE INTO chat_members (chat_id, identity_id, created_at) VALUES (?, ?, ?)")
+  for (const member of new Set(members)) add.run(chatKey, member, at)
 }
 
 export const members = ({ orm }: StoreContext, chatKey: number): Member[] =>

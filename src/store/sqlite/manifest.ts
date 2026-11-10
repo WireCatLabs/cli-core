@@ -145,6 +145,8 @@ export const MANIFEST: ManifestEntry[] = [
   { name: "20261108165309_version-59-templates", version: 59, minCompatible: 56 },
   { name: "20261108190101_version-60-base-stages", version: 60, minCompatible: 56 },
   { name: "20261109170741_version-61-people-ties", version: 61, minCompatible: 56 },
+  { name: "20261110005159_version-62-person-kinds", version: 62, minCompatible: 56 },
+  { name: "20261110005200_version-62-person-kinds-triggers", version: 62, minCompatible: 56 },
 ]
 
 export const generatedMigrations = (
