@@ -1,5 +1,7 @@
 # Stemming vs trigrams for word forms — results
 
+Published result, with the setup and the gate: [cli-testing, performance/search/stemming](https://github.com/WireCatLabs/cli-testing/blob/main/performance/search/stemming/README.md).
+
 Does a Snowball stem index (S) find Russian and Spanish word forms better than the trigram approaches?
 Ground truth: UD treebanks with human lemmas, one sentence = one message, relevant = holds a token with the
 same (lemma, UPOS). Run: `./run.sh` (downloads pinned data into `data/`, keeps the generated corpus in `data/corpus/` for the next run, rewrites everything below the marker).
