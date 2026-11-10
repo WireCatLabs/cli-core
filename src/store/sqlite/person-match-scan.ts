@@ -355,6 +355,7 @@ const proposeShared = (pass: Pass, { address, holders, shared }: SharedGroup) =>
         signal: "email",
         candidates: persons,
         shared,
+        mailbox: address,
         ...sharedMailboxCase(pass.context, address, from, to),
       })
 }

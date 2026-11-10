@@ -35,6 +35,8 @@ export interface IdentityLinkPayload {
   evidence: string[]
   /** The address both people have is a shared mailbox; absent on proposals made before it was recorded. */
   shared?: SharedMailbox
+  /** The shared mailbox's address, with `shared`. */
+  mailbox?: string
 }
 
 export interface IdentityLinkInput {
@@ -52,6 +54,12 @@ export interface IdentityLinkDecision {
   /** `"owner"` only on a path that established the owner decides; an agent is refused whatever the policy says. */
   by: Decider
   reason?: string
+  /**
+   * With `confirm: false` on a shared-mailbox proposal: the address is this organization's, not one of the two people.
+   * `organization` names one; otherwise the one holding the address or its company domain, or one of `name`, or a new
+   * company named `name` or the domain.
+   */
+  company?: { organization?: number; name?: string }
 }
 
 /** One `identity_link`, naming the people as they are now, not as they were when it was proposed. */
@@ -67,6 +75,8 @@ export interface IdentityLinkRow {
   score: number | null
   /** The address the two people share is a role address (`role`) or a company's line (`line`), not one person's. */
   shared: SharedMailbox | null
+  /** That shared address, which `decideLink` with `company` gives to an organization. */
+  mailbox: string | null
   candidates: string[]
   reason: string | null
   evidence: string[]
@@ -79,6 +89,8 @@ export interface IdentityLinkFilter {
   person?: string
   /** `proposed` unless named. */
   status?: IdentityLinkRow["status"] | "all"
+  /** `score`: highest score first, proposals without one last, each newest first; newest first otherwise. */
+  order?: "newest" | "score"
   limit: number
   offset: number
 }

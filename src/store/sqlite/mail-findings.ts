@@ -10,12 +10,12 @@ import {
   mailFindingProblem,
   validateMailFindings,
 } from "../../mail/findings.js"
-import { FREE_MAIL } from "../../mail/score.js"
 import { type FindingOutcome, type FindingsReceipt, findingHash } from "../../meetings/index.js"
 import { assertMayDecide, type Decider } from "../decisions.js"
 import { MAIL_FINDINGS_KIND, type MailFindingsBatch, type MailFindingsStore } from "../mail-findings.js"
 import { fold } from "../normalize.js"
 import type { AccountKey } from "../types.js"
+import { organizationOfAddress } from "./address-organization.js"
 import { financeOperationsOver } from "./finance.js"
 import { findingsAgent, findingsCoreOver } from "./findings-core.js"
 import { authorActor, linkEvidence, memoriesStoreOver } from "./memories.js"
@@ -154,67 +154,18 @@ export const mailFindingsStoreOver = (context: StoreContext): MailFindingsStore 
     return read
   }
 
-  const organizationsOf = (sql: string, ...params: string[]): number[] => [
-    ...new Set(
-      database
-        .prepare(sql)
-        .all(...params)
-        .map((row) => Number(row.id)),
-    ),
-  ]
-  const BY_ADDRESS =
-    "SELECT o.id FROM organizations o JOIN organization_identities oi ON oi.organization_id = o.id " +
-    "JOIN identities i ON i.id = oi.identity_id WHERE o.deleted_at IS NULL AND i.provider = 'email' AND "
-
   /**
-   * The organization a finding names but does not reference: the one its address belongs to, else the one its
-   * company domain belongs to, else the one of exactly this name; else a new company. Its address joins it, so the
-   * next mail from it finds it. Only the owner's accept runs this for real; staging runs it and rolls it back.
+   * The organization a finding names but does not reference, found or made by `organizationOfAddress`. Only the
+   * owner's accept runs this for real; staging runs it and rolls it back.
    */
-  const organizationNamed = (name: string, email: string | undefined): string => {
-    const domain = email?.split("@")[1]
-    let found = email === undefined ? [] : organizationsOf(`${BY_ADDRESS}lower(i.external_id) = ?`, email)
-    if (!found.length && domain && !FREE_MAIL.has(domain))
-      found = organizationsOf(`${BY_ADDRESS}substr(lower(i.external_id), -length(?)) = ?`, `@${domain}`, `@${domain}`)
-    if (!found.length)
-      found = database
-        .prepare("SELECT id, name FROM organizations WHERE deleted_at IS NULL")
-        .all()
-        .filter((row) => fold(String(row.name)).trim() === fold(name).trim())
-        .map((row) => Number(row.id))
-    if (found.length > 1)
-      return invalid(
-        `${found.length} organizations match ${name} (${found.map((id) => `organization:${id}`).join(", ")}); ` +
-          "name the one meant as a reference",
-        "finance.party",
-      )
-    const at = now()
-    const id =
-      found[0] ??
-      Number(
-        database
-          .prepare(
-            "INSERT INTO organizations (kind, name, scope, created_at, updated_at) VALUES ('company', ?, 'work', ?, ?) RETURNING id",
-          )
-          .get(name, at, at)?.id,
-      )
-    if (email !== undefined) {
-      database
-        .prepare(
-          "INSERT INTO identities (provider, external_id, created_at, updated_at) VALUES ('email', ?, ?, ?) " +
-            "ON CONFLICT (provider, external_id) DO NOTHING",
-        )
-        .run(email, at, at)
-      database
-        .prepare(
-          "INSERT INTO organization_identities (identity_id, organization_id, method, author, created_at, updated_at) " +
-            "SELECT id, ?, 'mail-finding', 'owner', ?, ? FROM identities WHERE provider = 'email' AND external_id = ? " +
-            "ON CONFLICT (identity_id, organization_id) DO NOTHING",
-        )
-        .run(id, at, at, email)
-    }
-    return `organization:${id}`
-  }
+  const organizationNamed = (name: string, email: string | undefined): string =>
+    `organization:${organizationOfAddress(context, {
+      name,
+      ...(email === undefined ? {} : { email }),
+      method: "mail-finding",
+      author: "owner",
+      reason: "finance.party",
+    })}`
   const partyOf = (reference: string | undefined, name: string | undefined, email: string | undefined) =>
     reference ?? (name === undefined ? undefined : organizationNamed(name, email))
 
