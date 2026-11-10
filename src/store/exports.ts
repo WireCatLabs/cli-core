@@ -171,5 +171,6 @@ export type {
   StoredReadiness,
   TaskAnalysisMark,
   TaskAnalysisMarkWrite,
+  UnlinkOptions,
 } from "./types.js"
 export type { AccountVectors, VectorsStore } from "./vectors.js"

@@ -57,6 +57,11 @@ export interface LinkOptions {
   by: string
 }
 
+export interface UnlinkOptions extends LinkOptions {
+  /** The uid of the person the identity is taken from; refused when it sits on someone else. */
+  from?: string
+}
+
 export interface LinkedIdentity extends IdentityRef {
   name: string | null
   username: string | null

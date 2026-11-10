@@ -2,7 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import type { IdentityRef, PersonRecord } from "../types.js"
 import { currentPerson, mergeSql, SEPARATIONS } from "./merged-persons.js"
 import type { StoreContext } from "./open.js"
-import { move, recordOf, renameAfterLeaving, required } from "./person-links.js"
+import { heldBy, move, recordOf, renameAfterLeaving, required } from "./person-links.js"
 import { persons } from "./schema.js"
 
 export interface PersonMerge {
@@ -147,12 +147,8 @@ export const split = (context: StoreContext, uid: string, refs: IdentityRef[], b
   const person = currentPerson(context.database, personPk(context, uid))
   const chosen = [...new Map(refs.map((ref) => [`${ref.provider}:${ref.id}`, ref])).values()]
   if (chosen.length === 0) throw new CliError("validation_error", "name at least one identity to split off")
-  const found = chosen.map((ref) => {
-    const row = required(context, ref)
-    if (row.personPk !== person)
-      throw new CliError("validation_error", `${ref.provider}:${ref.id} is not an identity of person:${person}`)
-    return row
-  })
+  heldBy(context, uid, chosen)
+  const found = chosen.map((ref) => required(context, ref))
   if (found.length === recordOf(context, person).identities.length)
     throw new CliError("validation_error", "a split leaves at least one identity with the person")
   const at = context.now()

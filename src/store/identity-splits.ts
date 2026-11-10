@@ -26,7 +26,14 @@ export interface IdentitySplitPayload {
 }
 
 /** Either the identities that leave, all of one person, or the merge to undo. */
-export type IdentitySplitInput = ({ identities: IdentityRef[] } | { merge: string }) & {
+export type IdentitySplitInput = (
+  | {
+      identities: IdentityRef[]
+      /** The uid of the person they leave; refused when they sit on someone else. */
+      from?: string
+    }
+  | { merge: string }
+) & {
   by: Author
   reason: string
   evidence?: string[]
