@@ -334,6 +334,13 @@ const OTHERS: Entry[] = [
   ["stage.owner-only", "permission_error", "only the owner confirms mappings and edits a base set, not an agent"],
   validation("stage.unmapped", "no stage of the row's pipeline maps to that base stage; map one first"),
   ["stage.not-found", "not_found", "no stored stage has that reference or name"],
+  validation("stage.answer-invalid", "the agent's answer to stages suggest is not the JSON stage map it asks for"),
+  ["stage.model-answer-invalid", "invalid_response", "the AI model's answer to stages suggest is not the stage map"],
+  [
+    "stage.model-agent",
+    "permission_error",
+    "an agent's run does not send stages to the AI model; it answers the task itself with --dry-run and --text-file",
+  ],
   validation("pipeline.ambiguous", "more than one pipeline has that name; name it by its pipeline: reference"),
   validation("pipeline.duplicate", "a pipeline of that name and kind is already stored"),
   validation("pipeline.field", "a pipeline needs a name and at least one stage, each named once"),

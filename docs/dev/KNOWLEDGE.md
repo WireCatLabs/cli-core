@@ -266,7 +266,12 @@ settings are. `pipeline_stages.base_stage_id` is the base stage a stage maps to 
 at the first use, at every sync of a CRM pipeline and when an own pipeline is made (`suggestBaseStages`): won and lost by outcome; an open stage by
 its relative place among its pipeline's open stages, and where that falls between two base stages, the one of the
 same name, else the nearer. A suggestion never replaces a confirmed row, so a stage the CRM adds after the confirm
-waits as a suggestion. A deal's or lead's `baseStage` is set only once its stage is confirmed; otherwise a board
+waits as a suggestion. A sync guesses only for a stage with no suggestion yet, so it keeps one an agent or a model made;
+editing the base set still guesses again for every unconfirmed stage. `stages suggest` asks the model chosen with
+`models ai set` (`aiTextReader`) about every unconfirmed stage that has more than one base stage of its outcome to go
+to, and records its answers unconfirmed; a won or lost stage usually has one, so it is not asked. An agent's run does
+not send them to the model (`stage.model-agent`): it reads the same task with `--dry-run` and gives its answer with
+`--text-file`. The owner then confirms with `stages confirm --all`. A deal's or lead's `baseStage` is set only once its stage is confirmed; otherwise a board
 shows it unsorted. Every pipeline but the base sets is mapped alike: a CRM's (suggested at each sync) and the owner's
 own (suggested when it is made, `account` `null`); the set's own stages are the columns and map to themselves.
 `resolve(row, base)` gives the one stage of the row's pipeline confirmed onto the base stage, the stage itself when it

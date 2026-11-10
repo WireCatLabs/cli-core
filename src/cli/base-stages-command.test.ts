@@ -128,7 +128,8 @@ it("lets an agent suggest a mapping, and keeps confirming and editing the set to
     })
 })
 
-it("passes the command lint memo runs on its tree", async () => {
+// "suggest" is not yet a vocabulary verb; memo's sources suggest carries the same override.
+it("passes the command lint memo runs on its tree, apart from the suggest verb", async () => {
   const definition = {
     app,
     commands: () => [
@@ -153,5 +154,5 @@ it("passes the command lint memo runs on its tree", async () => {
   const rules = [...`${lint.stdout}${lint.stderr}`.matchAll(/^(?:high|medium|low)\s+(\S+.*)$/gmu)].map(
     ([, rule]) => rule,
   )
-  expect(rules).toEqual([])
+  expect(rules).toEqual(['unknown-verb  stages suggest: "suggest" is not a verb or view noun in the vocabulary'])
 })

@@ -192,7 +192,7 @@ export const crmCopiesOver = (context: StoreContext, people: AccountPeople): Crm
       const accountId = account(key)
       const at = now()
       const saved = pipelines.map((pipeline) => savePipeline(accountId, kind, pipeline, at))
-      suggestBaseStages(database, kind, saved)
+      suggestBaseStages(database, kind, saved, { onlyEmpty: true })
       if (pipelines.length === 0) return { saved: 0, skipped: [] }
       const listed = new Set(pipelines.map(({ externalId }) => externalId))
       const mark = database.prepare("UPDATE pipelines SET deleted_at = ?, updated_at = ? WHERE id = ?")

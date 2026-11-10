@@ -29,8 +29,14 @@ export const baseStagesOf = (database: CacheDatabase, pipeline: number): Row[] =
 /**
  * Suggests a base stage for every unconfirmed live stage of `pipelines` (every pipeline of the kind but the set's when absent): won and lost by outcome; an open one by its relative place among its pipeline's open stages, and when that
  * falls between two base stages, the one of the same name, else the nearer. Does nothing before the set exists.
+ * `onlyEmpty` leaves a stage that already has a suggestion: a sync must not replace one a model or an agent made.
  */
-export const suggestBaseStages = (database: CacheDatabase, kind: DealKind, pipelines?: readonly number[]): void => {
+export const suggestBaseStages = (
+  database: CacheDatabase,
+  kind: DealKind,
+  pipelines?: readonly number[],
+  { onlyEmpty = false }: { onlyEmpty?: boolean } = {},
+): void => {
   const base = basePipelineOf(database, kind)
   if (base === undefined) return
   const stages = baseStagesOf(database, base)
@@ -44,7 +50,8 @@ export const suggestBaseStages = (database: CacheDatabase, kind: DealKind, pipel
       .all(kind, base)
       .map((row) => Number(row.id))
   const update = database.prepare(
-    "UPDATE pipeline_stages SET base_stage_id = ? WHERE id = ? AND base_confirmed = 0 AND base_stage_id IS NOT ?",
+    "UPDATE pipeline_stages SET base_stage_id = ? WHERE id = ? AND base_confirmed = 0 AND base_stage_id IS NOT ? " +
+      "AND (? = 0 OR base_stage_id IS NULL)",
   )
   for (const pipeline of ids) {
     if (pipeline === base) continue
@@ -65,7 +72,7 @@ export const suggestBaseStages = (database: CacheDatabase, kind: DealKind, pipel
               (place - Math.floor(place) < 0.5 ? below : above))
       } else if (stage.outcome !== "open") chosen = ends[stage.outcome as "won" | "lost"]
       const target = chosen === undefined ? null : Number(chosen.id)
-      update.run(target, Number(stage.id), target)
+      update.run(target, Number(stage.id), target, onlyEmpty ? 1 : 0)
     }
   }
 }
