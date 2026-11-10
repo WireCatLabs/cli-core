@@ -566,11 +566,16 @@ proposes them instead. A no-reply address (`isNoReplyAddress`) is no one's: it n
 - **What only the owner decides waits as an `identity_link` proposal** (`identity-proposals.ts`, kind in
   `identity-links.ts`): a `proposed_actions` row with the two people, each one's identities when proposed (`sides`),
   the signal (`agent`, `phone`, `email`, `guest-email`, `name`, `account`), whether the address is a shared mailbox
-  (`shared`, `null` on older proposals) and whether it joins the people or moves one identity. It is
+  (`shared` and its address `mailbox`, `null` on older proposals) and whether it joins the people or moves one
+  identity. It is
   owner-only (`isOwnerOnlyKind`) and a dedicated review, at most one open per pair; a pair the owner separated is never
   proposed or joined again. A pair the owner rejected is never joined, and is proposed again only on new evidence: a
   signal and pair of identities (`evidenceKeyOf`, in either order) that none of its rejected proposals had. A confirm is the owner's link (method `proposal`), refused with
-  `identity.stale` once `sides` no longer hold. An agent's mention confirm and meeting association go through
+  `identity.stale` once `sides` no longer hold. On a shared-mailbox proposal the owner has a third answer,
+  `decideLink` with `company` (NEED-2528): the address goes to an organization (`organization_identities`, method
+  `proposal`), the one named, else the one `organizationOfAddress` finds or makes as a mail finding does, and the
+  proposal is rejected, so its evidence keeps the pair from being proposed again on that address. `linkProposals` with
+  `order: "score"` lists the highest score first and proposals with none last. An agent's mention confirm and meeting association go through
   `linkOrPropose`, which links only for the owner; the mention waits as `proposed`.
   `linkPeople` (tg/max `contacts link`, a calendar's `people link`) takes who runs it from `actorOf`: an agent's link
   becomes a proposal with its `--reason`; only the owner links an identity to `me` or unlinks one.

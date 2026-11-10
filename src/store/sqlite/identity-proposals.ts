@@ -1,4 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
+import { FREE_MAIL } from "../../mail/score.js"
 import { assertMayDecide, deciderAuthor } from "../decisions.js"
 import {
   IDENTITY_LINK_KIND,
@@ -11,8 +12,17 @@ import {
   type SharedMailbox,
 } from "../identity-links.js"
 import type { IdentityRef, LinkOptions } from "../types.js"
+import { holdAddress, organizationOfAddress } from "./address-organization.js"
 import { ensurePerson } from "./identities.js"
-import { evidenceKeyOf, type LinkIndex, linkIndex, linkRows, settleLinks, sidesOf } from "./identity-link-rows.js"
+import {
+  evidenceKeyOf,
+  type LinkIndex,
+  type LinkRow,
+  linkIndex,
+  linkRows,
+  settleLinks,
+  sidesOf,
+} from "./identity-link-rows.js"
 import type { Author } from "./memories.js"
 import { currentPerson } from "./merged-persons.js"
 import type { StoreContext } from "./open.js"
@@ -39,6 +49,7 @@ export interface Opening {
   evidence?: string[] | undefined
   candidates?: number[] | undefined
   shared?: SharedMailbox | undefined
+  mailbox?: string | undefined
 }
 
 export type Opened =
@@ -93,6 +104,7 @@ export const openIdentityLink = (context: StoreContext, opening: Opening, index?
       ...(opening.candidates && opening.candidates.length > 2 ? { candidates: opening.candidates.map(String) } : {}),
       evidence: opening.evidence ?? [],
       ...(opening.shared === undefined ? {} : { shared: opening.shared }),
+      ...(opening.mailbox === undefined ? {} : { mailbox: opening.mailbox }),
     }
     const action = operations.propose({
       kind: IDENTITY_LINK_KIND,
@@ -195,6 +207,61 @@ const settleMentions = ({ database, now }: StoreContext, payload: IdentityLinkPa
     .run(to, now(), Number(identity.id))
 }
 
+const organizationExists = ({ database }: StoreContext, id: number): boolean =>
+  Number.isSafeInteger(id) &&
+  database.prepare("SELECT 1 FROM organizations WHERE id = ? AND deleted_at IS NULL").get(id) !== undefined
+
+/**
+ * NEED-2528: the shared mailbox is a company's, not one of the two people. The address goes to the organization and
+ * the proposal is turned down, so the pair is not proposed again on it (the rejected evidence), and nobody is joined.
+ */
+const toCompany = (
+  context: StoreContext,
+  proposal: ProposedAction,
+  company: NonNullable<IdentityLinkDecision["company"]>,
+  author: Author,
+  noted: { reason?: string },
+): ProposedAction => {
+  const payload = proposal.payload as IdentityLinkPayload
+  if (proposal.status !== "proposed")
+    throw new CliError("validation_error", `${proposal.id} is already ${proposal.status}`, {
+      reason: "proposal.wrong-state",
+    })
+  const address = payload.mailbox
+  if (payload.shared === undefined || address === undefined)
+    throw new CliError("validation_error", `${proposal.id} is not about a shared mailbox; confirm or reject it`, {
+      reason: "identity.not-shared",
+    })
+  const name = company.name?.trim() || undefined
+  const domain = address.split("@")[1] ?? ""
+  let organization: number
+  if (company.organization !== undefined) {
+    if (!organizationExists(context, company.organization))
+      throw new CliError("not_found", `no organization:${company.organization}`, { reason: "organization.not-found" })
+    organization = company.organization
+    holdAddress(context, organization, address, { method: CONFIRMED, author: "owner" })
+  } else {
+    if (name === undefined && FREE_MAIL.has(domain))
+      throw new CliError("validation_error", `${address} is a free mailbox; name the company or its organization`, {
+        reason: "organization.unnamed",
+      })
+    organization = organizationOfAddress(context, {
+      name: name ?? domain,
+      email: address,
+      method: CONFIRMED,
+      author: "owner",
+      reason: "organization.ambiguous",
+    })
+  }
+  const rejected = proposalOperationsOver(context).reject(proposal.id, author, {
+    dismissed: true,
+    organization: `organization:${organization}`,
+    ...noted,
+  })
+  settleMentions(context, payload, "found")
+  return rejected
+}
+
 /**
  * Decides an `identity_link`, the owner's alone. Confirm links the two people as the owner's link, refused with
  * `identity.stale` when either person changed since it was proposed; reject keeps them apart, and only new evidence
@@ -214,6 +281,11 @@ export const decideIdentityLink = (context: StoreContext, id: string, decision: 
     const author = deciderAuthor(decision.by)
     const reason = decision.reason?.trim() || undefined
     const noted = reason === undefined ? {} : { reason }
+    if (decision.company !== undefined) {
+      if (decision.confirm)
+        throw new CliError("validation_error", "a company's mailbox keeps the two people apart; it is not a confirm")
+      return toCompany(context, proposal, decision.company, author, noted)
+    }
     if (!decision.confirm) {
       const rejected = operations.reject(id, author, { dismissed: true, ...noted })
       settleMentions(context, proposal.payload as IdentityLinkPayload, "found")
@@ -262,10 +334,14 @@ const SHOWN: Record<string, IdentityLinkRow["status"]> = {
   failed: "confirmed",
 }
 
-/** The `identity_link` proposals, newest first, each naming its people as they are now; a page and whether more follow. */
+/** Newest first in, highest score first out, proposals without a score last; a stable sort keeps the dates' order. */
+const byOrder = (rows: LinkRow[], order: IdentityLinkFilter["order"]): LinkRow[] =>
+  order !== "score" ? rows : rows.sort((a, b) => (b.payload.score ?? -1) - (a.payload.score ?? -1))
+
+/** The `identity_link` proposals, newest first or by score, each naming its people as they are now; a page and whether more follow. */
 export const identityLinkRows = (
   context: StoreContext,
-  { person, status = "proposed", limit, offset }: IdentityLinkFilter,
+  { person, status = "proposed", order = "newest", limit, offset }: IdentityLinkFilter,
 ): { items: IdentityLinkRow[]; hasMore: boolean } => {
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > 500)
     throw new CliError("validation_error", "a list of link proposals takes 1–500 items")
@@ -275,11 +351,13 @@ export const identityLinkRows = (
   // Whose a proposal is now depends on merges since, so only a list for one person reads every proposal.
   const rows =
     asked === undefined
-      ? linkRows(context.database, statuses, { limit: limit + 1, offset })
-      : linkRows(context.database, statuses)
-          .filter((row) => row.pair?.includes(asked) ?? false)
-          .reverse()
-          .slice(offset, offset + limit + 1)
+      ? linkRows(context.database, statuses, { limit: limit + 1, offset, order })
+      : byOrder(
+          linkRows(context.database, statuses)
+            .filter((row) => row.pair?.includes(asked) ?? false)
+            .reverse(),
+          order,
+        ).slice(offset, offset + limit + 1)
   const items = rows.slice(0, limit).map((row): IdentityLinkRow => {
     const action = operations.get(row.id)
     const payload = row.payload
@@ -294,6 +372,7 @@ export const identityLinkRows = (
       signal: payload.signal,
       score: payload.score,
       shared: payload.shared ?? null,
+      mailbox: payload.mailbox ?? null,
       candidates: (payload.candidates ?? []).map((uid) => `person:${uid}`),
       reason: action.reason,
       evidence: payload.evidence,

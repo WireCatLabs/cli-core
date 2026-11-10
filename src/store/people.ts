@@ -112,7 +112,10 @@ export interface PeopleStore extends AccountPeople {
    * owner's separation or rejection; an open proposal for the same two people is given back instead of a second.
    */
   proposeLink(input: IdentityLinkInput): Promise<ProposedAction>
-  /** The owner's decision on an `identity_link`; confirm is refused with `identity.stale` when either person changed. */
+  /**
+   * The owner's decision on an `identity_link`; confirm is refused with `identity.stale` when either person changed.
+   * `company` turns down a shared-mailbox proposal and gives its address to an organization (NEED-2528).
+   */
   decideLink(id: string, decision: IdentityLinkDecision): Promise<ProposedAction>
   /**
    * One pass of the people matcher: the same address joins people in every scope, a phone exactly two people have
@@ -120,7 +123,10 @@ export interface PeopleStore extends AccountPeople {
    * name with a shared phone, address, chat or company domain become proposals. Never over the owner's separation; a pair the owner rejected is proposed again only on new evidence.
    */
   scanMatches(options?: { full?: boolean }): Promise<MatchScan>
-  /** The `identity_link` proposals, newest first, naming the people as they are now; `proposed` unless `status` says. */
+  /**
+   * The `identity_link` proposals, newest first or by score (`order`), naming the people as they are now; `proposed`
+   * unless `status` says.
+   */
   linkProposals(filter: IdentityLinkFilter): Promise<{ items: IdentityLinkRow[]; hasMore: boolean }>
   /**
    * Proposes to take identities off their person, or to undo a merge, as an `identity_split` only the owner decides:

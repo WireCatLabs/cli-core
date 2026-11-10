@@ -247,6 +247,46 @@ describe("the link proposals read", () => {
     expect(withAnya.hasMore).toBe(false)
   })
 
+  it("lists by score, highest first, with the proposals that have none last and newest first", async () => {
+    const store = await open()
+    await twoPeople(store)
+    await store.people.savePeople(MAX, [
+      { id: "8", name: "Cas" },
+      { id: "9", name: "Dee" },
+      { id: "10", name: "Eve" },
+    ])
+    const ids: string[] = []
+    for (const [id, score] of [
+      ["8", undefined],
+      ["9", 0.3],
+      ["10", undefined],
+    ] as const)
+      ids.push(
+        (
+          await store.people.proposeLink({
+            identity: ana,
+            with: { provider: "max", id },
+            signal: "agent",
+            by: agent,
+            ...(score === undefined ? {} : { score }),
+          })
+        ).id,
+      )
+    ids.push((await store.people.proposeLink({ identity: ana, with: anya, signal: "agent", by: agent, score: 0.7 })).id)
+
+    const everyone = await store.people.linkProposals({ order: "score", limit: 2, offset: 0 })
+    const rest = await store.people.linkProposals({ order: "score", limit: 2, offset: 2 })
+    const anas = await store.people.linkProposals({
+      person: await uidOf(store, ana),
+      order: "score",
+      limit: 10,
+      offset: 0,
+    })
+
+    expect([...everyone.items, ...rest.items].map(({ id }) => id)).toEqual([ids[3], ids[1], ids[2], ids[0]])
+    expect(anas.items.map(({ id }) => id)).toEqual([ids[3], ids[1], ids[2], ids[0]])
+  })
+
   it("pages everyone's proposals newest first, by status", async () => {
     const store = await open()
     await twoPeople(store)

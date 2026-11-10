@@ -185,6 +185,74 @@ describe("a shared mailbox (NEED-2526)", () => {
   })
 })
 
+describe("a company's mailbox, the owner's third answer (NEED-2528)", () => {
+  const sharedPair = async () => {
+    const store = await open()
+    await store.people.savePeople(PERSONAL, [{ id: "5", name: "Ana Diaz", email: "info@shop.example" }])
+    await store.people.savePeople(MAX, [{ id: "7", name: "Bo Lind", email: "info@shop.example" }])
+    await store.people.scanMatches({ full: true })
+    const [proposal] = (await store.people.linkProposals({ limit: 50, offset: 0 })).items
+    return { store, id: proposal?.id as string }
+  }
+  const holders = async () =>
+    (await raw())
+      .prepare(
+        "SELECT o.name, oi.method, oi.author FROM organization_identities oi JOIN organizations o " +
+          "ON o.id = oi.organization_id JOIN identities i ON i.id = oi.identity_id WHERE i.provider = 'email' " +
+          "AND i.external_id = 'info@shop.example'",
+      )
+      .all()
+
+  it("gives the address to a new company of its domain, joins nobody, and is not proposed again", async () => {
+    const { store, id } = await sharedPair()
+
+    const decided = await store.people.decideLink(id, { confirm: false, by: "owner", company: {} })
+    const rescan = await store.people.scanMatches({ full: true })
+
+    expect(decided).toMatchObject({ status: "rejected", result: { dismissed: true } })
+    expect(await holders()).toEqual([{ name: "shop.example", method: "proposal", author: "owner" }])
+    expect(await uidOf(store, "telegram", "5")).not.toBe(await uidOf(store, "max", "7"))
+    expect(rescan.proposed).toEqual([])
+    expect((await store.people.linkProposals({ limit: 50, offset: 0 })).items).toEqual([])
+  })
+
+  it("gives it to the organization the owner names, or to the one that holds the company's domain", async () => {
+    const { store, id } = await sharedPair()
+    const shop = await store.knowledge.addOrganization({ kind: "company", name: "Shop" })
+
+    const decided = await store.people.decideLink(id, {
+      confirm: false,
+      by: "owner",
+      company: { organization: Number(shop.id) },
+    })
+
+    expect(decided.result).toMatchObject({ organization: `organization:${shop.id}` })
+    expect(await holders()).toEqual([{ name: "Shop", method: "proposal", author: "owner" }])
+  })
+
+  it("is refused to an agent, on a proposal that is not about a shared mailbox, and on an unknown organization", async () => {
+    const { store, id } = await sharedPair()
+    await store.people.savePeople(MAX, [{ id: "8", name: "Cas" }])
+    const agents = await store.people.proposeLink({
+      identity: { provider: "max", id: "7" },
+      with: { provider: "max", id: "8" },
+      signal: "agent",
+      by: { bot: "helper" },
+    })
+
+    await expect(
+      store.people.decideLink(id, { confirm: false, by: { bot: "helper", reason: "same inbox" }, company: {} }),
+    ).rejects.toMatchObject({ code: "permission_error" })
+    await expect(
+      store.people.decideLink(agents.id, { confirm: false, by: "owner", company: {} }),
+    ).rejects.toMatchObject({ details: { reason: "identity.not-shared" } })
+    await expect(
+      store.people.decideLink(id, { confirm: false, by: "owner", company: { organization: 999 } }),
+    ).rejects.toMatchObject({ code: "not_found" })
+    expect(await holders()).toEqual([])
+  })
+})
+
 describe("a phone", () => {
   it("joins the two people who have it, whether kept with or without the +", async () => {
     const store = await open()

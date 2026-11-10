@@ -39,16 +39,23 @@ export const currentPairOf = (database: CacheDatabase, payload: IdentityLinkPayl
   return from === undefined || to === undefined ? undefined : [from, to]
 }
 
-/** The proposals that still say something: waiting for the owner, or turned down by them; a `page` is newest first. */
+const BY_SCORE = "json_extract(payload, '$.score') IS NULL, json_extract(payload, '$.score') DESC, id DESC"
+
+/**
+ * The proposals that still say something: waiting for the owner, or turned down by them. A `page` is newest first, or
+ * by score with `order: "score"`; without a page, oldest first.
+ */
 export const linkRows = (
   database: CacheDatabase,
   statuses: readonly string[] = ["proposed", "rejected"],
-  page?: { limit: number; offset: number },
+  page?: { limit: number; offset: number; order?: "newest" | "score" },
 ): LinkRow[] =>
   database
     .prepare(
-      "SELECT id, status, payload FROM proposed_actions WHERE kind = ? " +
-        `AND status IN (SELECT value FROM json_each(?)) ORDER BY id${page === undefined ? "" : " DESC LIMIT ? OFFSET ?"}`,
+      "SELECT id, status, payload FROM proposed_actions WHERE kind = ? AND status IN (SELECT value FROM json_each(?)) " +
+        (page === undefined
+          ? "ORDER BY id"
+          : `ORDER BY ${page.order === "score" ? BY_SCORE : "id DESC"} LIMIT ? OFFSET ?`),
     )
     .all(IDENTITY_LINK_KIND, JSON.stringify(statuses), ...(page === undefined ? [] : [page.limit, page.offset]))
     .map((row) => {
