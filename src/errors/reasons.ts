@@ -424,6 +424,14 @@ const OTHERS: Entry[] = [
     "conflict",
     "the people a merge or a proposed link names changed since; undo the later merge, or propose the link again",
   ],
+  ["identity.no-merge", "not_found", "nothing of that person is merged into the other; people show lists the merges"],
+  validation("identity.several-persons", "the identities that leave a person are all of that one person"),
+  validation("identity.nothing-left", "a split leaves at least one identity with the person"),
+  [
+    "identity.kept-together",
+    "conflict",
+    "the owner kept these identities together by turning down their split; only the owner splits them",
+  ],
   [
     "identity.rejected",
     "conflict",
@@ -435,6 +443,7 @@ const OTHERS: Entry[] = [
   validation("identity.owner", "one side is the owner's person, and only the owner joins anyone to themselves"),
   validation("identity.shared-email", "more than six people share the address, so it proposes no one"),
   validation("identity-link.dedicated-review", "an identity link is staged and decided through the people review"),
+  validation("identity-split.dedicated-review", "a split of a person is staged and decided through the people review"),
   ["transcription.no-key", "authentication_error", "no OpenAI key is set for transcription"],
   validation("transcription.too-large", "the audio is over the transcription provider's size limit"),
   [
