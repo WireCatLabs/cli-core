@@ -409,6 +409,8 @@ const OTHERS: Entry[] = [
   validation("order.status", "a rejected or deleted order's status does not change"),
   ["model.not-downloaded", "not_found", "the model is not downloaded on this machine"],
   ["person.no-owner", "not_found", "no person is marked as the owner in the store"],
+  ["person.not-found", "not_found", "the store has no person by that reference"],
+  ["person.no-doubt", "not_found", "nothing about that person is in doubt; people links check lists who is"],
   [
     "identity.separated",
     "conflict",

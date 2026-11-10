@@ -58,6 +58,35 @@ export const displayName = (name: string | null | undefined, fallbacks: NameFall
   )
 }
 
+const present = (value: string | null | undefined): string | null =>
+  typeof value === "string" && value !== "" ? value : null
+
+/** One identity of a person, as `takeFallbacks` reads it. */
+export interface FallbackSource {
+  provider: string
+  id: string
+  name: string | null
+  username: string | null
+  phone?: string | null
+  email?: string | null
+}
+
+/**
+ * Fills what is still missing in `into` from one more identity, read in the order the identities were stored: the first
+ * readable name that is no handle, the first username, phone and address. `people list` and a person's record give
+ * the same shown name because both fill it here.
+ */
+export const takeFallbacks = (into: Required<NameFallbacks>, identity: FallbackSource): Required<NameFallbacks> => {
+  const named = displayName(identity.name)
+  if (into.name === null && isReadable(named) && !named?.startsWith("@")) into.name = named
+  into.username ??= present(identity.username)
+  into.phone ??= present(identity.phone) ?? (identity.provider === "phone" ? identity.id : null)
+  into.email ??= present(identity.email) ?? (identity.provider === "email" ? identity.id : null)
+  return into
+}
+
+export const noFallbacks = (): Required<NameFallbacks> => ({ name: null, username: null, phone: null, email: null })
+
 /**
  * The name two people share when case, quotes, punctuation and word order are ignored: `"Ivanov Ivan"` and
  * `ivan IVANOV` give one key. `null` for a name with no letter or digit, which matches nobody.

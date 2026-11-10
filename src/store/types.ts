@@ -82,6 +82,8 @@ export interface LinkedIdentity extends IdentityRef {
 export interface PersonRecord {
   uid: string
   name: string | null
+  /** The name to show, by the rule `people list` uses: the person's own, else an account's, a username, phone, email. */
+  displayName?: string | null
   identities: LinkedIdentity[]
   /** Set when the uid asked for was merged away: the uid of the person its identities are now, the same as `uid`. */
   mergedInto?: string

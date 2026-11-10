@@ -1,6 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import { isNoReplyAddress, isRoleAddress } from "../../domain/addresses.js"
-import { displayName, isReadable, nameKey } from "../../domain/display-names.js"
+import { displayName, isReadable, nameKey, takeFallbacks } from "../../domain/display-names.js"
 import { spellings, variantKey } from "../../domain/name-variants.js"
 import {
   isAutomatedName,
@@ -176,14 +176,16 @@ const factsOf = (database: CacheDatabase, scope: Scope): Map<number, Facts> => {
       organization: false,
     }
     const email = text(row.email) ?? (row.provider === "email" ? text(row.external_id) : null)
-    const named = displayName(text(row.name))
-    if (one.name === null && isReadable(named) && !named?.startsWith("@")) one.name = named
-    if (one.username === null && text(row.username) !== null) {
-      one.username = text(row.username)
-      one.usernameSource = String(row.provider)
-    }
-    one.phone ??= text(row.phone) ?? (row.provider === "phone" ? text(row.external_id) : null)
-    one.email ??= email
+    const hadUsername = one.username !== null
+    takeFallbacks(one, {
+      provider: String(row.provider),
+      id: String(row.external_id),
+      name: text(row.name),
+      username: text(row.username),
+      phone: text(row.phone),
+      email: text(row.email),
+    })
+    if (!hadUsername && one.username !== null) one.usernameSource = String(row.provider)
     if (email !== null) one.emails.push(email)
     one.bot ||= Number(row.bot) === 1
     one.neverReplied ||= neverReplied.has(Number(row.id))

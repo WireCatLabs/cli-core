@@ -626,7 +626,7 @@ proposes them instead. A no-reply address (`isNoReplyAddress`) is no one's: it n
   them, never the user a sync signs in as (NEED-2500 A), a `person` record, or the address book (`account_identities.address_book`,
   written by `contacts sync` through `saveAddressBook`, version 61). Each person's kind, name order, messages and mail
   sent, tasks and newest contact are kept on `persons` (version 62; version 63 adds the triggers for message senders
-  and deal links, version 64 makes the deal-link ones look a deal's people up by the deal), so a list filters, counts, sorts and pages in SQL
+  and deal links, version 64 makes the deal-link ones look a deal's people up by the deal, version 66 adds account names to the identity one), so a list filters, counts, sorts and pages in SQL
   and works out ties, signals and contacts only for the page it returns. Triggers on every table they are made from
   clear a person's `kind` when a value they read changes (chat members are kept row by row, so a sync that writes the
   same members clears nothing). The next list works out up to 5,000 cleared people under the write lock; more, or

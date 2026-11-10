@@ -58,6 +58,64 @@ describe("people in doubt (IDEA-270)", () => {
     expect((await store.people.doubts(page)).items).toEqual([])
   })
 
+  it("leaves out the identities a person held when the owner linked another to them by hand (FIND-2492)", async () => {
+    const store = await open()
+    await store.people.savePeople(CRM, [
+      { id: "c/1", name: "Vyacheslav Ptsarev" },
+      { id: "c/2", name: "Slava" },
+    ])
+    const crm = (id: string) => ({ provider: "bitrix24", id })
+    await store.people.linkIdentities(crm("c/2"), crm("c/1"), { method: "manual", by: "owner" })
+
+    expect((await store.people.doubts(page)).items).toEqual([])
+  })
+
+  it("still names an identity that joined by a rule after the owner's link", async () => {
+    const store = await open()
+    await store.people.savePeople(CRM, [
+      { id: "c/1", name: "Vyacheslav Ptsarev" },
+      { id: "c/2", name: "Slava" },
+      { id: "c/3", name: "Olga Smirnova" },
+    ])
+    const crm = (id: string) => ({ provider: "bitrix24", id })
+    await store.people.linkIdentities(crm("c/1"), crm("c/2"), { method: "manual", by: "owner" })
+    await new Promise((done) => setTimeout(done, 5))
+    await store.people.linkIdentities(crm("c/1"), crm("c/3"), { method: "same-email", by: "rules" })
+
+    const [doubt] = (await store.people.doubts(page)).items
+
+    expect(doubt?.reason).toBe("mixed-names")
+    expect(doubt?.identities.map(({ identity }) => identity)).toContain("bitrix24:c/3")
+  })
+
+  it("stops naming a person the owner kept, and names only an identity that joins later (IDEA-273)", async () => {
+    const store = await open()
+    await store.people.savePeople(CRM, [
+      { id: "c/1", name: "Ivan Petrov" },
+      { id: "c/2", name: "Olga Smirnova" },
+    ])
+    const crm = (id: string) => ({ provider: "bitrix24", id })
+    await store.people.linkIdentities(crm("c/1"), crm("c/2"), { method: "same-email", by: "rules" })
+    const [doubt] = (await store.people.doubts(page)).items
+    const person = doubt?.person as string
+
+    await expect(store.people.keep(person, { bot: "claude-code", reason: "looks fine" })).rejects.toMatchObject({
+      details: { reason: "identity.owner-only" },
+    })
+    const kept = await store.people.keep(person, "owner")
+
+    expect(kept.person).toBe(person)
+    expect(kept.kept).toHaveLength(1)
+    expect((await store.people.doubts(page)).items).toEqual([])
+    await expect(store.people.keep(person, "owner")).rejects.toMatchObject({ details: { reason: "person.no-doubt" } })
+
+    await store.people.savePeople(CRM, [{ id: "c/3", name: "Pavel Orlov" }])
+    await store.people.linkIdentities(crm("c/1"), crm("c/3"), { method: "same-email", by: "rules" })
+    const [again] = (await store.people.doubts(page)).items
+    expect(again?.identities.map(({ identity }) => identity)).toContain("bitrix24:c/3")
+    expect(again?.identities.map(({ identity }) => identity)).not.toContain(kept.kept[0])
+  })
+
   it("leaves out a split the owner turned down", async () => {
     const store = await open()
     await store.people.savePeople(MAX, [{ id: "2", name: "Svetlana 2" }])

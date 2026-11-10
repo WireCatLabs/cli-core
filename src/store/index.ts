@@ -394,6 +394,7 @@ export {
   type DoubtIdentity,
   type DoubtMove,
   type DoubtReason,
+  type KeptPerson,
   type PersonDoubt,
   type PersonDoubts,
 } from "./sqlite/person-doubts.js"

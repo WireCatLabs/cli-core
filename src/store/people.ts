@@ -2,6 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import type { Contact, Id, Page, PersonAlias, Provider } from "../domain/models.js"
 import type { PersonKind } from "../domain/person-kinds.js"
 import type { PeopleLookup } from "../resolve.js"
+import type { Decider } from "./decisions.js"
 import type {
   IdentityLinkDecision,
   IdentityLinkFilter,
@@ -31,7 +32,7 @@ import {
   type SimilarPerson,
   similarPeople,
 } from "./sqlite/people-list.js"
-import { type PersonDoubts, personDoubts } from "./sqlite/person-doubts.js"
+import { type KeptPerson, keepPerson, type PersonDoubts, personDoubts } from "./sqlite/person-doubts.js"
 import * as personLinks from "./sqlite/person-links.js"
 import { PROPOSAL_SCORE, RULE, scanMatches } from "./sqlite/person-match-scan.js"
 import type { PersonMerge } from "./sqlite/person-merges.js"
@@ -151,6 +152,11 @@ export interface PeopleStore extends AccountPeople {
    * with other names share, one person with different names and nothing in common. Each says why and how to fix it.
    */
   doubts(page: { limit: number; offset: number }): Promise<PersonDoubts>
+  /**
+   * The owner says a person in doubt is right as they are: the identities in doubt stop being listed until one of them
+   * moves. The owner's alone; refused with `person.no-doubt` when nothing about the person is in doubt.
+   */
+  keep(person: string, by: Decider): Promise<KeptPerson>
   /** The identity, and everyone linked with it, is the owner. */
   linkToOwner(identity: IdentityRef): Promise<PersonRecord>
   /** A person known by name only, with no identity yet: someone to assign a task to before any message names them. */
@@ -302,6 +308,7 @@ export const peopleStoreOver = (context: StoreContext, keyed: AccountPeople): Pe
     decideSplit: async (id, decision) => identitySplits.decideIdentitySplit(context, id, decision),
     splitProposals: async (filter) => identitySplits.identitySplitRows(context, filter),
     doubts: async (page) => personDoubts(context, page),
+    keep: async (person, by) => write(database, () => keepPerson(context, person, by)),
     linkToOwner: async (identity) => linkToOwner(context, identity),
     list: async (options) => listPeople(database, options),
     counts: async (query) => countPeople(database, query),
