@@ -25,6 +25,7 @@ import {
 import { type PersonPreparation, personPreparation } from "./person-preparation.js"
 import { personProfile } from "./person-profile.js"
 import { type PersonTimeline, personTimeline, type TimelineOptions } from "./person-timeline.js"
+import { withOwner } from "./stored-project-gathering.js"
 
 export interface ContactSync {
   added: number
@@ -78,7 +79,7 @@ export interface PeopleService {
    * The owner's alone: an unlink separates two people, and nothing links them again on its own. `from` names the person
    * the identity leaves, `person:<uid>` or `person:me`; it is refused when the identity sits on someone else.
    */
-  unlink(person: string, options: { by: string; from?: string }): Promise<PersonRecord>
+  unlink(person: string, options: { by: string; from: string }): Promise<PersonRecord>
   /**
    * Only counts and the people recognised: never a number. `IMPORT_CHUNK` numbers a request, each request
    * through the guard, each number counted toward the hourly limit.
@@ -220,14 +221,12 @@ export const peopleService = (deps: ServiceDeps): PeopleService => {
         })
       const store = await deps.store()
       const identity = await identityIn(store, await deps.account(), person)
-      const named = from?.trim() ?? ""
-      if (named === "") throw await fromRequired(store, identity, person)
-      const uid = named === "person:me" ? (await store.people.owner())?.uid : named
-      if (uid === undefined)
-        throw new CliError("not_found", "no person is marked as the owner in the store", {
-          reason: "person.no-owner",
-          param: "from",
-        })
+      if (from.trim() === "") {
+        const holder = await store.people.personOf(identity)
+        if (holder !== undefined && holder.identities.length > 1) throw fromRequired(identity, holder)
+        return store.people.unlinkIdentity(identity, { method: "manual", by: "owner" })
+      }
+      const uid = await withOwner(store, from)
       return store.people.unlinkIdentity(identity, { method: "manual", by: "owner", from: uid })
     },
 
@@ -334,19 +333,14 @@ export interface LinkPeopleOptions {
 }
 
 /** Never guessed from the identity: a guess takes it off whoever holds it, who may not be the person meant. */
-const fromRequired = async (store: MessageStore, identity: IdentityRef, typed: string): Promise<CliError> => {
-  const holder = await store.people.personOf(identity)
-  const word = /^[\w@.:+/=-]+$/u.test(typed) ? typed : `'${typed.replaceAll("'", "'\\''")}'`
-  const where =
-    holder === undefined
-      ? ""
-      : ` ${identity.provider}:${identity.id} sits on ${displayName(holder.name, { name: holder.identities.find(({ name }) => name)?.name ?? null }) ?? "a person with no name"} (person:${holder.uid}); ` +
-        `to take it off them: contacts unlink ${word} --from person:${holder.uid}`
-  return new CliError("validation_error", `say whom it leaves with --from person:<uid> or --from person:me.${where}`, {
-    reason: "person.from-required",
-    param: "from",
-    ...(holder === undefined ? {} : { reference: `person:${holder.uid}` }),
-  })
+const fromRequired = (identity: IdentityRef, holder: PersonRecord): CliError => {
+  const name = displayName(holder.name, { name: holder.identities.find((one) => one.name)?.name ?? null })
+  return new CliError(
+    "validation_error",
+    `say whom it leaves with --from: ${identity.provider}:${identity.id} sits on ${name ?? "a person with no name"} ` +
+      `(person:${holder.uid}); run it again with --from person:${holder.uid}, or --from person:me for you`,
+    { reason: "person.from-required", param: "from", reference: `person:${holder.uid}` },
+  )
 }
 
 /** The person as linked, or, for an agent, as still unlinked with the `identity_link` proposal waiting for the owner. */

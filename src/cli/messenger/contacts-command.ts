@@ -380,7 +380,7 @@ export const contactsCommand = (messenger: Messenger): Command => {
       const { from } = this.opts<{ from?: string }>()
       const by = actorOf(this)
       const unlinked = await context.withServices((services) =>
-        services.people.unlink(person, { by, ...(from === undefined ? {} : { from }) }),
+        services.people.unlink(person, { by, from: from ?? "" }),
       )
       renderAnswer(this, context, itemOf(snakeKeys(unlinked)))
     })
@@ -444,7 +444,7 @@ export const contactsCommand = (messenger: Messenger): Command => {
     sync: "",
     events: '"Alex Example" --limit 10',
     unblock: '"Alex Example"',
-    unlink: '"Alex Example"',
+    unlink: '"Alex Example" --from person:me',
   }
   for (const [path, args] of Object.entries(examples)) {
     const command = commandAt(contacts, path)

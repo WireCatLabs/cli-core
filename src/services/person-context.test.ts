@@ -158,22 +158,22 @@ describe("contacts context", () => {
     expect(texts(alone.recent.direct)).not.toContain("from Ana on MAX")
   })
 
-  it("unlinks only from the person named, and says who holds it when none is", async () => {
+  it("unlinks only from the person named, says who holds it when none is, and needs an owner for person:me", async () => {
     const linked = await people().link("11", "max:m5", { by: "owner" })
     const owner = (await store.people.owner())?.uid as string
     const holder = { reference: `person:${linked.uid}` }
 
-    await expect(people().unlink("max:m5", { by: "owner" })).rejects.toMatchObject({
+    await expect(people().unlink("max:m5", { by: "owner", from: "" })).rejects.toMatchObject({
       details: { reason: "person.from-required", param: "from", ...holder },
     })
-    await expect(people().unlink("max:m5", { by: "owner" })).rejects.toThrow(
-      `contacts unlink max:m5 --from person:${linked.uid}`,
+    await expect(people().unlink("max:m5", { by: "owner", from: "" })).rejects.toThrow(
+      `run it again with --from person:${linked.uid}`,
     )
     await expect(people().unlink("max:m5", { by: "owner", from: "person:me" })).rejects.toMatchObject({
-      details: { reason: "identity.held-elsewhere", ...holder },
+      details: { reason: "person.no-owner" },
     })
     await expect(people().unlink("max:m5", { by: "owner", from: owner })).rejects.toMatchObject({
-      details: { reason: "identity.held-elsewhere" },
+      details: { reason: "identity.held-elsewhere", ...holder },
     })
     expect((await people().context("11")).person.identities).toHaveLength(2)
   })

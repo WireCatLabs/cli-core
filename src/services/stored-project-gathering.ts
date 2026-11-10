@@ -116,7 +116,7 @@ const projectOf = async (store: MessageStore, reference: string) => {
 }
 
 /** `person:me` as the owner's `person:<uid>`; any other reference as written. */
-const withOwner = async (store: MessageStore, reference: string): Promise<string> => {
+export const withOwner = async (store: MessageStore, reference: string): Promise<string> => {
   if (reference.trim() !== "person:me") return reference
   const owner = await store.people.owner()
   if (owner === undefined || owner.identities.length === 0)
