@@ -103,8 +103,21 @@ describe("a split an agent proposes (IDEA-271)", () => {
 
     await store.people.decideSplit(first.id, { confirm: false, by: "owner", reason: "it is mine" })
     await expect(
-      store.people.proposeSplit({ identities: [max("2")], by: agent, reason: "his wife's" }),
+      store.people.proposeSplit({ identities: [max("2"), tg("7")], by: agent, reason: "his wife's" }),
     ).rejects.toMatchObject({ details: { reason: "identity.kept-together" } })
+  })
+
+  it("adds the new evidence when proposed again", async () => {
+    const store = await absorbed()
+    await store.people.proposeSplit({ identities: [max("2")], by: agent, reason: "hers", evidence: ["a"] })
+    const again = await store.people.proposeSplit({
+      identities: [max("2")],
+      by: agent,
+      reason: "hers",
+      evidence: ["b"],
+    })
+
+    expect(again.payload).toMatchObject({ evidence: ["a", "b"] })
   })
 
   it("refuses identities of two people, and a split that leaves the person empty", async () => {
@@ -133,9 +146,16 @@ describe("a split an agent proposes (IDEA-271)", () => {
       details: { reason: "proposal.wrong-state" },
     })
     expect(await ownerRefs(store)).toEqual(["max:2", "telegram:1", "telegram:7"])
-    expect((await store.people.splitProposals({ status: "all", limit: 10, offset: 0 })).items).toMatchObject([
-      { id: proposal.id, status: "dropped" },
-    ])
+    const other = await store.people.proposeSplit({ identities: [tg("7")], by: agent, reason: "a friend" })
+    const list = async (status: "dropped" | "confirmed" | "proposed") =>
+      (await store.people.splitProposals({ status, limit: 10, offset: 0 })).items.map(({ id }) => id)
+    expect(await list("dropped")).toEqual([proposal.id])
+    expect(await list("confirmed")).toEqual([])
+    expect(await list("proposed")).toEqual([other.id])
+    const [row] = (
+      await proposalRegistry(store).list({ kinds: [IDENTITY_SPLIT_KIND], status: "all", limit: 10, offset: 0 })
+    ).items.filter(({ id }) => id === proposal.id)
+    expect(row).toMatchObject({ status: "rejected", summary: expect.stringMatching(/^not carried out/) })
   })
 
   it("is decided through the shared review, the owner's alone", async () => {

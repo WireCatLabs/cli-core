@@ -297,6 +297,8 @@ export const dropOrphanPeople = (database: CacheDatabase, unseenBefore: Set<numb
     .prepare(
       `DELETE FROM persons WHERE id IN (SELECT value FROM json_each(?)) AND owner = 0
         AND NOT EXISTS (SELECT 1 FROM identity_links l WHERE l.person_id = persons.id)
+        AND CAST(id AS TEXT) NOT IN (SELECT json_extract(payload, '$.person') FROM proposed_actions
+          WHERE kind = 'identity_split')
         AND id NOT IN (SELECT id FROM (${referencesTo(database, "persons", new Set(["identity_links"]))}) WHERE id IS NOT NULL)`,
     )
     .run(JSON.stringify(persons))

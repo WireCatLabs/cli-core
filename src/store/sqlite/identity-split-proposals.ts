@@ -29,7 +29,8 @@ interface Plan {
   merge: string | null
 }
 
-const keyOf = (person: number, identities: readonly string[]): string => `${person} ${[...identities].sort().join(" ")}`
+const keyOf = (split: IdentitySplitMove, person: number, identities: readonly string[]): string =>
+  `${split} ${person} ${[...identities].sort().join(" ")}`
 
 /** What the split would move, checked as the owner's own move would check it, so a proposal can be carried out. */
 const planOf = (context: StoreContext, input: IdentitySplitInput): Plan => {
@@ -68,10 +69,12 @@ const splitRows = (
   database: CacheDatabase,
   statuses: readonly string[],
   page?: { limit: number; offset: number },
+  made?: boolean,
 ): SplitRowStored[] =>
   database
     .prepare(
       "SELECT id, status, payload FROM proposed_actions WHERE kind = ? AND status IN (SELECT value FROM json_each(?)) " +
+        (made === undefined ? "" : `AND json_extract(result, '$.person') IS ${made ? "NOT " : ""}NULL `) +
         `ORDER BY id DESC${page === undefined ? "" : " LIMIT ? OFFSET ?"}`,
     )
     .all(IDENTITY_SPLIT_KIND, JSON.stringify(statuses), ...(page === undefined ? [] : [page.limit, page.offset]))
@@ -111,7 +114,8 @@ export const keptTogether = (database: CacheDatabase): Map<number, Set<string>> 
 /**
  * Proposes to take identities off their person, or to undo a merge, as an `identity_split` only the owner decides. An
  * open proposal for the same identities is given back instead of a second, brought up to date with the person as it
- * is now, so proposing again is how a stale one is renewed; one the owner turned down is refused.
+ * is now and with the new evidence added, so proposing again is how a stale one is renewed; its first reason and
+ * proposer stay. An identity the owner kept on this person by turning a split down is refused.
  */
 export const proposeIdentitySplit = (context: StoreContext, input: IdentitySplitInput): ProposedAction =>
   write(context.database, () => {
@@ -121,7 +125,12 @@ export const proposeIdentitySplit = (context: StoreContext, input: IdentitySplit
         reason: "proposal.reason-required",
       })
     const plan = planOf(context, input)
-    const key = keyOf(plan.person, plan.identities)
+    const kept = keptTogether(context.database).get(plan.person)
+    if (plan.identities.some((ref) => kept?.has(ref)))
+      throw new CliError("conflict", "the owner kept these identities together; only the owner splits them", {
+        reason: "identity.kept-together",
+      })
+    const key = keyOf(plan.split, plan.person, plan.identities)
     const operations = proposalOperationsOver(context)
     const payload: IdentitySplitPayload = {
       split: plan.split,
@@ -131,16 +140,13 @@ export const proposeIdentitySplit = (context: StoreContext, input: IdentitySplit
       side: sideOf(context.database, plan.person),
       evidence: input.evidence ?? [],
     }
-    for (const row of splitRows(context.database, ["proposed", "rejected"])) {
+    for (const row of splitRows(context.database, ["proposed"])) {
       const person = holder(context.database, row.payload)
-      if (person === undefined || keyOf(person, row.payload.identities) !== key) continue
-      if (row.status === "rejected")
-        throw new CliError("conflict", "the owner kept these identities together; only the owner splits them", {
-          reason: "identity.kept-together",
-        })
+      if (person === undefined || keyOf(row.payload.split, person, row.payload.identities) !== key) continue
+      const evidence = [...new Set([...row.payload.evidence, ...payload.evidence])]
       context.database
         .prepare("UPDATE proposed_actions SET payload = ? WHERE id = ?")
-        .run(JSON.stringify({ ...payload, evidence: row.payload.evidence }), Number(row.id))
+        .run(JSON.stringify({ ...payload, evidence }), Number(row.id))
       return operations.get(row.id)
     }
     return operations.propose({ kind: IDENTITY_SPLIT_KIND, by: input.by, payload, reason })
@@ -211,9 +217,10 @@ export const identitySplitRows = (
 ): { items: IdentitySplitRow[]; hasMore: boolean } => {
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > 500)
     throw new CliError("validation_error", "a list of split proposals takes 1–500 items")
-  const statuses = status === "all" || status === "dropped" ? Object.values(STORED).flat() : STORED[status]
+  const statuses = status === "all" ? Object.values(STORED).flat() : STORED[status === "dropped" ? "confirmed" : status]
+  const made = status === "dropped" ? false : status === "confirmed" ? true : undefined
   const operations = proposalOperationsOver(context)
-  const rows = splitRows(context.database, statuses, { limit: limit + 1, offset })
+  const rows = splitRows(context.database, statuses, { limit: limit + 1, offset }, made)
   const items = rows.slice(0, limit).map((row): IdentitySplitRow => {
     const action = operations.get(row.id)
     return {
