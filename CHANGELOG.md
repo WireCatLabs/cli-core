@@ -5,6 +5,15 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Added
+
+- **`stats tasks show` can count every account at once.** A `Messenger` that sets `accountsOf(command)` gets one answer
+  across the accounts it returns, when the command names none: memo uses it so `memo stats tasks show` needs no
+  `--source`. The answer lists them in `accounts`, and each chat row's `chat` names its own account. `--chat` and a
+  `chat:` term then ask for `--source`, since a chat belongs to one account.
+
 ## 0.631.0 — 10.11.2026
 
 ### Added

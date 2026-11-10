@@ -545,15 +545,18 @@ export const chatStatsAnswer = (
 export const MEMBERS_UNRECORDED = "joins and leaves are not recorded for this chat yet, so they are not counted"
 
 /** `stats tasks show`, CLI and MCP alike. A row of `--by chat` also names its chat as `chat`, as it always has. */
-export const taskStatsAnswer = (stats: TaskStats, account: AccountKey): ItemBody<Of<"task_stats">> =>
+/** `account` is the one account read; an answer across several names each row's own. */
+export const taskStatsAnswer = (stats: TaskStats, account: AccountKey | undefined): ItemBody<Of<"task_stats">> =>
   itemOf({
+    ...(stats.accounts ? { accounts: stats.accounts.map(({ provider, account }) => `${provider}:${account}`) } : {}),
     open: stats.open,
     created: stats.created,
     closed: stats.closed,
     median_close_ms: stats.medianCloseMs ?? null,
     mean_open_age_ms: stats.meanOpenAgeMs ?? null,
     rows: stats.rows.map((row) => {
-      const chat = stats.by === "chat" ? chatRef(account, row.group) : undefined
+      const own = row.account ?? account
+      const chat = stats.by === "chat" && own ? chatRef(own, row.group) : undefined
       return {
         ...(chat === undefined ? {} : { chat }),
         key: chat ?? (stats.by === "project" ? `project:${row.group}` : row.group),

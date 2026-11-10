@@ -293,7 +293,9 @@ export interface TasksService {
   /** The owner refuses an agent's close: the task stays open and the suggestion goes. */
   reject(id: string, by: TaskOrigin): Promise<TaskCard>
   /** `chat` narrows to one chat, by name or id; see `taskStatsOf` for what each count means. */
-  stats(request?: Omit<TaskStatsRequest, "group"> & { chat?: string }): Promise<TaskStats>
+  stats(
+    request?: Omit<TaskStatsRequest, "group"> & { chat?: string; accounts?: readonly AccountKey[] },
+  ): Promise<TaskStats>
   /** Title, description, due date and next check; `null` clears one. */
   plan(id: string, plan: TaskPlan, by: TaskOrigin): Promise<TaskCard>
   /**
@@ -743,16 +745,28 @@ export const tasksService = (deps: ServiceDeps, categories?: readonly TaskCatego
         return store.tasks.similar({ task: subject }, options)
       }),
 
-    stats: ({ chat, ...request } = {}) =>
-      inStore(async (store, account) => {
-        const group = await groupOf(store, account, chat)
-        return taskStatsOf(
-          store,
-          account,
-          { ...request, ...(group === undefined ? {} : { group }) },
-          await queryColumns(store, account, request.query),
-        )
-      }),
+    stats: ({ chat, accounts, ...request } = {}) =>
+      accounts
+        ? (async () => {
+            const store = await deps.store()
+            if (
+              chat !== undefined ||
+              (request.query && walkQuery(request.query.root).some(({ field }) => field === "chat"))
+            )
+              throw new CliError("validation_error", "a chat belongs to one account: name it with --source as well")
+            // Without a chat: term the columns read no account.
+            const columns = await queryColumns(store, accounts[0] ?? { provider: "", account: "" }, request.query)
+            return taskStatsOf(store, accounts, request, columns)
+          })()
+        : inStore(async (store, account) => {
+            const group = await groupOf(store, account, chat)
+            return taskStatsOf(
+              store,
+              account,
+              { ...request, ...(group === undefined ? {} : { group }) },
+              await queryColumns(store, account, request.query),
+            )
+          }),
   }
 }
 

@@ -1,7 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import { type QueryAst, type QueryNode, walkQuery } from "@wirecat/cli-base/query"
 import { parseMeetingReference } from "../meetings/index.js"
-import { type TaskStatRow, withoutField } from "../store/index.js"
+import { type TaskStatRow, type TaskStatScope, withoutField } from "../store/index.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
 import { type ColumnMap, queryFilter, type Where } from "../store/store.js"
 import { isClosedState, type TaskKind } from "../tasks/index.js"
@@ -25,6 +25,8 @@ export interface TaskStatsRequest {
 export interface TaskStatsGroup {
   /** The stored chat id, `meeting:<account>/<meeting>`, or the project's store id. */
   group: string
+  /** The group's account, when the answer reads several. */
+  account?: AccountKey
   name: string | null
   open: number
   created: number
@@ -36,6 +38,8 @@ export interface TaskStatsGroup {
 
 export interface TaskStats {
   by: TaskStatsBy
+  /** Every account read, when the answer reads several. */
+  accounts?: AccountKey[]
   open: number
   created: number
   closed: number
@@ -87,16 +91,19 @@ const and = (parts: Where[]): Where | undefined =>
 
 /**
  * `stats tasks show`: `open` is open now, `created` the tasks opened in the period, `closed` those closed in it; the
- * other terms of the query narrow all three. `columns` reads the task query's fields on the row `t`.
+ * other terms of the query narrow all three. `columns` reads the task query's fields on the row `t`. Given several
+ * accounts it reads each one's tasks and counts them together; every row then names its account.
  */
 export const taskStatsOf = async (
   store: MessageStore,
-  account: AccountKey,
+  accounts: AccountKey | readonly AccountKey[],
   { by = "chat", query, timezone, group, kind }: TaskStatsRequest,
   columns: ColumnMap,
   now = Date.now(),
 ): Promise<TaskStats> => {
   if (query) refuseNestedPeriod(query.root)
+  const several = Array.isArray(accounts)
+  const list: readonly AccountKey[] = several ? accounts : [accounts as AccountKey]
   const time = (sql: string) => ({ type: "time", sql }) as const
   const read = { ...columns, [PERIOD_FIELD]: time("t.created_at"), closed: time("t.closed_at") }
   const fixed: Where[] = [
@@ -107,21 +114,44 @@ export const taskStatsOf = async (
   const options = { command: "stats tasks show", now, ...(timezone === undefined ? {} : { zone: timezone }) }
   const where = (ast: QueryAst | undefined, more: Where[] = []) =>
     and([...fixed, ...more, ...(ast ? [queryFilter(ast, read, options)] : [])])
-  const scope = by === "project" ? ({ board: true } as const) : { account: taskAccount(account) }
-  const all = await store.tasks.statRows(scope, where(withoutField(query, PERIOD_FIELD)))
-  const created = await store.tasks.statRows(scope, where(query))
-  const closed = await store.tasks.statRows(
-    scope,
+  // Project tasks belong to no account: one board read, whatever the accounts.
+  const scopes: { account?: AccountKey; scope: TaskStatScope }[] =
+    by === "project"
+      ? [{ scope: { board: true } }]
+      : list.map((one) => ({ account: one, scope: { account: taskAccount(one) } }))
+  type Tagged = TaskStatRow & { account?: AccountKey }
+  const rowsOf = async (filter: Where | undefined): Promise<Tagged[]> =>
+    (
+      await Promise.all(
+        scopes.map(async ({ account, scope }) =>
+          (await store.tasks.statRows(scope, filter)).map((row) => (account ? { ...row, account } : row)),
+        ),
+      )
+    ).flat()
+  const all = await rowsOf(where(withoutField(query, PERIOD_FIELD)))
+  const created = await rowsOf(where(query))
+  const closed = await rowsOf(
     where(query && { ...query, root: renamed(query.root, PERIOD_FIELD, "closed") }, [
       { sql: "t.closed_at IS NOT NULL", params: [] },
     ]),
   )
 
-  const keyOf = (row: TaskStatRow) => (by === "project" ? String(row.projectId) : (row.group ?? ""))
-  const groups = new Map<string, { open: TaskStatRow[]; created: number; closeMs: number[] }>()
-  const slot = (row: TaskStatRow) => {
+  // Chat ids repeat across accounts, so a row is one account's chat.
+  const keyOf = (row: Tagged) =>
+    by === "project" ? String(row.projectId) : `${row.account ? taskAccount(row.account) : ""}\t${row.group ?? ""}`
+  const groups = new Map<
+    string,
+    { group: string; account?: AccountKey; open: TaskStatRow[]; created: number; closeMs: number[] }
+  >()
+  const slot = (row: Tagged) => {
     const key = keyOf(row)
-    const found = groups.get(key) ?? { open: [], created: 0, closeMs: [] }
+    const found = groups.get(key) ?? {
+      group: by === "project" ? String(row.projectId) : (row.group ?? ""),
+      ...(row.account ? { account: row.account } : {}),
+      open: [],
+      created: 0,
+      closeMs: [],
+    }
     groups.set(key, found)
     return found
   }
@@ -129,33 +159,62 @@ export const taskStatsOf = async (
   for (const row of created) slot(row).created++
   for (const row of closed) slot(row).closeMs.push((row.closedAt ?? row.createdAt) - row.createdAt)
 
-  const kept = [...groups].filter(([, one]) => one.open.length + one.created + one.closeMs.length > 0)
-  const ids = kept.map(([key]) => key)
-  const names =
-    by === "chat"
-      ? await store.tasks.statNames("chat", ids, taskAccount(account))
-      : by === "project"
-        ? await store.tasks.statNames("project", ids)
-        : await meetingNames(store, ids)
-  const rows = kept.map(([key, one]) => ({
-    group: key,
-    name: names.get(key) ?? null,
+  const kept = [...groups.values()].filter((one) => one.open.length + one.created + one.closeMs.length > 0)
+  const nameOf = await namesOf(store, by, kept)
+  const rows = kept.map((one) => ({
+    group: one.group,
+    ...(several && one.account ? { account: one.account } : {}),
+    name: nameOf(one) ?? null,
     open: one.open.length,
     created: one.created,
     closed: one.closeMs.length,
     ...(one.open[0] ? { oldestOpenAt: new Date(one.open[0].createdAt) } : {}),
     ...spread(one.open, one.closeMs, now),
   }))
-  const open = kept.flatMap(([, one]) => one.open)
-  const closeMs = kept.flatMap(([, one]) => one.closeMs)
+  const open = kept.flatMap((one) => one.open)
+  const closeMs = kept.flatMap((one) => one.closeMs)
   return {
     by,
+    ...(several ? { accounts: [...list] } : {}),
     open: open.length,
     created: created.length,
     closed: closeMs.length,
     ...spread(open, closeMs, now),
     rows,
   }
+}
+
+/** Each group's title: chats within their own account, meetings and projects by their store id. */
+const namesOf = async (
+  store: MessageStore,
+  by: TaskStatsBy,
+  groups: readonly { group: string; account?: AccountKey }[],
+): Promise<(one: { group: string; account?: AccountKey }) => string | undefined> => {
+  if (by === "project") {
+    const names = await store.tasks.statNames(
+      "project",
+      groups.map(({ group }) => group),
+    )
+    return ({ group }) => names.get(group)
+  }
+  if (by === "meeting") {
+    const names = await meetingNames(
+      store,
+      groups.map(({ group }) => group),
+    )
+    return ({ group }) => names.get(group)
+  }
+  const byAccount = new Map<string, Map<string, string>>()
+  for (const account of new Set(groups.flatMap(({ account }) => (account ? [taskAccount(account)] : []))))
+    byAccount.set(
+      account,
+      await store.tasks.statNames(
+        "chat",
+        groups.filter((one) => one.account && taskAccount(one.account) === account).map(({ group }) => group),
+        account,
+      ),
+    )
+  return ({ group, account }) => (account ? byAccount.get(taskAccount(account))?.get(group) : undefined)
 }
 
 const meetingIdOf = (group: string): string | undefined => {

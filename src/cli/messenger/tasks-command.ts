@@ -890,6 +890,7 @@ export const tasksStatsCommand = (messenger: Messenger): Command => {
       }>()
       refuseJsonl(context.format)
       const query = listQuery(typedQuery(words), TASK_STATS_QUERY, "stats tasks show")
+      const accounts = messenger.accountsOf?.(this)
       const { stats, account } = await context.withServices(async (services) => ({
         stats: await services.tasks.stats({
           ...(by === undefined ? {} : { by }),
@@ -897,8 +898,9 @@ export const tasksStatsCommand = (messenger: Messenger): Command => {
           ...(type === undefined ? {} : { kind: type }),
           ...(query === undefined ? {} : { query }),
           ...(timezone === undefined ? {} : { timezone }),
+          ...(accounts === undefined ? {} : { accounts }),
         }),
-        account: await services.messages.reader(),
+        account: accounts === undefined ? await services.messages.reader() : undefined,
       }))
       if (stats.rows.length === 0) context.renderer.note("no tasks yet")
       renderAnswer(this, context, taskStatsAnswer(stats, account), () =>

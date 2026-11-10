@@ -72,6 +72,8 @@ const ms = v.nullable(v.pipe(v.number(), v.minValue(0)))
  * tasks opened and closed in the query's period, every task without one.
  */
 export const taskStats = v.strictObject({
+  /** Every account counted, `provider:account`, when the answer reads several (memo without `--source`). */
+  accounts: v.optional(v.array(text)),
   /** Open tasks across every row. */
   open: count,
   created: count,
