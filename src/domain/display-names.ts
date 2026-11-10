@@ -2,6 +2,8 @@ import { foldName } from "../resolve.js"
 
 /** What a person can be shown as when their name has nothing to read. */
 export interface NameFallbacks {
+  /** A name one of the person's accounts carries: a real name beats a handle. */
+  name?: string | null
   username?: string | null
   phone?: string | null
   email?: string | null
@@ -38,13 +40,15 @@ const given = (value: string | null | undefined): string | undefined => {
 
 /**
  * A name as it is shown: no wrapping quotes, no repeated or edge spaces. One with no letter or digit (`!`, `!$`), or a
- * placeholder such as `null` or «Без имени», gives way to the username, then the phone, then the email; the stored name
- * stays as it came.
+ * placeholder such as `null` or «Без имени», gives way to an account's name, then the username, the phone, the email;
+ * the stored name stays as it came.
  */
 export const displayName = (name: string | null | undefined, fallbacks: NameFallbacks = {}): string | null => {
   const unwrapped = typeof name === "string" ? unquoted(name) : ""
   const cleaned = PLACEHOLDERS.has(unwrapped.toLowerCase()) ? "" : unwrapped
   if (READABLE.test(cleaned)) return cleaned
+  const borrowed = fallbacks.name === undefined || fallbacks.name === null ? null : displayName(fallbacks.name)
+  if (borrowed !== null && READABLE.test(borrowed) && !borrowed.startsWith("@")) return borrowed
   const username = given(fallbacks.username)
   return (
     (username === undefined ? undefined : username.startsWith("@") ? username : `@${username}`) ??

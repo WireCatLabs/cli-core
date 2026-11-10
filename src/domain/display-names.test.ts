@@ -16,6 +16,13 @@ describe("displayName", () => {
     expect(displayName("   ", {})).toBeNull()
   })
 
+  it("prefers an account's real name to a handle when the person has none of their own", () => {
+    expect(displayName(null, { name: "Ярослав Орлов", username: "Xorlov" })).toBe("Ярослав Орлов")
+    expect(displayName("!", { name: "  «Ярослав Орлов» ", username: "Xorlov" })).toBe("Ярослав Орлов")
+    expect(displayName(null, { name: "null", username: "Xorlov" })).toBe("@Xorlov")
+    expect(displayName("Ola", { name: "Someone Else", username: "ola_k" })).toBe("Ola")
+  })
+
   it("reads a messenger's placeholder for a missing name as no name", () => {
     expect(displayName("Без имени", { username: "kkkslav" })).toBe("@kkkslav")
     expect(displayName("null", {})).toBeNull()
