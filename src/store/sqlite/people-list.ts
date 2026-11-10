@@ -81,7 +81,6 @@ const matching = (query: string | undefined): { sql: string; params: SqlValue[] 
   const text = query.trim()
   if (text.length < MIN_QUERY)
     throw new CliError("validation_error", `a people search takes at least ${MIN_QUERY} characters, got "${query}"`)
-  // BUG-678: a name stored in one script is found by a query typed in the other.
   const forms = [...new Set([text, ...spellings(text)])]
   const like = (form: string) => `%${form.replace(/[\\%_]/g, (c) => `\\${c}`)}%`
   return {

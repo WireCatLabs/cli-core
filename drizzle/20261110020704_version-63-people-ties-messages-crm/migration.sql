@@ -38,6 +38,16 @@ WHEN (OLD.from_type IN ('deal', 'lead') AND OLD.kind = 'related-to' AND OLD.to_t
 END;
 --> statement-breakpoint
 CREATE TRIGGER person_kind_deal_owner_moved_au AFTER UPDATE OF person_id ON identity_links
-WHEN OLD.person_id IS NOT NEW.person_id AND EXISTS (SELECT 1 FROM links o WHERE o.to_type = 'person' AND o.to_id IN (OLD.person_id, NEW.person_id) AND o.role = 'owner' AND o.from_type IN ('deal', 'lead')) BEGIN
-  UPDATE persons SET kind = NULL WHERE kind IS NOT NULL AND id IN (SELECT d.to_id FROM links o JOIN links d ON d.from_type = o.from_type AND d.from_id = o.from_id AND d.kind = 'related-to' AND d.to_type = 'person' WHERE o.to_type = 'person' AND o.to_id IN (OLD.person_id, NEW.person_id) AND o.role = 'owner' AND o.from_type IN ('deal', 'lead'));
+WHEN OLD.person_id IS NOT NEW.person_id AND EXISTS (SELECT 1 FROM links o WHERE o.to_type = 'person' AND (o.to_id IN (OLD.person_id, NEW.person_id) OR o.to_id IN (SELECT e.from_person_id FROM identity_link_events e WHERE e.identity_id = NEW.identity_id)) AND o.role = 'owner' AND o.from_type IN ('deal', 'lead')) BEGIN
+  UPDATE persons SET kind = NULL WHERE kind IS NOT NULL AND id IN (SELECT d.to_id FROM links o JOIN links d ON d.from_type = o.from_type AND d.from_id = o.from_id AND d.kind = 'related-to' AND d.to_type = 'person' WHERE o.to_type = 'person' AND (o.to_id IN (OLD.person_id, NEW.person_id) OR o.to_id IN (SELECT e.from_person_id FROM identity_link_events e WHERE e.identity_id = NEW.identity_id)) AND o.role = 'owner' AND o.from_type IN ('deal', 'lead'));
+END;
+--> statement-breakpoint
+CREATE TRIGGER person_kind_deal_owner_person_au AFTER UPDATE OF owner ON persons
+WHEN OLD.owner IS NOT NEW.owner BEGIN
+  UPDATE persons SET kind = NULL WHERE kind IS NOT NULL AND id IN (SELECT d.to_id FROM links o JOIN links d ON d.from_type = o.from_type AND d.from_id = o.from_id AND d.kind = 'related-to' AND d.to_type = 'person' WHERE o.to_type = 'person' AND o.role = 'owner' AND o.from_type IN ('deal', 'lead') AND (o.to_id = NEW.id OR o.to_id IN (SELECT e.from_person_id FROM identity_link_events e JOIN identity_links l ON l.identity_id = e.identity_id WHERE l.person_id = NEW.id)));
+END;
+--> statement-breakpoint
+CREATE TRIGGER person_kind_message_outgoing_au AFTER UPDATE OF outgoing ON messages
+WHEN OLD.outgoing IS NOT NEW.outgoing BEGIN
+  UPDATE persons SET kind = NULL WHERE kind IS NOT NULL AND id IN (SELECT person_id FROM identity_links WHERE identity_id = NEW.sender_identity_id);
 END;

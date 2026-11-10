@@ -11,6 +11,8 @@ const UNDO: Record<number, string> = {
     "deal_link_ad",
     "deal_link_au",
     "deal_owner_moved_au",
+    "deal_owner_person_au",
+    "message_outgoing_au",
   ]
     .map((name) => `DROP TRIGGER person_kind_${name};`)
     .join(" "),

@@ -82,25 +82,28 @@ describe("the owner's person", () => {
     expect(await ownerRefs(store)).toEqual(["telegram:9"])
   })
 
-  it("keeps every identity when the owner confirms a scan proposal that names it", async () => {
+  it("keeps every identity when the owner confirms an agent's proposal that names it", async () => {
     const store = await open()
     await store.people.savePeople(PERSONAL, [{ id: "9", name: "Slava", phone: "79001234567" }])
     await store.people.savePeople(WORK, [{ id: "contact/1", name: "Assistant", phone: "+7 900 123-45-67" }])
-    await store.people.savePeople(MAX, [{ id: "7", name: "Office", phone: "+7 900 123 45 67" }])
     const me = await uidOf(store, "telegram", "9")
     await makeOwner(me)
-    await store.people.scanMatches()
-    const withMe = (await openLinks(store)).find(({ payload }) =>
-      (payload as { persons: string[] }).persons.includes(me),
-    )
+    expect((await store.people.scanMatches()).proposed).toEqual([])
+    const withMe = await store.people.proposeLink({
+      identity: { provider: "bitrix24", id: "contact/1" },
+      with: { provider: "telegram", id: "9" },
+      signal: "agent",
+      by: agent,
+      reason: "the same number",
+    })
 
-    await store.people.decideLink(withMe?.id as string, { confirm: true, by: "owner" })
+    await store.people.decideLink(withMe.id, { confirm: true, by: "owner" })
 
     expect((await store.people.owner())?.uid).toBe(me)
     expect(await uidOf(store, "telegram", "9")).toBe(me)
   })
 
-  it("only proposes the mail contact of an address the owner's CRM contact gains at import", async () => {
+  it("neither joins nor proposes the mail contact of an address the owner's CRM contact gains at import", async () => {
     const store = await open()
     await store.people.savePeople(WORK, [{ id: "contact/1", name: "Slava" }])
     const me = await uidOf(store, "bitrix24", "contact/1")
@@ -110,9 +113,7 @@ describe("the owner's person", () => {
 
     expect((await store.people.owner())?.uid).toBe(me)
     expect(await ownerRefs(store)).toEqual(["bitrix24:contact/1"])
-    expect(await openLinks(store)).toMatchObject([
-      { payload: { signal: "email" }, reason: "one side is you: only you join anyone to yourself" },
-    ])
+    expect(await openLinks(store)).toEqual([])
   })
 
   it("keeps its uid when the owner links one of its identities to another person", async () => {
@@ -186,6 +187,22 @@ describe("an address more than two people share (NEED-2446, safe option)", () =>
     for (let n = 0; n < 12; n++) people.add(await uidOf(store, "bitrix24", `contact/${n}`))
     expect(people.size).toBe(12)
     expect(scan.merged).toEqual([])
+  })
+
+  it("two contacts of one CRM share joins and proposes no one, at import or in a scan", async () => {
+    const store = await open()
+    await store.people.savePeople(WORK, [
+      { id: "contact/1", name: "Ana", email: "office@acme.example" },
+      { id: "contact/2", name: "Bea", email: "office@acme.example" },
+    ])
+
+    const scan = await store.people.scanMatches()
+
+    const contact = await uidOf(store, "email", "office@acme.example")
+    expect(await uidOf(store, "bitrix24", "contact/1")).not.toBe(contact)
+    expect(await uidOf(store, "bitrix24", "contact/2")).not.toBe(contact)
+    expect(scan.merged).toEqual([])
+    expect(await openLinks(store)).toEqual([])
   })
 
   it("opens a proposal for each pair when three people have it", async () => {

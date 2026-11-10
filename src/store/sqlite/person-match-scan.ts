@@ -5,9 +5,9 @@ import type { IdentityLinkSignal, MatchScan } from "../identity-links.js"
 import { type LinkIndex, linkIndex, settleLinks } from "./identity-link-rows.js"
 import { type Opening, openIdentityLink } from "./identity-proposals.js"
 import type { Author } from "./memories.js"
-import { peopleByNameKey, type SharedTrace, sharedTrace } from "./name-traces.js"
+import { peopleByNameKey, type SharedTrace, sharedTraces } from "./name-traces.js"
 import type { StoreContext } from "./open.js"
-import { isOwner, mergePerson, OWNER_PROPOSAL_REASON } from "./person-links.js"
+import { isOwner, mergePerson } from "./person-links.js"
 import { personsByIdentifiers } from "./person-matcher.js"
 import { resolvePersonLinks } from "./person-resolution.js"
 import { separated } from "./person-separation.js"
@@ -195,8 +195,7 @@ interface Pass {
 
 /**
  * Joins two people unless the owner separated them, or rejected the pair (NEED-2444): then the pair is proposed when
- * this evidence is new to the owner. With the owner on one side it only proposes (SEC-177). Gives the person that
- * stays.
+ * this evidence is new to the owner. Gives the person that stays.
  */
 const join = (
   pass: Pass,
@@ -210,17 +209,9 @@ const join = (
     result.skipped.push({ persons: [String(from), String(into)], signal: method, reason: "identity.separated" })
     return into
   }
-  const owners = isOwner(context, from) || isOwner(context, into)
-  if (owners || index.rejected(from, into) !== undefined) {
-    propose(pass, {
-      identity: sides.identity,
-      with: sides.with,
-      from,
-      to: into,
-      joins: "person",
-      signal,
-      ...(owners ? { reason: OWNER_PROPOSAL_REASON } : {}),
-    })
+  if (touchesOwner(pass, from, into, method)) return into
+  if (index.rejected(from, into) !== undefined) {
+    propose(pass, { identity: sides.identity, with: sides.with, from, to: into, joins: "person", signal })
     return into
   }
   const kept = mergePerson(context, from, into, { method, by: BY })
@@ -230,7 +221,19 @@ const join = (
   return kept
 }
 
-const propose = ({ context, index, result }: Pass, opening: Omit<Opening, "by">) => {
+/**
+ * SEC-177: the scan never joins the owner or proposes anyone to them; a mailbox or number the owner reads may be
+ * someone else's, and only the owner joins anyone to themselves.
+ */
+const touchesOwner = ({ context, result }: Pass, from: number, to: number, signal: string): boolean => {
+  if (!isOwner(context, from) && !isOwner(context, to)) return false
+  result.skipped.push({ persons: [String(from), String(to)], signal, reason: "identity.owner" })
+  return true
+}
+
+const propose = (pass: Pass, opening: Omit<Opening, "by">) => {
+  const { context, index, result } = pass
+  if (touchesOwner(pass, opening.from, opening.to, opening.signal)) return
   const opened = openIdentityLink(context, { ...opening, by: RULE }, index)
   const persons: [string, string] = [String(opening.from), String(opening.to)]
   if (opened.outcome === "skipped") {
@@ -340,8 +343,13 @@ const sameName = (pass: Pass, people: number[], name: string) => {
   const sorted = [...people].sort((a, b) => a - b)
   for (const [at, from] of sorted.entries())
     for (const to of sorted.slice(at + 1)) {
-      const trace = sharedTrace(pass.context.database, from, to, name)
-      if (trace === undefined || !strongEnough(pass.context, from, to, trace)) continue
+      let trace: SharedTrace | undefined
+      for (const one of sharedTraces(pass.context.database, from, to, name))
+        if (strongEnough(pass.context, from, to, one)) {
+          trace = one
+          break
+        }
+      if (trace === undefined) continue
       propose(pass, {
         identity: trace.identity,
         with: trace.with,

@@ -92,6 +92,9 @@ export const toLatin = (text: string): string =>
 /** A Russian reading of a Latin name, `Kuznetsova` as `Кузнецова`: a guess, good enough to search with. */
 export const toCyrillic = (text: string): string => {
   const folded = foldName(text)
+    .replace(/ii\b/gu, "ий")
+    .replace(/(?<=[aeouy])i\b/gu, "й")
+    .replace(/(?<=[b-df-hj-np-tv-z])i([au])/gu, (_, vowel: string) => (vowel === "a" ? "ия" : "ию"))
   let out = ""
   let at = 0
   while (at < folded.length) {
@@ -121,7 +124,6 @@ export const wordSkeleton = (word: string): string =>
     .replaceAll("w", "v")
     .replaceAll("j", "i")
     .replaceAll("y", "i")
-    .replaceAll("ie", "e")
     .replace(/(.)\1+/gu, "$1")
 
 const wordsOf = (name: string): string[] =>

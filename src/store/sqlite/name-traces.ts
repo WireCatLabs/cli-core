@@ -85,12 +85,14 @@ const tracesOf = (database: CacheDatabase, person: number): Traces => {
   return traces
 }
 
-const common = (a: Held[], b: Held[]): [Held, Held] | undefined => {
+function* common(a: Held[], b: Held[]): Generator<[Held, Held]> {
+  const seen = new Set<string>()
   for (const one of a) {
     const other = b.find(({ value }) => value === one.value)
-    if (other !== undefined) return [one, other]
+    if (other === undefined || seen.has(one.value)) continue
+    seen.add(one.value)
+    yield [one, other]
   }
-  return undefined
 }
 
 const commonChat = (database: CacheDatabase, a: number, b: number) =>
@@ -104,12 +106,11 @@ const commonChat = (database: CacheDatabase, a: number, b: number) =>
     )
     .get(a, b)
 
-/** The first trace two people share, strongest first: a phone, an address, a chat, a company's domain. */
-export const sharedTrace = (database: CacheDatabase, a: number, b: number, name: string): SharedTrace | undefined => {
+/** The traces two people share, strongest first: each phone, each address, a chat, a company's domain. */
+export function* sharedTraces(database: CacheDatabase, a: number, b: number, name: string): Generator<SharedTrace> {
   const [one, other] = [tracesOf(database, a), tracesOf(database, b)]
-  const phone = common(one.phones, other.phones)
-  if (phone)
-    return {
+  for (const phone of common(one.phones, other.phones))
+    yield {
       identity: phone[0].identity,
       with: phone[1].identity,
       kind: "phone",
@@ -117,9 +118,8 @@ export const sharedTrace = (database: CacheDatabase, a: number, b: number, name:
       evidence: [],
       reason: `same name «${name}» and the same phone`,
     }
-  const email = common(one.emails, other.emails)
-  if (email)
-    return {
+  for (const email of common(one.emails, other.emails))
+    yield {
       identity: email[0].identity,
       with: email[1].identity,
       kind: "email",
@@ -130,7 +130,7 @@ export const sharedTrace = (database: CacheDatabase, a: number, b: number, name:
   const chat = commonChat(database, a, b)
   if (chat) {
     const ref = referenceOfThing(database, { type: "chat", id: Number(chat.chat_id) })
-    return {
+    yield {
       identity: Number(chat.one),
       with: Number(chat.other),
       kind: "chat",
@@ -138,14 +138,13 @@ export const sharedTrace = (database: CacheDatabase, a: number, b: number, name:
       reason: `same name «${name}» and a chat they are both in`,
     }
   }
-  const domain = common(one.domains, other.domains)
+  const domain = common(one.domains, other.domains).next().value
   if (domain)
-    return {
+    yield {
       identity: domain[0].identity,
       with: domain[1].identity,
       kind: "email-domain",
       evidence: [],
       reason: `same name «${name}» and mail at the same company, ${domain[0].value}`,
     }
-  return undefined
 }

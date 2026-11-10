@@ -587,8 +587,9 @@ proposes them instead. A no-reply address (`isNoReplyAddress`) is no one's: it n
   cursor (`store_settings` `people.scan`: the newest identity, move, revision, guest row and update time) limits a
   later pass to what changed. The owner's pending rulings are one predicate each: `phonePairJoins` (NEED-2445),
   `addressGroupJoins` (NEED-2446, and role addresses), and the rejection check in `join` (NEED-2444), which proposes a
-  rejected pair on evidence new to the owner. SEC-177: a pair with the owner's person on either side is only ever
-  proposed (`OWNER_PROPOSAL_REASON`), at import (`joinByAddress`) and in the scan; a bot's number or address, a role
+  rejected pair on evidence new to the owner. SEC-177: a pair with the owner's person on either side is never joined
+  or proposed by a rule, at import (`joinByAddress`) or in the scan (`touchesOwner`, skipped as `identity.owner`); only
+  an account under another name is proposed (signal `account`, `linkOwnIdentities`); a bot's number or address, a role
   address and a company's line (held by an organization, or by two people of one source list such as two CRM
   contacts) join and propose no one (`sharedLine`); a CRM never names the owner (`nameUnnamed`). `linkIndex` holds each pair's open proposal and the evidence keys of its
   rejected ones, read once per pass. An address's mail contact stands for its person in both the scan and the import,

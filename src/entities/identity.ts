@@ -10,6 +10,9 @@ export const identity = v.strictObject({
   id,
   name: v.nullable(text),
   username: v.nullable(text),
+  /** The number or address the source gave for them, when it gave one. */
+  phone: v.optional(v.nullable(text)),
+  email: v.optional(v.nullable(text)),
   /** The `person:` they are linked to, when one is. */
   person: v.optional(v.nullable(reference)),
 })

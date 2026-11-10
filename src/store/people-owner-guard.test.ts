@@ -63,6 +63,21 @@ describe("an account the owner connects (SEC-177)", () => {
     expect(await ownerRefs(store)).toEqual(["max:2", "telegram:1"])
   })
 
+  it("before the owner has a name, joins no named account when two arrive together: one may be a partner's", async () => {
+    const store = await open()
+    await store.accounts.saveAccount(OWN, { name: null })
+    await store.accounts.saveAccount(MAX, { name: null })
+    await store.people.savePeople(OWN, [{ id: "1", name: "Aleksei Ivanov" }])
+    await store.people.savePeople(MAX, [{ id: "2", name: "Svetlana 2" }])
+    await store.accounts.saveAccount(OWN, { name: null })
+
+    expect(await ownerRefs(store)).toEqual([])
+    expect((await openLinks(store)).map(({ payload }) => (payload as { signal: string }).signal)).toEqual([
+      "account",
+      "account",
+    ])
+  })
+
   it("never joins the owner when it is a bot", async () => {
     const store = await withOwner()
     const bot: AccountKey = { provider: "telegram-bot", account: "8" }
