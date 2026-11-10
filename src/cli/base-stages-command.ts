@@ -18,7 +18,6 @@ import { type Body, itemOf, listOf, snakeKeys } from "./envelope.js"
 import { queryTerms, termField, withQuery } from "./list-query.js"
 import { readAll } from "./messenger/stdin.js"
 import { ANSWER_SHAPE, askModel, parseProposals, recordProposals, suggestJobOf } from "./stage-suggest.js"
-import { readsStdin } from "./stdin-field.js"
 
 export interface BaseStagesCommandOptions {
   /** The run's environment, read for an agent's markers: an agent suggests mappings, the owner confirms and edits. */
@@ -295,20 +294,17 @@ export const baseStagesCommand = (app: AppIdentity, options: BaseStagesCommandOp
       })
     })
 
-  readsStdin(
-    answerEntity(
-      leaf(
-        "suggest",
-        FETCH,
-        "propose a base stage for every unconfirmed stage, by the AI model or by an agent",
-        "suggest",
-        "suggest --kind deal --dry-run --json",
-        "suggest --text-file answer.json",
-      ),
-      "stage_suggestion",
-      v.union([suggestion, suggestJob]),
+  answerEntity(
+    leaf(
+      "suggest",
+      FETCH,
+      "propose a base stage for every unconfirmed stage, by the AI model or by an agent",
+      "suggest",
+      "suggest --kind deal --dry-run --json",
+      "suggest --text-file answer.json",
     ),
-    { name: "text", description: `the agent's answer, ${ANSWER_SHAPE}`, json: true },
+    "stage_suggestion",
+    v.union([suggestion, suggestJob]),
   )
     .description(
       "send every unconfirmed stage that has more than one base stage of its outcome to go to, with the base stages, " +
