@@ -216,6 +216,36 @@ describe("a company's mailbox, the owner's third answer (NEED-2528)", () => {
     expect((await store.people.linkProposals({ limit: 50, offset: 0 })).items).toEqual([])
   })
 
+  it("with all closes every pair on the address in one decision; without it only the pair asked about", async () => {
+    const store = await open()
+    await store.people.savePeople(PERSONAL, [{ id: "5", name: "Ana Diaz", email: "info@shop.example" }])
+    await store.people.savePeople(MAX, [
+      { id: "7", name: "Bo Lind", email: "info@shop.example" },
+      { id: "8", name: "Cy Moss", email: "info@shop.example" },
+    ])
+    await store.people.scanMatches({ full: true })
+    const listed = (await store.people.linkProposals({ limit: 50, offset: 0 })).items
+    const [first, ...rest] = listed.map(({ id }) => id) as [string, ...string[]]
+
+    await store.people.decideLink(first, { confirm: false, by: "owner", company: {} })
+    const left = (await store.people.linkProposals({ limit: 50, offset: 0 })).items.map(({ id }) => id)
+    const decided = await store.people.decideLink(rest[0] as string, {
+      confirm: false,
+      by: "owner",
+      company: { all: true },
+    })
+    const rescan = await store.people.scanMatches({ full: true })
+
+    expect(listed).toHaveLength(3)
+    expect(new Set(listed.map(({ candidates }) => candidates.length))).toEqual(new Set([3]))
+    expect(new Set(listed.map(({ mailbox }) => mailbox))).toEqual(new Set(["info@shop.example"]))
+    expect(left.sort()).toEqual([...rest].sort())
+    expect(decided.result).toMatchObject({ closed: [rest[0], rest[1]] })
+    expect((await store.people.linkProposals({ limit: 50, offset: 0 })).items).toEqual([])
+    expect(rescan.proposed).toEqual([])
+    expect(rescan.merged).toEqual([])
+  })
+
   it("gives it to the organization the owner names, or to the one that holds the company's domain", async () => {
     const { store, id } = await sharedPair()
     const shop = await store.knowledge.addOrganization({ kind: "company", name: "Shop" })

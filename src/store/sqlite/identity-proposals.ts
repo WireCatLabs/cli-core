@@ -253,11 +253,22 @@ const toCompany = (
       reason: "organization.ambiguous",
     })
   }
-  const rejected = proposalOperationsOver(context).reject(proposal.id, author, {
-    dismissed: true,
-    organization: `organization:${organization}`,
-    ...noted,
-  })
+  const operations = proposalOperationsOver(context)
+  const others = company.all
+    ? context.database
+        .prepare(
+          "SELECT id FROM proposed_actions WHERE kind = ? AND status = 'proposed' AND id <> ? " +
+            "AND json_extract(payload, '$.mailbox') = ? ORDER BY id",
+        )
+        .all(IDENTITY_LINK_KIND, Number(proposal.id), address)
+        .map((row) => String(row.id))
+    : []
+  const result = { dismissed: true, organization: `organization:${organization}`, ...noted }
+  for (const other of others) {
+    const closed = operations.reject(other, author, { ...result, with: proposal.id })
+    settleMentions(context, closed.payload as IdentityLinkPayload, "found")
+  }
+  const rejected = operations.reject(proposal.id, author, { ...result, closed: [proposal.id, ...others] })
   settleMentions(context, payload, "found")
   return rejected
 }

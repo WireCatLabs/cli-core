@@ -574,7 +574,7 @@ proposes them instead. A no-reply address (`isNoReplyAddress`) is no one's: it n
   `identity.stale` once `sides` no longer hold. On a shared-mailbox proposal the owner has a third answer,
   `decideLink` with `company` (NEED-2528): the address goes to an organization (`organization_identities`, method
   `proposal`), the one named, else the one `organizationOfAddress` finds or makes as a mail finding does, and the
-  proposal is rejected, so its evidence keeps the pair from being proposed again on that address. `linkProposals` with
+  proposal is rejected, so its evidence keeps the pair from being proposed again on that address. With `all` it closes every open proposal on the same `mailbox` in that one decision, and the decided one's result lists them as `closed`. `linkProposals` with
   `order: "score"` lists the highest score first and proposals with none last. An agent's mention confirm and meeting association go through
   `linkOrPropose`, which links only for the owner; the mention waits as `proposed`.
   `linkPeople` (tg/max `contacts link`, a calendar's `people link`) takes who runs it from `actorOf`: an agent's link
