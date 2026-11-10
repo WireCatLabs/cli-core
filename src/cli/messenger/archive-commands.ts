@@ -22,6 +22,7 @@ import { gapsCommand } from "./gaps-command.js"
 import { historyLimitGaps } from "./history-gaps.js"
 import { messageItems } from "./message-items.js"
 import { ENCRYPT_OPTION, passwordOf } from "./password.js"
+import { storeImportCommand } from "./store-import-command.js"
 import { storeMaintenanceCommands } from "./store-maintenance-command.js"
 
 /** `store`: the local store of messages — what it holds, filling it, reading it out, and looking after the file. */
@@ -34,6 +35,7 @@ export const storeCommand = (messenger: Messenger): Command => {
     .addCommand(jobsCommand(messenger))
     .addCommand(exportCommand(messenger))
     .addCommand(clearCommand(messenger))
+    .addCommand(storeImportCommand(messenger))
   for (const command of storeMaintenanceCommands(messenger)) store.addCommand(command)
   const examples: Record<string, string> = {
     backup: "./backup.db",
@@ -45,6 +47,7 @@ export const storeCommand = (messenger: Messenger): Command => {
     export: '"Book club" --output ./messages.jsonl',
     "gaps show": '"Book club"',
     "gaps repair": '"Book club" --limit 100',
+    import: "./synthetic-chats.json --yes",
     info: "",
     "jobs cancel": "job-101",
     "jobs clear": "",

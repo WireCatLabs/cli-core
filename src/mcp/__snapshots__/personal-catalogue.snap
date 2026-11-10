@@ -261,6 +261,7 @@ write store copies delete
 write store decrypt
 write store export
 write store gaps repair
+write store import
 write store jobs cancel
 write store jobs clear
 write store jobs retry

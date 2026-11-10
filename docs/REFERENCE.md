@@ -731,6 +731,48 @@ message asks the owner something) are dashboard aggregates over the same store:
 strings and keys. `--json=id,text` keeps only those fields. MCP contact searches keep third-party registries off
 unless the caller explicitly sets `registries: true`.
 
+## Made-up data for a test store
+
+`<tool> <profile> store import <file.json>` (tg, max, wa: the `storeCommand` group) loads made-up chats, people and
+messages into the profile's account in the local store, for a sandbox or a demo. It writes them as a pushed sync
+does (`saveChats`, `savePeople`, `saveMessages`, then `saveMembers`), and records the account for the profile, so
+`--offline` reads and every page that reads the store see it as they would see a synced account.
+
+The file is the adapter kit's `Seed` (`src/kit/seed.ts`) without its test-only fields, plus `"synthetic": true`:
+
+```json
+{
+  "synthetic": true,
+  "account": { "id": "seed-owner", "name": "Alex Demo", "username": null },
+  "people": [{ "id": "seed-ann", "name": "Ann Lee", "username": "ann" }],
+  "chats": [{ "id": "seed-chat-1", "title": "Ann Lee", "kind": "dialog" }],
+  "members": { "seed-chat-1": [{ "id": "seed-owner", "name": "Alex Demo", "username": null }] },
+  "messages": [
+    {
+      "id": "seed-msg-1",
+      "chatId": "seed-chat-1",
+      "senderId": "seed-ann",
+      "senderName": "Ann Lee",
+      "timestamp": "2026-11-01T09:00:00.000Z",
+      "text": "Are we still on for Friday?"
+    }
+  ]
+}
+```
+
+- A chat takes `unreadCount`, `lastMessageAt` (the newest message's time when left out) and `participantsCount`; a
+  message takes `editedAt`, `replyToId` and `outgoing` (left out, it is whether the account sent it). Attachments,
+  reactions and forwards are not loaded.
+- Ids are the file's own and stay the same between loads: the same file twice adds nothing, and a message whose text
+  changed is updated in place, its old text kept as a revision, as an edit from the messenger would be.
+- Without `--yes` it says what it would load and does not open the store. Over MCP it loads, as any `ask` write does.
+- It refuses a file without `"synthetic": true`, a store in the owner's real WireCat folder or the tool's state folder
+  in the owner's real home (both read from the system's user database, so a moved `HOME` does not hide them, and a
+  link into them is followed), a profile that does not exist, and a profile that the tool or the store already holds
+  as another account. Its permission key is `store.import`, `ask` by default.
+- Timestamps are kept in UTC. Each write is the sync's own transaction, so a load that fails half-way leaves what it
+  wrote; running it again finishes it.
+
 ## The store schema a version speaks
 
 `package.json` carries `wirecat.store`: `speaks`, the newest store schema this version migrates a file to, and

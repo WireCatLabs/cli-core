@@ -1380,6 +1380,13 @@ const samples: Record<EntityName, unknown> = {
   store_decrypt: { path: "./synthetic.db", from: "./sealed", bytes: 1 },
   store_restore: { path: "./synthetic.db", restored_from: "./backup.db", kept_at: null, schema: 1 },
   store_reset: { path: "./synthetic.db", exists: false, reset: false },
+  store_import: {
+    store: "./synthetic.db",
+    profile: "synthetic",
+    account: "person-1",
+    imported: false,
+    file: { chats: 1, people: 2, messages: 3 },
+  },
   store_repair: { path: "./synthetic.db", exists: false },
   store_copy_removal: { path: "./synthetic.db", deleted: { name: "synthetic__repair_12345678", rows: 0 } },
   store_table: { name: "messages", kind: "data", rows: 2, bytes: 4096 },

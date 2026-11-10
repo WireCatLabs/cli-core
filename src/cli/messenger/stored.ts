@@ -693,7 +693,7 @@ const onlyRekeys = (batch: HistoryBatch): boolean =>
  * No `seenAt`: a pushed snapshot may be older than a deletion this store already holds. A chat's votes and stars go
  * in the transaction of its messages, after them, so a message in the batch is held, or known deleted, before them.
  */
-const fill = async (store: MessageStore, account: AccountKey, batch: HistoryBatch): Promise<void> => {
+export const fill = async (store: MessageStore, account: AccountKey, batch: HistoryBatch): Promise<void> => {
   if (batch.chats?.length) await store.chats.saveChats(account, batch.chats)
   if (batch.people?.length) await store.people.savePeople(account, batch.people)
   const byChat = new Map<
