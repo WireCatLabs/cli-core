@@ -144,7 +144,7 @@ it("folds a relationship stored twice, NULL and empty alike, onto the owner's ro
   const { path, acme, bob } = await seeded()
   const store = await openStore({ path })
   const held = await store.knowledge.relate(null, { by: "owner", from: bob, to: acme, kind: "related-to" })
-  const proposal = await store.knowledge.updateRelation(null, held.id, { role: "vendor", by: { bot: "claude" } })
+  const proposal = await store.knowledge.updateRelation(null, held.id, { role: "supplier", by: { bot: "claude" } })
   await store.close()
   const old = await openCache(path)
   rollBackTo(old, 56)

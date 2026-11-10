@@ -45,10 +45,12 @@ says which roles it takes:
 | `reports-to` | person → person (read backwards: `manages`) | none |
 | `customer-of` | person, organization → organization (read backwards: `supplier of`) | none |
 | `partner-of` | organization ↔ organization, stored once with the lower id as `from` | none |
-| `related-to` | person, organization, project, task, deal, lead → person, organization, project, task; contract → person, organization | a deal's or lead's: `owner`, `contact`, `decision-maker`, `influencer`; a contract's: `customer`, `supplier`, `signatory`, `guarantor`; others free text |
+| `related-to` | person, organization, project, task, deal, lead → person, organization, project, task; contract → person, organization | a deal's or lead's: `owner`, `contact`, `decision-maker`, `influencer`; a contract's: `customer`, `supplier`, `signatory`, `guarantor`; between people and organizations: `colleague`, `client`, `supplier`, `partner`, `adviser`, `investor`, `family`, `friend`; others free text |
 
-The owner may add his own roles to the organization, project, deal and contract lists (`knowledge.addRole`, store setting
-`relationships.roles.<list>`); `knowledge.roles(list)` answers the built-in roles and his, each with `builtIn`. A
+The owner may add his own roles to the organization, project, deal, contract and related lists (`knowledge.addRole`,
+store setting `relationships.roles.<list>`); `knowledge.roles(list)` answers the built-in roles and his, each with
+`builtIn`, a built-in one with `labels` in English, Russian and Spanish (`ROLE_LABELS`), his with his own `label`. Each
+row of `listRelations` says in `roleList` which list its role comes from, `null` where the role is free text. A
 built-in role stays, and an owner role a relationship still holds is not removed. A job title is never a role: it is `position` beside the relationship (`metadata.position`), with `startsAt` and
 `endsAt` (when it held, UTC ms, end exclusive). What a role means on this link, in the owner's words, is `roleNote`
 beside it (`metadata.roleNote`, up to 200 characters). A person's `member-of` a project also takes `engagement`

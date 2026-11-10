@@ -5,6 +5,8 @@ import {
   notOverriddenSql,
   RELATION_KINDS,
   type RelationKind,
+  type RoleList,
+  roleListOf,
   rolesOf,
   STANDINGS,
   type Standing,
@@ -53,6 +55,8 @@ export interface RelationListItem extends KnowledgeRelation {
   inverse?: string | null
   /** A stored role off the list its ends take, such as one written before the lists. */
   custom: boolean
+  /** The list `relationships roles list` offers for this relationship's role; `null` where the role is free text. */
+  roleList: RoleList | null
 }
 
 export interface RelationList {
@@ -177,6 +181,12 @@ export const relationListOver = (context: StoreContext): RelationList => {
     },
   }
 
+  function roleListOfEnds(kind: string, from: string, to: string): RoleList | null {
+    const fromThing = thingOf(database, from)
+    const toThing = thingOf(database, to)
+    return (fromThing && toThing && roleListOf(kind, fromThing.type, toThing.type)) || null
+  }
+
   function custom(kind: string, from: string, to: string, role: string | null): boolean {
     const fromThing = thingOf(database, from)
     const toThing = thingOf(database, to)
@@ -190,7 +200,12 @@ export const relationListOver = (context: StoreContext): RelationList => {
       linkOf(database, database.prepare("SELECT * FROM links WHERE id = ?").get(id) as Row),
       at,
     )
-    return { ...relation, source: "link", custom: custom(relation.kind, relation.from, relation.to, relation.role) }
+    return {
+      ...relation,
+      source: "link",
+      custom: custom(relation.kind, relation.from, relation.to, relation.role),
+      roleList: roleListOfEnds(relation.kind, relation.from, relation.to),
+    }
   }
 
   function proposalItem(id: string): RelationListItem {
@@ -228,6 +243,7 @@ export const relationListOver = (context: StoreContext): RelationList => {
       createdAt: action.createdAt,
       source: "proposal",
       custom: custom(payload.kind, payload.from, payload.to, payload.role ?? null),
+      roleList: roleListOfEnds(payload.kind, payload.from, payload.to),
     }
   }
 }

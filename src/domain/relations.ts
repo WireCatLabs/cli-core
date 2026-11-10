@@ -14,6 +14,17 @@ export const ORGANIZATION_ROLES = [
 export const PROJECT_ROLES = ["owner", "manager", "contributor", "client-contact", "approver"] as const
 /** A contract party's part; a party the list cannot name has none, never a catch-all `other`. */
 export const CONTRACT_ROLES = ["customer", "supplier", "signatory", "guarantor"] as const
+/** What a person or an organization is to another on `related-to`: a list, so the same tie reads the same way. */
+export const RELATED_ROLES = [
+  "colleague",
+  "client",
+  "supplier",
+  "partner",
+  "adviser",
+  "investor",
+  "family",
+  "friend",
+] as const
 
 /** How much the owner deals with a person on a project himself, not how active the person is; absent is unknown. */
 export const ENGAGEMENT_LEVELS = ["none", "low", "medium", "high"] as const
@@ -112,6 +123,8 @@ export const checkEnds = (kind: string, from: string, to: string): RelationSpec 
   return spec
 }
 
+const isParty = (type: string) => type === "person" || type === "organization"
+
 /**
  * The roles a relationship takes, or `undefined` for free text. A member's list is the organization's or the
  * project's only when the member is a person: a chat's or a sub-project's role was never one of them.
@@ -119,6 +132,7 @@ export const checkEnds = (kind: string, from: string, to: string): RelationSpec 
 export const rolesOf = (kind: string, from: string, to: string): readonly string[] | undefined => {
   const spec = specOf(kind)
   if (kind === "member-of" && from !== "person") return undefined
+  if (kind === "related-to" && isParty(from) && isParty(to)) return RELATED_ROLES
   return spec?.roles?.from?.[from as End] ?? spec?.roles?.to?.[to as End]
 }
 
@@ -128,6 +142,7 @@ export const ROLE_LISTS = {
   project: PROJECT_ROLES,
   deal: DEAL_ROLES,
   contract: CONTRACT_ROLES,
+  related: RELATED_ROLES,
 } as const
 export type RoleList = keyof typeof ROLE_LISTS
 

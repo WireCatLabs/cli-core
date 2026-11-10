@@ -1,4 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
+import { ROLE_LABELS, type RoleLabels } from "../../domain/relation-role-labels.js"
 import { checkRole, ROLE_LISTS, type RoleList, roleListOf } from "../../domain/relations.js"
 import type { CacheDatabase } from "../driver.js"
 import type { StoreContext } from "./open.js"
@@ -6,7 +7,10 @@ import { write } from "./transaction.js"
 
 export interface RelationRole {
   id: string
+  /** The owner's own word for his role; a built-in one has none and reads by `labels`. */
   label: string | null
+  /** A built-in role in English, Russian and Spanish; `null` for the owner's own. */
+  labels: RoleLabels | null
   builtIn: boolean
 }
 
@@ -55,7 +59,11 @@ export const checkStoredRole = (database: CacheDatabase, kind: string, from: str
   checkRole(kind, from, to, role, extraRolesOf(database, kind, from, to))
 
 /** The `related-to` links whose role comes from a list, by the types that name it. */
-const RELATED_FROM: Partial<Record<RoleList, string>> = { deal: "'deal', 'lead'", contract: "'contract'" }
+const RELATED_FROM: Partial<Record<RoleList, string>> = {
+  deal: "'deal', 'lead'",
+  contract: "'contract'",
+  related: "'person', 'organization'",
+}
 
 /**
  * The links whose role comes from this list: a person's on an organization or a project, a deal's or a lead's people,
@@ -63,12 +71,16 @@ const RELATED_FROM: Partial<Record<RoleList, string>> = { deal: "'deal', 'lead'"
  */
 const usedBy = (database: CacheDatabase, list: RoleList, role: string): number => {
   const related = RELATED_FROM[list]
+  const parties = list === "related"
   const links = related
-    ? `kind = 'related-to' AND from_type IN (${related})`
+    ? `kind = 'related-to' AND from_type IN (${related})${parties ? ` AND to_type IN (${related})` : ""}`
     : `kind = 'member-of' AND from_type = 'person' AND to_type = '${list}'`
   // A pending proposal would make the role a relationship's once approved: it counts as a use.
   const proposals = related
-    ? `target_type IN (${related}) AND json_extract(payload, '$.kind') = 'related-to'`
+    ? `target_type IN (${related}) AND json_extract(payload, '$.kind') = 'related-to'` +
+      (parties
+        ? " AND (json_extract(payload, '$.to') LIKE 'person:%' OR json_extract(payload, '$.to') LIKE 'organization:%')"
+        : "")
     : `target_type = 'person' AND json_extract(payload, '$.kind') = 'member-of' AND json_extract(payload, '$.to') LIKE '${list}:%'`
   return Number(
     database
@@ -83,8 +95,8 @@ const usedBy = (database: CacheDatabase, list: RoleList, role: string): number =
 
 export const relationRolesOver = ({ database, now }: StoreContext): RelationRoles => {
   const all = (list: RoleList): RelationRole[] => [
-    ...ROLE_LISTS[list].map((id) => ({ id, label: null, builtIn: true })),
-    ...ownerRolesOf(database, list).map((role) => ({ ...role, builtIn: false })),
+    ...ROLE_LISTS[list].map((id) => ({ id, label: null, labels: ROLE_LABELS[list][id] ?? null, builtIn: true })),
+    ...ownerRolesOf(database, list).map((role) => ({ ...role, labels: null, builtIn: false })),
   ]
   const save = (list: RoleList, roles: { id: string; label: string | null }[]) =>
     database

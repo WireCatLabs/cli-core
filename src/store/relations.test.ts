@@ -40,9 +40,9 @@ it("refuses a role off the list a relationship's ends name, and says which roles
   await expect(store.knowledge.updateRelation(null, member.id, { role: "author", by: "owner" })).rejects.toMatchObject(
     role,
   )
-  expect(
-    await store.knowledge.relate(null, { by: "owner", from: acme, to: alice, kind: "related-to", role: "any" }),
-  ).toMatchObject({ role: "any" })
+  await expect(
+    store.knowledge.relate(null, { by: "owner", from: acme, to: alice, kind: "related-to", role: "any" }),
+  ).rejects.toMatchObject(role)
 })
 
 it("joins only the ends a kind names: a person reports to a person, an organization buys from an organization", async () => {
@@ -162,8 +162,8 @@ it("takes the owner's own roles on a list beside the built-in ones, and keeps th
   const { store, acme, alice } = await fixture()
   expect(await store.knowledge.addRole("organization", "board-member", "Board member")).toEqual(
     expect.arrayContaining([
-      { id: "employee", label: null, builtIn: true },
-      { id: "board-member", label: "Board member", builtIn: false },
+      expect.objectContaining({ id: "employee", label: null, builtIn: true }),
+      { id: "board-member", label: "Board member", labels: null, builtIn: false },
     ]),
   )
   await expect(store.knowledge.addRole("organization", "employee")).rejects.toMatchObject({
@@ -288,4 +288,28 @@ it("orders links by engagement: high, medium, unknown, low, none, the rest in th
     { id: 6, engagement: "medium" as const },
   ]
   expect(byEngagement(links).map(({ id }) => id)).toEqual([4, 6, 2, 5, 3, 1])
+})
+
+it("takes a person's tie to a person or an organization from the related list, with labels, and lists which list", async () => {
+  const { store, acme, alice, bob } = await fixture()
+  await expect(
+    store.knowledge.relate(null, { by: "owner", from: alice, to: bob, kind: "related-to", role: "drinking buddy" }),
+  ).rejects.toMatchObject({ ...role, message: expect.stringContaining("colleague, client") })
+  await store.knowledge.addRole("related", "mentor", "Наставник")
+  await store.knowledge.relate(null, { by: "owner", from: alice, to: bob, kind: "related-to", role: "mentor" })
+  await store.knowledge.relate(null, { by: "owner", from: alice, to: acme, kind: "related-to", role: "client" })
+  const { items } = await store.knowledge.listRelations({ kind: "related-to" })
+  expect(items.map(({ role, roleList, custom }) => ({ role, roleList, custom }))).toEqual([
+    { role: "mentor", roleList: "related", custom: false },
+    { role: "client", roleList: "related", custom: false },
+  ])
+  const roles = await store.knowledge.roles("related")
+  expect(roles.find(({ id }) => id === "colleague")).toMatchObject({
+    builtIn: true,
+    labels: { en: "Colleague", ru: "Коллега", es: "Colega" },
+  })
+  expect(roles.at(-1)).toEqual({ id: "mentor", label: "Наставник", labels: null, builtIn: false })
+  await expect(store.knowledge.removeRole("related", "mentor")).rejects.toMatchObject({
+    details: { reason: "relationship.role-in-use", count: 1 },
+  })
 })
