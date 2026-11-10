@@ -73,6 +73,12 @@ const picked = (name: string, text: string, values: readonly string[]) => {
   return text
 }
 
+/** The users whose deals and leads scope mine keeps, whatever the scope is now: `self` and the `unassigned` list. */
+export const crmScopeUsers = (database: CacheDatabase, key: AccountKey): string[] => {
+  const self = crmOwnUser(database, key)
+  return [...new Set([...(self ? [self] : []), ...userIds(stored(database, crmSettingKey(key, "unassigned")))])]
+}
+
 /**
  * `links`: reported or review; `scope`: mine or all; `unassigned`: the CRM's user ids, comma-separated;
  * `company-types`: `TYPE=meaning` pairs, comma-separated.

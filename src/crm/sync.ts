@@ -12,7 +12,7 @@ import {
 } from "../domain/crm.js"
 import { DEAL_KINDS, type DealKind } from "../domain/deals.js"
 import { isCliFailure } from "../errors/failures.js"
-import type { CrmRelationIssue, CrmSaved, CrmSkipped } from "../store/sqlite/crm.js"
+import type { CrmContactsRemoved, CrmRelationIssue, CrmSaved, CrmSkipped } from "../store/sqlite/crm.js"
 import { crmSettingKey } from "../store/sqlite/crm-settings.js"
 import type { MessageStore } from "../store/store.js"
 import type { AccountKey } from "../store/types.js"
@@ -158,6 +158,8 @@ export interface CrmSyncReport {
   scope: CrmScope
   /** Relationships left out because the owner removed or rejected that very one, role included. */
   skippedOwnerRejected: number
+  /** After a complete run that narrowed the copy or listed it again under `mine`: the contacts outside it, removed. */
+  contactsRemoved?: CrmContactsRemoved
   synced: CrmSyncResult[]
   issues: CrmSyncIssue[]
   /** Every kind finished its round and none failed. */
@@ -688,6 +690,13 @@ export const syncCrm = async (
   }
   // A relationship held back for an end a later page or kind brought is written now; it costs no request.
   run.droppedPending += (await store.crm.retryPending(account)).dropped
+  const narrowed = report.synced.some((one) => one.outOfScope > 0)
+  const whole = report.synced.every(
+    (one) => one.state === "complete" && one.error === undefined && !one.held && one.pass !== "held",
+  )
+  // Contacts have no scope of their own and no deletion check: they leave with the last deal or lead naming them.
+  if (scope.mode === "mine" && (options.rescan || narrowed) && whole && !stopped && kinds.includes("person"))
+    report.contactsRemoved = await store.crm.removeContacts(account, { users: scopeIds(scope) ?? [], before: now })
   if (run.unlistedUsers)
     report.issues.push({
       kind: "deal",

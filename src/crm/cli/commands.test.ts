@@ -306,6 +306,29 @@ describe("CRM commands", () => {
     })
   })
 
+  it("store apply counts the contacts scope mine would remove, and removes them only with --yes under mine", async () => {
+    const { path, source, cli, store } = await setup()
+    source.put("person", examplePerson("p2"))
+    source.put("deal", exampleDeal("d3", { assignee: "9", people: [{ externalId: "p2", role: "contact" }] }))
+    await cli("sync")
+    const set = async (name: string, value: string) => {
+      const database = await openCache(path)
+      database
+        .prepare("INSERT OR REPLACE INTO store_settings (key, value, at) VALUES (?, ?, 1)")
+        .run(`crm.${PORTAL.provider}:${PORTAL.account}.${name}`, JSON.stringify(value))
+      database.close()
+    }
+    await set("self", "7")
+    await set("scope", "all")
+    const counted = { contacts: 1, persons: 1, persons_kept: 0, names: 0 }
+    expect((await cli("store", "apply")).item).toEqual({ ...counted, applied: false })
+    await expect(cli("store", "apply", "--yes")).rejects.toMatchObject({ code: "validation_error" })
+    expect(await store.crm.count(PORTAL, "person")).toBe(2)
+    await set("scope", "mine")
+    expect((await cli("store", "apply", "--yes")).item).toEqual({ ...counted, applied: true })
+    expect(await store.crm.count(PORTAL, "person")).toBe(1)
+  })
+
   it("search all finds a deal by a word of its title", async () => {
     const { cli } = await setup()
     await cli("sync")

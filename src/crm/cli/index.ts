@@ -7,7 +7,7 @@ import * as v from "valibot"
 import { answerEntity } from "../../cli/answer-entity.js"
 import { environmentOf, inCommandRun, outputFor, runBudgetOf } from "../../cli/context.js"
 import { honoursDryRun } from "../../cli/dry-run-guard.js"
-import { FETCH, LOCAL_READ, NO_EFFECTS, REMOTE_WRITE } from "../../cli/effects.js"
+import { FETCH, LOCAL_READ, LOCAL_WRITE, NO_EFFECTS, REMOTE_WRITE } from "../../cli/effects.js"
 import { type Body, itemOf, listOf, renderAnswer, snakeKeys, snakeKeysKeeping } from "../../cli/envelope.js"
 import { queryTerms, termField, unfilteredQuery, withQuery } from "../../cli/list-query.js"
 import { terminalAsker } from "../../cli/messenger/ask.js"
@@ -17,7 +17,7 @@ import { DEAL_KINDS, DEAL_STATUSES, type DealKind } from "../../domain/deals.js"
 import { deal as dealEntity } from "../../entities/deal.js"
 import { count, text } from "../../entities/fields.js"
 import type { AppIdentity } from "../../ports/app.js"
-import { CRM_SCOPES } from "../../store/sqlite/crm-settings.js"
+import { CRM_SCOPES, crmSettingKey } from "../../store/sqlite/crm-settings.js"
 import type { Deal, DealFilter, Pipeline } from "../../store/sqlite/deals.js"
 import type { MessageStore } from "../../store/store.js"
 import type { AccountKey } from "../../store/types.js"
@@ -123,6 +123,15 @@ const DEAL_UNTRUSTED = [
 const PIPELINE_UNTRUSTED = ["name", "stages.name"]
 const STAGE_UNTRUSTED = ["name", "pipeline_name"]
 
+const crmContactsRemoved = v.strictObject({
+  contacts: count,
+  persons: count,
+  persons_kept: count,
+  names: count,
+})
+
+const crmContactsApplied = v.strictObject({ ...crmContactsRemoved.entries, applied: v.boolean() })
+
 const crmSync = v.strictObject({
   provider: text,
   account: text,
@@ -133,6 +142,7 @@ const crmSync = v.strictObject({
   pipelines: count,
   users: v.optional(count),
   skipped_owner_rejected: count,
+  contacts_removed: v.optional(crmContactsRemoved),
   synced: v.array(
     v.strictObject({
       kind: v.picklist(CRM_KINDS),
@@ -366,6 +376,33 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
         has_more: false,
         page: 1,
       })
+    })
+  })
+
+  example(
+    answerEntity(
+      annotate(store.command("apply"), { effects: LOCAL_WRITE }),
+      "crm_contacts_removed",
+      crmContactsApplied,
+    ).description(
+      "apply scope mine to the contacts already stored: remove those no deal or lead of the chosen users and no " +
+        "kept company names, and the people they leave empty; counts only unless --yes, under scope all too. A " +
+        "sync that narrows the scope, or sync --rescan under mine, does this itself",
+    ),
+    "store apply",
+    "store apply --yes",
+  ).action(async (_opts: unknown, command: Command) => {
+    const yes = command.optsWithGlobals<{ yes?: boolean }>().yes === true
+    await within(command, async (run) => {
+      const scope = crmSettingKey(run.account, "scope")
+      if (yes && (await run.store.crm.scope(run.account)).mode !== "mine")
+        throw new CliError(
+          "validation_error",
+          `scope is all, so a sync would copy these contacts again: set ${scope} to mine first`,
+          { setting: scope },
+        )
+      const removed = await run.store.crm.removeContacts(run.account, { before: now(), dryRun: !yes })
+      return itemOf(snakeKeys({ ...removed, applied: yes }))
     })
   })
 

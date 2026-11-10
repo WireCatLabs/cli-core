@@ -151,7 +151,8 @@ export type CrmScopeSetting = { mode: "all" } | { mode: "mine"; also: readonly s
 
 /**
  * Which deals and leads a sync copies: all, or those with no assignee or assigned to the sign-in's own user (`self`)
- * or to one of `also`. Contacts and companies are always copied whole. Ids are normalised (`normalCrmUserId`).
+ * or to one of `also`. Companies and contacts are what the source lists; under `mine`, a contact no kept deal, lead or
+ * company names is removed after a sync that narrowed the copy or listed it again. Ids are normalised (`normalCrmUserId`).
  */
 export type CrmScope = { mode: "all" } | { mode: "mine"; self: string; also: readonly string[] }
 

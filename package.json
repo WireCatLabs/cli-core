@@ -15,7 +15,7 @@
   "type": "module",
   "wirecat": {
     "store": {
-      "speaks": 63,
+      "speaks": 64,
       "minCompatible": 56
     }
   },
