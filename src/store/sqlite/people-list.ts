@@ -121,7 +121,7 @@ const MAIL_COUNTS = (scope: Scope) =>
   `WHERE e.outgoing IS NOT 1 AND e.deleted_at IS NULL AND ${IN_SCOPE(scope, "l.person_id")} GROUP BY 1`
 
 const IDENTITIES = (scope: Scope) =>
-  "SELECT l.person_id AS person, i.id, i.provider, i.external_id, i.username, i.phone, i.email, i.bot " +
+  "SELECT l.person_id AS person, i.id, i.provider, i.external_id, i.name, i.username, i.phone, i.email, i.bot " +
   `FROM identity_links l JOIN identities i ON i.id = l.identity_id WHERE ${IN_SCOPE(scope, "l.person_id")} ORDER BY i.id`
 
 /** Few identities have these; one pass each beats a lookup per identity. */
@@ -139,6 +139,7 @@ const LAST_CONTACTS = (identities: string) =>
 
 /** Everything a person's kind and row are made from, gathered once for every person. */
 interface Facts {
+  name: string | null
   username: string | null
   usernameSource: string | null
   phone: string | null
@@ -164,6 +165,7 @@ const factsOf = (database: CacheDatabase, scope: Scope): Map<number, Facts> => {
   for (const row of database.prepare(IDENTITIES(scope)).all(...scopeParams(scope))) {
     const person = Number(row.person)
     const one = facts.get(person) ?? {
+      name: null,
       username: null,
       usernameSource: null,
       phone: null,
@@ -174,6 +176,8 @@ const factsOf = (database: CacheDatabase, scope: Scope): Map<number, Facts> => {
       organization: false,
     }
     const email = text(row.email) ?? (row.provider === "email" ? text(row.external_id) : null)
+    const named = displayName(text(row.name))
+    if (one.name === null && isReadable(named) && !named?.startsWith("@")) one.name = named
     if (one.username === null && text(row.username) !== null) {
       one.username = text(row.username)
       one.usernameSource = String(row.provider)
@@ -269,7 +273,7 @@ const classified = (
   return people.map(({ id, name, owner }) => {
     const own = facts.get(id)
     const contact = { username: own?.username ?? null, phone: own?.phone ?? null, email: own?.email ?? null }
-    const shown = displayName(name, contact)
+    const shown = displayName(name, { ...contact, name: own?.name ?? null })
     const ties = reasons.get(id) ?? []
     const { kind, signals } = kindOf(shown, own, ties, mail.get(id))
     return {
@@ -319,7 +323,7 @@ const byName = (a: Classified, b: Classified) =>
  * Bump when what decides a kind, a name's order or a count changes in code (the word lists, `BULK_MIN`, the ties):
  * every stored one is worked out again on the next list.
  */
-const KIND_RULES = "2"
+const KIND_RULES = "3"
 const RULES_KEY = "people.kind_rules"
 /** Past this many people to work out, one pass over everyone beats a lookup per person. */
 const WHOLE_PASS = 20_000

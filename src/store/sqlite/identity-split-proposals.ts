@@ -15,7 +15,7 @@ import { personOf, pkOf, sideOf } from "./identity-link-rows.js"
 import { parseIdentityRef } from "./identity-proposals.js"
 import { currentPerson } from "./merged-persons.js"
 import type { StoreContext } from "./open.js"
-import { recordOf, required, unlinkIdentity } from "./person-links.js"
+import { heldBy, recordOf, required, unlinkIdentity } from "./person-links.js"
 import { mergeId, merges, parseMergeId, split, undoMerge } from "./person-merges.js"
 import { type ProposedAction, proposalOperationsOver, proposerOfAction } from "./proposed-actions.js"
 import { write } from "./transaction.js"
@@ -46,6 +46,7 @@ const planOf = (context: StoreContext, input: IdentitySplitInput): Plan => {
   }
   const chosen = [...new Map(input.identities.map((ref) => [refOf(ref), ref])).values()]
   if (chosen.length === 0) throw new CliError("validation_error", "name at least one identity to split off")
+  if (input.from !== undefined) heldBy(context, input.from, chosen)
   const persons = new Set(chosen.map((ref) => required(context, ref).personPk))
   if (persons.size > 1)
     throw new CliError("validation_error", "the identities that leave are all of one person", {

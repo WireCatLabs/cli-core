@@ -425,6 +425,10 @@ const OTHERS: Entry[] = [
     "the people a merge or a proposed link names changed since; undo the later merge, or propose the link again",
   ],
   ["identity.no-merge", "not_found", "nothing of that person is merged into the other; people show lists the merges"],
+  validation(
+    "identity.held-elsewhere",
+    "the identity sits on another person than the one named; name that person to take it off them",
+  ),
   validation("identity.several-persons", "the identities that leave a person are all of that one person"),
   validation("identity.nothing-left", "a split leaves at least one identity with the person"),
   [

@@ -43,7 +43,15 @@ import type { PrivateContact, PrivateContactNote } from "./sqlite/private-people
 import * as privatePeople from "./sqlite/private-people.js"
 import type { ProposedAction } from "./sqlite/proposed-actions.js"
 import { write } from "./sqlite/transaction.js"
-import type { AccountKey, IdentityRef, LinkOptions, PersonFacts, PersonRecord, StoredAccount } from "./types.js"
+import type {
+  AccountKey,
+  IdentityRef,
+  LinkOptions,
+  PersonFacts,
+  PersonRecord,
+  StoredAccount,
+  UnlinkOptions,
+} from "./types.js"
 
 export interface AccountPeople {
   savePeople(key: AccountKey, people: PersonFacts[]): Promise<void>
@@ -100,7 +108,7 @@ export interface PeopleStore extends AccountPeople {
   ): Promise<PersonPreparationRead>
   /** Records the decision in `identity_link_events`; `unlinkIdentity` undoes it. */
   linkIdentities(person: IdentityRef, other: IdentityRef, options: LinkOptions): Promise<PersonRecord>
-  unlinkIdentity(identity: IdentityRef, options: LinkOptions): Promise<PersonRecord>
+  unlinkIdentity(identity: IdentityRef, options: UnlinkOptions): Promise<PersonRecord>
   /** The people merged into this one, newest first, each with the identities that came from it. */
   merges(uid: string): Promise<PersonMerge[]>
   /** The owner's undo of a merge: the identities that came from `from` go back to it. Gives `from` again. */

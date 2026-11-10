@@ -188,3 +188,50 @@ describe("a split an agent proposes (IDEA-271)", () => {
     expect((await store.people.splitProposals({ status: "all", limit: 10, offset: 0 })).items).toEqual([])
   })
 })
+
+describe("taking identities off the person named (BUG-709)", () => {
+  const withColleague = async () => {
+    const store = await absorbed()
+    await store.people.savePeople(OWN, [
+      { id: "8", name: "Ярослав Орлов" },
+      { id: "9", name: "Yaroslav (work)" },
+    ])
+    await store.people.linkIdentities(tg("8"), tg("9"), { method: "manual", by: "owner" })
+    const owner = (await store.people.owner())?.uid as string
+    const colleague = (await store.people.personOf(tg("8")))?.uid as string
+    return { store, owner, colleague }
+  }
+
+  it("refuses an identity that sits on someone else, names who holds it, and moves nothing", async () => {
+    const { store, owner, colleague } = await withColleague()
+    const refused = {
+      code: "validation_error",
+      details: { reason: "identity.held-elsewhere", param: "from", reference: `person:${colleague}` },
+    }
+
+    await expect(
+      store.people.unlinkIdentity(tg("9"), { method: "unlink", by: "owner", from: owner }),
+    ).rejects.toMatchObject(refused)
+    await expect(store.people.split(owner, [tg("9")], "owner")).rejects.toMatchObject(refused)
+    await expect(
+      store.people.proposeSplit({ identities: [tg("9")], from: owner, by: agent, reason: "not mine" }),
+    ).rejects.toMatchObject(refused)
+    await expect(store.people.unlinkIdentity(tg("9"), { method: "unlink", by: "owner", from: owner })).rejects.toThrow(
+      `telegram:9 sits on Ярослав Орлов (person:${colleague})`,
+    )
+
+    expect((await store.people.personOf(tg("9")))?.uid).toBe(colleague)
+    expect(await ownerRefs(store)).toEqual(["max:2", "telegram:1", "telegram:7"])
+  })
+
+  it("takes it off when the person named holds it", async () => {
+    const { store, colleague } = await withColleague()
+    const alone = await store.people.unlinkIdentity(tg("9"), {
+      method: "unlink",
+      by: "owner",
+      from: `person:${colleague}`,
+    })
+    expect(alone.uid).not.toBe(colleague)
+    expect((await store.people.personOf(tg("8")))?.identities.map(({ id }) => id)).toEqual(["8"])
+  })
+})

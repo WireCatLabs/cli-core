@@ -1,7 +1,16 @@
 import { CliError } from "@wirecat/cli-base"
 import { isEmailAddress, isRoleAddress } from "../../domain/addresses.js"
+import { displayName } from "../../domain/display-names.js"
 import type { Id, Page } from "../../domain/models.js"
-import type { IdentityRef, LinkedIdentity, LinkOptions, PersonRecord, StoredAccount, StoredHit } from "../types.js"
+import type {
+  IdentityRef,
+  LinkedIdentity,
+  LinkOptions,
+  PersonRecord,
+  StoredAccount,
+  StoredHit,
+  UnlinkOptions,
+} from "../types.js"
 import { and, eq, inArray, isNull, type SQL, sql } from "./drizzle/core.js"
 import { identityOf } from "./identities.js"
 import { rejectedEvidence, settleLinks } from "./identity-link-rows.js"
@@ -323,8 +332,36 @@ export const renameAfterLeaving = (context: StoreContext, person: number, left: 
     .run(typeof kept === "string" ? kept : null, context.now(), person)
 }
 
+const shownAs = (person: PersonRecord) =>
+  `${displayName(person.name, { name: person.identities.find((identity) => identity.name)?.name ?? null }) ?? "a person with no name"} (person:${person.uid})`
+
+/**
+ * Refuses identities that sit on anyone but `from` (a uid, or `person:<uid>` as doubts and refusals give it), so a
+ * caller that guessed the person never takes them off someone else. The refusal names who holds them.
+ */
+export const heldBy = (context: StoreContext, from: string, refs: readonly IdentityRef[]): void => {
+  const uid = from.startsWith("person:") ? from.slice("person:".length) : from
+  const found = /^[1-9]\d*$/.test(uid)
+    ? context.database.prepare("SELECT id FROM persons WHERE id = ?").get(uid)
+    : undefined
+  if (found === undefined) throw new CliError("not_found", `no person:${uid} in the store`, { param: "from" })
+  const pk = currentPerson(context.database, Number(found.id))
+  for (const ref of refs) {
+    const row = required(context, ref)
+    if (row.personPk === pk) continue
+    const holder = recordOf(context, row.personPk)
+    throw new CliError(
+      "validation_error",
+      `${ref.provider}:${ref.id} sits on ${shownAs(holder)}, not on ${shownAs(recordOf(context, pk))}; nothing changed. ` +
+        `Name person:${holder.uid} to take it off them`,
+      { reason: "identity.held-elsewhere", param: "from", reference: `person:${holder.uid}` },
+    )
+  }
+}
+
 /** Gives the identity a person of its own again; the ones left keep theirs. */
-export const unlinkIdentity = (context: StoreContext, ref: IdentityRef, options: LinkOptions): PersonRecord => {
+export const unlinkIdentity = (context: StoreContext, ref: IdentityRef, options: UnlinkOptions): PersonRecord => {
+  if (options.from !== undefined) heldBy(context, options.from, [ref])
   const found = required(context, ref)
   const others = context.orm
     .select({ n: sql<number>`count(*)` })
@@ -342,7 +379,7 @@ export const unlinkIdentity = (context: StoreContext, ref: IdentityRef, options:
       .returning({ pk: persons.id })
       .get()?.pk,
   )
-  move(context, found.pk, found.personPk, alone, { ...options, method: "unlink" })
+  move(context, found.pk, found.personPk, alone, { method: "unlink", by: options.by })
   renameAfterLeaving(context, found.personPk, [found.pk])
   return recordOf(context, alone)
 }

@@ -118,10 +118,11 @@ describe("people in doubt (IDEA-270)", () => {
 
     const [doubt] = (await store.people.doubts(page)).items
 
+    const from = doubt?.person
     expect(doubt).toMatchObject({
       reason: "shared-address",
-      fix: ["people unlink 'bitrix24:Olga S'"],
-      moves: [{ op: "unlink", identities: ["bitrix24:Olga S"] }],
+      fix: [`people unlink 'bitrix24:Olga S' --from ${from}`],
+      moves: [{ op: "unlink", identities: ["bitrix24:Olga S"], from }],
     })
   })
 
