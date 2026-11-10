@@ -335,7 +335,7 @@ describe("tasks", () => {
 
     await ok("tasks", "scan", "7", "--yes")
     const { id, key } = item(await ok("tasks", "add", PROMISE, "--type", "promise", "--category", "money"))
-    const before = item(await ok("tasks", "show", key)).title
+    expect(item(await ok("tasks", "show", key)).title).toBe("I'll send the invoice tomorrow")
     await ok(
       "tasks",
       "update",
@@ -371,7 +371,9 @@ describe("tasks", () => {
     const store = await openStore({ path: call.env.MESSAGING_STORE as string })
     try {
       const events = await store.tasks.events(id)
-      expect(events.find((one) => one.kind === "title")?.changes).toEqual({ title: [before, "send Ana the invoice"] })
+      expect(events.find((one) => one.kind === "title")?.changes).toEqual({
+        title: ["promise — msg:chat/500/7/1", "send Ana the invoice"],
+      })
     } finally {
       await store.close()
     }

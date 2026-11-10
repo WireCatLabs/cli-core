@@ -31,6 +31,7 @@ import { type TaskCloseStore, taskCloseOver } from "./task-close-store.js"
 import { inboxKey, typedKey } from "./task-keys.js"
 import { type TaskPairs, taskPairsOver } from "./task-pairs.js"
 import { type TaskStats, taskStatsOver } from "./task-stats.js"
+import { displayTitleOf } from "./task-titles.js"
 import { taskRowOf, thingOf } from "./things.js"
 import { read, write } from "./transaction.js"
 import { recordTaskEvent, type WorkTasks, workTasksOver } from "./work-tasks.js"
@@ -175,7 +176,7 @@ export const taskStoreOver = (context: StoreContext): StoreTaskStore => {
         .all(project, ...(where?.params ?? []), limit, offset)
         .map((row) => ({
           task: toTask(row),
-          title: String(row.title),
+          title: displayTitleOf(database, row),
           updatedAt: new Date(Number(row.updated_at)),
           closeSuggestion: closeSuggestionOf(database, row),
         }))

@@ -40,6 +40,7 @@ import { type CloseSuggestion, closeSuggestionOf, SUGGESTION_COLUMNS } from "./t
 import { addComment, authorNamed, commentsOf, type NamedAuthor, type TaskComment } from "./task-comments.js"
 import { INBOX_KEY_LENGTH, inboxKey } from "./task-keys.js"
 import { type TaskRelationsStore, taskRelationsStoreOver } from "./task-relations.js"
+import { displayTitleOf } from "./task-titles.js"
 import { taskIdOf, taskRowOf, thingOf } from "./things.js"
 import { write } from "./transaction.js"
 
@@ -390,7 +391,7 @@ export const workTaskOperationsOver = (context: StoreContext): WorkTaskOperation
       project: `project:${row.project_id}`,
       ...projectNamed(Number(row.project_id)),
       createdBy: authorNamed(database, row),
-      title: String(row.title),
+      title: displayTitleOf(database, row),
       description: row.description == null ? null : String(row.description),
       type: row.type as TaskType,
       status: row.status as TaskState,
