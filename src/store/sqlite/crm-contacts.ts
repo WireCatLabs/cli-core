@@ -131,6 +131,11 @@ export const removeCrmContacts = (
           `AND from_id IN ${persons} AND kind = 'member-of' AND role = 'contact'))`,
       )
       .run(accountId)
+    // A split names the identities that would leave, an address among them: it goes with them, whatever its status.
+    database.exec(
+      "DELETE FROM proposed_actions WHERE kind = 'identity_split' AND EXISTS (SELECT 1 FROM json_each(payload, " +
+        `'$.identities') WHERE value IN (SELECT provider || ':' || external_id FROM identities WHERE id IN ${gone}))`,
+    )
     database.exec(
       "DELETE FROM proposed_actions WHERE kind = 'identity_link' AND status = 'proposed' AND (" +
         `json_extract(payload, '$.identity') IN (SELECT provider || ':' || external_id FROM identities WHERE id IN ${gone}) ` +
@@ -151,7 +156,8 @@ export const removeCrmContacts = (
       "SELECT CAST(substr(value, 8) AS INTEGER) AS id FROM proposed_actions, json_each(json_array(" +
       "json_extract(payload, '$.from'), json_extract(payload, '$.to'))) WHERE value LIKE 'person:%' " +
       "UNION SELECT CAST(value AS INTEGER) FROM proposed_actions, json_each(payload, '$.persons') " +
-      "WHERE json_type(payload, '$.persons') = 'array'"
+      "WHERE json_type(payload, '$.persons') = 'array' " +
+      "UNION SELECT CAST(json_extract(payload, '$.person') AS INTEGER) FROM proposed_actions WHERE kind = 'identity_split'"
     database.exec(
       `DELETE FROM temp.crm_persons WHERE id IN (SELECT id FROM persons WHERE owner <> 0) ` +
         "OR id IN (SELECT person_id FROM identity_links) " +

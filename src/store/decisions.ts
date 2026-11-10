@@ -1,6 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import { MEETING_FINDINGS_KIND } from "../meetings/index.js"
 import { IDENTITY_LINK_KIND } from "./identity-links.js"
+import { IDENTITY_SPLIT_KIND } from "./identity-splits.js"
 import { MAIL_FINDINGS_KIND } from "./mail-findings.js"
 import { SOURCE_REVIEW_KIND } from "./source-review.js"
 
@@ -52,7 +53,8 @@ export const isOwnerOnlyKind = (kind: string | undefined): boolean =>
   kind === MEETING_FINDINGS_KIND ||
   kind === TASK_CLOSE_KIND ||
   kind === SOURCE_REVIEW_KIND ||
-  kind === IDENTITY_LINK_KIND
+  kind === IDENTITY_LINK_KIND ||
+  kind === IDENTITY_SPLIT_KIND
 
 /**
  * The one check every decide path runs before it confirms or rejects a proposal. `null` means allowed. Every Claude

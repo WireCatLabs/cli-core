@@ -3,6 +3,7 @@ import { MEETING_FINDINGS_KIND } from "../../meetings/index.js"
 import { assertMayDecide, type Decider, deciderAuthor, type Proposer } from "../decisions.js"
 import { EVIDENCE_FINDINGS_KIND } from "../evidence-findings.js"
 import { IDENTITY_LINK_KIND } from "../identity-links.js"
+import { IDENTITY_SPLIT_KIND } from "../identity-splits.js"
 import { MAIL_FINDINGS_KIND } from "../mail-findings.js"
 import { SOURCE_REVIEW_KIND } from "../source-review.js"
 import type { AccountKey } from "../types.js"
@@ -327,6 +328,11 @@ const DEDICATED_REVIEW: Record<string, { what: string; reason: string; through: 
     what: "a proposed identity link",
     reason: "identity-link.dedicated-review",
     through: "the people review, which checks that neither person changed",
+  },
+  [IDENTITY_SPLIT_KIND]: {
+    what: "a proposed split of a person",
+    reason: "identity-split.dedicated-review",
+    through: "the people review, which checks that the person did not change",
   },
 }
 

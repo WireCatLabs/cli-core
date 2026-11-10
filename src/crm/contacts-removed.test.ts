@@ -119,3 +119,13 @@ it("a dry run counts and changes nothing; a contact the owner decided about stay
   expect(await store.crm.removeContacts(PORTAL, { users: ["7"], before })).toEqual(counted)
   expect(await store.crm.count(PORTAL, "person")).toBe(3)
 })
+
+it("forgets a proposed split that names a removed contact, since it holds the contact's address", async () => {
+  const { store, source, set } = await portal()
+  const di = { provider: PORTAL.provider, id: crmIdentityId(PORTAL, "4") }
+  await store.people.proposeSplit({ identities: [di], by: { bot: "claude-code" }, reason: "another Di" })
+  await set("scope", "mine")
+  await syncCrm(source, store, PORTAL, { rescan: true })
+
+  expect((await store.people.splitProposals({ status: "all", limit: 10, offset: 0 })).items).toEqual([])
+})
