@@ -1,12 +1,9 @@
 ### Added
 
 - **A role list for ties between people and organizations, and role labels in three languages.** `related-to` between
-  a person or an organization and another takes its role from the new `related` list: `colleague`, `client`,
-  `supplier`, `partner`, `adviser`, `investor`, `family`, `friend`, plus the owner's own (`knowledge.addRole`). Each
-  built-in role of every list carries `labels` (`en`, `ru`, `es`, also exported as `ROLE_LABELS`), and each row of
-  `listRelations` says in `roleList` which list its role comes from, so an app offers a picker instead of free text.
-
-### Changed — may break callers
-
-- **A free-text role on `related-to` between people and organizations is refused** (`relationship.role-unknown`).
-  A role stored before stays and reads as `custom`; a new one comes from the `related` list or is added to it first.
+  a person or an organization and another is offered the new `related` list: `colleague`, `adviser`, `investor`,
+  `mentor`, `family`, `friend`, plus the owner's own (`knowledge.addRole("related", …)`). It is offered, not enforced:
+  any other word is still stored and reads as `custom`. Buying and partnering stay the kinds `customer-of` and
+  `partner-of`. Each built-in role of every list carries `labels` (`en`, `ru`, `es`, exported as `ROLE_LABELS`), and
+  each row of `listRelations` says in `roleList` which list its role is offered from, so an app shows a picker with
+  "add a new role" instead of a text field.

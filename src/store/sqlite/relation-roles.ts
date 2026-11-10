@@ -95,7 +95,12 @@ const usedBy = (database: CacheDatabase, list: RoleList, role: string): number =
 
 export const relationRolesOver = ({ database, now }: StoreContext): RelationRoles => {
   const all = (list: RoleList): RelationRole[] => [
-    ...ROLE_LISTS[list].map((id) => ({ id, label: null, labels: ROLE_LABELS[list][id] ?? null, builtIn: true })),
+    ...ROLE_LISTS[list].map((id) => ({
+      id,
+      label: null,
+      labels: (ROLE_LABELS[list] as Record<string, RoleLabels>)[id] as RoleLabels,
+      builtIn: true,
+    })),
     ...ownerRolesOf(database, list).map((role) => ({ ...role, labels: null, builtIn: false })),
   ]
   const save = (list: RoleList, roles: { id: string; label: string | null }[]) =>

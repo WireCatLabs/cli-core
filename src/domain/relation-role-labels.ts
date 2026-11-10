@@ -1,4 +1,4 @@
-import type { RoleList } from "./relations.js"
+import type { ROLE_LISTS, RoleList } from "./relations.js"
 
 export interface RoleLabels {
   en: string
@@ -9,7 +9,7 @@ export interface RoleLabels {
 const label = (en: string, ru: string, es: string): RoleLabels => ({ en, ru, es })
 
 /** Keyed by list: a deal's `owner` is the one responsible for it, an organization's is the one who owns it. */
-export const ROLE_LABELS: Record<RoleList, Record<string, RoleLabels>> = {
+export const ROLE_LABELS: { [L in RoleList]: Record<(typeof ROLE_LISTS)[L][number], RoleLabels> } = {
   organization: {
     employee: label("Employee", "Сотрудник", "Empleado"),
     contractor: label("Contractor", "Подрядчик", "Contratista"),
@@ -40,11 +40,9 @@ export const ROLE_LABELS: Record<RoleList, Record<string, RoleLabels>> = {
   },
   related: {
     colleague: label("Colleague", "Коллега", "Colega"),
-    client: label("Client", "Клиент", "Cliente"),
-    supplier: label("Supplier", "Поставщик", "Proveedor"),
-    partner: label("Partner", "Партнёр", "Socio"),
     adviser: label("Adviser", "Советник", "Asesor"),
     investor: label("Investor", "Инвестор", "Inversor"),
+    mentor: label("Mentor", "Наставник", "Mentor"),
     family: label("Family", "Семья", "Familia"),
     friend: label("Friend", "Друг", "Amigo"),
   },
