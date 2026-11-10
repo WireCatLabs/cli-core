@@ -46,6 +46,12 @@ const storedTitles = async (path: string) => {
   }
 }
 
+const toStandIns = (database: Awaited<ReturnType<typeof openCache>>) =>
+  database.exec(
+    "UPDATE tasks SET title = type || ' — ' || source_locator, title_folded = NULL WHERE package_id IS NOT NULL " +
+      "AND title NOT LIKE 'Call Ann%'",
+  )
+
 const foundIn = (id: string) => `msg:telegram/1/${CHAT}/${id}`
 
 it("stores a found task's first line as its title once, and leaves every other title as it was", async () => {
@@ -85,6 +91,7 @@ it("stores a found task's first line as its title once, and leaves every other t
   await store.close()
 
   const old = await openCache(path)
+  toStandIns(old)
   rollBackTo(old, 65)
   old.close()
   const upgraded = await openStore({ path })
@@ -131,6 +138,7 @@ it("fills in batches and keeps the key until the last one", async () => {
 
   const database = await openCache(path)
   try {
+    toStandIns(database)
     database.exec("INSERT INTO store_settings (key, value, at) VALUES ('found_task_titles_to_fill', '1', 0)")
     const warnings: string[] = []
     expect(fillFoundTaskTitles(database, (line) => warnings.push(line), { batch: 2 })).toBe(3)

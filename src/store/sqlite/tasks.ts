@@ -220,6 +220,11 @@ export const taskStoreOver = (context: StoreContext): StoreTaskStore => {
         const key = typedKey(database, task.kind)
         const author = actorOfOrigin(database, task.origin)
         const closedBy = task.closedBy ? actorOfOrigin(database, task.closedBy) : undefined
+        const title = displayTitleOf(database, {
+          type: task.kind,
+          title: `${task.kind} — ${task.source}`,
+          source_locator: task.source,
+        })
         const made = database
           .prepare(
             "INSERT INTO tasks (project_id, number, key, title, type, status, due_at, closed_at, closed_by_type, closed_by_id, " +
@@ -231,7 +236,7 @@ export const taskStoreOver = (context: StoreContext): StoreTaskStore => {
             project,
             number,
             key,
-            `${task.kind} — ${task.source}`,
+            title,
             task.kind,
             task.state,
             time(task.dueAt),
@@ -248,7 +253,7 @@ export const taskStoreOver = (context: StoreContext): StoreTaskStore => {
             task.group,
             task.createdAt.getTime(),
             now(),
-            folded(`${task.kind} — ${task.source}`),
+            folded(title),
             folded(task.reason),
             task.category ?? null,
           )

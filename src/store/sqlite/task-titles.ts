@@ -28,8 +28,8 @@ const firstLine = (text: string) => {
 
 /**
  * What to show as a task's title: the first line of its source message while the stored title is still the
- * placeholder, the stored title otherwise. Store version 65 stored it once for the tasks found before it; a task found
- * since gets it only when read, so its title goes back to the placeholder once its message is deleted.
+ * placeholder, the stored title otherwise. A found task stores it when it is found, and store version 65 stored it for
+ * the tasks found before; read time covers a task found before its message was saved.
  */
 export const displayTitleOf = (database: CacheDatabase, row: Row): string => {
   const stored = String(row.title)

@@ -372,7 +372,7 @@ describe("tasks", () => {
     try {
       const events = await store.tasks.events(id)
       expect(events.find((one) => one.kind === "title")?.changes).toEqual({
-        title: ["promise — msg:chat/500/7/1", "send Ana the invoice"],
+        title: ["I'll send the invoice tomorrow", "send Ana the invoice"],
       })
     } finally {
       await store.close()
