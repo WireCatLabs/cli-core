@@ -89,13 +89,13 @@ export interface ProjectStatus {
   signals: { id: string; version: number }[]
 }
 
-const projectsCatalog = async (store: MessageStore) =>
+export const projectsCatalog = async (store: MessageStore) =>
   new Map(
     (await store.knowledge.vocabulary({ kind: "project" })).entries.map((entry) => [`project:${entry.id}`, entry]),
   )
 
 /** Confirmed `member-of` links from another project; depth two, eight at most, a project seen twice skipped. */
-const childrenOf = async (
+export const childrenOf = async (
   store: MessageStore,
   root: StatusProject,
   catalog: Awaited<ReturnType<typeof projectsCatalog>>,
@@ -133,7 +133,7 @@ const childrenOf = async (
 
 type Link = LinkedChat & { project: string }
 
-const inAccounts = (accounts: AccountKey[] | undefined, provider: string, account: string) =>
+export const inAccounts = (accounts: AccountKey[] | undefined, provider: string, account: string) =>
   accounts === undefined || accounts.some((one) => one.provider === provider && one.account === account)
 
 const failure = (error: unknown) => (error instanceof Error ? error.message : String(error))

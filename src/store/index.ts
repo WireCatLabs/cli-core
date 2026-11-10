@@ -391,6 +391,7 @@ export {
 export {
   DOUBT_REASONS,
   type DoubtIdentity,
+  type DoubtMove,
   type DoubtReason,
   type PersonDoubt,
   type PersonDoubts,
@@ -524,6 +525,7 @@ export {
   type AttachmentsStore,
   type AttachmentTextEntry,
   type AttachmentView,
+  type ChatActivityCount,
   type ChatStats,
   type ChatsStore,
   type ConversationsStore,

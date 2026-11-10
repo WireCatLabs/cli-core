@@ -89,6 +89,11 @@ const result = await gatherProjectEvidence(
   that reads it. When one linked chat with no purpose gives more than half of a first run's items, and at least 20,
   `purposeHint` says so once, for the owner to decide; nothing is changed or left out because of it.
 
+- **Activity of every project.** `projectActivity` (`src/services/project-activity.ts`) counts, for all projects in
+  one call, the same confirmed links of the project and its children, but of every purpose: it measures how busy a
+  project is, not what to read. Messages count by when they were sent; a chat muted now is counted in `muted` and its
+  messages are left out. One indexed read per linked chat (`MessagesStore.chatActivityCounts`).
+
 - **Proposed links.** With `includeProposed`, pending `member-of` proposals to the project (`relationship` proposals,
   and unconfirmed links written before them as `link:<id>`) count as linked chats and person members after the
   confirmed ones, inside the same limits. Their rows carry `proposed` (the inbox id) and `score`. An item carries

@@ -34,7 +34,12 @@ export interface PersonDoubt {
   evidence: string[]
   /** memo commands, after `memo`, that would take the doubted identities off; empty when none fits. */
   fix: string[]
+  /** The same moves as `fix`, one each, for an app that runs them without a command line. */
+  moves: DoubtMove[]
 }
+
+/** Undo a merge, or move identities to one new person. */
+export type DoubtMove = { op: "unmerge"; merge: string } | { op: "unlink"; identities: string[] }
 
 export interface PersonDoubts {
   items: PersonDoubt[]
@@ -242,28 +247,30 @@ const everyDoubt = (database: CacheDatabase): Found[] => {
  * The owner's moves that take the doubted identities off: undoing a merge that brought only doubted ones, and one
  * unlink per name group of the rest, so two strangers on one person do not land on one new person together.
  */
-const fixOf = (context: StoreContext, found: Found): string[] => {
+const movesOf = (context: StoreContext, found: Found): DoubtMove[] => {
   if (found.reason === "test-data" || found.reason === "mixed-names") return []
   const doubted = new Set(found.held.map(({ ref }) => ref))
-  const commands: string[] = []
+  const moves: DoubtMove[] = []
   const unmerged = new Set<string>()
   for (const merge of merges(context, String(found.person))) {
     const refs = merge.identities.map(({ provider, id }) => `${provider}:${id}`)
     if (refs.length === 0 || !refs.every((ref) => doubted.has(ref))) continue
-    commands.push(`people unmerge ${merge.id}`)
+    moves.push({ op: "unmerge", merge: merge.id })
     for (const ref of refs) unmerged.add(ref)
   }
   const rest = found.held.filter(({ ref }) => !unmerged.has(ref))
-  for (const group of nameGroups(rest))
-    commands.push(`people unlink ${group.map(({ ref }) => shellWord(ref)).join(" ")}`)
-  return commands
+  for (const group of nameGroups(rest)) moves.push({ op: "unlink", identities: group.map(({ ref }) => ref) })
+  return moves
 }
+
+const commandOf = (move: DoubtMove): string =>
+  move.op === "unmerge" ? `people unmerge ${move.merge}` : `people unlink ${move.identities.map(shellWord).join(" ")}`
 
 /** A ref as one shell word: an id may hold a space or a quote, and the fix is pasted into a terminal. */
 const shellWord = (ref: string): string => (/^[\w@.:+/=-]+$/u.test(ref) ? ref : `'${ref.replaceAll("'", "'\\''")}'`)
 
 const shown = (context: StoreContext, found: Found): PersonDoubt => {
-  const fix = fixOf(context, found)
+  const moves = movesOf(context, found)
   return {
     person: `person:${found.person}`,
     name: found.name,
@@ -280,9 +287,10 @@ const shown = (context: StoreContext, found: Found): PersonDoubt => {
     evidence: [
       ...found.held.map(({ ref }) => ref),
       ...(found.address === undefined ? [] : [`email:${found.address}`]),
-      ...fix.flatMap((command) => command.match(/merge:\d+-\d+/u) ?? []),
+      ...moves.flatMap((move) => (move.op === "unmerge" ? [move.merge] : [])),
     ],
-    fix,
+    fix: moves.map(commandOf),
+    moves,
   }
 }
 

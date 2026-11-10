@@ -631,7 +631,7 @@ replaced by a rule. Today only contacts have that shape. Who may be one person w
 agent's unlink or unmerge waits as an `identity_split` (`src/store/sqlite/identity-split-proposals.ts`), a kind of its
 own because every reader of `identity_link` takes a row for two people. Both are the owner's alone to decide.
 `people.doubts` (`src/store/sqlite/person-doubts.ts`) lists people that look wrong, for the owner or an agent to
-propose a split. **Not built yet:** `entity_link_events`, the same log for
+propose a split; each fix comes both as a memo command (`fix`) and as data (`moves`) for an app. **Not built yet:** `entity_link_events`, the same log for
 events and documents, and one review list of ambiguous pairs, shaped like `task_pairs` (`schema.ts:1468`).
 
 ### Migrations
