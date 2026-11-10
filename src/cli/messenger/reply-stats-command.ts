@@ -6,7 +6,8 @@ import { renderAnswer } from "../envelope.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { refuseJsonl, responsesAnswer, waitingAnswer } from "./stats-answers.js"
 
-const QUERY = "date:, chat: and kind: terms, AND-ed — date>=30d, date:[60d TO 30d]; none reads all time"
+const QUERY =
+  "date:, chat:, kind: and muted: terms, AND-ed — date>=30d, date:[60d TO 30d], muted:false; none reads all time"
 const GUIDE =
   "Guide: https://github.com/WireCatLabs/cli-core/blob/main/docs/rankings.md#reply-times-and-chats-waiting-on-you"
 

@@ -9,6 +9,8 @@ export interface ChatScope {
   accounts: AccountKey[]
   chats: { account: AccountKey; chatId: string }[]
   kinds: string[]
+  /** Only chats muted (true) or not muted (false) now; absent reads both. */
+  muted?: boolean
   /** Inclusive bounds in ms; absent is open. */
   since?: number
   until?: number
@@ -32,7 +34,9 @@ export interface NewestMessage {
 
 const FAR = Number.MAX_SAFE_INTEGER
 
-const chatsIn = (scope: ChatScope, kinds: string[]) => {
+const MUTED_NOW = "(coalesce(c.muted,0)=1 AND (c.muted_until IS NULL OR c.muted_until>?))"
+
+const chatsIn = (scope: ChatScope, kinds: string[], now: number) => {
   const params: SqlValue[] = [...scope.accounts.flatMap(({ provider, account }) => [provider, account]), ...kinds]
   const parts = [
     `(${scope.accounts.map(() => "(ac.provider=? AND ac.external_id=?)").join(" OR ") || "0"})`,
@@ -46,6 +50,10 @@ const chatsIn = (scope: ChatScope, kinds: string[]) => {
     parts.push(`${PEER_KIND}=?`)
     params.push(kind)
   }
+  if (scope.muted !== undefined) {
+    parts.push(scope.muted ? MUTED_NOW : `NOT ${MUTED_NOW}`)
+    params.push(now)
+  }
   // As in search: a chat named is read even when it is not searchable.
   if (scope.chats.length === 0) parts.push("c.searchable=1")
   return { sql: parts.join(" AND "), params }
@@ -55,10 +63,10 @@ const chatsIn = (scope: ChatScope, kinds: string[]) => {
  * One row per reply in one-to-one chats. Each chat is read from the start of the run before the first message in the
  * period, so a reply early in the period is timed from the first message it answers, however old.
  */
-export const replyDelaysQuery = (scope: ChatScope, who: "me" | "others") => {
+export const replyDelaysQuery = (scope: ChatScope, who: "me" | "others", now: number) => {
   const since = scope.since ?? -FAR
   const until = scope.until ?? FAR
-  const chats = chatsIn(scope, ["private"])
+  const chats = chatsIn(scope, ["private"], now)
   return {
     sql: `WITH scoped AS MATERIALIZED (
   SELECT c.id AS chat_id, coalesce((
@@ -83,7 +91,7 @@ WHERE asked_at IS NOT NULL AND mine=? AND sent_at>=? AND sent_at<=?`,
 }
 
 export const replyDelays = (context: StoreContext, scope: ChatScope, who: "me" | "others"): ReplyDelay[] => {
-  const { sql, params } = replyDelaysQuery(scope, who)
+  const { sql, params } = replyDelaysQuery(scope, who, context.now())
   return read(context.database, () =>
     context.database
       .prepare(sql)
@@ -94,7 +102,7 @@ export const replyDelays = (context: StoreContext, scope: ChatScope, who: "me" |
 
 /** Each one-to-one chat's and group's newest message, found by index per chat, its time within the scope's bounds. */
 export const newestMessagesQuery = (scope: ChatScope, now: number) => {
-  const chats = chatsIn(scope, ["private", "group"])
+  const chats = chatsIn(scope, ["private", "group"], now)
   return {
     sql: `SELECT c.id AS chat_id, ${PEER_KIND} AS kind, m.sent_at, coalesce(m.outgoing,0) AS mine, m.text,
   (EXISTS (SELECT 1 FROM json_each(CASE WHEN json_valid(m.mentions) THEN m.mentions ELSE '[]' END) WHERE value=ac.external_id)
@@ -102,7 +110,7 @@ export const newestMessagesQuery = (scope: ChatScope, now: number) => {
     OR EXISTS (SELECT 1 FROM messages q WHERE q.chat_id=c.id AND q.external_id=m.reply_to_external_id AND q.outgoing=1)
   ) AS addressed,
   (SELECT i.username FROM identities i WHERE i.provider=ac.provider AND i.external_id=ac.external_id) AS owner_username,
-  ((coalesce(c.muted,0)=1 AND (c.muted_until IS NULL OR c.muted_until>?)) OR coalesce(c.archived,0)=1)
+  (${MUTED_NOW} OR coalesce(c.archived,0)=1)
     AND coalesce(c.marked_unread,0)=0 AS quiet
 FROM chats c JOIN accounts ac ON ac.id=c.account_id
 JOIN messages m ON m.id=(SELECT n.id FROM messages n WHERE n.chat_id=c.id AND n.deleted_at IS NULL ORDER BY n.sent_at DESC LIMIT 1)
