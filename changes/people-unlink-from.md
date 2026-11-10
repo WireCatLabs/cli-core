@@ -7,3 +7,5 @@
   it, and the message names them, so nothing moves. Before, a script that meant to take a colleague's mailbox off the
   owner's card took it off the colleague. `split`'s refusal for an identity of another person is now this one (it said
   "is not an identity of person:<n>").
+- **A doubt's unlink names the person it takes the identities from.** `people.doubts()` gives each `unlink` move a
+  `from` (`person:<uid>`), and its `fix` command ends in `--from person:<uid>`, which memo's `people unlink` needs.

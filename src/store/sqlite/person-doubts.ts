@@ -39,7 +39,10 @@ export interface PersonDoubt {
 }
 
 /** Undo a merge, or move identities to one new person. */
-export type DoubtMove = { op: "unmerge"; merge: string } | { op: "unlink"; identities: string[] }
+export type DoubtMove =
+  | { op: "unmerge"; merge: string }
+  /** `from` is the person they leave, `person:<uid>`. */
+  | { op: "unlink"; identities: string[]; from: string }
 
 export interface PersonDoubts {
   items: PersonDoubt[]
@@ -259,12 +262,15 @@ const movesOf = (context: StoreContext, found: Found): DoubtMove[] => {
     for (const ref of refs) unmerged.add(ref)
   }
   const rest = found.held.filter(({ ref }) => !unmerged.has(ref))
-  for (const group of nameGroups(rest)) moves.push({ op: "unlink", identities: group.map(({ ref }) => ref) })
+  for (const group of nameGroups(rest))
+    moves.push({ op: "unlink", identities: group.map(({ ref }) => ref), from: `person:${found.person}` })
   return moves
 }
 
 const commandOf = (move: DoubtMove): string =>
-  move.op === "unmerge" ? `people unmerge ${move.merge}` : `people unlink ${move.identities.map(shellWord).join(" ")}`
+  move.op === "unmerge"
+    ? `people unmerge ${move.merge}`
+    : `people unlink ${move.identities.map(shellWord).join(" ")} --from ${move.from}`
 
 /** A ref as one shell word: an id may hold a space or a quote, and the fix is pasted into a terminal. */
 const shellWord = (ref: string): string => (/^[\w@.:+/=-]+$/u.test(ref) ? ref : `'${ref.replaceAll("'", "'\\''")}'`)
