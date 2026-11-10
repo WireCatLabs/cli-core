@@ -66,6 +66,13 @@ export {
   type ModelDownloadOptions,
 } from "./model-downloads.js"
 export { MONEY_DONE, MONEY_REQUEST, MONEY_WORDS, moneyClassesOf, PROMISE } from "./money-words.js"
+export {
+  type ProjectActivities,
+  type ProjectActivity,
+  type ProjectActivityChat,
+  type ProjectActivityInput,
+  projectActivity,
+} from "./project-activity.js"
 export type {
   ProjectChatFetcher,
   ProjectChatFetchProgress,

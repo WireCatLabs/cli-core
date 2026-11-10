@@ -44,6 +44,7 @@ describe("people in doubt (IDEA-270)", () => {
         reason: "owner-other-name",
         identities: [expect.objectContaining({ identity: "max:2", method: "account", by: "rules" })],
         fix: [`people unmerge merge:${owner}-${from}`],
+        moves: [{ op: "unmerge", merge: `merge:${owner}-${from}` }],
       }),
     ])
     expect(found.items[0]?.why).toMatch(/«Svetlana 2»/)
@@ -117,7 +118,11 @@ describe("people in doubt (IDEA-270)", () => {
 
     const [doubt] = (await store.people.doubts(page)).items
 
-    expect(doubt).toMatchObject({ reason: "shared-address", fix: ["people unlink 'bitrix24:Olga S'"] })
+    expect(doubt).toMatchObject({
+      reason: "shared-address",
+      fix: ["people unlink 'bitrix24:Olga S'"],
+      moves: [{ op: "unlink", identities: ["bitrix24:Olga S"] }],
+    })
   })
 
   it("names test data: the seed's people together, and an address at a reserved domain", async () => {

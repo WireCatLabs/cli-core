@@ -11,6 +11,7 @@ import type {
   WindowedMessage,
 } from "../domain/models.js"
 import { keysOver } from "./keys.js"
+import { type ChatActivityCount, chatActivityCounts } from "./sqlite/chat-activity-counts.js"
 import { applyCounterObservations } from "./sqlite/counters.js"
 import { type DocumentLinkMessage, documentLinkMessages } from "./sqlite/document-links.js"
 import { laterSharingRare } from "./sqlite/follow-ups.js"
@@ -150,6 +151,14 @@ export interface MessagesStore extends AccountMessages {
     wanted: { account: AccountKey; chatId: Id; id: Id }[],
     options: { rareAt: number; limit: number },
   ): Promise<StoredHit[][]>
+  /**
+   * Per chat, in the order asked: its messages and the owner's in the window (`until` exclusive), its newest message,
+   * whether it is muted at `now`, and its title; `undefined` for a chat the store does not know.
+   */
+  chatActivityCounts(
+    chats: readonly { account: AccountKey; chatId: Id }[],
+    window: { since: number; until: number; now: number },
+  ): Promise<(ChatActivityCount | undefined)[]>
 }
 
 export const accountMessagesOver = (context: StoreContext): AccountMessages => {
@@ -318,6 +327,16 @@ export const accountMessagesOver = (context: StoreContext): AccountMessages => {
 
 export const messagesStoreOver = (context: StoreContext, keyed: AccountMessages): MessagesStore => ({
   ...keyed,
+  chatActivityCounts: async (chats, window) => {
+    const { chatKeyOf } = keysOver(context)
+    const keys = chats.map(({ account, chatId }) => chatKeyOf(account, chatId))
+    const found = chatActivityCounts(
+      context,
+      keys.filter((key) => key !== undefined),
+      window,
+    )
+    return keys.map((key) => (key === undefined ? undefined : found.get(key)))
+  },
   search: async (query, { limit, account }) =>
     search.find(context, { text: query, limit, ...(account ? { account } : {}) }),
   find: async (filter) => search.find(context, filter),

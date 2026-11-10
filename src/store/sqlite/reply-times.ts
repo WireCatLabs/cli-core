@@ -34,7 +34,8 @@ export interface NewestMessage {
 
 const FAR = Number.MAX_SAFE_INTEGER
 
-const MUTED_NOW = "(coalesce(c.muted,0)=1 AND (c.muted_until IS NULL OR c.muted_until>?))"
+/** Muted now, until the mute runs out; one bound parameter, now. */
+export const MUTED_NOW = "(coalesce(c.muted,0)=1 AND (c.muted_until IS NULL OR c.muted_until>?))"
 
 const chatsIn = (scope: ChatScope, kinds: string[], now: number) => {
   const params: SqlValue[] = [...scope.accounts.flatMap(({ provider, account }) => [provider, account]), ...kinds]
