@@ -80,7 +80,7 @@ describe("a split an agent proposes (IDEA-271)", () => {
     expect(await ownerRefs(store)).toEqual(["telegram:1", "telegram:7"])
   })
 
-  it("is refused once the person changed since it was proposed", async () => {
+  it("is refused once the person changed since it was proposed, and proposing again renews it", async () => {
     const store = await absorbed()
     const proposal = await store.people.proposeSplit({ identities: [max("2")], by: agent, reason: "his wife's" })
     await store.people.unlinkIdentity(tg("7"), { method: "unlink", by: "owner" })
@@ -88,6 +88,11 @@ describe("a split an agent proposes (IDEA-271)", () => {
     await expect(store.people.decideSplit(proposal.id, { confirm: true, by: "owner" })).rejects.toMatchObject({
       details: { reason: "identity.stale" },
     })
+
+    const renewed = await store.people.proposeSplit({ identities: [max("2")], by: agent, reason: "his wife's" })
+    expect(renewed.id).toBe(proposal.id)
+    await store.people.decideSplit(proposal.id, { confirm: true, by: "owner" })
+    expect(await ownerRefs(store)).toEqual(["telegram:1"])
   })
 
   it("gives back the open one for the same identities, and after the owner's no refuses it", async () => {
@@ -128,6 +133,9 @@ describe("a split an agent proposes (IDEA-271)", () => {
       details: { reason: "proposal.wrong-state" },
     })
     expect(await ownerRefs(store)).toEqual(["max:2", "telegram:1", "telegram:7"])
+    expect((await store.people.splitProposals({ status: "all", limit: 10, offset: 0 })).items).toMatchObject([
+      { id: proposal.id, status: "dropped" },
+    ])
   })
 
   it("is decided through the shared review, the owner's alone", async () => {

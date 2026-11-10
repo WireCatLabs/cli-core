@@ -101,6 +101,25 @@ describe("people in doubt (IDEA-270)", () => {
     expect(doubt?.fix).toEqual([expect.stringMatching(/^people unmerge merge:\d+-\d+$/)])
   })
 
+  it("quotes an id with a space in the command that fixes it", async () => {
+    const store = await open()
+    const olga = { provider: "bitrix24", id: "Olga S" }
+    await store.people.savePeople(CRM, [{ id: "Olga S", name: "Olga Smirnova" }])
+    await store.people.savePeople(MAIL, [{ id: "ivan@acme.ru", name: "Ivan Petrov" }])
+    await store.people.savePeople(OWN, [{ id: "5", name: "Ivan Petrov" }])
+    await store.people.linkIdentities(olga, tg("5"), { method: "same-phone", by: "rules" })
+    // The merge brings Olga with Ivan's Telegram, so undoing it would take Ivan too: only an unlink fits.
+    await store.people.linkIdentities({ provider: "email", id: "ivan@acme.ru" }, olga, {
+      method: "same-email",
+      by: "rules",
+    })
+    await store.people.savePeople(CRM, [{ id: "Olga S", name: "Olga Smirnova", email: "ivan@acme.ru" }])
+
+    const [doubt] = (await store.people.doubts(page)).items
+
+    expect(doubt).toMatchObject({ reason: "shared-address", fix: ["people unlink 'bitrix24:Olga S'"] })
+  })
+
   it("names test data: the seed's people together, and an address at a reserved domain", async () => {
     const store = await open()
     await store.people.savePeople(WA, [

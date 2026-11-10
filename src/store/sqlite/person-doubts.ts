@@ -73,7 +73,7 @@ const heldOf = (row: Record<string, unknown>): Held => ({
   personName: text(row.person_name),
   ref: `${String(row.provider)}:${String(row.external_id)}`,
   name: text(row.name),
-  phone: text(row.phone),
+  phone: text(row.phone)?.replace(/\D/gu, "") || null,
   email: text(row.email)?.toLowerCase() ?? null,
   account: Number(row.account) === 1,
   method: String(row.method),
@@ -127,13 +127,30 @@ const sharesWord = (one: Set<string>, other: Set<string>): boolean => [...one].s
 const nameGroups = (held: Held[]): Held[][] => {
   const named = held.map((one) => ({ one, words: wordsOf(one.name) })).filter(({ words }) => words.size > 0)
   const group = named.map((_, index) => index)
-  const root = (at: number): number => (group[at] === at ? at : root(group[at] as number))
-  for (let a = 0; a < named.length; a++)
-    for (let b = a + 1; b < named.length; b++)
-      if (sharesWord((named[a] as { words: Set<string> }).words, (named[b] as { words: Set<string> }).words))
-        group[root(b)] = root(a)
+  const root = (at: number): number => {
+    let top = at
+    while (group[top] !== top) top = group[top] as number
+    let step = at
+    while (group[step] !== top) {
+      const next = group[step] as number
+      group[step] = top
+      step = next
+    }
+    return top
+  }
+  const firstWith = new Map<string, number>()
+  for (const [index, { words }] of named.entries())
+    for (const word of words) {
+      const first = firstWith.get(word)
+      if (first === undefined) firstWith.set(word, index)
+      else group[root(index)] = root(first)
+    }
   const groups = new Map<number, Held[]>()
-  for (const [index, { one }] of named.entries()) groups.set(root(index), [...(groups.get(root(index)) ?? []), one])
+  for (const [index, { one }] of named.entries()) {
+    const same = groups.get(root(index))
+    if (same) same.push(one)
+    else groups.set(root(index), [one])
+  }
   const own = wordsOf(held[0]?.personName ?? null)
   const weight = (members: Held[]) =>
     members.reduce((sum, one) => sum + 1 + (one.by === "owner" ? 2 : 0) + (one.account ? 2 : 0), 0) +
@@ -237,9 +254,13 @@ const fixOf = (context: StoreContext, found: Found): string[] => {
     for (const ref of refs) unmerged.add(ref)
   }
   const rest = found.held.filter(({ ref }) => !unmerged.has(ref))
-  for (const group of nameGroups(rest)) commands.push(`people unlink ${group.map(({ ref }) => ref).join(" ")}`)
+  for (const group of nameGroups(rest))
+    commands.push(`people unlink ${group.map(({ ref }) => shellWord(ref)).join(" ")}`)
   return commands
 }
+
+/** A ref as one shell word: an id may hold a space or a quote, and the fix is pasted into a terminal. */
+const shellWord = (ref: string): string => (/^[\w@.:+/=-]+$/u.test(ref) ? ref : `'${ref.replaceAll("'", "'\\''")}'`)
 
 const shown = (context: StoreContext, found: Found): PersonDoubt => {
   const fix = fixOf(context, found)

@@ -11,7 +11,7 @@ import {
   type IdentitySplitRow,
 } from "../identity-splits.js"
 import type { IdentityRef, PersonRecord } from "../types.js"
-import { sideOf } from "./identity-link-rows.js"
+import { personOf, pkOf, sideOf } from "./identity-link-rows.js"
 import { parseIdentityRef } from "./identity-proposals.js"
 import { currentPerson } from "./merged-persons.js"
 import type { StoreContext } from "./open.js"
@@ -81,40 +81,37 @@ const splitRows = (
       payload: JSON.parse(String(row.payload)) as IdentitySplitPayload,
     }))
 
-const identityPk = (database: CacheDatabase, ref: string): number | undefined => {
-  const { provider, id } = parseIdentityRef(ref)
-  const row = database.prepare("SELECT id FROM identities WHERE provider = ? AND external_id = ?").get(provider, id)
-  return row ? Number(row.id) : undefined
-}
-
-/** The person a proposal's first identity is on now; merges since may have moved it. */
-const personNow = (database: CacheDatabase, payload: IdentitySplitPayload): number => {
-  const pk = payload.identities[0] === undefined ? undefined : identityPk(database, payload.identities[0])
-  const row =
-    pk === undefined
-      ? undefined
-      : database.prepare("SELECT person_id FROM identity_links WHERE identity_id = ?").get(pk)
-  return row ? Number(row.person_id) : currentPerson(database, Number(payload.person))
+/**
+ * The person the proposal is about now: the one it was proposed for, or whom that person was merged into, while every
+ * identity it names is still there. `undefined` once one left, was erased or went elsewhere.
+ */
+const holder = (database: CacheDatabase, payload: IdentitySplitPayload): number | undefined => {
+  const person = currentPerson(database, Number(payload.person))
+  return payload.identities.every((ref) => personOf(database, pkOf(database, ref)) === person) ? person : undefined
 }
 
 /**
- * The identities the owner turned a split down for, by the person they are on now: the owner said they belong there.
- * `people doubts` leaves them out.
+ * The identities the owner turned a split down for, by the person they are still on: the owner said they belong there.
+ * `people doubts` leaves them out. One that moved since counts no longer.
  */
 export const keptTogether = (database: CacheDatabase): Map<number, Set<string>> => {
   const kept = new Map<number, Set<string>>()
   for (const { payload } of splitRows(database, ["rejected"])) {
-    const person = personNow(database, payload)
-    const refs = kept.get(person) ?? new Set<string>()
-    for (const ref of payload.identities) refs.add(ref)
-    kept.set(person, refs)
+    const person = currentPerson(database, Number(payload.person))
+    for (const ref of payload.identities) {
+      if (personOf(database, pkOf(database, ref)) !== person) continue
+      const refs = kept.get(person) ?? new Set<string>()
+      refs.add(ref)
+      kept.set(person, refs)
+    }
   }
   return kept
 }
 
 /**
  * Proposes to take identities off their person, or to undo a merge, as an `identity_split` only the owner decides. An
- * open proposal for the same identities is given back instead of a second; one the owner turned down is refused.
+ * open proposal for the same identities is given back instead of a second, brought up to date with the person as it
+ * is now, so proposing again is how a stale one is renewed; one the owner turned down is refused.
  */
 export const proposeIdentitySplit = (context: StoreContext, input: IdentitySplitInput): ProposedAction =>
   write(context.database, () => {
@@ -126,13 +123,6 @@ export const proposeIdentitySplit = (context: StoreContext, input: IdentitySplit
     const plan = planOf(context, input)
     const key = keyOf(plan.person, plan.identities)
     const operations = proposalOperationsOver(context)
-    for (const row of splitRows(context.database, ["proposed", "rejected"])) {
-      if (keyOf(personNow(context.database, row.payload), row.payload.identities) !== key) continue
-      if (row.status === "proposed") return operations.get(row.id)
-      throw new CliError("conflict", "the owner kept these identities together; only the owner splits them", {
-        reason: "identity.kept-together",
-      })
-    }
     const payload: IdentitySplitPayload = {
       split: plan.split,
       person: String(plan.person),
@@ -140,6 +130,18 @@ export const proposeIdentitySplit = (context: StoreContext, input: IdentitySplit
       merge: plan.merge,
       side: sideOf(context.database, plan.person),
       evidence: input.evidence ?? [],
+    }
+    for (const row of splitRows(context.database, ["proposed", "rejected"])) {
+      const person = holder(context.database, row.payload)
+      if (person === undefined || keyOf(person, row.payload.identities) !== key) continue
+      if (row.status === "rejected")
+        throw new CliError("conflict", "the owner kept these identities together; only the owner splits them", {
+          reason: "identity.kept-together",
+        })
+      context.database
+        .prepare("UPDATE proposed_actions SET payload = ? WHERE id = ?")
+        .run(JSON.stringify({ ...payload, evidence: row.payload.evidence }), Number(row.id))
+      return operations.get(row.id)
     }
     return operations.propose({ kind: IDENTITY_SPLIT_KIND, by: input.by, payload, reason })
   })
@@ -173,11 +175,7 @@ export const decideIdentitySplit = (
     const payload = proposal.payload as IdentitySplitPayload
     const person = Number(payload.person)
     const refs = payload.identities.map(parseIdentityRef)
-    const moved = refs.some((ref) => {
-      const pk = identityPk(context.database, refOf(ref))
-      return pk === undefined || required(context, ref).personPk !== person
-    })
-    if (moved || sideOf(context.database, person) !== payload.side)
+    if (holder(context.database, payload) !== person || sideOf(context.database, person) !== payload.side)
       throw new CliError("conflict", `the person ${id} names changed since it was proposed; propose it again`, {
         reason: "identity.stale",
       })
@@ -194,12 +192,16 @@ export const decideIdentitySplit = (
     return operations.approve(id, { person: made.uid, ...noted }, author)
   })
 
-const SHOWN: Record<string, IdentitySplitRow["status"]> = {
-  proposed: "proposed",
-  rejected: "rejected",
-  approved: "confirmed",
-  executed: "confirmed",
-  failed: "confirmed",
+/** A split carried out records the person it made; an older build's approval as a plain action made none. */
+const shownStatus = (status: string, result: unknown): IdentitySplitRow["status"] => {
+  if (status === "proposed" || status === "rejected") return status
+  return typeof (result as { person?: unknown } | null)?.person === "string" ? "confirmed" : "dropped"
+}
+
+const STORED: Record<Exclude<IdentitySplitRow["status"], "dropped">, string[]> = {
+  proposed: ["proposed"],
+  rejected: ["rejected"],
+  confirmed: ["approved", "executed", "failed"],
 }
 
 /** The `identity_split` proposals, newest first, each naming the person as they are now. */
@@ -209,16 +211,16 @@ export const identitySplitRows = (
 ): { items: IdentitySplitRow[]; hasMore: boolean } => {
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > 500)
     throw new CliError("validation_error", "a list of split proposals takes 1–500 items")
-  const statuses = Object.keys(SHOWN).filter((one) => status === "all" || SHOWN[one] === status)
+  const statuses = status === "all" || status === "dropped" ? Object.values(STORED).flat() : STORED[status]
   const operations = proposalOperationsOver(context)
   const rows = splitRows(context.database, statuses, { limit: limit + 1, offset })
   const items = rows.slice(0, limit).map((row): IdentitySplitRow => {
     const action = operations.get(row.id)
     return {
       id: row.id,
-      status: SHOWN[row.status] ?? "proposed",
+      status: shownStatus(row.status, action.result),
       split: row.payload.split,
-      person: `person:${personNow(context.database, row.payload)}`,
+      person: `person:${holder(context.database, row.payload) ?? currentPerson(context.database, Number(row.payload.person))}`,
       identities: row.payload.identities,
       merge: row.payload.merge,
       reason: action.reason,
@@ -233,6 +235,6 @@ export const identitySplitRows = (
 /** Deletes every `identity_split` that names an identity no longer in the store: its payload names the address. */
 export const forgetErasedSplits = (database: CacheDatabase): void => {
   for (const row of splitRows(database, ["proposed", "approved", "rejected", "executed", "failed"]))
-    if (row.payload.identities.some((ref) => identityPk(database, ref) === undefined))
+    if (row.payload.identities.some((ref) => pkOf(database, ref) === undefined))
       database.prepare("DELETE FROM proposed_actions WHERE id = ?").run(Number(row.id))
 }

@@ -42,7 +42,8 @@ export interface IdentitySplitDecision {
 /** One `identity_split`, naming the person as they are now. */
 export interface IdentitySplitRow {
   id: string
-  status: "proposed" | "confirmed" | "rejected"
+  /** `dropped`: an older build approved it as a plain action, and nothing was split. */
+  status: "proposed" | "confirmed" | "rejected" | "dropped"
   split: IdentitySplitMove
   /** `person:<uid>` the identities are on now. */
   person: string

@@ -14,7 +14,8 @@ export interface LinkRow {
 export const pairOf = (a: number | string, b: number | string): string =>
   [Number(a), Number(b)].sort((x, y) => x - y).join("-")
 
-const pkOf = (database: CacheDatabase, ref: string): number | undefined => {
+/** The identity a `provider:id` names, if the store still has it. */
+export const pkOf = (database: CacheDatabase, ref: string): number | undefined => {
   const at = ref.indexOf(":")
   const row = database
     .prepare("SELECT id FROM identities WHERE provider = ? AND external_id = ?")
@@ -22,7 +23,7 @@ const pkOf = (database: CacheDatabase, ref: string): number | undefined => {
   return row ? Number(row.id) : undefined
 }
 
-const personOf = (database: CacheDatabase, identity: number | undefined): number | undefined => {
+export const personOf = (database: CacheDatabase, identity: number | undefined): number | undefined => {
   if (identity === undefined) return undefined
   const row = database.prepare("SELECT person_id FROM identity_links WHERE identity_id = ?").get(identity)
   return row ? Number(row.person_id) : undefined
