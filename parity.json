@@ -2985,7 +2985,10 @@
       "in": "all"
     },
     "contacts unlink": {
-      "in": "all"
+      "in": "all",
+      "options": {
+        "--from": "all"
+      }
     },
     "conversations": {
       "in": "all"

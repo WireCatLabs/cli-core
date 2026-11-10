@@ -152,10 +152,30 @@ describe("contacts context", () => {
     expect(texts(both.recent.direct)).toContain("from Ana on MAX")
     expect(both.shared).toContainEqual(expect.objectContaining({ provider: "max", account: "900", chatId: "m1" }))
 
-    await people().unlink("max:m5", { by: "owner" })
+    await people().unlink("max:m5", { by: "owner", from: `person:${linked.uid}` })
     const alone = await people().context("11")
     expect(alone.person.identities).toHaveLength(1)
     expect(texts(alone.recent.direct)).not.toContain("from Ana on MAX")
+  })
+
+  it("unlinks only from the person named, and says who holds it when none is", async () => {
+    const linked = await people().link("11", "max:m5", { by: "owner" })
+    const owner = (await store.people.owner())?.uid as string
+    const holder = { reference: `person:${linked.uid}` }
+
+    await expect(people().unlink("max:m5", { by: "owner" })).rejects.toMatchObject({
+      details: { reason: "person.from-required", param: "from", ...holder },
+    })
+    await expect(people().unlink("max:m5", { by: "owner" })).rejects.toThrow(
+      `contacts unlink max:m5 --from person:${linked.uid}`,
+    )
+    await expect(people().unlink("max:m5", { by: "owner", from: "person:me" })).rejects.toMatchObject({
+      details: { reason: "identity.held-elsewhere", ...holder },
+    })
+    await expect(people().unlink("max:m5", { by: "owner", from: owner })).rejects.toMatchObject({
+      details: { reason: "identity.held-elsewhere" },
+    })
+    expect((await people().context("11")).person.identities).toHaveLength(2)
   })
 
   it("links a calendar attendee's email contact to a Telegram person", async () => {

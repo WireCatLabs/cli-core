@@ -374,15 +374,15 @@ export const contactsCommand = (messenger: Messenger): Command => {
   annotate(contacts.command("unlink"), { effects: LOCAL_WRITE, output: { entity: "linked_person" } })
     .description("undo contacts link for one identity: it is a person of its own again")
     .argument("<person>", "their id, @username, or part of their name; <messenger>:<person> for another messenger")
+    .option("--from <person>", "the person it leaves, person:<uid> or person:me; refused when it sits on another")
     .action(async function (this: Command, person: string) {
       const context = messengerContext(this, messenger)
-      renderAnswer(
-        this,
-        context,
-        itemOf(
-          snakeKeys(await context.withServices((services) => services.people.unlink(person, { by: actorOf(this) }))),
-        ),
+      const { from } = this.opts<{ from?: string }>()
+      const by = actorOf(this)
+      const unlinked = await context.withServices((services) =>
+        services.people.unlink(person, { by, ...(from === undefined ? {} : { from }) }),
       )
+      renderAnswer(this, context, itemOf(snakeKeys(unlinked)))
     })
 
   /**

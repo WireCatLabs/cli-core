@@ -1,12 +1,13 @@
 import { CliError } from "@wirecat/cli-base"
 import { type Predicate, queryError } from "@wirecat/cli-base/query"
+import { displayName } from "../domain/display-names.js"
 import type { Chat, Contact, Id, Member, Page, PersonCard, PersonProfile, PhoneBookEntry } from "../domain/models.js"
 import { isCliFailure } from "../errors/failures.js"
 import { capability } from "../ports/messenger.js"
 import { pickPerson } from "../resolve.js"
 import { guardedWrite, type Operated } from "../sends/guarded.js"
 import { newOperationId } from "../sends/send-id.js"
-import type { AccountKey, MessageStore, PersonRecord } from "../store/store.js"
+import type { AccountKey, IdentityRef, MessageStore, PersonRecord } from "../store/store.js"
 import type { PageWindow } from "./chats.js"
 import { fromStore, type ServiceDeps, storeIfOpen } from "./deps.js"
 
@@ -73,8 +74,11 @@ export interface PeopleService {
   ): Promise<PersonMessages>
   /** `other` may name another messenger of the store: `max:Ana`. */
   link(person: string, other: string, options: LinkPeopleOptions): Promise<LinkedPeople>
-  /** The owner's alone: an unlink separates two people, and nothing links them again on its own. */
-  unlink(person: string, options: { by: string }): Promise<PersonRecord>
+  /**
+   * The owner's alone: an unlink separates two people, and nothing links them again on its own. `from` names the person
+   * the identity leaves, `person:<uid>` or `person:me`; it is refused when the identity sits on someone else.
+   */
+  unlink(person: string, options: { by: string; from?: string }): Promise<PersonRecord>
   /**
    * Only counts and the people recognised: never a number. `IMPORT_CHUNK` numbers a request, each request
    * through the guard, each number counted toward the hourly limit.
@@ -209,16 +213,22 @@ export const peopleService = (deps: ServiceDeps): PeopleService => {
     link: async (person, other, options) =>
       linkPeople(await deps.store(), await deps.account(), person, other, options),
 
-    unlink: async (person, { by }) => {
+    unlink: async (person, { by, from }) => {
       if (by !== "owner")
         throw new CliError("permission_error", "only the owner unlinks an identity; the owner runs this", {
           reason: "identity.owner-only",
         })
       const store = await deps.store()
-      return store.people.unlinkIdentity(await identityIn(store, await deps.account(), person), {
-        method: "manual",
-        by: "owner",
-      })
+      const identity = await identityIn(store, await deps.account(), person)
+      const named = from?.trim() ?? ""
+      if (named === "") throw await fromRequired(store, identity, person)
+      const uid = named === "person:me" ? (await store.people.owner())?.uid : named
+      if (uid === undefined)
+        throw new CliError("not_found", "no person is marked as the owner in the store", {
+          reason: "person.no-owner",
+          param: "from",
+        })
+      return store.people.unlinkIdentity(identity, { method: "manual", by: "owner", from: uid })
     },
 
     lookup: async (phone) => capability(await deps.connection(), "lookup", "find a person by phone")(phone),
@@ -321,6 +331,22 @@ export interface LinkPeopleOptions {
   /** Why an agent thinks they are one person; it is required of an agent and kept on the proposal. */
   reason?: string | undefined
   method?: string
+}
+
+/** Never guessed from the identity: a guess takes it off whoever holds it, who may not be the person meant. */
+const fromRequired = async (store: MessageStore, identity: IdentityRef, typed: string): Promise<CliError> => {
+  const holder = await store.people.personOf(identity)
+  const word = /^[\w@.:+/=-]+$/u.test(typed) ? typed : `'${typed.replaceAll("'", "'\\''")}'`
+  const where =
+    holder === undefined
+      ? ""
+      : ` ${identity.provider}:${identity.id} sits on ${displayName(holder.name, { name: holder.identities.find(({ name }) => name)?.name ?? null }) ?? "a person with no name"} (person:${holder.uid}); ` +
+        `to take it off them: contacts unlink ${word} --from person:${holder.uid}`
+  return new CliError("validation_error", `say whom it leaves with --from person:<uid> or --from person:me.${where}`, {
+    reason: "person.from-required",
+    param: "from",
+    ...(holder === undefined ? {} : { reference: `person:${holder.uid}` }),
+  })
 }
 
 /** The person as linked, or, for an agent, as still unlinked with the `identity_link` proposal waiting for the owner. */
