@@ -25,13 +25,28 @@ const MOST_SHARING = 6
 const CURSOR = "people.scan"
 
 /** Raised when a rule changes what a pass finds in values nobody touched: the next pass then reads everything once. */
-const RULES = 2
+const RULES = 3
 
 /**
  * NEED-2526: a shared mailbox says little alone, so its proposal is scored by what else the two people have in common.
  * The role word itself does not move the score: the list does not tell a department's inbox from a company's.
  */
 const SHARED_SCORE = { alone: 0.1, name: 0.4, trace: 0.3, weakTrace: 0.2 }
+
+/**
+ * NEED-2529: every rule's proposal on the scale of `SHARED_SCORE`, so the review lists the strongest first. A phone two
+ * people alone have but that does not join (a CRM's or a card's), one name with a phone or an address only these two
+ * hold, and a pair the owner rejected that meets new evidence of that kind are 0.7; one name with a chat or a company
+ * domain in one source, and a meeting guest's typed address, 0.5; a phone or personal address 3–6 people share, 0.4.
+ */
+export const PROPOSAL_SCORE = {
+  ownPhone: 0.7,
+  nameAndOwnTrace: 0.7,
+  newEvidence: 0.7,
+  nameAndPlace: 0.5,
+  guestEmail: 0.5,
+  group: 0.4,
+}
 
 /**
  * NEED-2445, safe option until the owner rules: a number two people share joins them only when a messenger, which
@@ -232,7 +247,15 @@ const join = (
   }
   if (touchesOwner(pass, from, into, method)) return into
   if (index.rejected(from, into) !== undefined) {
-    propose(pass, { identity: sides.identity, with: sides.with, from, to: into, joins: "person", signal })
+    propose(pass, {
+      identity: sides.identity,
+      with: sides.with,
+      from,
+      to: into,
+      joins: "person",
+      signal,
+      score: PROPOSAL_SCORE.newEvidence,
+    })
     return into
   }
   const kept = mergePerson(context, from, into, { method, by: BY })
@@ -266,6 +289,7 @@ const propose = (pass: Pass, opening: Omit<Opening, "by">) => {
 }
 
 const proposeEachPair = (pass: Pass, people: Map<number, number>, signal: IdentityLinkSignal) => {
+  const score = people.size === 2 ? PROPOSAL_SCORE.ownPhone : PROPOSAL_SCORE.group
   const persons = [...people.keys()].sort((a, b) => a - b)
   for (const [at, from] of persons.entries())
     for (const to of persons.slice(at + 1))
@@ -277,6 +301,7 @@ const proposeEachPair = (pass: Pass, people: Map<number, number>, signal: Identi
         joins: "person",
         signal,
         candidates: persons,
+        score,
       })
 }
 
@@ -439,6 +464,7 @@ const sameName = (pass: Pass, people: number[], name: string) => {
         to,
         joins: "person",
         signal: "name",
+        score: trace.value === undefined ? PROPOSAL_SCORE.nameAndPlace : PROPOSAL_SCORE.nameAndOwnTrace,
         evidence: trace.evidence,
         reason: trace.reason,
       })
@@ -461,6 +487,7 @@ const guestEmail = (pass: Pass, row: { identity: number; email: unknown; meeting
     to: others[0] as number,
     joins: "identity",
     signal: "guest-email",
+    score: PROPOSAL_SCORE.guestEmail,
     ...(meeting === undefined ? {} : { evidence: [meeting] }),
   })
 }

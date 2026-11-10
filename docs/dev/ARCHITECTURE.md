@@ -574,7 +574,7 @@ proposes them instead. A no-reply address (`isNoReplyAddress`) is no one's: it n
   `identity.stale` once `sides` no longer hold. On a shared-mailbox proposal the owner has a third answer,
   `decideLink` with `company` (NEED-2528): the address goes to an organization (`organization_identities`, method
   `proposal`), the one named, else the one `organizationOfAddress` finds or makes as a mail finding does, and the
-  proposal is rejected, so its evidence keeps the pair from being proposed again on that address. `linkProposals` with
+  proposal is rejected, so its evidence keeps the pair from being proposed again on that address. With `all` it closes every open proposal on the same `mailbox` in that one decision, and the decided one's result lists them as `closed`. `linkProposals` with
   `order: "score"` lists the highest score first and proposals with none last. An agent's mention confirm and meeting association go through
   `linkOrPropose`, which links only for the owner; the mention waits as `proposed`.
   `linkPeople` (tg/max `contacts link`, a calendar's `people link`) takes who runs it from `actorOf`: an agent's link
@@ -601,7 +601,7 @@ proposes them instead. A no-reply address (`isNoReplyAddress`) is no one's: it n
   `info@` or a company's address by the same `sharedLine` test, never joins either, but proposes each pair (NEED-2526,
   `proposeShared`) with `shared` (`role` or `line`) in the payload and a `score` from what else the two share
   (`sharedMailboxCase`): 0.1 alone, plus 0.4 for one name (`variantKey`), plus 0.3 for a phone or another address only
-  they hold, or 0.2 for a chat or a company's domain within one source. The mailbox and other role addresses are no
+  they hold, or 0.2 for a chat or a company's domain within one source. Every other rule's proposal is scored on the same scale (NEED-2529, `PROPOSAL_SCORE` beside `SHARED_SCORE`): 0.7 for a phone two people alone have that does not join (a CRM's or a card's), for one name with a phone or an address only they hold, and for a rejected pair met on new evidence; 0.5 for one name with a chat or a company domain in one source and for a meeting guest's typed address; 0.4 for each pair on a phone or personal address 3–6 people share. An agent's proposal keeps the score the agent gave, or none; an account under another name (`account`) has none. A pass that meets an open rule proposal of the same signal with no score fills it in; a decided one is never touched. `RULES` 3 makes the first pass after the upgrade full once, so open proposals get their scores. The mailbox and other role addresses are no
   trace for it. They are proposed after the phones, so an open one never keeps a phone from joining the pair. A
   no-reply address proposes no one. `linkIndex` holds each pair's open proposal and the evidence keys of its
   rejected ones, read once per pass. An address's mail contact stands for its person in both the scan and the import,

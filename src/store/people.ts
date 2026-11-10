@@ -33,7 +33,7 @@ import {
 } from "./sqlite/people-list.js"
 import { type PersonDoubts, personDoubts } from "./sqlite/person-doubts.js"
 import * as personLinks from "./sqlite/person-links.js"
-import { RULE, scanMatches } from "./sqlite/person-match-scan.js"
+import { PROPOSAL_SCORE, RULE, scanMatches } from "./sqlite/person-match-scan.js"
 import type { PersonMerge } from "./sqlite/person-merges.js"
 import * as personMerges from "./sqlite/person-merges.js"
 import { type PersonPreparationRead, personPreparation } from "./sqlite/person-preparation.js"
@@ -189,7 +189,14 @@ export const accountPeopleOver = (context: StoreContext): AccountPeople => {
         person.email,
         key.provider,
       )
-      if (held) identityProposals.openIdentityLink(context, { ...held, joins: "person", signal: "email", by: RULE })
+      if (held)
+        identityProposals.openIdentityLink(context, {
+          ...held,
+          joins: "person",
+          signal: "email",
+          by: RULE,
+          score: PROPOSAL_SCORE.newEvidence,
+        })
     }
     return saved
   }
