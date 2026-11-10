@@ -907,9 +907,9 @@ export const tasksStatsCommand = (messenger: Messenger): Command => {
         stats.rows.length === 0
           ? ""
           : `${stats.rows
-              .map(({ group, name, open, created, closed, oldestOpenAt, medianCloseMs }) =>
+              .map(({ group, account: own, name, open, created, closed, oldestOpenAt, medianCloseMs }) =>
                 [
-                  name ? `${name} (${group})` : group,
+                  `${name ? `${name} (${group})` : group}${own ? ` ${own.provider}:${own.account}` : ""}`,
                   `${open} open`,
                   `${created} created`,
                   `${closed} closed`,

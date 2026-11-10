@@ -103,7 +103,9 @@ export const taskStatsOf = async (
 ): Promise<TaskStats> => {
   if (query) refuseNestedPeriod(query.root)
   const several = Array.isArray(accounts)
-  const list: readonly AccountKey[] = several ? accounts : [accounts as AccountKey]
+  const list: readonly AccountKey[] = several
+    ? [...new Map(accounts.map((one) => [taskAccount(one), one])).values()]
+    : [accounts as AccountKey]
   const time = (sql: string) => ({ type: "time", sql }) as const
   const read = { ...columns, [PERIOD_FIELD]: time("t.created_at"), closed: time("t.closed_at") }
   const fixed: Where[] = [
@@ -141,17 +143,19 @@ export const taskStatsOf = async (
     by === "project" ? String(row.projectId) : `${row.account ? taskAccount(row.account) : ""}\t${row.group ?? ""}`
   const groups = new Map<
     string,
-    { group: string; account?: AccountKey; open: TaskStatRow[]; created: number; closeMs: number[] }
+    { group: string; account?: AccountKey; first: number; open: TaskStatRow[]; created: number; closeMs: number[] }
   >()
   const slot = (row: Tagged) => {
     const key = keyOf(row)
     const found = groups.get(key) ?? {
       group: by === "project" ? String(row.projectId) : (row.group ?? ""),
       ...(row.account ? { account: row.account } : {}),
+      first: row.createdAt,
       open: [],
       created: 0,
       closeMs: [],
     }
+    found.first = Math.min(found.first, row.createdAt)
     groups.set(key, found)
     return found
   }
@@ -160,6 +164,8 @@ export const taskStatsOf = async (
   for (const row of closed) slot(row).closeMs.push((row.closedAt ?? row.createdAt) - row.createdAt)
 
   const kept = [...groups.values()].filter((one) => one.open.length + one.created + one.closeMs.length > 0)
+  // Each account's rows come oldest first; across accounts the groups are put back in that order.
+  if (several) kept.sort((a, b) => a.first - b.first)
   const nameOf = await namesOf(store, by, kept)
   const rows = kept.map((one) => ({
     group: one.group,

@@ -12,7 +12,7 @@ shape of this file.
 - **`stats tasks show` can count every account at once.** A `Messenger` that sets `accountsOf(command)` gets one answer
   across the accounts it returns, when the command names none: memo uses it so `memo stats tasks show` needs no
   `--source`. The answer lists them in `accounts`, and each chat row's `chat` names its own account. `--chat` and a
-  `chat:` term then ask for `--source`, since a chat belongs to one account.
+  `chat:` naming one chat are then refused, since a chat belongs to one account.
 
 ## 0.631.0 — 10.11.2026
 
