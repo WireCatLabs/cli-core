@@ -5,6 +5,60 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## 0.630.0 — 10.11.2026
+
+### Added
+
+- **`stages suggest` proposes a base stage for every unconfirmed CRM stage with the AI model** chosen with
+  `models ai set`. It asks only about stages with a real choice: a won or lost stage usually has one base stage of its
+  outcome and keeps the store's suggestion. The answers are suggestions the owner confirms at once with
+  `stages confirm --all`. Without a model it sends nothing and says how to choose one (`ai.not-set`).
+- **An agent can do the same work without a paid call.** `stages suggest --dry-run` prints the stages, the base
+  stages to choose from and the answer's shape as JSON; `stages suggest --text-file -` records the agent's answer as
+  suggestions and lists what it skipped. An agent's run never sends the stages to the model (`stage.model-agent`).
+- **`people.list` rows say which messenger a username belongs to** (`usernameSource`), and each identity of
+  `people.personOf` and `people.byUid` carries the `phone` and `email` its source gave it, as does each identity of
+  the `person` and `contact-activity` entities.
+
+### Changed — may break callers
+
+- **Nothing joins anyone to the owner without the owner**. A pair with the owner's person on either side is
+  neither joined nor proposed at import or in `people.scanMatches`, where it used to merge; the scan reports it as
+  skipped with the reason `identity.owner`. An
+  account's own identity joins the owner only under the owner's name, in either script; under another name, such as a
+  partner's mailbox or a spouse's messenger the owner reads, it opens a proposal with the new signal `account`
+  (`IDENTITY_LINK_SIGNALS`). A CRM no longer names the owner's person.
+- **A role address such as `info@` and a company's line or mailbox join and propose no one,** at import and in the
+  scan. A role address used to be proposed. A company's line is one an organization holds, or one two people of one source list share, such as two
+  CRM contacts. A bot's number or address is skipped too.
+- **A CRM contact ties a person to the owner only through a deal or lead whose owner is the owner**, that is
+  a CRM user linked to the owner's person. Every CRM contact used to count, so `kind:person` held a whole CRM. A CRM's users
+  still count.
+
+### Fixed
+
+- **A sync no longer replaces a suggestion an agent or a model made.** It guessed again by position for every
+  unconfirmed stage of the pipelines it saved; now it guesses only for a stage that has no suggestion yet.
+- **Telegram and WhatsApp people get their chat ties**. Those messengers keep no member list, so a
+  one-to-one chat or a small group tied nobody and the owner's top contacts were `stranger`. Whoever wrote in a
+  one-to-one chat or a group of at most 10 now has the tie. Store version 63 adds the triggers that keep stored kinds
+  in step with message senders and deal links; the next `people list` works everyone out
+  again once.
+- **A name is found in either script**. `people.list` with a `name` query looks for the text in Cyrillic and
+  Latin, and `people.similar` and the name match of `scanMatches` compare names with script, transliteration and
+  accents set aside, so `Светлана Кузнецова` is `Svetlana Kuznetsova`. A name alone still proposes nobody, and a surname
+  change is never guessed.
+- **A same-name proposal needs a strong trace between sources.** A phone or an address counts only when no third person
+  holds it; a shared chat or a company's mail domain counts only between people of one source. Every shared phone and
+  address is tried, not only the first.
+- **Two accounts that arrive together before the owner has a name are proposed, not joined**: one may be a partner's.
+- **A deal contact merged into another person keeps the deal's tie.**
+- **Tasks found in messages show the message's first line as their title.** A rule stored `question — msg:…` as the
+  title, so `tasks list` and the tasks views showed a raw reference. `tasks.details`, `tasks.list` and `tasks.query`
+  now give the first line of the source message, up to 120 characters, while the stored title is still that
+  placeholder. A deleted, empty or media-only message keeps the stored title. The store still holds no message
+  text, and a title the owner wrote is never replaced.
+
 ## 0.629.0 — 10.11.2026
 
 ### Added
