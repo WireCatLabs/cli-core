@@ -638,6 +638,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--file-ids` | `<ids>` | list | only these files, by comma-separated ids |  |
 | `--folder` | `<folder>` | string | a notes folder, by its id or path; repeat it for more |  |
 | `--for` | `<agents>` | list | the agents to install for, comma-separated |  |
+| `--from` | `<person>` | id | a person: the one identities leave, or the one who sent it; a search takes it repeated for any of several |  |
 | `--from-dir` | `<dir>` | path | match files in this folder, not its subfolders |  |
 | `--last` | `<n>` | count | stop once the newest n messages are held | messages |
 | `--link` | `<link>` | string | an invite link |  |

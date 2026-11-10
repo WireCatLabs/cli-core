@@ -272,7 +272,7 @@ export const botSearchCommand = (bot: BotMessenger): Command => {
     .option("--page <n>", "which page, starting at 1", positiveCount("--page"))
     .option("--newest", "newest first instead of best first")
     .option(
-      "--from <who>",
+      "--from <person>",
       "only what this person wrote — an id, @username or part of a name; repeat it for any of several",
       (value: string, previous: string[] = []) => [...previous, value],
     )

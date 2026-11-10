@@ -5,3 +5,5 @@
   only. Without `--from` the command is refused with `validation_error`, reason `person.from-required`, and the message
   names who holds the identity and the command to run with their `--from`. An identity on someone else is refused with
   `identity.held-elsewhere`, as memo's `people unlink` is, and nothing moves.
+- **`bot search messages --from` shows its value as `<person>`**, the placeholder cli-base 0.96.0's vocabulary gives
+  `--from`; it still takes an id, @username or part of a name, repeated for any of several.
