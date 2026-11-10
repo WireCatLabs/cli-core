@@ -29,14 +29,44 @@ const GROUP_SIZE =
   "coalesce(c.participants_count, (SELECT mc.listed_count FROM member_counts mc WHERE mc.chat_id = c.id " +
   "ORDER BY mc.date DESC LIMIT 1))"
 
+/**
+ * Telegram and WhatsApp keep no member list, so a chat's people are also whoever wrote in it (BUG-676). One pass over
+ * the messages of dialogs and small groups, read through `messages_by_time`.
+ */
+const chatPeople = (where: string): string =>
+  `SELECT m.identity_id FROM chats c JOIN chat_members m ON m.chat_id = c.id WHERE ${where} UNION ` +
+  "SELECT s.sender_identity_id FROM chats c JOIN messages s ON s.chat_id = c.id " +
+  `WHERE ${where} AND s.sender_identity_id IS NOT NULL AND s.outgoing IS NOT 1`
+
+/**
+ * NEED-2500 A: a CRM contact ties a person only when the CRM ties them to the owner, by a deal or lead whose owner is
+ * the owner's person, so the owner's CRM user must be linked to the owner. The user a CRM sync signs in as is not the
+ * owner: a portal's webhook may belong to a colleague. A CRM's users tie as before.
+ */
+// A deal's owner link names the person its CRM user had then; one merged into the owner since still counts.
+const OWNERS_CRM_PEOPLE =
+  "SELECT id FROM persons WHERE owner = 1 UNION SELECT e.from_person_id FROM identity_link_events e " +
+  "JOIN identity_links l ON l.identity_id = e.identity_id JOIN persons p ON p.id = l.person_id AND p.owner = 1"
+
+const crmTie = (crm: string[]): string => {
+  if (crm.length === 0) return "SELECT NULL WHERE 0"
+  const providers = crm.map(quoted).join(", ")
+  return (
+    `SELECT id FROM identities WHERE provider IN (${providers}) AND external_id LIKE '%/user/%' UNION ` +
+    "SELECT l.identity_id FROM links d JOIN links o ON o.from_type = d.from_type AND o.from_id = d.from_id " +
+    "AND o.kind = 'related-to' AND o.role = 'owner' AND o.to_type = 'person' AND o.deleted_at IS NULL " +
+    "JOIN identity_links l ON l.person_id = d.to_id " +
+    "WHERE d.from_type IN ('deal', 'lead') AND d.kind = 'related-to' AND d.to_type = 'person' AND d.role <> 'owner' " +
+    `AND d.deleted_at IS NULL AND o.to_id IN (${OWNERS_CRM_PEOPLE})`
+  )
+}
+
 /** Each tie as the identities that have it. */
 const tieIdentities = (): Record<PersonTie, string> => {
   const crm = crmProviders()
   return {
-    chat: "SELECT m.identity_id FROM chats c JOIN chat_members m ON m.chat_id = c.id WHERE c.kind = 'dialog'",
-    "small-group":
-      "SELECT m.identity_id FROM chats c JOIN chat_members m ON m.chat_id = c.id " +
-      `WHERE c.kind = 'group' AND ${GROUP_SIZE} <= ${SMALL_GROUP_MEMBERS}`,
+    chat: chatPeople("c.kind = 'dialog'"),
+    "small-group": chatPeople(`c.kind = 'group' AND ${GROUP_SIZE} <= ${SMALL_GROUP_MEMBERS}`),
     // NEED-2342 A: the owner wrote to them; mail they sent, a newsletter included, is no tie.
     mail:
       "SELECT r.identity_id FROM emails e JOIN email_recipients r ON r.email_id = e.id " +
@@ -44,10 +74,7 @@ const tieIdentities = (): Record<PersonTie, string> => {
     meeting:
       "SELECT identity_id FROM meeting_participants UNION ALL " +
       "SELECT identity_id FROM calendar_entry_participants WHERE resource = 0 AND identity_id IS NOT NULL",
-    crm:
-      crm.length === 0
-        ? "SELECT NULL WHERE 0"
-        : `SELECT id FROM identities WHERE provider IN (${crm.map(quoted).join(", ")})`,
+    crm: crmTie(crm),
     "phone-book": "SELECT identity_id FROM account_identities WHERE address_book = 1",
   }
 }

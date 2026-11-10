@@ -2,7 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import type { IdentityRef, PersonRecord } from "../types.js"
 import { currentPerson, mergeSql, SEPARATIONS } from "./merged-persons.js"
 import type { StoreContext } from "./open.js"
-import { move, recordOf, required } from "./person-links.js"
+import { move, recordOf, renameAfterLeaving, required } from "./person-links.js"
 import { persons } from "./schema.js"
 
 export interface PersonMerge {
@@ -129,6 +129,11 @@ export const undoMerge = (context: StoreContext, toUid: string, fromUid: string,
     })
   if (here.length === 0) throw new CliError("not_found", `nothing of person:${fromUid} is merged into person:${toUid}`)
   for (const { pk } of here) move(context, pk, to, from, { method: "undo-merge", by })
+  renameAfterLeaving(
+    context,
+    to,
+    here.map(({ pk }) => pk),
+  )
   return recordOf(context, from)
 }
 
@@ -160,5 +165,10 @@ export const split = (context: StoreContext, uid: string, refs: IdentityRef[], b
       .get()?.pk,
   )
   for (const { pk } of found) move(context, pk, person, alone, { method: "split", by })
+  renameAfterLeaving(
+    context,
+    person,
+    found.map(({ pk }) => pk),
+  )
   return recordOf(context, alone)
 }

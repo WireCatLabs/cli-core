@@ -1,11 +1,15 @@
 import { isEmailAddress, isNoReplyAddress, isRoleAddress } from "../../domain/addresses.js"
-import { displayName, nameKey } from "../../domain/display-names.js"
+import { displayName } from "../../domain/display-names.js"
+import { variantKey } from "../../domain/name-variants.js"
 import { storedPhone } from "../../domain/phones.js"
 import { FREE_MAIL } from "../../mail/score.js"
 import type { CacheDatabase } from "../driver.js"
 import { referenceOfThing } from "./things.js"
 
-/** People, owner aside, by the name they share once case, quotes and word order are set aside. */
+/**
+ * People, owner aside, by the name they share once case, quotes, word order, script and spelling are set aside:
+ * `Светлана Кузнецова` and `Svetlana Kuznetsova` are one name here (BUG-678).
+ */
 export const peopleByNameKey = (database: CacheDatabase): Map<string, { people: number[]; name: string }> => {
   const found = new Map<string, { people: number[]; name: string }>()
   for (const row of database
@@ -15,7 +19,7 @@ export const peopleByNameKey = (database: CacheDatabase): Map<string, { people: 
     )
     .all()) {
     const name = String(row.name)
-    const key = nameKey(name)
+    const key = variantKey(name)
     if (key === null) continue
     const held = found.get(key) ?? { people: [], name: displayName(name) ?? name }
     held.people.push(Number(row.id))
@@ -30,6 +34,8 @@ export interface SharedTrace {
   identity: number
   with: number
   kind: "chat" | "email" | "email-domain" | "phone"
+  /** The phone or address, for the kinds that have one. */
+  value?: string
   evidence: string[]
   reason: string
 }
@@ -107,6 +113,7 @@ export const sharedTrace = (database: CacheDatabase, a: number, b: number, name:
       identity: phone[0].identity,
       with: phone[1].identity,
       kind: "phone",
+      value: phone[0].value,
       evidence: [],
       reason: `same name «${name}» and the same phone`,
     }
@@ -116,6 +123,7 @@ export const sharedTrace = (database: CacheDatabase, a: number, b: number, name:
       identity: email[0].identity,
       with: email[1].identity,
       kind: "email",
+      value: email[0].value,
       evidence: [],
       reason: `same name «${name}» and the same address ${email[0].value}`,
     }

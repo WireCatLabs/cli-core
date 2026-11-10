@@ -313,3 +313,63 @@ it("clears kinds on a group's size by the same line the ties draw", async () => 
   const trigger = String(db.prepare("SELECT sql FROM sqlite_master WHERE name = 'person_kind_chat_au'").get()?.sql)
   expect(trigger).toContain(`participants_count <= ${SMALL_GROUP_MEMBERS}`)
 })
+
+it("keeps kinds in step when ties come from who wrote in a chat and from the owner's CRM deals", async () => {
+  const { store, db } = await opened()
+  const CRM: AccountKey = { provider: "bitrix24", account: "acme.example", scope: "work" }
+  await store.accounts.registerProvider({ name: "bitrix24", kind: "crm", aliases: ["b24"], command: "b24" })
+  await store.people.savePeople(TG, [
+    { id: "11", name: "Dina Ross" },
+    { id: "12", name: "Egor Lunin" },
+  ])
+  await store.people.savePeople(CRM, [
+    { id: "acme.example/contact/5", name: "Client Five" },
+    { id: "acme.example/contact/6", name: "Client Six" },
+    { id: "acme.example/user/7", name: "Me At Work" },
+  ])
+  const tg = Number(db.prepare("SELECT id FROM accounts WHERE provider = 'telegram'").get()?.id)
+  await store.chats.saveChats(TG, [chat("d", "dialog", null), chat("g", "group", 30)])
+  const chatPk = (id: string) => Number(db.prepare("SELECT id FROM chats WHERE external_id = ?").get(id)?.id)
+  const message = db.prepare(
+    "INSERT INTO messages (chat_id, account_id, external_id, sender_identity_id, sent_at, text, created_at, " +
+      "updated_at, source) VALUES (?, ?, ?, ?, ?, 'hi', ?, ?, 'sync')",
+  )
+  message.run(chatPk("d"), tg, "a", identityPk(db, "telegram", "11"), NOW, NOW, NOW)
+  message.run(chatPk("g"), tg, "b", identityPk(db, "telegram", "12"), NOW, NOW, NOW)
+  await inStep(store, db)
+  const kinds = async () =>
+    new Map((await store.people.list({ limit: 100, kind: "all" })).items.map((one) => [one.name, one.kind]))
+  expect((await kinds()).get("Dina Ross")).toBe("person")
+  expect((await kinds()).get("Egor Lunin")).toBe("stranger")
+
+  await store.chats.saveChats(TG, [chat("g", "group", 6)])
+  await inStep(store, db)
+  expect((await kinds()).get("Egor Lunin")).toBe("person")
+
+  const personOf = (id: string) =>
+    Number(
+      db
+        .prepare(
+          "SELECT l.person_id AS p FROM identities i JOIN identity_links l ON l.identity_id = i.id WHERE i.external_id = ?",
+        )
+        .get(id)?.p,
+    )
+  const link = db.prepare(
+    "INSERT INTO links (from_type, from_id, to_type, to_id, kind, role, source, created_at, updated_at) " +
+      "VALUES ('deal', 1, 'person', ?, 'related-to', ?, 'crm', ?, ?)",
+  )
+  link.run(personOf("acme.example/contact/5"), "contact", NOW, NOW)
+  link.run(personOf("acme.example/user/7"), "owner", NOW, NOW)
+  await inStep(store, db)
+
+  expect((await kinds()).get("Client Five")).toBe("stranger")
+
+  await store.people.linkToOwner({ provider: "bitrix24", id: "acme.example/user/7" })
+  await inStep(store, db)
+  expect((await kinds()).get("Client Five")).toBe("person")
+  expect((await kinds()).get("Client Six")).toBe("stranger")
+
+  db.prepare("UPDATE links SET deleted_at = ? WHERE role = 'owner'").run(NOW)
+  await inStep(store, db)
+  expect((await kinds()).get("Client Five")).toBe("stranger")
+})
