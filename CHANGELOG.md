@@ -5,6 +5,27 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## 0.627.0 — 10.11.2026
+
+### Added
+
+- **`commands --serve` runs up to 8 requests at once** ([protocol](docs/REFERENCE.md#the-command-server)). The
+  ready line says how many (`"concurrent":8`); the protocol stays 1, so a client that sends one request at a time
+  works as before. Each request keeps its own output, stdin, exit code and run, and opens the store on its own
+  connection; a `store` command runs alone. WireCat Desktop's Memory page sends 7 reads together, and today a pool of
+  2 servers starts a fresh process for the other 5. `EntryContext.setExitCode(code)` sets a request's exit code in a
+  CLI with its own program; a direct `process.exitCode` write is one value for the whole process.
+- **`memories.list`, `facts.list`, `proposedActions.list` and `agentActions.list` take an `offset`.** A caller pages
+  past the 500-row cap: `{ limit: 500, offset: 500 }` gives the next 500 in the same order, newest first with ties by
+  id, so no row shows twice and none is left out. memo's `--page` reads through it, so WireCat Desktop can show more
+  than 500 memories, facts or actions.
+
+### Fixed
+
+- **`models search-consents set` names the cost of the chosen model.** The consent text said "with claude-haiku-5-5
+  one costs about $0.0003" whatever model was chosen. It now prices one search with the chosen model (about $0.0005
+  with gpt-4o-mini), and says the cost is unknown for a model or address with no known price.
+
 ## 0.626.0 — 10.11.2026
 
 ### Added
