@@ -38,14 +38,18 @@ export const currentPairOf = (database: CacheDatabase, payload: IdentityLinkPayl
   return from === undefined || to === undefined ? undefined : [from, to]
 }
 
-/** The proposals that still say something: waiting for the owner, or turned down by them. */
-export const linkRows = (database: CacheDatabase, statuses: readonly string[] = ["proposed", "rejected"]): LinkRow[] =>
+/** The proposals that still say something: waiting for the owner, or turned down by them; a `page` is newest first. */
+export const linkRows = (
+  database: CacheDatabase,
+  statuses: readonly string[] = ["proposed", "rejected"],
+  page?: { limit: number; offset: number },
+): LinkRow[] =>
   database
     .prepare(
       "SELECT id, status, payload FROM proposed_actions WHERE kind = ? " +
-        "AND status IN (SELECT value FROM json_each(?)) ORDER BY id",
+        `AND status IN (SELECT value FROM json_each(?)) ORDER BY id${page === undefined ? "" : " DESC LIMIT ? OFFSET ?"}`,
     )
-    .all(IDENTITY_LINK_KIND, JSON.stringify(statuses))
+    .all(IDENTITY_LINK_KIND, JSON.stringify(statuses), ...(page === undefined ? [] : [page.limit, page.offset]))
     .map((row) => {
       const payload = JSON.parse(String(row.payload)) as IdentityLinkPayload
       return { id: String(row.id), status: String(row.status), payload, pair: currentPairOf(database, payload) }

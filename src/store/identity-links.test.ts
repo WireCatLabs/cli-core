@@ -246,4 +246,32 @@ describe("the link proposals read", () => {
     ])
     expect(withAnya.hasMore).toBe(false)
   })
+
+  it("pages everyone's proposals newest first, by status", async () => {
+    const store = await open()
+    await twoPeople(store)
+    await store.people.savePeople(MAX, [
+      { id: "8", name: "Cas" },
+      { id: "9", name: "Dee" },
+    ])
+    const ids = []
+    for (const other of [anya, { provider: "max", id: "8" }, { provider: "max", id: "9" }])
+      ids.push((await store.people.proposeLink({ identity: ana, with: other, signal: "agent", by: agent })).id)
+    await store.people.decideLink(ids[1] as string, { confirm: false, by: "owner" })
+
+    const pages = await Promise.all(
+      [0, 1, 2].map((offset) => store.people.linkProposals({ status: "all", limit: 1, offset })),
+    )
+    const proposed = await store.people.linkProposals({ limit: 10, offset: 0 })
+
+    expect(pages.map(({ items, hasMore }) => [items.map(({ id }) => id), hasMore])).toEqual([
+      [[ids[2]], true],
+      [[ids[1]], true],
+      [[ids[0]], false],
+    ])
+    expect(proposed.items.map(({ id }) => id)).toEqual([ids[2], ids[0]])
+    expect((await store.people.linkProposals({ status: "rejected", limit: 10, offset: 0 })).items).toMatchObject([
+      { id: ids[1], status: "rejected" },
+    ])
+  })
 })

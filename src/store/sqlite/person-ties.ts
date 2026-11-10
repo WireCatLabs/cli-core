@@ -3,7 +3,10 @@ import type { CacheDatabase } from "../driver.js"
 import { mergedAwaySql } from "./merged-persons.js"
 import { mergedAssignees } from "./task-board.js"
 
-/** A group this small is people the owner knows; in a bigger one an author alone is background. */
+/**
+ * A group this small is people the owner knows; in a bigger one an author alone is background. Store version 62's
+ * trigger `person_kind_chat_au` holds the same number: changing it takes a migration that replaces that trigger.
+ */
 export const SMALL_GROUP_MEMBERS = 10
 
 /** What ties a person to the owner, from what the store holds about them. */

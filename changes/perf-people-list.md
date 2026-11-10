@@ -17,3 +17,6 @@
   a list did before. A read-only open with anything left to work out answers from memory, as before.
 - **Saving a chat's members leaves the rows of members who stayed alone.** It deleted and wrote again every row, which
   would clear the stored kind of every member on each sync.
+- **`people.linkProposals` pages in SQL when it lists everyone's proposals.** It read, parsed and resolved every link
+  proposal of every status before it took the page: 213 to 244 ms for 500 of 25,000 proposals, now 18 ms. memo's
+  `people review` reads it. A list for one person still reads them all, since merges decide whose a proposal is now.

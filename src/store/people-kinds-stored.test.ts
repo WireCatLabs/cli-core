@@ -6,6 +6,7 @@ import type { Chat } from "../domain/models.js"
 import type { CacheDatabase } from "./driver.js"
 import { openCache } from "./open.js"
 import type { PeopleSort } from "./sqlite/people-list.js"
+import { SMALL_GROUP_MEMBERS } from "./sqlite/person-ties.js"
 import { type AccountKey, type MessageStore, openStore } from "./store.js"
 
 const TG: AccountKey = { provider: "telegram", account: "1" }
@@ -282,7 +283,7 @@ it("counts every kind at once, for the whole store or a name", async () => {
   expect((await store.people.list({ limit: 1, kind: "stranger" })).counts).toEqual(await store.people.counts())
 })
 
-it("clears no stored kind when a sync writes again what the store already holds", async () => {
+it("clears no stored kind when a sync writes again what the store holds, or a big group grows", async () => {
   const { store, db } = await opened()
   const sync = async () => {
     await store.people.savePeople(TG, [
@@ -296,9 +297,19 @@ it("clears no stored kind when a sync writes again what the store already holds"
     await store.people.saveAddressBook(TG, [{ id: "3", name: "Gala" }])
   }
   await sync()
+  await store.chats.saveChats(TG, [chat("big", "group", 5000), chat("channel", "channel", 900)])
+  await store.roster.saveMembers(TG, "big", ["1", "2", "3"])
+  await store.roster.saveMembers(TG, "channel", ["1", "2"])
   await store.people.list({ limit: 10 })
 
   await sync()
+  await store.chats.saveChats(TG, [chat("big", "group", 5001), chat("channel", "channel", 899)])
 
   expect(db.prepare("SELECT count(*) AS n FROM persons WHERE kind IS NULL").get()?.n).toBe(0)
+})
+
+it("clears kinds on a group's size by the same line the ties draw", async () => {
+  const { db } = await opened()
+  const trigger = String(db.prepare("SELECT sql FROM sqlite_master WHERE name = 'person_kind_chat_au'").get()?.sql)
+  expect(trigger).toContain(`participants_count <= ${SMALL_GROUP_MEMBERS}`)
 })

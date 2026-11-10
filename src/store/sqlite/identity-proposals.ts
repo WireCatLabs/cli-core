@@ -268,11 +268,16 @@ export const identityLinkRows = (
     throw new CliError("validation_error", "a list of link proposals takes 1–500 items")
   const asked = person === undefined ? undefined : currentPerson(context.database, Number(person))
   const operations = proposalOperationsOver(context)
-  const rows = linkRows(context.database, ["proposed", "rejected", "approved", "executed", "failed"])
-    .filter((row) => status === "all" || SHOWN[row.status] === status)
-    .filter((row) => asked === undefined || (row.pair?.includes(asked) ?? false))
-    .reverse()
-  const items = rows.slice(offset, offset + limit).map((row): IdentityLinkRow => {
+  const statuses = Object.keys(SHOWN).filter((one) => status === "all" || SHOWN[one] === status)
+  // Whose a proposal is now depends on merges since, so only a list for one person reads every proposal.
+  const rows =
+    asked === undefined
+      ? linkRows(context.database, statuses, { limit: limit + 1, offset })
+      : linkRows(context.database, statuses)
+          .filter((row) => row.pair?.includes(asked) ?? false)
+          .reverse()
+          .slice(offset, offset + limit + 1)
+  const items = rows.slice(0, limit).map((row): IdentityLinkRow => {
     const action = operations.get(row.id)
     const payload = row.payload
     const [from, to] = row.pair ?? payload.persons.map(Number)
@@ -292,5 +297,5 @@ export const identityLinkRows = (
       createdAt: action.createdAt,
     }
   })
-  return { items, hasMore: rows.length > offset + limit }
+  return { items, hasMore: rows.length > limit }
 }

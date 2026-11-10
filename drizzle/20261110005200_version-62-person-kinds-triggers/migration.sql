@@ -36,7 +36,7 @@ WHEN OLD.chat_id IS NOT NEW.chat_id OR OLD.identity_id IS NOT NEW.identity_id BE
 END;
 --> statement-breakpoint
 CREATE TRIGGER person_kind_chat_au AFTER UPDATE OF kind, participants_count ON chats
-WHEN OLD.kind IS NOT NEW.kind OR OLD.participants_count IS NOT NEW.participants_count BEGIN
+WHEN OLD.kind IS NOT NEW.kind OR (OLD.participants_count <= 10) IS NOT (NEW.participants_count <= 10) BEGIN
   UPDATE persons SET kind = NULL WHERE kind IS NOT NULL AND id IN (SELECT l.person_id FROM chat_members m JOIN identity_links l ON l.identity_id = m.identity_id WHERE m.chat_id = NEW.id);
 END;
 --> statement-breakpoint
