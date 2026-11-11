@@ -273,6 +273,25 @@ describe.each(["max", "telegram"])("strict store profile (%s)", (provider) => {
     const counted = await statsStore(store, account, { text: "muted:false", limit: 10, by: "chat", timezone: "UTC" })
     expect(counted.total).toBe(3)
   })
+  it("**participants_count:** reads the chat's size, and a chat of unknown size matches no value", async () => {
+    const store = await open()
+    await store.chats.saveChats(account, [
+      chat("1", "group", { participantsCount: 4 }),
+      chat("2", "group", { participantsCount: 10 }),
+      chat("3", "group", { participantsCount: 2144 }),
+      chat("4", "group"),
+      chat("5", "dialog"),
+    ])
+    for (const id of ["1", "2", "3", "4", "5"])
+      await store.messages.saveMessages(account, id, [message(id, id, "news")], { via: "history" })
+    expect(ids(await run(store, account, "participants_count<10"))).toEqual([1])
+    expect(ids(await run(store, account, "participants_count>=10"))).toEqual([2, 3])
+    expect(ids(await run(store, account, "participants_count:10"))).toEqual([2])
+    expect(ids(await run(store, account, "participants_count:[4 TO 10]"))).toEqual([1, 2])
+    const small = "kind:private OR (kind:group participants_count<10)"
+    const counted = await statsStore(store, account, { text: small, limit: 10, by: "chat", timezone: "UTC" })
+    expect(counted.total).toBe(2)
+  })
   it("counts distinct matches by chat, sender, day and hour", async () => {
     const store = await open()
     await store.chats.saveChats(account, [chat("1"), chat("2")])
