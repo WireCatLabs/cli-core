@@ -38,9 +38,10 @@ export class Pacer {
 
   /** When this call may go; reserved at once, so the next caller in any process lines up behind it. */
   async reserve(): Promise<number> {
-    const now = this.now()
-    if (this.interval === 0) return now
+    if (this.interval === 0) return this.now()
     return withFileLockAsync(this.path, "the request pace", () => {
+      // Inside the lock: read earlier, another process's write would look like a clock step.
+      const now = this.now()
       const tat = Math.max(this.read(now), now)
       this.write(tat + this.interval, now)
       return Math.max(now, tat - this.rate.burst * this.interval)
@@ -64,11 +65,13 @@ export class Pacer {
 
   private read(now: number): number {
     try {
-      const { tat, at } = JSON.parse(readFileSync(this.path, "utf8")) as { tat?: unknown; at?: unknown }
-      // Written "in the future" means the clock went back since, as when a machine boots ahead and NTP steps it: the
-      // wait it measured is then hours too long, and no messenger asked for it.
-      if (typeof at === "number" && at > now) return 0
-      return Number.isFinite(Number(tat)) ? Number(tat) : 0
+      const file = JSON.parse(readFileSync(this.path, "utf8")) as { tat?: unknown; at?: unknown }
+      const tat = Number(file.tat)
+      if (!Number.isFinite(tat)) return 0
+      const at = Number(file.at)
+      // Written "in the future" means the clock went back since, as when a machine boots ahead and NTP steps it. What
+      // was left of the wait still holds; the absolute time, hours off, does not.
+      return Number.isFinite(at) && at > now ? now + Math.max(0, tat - at) : tat
     } catch {
       return 0
     }

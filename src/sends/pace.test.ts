@@ -50,14 +50,33 @@ describe("the request pace", () => {
     expect(await pacer.reserve()).toBe(T)
   })
 
-  it("forgets a wait written before the clock went back", async () => {
+  it("does not carry the clock's error over when the clock goes back", async () => {
     let now = T + 3 * 3_600_000
     const pacer = new Pacer(fresh(), { perMinute: 60, burst: 1 }, () => now)
     await pacer.reserve()
     await pacer.reserve()
     now = T
 
-    expect(await pacer.reserve()).toBe(T)
+    expect(await pacer.reserve()).toBe(T + 1_000)
+  })
+
+  it("keeps what is left of a messenger's wait when the clock goes back", async () => {
+    let now = T + 3 * 3_600_000
+    const pacer = new Pacer(fresh(), { perMinute: 60, burst: 0 }, () => now)
+    await pacer.holdFor(600_000)
+    now = T
+
+    expect(await pacer.reserve()).toBe(T + 600_000)
+  })
+
+  it("reads the time inside the lock, so a later write by another process is no clock step", async () => {
+    const path = fresh()
+    let now = T
+    const pacer = new Pacer(path, { perMinute: 60, burst: 0 }, () => now)
+    await pacer.holdFor(600_000)
+    now = T + 10
+
+    expect(await pacer.reserve()).toBe(T + 600_000)
   })
 
   it("keeps a messenger's long wait while the clock runs forward", async () => {
