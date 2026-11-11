@@ -38,7 +38,11 @@ const fixture = async () => {
   const accountId = await store.accounts.saveAccount(MINE, { name: null })
   const save = (thread: string, ...emails: EmailInput[]) =>
     store.mail.saveThread({ accountId, externalId: thread, now: Date.now(), emails })
-  await save("t-lease", email("lease"), email("reply", { from: { address: MINE.account, name: "Me" }, outgoing: true }))
+  await save(
+    "t-lease",
+    email("lease", { bodyText: "Please sign the lease.\n-- \nAnn Lessor, Harbour Lettings" }),
+    email("reply", { from: { address: MINE.account, name: "Me" }, outgoing: true }),
+  )
   await save("t-big", email("big", { metadata: { partial: { bytes: 10 } } }))
   for (let n = 0; n < 6; n++) await save(`t-${n}`, email(`ask-${n}`))
   const ref = (thread: string, id: string) =>
@@ -617,4 +621,40 @@ it("refuses an order that already waits for the owner in another findings batch"
   ).rejects.toMatchObject({
     details: { reason: "order.proposed" },
   })
+})
+
+it("takes a new contact only when the mail's text gives a better name than the sender line", async () => {
+  const f = await fixture()
+  const lease = [await f.cite("t-lease", "lease")]
+  const contact = (name: string): MailFinding => ({
+    id: "c1",
+    kind: "new_contact",
+    address: "ann@example.com",
+    name,
+    reason: "she signs with it",
+    evidence: lease,
+  })
+  const stage = async (name: string, key: string) =>
+    f.store.mailFindings.stage(MINE, await f.batch([contact(name)], key), agent)
+
+  await expect(stage("Ann", "mail-triage:11")).rejects.toMatchObject({ details: { reason: "new-contact.sender-line" } })
+  await expect(stage("ANN", "mail-triage:12")).rejects.toMatchObject({ details: { reason: "new-contact.sender-line" } })
+  await expect(stage("Ann Invented", "mail-triage:13")).rejects.toMatchObject({
+    details: { reason: "new-contact.not-in-text" },
+  })
+  expect(
+    await f.store.mailFindings.check(MINE, await f.batch([contact("Ann")], "mail-triage:14"), agent),
+  ).toMatchObject({
+    valid: false,
+    problems: [{ finding: "c1", kind: "new_contact" }],
+  })
+  expect((await f.store.mailFindings.list({ account: MINE, status: "proposed" })).items).toEqual([])
+
+  const staged = await stage("Ann Lessor", "mail-triage:15")
+  const registry = proposalRegistry(f.store)
+  expect((await registry.list({ kinds: ["mail_findings"], limit: 10, offset: 0 })).items).toMatchObject([
+    { id: staged.id, parts: [{ id: "c1", kind: "new_contact" }] },
+  ])
+  await registry.decide([staged.id], { confirm: true, by: "owner" })
+  expect((await f.store.people.personOf({ provider: "email", id: "ann@example.com" }))?.name).toBe("Ann Lessor")
 })

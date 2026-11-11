@@ -43,6 +43,11 @@ const invalid = (message: string, reason?: string): never => {
 }
 const TEXT_BUDGET = 262144
 
+const wordsOf = (text: string): string[] =>
+  fold(text)
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter(Boolean)
+
 const EMAIL = `SELECT e.id, e.account_id, e.subject, coalesce(e.body_text, '') AS body,
     json_extract(e.metadata, '$.partial') IS NOT NULL AS partial, lower(e.from_address) AS sender,
     coalesce(e.outgoing, lower(e.from_address) = lower(a.external_id)) AS outgoing
@@ -262,6 +267,39 @@ export const mailFindingsStoreOver = (context: StoreContext): MailFindingsStore 
     )
   }
 
+  /** Every name the store already has for `address`: the sender and recipient lines of any mail, its identity, its person. */
+  const namesOnRecord = (address: string): string[] =>
+    database
+      .prepare(
+        "SELECT from_name AS name FROM emails WHERE lower(from_address) = ? AND from_name IS NOT NULL UNION " +
+          "SELECT name FROM email_recipients WHERE lower(address) = ? AND name IS NOT NULL UNION " +
+          "SELECT i.name FROM identities i WHERE i.provider = 'email' AND lower(i.external_id) = ? AND i.name IS NOT NULL UNION " +
+          "SELECT p.name FROM identities i JOIN identity_links l ON l.identity_id = i.id JOIN persons p ON p.id = l.person_id " +
+          "WHERE i.provider = 'email' AND lower(i.external_id) = ? AND p.name IS NOT NULL",
+      )
+      .all(address, address, address, address)
+      .map((row) => String(row.name))
+
+  /** The owner ruled a name copied from a sender line is metadata: only one the mail's own text adds is worth asking. */
+  const requireBetterName = (finding: Extract<MailFinding, { kind: "new_contact" }>, read: Map<string, Row>) => {
+    const name = wordsOf(finding.name)
+    const known = new Set(namesOnRecord(finding.address).flatMap(wordsOf))
+    if (name.every((word) => known.has(word)))
+      return invalid(
+        `the name of new contact ${finding.address} adds nothing to the name the store has from its mail; leave it out`,
+        "new-contact.sender-line",
+      )
+    const wanted = ` ${name.join(" ")} `
+    const inText = finding.evidence.some(({ reference }) =>
+      ` ${wordsOf(String(read.get(reference)?.body)).join(" ")} `.includes(wanted),
+    )
+    if (!inText)
+      return invalid(
+        `the name of new contact ${finding.address} is not in the text of the mail it cites; leave it out`,
+        "new-contact.not-in-text",
+      )
+  }
+
   /** A proposed findings batch that already holds this shop's order with this number. */
   const proposedOrder = (supplierName: string, number: string): string | undefined => {
     const shop = fold(supplierName).trim()
@@ -333,6 +371,7 @@ export const mailFindingsStoreOver = (context: StoreContext): MailFindingsStore 
         if (!inCitedMail(finding.address, finding, read))
           return invalid(`${finding.address} neither sent nor received the mail finding ${finding.id} cites`)
         if (!identityOfAddress(finding.address)) throw new CliError("not_found", `no stored contact ${finding.address}`)
+        requireBetterName(finding, read)
         return
       }
     }
