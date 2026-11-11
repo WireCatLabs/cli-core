@@ -112,9 +112,14 @@ it("accepts the findings whose own evidence is unchanged when another finding's 
   await expect(
     f.store.evidenceFindings.review(batch.id, { fingerprint: batch.fingerprint, accept: ["checklist"], by: "owner" }),
   ).rejects.toMatchObject({ details: { reason: "evidence-findings.stale" } })
-  const reviewed = await f.store.evidenceFindings.review(batch.id, {
+  const partly = await f.store.evidenceFindings.review(batch.id, {
     fingerprint: batch.fingerprint,
     accept: ["launch"],
+    by: "owner",
+  })
+  const reviewed = await f.store.evidenceFindings.review(batch.id, {
+    fingerprint: partly.fingerprint,
+    accept: [],
     by: "owner",
   })
   expect(reviewed.receipt?.items.map((item) => [item.id, item.status])).toEqual([
@@ -126,7 +131,7 @@ it("accepts the findings whose own evidence is unchanged when another finding's 
   expect(
     await f.store.evidenceFindings.review(renamed.id, {
       fingerprint: renamed.fingerprint,
-      accept: ["launch"],
+      accept: ["launch", "checklist"],
       by: "owner",
     }),
   ).toMatchObject({ status: "reviewed" })
@@ -142,10 +147,17 @@ it("lets the owner, or an agent with a reason, decide; later batches reuse the d
       by: { bot: "evidence-reviewer", reason: " " },
     }),
   ).rejects.toThrow("reason")
-  const reviewed = await f.store.evidenceFindings.review(batch.id, {
+  const reviewer = { bot: "evidence-reviewer", model: "m", reason: "the message states it plainly" }
+  const partly = await f.store.evidenceFindings.review(batch.id, {
     fingerprint: batch.fingerprint,
     accept: ["launch"],
-    by: { bot: "evidence-reviewer", model: "m", reason: "the message states it plainly" },
+    by: reviewer,
+  })
+  expect(partly).toMatchObject({ status: "proposed", decided: [{ id: "launch", status: "accepted" }] })
+  const reviewed = await f.store.evidenceFindings.review(batch.id, {
+    fingerprint: partly.fingerprint,
+    accept: [],
+    by: reviewer,
   })
   expect(reviewed).toMatchObject({
     status: "reviewed",
@@ -163,13 +175,13 @@ it("lets the owner, or an agent with a reason, decide; later batches reuse the d
   expect(fact).toMatch(/^fact:/)
   expect(
     await f.store.evidenceFindings.review(batch.id, {
-      fingerprint: batch.fingerprint,
+      fingerprint: reviewed.fingerprint,
       accept: ["launch"],
       by: "owner",
     }),
   ).toMatchObject({ id: batch.id })
   await expect(
-    f.store.evidenceFindings.review(batch.id, { fingerprint: batch.fingerprint, accept: [], by: "owner" }),
+    f.store.evidenceFindings.review(batch.id, { fingerprint: reviewed.fingerprint, accept: [], by: "owner" }),
   ).rejects.toThrow("different decision")
 
   const again = await f.store.evidenceFindings.stage(await f.input("run-2"), agent)
@@ -208,7 +220,12 @@ it("reads a batch closed with nothing accepted as rejected, and one with a findi
     if (finding.kind === "fact") finding.statement = "The harbour launch is the fourth one"
     else if (finding.kind === "task") finding.title = "Print the launch checklist"
   const some = await f.store.evidenceFindings.stage(other, agent)
-  await f.store.evidenceFindings.review(some.id, { fingerprint: some.fingerprint, accept: ["launch"], by: "owner" })
+  const partly = await f.store.evidenceFindings.review(some.id, {
+    fingerprint: some.fingerprint,
+    accept: ["launch"],
+    by: "owner",
+  })
+  await f.store.evidenceFindings.review(some.id, { fingerprint: partly.fingerprint, accept: [], by: "owner" })
 
   expect(await f.store.proposedActions.get(none.id)).toMatchObject({ status: "rejected", result: { accepted: [] } })
   expect(await f.store.proposedActions.get(some.id)).toMatchObject({ status: "approved" })
@@ -437,9 +454,108 @@ it("refuses every agent on a batch staged owner-only, even with agent decisions 
   ).rejects.toMatchObject({ details: { reason: "proposal.owner-only" } })
   const reviewed = await f.store.evidenceFindings.review(batch.id, {
     fingerprint: batch.fingerprint,
-    accept: ["launch"],
+    accept: ["launch", "checklist"],
     by: "owner",
   })
   expect(reviewed.receipt?.decision).toEqual({ by: "owner" })
   expect((await f.store.evidenceFindings.stage(await f.input("plain-1"), agent)).ownerOnly).toBe(false)
+})
+
+it("leaves the findings a confirm does not name pending, and creates nothing twice", async () => {
+  const f = await fixture()
+  const batch = await f.store.evidenceFindings.stage(await f.input(), agent)
+  const partly = await f.store.evidenceFindings.review(batch.id, {
+    fingerprint: batch.fingerprint,
+    accept: ["launch"],
+    by: "owner",
+  })
+  expect(partly).toMatchObject({ status: "proposed", receipt: null })
+  expect(partly.decided.map((item) => [item.id, item.status])).toEqual([["launch", "accepted"]])
+  const facts = () => f.db.prepare("SELECT count(*) AS n FROM facts").get()?.n
+  const made = facts()
+  const done = await f.store.evidenceFindings.review(batch.id, {
+    fingerprint: partly.fingerprint,
+    accept: ["launch", "checklist"],
+    by: "owner",
+  })
+  expect(done.status).toBe("reviewed")
+  expect(done.receipt?.items.map((item) => [item.id, item.status])).toEqual([
+    ["launch", "accepted"],
+    ["checklist", "accepted"],
+  ])
+  expect(facts()).toBe(made)
+})
+
+it("rejects only what is still pending after a partial confirm", async () => {
+  const f = await fixture()
+  const batch = await f.store.evidenceFindings.stage(await f.input(), agent)
+  const partly = await f.store.evidenceFindings.review(batch.id, {
+    fingerprint: batch.fingerprint,
+    accept: ["launch"],
+    by: "owner",
+  })
+  const closed = await f.store.evidenceFindings.review(batch.id, {
+    fingerprint: partly.fingerprint,
+    accept: [],
+    by: "owner",
+  })
+  expect(closed.receipt?.items.map((item) => [item.id, item.status])).toEqual([
+    ["launch", "accepted"],
+    ["checklist", "rejected"],
+  ])
+})
+
+it("lets the owner edit a waiting fact and task, never their evidence, and the agent's rerun still finds the batch", async () => {
+  const f = await fixture()
+  const input = await f.input()
+  const batch = await f.store.evidenceFindings.stage(input, agent)
+  await expect(
+    f.store.evidenceFindings.edit(
+      batch.id,
+      "launch",
+      { project: "project:99" },
+      {
+        fingerprint: batch.fingerprint,
+        by: "owner",
+      },
+    ),
+  ).rejects.toMatchObject({ details: { reason: "finding.unknown-field" } })
+  const fact = await f.store.evidenceFindings.edit(
+    batch.id,
+    "launch",
+    { statement: "The harbour launch is late" },
+    {
+      fingerprint: batch.fingerprint,
+      by: "owner",
+    },
+  )
+  await expect(
+    f.store.evidenceFindings.edit(
+      batch.id,
+      "checklist",
+      { assignee: "person:999999", assigneeEvidence: [f.message] },
+      {
+        fingerprint: fact.fingerprint,
+        by: "owner",
+      },
+    ),
+  ).rejects.toThrow()
+  const task = await f.store.evidenceFindings.edit(
+    batch.id,
+    "checklist",
+    { title: "Print the checklist" },
+    {
+      fingerprint: fact.fingerprint,
+      by: "owner",
+    },
+  )
+  expect(task.edited).toEqual(["launch", "checklist"])
+  expect((await f.store.evidenceFindings.stage(input, agent)).id).toBe(batch.id)
+  const done = await f.store.evidenceFindings.review(batch.id, {
+    fingerprint: task.fingerprint,
+    accept: ["launch", "checklist"],
+    by: "owner",
+  })
+  const made = await f.store.facts.get(done.receipt?.items[0]?.reference as string)
+  expect(made.statement).toBe("The harbour launch is late")
 })

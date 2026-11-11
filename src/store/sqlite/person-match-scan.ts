@@ -1,4 +1,5 @@
-import { isEmailAddress, isNoReplyAddress, isRoleAddress } from "../../domain/addresses.js"
+import { isEmailAddress, isNoReplyAddress, isPersonLikeRoleAddress, isRoleAddress } from "../../domain/addresses.js"
+import { displayName, isReadable } from "../../domain/display-names.js"
 import { variantKey } from "../../domain/name-variants.js"
 import { BARE_INTERNATIONAL_PROVIDERS, storedPhone } from "../../domain/phones.js"
 import type { CacheDatabase } from "../driver.js"
@@ -25,19 +26,20 @@ const MOST_SHARING = 6
 const CURSOR = "people.scan"
 
 /** Raised when a rule changes what a pass finds in values nobody touched: the next pass then reads everything once. */
-const RULES = 3
+const RULES = 4
 
 /**
  * NEED-2526: a shared mailbox says little alone, so its proposal is scored by what else the two people have in common.
- * The role word itself does not move the score: the list does not tell a department's inbox from a company's.
+ * The owner's word (2026-11-11): `hr@` is often one person's, so it starts below `info@`.
  */
-const SHARED_SCORE = { alone: 0.1, name: 0.4, trace: 0.3, weakTrace: 0.2 }
+const SHARED_SCORE = { alone: 0.1, personLike: 0.05, name: 0.4, trace: 0.3, weakTrace: 0.2 }
 
 /**
  * NEED-2529: every rule's proposal on the scale of `SHARED_SCORE`, so the review lists the strongest first. A phone two
  * people alone have but that does not join (a CRM's or a card's), one name with a phone or an address only these two
  * hold, and a pair the owner rejected that meets new evidence of that kind are 0.7; one name with a chat or a company
- * domain in one source, and a meeting guest's typed address, 0.5; a phone or personal address 3–6 people share, 0.4.
+ * domain in one source, and a meeting guest's typed address, 0.5; a phone or personal address 3–6 people share, 0.4;
+ * one name alone, written in private chats the owner answers on two messengers, 0.3.
  */
 export const PROPOSAL_SCORE = {
   ownPhone: 0.7,
@@ -46,6 +48,7 @@ export const PROPOSAL_SCORE = {
   nameAndPlace: 0.5,
   guestEmail: 0.5,
   group: 0.4,
+  nameInChats: 0.3,
 }
 
 /**
@@ -338,12 +341,13 @@ const TRACE_WORDS: Record<SharedTrace["kind"], string> = {
   email: "another address only they have",
   chat: "a chat they are both in",
   "email-domain": "mail at the same company",
+  "crm-company": "the same company in the CRM",
 }
 
 /** What two people on one shared mailbox have in common besides it, as a score and the words that say why. */
 const sharedMailboxCase = (context: StoreContext, address: string, from: number, to: number) => {
   const reasons = [`both have the shared mailbox ${address}`]
-  let score = SHARED_SCORE.alone
+  let score = isPersonLikeRoleAddress(address) ? SHARED_SCORE.personLike : SHARED_SCORE.alone
   const name = nameOf(context, from)
   const key = variantKey(name)
   if (key !== null && key === variantKey(nameOf(context, to))) {
@@ -358,7 +362,7 @@ const sharedMailboxCase = (context: StoreContext, address: string, from: number,
       evidence = trace.evidence
       break
     }
-  return { score: Math.round(score * 10) / 10, reason: reasons.join("; "), evidence }
+  return { score: Math.round(score * 100) / 100, reason: reasons.join("; "), evidence }
 }
 
 /**
@@ -471,6 +475,98 @@ const sameName = (pass: Pass, people: number[], name: string) => {
     }
 }
 
+/**
+ * The identities that wrote in a private chat the owner wrote in too, by the name they write under. A messenger may
+ * hide the phone (a WhatsApp `@lid`), so one name on two messengers, each a conversation, is all there is to go on.
+ */
+const chatNames = (database: CacheDatabase): Map<string, { identity: number; provider: string; name: string }[]> => {
+  const found = new Map<string, { identity: number; provider: string; name: string }[]>()
+  for (const row of database
+    .prepare(
+      "SELECT DISTINCT i.id, i.provider, i.name FROM messages s JOIN identities i ON i.id = s.sender_identity_id " +
+        "JOIN identity_links l ON l.identity_id = i.id WHERE s.outgoing IS NOT 1 AND i.bot IS NOT 1 " +
+        "AND trim(coalesce(i.name, '')) <> '' AND s.chat_id IN (SELECT c.id FROM chats c WHERE c.kind = 'dialog' " +
+        "AND EXISTS (SELECT 1 FROM messages o WHERE o.chat_id = c.id AND o.outgoing = 1)) ORDER BY i.id",
+    )
+    .all()) {
+    const name = String(row.name).trim()
+    const key = name.toLocaleLowerCase()
+    const held = found.get(key) ?? []
+    held.push({ identity: Number(row.id), provider: String(row.provider), name })
+    found.set(key, held)
+  }
+  return found
+}
+
+/** One name on two messengers, each a private conversation, and nothing else: the owner decides (`nameInChats`). */
+const sameNameInChats = (pass: Pass, holders: { identity: number; provider: string; name: string }[]) => {
+  const people = new Map<number, { identity: number; provider: string; name: string }>()
+  for (const holder of holders) {
+    const person = personOf(pass.context, holder.identity)
+    if (person !== undefined && !people.has(person)) people.set(person, holder)
+  }
+  if (people.size < 2) return
+  if (people.size > MOST_SHARING) {
+    pass.result.skipped.push({
+      persons: [...people.keys()].map(String),
+      signal: "name",
+      reason: "identity.common-name",
+    })
+    return
+  }
+  const persons = [...people.keys()].sort((a, b) => a - b)
+  for (const [at, from] of persons.entries())
+    for (const to of persons.slice(at + 1)) {
+      const [one, other] = [people.get(from), people.get(to)] as { identity: number; provider: string; name: string }[]
+      if (one === undefined || other === undefined || one.provider === other.provider) continue
+      propose(pass, {
+        identity: one.identity,
+        with: other.identity,
+        from,
+        to,
+        joins: "person",
+        signal: "name",
+        score: PROPOSAL_SCORE.nameInChats,
+        reason: `same name «${one.name}» in private chats on ${one.provider} and ${other.provider}`,
+      })
+    }
+}
+
+/**
+ * The person an identity of one of the owner's own accounts sits on (a second profile they use) is named after that
+ * profile's label: their own name from their other identities is better, the fullest one first.
+ */
+const renameFromOwnAccounts = ({ database, now }: StoreContext): void => {
+  const named = database
+    .prepare(
+      "SELECT DISTINCT p.id FROM persons p JOIN identity_links l ON l.person_id = p.id " +
+        "JOIN identities i ON i.id = l.identity_id JOIN accounts a ON a.provider = i.provider " +
+        "AND a.external_id = i.external_id WHERE p.owner = 0 AND p.name = i.name",
+    )
+    .all()
+  for (const { id } of named) {
+    const names = database
+      .prepare(
+        "SELECT i.name FROM identity_links l JOIN identities i ON i.id = l.identity_id WHERE l.person_id = ? " +
+          "AND trim(coalesce(i.name, '')) <> '' AND NOT EXISTS (SELECT 1 FROM accounts a " +
+          "WHERE a.provider = i.provider AND a.external_id = i.external_id) ORDER BY i.id",
+      )
+      .all(Number(id))
+      .map((row) => String(row.name).trim())
+      .filter((name) => isReadable(displayName(name)) && !name.startsWith("@"))
+    const words = (name: string) => name.split(/\s+/u).length
+    const fullest = names.reduce<string | undefined>(
+      (best, name) =>
+        best === undefined || words(name) > words(best) || (words(name) === words(best) && name.length > best.length)
+          ? name
+          : best,
+      undefined,
+    )
+    if (fullest !== undefined)
+      database.prepare("UPDATE persons SET name = ?, updated_at = ? WHERE id = ?").run(fullest, now(), Number(id))
+  }
+}
+
 /** What a meeting guest typed is their word only: it is proposed, and only when it names exactly one person. */
 const guestEmail = (pass: Pass, row: { identity: number; email: unknown; meeting: number }) => {
   const { context } = pass
@@ -539,6 +635,10 @@ export const scanMatches = (context: StoreContext, { full = false }: { full?: bo
   for (const { people, name } of peopleByNameKey(database).values())
     if (people.length > 1 && (changedPeople === undefined || people.some((one) => changedPeople.has(one))))
       write(database, () => sameName(pass, people, name))
+  for (const holders of chatNames(database).values())
+    if (holders.length > 1 && (changed === undefined || holders.some(({ identity }) => changed.has(identity))))
+      write(database, () => sameNameInChats(pass, holders))
+  write(database, () => renameFromOwnAccounts(context))
   write(database, () =>
     database
       .prepare("INSERT OR REPLACE INTO store_settings (key, value, at) VALUES (?, ?, ?)")

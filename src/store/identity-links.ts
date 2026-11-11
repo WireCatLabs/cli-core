@@ -58,9 +58,10 @@ export interface IdentityLinkDecision {
    * With `confirm: false` on a shared-mailbox proposal: the address is this organization's, not one of the two people.
    * `organization` names one; otherwise the one holding the address or its company domain, or one of `name`, or a new
    * company named `name` or the domain. `all` closes every open proposal on the same mailbox in this one decision;
-   * the decided proposal's result lists them all as `closed`.
+   * the decided proposal's result lists them all as `closed`. On a match that is not about a shared mailbox (one by
+   * name), `mailbox` names which of the two people's addresses is the company's.
    */
-  company?: { organization?: number; name?: string; all?: boolean }
+  company?: { organization?: number; name?: string; all?: boolean; mailbox?: string }
 }
 
 /** One `identity_link`, naming the people as they are now, not as they were when it was proposed. */

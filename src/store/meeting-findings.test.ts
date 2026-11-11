@@ -81,7 +81,7 @@ describe("reviewed meeting findings", () => {
       }),
     ).rejects.toMatchObject({ details: { reason: "meeting-findings.stale" } })
     const next = await f.store.meetingFindings.stage(account, { ...f.input, key: "new-preview" }, agent)
-    const decision = { fingerprint: next.fingerprint, accept: ["decision"], by: "owner" as const }
+    const decision = { fingerprint: next.fingerprint, accept: ["decision", "followup"], by: "owner" as const }
     const reviewed = await f.store.meetingFindings.review(account, next.id, decision)
     f.seed.transcripts[0].contentHash = "corrected-synthetic-revision"
     f.seed.transcripts[0].rows[0].text = "A corrected synthetic statement"
@@ -257,5 +257,50 @@ describe("reviewed meeting findings", () => {
     await expect(
       f.store.meetingFindings.stage(account, { ...f.input, by: "owner" } as MeetingFindingsInput, agent),
     ).rejects.toThrow("unknown")
+  })
+  it("edits a waiting task, confirms it alone, and leaves the fact waiting", async () => {
+    const f = await fixture()
+    const batch = await f.store.meetingFindings.stage(account, f.input, agent)
+    await expect(
+      f.store.meetingFindings.edit(
+        account,
+        batch.id,
+        "followup",
+        { project: f.project.ref },
+        {
+          fingerprint: batch.fingerprint,
+          by: "owner",
+        },
+      ),
+    ).rejects.toMatchObject({ details: { reason: "finding.unknown-field" } })
+    const edited = await f.store.meetingFindings.edit(
+      account,
+      batch.id,
+      "followup",
+      {
+        title: "Send the draft",
+        dueAt: "2026-11-20T10:00:00Z",
+        dueEvidence: [batch.input.findings[1]?.evidence[0]?.reference],
+      },
+      { fingerprint: batch.fingerprint, by: "owner" },
+    )
+    expect(edited.input.findings[1]).toMatchObject({ title: "Send the draft", dueAt: "2026-11-20T10:00:00.000Z" })
+    expect((await f.store.meetingFindings.stage(account, f.input, agent)).id).toBe(batch.id)
+    const partly = await f.store.meetingFindings.review(account, batch.id, {
+      fingerprint: edited.fingerprint,
+      accept: ["followup"],
+      by: "owner",
+    })
+    expect(partly).toMatchObject({ status: "proposed", decided: [{ id: "followup", status: "accepted" }] })
+    expect((await f.store.tasks.details(partly.decided[0]?.reference as string)).title).toBe("Send the draft")
+    const done = await f.store.meetingFindings.review(account, batch.id, {
+      fingerprint: partly.fingerprint,
+      accept: ["decision"],
+      by: "owner",
+    })
+    expect(done.receipt?.items.map((one) => [one.id, one.status])).toEqual([
+      ["decision", "accepted"],
+      ["followup", "accepted"],
+    ])
   })
 })

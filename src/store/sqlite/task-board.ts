@@ -45,6 +45,12 @@ export const PROJECT_TASK_FIELDS: readonly FieldSpec[] = [
   }),
   field("agent", "kw", "agent:hermes", { relation: "the agent working on it, by name; none or any" }),
   field("parent", "kw", "parent:HRB-1", { relation: "the subtasks of a task, by its key; none or any" }),
+  field("related", "ref", 'related:"deal:7"', {
+    operators: ["term", "phrase"],
+    relation:
+      "the tasks of a deal, lead or organization: its project's tasks and those its CRM stages opened; an " +
+      "organization's are its projects', its deals' and its leads'",
+  }),
   field("due", "time", "due:[today TO 2026-12-31]", {
     relation: "the due date; today, tomorrow and yesterday are your calendar days; NOT due:* has none",
   }),
@@ -181,6 +187,35 @@ const parentWhere = (node: Predicate): Where => {
   }
 }
 
+const PROJECTS_OF_DEALS = (table: "deals" | "leads", by: "id" | "organization_id") =>
+  `SELECT project_id FROM ${table} WHERE ${by} = ? AND deleted_at IS NULL AND project_id IS NOT NULL`
+const REFS_OF_DEALS = (table: "deals" | "leads", kind: string) =>
+  `SELECT '${kind}:' || id FROM ${table} WHERE organization_id = ? AND deleted_at IS NULL`
+
+/** What `deals context` and `organizations context` count as a deal's or an organization's tasks, as one filter. */
+const relatedWhere = (node: Predicate): Where => {
+  const [, kind, id] = /^(deal|lead|organization):(\d+)$/.exec(node.value.trim().toLowerCase()) ?? []
+  if (kind === undefined || id === undefined)
+    throw new CliError(
+      "validation_error",
+      `related: takes "deal:<id>", "lead:<id>" or "organization:<id>", not "${node.value}"`,
+    )
+  const number = Number(id)
+  if (kind === "organization")
+    return {
+      sql:
+        `(t.project_id IN (SELECT id FROM projects WHERE organization_id = ? AND deleted_at IS NULL UNION ` +
+        `${PROJECTS_OF_DEALS("deals", "organization_id")} UNION ${PROJECTS_OF_DEALS("leads", "organization_id")}) ` +
+        `OR t.source_group IN (${REFS_OF_DEALS("deals", "deal")} UNION ${REFS_OF_DEALS("leads", "lead")}))`,
+      params: [number, number, number, number, number],
+    }
+  const table = kind === "deal" ? "deals" : "leads"
+  return {
+    sql: `(t.source_group = ? OR t.project_id IN (${PROJECTS_OF_DEALS(table, "id")}))`,
+    params: [`${kind}:${number}`, number],
+  }
+}
+
 const truth = (node: Predicate, sql: string): Where => ({
   sql: node.value.toLowerCase() === "true" ? sql : `NOT (${sql})`,
   params: [],
@@ -221,6 +256,7 @@ export const projectTaskColumns = (now: number, zone: string, database: CacheDat
   priority: { where: priorityWhere },
   agent: { where: agentWhere },
   parent: { where: parentWhere },
+  related: { where: relatedWhere },
   due: { type: "time", sql: "t.due_at" },
   created: { type: "time", sql: "t.created_at" },
   closed: { type: "time", sql: "t.closed_at" },

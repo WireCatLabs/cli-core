@@ -3,7 +3,14 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { liftProfile, runGroup } from "../cli/profile.js"
-import { addGroupMember, listAccountGroups, moveGroupMember, removeGroupMember } from "../services/account-groups.js"
+import {
+  addGroupMember,
+  deleteAccountGroup,
+  listAccountGroups,
+  moveGroupMember,
+  removeGroupMember,
+  renameAccountGroup,
+} from "../services/account-groups.js"
 import { prepareLucene } from "../services/messages-search.js"
 import { searchNotesOf } from "../services/notes-search.js"
 import { listContextOf, listedAccounts } from "../services/search-kind.js"
@@ -350,5 +357,40 @@ describe("changing a group, as a settings page does", () => {
     const back = await moveGroupMember(where, { member: sourceOf(home), from: "all", to: "work" })
     expect(back.groups.work?.map(sourceOf)).toEqual([`bitrix24:${b24Work.account}`, sourceOf(home)])
     expect(back.groups.all?.some(sameAs(home))).toBe(true)
+  })
+
+  it("renames a group with its members, and refuses a built-in, missing or taken name", async () => {
+    const where = await at()
+    await addGroupMember(where, { group: "clients", member: "tg:personal" })
+
+    const renamed = await renameAccountGroup(where, { from: "work", to: "office" })
+
+    expect(renamed.groups.office?.map(sourceOf)).toEqual(["telegram:102", `bitrix24:${b24Work.account}`])
+    expect(renamed.groups.work).toBeUndefined()
+    await expect(renameAccountGroup(where, { from: "all", to: "x" })).rejects.toThrow(/built in/)
+    await expect(renameAccountGroup(where, { from: "work", to: "x" })).rejects.toThrow(/no group "work"/)
+    await expect(renameAccountGroup(where, { from: "office", to: "clients" })).rejects.toThrow(/already exists/)
+    await expect(renameAccountGroup(where, { from: "office", to: "all" })).rejects.toThrow(/cannot name a group/)
+    await expect(renameAccountGroup({ ...where, env: LOCKED }, { from: "office", to: "x" })).rejects.toThrow(
+      expect.objectContaining({ code: "permission_error" }),
+    )
+  })
+
+  it("deletes a group and its memberships only, and a later run in it is refused with the groups there are", async () => {
+    const where = await at()
+    await addGroupMember(where, { group: "clients", member: "telegram:102" })
+
+    const left = await deleteAccountGroup(where, "work")
+
+    expect(left.groups.work).toBeUndefined()
+    expect(left.groups.clients?.map(sourceOf)).toEqual(["telegram:102"])
+    expect(left.groups.all?.some(sameAs(b24Work))).toBe(true)
+    const context = await contextOf(where.store)
+    expect(() => scopeToGroup(inGroup("work"), {}, context)).toThrow(
+      /"work" is neither a command nor a group — .*clients/,
+    )
+    await expect(deleteAccountGroup(where, "all")).rejects.toThrow(/built in/)
+    await expect(deleteAccountGroup(where, "work")).rejects.toThrow(/no group "work" — groups here: clients/)
+    await expect(contextOf(where.store, { MEMO_GROUP_LOCK: "work" })).rejects.toThrow(/does not exist/)
   })
 })

@@ -15,6 +15,10 @@ export interface MailFindingsBatch {
   decidedBy: { type: "person" | "bot"; id: string } | null
   decidedAt: string | null
   previous: FindingOutcome[]
+  /** What a review of this still waiting batch already decided; the other findings wait for the owner. */
+  decided: FindingOutcome[]
+  /** The findings the owner changed before deciding them. */
+  edited: string[]
   receipt: FindingsReceipt | null
 }
 
@@ -55,4 +59,11 @@ export interface MailFindingsStore {
     offset?: number
   }): Promise<{ items: MailFindingsBatch[]; hasMore: boolean }>
   review(id: string, input: { fingerprint: string; accept: string[]; by: Decider }): Promise<MailFindingsBatch>
+  /** The owner's change to one finding still waiting: its words and the fields it names, never its evidence. */
+  edit(
+    id: string,
+    finding: string,
+    changes: Record<string, unknown>,
+    options: { fingerprint: string; by: Decider },
+  ): Promise<MailFindingsBatch>
 }

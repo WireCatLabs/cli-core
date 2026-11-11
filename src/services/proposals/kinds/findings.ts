@@ -16,7 +16,7 @@ const statusOf = (batch: EvidenceFindingsBatch): ProposalRow["status"] =>
 
 const rowOf = (batch: EvidenceFindingsBatch, createdAt: string): ProposalRow => {
   const findings = batch.input.findings
-  const outcome = (id: string) => batch.receipt?.items.find((item) => item.id === id)?.status ?? null
+  const outcome = (id: string) => (batch.receipt?.items ?? batch.decided).find((item) => item.id === id)?.status ?? null
   return {
     id: batch.id,
     kind: "findings",
@@ -42,7 +42,8 @@ const rowOf = (batch: EvidenceFindingsBatch, createdAt: string): ProposalRow => 
 
 /**
  * An agent's batch of cited facts and tasks from stored messages, mail and documents. Confirming accepts the parts
- * named, or every finding not rejected before; the rest are rejected. Meeting findings have their own kind.
+ * named, or every finding not rejected before; the rest wait. Rejecting turns down what still waits. Meeting findings
+ * have their own kind.
  */
 export const findingsKind = (store: Pick<MessageStore, "evidenceFindings" | "proposedActions">): ProposalKind => {
   // The batch view carries no staging time; its stored proposal does.
@@ -72,7 +73,11 @@ export const findingsKind = (store: Pick<MessageStore, "evidenceFindings" | "pro
     get: async (id) => created(await store.evidenceFindings.get(id)),
     decide: async (id, { confirm, by, parts, reason }): Promise<Decided> => {
       const batch = await store.evidenceFindings.get(id)
-      const turnedDown = new Set(batch.previous.filter((one) => one.status === "rejected").map((one) => one.id))
+      // A finding this batch already decided keeps its outcome; a confirm with no names takes what still waits.
+      const turnedDown = new Set([
+        ...batch.previous.filter((one) => one.status === "rejected").map((one) => one.id),
+        ...batch.decided.map((one) => one.id),
+      ])
       const accept = !confirm
         ? []
         : (parts ?? batch.input.findings.map((finding) => finding.id).filter((one) => !turnedDown.has(one)))
@@ -82,8 +87,10 @@ export const findingsKind = (store: Pick<MessageStore, "evidenceFindings" | "pro
         by,
         ...(reason === undefined ? {} : { reason }),
       })
-      const made = (reviewed.receipt?.items ?? []).flatMap((item) =>
-        item.status === "accepted" && item.reference && !item.reused ? [item.reference] : [],
+      const made = (reviewed.receipt?.items ?? reviewed.decided).flatMap((item) =>
+        item.status === "accepted" && item.reference && !item.reused && accept.includes(item.id)
+          ? [item.reference]
+          : [],
       )
       return { id, kind: "findings", status: accept.length ? "confirmed" : "rejected", made }
     },

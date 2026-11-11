@@ -157,6 +157,39 @@ export const moveGroupMember = async (at: GroupStore, move: GroupMemberMove): Pr
   return listAccountGroups(at)
 }
 
+/** A group the owner saved, by its exact name: `all` and the other built-in names are no saved group. */
+const savedGroup = async (at: GroupStore, name: string): Promise<string> => {
+  if (NOT_GROUP_NAMES.has(name.toLowerCase()))
+    fail("validation_error", `"${name}" is built in — it cannot be renamed or deleted`)
+  const saved = await at.store.accounts.accountGroups()
+  if (!Object.hasOwn(saved, name))
+    fail("not_found", `no group "${name}" — groups here: ${Object.keys(saved).join(", ") || "none"}`)
+  return name
+}
+
+/**
+ * A new name for a group, with its members. Nothing else in the store names a group: a run that still asks for the
+ * old name (`MEMO_GROUP`, a lock, `--source group:`) is refused with the groups there are, never given another group.
+ */
+export const renameAccountGroup = async (
+  at: GroupStore,
+  rename: { from: string; to: string; reserved?: ReadonlySet<string> },
+): Promise<GroupMembership> => {
+  unlocked(at)
+  const from = await savedGroup(at, rename.from)
+  const to = usableGroup(rename.to, rename.reserved)
+  if (hasGroup((await contextOf(at)).membership.groups, to)) fail("validation_error", `group "${to}" already exists`)
+  if (!(await at.store.accounts.renameAccountGroup(from, to))) fail("validation_error", `group "${to}" already exists`)
+  return listAccountGroups(at)
+}
+
+/** The group and its memberships go; its accounts stay, in their other groups and in `all`. */
+export const deleteAccountGroup = async (at: GroupStore, group: string): Promise<GroupMembership> => {
+  unlocked(at)
+  await at.store.accounts.saveAccountGroup(await savedGroup(at, group), undefined)
+  return listAccountGroups(at)
+}
+
 /**
  * The owner's choice of which side of his life an account is on, as the store now holds it. Moving an account to work
  * lets work views and meeting preparation read it, so a command over this is the owner's alone (`grantsAuthority`).

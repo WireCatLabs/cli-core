@@ -13,7 +13,7 @@ import { kept } from "./shared.js"
 const rowOf = (action: ProposedAction, batch: MeetingFindingsBatch): ProposalRow => {
   const findings = batch.input.findings
   const projects = [...new Set(findings.map((one) => ("project" in one ? one.project : undefined)))]
-  const outcome = (id: string) => batch.receipt?.items.find((item) => item.id === id)?.status ?? null
+  const outcome = (id: string) => (batch.receipt?.items ?? batch.decided).find((item) => item.id === id)?.status ?? null
   const references = [...new Set(findings.flatMap((finding) => finding.evidence.map((one) => one.reference)))]
   return {
     id: action.id,
@@ -68,13 +68,19 @@ export const meetingFindingsKind = (store: Pick<MessageStore, "meetingFindings" 
     },
     decide: async (id, { confirm, by, parts }): Promise<Decided> => {
       const { account, batch } = await batchOf(await store.proposedActions.get(id))
-      const turnedDown = new Set(batch.previous.filter((one) => one.status === "rejected").map((one) => one.id))
+      // A finding this batch already decided keeps its outcome; a confirm with no names takes what still waits.
+      const turnedDown = new Set([
+        ...batch.previous.filter((one) => one.status === "rejected").map((one) => one.id),
+        ...batch.decided.map((one) => one.id),
+      ])
       const accept = !confirm
         ? []
         : (parts ?? batch.input.findings.map((finding) => finding.id).filter((one) => !turnedDown.has(one)))
       const reviewed = await store.meetingFindings.review(account, id, { fingerprint: batch.fingerprint, accept, by })
-      const made = (reviewed.receipt?.items ?? []).flatMap((item) =>
-        item.status === "accepted" && item.reference && !item.reused ? [item.reference] : [],
+      const made = (reviewed.receipt?.items ?? reviewed.decided).flatMap((item) =>
+        item.status === "accepted" && item.reference && !item.reused && accept.includes(item.id)
+          ? [item.reference]
+          : [],
       )
       return { id, kind: "meeting_findings", status: accept.length ? "confirmed" : "rejected", made }
     },

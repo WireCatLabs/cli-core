@@ -1,6 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
-import { isNoReplyAddress, isRoleAddress } from "../../domain/addresses.js"
-import { displayName, isReadable, nameKey, takeFallbacks } from "../../domain/display-names.js"
+import { isNoReplyAddress, isPersonLikeRoleAddress, isRoleAddress } from "../../domain/addresses.js"
+import { displayName, isReadable, nameKey, noFallbacks, takeFallbacks } from "../../domain/display-names.js"
 import { spellings, variantKey } from "../../domain/name-variants.js"
 import {
   isAutomatedName,
@@ -109,11 +109,23 @@ const scopeParams = (scope: Scope): SqlValue[] => (scope === "all" ? [] : [JSON.
 const SCOPED_IDENTITIES = (scope: Scope) =>
   `SELECT identity_id FROM identity_links WHERE ${IN_SCOPE(scope, "person_id")}`
 
-/** Counted over `messages_by_sender_identity_id` alone: no message row is read. */
-const MESSAGE_COUNTS = (scope: Scope) =>
-  "SELECT l.person_id AS person, sum(x.n) AS n FROM (SELECT sender_identity_id AS identity, count(*) AS n FROM " +
-  `messages WHERE sender_identity_id ${scope === "all" ? "IS NOT NULL" : `IN (${SCOPED_IDENTITIES(scope)})`} ` +
-  "GROUP BY 1) x JOIN identity_links l ON l.identity_id = x.identity GROUP BY 1"
+const OF_SCOPE = (scope: Scope, column: string) =>
+  `${column} ${scope === "all" ? "IS NOT NULL" : `IN (${SCOPED_IDENTITIES(scope)})`}`
+
+/** Per identity, over `messages_by_sender_identity_id` alone: no message row is read. */
+const IDENTITY_MESSAGE_COUNTS = (scope: Scope) =>
+  `SELECT sender_identity_id AS identity, count(*) AS n FROM messages WHERE ${OF_SCOPE(scope, "sender_identity_id")} ` +
+  "GROUP BY 1"
+
+const IDENTITY_MAIL_COUNTS = (scope: Scope) =>
+  `SELECT from_identity_id AS identity, count(*) AS n FROM emails WHERE ${OF_SCOPE(scope, "from_identity_id")} ` +
+  "GROUP BY 1"
+
+/** Who wrote in a private chat the owner wrote in too: a conversation, which no mail signal makes automated. */
+const TWO_WAY =
+  "SELECT DISTINCT s.sender_identity_id AS identity_id FROM messages s WHERE s.outgoing IS NOT 1 " +
+  "AND s.sender_identity_id IS NOT NULL AND s.chat_id IN (SELECT c.id FROM chats c WHERE c.kind = 'dialog' " +
+  "AND EXISTS (SELECT 1 FROM messages o WHERE o.chat_id = c.id AND o.outgoing = 1))"
 
 const MAIL_COUNTS = (scope: Scope) =>
   "SELECT l.person_id AS person, count(*) AS n, sum(EXISTS (SELECT 1 FROM email_mailboxes m " +
@@ -149,8 +161,24 @@ interface Facts {
   bot: boolean
   neverReplied: boolean
   organization: boolean
+  twoWay: boolean
+  /** Messages its identities wrote. */
+  messages: number
 }
 
+const perIdentity = (database: CacheDatabase, sql: string, params: SqlValue[]): Map<number, number> =>
+  new Map(
+    database
+      .prepare(sql)
+      .all(...params)
+      .map((row) => [Number(row.identity), Number(row.n)]),
+  )
+
+/**
+ * The name comes from the oldest identity that has one. The phone, address and username come from the identity that
+ * wrote the most and has one (the owner's rule, 2026-11-11): an old mail contact's address is no way to reach someone
+ * who writes in a messenger every day. On a tie, or when nobody wrote, the oldest identity wins, as for the name.
+ */
 const factsOf = (database: CacheDatabase, scope: Scope): Map<number, Facts> => {
   const facts = new Map<number, Facts>()
   const text = (value: unknown) => (value == null || value === "" ? null : String(value))
@@ -163,9 +191,19 @@ const factsOf = (database: CacheDatabase, scope: Scope): Map<number, Facts> => {
     )
   const neverReplied = ids(NEVER_REPLIED)
   const owned = ids(OWNED)
+  const twoWay = ids(TWO_WAY)
+  const messages = perIdentity(database, IDENTITY_MESSAGE_COUNTS(scope), scopeParams(scope))
+  const mail = perIdentity(database, IDENTITY_MAIL_COUNTS(scope), scopeParams(scope))
+  const rows = new Map<number, { row: Record<string, unknown>; written: number }[]>()
   for (const row of database.prepare(IDENTITIES(scope)).all(...scopeParams(scope))) {
     const person = Number(row.person)
-    const one = facts.get(person) ?? {
+    const id = Number(row.id)
+    const held = rows.get(person) ?? []
+    held.push({ row, written: (messages.get(id) ?? 0) + (mail.get(id) ?? 0) })
+    rows.set(person, held)
+  }
+  for (const [person, held] of rows) {
+    const one: Facts = {
       name: null,
       username: null,
       usernameSource: null,
@@ -175,10 +213,10 @@ const factsOf = (database: CacheDatabase, scope: Scope): Map<number, Facts> => {
       bot: false,
       neverReplied: false,
       organization: false,
+      twoWay: false,
+      messages: 0,
     }
-    const email = text(row.email) ?? (row.provider === "email" ? text(row.external_id) : null)
-    const hadUsername = one.username !== null
-    takeFallbacks(one, {
+    const source = (row: Record<string, unknown>) => ({
       provider: String(row.provider),
       id: String(row.external_id),
       name: text(row.name),
@@ -186,11 +224,27 @@ const factsOf = (database: CacheDatabase, scope: Scope): Map<number, Facts> => {
       phone: text(row.phone),
       email: text(row.email),
     })
-    if (!hadUsername && one.username !== null) one.usernameSource = String(row.provider)
-    if (email !== null) one.emails.push(email)
-    one.bot ||= Number(row.bot) === 1
-    one.neverReplied ||= neverReplied.has(Number(row.id))
-    one.organization ||= owned.has(Number(row.id))
+    for (const { row } of held) {
+      const identity = Number(row.id)
+      const email = text(row.email) ?? (row.provider === "email" ? text(row.external_id) : null)
+      if (email !== null) one.emails.push(email)
+      if (one.name === null) one.name = takeFallbacks(noFallbacks(), source(row)).name
+      one.bot ||= Number(row.bot) === 1
+      one.neverReplied ||= neverReplied.has(identity)
+      one.organization ||= owned.has(identity)
+      one.twoWay ||= twoWay.has(identity)
+      one.messages += messages.get(identity) ?? 0
+    }
+    const contact = noFallbacks()
+    // Stable: equal counts keep the identities' stored order.
+    for (const { row } of [...held].sort((a, b) => b.written - a.written)) {
+      const hadUsername = contact.username !== null
+      takeFallbacks(contact, source(row))
+      if (!hadUsername && contact.username !== null) one.usernameSource = String(row.provider)
+    }
+    one.username = contact.username
+    one.phone = contact.phone
+    one.email = contact.email
     facts.set(person, one)
   }
   return facts
@@ -247,10 +301,13 @@ const kindOf = (
     ...(facts?.neverReplied ? (["bulk-never-replied"] as const) : []),
     ...(isAutomatedName(shown) ? (["automated-name"] as const) : []),
   ]
-  if (automated.length > 0) return { kind: "automated", signals: automated }
+  // One mailbox's newsletter signal must not hide someone the owner talks to in a private chat.
+  if (automated.length > 0 && (facts?.bot || !facts?.twoWay)) return { kind: "automated", signals: automated }
   const organization: KindSignal[] = [
     ...(facts?.organization ? (["organization"] as const) : []),
-    ...(emails.length > 0 && emails.every(isRoleAddress) ? (["role-address"] as const) : []),
+    ...(emails.length > 0 && emails.every((one) => isRoleAddress(one) && !isPersonLikeRoleAddress(one))
+      ? (["role-address"] as const)
+      : []),
     ...(isCompanyName(shown) ? (["company-name"] as const) : []),
   ]
   if (organization.length > 0) return { kind: "organization", signals: organization }
@@ -269,7 +326,6 @@ const classified = (
   const facts = factsOf(database, scope)
   const test = hiddenTestPeople(database)
   const tasks = countsOf(database, TASK_COUNTS, mergedAssignees(database))
-  const messages = countsOf(database, MESSAGE_COUNTS(scope), ...scopeParams(scope))
   const mail = new Map(
     database
       .prepare(MAIL_COUNTS(scope))
@@ -296,7 +352,7 @@ const classified = (
         contact.phone ?? contact.email ?? (contact.username === null ? null : `@${contact.username.replace(/^@/, "")}`),
       ...contact,
       usernameSource: own?.usernameSource ?? null,
-      messagesFrom: (messages.get(id) ?? 0) + (mail.get(id)?.n ?? 0),
+      messagesFrom: (own?.messages ?? 0) + (mail.get(id)?.n ?? 0),
       ties,
     }
   })

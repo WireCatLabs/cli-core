@@ -52,6 +52,10 @@ export interface EvidenceFindingsBatch {
   decidedBy: { type: "person" | "bot"; id: string } | null
   decidedAt: string | null
   previous: FindingOutcome[]
+  /** What a review of this still waiting batch already decided; the other findings wait for the owner. */
+  decided: FindingOutcome[]
+  /** The findings the owner changed before deciding them. */
+  edited: string[]
   receipt: EvidenceFindingsReceipt | null
 }
 /**
@@ -84,6 +88,13 @@ export interface EvidenceFindingsStore {
   review(
     id: string,
     input: { fingerprint: string; accept: string[]; by: EvidenceFindingsDecider; reason?: string },
+  ): Promise<EvidenceFindingsBatch>
+  /** The owner's change to one finding still waiting: its text and fields, never its evidence or project. */
+  edit(
+    id: string,
+    finding: string,
+    changes: Record<string, unknown>,
+    options: { fingerprint: string; by: "owner" },
   ): Promise<EvidenceFindingsBatch>
   /** Each reference the batch cites, read back once; one gone from the store since is `missing`. */
   sources(id: string): Promise<EvidenceSource[]>

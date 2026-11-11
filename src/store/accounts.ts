@@ -52,6 +52,8 @@ export interface AccountsStore extends AccountAccounts {
    * group left empty stays, to be filled again; an entry already there is not added twice.
    */
   changeAccountGroups(change: AccountGroupChange): Promise<{ removed: string[] }>
+  /** Gives a saved group another name with its entries, in one write; `false` when no group of that name is saved. */
+  renameAccountGroup(from: string, to: string): Promise<boolean>
   /** Per app command, each profile's account: how `--source max:default` finds a profile of another app. */
   profiles(): Promise<Profiles>
   /** Records which account a profile of `app` is; a no-op when the store already says so. */
@@ -108,6 +110,16 @@ export const accountsStoreOver = (context: StoreContext, keyed: AccountAccounts)
         if (members === undefined) delete groups[name]
         else groups[name] = members
         saveGroups(groups)
+      }),
+    renameAccountGroup: async (from, to) =>
+      write(database, () => {
+        const groups = accountGroupsOf(database)
+        if (!Object.hasOwn(groups, from) || Object.hasOwn(groups, to)) return false
+        const renamed = Object.fromEntries(
+          Object.entries(groups).map(([name, entries]) => [name === from ? to : name, entries]),
+        )
+        saveGroups(renamed)
+        return true
       }),
     changeAccountGroups: async ({ remove, add }) =>
       write(database, () => {

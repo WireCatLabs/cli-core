@@ -658,3 +658,49 @@ it("takes a new contact only when the mail's text gives a better name than the s
   await registry.decide([staged.id], { confirm: true, by: "owner" })
   expect((await f.store.people.personOf({ provider: "email", id: "ann@example.com" }))?.name).toBe("Ann Lessor")
 })
+
+it("lets the owner edit a waiting finding's words, keeps its evidence, and confirms the edited one", async () => {
+  const f = await fixture()
+  const input = await f.batch([await f.task("t1"), await f.task("t2")])
+  const staged = await f.store.mailFindings.stage(MINE, input, agent)
+  const edit = (fingerprint: string, changes: Record<string, unknown>, by: "owner" | { bot: string } = "owner") =>
+    f.store.mailFindings.edit(staged.id, "t1", changes, { fingerprint, by: by as "owner" })
+
+  await expect(edit(staged.fingerprint, { title: "Mine" }, { bot: "mail-triage" })).rejects.toMatchObject({
+    details: { reason: "proposal.owner-only" },
+  })
+  await expect(edit(staged.fingerprint, { evidence: [] })).rejects.toMatchObject({
+    details: { reason: "finding.unknown-field" },
+  })
+  await expect(edit("0".repeat(64), { title: "Mine" })).rejects.toMatchObject({
+    details: { reason: "mail-findings.stale" },
+  })
+  const edited = await edit(staged.fingerprint, { title: "Sign and send the lease", project: f.project.ref })
+  expect(edited).toMatchObject({ status: "proposed", edited: ["t1"] })
+  expect(edited.input.findings[0]).toMatchObject({ title: "Sign and send the lease", project: f.project.ref })
+  expect(edited.input.findings[0]?.evidence).toEqual(staged.input.findings[0]?.evidence)
+  expect(edited.fingerprint).not.toBe(staged.fingerprint)
+  expect((await f.store.mailFindings.stage(MINE, input, agent)).id).toBe(staged.id)
+
+  const partly = await f.store.mailFindings.review(staged.id, {
+    fingerprint: edited.fingerprint,
+    accept: ["t1"],
+    by: "owner",
+  })
+  expect(partly).toMatchObject({ status: "proposed", decided: [{ id: "t1", status: "accepted" }] })
+  const made = await f.store.tasks.details(partly.decided[0]?.reference as string)
+  expect(made.title).toBe("Sign and send the lease")
+  await expect(
+    f.store.mailFindings.edit(staged.id, "t1", { title: "Again" }, { fingerprint: partly.fingerprint, by: "owner" }),
+  ).rejects.toMatchObject({ details: { reason: "proposal.wrong-state" } })
+  const closed = await f.store.mailFindings.review(staged.id, {
+    fingerprint: partly.fingerprint,
+    accept: [],
+    by: "owner",
+  })
+  expect(closed.receipt?.items.map((one) => [one.id, one.status])).toEqual([
+    ["t1", "accepted"],
+    ["t2", "rejected"],
+  ])
+  expect(closed.receipt?.accepted).toEqual(["t1"])
+})
