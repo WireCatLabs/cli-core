@@ -256,3 +256,33 @@ it("keeps a CRM's fields in its order and names a code it lists twice instead of
   ])
   expect(await store.crm.fields({ provider: "example-crm", account: "other" }, "organization")).toEqual([])
 })
+
+it("keeps every phone and address of a contact, the first ones as its phone and email", async () => {
+  const store = await open()
+  await store.crm.savePeople(PORTAL, [
+    {
+      externalId: "7",
+      name: "Lev Orlov",
+      phone: "+34 600 000 001",
+      email: "lev@acme.ru",
+      phones: ["+34 600 000 001", "+34 600 000 002", " "],
+      emails: ["lev@acme.ru", "Lev.Home@Mail.ru"],
+    },
+  ])
+  const ref = { provider: "example-crm", id: "portal-a/contact/7" }
+
+  const contactOf = async () =>
+    (await store.people.personOf(ref))?.identities.find(({ provider }) => provider === "example-crm")
+  const identity = await contactOf()
+
+  expect(identity).toMatchObject({
+    phone: "+34 600 000 001",
+    phones: ["+34 600 000 001", "+34 600 000 002"],
+    emails: ["lev@acme.ru", "lev.home@mail.ru"],
+  })
+  await store.crm.savePeople(PORTAL, [{ externalId: "7", name: "Lev Orlov", phones: ["+34 600 000 003"] }])
+  expect(await contactOf()).toMatchObject({
+    phones: ["+34 600 000 001", "+34 600 000 003"],
+    emails: ["lev@acme.ru", "lev.home@mail.ru"],
+  })
+})

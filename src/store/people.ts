@@ -32,7 +32,14 @@ import {
   type SimilarPerson,
   similarPeople,
 } from "./sqlite/people-list.js"
-import { type KeptPerson, keepPerson, type PersonDoubts, personDoubts } from "./sqlite/person-doubts.js"
+import {
+  type KeptPerson,
+  keepPerson,
+  markTestData,
+  type PersonDoubts,
+  personDoubts,
+  type TestDataPerson,
+} from "./sqlite/person-doubts.js"
 import * as personLinks from "./sqlite/person-links.js"
 import { PROPOSAL_SCORE, RULE, scanMatches } from "./sqlite/person-match-scan.js"
 import type { PersonMerge } from "./sqlite/person-merges.js"
@@ -154,9 +161,15 @@ export interface PeopleStore extends AccountPeople {
   doubts(page: { limit: number; offset: number }): Promise<PersonDoubts>
   /**
    * The owner says a person in doubt is right as they are: the identities in doubt stop being listed until one of them
-   * moves. The owner's alone; refused with `person.no-doubt` when nothing about the person is in doubt.
+   * moves, and what looked like test data is a real contact, shown again even when memo hid it. The owner's alone;
+   * refused with `person.no-doubt` when nothing about the person is in doubt or hidden.
    */
   keep(person: string, by: Decider): Promise<KeptPerson>
+  /**
+   * The owner says a person is test data: hidden from every list, `list({ kind: "test" })` lists them, until `keep`.
+   * The owner's alone; refused for the owner's own person.
+   */
+  markTestData(person: string, by: Decider): Promise<TestDataPerson>
   /** The identity, and everyone linked with it, is the owner. */
   linkToOwner(identity: IdentityRef): Promise<PersonRecord>
   /** A person known by name only, with no identity yet: someone to assign a task to before any message names them. */
@@ -165,7 +178,8 @@ export interface PeopleStore extends AccountPeople {
    * People of one kind with their shown name, contact, interactions and ties, a page at a time. `person` (the default)
    * is the owner, people added by hand, task assignees, and named people with a tie (a one-to-one chat, a small group,
    * mail the owner wrote, a meeting, a CRM, the address book); `automated`, `organization`, `stranger` (a
-   * name, no tie) and `unsorted` (nothing to show as a name) hold the rest.
+   * name, no tie) and `unsorted` (nothing to show as a name) hold the rest. `test` holds what a test run left: a seed
+   * id, an address at a reserved domain, or what the owner called test data; `all` and every other kind leave it out.
    */
   list(options: PeopleListOptions): Promise<PeopleList>
   /** How many people of each kind match a name or username, or the whole store: `list`'s `counts` without a page. */
@@ -309,6 +323,7 @@ export const peopleStoreOver = (context: StoreContext, keyed: AccountPeople): Pe
     splitProposals: async (filter) => identitySplits.identitySplitRows(context, filter),
     doubts: async (page) => personDoubts(context, page),
     keep: async (person, by) => write(database, () => keepPerson(context, person, by)),
+    markTestData: async (person, by) => write(database, () => markTestData(context, person, by)),
     linkToOwner: async (identity) => linkToOwner(context, identity),
     list: async (options) => listPeople(database, options),
     counts: async (query) => countPeople(database, query),

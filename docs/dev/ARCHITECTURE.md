@@ -619,7 +619,11 @@ proposes them instead. A no-reply address (`isNoReplyAddress`) is no one's: it n
   `automated` (a bot, a no-reply address, mostly bulk mail, memo's `bulk_never_replied`, a notification name); then
   `organization` (`organization_identities`, a role address, a legal form or company word in the name); then a named
   `person` with a tie; a named one with no tie is a `stranger`;
-  one with nothing to show as a name is `unsorted`. A tie is a one-to-one chat, a group of at most
+  one with nothing to show as a name is `unsorted`. Before any of these, `test` holds what a test run left
+  (`test-people.ts`): a person whose every identity has a seed id or an address at a reserved domain, or is one the
+  owner called test data, and none the owner called a real contact. `all` leaves `test` out. The owner's word is a
+  `test_data` row in `proposed_actions`, approved for test data and rejected for a real contact, and clears the
+  person's stored kind. A tie is a one-to-one chat, a group of at most
   `SMALL_GROUP_MEMBERS` (10; a group of unknown size counts as large), as a member or as someone who wrote in it, since
   Telegram and WhatsApp keep no member list (BUG-676), mail the owner wrote to them (NEED-2342 A), a meeting or calendar
   entry, a CRM user, a CRM contact on a deal or lead whose owner is the owner's person, through the owner's CRM user linked to
@@ -643,7 +647,11 @@ replaced by a rule. Today only contacts have that shape. Who may be one person w
 agent's unlink or unmerge waits as an `identity_split` (`src/store/sqlite/identity-split-proposals.ts`), a kind of its
 own because every reader of `identity_link` takes a row for two people. Both are the owner's alone to decide.
 `people.doubts` (`src/store/sqlite/person-doubts.ts`) lists people that look wrong, for the owner or an agent to
-propose a split; each fix comes both as a memo command (`fix`) and as data (`moves`) for an app. **Not built yet:** `entity_link_events`, the same log for
+propose a split; each fix comes both as a memo command (`fix`) and as data (`moves`) for an app. Names are compared
+by their words with short forms read as the full name (`fullNames` in `domain/name-variants.ts`: Ярик is Ярослав, Bob
+is Robert), and a name that only repeats the identity's own mailbox or username counts as no name. Test data is asked
+about only when it is not sure: a seed name alone (`people.markTestData` hides it, `people.keep` keeps it), or a test
+identity on a person who holds a real one (unlink it). **Not built yet:** `entity_link_events`, the same log for
 events and documents, and one review list of ambiguous pairs, shaped like `task_pairs` (`schema.ts:1468`).
 
 ### Migrations

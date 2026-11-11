@@ -81,6 +81,9 @@ export interface CrmPerson {
   name: string | null
   email?: string | null
   phone?: string | null
+  /** Every phone and address the contact holds, `phone` and `email` first; left out, the stored ones stay. */
+  phones?: string[]
+  emails?: string[]
   /** The job title as the CRM writes it: kept beside the relationship, never a role. */
   position?: string | null
   /**

@@ -272,13 +272,21 @@ it("counts every kind at once, for the whole store or a name", async () => {
     { id: "5", name: "!" },
   ])
 
-  expect(await store.people.counts()).toEqual({ person: 1, organization: 1, automated: 1, stranger: 1, unsorted: 1 })
+  expect(await store.people.counts()).toEqual({
+    person: 1,
+    organization: 1,
+    automated: 1,
+    stranger: 1,
+    unsorted: 1,
+    test: 0,
+  })
   expect(await store.people.counts("Harbour")).toEqual({
     person: 0,
     organization: 1,
     automated: 0,
     stranger: 0,
     unsorted: 0,
+    test: 0,
   })
   expect((await store.people.list({ limit: 1, kind: "stranger" })).counts).toEqual(await store.people.counts())
 })

@@ -44,6 +44,18 @@ export const required = (context: StoreContext, ref: IdentityRef) => {
   return found
 }
 
+/** Every phone and address an identity holds: the source's lists, else the one `phone` and `email`. */
+const contactListsOf = (
+  { phone, email }: { phone: string | null; email: string | null },
+  metadata: string | null,
+): { phones: string[]; emails: string[] } => {
+  const stored = metadata === null ? {} : (JSON.parse(metadata) as { phones?: unknown; emails?: unknown })
+  const list = (values: unknown, one: string | null) => [
+    ...new Set([...(one === null ? [] : [one]), ...(Array.isArray(values) ? values.map(String) : [])]),
+  ]
+  return { phones: list(stored.phones, phone), emails: list(stored.emails, email) }
+}
+
 export const recordOf = ({ orm }: StoreContext, personPk: number): PersonRecord => {
   const person = orm.select().from(persons).where(eq(persons.id, personPk)).get()
   if (!person) throw new CliError("not_found", "that person is not in the store")
@@ -56,6 +68,7 @@ export const recordOf = ({ orm }: StoreContext, personPk: number): PersonRecord 
       username: identities.username,
       phone: identities.phone,
       email: identities.email,
+      metadata: identities.metadata,
       isBot: identities.bot,
       method: identityLinks.method,
       linkedBy: identityLinks.author,
@@ -77,19 +90,23 @@ export const recordOf = ({ orm }: StoreContext, personPk: number): PersonRecord 
       ),
     )
     .all()
-  const identitiesOf: LinkedIdentity[] = rows.map(({ pk, isBot, linkedAt, ...row }) => {
+  const identitiesOf: LinkedIdentity[] = rows.map(({ pk, isBot, linkedAt, metadata, ...row }) => {
     const seenIn = seen
       .filter((one) => one.identityPk === pk)
       .map(({ account, scope }) => ({ account, scope: scope as StoredAccount["scope"] }))
     return {
       ...row,
+      ...contactListsOf(row, metadata),
       isBot: isBot === null ? null : isBot === 1,
       accounts: seenIn.map((one) => one.account),
       seenIn,
       linkedAt: new Date(linkedAt).toISOString(),
     }
   })
-  const fallbacks = [...rows].sort((a, b) => a.pk - b.pk).reduce(takeFallbacks, noFallbacks())
+  const fallbacks = [...rows]
+    .map(({ metadata: _, ...row }) => row)
+    .sort((a, b) => a.pk - b.pk)
+    .reduce(takeFallbacks, noFallbacks())
   return {
     uid: String(person.id),
     name: person.name,

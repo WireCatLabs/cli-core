@@ -14,6 +14,7 @@ import { fold } from "../normalize.js"
 import { mergedAwaySql } from "./merged-persons.js"
 import { ALWAYS_SHOWN, type ShownBecause, shownReasons } from "./person-ties.js"
 import { mergedAssignees } from "./task-board.js"
+import { hiddenTestPeople } from "./test-people.js"
 import { read, writeBatch } from "./transaction.js"
 
 export const PEOPLE_SORTS = ["interactions", "recent", "name", "tasks"] as const
@@ -233,7 +234,9 @@ const kindOf = (
   facts: Facts | undefined,
   ties: ShownBecause[],
   mail: { n: number; bulk: number } | undefined,
+  test: boolean,
 ): { kind: PersonKind; signals: (ShownBecause | KindSignal)[] } => {
+  if (test) return { kind: "test", signals: ["test-data"] }
   const always = ties.filter((tie) => (ALWAYS_SHOWN as readonly string[]).includes(tie))
   if (always.length > 0) return { kind: "person", signals: ties }
   const emails = facts?.emails ?? []
@@ -264,6 +267,7 @@ const classified = (
   reasons = shownReasons(database, scope === "all" ? undefined : scope),
 ): Classified[] => {
   const facts = factsOf(database, scope)
+  const test = hiddenTestPeople(database)
   const tasks = countsOf(database, TASK_COUNTS, mergedAssignees(database))
   const messages = countsOf(database, MESSAGE_COUNTS(scope), ...scopeParams(scope))
   const mail = new Map(
@@ -277,7 +281,7 @@ const classified = (
     const contact = { username: own?.username ?? null, phone: own?.phone ?? null, email: own?.email ?? null }
     const shown = displayName(name, { ...contact, name: own?.name ?? null })
     const ties = reasons.get(id) ?? []
-    const { kind, signals } = kindOf(shown, own, ties, mail.get(id))
+    const { kind, signals } = kindOf(shown, own, ties, mail.get(id), test.has(id))
     return {
       id,
       nameOrder: nameOrderOf(shown),
@@ -325,7 +329,7 @@ const byName = (a: Classified, b: Classified) =>
  * Bump when what decides a kind, a name's order or a count changes in code (the word lists, `BULK_MIN`, the ties):
  * every stored one is worked out again on the next list.
  */
-const KIND_RULES = "3"
+const KIND_RULES = "4"
 const RULES_KEY = "people.kind_rules"
 /** Past this many people to work out, one pass over everyone beats a lookup per person. */
 const WHOLE_PASS = 20_000
@@ -449,6 +453,10 @@ const storedCounts = (database: CacheDatabase, filter: { sql: string; params: Sq
   return counts
 }
 
+/** Everyone but test data, which `all` leaves out as every list does. */
+const allOf = (counts: Record<PersonKind, number>): number =>
+  Object.entries(counts).reduce((sum, [kind, n]) => (kind === "test" ? sum : sum + n), 0)
+
 const checked = (options: PeopleListOptions) => {
   const { kind = "person", sort = "interactions" } = options
   if (kind !== "all" && !PERSON_KINDS.includes(kind))
@@ -471,13 +479,13 @@ export const listPeople = (database: CacheDatabase, options: PeopleListOptions):
   const { limit, offset = 0 } = options
   return read(database, () => {
     const counts = storedCounts(database, filter)
-    const total = kind === "all" ? Object.values(counts).reduce((a, b) => a + b, 0) : counts[kind]
+    const total = kind === "all" ? allOf(counts) : counts[kind]
     const rows = database
       .prepare(
-        `SELECT p.id, p.name, p.owner, p.last_contact FROM persons p WHERE p.kind ${kind === "all" ? "<>" : "="} ?` +
+        `SELECT p.id, p.name, p.owner, p.last_contact FROM persons p WHERE p.kind ${kind === "all" ? "NOT IN (?, ?)" : "= ?"}` +
           `${filter.sql} ORDER BY p.owner DESC, ${STORED_ORDER[sort]}p.name_order, p.id LIMIT ? OFFSET ?`,
       )
-      .all(kind === "all" ? MERGED : kind, ...filter.params, limit, offset)
+      .all(...(kind === "all" ? [MERGED, "test"] : [kind]), ...filter.params, limit, offset)
     const page = rows.map(candidateOf)
     const contacts = new Map(
       rows.filter((row) => row.last_contact != null).map((row) => [Number(row.id), Number(row.last_contact)]),
@@ -515,7 +523,7 @@ const listInMemory = (database: CacheDatabase, options: PeopleListOptions): Peop
   )
   const counts = noCounts()
   for (const person of everyone) counts[person.kind] += 1
-  const chosen = kind === "all" ? everyone : everyone.filter((person) => person.kind === kind)
+  const chosen = everyone.filter((person) => (kind === "all" ? person.kind !== "test" : person.kind === kind))
   // The newest contact of every person reads every message; only this order needs it.
   const recent = sort === "recent" ? lastContacts(database, "all") : undefined
   const order: (a: Classified, b: Classified) => number =
@@ -614,7 +622,7 @@ export const similarPeople = (database: CacheDatabase, typed: string, limit: num
     }))
   const byId = new Map(people.map((person) => [person.id, person]))
   const ordered = [...sameName.keys()].flatMap((id) => byId.get(id) ?? [])
-  const rows = classified(database, ordered, [...sameName.keys()], ties)
+  const rows = classified(database, ordered, [...sameName.keys()], ties).filter(({ kind }) => kind !== "test")
   const same = rows.map(({ id }) => sameName.get(id) === true)
   return withLastContact(database, rows).map((person, at) => ({ ...person, sameName: same[at] === true }))
 }

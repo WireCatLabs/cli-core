@@ -43,6 +43,18 @@ export interface SavedIdentity {
   revised: boolean
 }
 
+/** The source's every phone and address as a JSON patch of `metadata`; `undefined` when it gave no list. */
+const contactsOf = ({ phones, emails }: Facts): string | undefined => {
+  if (phones === undefined && emails === undefined) return undefined
+  const clean = (values: string[], lower: boolean) => [
+    ...new Set(values.map((one) => (lower ? one.trim().toLowerCase() : one.trim())).filter((one) => one !== "")),
+  ]
+  return JSON.stringify({
+    ...(phones === undefined ? {} : { phones: clean(phones, false) }),
+    ...(emails === undefined ? {} : { emails: clean(emails, true) }),
+  })
+}
+
 const flag = (value: boolean | null | undefined) => (value === undefined || value === null ? null : Number(value))
 
 const prepare = (orm: Orm) => ({
@@ -204,6 +216,14 @@ const saveIdentity = (
         .where(eq(identities.id, found.pk))
         .run()
     }
+    const contacts = contactsOf(facts)
+    if (contacts !== undefined)
+      database
+        .prepare(
+          "UPDATE identities SET metadata = json_patch(coalesce(metadata, '{}'), ?) WHERE id = ? " +
+            "AND json_patch(coalesce(metadata, '{}'), ?) IS NOT coalesce(metadata, '{}')",
+        )
+        .run(contacts, found.pk, contacts)
     const renamed = changed.name !== found.name || changed.username !== found.username
     if (renamed && resolveLinks) resolvePersonLinks(database, [changed.name, changed.username])
     if (marks === undefined && !renamed) return { pk: found.pk, revised: false }
@@ -220,7 +240,10 @@ const saveIdentity = (
         externalId: nativeId,
         name,
         nameFolded: folded(name),
-        metadata: facts.metadata == null ? null : JSON.stringify(facts.metadata),
+        metadata:
+          facts.metadata == null && contactsOf(facts) === undefined
+            ? null
+            : JSON.stringify({ ...facts.metadata, ...JSON.parse(contactsOf(facts) ?? "{}") }),
         username: facts.username ?? null,
         bot: flag(facts.isBot),
         description: facts.description ?? null,

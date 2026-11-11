@@ -411,7 +411,8 @@ const OTHERS: Entry[] = [
   ["person.no-owner", "not_found", "no person is marked as the owner in the store"],
   ["person.unknown", "not_found", "the store has no person by that reference; people list gives person:<uid>"],
   ["person.no-doubt", "not_found", "nothing about that person is in doubt; people links check lists who is"],
-  validation("person.test-data", "the person is in doubt only as test data, which is not kept; remove the test data"),
+  validation("person.owner", "the owner's own person is not test data"),
+  validation("person.no-identity", "a person with no identity is not test data; there is nothing to hide"),
   validation("person.from-required", "say whom the identity leaves: --from person:<uid>, or person:me for the owner"),
   [
     "identity.separated",

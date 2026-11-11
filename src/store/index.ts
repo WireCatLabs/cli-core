@@ -397,6 +397,7 @@ export {
   type KeptPerson,
   type PersonDoubt,
   type PersonDoubts,
+  type TestDataPerson,
 } from "./sqlite/person-doubts.js"
 export { mergeId, type PersonMerge, parseMergeId } from "./sqlite/person-merges.js"
 export {
