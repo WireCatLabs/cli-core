@@ -351,7 +351,7 @@ describe("attachments extract", () => {
     await store.close()
     const fetcher = vi.spyOn(globalThis, "fetch").mockImplementation(async (_url, init) => {
       const body = JSON.parse(String(init?.body))
-      expect(body.messages.at(-1).content[0].type).toBe("image_url")
+      expect(body.messages.at(-1).content.map(({ type }: { type: string }) => type)).toEqual(["text", "image_url"])
       expect(body.model).toBe("vision-fixture")
       return Response.json({
         choices: [{ finish_reason: "stop", message: { content: "bulkocrinvoice 42" } }],

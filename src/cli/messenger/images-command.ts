@@ -55,6 +55,8 @@ export const imagesCommand = (messenger: Messenger): Command => {
     output: { entity: "attachment_text_change" },
     effects: FETCH,
     offline: false,
+    // An agent over MCP reads the saved picture at local_path itself; this would hand it to a second agent.
+    mcp: false,
     examples: [
       `${messenger.app.command} images read "msg:..." --attachment 1`,
       `${messenger.app.command} images read "Book club" 101`,
