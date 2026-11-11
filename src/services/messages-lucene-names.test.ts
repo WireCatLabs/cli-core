@@ -100,6 +100,7 @@ describe("name patterns in from: and chat:", () => {
     const missing = await failure(store, "from:Ярослва*")
     expect(missing?.code).toBe("not_found")
     expect(missing?.message).toContain("Ярослав")
+    expect(missing?.details.candidates).toContainEqual({ id: "300", name: "Ярослав", username: null })
     await store.messages.saveMessages(
       account,
       "3",

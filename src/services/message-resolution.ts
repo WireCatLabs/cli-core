@@ -3,7 +3,7 @@ import type { Chat, Id, Page, Provider } from "../domain/models.js"
 import { chatReferenceOf, ensureAccount, type ProfilesOn } from "../domain/ref-arguments.js"
 import { profilesOn } from "../domain/ref-summaries.js"
 import type { MessengerTraits } from "../ports/traits.js"
-import { chatsMatching, isId, nearNames, peopleMatching, pickChat, pickPerson } from "../resolve.js"
+import { chatsMatching, isId, nearest, peopleMatching, pickChat, pickPerson } from "../resolve.js"
 import { codeOf } from "../sends/guarded.js"
 import type { AccountStore } from "../store/account-store.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
@@ -254,12 +254,19 @@ export const senderAmong = async (store: MessageStore, accounts: AccountKey[], r
 /** The most people or chats one name pattern may stand for in a search. */
 export const MOST_NAME_MATCHES = 50
 
-const patternRefused = (field: string, pattern: string, what: string, found: number, near: string[]): never => {
+/** `candidates` are shaped as an ambiguous name's are: `{id, name, username}` for people, `{id, title}` for chats. */
+const patternRefused = (
+  field: string,
+  pattern: string,
+  what: string,
+  found: number,
+  near: { id: Id; label: string; candidate: Record<string, unknown> }[],
+): never => {
   if (found === 0)
     throw new CliError(
       "not_found",
-      `${field}:${pattern} — no ${what} fits${near.length ? `; near: ${near.join(", ")}` : ""}`,
-      { candidates: near },
+      `${field}:${pattern} — no ${what} fits${near.length ? `; near: ${near.map(({ label }) => label).join(", ")}` : ""}`,
+      { candidates: near.map(({ candidate }) => candidate) },
     )
   throw new CliError(
     "validation_error",
@@ -288,8 +295,15 @@ export const sendersMatching = async (
     peopleMatching(pattern, people, { byAddress: provider === MAIL }).map(({ id }) => ({ provider, id })),
   )
   if (found.length === 0 || found.length > MOST_NAME_MATCHES) {
-    const names = seen.flatMap(({ people }) => people.flatMap(({ name, alias }) => [name, alias]))
-    patternRefused(field, pattern, "person", found.length, nearNames(pattern, names.filter(isText)))
+    const people = seen.flatMap(({ people }) => people)
+    const near = nearest(pattern, people, ({ name, alias }) => [name, alias].filter(isText))
+    patternRefused(
+      field,
+      pattern,
+      "person",
+      found.length,
+      near.map(({ id, name, username }) => ({ id, label: name ?? id, candidate: { id, name, username } })),
+    )
   }
   return found
 }
@@ -310,8 +324,15 @@ export const chatsMatchingIn = async (
     chatsMatching(pattern, chats).map((chat) => ({ account, chatId: chat.id })),
   )
   if (found.length === 0 || found.length > MOST_NAME_MATCHES) {
-    const titles = held.flatMap(({ chats }) => chats.map(({ title }) => title))
-    patternRefused("chat", pattern, "chat", found.length, nearNames(pattern, titles.filter(isText)))
+    const chats = held.flatMap(({ chats }) => chats)
+    const near = nearest(pattern, chats, ({ title }) => [title].filter(isText))
+    patternRefused(
+      "chat",
+      pattern,
+      "chat",
+      found.length,
+      near.map(({ id, title }) => ({ id, label: title ?? id, candidate: { id, title } })),
+    )
   }
   return found
 }

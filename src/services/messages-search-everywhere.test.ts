@@ -79,6 +79,21 @@ describe("a plain word searches everywhere", () => {
     expect(excerpts["4"]).toBe("Heron census 2026.pdf")
   })
 
+  it("**finds a word's start everywhere a word is found**, and narrows it with a field", async () => {
+    const store = await seeded()
+    const found = await search(store, "hero*")
+    expect(ids(found)).toEqual(["1", "2", "3", "4"])
+    expect(Object.fromEntries(found.items.map((hit) => [hit.id, hit.matchedIn]))).toEqual({
+      "1": "text",
+      "2": "transcript",
+      "3": "file",
+      "4": "filename",
+    })
+    expect(ids(await search(store, "text:hero*"))).toEqual(["1"])
+    expect(ids(await search(store, "transcript:hero*"))).toEqual(["2"])
+    expect(ids(await search(store, "content:hero*"))).toEqual(["3"])
+  })
+
   it("does so under --exact too", async () => {
     const store = await seeded()
     expect(ids(await search(store, "heron", { exact: true }))).toEqual(["1", "2", "3", "4"])

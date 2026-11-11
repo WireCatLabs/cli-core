@@ -93,9 +93,10 @@ from/to/cc/bcc/chat: id или reference — как есть; wildcard (`*`, `?`
 не больше 50 (`query.too-large`, budget `name matches`); ни одного — `not_found` с близкими именами (trigrams);
 иначе имя: точное раньше части, при нескольких точных candidates включают и тех, где имя — часть.
 Quoted `"*x*"` — phrase, literal name (как Lucene). topic принимает wildcard chat, если тот раскрылся в один чат.
-subject wildcard: vocabulary expansion как у exact, затем тест слов темы automaton; mailbox/label и tag: automaton по
-всем mailboxes/меткам хранилища; content/transcript: только `word*` (FTS5 prefix query), иначе
-`query.unsupported-operator`. Text `*word*` без literal prefix читает весь vocabulary: на синтетических 1M словах
+subject wildcard: нужен literal prefix (FTS5 prefix query по email_words сужает), затем automaton по словам темы;
+без prefix — `query.unsupported-operator`. mailbox/label и tag: automaton по всем mailboxes/меткам хранилища;
+content/transcript: только `word*` (FTS5 prefix query). Implicit `word*` (только prefix) добавляет, как слово без поля,
+attachment_words (тексты и расшифровки) и attachment_name_words тем же prefix query; matchedIn считается по ним. Text `*word*` без literal prefix читает весь vocabulary: на синтетических 1M словах
 1–2 s (scan + automaton), поэтому остаётся под бюджетом expansions с подсказкой `word*`.
 FIELD_VERSION не меняется: поля не переименованы, новый operator только расширяет принятые запросы.
 kind сохраняет dialog mapping; peerKind metadata различает bot/service без догадок по имени.

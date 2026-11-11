@@ -198,7 +198,8 @@ describe("search mail over the mail tables", () => {
     expect(await sorted("bcc:*@example.com")).toEqual(["<four@example.com>"])
     expect(await sorted("from:*Sample")).toEqual(["<two@example.com>"])
     expect(await sorted("subject:road*")).toEqual(["<four@example.com>"])
-    expect(await sorted("subject:*view")).toEqual(["<four@example.com>"])
+    expect(await sorted("subject:rev*")).toEqual(["<four@example.com>"])
+    await expect(sorted("subject:*view")).rejects.toThrow("subject:invoice*")
     expect(await sorted("content:invoi*")).toEqual(["<two@example.com>"])
     await expect(sorted("content:*voice")).rejects.toThrow("content:invoice*")
     const otherId = await store.accounts.saveAccount(

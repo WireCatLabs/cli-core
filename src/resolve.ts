@@ -107,23 +107,22 @@ export const chatsMatching = (pattern: string, chats: Chat[]): Chat[] => {
   return chats.filter((chat) => fits(chatNamesOf(chat)))
 }
 
-/** The names closest to what a pattern spells, for a refusal to offer: a typo in a pattern finds nobody. */
-export const nearNames = (pattern: string, names: string[], most = 5): string[] => {
-  const spelled = foldName(pattern.replace(/\\(.)/gu, "$1").replace(/[*?@]/gu, " ")).trim()
-  const wanted = new Set(spelled.split(/\s+/u).flatMap(trigrams))
+/** The items whose names are closest to what a pattern spells, for a refusal to offer: a typo finds nobody. */
+export const nearest = <T>(pattern: string, items: T[], names: (item: T) => string[], most = 5): T[] => {
+  const pieces = (text: string) => foldName(text).split(/\s+/u).flatMap(trigrams)
+  const wanted = new Set(pieces(pattern.replace(/\\(.)/gu, "$1").replace(/[*?@]/gu, " ").trim()))
   if (wanted.size === 0) return []
-  const scored = [...new Set(names)].map((name) => ({
-    name,
-    score: foldName(name)
-      .split(/\s+/u)
-      .flatMap(trigrams)
-      .filter((piece) => wanted.has(piece)).length,
-  }))
-  return scored
+  return items
+    .map((item) => ({
+      item,
+      score: names(item)
+        .flatMap(pieces)
+        .filter((piece) => wanted.has(piece)).length,
+    }))
     .filter(({ score }) => score > 1)
-    .toSorted((a, b) => b.score - a.score || a.name.localeCompare(b.name))
+    .toSorted((a, b) => b.score - a.score)
     .slice(0, most)
-    .map(({ name }) => name)
+    .map(({ item }) => item)
 }
 
 const ambiguous = <T extends { id: Id }>(

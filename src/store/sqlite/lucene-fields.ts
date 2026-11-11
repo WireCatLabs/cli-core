@@ -129,7 +129,8 @@ export interface FieldScope {
   attachmentWords: (match: string, which: "file" | "transcript" | "any") => { sql: string; params: SqlValue[] }
   /** The items whose voice-note transcripts a leaf matches: typed, in another form, or garbled. */
   transcripts: (node: ResolvedPredicate) => { sql: string; params: SqlValue[] }
-  everywhere: (node: ResolvedPredicate, fragment: Fragment) => Fragment
+  /** With `start`, a word's start: every word in a file, a transcript or a file name that begins so. */
+  everywhere: (node: ResolvedPredicate, fragment: Fragment, start?: string) => Fragment
   /** Counts the patterns' expanded words against the query's budget. */
   expand: (count: number) => number
 }
@@ -255,8 +256,12 @@ const words: FieldCompiler = (node, scope) => {
   }
   const pattern = operator === "wildcard" ? wildcardPattern(normalize(value)) : foldRegex(value, node.span)
   const automaton = scope.patternOf(pattern, node)
+  // A bare word's start reads where a bare word does: transcripts, file text and file names too.
+  const start =
+    operator === "wildcard" && node.implicit ? /^([\p{L}\p{N}]+)\*$/u.exec(normalize(value))?.[1] : undefined
+  const widened = (fragment: Fragment) => (start ? scope.everywhere(node, fragment, start) : fragment)
   const cached = scope.expanded.get(pattern)
-  if (cached) return { node, fragment: cached }
+  if (cached) return { node, fragment: widened(cached) }
   const prefix = prefixOf(pattern)
   const terms = scope.database
     .prepare(
@@ -271,7 +276,7 @@ const words: FieldCompiler = (node, scope) => {
   })
   const fragment = matches.length ? wordMatch(corpus, matches.join(" OR ")) : bound("0")
   scope.expanded.set(pattern, fragment)
-  return always(fragment)
+  return always(widened(fragment))
 }
 
 const body: FieldCompiler = (node, scope) => {
@@ -664,9 +669,14 @@ const subject: FieldCompiler = (node, scope) => {
   const parts = wanted.match(/[\p{L}\p{N}]+/gu) ?? []
   if (!mail || !parts.length) return always(bound("0"))
   if (operator === "wildcard") {
-    const automaton = scope.patternOf(wildcardPattern(wanted), node)
+    // The word index holds a mailbox's every word: a pattern without a start would read all of them.
+    const pattern = wildcardPattern(wanted)
+    const start = prefixOf(pattern)
+    if (!start)
+      searchError("query.unsupported-operator", node.span, "subject: takes a word's start, e.g. subject:invoice*")
+    const automaton = scope.patternOf(pattern, node)
     return {
-      fragment: { ...words({ ...node, field: "exact" }, scope).fragment, exact: false },
+      fragment: { ...wordMatch(corpus, `${quoted(start)} *`), exact: false },
       test: (text) =>
         (headingOf(text).match(/[\p{L}\p{N}]+/gu) ?? []).some((word) => automaton.test(word, scope.budget)),
     }
