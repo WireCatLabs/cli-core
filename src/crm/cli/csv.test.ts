@@ -100,13 +100,13 @@ describe("deals list --format csv", () => {
     expect(stdout.endsWith("\r\n")).toBe(true)
     const [header, ...rest] = rowsOf(stdout)
     expect(header).toBe(
-      "ref,title,status,pipeline,pipeline_name,stage,amount,currency,organization,people,close_date,closed_date," +
-        "closed_reason,assignee,external_id,created_at,updated_at,Source,Budget amount,Budget currency," +
-        "Tags (UF_TAGS),Tags (UF_TAGS_OLD)",
+      "ref,title,status,pipeline,pipeline_name,stage,amount,currency,organization,contact_name,company_name,people," +
+        "close_date,closed_date,closed_reason,assignee,external_id,created_at,updated_at,Source,Budget amount," +
+        "Budget currency,Tags (UF_TAGS),Tags (UF_TAGS_OLD)",
     )
     const first = rest.find((row) => row.includes("HYPERLINK")) ?? ""
     expect(first).toContain(`,"'=HYPERLINK(""http://example.com"")",open,`)
-    expect(first).toContain(',1500.00,EUR,"Acme, ""the"" company",Example person p1,')
+    expect(first).toContain(',1500.00,EUR,"Acme, ""the"" company",,,Example person p1,')
     expect(first).toMatch(/,Website,1500\.50,USD,vip; \+fair,$/)
     expect(stdout).toContain('"Line one\nline two"')
   })

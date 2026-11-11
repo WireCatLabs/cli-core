@@ -45,6 +45,12 @@ export interface CrmItem {
   /** A company's id. */
   organization?: string | null
   /**
+   * A lead's own person and company, as the CRM keeps them on the item itself: a lead often has no contact or company
+   * linked yet, and these are then all it says of who it is.
+   */
+  contactName?: string | null
+  companyName?: string | null
+  /**
    * Contacts on it, by their id, the part each plays and whether the CRM marks one its main contact. Left out, the CRM
    * did not say who is on it, and the people stored stay.
    */

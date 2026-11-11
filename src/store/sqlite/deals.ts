@@ -94,6 +94,9 @@ export interface Deal {
   baseStage: { ref: string; name: string } | null
   status: DealStatus
   organization: Party | null
+  /** A CRM copy's own person and company as the CRM keeps them on the item, linked or not; `null` on the owner's own. */
+  contactName: string | null
+  companyName: string | null
   /** Both `null` when no amount is expected yet. */
   currency: string | null
   amount: string | null
@@ -381,6 +384,8 @@ export const dealOperationsOver = (context: StoreContext) => {
             : { ref: `stage:${row.base_stage_ref_id}`, name: String(row.base_stage_name) },
         status: fields.status,
         organization: partyOf(row.organization_id == null ? null : "organization", row.organization_id),
+        contactName: jsonField(row.metadata, "contact_name"),
+        companyName: jsonField(row.metadata, "company_name"),
         currency,
         amount: amount === null || currency === null ? null : formatDecimal(amount, scaleOf(currency)),
         closeDate: row.close_date == null ? null : String(row.close_date),
@@ -861,7 +866,9 @@ export const dealOperationsOver = (context: StoreContext) => {
         }
         return database
           .prepare(
-            `SELECT d.id, d.title, d.updated_at, a.provider, a.external_id AS account, o.name AS company ` +
+            `SELECT d.id, d.title, d.updated_at, a.provider, a.external_id AS account, o.name AS company, ` +
+              "CASE WHEN json_valid(d.metadata) THEN json_extract(d.metadata, '$.company_name') END AS own_company, " +
+              "CASE WHEN json_valid(d.metadata) THEN json_extract(d.metadata, '$.contact_name') END AS own_contact " +
               `FROM ${TABLES[kind]} d LEFT JOIN accounts a ON a.id = d.account_id ` +
               "LEFT JOIN organizations o ON o.id = d.organization_id WHERE d.deleted_at IS NULL",
           )
@@ -872,11 +879,12 @@ export const dealOperationsOver = (context: StoreContext) => {
             row,
             parts: [
               { part: "title" as const, words: wordsOf(String(row.title)) },
-              ...(row.company == null ? [] : [{ part: "company" as const, words: wordsOf(String(row.company)) }]),
-              ...[...(contacts.get(Number(row.id)) ?? [])].map((text) => ({
-                part: "contact" as const,
-                words: wordsOf(text),
-              })),
+              ...[row.company, row.own_company]
+                .filter((text) => typeof text === "string")
+                .map((text) => ({ part: "company" as const, words: wordsOf(text) })),
+              ...[row.own_contact, ...(contacts.get(Number(row.id)) ?? [])]
+                .filter((text) => typeof text === "string")
+                .map((text) => ({ part: "contact" as const, words: wordsOf(text) })),
             ],
           }))
       })
