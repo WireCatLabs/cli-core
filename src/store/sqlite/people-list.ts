@@ -81,7 +81,12 @@ const matching = (query: string | undefined): { sql: string; params: SqlValue[] 
   if (query === undefined) return { sql: "", params: [] }
   const text = query.trim()
   if (text.length < MIN_QUERY)
-    throw new CliError("validation_error", `a people search takes at least ${MIN_QUERY} characters, got "${query}"`)
+    throw new CliError(
+      "validation_error",
+      `a people search takes at least ${MIN_QUERY} characters, got "${query}" — write more of the name, ` +
+        "or leave the search out and read the list by name",
+      { reason: "query.short-text" },
+    )
   const forms = [...new Set([text, ...spellings(text)])]
   const like = (form: string) => `%${form.replace(/[\\%_]/g, (c) => `\\${c}`)}%`
   return {

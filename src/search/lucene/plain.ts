@@ -1,7 +1,7 @@
 import { CliError, isCliError } from "@wirecat/cli-base"
 import { type Predicate, parseLucene, walkQuery } from "@wirecat/cli-base/query"
 import { QUERY_FIELDS } from "./registry.js"
-import { MESSAGE_PARSING } from "./types.js"
+import { MESSAGE_PARSING, searchError } from "./types.js"
 
 // The parser's own mistakes about plain text: a character it read as syntax. Errors about a field's value stay errors.
 const REPAIRED = new Set([
@@ -11,8 +11,34 @@ const REPAIRED = new Set([
   "query.invalid-escape",
 ])
 // Every source's fields are message fields; after: and before: are refused with a hint to write date:.
-const SEARCH_FIELDS = new Set([...QUERY_FIELDS.map(({ name }) => name), "after", "before"])
+const SEARCH_FIELDS = new Set([
+  ...QUERY_FIELDS.flatMap(({ name, aliases }) => [name, ...aliases]),
+  "after",
+  "before",
+  "_exists_",
+])
 const FIELD_PREFIX = /^[+-]?([\p{L}\p{N}_.]+)(?:[:=]|[<>]=?)/u
+// Lowercase Latin, three letters or more: a field someone meant. `10:30`, `HH:MM`, `a:b` and `итог:` stay words.
+const FIELD_NAME = /^[a-z][a-z_]{2,}$/u
+const LISTED_BY = "this search has no such field; a list filters by it:"
+const ELSEWHERE: Readonly<Record<string, string>> = {
+  status: `${LISTED_BY} tasks list status:open, deals list status:won`,
+  stage: `${LISTED_BY} deals list stage:<value>`,
+  pipeline: `${LISTED_BY} deals list pipeline:<value>`,
+  priority: `${LISTED_BY} tasks list priority:<value>`,
+  assignee: `${LISTED_BY} tasks list assignee:<value>`,
+  project: `${LISTED_BY} tasks list project:<value>`,
+  due: `${LISTED_BY} tasks list due:<value>`,
+  name: "a person's name is from: (who wrote) or mentions: here",
+}
+
+const unknownField = (field: string, written: string, span: Predicate["span"], fields: ReadonlySet<string>): never =>
+  searchError(
+    "query.unknown-field",
+    span,
+    `${ELSEWHERE[field] ?? `fields here: ${[...fields].filter((one) => FIELD_NAME.test(one)).join(", ")}`}; ` +
+      `to find the words as written, quote them: "${written}"`,
+  )
 const space = (c: string | undefined) => c !== undefined && /[ \t\n\r\u3000]/u.test(c)
 
 // A quoted word is read as words, whatever it holds; only its quote marks and a trailing backslash need escaping.
@@ -51,13 +77,30 @@ const wordAround = (text: string, at: number): { start: number; end: number } =>
 const everyWordLiteral = (text: string, fields: ReadonlySet<string>) =>
   text.replace(/[^ \t\n\r\u3000]+/gu, (word) => literal(word, false, fields))
 
-type Reading = { at: number } | { questions: number[] } | { wordless: Predicate[]; words: boolean }
+type Reading =
+  | { at: number }
+  | { questions: number[] }
+  | { wordless: Predicate[]; words: boolean }
+  | { refused: unknown }
+
+// What the caller must see; the reader's other errors are for the search to report in its own words.
+const refusal = (refuse: () => never): Reading => {
+  try {
+    return refuse()
+  } catch (error) {
+    return { refused: error }
+  }
+}
 
 /** Where `text` stops being a search query (-1: somewhere unknown), or the bare words the index holds nothing for. */
 const read = (text: string, fields: ReadonlySet<string>): Reading => {
   try {
     const leaves = walkQuery(parseLucene(text, MESSAGE_PARSING).root)
     const unknown = leaves.find(({ field }) => !fields.has(field))
+    if (unknown && FIELD_NAME.test(unknown.field) && unknown.value && !unknown.value.startsWith("/"))
+      return refusal(() =>
+        unknownField(unknown.field, text.slice(unknown.span.start, unknown.span.end), unknown.span, fields),
+      )
     if (unknown) return { at: text.lastIndexOf(unknown.field, unknown.span.start) }
     // "invoice?" and "что с бюджетом?" ask a question; a `?` inside a word (`inv?ice`) stays one character.
     const questions = leaves.flatMap(({ implicit, operator, value, span }) => {
@@ -77,7 +120,22 @@ const read = (text: string, fields: ReadonlySet<string>): Reading => {
     if (!details?.span || !REPAIRED.has(details.reason ?? "")) throw error
     // `word~1` is Lucene's fuzzy search, which the error answers with the prefix search to use instead.
     if (/^~\d/u.test(text.slice(details.span.start))) throw error
-    return { at: details.span.start }
+    // Ranking here is by relevance and date, never by weight: a refusal says so, where a dropped `^2` would hide it.
+    const at = details.span.start
+    const boost = /^\^\d+(?:\.\d+)?/u.exec(text.slice(at))?.[0]
+    if (boost && at > 0 && !space(text[at - 1])) {
+      const { start } = wordAround(text, at)
+      const written = text.slice(start, at + boost.length)
+      return refusal(() =>
+        searchError(
+          "query.unsupported-operator",
+          { start, end: at + boost.length },
+          `boost ${boost} is not supported — drop it: ${text.slice(start, at)}, ` +
+            `or quote the text to find it as written: ${quoted(written)}`,
+        ),
+      )
+    }
+    return { at }
   }
 }
 
@@ -112,6 +170,7 @@ export const plainQuery = (text: string, fields: ReadonlySet<string> = SEARCH_FI
     } catch {
       return text
     }
+    if ("refused" in reading) throw reading.refused
     if ("questions" in reading) {
       current = reading.questions
         .sort((a, b) => b - a)

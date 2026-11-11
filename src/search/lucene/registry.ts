@@ -3,6 +3,7 @@ import {
   type Operator,
   type Predicate,
   type QueryAst,
+  type QueryNode,
   type QueryRegistry,
   queryAstSchema,
   type Span,
@@ -100,7 +101,7 @@ export const QUERY_FIELDS: readonly MessageField[] = [
     name: "from",
     example: "from:Alice*",
     index: "identities / sender index",
-    aliases: [],
+    aliases: ["sender"],
     type: "kw",
     operators: names,
     normalization: NAMES,
@@ -367,8 +368,8 @@ export const QUERY_FIELDS: readonly MessageField[] = [
       [
         "title",
         'title:"quarterly report"',
-        "documents.metadata, then the title column",
-        "every word, folded as text is; notes and files only",
+        "documents.metadata, then the title column; chats.title_folded; email_words, then the subject",
+        "every word, folded as text is: of a note's or a file's title, inside a chat's title, of a mail's subject (as subject:)",
         "txt",
       ],
       [
@@ -465,14 +466,74 @@ export const QUERY_FIELDS: readonly MessageField[] = [
 const MESSAGES: QueryRegistry = { entity: "message", backend: "sql", fields: QUERY_FIELDS }
 
 const NEAR_FIELDS = new Set(["text", "exact", "transcript", "content"])
-/** Field, operator and value of every term, against the message fields. */
-export const validateFields = (ast: QueryAst): QueryAst => {
+const CANONICAL = new Map(QUERY_FIELDS.flatMap(({ name, aliases }) => aliases.map((alias) => [alias, name] as const)))
+/** `field:*`, which Lucene also writes `_exists_:field`: the field has a value. */
+export const isPresence = (node: Predicate): boolean => node.operator === "wildcard" && node.value === "*"
+/** The fields a message or a mail may lack, so `field:*` asks something of them. */
+export const PRESENCE = new Set(["from", "to", "cc", "bcc", "subject", "title", "topic", "participants_count"])
+// Every message has a chat and a date: `chat:*` keeps them all, as Lucene's `_exists_` would.
+const ALWAYS = new Set(["chat", "date"])
+const EVERY_DATE = { operator: "range", value: "*", upper: "*", lower_inclusive: true, upper_inclusive: true } as const
+const PRESENCE_INSTEAD: Readonly<Record<string, string>> = {
+  text: "has:text",
+  exact: "has:text",
+  body: "has:text",
+  content: "has:file",
+  transcript: "has:transcript",
+  size: "has:attachment",
+  url: "has:link",
+  link: "has:link",
+  domain: "has:link",
+}
+// Fields matched anywhere inside their value, so a pattern's stars are not needed.
+const CONTAINED = new Set(["title", "site", "author"])
+const notPresent = (node: Predicate): never =>
+  searchError(
+    "query.unsupported-operator",
+    node.span,
+    `${node.field}:* asks whether ${node.field} has a value, which search answers for ` +
+      `${[...PRESENCE, ...ALWAYS].join(", ")}${PRESENCE_INSTEAD[node.field] ? `; write ${PRESENCE_INSTEAD[node.field]}` : ""}`,
+  )
+
+// A tree without an alias or `_exists_` comes back as the same object.
+const canonical = (node: QueryNode): QueryNode => {
+  if (node.kind === "boolean") {
+    const clauses = node.clauses.map((clause) => {
+      const inner = canonical(clause.node)
+      return inner === clause.node ? clause : { ...clause, node: inner }
+    })
+    return clauses.every((clause, at) => clause === node.clauses[at]) ? node : { ...node, clauses }
+  }
+  const field = CANONICAL.get(node.field)
+  if (node.field !== "_exists_") return field ? { ...node, field } : node
+  const { implicit: _, ...rest } = node
+  return { ...rest, field: CANONICAL.get(node.value) ?? node.value, operator: "wildcard", value: "*" }
+}
+const everyDate = (node: QueryNode): QueryNode =>
+  node.kind === "boolean"
+    ? { ...node, clauses: node.clauses.map((clause) => ({ ...clause, node: everyDate(clause.node) })) }
+    : isPresence(node) && ALWAYS.has(node.field)
+      ? { kind: "predicate", field: "date", ...EVERY_DATE, span: node.span }
+      : node
+
+/**
+ * Field, operator and value of every term, against the message fields; an alias becomes its field's name.
+ * `presence` is message and mail search, whose compiler answers `field:*` for the fields a message may lack.
+ */
+export const validateFields = (written: QueryAst, { presence = false }: { presence?: boolean } = {}): QueryAst => {
+  const root = canonical(written.root)
+  const ast = root === written.root ? written : { ...written, root }
   for (const node of walkQuery(ast.root)) {
+    if (presence && isPresence(node)) {
+      if (PRESENCE.has(node.field) || ALWAYS.has(node.field)) continue
+      const known = QUERY_FIELDS.find(({ name }) => name === node.field)
+      if (known && (!known.operators.includes("wildcard") || PRESENCE_INSTEAD[node.field])) notPresent(node)
+    }
     const field = QUERY_FIELDS.find(({ name }) => name === node.field)
     if (!field && ["after", "before"].includes(node.field)) {
       const plain = ["term", "phrase"].includes(node.operator) && /^[\w:.+-]+$/u.test(node.value)
       searchError(
-        "legacy_date_field",
+        "query.legacy-date-field",
         node.span,
         plain ? `use date${node.field === "after" ? ">=" : "<"}${node.value}` : "use date>=YYYY-MM-DD or date:[a TO b]",
       )
@@ -485,11 +546,18 @@ export const validateFields = (ast: QueryAst): QueryAst => {
         node.span,
         `words at most ${MOST_WORDS_APART} apart: "a b"~${MOST_WORDS_APART}`,
       )
-    // The message compilers read `field:*` as a pattern, never as "has a value".
-    if (field && node.operator === "wildcard" && !field.operators.includes("wildcard"))
-      searchError("query.unsupported-operator", node.span, `${field.name} takes ${field.operators.join(", ")}`)
+    if (field && node.operator === "wildcard" && !field.operators.includes("wildcard")) {
+      const part = node.value.replace(/[*?]/gu, "")
+      searchError(
+        "query.unsupported-operator",
+        node.span,
+        `${field.name} takes ${field.operators.join(", ")}` +
+          (CONTAINED.has(field.name) && part ? `; ${field.name}:${part} already finds it inside a word` : ""),
+      )
+    }
   }
-  return validateQuery(ast, MESSAGES, SEARCH_QUERY)
+  const valid = validateQuery(ast, MESSAGES, SEARCH_QUERY)
+  return presence ? { ...valid, root: everyDate(valid.root) } : valid
 }
 
 const record = (value: unknown): value is Record<string, unknown> =>
@@ -502,7 +570,7 @@ const validSpan = (value: unknown): value is Span =>
   Number(value.end) >= Number(value.start) &&
   Number(value.end) <= QUERY_LIMITS.bytes
 /** Checks a received query tree — MCP input, a stored search — against cli-base's schema, the limits, then its fields. */
-export const validateAst = (input: unknown): QueryAst => {
+export const validateAst = (input: unknown, options: { presence?: boolean } = {}): QueryAst => {
   const failure = { start: 0, end: 0 }
   if (!record(input) || input.version !== 1 || input.language !== "lucene-v1")
     searchError("query.unsupported-version", failure)
@@ -530,7 +598,7 @@ export const validateAst = (input: unknown): QueryAst => {
       (node.upper === undefined || node.lower_inclusive === undefined || node.upper_inclusive === undefined),
   )
   if (open) searchError("query.invalid-ast", open.span)
-  return validateFields(parsed.output)
+  return validateFields(parsed.output, options)
 }
 
 export const QUERY_OPERATORS = [

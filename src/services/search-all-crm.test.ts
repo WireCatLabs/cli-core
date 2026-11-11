@@ -44,6 +44,13 @@ it("finds deals and leads by the start of a word of their title, in any letter c
   expect(found.accounts).toEqual([{ resource: "crm", provider: "crm", account: "internal" }])
 })
 
+it("reads title: as the deal's or lead's title, and only its title", async () => {
+  const { store, deal, lead } = await withDeals()
+  const found = await searchAll(store, ME, { text: "title:клиник", limit: 10, only: ["crm"] })
+  expect(found.items.map(({ ref }) => ref).sort()).toEqual([deal.ref, lead.ref].sort())
+  expect(found.items.every(({ foundBy }) => foundBy.includes("title"))).toBe(true)
+})
+
 it("needs every word unless the query joins them with OR", async () => {
   const { store } = await withDeals()
   const all = await searchAll(store, ME, { text: "клиник логотип", limit: 10, only: ["crm"] })
@@ -195,9 +202,10 @@ it("corrects a misspelt word only when nothing matched, and says so", async () =
   expect((await find("цемента")).items[0]?.match).toBeUndefined()
 })
 
-it("skips deals with the reason when the query filters by stage, instead of finding nothing", async () => {
+it("refuses a filter by stage, naming the list that filters by it, instead of finding nothing", async () => {
   const { find } = await synced()
-  const found = await find("stage:won")
-  expect(found.items).toEqual([])
-  expect(found.skipped).toEqual([expect.objectContaining({ resource: "crm", reason: expect.stringMatching(/stage/) })])
+  await expect(find("stage:won")).rejects.toMatchObject({
+    details: { reason: "query.unknown-field" },
+    message: expect.stringContaining("deals list stage:"),
+  })
 })

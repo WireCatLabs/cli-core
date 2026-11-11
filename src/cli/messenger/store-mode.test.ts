@@ -247,6 +247,13 @@ describe("a messenger whose history is read from the store", () => {
     expect(JSON.parse(context.stdout).items.map((one: Message) => one.id)).toEqual(["1", "2"])
     expect(JSON.parse(shown.stdout).item).toMatchObject({ id: "7", title: "Book club" })
     expect(JSON.parse(contacts.stdout).items.map((one: { name: string }) => one.name)).toEqual(["Zoe"])
+    for (const query of ["phone:+34", "email:example.org"]) {
+      const narrowed = await call(["contacts", "list", query, "--json"], env, connect, "store")
+      expect(JSON.parse(narrowed.stderr.split("\n").at(-1) ?? "").error).toMatchObject({
+        reason: "query.unsupported-field",
+        message: expect.stringContaining(`${query.split(":")[0]}: reads the contacts kept in the local store`),
+      })
+    }
     expect(connects).toEqual([])
   })
 

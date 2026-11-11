@@ -69,6 +69,8 @@ export const contactsCommand = (messenger: Messenger): Command => {
       const terms = nativeTerms(listQuery(typedQuery(words), CONTACTS_QUERY, "contacts list"), "contacts list")
       const name = terms.get("name")
       const notes = terms.get("notes")
+      const email = terms.get("email")
+      const phone = terms.get("phone")
       const context = messengerContext(this, messenger)
       notesAllowed(context.settings.permissions, notes)
       const { found, account } = await context.withServices(async (services) => ({
@@ -76,6 +78,8 @@ export const contactsCommand = (messenger: Messenger): Command => {
           order,
           ...(name ? { name } : {}),
           ...(notes ? { notes } : {}),
+          ...(email ? { email } : {}),
+          ...(phone ? { phone } : {}),
           ...window(context.settings),
         }),
         account: await services.chats.account(),

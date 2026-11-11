@@ -149,9 +149,12 @@ it("refuses operators meetings do not support", async () => {
     await expect(store.meetings.searchHits(query, { accountId })).rejects.toMatchObject({ code: "validation_error" })
 })
 
-it("reads a message field meetings do not have as a word", async () => {
+it("refuses a message field meetings do not have, naming the fields they have", async () => {
   const { texts } = await fixture()
-  expect(await texts("subject:риелтор")).toEqual([])
+  await expect(texts("subject:риелтор")).rejects.toMatchObject({
+    details: { reason: "query.unknown-field" },
+    message: expect.stringContaining("fields here: text, exact, from"),
+  })
 })
 
 it("takes words that must not become syntax as plain words", async () => {

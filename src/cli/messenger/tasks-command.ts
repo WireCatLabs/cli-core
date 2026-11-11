@@ -236,7 +236,7 @@ export const tasksCommand = (messenger: Messenger): Command => {
     .option("--limit <n>", "how many", positiveCount("--limit"))
     .action(async function (this: Command, words: string[]) {
       const context = messengerContext(this, messenger)
-      const query = listQuery(typedQuery(words), TASK_QUERY, "tasks list")
+      const query = listQuery(typedQuery(words), TASK_QUERY, "tasks list", { defaultField: "title" })
       const { limit, offset } = pageOf(context.settings)
       const found = await context.withServices((services) =>
         services.tasks.list({

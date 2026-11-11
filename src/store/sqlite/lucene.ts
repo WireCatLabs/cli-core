@@ -1,9 +1,10 @@
 import { CliError } from "@wirecat/cli-base"
 import type { Page } from "../../domain/models.js"
 import { type Automaton, compileAutomaton, type MatchBudget } from "../../search/lucene/automaton.js"
+import { isPresence, PRESENCE } from "../../search/lucene/registry.js"
 import type { QueryExecution, ResolvedNode, ResolvedPredicate } from "../../search/lucene/resolved.js"
 import { isStemmed } from "../../search/lucene/resolved.js"
-import { exhausted, outOfTime, QUERY_LIMITS, searchError } from "../../search/lucene/types.js"
+import { exhausted, outOfTime, QUERY_LIMITS, searchError, tooWideTerm } from "../../search/lucene/types.js"
 import { type SqlValue, TIME_LIMIT_FUNCTION, TimeLimitReached } from "../driver.js"
 import { emailHitsByPk } from "./emails.js"
 import { placeHits } from "./hit-places.js"
@@ -15,6 +16,7 @@ import {
   type Fragment,
   ftsMatch,
   type Leaf,
+  present,
   quoted,
   SPEECH,
 } from "./lucene-fields.js"
@@ -175,7 +177,7 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
     },
   }
   const createLeaf = (node: ResolvedPredicate): Leaf => {
-    const compiler = FIELD_COMPILERS[node.field]
+    const compiler = isPresence(node) && PRESENCE.has(node.field) ? present : FIELD_COMPILERS[node.field]
     if (!compiler) return searchError("query.unsupported-field", node.span)
     const compiled = compiler(node, fields)
     if ("node" in compiled) return compiled
@@ -472,6 +474,8 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
   }
 }
 
+const testedTerms = (leaves: Leaf[]) => leaves.flatMap(({ node, test }) => (test ? [node.value] : []))
+
 interface QuerySelection {
   sql: string
   params: SqlValue[]
@@ -503,9 +507,9 @@ export const withQuerySelection = <T>(
             )
             .all(...ranked.params, ...where.params, QUERY_LIMITS.candidates + 1)
           check()
-          if (candidates.length > QUERY_LIMITS.candidates) exhausted("candidate rows")
+          if (candidates.length > QUERY_LIMITS.candidates) tooWideTerm(testedTerms(leaves), "candidate rows")
           if (candidates.reduce((sum, row) => sum + Number(row.bytes), 0) > QUERY_LIMITS.bodyBytes)
-            exhausted("body bytes")
+            tooWideTerm(testedTerms(leaves), "body bytes")
           const matched: number[] = []
           for (let offset = 0; offset < candidates.length; offset += 500) {
             check()
@@ -659,8 +663,11 @@ const runCompiled = async (
     .all(...ranked.params, ...where.params, QUERY_LIMITS.candidates + 1)
   await new Promise<void>((resolve) => setImmediate(resolve))
   check()
-  if (candidates.length > QUERY_LIMITS.candidates) exhausted("candidate rows")
-  if (candidates.reduce((sum, row) => sum + Number(row.bytes), 0) > QUERY_LIMITS.bodyBytes) exhausted("body bytes")
+  // A page stops at its last hit, so only what it reads counts; a count or a group reads every candidate.
+  const tooWide = (budget: string) => tooWideTerm(testedTerms(leaves), budget)
+  if (by && candidates.length > QUERY_LIMITS.candidates) tooWide("candidate rows")
+  if (by && candidates.reduce((sum, row) => sum + Number(row.bytes), 0) > QUERY_LIMITS.bodyBytes) tooWide("body bytes")
+  let bytesRead = 0
   const found: number[] = []
   const scores = new Map(
     candidates.map((row) => [Number(row.id), row.relevance == null ? null : -Number(row.relevance)]),
@@ -669,7 +676,10 @@ const runCompiled = async (
   for (let offset = 0; offset < candidates.length; offset += 500) {
     if (offset > 0) await new Promise<void>((resolve) => setImmediate(resolve))
     check()
-    const pks = candidates.slice(offset, offset + 500).map(({ id }) => Number(id))
+    const chunk = candidates.slice(offset, offset + 500)
+    bytesRead += chunk.reduce((sum, row) => sum + Number(row.bytes), 0)
+    if (bytesRead > QUERY_LIMITS.bodyBytes) tooWide("body bytes")
+    const pks = chunk.map(({ id }) => Number(id))
     const rows = database
       .prepare(
         `SELECT m.id AS id,m.text AS body${projection ? `,${projection}` : ""},(SELECT json_group_array(att.kind) FROM attachments att WHERE att.attachable_type='${corpus.item}' AND att.attachable_id=m.id) AS attachment_kinds ${joinedFrom} WHERE m.id IN (${pks.map(() => "?").join(",")})`,
@@ -686,6 +696,7 @@ const runCompiled = async (
     }
     if (!by && found.length > execution.limit) break
   }
+  if (found.length <= execution.limit && candidates.length > QUERY_LIMITS.candidates) tooWide("candidate rows")
   if (by === "pks") return found
   if (by) return grouped(by, "m.id IN (SELECT value FROM json_each(?))", [JSON.stringify(found)], joinedFrom)
   return {

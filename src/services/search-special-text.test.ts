@@ -27,7 +27,7 @@ const CASES: [label: string, query: string, record: string | null][] = [
   ["at sign", "user@example.com", "write to user@example.com soon"],
   ["ampersand", "R&D", "the R&D budget"],
   ["percent", "50%", "a 50% discount"],
-  ["caret", "x^2", "the curve x^2 grows"],
+  ["caret, quoted since a bare ^2 is a refused boost", '"x^2"', "the curve x^2 grows"],
   ["tilde", "~home", "the ~home folder"],
   ["square brackets", "[draft]", "marked [draft] for now"],
   ["curly brackets", "{draft}", "marked {draft} for now"],

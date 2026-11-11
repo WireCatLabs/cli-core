@@ -73,7 +73,7 @@ describe("versioned structured AST and field registry", () => {
       validateFields(parseLucene(query))
       expect.unreachable()
     } catch (error) {
-      expect((error as CliError).details).toMatchObject({ reason: "legacy_date_field", alternative })
+      expect((error as CliError).details).toMatchObject({ reason: "query.legacy-date-field", alternative })
     }
   })
   it("rejects malicious structured inputs rather than trusting casts", () => {
@@ -97,5 +97,22 @@ describe("versioned structured AST and field registry", () => {
     }
     recursive.clauses.push({ occur: "must", node: recursive })
     expect(reason(() => validateAst({ ...ast, root: recursive }))).toBe("query.too-large")
+  })
+
+  it("reads sender: as from:, _exists_:x as x:*, and chat:* as every date", () => {
+    const leaves = (text: string) => {
+      const { root } = validateFields(parseLucene(text), { presence: true })
+      return root.kind === "predicate" ? [root] : root.clauses.map(({ node }) => node)
+    }
+    expect(leaves("sender:ana")).toMatchObject([{ field: "from", value: "ana" }])
+    expect(leaves("_exists_:sender")).toMatchObject([{ field: "from", operator: "wildcard", value: "*" }])
+    expect(leaves("chat:* invoice")).toMatchObject([{ field: "date", operator: "range" }, { field: "text" }])
+    expect(validateAst(JSON.parse(JSON.stringify(parseLucene("sender:ana")))).root).toMatchObject({ field: "from" })
+  })
+
+  it("says what to write instead of a pattern on a field matched inside its value", () => {
+    expect(() => validateFields(parseLucene("title:*встр*"))).toThrow("title:встр already finds it inside a word")
+    expect(() => validateFields(parseLucene("kind:*"), { presence: true })).toThrow("kind:* asks whether kind")
+    expect(() => validateFields(parseLucene("url:*"), { presence: true })).toThrow("write has:link")
   })
 })

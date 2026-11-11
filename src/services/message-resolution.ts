@@ -245,7 +245,13 @@ export const senderAmong = async (store: MessageStore, accounts: AccountKey[], r
     )
   } catch (error) {
     if (error instanceof CliError && error.code === "not_found") {
-      throw new CliError("not_found", `${field}:${reference} — ${error.message}`)
+      throw new CliError(
+        "not_found",
+        `${field}:${reference} — ${error.message}; a part of the name: ${field}:*${reference}*`,
+        {
+          reason: "query.no-match",
+        },
+      )
     }
     throw error
   }
@@ -262,12 +268,17 @@ const patternRefused = (
   found: number,
   near: { id: Id; label: string; candidate: Record<string, unknown> }[],
 ): never => {
-  if (found === 0)
+  if (found === 0) {
+    const inside = `*${pattern.replace(/^\*+|\*+$/gu, "")}*`
+    const [closest] = near
     throw new CliError(
       "not_found",
-      `${field}:${pattern} — no ${what} fits${near.length ? `; near: ${near.map(({ label }) => label).join(", ")}` : ""}`,
-      { candidates: near.map(({ candidate }) => candidate) },
+      `${field}:${pattern} — no ${what} fits${near.length ? `; near: ${near.map(({ label }) => label).join(", ")}` : ""}` +
+        ` — a pattern matches the whole name: ${pattern === inside ? "" : `write ${field}:${inside} for a part of it, or `}` +
+        `the name: ${field}:${JSON.stringify(closest?.label ?? pattern.replace(/[*?]/gu, ""))}`,
+      { reason: "query.no-match", candidates: near.map(({ candidate }) => candidate) },
     )
+  }
   throw new CliError(
     "validation_error",
     `${field}:${pattern} fits ${found} ${what}, more than ${MOST_NAME_MATCHES} — write more of the name`,

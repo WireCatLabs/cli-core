@@ -93,7 +93,9 @@ export const listQuery = (
   { defaultField = "none" }: { defaultField?: string } = {},
 ): QueryAst | undefined => {
   const context = { command, guide: LIST_QUERY_GUIDE }
-  const parsed = text.trim() === "" ? undefined : parseLucene(text, { defaultField, ...context })
+  // `phone:+34`: a `+` right after a field's colon can only be the value's own sign, never Lucene's "required".
+  const signed = text.replace(/(^|[\s(])([\p{L}_][\p{L}\p{N}_.]*:)\+([^\s()"]+)/gu, '$1$2"+$3"')
+  const parsed = signed.trim() === "" ? undefined : parseLucene(signed, { defaultField, ...context })
   const typed = parsed && withTomorrow(parsed, registry)
   if (typed) validateQuery(typed, registry, context)
   const named = typed ? fieldsNamed(typed) : new Set<string>()

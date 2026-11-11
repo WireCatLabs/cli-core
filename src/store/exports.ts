@@ -105,7 +105,7 @@ export type {
 export { savedPhoneCountries, saveStorePhoneCountries } from "./sqlite/phone-countries.js"
 export type { PrivateContact, PrivateContactNote } from "./sqlite/private-people.js"
 export type { ProposedAction } from "./sqlite/proposed-actions.js"
-export { type ColumnMap, queryFilter, type Where } from "./sqlite/query-filter.js"
+export { type ColumnMap, foldedWords, queryFilter, type Where } from "./sqlite/query-filter.js"
 export type { RankedEvidence, RankingEvidenceItem, RankingEvidenceRequest } from "./sqlite/ranking-evidence.js"
 export type { RankedStoreFound, RankedStoreRow, RankingRequest } from "./sqlite/rankings.js"
 export { AGENDA_COLUMNS } from "./sqlite/reads.js"
