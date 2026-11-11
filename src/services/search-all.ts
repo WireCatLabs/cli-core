@@ -54,8 +54,12 @@ export interface SearchAllRecordItem {
   email?: MailFields
   /** A message's or a mail's files, as `search messages` names them. */
   attachments?: HitFile[]
-  /** Which search found it: words, meaning or both. */
+  /** Which search found it: words, meaning or both; a deal or a lead by `title`, or `words` of its company or contacts. */
   foundBy: ("title" | "words" | "meaning")[]
+  /** A deal's or a lead's: `corrected` when it matched only once a misspelt query word was corrected. */
+  match?: "corrected"
+  /** For a `corrected` hit, the stored words each corrected query word became. */
+  corrections?: { from: string; to: string[] }[]
   /** A business hit's: whether the owner confirmed it, or it waits for him. */
   review?: "proposed" | "confirmed"
   /** A business hit's source record, when an import made it. */
@@ -187,12 +191,12 @@ const filtersBeside = (text: string): string | undefined => {
 }
 
 /**
- * What a deal or a lead is found by: words or phrases of its title, all of them, or any with OR. Anything else is
- * refused, so `search all` skips deals with the reason instead of matching a field they do not have.
+ * What a deal or a lead is found by: plain words or phrases, all of them, or any with OR. Anything else is refused,
+ * so `search all` skips deals with the reason instead of matching a field they do not have.
  */
 export const titleWords = (
   text: string,
-  refused = "deals and leads are found by the words of their title only",
+  refused = "deals and leads are found by the words of their title, company and contacts only",
 ): { words: string[]; anyWord: boolean } => {
   const { root } = parseLucene(text, SEARCH_QUERY)
   const clauses = root.kind === "boolean" ? root.clauses : [{ node: root, occur: "must" as const }]
@@ -479,11 +483,19 @@ export const searchAll = async (
           )
           accounts.push(...read.map(({ provider, account }) => ({ resource, provider, account })))
         } else if (resource === "crm") {
+          // `plainQuery` made `stage:won` a phrase, which would find nothing and still call the answer complete.
+          const field = /(?:^|\s)[+-]?(stage|status|pipeline):/iu.exec(asked.text)?.[1]?.toLowerCase()
+          if (field)
+            throw new CliError(
+              "validation_error",
+              `deals and leads are not searched by ${field}; list them by it with \`deals list ${field}:<value>\``,
+            )
           const { words, anyWord } = titleWords(request.text)
           const chosen = scope?.crm
           const found = await store.deals.find({
             words,
             anyWord: anyWord || discover,
+            ...(request.exact ? { exact: true } : {}),
             ...(request.crmKinds === undefined ? {} : { kinds: request.crmKinds }),
             limit: Math.min(depth + 1, 500),
             ...(chosen === undefined ? {} : { accounts: chosen }),
@@ -498,7 +510,8 @@ export const searchAll = async (
               title: deal.title,
               timestamp: deal.updatedAt,
               text: deal.summary,
-              foundBy: ["title"],
+              foundBy: deal.matched.includes("title") ? ["title"] : ["words"],
+              ...(deal.corrections ? { match: "corrected" as const, corrections: deal.corrections } : {}),
             })),
           )
           const read = chosen ?? [...(await crmAccounts(store)), { provider: "crm", account: INTERNAL_NOTES }]
