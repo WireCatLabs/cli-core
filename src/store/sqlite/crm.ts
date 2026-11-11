@@ -21,7 +21,19 @@ import { accountPk, findAccountPk } from "./accounts.js"
 import { suggestBaseStages } from "./base-suggest.js"
 import { type CrmContactsRemoved, removeCrmContacts } from "./crm-contacts.js"
 import { type CrmSkipped, crmAccountPrefix, crmIdentityId, crmRowsOver, SOURCE, TABLES, textOf } from "./crm-rows.js"
-import { crmCompanyTypes, crmOwnUser, crmScope, crmScopeUsers, crmSettingKey, saveCrmSetting } from "./crm-settings.js"
+import {
+  type CrmStageMove,
+  type CrmStageTasks,
+  crmCompanyTypes,
+  crmOwnUser,
+  crmScope,
+  crmScopeUsers,
+  crmSettingKey,
+  crmStageMoves,
+  crmStageTasks,
+  saveCrmSetting,
+  saveStageMovesMark,
+} from "./crm-settings.js"
 import type { StoreContext } from "./open.js"
 import { type ReportedRelation, type ReportedScope, syncReportedIn } from "./reported-relations.js"
 import { clearState, syncStateOf, writeState } from "./sync.js"
@@ -152,6 +164,14 @@ export interface CrmCopies {
   /** The CRM user whose copy this is (`self` setting); none before the first sync of a source that names one. */
   ownUser(key: AccountKey): Promise<string | undefined>
   saveOwnUser(key: AccountKey, userId: string): Promise<void>
+  /** The owner's `stage-tasks` rules, by kind and the CRM's stage id. */
+  stageTasks(key: AccountKey): Promise<CrmStageTasks>
+  /**
+   * Each stage a deal or lead of the account entered from another one since `markStageMoves` last ran, oldest first;
+   * a new row's first stage is no move. `through` is what to mark once they are handled.
+   */
+  stageMoves(key: AccountKey): Promise<{ moves: CrmStageMove[]; through: number }>
+  markStageMoves(key: AccountKey, through: number): Promise<void>
   /**
    * Marks deleted every stored deal or lead of the kind assigned to a user outside `userIds`; one with no assignee
    * stays. Reads only the store. Answers how many; `dryRun` only counts them.
@@ -838,6 +858,9 @@ export const crmCopiesOver = (context: StoreContext, people: AccountPeople): Crm
     scope: async (key) => crmScope(database, key),
     ownUser: async (key) => crmOwnUser(database, key),
     saveOwnUser: async (key, userId) => saveCrmSetting(database, crmSettingKey(key, "self"), userId, now()),
+    stageTasks: async (key) => crmStageTasks(database, key),
+    stageMoves: async (key) => crmStageMoves(database, key, findAccountPk(context, key)),
+    markStageMoves: async (key, through) => saveStageMovesMark(database, key, through, now()),
     removeOutOfScope: async (key, kind, userIds, { dryRun } = {}) =>
       write(database, () => {
         const keep = new Set(userIds.map((id) => crmIdentityId(key, id, "user")))

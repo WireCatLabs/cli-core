@@ -16,8 +16,9 @@ export const isClosedState = (state: string): state is ClosedState =>
   (CLOSED_STATES as readonly string[]).includes(state)
 
 /**
- * A task points at what it is about and never holds its text: `source` is a locator the host
- * resolves (`msg:…` for a message), so a deleted message leaves nothing behind here.
+ * A task points at what it is about and never copies its source's text: `source` is a locator the host resolves
+ * (`msg:…` for a message), so a deleted message leaves nothing behind here. Only a rule that wrote its own `title` and
+ * `description`, such as an owner's stage rule naming a deal, stores text with it.
  */
 export interface Task {
   id: string
@@ -37,6 +38,9 @@ export interface Task {
   key?: string
   /** One name from the host's category list; a host without one leaves it unset. */
   category?: string
+  /** Given by a rule that knows what to do, such as an owner's stage rule; a found task's comes from its source. */
+  title?: string
+  description?: string
   /** Who works on it now, until `claimedUntil`; a lapsed claim holds nothing. */
   claimedBy?: string
   claimedUntil?: Date

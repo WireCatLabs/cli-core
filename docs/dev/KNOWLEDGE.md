@@ -399,8 +399,8 @@ the kind in full again and runs no id pass. A narrowing under the default `mine`
 would mark more than half of a kind deleted is held as `crm.narrowing-held` (and `held: true` on the kind), naming
 the own user and the count, until the owner sets the `scope` setting; `--rescan` does not lift it. While it is held,
 new pages are still read under `mine`, and only the stored rows outside it are kept: a sign-in whose user holds few of
-the copy's deals is more likely the wrong one than the owner's wish. `config set` of `scope`, `self` or
-`unassigned` stops an agent's run (its own shell, or MCP with `mcp.authority`) with `permission_error`: the owner sets
+the copy's deals is more likely the wrong one than the owner's wish. `config set` of `scope`, `self`,
+`unassigned` or `stage-tasks` stops an agent's run (its own shell, or MCP with `mcp.authority`) with `permission_error`: the owner sets
 them in a terminal. It guards against a change by mistake and is not a boundary: an agent that drops its markers or
 writes the store file directly is not stopped. `self()` must answer a numeric user id (else `invalid_response`), and a source
 with it fills every deal's and lead's `assignee` (a source contract case checks it). One account's copy belongs to one user: the first sync stores it as
@@ -411,6 +411,20 @@ copy touches no relationship, so the owner's confirmed links stay and return wit
 never marks rows deleted without `--rescan`, whatever the copy's size. `store status` reads both without a sync: each deal and lead row's
 `scope` gives the setting, the scope its cursor reads new pages under (`all` under a source without `self()`),
 and `held` while the cursor's `narrowing` keeps stored rows outside it.
+
+`crm.<provider>:<account>.stage-tasks` is the owner's one rule for the copy, not a workflow: a stage the CRM names,
+`{"<stage id>": {"title": "…", "due_days": <0–3650>}}`, opens a local task when a deal enters it; a bare id is a deal's
+stage and `lead:<stage id>` a lead's, since the two may share ids. After each `sync`, `openStageTasks` reads the
+`pipeline_stage_changes` rows of the account's deals and leads past a mark kept beside the setting
+(`<setting>.after`, never listed by `config`), skips a row's first stage (`from_stage_id` null), and opens one task
+per configured move through `createTaskService().add` with `origin: "rule"`, source `deal:<id>/move/<change id>`,
+source kind `deal` or `lead`, group the deal's ref, kind `request`, the rule's title, a description naming the deal,
+stage, pipeline and responsible user, and a due date `due_days` after the sync. So a dismissed task never comes back
+and re-entering the stage opens a new one. The duplicate review is skipped: every deal entering a stage shares the
+title. The mark is set to the newest change when the setting is first saved and dropped when it is unset, so earlier
+moves open nothing. A local `deals move` is a move like the CRM's and counts at the next sync. Changes are compared
+between syncs, so A→B→C in between is seen as A→C. `dealContext` lists the deal's open tasks by group with its
+project's.
 
 A mail findings batch (`store.mailFindings`) also takes `invoice`, `payment`, `order` and `order_update` findings.
 Staging runs what accepting would write through `store.finance` or `store.orders` and rolls it back, so a batch the

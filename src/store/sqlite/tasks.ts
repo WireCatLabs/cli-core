@@ -241,17 +241,19 @@ export const taskStoreOver = (context: StoreContext): StoreTaskStore => {
         const key = typedKey(database, task.kind)
         const author = actorOfOrigin(database, task.origin)
         const closedBy = task.closedBy ? actorOfOrigin(database, task.closedBy) : undefined
-        const title = displayTitleOf(database, {
-          type: task.kind,
-          title: `${task.kind} — ${task.source}`,
-          source_locator: task.source,
-        })
+        const title =
+          task.title ??
+          displayTitleOf(database, {
+            type: task.kind,
+            title: `${task.kind} — ${task.source}`,
+            source_locator: task.source,
+          })
         const made = database
           .prepare(
             "INSERT INTO tasks (project_id, number, key, title, type, status, due_at, closed_at, closed_by_type, closed_by_id, " +
               "close_reason, author_type, author_id, source, package_id, source_locator, source_kind, source_group, created_at, updated_at, " +
-              "title_folded, close_reason_folded, category) " +
-              "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
+              "title_folded, close_reason_folded, category, description) " +
+              "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
           )
           .get(
             project,
@@ -277,6 +279,7 @@ export const taskStoreOver = (context: StoreContext): StoreTaskStore => {
             folded(title),
             folded(task.reason),
             task.category ?? null,
+            task.description ?? null,
           )
         recordTaskEvent(database, Number(made?.id), author, "created", null, task.createdAt.getTime())
       })
