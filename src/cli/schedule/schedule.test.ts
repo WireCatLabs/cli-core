@@ -880,6 +880,41 @@ describe("a run", () => {
       expect(ran.filter((one) => one.argv[0] === "notify-send")).toHaveLength(1)
     })
 
+    it("sits out a wait the provider asked for, up to six hours, then runs once more", async () => {
+      const { env, root } = setup()
+      const limited = (ms: number) =>
+        JSON.stringify({
+          error: {
+            code: "rate_limited",
+            reason: "provider.rate-limited",
+            message: "wait",
+            retry: { safe: true, after_ms: ms },
+          },
+        })
+      const count = join(root, "count")
+      const once = `const fs = require("fs"); if (!fs.existsSync(${JSON.stringify(count)})) { fs.writeFileSync(${JSON.stringify(count)}, "1"); console.error(${JSON.stringify(limited(2 * 60 * 60_000))}); process.exit(8) }`
+      const daily = scheduled(env.CHAT_STATE_DIR, { name: "sync", kind: "command", argv: [], when: { daily: "04:30" } })
+      const { waits, now, wait } = clock()
+
+      const last = await runSchedule(app, machine("linux", [process.execPath, "-e", once]).system, env, daily, {
+        untilUnlocked: true,
+        now,
+        wait,
+      })
+
+      expect(last.exitCode).toBe(0)
+      expect(waits).toEqual([2 * 60 * 60_000 + 30_000])
+
+      const always = `console.error(${JSON.stringify(limited(7 * 60 * 60_000))}); process.exit(8)`
+      const longer = await runSchedule(app, machine("linux", [process.execPath, "-e", always]).system, env, daily, {
+        untilUnlocked: true,
+        now,
+        wait,
+      })
+      expect(longer).toMatchObject({ exitCode: 8, reason: "rate_limited (provider.rate-limited)" })
+      expect(waits).toHaveLength(1)
+    })
+
     it("does not wait in a run by hand, in a schedule that repeats, or for any other failure", async () => {
       const { env, root } = setup()
       const { system } = machine("linux", [process.execPath, "-e", child(root, 1000)])

@@ -154,6 +154,8 @@ export interface LastRun {
   reason?: string
   /** The `code` of the error the run printed, as run records keep it. */
   errorCode?: string
+  /** How long the CLI asked to wait before it is tried again (`retry.after_ms` of a `rate_limited` error). */
+  retryAfterMs?: number
   /** The first failure of the failures in a row, so "failing since" survives every retry. */
   failingSince?: string
   /** Failed runs in a row; absent once a run succeeds. */
@@ -186,12 +188,22 @@ const REASON_ID = /^[a-z0-9][a-z0-9.-]{0,79}$/
  * message, which can name a chat or a person; the run's log keeps that. Any other line is another program's
  * text and is not kept either.
  */
-export const failureOf = (stderr: string, exitCode: number): { reason: string; errorCode?: string } => {
+export const failureOf = (
+  stderr: string,
+  exitCode: number,
+): { reason: string; errorCode?: string; retryAfterMs?: number } => {
   for (const line of stderr.split("\n").reverse()) {
     try {
-      const { code, reason } = (JSON.parse(line) as { error?: { code?: unknown; reason?: unknown } }).error ?? {}
+      const { code, reason, retry } =
+        (JSON.parse(line) as { error?: { code?: unknown; reason?: unknown; retry?: { after_ms?: unknown } } }).error ??
+        {}
       if ((errorCodes as readonly unknown[]).includes(code) && typeof reason === "string" && REASON_ID.test(reason)) {
-        return { reason: `${code} (${reason})`, errorCode: code as string }
+        const after = retry?.after_ms
+        return {
+          reason: `${code} (${reason})`,
+          errorCode: code as string,
+          ...(code === "rate_limited" && typeof after === "number" && after > 0 ? { retryAfterMs: after } : {}),
+        }
       }
     } catch {}
   }
@@ -429,6 +441,10 @@ const LOCKED_LONGEST_WAIT_MS = 15 * 60_000
 /** A night's catch-up waits for the morning's login; past that the run fails as it is. */
 const LOCKED_GIVE_UP_MS = 12 * 60 * 60_000
 
+/** A wait the provider asked for that a daily run sits out and then runs once more; a longer one fails for the day. */
+const RATE_LIMITED_WAIT_AT_MOST_MS = 6 * 60 * 60_000
+const RATE_LIMITED_MARGIN_MS = 30_000
+
 const lockedOut = (last: LastRun) => last.reason?.endsWith(`(${CREDENTIALS_UNREACHABLE})`) === true
 
 const pause = (ms: number, signal?: AbortSignal) =>
@@ -450,7 +466,8 @@ const pause = (ms: number, signal?: AbortSignal) =>
  *
  * `untilUnlocked` is for the timer's run: a timer that catches up at boot runs before the login unlocks the
  * keyring, so a run that fails for that reason is tried again, a minute then up to 15 minutes apart, for up to
- * 12 hours. A schedule that repeats every few minutes is left to its next tick; a run by hand fails at once.
+ * 12 hours. A run the provider asked to wait (`rate_limited` with `retry.after_ms`, up to 6 hours) waits that long
+ * and runs once more. A schedule that repeats every few minutes is left to its next tick; a run by hand fails at once.
  */
 export const runSchedule = async (
   app: AppIdentity,
@@ -534,6 +551,20 @@ export const runSchedule = async (
     })
     if ("repeated" in again) break
     last = again
+  }
+  const asked = last.errorCode === "rate_limited" ? last.retryAfterMs : undefined
+  if (retries && asked !== undefined && asked <= RATE_LIMITED_WAIT_AT_MOST_MS && !signal?.aborted) {
+    await wait(asked + RATE_LIMITED_MARGIN_MS, signal)
+    if (!signal?.aborted) {
+      const again = await attemptSchedule(app, system, env, schedule, folder, {
+        now,
+        signal,
+        killAfterMs,
+        agentRuns,
+        agentInput,
+      })
+      if (!("repeated" in again)) last = again
+    }
   }
   const { exitCode, output } = last
   const errors = agent ? output.replace(/\.md$/, ".log") : output
