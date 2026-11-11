@@ -2,10 +2,12 @@ import { CliError } from "@wirecat/cli-base"
 import { displayName } from "../../domain/display-names.js"
 import { nameSkeletons } from "../../domain/name-variants.js"
 import { RESERVED_ADDRESS_GLOBS, SEED_ID_GLOBS, SEED_PEOPLE } from "../../domain/test-data.js"
+import type { Decider } from "../decisions.js"
 import type { CacheDatabase } from "../driver.js"
-import { keptTogether } from "./identity-split-proposals.js"
+import { keepTogether, keptTogether } from "./identity-split-proposals.js"
+import { currentPerson } from "./merged-persons.js"
 import type { StoreContext } from "./open.js"
-import { merges } from "./person-merges.js"
+import { merges, ownerOnly } from "./person-merges.js"
 
 /** Why a person may be wrong, most urgent first: the owner's own person holding someone else matters most. */
 export const DOUBT_REASONS = ["owner-other-name", "test-data", "shared-address", "mixed-names"] as const
@@ -174,6 +176,8 @@ interface Found {
   held: Held[]
   /** A shared address, for `shared-address`. */
   address?: string
+  /** What the owner keeps by saying the person is right: `held` without the main name group a mixed doubt shows. */
+  doubted: Held[]
 }
 
 const quoted = (held: Held[]): string =>
@@ -201,16 +205,22 @@ const doubtsOf = (held: Held[], kept: ReadonlySet<string>, test: ReadonlySet<num
     .flat()
     .filter(({ by, ref }) => by !== "owner" && !kept.has(ref))
   const base = { person: first.person, owner: first.owner, name: first.personName }
-  if (first.owner) return outside.length ? [{ ...base, reason: "owner-other-name", held: outside }] : []
+  if (first.owner)
+    return outside.length ? [{ ...base, reason: "owner-other-name", held: outside, doubted: outside }] : []
   const found: Found[] = []
   const mixed: Held[] = []
   for (const one of outside) {
     if (one.phone !== null && main.some(({ phone }) => phone === one.phone)) continue
     const address = one.email === null ? undefined : main.find(({ email }) => email === one.email)?.email
-    if (typeof address === "string") found.push({ ...base, reason: "shared-address", held: [one], address })
+    if (typeof address === "string")
+      found.push({ ...base, reason: "shared-address", held: [one], address, doubted: [one] })
     else mixed.push(one)
   }
-  if (mixed.length) found.push({ ...base, reason: "mixed-names", held: [...main, ...mixed] })
+  // A link only moves the identities of the person joining, so the ones already here keep a rule's method, though the
+  // owner saw their names beside the new one. A shared address is not something a name shows, so it stays.
+  const vouched = held.reduce((newest, { by, at }) => (by === "owner" && at > newest ? at : newest), -Infinity)
+  const unseen = mixed.filter(({ at }) => at > vouched)
+  if (unseen.length) found.push({ ...base, reason: "mixed-names", held: [...main, ...unseen], doubted: unseen })
   return found
 }
 
@@ -236,7 +246,14 @@ const everyDoubt = (database: CacheDatabase): Found[] => {
     for (const one of doubtsOf(held, kept.get(person) ?? new Set(), testPks)) found.push(one)
   for (const held of byPerson(test).values()) {
     const [first] = held as [Held]
-    found.push({ person: first.person, owner: first.owner, name: first.personName, reason: "test-data", held })
+    found.push({
+      person: first.person,
+      owner: first.owner,
+      name: first.personName,
+      reason: "test-data",
+      held,
+      doubted: [],
+    })
   }
   return found.sort(
     (a, b) =>
@@ -315,4 +332,44 @@ export const personDoubts = (
     total: found.length,
     hasMore: found.length > offset + limit,
   }
+}
+
+export interface KeptPerson {
+  person: string
+  /** The identities the owner said belong here; a doubt about them comes back once one of them moves. */
+  kept: string[]
+}
+
+/**
+ * The owner's answer to a doubt: this person is right as they are. Test data is not a link and stays listed. Refused
+ * when nothing about the person is in doubt.
+ */
+export const keepPerson = (context: StoreContext, uid: string, by: Decider): KeptPerson => {
+  ownerOnly(by, "says a person's links are right")
+  const asked = /^(?:person:)?([1-9]\d*)$/u.exec(uid.trim())?.[1]
+  const known =
+    asked === undefined || !Number.isSafeInteger(Number(asked))
+      ? undefined
+      : context.database.prepare("SELECT id FROM persons WHERE id = ?").get(Number(asked))
+  if (known === undefined)
+    throw new CliError("not_found", `the store has no person for "${uid}"`, { reason: "person.unknown" })
+  const person = currentPerson(context.database, Number(known.id))
+  const held = context.database.prepare(`SELECT ${COLUMNS} WHERE l.person_id = ? ORDER BY i.id`).all(person).map(heldOf)
+  const test = new Set(testData(context.database).map(({ pk }) => pk))
+  const doubted = [
+    ...new Set(
+      doubtsOf(held, keptTogether(context.database).get(person) ?? new Set(), test).flatMap((found) =>
+        found.doubted.map(({ ref }) => ref),
+      ),
+    ),
+  ]
+  if (doubted.length === 0) {
+    if (held.some(({ pk }) => test.has(pk)))
+      throw new CliError("validation_error", `person:${person} is in doubt only as test data, which is not kept`, {
+        reason: "person.test-data",
+      })
+    throw new CliError("not_found", `nothing about person:${person} is in doubt`, { reason: "person.no-doubt" })
+  }
+  keepTogether(context, person, doubted)
+  return { person: `person:${person}`, kept: doubted }
 }

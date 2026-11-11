@@ -20,6 +20,8 @@ const linkedIdentity = v.strictObject({
 export const linkedPerson = v.strictObject({
   uid: id,
   name: v.nullable(text),
+  /** The name `people list` shows: the person's own, else an account's, a username, phone or address. */
+  display_name: v.optional(v.nullable(text)),
   identities: v.array(linkedIdentity),
   /** An agent's link: the `identity_link` proposal the owner decides; the person is still as it was. */
   proposal: v.optional(text),

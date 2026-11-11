@@ -477,3 +477,27 @@ describe("a username", () => {
     expect(row).toMatchObject({ contact: "@ola_k", username: "ola_k", usernameSource: "telegram" })
   })
 })
+
+describe("a person's shown name (DEBT-311)", () => {
+  it("is the same in a person's record as in the list", async () => {
+    const { store } = await opened()
+    await store.people.savePeople(TG, [
+      { id: "30", name: "!", username: "xorlov" },
+      { id: "31", name: "null" },
+    ])
+    await store.people.savePeople(CRM, [{ id: "c/30", name: "Ярослав Орлов" }])
+    await store.people.linkIdentities(
+      { provider: "telegram", id: "30" },
+      { provider: "bitrix24", id: "c/30" },
+      { method: "manual", by: "owner" },
+    )
+    const listed = await store.people.list({ limit: 50, kind: "all" })
+
+    for (const id of ["30", "31"]) {
+      const record = await store.people.personOf({ provider: "telegram", id })
+      const row = listed.items.find(({ person }) => person === `person:${record?.uid}`)
+      expect(record?.displayName).toBe(row?.displayName)
+    }
+    expect((await store.people.personOf({ provider: "telegram", id: "30" }))?.displayName).toBe("Ярослав Орлов")
+  })
+})

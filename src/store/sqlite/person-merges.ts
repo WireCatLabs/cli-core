@@ -31,7 +31,7 @@ const personPk = ({ database }: StoreContext, uid: string): number => {
   return Number(found.id)
 }
 
-const ownerOnly = (by: string, what: string) => {
+export const ownerOnly = (by: unknown, what: string) => {
   if (by !== "owner")
     throw new CliError("permission_error", `only the owner ${what}`, { reason: "identity.owner-only" })
 }

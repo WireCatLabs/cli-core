@@ -113,6 +113,33 @@ export const keptTogether = (database: CacheDatabase): Map<number, Set<string>> 
 }
 
 /**
+ * The owner says these identities belong on this person: recorded as a split the owner turned down, which is what
+ * `keptTogether` reads, so it lapses as soon as one of them moves. An agent's open split of any of them is turned down.
+ */
+export const keepTogether = (context: StoreContext, person: number, identities: readonly string[]): ProposedAction => {
+  const operations = proposalOperationsOver(context)
+  const payload: IdentitySplitPayload = {
+    split: "unlink",
+    person: String(person),
+    identities: [...identities],
+    merge: null,
+    side: sideOf(context.database, person),
+    evidence: [],
+  }
+  const keeping = new Set(identities)
+  for (const row of splitRows(context.database, ["proposed"]))
+    if (holder(context.database, row.payload) === person && row.payload.identities.some((ref) => keeping.has(ref)))
+      operations.reject(row.id, "owner", { reason: "the owner kept them" })
+  const proposed = operations.propose({
+    kind: IDENTITY_SPLIT_KIND,
+    by: "owner",
+    payload,
+    reason: "the owner kept them",
+  })
+  return operations.reject(proposed.id, "owner", { reason: "the owner kept them" })
+}
+
+/**
  * Proposes to take identities off their person, or to undo a merge, as an `identity_split` only the owner decides. An
  * open proposal for the same identities is given back instead of a second, brought up to date with the person as it
  * is now and with the new evidence added, so proposing again is how a stale one is renewed; its first reason and

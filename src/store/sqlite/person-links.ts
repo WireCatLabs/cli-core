@@ -1,6 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import { isEmailAddress, isRoleAddress } from "../../domain/addresses.js"
-import { displayName } from "../../domain/display-names.js"
+import { displayName, noFallbacks, takeFallbacks } from "../../domain/display-names.js"
 import type { Id, Page } from "../../domain/models.js"
 import type {
   IdentityRef,
@@ -89,7 +89,13 @@ export const recordOf = ({ orm }: StoreContext, personPk: number): PersonRecord 
       linkedAt: new Date(linkedAt).toISOString(),
     }
   })
-  return { uid: String(person.id), name: person.name, identities: identitiesOf }
+  const fallbacks = [...rows].sort((a, b) => a.pk - b.pk).reduce(takeFallbacks, noFallbacks())
+  return {
+    uid: String(person.id),
+    name: person.name,
+    displayName: displayName(person.name, fallbacks),
+    identities: identitiesOf,
+  }
 }
 
 /**
