@@ -5,6 +5,56 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## 0.641.0 — 11.11.2026
+
+### Added
+
+- **A deal or a lead keeps the person and company its CRM holds on the item itself.** A lead often has no contact or
+  company linked yet; its own name and company were all it said of who it is, and they were dropped. `CrmItem` takes
+  `contactName` and `companyName`, the store keeps them, `deals show` and `leads show` answer them as `contact_name`
+  and `company_name` (marked untrusted, as a CRM's users or a web form wrote them), the CSV export has both columns, and
+  `search all` finds the item by them, the name as a contact and the company as a company. See
+  [ARCHITECTURE.md](docs/dev/ARCHITECTURE.md).
+- **A deal or lead entering a stage opens a local task.** The owner's setting `crm.<provider>:<account>.stage-tasks`
+  maps a stage to a task, `{"<stage id>": {"title": "…", "due_days": 2}}`, a lead's stage as `lead:<stage id>`. After
+  each CRM `sync`, every move into such a stage since the last sync opens one task, due that many days later, whose
+  description names the deal, the stage and the responsible user. A move counts once: a dismissed task never comes
+  back, and entering the stage again opens a new one. Moves made before the setting was first saved, and a new row's
+  first stage, open none. The sync answer's `stage_tasks` says how many it opened, a deal's context lists them, and
+  an agent cannot change the setting. See
+  [KNOWLEDGE.md, "Relationships a source reports"](docs/dev/KNOWLEDGE.md#relationships-a-source-reports).
+- **`NewTask.title` and `description`.** A rule that knows what to do gives its task a title and a description.
+- **A part inside a word in chat messages.** `*договор*` without a field, or under `text:` or `exact:`, finds «Договор», «ДОГОВОРЫ» and «переговоры» through the store's index of three-letter pieces of message text, which every store already has. A large archive no longer refuses it, and it works inside `AND`/`OR`/`NOT`, groups, and with `chat:` and `date:`. Case does not matter, and ё and е are one letter; other letters match as typed. The part needs three letters in a row. `*вор`, `*дог*вор` and `*гов?р*` use the same index and are then checked word by word; a part found in too many messages is `query.too-large`, which `chat:`, `date:` or `*part*` avoid. Mail, transcripts and file text keep the word list and its `word*` hint.
+- **A run's log keeps the progress of `messages sync`.** Each progress line is also a `sync.progress` event with its counts, whatever the output format, so `runs show` tells what a desktop app's bar showed and when ([reference](docs/REFERENCE.md)).
+
+### Changed — may break callers
+
+- **`Deal` has two more fields, `contactName` and `companyName` (`string | null`).** A caller that builds a whole
+  `Deal` adds both; the `deal` and `lead` entities require `contact_name` and `company_name`. The CSV export of deals
+  and leads has the two new columns after `organization`, so a reader that takes columns by position moves past them.
+- **`*part*` in chat-message text no longer folds й/и or accents.** Through the word list, `*мои*` also found «мой» and `*cafe*` found «café»; through the trigram index the part matches as typed, except case and ё/е. Write the letter as the text has it, or search the whole word (`мой`), which still folds them.
+- **CRM search no longer matches inside a word.** `cement` no longer finds `replacement`, nor «кто» «Вектор». A query
+  word shorter than four letters matches only a whole word.
+- **`search all stage:won` skips deals and leads with the reason** instead of finding none and calling the answer
+  complete; so do `status:` and `pipeline:`. `deals list stage:<name>` lists them by stage.
+
+### Fixed
+
+- **A search over chats and mail together says when mail was left out.** Mail refused for a reason other than a messenger field (such as `*word*` over a large mailbox) used to drop out silently, so the answer looked complete; it is now listed under `skipped` with the reason.
+- **`to:`, `cc:` and `bcc:` name themselves when nobody matches.** The error said `from:owner — nobody matches` for `to:owner`.
+- **`list:` in a search without a mail account is refused** as `subject:` and `to:` are (`query.unsupported-field`, "list: is a mail field"), instead of finding nothing.
+- **`search all` finds deals and leads by any form of a word, and by their company and contacts.** A query word
+  matches a stored word it begins or one of the same stem, so «поставки цемента» finds «Поставка цемента» and
+  `repairs` finds `Forklift repair`. A deal's or a lead's company name and its contacts' names, e-mails and phones are
+  searched too, never the owner's, and a CRM copy only by what its own CRM holds of them, so a locked profile learns
+  nothing of a person's other accounts; `+79161234567` finds `+7 916 123-45-67`. `found_by` stays `title` when the title
+  matched and is `words` when only the company or a contact did. `deals.find` gives each hit's `matched` parts. See
+  [ARCHITECTURE.md](docs/dev/ARCHITECTURE.md).
+- **A misspelt CRM search is corrected once.** When nothing matches as typed, a word is corrected to the nearest
+  stored words, as messages search does, and those hits carry `match: "corrected"` and `corrections`. `--exact` turns
+  forms, word beginnings and correction off.
+- **`messages sync --all` reports progress while a chat is read.** Its progress line on stderr came only when a chat was finished, so a chat of many paced pages showed the same count for minutes, and a desktop app's bar stood still at the first chat. Every page now updates `fetched`, with the chat totals of `--all`.
+
 ## 0.640.0 — 11.11.2026
 
 ### Added
