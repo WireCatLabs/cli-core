@@ -13,10 +13,13 @@ import {
 } from "../../domain/deals.js"
 import { currencyOf, formatDecimal, minorUnits, scaleOf } from "../../domain/money.js"
 import { notOverriddenSql } from "../../domain/relations.js"
+import { correctWords, type Vocabulary } from "../../search/correct.js"
+import { createStemmer, DEFAULT_STEMMERS } from "../../search/stem.js"
 import { fold } from "../normalize.js"
 import type { AccountKey } from "../types.js"
 import { type ProposedByFilter, proposedBySql } from "./actors.js"
 import { suggestBaseStages } from "./base-suggest.js"
+import { crmAccountPrefix } from "./crm-rows.js"
 import { linkKind } from "./link-kinds.js"
 import { type Author, authorActor, authorOf, evidenceOf, linkEvidence, projectId, projectOf } from "./memories.js"
 import { requiredThing } from "./notes.js"
@@ -172,16 +175,31 @@ export interface DealFilter {
 }
 
 export interface DealSearch {
-  /** Words of the title, each in any letter case; a word may be a phrase. */
+  /**
+   * Words of the title, the company or a contact's name, e-mail or phone, each in any letter case; a word may be a
+   * phrase, whose words must follow each other.
+   */
   words: string[]
-  /** A title holding any of the words matches, those holding more first; otherwise every word is needed. */
+  /** A row holding any of the words matches, those holding more first; otherwise every word is needed. */
   anyWord?: boolean
+  /** Only whole words as typed: no other form of a word, no word it begins, no spelling correction. */
+  exact?: boolean
   /** Only the copies of these CRM accounts; absent, every account's and the owner's own. */
   accounts?: AccountKey[]
   /** Only these kinds; absent, deals and leads. */
   kinds?: readonly DealKind[]
   /** 1–500, 100 by default. */
   limit?: number
+}
+
+/** Where a deal's or a lead's words are searched: its title, its company, the people on it. */
+export type DealPart = "title" | "company" | "contact"
+
+export interface FoundDeal extends Deal {
+  /** Where the query's words were found, in the order of `DealPart`. */
+  matched: DealPart[]
+  /** Set when nothing matched as typed: each query word that was corrected, and the stored words it became. */
+  corrections?: { from: string; to: string[] }[]
 }
 
 export interface PipelineInput {
@@ -212,8 +230,12 @@ export interface DealsStore {
   /** Every stage it entered, in the order it entered them: a CRM's own stamps may run out of order. */
   stages(reference: string): Promise<StageChange[]>
   list(filter?: DealFilter): Promise<Deal[]>
-  /** Deals and leads together, by the words of their title: the most words matched first, then the latest changed. */
-  find(search: DealSearch): Promise<Deal[]>
+  /**
+   * Deals and leads together, by the words of their title, company and contacts: a query word matches a stored word
+   * it begins or one of the same stem. The most words matched first, then the latest changed. When nothing matches,
+   * a misspelt word is corrected to the stored words nearest to it, once.
+   */
+  find(search: DealSearch): Promise<FoundDeal[]>
   /**
    * The project it belongs to; `null` clears it. A CRM copy takes it too: the project is the store's own field, which
    * a CRM has none of and its sync never writes.
@@ -271,6 +293,51 @@ const providerMetadataOf = (metadata: unknown): Record<string, CrmValue> => {
 
 const accountOf = (provider: unknown, external: unknown) =>
   provider == null ? null : { provider: String(provider), account: String(external) }
+
+const DEAL_PARTS: readonly DealPart[] = ["title", "company", "contact"]
+const TOKEN = /[\p{L}\p{N}\p{M}]+/gu
+/** A query word shorter than this matches only a whole word: «с» or "a" begins half the words of any title. */
+const SHORTEST_BEGINNING = 3
+const stemmer = createStemmer(DEFAULT_STEMMERS, { cacheLimit: 20_000 })
+const stemsOf = (token: string) => stemmer.stemSequences(token).flat()
+
+type StoredWord = { token: string; literal: string }
+type Probe = { literal: string; stems: string[] }
+/** One word of a query clause, with the corrections that may stand for it. */
+type QueryWord = Probe[]
+
+const probeOf = (token: string): Probe => ({ literal: fold(token), stems: stemsOf(token) })
+const tokensOf = (text: string) => text.normalize("NFC").toLowerCase().match(TOKEN) ?? []
+
+const wordMatches = (probe: Probe, word: StoredWord, exact: boolean): boolean => {
+  if (word.literal === probe.literal) return true
+  if (exact) return false
+  if (probe.literal.length >= SHORTEST_BEGINNING && word.literal.startsWith(probe.literal)) return true
+  // A stem begins its word, so a word that does not start like the stem needs no stemming.
+  return (
+    probe.stems.some((stem) => word.literal.startsWith(stem.slice(0, 3))) &&
+    stemsOf(word.token).some((stem) => probe.stems.includes(stem))
+  )
+}
+
+/** A clause of several words, `КТП-630` or an e-mail, matches only where they follow each other. */
+const clauseIn = (clause: QueryWord[], words: StoredWord[], exact: boolean): boolean =>
+  words.some((_, at) =>
+    clause.every((alternatives, offset) => {
+      const word = words[at + offset]
+      return word !== undefined && alternatives.some((probe) => wordMatches(probe, word, exact))
+    }),
+  )
+
+const listOf = (json: unknown): string[] => {
+  if (typeof json !== "string") return []
+  try {
+    const parsed: unknown = JSON.parse(json)
+    return Array.isArray(parsed) ? parsed.map(String) : []
+  } catch {
+    return []
+  }
+}
 
 export const dealOperationsOver = (context: StoreContext) => {
   const { database, now } = context
@@ -734,26 +801,124 @@ export const dealOperationsOver = (context: StoreContext) => {
         )
         .map(itemOf(kind))
     },
-    find: ({ words, anyWord, accounts, kinds = DEAL_KINDS, limit }: DealSearch): Deal[] => {
-      const wanted = [...new Set(words.map((word) => fold(word).trim()).filter(Boolean))]
-      if (!wanted.length) return []
+    find: async ({ words, anyWord, exact = false, accounts, kinds = DEAL_KINDS, limit }: DealSearch) => {
+      const seen = new Set<string>()
+      const clauses = words
+        .map((word) => tokensOf(word).filter((token) => fold(token)))
+        .filter((tokens) => {
+          const key = tokens.map(fold).join(" ")
+          if (!tokens.length || seen.has(key)) return false
+          seen.add(key)
+          return true
+        })
+      if (!clauses.length) return []
       const most = Math.min(Math.max(limit ?? 100, 1), 500)
       const within = accounts?.map(({ provider, account }) => `${provider}\u0000${account}`)
-      // Titles are short and a CRM holds thousands, not millions: folding them here is cheaper than a word index.
-      const found = kinds.flatMap((kind) =>
-        database
+      const stored = new Map<string, StoredWord>()
+      const wordsOf = (text: string) =>
+        tokensOf(text).flatMap((token) => {
+          let word = stored.get(token)
+          if (word === undefined) {
+            word = { token, literal: fold(token) }
+            stored.set(token, word)
+          }
+          return word.literal ? [word] : []
+        })
+      // A CRM holds thousands of rows, not millions: reading their words here is cheaper than an index kept in step.
+      const records = kinds.flatMap((kind) => {
+        const contacts = new Map<number, Set<string>>()
+        // `+` keeps SQLite off the index by `to_type`: a store holds far more links to people than links from deals.
+        for (const row of database
           .prepare(
-            `SELECT d.id, d.title, d.updated_at, a.provider, a.external_id AS account FROM ${TABLES[kind]} d ` +
-              "LEFT JOIN accounts a ON a.id = d.account_id WHERE d.deleted_at IS NULL",
+            "SELECT k.from_id, a.provider AS account_provider, a.external_id AS account, p.name, i.provider, " +
+              "i.external_id, i.name AS identity, i.email, i.phone, " +
+              "CASE WHEN json_valid(i.metadata) THEN json_extract(i.metadata, '$.emails') END AS emails, " +
+              "CASE WHEN json_valid(i.metadata) THEN json_extract(i.metadata, '$.phones') END AS phones " +
+              `FROM links k JOIN ${TABLES[kind]} d ON d.id = k.from_id JOIN persons p ON p.id = k.to_id ` +
+              "LEFT JOIN accounts a ON a.id = d.account_id LEFT JOIN identity_links l ON l.person_id = p.id " +
+              "LEFT JOIN identities i ON i.id = l.identity_id " +
+              `WHERE k.from_type = ? AND d.deleted_at IS NULL AND k.kind = ${linkKind("related-to")} ` +
+              "AND +k.to_type = 'person' AND k.deleted_at IS NULL AND k.role IS NOT 'owner' " +
+              `AND ${notOverriddenSql("k")}`,
+          )
+          .all(kind)) {
+          const texts = contacts.get(Number(row.from_id)) ?? new Set<string>()
+          contacts.set(Number(row.from_id), texts)
+          if (typeof row.name === "string" && row.name) texts.add(row.name)
+          // A CRM copy is found only by what its CRM holds: a locked profile never learns a person's other accounts.
+          const own =
+            row.account_provider == null ||
+            (row.provider === row.account_provider &&
+              String(row.external_id).startsWith(
+                crmAccountPrefix({ provider: String(row.account_provider), account: String(row.account) }),
+              ))
+          if (!own) continue
+          const phones = [row.phone, ...listOf(row.phones)].filter((one): one is string => typeof one === "string")
+          for (const text of [row.identity, row.email, ...listOf(row.emails), ...phones])
+            if (typeof text === "string" && text) texts.add(text)
+          // `+7 916 123-45-67` is one number to whoever types `79161234567`.
+          for (const phone of phones) texts.add(phone.replace(/\D/g, ""))
+        }
+        return database
+          .prepare(
+            `SELECT d.id, d.title, d.updated_at, a.provider, a.external_id AS account, o.name AS company ` +
+              `FROM ${TABLES[kind]} d LEFT JOIN accounts a ON a.id = d.account_id ` +
+              "LEFT JOIN organizations o ON o.id = d.organization_id WHERE d.deleted_at IS NULL",
           )
           .all()
           .filter((row) => within === undefined || within.includes(`${row.provider}\u0000${row.account}`))
-          .map((row) => {
-            const title = fold(String(row.title))
-            return { kind, row, score: wanted.filter((word) => title.includes(word)).length }
+          .map((row) => ({
+            kind,
+            row,
+            parts: [
+              { part: "title" as const, words: wordsOf(String(row.title)) },
+              ...(row.company == null ? [] : [{ part: "company" as const, words: wordsOf(String(row.company)) }]),
+              ...[...(contacts.get(Number(row.id)) ?? [])].map((text) => ({
+                part: "contact" as const,
+                words: wordsOf(text),
+              })),
+            ],
+          }))
+      })
+      const search = (query: QueryWord[][]) =>
+        records
+          .map((record) => {
+            const matched = new Set<DealPart>()
+            const score = query.filter((clause) => {
+              const where = record.parts.filter(({ words: held }) => clauseIn(clause, held, exact))
+              for (const { part } of where) matched.add(part)
+              return where.length > 0
+            }).length
+            return { ...record, score, matched: DEAL_PARTS.filter((part) => matched.has(part)) }
           })
-          .filter(({ score }) => (anyWord ? score > 0 : score === wanted.length)),
-      )
+          .filter(({ score }) => (anyWord ? score > 0 : score === query.length))
+      const probes = clauses.map((clause) => clause.map(probeOf))
+      const queryWith = (fixes: Map<string, string[]>) =>
+        probes.map((clause) => clause.map((probe) => [probe, ...(fixes.get(probe.literal) ?? []).map(probeOf)]))
+      let found = search(queryWith(new Map()))
+      let corrections: { from: string; to: string[] }[] | undefined
+      if (!found.length && !exact) {
+        const docs = new Map<string, number>()
+        for (const { parts } of records)
+          for (const literal of new Set(parts.flatMap(({ words: held }) => held.map((word) => word.literal))))
+            docs.set(literal, (docs.get(literal) ?? 0) + 1)
+        const vocabulary: Vocabulary = {
+          knownTerms: async (terms) => new Set(terms.filter((term) => docs.has(term))),
+          termCandidates: async (_, { shortest, longest }) =>
+            [...docs]
+              .filter(([term]) => term.length >= shortest && term.length <= longest)
+              .map(([term, count]) => ({ term, docs: count })),
+        }
+        const unmatched = probes
+          .flat()
+          .filter((probe) => ![...stored.values()].some((word) => wordMatches(probe, word, false)))
+          .map(({ literal }) => literal)
+        const fixes = unmatched.length ? await correctWords(vocabulary, [...new Set(unmatched)]) : new Map()
+        if (fixes.size) {
+          corrections = [...fixes].map(([from, to]) => ({ from, to }))
+          found = search(queryWith(fixes))
+        }
+      }
       return found
         .sort(
           (a, b) =>
@@ -762,7 +927,13 @@ export const dealOperationsOver = (context: StoreContext) => {
             Number(b.row.id) - Number(a.row.id),
         )
         .slice(0, most)
-        .map(({ kind, row }) => read(`${kind}:${row.id}`))
+        .map(
+          ({ kind, row, matched }): FoundDeal => ({
+            ...read(`${kind}:${row.id}`),
+            matched,
+            ...(corrections ? { corrections } : {}),
+          }),
+        )
     },
     setProject: (reference: string, { project, by }: { project: string | null; by: Author }): Deal => {
       authorActor(context, by)

@@ -390,6 +390,8 @@ export const allHitItem = (item: SearchAllItem): HitItem =>
         sender_is_me: item.senderIsMe,
         sender_ref: item.from?.ref,
         found_by: item.foundBy,
+        match: item.match,
+        corrections: item.corrections,
         review: item.review,
         source_record:
           item.sourceRecord === undefined
