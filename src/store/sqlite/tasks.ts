@@ -28,7 +28,7 @@ import {
 } from "./task-category-settings.js"
 import { CLEAR_SUGGESTION, type CloseSuggestion, closeSuggestionOf, SUGGESTION_COLUMNS } from "./task-close.js"
 import { type TaskCloseStore, taskCloseOver } from "./task-close-store.js"
-import { inboxKey, typedKey } from "./task-keys.js"
+import { INBOX_KEY_LENGTH, inboxKey, typedKey } from "./task-keys.js"
 import { type TaskPairs, taskPairsOver } from "./task-pairs.js"
 import { type TaskStats, taskStatsOver } from "./task-stats.js"
 import { displayTitleOf } from "./task-titles.js"
@@ -109,11 +109,23 @@ export const inboxProject = (
 export const taskStoreOver = (context: StoreContext): StoreTaskStore => {
   const { database, now } = context
   const inbox = (account: string, create: boolean) => inboxProject(context, account, create)
-  // A task made here has no package id and may be a type the package does not know; the package never sees it.
+  // A task made here has no package id and may be a type the package does not know; the package never sees it,
+  // nor a found task the owner moved into a project.
   const select = (where: string) =>
     database.prepare(
-      `SELECT ${COLUMNS} FROM tasks t JOIN projects p ON p.id = t.project_id WHERE t.package_id IS NOT NULL AND ${where}`,
+      `SELECT ${COLUMNS} FROM tasks t JOIN projects p ON p.id = t.project_id WHERE t.package_id IS NOT NULL ` +
+        `AND length(p.key) = ${INBOX_KEY_LENGTH} AND ${where}`,
     )
+  /** The message kind a task was found as, though it may be a bug or a chore in its project now. */
+  const kindFound = (row: Record<string, unknown>): unknown =>
+    (TASK_KINDS as readonly unknown[]).includes(row.type)
+      ? row.type
+      : database
+          .prepare(
+            "SELECT json_extract(changes, '$.type[0]') AS kind FROM task_events WHERE task_id = ? AND kind = 'type' " +
+              "ORDER BY id LIMIT 1",
+          )
+          .get(Number(row.row_id))?.kind
   const toTask = (row: Record<string, unknown>): Task => {
     const task: Task = {
       id: String(row.package_id),
@@ -194,6 +206,15 @@ export const taskStoreOver = (context: StoreContext): StoreTaskStore => {
         .all(project, source)
         .map(toTask)
       if (!linked || own.length > 0) return own
+      // A rule must not find a message again once its task moved into a project, so that task still counts as seen.
+      const moved = database
+        .prepare(
+          `SELECT ${COLUMNS} FROM tasks t JOIN projects p ON p.id = t.project_id WHERE t.package_id IS NOT NULL ` +
+            "AND t.source_locator = ? AND EXISTS (SELECT 1 FROM task_events e WHERE e.task_id = t.id " +
+            "AND e.kind = 'project' AND json_extract(e.changes, '$.project[0]') = ?) ORDER BY t.created_at, t.id",
+        )
+        .all(source, `project:${project}`)
+      if (moved.length > 0) return moved.map((row) => toTask({ ...row, account, type: kindFound(row) }))
       let message: ReturnType<typeof thingOf>
       try {
         message = thingOf(database, source)

@@ -84,7 +84,8 @@ const wordsMatch = (node: Predicate): string | undefined => {
 }
 
 const projectWhere = (node: Predicate): Where => {
-  if (node.operator === "wildcard" && node.value === "*") return { sql: "1", params: [] }
+  if (node.operator === "wildcard" && node.value === "*")
+    return { sql: `t.project_id IN (${OWNER_PROJECTS})`, params: [] }
   const id = /^project:(\d+)$/.exec(node.value.trim())?.[1]
   if (id !== undefined) return { sql: "t.project_id = ?", params: [Number(id)] }
   const key = node.value.trim().toUpperCase()
@@ -245,8 +246,11 @@ export const projectTaskColumns = (now: number, zone: string, database: CacheDat
   },
 })
 
-/** Live tasks of the owner's projects; an account's inbox is listed by its account, never here. */
-export const BOARD_SCOPE = `t.deleted_at IS NULL AND t.project_id IN (${OWNER_PROJECTS})`
+/** Live tasks of the owner's projects, without the tasks found in messages. */
+export const PROJECT_SCOPE = `t.deleted_at IS NULL AND t.project_id IN (${OWNER_PROJECTS})`
+
+/** Every live task: the owner's projects and the tasks found in messages, which wait in each account's inbox. */
+export const BOARD_SCOPE = "t.deleted_at IS NULL AND t.project_id IN (SELECT id FROM projects WHERE deleted_at IS NULL)"
 
 const STATE_ORDER = `CASE t.status ${TASK_STATES.map((state, at) => `WHEN '${state}' THEN ${at}`).join(" ")} END`
 

@@ -161,7 +161,14 @@ export const agendaService = (deps: ServiceDeps, now: () => number = Date.now): 
     const parts = query ? split(query) : { tasks: undefined, chats: undefined }
     const find = (where?: Where) =>
       store.tasks
-        .find({ project: inboxKey(taskAccount(account)), status: "open", limit: 500, ...(where ? { where } : {}) })
+        .find({
+          project: inboxKey(taskAccount(account)),
+          limit: 500,
+          where: {
+            sql: `t.status NOT IN ('done', 'dismissed') AND (${where?.sql || "1"})`,
+            params: where?.params ?? [],
+          },
+        })
         .catch((error: unknown) => {
           // An account that never had a task has no inbox project yet.
           if (error instanceof Error && "code" in error && error.code === "not_found") return []
