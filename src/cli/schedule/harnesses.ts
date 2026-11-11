@@ -1,4 +1,4 @@
-import { basename } from "node:path"
+import { basename, join } from "node:path"
 import { type AgentCli, findProgram } from "../../background/schedules.js"
 
 /**
@@ -19,6 +19,16 @@ interface HarnessRun {
   folders: string[]
   leanStart: boolean
   maxCost?: number
+  /** The schedule's own folder, the run's working folder, where `files` are written before each run. */
+  folder: string
+}
+
+/** How a harness starts: its argv, the variables it reads its limits from, and files written into the run's folder. */
+interface HarnessStart {
+  argv: string[]
+  environment?: Record<string, string>
+  /** Paths relative to the schedule's folder, and what each holds. */
+  files?: Record<string, string>
 }
 
 interface HarnessKind {
@@ -30,14 +40,29 @@ interface HarnessKind {
   /** It reports what a run cost, so the cost caps can stop it; one that does not is never stopped by cost. */
   reportsCost: boolean
   /**
-   * The harness itself holds the agent to the CLIs' commands (claude) or to their folders (codex's sandbox). Any other
-   * approves every command in its one-shot mode, and only `<PREFIX>_READ_ONLY`, a variable it could unset, stops a send.
+   * The harness itself holds the agent to the CLIs' commands, as its docs say its one-shot mode does, or to their
+   * folders (codex's sandbox). One that is not would run any command, so no schedule starts it, as the owner ruled.
    */
   restricted: boolean
-  argv(run: HarnessRun): string[]
+  /** Why it is not restricted: what its docs offer for a one-shot run, and why that does not hold it to the CLIs. */
+  restrictedReason?: string
+  start(run: HarnessRun): HarnessStart
 }
 
 const modelFlag = (flag: string, model: string) => (model ? [flag, model] : [])
+
+/** A command that chains, pipes, substitutes or redirects: more than the one CLI command a prefix rule allows. */
+const CHAINED = "[;&|`$<>\\n]"
+
+/** One Gemini policy rule as TOML; every value is a string or a number. */
+const rule = (fields: Record<string, string | number>) =>
+  [
+    "[[rule]]",
+    ...Object.entries(fields).map(
+      ([key, value]) => `${key} = ${typeof value === "number" ? value : JSON.stringify(value)}`,
+    ),
+    "",
+  ].join("\n")
 
 /**
  * The coding agents a schedule may start, by the ids WireCat Desktop's Agents page uses. Only agents whose vendor
@@ -52,20 +77,22 @@ const AGENT_HARNESSES = {
     model: "sonnet",
     reportsCost: true,
     restricted: true,
-    argv: ({ program, prompt, model, clis, leanStart, maxCost }) => [
-      program,
-      "-p",
-      prompt,
-      // The owner's own settings may let every tool run (bypassPermissions); here only the CLI may.
-      "--permission-mode",
-      "dontAsk",
-      "--allowedTools",
-      ...clis.map((one) => `Bash(${one.command}:*)`),
-      "--no-session-persistence",
-      ...modelFlag("--model", model),
-      ...(leanStart ? LEAN_CLAUDE : []),
-      ...(maxCost ? ["--max-budget-usd", String(maxCost)] : []),
-    ],
+    start: ({ program, prompt, model, clis, leanStart, maxCost }) => ({
+      argv: [
+        program,
+        "-p",
+        prompt,
+        // The owner's own settings may let every tool run (bypassPermissions); here only the CLI may.
+        "--permission-mode",
+        "dontAsk",
+        "--allowedTools",
+        ...clis.map((one) => `Bash(${one.command}:*)`),
+        "--no-session-persistence",
+        ...modelFlag("--model", model),
+        ...(leanStart ? LEAN_CLAUDE : []),
+        ...(maxCost ? ["--max-budget-usd", String(maxCost)] : []),
+      ],
+    }),
   },
   // https://learn.chatgpt.com/docs/non-interactive-mode
   codex: {
@@ -75,20 +102,22 @@ const AGENT_HARNESSES = {
     model: "",
     reportsCost: false,
     restricted: true,
-    argv: ({ program, prompt, model, folders }) => [
-      program,
-      "exec",
-      "--skip-git-repo-check",
-      "--ephemeral",
-      "--sandbox",
-      "workspace-write",
-      // The CLIs reach their provider and write the store and their own state, and nothing else.
-      "-c",
-      "sandbox_workspace_write.network_access=true",
-      ...modelFlag("--model", model),
-      ...folders.flatMap((dir) => ["--add-dir", dir]),
-      prompt,
-    ],
+    start: ({ program, prompt, model, folders }) => ({
+      argv: [
+        program,
+        "exec",
+        "--skip-git-repo-check",
+        "--ephemeral",
+        "--sandbox",
+        "workspace-write",
+        // The CLIs reach their provider and write the store and their own state, and nothing else.
+        "-c",
+        "sandbox_workspace_write.network_access=true",
+        ...modelFlag("--model", model),
+        ...folders.flatMap((dir) => ["--add-dir", dir]),
+        prompt,
+      ],
+    }),
   },
   // https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/headless.md
   gemini: {
@@ -96,9 +125,25 @@ const AGENT_HARNESSES = {
     programs: ["gemini"],
     model: "",
     reportsCost: false,
-    restricted: false,
-    // A one-shot run cannot answer a prompt to approve, so every tool runs.
-    argv: ({ program, prompt, model }) => [program, "-p", prompt, "--approval-mode", "yolo", ...modelFlag("-m", model)],
+    // https://github.com/google-gemini/gemini-cli/blob/main/docs/reference/policy-engine.md: a rule that would ask "is
+    // treated as deny" in non-interactive mode, and write tools ask by default. A project's own policies do not apply,
+    // so the system settings file names this policy.
+    restricted: true,
+    start: ({ program, prompt, model, clis, folder }) => ({
+      argv: [program, "-p", prompt, ...modelFlag("-m", model)],
+      environment: { GEMINI_CLI_SYSTEM_SETTINGS_PATH: join(folder, "gemini", "settings.json") },
+      files: {
+        "gemini/settings.json": JSON.stringify({ policyPaths: [join(folder, "gemini", "policy.toml")] }),
+        "gemini/policy.toml": [
+          rule({ toolName: "run_shell_command", decision: "deny", priority: 10 }),
+          ...clis.map((one) =>
+            rule({ toolName: "run_shell_command", commandPrefix: `${one.command} `, decision: "allow", priority: 100 }),
+          ),
+          // How a prefix rule treats `memo x && rm …` is not documented; a chained or substituted command is refused.
+          rule({ toolName: "run_shell_command", commandRegex: CHAINED, decision: "deny", priority: 200 }),
+        ].join("\n"),
+      },
+    }),
   },
   // https://cursor.com/docs/cli/headless
   cursor: {
@@ -107,17 +152,17 @@ const AGENT_HARNESSES = {
     programs: ["cursor-agent", "agent"],
     model: "",
     reportsCost: false,
-    restricted: false,
-    argv: ({ program, prompt, model }) => [
-      program,
-      "-p",
-      prompt,
-      "--force",
-      "--trust",
-      "--output-format",
-      "text",
-      ...modelFlag("--model", model),
-    ],
+    // https://cursor.com/docs/cli/reference/permissions: without --force "anything that would need approval is
+    // rejected"; print mode writes files even so, and a deny wins over an allow.
+    restricted: true,
+    start: ({ program, prompt, model, clis }) => ({
+      argv: [program, "-p", prompt, "--output-format", "text", ...modelFlag("--model", model)],
+      files: {
+        ".cursor/cli.json": JSON.stringify({
+          permissions: { allow: [...clis.map((one) => `Shell(${one.command})`), "Read(**)"], deny: ["Write(**)"] },
+        }),
+      },
+    }),
   },
   // https://opencode.ai/docs/cli
   opencode: {
@@ -125,9 +170,23 @@ const AGENT_HARNESSES = {
     programs: ["opencode"],
     model: "",
     reportsCost: false,
-    restricted: false,
-    // Its models are `provider/model`.
-    argv: ({ program, prompt, model }) => [program, "run", ...modelFlag("-m", model), prompt],
+    // https://opencode.ai/docs/permissions/: "configured deny rules always remain enforced", the last matching rule
+    // wins, and a rule applies to every part of a chained command. Never --auto. The variable, as a project file is
+    // looked for from the working folder up to the root.
+    restricted: true,
+    start: ({ program, prompt, model, clis }) => ({
+      // Its models are `provider/model`.
+      argv: [program, "run", ...modelFlag("-m", model), prompt],
+      environment: {
+        OPENCODE_CONFIG_CONTENT: JSON.stringify({
+          permissions: [
+            { action: "shell", resource: "*", effect: "deny" },
+            ...clis.map((one) => ({ action: "shell", resource: `${one.command} *`, effect: "allow" })),
+            { action: "edit", resource: "*", effect: "deny" },
+          ],
+        }),
+      },
+    }),
   },
   // https://docs.openclaw.ai/cli/agent
   openclaw: {
@@ -136,8 +195,12 @@ const AGENT_HARNESSES = {
     model: "",
     reportsCost: false,
     restricted: false,
-    // `exec` runs one turn without the Gateway, final text on stdout.
-    argv: ({ program, prompt, model }) => [program, "agent", "exec", prompt, ...modelFlag("--model", model)],
+    restrictedReason:
+      "its command allow-list (https://docs.openclaw.ai/tools/exec-approvals.md) lives in its own state database, and " +
+      "its docs do not say it holds for a one-shot `agent exec` run",
+    start: ({ program, prompt, model }) => ({
+      argv: [program, "agent", "exec", prompt, ...modelFlag("--model", model)],
+    }),
   },
   // https://hermes-agent.nousresearch.com/docs/reference/cli-commands
   hermes: {
@@ -146,8 +209,10 @@ const AGENT_HARNESSES = {
     model: "",
     reportsCost: false,
     restricted: false,
-    // -Q answers once and prints only the answer; --yolo, as no one is there to approve a command.
-    argv: ({ program, prompt, model }) => [program, "chat", "-q", prompt, "-Q", "--yolo", ...modelFlag("-m", model)],
+    restrictedReason:
+      "it checks only commands on its list of dangerous patterns and runs any other " +
+      "(https://hermes-agent.nousresearch.com/docs/user-guide/security/); it has no allow-list",
+    start: ({ program, prompt, model }) => ({ argv: [program, "chat", "-q", prompt, "-Q", ...modelFlag("-m", model)] }),
   },
   // https://docs.x.ai/build/cli/headless-scripting
   grok: {
@@ -155,9 +220,24 @@ const AGENT_HARNESSES = {
     programs: ["grok"],
     model: "",
     reportsCost: false,
-    restricted: false,
-    // xAI's Grok Build and superagent's grok-cli both install `grok`; these are the flags both take.
-    argv: ({ program, prompt, model }) => [program, "-p", prompt, ...modelFlag("-m", model)],
+    // https://docs.x.ai/build/features/permissions: dontAsk "silently denies anything without an explicit allow rule",
+    // for headless runs. superagent's grok-cli, which installs `grok` too, has no such flags and refuses the run.
+    restricted: true,
+    start: ({ program, prompt, model, clis }) => ({
+      argv: [
+        program,
+        "-p",
+        prompt,
+        "--permission-mode",
+        "dontAsk",
+        ...clis.flatMap((one) => ["--allow", `Bash(${one.command} *)`]),
+        "--allow",
+        "Read",
+        "--allow",
+        "Grep",
+        ...modelFlag("-m", model),
+      ],
+    }),
   },
   // https://moonshotai.github.io/kimi-cli/en/customization/print-mode.html
   kimi: {
@@ -166,8 +246,10 @@ const AGENT_HARNESSES = {
     model: "",
     reportsCost: false,
     restricted: false,
-    // --quiet is print mode with the final message only; print mode approves every tool.
-    argv: ({ program, prompt, model }) => [program, "--quiet", "-p", prompt, ...modelFlag("-m", model)],
+    restrictedReason:
+      "print mode approves every tool call and has no allow-list " +
+      "(https://moonshotai.github.io/kimi-cli/en/customization/print-mode.html); its docs do not say a hook runs there",
+    start: ({ program, prompt, model }) => ({ argv: [program, "--quiet", "-p", prompt, ...modelFlag("-m", model)] }),
   },
 } as const satisfies Record<string, HarnessKind>
 
@@ -186,8 +268,15 @@ export const isHarness = (id: string): id is Harness => (HARNESSES as readonly s
 
 /** An agent's name, programs and what holds it, as `schedule agents list` answers them. */
 export const harnessInfo = (harness: Harness) => {
-  const { name, programs, reportsCost, restricted } = harnessOf(harness)
-  return { id: harness, name, programs: [...programs], reportsCost, restricted }
+  const { name, programs, reportsCost, restricted, restrictedReason } = harnessOf(harness)
+  return {
+    id: harness,
+    name,
+    programs: [...programs],
+    reportsCost,
+    restricted,
+    restrictedReason: restrictedReason ?? null,
+  }
 }
 
 /** Whether the harness reports what a run cost; the cost caps hold only for one that does. */

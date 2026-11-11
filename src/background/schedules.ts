@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process"
 import { createHash } from "node:crypto"
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
-import { basename, join } from "node:path"
+import { basename, dirname, join, relative } from "node:path"
 import { CliError, errorCodes, writeSecurely } from "@wirecat/cli-base"
 import { linkConfigOf, linkFor } from "../domain/links.js"
 import { type AppIdentity, mailHolderVariable, readOnlyLockOf } from "../ports/app.js"
@@ -60,6 +60,8 @@ export interface Schedule {
   to?: string[]
   /** Kept with no timer: `schedule run` still runs it, and `schedule resume` puts the timer back. */
   paused?: true
+  /** An agent's: files its harness reads its limits from, by path in the schedule's folder; written before each run. */
+  files?: Record<string, string>
 }
 
 export const NOTIFY_WHEN = ["always", "failures", "never"] as const
@@ -828,6 +830,12 @@ export const attemptSchedule = async (
     // A skip every few minutes would otherwise push the kept runs' files out of runs/.
     rmSync(join(runs, `${stamp}.jsonl`), { force: true })
     return { repeated: before }
+  }
+  for (const [path, body] of Object.entries(agent ? (schedule.files ?? {}) : {})) {
+    const file = join(folder, path)
+    if (relative(folder, file).startsWith("..")) continue
+    mkdirSync(dirname(file), { recursive: true })
+    writeFileSync(file, body, { mode: 0o600 })
   }
   let costUsd: number | undefined
   const exitCode = await new Promise<number>((resolve) => {

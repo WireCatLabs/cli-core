@@ -63,7 +63,7 @@ const setup = (programs: string[]) => {
 }
 
 describe.runIf(process.platform !== "win32")("agents other than claude", () => {
-  it("lists every agent, which are on PATH, and whether each reports cost", async () => {
+  it("lists every agent, which are on PATH, whether each reports cost, and why one may not run", async () => {
     const { bin, call } = setup(["claude", "kimi", "agent"])
     const listed = await call("agents", "list", "--json")
     expect(listed.code, listed.err).toBe(0)
@@ -79,35 +79,93 @@ describe.runIf(process.platform !== "win32")("agents other than claude", () => {
       name: "Gemini CLI",
       programs: ["gemini"],
       reports_cost: false,
-      restricted: false,
+      restricted: true,
+      restricted_reason: null,
       installed: false,
       path: null,
     })
+    expect(items.find((one) => one.id === "kimi")).toMatchObject({
+      restricted: false,
+      restricted_reason: expect.stringContaining("approves every tool call"),
+    })
   })
 
-  it("starts each agent in its one-shot mode with its own model flag", async () => {
-    const { bin, call, argvOf } = setup(["gemini", "hermes", "opencode"])
+  it("refuses an agent that would run any command, saying why", async () => {
+    const { call } = setup(["openclaw", "hermes", "kimi"])
+    for (const harness of ["openclaw", "hermes", "kimi"]) {
+      const refused = await call("agent", "x", harness, "brief me", "--at", "08:30")
+      expect(refused.code).not.toBe(0)
+      expect(refused.err).toContain("agent.unrestricted")
+    }
+  })
+
+  it("starts each agent in its one-shot mode, held to the CLI's commands, with its own model flag", async () => {
+    const { bin, call, argvOf } = setup(["gemini", "grok", "opencode", "cursor-agent"])
     expect((await call("agent", "g", "gemini", "brief me", "--at", "08:30", "--model", "gemini-pro")).code).toBe(0)
-    expect(argvOf("g")).toEqual([join(bin, "gemini"), "-p", "brief me", "--approval-mode", "yolo", "-m", "gemini-pro"])
-    expect((await call("agent", "h", "hermes", "brief me", "--at", "08:30")).code).toBe(0)
-    expect(argvOf("h")).toEqual([join(bin, "hermes"), "chat", "-q", "brief me", "-Q", "--yolo"])
+    expect(argvOf("g")).toEqual([join(bin, "gemini"), "-p", "brief me", "-m", "gemini-pro"])
+    expect((await call("agent", "k", "grok", "brief me", "--at", "08:30")).code).toBe(0)
+    expect(argvOf("k")).toEqual([
+      join(bin, "grok"),
+      "-p",
+      "brief me",
+      "--permission-mode",
+      "dontAsk",
+      "--allow",
+      "Bash(chat *)",
+      "--allow",
+      "Read",
+      "--allow",
+      "Grep",
+    ])
     expect(
       (await call("agent", "o", "opencode", "brief me", "--at", "08:30", "--model", "provider/model-a")).code,
     ).toBe(0)
     expect(argvOf("o")).toEqual([join(bin, "opencode"), "run", "-m", "provider/model-a", "brief me"])
-    expect(harnessOfArgv(argvOf("o"))).toBe("opencode")
+    expect((await call("agent", "c", "cursor", "brief me", "--at", "08:30")).code).toBe(0)
+    expect(argvOf("c")).toEqual([join(bin, "cursor-agent"), "-p", "brief me", "--output-format", "text"])
+    expect(argvOf("c")).not.toContain("--force")
   })
 
-  it("gives every agent the prompt and its model, and reads the agent back from what it saved", async () => {
-    const programs = ["claude", "codex", "gemini", "cursor-agent", "opencode", "openclaw", "hermes", "grok", "kimi"]
-    const { call, argvOf } = setup(programs)
-    for (const harness of HARNESSES) {
+  it("gives every agent it may start the prompt and its model, and reads the agent back from what it saved", async () => {
+    const { call, argvOf } = setup(["claude", "codex", "gemini", "cursor-agent", "opencode", "grok"])
+    for (const harness of ["claude", "codex", "gemini", "cursor", "opencode", "grok"]) {
       const added = await call("agent", harness, harness, "brief me", "--at", "08:30", "--model", "model-a")
       expect(added.code, added.err).toBe(0)
       const argv = argvOf(harness)
       expect(argv).toEqual(expect.arrayContaining(["brief me", "model-a"]))
       expect(harnessOfArgv(argv)).toBe(harness)
     }
+  })
+
+  it("gives gemini, cursor and opencode their limits when the run starts", async () => {
+    const { bin, env, call } = setup([])
+    const script = (body: string) => `#!/bin/sh\n${body}\n`
+    writeFileSync(
+      join(bin, "gemini"),
+      script('/bin/cat "$GEMINI_CLI_SYSTEM_SETTINGS_PATH"; echo; /bin/cat gemini/policy.toml'),
+    )
+    writeFileSync(join(bin, "cursor-agent"), script("/bin/cat .cursor/cli.json"))
+    writeFileSync(join(bin, "opencode"), script('printf %s "$OPENCODE_CONFIG_CONTENT"'))
+    for (const name of ["gemini", "cursor-agent", "opencode"]) chmodSync(join(bin, name), 0o755)
+    const ran = async (harness: string) => {
+      expect((await call("agent", harness, harness, "brief me", "--at", "08:30")).code).toBe(0)
+      const last = await runSchedule(app, system, env, scheduleFile(env.CHAT_STATE_DIR, harness), {})
+      expect(last.exitCode).toBe(0)
+      return readFileSync(last.output, "utf8")
+    }
+    const gemini = await ran("gemini")
+    expect(gemini).toContain('"policyPaths":[')
+    expect(gemini).toContain('toolName = "run_shell_command"\ndecision = "deny"\npriority = 10')
+    expect(gemini).toContain('commandPrefix = "chat "\ndecision = "allow"')
+    expect(gemini).toContain("commandRegex")
+    expect(JSON.parse(await ran("cursor"))).toEqual({
+      permissions: { allow: ["Shell(chat)", "Read(**)"], deny: ["Write(**)"] },
+    })
+    expect(JSON.parse(await ran("opencode")).permissions).toEqual([
+      { action: "shell", resource: "*", effect: "deny" },
+      { action: "shell", resource: "chat *", effect: "allow" },
+      { action: "edit", resource: "*", effect: "deny" },
+    ])
   })
 
   it("refuses a cost cap for an agent that reports no cost, and lists its cost as unknown", async () => {

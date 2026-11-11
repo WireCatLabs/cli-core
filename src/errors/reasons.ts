@@ -117,6 +117,11 @@ const OTHERS: Entry[] = [
   validation("finding.unknown-field", "a finding has a field its kind does not take"),
   validation("finding.quote-not-found", "a finding's quote is not in the text it cites, word for word"),
   validation("finding.missing-field", "a finding leaves out a field its kind needs"),
+  [
+    "agent.unrestricted",
+    "permission_error",
+    "nothing holds this agent to the CLI's commands, so no schedule starts it",
+  ],
   validation("agent.cost-unknown", "the agent reports no cost, so a cost cap cannot stop it"),
   validation("document.changed", "the document changed while it was read; nothing was saved"),
   ["document.not-imported", "not_found", "the document is not imported in this source account"],

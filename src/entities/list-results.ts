@@ -106,6 +106,8 @@ export const scheduleHarness = v.strictObject({
    * its one-shot mode, and only the read-only variable keeps it from sending.
    */
   restricted: v.boolean(),
+  /** Why an agent that is not restricted is not: a schedule refuses it (`agent.unrestricted`), and a client greys it. */
+  restricted_reason: v.nullable(text),
   installed: v.boolean(),
   /** Where its program is, or null when it is not on PATH. */
   path: v.nullable(text),

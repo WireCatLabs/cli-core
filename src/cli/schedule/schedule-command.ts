@@ -429,6 +429,13 @@ export const agentSchedule = (site: ScheduleSite, spec: AgentScheduleSpec): Sche
       agents: HARNESSES,
     })
   const kind = harnessOf(harness)
+  // The owner's ruling: a background agent that may run any command is never started.
+  if (!kind.restricted)
+    throw new CliError(
+      "permission_error",
+      `${kind.name} cannot run on a schedule: ${kind.restrictedReason ?? "nothing holds it to this tool's commands"}`,
+      { reason: "agent.unrestricted" },
+    )
   const model = spec.model ?? limits.models?.[harness] ?? AGENT_MODELS[harness]
   const program = programOf(harness, env, system.platform)
   if (!program) throw new CliError("not_found", `${kind.programs.join(" or ")} is not on PATH`)
@@ -437,21 +444,24 @@ export const agentSchedule = (site: ScheduleSite, spec: AgentScheduleSpec): Sche
     const paths = resolvePaths({ appName: one.appName, prefix: one.envPrefix, env })
     return [paths.state, paths.config, paths.cache]
   })
-  const argv = kind.argv({
+  const name = scheduleName(spec.name)
+  const start = kind.start({
     program,
     prompt,
     model,
     clis,
     folders: [dirname(storePath(env)), ...folders],
     leanStart: limits.leanStart ?? true,
+    folder: dirname(scheduleFile(scheduleState(site), name)),
     ...(spec.maxCost && kind.reportsCost ? { maxCost: spec.maxCost } : {}),
   })
   return {
-    name: scheduleName(spec.name),
+    name,
     kind: "agent",
-    argv,
+    argv: start.argv,
     when: spec.when,
-    environment: scheduleEnvironment(site),
+    environment: { ...scheduleEnvironment(site), ...start.environment },
+    ...(start.files ? { files: start.files } : {}),
     createdAt: new Date().toISOString(),
     ...(spec.onNewMail ? { onNewMail: spec.onNewMail } : {}),
     ...(spec.mailWaitMinutes === undefined ? {} : { mailWaitMinutes: spec.mailWaitMinutes }),
@@ -699,7 +709,7 @@ export const scheduleCommandFor = ({
       }),
     )
       .description(
-        `start an agent (${HARNESSES.join(", ")}) with a prompt on a timer; it runs with ${agentClis.map((one) => `${one.envPrefix}_READ_ONLY=1`).join(" and ")}, so it reads and drafts and does not send; claude and codex are also held to that by their own limits, the others approve every command — its answer is kept and you are notified`,
+        `start an agent (${HARNESSES.join(", ")}) with a prompt on a timer; it runs with ${agentClis.map((one) => `${one.envPrefix}_READ_ONLY=1`).join(" and ")}, so it reads and drafts and cannot send, and its own limits hold it to these CLIs' commands; an agent with no such limit is refused (\`schedule agents list\` says which) — its answer is kept and you are notified`,
       )
       .argument("<name>", "lowercase letters, digits and dashes")
       .addArgument(new Argument("<harness>", "the agent to start").choices(HARNESSES))

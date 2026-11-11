@@ -257,6 +257,7 @@ const samples: Record<EntityName, unknown> = {
     programs: ["kimi"],
     reports_cost: false,
     restricted: false,
+    restricted_reason: "print mode approves every tool",
     installed: false,
     path: null,
   },
