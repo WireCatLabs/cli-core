@@ -223,6 +223,16 @@ export const QUERY_FIELDS: readonly MessageField[] = [
     values: ["true", "false"],
   },
   {
+    name: "participants_count",
+    example: "participants_count<10",
+    index: "chats.participants_count",
+    aliases: [],
+    type: "num",
+    operators: [...terms, "range"],
+    normalization: "a whole number; a chat whose size the messenger never told matches no value",
+    support: "A1",
+  },
+  {
     name: "has",
     example: "has:file",
     index: "attachments / messages_fts links / message_transcripts",

@@ -481,6 +481,20 @@ export const PEER_KIND =
 
 const kind: FieldCompiler = messengerOnly(({ value }) => always(bound(`${PEER_KIND} = ?`, value.toLowerCase())))
 
+/** How many people a chat has, as the messenger last said; a chat with no known size matches no value. */
+const participantsCount: FieldCompiler = messengerOnly((node) => {
+  const { operator, value, upper } = node
+  const column = "c.participants_count"
+  if (operator !== "range") return always(bound(`${column} = ?`, Number(value)))
+  const conditions = [
+    ...(value === "*" ? [] : [bound(`${column} ${node.lower_inclusive ? ">=" : ">"} ?`, Number(value))]),
+    ...(upper === undefined || upper === "*"
+      ? []
+      : [bound(`${column} ${node.upper_inclusive ? "<=" : "<"} ?`, Number(upper))]),
+  ]
+  return always(combine(conditions, "AND"))
+})
+
 /** A chat the owner muted, until its mute runs out; a chat whose messenger keeps no mute is not muted. */
 const muted: FieldCompiler = messengerOnly(({ value }) =>
   always(
@@ -629,6 +643,7 @@ export const FIELD_COMPILERS: Readonly<Record<string, FieldCompiler>> = {
   topic,
   kind,
   muted,
+  participants_count: participantsCount,
   has,
   in: inSourceField,
   to: recipient,
