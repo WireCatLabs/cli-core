@@ -72,6 +72,11 @@ const OTHERS: Entry[] = [
   ["model.offline", "permission_error", "downloading a model needs the network; --offline was requested"],
   ["model.key-rejected", "invalid_response", "the model provider refused the API key (401 or 403)"],
   ["model.unreachable", "invalid_response", "the model provider could not be reached over the network"],
+  [
+    "model.empty-answer",
+    "invalid_response",
+    "the model answered nothing; given a picture, it may not read pictures — choose a vision model",
+  ],
   validation("model.address-refused", "the model address must be https, or http only on this computer"),
   [
     "local-only.refused",
@@ -80,6 +85,14 @@ const OTHERS: Entry[] = [
   ],
   ["local-only.owner-only", "permission_error", "only the owner turns local only off, not an agent"],
   ["ai.images-not-allowed", "permission_error", "the AI model may not read pictures; models ai set --allow-remote"],
+  ["picture-reading.off", "permission_error", "picture reading is never; models picture-reading set request"],
+  ["picture-reading.owner-only", "permission_error", "only the owner turns picture reading on, not an agent"],
+  validation("picture-reading.agent-missing", "choose the agent that reads: --agent claude or --agent codex"),
+  validation("picture-reading.not-a-picture", "the file is not a PNG, JPEG or WebP picture"),
+  ["picture-reading.unavailable-file", "not_found", "the picture could not be fetched, or is over the size limit"],
+  ["picture-reading.unavailable", "configuration_error", "the chosen coding agent is not installed"],
+  ["picture-reading.failed", "invalid_response", "the coding agent failed or answered nothing"],
+  ["picture-reading.timeout", "timeout", "the coding agent gave no answer in time"],
   [
     "ai.owner-only",
     "permission_error",

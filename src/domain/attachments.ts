@@ -18,12 +18,14 @@ export interface HitFile {
   kind: string
   name?: string
   size?: number
+  /** The saved copy on this computer, once `messages download` fetched it. */
+  local_path?: string
 }
 
 // The position is taken before the filter: the store numbers every attachment, and `--attachment` takes that number.
 // A server search hit built by an adapter may come without attachments at all.
 export const hitFiles = (attachments: readonly Attachment[] | undefined): HitFile[] =>
-  (attachments ?? []).flatMap(({ kind, name, size }, index) =>
+  (attachments ?? []).flatMap(({ kind, name, size, localPath }, index) =>
     NOT_FILES.has(kind)
       ? []
       : [
@@ -32,6 +34,7 @@ export const hitFiles = (attachments: readonly Attachment[] | undefined): HitFil
             kind,
             ...(name === undefined ? {} : { name }),
             ...(size === undefined ? {} : { size }),
+            ...(localPath === undefined ? {} : { local_path: localPath }),
           },
         ],
   )

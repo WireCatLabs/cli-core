@@ -58,8 +58,10 @@ describe("shared gateway image input", () => {
         const content = body.messages.at(-1).content
         if (provider === "openai") {
           expect(content).toEqual([
+            { type: "text", text: "Transcribe" },
             { type: "image_url", image_url: { url: "data:image/png;base64,AQIDBA==", detail: "high" } },
           ])
+          expect(body.messages).toHaveLength(2)
           expect(body.messages[0].content).toContain("untrusted document data")
           return Response.json({
             choices: [{ finish_reason: "stop", message: { content: "invoice 42" } }],
@@ -67,8 +69,10 @@ describe("shared gateway image input", () => {
           })
         }
         expect(content).toEqual([
+          { type: "text", text: "Transcribe" },
           { type: "image", source: { type: "base64", media_type: "image/png", data: "AQIDBA==" } },
         ])
+        expect(body.messages).toHaveLength(1)
         expect(body.system).toContain("transcribe visible text literally")
         return anthropicAnswer()
       })
@@ -151,5 +155,67 @@ describe("shared gateway image input", () => {
     expect(configured("a")).toBe(configured("a"))
     expect(configured("a")).not.toBe(configured("b"))
     expect(configured("a")).not.toBe(configured("a", "https://example.test/v1"))
+  })
+
+  const answering = (baseUrl: string, body: object) =>
+    modelGateway({
+      resolve: () => ({ provider: "openai", model: "vision-fixture", baseUrl }),
+      consent: () => true,
+      key: () => "synthetic-key",
+      fetch: vi.fn<typeof fetch>(async () => Response.json(body)),
+    }).complete(request)
+  const LOCAL = "http://127.0.0.1:11434/v1"
+  const HOSTED = "https://models.example.test/v1"
+
+  it("names an empty answer, as a model that cannot read pictures gives one (moondream on Ollama)", async () => {
+    for (const content of ["", "  ", null])
+      await expect(
+        answering(LOCAL, {
+          choices: [{ finish_reason: "stop", message: { content } }],
+          usage: { total_tokens: 1, completion_tokens: 1 },
+        }),
+      ).rejects.toMatchObject({ code: "invalid_response", details: { reason: "model.empty-answer" } })
+  })
+
+  it("takes a whole answer from a server on this computer without finish_reason or usage", async () => {
+    const answer = await answering(LOCAL, { choices: [{ finish_reason: null, message: { content: "Invoice 42" } }] })
+    expect(answer).toMatchObject({ text: "Invoice 42", tokens: 3 })
+    expect(answer.usage).toBeUndefined()
+    await expect(
+      answering(LOCAL, { choices: [{ finish_reason: "length", message: { content: "Invoice" } }] }),
+    ).rejects.toMatchObject({ code: "invalid_response" })
+  })
+
+  it("keeps a hosted API strict: no finish_reason or no usage is an incomplete answer", async () => {
+    for (const body of [
+      { choices: [{ finish_reason: null, message: { content: "Invoice 42" } }], usage: { total_tokens: 9 } },
+      { choices: [{ finish_reason: "stop", message: { content: "Invoice 42" } }] },
+    ]) {
+      const refused = answering(HOSTED, body)
+      await expect(refused).rejects.toMatchObject({ code: "invalid_response" })
+      await expect(refused).rejects.not.toMatchObject({ details: { reason: "model.empty-answer" } })
+    }
+  })
+
+  it("gives OCR of an empty answer its own error and a hint to choose a vision model", async () => {
+    const { ocrImage } = await import("../attachments/ocr.js")
+    const png = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
+      "base64",
+    )
+    const gateway = modelGateway({
+      resolve: () => ({ provider: "openai", model: "moondream", baseUrl: LOCAL }),
+      consent: () => true,
+      fetch: vi.fn<typeof fetch>(async () =>
+        Response.json({ choices: [{ finish_reason: "stop", message: { content: "" } }], usage: { total_tokens: 1 } }),
+      ),
+    })
+    const read = await ocrImage(png, {
+      extractor: "ocr:v1:fixture",
+      transcribe: async (one) =>
+        (await gateway.complete({ purpose: "ocr", prompt: "Read", images: [one], maxTokens: 10 })).text,
+    })
+    expect(read).toMatchObject({ status: "unreadable", error: "empty_answer" })
+    expect(read.status === "unreadable" && read.issue?.message).toContain("vision model")
   })
 })

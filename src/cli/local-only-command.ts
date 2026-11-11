@@ -1,6 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
+import { readPictureReading } from "../attachments/picture-reading.js"
 import { chosenTextModel } from "../embeddings/models.js"
 import { aiBaseUrl, aiLeavesComputer, aiSettingPath, readAiSetting } from "../models/ai.js"
 import { onThisComputer } from "../models/endpoint.js"
@@ -106,6 +107,20 @@ const features = (command: string, env: NodeJS.ProcessEnv, on: boolean): Feature
         ? "the downloaded speech model only"
         : "the downloaded speech model first, else the messenger's own service; OpenAI only when asked by name",
     ),
+    ...(() => {
+      const pictures = readPictureReading(env)
+      return [
+        one(
+          "picture_reading",
+          "Picture text read by your coding agent",
+          pictures.mode === "never" ? "off" : "agent",
+          null,
+          pictures.mode === "never"
+            ? `never; \`${command} models picture-reading set request\` turns it on`
+            : `\`${command} images read\` sends one picture to ${pictures.agent}: local only if that agent runs a local model`,
+        ),
+      ]
+    })(),
     one("digest", "Digest", "agent", null, "runs Claude Code or Codex: local only if that agent runs a local model"),
     one("agents", "Agents over MCP", "agent", null, "whatever the agent reads goes to the agent's model"),
   ]

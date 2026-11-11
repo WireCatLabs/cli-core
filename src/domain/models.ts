@@ -220,6 +220,8 @@ export interface Attachment {
   duration?: number
   /** What the adapter needs to fetch the bytes later. Opaque above the adapter. */
   providerRef?: ProviderMetadata
+  /** Where `messages download` saved the file on this computer; only the store knows it. */
+  localPath?: string
   /** A bot's keyboard under the message, row by row. */
   buttons?: Button[][]
   /** The poll the message carries, as it stood when read; drawn for a person, not part of the JSON answer. */

@@ -77,8 +77,12 @@ describe("bounded attachment OCR", () => {
     expect(model.transcribe).not.toHaveBeenCalled()
   })
 
-  it.each(["", " ", "x".repeat(2_000_001)])("never stores an empty or oversized OCR result", async (text) => {
-    expect(await ocrImage(image(), pipeline(text))).toMatchObject({ status: "unreadable", error: "ocr_failed" })
+  it.each([
+    ["", "empty_answer"],
+    [" ", "empty_answer"],
+    ["x".repeat(2_000_001), "ocr_failed"],
+  ])("never stores an empty or oversized OCR result", async (text, error) => {
+    expect(await ocrImage(image(), pipeline(text))).toMatchObject({ status: "unreadable", error })
   })
 
   it("sanitizes provider errors and cancels without accepting a late result", async () => {

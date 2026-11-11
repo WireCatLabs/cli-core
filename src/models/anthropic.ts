@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk"
 import * as v from "valibot"
 import { checkedOptions } from "./options.js"
-import { type ModelAdapter, messagesFor, systemFor } from "./types.js"
+import { EmptyAnswer, type ModelAdapter, messagesFor, systemFor } from "./types.js"
 
 // API version 2026-10-21 refuses temperature, top_p and top_k on every model.
 const options = v.strictObject({
@@ -41,10 +41,13 @@ export const anthropic: ModelAdapter = {
             : [
                 {
                   role: "user" as const,
-                  content: request.images.map((image) => ({
-                    type: "image" as const,
-                    source: { type: "base64" as const, media_type: image.mimeType, data: image.data },
-                  })),
+                  content: [
+                    { type: "text" as const, text: request.prompt },
+                    ...request.images.map((image) => ({
+                      type: "image" as const,
+                      source: { type: "base64" as const, media_type: image.mimeType, data: image.data },
+                    })),
+                  ],
                 },
               ]),
         ],
@@ -52,11 +55,13 @@ export const anthropic: ModelAdapter = {
       })
       .finalMessage()
     if (response.stop_reason !== "end_turn") throw new Error("incomplete response")
+    const text = response.content
+      .filter((block) => block.type === "text")
+      .map((block) => block.text)
+      .join("")
+    if (text.trim() === "") throw new EmptyAnswer()
     return {
-      text: response.content
-        .filter((block) => block.type === "text")
-        .map((block) => block.text)
-        .join(""),
+      text,
       usage: {
         input:
           response.usage.input_tokens +

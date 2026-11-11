@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto"
-import { readFile, stat } from "node:fs/promises"
+import { lstat, readFile } from "node:fs/promises"
 import { setTimeout as sleep } from "node:timers/promises"
 import { CliError } from "@wirecat/cli-base"
 import { formatLocator } from "../domain/locator.js"
@@ -12,7 +12,6 @@ import {
   isImageModelInstalled,
 } from "../images/picture/models.js"
 import { capability, type RemoteFile } from "../ports/messenger.js"
-import type { PictureInput } from "../store/store.js"
 import type { ServiceDeps } from "./deps.js"
 import { refreshedFiles } from "./file-download.js"
 import { storedChatId } from "./message-resolution.js"
@@ -68,6 +67,40 @@ export const plainWords = (query: string): string =>
     .replace(/\s+/g, " ")
     .trim()
 
+/**
+ * A picture's bytes: the saved copy when it is a regular file small enough, else a fresh download through the
+ * messenger. `read` is told which file was downloaded, so its refreshed reference can be kept.
+ */
+export const pictureBytes = async (
+  picture: { localPath: string | null; position: number },
+  files: () => Promise<RemoteFile[]>,
+  read: (file: RemoteFile) => Promise<void>,
+): Promise<Uint8Array | undefined> => {
+  if (picture.localPath) {
+    try {
+      // A link could point the read at another file; a saved copy is never one.
+      const found = await lstat(picture.localPath)
+      if (found.isFile() && found.size <= PICTURE_MAX_BYTES) return await readFile(picture.localPath)
+    } catch {
+      // The saved copy is gone; the messenger still has the picture.
+    }
+  }
+  const images = (await files()).filter(({ kind, mime }) => kind === "photo" || mime?.startsWith("image/"))
+  const file =
+    images.find(({ position }) => position === picture.position) ??
+    (images.every(({ position }) => position === undefined) ? images[0] : undefined)
+  if (!file || (file.size !== undefined && file.size > PICTURE_MAX_BYTES)) return undefined
+  const parts: Uint8Array[] = []
+  let total = 0
+  for await (const part of file.bytes()) {
+    total += part.length
+    if (total > PICTURE_MAX_BYTES) return undefined
+    parts.push(part)
+  }
+  await read(file)
+  return Buffer.concat(parts)
+}
+
 export const picturesService = (deps: ServiceDeps) => {
   let opened: Promise<PictureEmbedder> | undefined
   const open = async (): Promise<PictureEmbedder> => {
@@ -87,34 +120,6 @@ export const picturesService = (deps: ServiceDeps) => {
     return opened
   }
   const model = imageModel(DEFAULT_IMAGE_MODEL)
-
-  const bytesOf = async (
-    picture: PictureInput,
-    files: () => Promise<RemoteFile[]>,
-    read: (file: RemoteFile) => Promise<void>,
-  ): Promise<Uint8Array | undefined> => {
-    if (picture.localPath) {
-      try {
-        if ((await stat(picture.localPath)).size <= PICTURE_MAX_BYTES) return await readFile(picture.localPath)
-      } catch {
-        // The saved copy is gone; the messenger still has the picture.
-      }
-    }
-    const images = (await files()).filter(({ kind, mime }) => kind === "photo" || mime?.startsWith("image/"))
-    const file =
-      images.find(({ position }) => position === picture.position) ??
-      (images.every(({ position }) => position === undefined) ? images[0] : undefined)
-    if (!file || (file.size !== undefined && file.size > PICTURE_MAX_BYTES)) return undefined
-    const parts: Uint8Array[] = []
-    let total = 0
-    for await (const part of file.bytes()) {
-      total += part.length
-      if (total > PICTURE_MAX_BYTES) return undefined
-      parts.push(part)
-    }
-    await read(file)
-    return Buffer.concat(parts)
-  }
 
   return {
     /**
@@ -173,7 +178,7 @@ export const picturesService = (deps: ServiceDeps) => {
               return downloaded.files
             }
             try {
-              const bytes = await bytesOf(picture, files, async (file) => {
+              const bytes = await pictureBytes(picture, files, async (file) => {
                 const refreshed = refreshedFiles([file])
                 if (refreshed.length === 0) return
                 // A ref not saved costs only another fetch; the vector is still worth keeping.
