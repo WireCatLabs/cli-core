@@ -256,6 +256,23 @@ it("keeps the owner's own link out when its other end is a deal of an account ou
   expect(all.items.map((one) => one.from)).toContain(refs.deal)
 })
 
+it("leaves out a relationship whose message is gone", async () => {
+  const path = join(mkdtempSync(join(tmpdir(), "business-")), "store.db")
+  const store = await openStore({ path })
+  stores.push(store)
+  const { refs } = await acmeScenario(store)
+  const made = await store.knowledge.relate(null, { from: refs.bob, to: refs.acme, kind: "related-to", by: "owner" })
+  const before = (await store.knowledge.listRelations({ includeEnded: true, limit: 500 })).items.length
+  const database = await openCache(path)
+  database.prepare("UPDATE links SET from_type = 'message', from_id = 999999 WHERE id = ?").run(made.id)
+  database.close()
+
+  const after = await store.knowledge.listRelations({ includeEnded: true, limit: 500 })
+
+  expect(after.items).toHaveLength(before - 1)
+  expect(after.items.map((one) => one.id)).not.toContain(made.id)
+})
+
 it("calls a role custom only when it is neither built in nor one the owner added to the list", async () => {
   const path = join(mkdtempSync(join(tmpdir(), "business-")), "store.db")
   const store = await openStore({ path })

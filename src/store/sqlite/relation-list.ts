@@ -168,14 +168,17 @@ export const relationListOver = (context: StoreContext): RelationList => {
           ORDER BY r.standing = 'ended', r.created_at, r.source, r.id LIMIT ? OFFSET ?`,
         )
         .all(at, ...params, limit + 1, (page - 1) * limit)
-      const items = rows.slice(0, limit).map((row): RelationListItem => {
+      const items = rows.slice(0, limit).flatMap((row): RelationListItem[] => {
         const item = row.source === "link" ? linkItem(Number(row.id), at) : proposalItem(String(row.id))
-        if (!about) return item
+        if (!item) return []
+        if (!about) return [item]
         const from = thingOf(database, item.from)
         const outgoing = from?.type === about.type && aboutSame.has(from.id)
-        return outgoing
-          ? { ...item, direction: "outgoing" }
-          : { ...item, direction: "incoming", inverse: inverseOf(item.kind) }
+        return [
+          outgoing
+            ? { ...item, direction: "outgoing" }
+            : { ...item, direction: "incoming", inverse: inverseOf(item.kind) },
+        ]
       })
       return { items, hasMore: rows.length > limit }
     },
@@ -194,11 +197,11 @@ export const relationListOver = (context: StoreContext): RelationList => {
     return { roleList, custom }
   }
 
-  function linkItem(id: number, at: number): RelationListItem {
-    const relation = relationOf(
-      linkOf(database, database.prepare("SELECT * FROM links WHERE id = ?").get(id) as Row),
-      at,
-    )
+  /** Nothing for a link whose message or document is gone: the link outlives its end, and has no end to show. */
+  function linkItem(id: number, at: number): RelationListItem | undefined {
+    const link = linkOf(database, database.prepare("SELECT * FROM links WHERE id = ?").get(id) as Row)
+    if (!link.from || !link.to) return undefined
+    const relation = relationOf(link, at)
     return {
       ...relation,
       source: "link",
