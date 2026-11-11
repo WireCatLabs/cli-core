@@ -1,5 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import {
+  type FindingOutcome,
   findingHash,
   MEETING_FINDINGS_KIND,
   type MeetingFindingsInput,
@@ -12,13 +13,20 @@ import {
 import { assertMayDecide, deciderAuthor } from "../decisions.js"
 import type { MeetingFindingsBatch, MeetingFindingsStore } from "../meeting-findings.js"
 import type { AccountKey } from "../types.js"
-import { findingsCoreOver } from "./findings-core.js"
+import { editedFinding, FINDING_EDITS, findingsCoreOver, findingToEdit, pendingOf } from "./findings-core.js"
 import { authorActor } from "./memories.js"
 import type { StoreContext } from "./open.js"
 import { type ProposedAction, proposalOperationsOver } from "./proposed-actions.js"
 import { write } from "./transaction.js"
 
-type StoredInput = MeetingFindingsInput & { inputHash: string; snapshotHash: string; agentModel: string | null }
+type StoredInput = MeetingFindingsInput & {
+  inputHash: string
+  snapshotHash: string
+  agentModel: string | null
+  decided?: FindingOutcome[]
+  accepted?: string[]
+  edited?: string[]
+}
 const stale = (): never => {
   throw new CliError("validation_error", "meeting findings changed since they were read; stage a new batch", {
     reason: "meeting-findings.stale",
@@ -75,10 +83,16 @@ export const meetingFindingsStoreOver = (context: StoreContext): MeetingFindings
       decidedAt: proposal.decidedAt,
       previous: proposal.result
         ? (proposal.result as MeetingFindingsReceipt).items
-        : input.findings.flatMap((finding) => {
-            const held = previous(accountId(proposal.account as AccountKey), meetingFindingFingerprint(finding))
+        : pendingOf(input, input.decided).findings.flatMap((finding) => {
+            const held = previous(
+              accountId(proposal.account as AccountKey),
+              meetingFindingFingerprint(finding),
+              proposal.id,
+            )
             return held ? [{ ...held, id: finding.id, reused: true }] : []
           }),
+      decided: proposal.result ? [] : (input.decided ?? []),
+      edited: input.edited ?? [],
       receipt: proposal.result as MeetingFindingsReceipt | null,
     }
   }
@@ -218,27 +232,71 @@ export const meetingFindingsStoreOver = (context: StoreContext): MeetingFindings
           context.decisions,
         )
         if (batch.receipt) {
-          if (JSON.stringify(batch.receipt.accepted) !== JSON.stringify(accepted))
+          if (!core.sameDecision(batch.receipt, accepted))
             return invalid("this findings batch was already reviewed with a different decision")
           return batch
         }
         const input = proposal.payload as StoredInput
         // Rejecting creates nothing, so a batch whose evidence changed can still be closed.
-        if (accepted.length && snapshot(account, batch.input) !== input.snapshotHash) return stale()
+        if (accepted.length && snapshot(account, pendingOf(batch.input, input.decided)) !== input.snapshotHash)
+          return stale()
         if (proposal.proposedBy.type !== "bot" || !proposal.proposedBy.name)
           return invalid("a findings author must be an agent")
         const agent = {
           bot: proposal.proposedBy.name,
           ...(input.agentModel === null ? {} : { model: input.agentModel }),
         }
-        const items = core.outcomes(account, batch.input, accepted, agent, decision.by)
+        const by = decision.by
+        const { items, pending } = core.settle({
+          batch: id,
+          account,
+          findings: batch.input.findings,
+          decided: input.decided ?? [],
+          accepted,
+          fingerprintOf: meetingFindingFingerprint,
+          make: (finding) => core.create(finding, agent, by),
+        })
+        const named = core.named(input.accepted, accepted)
+        if (pending.length) {
+          core.keepWaiting(id, {
+            ...input,
+            decided: items,
+            accepted: named,
+            snapshotHash: snapshot(account, { ...batch.input, findings: pending }),
+          })
+          return view(load(account, id))
+        }
         return view(
           proposals.approve(
             id,
-            { previewFingerprint: batch.fingerprint, accepted, items } satisfies MeetingFindingsReceipt,
-            deciderAuthor(decision.by),
+            { previewFingerprint: batch.fingerprint, accepted: named, items } satisfies MeetingFindingsReceipt,
+            deciderAuthor(by),
           ),
         )
+      }),
+    edit: async (key, id, finding, changes, options) =>
+      write(database, () => {
+        const account = accountId(key)
+        const proposal = load(account, id)
+        const batch = view(proposal)
+        const original = findingToEdit(batch, finding, options, stale)
+        const input = proposal.payload as StoredInput
+        if (snapshot(account, pendingOf(batch.input, input.decided)) !== input.snapshotHash) return stale()
+        const edited = editedFinding(original, changes, FINDING_EDITS, "meeting finding")
+        const checked = validateMeetingFindings({
+          ...batch.input,
+          findings: batch.input.findings.map((one) => (one.id === finding ? edited : one)),
+        })
+        const fingerprints = checked.findings.map(meetingFindingFingerprint)
+        if (new Set(fingerprints).size !== fingerprints.length) return invalid("the edit makes two findings the same")
+        // The agent's inputHash stays: its rerun of the same key still finds this batch, now as the owner left it.
+        core.keepWaiting(id, {
+          ...input,
+          findings: checked.findings,
+          snapshotHash: snapshot(account, pendingOf(checked, input.decided)),
+          edited: [...new Set([...(input.edited ?? []), finding])],
+        })
+        return view(load(account, id))
       }),
   }
 }

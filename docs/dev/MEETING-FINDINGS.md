@@ -30,10 +30,17 @@ candidate/evidence matching, not semantic duplicate detection against manually c
 
 Only an owner-facing host action should call `review(account, id, { fingerprint, accept })`. A
 producer MCP tool must not expose review. `accept` lists the displayed candidate IDs to create;
-other new candidates are rejected. The entire preview fingerprint must match. Pending review also
+the other candidates keep waiting, and the batch stays `proposed` with what was decided in `decided`. An empty
+`accept` rejects every candidate still waiting and closes the batch; a batch closes too once nothing waits. The
+entire preview fingerprint must match, and each partial review changes it. Pending review also
 rechecks live sources and the project/assignment snapshot when it accepts anything, so edits cannot silently
 change a pending review. Rejecting every candidate creates nothing and needs no recheck, so a stale batch can
 still be closed. Stage a new batch when its preview is stale.
+
+The owner may change a waiting candidate first with `edit(account, id, finding, changes, { fingerprint, by:
+"owner" })`: a fact's `statement`, `type` and `subject`; a task's `title`, `type`, `reason`, `commitment`,
+`dueAt` and `assignee` (each with its `…Evidence`). `null` clears an optional field. Evidence and the project never
+change. The batch keeps the agent's input hash, so the agent's rerun of the same key still finds it.
 
 Review uses one synchronous native transaction. It reuses existing fact and work-task operations,
 records agent provenance, accepts selected facts as the owner, links task evidence, and writes the

@@ -478,3 +478,29 @@ describe("the task board", () => {
     expect((await store.tasks.details(task.id)).revision).toBe(task.revision + 2)
   })
 })
+
+describe("related:", () => {
+  it("lists a deal's tasks through its project, and an organization's through its deals", async () => {
+    const { store, add, keys } = await board()
+    const portal = { provider: "example-crm", account: "portal-a" }
+    await store.crm.savePipelines(portal, "deal", [
+      { externalId: "p1", name: "Sales", stages: [{ externalId: "s1", name: "New", position: 10, outcome: "open" }] },
+    ])
+    await store.crm.saveOrganizations(portal, [{ externalId: "c1", name: "Example LLC" }])
+    await store.crm.saveItems(portal, "deal", [
+      { externalId: "d1", title: "Website", pipeline: "p1", stage: "s1", organization: "c1" },
+    ])
+    const [deal] = await store.deals.list({ account: portal, kind: "deal" })
+    const organization = deal?.organization?.ref as string
+    const harbour = (await store.knowledge.projects()).find(({ key }) => key === "HRB")?.ref as string
+    await store.deals.setProject(deal?.ref as string, { project: harbour, by: "owner" })
+    const own = await add("HRB", "Draft the proposal")
+    await add("OPS", "Renew the lease")
+    const related = async (ref: string) => keys(await store.tasks.board(query(`related:"${ref}"`), { limit: 50 }))
+
+    expect(await related(deal?.ref as string)).toEqual([own.key])
+    expect(await related(organization)).toEqual([own.key])
+    expect(await related("organization:999")).toEqual([])
+    await expect(related("person:1")).rejects.toMatchObject({ code: "validation_error" })
+  })
+})

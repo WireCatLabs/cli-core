@@ -61,6 +61,10 @@ export interface McpCommand {
   availability?: () => CommandAvailability
   title: string
   description: string
+  /** Other names the command answers to, found by search as its own name is. */
+  aliases?: readonly string[]
+  /** Words of its help's examples: an agent's task often uses them, not the command's. */
+  keywords?: readonly string[]
   writes: boolean
   input: Input
   /** The envelope it answers with, when it declares its entity; any envelope otherwise. */
@@ -77,23 +81,74 @@ export const normal = (command: string): string =>
     .split(/[\s_-]+/)
     .join(" ")
 
-const haystack = (command: string, one: McpCommand): string =>
-  [command, one.title, one.description, ...Object.keys(one.input.entries)].join(" ").toLowerCase()
+// Words that carry no task: an agent's phrase keeps its nouns and verbs, which the commands' own words are made of.
+const STOP_WORDS = new Set(
+  (
+    "a an the to of in on at by for from with into out about and or but is are be been was were it its this that " +
+    "these those which who whom whose what when where how do does did can could should would will my our your their " +
+    "his her them they we you i one some any all each every another other"
+  ).split(" "),
+)
+
+const wordsOf = (text: string): string[] =>
+  text
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter(Boolean)
+
+/** A plural, a possessive or a past tense names the same thing: `deals` is `deal`, `ended` is `end`. */
+const stem = (word: string): string => {
+  const bare = word.replace(/'s$/u, "")
+  if (bare.length > 4 && bare.endsWith("ies")) return `${bare.slice(0, -3)}y`
+  for (const ending of ["ing", "ed", "es", "s"])
+    if (bare.length - ending.length >= 3 && bare.endsWith(ending)) return bare.slice(0, -ending.length)
+  return bare
+}
+
+const sameWord = (asked: string, known: string): boolean => {
+  if (asked === known) return true
+  const [short, long] = asked.length <= known.length ? [asked, known] : [known, asked]
+  return short.length >= 3 && long.startsWith(short)
+}
+
+/** Where a word of the task is found, by how much it says about the command: its own name says the most. */
+const fieldsOf = (command: string, one: McpCommand): [number, string[]][] =>
+  [
+    [4, [...wordsOf(command), ...(one.aliases ?? []).flatMap(wordsOf)]],
+    [2, wordsOf(one.title)],
+    [1, [...wordsOf(one.description), ...(one.keywords ?? []).flatMap(wordsOf), ...Object.keys(one.input.entries)]],
+  ].map(([weight, words]) => [weight as number, [...new Set((words as string[]).map(stem))]])
 
 /**
- * Every query word must appear. The command named exactly ranks first, then whole words of the command,
- * then parts of them. No word lists everything.
+ * Ranks by how many words of the task a command matches, then by where they matched: its name, then its title, then
+ * its help, examples and arguments. A task is typed in its own words, so no single word is required. The command
+ * named exactly ranks first. No word lists everything.
  */
 export const search = (commands: Record<string, McpCommand>, query: string): [string, McpCommand][] => {
-  const words = query.toLowerCase().split(/\s+/).filter(Boolean)
-  return Object.entries(commands)
-    .filter(([command, one]) => words.every((word) => haystack(command, one).includes(word)))
+  const named = normal(query)
+  const all = Object.entries(commands)
+  if (!named) return all.map((entry) => entry).sort((a, b) => a[0].localeCompare(b[0]))
+  const words = [
+    ...new Set(
+      wordsOf(query)
+        .filter((word) => word.length > 1 && !STOP_WORDS.has(word))
+        .map(stem),
+    ),
+  ]
+  return all
     .map((entry) => {
-      const parts = entry[0].split(/[\s-]/)
-      const exact = entry[0] === words.join(" ") ? 100 : 0
-      const whole = words.filter((word) => parts.includes(word)).length * 10
-      return { entry, rank: exact + whole + words.filter((word) => entry[0].includes(word)).length }
+      const fields = fieldsOf(entry[0], entry[1])
+      const weights = words.map((word) =>
+        fields.reduce(
+          (best, [weight, known]) => (known.some((one) => sameWord(word, one)) ? Math.max(best, weight) : best),
+          0,
+        ),
+      )
+      const matched = weights.filter((weight) => weight > 0).length
+      const exact = normal(entry[0]) === named || (entry[1].aliases ?? []).some((alias) => normal(alias) === named)
+      return { entry, matched, rank: (exact ? 1000 : 0) + matched * 10 + weights.reduce((a, b) => a + b, 0) }
     })
+    .filter(({ matched, rank }) => matched > 0 || rank >= 1000)
     .sort((a, b) => b.rank - a.rank || a.entry[0].localeCompare(b.entry[0]))
     .map(({ entry }) => entry)
 }

@@ -48,6 +48,14 @@ export interface AppServerOptions {
 /** `mcp` itself is left out: an agent cannot start a server from inside one. */
 const EXCLUDED = [["mcp"]]
 
+// cli-base's command description leaves aliases out, so they are read from the tree itself.
+const aliasesOf = (root: Command, path: readonly string[]): { aliases?: readonly string[] } => {
+  let at: Command | undefined = root
+  for (const name of path) at = at?.commands.find((child) => child.name() === name)
+  const aliases = at?.aliases() ?? []
+  return aliases.length > 0 ? { aliases } : {}
+}
+
 /**
  * Every command of the program is a tool, run in this process through the CLI's own `run` — the same parsing,
  * permissions, guard and answer as on the command line. A fresh server per `build`, as `serveStdio` and each HTTP
@@ -88,6 +96,8 @@ export const createAppServer = (command: Command, context: BaseContext, options:
       {
         title: one.title,
         description: one.description,
+        ...(one.keywords ? { keywords: one.keywords } : {}),
+        ...aliasesOf(root, one.path),
         writes: one.writes,
         availability: availability(one),
         input: one.input,

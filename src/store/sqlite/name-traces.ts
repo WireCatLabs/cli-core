@@ -33,7 +33,7 @@ export interface SharedTrace {
   /** An identity of each side that holds it. */
   identity: number
   with: number
-  kind: "chat" | "email" | "email-domain" | "phone"
+  kind: "chat" | "email" | "crm-company" | "email-domain" | "phone"
   /** The phone or address, for the kinds that have one. */
   value?: string
   evidence: string[]
@@ -106,9 +106,29 @@ const commonChat = (database: CacheDatabase, a: number, b: number) =>
     )
     .get(a, b)
 
+/** An organization the CRM puts both people in, with a CRM identity of each: the owner's CRM, not a mail domain. */
+const crmCompany = (database: CacheDatabase, a: number, b: number) => {
+  const row = database
+    .prepare(
+      "SELECT k1.to_id AS organization, (SELECT min(identity_id) FROM identity_links WHERE person_id = ?) AS one, " +
+        "(SELECT min(identity_id) FROM identity_links WHERE person_id = ?) AS other FROM links k1 " +
+        "JOIN links k2 ON k2.to_type = 'organization' AND k2.to_id = k1.to_id AND k2.kind = 'member-of' " +
+        "AND k2.source = 'crm' AND k2.deleted_at IS NULL AND k2.from_type = 'person' AND k2.from_id = ? " +
+        "WHERE k1.from_type = 'person' AND k1.from_id = ? AND k1.to_type = 'organization' AND k1.kind = 'member-of' " +
+        "AND k1.source = 'crm' AND k1.deleted_at IS NULL ORDER BY k1.to_id LIMIT 1",
+    )
+    .get(a, b, b, a)
+  if (!row || row.one == null || row.other == null) return undefined
+  return {
+    one: row.one,
+    other: row.other,
+    ref: referenceOfThing(database, { type: "organization", id: Number(row.organization) }),
+  }
+}
+
 /**
- * The traces two people share, strongest first: each phone, each address, a chat, a company's domain. `except` is an
- * address left out, with its domain, when it is the very thing being weighed.
+ * The traces two people share, strongest first: each phone, each address, a chat, one company in the CRM, a company's
+ * domain. `except` is an address left out, with its domain, when it is the very thing being weighed.
  */
 export function* sharedTraces(
   database: CacheDatabase,
@@ -147,6 +167,15 @@ export function* sharedTraces(
       reason: `same name «${name}» and a chat they are both in`,
     }
   }
+  const company = crmCompany(database, a, b)
+  if (company)
+    yield {
+      identity: Number(company.one),
+      with: Number(company.other),
+      kind: "crm-company",
+      evidence: company.ref === undefined ? [] : [company.ref],
+      reason: `same name «${name}» and the same company in the CRM`,
+    }
   const domain = common(one.domains, other.domains).next().value
   if (domain)
     yield {

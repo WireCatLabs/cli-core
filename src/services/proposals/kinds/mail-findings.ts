@@ -40,7 +40,7 @@ const summaryOf = (finding: MailFinding): string => {
 
 const rowOf = (batch: MailFindingsBatch, createdAt: string): ProposalRow => {
   const findings = batch.input.findings
-  const outcome = (id: string) => batch.receipt?.items.find((item) => item.id === id)?.status ?? null
+  const outcome = (id: string) => (batch.receipt?.items ?? batch.decided).find((item) => item.id === id)?.status ?? null
   const project =
     findings.flatMap((finding) => ("project" in finding && finding.project ? [finding.project] : []))[0] ?? null
   return {
@@ -70,7 +70,7 @@ const rowOf = (batch: MailFindingsBatch, createdAt: string): ProposalRow => {
  * What an agent read in new mail, one batch per mailbox and run. Only the owner decides it — mail is text a stranger
  * wrote, so an agent that read it must not also approve what it made of it: an agent's confirmation is refused
  * whatever `agent_decisions` says. Confirming accepts the parts named, or every finding not
- * rejected before; the rest are rejected.
+ * rejected before; the rest wait. Rejecting turns down what still waits.
  */
 export const mailFindingsKind = (store: Pick<MessageStore, "mailFindings" | "proposedActions">): ProposalKind => {
   const created = async (batch: MailFindingsBatch): Promise<ProposalRow> =>
@@ -98,13 +98,19 @@ export const mailFindingsKind = (store: Pick<MessageStore, "mailFindings" | "pro
     get: async (id) => created(await store.mailFindings.get(id)),
     decide: async (id, { confirm, by, parts }): Promise<Decided> => {
       const batch = await store.mailFindings.get(id)
-      const turnedDown = new Set(batch.previous.filter((one) => one.status === "rejected").map((one) => one.id))
+      // A finding this batch already decided keeps its outcome; a confirm with no names takes what still waits.
+      const turnedDown = new Set([
+        ...batch.previous.filter((one) => one.status === "rejected").map((one) => one.id),
+        ...batch.decided.map((one) => one.id),
+      ])
       const accept = !confirm
         ? []
         : (parts ?? batch.input.findings.map((finding) => finding.id).filter((one) => !turnedDown.has(one)))
       const reviewed = await store.mailFindings.review(id, { fingerprint: batch.fingerprint, accept, by })
-      const made = (reviewed.receipt?.items ?? []).flatMap((item) =>
-        item.status === "accepted" && item.reference && !item.reused ? [item.reference] : [],
+      const made = (reviewed.receipt?.items ?? reviewed.decided).flatMap((item) =>
+        item.status === "accepted" && item.reference && !item.reused && accept.includes(item.id)
+          ? [item.reference]
+          : [],
       )
       return { id, kind: "mail_findings", status: accept.length ? "confirmed" : "rejected", made }
     },

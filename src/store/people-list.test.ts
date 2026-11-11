@@ -280,6 +280,7 @@ describe("the kind of a person", () => {
     await store.people.savePeople(MAIL, [
       { id: "no-reply@shop.ru", name: "Orders" },
       { id: "info@hotel.ru", name: "Reception" },
+      { id: "hr@hotel.ru", name: "Mia Holt" },
     ])
 
     expect(await kinds(store)).toEqual({
@@ -290,6 +291,7 @@ describe("the kind of a person", () => {
       Kai: ["person", "chat"],
       Orders: ["automated", "no-reply"],
       Reception: ["organization", "role-address"],
+      "Mia Holt": ["stranger", "no-tie"],
     })
   })
 
@@ -500,5 +502,93 @@ describe("a person's shown name (DEBT-311)", () => {
       expect(record?.displayName).toBe(row?.displayName)
     }
     expect((await store.people.personOf({ provider: "telegram", id: "30" }))?.displayName).toBe("Ярослав Орлов")
+  })
+})
+
+const WA: AccountKey = { provider: "whatsapp", account: "3" }
+
+const wrote = async (store: MessageStore, account: AccountKey, chat: string, sender: string, count: number) =>
+  store.messages.saveMessages(
+    account,
+    chat,
+    Array.from({ length: count }, (_, at) => ({
+      ...{ id: `${sender}-${at}`, chatId: chat, senderId: sender, senderName: null, editedAt: null },
+      ...{ timestamp: new Date(NOW - (at + 1) * 60_000).toISOString(), text: "synthetic", outgoing: false },
+      ...{ attachments: [], replyTo: null, forwardedFrom: null, reactions: null },
+    })),
+    { via: "history" },
+  )
+
+const answered = async (store: MessageStore, account: AccountKey, chat: string) =>
+  store.messages.saveMessages(
+    account,
+    chat,
+    [
+      {
+        ...{ id: "mine", chatId: chat, senderId: null, senderName: null, editedAt: null, outgoing: true },
+        ...{ timestamp: new Date(NOW).toISOString(), text: "synthetic", attachments: [], replyTo: null },
+        ...{ forwardedFrom: null, reactions: null },
+      },
+    ],
+    { via: "history" },
+  )
+
+describe("a person's contact details (the owner's rule, 2026-11-11)", () => {
+  it("come from the identity that wrote the most and has each, not from the oldest", async () => {
+    const { store } = await opened()
+    await store.people.savePeople(MAIL, [
+      { id: "kai.old@acme.ru", name: "Kai Berg", email: "kai.old@acme.ru", phone: "+34600000001" },
+    ])
+    await store.people.savePeople(WA, [{ id: "555@lid", name: "Kai" }])
+    await store.people.savePeople(TG, [{ id: "7", name: "Kai", phone: "+34600000002", username: "kai_b" }])
+    await store.chats.saveChats(WA, [chat("555@lid", "dialog", 2)])
+    await store.chats.saveChats(TG, [chat("7", "dialog", 2)])
+    await wrote(store, WA, "555@lid", "555@lid", 30)
+    await wrote(store, TG, "7", "7", 3)
+    const owner = { method: "manual", by: "owner" }
+    await store.people.linkIdentities(
+      { provider: "whatsapp", id: "555@lid" },
+      { provider: "email", id: "kai.old@acme.ru" },
+      owner,
+    )
+    await store.people.linkIdentities(
+      { provider: "telegram", id: "7" },
+      { provider: "email", id: "kai.old@acme.ru" },
+      owner,
+    )
+
+    const [kai] = (await store.people.list({ limit: 100, kind: "all" })).items.filter(({ owner }) => !owner)
+
+    expect(kai).toMatchObject({ phone: "+34600000002", email: "kai.old@acme.ru", username: "kai_b" })
+    expect(kai?.messagesFrom).toBe(33)
+  })
+})
+
+describe("a private conversation", () => {
+  it("keeps a person who answers in a private chat out of automated, whatever one mailbox says", async () => {
+    const { store, db } = await opened()
+    await store.people.savePeople(TG, [{ id: "8", name: "Lu Park" }])
+    await store.people.savePeople(MAIL, [{ id: "lu@shop.ru", name: "Lu Park" }])
+    await store.people.linkIdentities(
+      { provider: "telegram", id: "8" },
+      { provider: "email", id: "lu@shop.ru" },
+      { method: "manual", by: "owner" },
+    )
+    const mailbox = identityPk(db, "email", "lu@shop.ru")
+    const account = Number(db.prepare("SELECT id FROM accounts WHERE provider = 'email'").get()?.id)
+    db.prepare(
+      "INSERT INTO account_identities (account_id, identity_id, created_at, updated_at, mail_signals) " +
+        "VALUES (?, ?, 0, 0, '[\"bulk_never_replied\"]') ON CONFLICT DO UPDATE SET mail_signals = excluded.mail_signals",
+    ).run(account, mailbox)
+    const kindOfLu = async () =>
+      (await store.people.list({ limit: 100, kind: "all" })).items.find(({ displayName }) => displayName === "Lu Park")
+        ?.kind
+
+    expect(await kindOfLu()).toBe("automated")
+    await store.chats.saveChats(TG, [chat("8", "dialog", 2)])
+    await wrote(store, TG, "8", "8", 2)
+    expect(await kindOfLu()).toBe("automated")
+    await answered(store, TG, "8")
+    expect(await kindOfLu()).toBe("person")
   })
 })

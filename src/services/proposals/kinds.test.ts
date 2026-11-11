@@ -60,7 +60,7 @@ const fixture = async () => {
 }
 
 describe("the findings kind", () => {
-  it("lists a batch with its parts, confirms only the parts named and rejects the rest", async () => {
+  it("lists a batch with its parts, confirms only the parts named and leaves the rest waiting", async () => {
     const f = await fixture()
     const batch = await f.stage("one")
     const listed = await f.registry.list({ limit: 10, offset: 0, kinds: ["findings"], project: f.project.ref })
@@ -87,8 +87,16 @@ describe("the findings kind", () => {
     expect(decided).toMatchObject([
       { id: batch.id, kind: "findings", status: "confirmed", made: [expect.stringMatching(/^fact:/)] },
     ])
-    const row = await f.registry.get(batch.id)
-    expect(row).toMatchObject({
+    expect(await f.registry.get(batch.id)).toMatchObject({
+      status: "proposed",
+      parts: [
+        { id: "launch", outcome: "accepted" },
+        { id: "checklist", outcome: null },
+      ],
+    })
+    const rest = await f.registry.decide([batch.id], { confirm: false, by: codex })
+    expect(rest.decided).toMatchObject([{ id: batch.id, status: "rejected", made: [] }])
+    expect(await f.registry.get(batch.id)).toMatchObject({
       status: "confirmed",
       parts: [
         { id: "launch", outcome: "accepted" },

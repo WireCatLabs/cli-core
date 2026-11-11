@@ -66,6 +66,8 @@ export interface AgentTool {
   path: readonly string[]
   title: string
   description: string
+  /** The words of its help's examples, flags left out: tools search reads them for the words a task is typed in. */
+  keywords?: readonly string[]
   writes: boolean
   input: v.ObjectSchema<v.ObjectEntries, undefined>
   /** The entity it answers with, when the command declares one. */
@@ -252,6 +254,13 @@ const schemaOf = (fields: readonly Field[]) =>
 const startsWith = (path: readonly string[], prefix: readonly string[]) => prefix.every((word, at) => path[at] === word)
 
 /** Build the discoverable command catalogue; profile permissions annotate availability. */
+// A flag names a CLI option, which an agent never passes as such; the words around it are what it is about.
+const keywordsOf = (examples: readonly string[]): string[] => [
+  ...new Set(
+    examples.flatMap((example) => example.split(/\s+/u).filter((word) => word !== "" && !word.startsWith("-"))),
+  ),
+]
+
 export const toolsFromCommands = (commands: readonly CommandInfo[], options: CatalogueOptions = {}): AgentTool[] => {
   const { root = [], exclude = [], levels, keyOf, authority, readOnly = false, permissions } = options
   return flatten(commands)
@@ -285,6 +294,7 @@ export const toolsFromCommands = (commands: readonly CommandInfo[], options: Cat
       path: info.path,
       title: info.summary ?? info.description,
       description: info.description,
+      ...(info.examples?.length ? { keywords: keywordsOf(info.examples) } : {}),
       writes: writes(info.effects) && options.fetchOnly?.(info.path) !== true,
       input: schemaOf(fieldsOf(info, options)),
       ...(info.output ? { output: info.output } : {}),

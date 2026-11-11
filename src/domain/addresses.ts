@@ -66,5 +66,14 @@ const localWord = (address: string): string => {
 /** Whether the whole local part, `+tag` and `.`/`-`/`_` aside, is a role word: `info@`, `Hello+news@`, `no_reply@`. */
 export const isRoleAddress = (address: string): boolean => ROLE.has(localWord(address))
 
+/**
+ * Role words that one person often reads alone: a small company's `hr@` is its HR manager. Still a role address, so it
+ * joins no one, but weaker evidence of a company's mailbox than `info@`, and it never makes a contact a company.
+ */
+const PERSON_LIKE = new Set(["hr"])
+
+/** Whether the address is a role address that one person often reads alone, such as `hr@`. */
+export const isPersonLikeRoleAddress = (address: string): boolean => PERSON_LIKE.has(localWord(address))
+
 /** Whether the address is a no-reply one, which belongs to no person. */
 export const isNoReplyAddress = (address: string): boolean => NO_REPLY.has(localWord(address))

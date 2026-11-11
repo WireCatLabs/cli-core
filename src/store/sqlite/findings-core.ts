@@ -4,7 +4,7 @@ import {
   type FindingEvidence,
   type FindingOutcome,
   type FindingsInput,
-  findingFingerprint,
+  findingFields,
   findingHash,
 } from "../../meetings/index.js"
 import type { Decider } from "../decisions.js"
@@ -37,6 +37,75 @@ export const findingsAgent = (agent: FindingsAgent): FindingsAgent => {
     return invalid("findings must name an agent author independently of their payload")
   return { bot: agent.bot, ...(agent.model === undefined ? {} : { model: agent.model }) }
 }
+
+/**
+ * What the owner may change in a finding before it is decided: its words and the fields that only say what the agent
+ * read. Evidence never changes, and neither does a meeting or evidence finding's project, which its evidence vouches
+ * for.
+ */
+export const FINDING_EDITS: Readonly<Record<string, readonly string[]>> = {
+  fact: ["statement", "type", "subject"],
+  task: ["title", "type", "reason", "commitment", "dueAt", "dueEvidence", "assignee", "assigneeEvidence"],
+  payment: ["statement"],
+}
+
+/** Each optional field a cleared field takes with it, so a cleared due date leaves no orphaned support. */
+const CLEARS: Readonly<Record<string, string>> = { dueAt: "dueEvidence", assignee: "assigneeEvidence" }
+
+/** The finding with the owner's changes; `null` clears an optional field. The kind's own validation runs after. */
+export const editedFinding = <F extends { id: string; kind: string }>(
+  finding: F,
+  changes: Record<string, unknown>,
+  editable: Readonly<Record<string, readonly string[]>>,
+  noun: string,
+): F => {
+  if (!changes || typeof changes !== "object" || Array.isArray(changes) || Object.keys(changes).length === 0)
+    return invalid("an edit changes at least one field of the finding")
+  findingFields(changes, [...(editable[finding.kind] ?? [])], noun, finding)
+  const edited: Record<string, unknown> = { ...finding }
+  for (const [key, value] of Object.entries(changes)) {
+    if (value !== null) {
+      edited[key] = value
+      continue
+    }
+    delete edited[key]
+    const also = CLEARS[key]
+    if (also) delete edited[also]
+  }
+  return edited as F
+}
+
+/**
+ * The finding an owner's edit changes: only the owner edits, only a batch still waiting, at the fingerprint the owner
+ * read, and only a finding this batch has not decided yet.
+ */
+export const findingToEdit = <F extends { id: string }>(
+  batch: { status: string; fingerprint: string; input: { findings: readonly F[] }; decided: readonly FindingOutcome[] },
+  finding: string,
+  options: { fingerprint: string; by: Decider },
+  stale: () => never,
+): F => {
+  if (options?.by !== "owner")
+    throw new CliError("permission_error", "only the owner edits a finding before it is decided", {
+      reason: "proposal.owner-only",
+    })
+  if (batch.status !== "proposed")
+    throw new CliError("validation_error", "this findings batch was already reviewed; its findings stay as decided", {
+      reason: "proposal.wrong-state",
+    })
+  if (typeof options.fingerprint !== "string" || options.fingerprint !== batch.fingerprint) return stale()
+  const found = batch.input.findings.find((one) => one.id === finding)
+  if (!found) throw new CliError("not_found", `no finding ${finding} in this batch`)
+  if (batch.decided.some((one) => one.id === finding))
+    throw new CliError("validation_error", `finding ${finding} was already decided`, { reason: "proposal.wrong-state" })
+  return found
+}
+
+/** The findings a review has not decided yet. */
+export const pendingOf = <I extends { findings: readonly { id: string }[] }>(
+  input: I,
+  decided: readonly FindingOutcome[] | undefined,
+): I => ({ ...input, findings: input.findings.filter((one) => !decided?.some((done) => done.id === one.id)) })
 
 /**
  * What meeting and evidence findings share: the project and assignee snapshot, earlier decisions on an unchanged
@@ -87,12 +156,15 @@ export const findingsCoreOver = (context: StoreContext, kind: string) => {
   const snapshotParts = (...args: Parameters<typeof cited>): Record<string, string> =>
     Object.fromEntries([...cited(...args)].map(([key, value]) => [key, findingHash(value)]))
 
-  const previous = (account: number | null, fingerprint: string): FindingOutcome | undefined => {
+  // A batch still partly pending keeps its decisions in the payload, so an unchanged finding another batch carries
+  // is never created twice.
+  const previous = (account: number | null, fingerprint: string, except?: string): FindingOutcome | undefined => {
     const row = database
       .prepare(
-        "SELECT substr(j.value,1,4096) AS item FROM proposed_actions p,json_each(p.result,'$.items') j WHERE p.account_id IS ? AND p.kind=? AND p.status='approved' AND json_extract(j.value,'$.fingerprint')=? ORDER BY p.id LIMIT 1",
+        "SELECT item FROM (SELECT p.id, substr(j.value,1,4096) AS item FROM proposed_actions p,json_each(p.result,'$.items') j WHERE p.account_id IS ? AND p.kind=? AND p.status='approved' AND json_extract(j.value,'$.fingerprint')=? " +
+          "UNION ALL SELECT p.id, substr(j.value,1,4096) AS item FROM proposed_actions p,json_each(p.payload,'$.decided') j WHERE p.account_id IS ? AND p.kind=? AND p.status='proposed' AND p.id IS NOT ? AND json_extract(j.value,'$.fingerprint')=?) ORDER BY id LIMIT 1",
       )
-      .get(account, kind, fingerprint)
+      .get(account, kind, fingerprint, account, kind, except === undefined ? null : Number(except), fingerprint)
     return row ? (JSON.parse(String(row.item)) as FindingOutcome) : undefined
   }
 
@@ -135,31 +207,67 @@ export const findingsCoreOver = (context: StoreContext, kind: string) => {
     return task.ref
   }
 
-  /** Reuses an earlier decision on an unchanged candidate; refuses to accept one that was rejected. */
-  const outcomes = (
-    account: number | null,
-    input: FindingsInput,
-    accepted: string[],
-    agent: FindingsAgent,
-    decidedBy: Decider,
-  ) =>
-    input.findings.map((finding): FindingOutcome => {
-      const fingerprint = findingFingerprint(finding)
-      const prior = previous(account, fingerprint)
-      if (prior) {
-        if (accepted.includes(finding.id) && prior.status === "rejected")
-          return invalid("this unchanged finding was already rejected; changed evidence needs a new candidate")
-        return { ...prior, id: finding.id, reused: true }
+  /**
+   * Decides what a review settles. A confirm settles the findings it names and any unchanged candidate decided
+   * earlier; the rest wait for the owner. A reject (no names) settles everything still pending. A finding this batch
+   * already decided keeps its outcome, so nothing is created twice.
+   */
+  const settle = <F extends { id: string }>(options: {
+    batch: string
+    account: number | null
+    findings: readonly F[]
+    decided: readonly FindingOutcome[]
+    accepted: readonly string[]
+    fingerprintOf: (finding: F) => string
+    make: (finding: F) => string
+  }): { items: FindingOutcome[]; pending: F[] } => {
+    const { accepted } = options
+    const items: FindingOutcome[] = []
+    const pending: F[] = []
+    for (const finding of options.findings) {
+      const named = accepted.includes(finding.id)
+      const done = options.decided.find((one) => one.id === finding.id)
+      if (done) {
+        if (named && done.status === "rejected") return invalid("this finding was already rejected")
+        items.push(done)
+        continue
       }
-      const status = accepted.includes(finding.id) ? "accepted" : "rejected"
-      return {
+      const fingerprint = options.fingerprintOf(finding)
+      const prior = previous(options.account, fingerprint, options.batch)
+      if (prior) {
+        if (named && prior.status === "rejected")
+          return invalid("this unchanged finding was already rejected; changed evidence needs a new candidate")
+        items.push({ ...prior, id: finding.id, reused: true })
+        continue
+      }
+      if (accepted.length && !named) {
+        pending.push(finding)
+        continue
+      }
+      items.push({
         id: finding.id,
         fingerprint,
-        status,
-        reference: status === "accepted" ? create(finding, agent, decidedBy) : null,
+        status: named ? "accepted" : "rejected",
+        reference: named ? options.make(finding) : null,
         reused: false,
-      }
-    })
+      })
+    }
+    return { items, pending }
+  }
 
-  return { snapshot, snapshotParts, previous, outcomes, create }
+  /** A partly reviewed batch keeps waiting: its payload carries what was decided and who was named so far. */
+  const keepWaiting = (id: string, payload: object) =>
+    database
+      .prepare("UPDATE proposed_actions SET payload=?, updated_at=? WHERE id=? AND status='proposed'")
+      .run(JSON.stringify(payload), context.now(), Number(id))
+
+  /** The receipt's `accepted`: every finding a review of this batch named, sorted. */
+  const named = (earlier: readonly string[] | undefined, now: readonly string[]): string[] =>
+    [...new Set([...(earlier ?? []), ...now])].sort()
+
+  /** A review of a batch already closed is answered again only when it asks for nothing new. */
+  const sameDecision = (receipt: { accepted: string[] }, accepted: readonly string[]): boolean =>
+    accepted.length ? accepted.every((one) => receipt.accepted.includes(one)) : receipt.accepted.length === 0
+
+  return { snapshot, snapshotParts, previous, settle, keepWaiting, named, sameDecision, create }
 }

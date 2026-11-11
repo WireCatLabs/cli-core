@@ -1,4 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
+import { isEmailAddress, isNoReplyAddress } from "../../domain/addresses.js"
 import { FREE_MAIL } from "../../mail/score.js"
 import { assertMayDecide, deciderAuthor } from "../decisions.js"
 import {
@@ -223,6 +224,43 @@ const organizationExists = ({ database }: StoreContext, id: number): boolean =>
   Number.isSafeInteger(id) &&
   database.prepare("SELECT 1 FROM organizations WHERE id = ? AND deleted_at IS NULL").get(id) !== undefined
 
+/** The addresses the match's two people hold now, a free mailbox's and a no-reply one left out. */
+const addressesOfPair = ({ database }: StoreContext, payload: IdentityLinkPayload): string[] => {
+  const persons = payload.persons.map((uid) => currentPerson(database, Number(uid)))
+  const rows = database
+    .prepare(
+      "SELECT DISTINCT lower(trim(coalesce(i.email, CASE WHEN i.provider = 'email' THEN i.external_id END))) AS address " +
+        "FROM identity_links l JOIN identities i ON i.id = l.identity_id WHERE l.person_id IN (?, ?) ORDER BY 1",
+    )
+    .all(...persons)
+  return rows
+    .map(({ address }) => (typeof address === "string" ? address : ""))
+    .filter((address) => isEmailAddress(address) && !isNoReplyAddress(address))
+    .filter((address) => !FREE_MAIL.has(address.split("@")[1] ?? ""))
+}
+
+/**
+ * A match found another way, by name say, says nothing of which address is the company's, or whether any is: only an
+ * address the owner names, one the two people hold at a company's domain, is taken.
+ */
+const companyAddressOf = (
+  context: StoreContext,
+  id: string,
+  payload: IdentityLinkPayload,
+  asked: string | undefined,
+): string => {
+  const held = addressesOfPair(context, payload)
+  if (asked !== undefined && held.includes(asked)) return asked
+  const choices = held.length > 0 ? `: ${held.join(", ")}` : "; neither holds an address at a company's domain"
+  throw new CliError(
+    "validation_error",
+    asked === undefined
+      ? `${id} is not about a shared mailbox; name which of the two people's addresses is the company's${choices}`
+      : `${asked} is not an address of these two people at a company's domain${choices}`,
+    { reason: "identity.not-shared", candidates: held },
+  )
+}
+
 /**
  * NEED-2528: the shared mailbox is a company's, not one of the two people. The address goes to the organization and
  * the proposal is turned down, so the pair is not proposed again on it (the rejected evidence), and nobody is joined.
@@ -239,11 +277,19 @@ const toCompany = (
     throw new CliError("validation_error", `${proposal.id} is already ${proposal.status}`, {
       reason: "proposal.wrong-state",
     })
-  const address = payload.mailbox
-  if (payload.shared === undefined || address === undefined)
-    throw new CliError("validation_error", `${proposal.id} is not about a shared mailbox; confirm or reject it`, {
-      reason: "identity.not-shared",
-    })
+  const asked = company.mailbox
+    ?.trim()
+    .toLowerCase()
+    .replace(/^email:/u, "")
+  if (payload.mailbox !== undefined && asked !== undefined && asked !== payload.mailbox)
+    throw new CliError(
+      "validation_error",
+      `${proposal.id} is about the shared mailbox ${payload.mailbox}, not ${asked}`,
+      {
+        reason: "identity.not-shared",
+      },
+    )
+  const address = payload.mailbox ?? companyAddressOf(context, proposal.id, payload, asked)
   const name = company.name?.trim() || undefined
   const domain = address.split("@")[1] ?? ""
   let organization: number
@@ -275,7 +321,7 @@ const toCompany = (
         .all(IDENTITY_LINK_KIND, Number(proposal.id), address)
         .map((row) => String(row.id))
     : []
-  const result = { dismissed: true, organization: `organization:${organization}`, ...noted }
+  const result = { dismissed: true, organization: `organization:${organization}`, mailbox: address, ...noted }
   for (const other of others) {
     const closed = operations.reject(other, author, { ...result, with: proposal.id })
     settleMentions(context, closed.payload as IdentityLinkPayload, "found")

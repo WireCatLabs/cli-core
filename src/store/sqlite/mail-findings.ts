@@ -17,7 +17,7 @@ import { fold } from "../normalize.js"
 import type { AccountKey } from "../types.js"
 import { organizationOfAddress } from "./address-organization.js"
 import { financeOperationsOver } from "./finance.js"
-import { findingsAgent, findingsCoreOver } from "./findings-core.js"
+import { editedFinding, findingsAgent, findingsCoreOver, findingToEdit, pendingOf } from "./findings-core.js"
 import { authorActor, linkEvidence, memoriesStoreOver } from "./memories.js"
 import { insertLink, requiredThing } from "./notes.js"
 import type { StoreContext } from "./open.js"
@@ -30,7 +30,30 @@ import { taskRowOf } from "./things.js"
 import { write } from "./transaction.js"
 import { workTaskOperationsOver } from "./work-tasks.js"
 
-type StoredInput = MailFindingsInput & { inputHash: string; agentModel: string | null }
+type StoredInput = MailFindingsInput & {
+  inputHash: string
+  agentModel: string | null
+  decided?: FindingOutcome[]
+  accepted?: string[]
+  edited?: string[]
+}
+
+/**
+ * What the owner may change in a mail finding before deciding it: its words, and the fields that only say what the
+ * agent read. Money, orders and the identities a link or contact names keep what the mail said; evidence never changes.
+ */
+const MAIL_EDITS: Readonly<Record<MailFinding["kind"], readonly string[]>> = {
+  task: ["title", "type", "reason", "commitment", "project", "dueAt", "dueEvidence", "assignee", "assigneeEvidence"],
+  fact: ["statement", "type", "reason", "subject", "project"],
+  memory: ["body", "memoryKind", "scope", "reason", "subject", "project"],
+  task_update: ["reason", "detail", "dueAt"],
+  link: ["reason"],
+  new_contact: ["name", "reason"],
+  invoice: ["reason"],
+  payment: ["reason"],
+  order: ["reason"],
+  order_update: ["reason"],
+}
 type Row = Record<string, unknown>
 
 const stale = (): never => {
@@ -101,10 +124,12 @@ export const mailFindingsStoreOver = (context: StoreContext): MailFindingsStore 
       decidedAt: proposal.decidedAt,
       previous: proposal.result
         ? (proposal.result as FindingsReceipt).items
-        : input.findings.flatMap((finding) => {
-            const held = core.previous(accountOf(proposal), mailFindingFingerprint(finding))
+        : pendingOf(input, input.decided).findings.flatMap((finding) => {
+            const held = core.previous(accountOf(proposal), mailFindingFingerprint(finding), proposal.id)
             return held ? [{ ...held, id: finding.id, reused: true }] : []
           }),
+      decided: proposal.result ? [] : (input.decided ?? []),
+      edited: input.edited ?? [],
       receipt: proposal.result as FindingsReceipt | null,
     }
   }
@@ -572,7 +597,7 @@ export const mailFindingsStoreOver = (context: StoreContext): MailFindingsStore 
         )
         const accepted = [...decision.accept].sort()
         if (batch.receipt) {
-          if (JSON.stringify(batch.receipt.accepted) !== JSON.stringify(accepted))
+          if (!core.sameDecision(batch.receipt, accepted))
             return invalid("this findings batch was already reviewed with a different decision")
           return batch
         }
@@ -580,7 +605,7 @@ export const mailFindingsStoreOver = (context: StoreContext): MailFindingsStore 
         const account = accountOf(proposal)
         // Rejecting creates nothing, so a batch whose mail changed can still be closed; accepting needs the
         // accepted findings' own mail unchanged.
-        const chosen = batch.input.findings.filter((finding) => accepted.includes(finding.id))
+        const chosen = pendingOf(batch.input, input.decided).findings.filter((finding) => accepted.includes(finding.id))
         if (chosen.length) cite(chosen, account, true)
         if (proposal.proposedBy.type !== "bot" || !proposal.proposedBy.name)
           return invalid("a findings author must be an agent")
@@ -588,30 +613,50 @@ export const mailFindingsStoreOver = (context: StoreContext): MailFindingsStore 
           bot: proposal.proposedBy.name,
           ...(input.agentModel === null ? {} : { model: input.agentModel }),
         }
-        const items = batch.input.findings.map((finding): FindingOutcome => {
-          const fingerprint = mailFindingFingerprint(finding)
-          const prior = core.previous(account, fingerprint)
-          if (prior) {
-            if (accepted.includes(finding.id) && prior.status === "rejected")
-              return invalid("this unchanged finding was already rejected; changed evidence needs a new candidate")
-            return { ...prior, id: finding.id, reused: true }
-          }
-          const status = accepted.includes(finding.id) ? "accepted" : "rejected"
-          return {
-            id: finding.id,
-            fingerprint,
-            status,
-            reference: status === "accepted" ? create(finding, batch.account, agent) : null,
-            reused: false,
-          }
+        const { items, pending } = core.settle({
+          batch: id,
+          account,
+          findings: batch.input.findings,
+          decided: input.decided ?? [],
+          accepted,
+          fingerprintOf: mailFindingFingerprint,
+          make: (finding) => create(finding, batch.account, agent),
         })
+        const named = core.named(input.accepted, accepted)
+        if (pending.length) {
+          core.keepWaiting(id, { ...input, decided: items, accepted: named })
+          return view(load(id))
+        }
         return view(
           proposals.approve(
             id,
-            { previewFingerprint: batch.fingerprint, accepted, items } satisfies FindingsReceipt,
+            { previewFingerprint: batch.fingerprint, accepted: named, items } satisfies FindingsReceipt,
             "owner" satisfies Decider,
           ),
         )
+      }),
+    edit: async (id, finding, changes, options) =>
+      write(database, () => {
+        const proposal = load(id)
+        const batch = view(proposal)
+        const original = findingToEdit(batch, finding, options, stale)
+        const input = proposal.payload as StoredInput
+        const edited = editedFinding(original, changes, MAIL_EDITS, "mail finding")
+        const checked = validateMailFindings({
+          ...batch.input,
+          findings: batch.input.findings.map((one) => (one.id === finding ? edited : one)),
+        })
+        const now = checked.findings.find((one) => one.id === finding) as MailFinding
+        targets(now, cite([now], accountOf(proposal), true))
+        const fingerprints = checked.findings.map(mailFindingFingerprint)
+        if (new Set(fingerprints).size !== fingerprints.length) return invalid("the edit makes two findings the same")
+        // The agent's inputHash stays: its rerun of the same key still finds this batch, now as the owner left it.
+        core.keepWaiting(id, {
+          ...input,
+          findings: checked.findings,
+          edited: [...new Set([...(input.edited ?? []), finding])],
+        })
+        return view(load(id))
       }),
   }
 }

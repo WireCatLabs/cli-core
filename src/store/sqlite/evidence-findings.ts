@@ -1,6 +1,12 @@
 import { CliError } from "@wirecat/cli-base"
 import { contextEvidenceFingerprint } from "../../context/evidence.js"
-import { type FindingEvidence, type FindingsInput, findingFingerprint, findingHash } from "../../meetings/index.js"
+import {
+  type FindingEvidence,
+  type FindingOutcome,
+  type FindingsInput,
+  findingFingerprint,
+  findingHash,
+} from "../../meetings/index.js"
 import { assertMayDecide } from "../decisions.js"
 import {
   EVIDENCE_FINDINGS_KIND,
@@ -12,7 +18,14 @@ import {
 import { contextRecordOf } from "./context-evidence.js"
 import { quoteKept } from "./evidence-signature.js"
 import { sourcesOfReferences } from "./evidence-sources.js"
-import { findingsAgent, findingsCoreOver } from "./findings-core.js"
+import {
+  editedFinding,
+  FINDING_EDITS,
+  findingsAgent,
+  findingsCoreOver,
+  findingToEdit,
+  pendingOf,
+} from "./findings-core.js"
 import { authorActor } from "./memories.js"
 import type { StoreContext } from "./open.js"
 import { type ProposedAction, proposalOperationsOver } from "./proposed-actions.js"
@@ -24,6 +37,9 @@ type StoredInput = FindingsInput & {
   snapshotParts?: Record<string, string>
   agentModel: string | null
   ownerOnly?: true
+  decided?: FindingOutcome[]
+  accepted?: string[]
+  edited?: string[]
 }
 const stale = (): never => {
   throw new CliError("validation_error", "evidence findings changed since they were read; stage a new batch", {
@@ -71,10 +87,12 @@ export const evidenceFindingsStoreOver = (context: StoreContext): EvidenceFindin
       decidedAt: proposal.decidedAt,
       previous: proposal.result
         ? (proposal.result as EvidenceFindingsReceipt).items
-        : input.findings.flatMap((finding) => {
-            const held = core.previous(null, findingFingerprint(finding))
+        : pendingOf(input, input.decided).findings.flatMap((finding) => {
+            const held = core.previous(null, findingFingerprint(finding), proposal.id)
             return held ? [{ ...held, id: finding.id, reused: true }] : []
           }),
+      decided: proposal.result ? [] : (input.decided ?? []),
+      edited: input.edited ?? [],
       receipt: proposal.result as EvidenceFindingsReceipt | null,
     }
   }
@@ -104,6 +122,18 @@ export const evidenceFindingsStoreOver = (context: StoreContext): EvidenceFindin
     }
   }
   const snapshot = (input: FindingsInput) => core.snapshot(input, cite())
+  /**
+   * The whole-batch hash the next review of an old batch compares, over the findings still waiting. Evidence that
+   * changed under a waiting finding keeps the old hash, so accepting that finding stays refused as stale.
+   */
+  const snapshotOr = (waiting: FindingsInput, held: string): string => {
+    try {
+      return snapshot(waiting)
+    } catch (error) {
+      if ((error as CliError).details?.reason === "evidence-findings.stale") return held
+      throw error
+    }
+  }
   const decider = (by: unknown) => {
     if (by === "owner") return { author: "owner" as const, decision: { by: "owner" as const } }
     if (by === undefined) return invalid("a findings review names who decides: the owner or an agent with a reason")
@@ -232,11 +262,12 @@ export const evidenceFindingsStoreOver = (context: StoreContext): EvidenceFindin
           context.decisions,
         )
         if (batch.receipt) {
-          if (JSON.stringify(batch.receipt.accepted) !== JSON.stringify(accepted))
+          if (!core.sameDecision(batch.receipt, accepted))
             return invalid("this findings batch was already reviewed with a different decision")
           return batch
         }
         const input = proposal.payload as StoredInput
+        const waiting = pendingOf(batch.input, input.decided)
         // Rejecting creates nothing, so a batch whose evidence changed can still be closed. Accepting needs only the
         // accepted findings' own evidence and assignee unchanged. The project is left out: every task a sibling batch
         // creates moves its row, and the project still has to exist, which citing checks. A batch staged before parts
@@ -244,9 +275,9 @@ export const evidenceFindingsStoreOver = (context: StoreContext): EvidenceFindin
         if (accepted.length) {
           const parts = input.snapshotParts
           if (!parts) {
-            if (snapshot(batch.input) !== input.snapshotHash) return stale()
+            if (snapshot(waiting) !== input.snapshotHash) return stale()
           } else {
-            const chosen = { ...batch.input, findings: batch.input.findings.filter((f) => accepted.includes(f.id)) }
+            const chosen = { ...batch.input, findings: waiting.findings.filter((f) => accepted.includes(f.id)) }
             const now = core.snapshotParts(chosen, cite())
             if (Object.entries(now).some(([key, hash]) => !key.startsWith("project:") && parts[key] !== hash))
               return stale()
@@ -258,19 +289,69 @@ export const evidenceFindingsStoreOver = (context: StoreContext): EvidenceFindin
           bot: proposal.proposedBy.name,
           ...(input.agentModel === null ? {} : { model: input.agentModel }),
         }
-        const items = core.outcomes(null, batch.input, accepted, agent, decision.by)
+        const by = decision.by
+        const { items, pending } = core.settle({
+          batch: id,
+          account: null,
+          findings: batch.input.findings,
+          decided: input.decided ?? [],
+          accepted,
+          fingerprintOf: findingFingerprint,
+          make: (finding) => core.create(finding, agent, by),
+        })
+        const named = core.named(input.accepted, accepted)
+        if (pending.length) {
+          core.keepWaiting(id, {
+            ...input,
+            decided: items,
+            accepted: named,
+            snapshotHash: snapshotOr({ ...batch.input, findings: pending }, input.snapshotHash),
+          })
+          return view(load(id))
+        }
         return view(
           proposals.approve(
             id,
             {
               previewFingerprint: batch.fingerprint,
-              accepted,
+              accepted: named,
               items,
               decision: decidedBy,
             } satisfies EvidenceFindingsReceipt,
             author,
           ),
         )
+      }),
+    edit: async (id, finding, changes, options) =>
+      write(database, () => {
+        const proposal = load(id)
+        const batch = view(proposal)
+        const original = findingToEdit(batch, finding, options, stale)
+        const input = proposal.payload as StoredInput
+        const parts = input.snapshotParts
+        const alone = (one: FindingsInput["findings"][number]) => ({ ...batch.input, findings: [one] })
+        if (parts) {
+          const now = core.snapshotParts(alone(original), cite())
+          if (Object.entries(now).some(([key, hash]) => !key.startsWith("project:") && parts[key] !== hash))
+            return stale()
+        } else if (snapshot(pendingOf(batch.input, input.decided)) !== input.snapshotHash) return stale()
+        const edited = editedFinding(original, changes, FINDING_EDITS, "evidence finding")
+        const checked = validateEvidenceFindings({
+          ...batch.input,
+          findings: batch.input.findings.map((one) => (one.id === finding ? edited : one)),
+        })
+        const fingerprints = checked.findings.map(findingFingerprint)
+        if (new Set(fingerprints).size !== fingerprints.length) return invalid("the edit makes two findings the same")
+        // The agent's inputHash stays: its rerun of the same key still finds this batch, now as the owner left it.
+        const now = checked.findings.find((one) => one.id === finding) as FindingsInput["findings"][number]
+        core.keepWaiting(id, {
+          ...input,
+          findings: checked.findings,
+          snapshotHash: snapshotOr(pendingOf(checked, input.decided), input.snapshotHash),
+          ...(parts ? { snapshotParts: { ...parts, ...core.snapshotParts(alone(now), cite()) } } : {}),
+          edited: [...new Set([...(input.edited ?? []), finding])],
+        })
+        return view(load(id))
       }),
   }
 }

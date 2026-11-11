@@ -95,6 +95,26 @@ describe("a shared mailbox (NEED-2526)", () => {
     ])
   })
 
+  it("starts hr@ below info@: one person often reads hr@ alone", async () => {
+    const store = await open()
+    await store.people.savePeople(PERSONAL, [
+      { id: "5", name: "Ana Diaz", email: "info@shop.example" },
+      { id: "6", name: "Eva Ruiz", email: "hr@shop.example" },
+    ])
+    await store.people.savePeople(MAX, [
+      { id: "7", name: "Bo Lind", email: "info@shop.example" },
+      { id: "8", name: "Lu Park", email: "hr@shop.example" },
+    ])
+
+    await store.people.scanMatches({ full: true })
+
+    const found = await sharedProposals(store)
+    expect(found.map(({ mailbox, score }) => [mailbox, score]).sort()).toEqual([
+      ["hr@shop.example", 0.05],
+      ["info@shop.example", 0.1],
+    ])
+  })
+
   it("scores higher when the two people have one name, and higher again with a chat they are both in", async () => {
     const store = await open()
     await store.people.savePeople(PERSONAL, [
@@ -209,7 +229,7 @@ describe("a company's mailbox, the owner's third answer (NEED-2528)", () => {
     const decided = await store.people.decideLink(id, { confirm: false, by: "owner", company: {} })
     const rescan = await store.people.scanMatches({ full: true })
 
-    expect(decided).toMatchObject({ status: "rejected", result: { dismissed: true } })
+    expect(decided).toMatchObject({ status: "rejected", result: { dismissed: true, mailbox: "info@shop.example" } })
     expect(await holders()).toEqual([{ name: "shop.example", method: "proposal", author: "owner" }])
     expect(await uidOf(store, "telegram", "5")).not.toBe(await uidOf(store, "max", "7"))
     expect(rescan.proposed).toEqual([])
@@ -280,6 +300,42 @@ describe("a company's mailbox, the owner's third answer (NEED-2528)", () => {
       store.people.decideLink(id, { confirm: false, by: "owner", company: { organization: 999 } }),
     ).rejects.toMatchObject({ code: "not_found" })
     expect(await holders()).toEqual([])
+  })
+})
+
+describe("a company's address on a match that is not about a shared mailbox (Desktop #331)", () => {
+  it("gives the address the owner names to the company, and keeps the two people apart", async () => {
+    const store = await open()
+    await store.people.savePeople(PERSONAL, [{ id: "5", name: "Kai Berg", email: "b2b@telco.example" }])
+    await store.people.savePeople(MAX, [{ id: "7", name: "Kai Berg", email: "kai@gmail.com" }])
+    const proposed = await store.people.proposeLink({
+      identity: { provider: "max", id: "7" },
+      with: { provider: "telegram", id: "5" },
+      signal: "agent",
+      by: { bot: "helper" },
+    })
+
+    await expect(
+      store.people.decideLink(proposed.id, { confirm: false, by: "owner", company: {} }),
+    ).rejects.toMatchObject({ details: { reason: "identity.not-shared", candidates: ["b2b@telco.example"] } })
+    await expect(
+      store.people.decideLink(proposed.id, { confirm: false, by: "owner", company: { mailbox: "kai@gmail.com" } }),
+    ).rejects.toMatchObject({ details: { reason: "identity.not-shared" } })
+    const decided = await store.people.decideLink(proposed.id, {
+      confirm: false,
+      by: "owner",
+      company: { mailbox: "email:b2b@telco.example", name: "Telco" },
+    })
+
+    expect(decided).toMatchObject({ status: "rejected", result: { dismissed: true, mailbox: "b2b@telco.example" } })
+    expect(await uidOf(store, "telegram", "5")).not.toBe(await uidOf(store, "max", "7"))
+    const held = (await raw())
+      .prepare(
+        "SELECT o.name FROM organization_identities oi JOIN organizations o ON o.id = oi.organization_id " +
+          "JOIN identities i ON i.id = oi.identity_id WHERE i.provider = 'email' AND i.external_id = 'b2b@telco.example'",
+      )
+      .all()
+    expect(held).toEqual([{ name: "Telco" }])
   })
 })
 
@@ -510,5 +566,93 @@ describe("the same name and a shared trace", () => {
     expect(scan.skipped).toEqual(
       expect.arrayContaining([expect.objectContaining({ signal: "name", reason: "identity.common-name" })]),
     )
+  })
+})
+
+describe("the same company in the CRM", () => {
+  it("proposes two CRM contacts of one name whom the CRM puts in one company, and not two without one", async () => {
+    const store = await open()
+    await store.crm.saveOrganizations(WORK, [{ externalId: "c1", name: "Acme Ltd" }])
+    const atAcme = [{ externalId: "c1" }]
+    await store.crm.savePeople(WORK, [
+      { externalId: "1", name: "Kai Berg", organizations: atAcme },
+      { externalId: "2", name: "Kai Berg", organizations: atAcme },
+      { externalId: "3", name: "Lu Park" },
+      { externalId: "4", name: "Lu Park" },
+    ])
+
+    await store.people.scanMatches({ full: true })
+
+    const found = (await store.people.linkProposals({ limit: 50, offset: 0 })).items.filter(
+      ({ signal }) => signal === "name",
+    )
+    expect(found).toMatchObject([{ score: 0.5, reason: "same name «Kai Berg» and the same company in the CRM" }])
+    expect(found[0]?.evidence).toEqual([expect.stringMatching(/^organization:\d+$/)])
+  })
+})
+
+describe("one name in private chats on two messengers", () => {
+  const WA: AccountKey = { provider: "whatsapp", account: "3" }
+  const dialog = async (store: MessageStore, account: AccountKey, id: string, answered: boolean) => {
+    await store.chats.saveChats(account, [
+      { id, title: id, kind: "dialog", unreadCount: 0, lastMessageAt: null, participantsCount: 2 },
+    ])
+    const message = (n: string, outgoing: boolean) => ({
+      ...{ id: n, chatId: id, senderId: outgoing ? null : id, senderName: null, editedAt: null, outgoing },
+      ...{ timestamp: new Date(Date.UTC(2026, 9, 1, 10, Number(n))).toISOString(), text: "synthetic" },
+      ...{ attachments: [], replyTo: null, forwardedFrom: null, reactions: null },
+    })
+    await store.messages.saveMessages(account, id, [message("1", false), ...(answered ? [message("2", true)] : [])], {
+      via: "history",
+    })
+  }
+
+  it("is proposed at 0.3 when the owner talks to both, and not when one side never got an answer", async () => {
+    const store = await open()
+    await store.people.savePeople(WA, [
+      { id: "555@lid", name: "Mila" },
+      { id: "556@lid", name: "Rus" },
+    ])
+    await store.people.savePeople(PERSONAL, [
+      { id: "77", name: "Mila" },
+      { id: "78", name: "Rus" },
+    ])
+    await dialog(store, WA, "555@lid", true)
+    await dialog(store, PERSONAL, "77", true)
+    await dialog(store, WA, "556@lid", true)
+    await dialog(store, PERSONAL, "78", false)
+
+    await store.people.scanMatches({ full: true })
+
+    const found = (await store.people.linkProposals({ limit: 50, offset: 0 })).items
+    expect(found).toMatchObject([
+      { signal: "name", score: 0.3, reason: "same name «Mila» in private chats on whatsapp and telegram" },
+    ])
+  })
+})
+
+describe("a person on one of the owner's own accounts", () => {
+  it("takes the fullest name of their other identities, not the account's label", async () => {
+    const store = await open()
+    await store.accounts.saveAccount(MAX, { name: "Mila 2" })
+    await store.people.savePeople(MAX, [{ id: "2", name: "Mila 2" }])
+    await store.people.savePeople(PERSONAL, [{ id: "77", name: "Mila" }])
+    const mail: AccountKey = { provider: "email", account: "me@shop.example" }
+    await store.people.savePeople(mail, [
+      { id: "mila@home.example", name: "Mila Orlova" },
+      { id: "m.orlova@work.example", name: "Mila K. Orlova" },
+    ])
+    const owner = { method: "manual", by: "owner" }
+    for (const other of [
+      { provider: "telegram", id: "77" },
+      { provider: "email", id: "mila@home.example" },
+      { provider: "email", id: "m.orlova@work.example" },
+    ])
+      await store.people.linkIdentities({ provider: "max", id: "2" }, other, owner)
+
+    await store.people.scanMatches({ full: true })
+
+    const person = await store.people.personOf({ provider: "max", id: "2" })
+    expect(person?.name).toBe("Mila K. Orlova")
   })
 })
