@@ -1,13 +1,15 @@
 import { CliError } from "@wirecat/cli-base"
 import { displayName } from "../../domain/display-names.js"
-import { nameSkeletons } from "../../domain/name-variants.js"
-import { RESERVED_ADDRESS_GLOBS, SEED_ID_GLOBS, SEED_PEOPLE } from "../../domain/test-data.js"
+import { FIRST_NAMES } from "../../domain/first-names.js"
+import { fullNames, nameSkeletons, wordSkeleton } from "../../domain/name-variants.js"
+import { foldName } from "../../resolve.js"
 import type { Decider } from "../decisions.js"
 import type { CacheDatabase } from "../driver.js"
 import { keepTogether, keptTogether } from "./identity-split-proposals.js"
 import { currentPerson } from "./merged-persons.js"
 import type { StoreContext } from "./open.js"
 import { merges, ownerOnly } from "./person-merges.js"
+import { hiddenTestPeople, judgeTestData, testIdentitySql, testVerdicts } from "./test-people.js"
 
 /** Why a person may be wrong, most urgent first: the owner's own person holding someone else matters most. */
 export const DOUBT_REASONS = ["owner-other-name", "test-data", "shared-address", "mixed-names"] as const
@@ -40,11 +42,12 @@ export interface PersonDoubt {
   moves: DoubtMove[]
 }
 
-/** Undo a merge, or move identities to one new person. */
+/** Undo a merge, move identities to one new person, or call the person test data, which hides them. */
 export type DoubtMove =
   | { op: "unmerge"; merge: string }
   /** `from` is the person they leave, `person:<uid>`. */
   | { op: "unlink"; identities: string[]; from: string }
+  | { op: "test-data"; person: string }
 
 export interface PersonDoubts {
   items: PersonDoubt[]
@@ -61,6 +64,7 @@ interface Held {
   name: string | null
   phone: string | null
   email: string | null
+  username: string | null
   /** The identity is an account the owner connected. */
   account: boolean
   method: string
@@ -70,7 +74,7 @@ interface Held {
 
 const COLUMNS =
   "l.person_id AS person, p.owner, p.name AS person_name, i.id AS pk, i.provider, i.external_id, i.name, i.phone, " +
-  "i.email, l.method, l.author, l.created_at, EXISTS (SELECT 1 FROM accounts a WHERE a.provider = i.provider " +
+  "i.email, i.username, l.method, l.author, l.created_at, EXISTS (SELECT 1 FROM accounts a WHERE a.provider = i.provider " +
   "AND a.external_id = i.external_id) AS account FROM identity_links l JOIN identities i ON i.id = l.identity_id " +
   "JOIN persons p ON p.id = l.person_id"
 
@@ -85,6 +89,7 @@ const heldOf = (row: Record<string, unknown>): Held => ({
   name: text(row.name),
   phone: text(row.phone)?.replace(/\D/gu, "") || null,
   email: text(row.email)?.toLowerCase() ?? null,
+  username: text(row.username),
   account: Number(row.account) === 1,
   method: String(row.method),
   by: String(row.author),
@@ -101,32 +106,40 @@ const sharedPeople = (database: CacheDatabase): Held[] =>
     .all()
     .map(heldOf)
 
-/**
- * Identities a test run left: the seed's word ids, an address at a reserved domain, or a seed name with its username
- * or beside another seed name in one provider, since one name alone may be a real person's.
- */
-const testData = (database: CacheDatabase): Held[] => {
-  const names = JSON.stringify(SEED_PEOPLE.map(({ name }) => name))
-  const usernames = JSON.stringify(SEED_PEOPLE.flatMap(({ username }) => (username === null ? [] : [username])))
-  const globs = (column: string, patterns: readonly string[]) =>
-    patterns.map((pattern) => `${column} GLOB '${pattern}'`).join(" OR ")
+/** Identities a test run left, the owner's word aside. */
+const testData = (database: CacheDatabase): (Held & { sure: boolean })[] => {
+  const { where, sure, params } = testIdentitySql()
   return database
-    .prepare(
-      `SELECT ${COLUMNS} WHERE ${globs("i.external_id", SEED_ID_GLOBS)} OR ${globs("lower(i.email)", RESERVED_ADDRESS_GLOBS)} ` +
-        "OR (i.name IN (SELECT value FROM json_each(?)) AND (i.username IN (SELECT value FROM json_each(?)) " +
-        "OR (SELECT count(DISTINCT j.name) FROM identities j WHERE j.provider = i.provider " +
-        "AND j.name IN (SELECT value FROM json_each(?))) >= 2)) ORDER BY l.person_id, i.id",
-    )
-    .all(names, usernames, names)
-    .map(heldOf)
+    .prepare(`SELECT ${sure}, ${COLUMNS} WHERE ${where} ORDER BY l.person_id, i.id`)
+    .all(...params)
+    .map((row) => ({ ...heldOf(row), sure: Number(row.sure) === 1 }))
 }
 
-/** A name's words, script and spelling aside; none for an address or a placeholder, which say nothing of a name. */
-const wordsOf = (name: string | null): Set<string> => {
+const FIRST = new Set(FIRST_NAMES.map(wordSkeleton))
+
+/** «Ivan» at ivan@… is still a name; «msx04x» at msx04x@… is not. */
+const isFirstName = (name: string): boolean => nameSkeletons(name).some((word) => FIRST.has(word))
+
+const bare = (text: string): string => foldName(text).replace(/[^\p{L}\p{N}]/gu, "")
+
+/**
+ * A name's words, script, spelling and short forms aside; none for an address or a placeholder, which say nothing of a
+ * name, nor for a name that only repeats the identity's own mailbox or username and is no first name, as Drive and
+ * mail show «msx04x» for msx04x@….
+ */
+const wordsOf = (name: string | null, handles: readonly (string | null)[] = []): Set<string> => {
   const shown = displayName(name)
   if (shown === null || shown.includes("@")) return new Set()
-  return new Set(nameSkeletons(shown).filter((word) => word.length >= 2 && !/^\d+$/u.test(word)))
+  if (handles.some((handle) => handle !== null && bare(handle) === bare(shown)) && !isFirstName(shown)) return new Set()
+  return new Set(
+    nameSkeletons(shown)
+      .filter((word) => word.length >= 2 && !/^\d+$/u.test(word))
+      .flatMap(fullNames),
+  )
 }
+
+const heldWords = ({ name, email, username }: Held): Set<string> =>
+  wordsOf(name, [email?.split("@")[0] ?? null, username])
 
 const sharesWord = (one: Set<string>, other: Set<string>): boolean => [...one].some((word) => other.has(word))
 
@@ -135,7 +148,7 @@ const sharesWord = (one: Set<string>, other: Set<string>): boolean => [...one].s
  * the owner linked by hand, an account the owner connected and the person's own name.
  */
 const nameGroups = (held: Held[]): Held[][] => {
-  const named = held.map((one) => ({ one, words: wordsOf(one.name) })).filter(({ words }) => words.size > 0)
+  const named = held.map((one) => ({ one, words: heldWords(one) })).filter(({ words }) => words.size > 0)
   const group = named.map((_, index) => index)
   const root = (at: number): number => {
     let top = at
@@ -164,7 +177,7 @@ const nameGroups = (held: Held[]): Held[][] => {
   const own = wordsOf(held[0]?.personName ?? null)
   const weight = (members: Held[]) =>
     members.reduce((sum, one) => sum + 1 + (one.by === "owner" ? 2 : 0) + (one.account ? 2 : 0), 0) +
-    (members.some(({ name }) => sharesWord(wordsOf(name), own)) ? 2 : 0)
+    (members.some((one) => sharesWord(heldWords(one), own)) ? 2 : 0)
   return [...groups.values()].sort((a, b) => weight(b) - weight(a) || (a[0] as Held).pk - (b[0] as Held).pk)
 }
 
@@ -178,6 +191,8 @@ interface Found {
   address?: string
   /** What the owner keeps by saying the person is right: `held` without the main name group a mixed doubt shows. */
   doubted: Held[]
+  /** Test data that is all the person holds, so calling the person test data hides nothing real. */
+  whole?: boolean
 }
 
 const quoted = (held: Held[]): string =>
@@ -236,23 +251,34 @@ const byPerson = (held: readonly Held[]): Map<number, Held[]> => {
 
 const ORDER = new Map(DOUBT_REASONS.map((reason, index) => [reason, index]))
 
+/** The identities a test run left that the owner has not called real, and the people memo hides as test data. */
+const testState = (database: CacheDatabase) => {
+  const verdicts = testVerdicts(database)
+  const test = testData(database).filter(({ ref }) => verdicts.get(ref) !== false)
+  return { verdicts, test, pks: new Set(test.map(({ pk }) => pk)), hidden: hiddenTestPeople(database) }
+}
+
 /** Everything in doubt, the owner first, then by reason and person. A few thousand people are read, never every row. */
 const everyDoubt = (database: CacheDatabase): Found[] => {
-  const test = testData(database)
-  const testPks = new Set(test.map(({ pk }) => pk))
+  const { verdicts, test, pks, hidden } = testState(database)
   const kept = keptTogether(database)
   const found: Found[] = []
   for (const [person, held] of byPerson(sharedPeople(database)))
-    for (const one of doubtsOf(held, kept.get(person) ?? new Set(), testPks)) found.push(one)
-  for (const held of byPerson(test).values()) {
-    const [first] = held as [Held]
+    for (const one of doubtsOf(held, kept.get(person) ?? new Set(), pks)) found.push(one)
+  const holds = database.prepare("SELECT count(*) AS n FROM identity_links WHERE person_id = ?")
+  for (const [person, held] of byPerson(test)) {
+    if (hidden.has(person)) continue
+    const open = held.filter(({ ref }) => !verdicts.has(ref))
+    const [first] = open
+    if (first === undefined) continue
     found.push({
-      person: first.person,
+      person,
       owner: first.owner,
       name: first.personName,
       reason: "test-data",
-      held,
+      held: open,
       doubted: [],
+      whole: !first.owner && Number(holds.get(person)?.n) === held.length,
     })
   }
   return found.sort(
@@ -268,7 +294,11 @@ const everyDoubt = (database: CacheDatabase): Found[] => {
  * unlink per name group of the rest, so two strangers on one person do not land on one new person together.
  */
 const movesOf = (context: StoreContext, found: Found): DoubtMove[] => {
-  if (found.reason === "test-data" || found.reason === "mixed-names") return []
+  if (found.reason === "mixed-names") return []
+  if (found.reason === "test-data")
+    return found.whole
+      ? [{ op: "test-data", person: `person:${found.person}` }]
+      : [{ op: "unlink", identities: found.held.map(({ ref }) => ref), from: `person:${found.person}` }]
   const doubted = new Set(found.held.map(({ ref }) => ref))
   const moves: DoubtMove[] = []
   const unmerged = new Set<string>()
@@ -287,7 +317,9 @@ const movesOf = (context: StoreContext, found: Found): DoubtMove[] => {
 const commandOf = (move: DoubtMove): string =>
   move.op === "unmerge"
     ? `people unmerge ${move.merge}`
-    : `people unlink ${move.identities.map(shellWord).join(" ")} --from ${move.from}`
+    : move.op === "test-data"
+      ? `people links resolve ${move.person} test`
+      : `people unlink ${move.identities.map(shellWord).join(" ")} --from ${move.from}`
 
 /** A ref as one shell word: an id may hold a space or a quote, and the fix is pasted into a terminal. */
 const shellWord = (ref: string): string => (/^[\w@.:+/=-]+$/u.test(ref) ? ref : `'${ref.replaceAll("'", "'\\''")}'`)
@@ -340,12 +372,13 @@ export interface KeptPerson {
   kept: string[]
 }
 
-/**
- * The owner's answer to a doubt: this person is right as they are. Test data is not a link and stays listed. Refused
- * when nothing about the person is in doubt.
- */
-export const keepPerson = (context: StoreContext, uid: string, by: Decider): KeptPerson => {
-  ownerOnly(by, "says a person's links are right")
+export interface TestDataPerson {
+  person: string
+  /** The identities the owner called test data: the person is hidden from every list until called real. */
+  identities: string[]
+}
+
+const personFor = (context: StoreContext, uid: string): number => {
   const asked = /^(?:person:)?([1-9]\d*)$/u.exec(uid.trim())?.[1]
   const known =
     asked === undefined || !Number.isSafeInteger(Number(asked))
@@ -353,23 +386,48 @@ export const keepPerson = (context: StoreContext, uid: string, by: Decider): Kep
       : context.database.prepare("SELECT id FROM persons WHERE id = ?").get(Number(asked))
   if (known === undefined)
     throw new CliError("not_found", `the store has no person for "${uid}"`, { reason: "person.unknown" })
-  const person = currentPerson(context.database, Number(known.id))
-  const held = context.database.prepare(`SELECT ${COLUMNS} WHERE l.person_id = ? ORDER BY i.id`).all(person).map(heldOf)
-  const test = new Set(testData(context.database).map(({ pk }) => pk))
+  return currentPerson(context.database, Number(known.id))
+}
+
+const heldOn = (context: StoreContext, person: number): Held[] =>
+  context.database.prepare(`SELECT ${COLUMNS} WHERE l.person_id = ? ORDER BY i.id`).all(person).map(heldOf)
+
+/**
+ * The owner's answer to a doubt: this person is right as they are, and what looked like test data is a real contact,
+ * which also brings back a person memo hid as test data. Refused when nothing about the person is in doubt or hidden.
+ */
+export const keepPerson = (context: StoreContext, uid: string, by: Decider): KeptPerson => {
+  ownerOnly(by, "says a person's links are right")
+  const person = personFor(context, uid)
+  const held = heldOn(context, person)
+  const { verdicts, pks } = testState(context.database)
   const doubted = [
     ...new Set(
-      doubtsOf(held, keptTogether(context.database).get(person) ?? new Set(), test).flatMap((found) =>
+      doubtsOf(held, keptTogether(context.database).get(person) ?? new Set(), pks).flatMap((found) =>
         found.doubted.map(({ ref }) => ref),
       ),
     ),
   ]
-  if (doubted.length === 0) {
-    if (held.some(({ pk }) => test.has(pk)))
-      throw new CliError("validation_error", `person:${person} is in doubt only as test data, which is not kept`, {
-        reason: "person.test-data",
-      })
+  const real = held.filter(({ pk, ref }) => pks.has(pk) || verdicts.get(ref) === true).map(({ ref }) => ref)
+  if (doubted.length === 0 && real.length === 0)
     throw new CliError("not_found", `nothing about person:${person} is in doubt`, { reason: "person.no-doubt" })
-  }
-  keepTogether(context, person, doubted)
-  return { person: `person:${person}`, kept: doubted }
+  if (doubted.length > 0) keepTogether(context, person, doubted)
+  if (real.length > 0) judgeTestData(context, person, real, false)
+  return { person: `person:${person}`, kept: [...new Set([...doubted, ...real])] }
+}
+
+/** The owner's answer to a doubt: the person is test data, hidden from every list until the owner calls them real. */
+export const markTestData = (context: StoreContext, uid: string, by: Decider): TestDataPerson => {
+  ownerOnly(by, "calls a person test data")
+  const person = personFor(context, uid)
+  const held = heldOn(context, person)
+  if (held[0]?.owner === true)
+    throw new CliError("validation_error", "your own person is not test data", { reason: "person.owner" })
+  if (held.length === 0)
+    throw new CliError("validation_error", `person:${person} has no identity to call test data`, {
+      reason: "person.no-identity",
+    })
+  const identities = held.map(({ ref }) => ref)
+  judgeTestData(context, person, identities, true)
+  return { person: `person:${person}`, identities }
 }

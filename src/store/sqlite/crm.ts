@@ -190,6 +190,12 @@ const relationNotes = ({ issues, skippedOwnerRejected, unlistedUsers, droppedPen
   ...(droppedPending ? { droppedPending } : {}),
 })
 
+/** At most this many of a contact's phones or addresses: a CRM field holds what people typed into it. */
+const MOST_CONTACTS = 20
+
+const listOf = (values: readonly unknown[], most: number): string[] =>
+  values.flatMap((value) => textOf(value, most) ?? []).slice(0, MOST_CONTACTS)
+
 export const crmCopiesOver = (context: StoreContext, people: AccountPeople): CrmCopies => {
   const { database, now } = context
   const { savePipeline, saveItemRow } = crmRowsOver(context)
@@ -753,6 +759,8 @@ export const crmCopiesOver = (context: StoreContext, people: AccountPeople): Crm
           name: textOf(contact.name, 200),
           email: textOf(contact.email, 320)?.toLowerCase() ?? null,
           phone: textOf(contact.phone, 64),
+          ...(contact.phones === undefined ? {} : { phones: listOf(contact.phones, 64) }),
+          ...(contact.emails === undefined ? {} : { emails: listOf(contact.emails, 320) }),
         })),
       )
       return write(database, () => {

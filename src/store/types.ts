@@ -43,6 +43,9 @@ export interface PersonFacts {
   email?: string | null
   /** As the provider showed it, whole; only where it shows it to the owner. */
   phone?: string | null
+  /** Every phone and address the source gives, as a CRM contact holds several; left out, the stored ones stay. */
+  phones?: string[]
+  emails?: string[]
 }
 
 /** One identity in one messenger, by the messenger's own id. `provider` is any string: `email` is one. */
@@ -68,6 +71,9 @@ export interface LinkedIdentity extends IdentityRef {
   /** The phone and address its source gave it, when it gave one. */
   phone?: string | null
   email?: string | null
+  /** Every phone and address its source gave, `phone` and `email` among them; empty when it gave none. */
+  phones?: string[]
+  emails?: string[]
   isBot: boolean | null
   /** The accounts in this store that have seen it. */
   accounts: Id[]

@@ -134,7 +134,7 @@ describe("people in doubt (IDEA-270)", () => {
     expect((await store.people.doubts(page)).items).toMatchObject([{ reason: "shared-address" }])
   })
 
-  it("keep turns down an agent's open split of the kept identities, and refuses a person in doubt as test data", async () => {
+  it("keep turns down an agent's open split of the kept identities", async () => {
     const store = await open()
     await store.people.savePeople(CRM, [
       { id: "c/1", name: "Ivan Petrov" },
@@ -155,14 +155,6 @@ describe("people in doubt (IDEA-270)", () => {
     expect((await store.people.splitProposals({ status: "rejected", limit: 10, offset: 0 })).items).toContainEqual(
       expect.objectContaining({ id: split.id }),
     )
-    await store.people.savePeople(WA, [
-      { id: "11", name: "Ann Lee" },
-      { id: "12", name: "Bob Ray" },
-    ])
-    const test = (await store.people.doubts(page)).items.find(({ reason }) => reason === "test-data")
-    await expect(store.people.keep(test?.person as string, "owner")).rejects.toMatchObject({
-      details: { reason: "person.test-data" },
-    })
   })
 
   it("leaves out a split the owner turned down", async () => {
@@ -233,7 +225,7 @@ describe("people in doubt (IDEA-270)", () => {
     })
   })
 
-  it("names test data: the seed's people together, and an address at a reserved domain", async () => {
+  it("asks about the seed's names together, and hides an address at a reserved domain without asking", async () => {
     const store = await open()
     await store.people.savePeople(WA, [
       { id: "11", name: "Ann Lee" },
@@ -246,11 +238,109 @@ describe("people in doubt (IDEA-270)", () => {
 
     const found = await store.people.doubts(page)
 
-    expect(found.items.map(({ reason, identities }) => [reason, identities.map(({ identity }) => identity)])).toEqual([
-      ["test-data", ["whatsapp:11"]],
-      ["test-data", ["whatsapp:12"]],
-      ["test-data", ["bitrix24:c/9", "email:x@demo.test"]],
+    expect(
+      found.items.map(({ reason, identities, moves }) => [reason, identities.map(({ identity }) => identity), moves]),
+    ).toEqual([
+      ["test-data", ["whatsapp:11"], [{ op: "test-data", person: found.items[0]?.person }]],
+      ["test-data", ["whatsapp:12"], [{ op: "test-data", person: found.items[1]?.person }]],
     ])
+    expect(found.items[0]?.fix).toEqual([`people links resolve ${found.items[0]?.person} test`])
+    expect((await store.people.similar("Real Person")).map(({ displayName }) => displayName)).toEqual([])
+    const hidden = await store.people.list({ kind: "test", limit: 10 })
+    expect(hidden.items.map(({ displayName }) => displayName)).toEqual(["Real Person"])
+    expect(hidden.items[0]?.kindSignals).toEqual(["test-data"])
+    const all = await store.people.list({ kind: "all", limit: 50 })
+    expect(all.items.map(({ displayName }) => displayName)).not.toContain("Real Person")
+    expect(all.total).toBe(all.items.length)
+  })
+
+  it("hides what the owner calls test data and brings back what the owner calls a real contact", async () => {
+    const store = await open()
+    await store.people.savePeople(WA, [
+      { id: "11", name: "Ann Lee" },
+      { id: "12", name: "Bob Ray" },
+    ])
+    await store.people.savePeople(MAIL, [{ id: "qa@demo.test", name: "Quinn Alder" }])
+    const [ann, bob] = (await store.people.doubts(page)).items
+    const hiddenPerson = (await store.people.list({ kind: "test", limit: 10 })).items[0]?.person as string
+
+    await expect(
+      store.people.markTestData(ann?.person as string, { bot: "claude-code", reason: "a seed name" }),
+    ).rejects.toMatchObject({
+      details: { reason: "identity.owner-only" },
+    })
+    await expect(store.people.markTestData("person:me", "owner")).rejects.toMatchObject({
+      details: { reason: "person.unknown" },
+    })
+    expect(await store.people.markTestData(ann?.person as string, "owner")).toEqual({
+      person: ann?.person,
+      identities: ["whatsapp:11"],
+    })
+    expect(await store.people.keep(bob?.person as string, "owner")).toEqual({
+      person: bob?.person,
+      kept: ["whatsapp:12"],
+    })
+    await store.people.keep(hiddenPerson, "owner")
+
+    expect((await store.people.doubts(page)).items).toEqual([])
+    expect((await store.people.list({ kind: "test", limit: 10 })).items.map(({ person }) => person)).toEqual([
+      ann?.person,
+    ])
+    const shown = (await store.people.list({ kind: "all", limit: 50 })).items.map(({ person }) => person)
+    expect(shown).toEqual(expect.arrayContaining([bob?.person, hiddenPerson]))
+    expect(shown).not.toContain(ann?.person)
+  })
+
+  it("asks to unlink test data from a person who holds a real identity too", async () => {
+    const store = await open()
+    await store.people.savePeople(CRM, [{ id: "c/1", name: "Ivan Petrov" }])
+    await store.people.savePeople(MAIL, [{ id: "ivan@demo.test", name: "Ivan Petrov" }])
+    const crm = { provider: "bitrix24", id: "c/1" }
+    await store.people.linkIdentities(
+      crm,
+      { provider: "email", id: "ivan@demo.test" },
+      { method: "same-name", by: "rules" },
+    )
+
+    const [doubt] = (await store.people.doubts(page)).items
+
+    expect(doubt).toMatchObject({
+      reason: "test-data",
+      moves: [{ op: "unlink", identities: ["email:ivan@demo.test"], from: doubt?.person }],
+    })
+    expect((await store.people.list({ kind: "test", limit: 10 })).items).toEqual([])
+  })
+
+  it("does not doubt a name that only repeats the identity's own mailbox", async () => {
+    const store = await open()
+    await store.people.savePeople(MAIL, [{ id: "zx81q@mail.ru", name: "Yarik" }])
+    await store.people.savePeople({ provider: "google-drive", account: "d1", scope: "personal" }, [
+      { id: "g1", name: "zx81q", email: "zx81q@mail.ru" },
+    ])
+
+    expect((await store.people.doubts(page)).items).toEqual([])
+  })
+
+  it("still doubts a first name on its own mailbox beside another name on the same address", async () => {
+    const store = await open()
+    await store.people.savePeople(MAIL, [{ id: "ivan@acme.ru", name: "Ivan" }])
+    await store.people.savePeople(CRM, [{ id: "c/1", name: "Олег Петров", email: "ivan@acme.ru" }])
+
+    expect((await store.people.doubts(page)).items).toMatchObject([{ reason: "shared-address" }])
+  })
+
+  it("does not doubt a short form of a name on one address, in either script", async () => {
+    const store = await open()
+    await store.people.savePeople(MAIL, [
+      { id: "orlov@acme.ru", name: "Ярик" },
+      { id: "petrov@acme.ru", name: "Bob" },
+    ])
+    await store.people.savePeople(CRM, [
+      { id: "c/1", name: "Yaroslav Orlov", email: "orlov@acme.ru" },
+      { id: "c/2", name: "Роберт Петров", email: "petrov@acme.ru" },
+    ])
+
+    expect((await store.people.doubts(page)).items).toEqual([])
   })
 
   it("pages, the owner first, with the total", async () => {

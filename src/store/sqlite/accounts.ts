@@ -34,6 +34,7 @@ import {
   syncRanges,
   syncs,
 } from "./schema.js"
+import { forgetErasedTestData } from "./test-people.js"
 import { dropUnusedVectors } from "./vector-index.js"
 
 /**
@@ -339,6 +340,7 @@ export const dropOrphanPeople = (database: CacheDatabase, unseenBefore: Set<numb
   database.prepare("DELETE FROM identities WHERE id IN (SELECT value FROM json_each(?))").run(gone)
   forgetErasedLinks(database)
   forgetErasedSplits(database)
+  forgetErasedTestData(database)
   database
     .prepare(
       `DELETE FROM persons WHERE id IN (SELECT value FROM json_each(?)) AND owner = 0

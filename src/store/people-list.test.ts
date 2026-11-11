@@ -8,7 +8,7 @@ import { openCache } from "./open.js"
 import { type AccountKey, type MessageStore, openStore } from "./store.js"
 
 const TG: AccountKey = { provider: "telegram", account: "1" }
-const MAIL: AccountKey = { provider: "email", account: "me@example.test" }
+const MAIL: AccountKey = { provider: "email", account: "me@acme.ru" }
 const CRM: AccountKey = { provider: "bitrix24", account: "acme.example" }
 const NOW = Date.parse("2026-11-01T12:00:00Z")
 
@@ -81,7 +81,7 @@ describe("people's ties to the owner", () => {
     expect(await shownOf(store)).toEqual({ Dina: ["chat"], Gala: ["small-group"] })
     expect(listed.items[0]).toMatchObject({ owner: true, ties: ["owner", "chat", "small-group"] })
     expect(listed).toMatchObject({ total: 3, hasMore: false })
-    expect(listed.counts).toEqual({ person: 3, organization: 0, automated: 0, stranger: 2, unsorted: 0 })
+    expect(listed.counts).toEqual({ person: 3, organization: 0, automated: 0, stranger: 2, unsorted: 0, test: 0 })
     expect((await store.people.list({ limit: 100, kind: "stranger" })).items.map(({ name }) => name)).toEqual([
       "Hugo",
       "Ugo",
@@ -99,8 +99,8 @@ describe("people's ties to the owner", () => {
     const { store, db } = await opened()
     await store.accounts.saveAccount(MAIL, { name: null })
     await store.people.savePeople(MAIL, [
-      { id: "ann@example.test", name: "Ann" },
-      { id: "news@shop.example", name: "Shop News" },
+      { id: "ann@acme.ru", name: "Ann" },
+      { id: "news@shop.ru", name: "Shop News" },
     ])
     const account = Number(db.prepare("SELECT id FROM accounts WHERE provider = 'email'").get()?.id)
     const thread = (n: number) =>
@@ -120,11 +120,11 @@ describe("people's ties to the owner", () => {
         "VALUES (?, ?, ?, 'to', 0, ?, ?)",
     )
     const sent = Number(email.get(account, thread(1), "m1", null, 1, NOW, NOW)?.id)
-    recipient.run(sent, identityPk(db, "email", "ann@example.test"), "ann@example.test", NOW, NOW)
+    recipient.run(sent, identityPk(db, "email", "ann@acme.ru"), "ann@acme.ru", NOW, NOW)
     const newsletter = Number(
-      email.get(account, thread(2), "m2", identityPk(db, "email", "news@shop.example"), 0, NOW, NOW)?.id,
+      email.get(account, thread(2), "m2", identityPk(db, "email", "news@shop.ru"), 0, NOW, NOW)?.id,
     )
-    recipient.run(newsletter, null, "me@example.test", NOW, NOW)
+    recipient.run(newsletter, null, "me@acme.ru", NOW, NOW)
 
     expect(await shownOf(store)).toEqual({ Ann: ["mail"] })
   })
@@ -278,8 +278,8 @@ describe("the kind of a person", () => {
     for (const id of ["40", "41", "44"]) await store.roster.saveMembers(TG, `d${id}`, ["1", id])
     await store.accounts.saveAccount(MAIL, { name: null })
     await store.people.savePeople(MAIL, [
-      { id: "no-reply@shop.example", name: "Orders" },
-      { id: "info@hotel.example", name: "Reception" },
+      { id: "no-reply@shop.ru", name: "Orders" },
+      { id: "info@hotel.ru", name: "Reception" },
     ])
 
     expect(await kinds(store)).toEqual({
@@ -296,7 +296,7 @@ describe("the kind of a person", () => {
   it("calls a sender automated when most of their mail went to the bulk box", async () => {
     const { store, db } = await opened()
     await store.accounts.saveAccount(MAIL, { name: null })
-    await store.people.savePeople(MAIL, [{ id: "lena@example.test", name: "Lena Marsh" }])
+    await store.people.savePeople(MAIL, [{ id: "lena@acme.ru", name: "Lena Marsh" }])
     const account = Number(db.prepare("SELECT id FROM accounts WHERE provider = 'email'").get()?.id)
     const thread = Number(
       db
@@ -320,7 +320,7 @@ describe("the kind of a person", () => {
             "INSERT INTO emails (account_id, email_thread_id, external_id, from_identity_id, outgoing, sent_at, " +
               "created_at, updated_at) VALUES (?, ?, ?, ?, 0, ?, ?, ?) RETURNING id",
           )
-          .get(account, thread, `m${n}`, identityPk(db, "email", "lena@example.test"), NOW + n, NOW, NOW)?.id,
+          .get(account, thread, `m${n}`, identityPk(db, "email", "lena@acme.ru"), NOW + n, NOW, NOW)?.id,
       )
       db.prepare("INSERT INTO email_mailboxes (email_id, mailbox_id, created_at) VALUES (?, ?, ?)").run(
         email,
@@ -334,7 +334,7 @@ describe("the kind of a person", () => {
       kindSignals: ["bulk-mail"],
       messagesFrom: 3,
       lastContact: new Date(NOW + 3).toISOString(),
-      contact: "lena@example.test",
+      contact: "lena@acme.ru",
     })
   })
 
@@ -375,6 +375,7 @@ describe("the kind of a person", () => {
       automated: 0,
       stranger: 1,
       unsorted: 1,
+      test: 0,
     })
   })
 
@@ -434,7 +435,7 @@ describe("similar people", () => {
 describe("a name in another script (BUG-678)", () => {
   it("is found by a people search and by the check before adding someone", async () => {
     const { store } = await opened()
-    await store.people.savePeople(MAIL, [{ id: "sveta@example.test", name: "Svetlana Kuznetsova" }])
+    await store.people.savePeople(MAIL, [{ id: "sveta@acme.ru", name: "Svetlana Kuznetsova" }])
     await store.people.savePeople(TG, [{ id: "20", name: "Светлана Морозова" }])
 
     const found = await store.people.list({ limit: 10, kind: "all", query: "Светлана" })
