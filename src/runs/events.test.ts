@@ -2,6 +2,17 @@ import { describe, expect, it } from "vitest"
 import { providerErrorKey, renderEvent } from "./events.js"
 
 describe("renderEvent", () => {
+  it("shows a progress line with its counts", () => {
+    expect(
+      renderEvent({
+        event: "progress",
+        operation: "sync.progress",
+        kind: "progress",
+        counts: { chats: 36, chats_done: 2, fetched: 146 },
+      }),
+    ).toBe("… sync.progress    36 chats  2 chats_done  146 fetched")
+  })
+
   it("shows a request and its response with ids, duration, counts and the error", () => {
     expect(renderEvent({ event: "request", operation: "messages.list", ids: { chat: "777" } })).toBe(
       "→ messages.list    chat 777",

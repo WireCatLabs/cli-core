@@ -541,6 +541,18 @@ describe("messages sync progress", () => {
     expect(stderr).not.toMatch(/Secret title|9002/)
   })
 
+  it("**the run's log keeps each progress line as sync.progress**, counts only", async () => {
+    clock()
+    const { stderr } = await call([...sync, "9002", "--json", "--trace"], chatsOf({ "9002": 5 }, 1_000), setup())
+
+    const logged = stderr
+      .split("\n")
+      .filter((line) => line.includes('"sync.progress"'))
+      .map((line) => JSON.parse(line))
+    expect(logged.map((event) => event.counts)).toEqual([{ fetched: 2 }, { fetched: 4 }, { fetched: 5 }])
+    expect(logged[0]).toMatchObject({ event: "progress", operation: "sync.progress", kind: "progress" })
+  })
+
   it("**keeps to about two lines a second** when pages come faster, and prints none for a person", async () => {
     clock()
     const fast = chatsOf({ "9002": 5 }, 100)

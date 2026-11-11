@@ -373,7 +373,7 @@ WireCat Desktop runs for its own pages (`WIRECAT_CALLER=desktop`) keep a success
 (`{ kind: "store", table, op: insert|update|delete, n }`; counts only, from the statement text and SQLite's own
 change count, so every writer is covered without passing anything). Past 100 in a run the rest are summed by table
 and change and written as one event each when the run ends, so a long sync neither crowds out its requests nor pays
-for each write. The run's `tables` lists every table they named; `search runs kind:store table:emails` finds them. A success that wrote the store is kept
+for each write. The run's `tables` lists every table they named; `search runs kind:store table:emails` finds them. `messages sync` logs each progress line it shows as a `sync.progress` event (`{ kind: "progress", counts: { chats, chats_done, fetched } }`, counts only), in every output format, so the log says what a window drew; `search runs kind:progress` finds them. A success that wrote the store is kept
 for `keep_store_runs_for_days` (3) even where it would not be (`record: false`, Desktop, a server), marked
 `kept_because_store`, and for the longer of the two horizons when it was recorded anyway. A run holds
 at most 2,000 events or 1 MB; past that it counts the rest by operation in one `events.dropped` line and

@@ -7,6 +7,7 @@ import { Command } from "commander"
 import { parseDuration } from "../../domain/duration.js"
 import { isCliFailure } from "../../errors/failures.js"
 import { envName } from "../../ports/app.js"
+import { runEvent } from "../../runs/scope.js"
 import { FETCHING, type Fetched, type FetchedAll } from "../../services/archive.js"
 import { JOBS_QUERY, jobItems } from "../../services/job-query.js"
 import { dateWindow } from "../../services/moment.js"
@@ -363,6 +364,7 @@ const PROGRESS_EVERY_MS = 500
 /**
  * `messages sync`'s progress for a window to draw a bar by: counts only, because the lines reach a desktop app and
  * its logs — never a chat's id or title. `always` keeps the first and the last line of `--all` through the throttle.
+ * The run's log gets the same counts as `sync.progress`, whatever the output format.
  */
 const syncProgress = (emit: ReturnType<typeof stepLines>) => {
   let last = Number.NEGATIVE_INFINITY
@@ -371,6 +373,14 @@ const syncProgress = (emit: ReturnType<typeof stepLines>) => {
     if (!always && now - last < PROGRESS_EVERY_MS) return
     last = now
     emit({ event: "progress", step: "sync", ...counts })
+    runEvent({
+      event: "progress",
+      operation: "sync.progress",
+      kind: "progress",
+      counts: Object.fromEntries(
+        Object.entries(counts).filter((entry): entry is [string, number] => entry[1] !== null),
+      ),
+    })
   }
 }
 
