@@ -38,11 +38,12 @@ export class Pacer {
 
   /** When this call may go; reserved at once, so the next caller in any process lines up behind it. */
   async reserve(): Promise<number> {
-    const now = this.now()
-    if (this.interval === 0) return now
+    if (this.interval === 0) return this.now()
     return withFileLockAsync(this.path, "the request pace", () => {
-      const tat = Math.max(this.read(), now)
-      this.write(tat + this.interval)
+      // Inside the lock: read earlier, another process's write would look like a clock step.
+      const now = this.now()
+      const tat = Math.max(this.read(now), now)
+      this.write(tat + this.interval, now)
       return Math.max(now, tat - this.rate.burst * this.interval)
     })
   }
@@ -51,28 +52,34 @@ export class Pacer {
   async holdFor(waitMs: number): Promise<void> {
     if (this.interval === 0) return
     await withFileLockAsync(this.path, "the request pace", () => {
-      const hold = this.now() + waitMs + this.rate.burst * this.interval
-      this.write(Math.max(this.read(), hold))
+      const now = this.now()
+      const hold = now + waitMs + this.rate.burst * this.interval
+      this.write(Math.max(this.read(now), hold), now)
     })
   }
 
   /** The owner's `flood clear`: every process may go again at once. */
   async reset(): Promise<void> {
-    await withFileLockAsync(this.path, "the request pace", () => this.write(0))
+    await withFileLockAsync(this.path, "the request pace", () => this.write(0, this.now()))
   }
 
-  private read(): number {
+  private read(now: number): number {
     try {
-      const tat = Number((JSON.parse(readFileSync(this.path, "utf8")) as { tat?: unknown }).tat)
-      return Number.isFinite(tat) ? tat : 0
+      const file = JSON.parse(readFileSync(this.path, "utf8")) as { tat?: unknown; at?: unknown }
+      const tat = Number(file.tat)
+      if (!Number.isFinite(tat)) return 0
+      const at = Number(file.at)
+      // Written "in the future" means the clock went back since, as when a machine boots ahead and NTP steps it. What
+      // was left of the wait still holds; the absolute time, hours off, does not.
+      return Number.isFinite(at) && at > now ? now + Math.max(0, tat - at) : tat
     } catch {
       return 0
     }
   }
 
-  private write(tat: number): void {
+  private write(tat: number, at: number): void {
     const temporary = `${this.path}.${process.pid}.tmp`
-    writeFileSync(temporary, JSON.stringify({ tat }), { mode: 0o600 })
+    writeFileSync(temporary, JSON.stringify({ tat, at }), { mode: 0o600 })
     renameSync(temporary, this.path)
   }
 }
@@ -117,7 +124,7 @@ export const waitForTurn = async (pacer: Pacer, options: TurnOptions): Promise<v
   if (waitMs > LONGEST_PACE_WAIT_MS)
     throw new CliError(
       "rate_limited",
-      `${name} asked this profile to wait, ${Math.ceil(waitMs / 1000)} s are left — nothing was sent to ${name}`,
+      `this profile's next request to ${name} has to wait ${Math.ceil(waitMs / 1000)} s more — nothing was sent to ${name}`,
       { retry_after_ms: waitMs, retry_at: new Date(at).toISOString(), remembered: true },
     )
   if (waitMs >= ANNOUNCE_WAIT_MS) {

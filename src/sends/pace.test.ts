@@ -50,6 +50,44 @@ describe("the request pace", () => {
     expect(await pacer.reserve()).toBe(T)
   })
 
+  it("does not carry the clock's error over when the clock goes back", async () => {
+    let now = T + 3 * 3_600_000
+    const pacer = new Pacer(fresh(), { perMinute: 60, burst: 1 }, () => now)
+    await pacer.reserve()
+    await pacer.reserve()
+    now = T
+
+    expect(await pacer.reserve()).toBe(T + 1_000)
+  })
+
+  it("keeps what is left of a messenger's wait when the clock goes back", async () => {
+    let now = T + 3 * 3_600_000
+    const pacer = new Pacer(fresh(), { perMinute: 60, burst: 0 }, () => now)
+    await pacer.holdFor(600_000)
+    now = T
+
+    expect(await pacer.reserve()).toBe(T + 600_000)
+  })
+
+  it("reads the time inside the lock, so a later write by another process is no clock step", async () => {
+    const path = fresh()
+    let now = T
+    const pacer = new Pacer(path, { perMinute: 60, burst: 0 }, () => now)
+    await pacer.holdFor(600_000)
+    now = T + 10
+
+    expect(await pacer.reserve()).toBe(T + 600_000)
+  })
+
+  it("keeps a messenger's long wait while the clock runs forward", async () => {
+    let now = T
+    const pacer = new Pacer(fresh(), { perMinute: 60, burst: 0 }, () => now)
+    await pacer.holdFor(3 * 3_600_000)
+    now += 60_000
+
+    expect(await pacer.reserve()).toBe(T + 3 * 3_600_000)
+  })
+
   it("does nothing at 0 a minute", async () => {
     const pacer = new Pacer(fresh(), { perMinute: 0, burst: 0 }, () => T)
     await pacer.holdFor(30_000)
@@ -88,6 +126,8 @@ describe("waiting for a turn", () => {
   it("refuses a wait longer than a run sits out, sending nothing", async () => {
     const pacer = new Pacer(fresh(), { perMinute: 60, burst: 1 }, () => T)
     await pacer.holdFor(10 * 60_000)
-    await expect(turn(pacer)).rejects.toMatchObject({ code: "rate_limited", details: { remembered: true } })
+    const refused = turn(pacer)
+    await expect(refused).rejects.toMatchObject({ code: "rate_limited", details: { remembered: true } })
+    await expect(refused).rejects.toThrow("has to wait")
   })
 })
