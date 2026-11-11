@@ -5,6 +5,23 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## 0.638.0 — 11.11.2026
+
+### Added
+
+- **`participants_count` in the query language.** `participants_count<10` matches messages in chats of fewer than ten
+  people, as the messenger last reported the size; a chat whose size was never reported matches no value. So
+  `stats messages show 'kind:private OR (kind:group participants_count<10)'` counts personal conversations and leaves
+  big groups out.
+
+### Fixed
+
+- **A new contact from mail needs a name the mail's text adds.** A `new_contact` finding whose name only repeats what the store has from the sender line is refused (`new-contact.sender-line`), and so is one whose name is not in the text of the mail it cites (`new-contact.not-in-text`). A name copied from a header is metadata, not something for the owner to review. Batches already waiting stay as they are until decided.
+- **A clock stepped back no longer leaves a profile waiting for hours.** The request pace now keeps when it wrote its
+  file, and corrects a wait written "in the future" by the size of the step: a computer that booted with its clock three hours ahead refused
+  every sync for three hours once NTP corrected it. The refusal also stops saying the messenger asked for the wait,
+  which it could not know.
+
 ## 0.637.0 — 11.11.2026
 
 ### Fixed
