@@ -17,7 +17,9 @@ import { toolsFromCommands } from "../../mcp/agent.js"
 import type { AppIdentity } from "../../ports/app.js"
 import { SendJournal, sendsPathFor } from "../../sends/journal.js"
 import type { Level } from "../../sends/permissions.js"
+import { dealContext } from "../../services/deal-context.js"
 import { openCache } from "../../store/open.js"
+import { crmSettingKey, saveCrmSetting } from "../../store/sqlite/crm-settings.js"
 import { type MessageStore, openStore } from "../../store/store.js"
 import {
   exampleDeal,
@@ -652,5 +654,91 @@ describe("CRM write commands", () => {
       details: { sent: true, operation_id: expect.any(String) },
     })
     expect(journal()).toEqual([expect.objectContaining({ outcome: "sent", key: "deals.update" })])
+  })
+})
+
+describe("CRM stage tasks", () => {
+  const NOW = Date.UTC(2026, 10, 11)
+  const rules = async (path: string, value: Record<string, unknown>) => {
+    const database = await openCache(path)
+    saveCrmSetting(database, crmSettingKey(PORTAL, "stage-tasks"), value, NOW)
+    database.close()
+  }
+  const tasksOf = async (store: MessageStore, ref: string) =>
+    store.tasks.find({ where: { sql: "t.source_group = ?", params: [ref] } })
+  const stageTasks = async (cli: (...args: string[]) => Promise<{ item: Record<string, unknown> }>) =>
+    (await cli("sync")).item.stage_tasks
+  const QUOTE = {
+    quote: { title: "Send the quote", due_days: 2 },
+    "lead:lead-good": { title: "Call back", due_days: 0 },
+  }
+
+  it("open one task per move into a configured stage, none on the first sync, for a new row or another stage", async () => {
+    const { path, cli, source, store } = await setup({}, { now: () => NOW })
+    await rules(path, QUOTE)
+    expect(await stageTasks(cli)).toBe(0)
+    const d1 = (await cli("deals", "list", "status:open")).items[0]?.ref as string
+    const update = (stage: string) =>
+      source.put("deal", exampleDeal("d1", { title: "Example website", organization: "c1", stage }))
+
+    source.put(
+      "deal",
+      exampleDeal("d1", { title: "Example website", organization: "c1", stage: "quote", assignee: "7" }),
+    )
+    source.put("deal", exampleDeal("d2", { stage: "quote" }))
+    source.put("deal", exampleDeal("d3", { stage: "quote" }))
+    source.put("lead", exampleLead("l1", { stage: "lead-good" }))
+    expect(await stageTasks(cli)).toBe(3)
+    const [task] = await tasksOf(store, d1)
+    expect(task).toMatchObject({
+      title: "Send the quote",
+      status: "open",
+      dueAt: new Date(NOW + 2 * 86_400_000).toISOString(),
+    })
+    expect(task?.description).toContain("Example website")
+    expect(task?.description).toContain("Quote sent")
+    expect(task?.description).toContain("Responsible: CRM user 7")
+    expect(await stageTasks(cli)).toBe(0)
+
+    update("won")
+    expect(await stageTasks(cli)).toBe(0)
+    update("quote")
+    expect(await stageTasks(cli)).toBe(1)
+    expect(await tasksOf(store, d1)).toHaveLength(2)
+    expect((await dealContext(store, d1)).tasks.items.map(({ title }) => title)).toEqual([
+      "Send the quote",
+      "Send the quote",
+    ])
+  })
+
+  it("a dismissed task stays dismissed when its move is read again", async () => {
+    const { path, cli, source, store } = await setup({}, { now: () => NOW })
+    await rules(path, QUOTE)
+    await cli("sync")
+    source.put("deal", exampleDeal("d2", { stage: "quote" }))
+    expect(await stageTasks(cli)).toBe(1)
+    const ref = (await cli("deals", "list", "status:open")).items.find(({ external_id }) => external_id === "d2")
+      ?.ref as string
+    const [task] = await tasksOf(store, ref)
+    await store.tasks.edit(task?.ref as string, { status: "dismissed" }, "owner")
+    const database = await openCache(path)
+    database.prepare("UPDATE store_settings SET value = '0' WHERE key LIKE '%.stage-tasks.after'").run()
+    database.close()
+    expect(await stageTasks(cli)).toBe(0)
+    expect((await tasksOf(store, ref)).map(({ status }) => status)).toEqual(["dismissed"])
+  })
+
+  it("moves made before the rule was set open none, and a deals move counts at the next sync", async () => {
+    const { path, cli, source, store } = await setup({}, { writes: WRITES, now: () => NOW })
+    await cli("sync")
+    const ref = (await cli("deals", "list", "status:open")).items[0]?.ref as string
+    source.put("deal", exampleDeal("d1", { title: "Example website", organization: "c1", stage: "quote" }))
+    await cli("sync")
+    await cli("deals", "move", ref, "New")
+    await rules(path, QUOTE)
+    expect(await stageTasks(cli)).toBe(0)
+    await cli("deals", "move", ref, "Quote sent")
+    expect(await stageTasks(cli)).toBe(1)
+    expect(await tasksOf(store, ref)).toHaveLength(1)
   })
 })

@@ -11,6 +11,8 @@ export interface NewTask {
   origin: TaskOrigin
   dueAt?: Date
   category?: string
+  title?: string
+  description?: string
 }
 
 export interface CloseOptions {

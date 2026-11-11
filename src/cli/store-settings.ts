@@ -71,10 +71,10 @@ export const STORE_SETTINGS = [
 
 const GROUP_PREFIX = `${ACCOUNT_GROUPS_SETTING}.`
 /**
- * A CRM account's: whether what it reports is a relationship or waits for review, what its company types mean, and
- * whose deals and leads its sync copies.
+ * A CRM account's: whether what it reports is a relationship or waits for review, what its company types mean, whose
+ * deals and leads its sync copies, and which stages open a task.
  */
-const CRM_SETTINGS = ["links", "company-types", "scope", "unassigned", "self"].map(
+const CRM_SETTINGS = ["links", "company-types", "scope", "unassigned", "self", "stage-tasks"].map(
   (name) => `crm.<provider>:<account>.${name}`,
 )
 
@@ -90,10 +90,13 @@ export const storeSettingsOf = (app: Pick<AppIdentity, "messenger">): string[] =
 export const offersStoreSetting = (app: Pick<AppIdentity, "messenger">, setting: string): boolean =>
   app.messenger !== false || setting in SCRIPTS || setting === OWNER_LANGUAGES || parseCrmSetting(setting) !== undefined
 
-/** Whose deals a CRM copy holds: the owner's to set; an agent's run is stopped from changing it by mistake. */
+/**
+ * Whose deals a CRM copy holds and what opens the owner's tasks: the owner's to set; an agent's run is stopped from
+ * changing them by mistake.
+ */
 export const isOwnerOnlyStoreSetting = (setting: string): boolean => {
   const name = parseCrmSetting(setting)?.name
-  return name === "scope" || name === "self" || name === "unassigned"
+  return name === "scope" || name === "self" || name === "unassigned" || name === "stage-tasks"
 }
 
 export const isStoreSetting = (setting: string): boolean =>
@@ -311,11 +314,20 @@ const crmValueText = (value: unknown): string =>
     ? value
     : Array.isArray(value)
       ? value.join(",")
-      : Object.entries(value as Record<string, string>)
-          .map(([type, meaning]) => `${type}=${meaning}`)
-          .join(",")
+      : Object.values(value as object).some((one) => typeof one === "object")
+        ? JSON.stringify(value)
+        : Object.entries(value as Record<string, string>)
+            .map(([type, meaning]) => `${type}=${meaning}`)
+            .join(",")
 
-const CRM_DEFAULTS = { links: "reported", "company-types": {}, scope: "mine", unassigned: [], self: "" } as const
+const CRM_DEFAULTS = {
+  links: "reported",
+  "company-types": {},
+  scope: "mine",
+  unassigned: [],
+  self: "",
+  "stage-tasks": {},
+} as const
 
 const crmNote = (name: keyof typeof CRM_DEFAULTS, now: unknown): string => {
   if (name === "links")
@@ -331,6 +343,11 @@ const crmNote = (name: keyof typeof CRM_DEFAULTS, now: unknown): string => {
           "of the unassigned users, and marks the others deleted here; contacts and companies stay whole"
   if (name === "unassigned")
     return "store-wide — with scope mine, the next sync also copies the deals and leads of these users"
+  if (name === "stage-tasks")
+    return Object.keys(now as object).length === 0
+      ? "store-wide — no stage opens a task"
+      : "store-wide — from now on, each sync opens a local task for every deal or lead that moved into one of these " +
+          "stages since the last sync; moves made before the rules were first set open none"
   return now === ""
     ? "store-wide — the next sync gives the account's copy to its sign-in's user, and narrows it to that user's deals"
     : "store-wide — the account's copy holds this user's deals; a sync signed in as another user is refused"

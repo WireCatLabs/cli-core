@@ -359,7 +359,7 @@ describe("config", () => {
     expect((await call(["config", "show", "--json"], env)).code).toBe(0)
   })
 
-  it("**whose deals a CRM copy holds is the owner's**: an agent's run is stopped from setting a CRM account's scope, self or unassigned by mistake", async () => {
+  it("**whose deals a CRM copy holds is the owner's**: an agent's run is stopped from setting a CRM account's scope, self, unassigned or stage tasks by mistake", async () => {
     const tool = { ...app, messenger: false }
     const own = settingsFor(tool)
     const root = mkdtempSync(join(tmpdir(), "config-"))
@@ -382,6 +382,7 @@ describe("config", () => {
       ["scope", "all"],
       ["self", "7"],
       ["unassigned", "15"],
+      ["stage-tasks", '{"C1:WON":{"title":"Send the closing papers","due_days":2}}'],
     ] as const) {
       const refused = await call({ AI_AGENT: "hermes-agent" }, "set", `${key}.${name}`, value)
       expect(refused.code).toBe(5)
@@ -390,6 +391,7 @@ describe("config", () => {
       expect((await call({}, "set", `${key}.${name}`, value)).code).toBe(0)
     }
     expect((await call({ AI_AGENT: "hermes-agent" }, "set", `${key}.links`, "review")).code).toBe(0)
+    expect((await call({}, "set", `${key}.stage-tasks`, '{"WON":{"title":"x"}}')).stderr).toContain("due_days")
     const program = new Command("chat").addCommand(configCommand(tool, own))
     expect(changesAuthorityAt(program)(["config", "set"])).toBe(true)
   })

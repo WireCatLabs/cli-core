@@ -22,6 +22,7 @@ import type { Deal, DealFilter, Pipeline } from "../../store/sqlite/deals.js"
 import type { MessageStore } from "../../store/store.js"
 import type { AccountKey } from "../../store/types.js"
 import type { CrmSource } from "../source.js"
+import { openStageTasks } from "../stage-tasks.js"
 import { crmStatus, syncCrm } from "../sync.js"
 import type { CrmWriteCapabilities } from "../writer.js"
 import {
@@ -143,6 +144,7 @@ const crmSync = v.strictObject({
   users: v.optional(count),
   skipped_owner_rejected: count,
   contacts_removed: v.optional(crmContactsRemoved),
+  stage_tasks: count,
   synced: v.array(
     v.strictObject({
       kind: v.picklist(CRM_KINDS),
@@ -283,7 +285,8 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
     ).description(
       "bring the CRM's copy in the local store up to date: pipelines, companies, contacts, deals and leads that " +
         "changed since the last sync, or everything with --rescan; a run stops before its deadline or --max-pages " +
-        "and the next one goes on from there",
+        "and the next one goes on from there. Then each deal or lead that moved into a stage the stage-tasks setting " +
+        "names opens a local task, once per move",
     ),
     "sync",
     "sync --rescan",
@@ -300,6 +303,7 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
           ...(signal ? { signal } : {}),
           ...(opts.rescan ? { rescan: true } : {}),
         })
+        const stageTasks = await openStageTasks(run.store, run.account, now())
         const failed = report.synced.filter((one) => one.error !== undefined)
         // A kind that failed on a setting fails the same way again until the owner changes it: no retry is offered.
         const retried = failed.filter((one) => one.setting === undefined)
@@ -350,7 +354,7 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
           })),
         ]
         const partial = report.state === "partial" || issues.length > 0
-        return itemOf(snakeKeys({ ...rest, ...(hint === undefined ? {} : { hint }) }), {
+        return itemOf(snakeKeys({ ...rest, stageTasks, ...(hint === undefined ? {} : { hint }) }), {
           ...(partial ? { meta: { complete: false, ...(issues.length ? { issues } : {}) } } : {}),
           ...(next ? { next } : {}),
         })

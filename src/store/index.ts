@@ -246,7 +246,10 @@ export {
   type CompanyTypeMeaning,
   CRM_LINK_MODES,
   type CrmLinkMode,
+  type CrmStageMove,
+  type CrmStageTasks,
   crmSettingKey,
+  type StageTaskRule,
 } from "./sqlite/crm-settings.js"
 export type {
   Deal,

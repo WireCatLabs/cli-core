@@ -2,6 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import type { DealKind } from "../domain/deals.js"
 import { isUsable, type Standing } from "../domain/relations.js"
 import type { AccountKey, Deal, FinancePayment, Invoice, MessageStore, StageChange } from "../store/index.js"
+import { isClosedState } from "../tasks/index.js"
 import {
   type Category,
   type Coverage,
@@ -138,6 +139,22 @@ export const dealContext = async (
   const said = talks.counts.messages + talks.counts.mail + talks.counts.meetings
   const stages = await store.deals.stages(deal.ref)
   const tasks = await openTasksOf(store, project ? [{ ref: project.ref, key: project.key }] : [])
+  const opened = await store.tasks.find({
+    where: { sql: "t.source_group = ?", params: [deal.ref] },
+    limit: STORE_PAGE,
+  })
+  for (const task of opened)
+    if (!isClosedState(task.status) && !tasks.tasks.some((one) => one.ref === task.ref))
+      tasks.tasks.push({
+        ref: task.ref,
+        key: task.key,
+        title: task.title,
+        status: task.status,
+        project: task.project,
+        dueAt: task.dueAt,
+      })
+  tasks.full ||= opened.length >= STORE_PAGE
+  tasks.tasks.sort((a, b) => (a.dueAt ?? "~").localeCompare(b.dueAt ?? "~") || a.ref.localeCompare(b.ref))
   return {
     deal,
     stages: sectionOf(stages, limit, null, { newest: true }),
