@@ -503,6 +503,7 @@ export type {
   RevisionCheck,
   TaskAssignment,
   TaskDetails,
+  TaskEdit,
   TaskEvent,
   TaskFields,
   TaskMove,

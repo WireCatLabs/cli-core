@@ -98,13 +98,16 @@ export interface TaskFields {
    * the same edit.
    */
   project?: string
-  /** Bug, feature or chore in a project; a task found in a message keeps a message kind until it moves into one. */
-  type?: TaskType
+  /** A project task's kind, bug, feature or chore. */
+  type?: WorkTaskType
   /** `<service>:<id>`, the task's id in an outside service, such as `avito:4512345678`; `null` clears it. */
   externalId?: string | null
   /** The http or https page the task is about, such as an Avito ad; `null` clears it. */
   sourceUrl?: string | null
 }
+
+/** What `edit` takes: a task found in a message keeps a message kind until it moves into a project. */
+export type TaskEdit = Omit<TaskFields, "type"> & { type?: TaskType }
 
 export interface NewWorkTask extends Omit<TaskFields, "reason" | "project" | "type"> {
   /** `project:<id>` or the project's key. */
@@ -230,7 +233,7 @@ export interface TaskEvent {
 /** Tasks beyond the package's four message kinds, and the fields the package does not know, on any task. */
 export interface WorkTasks extends TaskRelationsStore {
   create(input: NewWorkTask, by: Author): Promise<TaskDetails>
-  edit(id: string, fields: TaskFields, by: Author, check?: RevisionCheck): Promise<EditedTask>
+  edit(id: string, fields: TaskEdit, by: Author, check?: RevisionCheck): Promise<EditedTask>
   assign(id: string, assignment: TaskAssignment, by: Author, check?: RevisionCheck): Promise<TaskDetails>
   unassign(id: string, assignment: TaskAssignment, by: Author, check?: RevisionCheck): Promise<TaskDetails>
   /**
@@ -338,7 +341,7 @@ export const checkRevision = (row: Row, expected: number | undefined): void => {
 type WorkTaskOperations = Omit<WorkTasks, "create" | "assign"> & {
   create(input: NewWorkTask, by: Author): TaskDetails
   assign(id: string, assignment: TaskAssignment, by: Author, check?: RevisionCheck): TaskDetails
-  editNow(id: string, fields: TaskFields, by: Author): TaskDetails
+  editNow(id: string, fields: TaskEdit, by: Author): TaskDetails
 }
 
 export const workTaskOperationsOver = (context: StoreContext): WorkTaskOperations => {
@@ -497,7 +500,7 @@ export const workTaskOperationsOver = (context: StoreContext): WorkTaskOperation
     return moved
   }
 
-  const edit = (task: number, fields: TaskFields, actor: Actor, created = false) => {
+  const edit = (task: number, fields: TaskEdit, actor: Actor, created = false) => {
     const before = rowById(task)
     const at = now()
     const set: string[] = []
@@ -575,9 +578,8 @@ export const workTaskOperationsOver = (context: StoreContext): WorkTaskOperation
       // The task package reads a message kind back, so a task keeps one while it stays in its inbox.
       const found = inInbox(fields.project === undefined ? Number(before.project_id) : projectOf(fields.project))
       const kinds: readonly string[] = found ? TASK_KINDS : WORK_TASK_TYPES
-      const what = found ? "task found in a message" : "project task"
-      if (!kinds.includes(fields.type) || !onBoard(task))
-        throw new CliError("validation_error", `a ${what}'s kind is one of ${kinds.join(", ")}`)
+      const what = `a ${found ? "found" : "project"} task's kind is one of ${kinds.join(", ")}`
+      if (!kinds.includes(fields.type) || !onBoard(task)) throw new CliError("validation_error", what)
       change("type", fields.type, "type")
       bump = true
     }
