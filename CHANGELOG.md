@@ -5,6 +5,52 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## 0.636.0 — 11.11.2026
+
+### Added
+
+- **"This is the company's mailbox" can close every pair on the address at once.** `people.decideLink` with
+  `company: { all: true }` turns down every open proposal on the same shared mailbox in one decision, gives the
+  address to the one organization, and lists the proposals it closed as `closed` in the decided proposal's result.
+  Without `all` it closes only the pair asked about, as before ([ARCHITECTURE.md](docs/dev/ARCHITECTURE.md)).
+
+- **Every rule's people proposal has a score on one scale**, so `linkProposals({ order: "score" })` lists the
+  strongest first. 0.7: a phone two people alone have that does not join them (a CRM's or a card's), one name with a
+  phone or an address only they hold, or a rejected pair met on new evidence. 0.5: one name with a chat or a company
+  domain in one source, or a meeting guest's typed address. 0.4: each pair on a phone or a personal address three to
+  six people share. A shared mailbox stays 0.1 to 0.8. An agent's proposal keeps the agent's own score or none, and an
+  account under another name has none. The first people scan after the upgrade reads everything once and fills in the
+  score of open proposals made before; decided ones stay as they are ([ARCHITECTURE.md](docs/dev/ARCHITECTURE.md)).
+- **The owner can say a person in doubt is right: `people.keep(person, "owner")`.** The identities in doubt stop being
+  listed by `people.doubts()` until one of them moves; an identity that joins later is in doubt again. It is recorded
+  as a split the owner turned down, so an agent's split of them is refused (`identity.kept-together`) and an open one
+  is turned down. An agent is refused with `identity.owner-only`, a person with nothing in doubt with
+  `person.no-doubt`, one in doubt only as test data with `person.test-data`, an unknown one with `person.unknown`. The
+  answer is `{ person: "person:<uid>", kept: ["<provider>:<id>", …] }`.
+- **A person's record carries `displayName`**, the name `people.list` shows for them: their own, else the first readable
+  account name, a username, phone or address. `people.personOf()` and `people.personByUid()` return it.
+
+### Changed — may break callers
+
+- **`contacts unlink` needs `--from`, the person the identity leaves.** `tg`, `max` and `wa contacts unlink <person>
+  --from person:<uid>|person:me` (and `services.people.unlink(person, { by, from })`) take the identity off that person
+  only. Without `--from` the command is refused with `validation_error`, reason `person.from-required`, and the message
+  names who holds the identity and the `--from` to run it again with. An identity on someone else is refused with
+  `identity.held-elsewhere`, as memo's `people unlink` is, and nothing moves.
+- **`bot search messages --from` shows its value as `<person>`**, the placeholder cli-base 0.96.0's vocabulary gives
+  `--from`; it still takes an id, @username or part of a name, repeated for any of several.
+- **`PeopleStore` has a new method, `keep`.** A store implemented outside cli-core must add it.
+
+### Fixed
+
+- **`people.doubts()` no longer lists a person the owner linked by hand under mixed names.** A link moves
+  only the identities of the person who joins, so the ones already there kept a rule's method and came back as a doubt.
+  An identity on the person when the owner linked into it no longer counts as a different name; one that joins later
+  is still checked. A shared address and the owner's own person are checked as before.
+- **Store version 66: a person with no name of their own has their kind and name order worked out again when an
+  account's name changes.** The migration also clears the stored kind of every person with no name of their own once.
+  Triggers only otherwise; `minCompatible` stays 56.
+
 ## 0.635.0 — 10.11.2026
 
 ### Added
