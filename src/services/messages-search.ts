@@ -6,7 +6,14 @@ import { type MessengerTraits, syncsOneChat } from "../ports/traits.js"
 import type { SkippedSource } from "../search/account-list.js"
 import { PRESET_VERSION } from "../search/lucene/presets.js"
 import { FIELD_VERSION, validateAst, validateFields } from "../search/lucene/registry.js"
-import { hasStems, hasText, isStemmed, type QueryExecution, type ResolvedNode } from "../search/lucene/resolved.js"
+import {
+  hasStems,
+  hasText,
+  isStemmed,
+  type QueryExecution,
+  type ResolvedNode,
+  type ResolvedPredicate,
+} from "../search/lucene/resolved.js"
 import { inSource, sourceOf } from "../search/query.js"
 import { createStemmer, DEFAULT_STEMMERS, type Stemmer } from "../search/stem.js"
 import type { ScoredHit, StemsState } from "../store/store.js"
@@ -19,13 +26,22 @@ import {
 } from "../store/store.js"
 import { withExcerpt } from "./excerpt.js"
 import { mailAround, mergeMail, withMailThreads } from "./mail-search.js"
-import { chatAmong, senderAmong } from "./message-resolution.js"
+import { chatAmong, chatsMatchingIn, senderAmong, sendersMatching } from "./message-resolution.js"
 import type { SearchFound, SearchQuery } from "./messages.js"
 import { accountsOfKind, listedAccounts, MAIL } from "./search-kind.js"
 
+const PERSON_FIELDS = new Set(["from", "to", "cc", "bcc"])
 const MAIL_FIELDS = new Set(["to", "cc", "bcc", "subject", "mailbox", "label", "is"])
 
-import { dateRange, parseLucene, type QueryAst, type QueryNode, timezoneOf, walkQuery } from "@wirecat/cli-base/query"
+import {
+  dateRange,
+  type Predicate,
+  parseLucene,
+  type QueryAst,
+  type QueryNode,
+  timezoneOf,
+  walkQuery,
+} from "@wirecat/cli-base/query"
 import { MESSAGE_PARSING, searchError } from "../search/lucene/types.js"
 import type { SearchRefreshed } from "./search-refresh.js"
 
@@ -214,14 +230,15 @@ export const prepareLucene = async (
         ...node,
         clauses: await Promise.all(node.clauses.map(async ({ occur, node }) => ({ occur, node: await resolve(node) }))),
       }
+    if (node.field === "chat" && node.operator === "wildcard")
+      return anyOf(node, await chatsMatchingIn(chatLookup, scopeAccounts, node.value), (chat) => ({ chat }))
     if (node.field === "chat")
       return { ...node, resolution: { chat: await chatAmong(messenger, chatLookup, scopeAccounts, node.value) } }
-    if (node.field === "to" || node.field === "cc" || node.field === "bcc")
-      return { ...node, resolution: { sender: await senderAmong(store, scopeAccounts, node.value) } }
-    if (node.field === "from")
-      return node.value.toLowerCase() === "me"
-        ? { ...node, resolution: { outgoing: true } }
-        : { ...node, resolution: { sender: await senderAmong(store, scopeAccounts, node.value) } }
+    const person = PERSON_FIELDS.has(node.field) && !(node.field === "from" && node.value.toLowerCase() === "me")
+    if (person && node.operator === "wildcard")
+      return anyOf(node, await sendersMatching(store, scopeAccounts, node.field, node.value), (sender) => ({ sender }))
+    if (person) return { ...node, resolution: { sender: await senderAmong(store, scopeAccounts, node.value) } }
+    if (node.field === "from") return { ...node, resolution: { outgoing: true } }
     if (node.field === "date")
       return {
         ...node,
@@ -240,15 +257,16 @@ export const prepareLucene = async (
   }
   const root = await resolve(ast.root)
   const chats = leaves.filter(({ field }) => field === "chat")
-  const selectedChat =
-    globalChat ??
-    (chats.length === 1 && requiresChat(ast.root, chats[0] as QueryNode)
-      ? await chatAmong(messenger, chatLookup, scopeAccounts, (chats[0] as { value: string }).value)
-      : undefined)
-  if (leaves.some(({ field }) => field === "topic")) {
-    if (!globalChat && (chats.length !== 1 || !requiresChat(ast.root, chats[0] as QueryNode)))
-      searchError("query.topic-scope", { start: 0, end: 0 }, "name one chat with chat:, required")
-  }
+  const [lone] = chats.length === 1 && chats[0] && requiresChat(ast.root, chats[0]) ? chats : []
+  const loneChats =
+    lone === undefined || globalChat
+      ? []
+      : lone.operator === "wildcard"
+        ? await chatsMatchingIn(chatLookup, scopeAccounts, lone.value)
+        : [await chatAmong(messenger, chatLookup, scopeAccounts, lone.value)]
+  const selectedChat = globalChat ?? (loneChats.length === 1 ? loneChats[0] : undefined)
+  if (leaves.some(({ field }) => field === "topic") && !selectedChat)
+    searchError("query.topic-scope", { start: 0, end: 0 }, "name one chat with chat:, required")
   const wordsReady = (await store.searchIndex.searchIndexState())?.ready === true
   if (hasText(ast.root) && !wordsReady) await indexNotReady(store, messenger.app?.command)
   const stems = await store.searchIndex.stemsState()
@@ -558,6 +576,20 @@ const oldestFetch = (chats: ChatCompleteness[]): string | null =>
   chats.length === 0 || chats.some(({ fetchedAt }) => fetchedAt === null)
     ? null
     : (chats.map(({ fetchedAt }) => fetchedAt as string).sort()[0] as string)
+/** A name pattern's leaf as an OR of one resolved leaf per fit, so every compiler still reads one sender or chat. */
+const anyOf = <T>(
+  node: Predicate,
+  found: T[],
+  resolution: (one: T) => NonNullable<ResolvedPredicate["resolution"]>,
+): ResolvedNode => ({
+  kind: "boolean",
+  span: node.span,
+  clauses: found.map((one) => ({
+    occur: "should" as const,
+    node: { ...node, operator: "term" as const, resolution: resolution(one) },
+  })),
+})
+
 const requiresChat = (node: QueryNode, chat: QueryNode): boolean =>
   node === chat ||
   (node.kind === "boolean" && node.clauses.some((clause) => clause.occur === "must" && requiresChat(clause.node, chat)))

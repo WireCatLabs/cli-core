@@ -15,6 +15,7 @@ import {
   type Fragment,
   ftsMatch,
   type Leaf,
+  quoted,
   SPEECH,
 } from "./lucene-fields.js"
 import { GROUPS, type QueryGroup, type QueryGrouping } from "./lucene-groups.js"
@@ -139,14 +140,14 @@ const compileQuery = (context: StoreContext, execution: QueryExecution, boundedA
       part,
     )
   /** A bare word also matches a transcript, a file's text and a word of a file's name. */
-  const everywhere = (node: ResolvedPredicate, fragment: Fragment): Fragment => {
-    if (!node.implicit || fragment.sql === "0") return fragment
-    const match = ftsMatch(node)
-    const files = attachmentWords(match, "file")
-    const spoken = said(node)
+  const everywhere = (node: ResolvedPredicate, fragment: Fragment, start?: string): Fragment => {
+    if (!node.implicit || (fragment.sql === "0" && start === undefined)) return fragment
+    const match = start === undefined ? ftsMatch(node) : `${quoted(start)} *`
+    const files = attachmentWords(match, start === undefined ? "file" : "any")
+    const spoken = start === undefined ? said(node) : undefined
     const elsewhere = {
-      sql: `${files.sql} UNION ${spoken.sql} UNION ${namedSql}`,
-      params: [...files.params, ...spoken.params, match],
+      sql: `${files.sql}${spoken ? ` UNION ${spoken.sql}` : ""} UNION ${namedSql}`,
+      params: [...files.params, ...(spoken?.params ?? []), match],
     }
     return {
       ...fragment,

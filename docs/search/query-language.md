@@ -141,6 +141,14 @@ tg search messages 'invoice' --timezone UTC
 
 На synthetic fixture: ids 101, 102, 105, 106. В MAX замените первый аргумент `tg` на `max`.
 
+### Слово по началу
+
+```sh
+tg search messages 'invoi*' --timezone UTC
+```
+
+На synthetic fixture: ids 101, 102, 105, 106. В MAX замените первый аргумент `tg` на `max`.
+
 ### Другие формы слова
 
 ```sh
@@ -189,6 +197,14 @@ tg search messages 'chat:"Work fixture" AND invoice' --timezone UTC
 
 На synthetic fixture: ids 101, 102, 105, 106. В MAX замените первый аргумент `tg` на `max`.
 
+### Чат по части названия
+
+```sh
+tg search messages 'chat:*work* AND invoice' --timezone UTC
+```
+
+На synthetic fixture: ids 101, 102, 105, 106. В MAX замените первый аргумент `tg` на `max`.
+
 ### Диапазон дат
 
 ```sh
@@ -201,6 +217,14 @@ tg search messages 'invoice date:[2026-01-20 TO 2026-01-22}' --timezone UTC
 
 ```sh
 tg search messages 'from:"Bob Synthetic"' --timezone UTC
+```
+
+На synthetic fixture: ids 106, 107, 108. В MAX замените первый аргумент `tg` на `max`.
+
+### Автор по части имени
+
+```sh
+tg search messages 'from:Bo*' --timezone UTC
 ```
 
 На synthetic fixture: ids 106, 107, 108. В MAX замените первый аргумент `tg` на `max`.
@@ -416,16 +440,16 @@ enum или unsupported сочетание дают ошибку, а не пус
 | `text` | txt | Snowball 3.1.1 by script (Cyrillic, Latin; the store's search_stemmers), then v1 | `invoice` | term, phrase, wildcard, regex |
 | `exact` | txt | NFKD/marks/NFC/lowercase v1 | `exact:invoice` | term, phrase, wildcard, regex |
 | `body` | txt | raw, case-sensitive | `body:/.*invoice.*/` | term, phrase, wildcard, regex |
-| `from` | kw | account-scoped resolution | `from:"Alice Synthetic"` | term, phrase |
-| `to` | kw | account-scoped resolution; mail only | `to:"Alice Synthetic"` | term, phrase |
-| `cc` | kw | account-scoped resolution; mail only | `cc:"Alice Synthetic"` | term, phrase |
-| `bcc` | kw | account-scoped resolution; mail only | `bcc:"Alice Synthetic"` | term, phrase |
-| `subject` | txt | every word, folded as text is; mail only | `subject:"quarterly planning"` | term, phrase |
-| `mailbox` | kw | a folder or label by its id (ASCII case folded) or name (case folded in any script); mail only | `mailbox:INBOX OR mailbox:"[Gmail]/Sent Mail"` | term, phrase |
-| `label` | kw | the same as mailbox:; mail only | `label:Projects` | term, phrase |
+| `from` | kw | account-scoped: an id or contact: reference as is; with * or ? a pattern over alias, name, @username (up to 50); else a name | `from:Alice*` | term, phrase, wildcard |
+| `to` | kw | account-scoped: an id or contact: reference as is; with * or ? a pattern over alias, name, @username (up to 50); else a name; mail only | `to:"Alice Synthetic"` | term, phrase, wildcard |
+| `cc` | kw | account-scoped: an id or contact: reference as is; with * or ? a pattern over alias, name, @username (up to 50); else a name; mail only | `cc:"Alice Synthetic"` | term, phrase, wildcard |
+| `bcc` | kw | account-scoped: an id or contact: reference as is; with * or ? a pattern over alias, name, @username (up to 50); else a name; mail only | `bcc:"Alice Synthetic"` | term, phrase, wildcard |
+| `subject` | txt | every word, folded as text is; mail only | `subject:"quarterly planning"` | term, phrase, wildcard |
+| `mailbox` | kw | a folder or label by its id (ASCII case folded) or name (case folded in any script); mail only | `mailbox:INBOX OR mailbox:"[Gmail]/Sent Mail"` | term, phrase, wildcard |
+| `label` | kw | the same as mailbox:; mail only | `label:Projects` | term, phrase, wildcard |
 | `list` | kw | the List-Id of a mailing list, lower case; a domain matches every list under it; mail only | `list:github.com` | term, phrase |
 | `is` | enum | unread, read, starred | `is:unread` | term, phrase |
-| `chat` | kw | account-scoped resolution | `chat:"Work fixture"` | term, phrase |
+| `chat` | kw | account-scoped: an id or chat: reference as is; with * or ? a pattern over title, @username (up to 50); else a title | `chat:*fixture*` | term, phrase, wildcard |
 | `date` | time | ISO/calendar timezone; today, yesterday, 30m/2h/7d ago | `date:[2026-01-01 TO 2026-02-01}` | term, phrase, range |
 | `source` | enum | internal, file | `source:internal` | term, phrase |
 | `kind` | enum | private, saved, bot, service, group, channel, unknown | `kind:private` | term, phrase |
@@ -438,8 +462,8 @@ enum или unsupported сочетание дают ошибку, а не пус
 | `filename` | kw | NFKD/marks/NFC/lowercase v1, whole name | `filename:*.pdf` | term, phrase, wildcard, regex |
 | `mime` | kw | lowercase; a value without / matches the first part; only where the messenger reports a type | `mime:"application/pdf" OR mime:image` | term, phrase, wildcard |
 | `size` | kw | bytes; KB/MB/GB are 1024-based | `size>10MB` | term, phrase, range |
-| `content` | txt | NFKD/marks/NFC/lowercase v1; the text of files attachments extract read or an agent wrote | `content:invoice` | term, phrase |
-| `transcript` | txt | any form of the word (Snowball), widened to spellings speech recognition garbles; what a voice message said | `transcript:invoice` | term, phrase |
+| `content` | txt | NFKD/marks/NFC/lowercase v1; the text of files attachments extract read or an agent wrote | `content:invoice` | term, phrase, wildcard |
+| `transcript` | txt | any form of the word (Snowball), widened to spellings speech recognition garbles; what a voice message said | `transcript:invoice` | term, phrase, wildcard |
 | `title` | txt | every word, folded as text is; notes and files only | `title:"quarterly report"` | term, phrase |
 | `site` | kw | contained, folded as text is; notes and files only | `site:wikipedia` | term, phrase |
 | `lang` | kw | language tag or its prefix, lowercase; notes and files only | `lang:ru` | term, phrase |
@@ -451,9 +475,26 @@ enum или unsupported сочетание дают ошибку, а не пус
 | `domain` | kw | the site of a link or an address in the text; docs.google.com means google.com | `domain:google.com` | term, phrase |
 | `link` | kw | a part of a link, quoted; Latin letters in any case; in mail also the body of a letter with a tracking link | `link:"click?id=1"` | term, phrase |
 | `mentions` | kw | a person (by name, phone or address), an organization or a document, linked; quoted | `mentions:"person:12"` | term, phrase |
-| `tag` | kw | lowercase a-z, 0-9 and -, 1-32 characters | `tag:work` | term, phrase |
+| `tag` | kw | lowercase a-z, 0-9 and -, 1-32 characters | `tag:work` | term, phrase, wildcard |
 
 <!-- fields: end -->
+
+**Люди и чаты: id, имя или шаблон.** Значение `from:`, `to:`, `cc:`, `bcc:` и `chat:` читается по одному правилу:
+id (`from:1001`, `contact:telegram:1001`, `chat:7`, `chat:chat:telegram:100:7`) — этот человек или чат, как раньше;
+значение со `*` или `?` без кавычек — шаблон по имени: `from:Ярослав*` — все, чьё имя, псевдоним или @username
+начинается так, `from:*Орлов*` — где оно есть внутри, `chat:*отчет*` — все чаты с этим в названии; поиск берёт их
+всех через OR. Регистр, ё/е и форма записи букв не важны; имя с пробелом пишется с `\ ` (`from:Ярослав\ О*`), а
+`from:"*Ярослав*"` в кавычках — буквальное имя, не шаблон (так в Lucene). Шаблон, под который никто не подходит, —
+`not_found` с близкими именами; больше 50 людей или чатов — `query.too-large`: допишите имя. Остальное — имя целиком
+или его часть: точное совпадение важнее части, а если точно так зовут нескольких, ошибка перечисляет их и тех, в чьём
+имени это только часть, — выберите id.
+**Часть значения в других полях.** Начало слова (`счёт*`) — обычный способ искать слово: оно находит и его формы,
+и, как слово без поля, ищется в тексте, расшифровках, тексте и имени файлов.
+`mailbox:`/`label:`, `tag:`, `filename:` и `mime:` берут `*` и `?` где угодно (`mailbox:Proj*`, `tag:work-*`);
+`subject:`, `content:` и `transcript:` — начало слова (`subject:отчет*`, `content:накладн*`). `*слово*` в тексте
+перебирает весь словарь архива: на большом архиве это больше 10 000 слов и `query.too-large` с подсказкой `слово*`.
+`link:`, `site:` и `author:` и так находят часть значения; у `url:`, `email:`, `phone:`, `domain:`, `topic:`, `in:`,
+`mentions:` и полей-перечислений шаблонов нет.
 
 `kind:private` сохраняет mapping старого `dialog`. Подтверждённый `providerMetadata.peerKind`
 различает bot/service; существующий `providerMetadata.isBot` также определяет bot. старые записи не переклассифицируются по имени. `kind:bot` — peer,
@@ -492,8 +533,8 @@ MAX — нет, там ищите по расширению (`filename:*.pdf`). 
 основа в одной правке от слова, которого нет в словаре; числительные не расширяются. Расширяется только одно слово —
 не фраза и не `"…"~N`, и не под `exact:`. Найденное только через искажение сообщение помечено `match: "corrected"`, а
 ответ называет искажения в `corrections`; такие сообщения идут после всех остальных находок. В тексте файлов слово ищется в
-точной форме, и `слово*` с исправлением опечаток читают только текст сообщений.
-`content:` и `transcript:` берут только term и phrase, без wildcard и regex.
+точной форме (начало слова `слово*` — тоже), а исправление опечаток читает только текст сообщений.
+`content:` и `transcript:` берут term, phrase и начало слова (`content:накладн*`), без regex.
 `"риелтор договор"~3` — оба слова в одном сообщении (в тексте, расшифровке, имени или тексте файла), и между
 ними не больше трёх других слов, в любом порядке. Слова — в любой форме, как во фразе; `exact:"…"~3` — только
 введённые формы. В отличие от Lucene, порядок не стоит слов: `"a b"~0` находит и «a b», и «b a». N — до 50,

@@ -93,11 +93,17 @@ export const wordMatch = (corpus: Corpus, match: string): Fragment => ({
   fts: match,
 })
 // The vocabulary is the whole store's, so a chat or date filter does not shorten it.
-const tooManyWords = ({ field, operator, value, span }: ResolvedPredicate, alone: boolean): never => {
+const tooManyWords = ({ field, operator, value, span }: ResolvedPredicate, alone: boolean, prefix: string): never => {
   const term = `${field}:${operator === "regex" ? `/${value}/` : value}`
+  const spelled = operator === "wildcard" ? value.replace(/[*?]+/gu, " ").trim().split(/\s+/u)[0] : ""
+  // Measured on a synthetic 1M-word vocabulary: reading every word takes 1-2 s, the whole search's time.
+  const instead =
+    !prefix && spelled
+      ? `a pattern that starts with * reads every indexed word — write the start of the word: ${spelled}* (it also finds the word's other forms)`
+      : "use a longer prefix, or body:/…/ inside one chat"
   throw new CliError(
     "validation_error",
-    `search: ${term}${alone ? " matches" : " and the patterns before it match"} more than ${QUERY_LIMITS.expansions} indexed words, the term expansions budget — use a longer prefix, or body:/…/ inside one chat`,
+    `search: ${term}${alone ? " matches" : " and the patterns before it match"} more than ${QUERY_LIMITS.expansions} indexed words, the term expansions budget — ${instead}`,
     {
       reason: "query.too-large",
       budget: "term expansions",
@@ -123,7 +129,8 @@ export interface FieldScope {
   attachmentWords: (match: string, which: "file" | "transcript" | "any") => { sql: string; params: SqlValue[] }
   /** The items whose voice-note transcripts a leaf matches: typed, in another form, or garbled. */
   transcripts: (node: ResolvedPredicate) => { sql: string; params: SqlValue[] }
-  everywhere: (node: ResolvedPredicate, fragment: Fragment) => Fragment
+  /** With `start`, a word's start: every word in a file, a transcript or a file name that begins so. */
+  everywhere: (node: ResolvedPredicate, fragment: Fragment, start?: string) => Fragment
   /** Counts the patterns' expanded words against the query's budget. */
   expand: (count: number) => number
 }
@@ -249,22 +256,27 @@ const words: FieldCompiler = (node, scope) => {
   }
   const pattern = operator === "wildcard" ? wildcardPattern(normalize(value)) : foldRegex(value, node.span)
   const automaton = scope.patternOf(pattern, node)
+  // A bare word's start reads where a bare word does: transcripts, file text and file names too.
+  const start =
+    operator === "wildcard" && node.implicit ? /^([\p{L}\p{N}]+)\*$/u.exec(normalize(value))?.[1] : undefined
+  const widened = (fragment: Fragment) => (start ? scope.everywhere(node, fragment, start) : fragment)
   const cached = scope.expanded.get(pattern)
-  if (cached) return { node, fragment: cached }
+  if (cached) return { node, fragment: widened(cached) }
   const prefix = prefixOf(pattern)
   const terms = scope.database
     .prepare(
       `SELECT term FROM ${corpus.vocab} WHERE col='normalized_text'${prefix ? " AND term>=? AND term<=?" : ""} ORDER BY term LIMIT ?`,
     )
     .all(...(prefix ? [prefix, `${prefix}\u{10ffff}`] : []), QUERY_LIMITS.expansions + 1)
-  if (scope.expand(terms.length) > QUERY_LIMITS.expansions) tooManyWords(node, terms.length > QUERY_LIMITS.expansions)
+  if (scope.expand(terms.length) > QUERY_LIMITS.expansions)
+    tooManyWords(node, terms.length > QUERY_LIMITS.expansions, prefix)
   const matches = terms.flatMap(({ term }) => {
     scope.check()
     return automaton.test(String(term), scope.budget) ? [quoted(String(term))] : []
   })
   const fragment = matches.length ? wordMatch(corpus, matches.join(" OR ")) : bound("0")
   scope.expanded.set(pattern, fragment)
-  return always(fragment)
+  return always(widened(fragment))
 }
 
 const body: FieldCompiler = (node, scope) => {
@@ -361,6 +373,18 @@ const attachmentText =
   (which: "file" | "transcript"): FieldCompiler =>
   (node, scope) => {
     const text = normalize(node.value)
+    if (node.operator === "wildcard") {
+      // FTS5 finds a word by its start in the index itself; any other pattern would read every word of every file.
+      const start = /^([\p{L}\p{N}]+)\*$/u.exec(text)?.[1]
+      if (start === undefined)
+        searchError(
+          "query.unsupported-operator",
+          node.span,
+          `${node.field}: takes a word's start only, e.g. ${node.field}:invoice*`,
+        )
+      const set = scope.attachmentWords(`${quoted(start)} *`, which)
+      return always(bound(`m.id IN (${set.sql})`, ...set.params))
+    }
     // Never `fts`: the ranking ANDs every required word into message_words, where a file's words are not.
     const set = which === "transcript" ? scope.transcripts(node) : scope.attachmentWords(ftsMatch(node), which)
     return always(/[\p{L}\p{N}]/u.test(text) ? bound(`m.id IN (${set.sql})`, ...set.params) : bound("0"))
@@ -442,20 +466,37 @@ const found: FieldCompiler = ({ field, value }, scope) => {
   )
 }
 
-const tag: FieldCompiler = (node, { corpus, database }) => {
-  const selected = tagOf(node.value)
-  if (selected === undefined) searchError("query.invalid-tag", node.span)
-  const name = canonicalTagNamed(database, selected)?.name ?? selected
+const tag: FieldCompiler = (node, scope) => {
+  const { corpus, database } = scope
+  const names =
+    node.operator === "wildcard"
+      ? tagsFitting(node, scope)
+      : [canonicalTagNamed(database, tagNamed(node))?.name ?? tagNamed(node)]
+  const named = "t.name IN (SELECT value FROM json_each(?))"
+  const list = JSON.stringify(names)
   return always(
     bound(
-      `m.id IN (SELECT tg.taggable_id FROM taggings tg JOIN resolved_tags t ON t.id=tg.tag_id WHERE t.name=? AND tg.taggable_type='${corpus.item}') OR ` +
-        `m.chat_id IN (SELECT tg.taggable_id FROM taggings tg JOIN resolved_tags t ON t.id=tg.tag_id WHERE t.name=? AND tg.taggable_type='${corpus.thread}') OR ` +
-        "m.sender_identity_id IN (SELECT tg.taggable_id FROM taggings tg JOIN resolved_tags t ON t.id=tg.tag_id WHERE t.name=? AND tg.taggable_type='identity')",
-      name,
-      name,
-      name,
+      `m.id IN (SELECT tg.taggable_id FROM taggings tg JOIN resolved_tags t ON t.id=tg.tag_id WHERE ${named} AND tg.taggable_type='${corpus.item}') OR ` +
+        `m.chat_id IN (SELECT tg.taggable_id FROM taggings tg JOIN resolved_tags t ON t.id=tg.tag_id WHERE ${named} AND tg.taggable_type='${corpus.thread}') OR ` +
+        `m.sender_identity_id IN (SELECT tg.taggable_id FROM taggings tg JOIN resolved_tags t ON t.id=tg.tag_id WHERE ${named} AND tg.taggable_type='identity')`,
+      list,
+      list,
+      list,
     ),
   )
+}
+const tagNamed = (node: ResolvedPredicate): string => {
+  const selected = tagOf(node.value)
+  if (selected === undefined) searchError("query.invalid-tag", node.span)
+  return selected
+}
+const tagsFitting = (node: ResolvedPredicate, scope: FieldScope): string[] => {
+  const automaton = scope.patternOf(wildcardPattern(node.value.toLowerCase()), node)
+  return scope.database
+    .prepare("SELECT DISTINCT name FROM resolved_tags")
+    .all()
+    .map(({ name }) => String(name))
+    .filter((name) => automaton.test(name, scope.budget))
 }
 
 const messengerOnly =
@@ -563,19 +604,37 @@ const recipient: FieldCompiler = (node, { mail }) => {
 // What a page says about itself, and whether a note is written or a file, exist for notes only.
 const notesOnly: FieldCompiler = () => always(bound("0"))
 
-const mailbox: FieldCompiler = ({ value }, { mail }) =>
-  always(
-    mail
-      ? bound(
-          // Not tied to m.account_id: a correlated subquery re-reads every mailbox link for each email (minutes on
-          // 880k links), and an email only ever links to its own account's mailboxes anyway.
-          `m.id IN (SELECT em.email_id FROM email_mailboxes em WHERE em.mailbox_id IN
+const mailbox: FieldCompiler = (node, scope) => {
+  const { value, operator } = node
+  if (!scope.mail) return always(bound("0"))
+  if (operator === "wildcard") {
+    // A store holds tens of mailboxes: every one is read and the pattern tried on its id and its name.
+    const automaton = scope.patternOf(wildcardPattern(fold(value)), node)
+    const ids = scope.database
+      .prepare("SELECT id, external_id, name_folded FROM mailboxes")
+      .all()
+      .filter((row) =>
+        [fold(String(row.external_id)), String(row.name_folded ?? "")].some((one) => automaton.test(one, scope.budget)),
+      )
+      .map(({ id }) => Number(id))
+    return always(
+      bound(
+        "m.id IN (SELECT em.email_id FROM email_mailboxes em WHERE em.mailbox_id IN (SELECT value FROM json_each(?)))",
+        JSON.stringify(ids),
+      ),
+    )
+  }
+  return always(
+    bound(
+      // Not tied to m.account_id: a correlated subquery re-reads every mailbox link for each email (minutes on
+      // 880k links), and an email only ever links to its own account's mailboxes anyway.
+      `m.id IN (SELECT em.email_id FROM email_mailboxes em WHERE em.mailbox_id IN
                (SELECT b.id FROM mailboxes b WHERE lower(b.external_id) = lower(?) OR b.name_folded = ?))`,
-          value,
-          fold(value),
-        )
-      : bound("0"),
+      value,
+      fold(value),
+    ),
   )
+}
 
 // Mail stored in full keeps List-Id in its headers; mail only recorded, in its metadata.
 const list: FieldCompiler = ({ value }, { mail }) => {
@@ -603,21 +662,38 @@ const is: FieldCompiler = ({ value }, { mail }) => {
   )
 }
 
-const subject: FieldCompiler = ({ operator, value }, { corpus, mail }) => {
+const subject: FieldCompiler = (node, scope) => {
+  const { operator, value } = node
+  const { corpus, mail } = scope
   const wanted = normalize(value)
   const parts = wanted.match(/[\p{L}\p{N}]+/gu) ?? []
   if (!mail || !parts.length) return always(bound("0"))
+  if (operator === "wildcard") {
+    // The word index holds a mailbox's every word: a pattern without a start would read all of them.
+    const pattern = wildcardPattern(wanted)
+    const start = prefixOf(pattern)
+    if (!start)
+      searchError("query.unsupported-operator", node.span, "subject: takes a word's start, e.g. subject:invoice*")
+    const automaton = scope.patternOf(pattern, node)
+    return {
+      fragment: { ...wordMatch(corpus, `${quoted(start)} *`), exact: false },
+      test: (text) =>
+        (headingOf(text).match(/[\p{L}\p{N}]+/gu) ?? []).some((word) => automaton.test(word, scope.budget)),
+    }
+  }
   // The word index holds subject and body together: it narrows, the subject itself decides.
   return {
     fragment: { ...wordMatch(corpus, parts.map(quoted).join(" AND ")), exact: false },
     test: (text) => {
-      const heading = normalize(text.slice(0, Math.max(0, text.indexOf("\n\n"))))
+      const heading = headingOf(text)
       return operator === "phrase"
         ? heading.includes(wanted)
         : parts.every((word) => new RegExp(`(^|[^\\p{L}\\p{N}])${word}`, "u").test(heading))
     },
   }
 }
+
+const headingOf = (text: string) => normalize(text.slice(0, Math.max(0, text.indexOf("\n\n"))))
 
 /** One compiler per field of `QUERY_FIELDS`, by its name: a leaf compiles by a lookup, never a branch. */
 export const FIELD_COMPILERS: Readonly<Record<string, FieldCompiler>> = {

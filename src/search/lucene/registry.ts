@@ -50,7 +50,7 @@ const validateSize = (node: Predicate): void => {
     if (bound !== undefined && bound !== "*") parseBytes(bound, node.span)
 }
 const validateTag = (node: Predicate): void => {
-  if (tagOf(node.value) === undefined)
+  if (node.operator === "wildcard" ? !/^[a-z0-9*?-]{1,32}$/iu.test(node.value) : tagOf(node.value) === undefined)
     searchError("query.invalid-tag", node.span, "a tag is 1-32 letters a-z, digits and hyphens")
 }
 const validateMentioned = (node: Predicate): void => {
@@ -62,6 +62,9 @@ const validateTopic = (node: Predicate): void => {
 }
 
 const terms: Operator[] = ["term", "phrase"]
+const names: Operator[] = [...terms, "wildcard"]
+const NAMES =
+  "account-scoped: an id or contact: reference as is; with * or ? a pattern over alias, name, @username (up to 50); else a name"
 export const QUERY_FIELDS: readonly MessageField[] = [
   {
     name: "text",
@@ -95,12 +98,12 @@ export const QUERY_FIELDS: readonly MessageField[] = [
   },
   {
     name: "from",
-    example: 'from:"Alice Synthetic"',
+    example: "from:Alice*",
     index: "identities / sender index",
     aliases: [],
     type: "kw",
-    operators: terms,
-    normalization: "account-scoped resolution",
+    operators: names,
+    normalization: NAMES,
     support: "A1",
   },
   ...(["to", "cc", "bcc"] as const).map(
@@ -110,8 +113,8 @@ export const QUERY_FIELDS: readonly MessageField[] = [
       index: "email_recipients",
       aliases: [],
       type: "kw",
-      operators: terms,
-      normalization: "account-scoped resolution; mail only",
+      operators: names,
+      normalization: `${NAMES}; mail only`,
       support: "A1",
     }),
   ),
@@ -121,7 +124,7 @@ export const QUERY_FIELDS: readonly MessageField[] = [
     index: "email_words, then the subject",
     aliases: [],
     type: "txt",
-    operators: terms,
+    operators: [...terms, "wildcard"],
     normalization: "every word, folded as text is; mail only",
     support: "A1",
     validate: filled,
@@ -132,7 +135,7 @@ export const QUERY_FIELDS: readonly MessageField[] = [
     index: "email_mailboxes",
     aliases: [],
     type: "kw",
-    operators: terms,
+    operators: [...terms, "wildcard"],
     normalization: "a folder or label by its id (ASCII case folded) or name (case folded in any script); mail only",
     support: "A1",
   },
@@ -142,7 +145,7 @@ export const QUERY_FIELDS: readonly MessageField[] = [
     index: "email_mailboxes",
     aliases: [],
     type: "kw",
-    operators: terms,
+    operators: [...terms, "wildcard"],
     normalization: "the same as mailbox:; mail only",
     support: "A1",
   },
@@ -171,12 +174,13 @@ export const QUERY_FIELDS: readonly MessageField[] = [
   },
   {
     name: "chat",
-    example: 'chat:"Work fixture"',
+    example: "chat:*fixture*",
     index: "chats / message time index",
     aliases: [],
     type: "kw",
-    operators: terms,
-    normalization: "account-scoped resolution",
+    operators: names,
+    normalization:
+      "account-scoped: an id or chat: reference as is; with * or ? a pattern over title, @username (up to 50); else a title",
     support: "A1",
   },
   {
@@ -341,7 +345,7 @@ export const QUERY_FIELDS: readonly MessageField[] = [
     index: "attachment_words",
     aliases: [],
     type: "txt",
-    operators: terms,
+    operators: [...terms, "wildcard"],
     normalization: "NFKD/marks/NFC/lowercase v1; the text of files attachments extract read or an agent wrote",
     support: "A2",
     validate: filled,
@@ -352,7 +356,7 @@ export const QUERY_FIELDS: readonly MessageField[] = [
     index: "attachment_words ∪ transcript_stems; garbled spellings from transcript_words_vocab",
     aliases: [],
     type: "txt",
-    operators: terms,
+    operators: [...terms, "wildcard"],
     normalization:
       "any form of the word (Snowball), widened to spellings speech recognition garbles; what a voice message said",
     support: "A2",
@@ -451,7 +455,7 @@ export const QUERY_FIELDS: readonly MessageField[] = [
     index: "tags: the message, its chat or its sender",
     aliases: [],
     type: "kw",
-    operators: terms,
+    operators: [...terms, "wildcard"],
     normalization: "lowercase a-z, 0-9 and -, 1-32 characters",
     support: "A2",
     validate: validateTag,

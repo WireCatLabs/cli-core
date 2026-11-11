@@ -1,12 +1,20 @@
 import type { ResolvedPredicate } from "../../search/lucene/resolved.js"
 import type { CacheDatabase } from "../driver.js"
 import { normalize } from "../normalize.js"
-import { type Corpus, ftsMatch, type Leaf, SPEECH } from "./lucene-fields.js"
+import { type Corpus, ftsMatch, type Leaf, quoted, SPEECH } from "./lucene-fields.js"
 import type { hitsByPk } from "./search.js"
 import { spokenTranscripts, type TranscriptTerms } from "./transcript-query.js"
 import type { MatchPlace } from "./words.js"
 
 type Hits = ReturnType<typeof hitsByPk>
+
+/** A bare word's start (`hero*`), which is looked for where a bare word is. */
+const startOf = (node: ResolvedPredicate): string | undefined =>
+  node.operator === "wildcard" && node.implicit ? /^([\p{L}\p{N}]+)\*$/u.exec(normalize(node.value))?.[1] : undefined
+const matchOf = (node: ResolvedPredicate) => {
+  const start = startOf(node)
+  return start === undefined ? ftsMatch(node) : `${quoted(start)} *`
+}
 
 /**
  * Which place of each hit holds the words, first match wins in the order of `MatchPlace`; a hit its transcript
@@ -22,14 +30,16 @@ export const placeHits = (
 ): Hits => {
   const placeLeaves = leaves.filter(
     ({ node }) =>
-      (node.operator === "term" || node.operator === "phrase") &&
-      (node.implicit || node.field === "content" || node.field === "transcript"),
+      ((node.operator === "term" || node.operator === "phrase") &&
+        (node.implicit || node.field === "content" || node.field === "transcript")) ||
+      startOf(node) !== undefined,
   )
   if (!placeLeaves.length || !pks.length || found.length !== pks.length) return found
   const keys = JSON.stringify(pks)
   const wordy = placeLeaves.filter(({ node }) => /[\p{L}\p{N}]/u.test(normalize(node.value)))
   if (!wordy.length) return found
-  const match = wordy.map(({ node }) => ftsMatch(node)).join(" OR ")
+  const match = wordy.map(({ node }) => matchOf(node)).join(" OR ")
+  const starts = wordy.flatMap(({ node }) => startOf(node) ?? [])
   const implicit = placeLeaves.some(({ node }) => node.implicit)
   const inText = new Set(
     implicit
@@ -59,6 +69,8 @@ export const placeHits = (
       `SELECT att.attachable_id AS id, att.text AS text, ${SPEECH} AS speech FROM attachments att WHERE att.attachable_type='${corpus.item}' AND att.attachable_id IN (SELECT value FROM json_each(?)) AND att.id IN (SELECT rowid FROM attachment_words WHERE attachment_words MATCH ?) ORDER BY att.position`,
     )
     .all(keys, match)
+  const startSaid = (pk: number) =>
+    starts.length ? files.find((row) => Number(row.id) === pk && Number(row.speech) === 1) : undefined
   const fileFields = new Set(
     placeLeaves.flatMap(({ node }) => (node.implicit ? ["transcript", "content"] : [node.field])),
   )
@@ -77,12 +89,14 @@ export const placeHits = (
     : []
   return found.map((hit, index) => {
     const pk = pks[index] as number
-    const transcript = spoken.get(pk)
+    const transcript = spoken.get(pk) ?? startSaid(pk)
     const file = files.find((row) => Number(row.id) === pk && Number(row.speech) !== 1)
     const name = allNames.find((row) => {
       if (Number(row.id) !== pk) return false
       const words = normalize(String(row.name)).split(/[^\p{L}\p{N}]+/u)
+      if (words.some((word) => starts.some((start) => word.startsWith(start)))) return true
       return wordy.some(({ node }) => {
+        if (startOf(node) !== undefined) return false
         const phrase = normalize(node.value).match(/[\p{L}\p{N}]+/gu) ?? []
         if (node.slop !== undefined) return phrase.every((word) => words.includes(word))
         return words.some((_, at) => phrase.every((word, offset) => words[at + offset] === word))
@@ -98,7 +112,7 @@ export const placeHits = (
             ? ["file", String(file.text)]
             : undefined
     if (!place) return hit
-    const fixes = place[0] === "transcript" ? (transcript?.corrections ?? []) : []
+    const fixes = place[0] === "transcript" ? (spoken.get(pk)?.corrections ?? []) : []
     return {
       ...hit,
       matchedIn: place[0],

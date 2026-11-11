@@ -300,6 +300,18 @@ export const searchCorpus = (context: StoreContext, query: CorpusQuery, corpus: 
       tests.set(node, (text) => matcher.test(text, budget))
       return { sql: "1", params: [], exact: false }
     }
+    if (field === "tag" && operator === "wildcard") {
+      const matcher = automaton(wildcardPattern(value.toLowerCase()), node)
+      const names = database
+        .prepare("SELECT DISTINCT name FROM resolved_tags")
+        .all()
+        .map(({ name }) => String(name))
+        .filter((name) => matcher.test(name, budget))
+      return combine(
+        names.flatMap((name) => corpus.tagged?.(name) ?? []),
+        "OR",
+      )
+    }
     if (field === "tag") {
       const tag = tagOf(value)
       if (tag === undefined) searchError("query.invalid-tag", node.span)
