@@ -26,6 +26,9 @@ export const deal = v.strictObject({
   base_stage: v.nullable(v.strictObject({ ref: reference, name: text })),
   status: outcome,
   organization: v.nullable(party),
+  /** A CRM copy's own person and company as the CRM keeps them on it, such as a lead's with nobody linked yet. */
+  contact_name: nullableText,
+  company_name: nullableText,
   currency: nullableText,
   amount: nullableText,
   close_date: day,

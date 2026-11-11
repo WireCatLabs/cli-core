@@ -118,6 +118,8 @@ const DEAL_UNTRUSTED = [
   "stage",
   "pipeline_name",
   "organization.name",
+  "contact_name",
+  "company_name",
   "people.name",
   "provider_metadata",
 ]

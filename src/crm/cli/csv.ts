@@ -46,6 +46,8 @@ export const DEAL_CSV_COLUMNS: readonly string[] = [
   "amount",
   "currency",
   "organization",
+  "contact_name",
+  "company_name",
   "people",
   "close_date",
   "closed_date",

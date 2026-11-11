@@ -144,6 +144,8 @@ const dealSample = {
   base_stage: { ref: "stage:7", name: "Proposal" },
   status: "open",
   organization: { ref: "organization:3", name: "Sample LLC", owner: false },
+  contact_name: null,
+  company_name: null,
   currency: "EUR",
   amount: "1500.00",
   close_date: "2026-12-01",

@@ -193,6 +193,8 @@ export const crmRowsOver = (context: StoreContext) => {
       ...(item.metadata ?? {}),
       ...(item.url ? { url: item.url } : {}),
       ...(item.assignee ? { assignee: crmIdentityId(key, item.assignee, "user") } : {}),
+      ...(textOf(item.contactName, 200) ? { contact_name: textOf(item.contactName, 200) } : {}),
+      ...(textOf(item.companyName, 200) ? { company_name: textOf(item.companyName, 200) } : {}),
       ...(item.closedReason && status !== "open" ? { closed_reason: textOf(item.closedReason, 2000) } : {}),
     }
     const values = {

@@ -146,6 +146,28 @@ it("finds a deal by its company and by its contact's name, e-mail and phone, and
   expect((await find("цемент")).items[0]?.foundBy).toEqual(["title"])
 })
 
+it("finds a lead with nobody linked by its own person and company, and shows them", async () => {
+  const { store, find } = await synced()
+  await store.crm.savePipelines(PORTAL, "lead", [
+    { externalId: "0", name: "Leads", stages: [{ externalId: "NEW", name: "New", position: 1, outcome: "open" }] },
+  ])
+  await store.crm.saveItems(PORTAL, "lead", [
+    {
+      externalId: "l1",
+      title: "Заявка с сайта",
+      pipeline: "0",
+      stage: "NEW",
+      contactName: "Иван Петров",
+      companyName: "ООО «Ромашка»",
+    },
+  ])
+  const [lead] = await store.deals.list({ kind: "lead", account: PORTAL })
+  expect(lead).toMatchObject({ contactName: "Иван Петров", companyName: "ООО «Ромашка»", organization: null })
+  expect((await find("Петрова")).items).toMatchObject([{ ref: lead?.ref, foundBy: ["words"] }])
+  expect((await find("Ромашка")).items).toMatchObject([{ ref: lead?.ref }])
+  expect((await find("Петров Ромашка заявка")).items).toMatchObject([{ ref: lead?.ref }])
+})
+
 it("never finds a CRM copy by what another account holds of the same person", async () => {
   const { store, refs, refsOf } = await synced()
   const other = { provider: PORTAL.provider, account: "other-portal" }
