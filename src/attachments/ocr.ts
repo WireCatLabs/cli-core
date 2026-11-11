@@ -51,10 +51,35 @@ const imageOf = (bytes: Uint8Array): ModelImage | undefined => {
   return { mimeType, data: Buffer.from(bytes).toString("base64") }
 }
 
+class EmptyOcrText extends Error {}
+
 const checkedText = (text: string): string => {
-  if (typeof text !== "string" || !text.trim() || text.length > MAX_TEXT_CHARS)
-    throw new Error("empty or oversized OCR result")
+  if (typeof text !== "string" || !text.trim()) throw new EmptyOcrText("empty OCR result")
+  if (text.length > MAX_TEXT_CHARS) throw new Error("oversized OCR result")
   return text
+}
+
+const EMPTY_HINT =
+  "the model answered nothing: it may not read pictures; choose a vision model (llava, qwen2.5vl) or skip this item"
+
+/** Why OCR failed, as the extraction answers it: an empty answer gets its own error and a hint that names the cause. */
+const failure = (error: unknown) => {
+  const empty =
+    error instanceof EmptyOcrText || (error instanceof CliError && error.details?.reason === "model.empty-answer")
+  return {
+    error: empty
+      ? "empty_answer"
+      : error instanceof CliError && error.code === "rate_limited"
+        ? "rate_limited"
+        : "ocr_failed",
+    issue: withRecovery({
+      code: isCliFailure(error) ? error.code : "provider_error",
+      message: empty ? EMPTY_HINT : "OCR provider refused this item; retry or skip it",
+      ...(isCliFailure(error) && typeof error.details?.retry_after_ms === "number"
+        ? { retry_after_ms: error.details.retry_after_ms }
+        : {}),
+    }),
+  }
 }
 
 export const ocrImage = async (bytes: Uint8Array, pipeline: OcrPipeline, signal?: AbortSignal): Promise<Extraction> => {
@@ -70,14 +95,7 @@ export const ocrImage = async (bytes: Uint8Array, pipeline: OcrPipeline, signal?
     return {
       status: "unreadable",
       extractor: pipeline.extractor,
-      error: error instanceof CliError && error.code === "rate_limited" ? "rate_limited" : "ocr_failed",
-      issue: withRecovery({
-        code: isCliFailure(error) ? error.code : "provider_error",
-        message: "OCR provider refused this item; retry or skip it",
-        ...(isCliFailure(error) && typeof error.details?.retry_after_ms === "number"
-          ? { retry_after_ms: error.details.retry_after_ms }
-          : {}),
-      }),
+      ...failure(error),
     }
   }
 }
@@ -184,14 +202,7 @@ export const ocrPdf = async (
     return {
       status: "unreadable",
       extractor: pipeline.extractor,
-      error: error instanceof CliError && error.code === "rate_limited" ? "rate_limited" : "ocr_failed",
-      issue: withRecovery({
-        code: isCliFailure(error) ? error.code : "provider_error",
-        message: "OCR provider refused this item; retry or skip it",
-        ...(isCliFailure(error) && typeof error.details?.retry_after_ms === "number"
-          ? { retry_after_ms: error.details.retry_after_ms }
-          : {}),
-      }),
+      ...failure(error),
     }
   } finally {
     signal?.removeEventListener("abort", close)

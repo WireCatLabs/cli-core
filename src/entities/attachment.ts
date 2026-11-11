@@ -46,4 +46,11 @@ export const attachment = v.strictObject({
 })
 
 /** A file named on a search hit: `position` is the one `attachments show` and `messages download` take. */
-export const hitFile = v.strictObject({ position: count, kind: text, name: v.optional(text), size: v.optional(count) })
+export const hitFile = v.strictObject({
+  position: count,
+  kind: text,
+  name: v.optional(text),
+  size: v.optional(count),
+  /** The saved copy on this computer, once `messages download` fetched it; absent until then. */
+  local_path: v.optional(text),
+})

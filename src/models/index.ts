@@ -2,7 +2,14 @@ import { CliError } from "@wirecat/cli-base"
 import { endpoint, modelAddressAllowed, PLAIN_HTTP_REFUSED } from "./endpoint.js"
 import { refuseOffComputer } from "./local-only.js"
 import { openai } from "./openai.js"
-import { type ModelAdapter, type ModelAnswer, type ModelRequest, type ModelTarget, validateImages } from "./types.js"
+import {
+  EmptyAnswer,
+  type ModelAdapter,
+  type ModelAnswer,
+  type ModelRequest,
+  type ModelTarget,
+  validateImages,
+} from "./types.js"
 
 export { modelAddressAllowed, onThisComputer } from "./endpoint.js"
 export { localOnly, readLocalOnly, refuseModelAddress, refuseOffComputer } from "./local-only.js"
@@ -88,7 +95,7 @@ export const modelGateway = (deps: GatewayDeps) => ({
       if (typeof answer.text !== "string" || !Number.isSafeInteger(answer.tokens) || answer.tokens < 1)
         throw new Error("incomplete")
       return { ...answer, provider: target.provider, model: target.model }
-    } catch {
+    } catch (error) {
       if (limited)
         throw new CliError("rate_limited", `${request.purpose} provider rate limit reached; no result was stored`)
       // The message stays one for every failure; the reason tells a refused key and a network failure apart.
@@ -96,7 +103,9 @@ export const modelGateway = (deps: GatewayDeps) => ({
         ? "model.key-rejected"
         : unreachable && !deps.signal?.aborted
           ? "model.unreachable"
-          : undefined
+          : error instanceof EmptyAnswer
+            ? "model.empty-answer"
+            : undefined
       throw new CliError(
         "invalid_response",
         `${request.purpose} provider failed or returned an incomplete response; no result was stored`,

@@ -19,12 +19,19 @@ import {
 import { attachmentMaxBytes } from "../attachments/limits.js"
 import { type OcrPipeline, ocrImage, ocrPdf } from "../attachments/ocr.js"
 import { pdfPreview } from "../attachments/pdf-preview.js"
+import {
+  pictureExtractor,
+  pictureReaderOf,
+  readPictureReading,
+  readPictureWithAgent,
+} from "../attachments/picture-reading.js"
 import { type ByteWindow, retainedBytes, transferMime, validateWindow } from "../attachments/transfer.js"
 import { NOT_FILES } from "../domain/attachments.js"
 import { formatLocator, isLocator, parseLocator } from "../domain/locator.js"
 import type { Id } from "../domain/models.js"
 import { type ActionableError, withRecovery } from "../domain/recovery.js"
 import { attachment as attachmentEntity } from "../entities/attachment.js"
+import { capability } from "../ports/messenger.js"
 import { refusedPlace } from "../sends/upload.js"
 import type { AccountStore } from "../store/account-store.js"
 import {
@@ -37,8 +44,9 @@ import {
 } from "../store/store.js"
 import { batchProgress } from "./batch.js"
 import { accountStore, type ServiceDeps } from "./deps.js"
-import { type Saved, save } from "./file-download.js"
+import { refreshedFiles, type Saved, save } from "./file-download.js"
 import { chatIdIn } from "./message-resolution.js"
+import { PICTURE_MAX_BYTES, pictureBytes } from "./pictures.js"
 
 export type ExtractStatus = "extracted" | "needs-agent" | "unreadable" | "engine-missing" | "too-large" | "missing"
 
@@ -126,6 +134,13 @@ export interface AttachmentTextSet {
   replaced: TextOrigin | null
 }
 
+/** A picture the owner's coding agent read, as `images read` answers it. */
+export interface PictureRead extends AttachmentTextSet {
+  /** `agent:claude`, `agent:codex/<model>`: what the store keeps as the text's extractor. */
+  extractor: string
+  text: string
+}
+
 export interface AttachmentBytes {
   ref: string
   attachment: number
@@ -160,6 +175,16 @@ export interface AttachmentsService {
   saveHeld(target: { chat: string; message?: string; attachment?: number; output: string }): Promise<Saved[]>
   /** Keeps text an agent read from a file — a scan, a photo — replacing whatever was there. Sends nothing. */
   setText(target: { chat: string; message?: string; attachment?: number; text: string }): Promise<AttachmentTextSet>
+  /**
+   * Gives one picture to the coding agent the owner chose in `picture_reading` and keeps the text it read. Refused
+   * while that setting is `never`. The bytes come from the saved copy, else from the messenger; none are kept.
+   */
+  readPicture(target: {
+    chat: string
+    message?: string
+    attachment?: number
+    signal?: AbortSignal
+  }): Promise<PictureRead>
 }
 
 const PAGE = 200
@@ -299,6 +324,35 @@ const messageOf = async (
   if (message === undefined) throw new CliError("validation_error", "which message? give its id after the chat")
   return { chatId: await chatIdIn(deps.messenger, chat, store, { includeLeft: true }), messageId: message.trim() }
 }
+
+const oneFile = async (
+  store: AccountStore,
+  chatId: Id,
+  messageId: Id,
+  attachment: number | undefined,
+): Promise<AttachmentView> => {
+  const files = (await store.attachments.attachments({ chatId, messageId, limit: 1000 })).filter(
+    ({ kind }) => !NOT_FILES.has(kind),
+  )
+  if (files.length === 0)
+    throw new CliError("not_found", `the local store holds no message ${messageId} with a file in chat ${chatId}`)
+  const chosen =
+    attachment === undefined
+      ? files.length === 1
+        ? files[0]
+        : undefined
+      : files.find(({ position }) => position === attachment - 1)
+  if (!chosen)
+    throw new CliError(
+      "validation_error",
+      attachment === undefined
+        ? `message ${messageId} has ${files.length} files — name one with --attachment (${files.map(({ position }) => position + 1).join(", ")})`
+        : `message ${messageId} has no file number ${attachment} — it has ${files.map(({ position }) => position + 1).join(", ")}`,
+    )
+  return chosen
+}
+
+const PICTURE_NAME = /\.(png|jpe?g|webp)$/i
 
 export const attachmentsService = (deps: ServiceDeps): AttachmentsService => ({
   extract: async ({
@@ -667,25 +721,7 @@ export const attachmentsService = (deps: ServiceDeps): AttachmentsService => ({
     const store = await accountStore(deps)
     const { account } = store
     const { chatId, messageId } = await messageOf(deps, store, chat, message)
-    const files = (await store.attachments.attachments({ chatId, messageId, limit: 1000 })).filter(
-      ({ kind }) => !NOT_FILES.has(kind),
-    )
-    if (files.length === 0)
-      throw new CliError("not_found", `the local store holds no message ${messageId} with a file in chat ${chatId}`)
-    const chosen =
-      attachment === undefined
-        ? files.length === 1
-          ? files[0]
-          : undefined
-        : files.find(({ position }) => position === attachment - 1)
-    if (!chosen) {
-      throw new CliError(
-        "validation_error",
-        attachment === undefined
-          ? `message ${messageId} has ${files.length} files — name one with --attachment (${files.map(({ position }) => position + 1).join(", ")})`
-          : `message ${messageId} has no file number ${attachment} — it has ${files.map(({ position }) => position + 1).join(", ")}`,
-      )
-    }
+    const chosen = await oneFile(store, chatId, messageId, attachment)
     await store.attachments.keepAttachmentText(chosen.pk, { text, origin: "agent", extractor: "agent" })
     return {
       ref: formatLocator({ ...account, chat: chatId, message: messageId }),
@@ -693,6 +729,60 @@ export const attachmentsService = (deps: ServiceDeps): AttachmentsService => ({
       origin: "agent",
       chars: text.length,
       replaced: chosen.text?.origin ?? null,
+    }
+  },
+
+  readPicture: async ({ chat, message, attachment, signal }) => {
+    const env = deps.env ?? process.env
+    const reader = pictureReaderOf(readPictureReading(env), deps.messenger.app.command)
+    const store = await accountStore(deps)
+    const { account } = store
+    const { chatId, messageId } = await messageOf(deps, store, chat, message)
+    const chosen = await oneFile(store, chatId, messageId, attachment)
+    const ref = formatLocator({ ...account, chat: chatId, message: messageId })
+    const notPicture = new CliError("validation_error", `file ${chosen.position + 1} of ${ref} is not a picture`, {
+      reason: "picture-reading.not-a-picture",
+    })
+    if (chosen.kind !== "photo" && !chosen.mime?.startsWith("image/") && !PICTURE_NAME.test(chosen.name ?? ""))
+      throw notPicture
+    const localPath =
+      chosen.localPath !== null && !refusedPlace(chosen.localPath, deps.messenger.app, env) ? chosen.localPath : null
+    const bytes = await pictureBytes(
+      { localPath, position: chosen.position },
+      async () =>
+        (await capability(await deps.connection(), "download", "download attachments")(chatId, messageId)).files,
+      async (file) => {
+        const refreshed = refreshedFiles([file])
+        if (refreshed.length > 0)
+          await store.attachments.keepProviderRefs(chatId, messageId, refreshed).catch(() => undefined)
+      },
+    )
+    if (!bytes)
+      throw new CliError(
+        "not_found",
+        `file ${chosen.position + 1} of ${ref} could not be fetched, or is over ${PICTURE_MAX_BYTES / 1024 / 1024} MB`,
+        { reason: "picture-reading.unavailable-file" },
+      )
+    const mime = transferMime(Buffer.from(bytes.subarray(0, 16)), null)
+    if (!mime.startsWith("image/")) throw notPicture
+    const read = await readPictureWithAgent({ ...reader, bytes, mime, env, ...(signal ? { signal } : {}) })
+    const text = read.slice(0, MAX_TEXT_CHARS)
+    const extractor = pictureExtractor(reader.agent, reader.model)
+    await store.attachments.keepAttachmentText(chosen.pk, {
+      text,
+      origin: "agent",
+      extractor,
+      contentSha256: createHash("sha256").update(bytes).digest("hex"),
+      bytes: bytes.length,
+    })
+    return {
+      ref,
+      attachment: chosen.position + 1,
+      origin: "agent",
+      extractor,
+      chars: text.length,
+      replaced: chosen.text?.origin ?? null,
+      text,
     }
   },
 })

@@ -1,7 +1,8 @@
 import * as v from "valibot"
 import { withTimeLimit } from "../http/time-limit.js"
+import { onThisComputer } from "./endpoint.js"
 import { checkedOptions, range } from "./options.js"
-import { type ModelAdapter, messagesFor, systemFor } from "./types.js"
+import { EmptyAnswer, type ModelAdapter, messagesFor, systemFor } from "./types.js"
 
 const options = v.strictObject({
   temperature: range(0, 2),
@@ -33,10 +34,13 @@ export const openai: ModelAdapter = {
               : [
                   {
                     role: "user",
-                    content: request.images.map((image) => ({
-                      type: "image_url",
-                      image_url: { url: `data:${image.mimeType};base64,${image.data}`, detail: "high" },
-                    })),
+                    content: [
+                      { type: "text", text: request.prompt },
+                      ...request.images.map((image) => ({
+                        type: "image_url",
+                        image_url: { url: `data:${image.mimeType};base64,${image.data}`, detail: "high" },
+                      })),
+                    ],
                   },
                 ]),
           ],
@@ -53,17 +57,21 @@ export const openai: ModelAdapter = {
         usage?: { total_tokens?: number; prompt_tokens?: number; completion_tokens?: number }
       }
       const choice = body.choices?.[0]
-      if (
-        choice?.finish_reason !== "stop" ||
-        typeof choice.message?.content !== "string" ||
-        !Number.isInteger(body.usage?.total_tokens) ||
-        (body.usage?.total_tokens ?? 0) < 1
-      )
-        throw new Error("incomplete response")
+      const content = choice?.message?.content
+      const total = body.usage?.total_tokens
+      const counted = Number.isInteger(total) && (total ?? 0) >= 1
+      // A hosted API always reports why it stopped and what it counted; an answer without them may be cut short,
+      // and the count is what the owner pays. Ollama's /v1 leaves both empty on a whole answer from some models.
+      const local = onThisComputer(target.baseUrl)
+      const finish = choice?.finish_reason ?? null
+      if (finish !== "stop" && !(local && finish === null)) throw new Error("incomplete response")
+      if (typeof content !== "string" || content.trim() === "") throw new EmptyAnswer()
+      if (!counted && !local) throw new Error("incomplete response")
       const { prompt_tokens: input, completion_tokens: output } = body.usage ?? {}
       return {
-        text: choice.message.content,
-        tokens: body.usage?.total_tokens as number,
+        text: content,
+        // No count from a server on this computer costs nothing; a rough one keeps the gateway's check meaningful.
+        tokens: counted ? (total as number) : Math.max(1, Math.ceil(content.length / 4)),
         ...(Number.isInteger(input) && Number.isInteger(output)
           ? { usage: { input: input as number, output: output as number } }
           : {}),

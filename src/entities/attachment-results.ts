@@ -29,4 +29,7 @@ export const attachmentTextChange = v.strictObject({
   origin: v.literal("agent"),
   chars: count,
   replaced: v.nullable(v.picklist(["extracted", "agent"])),
+  /** `images read` only: who read the picture, `agent:claude` or `agent:codex/<model>`, and what it read. */
+  extractor: v.optional(text),
+  text: v.optional(text),
 })

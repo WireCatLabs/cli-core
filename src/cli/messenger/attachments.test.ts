@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs"
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { Readable } from "node:stream"
@@ -10,6 +10,7 @@ import * as v from "valibot"
 import { describe, expect, it, vi } from "vitest"
 import type { LoadEngine } from "../../attachments/extract.js"
 import { importEngine } from "../../attachments/extract.js"
+import { writePictureReading } from "../../attachments/picture-reading.js"
 import type { Attachment, Chat, Message } from "../../domain/models.js"
 import { attachment } from "../../entities/attachment.js"
 import { ENTITIES } from "../../entities/index.js"
@@ -23,6 +24,7 @@ import { rememberAccount } from "./accounts.js"
 import { storeCommand } from "./archive-commands.js"
 import { attachmentsCommand } from "./attachments-command.js"
 import type { Messenger } from "./context.js"
+import { imagesCommand } from "./images-command.js"
 import { messagesCommand } from "./messages-command.js"
 import { searchCommand } from "./search-command.js"
 
@@ -153,6 +155,7 @@ const setup = async ({ config, load, history }: { config?: object; load?: LoadEn
             messagesCommand(messenger),
             searchCommand(messenger),
             storeCommand(messenger),
+            imagesCommand(messenger),
           ],
         },
         {
@@ -348,7 +351,7 @@ describe("attachments extract", () => {
     await store.close()
     const fetcher = vi.spyOn(globalThis, "fetch").mockImplementation(async (_url, init) => {
       const body = JSON.parse(String(init?.body))
-      expect(body.messages.at(-1).content[0].type).toBe("image_url")
+      expect(body.messages.at(-1).content.map(({ type }: { type: string }) => type)).toEqual(["text", "image_url"])
       expect(body.model).toBe("vision-fixture")
       return Response.json({
         choices: [{ finish_reason: "stop", message: { content: "bulkocrinvoice 42" } }],
@@ -708,7 +711,7 @@ describe("an agent's text for a file", () => {
 
 describe("a search hit's files", () => {
   it("names the files on a hit, by the position the other commands take", async () => {
-    const { call, env } = await setup()
+    const { call, env, files } = await setup()
     const store = await openStore({ path: env.MESSAGING_STORE })
     await store.messages.saveMessages(
       OWNER,
@@ -723,16 +726,21 @@ describe("a search hit's files", () => {
     )
     await store.close()
     const found = json(await call("search", "messages", "message", "--json")).items
-    const byId = (list: { ref: string; untrusted?: string[] }[], id: string) =>
+    const byId = (list: { ref: string; untrusted?: string[]; attachments: { local_path?: string }[] }[], id: string) =>
       list.find(({ ref }) => ref.endsWith(`/${id}`))
     expect(byId(found, "9")).toMatchObject({
       attachments: [{ position: 2, kind: "file", name: "terms.pdf", size: 2048 }],
     })
     expect(byId(found, "1")).toMatchObject({ attachments: [{ position: 1, kind: "file", name: "notes.txt" }] })
+    expect(byId(found, "1")?.attachments[0]?.local_path).toBe(join(files, "notes.txt"))
+    expect(byId(found, "9")?.attachments[0]?.local_path).toBeUndefined()
     expect(byId(found, "9")?.untrusted).toContain("attachments.name")
     for (const hit of found) v.parse(ENTITIES["message.hit"], hit)
     const all = json(await call("search", "all", "message", "--json")).items
     expect(byId(all, "9")).toMatchObject({ attachments: [{ position: 2, name: "terms.pdf" }] })
+    expect(byId(all, "1")?.attachments[0]?.local_path).toBe(join(files, "notes.txt"))
+    const shown = json(await call("messages", "show", "7", "5", "--offline", "--json"))
+    expect(shown.attachments).toEqual([{ kind: "photo", name: "5-1.jpg", local_path: join(files, "5-1.jpg") }])
     for (const hit of all) v.parse(ENTITIES.hit, hit)
   })
 
@@ -787,5 +795,66 @@ describe("a search hit's files", () => {
       reason: "offline",
       files: [{ position: 1, kind: "file", name: "notes.txt", url: null, reason: "unsupported_provider" }],
     })
+  })
+})
+
+describe("images read", () => {
+  const JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 16])
+  const withAgent = (root: string, env: NodeJS.ProcessEnv) => {
+    const bin = join(root, "bin")
+    mkdirSync(bin)
+    writeFileSync(
+      join(bin, "claude"),
+      `#!/bin/sh\nprintf '%s\\n' "$@" > "${root}/argv"\nenv > "${root}/env"\nls > "${root}/ls"\necho "Доска: план релиза"\n`,
+    )
+    chmodSync(join(bin, "claude"), 0o755)
+    Object.assign(env, { PATH: `${bin}:${env.PATH}`, ANTHROPIC_API_KEY: "synthetic-key", CHAT_MCP_CLIENT: "synthetic" })
+  }
+
+  it("**refuses while reading is never, then gives the saved picture to the agent and keeps its text**", async () => {
+    const { call, env, root, files } = await setup()
+    writeFileSync(join(files, "5-1.jpg"), JPEG)
+    withAgent(root, env)
+    const refused = await call("images", "read", "msg:chat/500/7/5", "--json")
+    expect(refused.code).toBe(5)
+    expect(refused.stderr).toContain("picture reading is off")
+    expect(existsSync(join(root, "argv"))).toBe(false)
+
+    writePictureReading(env, { mode: "request", agent: "claude" })
+    const read = await call("images", "read", "msg:chat/500/7/5", "--attachment", "1", "--json")
+    expect(read.code).toBe(0)
+    const answer = json(read)
+    v.parse(ENTITIES.attachment_text_change, answer)
+    expect(answer).toEqual({
+      ref: "msg:chat/500/7/5",
+      attachment: 1,
+      origin: "agent",
+      extractor: "agent:claude",
+      chars: 18,
+      replaced: null,
+      text: "Доска: план релиза",
+    })
+    expect(readFileSync(join(root, "ls"), "utf8").trim()).toBe("picture.jpg")
+    expect(readFileSync(join(root, "env"), "utf8")).not.toMatch(/ANTHROPIC_API_KEY=|CHAT_MCP_CLIENT=/)
+    expect(await hits(call, 'content:"план релиза"')).toEqual(["5"])
+    const listed = json(await call("attachments", "list", "--json")).items
+    expect(listed.find(({ message }: { message: string }) => message.endsWith("/5"))).toMatchObject({
+      extraction: { origin: "agent", extractor: "agent:claude", chars: 18 },
+    })
+  })
+
+  it("downloads a picture not saved here, and refuses a file that is not a picture", async () => {
+    const { call, env, root } = await setup({ history: [] })
+    withAgent(root, env)
+    writePictureReading(env, { mode: "request", agent: "claude", model: "sonnet" })
+    const notPicture = await call("images", "read", "7", "1", "--json")
+    expect(notPicture.stderr).toContain("is not a picture")
+    const store = await openStore({ path: env.MESSAGING_STORE })
+    await store.messages.saveMessages(OWNER, "7", [message("8", [{ kind: "photo" }])], { via: "history" })
+    await store.close()
+    // The fixture's messenger hands back a text file for every download: no picture comes back.
+    const fetched = await call("images", "read", "7", "8", "--json")
+    expect(fetched.code).not.toBe(0)
+    expect(fetched.stderr).toContain("could not be fetched")
   })
 })

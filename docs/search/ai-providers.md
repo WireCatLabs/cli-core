@@ -239,3 +239,13 @@ file; a section that cannot be read counts as on. An agent may turn it on, only 
 `memo models local-only show --json` lists each feature with `where` (`this-computer`, `elsewhere`, `agent`, `off`)
 and whether local only refuses it. The digest and MCP agents run outside WireCat: they are local only when the agent
 runs a local model.
+
+## Pictures read by your coding agent
+
+WireCat has no picture reader of its own. `models picture-reading set request --agent claude` (or `--agent codex`,
+with an optional `--model`) lets `images read <ref> --attachment <n>` give that one picture to the coding agent and
+keep the text it read as the attachment's text, with the extractor `agent:claude` or `agent:codex/<model>`. The picture
+goes to that agent's provider, unless the agent runs a model on this computer; local only does not stop it. The
+default is `never`, kept as `picture_reading` in the shared settings file; a section that cannot be read counts as
+never. Only the owner turns it on (an agent may with the owner's `--from-app`); anyone may turn it off. Nothing reads
+pictures at sync, and no picture is kept: the saved copy is read when there is one, else the messenger's download.

@@ -51,6 +51,52 @@ export const imagesCommand = (messenger: Messenger): Command => {
       } else renderAnswer(this, context, itemOf(snakeKeys(done)))
     })
 
+  annotate(images.command("read"), {
+    output: { entity: "attachment_text_change" },
+    effects: FETCH,
+    offline: false,
+    // An agent over MCP reads the saved picture at local_path itself; this would hand it to a second agent.
+    mcp: false,
+    examples: [
+      `${messenger.app.command} images read "msg:..." --attachment 1`,
+      `${messenger.app.command} images read "Book club" 101`,
+    ],
+  })
+    .summary("have your coding agent read the text of one picture, and keep it for search")
+    .description(
+      "give one picture of a message to the coding agent chosen in `models picture-reading` (Claude Code or Codex) " +
+        "and keep the text it read, so search finds it; the picture goes to that agent's provider. Refused while " +
+        "picture reading is never; the saved copy is used when there is one, else the messenger's download",
+    )
+    .argument("<chat>", `${messenger.chatArgument}; or a msg: locator, with no message id after it`)
+    .argument("[message]", "the message id")
+    .option(
+      "--attachment <n>",
+      "which file of the message, from 1; needed when it has more than one",
+      positiveCount("--attachment"),
+    )
+    .action(async function (this: Command, chat: string, message: string | undefined) {
+      const context = messengerContext(this, messenger)
+      refuseLocalWrite(context, messenger.app.command, "attachments.update")
+      const { attachment } = this.opts<{ attachment?: number }>()
+      const controller = new AbortController()
+      context.track({ close: async () => controller.abort() })
+      const done = await context.withServices((services) =>
+        services.attachments.readPicture({
+          chat,
+          ...(message === undefined ? {} : { message }),
+          ...(attachment === undefined ? {} : { attachment }),
+          signal: controller.signal,
+        }),
+      )
+      renderAnswer(
+        this,
+        context,
+        itemOf(snakeKeys(done)),
+        () => `${done.ref} #${done.attachment}  ${done.chars} characters read by ${done.extractor}\n${done.text}\n`,
+      )
+    })
+
   images.addCommand(imageModelsCommand(messenger))
   return images
 }
