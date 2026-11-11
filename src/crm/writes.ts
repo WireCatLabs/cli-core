@@ -26,8 +26,11 @@ import {
 export interface CrmWrites {
   writer: CrmWriter
   app: AppIdentity
-  /** The profile's levels, read on every write so a config change applies at once. */
-  settings: () => GuardSettings
+  /**
+   * The profile's levels, read on every write so a config change applies at once. A CRM limits its own rate, so
+   * `sendsPerHour` is not read: the guard is there for the levels and the journal.
+   */
+  settings: () => Omit<GuardSettings, "sendsPerHour"> & Partial<Pick<GuardSettings, "sendsPerHour">>
   /** The CRM user the sign-in acts as. An owner other than it checks `crm.assign-others`; left out, every owner does. */
   self?: string
   env?: NodeJS.ProcessEnv
@@ -331,7 +334,7 @@ const guardOf = (context: CrmWriteContext, extra: readonly PermissionKey[]): Sen
     (ask) =>
       guardFor(
         context.writes.app,
-        { ...settings, permissionDefaults: defaults },
+        { ...settings, sendsPerHour: Number.MAX_SAFE_INTEGER, permissionDefaults: defaults },
         context.writes.warn ?? (() => {}),
         context.writes.env,
         ask,

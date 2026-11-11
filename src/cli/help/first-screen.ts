@@ -75,6 +75,11 @@ export const WIRECAT_TOOLS: readonly Tool[] = [
     package: "@wirecat/mail-cli",
     does: "IMAP mail in the same local store: search your mailbox offline, next to your other WireCat data",
   },
+  {
+    command: "b24",
+    package: "@wirecat/bitrix24-cli",
+    does: "Bitrix24 CRM: deals, leads and pipelines, searchable with your other WireCat data",
+  },
 ]
 
 const WIDTH = 100

@@ -50,6 +50,7 @@ export {
   printCsv,
   refuseCsvConflict,
 } from "./csv.js"
+export { type CrmStoreOptions, openCrmStore } from "./store.js"
 
 /**
  * The selected profile's CRM account, opened by the app for one command and closed once its answer is built, before

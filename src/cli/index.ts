@@ -295,6 +295,7 @@ export {
   rowsOfEntity,
   SHARED_ROWS,
 } from "./compact.js"
+export type { AppCompletionOptions, CompletionRequest } from "./complete-command.js"
 export { refuseUnknownKey } from "./config-command.js"
 export {
   type ConfigIssue,
@@ -616,6 +617,7 @@ export {
   addMeetingPreparationCommand,
   addMeetingProjectCandidatesCommand,
   addMeetingSeriesInventoryCommand,
+  appCompleteCommand,
   appDoctorCommand,
   appMcpCommand,
   attachmentsCommand,

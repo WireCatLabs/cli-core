@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import { startRecording } from "../runs/recording.js"
 import { listRuns } from "../runs/run.js"
 import { writesInFlight } from "../sends/guarded.js"
+import { appUpdate, type UpdateEnvironment } from "../update/index.js"
 import { baseContext, environmentOf, runBudgetOf } from "./context.js"
 import { sharedCommandTemplate } from "./contract-templates.js"
 import * as cli from "./index.js"
@@ -1358,5 +1359,60 @@ describe("the shared command contracts", () => {
     const failing: ProgramDefinition = { app, commands: () => [changedSearch()] }
     expect(() => createProgram(failing)).toThrow("without an explicit override")
     expect(() => createProgram(failing)).toThrow("without an explicit override")
+  })
+})
+
+describe("the daily line about a newer version", () => {
+  const home = mkdtempSync(join(tmpdir(), "run-update-"))
+  const env = { ...process.env, CI: undefined, NO_UPDATE_NOTIFIER: undefined, APP_NO_UPDATE_CHECK: undefined }
+  let asked = 0
+  const update: UpdateEnvironment = {
+    stderrIsTTY: true,
+    scriptPath: "/usr/lib/node_modules/@wirecat/app-cli/dist/bin.js",
+    fetch: async () => {
+      asked += 1
+      return new Response(JSON.stringify({ version: "9.0.0" }))
+    },
+  }
+  const updating = (action: (command: Command) => Promise<void> = async () => {}): ProgramDefinition => ({
+    ...definition(action),
+    update: appUpdate({
+      packageName: "@wirecat/app-cli",
+      command: "app",
+      version: app.version,
+      entry: import.meta.url,
+      statePath: () => join(home, "update-check.json"),
+      enabled: () => true,
+      offVariables: ["APP_NO_UPDATE_CHECK"],
+    }),
+  })
+  const runOf = async (argv: string[], program: ProgramDefinition) => {
+    const streams = captureStreams()
+    const code = await run(argv, program, { streams, tty: true, env, update })
+    return { code, stderr: streams.stderr.join("\n") }
+  }
+
+  it("follows a command that succeeded, for any CLI that hands run() its update", async () => {
+    const { code, stderr } = await runOf(["chats", "list"], updating())
+    expect(code).toBe(0)
+    expect(stderr).toMatch(/app 9\.0\.0 is out — you have 1\.2\.3/)
+  })
+
+  it("is left out after a failure, for --json, and for a CLI that prints it itself", async () => {
+    const failing = updating(async () => {
+      throw new CliError("not_found", "no such chat")
+    })
+    expect((await runOf(["chats", "list"], failing)).stderr).not.toMatch(/is out/)
+    expect((await runOf(["chats", "list", "--json"], updating())).stderr).not.toMatch(/is out/)
+    const before = asked
+    expect(
+      (
+        await runOf(
+          ["chats", "list"],
+          definition(async () => {}),
+        )
+      ).stderr,
+    ).not.toMatch(/is out/)
+    expect(asked).toBe(before)
   })
 })

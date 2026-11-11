@@ -93,7 +93,8 @@ const setup = async (
       profile: "work",
       permissions: options.permissions ?? {},
       permissionSources: {},
-      sendsPerHour: 1000,
+      // A CRM limits its own rate: a write never reads the profile's send limit, so 0 refuses nothing.
+      sendsPerHour: 0,
     }),
   })
   const journal = () => new SendJournal(sendsPathFor(APP, "work", env)).entries()

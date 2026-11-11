@@ -24,6 +24,7 @@ import { recorded, wasSettled } from "../runs/recording.js"
 import { runContextOf } from "../runs/run-context.js"
 import { processRun, useAsProcessRun } from "../runs/scope.js"
 import { AUTHORITY_KEY, BOT_API_KEY, isBotApi, keyForCommand } from "../sends/permissions.js"
+import type { AppUpdate, UpdateEnvironment } from "../update/index.js"
 import { liftOptionsAfterDashes } from "./after-dashes.js"
 import { logParsedArgv, logVersion } from "./argv-log.js"
 import { commandAvailability } from "./command-availability.js"
@@ -108,6 +109,11 @@ export interface ProgramDefinition {
   rows?: RowTable
   /** The tool's pitch and "what you can do" lines on `--help` and a bare run. */
   firstScreen?: FirstScreen
+  /**
+   * The CLI's `appUpdate`: `run()` shows its daily "a newer version exists" line after a command that succeeded. A CLI
+   * that prints the line itself leaves this out, or it shows twice.
+   */
+  update?: Pick<AppUpdate, "updateNotice">
   prepare?: (program: Command, environment: RunOptions) => void | Promise<void>
   onFailure?: (error: unknown, program: Command) => void | Promise<void>
 }
@@ -237,11 +243,20 @@ const RELAY_MARGIN_MS = 10_000
  */
 export const run = async (argv: string[], definition: ProgramDefinition, options: RunOptions = {}): Promise<number> => {
   const outer = processRun()
+  const notice = definition.update?.updateNotice(argv, {
+    ...(options.tty === undefined ? {} : { tty: options.tty }),
+    ...(options.update ? { environment: options.update as UpdateEnvironment } : {}),
+    ...(options.env ? { env: options.env } : {}),
+  })
+  let code: number
   try {
-    return await runOnce(argv, definition, options)
+    code = await runOnce(argv, definition, options)
   } finally {
     useAsProcessRun(outer)
   }
+  const line = await notice
+  if (line && code === 0) (options.streams ?? processStreams).diagnostic(line)
+  return code
 }
 
 const isMachine = (words: readonly string[]): boolean =>
