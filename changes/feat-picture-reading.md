@@ -14,3 +14,10 @@
 
 - **`messages show` and search hits name a downloaded file's `local_path`.** An agent reading a hit could not tell
   that a picture was already on this computer, nor where.
+- **A small vision model on Ollama reads pictures.** The OpenAI-compatible and Anthropic adapters put the prompt as a
+  text part beside the images in one user message; moondream answered nothing to a message of images alone. A server
+  on this computer may leave out `finish_reason` and `usage` on a whole answer (Ollama's `/v1` does); a hosted API
+  stays strict.
+- **An empty answer has its own reason.** The gateway says `model.empty-answer`, `models ai check` says
+  `ai.empty-answer`, and OCR answers `error: "empty_answer"` with a hint to choose a vision model, instead of a bare
+  failure.

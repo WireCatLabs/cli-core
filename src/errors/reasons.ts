@@ -72,6 +72,11 @@ const OTHERS: Entry[] = [
   ["model.offline", "permission_error", "downloading a model needs the network; --offline was requested"],
   ["model.key-rejected", "invalid_response", "the model provider refused the API key (401 or 403)"],
   ["model.unreachable", "invalid_response", "the model provider could not be reached over the network"],
+  [
+    "model.empty-answer",
+    "invalid_response",
+    "the model answered nothing; given a picture, it may not read pictures — choose a vision model",
+  ],
   validation("model.address-refused", "the model address must be https, or http only on this computer"),
   [
     "local-only.refused",
