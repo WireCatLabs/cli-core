@@ -297,7 +297,7 @@ const accountOf = (provider: unknown, external: unknown) =>
 const DEAL_PARTS: readonly DealPart[] = ["title", "company", "contact"]
 const TOKEN = /[\p{L}\p{N}\p{M}]+/gu
 /** A query word shorter than this matches only a whole word: «с» or "a" begins half the words of any title. */
-const SHORTEST_BEGINNING = 3
+const SHORTEST_BEGINNING = 4
 const stemmer = createStemmer(DEFAULT_STEMMERS, { cacheLimit: 20_000 })
 const stemsOf = (token: string) => stemmer.stemSequences(token).flat()
 

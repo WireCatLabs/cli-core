@@ -132,6 +132,12 @@ it("never matches inside a word", async () => {
   expect(await refsOf(`"630 ктп"`)).toEqual([])
 })
 
+it("matches the start of a word only from four letters on", async () => {
+  const { refs, refsOf } = await synced()
+  expect(await refsOf("мон")).toEqual([])
+  expect(await refsOf("монт")).toEqual([refs.d4])
+})
+
 it("finds a deal by its company and by its contact's name, e-mail and phone, and says the title did not match", async () => {
   const { refs, find, refsOf } = await synced()
   for (const text of ["АкваБарьер", "Белоусовой", "o.belousova@example.test", "+79161234567", "цемент Ольга"])

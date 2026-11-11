@@ -368,7 +368,7 @@ Its messages take the same server step as `search messages` (`--backend`, defaul
 `messages.searchAll`); mail and notes are always the local store's. The `crm` and `business` lanes fold short
 titles in memory per query, with no index. `deals.find` reads deal and lead titles, their company's name and their
 contacts' names, e-mails and phones (not the owner's; for a CRM copy, only that CRM's contact record), and matches
-whole words: a query word matches a stored word it begins (three letters or more) or one of the same stem; a phrase's
+whole words: a query word matches a stored word it begins (four letters or more) or one of the same stem; a phrase's
 words must follow each other; when nothing matches, `correctWords` corrects a misspelt word against those same words
 once, and the hits say `match: corrected`.
 `store.business.find` (`src/store/sqlite/business-search.ts`) reads the numbers and names of invoices, payments,

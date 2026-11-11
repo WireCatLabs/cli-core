@@ -14,6 +14,6 @@
 ### Changed — may break callers
 
 - **CRM search no longer matches inside a word.** `cement` no longer finds `replacement`, nor «кто» «Вектор». A query
-  word shorter than three letters matches only a whole word.
+  word shorter than four letters matches only a whole word.
 - **`search all stage:won` skips deals and leads with the reason** instead of finding none and calling the answer
   complete; so do `status:` and `pipeline:`. `deals list stage:<name>` lists them by stage.
