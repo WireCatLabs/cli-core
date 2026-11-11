@@ -422,14 +422,14 @@ export const searchAll = async (
             ...(request.timezone === undefined ? {} : { timezone: request.timezone }),
             ...(request.env === undefined ? {} : { env: request.env }),
           })
-          hasMore ||= found.has_more
+          hasMore ||= found.hasMore
           notes = {
             by: found.by,
             ...(found.meaning_skipped === undefined ? {} : { meaningSkipped: found.meaning_skipped }),
           }
-          for (const hit of found.hits) if (hit.meaning_score !== undefined) cosines.set(hit.ref, hit.meaning_score)
+          for (const hit of found.items) if (hit.meaning_score !== undefined) cosines.set(hit.ref, hit.meaning_score)
           lists.push(
-            found.hits.map((hit) => ({
+            found.items.map((hit) => ({
               kind: hit.kind ?? "note",
               ref: hit.ref,
               provider: hit.provider ?? "notes",
@@ -462,14 +462,14 @@ export const searchAll = async (
             ...(request.timezone === undefined ? {} : { timezone: request.timezone }),
             ...(request.signal === undefined ? {} : { signal: request.signal }),
           })
-          hasMore ||= found.has_more
+          hasMore ||= found.hasMore
           events = {
             by: found.by,
             ...(found.meaning_skipped === undefined ? {} : { meaningSkipped: found.meaning_skipped }),
           }
-          for (const hit of found.hits) if (hit.meaning_score !== undefined) cosines.set(hit.ref, hit.meaning_score)
+          for (const hit of found.items) if (hit.meaning_score !== undefined) cosines.set(hit.ref, hit.meaning_score)
           lists.push(
-            found.hits.map((hit) => ({
+            found.items.map((hit) => ({
               kind: "event",
               ref: hit.ref,
               provider: hit.provider ?? "calendar",
@@ -497,12 +497,12 @@ export const searchAll = async (
             anyWord: anyWord || discover,
             ...(request.exact ? { exact: true } : {}),
             ...(request.crmKinds === undefined ? {} : { kinds: request.crmKinds }),
-            limit: Math.min(depth + 1, 500),
+            limit: Math.min(depth, 500),
             ...(chosen === undefined ? {} : { accounts: chosen }),
           })
-          hasMore ||= found.length > depth
+          hasMore ||= found.hasMore
           lists.push(
-            found.slice(0, depth).map((deal) => ({
+            found.items.map((deal) => ({
               kind: deal.kind,
               ref: deal.ref,
               provider: deal.account?.provider ?? "crm",

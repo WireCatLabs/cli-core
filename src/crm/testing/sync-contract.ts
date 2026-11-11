@@ -51,7 +51,7 @@ export const crmSyncContract = (make: () => CrmSyncFixture | Promise<CrmSyncFixt
         const sync = (options: CrmSyncOptions = {}) =>
           syncCrm(source, fixture.store, fixture.account, { now, ...options })
         const deals = async () =>
-          (await fixture.store.deals.list({ account: fixture.account, kind: "deal" }))
+          (await fixture.store.deals.list({ account: fixture.account, kind: "deal" })).items
             .map(({ externalId }) => externalId as string)
             .sort()
         await check({ ...fixture, source, sync, deals })
@@ -75,7 +75,7 @@ export const crmSyncContract = (make: () => CrmSyncFixture | Promise<CrmSyncFixt
         const first = await sync()
         assert.equal(first.state, "complete")
         assert.deepEqual(await deals(), ["d1", "d2", "d3"])
-        assert.equal((await store.deals.list({ account, kind: "lead" })).length, 1)
+        assert.equal((await store.deals.list({ account, kind: "lead" })).items.length, 1)
         assert.ok(first.synced.every(({ round }) => round === "full"))
         source.put("deal", exampleDeal("d2", { stage: "won", title: "Example deal won" }))
         const second = await sync()
@@ -88,7 +88,9 @@ export const crmSyncContract = (make: () => CrmSyncFixture | Promise<CrmSyncFixt
             ["lead", "changes", 0],
           ],
         )
-        const [won] = await store.deals.list({ account, status: "won" })
+        const {
+          items: [won],
+        } = await store.deals.list({ account, status: "won" })
         assert.equal(won?.title, "Example deal won")
       }),
       test("marks deleted what the CRM deleted, after a complete list at the latest", async ({
@@ -242,7 +244,9 @@ export const crmSyncContract = (make: () => CrmSyncFixture | Promise<CrmSyncFixt
         source.put("person", examplePerson("p1", { email: "person@example.com" }))
         source.put("deal", exampleDeal("d1", { organization: "c1", people: [{ externalId: "p1", role: "contact" }] }))
         await sync()
-        const [deal] = await store.deals.list({ account })
+        const {
+          items: [deal],
+        } = await store.deals.list({ account })
         assert.notEqual(deal?.organization?.ref, own.ref)
         assert.equal(deal?.organization?.name, "Example company c1")
         const person = await store.people.personOf({ provider: "email", id: "person@example.com" })

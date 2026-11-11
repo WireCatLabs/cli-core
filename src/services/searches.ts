@@ -1,5 +1,6 @@
 import { CliError, singleLine } from "@wirecat/cli-base"
 import { parseLucene, type QueryAst } from "@wirecat/cli-base/query"
+import type { ListResult } from "@wirecat/cli-base/standards"
 import type * as v from "valibot"
 import type { savedSearch } from "../entities/saved-search.js"
 import { validateAst, validateFields } from "../search/lucene/registry.js"
@@ -37,7 +38,7 @@ export interface SearchesService {
   create(name: string, params: SearchParams, options?: { replace?: boolean }): Promise<StoredSearch>
   show(reference: string): Promise<StoredSearch>
   list(): Promise<StoredSearch[]>
-  history(limit: number, offset?: number): Promise<{ items: StoredSearch[]; has_more: boolean }>
+  history(limit: number, offset?: number): Promise<ListResult<StoredSearch>>
   delete(reference: string): Promise<StoredSearch>
   clear(): Promise<{ cleared: number }>
   /**
@@ -160,7 +161,7 @@ export const searchesService = (deps: ServiceDeps): SearchesService => {
     history: (limit, offset = 0) =>
       inStore(async (store) => {
         const rows = await store.searches.searchHistory(limit, offset, MESSAGE_SEARCH_COMMANDS)
-        return { items: rows.slice(0, limit), has_more: rows.length > limit }
+        return { items: rows.slice(0, limit), hasMore: rows.length > limit }
       }),
 
     delete: (reference) => inStore(async (store) => store.searches.deleteSearch((await found(store, reference)).id)),

@@ -90,7 +90,8 @@ export const mailFindingsKind = (store: Pick<MessageStore, "mailFindings" | "pro
           limit: 50,
           offset,
         })
-        for (const row of kept(await Promise.all(page.items.map(created)), { ...filter, limit: 50 })) rows.push(row)
+        for (const row of kept(await Promise.all(page.items.map(created)), { ...filter, limit: 50 }).items)
+          rows.push(row)
         if (!page.hasMore) break
       }
       return kept(rows, filter)

@@ -73,7 +73,7 @@ export const bothSearchAnswer = async (
   limit: number,
 ) => {
   const calendars = new Map((await store.calendars(accountId)).map((calendar) => [calendar.externalId, calendar]))
-  const hits: (Omit<FoundEvent, "found_by"> & { found_by: FoundBy[] })[] = archived.hits.map((hit) => ({ ...hit }))
+  const hits: (Omit<FoundEvent, "found_by"> & { found_by: FoundBy[] })[] = archived.items.map((hit) => ({ ...hit }))
   const byGroup = new Map<string, (typeof hits)[number]>()
   for (const hit of hits) {
     const details = await store.event(Number(hit.ref.slice("event:".length)))
@@ -95,6 +95,6 @@ export const bothSearchAnswer = async (
     by: "both" as const,
     ...(archived.meaning_skipped === undefined ? {} : { meaning_skipped: archived.meaning_skipped }),
     hits: merged.slice(0, limit),
-    has_more: archived.has_more || served.has_more || merged.length > limit,
+    has_more: archived.hasMore || served.has_more || merged.length > limit,
   }
 }

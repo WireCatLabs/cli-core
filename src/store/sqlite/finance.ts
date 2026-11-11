@@ -1,4 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
+import type { ListResult } from "@wirecat/cli-base/standards"
 import {
   FINANCE_REVIEWS,
   type FinanceReview,
@@ -33,6 +34,7 @@ import {
   text,
   type Written,
 } from "./reviewed.js"
+import { pageOfRows } from "./rows-page.js"
 import { write } from "./transaction.js"
 
 export interface Invoice extends Reviewed {
@@ -139,6 +141,7 @@ interface ListFilter {
   proposedBy?: ProposedByFilter
   /** 1–500, 100 by default; newest written first. */
   limit?: number
+  offset?: number
 }
 
 export interface OpenTotal extends Money {
@@ -158,7 +161,7 @@ export interface FinanceStore {
       /** The number printed on it, exactly. */
       number?: string
     },
-  ): Promise<Invoice[]>
+  ): Promise<ListResult<Invoice>>
   /**
    * A line at the end, and the total follows. The owner changes any invoice's lines but a void one's, a bot only those
    * of an invoice it proposed that is still proposed; the total never falls below what confirmed payments settled.
@@ -172,7 +175,7 @@ export interface FinanceStore {
   voidInvoice(reference: string, by: Author): Promise<InvoiceDetail>
   addPayment(input: PaymentInput): Promise<PaymentDetail>
   payment(reference: string): Promise<PaymentDetail>
-  payments(filter?: ListFilter & { direction?: MoneyDirection; party?: string }): Promise<Payment[]>
+  payments(filter?: ListFilter & { direction?: MoneyDirection; party?: string }): Promise<ListResult<Payment>>
   /**
    * Settles part of an invoice with part of a payment, in one currency, never beyond either. The owner allocates any
    * payment; a bot only one it proposed that is still proposed.
@@ -592,18 +595,20 @@ export const financeOperationsOver = (context: StoreContext): FinanceOperations 
       return relined(row, (id) => lines.deleteLine("invoice", id, position))
     },
     invoices: (filter = {}) => {
+      const limit = limitOf(filter.limit)
+      const offset = Math.max(filter.offset ?? 0, 0)
       const project = filter.project === undefined ? null : projectId(database, filter.project)
       const counterparty = partyThing(filter.counterparty, "the counterparty")
       const by = proposedBySql("i.author_type", "i.author_id", filter.proposedBy)
       const status = filter.status === undefined ? null : oneOf(filter.status, INVOICE_STATUSES, "a status")
       const review = filter.review === undefined ? null : oneOf(filter.review, FINANCE_REVIEWS, "a review")
-      return database
+      const rows = database
         .prepare(
           `${INVOICES} WHERE i.deleted_at IS NULL AND (? IS NULL OR i.direction = ?) AND (? IS NULL OR i.status = ?) ` +
             "AND (? IS NULL OR i.review = ?) AND (? IS NULL OR i.project_id = ?) " +
             "AND (? IS NULL OR (i.counterparty_type = ? AND i.counterparty_id = ?)) AND (? IS NULL OR i.number = ?) " +
             `${filter.open ? "AND i.status IN ('issued', 'partly_paid') " : ""}AND ${by.sql} ` +
-            "ORDER BY i.created_at DESC, i.id DESC LIMIT ?",
+            "ORDER BY i.created_at DESC, i.id DESC LIMIT ? OFFSET ?",
         )
         .all(
           filter.direction ?? null,
@@ -620,9 +625,11 @@ export const financeOperationsOver = (context: StoreContext): FinanceOperations 
           filter.number ?? null,
           filter.number ?? null,
           ...by.params,
-          limitOf(filter.limit),
+          limit + 1,
+          offset,
         )
         .map(invoiceOf)
+      return pageOfRows(rows, limit, offset)
     },
     issueInvoice: (reference, by) => {
       ownerOnly(by, "issues an invoice")
@@ -708,15 +715,17 @@ export const financeOperationsOver = (context: StoreContext): FinanceOperations 
     },
     payment: (reference) => paymentDetail(reference),
     payments: (filter = {}) => {
+      const limit = limitOf(filter.limit)
+      const offset = Math.max(filter.offset ?? 0, 0)
       const project = filter.project === undefined ? null : projectId(database, filter.project)
       const party = partyThing(filter.party, "the party")
       const by = proposedBySql("p.author_type", "p.author_id", filter.proposedBy)
       const review = filter.review === undefined ? null : oneOf(filter.review, FINANCE_REVIEWS, "a review")
-      return database
+      const rows = database
         .prepare(
           `${PAYMENTS} WHERE p.deleted_at IS NULL AND (? IS NULL OR p.direction = ?) AND (? IS NULL OR p.review = ?) ` +
             "AND (? IS NULL OR p.project_id = ?) AND (? IS NULL OR (p.payer_type = ? AND p.payer_id = ?) " +
-            `OR (p.payee_type = ? AND p.payee_id = ?)) AND ${by.sql} ORDER BY p.created_at DESC, p.id DESC LIMIT ?`,
+            `OR (p.payee_type = ? AND p.payee_id = ?)) AND ${by.sql} ORDER BY p.created_at DESC, p.id DESC LIMIT ? OFFSET ?`,
         )
         .all(
           filter.direction ?? null,
@@ -731,9 +740,11 @@ export const financeOperationsOver = (context: StoreContext): FinanceOperations 
           party?.type ?? null,
           party?.id ?? null,
           ...by.params,
-          limitOf(filter.limit),
+          limit + 1,
+          offset,
         )
         .map(paymentOf)
+      return pageOfRows(rows, limit, offset)
     },
     allocate: ({ payment, invoice, amount, by }) => {
       const row = rowOf(payment, "payment")

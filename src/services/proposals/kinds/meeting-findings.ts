@@ -53,7 +53,7 @@ export const meetingFindingsKind = (store: Pick<MessageStore, "meetingFindings" 
     parts: true,
     ownerOnly: true,
     list: async (filter) => {
-      const actions = await store.proposedActions.list({
+      const { items: actions } = await store.proposedActions.list({
         kinds: [MEETING_FINDINGS_KIND],
         ...((filter.status ?? "proposed") === "proposed" ? { status: "proposed" as const } : {}),
         ...(filter.by === undefined ? {} : { proposedBy: filter.by }),

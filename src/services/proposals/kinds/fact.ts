@@ -33,7 +33,7 @@ export const factKind = (store: Pick<MessageStore, "facts">): ProposalKind => ({
   prefix: "fact",
   list: async (filter) => {
     const status = filter.status ?? "proposed"
-    const facts = await store.facts.list({
+    const { items: facts } = await store.facts.list({
       ...pushed(filter),
       ...(status === "all" ? {} : { status: status === "confirmed" ? ("accepted" as const) : status }),
       order: "created",

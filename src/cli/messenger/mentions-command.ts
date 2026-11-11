@@ -65,7 +65,7 @@ export const mentionsCommand = (messenger: Messenger): Command => {
         context,
         pagedList("mentions list", context.settings, {
           items: found.items.map(snakeKeys),
-          has_more: found.hasMore,
+          hasMore: found.hasMore,
           args: { query: query.join(" ") },
         }),
         () => found.items.map((item) => `${line(item)}\n`).join(""),
@@ -97,7 +97,7 @@ export const mentionsCommand = (messenger: Messenger): Command => {
         context,
         pagedList("mentions domains", context.settings, {
           items: sites.items.map(snakeKeys),
-          has_more: sites.hasMore,
+          hasMore: sites.hasMore,
           args: { query: query.join(" ") },
         }),
         () =>
@@ -128,7 +128,7 @@ export const mentionsCommand = (messenger: Messenger): Command => {
         context,
         pagedList("mentions places", context.settings, {
           items: places.items.map(snakeKeys),
-          has_more: places.hasMore,
+          hasMore: places.hasMore,
         }),
         () => places.items.map(({ id, address, mentions }) => `${id}  ${address}  ${mentions} mentioned\n`).join(""),
       )

@@ -1,3 +1,4 @@
+import type { ListResult } from "@wirecat/cli-base/standards"
 import {
   CONTRACT_KINDS,
   CONTRACT_STATUSES,
@@ -17,6 +18,7 @@ import { requiredThing } from "./notes.js"
 import type { StoreContext } from "./open.js"
 import { recordRelationshipsOver } from "./record-relationships.js"
 import { isoDate, limitOf, oneOf, type Reviewed, refuse, reviewedRowsOver, text, type Written } from "./reviewed.js"
+import { pageOfRows } from "./rows-page.js"
 import { storedThing } from "./things.js"
 import { write } from "./transaction.js"
 
@@ -86,6 +88,7 @@ export interface ContractFilter {
   expiresBy?: string
   /** 1–500, 100 by default; newest written first. */
   limit?: number
+  offset?: number
 }
 
 /**
@@ -96,7 +99,7 @@ export interface ContractFilter {
 export interface ContractsStore {
   add(input: ContractInput): Promise<Contract>
   get(reference: string): Promise<Contract>
-  list(filter?: ContractFilter): Promise<Contract[]>
+  list(filter?: ContractFilter): Promise<ListResult<Contract>>
   /** The owner changes any; a bot only one it proposed that is still proposed. */
   update(reference: string, input: ContractUpdate): Promise<Contract>
   confirm(reference: string, by: Decider, reason?: string): Promise<Contract>
@@ -294,17 +297,19 @@ export const contractOperationsOver = (context: StoreContext): ContractOperation
     },
     get: (reference) => contractOf(rowOf(reference)),
     list: (filter = {}) => {
+      const limit = limitOf(filter.limit)
+      const offset = Math.max(filter.offset ?? 0, 0)
       const project = filter.project === undefined ? null : projectId(database, filter.project)
       const status = filter.status === undefined ? null : oneOf(filter.status, CONTRACT_STATUSES, "a status")
       const kind = filter.kind === undefined ? null : oneOf(filter.kind, CONTRACT_KINDS, "a kind")
       const review = filter.review === undefined ? null : oneOf(filter.review, FINANCE_REVIEWS, "a review")
       const expires = isoDate(filter.expiresBy, "the last expiration day")
       const by = proposedBySql("k.author_type", "k.author_id", filter.proposedBy)
-      return database
+      const rows = database
         .prepare(
           `${CONTRACTS} WHERE k.deleted_at IS NULL AND (? IS NULL OR k.status = ?) AND (? IS NULL OR k.kind = ?) ` +
             "AND (? IS NULL OR k.review = ?) AND (? IS NULL OR k.project_id = ?) " +
-            `AND (? IS NULL OR k.expiration_date <= ?) AND ${by.sql} ORDER BY k.created_at DESC, k.id DESC LIMIT ?`,
+            `AND (? IS NULL OR k.expiration_date <= ?) AND ${by.sql} ORDER BY k.created_at DESC, k.id DESC LIMIT ? OFFSET ?`,
         )
         .all(
           status,
@@ -318,9 +323,11 @@ export const contractOperationsOver = (context: StoreContext): ContractOperation
           expires,
           expires,
           ...by.params,
-          limitOf(filter.limit),
+          limit + 1,
+          offset,
         )
         .map((row) => contractOf(row))
+      return pageOfRows(rows, limit, offset)
     },
     update: (reference, { by, ...fields }) => {
       const row = rowOf(reference)

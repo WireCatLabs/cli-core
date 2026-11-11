@@ -1,5 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import { type QueryAst, type QueryRegistry, queryFieldsOf } from "@wirecat/cli-base/query"
+import type { ListResult } from "@wirecat/cli-base/standards"
 import type * as v from "valibot"
 import { cutChunks } from "../conversations/chunks.js"
 import { type LinkInput, linkMessages, RULES_VERSION } from "../conversations/link.js"
@@ -76,7 +77,7 @@ export interface ConversationsService {
   list(
     chat: string,
     window: { limit: number; offset?: number; query?: QueryAst },
-  ): Promise<{ items: ConversationItem[]; has_more: boolean }>
+  ): Promise<ListResult<ConversationItem>>
   /** By the conversation's id, or as the conversation a message is in. */
   show(
     target: { id: string } | { chat: string; message: Id },
@@ -178,7 +179,7 @@ export const conversationsService = (deps: ServiceDeps): ConversationsService =>
       const where = query ? queryFilter(query, CONVERSATION_COLUMNS, { command: "conversations list" }) : undefined
       const page = await store.conversations.conversations(chatId, { limit, offset, ...(where ? { where } : {}) })
       const account = await deps.account()
-      return { items: page.items.map((one) => conversationItem(account, one)), has_more: page.hasMore }
+      return { items: page.items.map((one) => conversationItem(account, one)), hasMore: page.hasMore }
     },
 
     show: async (target) => {

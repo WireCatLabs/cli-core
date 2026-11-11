@@ -130,13 +130,13 @@ export const pageOf = ({ limit, page, all }: Pick<Settings, "limit" | "page" | "
 export const pagedList = <T>(
   command: string,
   { limit, page, all }: Pick<Settings, "limit" | "page" | "all">,
-  { items, has_more, ...rest }: Omit<ListInput<T>, "limit" | "page" | "cursor">,
+  { items, hasMore, ...rest }: Omit<ListInput<T>, "limit" | "page" | "cursor" | "has_more"> & { hasMore: boolean },
 ): ListBody<T> =>
   listOf(command, {
     ...rest,
     items,
     limit: all ? Math.max(1, items.length) : limit,
-    has_more: all ? false : has_more,
+    has_more: all ? false : hasMore,
     page,
   })
 

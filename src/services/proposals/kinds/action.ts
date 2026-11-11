@@ -40,7 +40,7 @@ export const actionKind = (
   kind: "action",
   list: async (filter) => {
     const status = storedStatus(filter)
-    const actions = await store.proposedActions.list({
+    const { items: actions } = await store.proposedActions.list({
       except: [...claimed(), MEETING_FINDINGS_KIND, EVIDENCE_FINDINGS_KIND, MAIL_FINDINGS_KIND],
       ...(status === undefined ? {} : { status }),
       ...pushed(filter),

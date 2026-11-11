@@ -105,7 +105,11 @@ export const promises: StatusSignal<PromisesData> = {
   scope: "project",
   read: async (context) => {
     const projects = [context.project.ref, ...context.project.children.map((child) => child.ref)]
-    const facts = (await Promise.all(projects.map((project) => context.store.facts.list({ type: "promise", project }))))
+    const facts = (
+      await Promise.all(
+        projects.map(async (project) => (await context.store.facts.list({ type: "promise", project })).items),
+      )
+    )
       .flat()
       .filter((fact) => fact.status === "proposed" || fact.status === "accepted")
     return [

@@ -1,5 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import type { QueryAst } from "@wirecat/cli-base/query"
+import type { ListResult } from "@wirecat/cli-base/standards"
 import type {
   Author,
   Decider,
@@ -47,17 +48,18 @@ export interface DocumentKnowledge {
   memories(
     principal: string,
     ref: string,
-    options?: { scope?: Memory["scope"]; kind?: Memory["kind"]; status?: Memory["status"]; limit?: number },
-  ): Promise<Memory[]>
+    options?: {
+      scope?: Memory["scope"]
+      kind?: Memory["kind"]
+      status?: Memory["status"]
+      limit?: number
+      offset?: number
+    },
+  ): Promise<ListResult<Memory>>
   memory(principal: string, ref: string, memoryRef: string, action?: "show"): Promise<Memory>
   /** `by` decides: the owner, or an agent for the owner that did not propose it. */
   memory(principal: string, ref: string, memoryRef: string, action: "confirm" | "stale", by: Decider): Promise<Memory>
-  searchMemories(
-    principal: string,
-    ref: string,
-    query: string,
-    scope?: Memory["scope"],
-  ): Promise<{ items: Memory[]; limit_reached: boolean }>
+  searchMemories(principal: string, ref: string, query: string, scope?: Memory["scope"]): Promise<ListResult<Memory>>
   addFact(
     principal: string,
     ref: string,
@@ -73,8 +75,8 @@ export interface DocumentKnowledge {
   facts(
     principal: string,
     ref: string,
-    options?: { type?: Fact["type"]; status?: Fact["status"]; limit?: number },
-  ): Promise<Fact[]>
+    options?: { type?: Fact["type"]; status?: Fact["status"]; limit?: number; offset?: number },
+  ): Promise<ListResult<Fact>>
   fact(principal: string, ref: string, factRef: string, action?: "show"): Promise<Fact>
   /** `by` decides: the owner, or an agent for the owner that did not propose it; only the owner reverses. */
   fact(principal: string, ref: string, factRef: string, action: "confirm" | "reverse", by: Decider): Promise<Fact>
@@ -198,8 +200,7 @@ export const documentKnowledge = (
     },
     searchMemories: async (principal, ref, query, scope) => {
       await document(principal, ref)
-      const items = await store.memories.search(query, { subject: ref, ...(scope ? { scope } : {}), limit: 200 })
-      return { items, limit_reached: items.length === 200 }
+      return store.memories.search(query, { subject: ref, ...(scope ? { scope } : {}), limit: 200 })
     },
     addFact: async (principal, ref, { statement, type, scope, by, supersedes, occurredAt }) => {
       await document(principal, ref)

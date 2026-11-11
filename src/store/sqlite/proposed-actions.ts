@@ -1,4 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
+import type { ListResult } from "@wirecat/cli-base/standards"
 import { MEETING_FINDINGS_KIND } from "../../meetings/index.js"
 import { assertMayDecide, type Decider, deciderAuthor, type Proposer } from "../decisions.js"
 import { EVIDENCE_FINDINGS_KIND } from "../evidence-findings.js"
@@ -11,6 +12,7 @@ import { type Actor, type ProposedByFilter, proposedBySql } from "./actors.js"
 import { type Author, authorActor } from "./memories.js"
 import { requiredThing } from "./notes.js"
 import type { StoreContext } from "./open.js"
+import { pageOfRows } from "./rows-page.js"
 import { referenceOfThing, storedThing } from "./things.js"
 import { write } from "./transaction.js"
 
@@ -69,7 +71,7 @@ export interface ProposedActionsStore {
     project?: string
     /** A reference the payload's `evidence` holds. */
     evidence?: string
-  }): Promise<ProposedAction[]>
+  }): Promise<ListResult<ProposedAction>>
   /** `result` records what the approval made, such as the task it became. `by` must be allowed to decide it. */
   approve(id: string, by: Decider, result?: unknown): Promise<ProposedAction>
   /** `reason` is kept as the result: why it was turned down. */
@@ -252,11 +254,13 @@ export const proposalOperationsOver = (context: StoreContext): ProposalOperation
         .prepare(`${NAMED} WHERE p.status = 'proposed' ORDER BY p.created_at, p.id LIMIT ?`)
         .all(Math.min(Math.max(limit, 1), 500))
         .map(actionOf),
-    list: ({ status, limit = 100, offset = 0, kinds, except, proposedBy, project, evidence } = {}) => {
+    list: ({ status, limit: asked = 100, offset: from = 0, kinds, except, proposedBy, project, evidence } = {}) => {
+      const limit = Math.min(Math.max(asked, 1), 500)
+      const offset = Math.max(from, 0)
       if (status !== undefined && !PROPOSAL_STATUSES.includes(status))
         throw new CliError("validation_error", `a status is one of ${PROPOSAL_STATUSES.join(", ")}`)
       const by = proposedBySql("p.proposed_by_type", "p.proposed_by_id", proposedBy)
-      return database
+      const rows = database
         .prepare(
           `${NAMED} WHERE (? IS NULL OR ${STATUS} = ?) AND (? IS NULL OR p.kind IN (SELECT value FROM json_each(?))) ` +
             "AND p.kind NOT IN (SELECT value FROM json_each(?)) AND (? IS NULL OR (p.target_type = 'project' AND " +
@@ -274,10 +278,11 @@ export const proposalOperationsOver = (context: StoreContext): ProposalOperation
           evidence ?? null,
           evidence ?? null,
           ...by.params,
-          Math.min(Math.max(limit, 1), 500),
-          Math.max(offset, 0),
+          limit + 1,
+          offset,
         )
         .map(actionOf)
+      return pageOfRows(rows, limit, offset)
     },
     approve: (id, result, by) => decide(id, "approved", result, by),
     reject: (id, by, result) => decide(id, "rejected", result, by),

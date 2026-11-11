@@ -68,7 +68,12 @@ export const meetingPeople = async (
   if (store.participantCandidates && accountId === undefined)
     throw new MeetingError("configuration_error", "select an account for bounded participant lookup")
   if (accountId !== undefined && store.participantCandidates) {
-    const { limit, has_more, next_cursor, ...packet } = await store.participantCandidates(query, {
+    const {
+      limit,
+      hasMore: has_more,
+      nextCursor: next_cursor,
+      ...packet
+    } = await store.participantCandidates(query, {
       ...options,
       accountId,
     })

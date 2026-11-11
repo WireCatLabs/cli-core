@@ -1,4 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
+import type { ListResult } from "@wirecat/cli-base/standards"
 import { type FACT_STATUSES, FACT_TYPES, MEMORY_SCOPES } from "../../domain/knowledge.js"
 import { calendarMoment } from "../../domain/moment.js"
 import { assertMayDecide, assertMayWithdraw, type Decider, deciderAuthor } from "../decisions.js"
@@ -23,6 +24,7 @@ import {
 import { idsOf } from "./merged-persons.js"
 import { requiredThing } from "./notes.js"
 import type { StoreContext } from "./open.js"
+import { pageOfRows } from "./rows-page.js"
 import { closeSourceReviews, eraseSourceReviews, sourceReviewOf } from "./source-review-marks.js"
 import { write } from "./transaction.js"
 
@@ -85,7 +87,7 @@ export interface FactsStore {
     limit?: number
     /** Rows to skip, for the next page in the same order, ties by id. */
     offset?: number
-  }): Promise<Fact[]>
+  }): Promise<ListResult<Fact>>
   /** The owner, or an agent for the owner, accepts a proposed fact; the fact it supersedes stops holding. */
   accept(reference: string, by: Decider, reason?: string): Promise<Fact>
   /** An accepted decision no longer holds and nothing replaced it. */
@@ -290,12 +292,14 @@ export const factOperationsOver = (context: StoreContext): FactOperations => {
     },
     get: (reference) => factOf(rowOf(reference)),
     list: (options = {}) => {
+      const limit = Math.min(Math.max(options.limit ?? 100, 1), 500)
+      const offset = Math.max(options.offset ?? 0, 0)
       const project =
         options.project === undefined ? undefined : requiredThing(database, options.project, "the project")
       const subject = options.subject === undefined ? undefined : requiredThing(database, options.subject)
       const by = proposedBySql("f.author_type", "f.author_id", options.proposedBy)
       const order = options.order === "created" ? "f.created_at" : "coalesce(f.occurred_at, f.created_at)"
-      return database
+      const rows = database
         .prepare(
           `${NAMED} WHERE f.deleted_at IS NULL AND (? IS NULL OR f.type = ?) AND (? IS NULL OR f.project_id = ?) ` +
             "AND (? IS NULL OR (f.subject_type = ? AND f.subject_id IN (SELECT value FROM json_each(?)))) AND (? IS NULL OR f.status = ?) " +
@@ -312,10 +316,11 @@ export const factOperationsOver = (context: StoreContext): FactOperations => {
           options.status ?? null,
           options.status ?? null,
           ...by.params,
-          Math.min(Math.max(options.limit ?? 100, 1), 500),
-          Math.max(options.offset ?? 0, 0),
+          limit + 1,
+          offset,
         )
         .map(factOf)
+      return pageOfRows(rows, limit, offset)
     },
     accept: (reference, by, reason) => {
       const row = rowOf(reference)

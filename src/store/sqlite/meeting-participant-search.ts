@@ -78,8 +78,7 @@ export const meetingParticipantSearchOver = (context: StoreContext): MeetingPart
         query: query.trim(),
         items: [],
         limit: limits.limit,
-        has_more: false,
-        next_cursor: null,
+        hasMore: false,
         ambiguity: { scope: "page", multiple_identities: false, identity_ids: [] },
         coverage: { scanned: 0, read_bytes: 0, archive_completeness: "unknown", truncated_by: null },
       }
@@ -110,9 +109,9 @@ export const meetingParticipantSearchOver = (context: StoreContext): MeetingPart
           email,
         })
       }
-      result.has_more = result.coverage.truncated_by !== null
-      if (result.has_more)
-        result.next_cursor = Buffer.from(JSON.stringify({ version: 1, key, after, until })).toString("base64url")
+      result.hasMore = result.coverage.truncated_by !== null
+      if (result.hasMore)
+        result.nextCursor = Buffer.from(JSON.stringify({ version: 1, key, after, until })).toString("base64url")
       result.ambiguity.identity_ids = [...new Set(result.items.map((item) => item.identity_id))]
       result.ambiguity.multiple_identities = result.ambiguity.identity_ids.length > 1
       input.signal?.throwIfAborted()

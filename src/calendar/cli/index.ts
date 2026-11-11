@@ -664,7 +664,16 @@ const addCalendarCommandsDefinition = (program: Command, options: CalendarComman
             ...(opts.exact ? { exact: true } : {}),
             ...(opts.newest ? { newest: true } : {}),
           })
-        if (!server) return hitsBody(command, { ...(await archived()), untrusted: SEARCH_UNTRUSTED })
+        if (!server) {
+          const { items, hasMore, nextOffset, ...found } = await archived()
+          return hitsBody(command, {
+            ...found,
+            hits: items,
+            has_more: hasMore,
+            ...(nextOffset === undefined ? {} : { next_offset: nextOffset }),
+            untrusted: SEARCH_UNTRUSTED,
+          })
+        }
         const served = await serverSearchAnswer(run.source(), run.store, {
           accountId: run.accountId,
           account: run.account,

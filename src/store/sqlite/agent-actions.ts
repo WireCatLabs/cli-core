@@ -1,7 +1,9 @@
 import { CliError } from "@wirecat/cli-base"
+import type { ListResult } from "@wirecat/cli-base/standards"
 import type { Actor } from "./actors.js"
 import { type Author, authorActor } from "./memories.js"
 import type { StoreContext } from "./open.js"
+import { pageOfRows } from "./rows-page.js"
 import { thingOf } from "./things.js"
 
 export const ACTION_TIERS = ["read", "draft", "write-private", "write-public", "destructive", "admin"] as const
@@ -39,7 +41,7 @@ export interface AgentAction {
 export interface AgentActionsStore {
   record(input: AgentActionInput): Promise<AgentAction>
   /** Newest first; `agent` is a bot's name, such as `tg-mcp`. */
-  list(options?: { tool?: string; agent?: string; limit?: number; offset?: number }): Promise<AgentAction[]>
+  list(options?: { tool?: string; agent?: string; limit?: number; offset?: number }): Promise<ListResult<AgentAction>>
 }
 
 const CODE = /^[a-z][a-z0-9_]{0,63}$/
@@ -96,19 +98,16 @@ export const agentActionsStoreOver = (context: StoreContext, afterRecord: () => 
       afterRecord()
       return actionOf(database.prepare(`${NAMED} WHERE a.id = ?`).get(Number(row?.id)) as Record<string, unknown>)
     },
-    list: async ({ tool, agent, limit = 100, offset = 0 } = {}) =>
-      database
+    list: async ({ tool, agent, limit: asked = 100, offset: from = 0 } = {}) => {
+      const limit = Math.min(Math.max(asked, 1), 500)
+      const offset = Math.max(from, 0)
+      const rows = database
         .prepare(
           `${NAMED} WHERE (? IS NULL OR a.tool = ?) AND (? IS NULL OR b.name = ?) ORDER BY a.started_at DESC, a.id DESC LIMIT ? OFFSET ?`,
         )
-        .all(
-          tool ?? null,
-          tool ?? null,
-          agent ?? null,
-          agent ?? null,
-          Math.min(Math.max(limit, 1), 500),
-          Math.max(offset, 0),
-        )
-        .map(actionOf),
+        .all(tool ?? null, tool ?? null, agent ?? null, agent ?? null, limit + 1, offset)
+        .map(actionOf)
+      return pageOfRows(rows, limit, offset)
+    },
   }
 }

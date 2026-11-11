@@ -168,7 +168,7 @@ export interface TaskListRequest {
 
 export interface TaskList {
   items: TaskItem[]
-  has_more: boolean
+  hasMore: boolean
   previews?: TaskView[]
 }
 
@@ -435,7 +435,7 @@ export const tasksService = (deps: ServiceDeps, categories?: readonly TaskCatego
         const shown = rows.slice(0, limit)
         return {
           items: shown.map((row) => taskItem(account, row)),
-          has_more: rows.length > limit,
+          hasMore: rows.length > limit,
           ...(previews ? { previews: await Promise.all(shown.map(({ task }) => taskView(store, account, task))) } : {}),
         }
       }),

@@ -107,9 +107,9 @@ export const dealContext = async (
   for (const [way, invoiceFilter, paymentFilter] of ways) {
     const invoiceRows = await store.finance.invoices({ ...invoiceFilter, limit: STORE_PAGE })
     const paymentRows = await store.finance.payments({ ...paymentFilter, limit: STORE_PAGE })
-    complete &&= invoiceRows.length < STORE_PAGE && paymentRows.length < STORE_PAGE
-    for (const invoice of notRejected(invoiceRows)) invoices.push([invoice, way])
-    for (const payment of notRejected(paymentRows)) payments.push([payment, way])
+    complete &&= !invoiceRows.hasMore && !paymentRows.hasMore
+    for (const invoice of notRejected(invoiceRows.items)) invoices.push([invoice, way])
+    for (const payment of notRejected(paymentRows.items)) payments.push([payment, way])
   }
   const only = ways.length === 1 ? ways[0]?.[0] : undefined
   const moneyNext = {

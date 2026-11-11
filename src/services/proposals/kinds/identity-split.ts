@@ -55,7 +55,7 @@ export const identitySplitKind = (store: Pick<MessageStore, "people" | "proposed
   ownerOnly: true,
   list: async (filter) => {
     const status = storedStatus(filter)
-    const stored = await store.proposedActions.list({
+    const { items: stored } = await store.proposedActions.list({
       kinds: [IDENTITY_SPLIT_KIND],
       ...(status === undefined ? {} : { status }),
       ...pushed(filter),

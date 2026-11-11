@@ -80,7 +80,7 @@ export const analysisCommands = (tasks: Command, messenger: Messenger): void => 
         context,
         pagedList("tasks status", context.settings, {
           items: shown.map(analysisItem),
-          has_more: chats.length > offset + limit,
+          hasMore: chats.length > offset + limit,
         }),
         () =>
           shown.length === 0

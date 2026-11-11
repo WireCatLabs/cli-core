@@ -176,8 +176,8 @@ export const organizationContext = async (
       limit: STORE_PAGE,
       ...(accounts === undefined ? {} : { accounts }),
     })
-    dealsFull ||= found.length >= STORE_PAGE
-    for (const deal of found) deals.push(deal)
+    dealsFull ||= found.hasMore
+    for (const deal of found.items) deals.push(deal)
   }
   const catalog = new Map((await store.knowledge.projects()).map((project) => [project.ref, project]))
   const projects = new Map<string, ProjectLine>()
@@ -193,14 +193,17 @@ export const organizationContext = async (
 
   const invoiceRows = await store.finance.invoices({ counterparty: ref, limit: STORE_PAGE })
   const paymentRows = await store.finance.payments({ party: ref, limit: STORE_PAGE })
-  const invoices: [Invoice, LinkedBy][] = notRejected(invoiceRows).map((invoice) => [invoice, "counterparty"])
-  const payments: [FinancePayment, LinkedBy][] = notRejected(paymentRows).map((payment) => [payment, "counterparty"])
+  const invoices: [Invoice, LinkedBy][] = notRejected(invoiceRows.items).map((invoice) => [invoice, "counterparty"])
+  const payments: [FinancePayment, LinkedBy][] = notRejected(paymentRows.items).map((payment) => [
+    payment,
+    "counterparty",
+  ])
   const orders: OrderLine[] = []
   let ordersFull = false
   for (const side of ["customer", "supplier"] as const) {
     const found = await store.orders.list({ [side]: ref, limit: STORE_PAGE })
-    ordersFull ||= found.length >= STORE_PAGE
-    for (const order of notRejected(found))
+    ordersFull ||= found.hasMore
+    for (const order of notRejected(found.items))
       orders.push({
         ref: order.ref,
         title: order.title,
@@ -211,7 +214,7 @@ export const organizationContext = async (
         side,
       })
   }
-  const financeComplete = invoiceRows.length < STORE_PAGE && paymentRows.length < STORE_PAGE && !ordersFull
+  const financeComplete = !invoiceRows.hasMore && !paymentRows.hasMore && !ordersFull
 
   const members = []
   for (const person of people)

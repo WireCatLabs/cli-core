@@ -3,6 +3,7 @@ import { constants, mkdirSync } from "node:fs"
 import { lstat, open, readFile, stat } from "node:fs/promises"
 import { CliError } from "@wirecat/cli-base"
 import { type QueryAst, type QueryRegistry, queryFieldsOf, walkQuery } from "@wirecat/cli-base/query"
+import type { ListResult } from "@wirecat/cli-base/standards"
 import type * as v from "valibot"
 import { directoryPaths } from "../attachments/directory.js"
 import { documentExtractor, documentKind } from "../attachments/documents.js"
@@ -148,11 +149,7 @@ export interface AttachmentsService {
   /** Reads the text layer of saved files into the local store; prints and sends nothing. */
   extract(options?: ExtractOptions): Promise<ExtractRun>
   /** File attachments of stored messages and what is held of their text, newest first. */
-  list(window: {
-    limit: number
-    offset?: number
-    query?: QueryAst
-  }): Promise<{ items: AttachmentItem[]; has_more: boolean }>
+  list(window: { limit: number; offset?: number; query?: QueryAst }): Promise<ListResult<AttachmentItem>>
   /**
    * Copies files the store already holds to `output`, never over a file there, and never asks the messenger: one
    * not held locally is an error before anything is written. The store keeps pointing at its own copy.
@@ -531,7 +528,7 @@ export const attachmentsService = (deps: ServiceDeps): AttachmentsService => ({
           chats.set(node.value, await chatIdIn(deps.messenger, node.value, store, { includeLeft: true }))
     const where = query ? queryFilter(query, attachmentColumns(chats), { command: "attachments list" }) : undefined
     const views = await store.attachments.attachments({ ...(where ? { where } : {}), offset, limit: limit + 1 })
-    return { items: views.slice(0, limit).map((view) => itemOf(account, view)), has_more: views.length > limit }
+    return { items: views.slice(0, limit).map((view) => itemOf(account, view)), hasMore: views.length > limit }
   },
 
   show: async ({ chat, message, attachment, page, load, ...window }) => {

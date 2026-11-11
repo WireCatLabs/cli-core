@@ -1,4 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
+import type { ListResult } from "@wirecat/cli-base/standards"
 import { MEMORY_KINDS, MEMORY_SCOPES, type MEMORY_STATUSES } from "../../domain/knowledge.js"
 import type { Stemmer, Stemmers } from "../../search/stem.js"
 import { assertMayDecide, assertMayWithdraw, type Decider, deciderAuthor } from "../decisions.js"
@@ -19,6 +20,7 @@ import { idsOf } from "./merged-persons.js"
 import { CORPORA, corpusIndexState, drainCorpus, type NoteIndexState } from "./note-index.js"
 import { requiredThing } from "./notes.js"
 import type { StoreContext } from "./open.js"
+import { pageOfRows } from "./rows-page.js"
 import { closeSourceReviews, eraseSourceReviews, sourceReviewOf } from "./source-review-marks.js"
 import { stemmerCache } from "./stems.js"
 import { referenceOfThing, storedThing } from "./things.js"
@@ -86,7 +88,7 @@ export interface MemoriesStore {
     limit?: number
     /** Rows to skip, for the next page: newest first, ties by id, so pages do not overlap. */
     offset?: number
-  }): Promise<Memory[]>
+  }): Promise<ListResult<Memory>>
   /** Moves it to another project, or to none with `null`. */
   update(reference: string, change: { project: string | null }): Promise<Memory>
   /** The owner, or an agent for the owner, stands behind it; its evidence was checked now. */
@@ -105,7 +107,10 @@ export interface MemoriesStore {
   /** Each reference it rests on, read back; one deleted since is `missing`. */
   sources(reference: string): Promise<EvidenceSource[]>
   /** Indexes what was written since, then finds memories holding every word or a longer one it starts, best first. */
-  search(text: string, options?: { subject?: string; scope?: Memory["scope"]; limit?: number }): Promise<Memory[]>
+  search(
+    text: string,
+    options?: { subject?: string; scope?: Memory["scope"]; limit?: number; offset?: number },
+  ): Promise<ListResult<Memory>>
   indexState(): Promise<NoteIndexState>
 }
 
@@ -438,7 +443,9 @@ export const memoriesStoreOver = (
       const subject = options.subject === undefined ? undefined : requiredThing(database, options.subject)
       const project = options.project === undefined ? null : projectId(database, options.project)
       const by = proposedBySql("m.author_type", "m.author_id", options.proposedBy)
-      return database
+      const limit = Math.min(Math.max(options.limit ?? 100, 1), 500)
+      const offset = Math.max(options.offset ?? 0, 0)
+      const rows = database
         .prepare(
           `${NAMED} WHERE m.deleted_at IS NULL AND (? IS NULL OR (m.subject_type = ? AND m.subject_id IN (SELECT value FROM json_each(?)))) ` +
             "AND (? IS NULL OR m.project_id = ?) AND (? IS NULL OR m.kind = ?) AND (? IS NULL OR m.status = ?) AND (? IS NULL OR m.scope = ?) " +
@@ -457,10 +464,11 @@ export const memoriesStoreOver = (
           options.scope ?? null,
           options.scope ?? null,
           ...by.params,
-          Math.min(Math.max(options.limit ?? 100, 1), 500),
-          Math.max(options.offset ?? 0, 0),
+          limit + 1,
+          offset,
         )
         .map(memoryOf)
+      return pageOfRows(rows, limit, offset)
     },
     update: async (reference, change) =>
       write(database, () => {
@@ -507,7 +515,7 @@ export const memoriesStoreOver = (
       return { ref: `memory:${id}`, removed: true, links }
     },
     sources: async (reference) => evidenceSourcesOf(database, { type: "memory", id: Number(rowOf(reference).id) }),
-    search: async (text, { subject: subjectRef, scope, limit = 20 } = {}) => {
+    search: async (text, { subject: subjectRef, scope, limit: asked = 20, offset: from = 0 } = {}) => {
       const subject = subjectRef === undefined ? undefined : requiredThing(database, subjectRef)
       drainCorpus(database, CORPORA.memory, stemmerFor)
       const words = normalize(text)
@@ -515,12 +523,14 @@ export const memoriesStoreOver = (
         .filter((word) => /[\p{L}\p{N}]/u.test(word))
       if (words.length === 0) throw new CliError("validation_error", "say what to find in the memories")
       const match = `normalized_text : (${words.map((word) => `"${word.replaceAll('"', '""')}"*`).join(" AND ")})`
-      return database
+      const limit = Math.min(Math.max(asked, 1), 200)
+      const offset = Math.max(from, 0)
+      const rows = database
         .prepare(
           "SELECT m.*, b.name AS author_name, b.kind AS author_kind FROM memory_words w JOIN memories m ON m.id = w.rowid " +
             "LEFT JOIN bots b ON m.author_type = 'bot' AND b.id = m.author_id WHERE memory_words MATCH ? " +
             "AND m.deleted_at IS NULL AND (? IS NULL OR (m.subject_type = ? AND m.subject_id IN (SELECT value FROM json_each(?)))) " +
-            "AND (? IS NULL OR m.scope = ?) ORDER BY bm25(memory_words), m.id LIMIT ?",
+            "AND (? IS NULL OR m.scope = ?) ORDER BY bm25(memory_words), m.id LIMIT ? OFFSET ?",
         )
         .all(
           match,
@@ -529,9 +539,11 @@ export const memoriesStoreOver = (
           subject ? idsOf(database, subject.type, subject.id) : null,
           scope ?? null,
           scope ?? null,
-          Math.min(Math.max(limit, 1), 200),
+          limit + 1,
+          offset,
         )
         .map(memoryOf)
+      return pageOfRows(rows, limit, offset)
     },
     indexState: async () => corpusIndexState(database, CORPORA.memory),
   }
