@@ -9,6 +9,7 @@ import { botCommand as botCommandDefinition } from "./bot/command.js"
 import { botMcpCommand as botMcpCommandDefinition } from "./bot/mcp.js"
 import { botMessagesCommand as botMessagesCommandDefinition } from "./bot/messages.js"
 import { commandsCommand as commandsCommandDefinition } from "./commands-command.js"
+import { appCompleteCommand as appCompleteCommandDefinition } from "./complete-command.js"
 import { configCommand as configCommandDefinition } from "./config-command.js"
 import { honoursDryRun } from "./dry-run-guard.js"
 import { guideCommand as guideCommandDefinition } from "./guide.js"
@@ -80,6 +81,7 @@ import { upgradeCommand as upgradeCommandDefinition } from "./upgrade-command.js
 const sharedCommand: typeof protectedCommand = (factory) => honoursDryRun(protectedCommand(factory))
 
 export const appDoctorCommand = sharedCommand(appDoctorCommandDefinition)
+export const appCompleteCommand = sharedCommand(appCompleteCommandDefinition)
 export const appMcpCommand = sharedCommand(appMcpCommandDefinition)
 export const botAdminsCommand = sharedCommand(botAdminsCommandDefinition)
 export const botMembersCommand = sharedCommand(botMembersCommandDefinition)
