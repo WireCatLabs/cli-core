@@ -11,6 +11,7 @@ import { FETCH, LOCAL_READ, LOCAL_WRITE, NO_EFFECTS, REMOTE_WRITE } from "../../
 import { type Body, itemOf, listOf, renderAnswer, snakeKeys, snakeKeysKeeping } from "../../cli/envelope.js"
 import { queryTerms, termField, unfilteredQuery, withQuery } from "../../cli/list-query.js"
 import { terminalAsker } from "../../cli/messenger/ask.js"
+import { addStoreMaintenanceCommands } from "../../cli/messenger/store-maintenance-command.js"
 import { lineOf } from "../../cli/steps.js"
 import { CRM_KINDS, type CrmKind } from "../../domain/crm.js"
 import { DEAL_KINDS, DEAL_STATUSES, type DealKind } from "../../domain/deals.js"
@@ -364,7 +365,10 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
       })
     })
 
-  const store = annotate(program.command("store").description("the local copy of the CRM"), { effects: NO_EFFECTS })
+  const store = annotate(
+    program.command("store").description("the local copy of the CRM, and the shared store file it lives in"),
+    { effects: NO_EFFECTS },
+  )
   example(
     answerEntity(
       annotate(store.command("status"), { effects: LOCAL_READ }),
@@ -412,6 +416,8 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
       return itemOf(snakeKeys({ ...removed, applied: yes }))
     })
   })
+
+  addStoreMaintenanceCommands(store, { app: options.app }, "work")
 
   const items = (kind: DealKind) => {
     const plural = `${kind}s`
