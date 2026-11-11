@@ -44,7 +44,12 @@ const tasksOf = async (context: StatusContext): Promise<TaskDetails[]> => {
   const accounts = new Map(context.chats.map((chat) => [taskAccount(chat.account), chat.account]))
   const inboxes = [...accounts.keys()].map(inboxKey)
   const found = await Promise.all(
-    [...projects, ...inboxes].map((project) => context.store.tasks.find({ project, limit: 500 }).catch(orNone)),
+    [...projects, ...inboxes].map((project) =>
+      context.store.tasks
+        .find({ project, limit: 500 })
+        .then(({ items }) => items)
+        .catch(orNone),
+    ),
   )
   const projectRefs = new Set(projects)
   return found

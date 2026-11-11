@@ -1,4 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
+import type { ListResult } from "@wirecat/cli-base/standards"
 import type { Page } from "../domain/models.js"
 import type { Meeting, MeetingDetails, MeetingFilter, SearchHit } from "../meetings/index.js"
 import type { AccountAccounts } from "./accounts.js"
@@ -70,7 +71,7 @@ export interface AccountMail {
 export interface AccountMeetings {
   meetings(filter?: Omit<MeetingFilter, "accountId">): Promise<Meeting[]>
   meeting(id: number): Promise<MeetingDetails | null>
-  search(query: string, filter?: Omit<MeetingFilter, "accountId">): Promise<SearchHit[]>
+  search(query: string, filter?: Omit<MeetingFilter, "accountId">): Promise<ListResult<SearchHit>>
 }
 
 /**
@@ -163,7 +164,9 @@ export const bindAccount = (
     },
     search: async (query, filter = {}) => {
       const id = accountId()
-      return id === undefined ? [] : store.meetings.search(query, { ...filter, accountId: id })
+      return id === undefined
+        ? { items: [], hasMore: false }
+        : store.meetings.search(query, { ...filter, accountId: id })
     },
   }
   const accounts = bound(areas.accounts)

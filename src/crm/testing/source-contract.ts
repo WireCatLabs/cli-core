@@ -29,13 +29,15 @@ const listAll = async (source: CrmSource, kind: CrmKind, cursor: string | null) 
     const listed = answer as CrmPage<unknown>
     assert.ok(Array.isArray(listed.items), `${kind}: a page has items`)
     items.push(...listed.items)
-    if (listed.nextPage === undefined) {
+    assert.equal(listed.hasMore, listed.nextCursor !== undefined, `${kind}: a next cursor exactly when there is more`)
+    if (!listed.hasMore) {
       assert.ok(listed.cursor === null || typeof listed.cursor === "string", `${kind}: the last page gives a cursor`)
       return { items, cursor: listed.cursor ?? null }
     }
-    assert.ok(!pages.has(listed.nextPage), `${kind}: the same page twice`)
-    pages.add(listed.nextPage)
-    page = listed.nextPage
+    const next = listed.nextCursor as string
+    assert.ok(!pages.has(next), `${kind}: the same page twice`)
+    pages.add(next)
+    page = next
   }
   throw new assert.AssertionError({ message: `${kind}: more than ${MAX_PAGES} pages` })
 }
@@ -174,9 +176,9 @@ export const crmSourceContract = (make: () => CrmSourceFixture | Promise<CrmSour
           let page: string | undefined
           for (let read = 0; read < MAX_PAGES; read += 1) {
             const answer = await ids.call(source, kind, page)
-            for (const id of answer.ids) listed.add(id)
-            if (answer.nextPage === undefined) break
-            page = answer.nextPage
+            for (const id of answer.items) listed.add(id)
+            if (!answer.hasMore) break
+            page = answer.nextCursor
           }
           for (const item of items as { externalId: string }[])
             assert.ok(listed.has(item.externalId), `${kind} ${item.externalId} is missing from ids()`)

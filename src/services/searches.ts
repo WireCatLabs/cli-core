@@ -159,10 +159,7 @@ export const searchesService = (deps: ServiceDeps): SearchesService => {
     list: () => inStore((store) => store.searches.savedSearches(MESSAGE_SEARCH_COMMANDS)),
 
     history: (limit, offset = 0) =>
-      inStore(async (store) => {
-        const rows = await store.searches.searchHistory(limit, offset, MESSAGE_SEARCH_COMMANDS)
-        return { items: rows.slice(0, limit), hasMore: rows.length > limit }
-      }),
+      inStore((store) => store.searches.searchHistory(limit, offset, MESSAGE_SEARCH_COMMANDS)),
 
     delete: (reference) => inStore(async (store) => store.searches.deleteSearch((await found(store, reference)).id)),
 

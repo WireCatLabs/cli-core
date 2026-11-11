@@ -139,7 +139,7 @@ export const dealContext = async (
   const said = talks.counts.messages + talks.counts.mail + talks.counts.meetings
   const stages = await store.deals.stages(deal.ref)
   const tasks = await openTasksOf(store, project ? [{ ref: project.ref, key: project.key }] : [])
-  const opened = await store.tasks.find({
+  const { items: opened, hasMore } = await store.tasks.find({
     where: { sql: "t.source_group = ?", params: [deal.ref] },
     limit: STORE_PAGE,
   })
@@ -153,7 +153,7 @@ export const dealContext = async (
         project: task.project,
         dueAt: task.dueAt,
       })
-  tasks.full ||= opened.length >= STORE_PAGE
+  tasks.full ||= hasMore
   tasks.tasks.sort((a, b) => (a.dueAt ?? "~").localeCompare(b.dueAt ?? "~") || a.ref.localeCompare(b.ref))
   return {
     deal,

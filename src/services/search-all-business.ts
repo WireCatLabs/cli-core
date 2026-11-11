@@ -33,14 +33,13 @@ export const searchBusiness = async (
     accounts,
   }: { words: string[]; anyWord: boolean; window: number; accounts: AccountKey[] | undefined },
 ): Promise<BusinessLane> => {
-  const asked = Math.min(window + 1, BUSINESS_FIND_MAX)
   const found = await store.business.find({
     words,
     anyWord,
-    limit: asked,
+    limit: Math.min(window, BUSINESS_FIND_MAX),
     ...(accounts === undefined ? {} : { accounts }),
   })
-  const page = found.slice(0, window)
+  const page = found.items
   const titles = await store.refs.summaries(page.map(({ ref }) => ref))
   return {
     items: page.map((hit) => ({
@@ -54,7 +53,7 @@ export const searchBusiness = async (
       ...(hit.source === undefined ? {} : { sourceRecord: hit.source }),
       foundBy: ["title"],
     })),
-    hasMore: found.length > window || (asked < window + 1 && found.length === asked),
+    hasMore: found.hasMore,
     read: accounts ?? [...(await store.business.accounts()), OWN_BUSINESS],
   }
 }

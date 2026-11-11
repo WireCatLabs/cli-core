@@ -321,14 +321,18 @@ export const fakeCrmSource = (options: FakeCrmSourceOptions = {}): FakeCrmSource
       return {
         items: slice.filter(([, held]) => !held.deleted).map(([, held]) => held.record as CrmRecords[K]),
         ...(traits.removedInChanges ? { removed: slice.filter(([, held]) => held.deleted).map(([id]) => id) } : {}),
-        ...(nextPage === undefined ? { cursor: String(version) } : { nextPage }),
+        ...(nextPage === undefined
+          ? { hasMore: false, cursor: String(version) }
+          : { hasMore: true, nextCursor: nextPage }),
       }
     },
     async ids(kind, page): Promise<CrmIdPage> {
       calls.ids += 1
       const listed = hidden ? [] : [...of(kind).entries()].filter(([, held]) => !held.deleted).map(([id]) => id)
       const { slice, nextPage } = window(listed, page)
-      return { ids: slice, ...(nextPage === undefined ? {} : { nextPage }) }
+      return nextPage === undefined
+        ? { items: slice, hasMore: false }
+        : { items: slice, hasMore: true, nextCursor: nextPage }
     },
   }
   return fake

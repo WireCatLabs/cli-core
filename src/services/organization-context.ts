@@ -103,8 +103,8 @@ export const openTasksOf = async (
   const tasks: TaskLine[] = []
   let full = false
   for (const project of projects) {
-    const found = await store.tasks.find({ project: project.ref, limit: STORE_PAGE })
-    full ||= found.length >= STORE_PAGE
+    const { items: found, hasMore } = await store.tasks.find({ project: project.ref, limit: STORE_PAGE })
+    full ||= hasMore
     for (const task of found)
       if (!isClosedState(task.status))
         tasks.push({

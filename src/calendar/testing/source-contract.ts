@@ -73,14 +73,15 @@ const round = async (
   for (let pages = 0; pages < 1000; pages++) {
     const result = await source.changes(calendar, { cursor, window, ...(page === undefined ? {} : { page }) })
     if ("reset" in result) return "reset"
-    const { entries, removed, nextPage, cursor: next } = result as ChangePage
-    listed.entries.push(...entries)
+    const { items, removed, hasMore, nextCursor, cursor: next } = result as ChangePage
+    listed.entries.push(...items)
     listed.removed.push(...removed)
-    if (nextPage === undefined) {
+    assert.equal(hasMore, nextCursor !== undefined, "a page names its next cursor exactly when it has more")
+    if (!hasMore) {
       listed.cursor = next ?? null
       return listed
     }
-    page = nextPage
+    page = nextCursor
   }
   throw new assert.AssertionError({ message: "the source never stopped paging" })
 }

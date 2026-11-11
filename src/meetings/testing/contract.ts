@@ -63,8 +63,8 @@ export const meetingStoreContract = (make: () => MeetingStore | Promise<MeetingS
       assert.equal((await s.participants("ALICE"))[0]?.id, p.id)
       assert.equal((await s.participants("example.com", 1)).length, 1)
       assert.equal((await s.participants("alice", 2)).length, 0)
-      assert.deepEqual((await s.search("EXAMPLE")).map((h) => h.scope).sort(), ["chat", "summary", "transcript"])
-      const [ship] = await s.search("Ship")
+      assert.deepEqual((await s.search("EXAMPLE")).items.map((h) => h.scope).sort(), ["chat", "summary", "transcript"])
+      const [ship] = (await s.search("Ship")).items
       assert.equal(ship?.startMs, 0)
       const cue = t.rows.find((row) => row.id === ship?.id)
       assert.ok(cue)
@@ -104,8 +104,8 @@ export const meetingStoreContract = (make: () => MeetingStore | Promise<MeetingS
       assert.equal(corrected.transcripts.length, 2)
       assert.equal(corrected.transcripts[0]?.transcript.supersededAt, 4000)
       assert.equal(corrected.transcripts[0]?.rows[0]?.text, "Ship the example plan.")
-      assert.equal((await s.search("Ship")).length, 0)
-      assert.equal((await s.search("Corrected")).length, 1)
+      assert.equal((await s.search("Ship")).items.length, 0)
+      assert.equal((await s.search("Corrected")).items.length, 1)
       t.source = "file"
       t.contentHash = null
       t.rows[0].speakerParticipantPosition = null

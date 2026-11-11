@@ -21,7 +21,7 @@ export interface MeetingProjectDiscoveryPage {
   limits: { limit: number; maxReadBytes: number; maxVocabularyReadBytes: number; maxTerms: number }
   project: { id: string; name: string; key: string | null }
   term: { name: string; kind: "canonical" | "key" | "alias"; aliasId?: string }
-  hits: (SearchHit & { ref: string })[]
+  items: (SearchHit & { ref: string })[]
   association: "unconfirmed-word-evidence"
   vocabularyFingerprint: string
   hasMore: boolean

@@ -134,17 +134,16 @@ export const callMeetingTool = async (
     }
     let result: object
     switch (name) {
-      case "meetings_list":
-        result = await meetingsList(
-          store,
-          {
-            ...filter,
-            limit: args.limit as number | undefined,
-            query: meetingsQuery(args.query as string | undefined),
-          },
-          args.page as number | undefined,
-        )
+      case "meetings_list": {
+        const limit = (args.limit as number | undefined) ?? 100
+        result = await meetingsList(store, {
+          ...filter,
+          limit,
+          offset: (((args.page as number | undefined) ?? 1) - 1) * limit,
+          query: meetingsQuery(args.query as string | undefined),
+        })
         break
+      }
       case "meeting_show":
         result = await meetingDetailsAnswer(store, args.meeting as number, filter.accountId)
         break

@@ -405,7 +405,7 @@ export const icsFeeds = (options: IcsFeedsOptions): CalendarFeeds => {
       if (got === "unchanged") {
         const [events, skipped] = [held?.events ?? 0, held?.skipped ?? 0]
         stats.set(calendar.id, { calendarId: calendar.id, events, skipped, unchanged: true })
-        return { entries: [], removed: [], cursor, unchanged: true }
+        return { items: [], hasMore: false, removed: [], cursor, unchanged: true }
       }
       const { text, validators } = got
       const found = readFeed(text, calendar.timezone ?? options.zone, window)
@@ -418,7 +418,7 @@ export const icsFeeds = (options: IcsFeedsOptions): CalendarFeeds => {
         validators.etag || validators.lastModified
           ? { v: 1, validators, window, events: found.events, skipped: found.skipped }
           : null
-      return { entries: found.entries, removed: [], cursor: next && JSON.stringify(next) }
+      return { items: found.entries, hasMore: false, removed: [], cursor: next && JSON.stringify(next) }
     },
   }
 

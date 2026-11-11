@@ -111,9 +111,10 @@ export const fakeCalendarSource = (options: FakeCalendarSourceOptions = {}): Fak
       const slice = entries.slice(from, from + pageSize)
       const more = from + pageSize < entries.length
       return {
-        entries: slice.map((entry) => structuredClone(entry)),
+        items: slice.map((entry) => structuredClone(entry)),
+        hasMore: more,
         removed: from === 0 ? removed : [],
-        ...(more ? { nextPage: `p${pages}:${from + pageSize}` } : { cursor: token(window) }),
+        ...(more ? { nextCursor: `p${pages}:${from + pageSize}` } : { cursor: token(window) }),
       }
     },
     ...(traits.expands === "on-request"

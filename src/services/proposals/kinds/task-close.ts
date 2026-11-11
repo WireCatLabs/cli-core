@@ -44,7 +44,7 @@ export const taskCloseKind = (store: Pick<MessageStore, "tasks">): ProposalKind 
     ownerOnly: true,
     list: async (filter) => {
       if ((filter.status ?? "proposed") !== "proposed" && filter.status !== "all") return { items: [], hasMore: false }
-      const tasks = await store.tasks.find({
+      const { items: tasks } = await store.tasks.find({
         status: "open",
         where: { sql: "t.close_suggested_as IS NOT NULL", params: [] },
         limit: filter.offset + filter.limit,

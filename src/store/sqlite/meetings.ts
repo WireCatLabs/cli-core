@@ -1,4 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
+import type { ListResult } from "@wirecat/cli-base/standards"
 import type {
   Attachment,
   ChatLine,
@@ -685,9 +686,9 @@ export const wordsQuery = (query: string): string | null => {
 }
 
 /** Pages over meetings, then lists their hits, as the reference store does. */
-const search = (database: CacheDatabase, query: string, filter?: MeetingFilter): SearchHit[] => {
+const search = (database: CacheDatabase, query: string, filter: MeetingFilter = {}): ListResult<SearchHit> => {
   const match = wordsQuery(query)
-  if (match === null) return []
+  if (match === null) return { items: [], hasMore: false }
   drainMeetingIndex(database)
   return read(database, () => {
     const picked = filtered(filter)
@@ -721,7 +722,10 @@ const search = (database: CacheDatabase, query: string, filter?: MeetingFilter):
       legacyBudget(total)
     }
     const scopes = ["transcript", "chat", "summary"] as const
-    return rows.map((row) => {
+    const [limit, offset] = page(filter)
+    const beyond = filtered({ ...filter, limit: 1, offset: offset + limit })
+    const hasMore = limit >= 0 && database.prepare(`SELECT 1 FROM (${beyond.sql})`).get(...beyond.params) !== undefined
+    const items = rows.map((row): SearchHit => {
       const scope = scopes[Number(row.kind)] as SearchHit["scope"]
       const cue =
         scope === "transcript"
@@ -757,6 +761,7 @@ const search = (database: CacheDatabase, query: string, filter?: MeetingFilter):
         startMs: int(row.start_ms),
       }
     })
+    return hasMore ? { items, hasMore, nextOffset: offset + limit } : { items, hasMore }
   })
 }
 

@@ -128,8 +128,8 @@ export const memoryMeetingStore = (): MeetingStore & MeetingTranscriptStore => {
     },
     async search(query, filter) {
       const term = query.trim().toLocaleLowerCase()
-      if (!term) return []
-      return filterMeetings(state.meetings, filter).flatMap((d) => {
+      if (!term) return { items: [], hasMore: false }
+      const items = filterMeetings(state.meetings, filter).flatMap((d) => {
         const rows: SearchHit[] = d.transcripts
           .filter((t) => t.transcript.supersededAt === null && t.transcript.deletedAt === null)
           .flatMap((t) =>
@@ -175,6 +175,12 @@ export const memoryMeetingStore = (): MeetingStore & MeetingTranscriptStore => {
         ]
         return hits.filter((r) => r.text.toLocaleLowerCase().includes(term))
       })
+      const offset = filter?.offset ?? 0
+      const limit = filter?.limit
+      const hasMore =
+        limit !== undefined &&
+        filterMeetings(state.meetings, { ...filter, limit: 1, offset: offset + limit }).length > 0
+      return hasMore ? { items, hasMore, nextOffset: offset + limit } : { items, hasMore }
     },
     async events() {
       return structuredClone(state.events.filter((e) => e.deletedAt === null))

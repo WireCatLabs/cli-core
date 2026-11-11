@@ -23,14 +23,15 @@ export interface CalendarSourceTraits {
 }
 
 export interface ChangePage {
-  entries: EntryInput[]
+  items: EntryInput[]
   /**
    * Entries the provider confirmed deleted, known only by `externalId` (CalDAV 404; Graph `@removed` that a GET by id
    * answered 404). Never an entry that only left the window.
    */
   removed: string[]
-  /** More pages in this round. */
-  nextPage?: string
+  /** More pages in this round, read from `nextCursor`. */
+  hasMore: boolean
+  nextCursor?: string
   /** On the last page: the cursor for the next run; `null` when the source has none. */
   cursor?: string | null
   /**
