@@ -257,6 +257,8 @@ export const syncCommand = (messenger: Messenger): Command => {
       const stop = stopOnSignal(this)
       // A background job keeps its log as it was; its progress is the job file.
       const progress = syncProgress(stepLines(context.streams.diagnostic, !jobId && context.format !== "pretty"))
+      // One chat of --all can take minutes of paced pages: its pages move the count, not only its end.
+      let walked = { chats: 0, done: 0, fetched: 0 }
       try {
         const options = {
           limit,
@@ -272,9 +274,15 @@ export const syncCommand = (messenger: Messenger): Command => {
           onPage: (page: { fetched: number; chatId: string; oldest: number }) => {
             if (jobId) updateJob(jobs, jobId, { progress: { ...page, at: new Date().toISOString() } })
             if (chat !== undefined) progress({ chats: null, chats_done: null, fetched: page.fetched })
+            else progress({ chats: walked.chats, chats_done: walked.done, fetched: walked.fetched + page.fetched })
           },
-          onChat: ({ chats, done, fetched }: { chats: number; done: number; fetched: number }) =>
-            progress({ chats, chats_done: done, fetched }, done === 0 || done === chats),
+          onChat: (counts: { chats: number; done: number; fetched: number }) => {
+            walked = counts
+            progress(
+              { chats: counts.chats, chats_done: counts.done, fetched: counts.fetched },
+              counts.done === 0 || counts.done === counts.chats,
+            )
+          },
         }
         const result = await context.withServices(
           (services): Promise<Fetched | FetchedAll> =>
