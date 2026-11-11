@@ -12,7 +12,6 @@ import {
   type AgentInput,
   calendarOf,
   describeWhen,
-  findProgram,
   isCalendar,
   type LastRun,
   lastRun,
@@ -49,28 +48,30 @@ import { ownerLanguages, storedTemplateBodies } from "../../store/store.js"
 import { type BaseEnvironment, environmentOf, setExitCode } from "../context.js"
 import { grantsAuthority, LOCAL_READ, LOCAL_WRITE, REMOTE_WRITE } from "../effects.js"
 import { type AnswerOutput, itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
-import { withQuery } from "../list-query.js"
-import { SCHEDULES_QUERY, scheduleFilter } from "../messenger/list-result-queries.js"
+import { listQuery, typedQuery, withQuery } from "../list-query.js"
+import { SCHEDULE_HARNESSES_QUERY, SCHEDULES_QUERY, scheduleFilter } from "../messenger/list-result-queries.js"
 import type { DeclaredSetting } from "../setting-defaults.js"
 import { lineOf } from "../steps.js"
+import {
+  AGENT_MODELS,
+  COSTED,
+  HARNESSES,
+  type Harness,
+  harnessesOn,
+  harnessOf,
+  harnessOfArgv,
+  isHarness,
+  programOf,
+  reportsCost,
+} from "./harnesses.js"
 
 /** Each run of an agent is a paid model call that reads chats; keeping the store current is `serve`'s job. */
 const AGENT_MINIMUM_MINUTES = 60
 /** A run gated on new mail costs a store read when nothing came, so it may check as often as mail syncs. */
 const GATED_AGENT_MINIMUM_MINUTES = 5
 const COMMAND_MINIMUM_MINUTES = 1
-const HARNESSES = ["claude", "codex"] as const
-export type Harness = (typeof HARNESSES)[number]
-/** A mid-tier model by default; codex has no alias of that tier, so it takes its own default. Empty: the harness's own. */
-const AGENT_MODELS: Record<Harness, string> = { claude: "sonnet", codex: "" }
 /** An alias or a model id; a leading dash would read as the harness's next flag. */
 const isModel = (model: string) => /^([A-Za-z0-9][\w.:/@[\]-]*)?$/.test(model)
-/**
- * Claude starts without the owner's MCP servers, skills, settings and CLAUDE.md: a run reads its instructions
- * through the CLI, and the rest was most of its starting context. Auth, `--permission-mode` and `--allowedTools` hold.
- */
-const LEAN_CLAUDE = ["--tools", "Bash", "--strict-mcp-config", "--disable-slash-commands", "--setting-sources", ""]
-
 interface WhenOptions {
   every?: string
   at?: string[]
@@ -269,7 +270,7 @@ export const scheduleLimitsOf = (config: {
   const { schedule_mail_wait: wait, schedule_mail_batch: batch, schedule_max_cost_per_day: cap } = config
   const models = Object.fromEntries(
     HARNESSES.flatMap((harness) => {
-      const model = config[`schedule_model_${harness}`]
+      const model = (config as Record<string, unknown>)[`schedule_model_${harness}`]
       return typeof model === "string" && isModel(model.trim()) ? [[harness, model.trim()]] : []
     }),
   )
@@ -423,45 +424,28 @@ export const agentSchedule = (site: ScheduleSite, spec: AgentScheduleSpec): Sche
   }
   if (spec.model !== undefined && !isModel(spec.model))
     throw new CliError("validation_error", `--model takes an alias such as sonnet or a model id, not "${spec.model}"`)
+  if (!isHarness(harness))
+    throw new CliError("validation_error", `the agent is one of ${HARNESSES.join(", ")}; not "${harness}"`, {
+      agents: HARNESSES,
+    })
+  const kind = harnessOf(harness)
   const model = spec.model ?? limits.models?.[harness] ?? AGENT_MODELS[harness]
-  const modelFlag = model ? ["--model", model] : []
-  const program = findProgram(harness, env, system.platform)
-  if (!program) throw new CliError("not_found", `${harness} is not on PATH`)
-  const agentClis = [app, ...agentRuns]
-  const folders = agentClis.flatMap((one) => {
+  const program = programOf(harness, env, system.platform)
+  if (!program) throw new CliError("not_found", `${kind.programs.join(" or ")} is not on PATH`)
+  const clis = [app, ...agentRuns]
+  const folders = clis.flatMap((one) => {
     const paths = resolvePaths({ appName: one.appName, prefix: one.envPrefix, env })
     return [paths.state, paths.config, paths.cache]
   })
-  const argv =
-    harness === "claude"
-      ? [
-          program,
-          "-p",
-          prompt,
-          // The owner's own settings may let every tool run (bypassPermissions); here only the CLI may.
-          "--permission-mode",
-          "dontAsk",
-          "--allowedTools",
-          ...agentClis.map((one) => `Bash(${one.command}:*)`),
-          "--no-session-persistence",
-          ...modelFlag,
-          ...((limits.leanStart ?? true) ? LEAN_CLAUDE : []),
-          ...(spec.maxCost ? ["--max-budget-usd", String(spec.maxCost)] : []),
-        ]
-      : [
-          program,
-          "exec",
-          "--skip-git-repo-check",
-          "--ephemeral",
-          "--sandbox",
-          "workspace-write",
-          // The CLIs reach their provider and write the store and their own state, and nothing else.
-          "-c",
-          "sandbox_workspace_write.network_access=true",
-          ...modelFlag,
-          ...[dirname(storePath(env)), ...folders].flatMap((dir) => ["--add-dir", dir]),
-          prompt,
-        ]
+  const argv = kind.argv({
+    program,
+    prompt,
+    model,
+    clis,
+    folders: [dirname(storePath(env)), ...folders],
+    leanStart: limits.leanStart ?? true,
+    ...(spec.maxCost && kind.reportsCost ? { maxCost: spec.maxCost } : {}),
+  })
   return {
     name: scheduleName(spec.name),
     kind: "agent",
@@ -472,7 +456,7 @@ export const agentSchedule = (site: ScheduleSite, spec: AgentScheduleSpec): Sche
     ...(spec.onNewMail ? { onNewMail: spec.onNewMail } : {}),
     ...(spec.mailWaitMinutes === undefined ? {} : { mailWaitMinutes: spec.mailWaitMinutes }),
     ...(spec.mailBatch === undefined ? {} : { mailBatch: spec.mailBatch }),
-    ...(spec.maxCostPerDay === undefined ? {} : { maxCostPerDay: spec.maxCostPerDay }),
+    ...(spec.maxCostPerDay === undefined || !kind.reportsCost ? {} : { maxCostPerDay: spec.maxCostPerDay }),
     ...(spec.notify ? { notify: spec.notify } : {}),
     ...(spec.to?.length ? { to: spec.to } : {}),
     ...(spec.paused ? { paused: true } : {}),
@@ -633,6 +617,18 @@ export const scheduleCommandFor = ({
       maxCostPerDay: schedule.maxCostPerDay,
     }),
   })
+  /** An agent that reports no cost answers null for what it spent and for its caps: unknown, not $0 and not capped. */
+  const agentCostsOf = (self: Command, state: string, schedule: Schedule) => {
+    const harness = harnessOfArgv(schedule.argv)
+    const costed = harness !== null && reportsCost(harness)
+    return {
+      harness,
+      reportsCost: costed,
+      spentTodayUsd: costed ? spentToday(scheduleFile(state, schedule.name)) : null,
+      maxCostUsd: costed ? runCapOf(schedule.argv) : null,
+      maxCostPerDayUsd: costed ? limitsOf(self, schedule).maxCostPerDay : null,
+    }
+  }
   const waits = async (
     self: Command,
     file: string,
@@ -703,14 +699,14 @@ export const scheduleCommandFor = ({
       }),
     )
       .description(
-        `start an agent (claude or codex) with a prompt on a timer; it runs with ${agentClis.map((one) => `${one.envPrefix}_READ_ONLY=1`).join(" and ")}, so it reads and drafts and cannot send — its answer is kept and you are notified`,
+        `start an agent (${HARNESSES.join(", ")}) with a prompt on a timer; it runs with ${agentClis.map((one) => `${one.envPrefix}_READ_ONLY=1`).join(" and ")}, so it reads and drafts and does not send; claude and codex are also held to that by their own limits, the others approve every command — its answer is kept and you are notified`,
       )
       .argument("<name>", "lowercase letters, digits and dashes")
       .addArgument(new Argument("<harness>", "the agent to start").choices(HARNESSES))
       .argument("<prompt>", `what to do, e.g. "${promptExample(app)}"`)
       .option(
         "--model <model>",
-        `the model it runs on: an alias such as sonnet, or a model id; "" for the harness's default (default sonnet for claude, codex's own for codex, or the config file's)`,
+        `the model it runs on: an alias such as sonnet, or a model id; "" for the agent's own default (default sonnet for claude, the agent's own for the others, or the config file's)`,
       )
       .addOption(
         new Option("--max-cost <usd>", "claude only: stop a run that costs more than this, in US dollars").argParser(
@@ -720,7 +716,7 @@ export const scheduleCommandFor = ({
       .addOption(
         new Option(
           "--max-cost-per-day <usd>",
-          `claude only: start no run for the rest of the day once its runs cost this much, in US dollars; 0 for no cap (default ${SCHEDULE_DEFAULTS.maxCostPerDay}, or the config file's)`,
+          `${COSTED} only, as the others report no cost: start no run for the rest of the day once its runs cost this much, in US dollars; 0 for no cap (default ${SCHEDULE_DEFAULTS.maxCostPerDay}, or the config file's)`,
         ).argParser(Number),
       ),
   ).action(async function (this: Command, name: string, harness: Harness, prompt: string) {
@@ -741,6 +737,12 @@ export const scheduleCommandFor = ({
       throw new CliError("validation_error", "--mail-wait and --mail-batch shape a run gated by --on-new-mail")
     if (options.maxCostPerDay !== undefined && !(Number.isFinite(options.maxCostPerDay) && options.maxCostPerDay >= 0))
       throw new CliError("validation_error", "--max-cost-per-day takes US dollars, 0 or more")
+    if (!reportsCost(harness) && (options.maxCost || options.maxCostPerDay))
+      throw new CliError(
+        "validation_error",
+        `${harness} reports no cost, so --max-cost and --max-cost-per-day cannot stop it; leave them out (${COSTED} reports one)`,
+        { reason: "agent.cost-unknown" },
+      )
     const mailBatch = options.mailBatch === undefined ? undefined : Number(options.mailBatch)
     if (mailBatch !== undefined && !(Number.isSafeInteger(mailBatch) && mailBatch >= 1))
       throw new CliError("validation_error", "--mail-batch takes a count of emails, 1 or more")
@@ -797,13 +799,7 @@ export const scheduleCommandFor = ({
         notify: notifyOf(schedule),
         ...(schedule.to?.length ? { deliverTo: schedule.to } : {}),
         last: lastRun(scheduleFile(state, schedule.name)) ?? null,
-        ...(schedule.kind === "agent"
-          ? {
-              spentTodayUsd: spentToday(scheduleFile(state, schedule.name)),
-              maxCostUsd: runCapOf(schedule.argv),
-              maxCostPerDayUsd: limitsOf(this, schedule).maxCostPerDay,
-            }
-          : {}),
+        ...(schedule.kind === "agent" ? agentCostsOf(this, state, schedule) : {}),
       }))
       const answer = listOf("schedule list", {
         items: rows.map((row) => snakeKeys(row)),
@@ -816,10 +812,10 @@ export const scheduleCommandFor = ({
           return ""
         }
         return rows
-          .map(({ name, kind, when, paused, notify, deliverTo, last, spentTodayUsd, maxCostPerDayUsd }) =>
+          .map(({ name, kind, harness, when, paused, notify, deliverTo, last, spentTodayUsd, maxCostPerDayUsd }) =>
             [
               name,
-              kind,
+              kind === "agent" ? `agent ${harness ?? "unknown"}` : kind,
               paused ? `${when}, paused` : when,
               `notify ${notify}`,
               ...(deliverTo ? [`to ${deliverTo.join(", ")}`] : []),
@@ -843,6 +839,32 @@ export const scheduleCommandFor = ({
           )
           .join("\n")
       })
+    })
+
+  withQuery(
+    annotate(command.command("agents").description("the coding agents an agent schedule may start").command("list"), {
+      effects: LOCAL_READ,
+      examples: [`${app.command} schedule agents list`, `${app.command} schedule agents list --json`],
+    }),
+    SCHEDULE_HARNESSES_QUERY,
+  )
+    .description("the agents a schedule may start, and which are on PATH here")
+    .action(function (this: Command, words: string[]) {
+      listQuery(typedQuery(words), SCHEDULE_HARNESSES_QUERY, "schedule agents list")
+      const { context, system } = prepare(this, { needsProfile: false })
+      const rows = harnessesOn(context.env, system.platform)
+      const answer = listOf("schedule agents list", {
+        items: rows.map((row) => snakeKeys(row)),
+        limit: rows.length,
+        has_more: false,
+      })
+      renderAnswer(this, context, answer, () =>
+        rows
+          .map(({ id, name, installed, path, reportsCost }) =>
+            [id, name, installed ? path : "not on PATH", reportsCost ? "reports cost" : "cost unknown"].join("  "),
+          )
+          .join("\n"),
+      )
     })
 
   annotate(command.command("run"), {

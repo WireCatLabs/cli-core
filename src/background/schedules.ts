@@ -102,7 +102,7 @@ const addSpend = (folder: string, usd: number, at: Date) => {
 
 /**
  * Claude reports a run's cost only in its JSON answer, so a scheduled claude run asks for it; the report kept is the
- * answer's text. Codex reports none.
+ * answer's text. No other agent reports one.
  */
 const priced = (argv: string[]): string[] => {
   const [program = ""] = argv
@@ -112,13 +112,20 @@ const priced = (argv: string[]): string[] => {
     : argv
 }
 
-const reportOf = (stdout: Buffer): { text: Buffer; costUsd?: number } => {
+/** `failed`: claude answered an error, such as no credit left, which it may do with exit 0. */
+const reportOf = (stdout: Buffer): { text: Buffer; costUsd?: number; failed?: true } => {
   try {
-    const answer = JSON.parse(stdout.toString("utf8")) as { type?: unknown; result?: unknown; total_cost_usd?: unknown }
+    const answer = JSON.parse(stdout.toString("utf8")) as {
+      type?: unknown
+      result?: unknown
+      total_cost_usd?: unknown
+      is_error?: unknown
+    }
     if (answer?.type !== "result") return { text: stdout }
     return {
       text: typeof answer.result === "string" ? Buffer.from(answer.result) : stdout,
       ...(typeof answer.total_cost_usd === "number" ? { costUsd: answer.total_cost_usd } : {}),
+      ...(answer.is_error === true ? { failed: true as const } : {}),
     }
   } catch {
     return { text: stdout }
@@ -850,8 +857,11 @@ export const attemptSchedule = async (
       const report = agent ? reportOf(Buffer.concat(out)) : { text: Buffer.concat([...out, ...err]) }
       costUsd = report.costUsd
       writeFileSync(output, report.text, { mode: 0o600 })
-      if (agent) writeFileSync(errors, Buffer.concat(err), { mode: 0o600 })
-      resolve(code ?? (killedBy === "SIGKILL" ? 137 : killedBy === "SIGTERM" ? 143 : 1))
+      // The error is the agent's answer, so the log keeps it beside its stderr.
+      if (agent)
+        writeFileSync(errors, Buffer.concat([...err, ...("failed" in report ? [report.text] : [])]), { mode: 0o600 })
+      const exited = code ?? (killedBy === "SIGKILL" ? 137 : killedBy === "SIGTERM" ? 143 : 1)
+      resolve("failed" in report && exited === 0 ? 1 : exited)
     })
   })
   const ended = now()

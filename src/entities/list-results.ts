@@ -78,12 +78,37 @@ export const scheduledJob = v.strictObject({
       ),
     }),
   ),
-  /** Agent schedules: what today's runs cost, in US dollars. */
-  spent_today_usd: v.optional(v.number()),
-  /** Agent schedules: the cap on one run (`--max-cost`), null when none. */
+  /** Agent schedules: the agent it starts, as `schedule agents list` names it; null for a program no agent here runs. */
+  harness: v.optional(v.nullable(text)),
+  /** Agent schedules: whether the agent reports what a run cost; when it does not, the cost fields are null. */
+  reports_cost: v.optional(v.boolean()),
+  /** Agent schedules: what today's runs cost, in US dollars; null when the agent reports no cost (unknown, not 0). */
+  spent_today_usd: v.optional(v.nullable(v.number())),
+  /** Agent schedules: the cap on one run (`--max-cost`), null when none or when the agent reports no cost. */
   max_cost_usd: v.optional(v.nullable(v.number())),
-  /** Agent schedules: the daily cap in force, the schedule's `--max-cost-per-day` or the config's; 0 for none. */
-  max_cost_per_day_usd: v.optional(v.number()),
+  /**
+   * Agent schedules: the daily cap in force, the schedule's `--max-cost-per-day` or the config's; 0 for none; null when
+   * the agent reports no cost, so no cap can stop it.
+   */
+  max_cost_per_day_usd: v.optional(v.nullable(v.number())),
+})
+
+/** One agent `schedule agents list` answers: an id `schedule agent` takes, and whether its program is on PATH. */
+export const scheduleHarness = v.strictObject({
+  id: text,
+  name: text,
+  /** The program names it is found by on PATH, the first found wins. */
+  programs: v.array(text),
+  /** It reports what a run costs, so `--max-cost` and `--max-cost-per-day` hold. */
+  reports_cost: v.boolean(),
+  /**
+   * The agent itself holds a run to the CLI's commands or folders (claude, codex). False: it approves every command in
+   * its one-shot mode, and only the read-only variable keeps it from sending.
+   */
+  restricted: v.boolean(),
+  installed: v.boolean(),
+  /** Where its program is, or null when it is not on PATH. */
+  path: v.nullable(text),
 })
 
 export const botTemplate = v.strictObject({

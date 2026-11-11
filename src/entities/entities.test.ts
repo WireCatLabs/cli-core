@@ -251,6 +251,15 @@ const samples: Record<EntityName, unknown> = {
   topic_icon: { emoji: "🤖" },
   bot_webhook: { url: "https://example.invalid/hook" },
   scheduled_job: { name: "daily", kind: "command", when: "every 1d", last: null },
+  schedule_harness: {
+    id: "kimi",
+    name: "Kimi CLI",
+    programs: ["kimi"],
+    reports_cost: false,
+    restricted: false,
+    installed: false,
+    path: null,
+  },
   sync_progress: {
     job: "meetings",
     profile: "invented",

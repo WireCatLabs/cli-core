@@ -83,6 +83,7 @@ import {
   botWebhook,
   callRecord,
   scheduledJob,
+  scheduleHarness,
   stickerInventory,
   topicIcon,
 } from "./list-results.js"
@@ -347,6 +348,7 @@ export {
   runLocation,
   savedSearch,
   scheduledJob,
+  scheduleHarness,
   searchHistoryClear,
   sendAttempt,
   serveSummary,
@@ -505,6 +507,7 @@ export const ENTITIES = {
   topic_icon: topicIcon,
   bot_webhook: botWebhook,
   scheduled_job: scheduledJob,
+  schedule_harness: scheduleHarness,
   call_record: callRecord,
   sticker_inventory: stickerInventory,
   note,

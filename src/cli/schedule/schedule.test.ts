@@ -305,7 +305,7 @@ describe.runIf(posix)("schedule on Linux", () => {
         JSON.stringify({
           name,
           kind,
-          argv: ["doctor"],
+          argv: kind === "agent" ? ["/usr/bin/claude", "-p", "brief me"] : ["doctor"],
           when: { every: 60 },
           environment: {},
           createdAt: "2026-10-01T00:00:00Z",
@@ -321,6 +321,8 @@ describe.runIf(posix)("schedule on Linux", () => {
         when: "every 1h",
         notify: "failures",
         last: null,
+        harness: "claude",
+        reports_cost: true,
         spent_today_usd: 0,
         max_cost_usd: null,
         max_cost_per_day_usd: 5,

@@ -117,6 +117,7 @@ const OTHERS: Entry[] = [
   validation("finding.unknown-field", "a finding has a field its kind does not take"),
   validation("finding.quote-not-found", "a finding's quote is not in the text it cites, word for word"),
   validation("finding.missing-field", "a finding leaves out a field its kind needs"),
+  validation("agent.cost-unknown", "the agent reports no cost, so a cost cap cannot stop it"),
   validation("document.changed", "the document changed while it was read; nothing was saved"),
   ["document.not-imported", "not_found", "the document is not imported in this source account"],
   ["extraction.invalid-proposals", "invalid_response", "the model's memory proposals could not be used"],
