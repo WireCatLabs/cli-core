@@ -74,6 +74,7 @@ read  review
 read  runs list
 read  runs path
 read  runs show
+read  schedule agents list
 read  schedule list
 read  search all
 read  search conversations

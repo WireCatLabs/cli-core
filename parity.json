@@ -4067,6 +4067,18 @@
         }
       }
     },
+    "schedule agents": {
+      "in": ["max", "tg"],
+      "planned": {
+        "wa": "wa backlog: mount the shared schedule command"
+      }
+    },
+    "schedule agents list": {
+      "in": ["max", "tg"],
+      "planned": {
+        "wa": "wa backlog: mount the shared schedule command"
+      }
+    },
     "schedule command": {
       "in": ["max", "tg"],
       "planned": {

@@ -98,6 +98,18 @@ describe.runIf(process.platform !== "win32")("agents other than claude", () => {
     expect(harnessOfArgv(argvOf("o"))).toBe("opencode")
   })
 
+  it("gives every agent the prompt and its model, and reads the agent back from what it saved", async () => {
+    const programs = ["claude", "codex", "gemini", "cursor-agent", "opencode", "openclaw", "hermes", "grok", "kimi"]
+    const { call, argvOf } = setup(programs)
+    for (const harness of HARNESSES) {
+      const added = await call("agent", harness, harness, "brief me", "--at", "08:30", "--model", "model-a")
+      expect(added.code, added.err).toBe(0)
+      const argv = argvOf(harness)
+      expect(argv).toEqual(expect.arrayContaining(["brief me", "model-a"]))
+      expect(harnessOfArgv(argv)).toBe(harness)
+    }
+  })
+
   it("refuses a cost cap for an agent that reports no cost, and lists its cost as unknown", async () => {
     const { call } = setup(["codex"])
     const capped = await call("agent", "c", "codex", "brief me", "--at", "08:30", "--max-cost-per-day", "2")
