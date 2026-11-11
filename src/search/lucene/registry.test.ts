@@ -52,7 +52,7 @@ describe("versioned structured AST and field registry", () => {
     ["kind:dialog", "query.unknown-value"],
     ["has:imaginary", "query.unknown-value"],
     ["preset:money", "query.unknown-value"],
-    ["from:ali*", "query.unsupported-operator"],
+    ["participants_count:1*", "query.unsupported-operator"],
     ["kind:*", "query.unsupported-operator"],
     ["topic:abc", "query.invalid-topic"],
     ["size>lots", "query.invalid-size"],

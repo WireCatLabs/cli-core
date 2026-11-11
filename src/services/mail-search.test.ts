@@ -160,6 +160,8 @@ describe("search mail over the mail tables", () => {
 
     await store.tags.addTags(MAIL, { type: "chat", chatId: "thread-2" }, ["food"])
     expect(await found(store, "tag:food")).toEqual(["<three@example.com>"])
+    expect(await found(store, "tag:fo*")).toEqual(["<three@example.com>"])
+    expect(await found(store, "tag:x*")).toEqual([])
   })
 
   it("filters by recipients, mailbox and subject", async () => {
@@ -190,6 +192,15 @@ describe("search mail over the mail tables", () => {
     expect(await sorted('to:"owner@example.com" AND from:"bob@example.com"')).toEqual(["<two@example.com>"])
     expect(await sorted("mailbox:Projects")).toEqual(["<four@example.com>"])
     expect(await sorted("mailbox:label_1")).toEqual(["<four@example.com>"])
+    expect(await sorted("mailbox:Proj*")).toEqual(["<four@example.com>"])
+    expect(await sorted("label:*bel_?")).toEqual(["<four@example.com>"])
+    expect(await sorted("to:Car*")).toEqual(["<four@example.com>"])
+    expect(await sorted("bcc:*@example.com")).toEqual(["<four@example.com>"])
+    expect(await sorted("from:*Sample")).toEqual(["<two@example.com>"])
+    expect(await sorted("subject:road*")).toEqual(["<four@example.com>"])
+    expect(await sorted("subject:*view")).toEqual(["<four@example.com>"])
+    expect(await sorted("content:invoi*")).toEqual(["<two@example.com>"])
+    await expect(sorted("content:*voice")).rejects.toThrow("content:invoice*")
     const otherId = await store.accounts.saveAccount(
       { provider: "email", account: "other@example.com" },
       { name: null },

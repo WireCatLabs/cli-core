@@ -1,6 +1,8 @@
 import { CliError, singleLine } from "@wirecat/cli-base"
 import type { Chat, Contact, Id, Provider } from "./domain/models.js"
 import { contactReferenceOf } from "./domain/ref-arguments.js"
+import { compileAutomaton, wildcardPattern } from "./search/lucene/automaton.js"
+import { trigrams } from "./search/trigrams.js"
 
 /** The part of a store that `pickPerson` reads. */
 export interface PeopleLookup {
@@ -64,20 +66,64 @@ export const pickPerson = (reference: string, people: PeopleLookup): Contact => 
 
   const wanted = foldName(trimmed.replace(/^@/, ""))
   const everyone = people.all().toSorted((a, b) => (a.name ?? "").localeCompare(b.name ?? ""))
-  const fields = (person: Contact) => [person.alias, person.name, person.username].filter(isPresent).map(foldName)
 
-  const exact = everyone.filter((person) => fields(person).includes(wanted))
-  const matches =
-    exact.length > 0 ? exact : everyone.filter((person) => fields(person).some((one) => one.includes(wanted)))
-
-  if (matches.length === 1 && matches[0]) return matches[0]
-  if (matches.length === 0) throw new CliError("not_found", `nobody matches "${reference}"`)
+  const exact = everyone.filter((person) => namesOf(person).includes(wanted))
+  const containing = everyone.filter((person) => namesOf(person).some((one) => one.includes(wanted)))
+  if (exact.length === 1 && exact[0]) return exact[0]
+  if (containing.length === 1 && containing[0]) return containing[0]
+  if (containing.length === 0) throw new CliError("not_found", `nobody matches "${reference}"`)
+  // Several people are named exactly this: the ones it is only part of the name of are as likely meant.
+  const matches = exact.length > 0 ? [...exact, ...containing.filter((person) => !exact.includes(person))] : containing
   throw ambiguous(
     reference,
     "people",
     matches.map(({ id, name, username }) => ({ id, name, username })),
     ({ name, username }) => singleLine([name, username && `@${username}`].filter(isPresent).join("  ")),
   )
+}
+
+const namesOf = (person: Contact, byAddress = false): string[] =>
+  [person.alias, person.name, person.username, byAddress ? person.id : undefined].filter(isPresent).map(foldName)
+const chatNamesOf = (chat: Chat): string[] =>
+  [chat.title, chat.providerMetadata?.username]
+    .filter((one): one is string => typeof one === "string" && one !== "")
+    .map(foldName)
+
+/** A name pattern with Lucene's `*` and `?`, matched against a whole name folded as `foldName` folds it. */
+const namePattern = (pattern: string) => {
+  const automaton = compileAutomaton(wildcardPattern(foldName(pattern.trim().replace(/^@/, ""))))
+  return (names: string[]) => names.some((one) => automaton.test(one))
+}
+
+/** Everyone a name pattern such as `Ярослав*` or `*Орлов*` fits by their alias, name or @username. */
+export const peopleMatching = (pattern: string, people: Contact[], { byAddress = false } = {}): Contact[] => {
+  const fits = namePattern(pattern)
+  return people.filter((person) => fits(namesOf(person, byAddress)))
+}
+
+/** Every chat a name pattern fits by its title or @username. */
+export const chatsMatching = (pattern: string, chats: Chat[]): Chat[] => {
+  const fits = namePattern(pattern)
+  return chats.filter((chat) => fits(chatNamesOf(chat)))
+}
+
+/** The names closest to what a pattern spells, for a refusal to offer: a typo in a pattern finds nobody. */
+export const nearNames = (pattern: string, names: string[], most = 5): string[] => {
+  const spelled = foldName(pattern.replace(/\\(.)/gu, "$1").replace(/[*?@]/gu, " ")).trim()
+  const wanted = new Set(spelled.split(/\s+/u).flatMap(trigrams))
+  if (wanted.size === 0) return []
+  const scored = [...new Set(names)].map((name) => ({
+    name,
+    score: foldName(name)
+      .split(/\s+/u)
+      .flatMap(trigrams)
+      .filter((piece) => wanted.has(piece)).length,
+  }))
+  return scored
+    .filter(({ score }) => score > 1)
+    .toSorted((a, b) => b.score - a.score || a.name.localeCompare(b.name))
+    .slice(0, most)
+    .map(({ name }) => name)
 }
 
 const ambiguous = <T extends { id: Id }>(

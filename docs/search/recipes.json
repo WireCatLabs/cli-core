@@ -88,6 +88,7 @@
   "fileTexts": [{ "chat": "7", "message": "105", "attachment": 1, "text": "Накладная № 17, оплата до 31 января" }],
   "recipes": [
     { "title": "Слово", "query": "invoice", "ids": ["101", "102", "105", "106"] },
+    { "title": "Слово по началу", "query": "invoi*", "ids": ["101", "102", "106"] },
     { "title": "Другие формы слова", "query": "квартира", "ids": ["109"] },
     { "title": "Фраза в кавычках — тоже в любой форме", "query": "\"квартира\"", "ids": ["109"] },
     { "title": "Только точная форма", "query": "exact:квартира", "ids": [] },
@@ -98,8 +99,10 @@
       "ids": ["101", "102", "105", "106"]
     },
     { "title": "Чат по имени", "query": "chat:\"Work fixture\" AND invoice", "ids": ["101", "102", "105", "106"] },
+    { "title": "Чат по части названия", "query": "chat:*work* AND invoice", "ids": ["101", "102", "105", "106"] },
     { "title": "Диапазон дат", "query": "invoice date:[2026-01-20 TO 2026-01-22}", "ids": ["101", "102"] },
     { "title": "Все сообщения автора", "query": "from:\"Bob Synthetic\"", "ids": ["106", "107", "108"] },
+    { "title": "Автор по части имени", "query": "from:Bo*", "ids": ["106", "107", "108"] },
     { "title": "Начиная с даты", "query": "invoice date>=2026-01-21", "ids": ["102", "105", "106"] },
     { "title": "Личная переписка", "query": "passport kind:private", "ids": ["103"] },
     { "title": "Кандидат secret в Избранном", "query": "preset:secret kind:saved", "ids": ["104"] },

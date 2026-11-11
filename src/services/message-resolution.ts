@@ -3,12 +3,13 @@ import type { Chat, Id, Page, Provider } from "../domain/models.js"
 import { chatReferenceOf, ensureAccount, type ProfilesOn } from "../domain/ref-arguments.js"
 import { profilesOn } from "../domain/ref-summaries.js"
 import type { MessengerTraits } from "../ports/traits.js"
-import { isId, pickChat, pickPerson } from "../resolve.js"
+import { chatsMatching, isId, nearNames, peopleMatching, pickChat, pickPerson } from "../resolve.js"
 import { codeOf } from "../sends/guarded.js"
 import type { AccountStore } from "../store/account-store.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
 import type { StoredChatFilter } from "../store/types.js"
 import { nothingStored, type ServiceDeps } from "./deps.js"
+import { MAIL } from "./search-kind.js"
 
 /** What a store search reads of the messenger: its saved-messages chat, and its command for a hint. */
 export type Saved = Partial<Pick<MessengerTraits, "savedChatId" | "app">>
@@ -249,3 +250,70 @@ export const senderAmong = async (store: MessageStore, accounts: AccountKey[], r
     throw error
   }
 }
+
+/** The most people or chats one name pattern may stand for in a search. */
+export const MOST_NAME_MATCHES = 50
+
+const patternRefused = (field: string, pattern: string, what: string, found: number, near: string[]): never => {
+  if (found === 0)
+    throw new CliError(
+      "not_found",
+      `${field}:${pattern} — no ${what} fits${near.length ? `; near: ${near.join(", ")}` : ""}`,
+      { candidates: near },
+    )
+  throw new CliError(
+    "validation_error",
+    `${field}:${pattern} fits ${found} ${what}, more than ${MOST_NAME_MATCHES} — write more of the name`,
+    { reason: "query.too-large", budget: "name matches", limit: MOST_NAME_MATCHES, complete: false },
+  )
+}
+
+/** Every sender a name pattern (`from:Ярослав*`) fits, through the names each messenger's accounts have seen. */
+export const sendersMatching = async (
+  store: MessageStore,
+  accounts: AccountKey[],
+  field: string,
+  pattern: string,
+): Promise<{ provider: Provider; id: Id }[]> => {
+  const providers = [...new Set(accounts.map(({ provider }) => provider))]
+  const seen = await Promise.all(
+    providers.map(async (provider) => {
+      const ids = accounts.filter((one) => one.provider === provider).map(({ account }) => account)
+      // One account's people carry its aliases; several accounts' do not.
+      const scope = ids.length === 1 ? { account: ids[0] as string } : { accounts: ids }
+      return { provider, people: (await store.people.people(provider, scope)).all() }
+    }),
+  )
+  const found = seen.flatMap(({ provider, people }) =>
+    peopleMatching(pattern, people, { byAddress: provider === MAIL }).map(({ id }) => ({ provider, id })),
+  )
+  if (found.length === 0 || found.length > MOST_NAME_MATCHES) {
+    const names = seen.flatMap(({ people }) => people.flatMap(({ name, alias }) => [name, alias]))
+    patternRefused(field, pattern, "person", found.length, nearNames(pattern, names.filter(isText)))
+  }
+  return found
+}
+
+/** Every stored chat a name pattern (`chat:*отчёт*`) fits, left ones included: a search reads kept history. */
+export const chatsMatchingIn = async (
+  store: MessageStore,
+  accounts: AccountKey[],
+  pattern: string,
+): Promise<{ account: AccountKey; chatId: Id }[]> => {
+  const held = await Promise.all(
+    accounts.map(async (account) => ({
+      account,
+      chats: (await store.chats.chats(account, { includeLeft: true })).items,
+    })),
+  )
+  const found = held.flatMap(({ account, chats }) =>
+    chatsMatching(pattern, chats).map((chat) => ({ account, chatId: chat.id })),
+  )
+  if (found.length === 0 || found.length > MOST_NAME_MATCHES) {
+    const titles = held.flatMap(({ chats }) => chats.map(({ title }) => title))
+    patternRefused("chat", pattern, "chat", found.length, nearNames(pattern, titles.filter(isText)))
+  }
+  return found
+}
+
+const isText = (value: string | null | undefined): value is string => typeof value === "string" && value !== ""
