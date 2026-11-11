@@ -465,7 +465,7 @@ describe("messages sync progress", () => {
   }
   const sync = ["messages", "sync", "--page-size", "2", "--pause", "1ms", "--since-time", "2020-01-01"]
 
-  it("**--all prints counts on stderr after the chat list and after each chat, current ones too, never an id or title**", async () => {
+  it("**--all prints counts on stderr after the chat list, each page and the last chat, never an id or title**", async () => {
     clock()
     const env = setup()
     // 9001 is the oldest chat, walked last; held whole beforehand, so --all passes it as current.
@@ -478,10 +478,15 @@ describe("messages sync progress", () => {
     expect(stdout).toHaveLength(1)
     expect(answer).toMatchObject({ chats: 3, fetched: 8 })
     expect(progressLines(stderr)).toEqual([
-      { event: "progress", step: "sync", chats: 3, chats_done: 0, fetched: 0 },
-      { event: "progress", step: "sync", chats: 3, chats_done: 1, fetched: 5 },
-      { event: "progress", step: "sync", chats: 3, chats_done: 2, fetched: 8 },
-      { event: "progress", step: "sync", chats: 3, chats_done: 3, fetched: 8 },
+      ...[
+        [0, 0],
+        [0, 2],
+        [0, 4],
+        [0, 5],
+        [1, 7],
+        [1, 8],
+        [3, 8],
+      ].map(([done, fetched]) => ({ event: "progress", step: "sync", chats: 3, chats_done: done, fetched })),
     ])
     expect(stderr).not.toMatch(/Secret title|900[123]/)
   })
@@ -534,6 +539,18 @@ describe("messages sync progress", () => {
       })),
     )
     expect(stderr).not.toMatch(/Secret title|9002/)
+  })
+
+  it("**the run's log keeps each progress line as sync.progress**, counts only", async () => {
+    clock()
+    const { stderr } = await call([...sync, "9002", "--json", "--trace"], chatsOf({ "9002": 5 }, 1_000), setup())
+
+    const logged = stderr
+      .split("\n")
+      .filter((line) => line.includes('"sync.progress"'))
+      .map((line) => JSON.parse(line))
+    expect(logged.map((event) => event.counts)).toEqual([{ fetched: 2 }, { fetched: 4 }, { fetched: 5 }])
+    expect(logged[0]).toMatchObject({ event: "progress", operation: "sync.progress", kind: "progress" })
   })
 
   it("**keeps to about two lines a second** when pages come faster, and prints none for a person", async () => {
