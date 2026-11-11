@@ -2,6 +2,7 @@ import { setTimeout as wait } from "node:timers/promises"
 import { backoffMs, CliError, DEFAULT_RETRY, type RetryConfig } from "@wirecat/cli-base"
 import { providerWaitMs } from "@wirecat/cli-base/http"
 import { type Fetch, OPENAI_URL } from "../embeddings/remote.js"
+import { refuseModelAddress } from "../models/local-only.js"
 import type { Pcm } from "./decode.js"
 import { filesPresent, modelsDirectory, vadPath } from "./install.js"
 import { OPENAI_TRANSCRIBE_MODEL, VAD } from "./models.js"
@@ -221,6 +222,7 @@ const checkKeywords = (keywords: readonly string[] = []): void => {
  * dialogue by `start`. `gpt-transcribe` gives no timestamps of its own, so the times are the detector's.
  */
 export const transcribeOpenAI = async (audio: Pcm, options: OpenAITranscription): Promise<TimedText[]> => {
+  refuseModelAddress(options.env ?? process.env, options.baseUrl ?? OPENAI_URL, "audio")
   if (!options.apiKey)
     throw new CliError("authentication_error", "no OpenAI key — `models keys set openai`, or OPENAI_API_KEY", {
       reason: "transcription.no-key",

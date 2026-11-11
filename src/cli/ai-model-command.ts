@@ -7,14 +7,16 @@ import {
   aiBaseUrl,
   aiImagesAllowed,
   aiKeys,
-  aiNeedsKey,
+  aiLeavesComputer,
   aiOrigin,
   aiSettingOf,
   aiSettingPath,
+  aiTakesKey,
   checkAi,
   readAiSetting,
   writeAiSetting,
 } from "../models/ai.js"
+import { localOnly, localOnlyRefusal } from "../models/local-only.js"
 import type { AppIdentity } from "../ports/app.js"
 import { agentOf } from "../runs/run-context.js"
 import { readSecret } from "../terminal/prompt.js"
@@ -47,7 +49,7 @@ const view = (app: AppIdentity, options: AiModelCommandOptions, setting: AiSetti
       images: false,
       key: { stored: false, source: null },
     }
-  const key = aiNeedsKey(setting) ? aiKeys(app, options.env(), options.keyring).read(aiOrigin(setting)) : undefined
+  const key = aiTakesKey(setting) ? aiKeys(app, options.env(), options.keyring).read(aiOrigin(setting)) : undefined
   return {
     provider: setting.provider,
     model: setting.model,
@@ -133,8 +135,10 @@ export const aiModelCommand = (app: AppIdentity, options: AiModelCommandOptions)
         baseUrl: given.baseUrl,
         allowImages: given.allowRemote,
       })
+      if (aiLeavesComputer(setting) && localOnly(env))
+        throw localOnlyRefusal("what WireCat sends to its AI model", new URL(aiBaseUrl(setting)).host)
       if (given.secretStdin) {
-        if (!aiNeedsKey(setting)) throw new CliError("validation_error", "Ollama on this computer takes no key")
+        if (!aiTakesKey(setting)) throw new CliError("validation_error", "Ollama on this computer takes no key")
         const input = options.stdin?.()
         const secret = (await readSecret("API key: ", input ? { input } : {})).trim()
         if (!secret) throw new CliError("validation_error", "no key was given; nothing was changed")

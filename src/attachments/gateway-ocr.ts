@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto"
 import { CliError, type KeyringStore } from "@wirecat/cli-base"
-import { embeddingKeys, endpointKeyName } from "../embeddings/keys.js"
-import { type ModelSettings, modelGateway, modelTarget } from "../models/index.js"
+import { aiImagesAllowed, aiLeavesComputer } from "../models/ai.js"
+import { type ModelSettings, modelGateway } from "../models/index.js"
+import { purposeModel } from "../models/purpose.js"
 import type { AppIdentity } from "../ports/app.js"
 import type { OcrPipeline } from "./ocr.js"
 
@@ -25,11 +26,21 @@ export const gatewayOcr = ({
   key?: () => string | undefined
 }): OcrPipeline => {
   if (!enabled) throw new CliError("permission_error", "API OCR needs an explicit OCR request")
-  const target = modelTarget(settings, "ocr")
-  if (!target || target.provider === "off")
-    throw new CliError("configuration_error", "set models.ocr.provider and models.ocr.model before API OCR")
-  const baseUrl =
-    target.baseUrl ?? (target.provider === "anthropic" ? "https://api.anthropic.com" : "https://api.openai.com/v1")
+  const chosen = purposeModel(settings, "ocr", { app, env, keyring })
+  if (!chosen)
+    throw new CliError(
+      "configuration_error",
+      "set models.ocr.provider and models.ocr.model, or choose an AI model with `models ai set`, before API OCR",
+    )
+  // The shared model's yes to pictures was given for it alone, at its address; a model elsewhere needs it here too.
+  if (chosen.shared && aiLeavesComputer(chosen.shared) && !aiImagesAllowed(chosen.shared))
+    throw new CliError(
+      "permission_error",
+      "the AI model may not read pictures: allow it with `models ai set … --allow-remote`; nothing was sent",
+      { reason: "ai.images-not-allowed" },
+    )
+  const { target } = chosen
+  const { baseUrl } = target
   const identity = createHash("sha256")
     .update(JSON.stringify([target.provider, target.model, baseUrl.replace(/\/+$/, "")]))
     .digest("hex")
@@ -37,12 +48,8 @@ export const gatewayOcr = ({
   const gateway = modelGateway({
     resolve: () => target,
     consent: () => enabled,
-    key:
-      key ??
-      ((provider, selected) =>
-        embeddingKeys(app, env, keyring).read(
-          selected.baseUrl === undefined ? provider : endpointKeyName(selected.baseUrl),
-        )?.key),
+    key: key ?? chosen.key,
+    env,
     ...(signal === undefined ? {} : { signal }),
     ...(fetch === undefined ? {} : { fetch }),
   })

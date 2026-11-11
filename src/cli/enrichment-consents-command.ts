@@ -1,6 +1,7 @@
 import { CliError, type KeyringStore } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
+import { refuseModelAddress } from "../models/local-only.js"
 import type { AppIdentity } from "../ports/app.js"
 import { agentOf } from "../runs/run-context.js"
 import { type EnrichmentState, enrichmentState } from "../services/enrichment.js"
@@ -101,6 +102,7 @@ export const enrichmentConsentsCommand = (app: AppIdentity, options: EnrichmentC
         model: given.model,
         ...(given.baseUrl === undefined ? {} : { base_url: given.baseUrl }),
       }
+      refuseModelAddress(env, enrichmentEndpoint(chosen), "records to enrich")
       const state = await withStore(env, (store) =>
         enrichmentState(store, env, chosen, { app, ...(options.keyring ? { keyring: options.keyring } : {}) }),
       )

@@ -5,11 +5,19 @@ import { metaSchema } from "@wirecat/cli-base/standards"
 import * as v from "valibot"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import type { ModelAdapter, ModelRequest } from "../models/index.js"
+import { writeLocalOnly } from "../models/local-only.js"
 import { writeSharedSection } from "../store/shared-config.js"
 import { type AccountKey, type MessageStore, openStore } from "../store/store.js"
 import { enrichmentSettingPath } from "./enrichment-setting.js"
 import { searchAll } from "./search-all.js"
-import { type HarderOptions, type HarderResult, harderRanking, writeHarderSetting } from "./search-harder.js"
+import {
+  type HarderOptions,
+  type HarderResult,
+  harderRanking,
+  harderTimeoutSeconds,
+  writeHarderSetting,
+  writeHarderTimeout,
+} from "./search-harder.js"
 
 const MAIL: AccountKey = { provider: "email", account: "owner@example.com" }
 const NOW = Date.parse("2026-11-09T12:00:00Z")
@@ -198,6 +206,34 @@ describe("search all --harder", () => {
     const found = await search(store, env, { ...model.harder, fetch: hanging, timeoutMs: 5 })
     expect(titles(found)).toEqual(plain)
     expect(found.harder).toMatchObject({ applied: false, reason_id: "harder.timeout" })
+  })
+
+  it("**refuses plain http to another computer**, and a hosted model under local only, sending nothing", async () => {
+    const { env, store } = await seeded()
+    const model = fakeModel('{"records":[2]}')
+    writeHarderSetting(env, {
+      provider: "openai",
+      model: "synthetic",
+      base_url: "http://192.0.2.10/v1",
+      consented_at: "2026-11-09T10:00:00.000Z",
+    })
+    expect((await search(store, env, model.harder)).harder).toMatchObject({
+      reason_id: "harder.address-refused",
+      sent: 0,
+    })
+    consent(env)
+    writeLocalOnly(env, true)
+    expect((await search(store, env, model.harder)).harder).toMatchObject({ reason_id: "harder.local-only", sent: 0 })
+    expect(model.requests).toEqual([])
+  })
+
+  it("waits 5 s for a hosted model and 60 s for one on this computer, unless the owner sets the limit", () => {
+    const root = mkdtempSync(join(tmpdir(), "search-harder-"))
+    const env: NodeJS.ProcessEnv = { WIRECAT_STATE_DIR: root, MESSAGING_STORE: join(root, "store.db") }
+    expect(harderTimeoutSeconds(env, "https://api.anthropic.com")).toBe(5)
+    expect(harderTimeoutSeconds(env, "http://127.0.0.1:11434/v1")).toBe(60)
+    writeHarderTimeout(env, 120)
+    expect(harderTimeoutSeconds(env, "https://api.anthropic.com")).toBe(120)
   })
 
   it("**a later page is not reordered and sends nothing**", async () => {

@@ -70,7 +70,7 @@ max config set models.analysis.model '<your installed Ollama model>'
 max models keys set '<endpoint host[:port]>'
 ```
 
-Custom endpoints never inherit the public OpenAI/Anthropic key. URLs must be HTTP/S without embedded credentials, query or fragment. Anthropic is analysis only: [Anthropic offers no embedding model](https://platform.claude.com/docs/en/build-with-claude/embeddings). OpenAI-style analysis uses Chat Completions; custom servers use the compatible `max_tokens` field, while api.openai.com uses `max_completion_tokens`. [Ollama compatibility](https://docs.ollama.com/api/openai-compatibility) covers a subset of that API. Choose a model that returns JSON and token usage; there is no automatic provider fallback or retry.
+Custom endpoints never inherit the public OpenAI/Anthropic key. URLs must be HTTPS without embedded credentials, query or fragment; plain HTTP only on this computer (`localhost`, `127.x.x.x`, `[::1]`), so neither the text nor the key crosses a network unencrypted. With `models.analysis`, `models.replies` and `models.ocr` not set (and not `off`), linking, reply drafts and attachment OCR use the AI model chosen with `memo models ai set`, with the key kept for its address; OCR through it to another computer needs that model's yes to pictures (`--allow-remote`). Anthropic is analysis only: [Anthropic offers no embedding model](https://platform.claude.com/docs/en/build-with-claude/embeddings). OpenAI-style analysis uses Chat Completions; custom servers use the compatible `max_tokens` field, while api.openai.com uses `max_completion_tokens`. [Ollama compatibility](https://docs.ollama.com/api/openai-compatibility) covers a subset of that API. Choose a model that returns JSON and token usage; there is no automatic provider fallback or retry.
 
 Before analysis sends its first batch, the CLI explains the endpoint/model, messages, characters, estimated message tokens, and run cap. Machine mode requires `--yes` for a new consent. A yes is remembered for **this account, native chat ID, provider and endpoint path**, across model changes at that endpoint, until revoked. A different chat/account/provider/endpoint requires another yes. This applies to explicitly configured local endpoints too. `conversations embed` still asks for remote message batches on every run; configuring a provider does not waive it. Search with a remote embedding provider sends the query text to that endpoint; MCP search/related/status honor the profile's embedding choice. Bulk refresh stays local.
 
@@ -201,9 +201,11 @@ memo models search-consents revoke
 memo models keys set anthropic < key.txt
 ```
 
-The search never fails because of it. Without consent or a key, with a settings section it cannot read, after 5 s with
-no answer, or on any provider error, the plain order stays and the answer's `harder` field says why (`applied: false`,
-a `reason` and a `reason_id`: `harder.no-consent`, `no-key`, `bad-setting`, `later-page`, `too-few`, `timeout`,
+The search waits 5 s for a hosted model and 60 s for one on this computer; `set … --timeout <duration>` (1s to 10m)
+sets the limit, kept as `search_harder_timeout_s` beside the section. The search never fails because of it. Without
+consent or a key, with a settings section it cannot read, under local only to a hosted model, past the time limit, or
+on any provider error, the plain order stays and the answer's `harder` field says why (`applied: false`,
+a `reason` and a `reason_id`: `harder.no-consent`, `no-key`, `bad-setting`, `address-refused`, `local-only`, `later-page`, `too-few`, `timeout`,
 `key-rejected`, `unreachable`, `rate-limited`, `bad-reply`, `error`), with `provider`, `model`, `endpoint`, `sent`
 (hits sent, 0 when nothing left), `cost_usd` (`null` for a model with no known price) and `ms`.
 
@@ -225,3 +227,15 @@ The delay is the whole search on a loaded machine, not the call alone. Rewriting
 the rerank was tried too and lowered LifeBench recall@10 (0.39 to 0.37), so it is not done
 ([search lab](https://github.com/WireCatLabs/cli-testing/tree/main/performance/agents/knowledge-graph-memory/search-lab)).
 An agent's shell cannot give the consent, and over MCP `models search-consents set` needs `mcp.authority`.
+
+## Local only
+
+`memo models local-only set on` keeps every model call on this computer, in every WireCat tool: an address that is not
+`localhost`, `127.x.x.x` or `[::1]` is refused before anything is sent (`permission_error`, reason
+`local-only.refused`). It covers the AI model (`models ai`), enrichment, search harder, linking, reply drafts,
+attachment OCR, remote embeddings and OpenAI transcription; voice messages then use only the downloaded speech model,
+never the messenger's service. It is off until the owner turns it on, kept as `local_only` in the shared settings
+file; a section that cannot be read counts as on. An agent may turn it on, only the owner turns it off.
+`memo models local-only show --json` lists each feature with `where` (`this-computer`, `elsewhere`, `agent`, `off`)
+and whether local only refuses it. The digest and MCP agents run outside WireCat: they are local only when the agent
+runs a local model.

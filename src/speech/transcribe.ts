@@ -2,6 +2,7 @@ import { CliError, isCliError, type KeyringStore } from "@wirecat/cli-base"
 import type { Messenger } from "../cli/messenger/context.js"
 import { fromFile, type Settings } from "../cli/settings.js"
 import { embeddingKeys } from "../embeddings/keys.js"
+import { localOnly, localOnlyRefusal } from "../models/local-only.js"
 import { readOnlyLockOf, readOnlyRefusal } from "../ports/app.js"
 import { capability, type MessengerAdapter, type RemoteFile, type Transcript } from "../ports/messenger.js"
 import { typedCommand } from "../runs/scope.js"
@@ -11,8 +12,9 @@ import { OPENAI_TRANSCRIBE_MODEL, orderedModels, type SpeechModel, speechModel }
 import type { Recognizer } from "./recognize.js"
 
 /**
- * `messenger`: its own recognition (Telegram Premium). `local`: a model on this machine. `auto`: the first, then the
- * second. `openai`: OpenAI's API, only when asked by name — `auto` never sends audio off the machine.
+ * `messenger`: its own recognition (Telegram Premium). `local`: a model on this machine. `auto`: the local model when
+ * it is downloaded, else the messenger's. `openai`: OpenAI's API, only when asked by name — `auto` never sends audio
+ * to OpenAI, and with local only on it never asks the messenger either.
  */
 export const TRANSCRIBE_WITH = ["auto", "messenger", "local", "openai"] as const
 export type TranscribeWith = (typeof TRANSCRIBE_WITH)[number]
@@ -46,6 +48,8 @@ export interface Choice {
   fetch?: (url: string, init: RequestInit) => Promise<Response>
   /** The command's own cancel and deadline, for a request that leaves the machine. */
   signal?: AbortSignal
+  /** Local only is on: `auto` never asks the messenger. */
+  localOnly?: boolean
 }
 
 /** A voice note, or an audio file someone sent — an iPhone recording reaches WhatsApp as `audio/mp4`. */
@@ -67,7 +71,10 @@ export const choose = (
       : (flags.with ?? fromFile<TranscribeWith>(settings, "transcribeWith", "auto").value)
   // Refused only where something is heard: `models list` reads the same profile for its model alone.
   const known = TRANSCRIBE_WITH.includes(chosen)
+  const onlyHere = localOnly(env)
+  const offComputer = known && onlyHere && (chosen === "messenger" || chosen === "openai")
   return {
+    ...(onlyHere ? { localOnly: true } : {}),
     directory: modelsDirectory(env),
     with: known ? chosen : "auto",
     ...(known
@@ -80,7 +87,10 @@ export const choose = (
         }),
     model: model === undefined ? (orderedModels(messenger.speechModels)[0] as SpeechModel) : speechModel(model),
     transcribeModel: fromFile<string>(settings, "transcribeModel", OPENAI_TRANSCRIBE_MODEL).value,
-    ...(known && chosen === "openai" ? openaiAccess(messenger, env, keyring) : {}),
+    ...(known && chosen === "openai" && !offComputer ? openaiAccess(messenger, env, keyring) : {}),
+    ...(offComputer
+      ? { refusal: localOnlyRefusal("the voice message", chosen === "openai" ? "OpenAI" : messenger.provider) }
+      : {}),
   }
 }
 
@@ -126,7 +136,8 @@ export const hearOnline = async (
   read?: (file: RemoteFile) => Promise<void>,
 ): Promise<Heard | Uint8Array> => {
   if (choice.refusal) throw choice.refusal
-  if (choice.with === "auto" || choice.with === "messenger") {
+  const localReady = choice.with !== "openai" && isInstalled(choice.model, choice.directory)
+  if (choice.with === "messenger" || (choice.with === "auto" && !localReady && !choice.localOnly)) {
     const canAsk = typeof connection.transcribe === "function"
     if (choice.with === "messenger" || canAsk) {
       try {
@@ -138,8 +149,7 @@ export const hearOnline = async (
       }
     }
   }
-  if (choice.with !== "openai" && !isInstalled(choice.model, choice.directory))
-    throw notDownloaded(messenger, choice.model)
+  if (choice.with !== "openai" && !localReady) throw notDownloaded(messenger, choice.model)
   const { files } = await capability(connection, "download", "download attachments")(chat, messageId)
   const voice = files.find(isAudioFile)
   if (!voice) throw new CliError("validation_error", "that message has no voice message or audio file")

@@ -1,7 +1,7 @@
 import { CliError, type KeyringStore } from "@wirecat/cli-base"
 import type { Chat, Message } from "../domain/models.js"
-import { embeddingKeys, endpointKeyName } from "../embeddings/keys.js"
-import { type ModelSettings, type ModelTarget, modelGateway, modelTarget } from "../models/index.js"
+import { type ModelSettings, modelGateway } from "../models/index.js"
+import { type PurposeModel, purposeModel } from "../models/purpose.js"
 import type { AppIdentity } from "../ports/app.js"
 import type { Warn } from "../runs/events.js"
 import { mayModelReply, replyConsentPathFor, replyModelIdentity } from "./consents.js"
@@ -23,12 +23,14 @@ export const replyRenderer =
     },
   ): ReplyRender =>
   async (rule, message, chat, now) => {
-    let called: ModelTarget | undefined
+    const deps = { app, env, keyring: options.keyring }
+    let called: PurposeModel | undefined
     const gateway = modelGateway({
       signal: options.signal,
+      env,
       resolve: (purpose) => {
-        called = modelTarget(settings(), purpose)
-        return called
+        called = purposeModel(settings(), purpose, deps)
+        return called?.target
       },
       consent: (_request, target) =>
         mayModelReply(
@@ -36,10 +38,7 @@ export const replyRenderer =
           replyModelIdentity(target.provider, target.baseUrl ?? ""),
           message.chatId,
         ),
-      key: (provider, target) =>
-        embeddingKeys(app, env, options.keyring).read(
-          target.baseUrl === undefined ? provider : endpointKeyName(target.baseUrl),
-        )?.key,
+      key: () => called?.key(),
     })
     if (options.signal?.aborted) throw new CliError("cancelled", "reply rendering cancelled")
     const result = await renderReplyTemplate(rule.reply, {
@@ -60,16 +59,13 @@ export const replyRenderer =
           maxTokens: 512,
         })
         if (options.signal?.aborted) throw new CliError("cancelled", "reply rendering cancelled")
-        const current = modelTarget(settings(), "replies")
-        const baseUrl =
-          called?.baseUrl ??
-          (called?.provider === "anthropic" ? "https://api.anthropic.com" : "https://api.openai.com/v1")
+        const current = purposeModel(settings(), "replies", deps)?.target
         if (
           !called ||
-          JSON.stringify(current) !== JSON.stringify(called) ||
+          JSON.stringify(current) !== JSON.stringify(called.target) ||
           !mayModelReply(
             replyConsentPathFor(app, profile, env),
-            replyModelIdentity(called.provider, baseUrl),
+            replyModelIdentity(called.target.provider, called.target.baseUrl),
             message.chatId,
           )
         ) {

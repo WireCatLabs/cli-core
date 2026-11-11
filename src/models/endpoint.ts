@@ -6,3 +6,21 @@ export const endpoint = (value: string): boolean => {
     return false
   }
 }
+
+const loopback = (hostname: string) =>
+  hostname === "localhost" || hostname === "[::1]" || /^127(\.\d{1,3}){3}$/.test(hostname)
+
+/** An address on this computer: localhost, 127.x.x.x or [::1]. */
+export const onThisComputer = (value: string): boolean => {
+  try {
+    return loopback(new URL(value).hostname)
+  } catch {
+    return false
+  }
+}
+
+/** https anywhere; plain http only to this computer, so neither the text nor the key crosses a network unencrypted. */
+export const modelAddressAllowed = (value: string): boolean =>
+  endpoint(value) && (new URL(value).protocol === "https:" || onThisComputer(value))
+
+export const PLAIN_HTTP_REFUSED = "this address is not allowed: use https, or http only on this computer"

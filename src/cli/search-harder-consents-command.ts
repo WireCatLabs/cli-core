@@ -1,6 +1,8 @@
 import { CliError, type KeyringStore } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
+import { parseDuration } from "../domain/duration.js"
+import { refuseModelAddress } from "../models/local-only.js"
 import type { AppIdentity } from "../ports/app.js"
 import { agentOf } from "../runs/run-context.js"
 import { keyLookup, keyVariable } from "../services/enrichment.js"
@@ -15,9 +17,13 @@ import {
   HARDER_CANDIDATES,
   HARDER_CHARS,
   HARDER_MODELS,
+  HARDER_TIMEOUT_S,
   type HarderSetting,
+  harderTimeoutSeconds,
   readHarderSetting,
+  readHarderTimeout,
   writeHarderSetting,
+  writeHarderTimeout,
 } from "../services/search-harder.js"
 import { grantsAuthority, LOCAL_READ, LOCAL_WRITE } from "./effects.js"
 import { type Body, itemOf } from "./envelope.js"
@@ -74,6 +80,8 @@ const state = (app: AppIdentity, options: HarderConsentsOptions, given?: Choice)
     endpoint: enrichmentEndpoint(chosen),
     ...(enrichment ? { proposed_from: "enrichment" } : {}),
     consented_at: setting?.consented_at ?? null,
+    timeout_s: harderTimeoutSeconds(env, enrichmentEndpoint(chosen)),
+    timeout_set: readHarderTimeout(env) !== undefined,
     candidates: HARDER_CANDIDATES,
     chars_per_hit: HARDER_CHARS,
     usd_per_million: price
@@ -83,6 +91,12 @@ const state = (app: AppIdentity, options: HarderConsentsOptions, given?: Choice)
     consent: harderConsentWording(app.command, chosen),
     off_command: `${app.command} models search-consents revoke`,
   }
+}
+
+const seconds = (value: string): number => {
+  const ms = parseDuration(value, "--timeout")
+  if (ms < 1000 || ms > 600_000) throw new CliError("validation_error", "--timeout takes 1s to 10m")
+  return Math.round(ms / 1000)
 }
 
 /**
@@ -114,8 +128,18 @@ export const harderConsentsCommand = (app: AppIdentity, options: HarderConsentsO
       `the provider's model; ${HARDER_MODELS.anthropic} or ${HARDER_MODELS.openai} if left out`,
     )
     .option("--base-url <url>", "the address of an OpenAI-compatible model API (OpenRouter…); needs --model")
+    .option(
+      "--timeout <duration>",
+      `how long a --harder search waits for the model, 1s to 10m (30s, 2m); ${HARDER_TIMEOUT_S.hosted} s for a hosted model, ` +
+        `${HARDER_TIMEOUT_S.local} s for one on this computer until one is set; kept until set again`,
+      seconds,
+    )
     .option("--yes", "agree that a --harder search sends its question and hits, and allow it")
-    .action(function (this: Command, provider: string, given: { model?: string; baseUrl?: string; yes?: boolean }) {
+    .action(function (
+      this: Command,
+      provider: string,
+      given: { model?: string; baseUrl?: string; timeout?: number; yes?: boolean },
+    ) {
       if (!isEnrichmentProvider(provider))
         throw new CliError(
           "validation_error",
@@ -135,6 +159,7 @@ export const harderConsentsCommand = (app: AppIdentity, options: HarderConsentsO
         model: given.model ?? HARDER_MODELS[provider],
         ...(given.baseUrl === undefined ? {} : { base_url: given.baseUrl }),
       }
+      refuseModelAddress(env, enrichmentEndpoint(chosen), "a --harder search's question and hits")
       if (!given.yes) {
         const now = state(app, options, chosen)
         options.diagnostic(`${now.consent}\nNothing changed — add --yes to allow it.`)
@@ -142,6 +167,7 @@ export const harderConsentsCommand = (app: AppIdentity, options: HarderConsentsO
         return
       }
       writeHarderSetting(env, { ...chosen, consented_at: new Date().toISOString() })
+      if (given.timeout !== undefined) writeHarderTimeout(env, given.timeout)
       options.diagnostic(`search all --harder may now call ${provider} ${chosen.model}`)
       options.output(itemOf({ ...state(app, options), changed: true }), this)
     })

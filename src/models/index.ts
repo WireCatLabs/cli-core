@@ -1,8 +1,11 @@
 import { CliError } from "@wirecat/cli-base"
-import { endpoint } from "./endpoint.js"
+import { endpoint, modelAddressAllowed, PLAIN_HTTP_REFUSED } from "./endpoint.js"
+import { refuseOffComputer } from "./local-only.js"
 import { openai } from "./openai.js"
 import { type ModelAdapter, type ModelAnswer, type ModelRequest, type ModelTarget, validateImages } from "./types.js"
 
+export { modelAddressAllowed, onThisComputer } from "./endpoint.js"
+export { localOnly, readLocalOnly, refuseModelAddress, refuseOffComputer } from "./local-only.js"
 export type { ModelSettings } from "./settings.js"
 export { modelTarget } from "./settings.js"
 export type { ModelAdapter, ModelAnswer, ModelImage, ModelRequest, ModelTarget, ModelUsage } from "./types.js"
@@ -14,6 +17,8 @@ export interface GatewayDeps {
   adapters?: Readonly<Record<string, ModelAdapter>>
   fetch?: typeof fetch
   signal?: AbortSignal
+  /** Where the local-only switch is read; the process's own when absent, so a caller cannot skip it by omission. */
+  env?: NodeJS.ProcessEnv
 }
 
 export const modelGateway = (deps: GatewayDeps) => ({
@@ -46,6 +51,11 @@ export const modelGateway = (deps: GatewayDeps) => ({
         "validation_error",
         "a model target needs a model and an HTTP/S endpoint without credentials, query or fragment",
       )
+    if (!modelAddressAllowed(baseUrl))
+      throw new CliError("validation_error", `${PLAIN_HTTP_REFUSED}; no data was sent`, {
+        reason: "model.address-refused",
+      })
+    refuseOffComputer(deps.env ?? process.env, baseUrl, `${request.purpose} data`)
     if (!(await deps.consent(request, { ...target, baseUrl })))
       throw new CliError("permission_error", `model consent for ${request.purpose} is missing; no data was sent`)
     const apiKey = await deps.key?.(target.provider, target)

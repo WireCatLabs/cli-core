@@ -33,6 +33,7 @@ export {
   aiSettingPath,
   aiTextReader,
   readAiSetting,
+  sharedModel,
 } from "./models/ai.js"
 export { registerReader } from "./readers/registry.js"
 export type { ReadContext, Reader, Section } from "./readers/types.js"

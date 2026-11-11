@@ -32,7 +32,7 @@ describe("AI settings and provider selection", () => {
     env.APP_OPENAI_API_KEY = "synthetic-public-key"
     env.APP_ANTHROPIC_API_KEY = "synthetic-anthropic-key"
     for (const host of ["openai", "anthropic"]) {
-      const baseUrl = `http://${host}/v1`
+      const baseUrl = `https://${host}/v1`
       expect(endpointKeyName(baseUrl)).toBe(`endpoint:${host}`)
       expect(
         analysisChoice({ analysisProvider: "openai", model: "test", baseUrl }, app, settings(), env, keyring).apiKey,
@@ -181,7 +181,7 @@ describe("AI settings and provider selection", () => {
         env,
         keyring,
       ),
-    ).toThrow("HTTP/S")
+    ).toThrow("not allowed")
     expect(() => embeddingChoice({ embeddingProvider: "bad" }, app, settings(), env, { keyring })).toThrow("provider")
     expect(() => embeddingChoice({ embeddingProvider: "openai" }, app, settings(), env, { keyring })).toThrow("key")
     expect(() => embeddingChoice({ embeddingProvider: "local", dims: 128 }, app, settings(), env, { keyring })).toThrow(

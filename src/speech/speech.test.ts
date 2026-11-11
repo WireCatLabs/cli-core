@@ -283,16 +283,41 @@ describe("hearing a voice message", () => {
     throw new CliError("permission_error", "no Premium")
   }
 
-  it("**asks the messenger first**, and says so", async () => {
+  it("**hears with the downloaded model first**, without asking the messenger", async () => {
+    let asked = false
+    const counting = adapter(async () => {
+      asked = true
+      return { text: "hi", pending: false }
+    })
+
+    expect(await hearOnline(messenger, counting, "7", "5", choice())).toEqual(tone)
+    expect(asked).toBe(false)
+  })
+
+  it("**asks the messenger when no model is downloaded**, and says so", async () => {
     const heard = await hearOnline(
       messenger,
       adapter(async () => ({ text: "hi", pending: false })),
       "7",
       "5",
-      choice(),
+      choice({ directory: mkdtempSync(join(tmpdir(), "no-models-")) }),
     )
 
     expect(heard).toEqual({ messageId: "5", text: "hi", pending: false, via: "chat" })
+  })
+
+  it("**never asks the messenger under local only**, even with no model downloaded", async () => {
+    let asked = false
+    const counting = adapter(async () => {
+      asked = true
+      return { text: "hi", pending: false }
+    })
+    const empty = choice({ directory: mkdtempSync(join(tmpdir(), "no-models-")), localOnly: true })
+
+    await expect(hearOnline(messenger, counting, "7", "5", empty)).rejects.toMatchObject({
+      details: { reason: "model.not-downloaded" },
+    })
+    expect(asked).toBe(false)
   })
 
   it("**falls back to the model on this machine when the messenger refuses the account**", async () => {
