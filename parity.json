@@ -3226,12 +3226,6 @@
         "--limit": "all"
       }
     },
-    "images read": {
-      "in": "all",
-      "options": {
-        "--attachment": "all"
-      }
-    },
     "images models": {
       "in": "all"
     },
@@ -3240,6 +3234,12 @@
     },
     "images models list": {
       "in": "all"
+    },
+    "images read": {
+      "in": "all",
+      "options": {
+        "--attachment": "all"
+      }
     },
     "inbox": {
       "in": "all",
