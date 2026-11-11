@@ -152,11 +152,11 @@ describe("MCP meeting reads", () => {
       query: "started_at:[1970-01-01 TO 1970-01-02]",
     })
     expect(list.structuredContent).toEqual(
-      await meetingsList(
-        store,
-        { accountId: 1, limit: 1, query: meetingsQuery("started_at:[1970-01-01 TO 1970-01-02]") },
-        1,
-      ),
+      await meetingsList(store, {
+        accountId: 1,
+        limit: 1,
+        query: meetingsQuery("started_at:[1970-01-01 TO 1970-01-02]"),
+      }),
     )
     expect(list.structuredContent).toMatchObject({ items: [{ id: String(d.meeting.id) }] })
     const show = await callMeetingTool(store, "meeting_show", { meeting: d.meeting.id })
@@ -228,9 +228,9 @@ it("pagination detects the next page and readers validate arguments", async () =
   const first = await meetingsList(store, { limit: 1 })
   expect(first.page.has_more).toBe(true)
   expect(first.next).toMatchObject([{ step: "page.next", command: "meetings list", args: { page: 2, limit: 1 } }])
-  expect((await meetingsList(store, { limit: 1 }, 2)).page.has_more).toBe(false)
+  expect((await meetingsList(store, { limit: 1, offset: 1 })).page.has_more).toBe(false)
   await expect(meetingDetailsAnswer(store, -1)).rejects.toThrow()
-  await expect(meetingsList(store, {}, 0)).rejects.toThrow()
+  await expect(meetingsList(store, { offset: -100 })).rejects.toThrow()
   const saved = await store.meeting((await store.meetings())[0]?.id ?? 0)
   if (!saved) throw new Error("Missing meeting")
   await expect(meetingDetailsAnswer(store, saved.meeting.id, 2)).rejects.toThrow(/not found/)

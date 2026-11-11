@@ -90,7 +90,7 @@ describe("searchNotes with pictures", () => {
     const found = await searchNotes(store, "cat", { pictures: true, pictureEmbedder: embedder, folderIds: [folder.id] })
     expect(found.pictures).toEqual([{ ref: cat, score: 1 }])
     const off = await searchNotes(store, "cat", { pictureEmbedder: embedder, folderIds: [folder.id] })
-    expect(found.hits).toEqual(off.hits)
+    expect(found.items).toEqual(off.items)
     expect(off).not.toHaveProperty("pictures")
     expect(off).not.toHaveProperty("pictures_skipped")
   })

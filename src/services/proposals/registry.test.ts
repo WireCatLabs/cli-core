@@ -215,7 +215,7 @@ describe("the proposal registry", () => {
     const kind: ProposalKind = {
       kind: "person_merge",
       prefix: "person_merge",
-      list: async () => [merge],
+      list: async () => ({ items: [merge], hasMore: false }),
       get: async () => merge,
       decide: async (id) => ({ id, kind: "person_merge", status: "confirmed", made: [] }),
     }

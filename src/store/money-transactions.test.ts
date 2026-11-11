@@ -136,8 +136,12 @@ it("splits a transaction by category within its amount and totals the categories
     { category: "Хозяйство", amount: "150.00", currency: "RUB" },
     { category: null, amount: "150.00", currency: "RUB" },
   ])
-  expect((await f.store.transactions.list({ category: "ПРОДУКТЫ" })).map((one) => one.ref)).toEqual([groceries.ref])
-  expect((await f.store.transactions.list({ uncategorized: true })).map((one) => one.ref)).toEqual([groceries.ref])
+  expect((await f.store.transactions.list({ category: "ПРОДУКТЫ" })).items.map((one) => one.ref)).toEqual([
+    groceries.ref,
+  ])
+  expect((await f.store.transactions.list({ uncategorized: true })).items.map((one) => one.ref)).toEqual([
+    groceries.ref,
+  ])
 })
 
 it("lets an agent change only its own proposed transaction, and only the owner decide it", async () => {

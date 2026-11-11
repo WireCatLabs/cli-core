@@ -202,7 +202,7 @@ it("takes a CRM role beside the owner's confirmed one as another relationship, a
     ["contact", "confirmed"],
     ["decision-maker", "reported"],
   ])
-  expect(await store.proposedActions.list({ kinds: ["relationship_update"] })).toEqual([])
+  expect((await store.proposedActions.list({ kinds: ["relationship_update"] })).items).toEqual([])
 })
 
 it("keeps a contact the owner separated apart through every sync, and names the person after the contact", async () => {
@@ -233,7 +233,7 @@ it("with the account set to review, writes what the CRM reports as proposals, on
   const deal = (await store.crm.refOf(PORTAL, "deal", "d1")) as string
   expect(await store.knowledge.relations(null, deal)).toEqual([])
   const proposed = await store.proposedActions.list({ kinds: ["relationship"], status: "proposed" })
-  expect(proposed.map(({ payload }) => (payload as { kind: string }).kind).sort()).toEqual([
+  expect(proposed.items.map(({ payload }) => (payload as { kind: string }).kind).sort()).toEqual([
     "member-of",
     "member-of",
     "member-of",
@@ -245,7 +245,7 @@ it("with the account set to review, writes what the CRM reports as proposals, on
     "reports-to",
   ])
   await sync()
-  expect(await store.proposedActions.list({ kinds: ["relationship"], status: "proposed" })).toHaveLength(9)
+  expect((await store.proposedActions.list({ kinds: ["relationship"], status: "proposed" })).items).toHaveLength(9)
   const alice = await person("alice@acme.example")
   expect(alice).toMatch(/^person:/)
 })

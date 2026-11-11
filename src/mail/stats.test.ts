@@ -58,7 +58,7 @@ describe("mail stats", () => {
   it("**counts mail received and sent** per day, week and sender, in the timezone, and records no search", async () => {
     const { store } = await seeded()
     const runAs = { provider: "memo", account: "local" }
-    const searches = async () => (await store.searches.searchHistory(100)).length
+    const searches = async () => (await store.searches.searchHistory(100)).items.length
     const before = await searches()
 
     const days = await mailStats(store, runAs, { by: "day", timezone: "Europe/Madrid", limit: 30 })

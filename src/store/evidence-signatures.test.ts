@@ -256,7 +256,7 @@ describe("citing evidence", () => {
           author: "owner",
         }),
       ).rejects.toMatchObject({ code: "validation_error", details: { reason: "evidence.quote-length" } })
-    expect(await f.store.memories.list()).toEqual([])
+    expect((await f.store.memories.list()).items).toEqual([])
   })
 
   it("refuses a quote the source never said, and takes one where the store keeps no text", async () => {
@@ -266,7 +266,7 @@ describe("citing evidence", () => {
       code: "validation_error",
       details: { reason: "evidence.quote-not-found" },
     })
-    expect(await f.store.memories.list()).toEqual([])
+    expect((await f.store.memories.list()).items).toEqual([])
     const project = await f.store.knowledge.addProject({ name: "Harbour" })
     expect((await f.cite({ type: "project", id: Number(project.id) }, "anything")).stored).toMatchObject({
       quote: "anything",

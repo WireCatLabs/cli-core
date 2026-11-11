@@ -723,8 +723,9 @@ const search = (database: CacheDatabase, query: string, filter: MeetingFilter = 
     }
     const scopes = ["transcript", "chat", "summary"] as const
     const [limit, offset] = page(filter)
-    const beyond = filtered({ ...filter, limit: 1, offset: offset + limit })
-    const hasMore = limit >= 0 && database.prepare(`SELECT 1 FROM (${beyond.sql})`).get(...beyond.params) !== undefined
+    const beyond = limit < 0 ? undefined : filtered({ ...filter, limit: 1, offset: offset + limit })
+    const hasMore =
+      beyond !== undefined && database.prepare(`SELECT 1 FROM (${beyond.sql})`).get(...beyond.params) !== undefined
     const items = rows.map((row): SearchHit => {
       const scope = scopes[Number(row.kind)] as SearchHit["scope"]
       const cue =

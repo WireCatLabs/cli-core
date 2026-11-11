@@ -101,7 +101,7 @@ it("refuses a total that is not the sum of the lines, and a line whose amount is
       lines: [{ description: "Часы", quantity: "1.5", unitPrice: "1000.00", amount: "1400.00" }],
     }),
   ).rejects.toMatchObject({ details: { reason: "finance.line-amount" } })
-  expect(await f.store.finance.invoices()).toEqual([])
+  expect((await f.store.finance.invoices()).items).toEqual([])
 })
 
 it("derives the status from confirmed allocations and keeps open totals per currency", async () => {
@@ -121,9 +121,9 @@ it("derives the status from confirmed allocations and keeps open totals per curr
 
   await f.payment("30000.00", { allocations: [{ invoice: invoice.ref, amount: "30000.00" }] })
   expect(await f.store.finance.invoice(invoice.ref)).toMatchObject({ status: "paid", open: "0.00" })
-  expect(await f.store.finance.invoices({ open: true })).toEqual([])
-  expect((await f.store.finance.invoices({ number: "42" })).map((one) => one.ref)).toEqual([invoice.ref])
-  expect(await f.store.finance.invoices({ number: "4" })).toEqual([])
+  expect((await f.store.finance.invoices({ open: true })).items).toEqual([])
+  expect((await f.store.finance.invoices({ number: "42" })).items.map((one) => one.ref)).toEqual([invoice.ref])
+  expect((await f.store.finance.invoices({ number: "4" })).items).toEqual([])
   expect((await f.store.finance.openTotals({ project: f.project.ref })).receivable).toEqual([])
   await expect(f.store.finance.voidInvoice(invoice.ref, "owner")).rejects.toMatchObject({
     details: { reason: "finance.status" },

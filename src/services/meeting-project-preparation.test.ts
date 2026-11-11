@@ -61,13 +61,13 @@ it.each(["example-calendar", "another-calendar"])(
       "Bureau Example",
       "Гавань Пример",
     ])
-    expect(section?.pages[0]?.hits).toEqual([])
-    expect(section?.pages[1]?.hits[0]?.ref).toBe(section?.pages[2]?.hits[0]?.ref)
+    expect(section?.pages[0]?.items).toEqual([])
+    expect(section?.pages[1]?.items[0]?.ref).toBe(section?.pages[2]?.items[0]?.ref)
     expect(section?.coverage).toEqual({ pageLimit: 4, hasMore: true, outputLimited: false })
     for (const page of section?.pages ?? []) {
       expect(page.association).toBe("unconfirmed-word-evidence")
       expect(
-        page.hits.every(
+        page.items.every(
           (hit) => hit.meetingId === f.candidate.meeting.id && hit.ref.startsWith(`meeting:${f.accountId}/`),
         ),
       ).toBe(true)
@@ -90,7 +90,7 @@ it.each(["example-calendar", "another-calendar"])(
       cursor: continuation.cursor,
     })
     expect(page.term).toMatchObject({ name: "ПРИ", kind: "alias" })
-    expect(page.hits.some((hit) => hit.source?.title === "ПРИ" && hit.scope === "transcript")).toBe(true)
+    expect(page.items.some((hit) => hit.source?.title === "ПРИ" && hit.scope === "transcript")).toBe(true)
     expect(await f.store.knowledge.vocabulary({ kind: "project" })).toEqual(vocabulary)
     expect(
       (await f.store.knowledge.meetingProjects(f.key, { meetingId: String(f.candidate.meeting.id) })).items,
@@ -212,7 +212,7 @@ it("finishes a one-name vocabulary and exposes byte failures without converting 
   const f = await fixture()
   await f.store.knowledge.addProject({ name: "ONE", key: "ONE" })
   const result = await f.service.prepare("example-series", { ...f.request, project: "ONE" })
-  expect(result.projectEvidence).toMatchObject({ pages: [{ hits: [], hasMore: false }], coverage: { hasMore: false } })
+  expect(result.projectEvidence).toMatchObject({ pages: [{ items: [], hasMore: false }], coverage: { hasMore: false } })
   expect(meetingPreparationAnswer(result).item.project_evidence?.continuation).toBeNull()
   const read = vi
     .spyOn(f.store.knowledge, "resolveVocabulary")
@@ -226,7 +226,7 @@ it("finishes a one-name vocabulary and exposes byte failures without converting 
 it("bounds the escaped MCP item and rewinds continuation to the last retained page", async () => {
   const f = await fixture()
   const packet = await f.service.prepare("example-series", { ...f.request, project: "HAR" })
-  const hit = packet.projectEvidence?.pages[1]?.hits[0]
+  const hit = packet.projectEvidence?.pages[1]?.items[0]
   if (!hit) throw Error("missing invented hit")
   hit.text = "\u200e".repeat(1000)
   const normal = meetingPreparationAnswer(packet)

@@ -67,8 +67,8 @@ describe("tasks made in the store", () => {
       ["due", { due_at: [null, "2026-10-20T00:00:00.000Z"] }],
       ["status", { status: ["open", "done"] }],
     ])
-    expect((await store.tasks.find({ project: "LHT", type: "bug" })).map((task) => task.id)).toEqual(["LHT-1"])
-    expect((await store.tasks.find({ assignee: "person:21" })).map((task) => task.id)).toEqual(["LHT-1"])
+    expect((await store.tasks.find({ project: "LHT", type: "bug" })).items.map((task) => task.id)).toEqual(["LHT-1"])
+    expect((await store.tasks.find({ assignee: "person:21" })).items.map((task) => task.id)).toEqual(["LHT-1"])
     await store.close()
   })
 

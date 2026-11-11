@@ -63,7 +63,7 @@ describe("persistent atomic transcript append", () => {
     const reopened = await openStore({ path })
     opened.push(reopened)
     expect(await reopened.meetings.meeting(saved.meeting.id)).toEqual(result)
-    expect((await reopened.meetings.search("example", { accountId })).length).toBeGreaterThan(0)
+    expect((await reopened.meetings.search("example", { accountId })).items.length).toBeGreaterThan(0)
   })
 
   it("rolls back creation, prior supersession and index queues on a later SQL failure", async () => {

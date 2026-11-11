@@ -54,7 +54,7 @@ it("rewrites the query trees of saved searches, rankings and runs stored before 
     expect(JSON.stringify((await upgraded.searches.storedSearch("words"))?.params)).toBe(text.params)
 
     await upgraded.searches.recordSearch(after)
-    const runs = (await upgraded.searches.searchHistory(10)).filter((one) => one.name === null)
+    const runs = (await upgraded.searches.searchHistory(10)).items.filter((one) => one.name === null)
     expect(runs.map((one) => one.runs)).toEqual([2])
   } finally {
     await upgraded.close()

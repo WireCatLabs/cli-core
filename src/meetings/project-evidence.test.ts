@@ -19,7 +19,7 @@ const page = (): MeetingProjectDiscoveryPage => ({
   limits: { limit: 2, maxReadBytes: 1024, maxVocabularyReadBytes: 1048576, maxTerms: 32 },
   project: { id: "7", name: "Research Example", key: "RES" },
   term: { name: "исследование", kind: "alias", aliasId: "9" },
-  hits: [{ ref: "meeting:1/2/3/0", meetingId: 2, scope: "transcript", id: 5, text: "launch", startMs: 1000 }],
+  items: [{ ref: "meeting:1/2/3/0", meetingId: 2, scope: "transcript", id: 5, text: "launch", startMs: 1000 }],
   association: "unconfirmed-word-evidence",
   vocabularyFingerprint: "sample-fingerprint",
   hasMore: true,
@@ -115,7 +115,7 @@ it("CLI and MCP retain the complete registered evidence entity and replay every 
 })
 
 it("empty name pages keep continuation and exhausted pages omit it", async () => {
-  const empty = { ...page(), hits: [] }
+  const empty = { ...page(), items: [] }
   const read = vi.fn(async () => empty)
   const found = await readMeetingProjectEvidence(read, "RES")
   expect(found.item.hits).toEqual([])

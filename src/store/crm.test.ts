@@ -95,7 +95,9 @@ it("saves a deal with its status from its stage, its company as an organization 
     },
   ])
   expect(saved).toEqual({ saved: 1, skipped: [] })
-  const [deal] = await store.deals.list({ account: PORTAL, kind: "deal" })
+  const {
+    items: [deal],
+  } = await store.deals.list({ account: PORTAL, kind: "deal" })
   expect(deal).toMatchObject({
     title: "Website",
     stage: "Won",
@@ -154,7 +156,7 @@ it("marks deleted what the CRM deleted or no longer lists, never a row changed s
   expect(await store.crm.removeUnlisted(PORTAL, "deal", [], 5_000, { dryRun: true })).toBe(1)
   expect(await store.crm.count(PORTAL, "deal")).toBe(2)
   expect(await store.crm.removeUnlisted(PORTAL, "deal", [], 5_000)).toBe(1)
-  expect((await store.deals.list({ account: PORTAL })).map(({ externalId }) => externalId)).toEqual(["d3"])
+  expect((await store.deals.list({ account: PORTAL })).items.map(({ externalId }) => externalId)).toEqual(["d3"])
   await store.crm.saveItems(PORTAL, "deal", [item("d1", 10_000)])
   expect(await store.crm.count(PORTAL, "deal")).toBe(2)
 })
@@ -166,7 +168,9 @@ it("follows a company's new name on the organization it made for it", async () =
     { externalId: "d1", title: "x", pipeline: "p1", stage: "s1", organization: "c1" },
   ])
   await store.crm.saveOrganizations(PORTAL, [{ externalId: "c1", name: "New name" }])
-  const [deal] = await store.deals.list({ account: PORTAL })
+  const {
+    items: [deal],
+  } = await store.deals.list({ account: PORTAL })
   expect(deal?.organization?.name).toBe("New name")
 })
 
@@ -174,7 +178,9 @@ it("leaves a CRM's copies to the CRM: the owner's writes neither find its stages
   const store = await open()
   await store.crm.saveItems(PORTAL, "deal", [{ externalId: "d1", title: "x", pipeline: "p1", stage: "s1" }])
   await expect(store.deals.add({ by: "owner", title: "Mine", stage: "Quote" })).rejects.toThrow(/no stage named Quote/)
-  const [copy] = await store.deals.list({ account: PORTAL })
+  const {
+    items: [copy],
+  } = await store.deals.list({ account: PORTAL })
   await expect(store.deals.move(copy?.ref as string, { stage: "Quote", by: "owner" })).rejects.toThrow(
     /change it there/,
   )
@@ -201,7 +207,9 @@ it("takes a deal's own status over its stage's outcome, as a CRM that keeps won 
     },
     { externalId: "d3", title: "No status of its own", pipeline: "p1", stage: "s3" },
   ])
-  const byId = Object.fromEntries((await store.deals.list({ account: PORTAL })).map((one) => [one.externalId, one]))
+  const byId = Object.fromEntries(
+    (await store.deals.list({ account: PORTAL })).items.map((one) => [one.externalId, one]),
+  )
   expect(byId.d1).toMatchObject({ stage: "Quote", status: "won", closedDate: "2026-10-30" })
   expect(byId.d2).toMatchObject({ stage: "Quote", status: "lost", closedDate: "2026-10-31" })
   expect(byId.d3).toMatchObject({ stage: "Won", status: "won" })
@@ -234,7 +242,9 @@ it("leaves out a pipeline the CRM no longer lists, keeps its deals, lists it aga
   expect(await store.deals.pipelines({ account: PORTAL })).toHaveLength(1)
   await store.crm.savePipelines(PORTAL, "deal", [{ ...SALES, externalId: "p2", name: "Other" }])
   expect((await store.deals.pipelines({ account: PORTAL })).map(({ name }) => name)).toEqual(["Other"])
-  const [deal] = await store.deals.list({ account: PORTAL })
+  const {
+    items: [deal],
+  } = await store.deals.list({ account: PORTAL })
   expect(deal).toMatchObject({ externalId: "d1", pipelineName: "Sales" })
   expect((await store.deals.pipeline(deal?.pipeline as string)).name).toBe("Sales")
   await store.crm.savePipelines(PORTAL, "deal", [SALES])

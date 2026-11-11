@@ -79,7 +79,7 @@ describe("payment findings", () => {
       reason: "1 200 EUR to us from organization:1 for September (paid)",
       evidence: [ASK, REMINDER],
     })
-    expect(await f.store.facts.list({})).toEqual([])
+    expect((await f.store.facts.list({})).items).toEqual([])
   })
 
   it("make an expected one an invoice that a paid one settles, and a cancelled one void another", async () => {
@@ -182,9 +182,13 @@ describe("payment facts", () => {
 
     const upgraded = await openStore({ path })
     opened.push(upgraded)
-    const [invoice] = await upgraded.finance.invoices({})
+    const {
+      items: [invoice],
+    } = await upgraded.finance.invoices({})
     expect(invoice).toMatchObject({ review: "confirmed", total: "1200.00", project: project.ref, status: "issued" })
-    const [moved] = await upgraded.finance.payments({})
+    const {
+      items: [moved],
+    } = await upgraded.finance.payments({})
     expect(moved).toMatchObject({
       review: "proposed",
       amount: "1200.00",
@@ -194,7 +198,7 @@ describe("payment facts", () => {
     expect((await upgraded.finance.payment(moved?.ref ?? "")).allocations).toMatchObject([{ invoice: invoice?.ref }])
     await upgraded.finance.confirm(moved?.ref ?? "", "owner")
     expect((await upgraded.finance.invoice(invoice?.ref ?? "")).status).toBe("paid")
-    expect((await upgraded.facts.list({})).map((one) => [one.ref, one.type])).toEqual([[vague.ref, "statement"]])
+    expect((await upgraded.facts.list({})).items.map((one) => [one.ref, one.type])).toEqual([[vague.ref, "statement"]])
   })
 })
 

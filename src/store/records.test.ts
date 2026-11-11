@@ -53,7 +53,7 @@ it("imports a payment once as a proposal, and the same import again writes nothi
   const row = await store.finance.payment(first.proposed[0] as string)
   expect(row).toMatchObject({ review: "proposed", amount: "50000.00", payer: { name: "ООО Ромашка" } })
   expect(row.author).toMatchObject({ type: "bot", name: "import" })
-  expect(await store.finance.payments({ review: "confirmed" })).toEqual([])
+  expect((await store.finance.payments({ review: "confirmed" })).items).toEqual([])
   const inbox = await proposalRegistry(store).list({ kinds: ["payment"], limit: 10, offset: 0 })
   expect(inbox.items.map((item) => item.id)).toEqual(first.proposed)
   expect(await store.records.get({ ...SOURCE, type: "payment", externalId: "п-1" })).toMatchObject({
@@ -110,7 +110,9 @@ it("never links an organization by its name: it makes one, which the owner may r
   const made = await store.records.get({ ...SOURCE, type: "organization", externalId: "клиент-7" })
   expect(made).toMatchObject({ createdEntity: true, entity: expect.stringMatching(/^organization:\d+$/) })
   expect(made?.entity).not.toBe(romashka.ref)
-  const [invoice] = await store.finance.invoices()
+  const {
+    items: [invoice],
+  } = await store.finance.invoices()
   expect(invoice).toMatchObject({ review: "proposed", total: "50000.00", counterparty: { ref: made?.entity } })
 
   const remapped = await store.records.map(
@@ -120,7 +122,9 @@ it("never links an organization by its name: it makes one, which the owner may r
   )
   expect(remapped).toMatchObject({ entity: romashka.ref, createdEntity: false, unused: made?.entity })
   expect(await store.finance.invoice(invoice?.ref as string)).toMatchObject({ counterparty: { ref: romashka.ref } })
-  const [paid] = await store.finance.payments()
+  const {
+    items: [paid],
+  } = await store.finance.payments()
   expect(await store.finance.payment(paid?.ref as string)).toMatchObject({
     review: "proposed",
     allocations: [expect.objectContaining({ invoice: invoice?.ref, amount: "30000.00" })],
@@ -165,7 +169,7 @@ const mapped = async () => {
 const allocationsOf = async (store: Awaited<ReturnType<typeof openStore>>, externalId: string) => {
   const record = await store.records.get({ ...SOURCE, type: "payment", externalId })
   const { allocations } = await store.finance.payment(record?.entity as string)
-  const numbers = new Map((await store.finance.invoices()).map((one) => [one.ref, one.number]))
+  const numbers = new Map((await store.finance.invoices()).items.map((one) => [one.ref, one.number]))
   return allocations.map((one) => `${numbers.get(one.invoice)} ${one.amount}`).sort()
 }
 
@@ -199,7 +203,9 @@ it("never lets one batch of proposed payments cover an invoice more than once", 
   )
   expect(receipt).toMatchObject({ created: 5, refused: 0 })
   expect(await allocationsOf(store, "PA-3")).toEqual(["SEO-03 13000.00"])
-  const [seo] = await store.finance.invoices()
+  const {
+    items: [seo],
+  } = await store.finance.invoices()
   const allocated = (await store.finance.invoice(seo?.ref as string)).allocations.map((one) => Number(one.amount))
   expect(allocated.reduce((sum, one) => sum + one, 0)).toBe(75000)
   for (const ref of receipt.proposed.filter((one) => one.startsWith("payment:")))
@@ -283,7 +289,7 @@ it("keeps minor units exact for RUB and JPY and refuses more decimals than the c
   expect(receipt.errors).toEqual([
     expect.objectContaining({ pointer: "/records/2/fields", code: "money.amount", key: "payment-jpy-cents" }),
   ])
-  const amounts = (await store.finance.payments()).map(({ amount, currency }) => `${amount} ${currency}`).sort()
+  const amounts = (await store.finance.payments()).items.map(({ amount, currency }) => `${amount} ${currency}`).sort()
   expect(amounts).toEqual(["1234567.89 RUB", "150000 JPY"])
 })
 
@@ -291,7 +297,7 @@ it("deletes softly and flags the entity, refuses secrets and another account, an
   const { store } = await fixture()
   const dry = await take(store, envelope([payment("1", { amount: "10.00" })]), true)
   expect(dry).toMatchObject({ dryRun: true, created: 1, proposed: [expect.stringMatching(/^payment:/)] })
-  expect(await store.finance.payments()).toEqual([])
+  expect((await store.finance.payments()).items).toEqual([])
   expect(await store.records.get({ ...SOURCE, type: "payment", externalId: "1" })).toBeUndefined()
 
   const made = await take(store, envelope([payment("1", { amount: "10.00" })]))

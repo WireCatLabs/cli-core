@@ -97,7 +97,7 @@ const vectors = async (store: MessageStore, near: (text: string) => boolean = ()
 
 const search = async (store: MessageStore, query: string, options: Parameters<typeof searchNotes>[2] = {}) => {
   const found = await searchNotes(store, query, { env, embedders, timezone: "UTC", ...options })
-  return { ...found, titles: found.hits.map(({ title }) => title).sort() }
+  return { ...found, titles: found.items.map(({ title }) => title).sort() }
 }
 
 describe("field terms in the query hold for hits found by meaning", () => {
@@ -117,7 +117,7 @@ describe("field terms in the query hold for hits found by meaning", () => {
     const found = await search(store, "plan tag:work")
     expect(found.by).toBe("words and meaning")
     expect(found.titles).toEqual(["Harbour plan", "Kitchen"])
-    expect(found.hits.find(({ title }) => title === "Kitchen")?.found_by).toEqual(["meaning"])
+    expect(found.items.find(({ title }) => title === "Kitchen")?.found_by).toEqual(["meaning"])
     expect((await search(store, "plan")).titles).toEqual(["Garden plan", "Harbour plan", "Holiday", "Kitchen"])
     expect((await search(store, "plan date>=2026-10-03")).titles).toEqual(["Holiday", "Kitchen"])
   })
@@ -153,7 +153,7 @@ describe("field terms in the query hold for hits found by meaning", () => {
     const store = await seeded(notes)
     await vectors(store, (text) => text.includes("lighthouse"))
     const found = await search(store, "beacon", { filter: "tag:work" })
-    expect(found.hits[0]).toMatchObject({ title: "Lighthouse", found_by: ["meaning"] })
+    expect(found.items[0]).toMatchObject({ title: "Lighthouse", found_by: ["meaning"] })
   })
 })
 
@@ -183,7 +183,7 @@ describe("meaning inside a narrow filter", () => {
     const store = await crowded()
     const found = await search(store, "beacon tag:work")
     expect(found.titles).toEqual(["Inside 0", "Inside 1", "Inside 2"])
-    expect(found.hits.every(({ found_by }) => found_by.includes("meaning"))).toBe(true)
+    expect(found.items.every(({ found_by }) => found_by.includes("meaning"))).toBe(true)
     expect(found.total).toEqual({ value: 3, relation: "eq" })
   })
 

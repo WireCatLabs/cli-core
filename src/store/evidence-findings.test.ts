@@ -229,8 +229,8 @@ it("reads a batch closed with nothing accepted as rejected, and one with a findi
 
   expect(await f.store.proposedActions.get(none.id)).toMatchObject({ status: "rejected", result: { accepted: [] } })
   expect(await f.store.proposedActions.get(some.id)).toMatchObject({ status: "approved" })
-  expect((await f.store.proposedActions.list({ status: "rejected" })).map((one) => one.id)).toEqual([none.id])
-  expect((await f.store.proposedActions.list({ status: "approved" })).map((one) => one.id)).toEqual([some.id])
+  expect((await f.store.proposedActions.list({ status: "rejected" })).items.map((one) => one.id)).toEqual([none.id])
+  expect((await f.store.proposedActions.list({ status: "approved" })).items.map((one) => one.id)).toEqual([some.id])
   expect(await f.store.evidenceFindings.get(none.id)).toMatchObject({ status: "reviewed" })
 })
 

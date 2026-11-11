@@ -109,7 +109,7 @@ describe("ranking services and drilldown selection", () => {
   it("records repeatable ranking parameters rather than results", async () => {
     const { store, service } = await setup()
     const result = await service.top("contacts", { weights: { messages: 1, words: 0 }, minMessages: 2, limit: 10 })
-    const record = (await store.searches.searchHistory(1))[0]
+    const record = (await store.searches.searchHistory(1)).items[0]
     expect(record).toMatchObject({
       command: "author-top",
       params: { target: "contacts", weights: { messages: 1, words: 0 }, minMessages: 2 },

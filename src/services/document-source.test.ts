@@ -34,8 +34,8 @@ describe("imported document search provenance", () => {
         text: "synthetic budget evidence",
       })
       const found = await searchNotesOf(store, account, "budget", { accounts: "drive:personal", exact: true })
-      expect(found.hits).toHaveLength(1)
-      expect(noteHitItem(required(found.hits[0]))).toMatchObject({
+      expect(found.items).toHaveLength(1)
+      expect(noteHitItem(required(found.items[0]))).toMatchObject({
         ref: note.ref,
         kind: "document",
         provider: "drive",
@@ -55,10 +55,10 @@ describe("imported document search provenance", () => {
         kind: "document",
         provider: "drive",
         account: "personal",
-        url: found.hits[0]?.url,
+        url: found.items[0]?.url,
         timestamp: "2026-01-01T00:00:00.000Z",
       })
-      expect((await searchNotesOf(store, account, "budget", { accounts: "drive", exact: true })).hits).toHaveLength(1)
+      expect((await searchNotesOf(store, account, "budget", { accounts: "drive", exact: true })).items).toHaveLength(1)
     } finally {
       await store.close()
     }
@@ -76,13 +76,13 @@ describe("imported document search provenance", () => {
         frontMatter: { source: "google-drive", modifiedAt: "invalid" },
       })
       const found = await searchNotesOf(store, account, "budget", { accounts: `notes:${folder.id}`, exact: true })
-      expect(found.hits[0]).toMatchObject({
+      expect(found.items[0]).toMatchObject({
         kind: "document",
         provider: "notes",
         account: folder.id,
         updated_at: note.updatedAt,
       })
-      expect(found.hits[0]).not.toHaveProperty("url")
+      expect(found.items[0]).not.toHaveProperty("url")
     } finally {
       await store.close()
     }

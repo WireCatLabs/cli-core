@@ -26,13 +26,13 @@ describe("search notes --source", () => {
     const spy = vi.spyOn(store.notes, "search")
     const whole = await searchNotesOf(store, alpha, SHARED_WORD, { accounts: source, limit: 50 })
     expect(spy).toHaveBeenCalledTimes(2)
-    expect(new Set(whole.hits.map(accountOf))).toEqual(new Set(["internal", twins.alpha.folderId]))
+    expect(new Set(whole.items.map(accountOf))).toEqual(new Set(["internal", twins.alpha.folderId]))
     expect(whole.accounts.map(({ account }) => account)).toEqual(["internal", twins.alpha.folderId])
     expect(whole.skipped).toEqual([])
 
     const first = await searchNotesOf(store, alpha, SHARED_WORD, { accounts: source, limit: 2 })
     const rest = await searchNotesOf(store, alpha, SHARED_WORD, { accounts: source, limit: 50, offset: 2 })
-    expect([...first.hits, ...rest.hits].map(({ ref }) => ref)).toEqual(whole.hits.map(({ ref }) => ref))
+    expect([...first.items, ...rest.items].map(({ ref }) => ref)).toEqual(whole.items.map(({ ref }) => ref))
   })
 
   it("names an entry it cannot read in skipped, and fails when nothing fits", async () => {
@@ -41,7 +41,7 @@ describe("search notes --source", () => {
       accounts: `notes:${twins.bravo.folderId},synthetic:500`,
       limit: 50,
     })
-    expect(new Set(found.hits.map(accountOf))).toEqual(new Set([twins.bravo.folderId]))
+    expect(new Set(found.items.map(accountOf))).toEqual(new Set([twins.bravo.folderId]))
     expect(found.skipped).toEqual([
       { source: "synthetic:500", code: "validation_error", reason: "messenger messages — search messages reads them" },
     ])
@@ -59,7 +59,7 @@ describe("search notes --source", () => {
       accounts: `notes:internal,notes:${twins.alpha.folderId}`,
       limit: 50,
     })
-    expect(new Set(files.hits.map(accountOf))).toEqual(new Set([twins.alpha.folderId]))
+    expect(new Set(files.items.map(accountOf))).toEqual(new Set([twins.alpha.folderId]))
     expect(files.accounts.map(({ account }) => account)).toEqual([twins.alpha.folderId])
   })
 

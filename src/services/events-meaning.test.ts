@@ -109,7 +109,7 @@ describe("calendar events by meaning", () => {
     const found = await searchEvents(store, "kitten")
 
     expect(found.by).toBe("words and meaning")
-    expect(found.hits[0]).toMatchObject({ title: "cat", occurrences: 52, found_by: ["meaning"] })
+    expect(found.items[0]).toMatchObject({ title: "cat", occurrences: 52, found_by: ["meaning"] })
   })
 
   it("marks a hit found both ways once per series", async () => {
@@ -119,8 +119,8 @@ describe("calendar events by meaning", () => {
 
     const found = await searchEvents(store, "cat")
 
-    expect(found.hits).toHaveLength(1)
-    expect(found.hits[0]?.found_by).toEqual(["words", "meaning"])
+    expect(found.items).toHaveLength(1)
+    expect(found.items[0]?.found_by).toEqual(["words", "meaning"])
   })
 
   it("leaves meaning out, and says why, without the model, for --exact and for a query with fields", async () => {
@@ -166,7 +166,7 @@ describe("calendar events by meaning", () => {
     const meaning = async (account?: string) =>
       (
         await searchEvents(store, "kitten", account ? { accounts: [{ provider: "google-calendar", account }] } : {})
-      ).hits.map(({ title, found_by }) => [title, found_by])
+      ).items.map(({ title, found_by }) => [title, found_by])
 
     expect(await meaning()).toEqual([["cat", ["meaning"]]])
     expect(await meaning("owner-2")).toEqual([["cat", ["meaning"]]])

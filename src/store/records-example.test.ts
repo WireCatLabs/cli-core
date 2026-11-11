@@ -77,5 +77,5 @@ it("dry-runs the example: the receipt is the real one, and nothing is written", 
   expect(dry).toMatchObject({ dryRun: true, created: 10, refused: 0, waiting: [], errors: [] })
   expect(dry.proposed).toHaveLength(4)
   expect(await store.records.get({ ...KEY, type: "deal", externalId: "D-7" })).toBeUndefined()
-  expect(await store.finance.invoices()).toEqual([])
+  expect((await store.finance.invoices()).items).toEqual([])
 })

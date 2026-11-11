@@ -137,7 +137,7 @@ describe("free text with special characters", () => {
       const mail = await searchStore(store, ME, { text: query, kind: "mail", limit: 50 })
       expect(mail.items).not.toEqual([])
       const notes = await searchNotes(store, query, { limit: 50 })
-      expect(notes.hits.map(({ excerpt }) => excerpt).join("\n")).toContain((record as string).slice(0, 12))
+      expect(notes.items.map(({ excerpt }) => excerpt).join("\n")).toContain((record as string).slice(0, 12))
     },
   )
 

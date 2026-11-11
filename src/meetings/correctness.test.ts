@@ -42,7 +42,7 @@ it("rejects invalid read filters and unsafe page arithmetic before calling a sto
   await expect(meetingsList(store, { limit: Number.MAX_SAFE_INTEGER })).rejects.toMatchObject({
     code: "validation_error",
   })
-  await expect(meetingsList(store, { limit: 3 }, Number.MAX_SAFE_INTEGER)).rejects.toMatchObject({
+  await expect(meetingsList(store, { limit: 3, offset: Number.MAX_SAFE_INTEGER })).rejects.toMatchObject({
     code: "validation_error",
   })
 })

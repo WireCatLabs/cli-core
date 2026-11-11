@@ -127,8 +127,8 @@ describe("reviewed meeting findings", () => {
     const f = await fixture()
     const batch = await f.store.meetingFindings.stage(account, f.input, agent)
     expect(batch).toMatchObject({ status: "proposed", receipt: null, author: { name: agent.bot } })
-    expect(await f.store.facts.list()).toEqual([])
-    expect(await f.store.tasks.find({ project: f.project.ref })).toEqual([])
+    expect((await f.store.facts.list()).items).toEqual([])
+    expect((await f.store.tasks.find({ project: f.project.ref })).items).toEqual([])
     expect(await f.store.meetingFindings.stage(account, f.input, agent)).toEqual(batch)
     const decision = { fingerprint: batch.fingerprint, accept: ["decision", "followup"], by: "owner" as const }
     const reviewed = await f.store.meetingFindings.review(account, batch.id, decision)
@@ -155,8 +155,8 @@ describe("reviewed meeting findings", () => {
     expect(repeated.receipt?.items.map((x) => [x.reference, x.reused])).toEqual(
       reviewed.receipt?.items.map((x) => [x.reference, true]),
     )
-    expect(await f.store.facts.list()).toHaveLength(1)
-    expect(await f.store.tasks.find({ project: f.project.ref })).toHaveLength(1)
+    expect((await f.store.facts.list()).items).toHaveLength(1)
+    expect((await f.store.tasks.find({ project: f.project.ref })).items).toHaveLength(1)
   })
   it("reserves findings from generic proposal approval before any inbox task is made", async () => {
     const f = await fixture()
@@ -191,7 +191,7 @@ describe("reviewed meeting findings", () => {
         by: "owner",
       }),
     ).rejects.toThrow("already rejected")
-    expect(await f.store.facts.list()).toEqual([])
+    expect((await f.store.facts.list()).items).toEqual([])
   })
   it("rolls back all accepted records, task numbering and receipt when a later write fails", async () => {
     const f = await fixture()
@@ -206,7 +206,7 @@ describe("reviewed meeting findings", () => {
         by: "owner",
       }),
     ).rejects.toThrow("synthetic task failure")
-    expect(await f.store.facts.list()).toEqual([])
+    expect((await f.store.facts.list()).items).toEqual([])
     expect(await f.store.meetingFindings.get(account, batch.id)).toMatchObject({ status: "proposed", receipt: null })
     expect(f.db.prepare("SELECT tasks_count FROM projects WHERE id=?").get(Number(f.project.id))?.tasks_count).toBe(0)
   })
@@ -235,7 +235,7 @@ describe("reviewed meeting findings", () => {
     await f.store.accounts.saveAccount(other, { name: "Other" })
     await expect(f.store.meetingFindings.get(other, batch.id)).rejects.toThrow("unavailable")
     await expect(f.store.meetingFindings.stage(other, f.input, agent)).rejects.toThrow("another account")
-    expect(await f.store.facts.list()).toEqual([])
+    expect((await f.store.facts.list()).items).toEqual([])
   })
   it("requires date/assignee evidence, bounds payloads and rejects payload-supplied actors", async () => {
     const f = await fixture()

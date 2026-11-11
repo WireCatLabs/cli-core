@@ -216,7 +216,7 @@ describe("search answers", () => {
     const { store } = await setup()
     try {
       const refs = async (options: { tag?: string; filter?: string }) =>
-        (await searchNotes(store, "chapter", { limit: 10, ...options })).hits.map(({ ref }) => ref)
+        (await searchNotes(store, "chapter", { limit: 10, ...options })).items.map(({ ref }) => ref)
       const tagged = await refs({ tag: "work" })
       expect(tagged).toHaveLength(1)
       expect(await refs({ filter: "tag:work" })).toEqual(tagged)

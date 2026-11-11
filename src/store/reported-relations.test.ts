@@ -88,7 +88,7 @@ it("keeps counting what an account reported after the owner sets it to review, a
     const adviser = { from: alice, to: northstar, kind: "member-of" as const, role: "adviser" }
     const done = await store.relations.syncReported(SOURCE, [contact, adviser, { ...adviser, role: "owner" }], scope)
     expect(done).toMatchObject({ kept: 1, proposed: 2 })
-    expect(await store.proposedActions.list({ kinds: ["relationship"], status: "proposed" })).toHaveLength(2)
+    expect((await store.proposedActions.list({ kinds: ["relationship"], status: "proposed" })).items).toHaveLength(2)
   } finally {
     database.close()
   }

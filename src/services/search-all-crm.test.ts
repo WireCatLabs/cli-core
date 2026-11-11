@@ -107,7 +107,7 @@ const synced = async () => {
     deal("d5", "Подстанция КТП-630"),
   ])
   const refs = Object.fromEntries(
-    (await store.deals.list({ account: PORTAL })).map((one) => [one.externalId as string, one.ref]),
+    (await store.deals.list({ account: PORTAL })).items.map((one) => [one.externalId as string, one.ref]),
   )
   const find = async (text: string, extra: Partial<Parameters<typeof searchAll>[2]> = {}) =>
     searchAll(store, ME, { text, limit: 10, only: ["crm"], ...extra })
@@ -161,7 +161,9 @@ it("finds a lead with nobody linked by its own person and company, and shows the
       companyName: "ООО «Ромашка»",
     },
   ])
-  const [lead] = await store.deals.list({ kind: "lead", account: PORTAL })
+  const {
+    items: [lead],
+  } = await store.deals.list({ kind: "lead", account: PORTAL })
   expect(lead).toMatchObject({ contactName: "Иван Петров", companyName: "ООО «Ромашка»", organization: null })
   expect((await find("Петрова")).items).toMatchObject([{ ref: lead?.ref, foundBy: ["words"] }])
   expect((await find("Ромашка")).items).toMatchObject([{ ref: lead?.ref }])

@@ -125,8 +125,8 @@ describe("what the memory review holds", () => {
 
     expect(await f.waiting()).toEqual([])
     expect((await f.store.knowledge.listRelations({ standing: "proposed" })).items).toEqual([])
-    expect((await f.store.memories.list({ limit: 10 })).length).toBe(0)
-    expect((await f.store.facts.list({ limit: 10 })).length).toBe(0)
+    expect((await f.store.memories.list({ limit: 10 })).items.length).toBe(0)
+    expect((await f.store.facts.list({ limit: 10 })).items.length).toBe(0)
   })
 
   it("keeps a file's owner as the account's report, read on the document and never waiting", async () => {
@@ -199,10 +199,10 @@ describe("what the memory review holds", () => {
     await f.registry.decide([mailBatch.id, meetingBatch.id], { confirm: true, by: "owner" })
 
     expect(await f.waiting()).toEqual([])
-    expect(await f.store.tasks.find({ status: "open", limit: 5 })).toMatchObject([
+    expect((await f.store.tasks.find({ status: "open", limit: 5 })).items).toMatchObject([
       { title: "Expect the signed lease from Ann by Friday" },
     ])
-    expect(await f.store.facts.list({ limit: 5 })).toMatchObject([
+    expect((await f.store.facts.list({ limit: 5 })).items).toMatchObject([
       { type: "decision", statement: "The launch moves to March" },
     ])
   })
