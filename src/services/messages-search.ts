@@ -31,7 +31,7 @@ import type { SearchFound, SearchQuery } from "./messages.js"
 import { accountsOfKind, listedAccounts, MAIL } from "./search-kind.js"
 
 const PERSON_FIELDS = new Set(["from", "to", "cc", "bcc"])
-const MAIL_FIELDS = new Set(["to", "cc", "bcc", "subject", "mailbox", "label", "is"])
+const MAIL_FIELDS = new Set(["to", "cc", "bcc", "subject", "mailbox", "label", "is", "list"])
 
 import {
   dateRange,
@@ -237,7 +237,8 @@ export const prepareLucene = async (
     const person = PERSON_FIELDS.has(node.field) && !(node.field === "from" && node.value.toLowerCase() === "me")
     if (person && node.operator === "wildcard")
       return anyOf(node, await sendersMatching(store, scopeAccounts, node.field, node.value), (sender) => ({ sender }))
-    if (person) return { ...node, resolution: { sender: await senderAmong(store, scopeAccounts, node.value) } }
+    if (person)
+      return { ...node, resolution: { sender: await senderAmong(store, scopeAccounts, node.value, node.field) } }
     if (node.field === "from") return { ...node, resolution: { outgoing: true } }
     if (node.field === "date")
       return {
@@ -487,13 +488,18 @@ export const searchLucene = async (
   const prepared = await prepareLucene(store, account, request, messenger)
   const execute = store.queries.matchQuery.bind(store.queries)
   const mailAccounts = prepared.scopeAccounts.filter(({ provider }) => provider === MAIL)
+  let mailLeftOut: SkippedSource | undefined
   const inMailTables = async () => {
     try {
       return await execute({ ...prepared.execution, accounts: mailAccounts, corpus: "mail" })
     } catch (error) {
-      // A messenger field (`kind:`, `topic:`) leaves mail out of a search that names messenger accounts too.
-      if (request.kind !== "mail" && error instanceof CliError && error.code === "validation_error")
+      // A messenger field (`kind:`, `topic:`) leaves mail out of a search that names messenger accounts too; any
+      // other refusal (`*word*` over a large mailbox) is said, or the answer would look complete.
+      if (request.kind !== "mail" && error instanceof CliError && error.code === "validation_error") {
+        if (error.details.reason !== "query.unsupported-field")
+          mailLeftOut = { source: MAIL, code: "validation_error", reason: error.message }
         return { items: [], hasMore: false }
+      }
       throw error
     }
   }
@@ -532,7 +538,9 @@ export const searchLucene = async (
     completeness,
     query: queryOf(prepared.timezone, request.newest, prepared.stemming),
     ...(coverage ? { coverage } : {}),
-    ...(prepared.skipped ? { skipped: prepared.skipped } : {}),
+    ...(prepared.skipped || mailLeftOut
+      ? { skipped: [...(prepared.skipped ?? []), ...(mailLeftOut ? [mailLeftOut] : [])] }
+      : {}),
     ...(request.kind === "mail"
       ? { accounts: mailAccounts.map(({ provider, account }) => ({ resource: "mail" as const, provider, account })) }
       : {}),

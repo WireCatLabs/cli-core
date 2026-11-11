@@ -96,8 +96,16 @@ Quoted `"*x*"` — phrase, literal name (как Lucene). topic принимае�
 subject wildcard: нужен literal prefix (FTS5 prefix query по email_words сужает), затем automaton по словам темы;
 без prefix — `query.unsupported-operator`. mailbox/label и tag: automaton по всем mailboxes/меткам хранилища;
 content/transcript: только `word*` (FTS5 prefix query). Implicit `word*` (только prefix) добавляет, как слово без поля,
-attachment_words (тексты и расшифровки) и attachment_name_words тем же prefix query; matchedIn считается по ним. Text `*word*` без literal prefix читает весь vocabulary: на синтетических 1M словах
-1–2 s (scan + automaton), поэтому остаётся под бюджетом expansions с подсказкой `word*`.
+attachment_words (тексты и расшифровки) и attachment_name_words тем же prefix query; matchedIn считается по ним.
+Text/exact wildcard в корпусе сообщений (не почта) с literal prefix короче 3 символов не читает vocabulary:
+самый длинный literal run (≥3 символов, после NFC и lowercase, без fold) ищется в `messages_fts` (trigram над
+`messages.text`, store с 2026-09-29), каждое е/ё в обоих написаниях (OR фраз, не больше 64 написаний).
+`*run*` из букв и цифр — точное SQL условие (подстрока текста = подстрока слова). Иная форма (`*run`, `*a*run`,
+`?`) — superset по trigram плюс проверка automaton по словам `normalize(text)`; выше candidate/body budgets —
+`query.too-large`. Trigram folds case, но не marks: й/и и accents как написаны. Нет run ≥3 или больше 64
+написаний — прежний vocabulary path. Почта, расшифровки и тексты файлов trigram не имеют (+113% к тексту почты),
+там text `*word*` без prefix читает весь vocabulary (1–2 s на 1M слов) и остаётся под бюджетом expansions
+с подсказкой `word*`.
 FIELD_VERSION не меняется: поля не переименованы, новый operator только расширяет принятые запросы.
 kind сохраняет dialog mapping; peerKind metadata различает bot/service без догадок по имени.
 filename/mime: до основного запроса страницами читаются имена/типы вложений в выбранных аккаунтах,
@@ -119,7 +127,7 @@ FIELD_VERSION не меняется: новое поле, ничего не пе
 страницы ответа. Legacy (`words.ts`) и `--backend` server search по-прежнему ищут только текст.
 FIELD_VERSION не меняется: поле `text` не переименовано, у слова без поля шире охват; сохранённые поиски
 разбираются заново и получают это поведение.
-Поля почты (to/cc/bcc/subject/mailbox/label/is): поиск без почтового аккаунта отвергает их
+Поля почты (to/cc/bcc/subject/mailbox/label/list/is): поиск без почтового аккаунта отвергает их
 (`query.unsupported-field`), в поиске по мессенджерам и почте сразу они совпадают только с почтой. label — синоним
 mailbox. is: `unread` — `emails.read = 0`, `read` — `emails.read = 1`, `starred` — `emails.flagged = 1`;
 NULL (импорт не знал состояния) не совпадает ни с одним значением, а NOT is:unread его включает (NOT coalesce).

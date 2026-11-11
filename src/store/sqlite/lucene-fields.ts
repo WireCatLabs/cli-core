@@ -93,13 +93,20 @@ export const wordMatch = (corpus: Corpus, match: string): Fragment => ({
   fts: match,
 })
 // The vocabulary is the whole store's, so a chat or date filter does not shorten it.
-const tooManyWords = ({ field, operator, value, span }: ResolvedPredicate, alone: boolean, prefix: string): never => {
+const tooManyWords = (
+  { field, operator, value, span }: ResolvedPredicate,
+  alone: boolean,
+  prefix: string,
+  mail: boolean,
+): never => {
   const term = `${field}:${operator === "regex" ? `/${value}/` : value}`
   const spelled = operator === "wildcard" ? value.replace(/[*?]+/gu, " ").trim().split(/\s+/u)[0] : ""
   // Measured on a synthetic 1M-word vocabulary: reading every word takes 1-2 s, the whole search's time.
   const instead =
     !prefix && spelled
-      ? `a pattern that starts with * reads every indexed word — write the start of the word: ${spelled}* (it also finds the word's other forms)`
+      ? mail
+        ? `a pattern that starts with * reads every indexed word — write the start of the word: ${spelled}* (it also finds the word's other forms)`
+        : `a pattern without three letters in a row reads every indexed word — write three or more between the stars, or the start of the word: ${spelled}*`
       : "use a longer prefix, or body:/…/ inside one chat"
   throw new CliError(
     "validation_error",
@@ -240,6 +247,51 @@ const stemmedText: FieldCompiler = (node, scope) => {
   )
 }
 
+/** A wildcard value's literal parts, split at its unescaped `*` and `?`. */
+const literalRuns = (value: string): string[] => {
+  const runs = [""]
+  const chars = [...value]
+  for (let at = 0; at < chars.length; at++) {
+    const c = chars[at] as string
+    if (c === "\\") runs[runs.length - 1] += chars[++at] ?? ""
+    else if (c === "*" || c === "?") runs.push("")
+    else runs[runs.length - 1] += c
+  }
+  return runs.filter(Boolean)
+}
+const MOST_YO_SPELLINGS = 64
+/** Every spelling of `run` with each е or ё as either: the trigram index keeps the text as written. */
+const yoSpellings = (run: string): string[] | undefined => {
+  let spellings = [""]
+  for (const c of run) {
+    spellings = spellings.flatMap((start) => (c === "е" || c === "ё" ? [`${start}е`, `${start}ё`] : [`${start}${c}`]))
+    if (spellings.length > MOST_YO_SPELLINGS) return undefined
+  }
+  return spellings
+}
+
+/**
+ * A pattern with no start to read the word list from (`*договор*`, `*ость`), in chat messages: the trigram index of
+ * their text finds where its longest part occurs, so a large store does not refuse it: the whole search took 0.5–1 s at
+ * 1M messages (cli-testing performance/search/infix-chat-text). `*part*` is answered by the index alone; any other shape is
+ * checked word by word. It folds case, not accents: the part matches as typed, ё and е either way.
+ */
+const insideWords = (node: ResolvedPredicate, automaton: Automaton, scope: FieldScope): Compiled | undefined => {
+  const typed = node.value.normalize("NFC").toLowerCase()
+  const [longest = ""] = literalRuns(typed).sort((a, b) => [...b].length - [...a].length)
+  const spellings = [...longest].length >= 3 ? yoSpellings(longest) : undefined
+  if (!spellings) return undefined
+  const fragment = bound(
+    "m.id IN (SELECT rowid FROM messages_fts WHERE messages_fts MATCH ?)",
+    spellings.map(quoted).join(" OR "),
+  )
+  if (/^\*+[\p{L}\p{N}]+\*+$/u.test(typed)) return always(fragment)
+  return {
+    fragment: { ...fragment, exact: false },
+    test: (text) => (normalize(text).match(/[\p{L}\p{N}]+/gu) ?? []).some((word) => automaton.test(word, scope.budget)),
+  }
+}
+
 const words: FieldCompiler = (node, scope) => {
   const { operator, value } = node
   const { corpus } = scope
@@ -263,13 +315,17 @@ const words: FieldCompiler = (node, scope) => {
   const cached = scope.expanded.get(pattern)
   if (cached) return { node, fragment: widened(cached) }
   const prefix = prefixOf(pattern)
+  if (!scope.mail && operator === "wildcard" && [...prefix].length < 3) {
+    const inside = insideWords(node, automaton, scope)
+    if (inside) return inside
+  }
   const terms = scope.database
     .prepare(
       `SELECT term FROM ${corpus.vocab} WHERE col='normalized_text'${prefix ? " AND term>=? AND term<=?" : ""} ORDER BY term LIMIT ?`,
     )
     .all(...(prefix ? [prefix, `${prefix}\u{10ffff}`] : []), QUERY_LIMITS.expansions + 1)
   if (scope.expand(terms.length) > QUERY_LIMITS.expansions)
-    tooManyWords(node, terms.length > QUERY_LIMITS.expansions, prefix)
+    tooManyWords(node, terms.length > QUERY_LIMITS.expansions, prefix, scope.mail)
   const matches = terms.flatMap(({ term }) => {
     scope.check()
     return automaton.test(String(term), scope.budget) ? [quoted(String(term))] : []
