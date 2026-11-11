@@ -18,6 +18,7 @@ import { FETCH, grantsAuthority, LOCAL_READ, LOCAL_WRITE, NO_EFFECTS } from "./e
 import { enrichmentConsentsCommand } from "./enrichment-consents-command.js"
 import { type Body, itemOf, listOf } from "./envelope.js"
 import { listQuery, nativeTerms, termField, typedQuery, withQuery } from "./list-query.js"
+import { localOnlyCommand } from "./local-only-command.js"
 import { harderConsentsCommand } from "./search-harder-consents-command.js"
 
 export const MODEL_CATALOGUE_QUERY = defineQuery({
@@ -177,6 +178,7 @@ export const modelCatalogueCommand = (app: AppIdentity, options: ModelCatalogueO
     models.addCommand(harderConsentsCommand(app, options))
     models.addCommand(providerKeysCommand(app, options))
     models.addCommand(aiModelCommand(app, options))
+    models.addCommand(localOnlyCommand(app, options))
   }
   if (options.jsonOption)
     for (const command of models.commands.flatMap((one) => (one.commands.length ? one.commands : [one])))

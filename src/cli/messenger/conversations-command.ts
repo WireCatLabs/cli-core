@@ -117,7 +117,7 @@ const conversationBuildCommand = (messenger: Messenger): Command =>
           await consents.remember(status.chat, identity)
         }
         await services.conversations.build(chat)
-        const request = openAnalysis(target, controller.signal)
+        const request = openAnalysis(target, controller.signal, context.env)
         return runAnalysis(
           services.conversations,
           chat,

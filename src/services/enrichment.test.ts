@@ -7,6 +7,7 @@ import { memoryKeyring } from "@wirecat/cli-base"
 import { afterEach, describe, expect, it } from "vitest"
 import { textModelsFile } from "../embeddings/models.js"
 import type { ModelAdapter, ModelRequest } from "../models/index.js"
+import { writeLocalOnly } from "../models/local-only.js"
 import { writeSharedSection } from "../store/shared-config.js"
 import { type MessageStore, openStore } from "../store/store.js"
 import { enrichmentState, enrichRecords, parseEnrichmentReply } from "./enrichment.js"
@@ -87,6 +88,30 @@ describe("enrichment", () => {
     expect(await enrichRecords(store, { env, ...model, key })).toEqual({ status: "off" })
     expect(model.requests).toEqual([])
     expect(readEnrichmentSetting(env)).toBeUndefined()
+  })
+
+  it("**refuses plain http to another computer**, and a hosted model under local only, sending nothing", async () => {
+    const { env, store } = await machine()
+    await store.notes.addNote({ text: "cat dog" })
+    const model = fakeModel(() => ({ facts: ["zebra"], questions: [] }))
+    writeEnrichmentSetting(env, {
+      provider: "openai",
+      model: "synthetic",
+      base_url: "http://192.0.2.10/v1",
+      consented_at: "2026-11-08T10:00:00.000Z",
+    })
+    expect(await enrichRecords(store, { env, ...model, key: () => "test-key" })).toMatchObject({
+      status: "stopped",
+      reason_id: "enrichment.address-refused",
+      failed: 0,
+    })
+    turnOn(env)
+    writeLocalOnly(env, true)
+    expect(await enrichRecords(store, { env, ...model, key: () => "test-key" })).toMatchObject({
+      reason_id: "enrichment.local-only",
+      enriched: 0,
+    })
+    expect(model.requests).toEqual([])
   })
 
   it("sends each record once, as untrusted data, and pays again only when its text changes", async () => {

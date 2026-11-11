@@ -65,7 +65,10 @@ export const embeddingTarget = (deps: ModelDeps, choice: ModelChoice = chosenTex
       installed: true,
       perBatch: PER_REQUEST * concurrency,
       open: async (): Promise<Embedder> =>
-        (await import("../embeddings/remote.js")).openRemote(remote, apiKey, { concurrency }),
+        (await import("../embeddings/remote.js")).openRemote(remote, apiKey, {
+          concurrency,
+          env: deps.env ?? process.env,
+        }),
     }
   }
   const model = textModel(choice, deps.env)

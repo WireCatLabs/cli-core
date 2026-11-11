@@ -1,7 +1,9 @@
 import { CliError, type KeyringStore } from "@wirecat/cli-base"
 import type { Ranking } from "@wirecat/cli-base/standards"
 import * as v from "valibot"
+import { modelAddressAllowed, onThisComputer } from "../models/endpoint.js"
 import { type ModelAdapter, type ModelRequest, type ModelUsage, modelGateway } from "../models/index.js"
+import { localOnly } from "../models/local-only.js"
 import type { AppIdentity } from "../ports/app.js"
 import { readSharedSection, writeSharedSection } from "../store/shared-config.js"
 import { keyLookup, keyVariable } from "./enrichment.js"
@@ -25,7 +27,9 @@ export const HARDER_MODELS: Readonly<Record<EnrichmentProvider, string>> = {
 /** The search lab's setup (cli-testing search-lab, "Haiku rerank"): the top 30, each cut to 400 characters. */
 export const HARDER_CANDIDATES = 30
 export const HARDER_CHARS = 400
-const TIMEOUT_MS = 5_000
+/** A hosted model answers in 1 to 2 s; a model on this computer's CPU can take tens of seconds for 30 hits. */
+export const HARDER_TIMEOUT_S = { hosted: 5, local: 60 } as const
+const TIMEOUT_SECTION = "search_harder_timeout_s"
 
 const Setting = v.strictObject({
   ...MODEL_CHOICE,
@@ -52,10 +56,32 @@ export const readHarderSetting = (env: NodeJS.ProcessEnv): HarderSetting | undef
 export const writeHarderSetting = (env: NodeJS.ProcessEnv, setting: HarderSetting | undefined): void =>
   writeSharedSection(enrichmentSettingPath(env), SECTION, setting === undefined ? undefined : v.parse(Setting, setting))
 
+// Its own key beside search_harder: an older tool reads that section strictly and would refuse a new field in it.
+const Timeout = v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(600))
+
+/** The owner's time limit in seconds, or `undefined` for the default by where the model runs. */
+export const readHarderTimeout = (env: NodeJS.ProcessEnv): number | undefined => {
+  const value = readSharedSection(enrichmentSettingPath(env), TIMEOUT_SECTION)
+  const checked = v.safeParse(Timeout, value)
+  return checked.success ? checked.output : undefined
+}
+
+export const writeHarderTimeout = (env: NodeJS.ProcessEnv, seconds: number | undefined): void =>
+  writeSharedSection(
+    enrichmentSettingPath(env),
+    TIMEOUT_SECTION,
+    seconds === undefined ? undefined : v.parse(Timeout, seconds),
+  )
+
+export const harderTimeoutSeconds = (env: NodeJS.ProcessEnv, endpoint: string): number =>
+  readHarderTimeout(env) ?? (onThisComputer(endpoint) ? HARDER_TIMEOUT_S.local : HARDER_TIMEOUT_S.hosted)
+
 export const HARDER_REASON_IDS = [
   "harder.no-consent",
   "harder.no-key",
   "harder.bad-setting",
+  "harder.local-only",
+  "harder.address-refused",
   "harder.later-page",
   "harder.too-few",
   "harder.timeout",
@@ -148,7 +174,10 @@ const REASON_TEXT: Record<HarderReasonId, string> = {
   "harder.bad-setting": "the search_harder setting cannot be read; nothing was sent",
   "harder.later-page": "--harder reorders the first page only; nothing was sent",
   "harder.too-few": "fewer than two hits to reorder; nothing was sent",
-  "harder.timeout": `the model did not answer within ${TIMEOUT_MS / 1000} s`,
+  "harder.address-refused":
+    "the address is plain http to another computer: use https, or http only on this computer; nothing was sent",
+  "harder.local-only": "local only is on and the model is not on this computer; nothing was sent",
+  "harder.timeout": "the model did not answer within the time limit",
   "harder.key-rejected": "the provider refused the key",
   "harder.unreachable": "the provider could not be reached",
   "harder.rate-limited": "the provider's rate limit was reached",
@@ -169,7 +198,15 @@ type Asking = HarderOptions & { env: NodeJS.ProcessEnv; now: number; command?: s
 
 /** The consent and key a call needs, or why nothing may be sent. */
 export type HarderAccess =
-  | { ready: true; provider: EnrichmentProvider; model: string; endpoint: string; custom: boolean; key?: string }
+  | {
+      ready: true
+      provider: EnrichmentProvider
+      model: string
+      endpoint: string
+      custom: boolean
+      timeoutMs: number
+      key?: string
+    }
   | { ready: false; provider: string; model: string; endpoint: string; reason_id: HarderReasonId; reason: string }
 
 const UNSET = {
@@ -200,6 +237,15 @@ export const harderAccess = ({ env, command, ...options }: Asking): HarderAccess
     endpoint: enrichmentEndpoint(setting),
     custom: setting.base_url !== undefined,
   }
+  if (!modelAddressAllowed(chosen.endpoint))
+    return {
+      ready: false,
+      ...chosen,
+      reason_id: "harder.address-refused",
+      reason: REASON_TEXT["harder.address-refused"],
+    }
+  if (!onThisComputer(chosen.endpoint) && localOnly(env))
+    return { ready: false, ...chosen, reason_id: "harder.local-only", reason: REASON_TEXT["harder.local-only"] }
   let key: string | undefined
   try {
     key = keyLookup({ env, ...options }, setting)?.key
@@ -219,22 +265,28 @@ export const harderAccess = ({ env, command, ...options }: Asking): HarderAccess
       reason_id: "harder.no-key",
       reason: `no ${setting.provider} key: \`${tool} models keys set ${setting.provider}\` or set ${keyVariable(setting.provider)}; nothing was sent`,
     }
-  return { ready: true, ...chosen, ...(key === undefined ? {} : { key }) }
+  return {
+    ready: true,
+    ...chosen,
+    timeoutMs: options.timeoutMs ?? harderTimeoutSeconds(env, chosen.endpoint) * 1000,
+    ...(key === undefined ? {} : { key }),
+  }
 }
 
-/** One call to the model under the 5 s limit; a failure comes back as its reason, never thrown. */
+/** One call to the model under the time limit; a failure comes back as its reason, never thrown. */
 const ask = async (
   access: Extract<HarderAccess, { ready: true }>,
-  options: HarderOptions,
+  options: HarderOptions & { env: NodeJS.ProcessEnv },
   request: Omit<ModelRequest, "options"> & { format?: typeof FORMAT },
 ): Promise<{ text: string; cost: number | null; usage?: ModelUsage } | { reason_id: HarderReasonId }> => {
   const limit = new AbortController()
-  const timer = setTimeout(() => limit.abort(), options.timeoutMs ?? TIMEOUT_MS)
+  const timer = setTimeout(() => limit.abort(), access.timeoutMs)
   const gateway = modelGateway({
     resolve: () => ({ provider: access.provider, model: access.model, baseUrl: access.endpoint }),
     consent: (_request, chosen) => chosen.provider === access.provider && chosen.baseUrl === access.endpoint,
     key: () => access.key,
     signal: limit.signal,
+    env: options.env,
     ...(options.adapters ? { adapters: options.adapters } : {}),
     ...(options.fetch ? { fetch: options.fetch } : {}),
   })

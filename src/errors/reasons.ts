@@ -72,6 +72,14 @@ const OTHERS: Entry[] = [
   ["model.offline", "permission_error", "downloading a model needs the network; --offline was requested"],
   ["model.key-rejected", "invalid_response", "the model provider refused the API key (401 or 403)"],
   ["model.unreachable", "invalid_response", "the model provider could not be reached over the network"],
+  validation("model.address-refused", "the model address must be https, or http only on this computer"),
+  [
+    "local-only.refused",
+    "permission_error",
+    "local only is on and the address is not on this computer; nothing was sent",
+  ],
+  ["local-only.owner-only", "permission_error", "only the owner turns local only off, not an agent"],
+  ["ai.images-not-allowed", "permission_error", "the AI model may not read pictures; models ai set --allow-remote"],
   [
     "ai.owner-only",
     "permission_error",

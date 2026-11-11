@@ -12,7 +12,7 @@ import { embeddingKeys, endpointKeyName } from "../embeddings/keys.js"
 import type { AppIdentity } from "../ports/app.js"
 import { storePath } from "../store/path.js"
 import { readSharedSection, sharedConfigPath, writeSharedSection } from "../store/shared-config.js"
-import { endpoint } from "./endpoint.js"
+import { modelAddressAllowed, onThisComputer } from "./endpoint.js"
 import { modelGateway } from "./index.js"
 import type { ModelTarget } from "./types.js"
 
@@ -32,15 +32,7 @@ const OFFICIAL: Readonly<Record<string, "openai" | "anthropic">> = {
 
 const SECTION = "ai"
 
-const loopback = (hostname: string) =>
-  hostname === "localhost" || hostname === "[::1]" || /^127(\.\d{1,3}){3}$/.test(hostname)
-
-/** https anywhere; plain http only to this computer, so neither the text nor the key crosses a network unencrypted. */
-export const aiAddressAllowed = (value: string): boolean => {
-  if (!endpoint(value)) return false
-  const url = new URL(value)
-  return url.protocol === "https:" || loopback(url.hostname)
-}
+export const aiAddressAllowed = modelAddressAllowed
 
 const consentShape = v.strictObject({
   origin: v.string(),
@@ -101,7 +93,7 @@ export const aiSettingOf = (given: {
       { reason: field === "base_url" ? "ai.address-refused" : "ai.setting-invalid" },
     )
   }
-  if (checked.output.provider === "ollama" && !loopback(new URL(aiBaseUrl(checked.output)).hostname))
+  if (checked.output.provider === "ollama" && !onThisComputer(aiBaseUrl(checked.output)))
     throw new CliError("validation_error", "Ollama is read only on this computer", { reason: "ai.address-refused" })
   return given.allowImages
     ? {
@@ -159,7 +151,10 @@ export const aiKeys = (app: AppIdentity, env: NodeJS.ProcessEnv, keyring?: Keyri
   }
 }
 
-export const aiNeedsKey = (setting: AiSetting): boolean => setting.provider !== "ollama"
+/** A model on this computer runs without a key; LM Studio or vLLM may still be given one. */
+export const aiNeedsKey = (setting: AiSetting): boolean => aiLeavesComputer(setting)
+
+export const aiTakesKey = (setting: AiSetting): boolean => setting.provider !== "ollama"
 
 export interface AiCallDeps {
   app: AppIdentity
@@ -170,13 +165,14 @@ export interface AiCallDeps {
 }
 
 const keyFor = (setting: AiSetting, deps: AiCallDeps) =>
-  aiNeedsKey(setting) ? aiKeys(deps.app, deps.env, deps.keyring).read(aiOrigin(setting))?.key : undefined
+  aiTakesKey(setting) ? aiKeys(deps.app, deps.env, deps.keyring).read(aiOrigin(setting))?.key : undefined
 
 const gatewayFor = (setting: AiSetting, deps: AiCallDeps, key: string | undefined) =>
   modelGateway({
     resolve: () => aiTarget(setting),
     consent: () => true,
     key: () => key,
+    env: deps.env,
     ...(deps.fetch ? { fetch: deps.fetch } : {}),
     ...(deps.signal ? { signal: deps.signal } : {}),
   })
@@ -216,7 +212,20 @@ export const aiImageReader = (
 }
 
 /** False only for a model on this computer: Ollama, or any address on loopback. */
-export const aiLeavesComputer = (setting: AiSetting): boolean => !loopback(new URL(aiBaseUrl(setting)).hostname)
+export const aiLeavesComputer = (setting: Pick<AiSetting, "provider" | "base_url">): boolean =>
+  !onThisComputer(aiBaseUrl(setting))
+
+/**
+ * The shared AI model as the target and key of a feature that has no model of its own configured (chat linking,
+ * replies, attachment OCR). The key is the one kept for its address, never another tool's.
+ */
+export const sharedModel = (
+  deps: Pick<AiCallDeps, "app" | "env" | "keyring">,
+): { target: ModelTarget & { baseUrl: string }; key: string | undefined; setting: AiSetting } | undefined => {
+  const setting = readAiSetting(aiSettingPath(deps.env))
+  if (!setting) return undefined
+  return { target: { ...aiTarget(setting), baseUrl: aiBaseUrl(setting) }, key: keyFor(setting, deps), setting }
+}
 
 export type AiTextRefusal = "ai.not-set" | "ai.key-missing"
 

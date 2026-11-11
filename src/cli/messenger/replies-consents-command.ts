@@ -1,7 +1,8 @@
 import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
-import { modelTarget } from "../../models/index.js"
+import { refuseModelAddress } from "../../models/local-only.js"
+import { purposeModel } from "../../models/purpose.js"
 import { readReplyConsent, replyConsentPathFor, replyModelIdentity, writeReplyConsent } from "../../replies/consents.js"
 import { grantsAuthority, LOCAL_READ, LOCAL_WRITE } from "../effects.js"
 import { renderItem } from "./chat-answers.js"
@@ -32,17 +33,19 @@ export const replyConsentsCommand = (messenger: Messenger): Command => {
           const path = replyConsentPathFor(messenger.app, settings.profile, env)
           const consent = readReplyConsent(path)
           if (grant) {
-            const target = modelTarget(settings, "replies")
-            if (!target)
+            const chosen = purposeModel(settings, "replies", {
+              app: messenger.app,
+              env,
+              keyring: context.keyring,
+            })
+            if (!chosen)
               throw new CliError(
                 "configuration_error",
-                "set models.replies.provider and models.replies.model before replies consents grant",
+                "set models.replies.provider and models.replies.model, or choose an AI model with `models ai set`, " +
+                  "before replies consents grant",
               )
-            consent.provider = replyModelIdentity(
-              target.provider,
-              target.baseUrl ??
-                (target.provider === "anthropic" ? "https://api.anthropic.com" : "https://api.openai.com/v1"),
-            )
+            refuseModelAddress(env, chosen.target.baseUrl, "incoming messages")
+            consent.provider = replyModelIdentity(chosen.target.provider, chosen.target.baseUrl)
           } else consent.provider = null
           writeReplyConsent(path, consent)
           renderItem(this, context, consent)

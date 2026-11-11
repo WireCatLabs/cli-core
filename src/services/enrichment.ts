@@ -1,7 +1,9 @@
 import { CliError, type KeyringStore } from "@wirecat/cli-base"
 import * as v from "valibot"
 import { embeddingKeys, endpointKeyName } from "../embeddings/keys.js"
+import { modelAddressAllowed, onThisComputer } from "../models/endpoint.js"
 import { type ModelAdapter, type ModelUsage, modelGateway } from "../models/index.js"
+import { localOnly } from "../models/local-only.js"
 import type { AppIdentity } from "../ports/app.js"
 import type { EnrichmentCandidate, EnrichmentNarrowing, EnrichmentStore, SavedEnrichment } from "../store/store.js"
 import {
@@ -97,6 +99,8 @@ export const ENRICHMENT_REASON_IDS = [
   "enrichment.rate-limited",
   "enrichment.bad-replies",
   "enrichment.cancelled",
+  "enrichment.local-only",
+  "enrichment.address-refused",
   "enrichment.error",
 ] as const
 export type EnrichmentReasonId = (typeof ENRICHMENT_REASON_IDS)[number]
@@ -111,6 +115,7 @@ const reasonIdOf = (error: unknown): EnrichmentReasonId => {
   if (!(error instanceof CliError)) return "enrichment.bad-replies"
   if (error.details.reason === "model.key-rejected") return "enrichment.key-rejected"
   if (error.details.reason === "model.unreachable") return "enrichment.unreachable"
+  if (error.details.reason === "local-only.refused") return "enrichment.local-only"
   if (error.code === "rate_limited") return "enrichment.rate-limited"
   if (error.code === "cancelled") return "enrichment.cancelled"
   if (error.code === "invalid_response") return "enrichment.bad-replies"
@@ -191,6 +196,27 @@ export const enrichRecords = async (
   const target = { provider: setting.provider, model: setting.model, baseUrl }
   const apiKey = keyLookup(options, setting)?.key
   const maxRecords = options.maxRecords ?? ENRICH_PER_RUN
+  const refused: EnrichmentReasonId | undefined = !modelAddressAllowed(baseUrl)
+    ? "enrichment.address-refused"
+    : !onThisComputer(baseUrl) && localOnly(options.env)
+      ? "enrichment.local-only"
+      : undefined
+  if (refused)
+    return {
+      status: "stopped",
+      provider: setting.provider,
+      model: setting.model,
+      enriched: 0,
+      failed: 0,
+      left: (await enrichment.pending(Number.MAX_SAFE_INTEGER, options.narrow)).length,
+      usage: { input: 0, output: 0 },
+      cost_usd: 0,
+      reason:
+        refused === "enrichment.local-only"
+          ? "local only is on and the model is not on this computer; nothing was sent"
+          : "the address is plain http to another computer: use https, or http only on this computer; nothing was sent",
+      reason_id: refused,
+    }
   // Without a key the public API answers 401 only after the records' text has left; a custom server may need none.
   if (apiKey === undefined && setting.base_url === undefined)
     return {
@@ -210,6 +236,7 @@ export const enrichRecords = async (
     // The setting exists only with the owner's yes for this provider and endpoint; the endpoint is checked again.
     consent: (_request, chosen) => chosen.provider === setting.provider && chosen.baseUrl === baseUrl,
     key: () => apiKey,
+    env: options.env,
     ...(options.adapters ? { adapters: options.adapters } : {}),
     ...(options.fetch ? { fetch: options.fetch } : {}),
     ...(options.signal ? { signal: options.signal } : {}),

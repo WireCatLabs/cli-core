@@ -1,5 +1,7 @@
 import { setTimeout } from "node:timers/promises"
 import { CliError } from "@wirecat/cli-base"
+import { onThisComputer } from "../models/endpoint.js"
+import { refuseModelAddress } from "../models/local-only.js"
 import { type Embedder, unit } from "./embed.js"
 import type { TextModel } from "./models.js"
 
@@ -32,10 +34,8 @@ export const DEFAULT_OPENAI_MODEL = "text-embedding-3-small"
 /** OpenAI's limits per request (2,048 inputs, 300,000 tokens); a chunk is at most ~400 tokens. */
 const PER_REQUEST = 256
 
-const LOCAL = new Set(["localhost", "127.0.0.1", "[::1]", "::1"])
-
 /** A server on this machine: nothing leaves it, so nothing is asked. */
-export const isLocal = (baseUrl: string): boolean => LOCAL.has(new URL(baseUrl).hostname)
+export const isLocal = (baseUrl: string): boolean => onThisComputer(baseUrl)
 
 export const remoteModel = ({
   model = DEFAULT_OPENAI_MODEL,
@@ -75,8 +75,14 @@ export type Fetch = (url: string, init: RequestInit) => Promise<Response>
 export const openRemote = (
   remote: RemoteModel,
   apiKey: string | undefined,
-  { concurrency = 4, fetch: post = fetch, tries = 5 }: { concurrency?: number; fetch?: Fetch; tries?: number } = {},
+  {
+    concurrency = 4,
+    fetch: post = fetch,
+    tries = 5,
+    env,
+  }: { concurrency?: number; fetch?: Fetch; tries?: number; env?: NodeJS.ProcessEnv },
 ): Embedder => {
+  refuseModelAddress(env ?? process.env, remote.baseUrl, "text to embed")
   const request = async (input: string[]): Promise<Float32Array[]> => {
     for (let attempt = 1; ; attempt++) {
       let response: Response

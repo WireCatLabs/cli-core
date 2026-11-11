@@ -212,7 +212,7 @@ export const openMeetingEmbedder = async (
         throw error
       }
     }
-    engine = openRemote(remote, key, { concurrency: 1, fetch: guarded, tries: 1 })
+    engine = openRemote(remote, key, { concurrency: 1, fetch: guarded, tries: 1, env: options.env ?? process.env })
   }
   if (signal?.aborted) {
     await engine.close()
