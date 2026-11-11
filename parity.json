@@ -3226,6 +3226,12 @@
         "--limit": "all"
       }
     },
+    "images read": {
+      "in": "all",
+      "options": {
+        "--attachment": "all"
+      }
+    },
     "images models": {
       "in": "all"
     },
