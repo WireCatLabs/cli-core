@@ -267,6 +267,9 @@ describe("search mail over the mail tables", () => {
 
     const TG: AccountKey = { provider: "tg", account: "1" }
     await expect(searchStore(store, TG, { text: "is:unread", limit: 5 })).rejects.toThrow("is: is a mail field")
+    await expect(searchStore(store, TG, { text: "list:news.example.com", limit: 5 })).rejects.toThrow(
+      "list: is a mail field",
+    )
   })
 
   it("finds a letter by its whole tracking link and by a quoted part of a link", async () => {
@@ -357,9 +360,33 @@ describe("search mail over the mail tables", () => {
       ]),
     )
     expect(await both("roadmap kind:group")).toEqual([formatLocator({ ...TG, chat: "5", message: "1" })])
+    expect(
+      (await searchStore(store, TG, { text: "roadmap kind:group", accounts: [TG, MAIL], limit: 10 })).skipped,
+    ).toBe(undefined)
+    await expect(searchStore(store, MAIL, { text: "to:nobody", kind: "mail", limit: 10 })).rejects.toThrow(
+      "to:nobody — nobody matches",
+    )
     await store.mail.setFlags(accountId, new Map([["<one@example.com>", { read: true }]]), at(11))
     expect(await both("roadmap is:read")).toEqual([
       formatLocator({ ...MAIL, chat: "thread-1", message: "<one@example.com>" }),
+    ])
+    await store.mail.saveThread({
+      accountId,
+      externalId: "thread-big",
+      now: at(12),
+      emails: [
+        email("<big@example.com>", {
+          bodyText: Array.from({ length: 10_001 }, (_, n) => `w${n.toString(36)}x`).join(" "),
+        }),
+      ],
+    })
+    const inside = await searchStore(store, TG, { text: "*oadma*", accounts: [TG, MAIL], limit: 10 })
+    expect(inside.items.map(({ locator }) => locator)).toEqual(
+      expect.arrayContaining([formatLocator({ ...TG, chat: "5", message: "1" })]),
+    )
+    expect(inside.items.map(({ id }) => id)).not.toContain("<one@example.com>")
+    expect(inside.skipped).toEqual([
+      expect.objectContaining({ source: "email", code: "validation_error", reason: expect.stringContaining("oadma*") }),
     ])
   })
 

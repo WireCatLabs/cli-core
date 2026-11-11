@@ -118,7 +118,7 @@ describe("name patterns in from: and chat:", () => {
     expect((await failure(store, "chat:*отчет* AND topic:42"))?.message).toContain("query.topic-scope")
   })
 
-  it("refuses *word* in the text with the word's start as the way out, once the vocabulary is large", async () => {
+  it("finds *word* in a large vocabulary, and refuses a part under three letters with the word's start as the way out", async () => {
     const store = await seeded()
     expect(await ids(store, "*ote")).toEqual([1, 2, 3, 4, 10, 20])
     const words = Array.from({ length: 10_001 }, (_, at) => `w${at.toString(36)}x`)
@@ -130,6 +130,10 @@ describe("name patterns in from: and chat:", () => {
         via: "history",
       },
     )
-    expect((await failure(store, "*note*"))?.message).toContain("note*")
+    expect(await ids(store, "*note*")).toEqual([1, 2, 3, 4, 10, 20])
+    const short = await failure(store, "*no*")
+    expect(short?.details.reason).toBe("query.too-large")
+    expect(short?.message).toContain("three or more between the stars")
+    expect(short?.message).toContain("no*")
   })
 })

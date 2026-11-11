@@ -210,7 +210,7 @@ export const chatAmong = async (
 }
 
 /** A sender, through the names each messenger's accounts have seen; `from:` names one person. */
-export const senderAmong = async (store: MessageStore, accounts: AccountKey[], reference: string) => {
+export const senderAmong = async (store: MessageStore, accounts: AccountKey[], reference: string, field = "from") => {
   const providers = [...new Set(accounts.map(({ provider }) => provider))]
   const [only] = accounts
   try {
@@ -245,7 +245,7 @@ export const senderAmong = async (store: MessageStore, accounts: AccountKey[], r
     )
   } catch (error) {
     if (error instanceof CliError && error.code === "not_found") {
-      throw new CliError("not_found", `from:${reference} — ${error.message}`)
+      throw new CliError("not_found", `${field}:${reference} — ${error.message}`)
     }
     throw error
   }
