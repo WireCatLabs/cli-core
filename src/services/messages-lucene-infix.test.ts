@@ -96,5 +96,6 @@ describe("a part inside a word in chat messages", () => {
     expect(await ids(store, "*говор* AND date>=2026-01-03")).toEqual([3, 7])
     expect(await ids(store, "*говор AND NOT chat:2")).toEqual([1])
     expect(await ids(store, "NOT *говор* AND chat:2")).toEqual([8, 9])
+    expect(await ids(store, "NOT *говор AND chat:1")).toEqual([2, 3, 4, 5, 6])
   })
 })
