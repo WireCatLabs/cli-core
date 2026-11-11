@@ -1,7 +1,7 @@
 import type { SqlValue } from "../driver.js"
 import type { StoreContext } from "./open.js"
 import type { Where } from "./query-filter.js"
-import { BOARD_SCOPE } from "./task-board.js"
+import { PROJECT_SCOPE } from "./task-board.js"
 
 /** One account's tasks (its inbox), or the owner's project tasks across every project. */
 export type TaskStatScope = { account: string } | { board: true }
@@ -30,7 +30,7 @@ const ACCOUNT_SCOPE = "t.package_id IS NOT NULL AND t.deleted_at IS NULL AND t.p
 export const TASK_STATS_SQL = {
   rows: (board: boolean, filter: string) =>
     "SELECT t.source_group, t.source_kind, t.project_id, t.status, t.created_at, t.closed_at FROM tasks t " +
-    `WHERE ${board ? BOARD_SCOPE : ACCOUNT_SCOPE}${filter} ORDER BY t.created_at, t.id`,
+    `WHERE ${board ? PROJECT_SCOPE : ACCOUNT_SCOPE}${filter} ORDER BY t.created_at, t.id`,
   chat:
     "SELECT c.external_id AS id, c.title AS name FROM chats c JOIN accounts a ON a.id = c.account_id " +
     "WHERE a.provider = ? AND a.external_id = ? AND c.external_id IN (SELECT value FROM json_each(?))",

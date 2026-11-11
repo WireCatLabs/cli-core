@@ -118,6 +118,13 @@ kept from new project keys. `store.tasks.claim(id, holder, until)` takes an open
 under the write lock and refuses, naming the holder, while an unlapsed claim holds it; `release` and closing the
 task clear it.
 
+A found task takes the same fields as a project task: `todo` and `in_progress`, priority, agent, assignees, and
+another message kind while it stays in its account's inbox. `store.tasks.edit(id, { project })` moves it into an
+owner project: it takes that project's next key (the old key and its id still resolve), keeps its source message,
+leaves the task package's reads and may then become a bug, feature or chore. `board` and `boardCounts` list found
+tasks beside project tasks; `project:*` still means the owner's projects only, and the project choices leave the
+inboxes out. An account's read of `open` tasks includes its `todo` and `in_progress` ones.
+
 `store.tasks.linkTask(from, to, kind, "owner")` and `unlinkTask` manage `blocked-by`, `follow-up-of`,
 `related-to`, `duplicate-of` and `discovered-from`. `RES-2 blocked-by RES-1` means RES-1 must finish first. Informational follow-up and
 related links do not affect readiness; related pairs are symmetric. Cycles and self-links fail before
@@ -132,7 +139,8 @@ and maybe candidates on the review list (a rule never merges); `pairs(account, {
 `decidePair(task, other, "rejected" | "unsure", by)`, `merge(dup, into, by)` and `unmerge(dup, by)` decide. A merge
 links every message of the duplicate to the task as `evidence`, closes it `dismissed` with a `duplicate-of` relation
 and deletes nothing; the reviewing agent may merge, so these take any author. `findBySource(account, source,
-{ linked: true })` also finds the task a message was attached or merged into, so a rule opens no second one.
+{ linked: true })` also finds the task a message was attached or merged into, or the task found in it that moved into
+a project, so a rule opens no second one.
 
 `taskRelations(id)`, `taskReadiness(id)` and `readyTasks(project, { limit? })` read bounded coherent
 snapshots. Only a done blocker is resolved: dismissed/deleted blockers continue to require review.

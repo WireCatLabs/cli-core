@@ -531,21 +531,18 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
         throw new CliError("validation_error", "select at most 2000 task sources")
       if (options.sources?.length === 0) return { items: [], hasMore: false }
       account(key)
+      // Open is every task not closed yet: a found task may be todo or in_progress as well.
+      const open = ["open", "todo", "in_progress"]
+      const states =
+        options.state === undefined ? null : JSON.stringify(options.state === "open" ? open : [options.state])
       const rows = database
         .prepare(
           "SELECT t.key, t.package_id AS id FROM tasks t JOIN projects p ON p.id = t.project_id " +
-            "WHERE p.key = ? AND t.deleted_at IS NULL AND (? IS NULL OR t.status = ?) " +
+            "WHERE p.key = ? AND t.deleted_at IS NULL AND (? IS NULL OR t.status IN (SELECT value FROM json_each(?))) " +
             `${options.sources ? `AND t.source_locator IN (${options.sources.map(() => "?").join(",")}) ` : ""}` +
             "ORDER BY t.created_at, t.id LIMIT ? OFFSET ?",
         )
-        .all(
-          inboxKey(taskAccount(key)),
-          options.state ?? null,
-          options.state ?? null,
-          ...(options.sources ?? []),
-          limit + 1,
-          offset,
-        )
+        .all(inboxKey(taskAccount(key)), states, states, ...(options.sources ?? []), limit + 1, offset)
       return { items: rows.slice(0, limit).map((row) => String(row.id ?? row.key)), hasMore: rows.length > limit }
     },
     addAnnotation: async (key, target, text) => {

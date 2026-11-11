@@ -128,7 +128,8 @@ export const applyTaskRules = async (
         })
     }
   }
-  const hasTask = async (message: Message) => (await store.findBySource(owner, sourceOf(message))).length > 0
+  const hasTask = async (message: Message) =>
+    (await store.findBySource(owner, sourceOf(message), { linked: true })).length > 0
 
   for (const chat of review.chats) {
     const scope = scopeOf(chat.kind, chat.watched === true)

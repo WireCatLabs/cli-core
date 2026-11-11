@@ -11,6 +11,7 @@ import {
   type PriorityLabel,
   priorityBand,
   priorityLabel,
+  TASK_KINDS,
   TASK_STATES,
   type TaskState,
   type TaskVerdict,
@@ -104,6 +105,9 @@ export interface TaskFields {
   /** The http or https page the task is about, such as an Avito ad; `null` clears it. */
   sourceUrl?: string | null
 }
+
+/** What `edit` takes: a task found in a message keeps a message kind until it moves into a project. */
+export type TaskEdit = Omit<TaskFields, "type"> & { type?: TaskType }
 
 export interface NewWorkTask extends Omit<TaskFields, "reason" | "project" | "type"> {
   /** `project:<id>` or the project's key. */
@@ -229,7 +233,7 @@ export interface TaskEvent {
 /** Tasks beyond the package's four message kinds, and the fields the package does not know, on any task. */
 export interface WorkTasks extends TaskRelationsStore {
   create(input: NewWorkTask, by: Author): Promise<TaskDetails>
-  edit(id: string, fields: TaskFields, by: Author, check?: RevisionCheck): Promise<EditedTask>
+  edit(id: string, fields: TaskEdit, by: Author, check?: RevisionCheck): Promise<EditedTask>
   assign(id: string, assignment: TaskAssignment, by: Author, check?: RevisionCheck): Promise<TaskDetails>
   unassign(id: string, assignment: TaskAssignment, by: Author, check?: RevisionCheck): Promise<TaskDetails>
   /**
@@ -261,7 +265,7 @@ export interface WorkTasks extends TaskRelationsStore {
   comment(id: string, text: string, by: Author): Promise<TaskComment>
   /** Its comments, oldest first. */
   comments(id: string): Promise<TaskComment[]>
-  /** The owner's project tasks, every project at once, narrowed by a query over `PROJECT_TASK_FIELDS`. */
+  /** Every live task, the found ones too, narrowed by a query over `PROJECT_TASK_FIELDS`. */
   board(query: QueryAst | undefined, options: BoardOptions): Promise<{ items: TaskDetails[]; total: number }>
   /** The owner and everyone who holds a role on a live task, by name: who the board offers to assign. */
   /** Everyone the store knows, the owner first, then by how many live tasks name them. */
@@ -337,7 +341,7 @@ export const checkRevision = (row: Row, expected: number | undefined): void => {
 type WorkTaskOperations = Omit<WorkTasks, "create" | "assign"> & {
   create(input: NewWorkTask, by: Author): TaskDetails
   assign(id: string, assignment: TaskAssignment, by: Author, check?: RevisionCheck): TaskDetails
-  editNow(id: string, fields: TaskFields, by: Author): TaskDetails
+  editNow(id: string, fields: TaskEdit, by: Author): TaskDetails
 }
 
 export const workTaskOperationsOver = (context: StoreContext): WorkTaskOperations => {
@@ -439,6 +443,8 @@ export const workTaskOperationsOver = (context: StoreContext): WorkTaskOperation
   const rowById = (id: number) => database.prepare("SELECT * FROM tasks WHERE id = ?").get(id) as Row
   const details = (id: number) => detailsOf(rowById(id))
 
+  const inInbox = (project: number) =>
+    String(database.prepare("SELECT key FROM projects WHERE id = ?").get(project)?.key).length === INBOX_KEY_LENGTH
   const onBoard = (task: number) =>
     Boolean(database.prepare(`SELECT 1 FROM tasks t WHERE t.id = ? AND ${BOARD_SCOPE}`).get(task))
 
@@ -494,7 +500,7 @@ export const workTaskOperationsOver = (context: StoreContext): WorkTaskOperation
     return moved
   }
 
-  const edit = (task: number, fields: TaskFields, actor: Actor, created = false) => {
+  const edit = (task: number, fields: TaskEdit, actor: Actor, created = false) => {
     const before = rowById(task)
     const at = now()
     const set: string[] = []
@@ -533,15 +539,6 @@ export const workTaskOperationsOver = (context: StoreContext): WorkTaskOperation
     if (fields.status !== undefined) {
       if (!TASK_STATES.includes(fields.status))
         throw new CliError("validation_error", `a task's status is one of ${TASK_STATES.join(", ")}`)
-      if (
-        (fields.status === "todo" || fields.status === "in_progress") &&
-        String(database.prepare("SELECT key FROM projects WHERE id = ?").get(Number(before.project_id))?.key).length ===
-          INBOX_KEY_LENGTH
-      )
-        throw new CliError(
-          "validation_error",
-          "a task from a message is open, done or dismissed; todo and in_progress are for a project task",
-        )
       const closed = isClosedState(fields.status)
       const reopened = !closed && isClosedState(String(before.status))
       if (before.status !== fields.status) {
@@ -578,8 +575,11 @@ export const workTaskOperationsOver = (context: StoreContext): WorkTaskOperation
       change("source_url", fields.sourceUrl === null ? null : sourceUrlOf(fields.sourceUrl))
     if (fields.category !== undefined) change("category", fields.category, "category")
     if (fields.type !== undefined && fields.type !== before.type) {
-      if (!WORK_TASK_TYPES.includes(fields.type) || !onBoard(task))
-        throw new CliError("validation_error", `a project task's kind is one of ${WORK_TASK_TYPES.join(", ")}`)
+      // The task package reads a message kind back, so a task keeps one while it stays in its inbox.
+      const found = inInbox(fields.project === undefined ? Number(before.project_id) : projectOf(fields.project))
+      const kinds: readonly string[] = found ? TASK_KINDS : WORK_TASK_TYPES
+      const what = `a ${found ? "found" : "project"} task's kind is one of ${kinds.join(", ")}`
+      if (!kinds.includes(fields.type) || !onBoard(task)) throw new CliError("validation_error", what)
       change("type", fields.type, "type")
       bump = true
     }
@@ -914,6 +914,7 @@ export const workTaskOperationsOver = (context: StoreContext): WorkTaskOperation
           .all(...where.params)
       }
       const project = grouped("project", "p.id, p.key, p.name", "JOIN projects p ON p.id = t.project_id", "p.id")
+        .filter((row) => String(row.key).length !== INBOX_KEY_LENGTH)
         .map((row) => ({
           value: String(row.key),
           ref: `project:${row.id}`,
