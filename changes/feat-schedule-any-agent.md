@@ -17,6 +17,27 @@
 
 ### Changed — may break callers
 
+- **Every list and search in the TypeScript API answers a `ListResult`** (`{ items, hasMore, nextOffset?, nextCursor? }`,
+  cli-base WC-OUT-25), and `cli-dev lint` checks it (`result-shape`). The `--json` answers stay as they were. A store
+  list reads one row past the page, so `hasMore` is exact, and takes an `offset`.
+  - The store: `memories.list` and `memories.search`, `facts.list`, `agentActions.list`, `proposedActions.list`,
+    `records.list`, `contracts.list`, `transactions.list`, `orders.list`, `products.list`, `subscriptions.list` and
+    `subscriptions.prices`, `wallets.list`, `finance.invoices` and `finance.payments`, `deals.list` and `deals.find`,
+    `tasks.find`, `business.find`, `searches.searchHistory` and `meetings.search` answered an array; read `.items`.
+  - `searchEvents` and `searchNotes` (`EventsFound`, `NotesFound`): `hits`, `has_more` and `next_offset` are `items`,
+    `hasMore` and `nextOffset`.
+  - The knowledge service: `memories`, `facts` and `searchMemories` answer a `ListResult`; `searchMemories`'
+    `limit_reached` is `hasMore`.
+  - The attachments, conversations and tags services' `list`, the searches service's `history` and `TaskList` say
+    `hasMore` where they said `has_more`.
+  - `pagedList(path, settings, { items, hasMore })` takes `hasMore` where it took `has_more`.
+  - `meetingsList(store, filter)` takes `filter.offset` where it took a page number as its third argument.
+  - `participantCandidates` (`MeetingParticipantPage`): `has_more` and `next_cursor` are `hasMore` and `nextCursor`,
+    absent on the last page. `MeetingProjectDiscoveryPage.hits` is `items`.
+  - `ProposalKind.list` answers a `ListResult`.
+  - A CRM or calendar source's page: `CrmPage` and `ChangePage` say `hasMore` and give `nextCursor` where they gave
+    `nextPage`; `CrmIdPage.ids` and `ChangePage.entries` are `items`. A page that says `hasMore` with no `nextCursor`
+    is refused (`invalid_response`).
 - **An agent that reports no cost lists it as unknown.** `schedule list` answers `spent_today_usd`, `max_cost_usd` and
   `max_cost_per_day_usd` as `null` for every agent but claude, where codex answered 0 and the configured cap before:
   no cap could ever stop it. `schedule agent` refuses `--max-cost` and `--max-cost-per-day` for such an agent
