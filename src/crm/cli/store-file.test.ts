@@ -1,10 +1,12 @@
-import { existsSync, mkdtempSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { CliError, captureStreams } from "@wirecat/cli-base"
 import { Command } from "commander"
 import { describe, expect, it } from "vitest"
+import { commandPermissions } from "../../cli/permission-keys.js"
 import { createProgram, type ProgramDefinition, run } from "../../cli/program.js"
+import { settingsFor } from "../../cli/settings.js"
 import { commandAt } from "../../cli/steps.js"
 import { openStore } from "../../store/store.js"
 import { syncCrm } from "../sync.js"
@@ -22,6 +24,7 @@ const app = {
 
 const definition: ProgramDefinition = {
   app,
+  configuration: settingsFor(app, { permissions: commandPermissions() }),
   commands: () => {
     const holder = new Command("crm")
     addCrmCommands(holder, {
@@ -36,7 +39,11 @@ const definition: ProgramDefinition = {
 
 const setup = async () => {
   const root = mkdtempSync(join(tmpdir(), "crm-store-file-"))
-  const env = { MESSAGING_STORE: join(root, "wirecat.db"), CRM_STATE_DIR: join(root, "state") }
+  const env: NodeJS.ProcessEnv = {
+    MESSAGING_STORE: join(root, "wirecat.db"),
+    CRM_STATE_DIR: join(root, "state"),
+    CRM_CONFIG_DIR: join(root, "config"),
+  }
   const store = await openStore({ env })
   const source = fakeCrmSource()
   source.put("deal", exampleDeal("d1", { title: "Example website" }))
@@ -81,5 +88,28 @@ describe("the shared store file, from a CRM CLI", () => {
     expect(store.commands.map((one) => one.name())).toEqual(
       expect.arrayContaining(["status", "apply", "info", "check", "backup", "restore", "repair", "migrate"]),
     )
+  })
+
+  it("a read-only lock or a profile's deny stops reset, restore and repair, and the file stays as it was", async () => {
+    const { root, env, cli } = await setup()
+    const backup = join(root, "backup.db")
+    expect((await cli("backup", backup)).code).toBe(0)
+    const before = readFileSync(join(root, "wirecat.db"))
+    env.CRM_READ_ONLY = "1"
+    for (const argv of [["reset", "--yes"], ["restore", backup], ["repair"]]) {
+      const refused = await cli(...argv)
+      expect(refused.code, argv.join(" ")).not.toBe(0)
+      expect(refused.stderr).toContain("CRM_READ_ONLY")
+    }
+    delete env.CRM_READ_ONLY
+    mkdirSync(env.CRM_CONFIG_DIR as string, { recursive: true })
+    writeFileSync(
+      join(env.CRM_CONFIG_DIR as string, "config.json"),
+      JSON.stringify({ profiles: { work: { permissions: { "store.reset": "deny" } } } }),
+    )
+    const denied = await cli("reset", "--yes")
+    expect(denied.code).not.toBe(0)
+    expect(denied.stderr).toContain("store.reset")
+    expect(readFileSync(join(root, "wirecat.db")).equals(before)).toBe(true)
   })
 })
