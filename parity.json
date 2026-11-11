@@ -442,8 +442,8 @@
       "note": "the shared `store export` takes `jsonl` or `markdown`, max's own takes `jsonl` or `md` (e4)"
     },
     "--from": {
-      "value": "<who>",
-      "meaning": "sender to match in `bot search messages`"
+      "value": "<person>",
+      "meaning": "a person: the one an identity leaves in `contacts unlink`, the sender in `bot search messages`"
     },
     "--from-dir": {
       "value": "<dir>",
@@ -2985,7 +2985,10 @@
       "in": "all"
     },
     "contacts unlink": {
-      "in": "all"
+      "in": "all",
+      "options": {
+        "--from": "all"
+      }
     },
     "conversations": {
       "in": "all"

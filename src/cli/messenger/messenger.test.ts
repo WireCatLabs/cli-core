@@ -3664,8 +3664,12 @@ describe("the shared read commands", () => {
     )
     expect(mine.code).toBe(0)
     expect(v.safeParse(ENTITIES.linked_person, JSON.parse(mine.stdout[0] ?? "null").item).success).toBe(true)
+    const unnamed = await call(["contacts", "unlink", "max:m5", "--offline"], never, env, {}, { provider: "telegram" })
+    expect(unnamed.code).not.toBe(0)
+    const from = /--from (person:\d+)/.exec(unnamed.stderr.join(" "))?.[1] as string
+    expect(from).toMatch(/^person:\d+$/)
     const unlinked = await call(
-      ["contacts", "unlink", "max:m5", "--offline", "--json"],
+      ["contacts", "unlink", "max:m5", "--from", from, "--offline", "--json"],
       never,
       env,
       {},

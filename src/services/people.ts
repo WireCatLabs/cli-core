@@ -1,12 +1,13 @@
 import { CliError } from "@wirecat/cli-base"
 import { type Predicate, queryError } from "@wirecat/cli-base/query"
+import { displayName } from "../domain/display-names.js"
 import type { Chat, Contact, Id, Member, Page, PersonCard, PersonProfile, PhoneBookEntry } from "../domain/models.js"
 import { isCliFailure } from "../errors/failures.js"
 import { capability } from "../ports/messenger.js"
 import { pickPerson } from "../resolve.js"
 import { guardedWrite, type Operated } from "../sends/guarded.js"
 import { newOperationId } from "../sends/send-id.js"
-import type { AccountKey, MessageStore, PersonRecord } from "../store/store.js"
+import type { AccountKey, IdentityRef, MessageStore, PersonRecord } from "../store/store.js"
 import type { PageWindow } from "./chats.js"
 import { fromStore, type ServiceDeps, storeIfOpen } from "./deps.js"
 
@@ -24,6 +25,7 @@ import {
 import { type PersonPreparation, personPreparation } from "./person-preparation.js"
 import { personProfile } from "./person-profile.js"
 import { type PersonTimeline, personTimeline, type TimelineOptions } from "./person-timeline.js"
+import { withOwner } from "./stored-project-gathering.js"
 
 export interface ContactSync {
   added: number
@@ -73,8 +75,11 @@ export interface PeopleService {
   ): Promise<PersonMessages>
   /** `other` may name another messenger of the store: `max:Ana`. */
   link(person: string, other: string, options: LinkPeopleOptions): Promise<LinkedPeople>
-  /** The owner's alone: an unlink separates two people, and nothing links them again on its own. */
-  unlink(person: string, options: { by: string }): Promise<PersonRecord>
+  /**
+   * The owner's alone: an unlink separates two people, and nothing links them again on its own. `from` names the person
+   * the identity leaves, `person:<uid>` or `person:me`; it is refused when the identity sits on someone else.
+   */
+  unlink(person: string, options: { by: string; from: string }): Promise<PersonRecord>
   /**
    * Only counts and the people recognised: never a number. `IMPORT_CHUNK` numbers a request, each request
    * through the guard, each number counted toward the hourly limit.
@@ -209,16 +214,20 @@ export const peopleService = (deps: ServiceDeps): PeopleService => {
     link: async (person, other, options) =>
       linkPeople(await deps.store(), await deps.account(), person, other, options),
 
-    unlink: async (person, { by }) => {
+    unlink: async (person, { by, from }) => {
       if (by !== "owner")
         throw new CliError("permission_error", "only the owner unlinks an identity; the owner runs this", {
           reason: "identity.owner-only",
         })
       const store = await deps.store()
-      return store.people.unlinkIdentity(await identityIn(store, await deps.account(), person), {
-        method: "manual",
-        by: "owner",
-      })
+      const identity = await identityIn(store, await deps.account(), person)
+      if (from.trim() === "") {
+        const holder = await store.people.personOf(identity)
+        if (holder !== undefined && holder.identities.length > 1) throw fromRequired(identity, holder)
+        return store.people.unlinkIdentity(identity, { method: "manual", by: "owner" })
+      }
+      const uid = await withOwner(store, from)
+      return store.people.unlinkIdentity(identity, { method: "manual", by: "owner", from: uid })
     },
 
     lookup: async (phone) => capability(await deps.connection(), "lookup", "find a person by phone")(phone),
@@ -321,6 +330,17 @@ export interface LinkPeopleOptions {
   /** Why an agent thinks they are one person; it is required of an agent and kept on the proposal. */
   reason?: string | undefined
   method?: string
+}
+
+/** Never guessed from the identity: a guess takes it off whoever holds it, who may not be the person meant. */
+const fromRequired = (identity: IdentityRef, holder: PersonRecord): CliError => {
+  const name = displayName(holder.name, { name: holder.identities.find((one) => one.name)?.name ?? null })
+  return new CliError(
+    "validation_error",
+    `say whom it leaves with --from: ${identity.provider}:${identity.id} sits on ${name ?? "a person with no name"} ` +
+      `(person:${holder.uid}); run it again with --from person:${holder.uid}, or --from person:me for you`,
+    { reason: "person.from-required", param: "from", reference: `person:${holder.uid}` },
+  )
 }
 
 /** The person as linked, or, for an agent, as still unlinked with the `identity_link` proposal waiting for the owner. */

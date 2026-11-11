@@ -638,6 +638,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--file-ids` | `<ids>` | list | only these files, by comma-separated ids |  |
 | `--folder` | `<folder>` | string | a notes folder, by its id or path; repeat it for more |  |
 | `--for` | `<agents>` | list | the agents to install for, comma-separated |  |
+| `--from` | `<person>` | id | a person: the one identities leave, or the one who sent it; a search takes it repeated for any of several |  |
 | `--from-dir` | `<dir>` | path | match files in this folder, not its subfolders |  |
 | `--last` | `<n>` | count | stop once the newest n messages are held | messages |
 | `--link` | `<link>` | string | an invite link |  |
@@ -1068,7 +1069,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--for` | `<agents>` | which agents a skill is installed for: claude, agents or all | `all` | `skill install`, `skill show` |
 | `--for-everyone` |  | delete for everyone in the chat, not only for you — they cannot get it back |  | `messages delete` |
 | `--format` | `<format>` | jsonl, one message per line, or a markdown transcript. **the shared `store export` takes `jsonl` or `markdown`, max's own takes `jsonl` or `md` (e4)** |  | `store export` |
-| `--from` | `<who>` | sender to match in `bot search messages` |  | `bot search messages` (planned) |
+| `--from` | `<person>` | a person: the one an identity leaves in `contacts unlink`, the sender in `bot search messages` |  | `bot search messages` (planned), `contacts unlink` |
 | `--from-dir` | `<dir>` | read nonrecursive files from this directory for one explicit chat |  | `attachments extract` |
 | `--full` |  | found messages with their whole text and every provider field |  | every command |
 | `--full-history` |  | keep this chat's pushed history in full from now on, past the history limits |  | `messages sync` |
