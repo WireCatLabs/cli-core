@@ -83,6 +83,7 @@ export const messenger: Messenger = {
   stickerFileBytes: 500 * 1024,
   groupPhoto: true,
   groupPhotoRemoval: true,
+  accountRemoval: { signOut: refuse },
 }
 
 /** Every shared command over `over`, as tg, max and wa mount them between them; its switches drop what they drop. */
