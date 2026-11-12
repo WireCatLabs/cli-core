@@ -5,6 +5,9 @@ import { afterEach, describe, expect, it } from "vitest"
 import { meetingDetailsAnswer, meetingPeople, pull, type SourceParticipant } from "../meetings/index.js"
 import { fakeMeetingSource } from "../meetings/testing/index.js"
 import { type MessageStore, openStore } from "../store/store.js"
+import { scopeOf } from "./business-context.js"
+import { communicationsOf } from "./communications.js"
+import { personContext } from "./person-context.js"
 import { personMeetingContext } from "./person-meeting-context.js"
 
 const CRM = { provider: "bitrix24", account: "acme.example", scope: "work" as const }
@@ -56,12 +59,23 @@ describe("a call's client and the CRM contact with that number (NEED-2600)", () 
     const context = await personMeetingContext(store, `person:${callPerson?.uid}`, { accountIds: [accountId] })
     expect(context.person.name).toBe("Ana Example")
     expect(context.items.map(({ reference }) => reference)).toEqual([expect.stringMatching(/^meeting:/)])
-    const [call] = (await store.meetings.meetings({ accountId })) as [{ id: number }]
+    const [stored] = (await store.meetings.meetings({ accountId })) as [{ id: number }]
     const person = { ref: `person:${callPerson?.uid}`, name: "Ana Example" }
-    expect((await meetingDetailsAnswer(store.meetings, call.id, accountId)).item.participants).toMatchObject([
+    expect((await meetingDetailsAnswer(store.meetings, stored.id, accountId)).item.participants).toMatchObject([
       { name: null, person },
     ])
     expect((await meetingPeople(store.meetings, "ana", accountId)).items).toMatchObject([{ person }])
+    const call = {
+      ref: `meeting:${accountId}/${stored.id}`,
+      meetingId: stored.id,
+      account: { provider: CALLS.provider, account: CALLS.account },
+      hasTranscript: true,
+      people: [person.ref],
+    }
+    expect((await personContext(store, CRM, "Ana Example")).meetings).toMatchObject([call])
+    const touches = await communicationsOf(store, [callPerson as NonNullable<typeof callPerson>], scopeOf(undefined))
+    expect(touches.counts.meetings).toBe(1)
+    expect(touches.items).toMatchObject([{ kind: "meeting", ref: call.ref, people: [person.ref] }])
   })
 
   it("are only proposed on a landline: an office's number is everyone's who works there", async () => {

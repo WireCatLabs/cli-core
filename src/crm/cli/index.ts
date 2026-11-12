@@ -18,6 +18,8 @@ import { DEAL_KINDS, DEAL_STATUSES, type DealKind } from "../../domain/deals.js"
 import { deal as dealEntity } from "../../entities/deal.js"
 import { count, text } from "../../entities/fields.js"
 import type { AppIdentity } from "../../ports/app.js"
+import { readableAccounts } from "../../services/person-context.js"
+import { personMeetings } from "../../services/person-meetings.js"
 import { CRM_SCOPES, crmSettingKey } from "../../store/sqlite/crm-settings.js"
 import type { Deal, DealFilter, Pipeline } from "../../store/sqlite/deals.js"
 import type { MessageStore } from "../../store/store.js"
@@ -127,6 +129,8 @@ const DEAL_UNTRUSTED = [
 ]
 /** `show` lists this many of a deal's activities: the open ones come first, so a long history does not hide them. */
 const SHOWN_ACTIVITIES = 20
+/** The newest recorded meetings and calls of the people on a deal or lead that `show` lists. */
+const SHOWN_MEETINGS = 10
 const PIPELINE_UNTRUSTED = ["name", "stages.name"]
 const STAGE_UNTRUSTED = ["name", "pipeline_name"]
 
@@ -483,8 +487,9 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
     example(
       annotate(group.command("show"), { effects: LOCAL_READ, output: { entity: kind } })
         .description(
-          `one ${kind} with its pipeline, stage, status, amount and the people on it; with the activities setting ` +
-            "on, its activities and tasks too",
+          `one ${kind} with its pipeline, stage, status, amount and the people on it, and the newest recorded ` +
+            "meetings and calls of those people in this account's scope; with the activities setting on, its " +
+            "activities and tasks too",
         )
         .argument(`<${kind}>`, `${kind}:<id>, as a list shows it`),
       `${plural} show ${kind}:12`,
@@ -505,10 +510,32 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
                 updated_at: new Date(one.updatedAt).toISOString(),
               }))
             : undefined
+        const recorded = await personMeetings(
+          run.store,
+          found.people.filter(({ owner }) => !owner).map(({ ref }) => ref.slice("person:".length)),
+          await readableAccounts(run.store, run.account),
+          { limit: SHOWN_MEETINGS },
+        )
+        const meetings = recorded.items.map((one) => ({
+          ref: one.ref,
+          meeting_id: one.meetingId,
+          account: one.account,
+          title: one.title,
+          started_at: one.startedAt,
+          duration_ms: one.durationMs,
+          has_transcript: one.hasTranscript,
+          event: one.event,
+          people: one.people,
+        }))
         return itemOf({
           ...(dealKeys(found) as object),
+          meetings,
           ...(activities ? { activities } : {}),
-          untrusted: activities ? [...DEAL_UNTRUSTED, "activities.subject", "activities.body"] : DEAL_UNTRUSTED,
+          untrusted: [
+            ...DEAL_UNTRUSTED,
+            "meetings.title",
+            ...(activities ? ["activities.subject", "activities.body"] : []),
+          ],
         })
       })
     })

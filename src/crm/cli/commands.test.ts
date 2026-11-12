@@ -15,6 +15,8 @@ import { runsCommand } from "../../cli/runs/command.js"
 import type { CrmActivity } from "../../domain/crm.js"
 import { CRM_OPENS } from "../../domain/providers.js"
 import { toolsFromCommands } from "../../mcp/agent.js"
+import { pull } from "../../meetings/index.js"
+import { fakeMeetingSource } from "../../meetings/testing/index.js"
 import type { AppIdentity } from "../../ports/app.js"
 import { SendJournal, sendsPathFor } from "../../sends/journal.js"
 import type { Level } from "../../sends/permissions.js"
@@ -184,6 +186,42 @@ describe("CRM commands", () => {
     expect(funnel.item).toMatchObject({ totals: { items: 2, open: 1, won: 1 } })
     const stages = await cli("stages", "list", "kind:lead")
     expect(stages.items.map(({ name }) => name)).toEqual(["New", "Converted", "Junk"])
+  })
+
+  it("deals show lists the calls of the deal's client, linked by the phone the call came from (NEED-2600)", async () => {
+    const { cli, source, store } = await setup()
+    source.put("person", examplePerson("p1", { email: "person@example.com", phone: "+7 916 123-45-67" }))
+    await cli("sync")
+    const accountId = await store.accounts.saveAccount({ provider: "pbx-example", account: "office" }, { name: null })
+    const client = {
+      identityExternalId: "phone:+79161234567",
+      phone: "+79161234567",
+      email: null,
+      displayName: null,
+      externalId: null,
+      role: "client",
+      joinedAt: null,
+      leftAt: null,
+      durationMs: null,
+      sessions: null,
+      metadata: null,
+    }
+    const calls = fakeMeetingSource({ provider: "pbx-example", participants: async () => [client] })
+    await pull(calls, store.meetings, { accountId, now: 4000 })
+    await store.people.scanMatches()
+
+    const deal = (await cli("deals", "list", "status:open")).items[0] as { ref: string }
+    const shown = (await cli("deals", "show", deal.ref)).item
+
+    expect(shown.meetings).toMatchObject([
+      {
+        ref: expect.stringMatching(new RegExp(`^meeting:${accountId}/`)),
+        account: { provider: "pbx-example", account: "office" },
+        has_transcript: true,
+        people: [(shown.people as { ref: string }[])[0]?.ref],
+      },
+    ])
+    expect(shown.untrusted).toContain("meetings.title")
   })
 
   it("fields list answers a kind's synced fields in b24's shape, pages them, and refuses an unknown kind", async () => {
