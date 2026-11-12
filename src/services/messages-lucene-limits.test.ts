@@ -45,4 +45,46 @@ it("finds a file name among more messages with files than the candidate row limi
   expect((await run("filename:*.pdf")).items.map(({ id }) => id)).toEqual(["21"])
   expect((await run("has:file AND NOT filename:*.jpg")).items).toHaveLength(1)
   await expect(run("body:/.*/")).rejects.toThrow("candidate rows")
+  const page = await searchStore(store, account, { text: "body:/.*/", limit: 5 })
+  expect(page.items.map(({ id }) => id)).toEqual(["21", "20", "19", "18", "17"])
+  expect(page.hasMore).toBe(true)
+  await expect(run("filename:scan*")).resolves.toBeDefined()
+})
+
+it("names the word-end pattern a search could not check and says what to write instead", async () => {
+  const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "lucene-limits-")), "messages.db") })
+  live.push(store)
+  const account = { provider: "max", account: "1" }
+  await store.chats.saveChats(account, [
+    { id: "1", title: "Chat 1", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: null },
+  ])
+  await store.messages.saveMessages(
+    account,
+    "1",
+    Array.from({ length: 21 }, (_, at) => ({
+      id: String(at + 1),
+      chatId: "1",
+      senderId: "200",
+      senderName: "alice",
+      timestamp: new Date(Date.UTC(2026, 0, 1, 10, at)).toISOString(),
+      editedAt: null,
+      text: at === 3 ? "решение" : "изменение плана",
+      outgoing: false,
+      attachments: [],
+      replyTo: null,
+      forwardedFrom: null,
+      reactions: null,
+    })),
+    { via: "history" },
+  )
+  let fill: Awaited<ReturnType<typeof store.searchIndex.fillSearchIndex>>
+  do fill = await store.searchIndex.fillSearchIndex()
+  while (fill.normalized || fill.indexed)
+  const run = (text: string, limit: number) => searchStore(store, account, { text, limit })
+  expect((await run("*ение", 3)).items).toHaveLength(3)
+  await expect(run("*ешение", 100)).resolves.toMatchObject({ items: [{ id: "4" }] })
+  await expect(run("*ние", 100)).rejects.toMatchObject({
+    details: { reason: "query.too-large", budget: "candidate rows", term: "*ние" },
+    message: expect.stringContaining("write *ние*"),
+  })
 })

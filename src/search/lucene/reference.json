@@ -241,7 +241,7 @@
     "query": "(alpha OR beta)@2",
     "parsed": true,
     "luceneQuery": "(text:alpha text:beta)~2",
-    "syntax": "org.apache.lucene.queryparser.flexible.standard.nodes.MinShouldMatchNode@4bbf6d0e",
+    "syntax": "org.apache.lucene.queryparser.flexible.standard.nodes.MinShouldMatchNode@<id>",
     "ids": [3, 7, 11, 15]
   },
   {

@@ -202,7 +202,7 @@ describe("polls voters", () => {
 })
 
 describe("contacts list", () => {
-  it("**filters by name and notes only; anything else is a field the store cannot filter**", async () => {
+  it("**filters by name, notes, email and phone only; anything else is a field the store cannot filter**", async () => {
     const call = harness()
     const listed = JSON.parse((await call(["contacts", "list", "--json"])).stdout)
     expect(listed.items.map((one: { ref: string }) => one.ref)).toContain("contact:chat/8")
@@ -216,7 +216,7 @@ describe("contacts list", () => {
     expect(refused.code).toBe(2)
     expect(JSON.parse(refused.stderr).error).toMatchObject({
       reason: "query.unsupported-field",
-      details: { supported: ["name", "notes"] },
+      details: { supported: ["name", "email", "phone", "notes"] },
     })
   })
 })

@@ -16,8 +16,8 @@ StandardSyntaxParser и PrecedenceQueryParser, default AND, default field `text`
 `search notes` (заметки всех папок сразу, `--source notes:<id>` — только одной, `notes:internal` — написанные
 в memo; у них только поля `text`, `exact`, `body`, `tag`, `date`, `in`, `has:text`, `source` (`source:internal` —
 написанные в memo, `source:file` — файлы из папок), а у файлов-страниц ещё
-`title`, `site`, `lang`, `author`, `keyword` — то, что страница сообщает о себе; у сообщений эти поля
-ничего не находят). `search all` ищет в сообщениях, заметках, событиях календаря, сделках и встречах сразу. Почта принадлежит memo: `memo search mail`
+`title`, `site`, `lang`, `author`, `keyword` — то, что страница сообщает о себе; в поиске сообщений `title:` —
+название чата, а остальные отказывают с `query.unsupported-field`). `search all` ищет в сообщениях, заметках, событиях календаря, сделках и встречах сразу. Почта принадлежит memo: `memo search mail`
 ищет только в почте, импортированной `memo sync --only mail`, во всех почтовых аккаунтах сразу, а
 `--source email:<адрес>` — в одном; `memo search all` добавляет почту к сообщениям и заметкам. В почте
 `chat:` и `--chat` — тред по id или теме, полей `kind` и `topic` нет; только у почты — `to:`, `cc:`,
@@ -428,8 +428,13 @@ Ranking не меняет Boolean множество. Когда в запрос
 
 ## Поля
 
-Имена полей case-sensitive. Повтор поля — обычный Boolean AST. Слово перед двоеточием, которое не называет поле
-поиска (`10:30`, `HH:MM`, `a:b`), ищется как обычный текст. Неверное значение известного поля, значение
+Имена полей case-sensitive. Повтор поля — обычный Boolean AST. Слово перед двоеточием, которое не похоже на имя поля
+(`10:30`, `HH:MM`, `a:b`, `итог:договор`, ссылка), ищется как обычный текст. Имя в виде поля — латиница в нижнем
+регистре от трёх букв со значением (`status:open`, `assignee:ana`), — которого у поиска нет, даёт `query.unknown-field`:
+ошибка называет поля этого поиска или список, который по такому полю фильтрует (`tasks list status:open`,
+`deals list stage:<значение>`), и запись в кавычках, чтобы найти сами слова (`"status:open"`). Поле заметок
+(`site:`, `lang:`, `author:`, `keyword:`, `source:`) в поиске сообщений и почты — `query.unsupported-field`, как
+почтовое поле в поиске без почты. Неверное значение известного поля, значение
 enum или unsupported сочетание дают ошибку, а не пустой ответ. Unknown name автора/чата
 не разрешается через сеть. Числовой id может обозначать чат, история которого ещё не сохранена.
 
@@ -440,7 +445,7 @@ enum или unsupported сочетание дают ошибку, а не пус
 | `text` | txt | Snowball 3.1.1 by script (Cyrillic, Latin; the store's search_stemmers), then v1 | `invoice` | term, phrase, wildcard, regex |
 | `exact` | txt | NFKD/marks/NFC/lowercase v1 | `exact:invoice` | term, phrase, wildcard, regex |
 | `body` | txt | raw, case-sensitive | `body:/.*invoice.*/` | term, phrase, wildcard, regex |
-| `from` | kw | account-scoped: an id or contact: reference as is; with * or ? a pattern over alias, name, @username (up to 50); else a name | `from:Alice*` | term, phrase, wildcard |
+| `from`, `sender` | kw | account-scoped: an id or contact: reference as is; with * or ? a pattern over alias, name, @username (up to 50); else a name | `from:Alice*` | term, phrase, wildcard |
 | `to` | kw | account-scoped: an id or contact: reference as is; with * or ? a pattern over alias, name, @username (up to 50); else a name; mail only | `to:"Alice Synthetic"` | term, phrase, wildcard |
 | `cc` | kw | account-scoped: an id or contact: reference as is; with * or ? a pattern over alias, name, @username (up to 50); else a name; mail only | `cc:"Alice Synthetic"` | term, phrase, wildcard |
 | `bcc` | kw | account-scoped: an id or contact: reference as is; with * or ? a pattern over alias, name, @username (up to 50); else a name; mail only | `bcc:"Alice Synthetic"` | term, phrase, wildcard |
@@ -464,7 +469,7 @@ enum или unsupported сочетание дают ошибку, а не пус
 | `size` | kw | bytes; KB/MB/GB are 1024-based | `size>10MB` | term, phrase, range |
 | `content` | txt | NFKD/marks/NFC/lowercase v1; the text of files attachments extract read or an agent wrote | `content:invoice` | term, phrase, wildcard |
 | `transcript` | txt | any form of the word (Snowball), widened to spellings speech recognition garbles; what a voice message said | `transcript:invoice` | term, phrase, wildcard |
-| `title` | txt | every word, folded as text is; notes and files only | `title:"quarterly report"` | term, phrase |
+| `title` | txt | every word, folded as text is: of a note's or a file's title, inside a chat's title, of a mail's subject (as subject:) | `title:"quarterly report"` | term, phrase |
 | `site` | kw | contained, folded as text is; notes and files only | `site:wikipedia` | term, phrase |
 | `lang` | kw | language tag or its prefix, lowercase; notes and files only | `lang:ru` | term, phrase |
 | `author` | kw | contained, folded as text is; notes and files only | `author:ivanov` | term, phrase |
@@ -478,6 +483,23 @@ enum или unsupported сочетание дают ошибку, а не пус
 | `tag` | kw | lowercase a-z, 0-9 and -, 1-32 characters | `tag:work` | term, phrase, wildcard |
 
 <!-- fields: end -->
+
+**Одно понятие — одно поле.** Название, автор и дата пишутся одинаково во всех поисках; старые поля остаются.
+
+| Понятие | Сообщения | Почта | Заметки и файлы | События | Встречи в `search all` | `tasks list` | Сделки и лиды в `search all` | `contacts list` |
+|---|---|---|---|---|---|---|---|---|
+| Название | `title:` — часть названия чата (`chat:` выбирает сами чаты) | `title:` = `subject:` | `title:` | `title:` | слова названия (поля `title:` у встреч нет: встречи пропускаются с причиной) | `title:` или слово без поля — часть названия | `title:` — только название | `name:` |
+| Автор | `from:`, `sender:` | `from:`, `sender:` | `author:` (автор страницы) | — | `from:` (кто сказал) | `assignee:` | — | — |
+| Дата | `date:` — отправлено | `date:` — отправлено или получено | `date:` — изменено | `date:` — начало | `date:` — начало | `created_at:`, `due_at:` | — | — |
+| Есть значение | `field:*`, `_exists_:field` | `field:*`, `_exists_:field` | — | — | — | `field:*` | — | — |
+
+**Есть ли значение: `field:*` и `_exists_:field`.** В поиске сообщений и почты `from:*` (или `_exists_:from`) — у
+сообщения есть автор, `title:*` — у чата есть название (у письма — тема), `subject:*`, `to:*`, `cc:*`, `bcc:*` —
+у письма есть тема или такие получатели, `topic:*` — сообщение в теме форума, `participants_count:*` — мессенджер
+сообщил размер чата. Чат и дата есть у каждого сообщения: `chat:*` и `date:*` ничего не отсекают. Остальным
+полям `*` — `query.unsupported-operator` с подсказкой: `text:*` → `has:text`, `content:*` → `has:file`,
+`transcript:*` → `has:transcript`, `url:*` и `link:*` → `has:link`. `filename:*`, `mime:*`, `tag:*` и `mailbox:*`
+по-прежнему шаблоны, то есть «есть хотя бы один».
 
 **Люди и чаты: id, имя или шаблон.** Значение `from:`, `to:`, `cc:`, `bcc:` и `chat:` читается по одному правилу:
 id (`from:1001`, `contact:telegram:1001`, `chat:7`, `chat:chat:telegram:100:7`) — этот человек или чат, как раньше;
@@ -496,8 +518,9 @@ id (`from:1001`, `contact:telegram:1001`, `chat:7`, `chat:chat:telegram:100:7`) 
 «ДОГОВОРЫ» и «переговоры» по индексу трёх букв текста сообщений: на 1M сообщений это доли секунды, и большой архив
 не мешает. Регистр не важен, ё и е — одна буква, остальные буквы — как написаны (`*мой*` не найдёт «мои»). Нужно
 три буквы подряд или больше. `*вор` (конец слова), `*дог*вор`, `*гов?р*` ищутся тем же индексом и проверяются по
-словам каждого найденного сообщения; если часть есть в слишком многих сообщениях (`*ени`), это `query.too-large` —
-добавьте `chat:` или `date:` либо пишите `*часть*`. Почта, расшифровки и тексты файлов такого индекса не имеют:
+словам каждого найденного сообщения в порядке ответа, и проверка останавливается, как только страница заполнена:
+`*ени` на 1M сообщений отвечает первой страницей. Если страница не заполняется, пока бюджет не кончился, это
+`query.too-large` с `term` — ошибка называет шаблон и что писать вместо: `*часть*`, больше букв, `chat:` или `date:`. Почта, расшифровки и тексты файлов такого индекса не имеют:
 там `*слово*` перебирает весь словарь, на большом архиве это больше 10 000 слов и `query.too-large` с подсказкой
 `слово*`.
 `link:`, `site:` и `author:` и так находят часть значения; у `url:`, `email:`, `phone:`, `domain:`, `topic:`, `in:`,
@@ -771,7 +794,12 @@ Query page: 1–1000 results, context: прежняя CLI/MCP модель. SQL 
 
 Syntax/field/operator errors несут UTF-16 span `[start,end)`, reason и guide/alternative;
 CLI печатает позицию с единицы. `~` после слова (fuzzy) даёт `query.unsupported-operator` с подсказкой:
-формы слова ловит prefix `word*`.
+формы слова ловит prefix `word*`. Boost `invoice^2` — тоже `query.unsupported-operator`, а не поиск «invoice^2»:
+порядок здесь по релевантности и дате, без весов. Подсказка — `invoice` без `^2` или `"invoice^2"` в кавычках, чтобы
+найти запись как есть. `after:` и `before:` — `query.legacy-date-field` с готовой записью `date>=…` или `date<…`.
+Имя или шаблон, под который не подходит ни один человек или чат (`chat:Альфа*`), — `not_found` с reason
+`query.no-match`, близкими именами и тем, что писать: `chat:*Альфа*` (часть) или имя целиком. Поиск списка чатов,
+людей и контактов по части имени короче трёх букв — `query.short-text` с подсказкой.
 `index.not-ready` говорит, насколько построен word index (процент или сколько сообщений ждут
 нормализации), и точную команду: `<cli> store migrate` достраивает его сразу; каждый поиск тоже
 строит понемногу. Запросы без слов (`has:`, `kind:`, `date:`) работают и до этого.

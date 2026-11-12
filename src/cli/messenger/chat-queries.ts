@@ -10,7 +10,12 @@ const titleWords = (node: Predicate) => {
   if (/[*?]/.test(part))
     queryError("query.unsupported-operator", node.span, "title: matches part of a title: title:book or title:*book*")
   if (part.length < 3)
-    throw new CliError("validation_error", `a chat search takes at least 3 characters, got "${part}"`)
+    throw new CliError(
+      "validation_error",
+      `a chat search takes at least 3 characters, got "${part}" — write more of the title, or leave title: out ` +
+        "and read the list newest first",
+      { reason: "query.short-text" },
+    )
 }
 
 /**

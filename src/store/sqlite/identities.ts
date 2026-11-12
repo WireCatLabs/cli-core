@@ -326,11 +326,28 @@ export interface ContactFilter {
   query?: string
   /** Three characters or more of one of the owner's private notes about them, anywhere, in any letter case. */
   notes?: string
+  /** A part of their address, in any letter case. */
+  email?: string
+  /** A part of their phone, digits only compared. */
+  phone?: string
 }
 
-const contactsWhere = (accountKey: number, key: AccountKey, { query, notes }: ContactFilter) => {
+const DIGITS = (column: string) =>
+  `replace(replace(replace(replace(replace(coalesce(${column}, ''), '+', ''), ' ', ''), '-', ''), '(', ''), ')', '')`
+
+const contactsWhere = (accountKey: number, key: AccountKey, { query, notes, email, phone }: ContactFilter) => {
+  const digits = phone?.replace(/\D/gu, "")
+  if (phone !== undefined && !digits)
+    throw new CliError("validation_error", `phone: takes digits, got "${phone}" — e.g. phone:+34 or phone:600`, {
+      reason: "query.unknown-value",
+    })
   if (query !== undefined && query.trim().length < 3) {
-    throw new CliError("validation_error", `a contact search takes at least 3 characters, got "${query}"`)
+    throw new CliError(
+      "validation_error",
+      `a contact search takes at least 3 characters, got "${query}" — write more of the name, or leave it out ` +
+        "and read the list by name (--order name)",
+      { reason: "query.short-text" },
+    )
   }
   const noted = notes === undefined ? undefined : holdingText("note", "n.id", notes)
   return and(
@@ -345,6 +362,10 @@ const contactsWhere = (accountKey: number, key: AccountKey, { query, notes }: Co
     notes === undefined
       ? undefined
       : sql`EXISTS (SELECT 1 FROM notes n WHERE n.notable_type='identity' AND n.notable_id=${identities.id} AND n.deleted_at IS NULL${noted ? sql` AND ${bound(noted)}` : sql``})`,
+    email === undefined
+      ? undefined
+      : sql`instr(lower(coalesce(${identities.email}, '')), ${email.trim().toLowerCase()}) > 0`,
+    digits === undefined ? undefined : sql`instr(${sql.raw(DIGITS("identities.phone"))}, ${digits}) > 0`,
   )
 }
 

@@ -20,7 +20,11 @@ const QUERY: Entry[] = [
   ["query.invalid-tag", "a tag in the query is not valid"],
   ["query.invalid-topic", "a topic in the query is not valid"],
   ["query.topic-scope", "a topic needs its chat in the query"],
-].map(([reason, message]) => validation(reason as string, message as string))
+  ["query.short-text", "a search by part of a name or a title needs three characters or more"],
+  ["query.legacy-date-field", "after: and before: are written date>= and date<"],
+]
+  .map(([reason, message]) => validation(reason as string, message as string))
+  .concat([["query.no-match", "not_found", "no person or chat in the store fits a name in the query"]])
 
 const SIGN_IN: Entry[] = [
   ["oauth.declined", "authentication_error", "the provider's consent was declined"],

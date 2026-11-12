@@ -247,6 +247,10 @@ describe("the people list", () => {
       '"Zed Quoted "',
     ])
     await expect(store.people.list({ limit: 10, query: "ab" })).rejects.toThrow("at least 3 characters")
+    await expect(store.people.list({ limit: 10, query: "ab" })).rejects.toMatchObject({
+      details: { reason: "query.short-text" },
+      message: expect.stringContaining("leave the search out"),
+    })
     await expect(store.people.list({ limit: 10, kind: "people" as "person" })).rejects.toThrow(
       "a person's kind is one of",
     )

@@ -40,6 +40,12 @@ describe("nativeTerms", () => {
     const terms = nativeTerms(listQuery("project:a subject:b", REGISTRY, "facts list"), "facts list")
     expect([...terms.keys()]).toEqual(["project", "subject", "kind"])
   })
+
+  it("reads a + right after a field's colon as the value's own sign", () => {
+    const terms = nativeTerms(listQuery("project:+34 kind:event", REGISTRY, "facts list"), "facts list")
+    expect(terms.get("project")?.value).toBe("+34")
+    expect(nativeTerms(listQuery("+project:a", REGISTRY, "facts list"), "facts list").get("project")?.value).toBe("a")
+  })
 })
 
 it("tells an MCP caller a native list takes AND only", () => {

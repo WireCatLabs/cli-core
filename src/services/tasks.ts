@@ -16,7 +16,7 @@ import {
   type TaskRelationKind,
 } from "../store/index.js"
 import type { AccountKey, Author, MessageStore, TaskDetails, ThingLink } from "../store/store.js"
-import { type ColumnMap, queryFilter, type Where } from "../store/store.js"
+import { type ColumnMap, foldedWords, queryFilter, type Where } from "../store/store.js"
 import {
   type ClosedState,
   createTaskService,
@@ -47,6 +47,7 @@ export const TASK_QUERY = {
   backend: "sql",
   fields: queryFieldsOf(taskEntity, {
     exclude: ["ref", "description", "project", "account", "priority", "parent", "claimed_until", "close_suggestion"],
+    text: ["title"],
     relations: {
       close: {
         type: "enum",
@@ -118,7 +119,7 @@ const taskColumns = (groups: ReadonlyMap<string, string>, tags: ReadonlyMap<stri
   key: { type: "kw", sql: "t.key" },
   category: { type: "kw", sql: "t.category" },
   tag: { where: (node) => tags.get(node.value) ?? { sql: "0", params: [] } },
-  title: { type: "kw", sql: "t.title_folded", folded: true },
+  title: foldedWords("t.title_folded"),
   kind: { type: "enum", sql: "t.type" },
   state: { type: "enum", sql: "t.status" },
   origin: { type: "enum", sql: "t.source" },

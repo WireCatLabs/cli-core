@@ -21,7 +21,7 @@ const SPECIAL_TEXT = [
   ["slash", "and/or", ["text:and/or"]],
   ["trailing backslash", "path\\", ["text:path\\"]],
   ["exclamation", "wow!", ["text:wow!"]],
-  ["caret", "x^2", ["text:x^2"]],
+  ["quoted caret", '"x^2"', ["text:x^2"]],
   ["spaced caret", "a ^ b", ["text:a", "text:b"]],
   ["emoji beside a word", "party 🎉", ["text:party"]],
   ["tilde", "~home", ["text:~home"]],
@@ -82,6 +82,34 @@ describe("plainQuery", () => {
 
   it.each(["!!!", "🎉", '""', "?", "()"])("refuses %s, which holds no letter or digit", (text) => {
     expect(() => plainQuery(text)).toThrow("search needs a letter or a digit to look for")
+  })
+
+  it.each([
+    ["invoice^2", 'drop it: invoice, or quote the text to find it as written: "invoice^2"'],
+    ["договор^1.5 аренды", "drop it: договор,"],
+  ])("refuses the boost of %s and says what to write instead", (text, alternative) => {
+    expect(() => plainQuery(text)).toThrow(
+      expect.objectContaining({ details: expect.objectContaining({ reason: "query.unsupported-operator" }) }),
+    )
+    expect(() => plainQuery(text)).toThrow(alternative)
+  })
+
+  it.each([
+    ["status:open", "tasks list status:open"],
+    ["sender_name:x OR budget", "fields here:"],
+    ["invoice AND assignee:ana", "tasks list assignee:"],
+  ])("refuses %s, a field this search does not have, instead of searching the words", (text, alternative) => {
+    expect(() => plainQuery(text)).toThrow(
+      expect.objectContaining({ details: expect.objectContaining({ reason: "query.unknown-field" }) }),
+    )
+    expect(() => plainQuery(text)).toThrow(alternative)
+  })
+
+  it("takes an alias and _exists_ as fields, and leaves a name that is no field's shape as words", () => {
+    expect(plainQuery("sender:ana")).toBe("sender:ana")
+    expect(plainQuery("_exists_:from")).toBe("_exists_:from")
+    expect(words("итог:договор")).toEqual(["text:итог:договор"])
+    expect(words("Status:open")).toEqual(["text:Status:open"])
   })
 
   it("leaves fuzzy search and a field's own mistakes to the search to report", () => {

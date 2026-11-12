@@ -305,6 +305,26 @@ export const chatStats = ({ orm }: StoreContext, accountKey: number, chatId: Id 
     }))
 }
 
+// `message_count` is kept by triggers; ORDER BY … LIMIT 1 walks `messages_by_time` and skips a tombstone, where
+// max() over the same rows would read the whole chat (PERF-100: 0.48 s of every search at 1M messages).
+export const chatsNewest = (
+  { database }: StoreContext,
+  accountKey: number,
+): Pick<ChatStats, "chatId" | "title" | "messages" | "newestAt">[] =>
+  database
+    .prepare(
+      `SELECT c.external_id AS chat, c.title, c.message_count AS messages, (SELECT m.sent_at FROM messages m WHERE m.chat_id = c.id
+         AND m.deleted_at IS NULL ORDER BY m.sent_at DESC LIMIT 1) AS newest
+       FROM chats c WHERE c.account_id = ? AND c.message_count > 0`,
+    )
+    .all(accountKey)
+    .map((row) => ({
+      chatId: String(row.chat),
+      title: row.title === null ? null : String(row.title),
+      messages: Number(row.messages),
+      newestAt: toIso(row.newest === null ? null : Number(row.newest)),
+    }))
+
 /** One sender's stored messages per chat — count, first and last — in one grouped read. */
 export const senderStats = (
   { orm }: StoreContext,

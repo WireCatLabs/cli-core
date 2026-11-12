@@ -62,7 +62,11 @@ operator/field tables, budgets, presets и recipes; `docs:check` проверя�
 text — существующий SQLite FTS5 `unicode61 remove_diacritics 2` над normalized_text v1.
 NFKD/mark stripping/NFC/lowercase/control-whitespace folding не меняются. Literal с несколькими
 анализированными tokens сопоставляется как последовательность; несколько query terms — Boolean.
-Boost и fuzzy profile operators отвергаются; discovery никогда не добавляет hits.
+Boost и fuzzy profile operators отвергаются; discovery никогда не добавляет hits. `plainQuery` не чинит `word^N`
+в литерал: `query.unsupported-operator` с alternative «без `^N`» и «в кавычках». Пометка «boost снят» потребовала бы
+нового поля результата; отказ даёт агенту готовый повтор. Неизвестное поле вида `[a-z][a-z_]{2,}` со значением, не
+начинающимся с `/`, — `query.unknown-field` (alternative: поля поиска или список, фильтрующий по нему, и запись в
+кавычках); прочие `слово:` (`10:30`, `HH:MM`, `итог:`) по-прежнему литерал.
 `~` после term — alternative про prefix `word*`. `"a b"~N` (text, exact, transcript, content, слово без поля;
 N ≤ 50) — FTS5 `NEAR(... , N)`: слова одного сообщения, между ними не больше N, порядок любой (у Lucene
 обратный порядок стоит slop). По `message_stems` строка с `STEM_SEPARATOR` (два латинских прочтения)
@@ -127,6 +131,16 @@ FIELD_VERSION не меняется: новое поле, ничего не пе
 страницы ответа. Legacy (`words.ts`) и `--backend` server search по-прежнему ищут только текст.
 FIELD_VERSION не меняется: поле `text` не переименовано, у слова без поля шире охват; сохранённые поиски
 разбираются заново и получают это поведение.
+Синонимы (`MessageField.aliases`) переименовываются в `validateFields` до проверки и до разрешения имён: `sender` →
+`from`; сохранённое дерево с синонимом проходит тот же путь. `title:` зависит от корпуса: в сообщениях —
+`instr(c.title_folded, ?)` по каждому слову (фраза — целиком), в почте — компилятор `subject`, в заметках — прежний.
+Поля заметок (site/lang/author/keyword/source) в корпусах сообщений и почты — `query.unsupported-field`.
+Presence (`field:*`, `_exists_:field`; `validateFields(…, {presence:true})`, только поиск сообщений и почты): from —
+`sender_identity_id IS NOT NULL`, title — непустое название чата или тема, subject — тема (`text` не начинается с
+пустой строки), to/cc/bcc — `email_recipients` той роли, topic и participants_count — колонки чата (поля
+мессенджера); `chat:*` и `date:*` становятся `date:[* TO *]`. Остальным — `query.unsupported-operator` с
+alternative (`has:text`, `has:file`, `has:link`, `has:transcript`); шаблонные поля (filename, mime, tag, mailbox)
+читают `*` как шаблон. FIELD_VERSION не меняется: поля не переименованы.
 Поля почты (to/cc/bcc/subject/mailbox/label/list/is): поиск без почтового аккаунта отвергает их
 (`query.unsupported-field`), в поиске по мессенджерам и почте сразу они совпадают только с почтой. label — синоним
 mailbox. is: `unread` — `emails.read = 0`, `read` — `emails.read = 1`, `starred` — `emails.flagged = 1`;
@@ -160,8 +174,14 @@ Explicit chat-only scan стартует с chat/time index. Index not ready —
 message называет прогресс (`filledThrough/watermark` либо pendingNormalization) и `<cli> store migrate`.
 
 Postfilter candidate selection — SQL superset без unsafe отрицания bounded predicates; full AST
-проверяется на candidates. Row/byte caps проверяются до body loading; bounded batches позволяют abort.
+проверяется на candidates в порядке ответа. Страница останавливается на limit+1 найденном: byte cap считает только
+прочитанные пачки, row cap отказывает, лишь если страница не заполнилась (порядок candidates — порядок ответа,
+hasMore — по limit+1, total здесь не считается). Подсчёт и группы читают всех candidates и проверяют caps заранее.
+Отказ называет шаблон (`term`) и alternative `*часть*`; bounded batches позволяют abort.
 Relevance и pagination не меняют matched set. Охват описывает выбранные accounts/chats даже при нуле.
+Охват берёт название, число и новейшее сообщение чатов из `chatsNewest`: `chats.message_count` (триггеры) и
+`ORDER BY sent_at DESC LIMIT 1` по `messages_by_time` с пропуском tombstone, а не count/min/max по всем сообщениям
+(было 0,45 с на 1M при каждом поиске).
 lastSyncedAt — самый старый `fetched:<chat>` sync_state охвата (null, если чат охвата не скачивался);
 inventoryComplete — у каждого account охвата есть `chat_list_complete` (пишет `markChatsLeft`);
 wordsReady — `searchIndexState().ready` для любого запроса, не константа.

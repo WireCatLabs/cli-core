@@ -83,6 +83,20 @@ describe("contacts", () => {
     await store.close()
   })
 
+  it("**find people by a part of their address or phone**, the phone by its digits", async () => {
+    const store = await seeded()
+    await store.people.savePeople(OWNER, [
+      { id: "7", name: "Vera", phone: "+34 600 11 22 33" },
+      { id: "8", name: "Anna", email: "Anna.K@Example.com" },
+    ])
+    const page = { order: "name" as const, limit: 10 }
+    expect(ids(await store.people.contacts(OWNER, { ...page, phone: "+34600" }))).toEqual(["7"])
+    expect(ids(await store.people.contacts(OWNER, { ...page, phone: "600-11" }))).toEqual(["7"])
+    expect(ids(await store.people.contacts(OWNER, { ...page, email: "example.com" }))).toEqual(["8"])
+    await expect(store.people.contacts(OWNER, { ...page, phone: "abc" })).rejects.toThrow("phone: takes digits")
+    await store.close()
+  })
+
   it("**find people by text in the owner's private notes**, Latin letters in any case", async () => {
     const store = await seeded()
     await store.people.addContactNote(OWNER, "7", "Met at the Valencia meetup")

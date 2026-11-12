@@ -5,7 +5,7 @@ import { isImportedProvider, kindIn, UNKNOWN_PROVIDER } from "../domain/provider
 import { type MessengerTraits, syncsOneChat } from "../ports/traits.js"
 import type { SkippedSource } from "../search/account-list.js"
 import { PRESET_VERSION } from "../search/lucene/presets.js"
-import { FIELD_VERSION, validateAst, validateFields } from "../search/lucene/registry.js"
+import { FIELD_VERSION, isPresence, validateAst, validateFields } from "../search/lucene/registry.js"
 import {
   hasStems,
   hasText,
@@ -141,7 +141,7 @@ export const prepareLucene = async (
     searchError("query.conflict", { start: 0, end: 0 }, "an AST names its fields — use field exact instead of exact")
   const ast: QueryAst =
     request.ast !== undefined
-      ? validateAst(request.ast)
+      ? validateAst(request.ast, { presence: true })
       : request.text === undefined
         ? {
             version: 1,
@@ -159,6 +159,7 @@ export const prepareLucene = async (
           }
         : validateFields(
             parseLucene(request.text, { ...MESSAGE_PARSING, defaultField: request.exact ? "exact" : "text" }),
+            { presence: true },
           )
   const timezone = timezoneOf(request.timezone)
   const stored = await store.accounts.accounts()
@@ -230,6 +231,7 @@ export const prepareLucene = async (
         ...node,
         clauses: await Promise.all(node.clauses.map(async ({ occur, node }) => ({ occur, node: await resolve(node) }))),
       }
+    if (isPresence(node)) return node
     if (node.field === "chat" && node.operator === "wildcard")
       return anyOf(node, await chatsMatchingIn(chatLookup, scopeAccounts, node.value), (chat) => ({ chat }))
     if (node.field === "chat")
@@ -395,7 +397,7 @@ export const coverageOf = async (
   messenger: Partial<Pick<MessengerTraits, "app" | "history" | "historyOnDemand" | "provider">> = {},
 ): Promise<{ completeness: (ChatCompleteness & AccountKey)[]; coverage: SearchCoverage }> => {
   const completeness: (ChatCompleteness & AccountKey)[] = []
-  const stats = new Map<string, ChatStats>()
+  const stats = new Map<string, Pick<ChatStats, "title" | "messages" | "newestAt">>()
   let inventoryComplete = scopeAccounts.length > 0
   // An import-only account holds what its import wrote: no fetch could add to it, so it says nothing of coverage.
   for (const selected of scopeAccounts.filter(({ provider }) => !isImportedProvider(provider))) {
@@ -410,7 +412,7 @@ export const coverageOf = async (
     for (const chat of await store.chats.chatCompleteness(selected, chatIds))
       completeness.push({ ...chat, ...selected })
     const wanted = new Set(chatIds)
-    for (const one of await store.chats.chatStats(selected))
+    for (const one of await store.chats.chatsNewest(selected))
       if (wanted.has(one.chatId)) stats.set(statKey(selected, one.chatId), one)
   }
   // Only this messenger's chats can be fetched by its command; another source's say nothing about it.

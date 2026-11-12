@@ -22,11 +22,13 @@ node --input-type=module - "$QUERY_REF_ROOT" "$QUERY_REF_TMP" "$QUERY_REF_MODE" 
 import {readFileSync,writeFileSync} from "node:fs"
 import {join} from "node:path"
 const [root,temp,mode]=process.argv.slice(2)
+// Lucene prints some nodes by Java's default toString, class@identity-hash, which differs per JDK and per run.
+const stable=(text)=>JSON.parse(text.replace(/(\.[A-Z][\w$]*)@[0-9a-f]{1,8}\b/g,"$1@<id>"))
 for(const file of ["reference.json","regex-reference.json"]) {
-  const actual=JSON.parse(readFileSync(join(temp,file),"utf8"))
+  const actual=stable(readFileSync(join(temp,file),"utf8"))
   const target=join(root,"src/search/lucene",file)
   if(mode==="--write")writeFileSync(target,JSON.stringify(actual,null,2)+"\n")
-  else if(JSON.stringify(actual)!==JSON.stringify(JSON.parse(readFileSync(target,"utf8")))) throw new Error(`reference drift in ${file}`)
+  else if(JSON.stringify(actual)!==JSON.stringify(stable(readFileSync(target,"utf8")))) throw new Error(`reference drift in ${file}`)
 }
 console.log("Lucene 9.12.3 reference fixtures verified")
 JS
