@@ -91,7 +91,7 @@ const machine = () => {
 
 const call = async (
   argv: string[],
-  { env, keyring }: { env: NodeJS.ProcessEnv; keyring: KeyringStore },
+  { env, keyring, ownerHome }: { env: NodeJS.ProcessEnv; keyring: KeyringStore; ownerHome?: string },
   removal: AccountRemoval,
   system: ServerSystem = machine().system,
 ) => {
@@ -102,7 +102,10 @@ const call = async (
       app,
       commands: () => [
         new Command("account").addCommand(
-          accountRemoveCommand(app, removal, { resolveSettings: settingsFor(app).resolveSettings }),
+          accountRemoveCommand(app, removal, {
+            resolveSettings: settingsFor(app).resolveSettings,
+            ...(ownerHome === undefined ? {} : { ownerHome }),
+          }),
         ),
       ],
     },
@@ -223,6 +226,51 @@ describe("account remove", () => {
     expect(result.item.kept).toEqual([])
     expect(existsSync(given.media)).toBe(false)
     expect(await storeState(given.env)).toEqual({ accounts: ["600"], profiles: ["work"] })
+  })
+
+  it("**removes nothing in the owner's folders when only the config folder is moved** (WC-SECR-24)", async () => {
+    const root = mkdtempSync(join(tmpdir(), "account-remove-moved-config-"))
+    const env: NodeJS.ProcessEnv = { HOME: root, CHAT_CONFIG_DIR: join(root, "moved-config") }
+    mkdirSync(join(root, "moved-config"), { recursive: true })
+    writeFileSync(join(root, "moved-config", "config.json"), JSON.stringify({ profiles: { personal: {} } }))
+    rememberAccount(app, "personal", "500", env)
+    const store = await openStore({ env })
+    await store.accounts.saveAccount({ provider: "telegram", account: "500" }, { name: "personal" })
+    await store.accounts.saveProfile("chat", "personal", { provider: "telegram", account: "500" })
+    await store.close()
+    const state = join(root, ".local", "share", "chat-cli")
+    const session = join(state, "sessions", "personal.session")
+    const lock = lockPath(app, "personal", env)
+    for (const file of [session, lock]) {
+      mkdirSync(join(file, ".."), { recursive: true })
+      writeFileSync(file, JSON.stringify({ pid: 2 ** 22 + 1, startedAt: new Date(0).toISOString() }))
+    }
+    const keyring = memoryKeyring()
+    const removal: AccountRemoval = {
+      signOut: async () => ({ revoked: null, removed: [] }),
+      account: () => ({ provider: "telegram", account: "500" }),
+      stateFiles: () => [session],
+      dataFiles: () => [join(state, "media")],
+    }
+
+    const result = await call(
+      ["personal", "--json", "account", "remove", "--delete-data", "--yes"],
+      { env, keyring, ownerHome: root },
+      removal,
+    )
+
+    expect(result.code).toBe(0)
+    expect(result.item.removed.filter(({ kind }: { kind: string }) => kind === "file" || kind === "store")).toEqual([])
+    expect(result.item.kept).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: "file", target: accountFileFor(app, "personal", env) }),
+        expect.objectContaining({ kind: "file", target: session }),
+        expect.objectContaining({ kind: "file", target: lock }),
+        expect.objectContaining({ kind: "store", target: "telegram:500" }),
+      ]),
+    )
+    for (const file of [accountFileFor(app, "personal", env), session, lock]) expect(existsSync(file)).toBe(true)
+    expect((await storeState(env)).accounts).toEqual(["500"])
   })
 
   it("refuses while a serve runs for the profile, or the tool says a sync holds it", async () => {
@@ -383,7 +431,7 @@ describe("account remove and what cli-core keeps for the profile", () => {
     write(join(checkpoint, "meetings.json"))
     const result = await call(["personal", "--json", "account", "remove", "--keep-data", "--yes"], given, {
       ...removalOf(given),
-      ownFolders: () => [extra],
+      ownFolders: ({ env }) => [join(env.HOME as string, ".local", "share", "zm")],
       stateFiles: () => [checkpoint],
     })
 
