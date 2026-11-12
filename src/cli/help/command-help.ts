@@ -5,7 +5,6 @@ import { commandPathOf, outputOf } from "../command-contract.js"
 import { environmentOf } from "../context.js"
 import { takesProfile } from "../profile.js"
 import { commandAt } from "../steps.js"
-import { short } from "./commands-text.js"
 
 type Kind = "chat" | "message" | "person" | "task" | "meeting" | "folder" | "topic" | "note" | "document" | "model"
 
@@ -105,16 +104,14 @@ export const nextUsually = <T extends Command>(command: T, choice: NextChoice): 
 
 const kindOfArgument = (argument: Argument): Kind | undefined => ARGUMENT_KINDS[argument.name()]
 
-/** A group like `doctor` that also runs on its own: its help and docs keep their own lines beside its subcommands'. */
-const runsItself = (command: Command): boolean =>
-  (command as unknown as { _actionHandler: unknown })._actionHandler != null
+const runs = (command: Command): boolean =>
+  command.commands.length === 0 || Boolean((command as Command & { _actionHandler?: unknown })._actionHandler)
 
+/** Every command that runs: the leaves, and a group that also runs on its own, such as `doctor`. */
 const leaves = (command: Command): Command[] =>
   command.commands
     .filter((child) => !(child as Command & { _hidden?: boolean })._hidden)
-    .flatMap((child) =>
-      child.commands.length === 0 ? [child] : [...(runsItself(child) ? [child] : []), ...leaves(child)],
-    )
+    .flatMap((child) => [...(runs(child) ? [child] : []), ...leaves(child)])
 
 const rootOf = (command: Command): Command => {
   let at = command
@@ -139,8 +136,7 @@ const fieldsOf = (schema: Record<string, unknown>): string[] => {
 const returnsOf = (command: Command): string => {
   const output = metaOf(command).output
   const { item, coverage } = outputOf(command)
-  if (!output || coverage !== "declared-entity")
-    return short(command.summary() || command.description()) || "not declared"
+  if (!output || coverage !== "declared-entity") return ""
   const fields = [...new Set(fieldsOf(item))]
   const noun = (output.view ? `${output.entity} ${output.view}` : output.entity).replaceAll("_", " ")
   const more = fields.length > 8 ? `, and ${fields.length - 8} more` : ""
@@ -219,6 +215,7 @@ const withProfile = (command: Command, example: string): string => {
 }
 
 export interface CommandHelp {
+  /** Empty when the command declares no output entity: its description already says what it does. */
   returns: string
   next: readonly string[]
   examples: readonly string[]
@@ -261,7 +258,7 @@ export const commandHelpText = (command: Command): string => {
   return [
     "",
     ...access,
-    ...rows("Returns:", [returns]),
+    ...rows("Returns:", returns ? [returns] : []),
     ...rows("Next usually:", next),
     ...rows("Example:", examples),
     "",
@@ -271,11 +268,11 @@ export const commandHelpText = (command: Command): string => {
 /** The same, as Markdown lines for `docs/commands.md`: hand it to cli-base's `commandsPage` per command. */
 export const commandHelpMarkdown = (root: Command, path: readonly string[]): string[] => {
   const command = commandAt(root, path.join(" "))
-  if (!command || (command.commands.length > 0 && !runsItself(command))) return []
+  if (!command || !runs(command)) return []
   const { returns, next, examples } = commandHelp(command)
   const code = (values: readonly string[]) => values.map((value) => `\`${value}\``).join(", ")
   return [
-    `**Returns:** ${returns}`,
+    ...(returns ? [`**Returns:** ${returns}`] : []),
     ...(next.length > 0 ? [`**Next usually:** ${code(next)}`] : []),
     `**Example:** ${code(examples)}`,
   ]

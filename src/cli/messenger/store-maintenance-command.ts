@@ -53,7 +53,7 @@ import {
   vectorIndexCounts,
 } from "../../store/store.js"
 import { environmentOf, outputFor } from "../context.js"
-import { destroysNothing, LOCAL_READ, LOCAL_WRITE } from "../effects.js"
+import { destroysNothing, grantsAuthority, LOCAL_READ, LOCAL_WRITE } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { commandAt, lineOf, nextStep } from "../steps.js"
 import { storeInfoCommand } from "../store-info.js"
@@ -721,7 +721,7 @@ const decryptCommand = (): Command =>
  * `serve` runs: that opens the store on its first write, so until then it holds nothing to see.
  */
 const restoreCommand = (owner: StoreOwner): Command =>
-  annotate(new Command("restore"), { output: { entity: "store_restore" }, effects: LOCAL_WRITE })
+  grantsAuthority(annotate(new Command("restore"), { output: { entity: "store_restore" }, effects: LOCAL_WRITE }))
     .summary("restore a backup and keep the current store, or roll back a breaking upgrade")
     .description(
       "put a backup in place of the store; the store it replaces is kept beside it, never deleted. Given a rollback " +
@@ -903,7 +903,7 @@ const quiesce = async (
  * pages until a VACUUM, and every table comes back in this build's shape.
  */
 const resetCommand = (owner: StoreOwner): Command =>
-  annotate(new Command("reset"), { output: { entity: "store_reset" }, effects: LOCAL_WRITE })
+  annotate(new Command("reset"), { output: { entity: "store_reset" }, effects: LOCAL_WRITE, mcp: false })
     .summary(`back up the ${archive(owner)} and replace it with an empty one`)
     .description(
       "back the store up beside itself, then delete it and start an empty one at this build's schema; asks first, or --yes",

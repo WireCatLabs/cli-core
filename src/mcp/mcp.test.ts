@@ -2275,6 +2275,8 @@ describe("the MCP server", () => {
   it("offers the store and runs commands, each limited by a permission key (NEED-1663)", async () => {
     const commands = await (await connect(scripted())).client.availableCommands()
 
+    // `store restore` and `store recover run` put older settings back, so they wait for `mcp.authority`; `store reset`
+    // needs the global --yes, which a call cannot pass (SEC-193).
     expect(commands.filter((one) => one.startsWith("store ") || one.startsWith("runs ")).sort()).toEqual([
       "runs list",
       "runs path",
@@ -2298,11 +2300,7 @@ describe("the MCP server", () => {
       "store migrate",
       "store rebuild",
       "store recover",
-      "store recover run",
       "store repair",
-      "store reset",
-      "store restore",
-
       "store status",
       "store tables list",
     ])

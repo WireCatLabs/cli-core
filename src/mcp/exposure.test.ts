@@ -22,7 +22,8 @@ const withChatDeletion = () =>
   )
 
 describe("what the shared commands keep off MCP servers (NEED-1411, owner 2026-10-23)", () => {
-  it.each(["mcp", "complete", "bot auth", "bot mcp"])("%s", (path) => {
+  // `store reset` needs the global --yes, which an MCP call cannot pass: offered, it could only fail (SEC-193).
+  it.each(["mcp", "complete", "bot auth", "bot mcp", "store reset"])("%s", (path) => {
     const found = flatten(withChatDeletion()).find((one) => one.path.join(" ") === path)
 
     expect(found, path).toBeDefined()
@@ -60,8 +61,8 @@ describe("what the shared commands keep off MCP servers (NEED-1411, owner 2026-1
     ["images models download", "images.models.download"],
     ["schedule run", "schedule.run"],
     ["server start", "server.start"],
-    ["store reset", "store.reset"],
     ["store restore", "store.restore"],
+    ["store recover run", "store.recover.run"],
   ])("keeps %s discoverable when %s is denied", (path, key) => {
     const catalogue = (levels: Record<string, Level>) =>
       toolsFromCommands(withChatDeletion(), { exclude: [["bot"]], includeUnavailable: true, levels })
@@ -80,6 +81,8 @@ describe("what the shared commands keep off MCP servers (NEED-1411, owner 2026-1
     "replies add",
     "schedule command",
     "skill install",
+    "store restore",
+    "store recover run",
   ])("lists %s with its authority requirement", (path) => {
     const program = createProgram(sharedProgram)
     const listed = (levels: Record<string, Level>) =>

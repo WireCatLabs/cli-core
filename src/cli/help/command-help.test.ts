@@ -79,10 +79,10 @@ describe("generated command help", () => {
     `)
   })
 
-  it("takes the definition's example, and falls back to the description without an output schema", async () => {
+  it("takes the definition's example, and says no Returns without an output schema", async () => {
     const link = (await help(["messages", "link"])).stdout
     expect(link).toContain("Example:       tg personal messages link Team 1234")
-    expect(link).toContain("Returns:       a message's permalink")
+    expect(link).not.toContain("Returns:")
 
     expect((await help(["messages", "send"])).stdout).toContain(
       'Example:       tg personal messages send Team "on my way"',

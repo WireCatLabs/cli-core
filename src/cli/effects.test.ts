@@ -113,6 +113,8 @@ describe("command effects", () => {
         "server install",
         "server uninstall",
         "skill install",
+        "store recover run",
+        "store restore",
         "templates edit",
         "templates reset",
       ].sort(),
@@ -191,10 +193,8 @@ describe("command effects", () => {
         "store decrypt",
         "store import",
         "store migrate",
-        "store recover run",
         "store repair",
         "store reset",
-        "store restore",
         "tags add",
         "tags rebuild",
         "tags remove",
@@ -445,7 +445,7 @@ describe("the read-only lock on the message store", () => {
     const { code, error } = await locked(["ro", ...words], store)
 
     expect([code, error.code]).toEqual([5, "permission_error"])
-    expect(error.message).toBe("this process is read-only (CHAT_READ_ONLY) — it cannot change the message store")
+    expect(error.message).toMatch(/^this process is read-only \(CHAT_READ_ONLY\) — /)
     expect(readFileSync(store, "utf8")).toBe("kept")
     expect(existsSync(output)).toBe(false)
   })

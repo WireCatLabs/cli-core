@@ -73,6 +73,8 @@ describe("a CLI that declares its own permission keys", () => {
     for (const key of ["messages", "messages.send", "config", "chats.delete"]) expect(known.has(key)).toBe(false)
     expect(commandPathKey(["config", "set"])).toBeNull()
     expect(commandPathKey(["events", "list"])).toBe("events.list")
+    expect(commandPathKey(["doctor", "reports", "create"])).toBe("doctor.reports.create")
+    expect(commandPathKey(["doctor", "reports", "show"])).toBeNull()
   })
 
   it("**saves a key that names a command or group, and refuses one that names none**, listing the ones beside it", async () => {

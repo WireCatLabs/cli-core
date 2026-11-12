@@ -577,6 +577,19 @@ describe("doctor reports show", () => {
     expect(sent.operationId).toBe(sent.sendId)
   })
 
+  it("**never overwrites a file** given to --output (SEC-192)", async () => {
+    const { root, env } = setup()
+    const output = join(root, "notes.txt")
+    writeFileSync(output, "kept")
+
+    const { code, stderr } = await call(["doctor", "reports", "create", "--output", output, "--json"], env, refused)
+
+    expect(code).not.toBe(0)
+    const { error } = JSON.parse(stderr.find((line) => line.startsWith("{")) ?? "{}")
+    expect(error).toMatchObject({ code: "validation_error", reason: "doctor.report-exists" })
+    expect(readFileSync(output, "utf8")).toBe("kept")
+  })
+
   it("names a run that does not exist, and explains itself without writing", async () => {
     const { env } = setup()
     const missing = await call(["doctor", "reports", "create", "--run", "nope"], env, refused)

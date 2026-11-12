@@ -70,6 +70,7 @@ const PROVIDER_API: Entry[] = [
 ]
 
 const OTHERS: Entry[] = [
+  validation("doctor.report-exists", "the report's file exists; a problem report never overwrites a file"),
   ["query.time-limit", "timeout", "the search took longer than its time limit; the query itself is valid"],
   ["enrichment.owner-only", "permission_error", "only the owner turns enrichment on, not an agent"],
   ["search-harder.owner-only", "permission_error", "only the owner allows search all --harder, not an agent"],

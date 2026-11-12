@@ -270,7 +270,6 @@ write store migrate
 write store rebuild
 write store recover run
 write store repair
-write store reset
 write store restore
 write tags add
 write tags rebuild

@@ -18,7 +18,7 @@ import {
 } from "../store/recover.js"
 import { openSqlite } from "../store/store.js"
 import { environmentOf, outputFor } from "./context.js"
-import { LOCAL_READ, LOCAL_WRITE } from "./effects.js"
+import { grantsAuthority, LOCAL_READ, LOCAL_WRITE } from "./effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "./envelope.js"
 
 /** The tables whose counts say what the store holds; every other table is in `store info`. */
@@ -254,7 +254,7 @@ export const storeRecoverCommand = ({ command, version }: { command: string; ver
       if (output.format === "pretty") for (const line of recoveryNotes(answer)) output.renderer.note(line)
     })
   recover.addCommand(
-    annotate(new Command("run"), { effects: LOCAL_WRITE, examples: [`${command} store recover run`] })
+    grantsAuthority(annotate(new Command("run"), { effects: LOCAL_WRITE, examples: [`${command} store recover run`] }))
       .summary("rebuild a damaged store from every row it can read")
       .description(
         "copy every readable row into a new file with the sqlite3 program, rebuild the search indexes, mentions and vector index, " +

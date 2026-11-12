@@ -4,6 +4,7 @@ import {
   AUTHORITY_KEY,
   CEILING_KEY,
   DEFAULT_PERMISSIONS,
+  KEYED_UNDER_HOUSEKEEPING,
   keyForCommand,
   type Level,
   type PermissionKey,
@@ -57,7 +58,9 @@ const HOUSEKEEPING = new Set([
 
 /** A command's own path is its key; the commands that look after the tool have none. */
 export const commandPathKey = (path: readonly string[]): PermissionKey | null =>
-  path[0] === undefined || HOUSEKEEPING.has(path[0]) ? null : path.join(".")
+  path[0] === undefined || (HOUSEKEEPING.has(path[0]) && !KEYED_UNDER_HOUSEKEEPING.has(path.join(".")))
+    ? null
+    : path.join(".")
 
 export const commandPermissions = ({
   keyOf = commandPathKey,

@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs"
-import { dirname, resolve } from "node:path"
-import { configFilePath, resolvePaths, writeSecurely } from "@wirecat/cli-base"
+import { dirname } from "node:path"
+import { configFilePath, resolvePaths } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { engineStates } from "../../attachments/extract.js"
@@ -12,16 +12,16 @@ import { FloodMemory, floodPathFor } from "../../sends/flood.js"
 import { SendJournal, sendsPathFor } from "../../sends/journal.js"
 import { storePath } from "../../store/path.js"
 import { type BaseContext, baseContext, environmentOf, outputFor } from "../context.js"
+import { doctorReportsCommand } from "../doctor-reports-command.js"
 import { DOCTOR_ONLINE_OPTION, DOCTOR_SUMMARY } from "../doctor-text.js"
-import { destroysNothing, LOCAL_WRITE, NO_EFFECTS, REMOTE_READ } from "../effects.js"
+import { REMOTE_READ } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { unknownPermissionIssues } from "../permission-keys.js"
 import { NONE_NAMED } from "../settings.js"
-import { lineOf, nextStep, rootOf } from "../steps.js"
+import { nextStep } from "../steps.js"
 import { recalledAccount } from "./accounts.js"
 import { type Messenger, messengerContext } from "./context.js"
 import { type PrivateFiles, privateFiles, withSqliteSidecars } from "./private-files.js"
-import { buildReport, reportFileName } from "./report.js"
 import { DAY_MS } from "./serve-members.js"
 import { storeSummary } from "./store-maintenance-command.js"
 
@@ -99,84 +99,23 @@ const INCLUDES = [
 ]
 const EXCLUDES = ["message text", "chat titles", "names", "phone numbers", "the session", "the app credentials"]
 
-const reportCommand = (messenger: Messenger): Command => {
-  const { app } = messenger
-  const report = annotate(new Command("reports"), { effects: NO_EFFECTS }).description("problem reports")
-  annotate(report.command("show"), {
-    effects: NO_EFFECTS,
-    examples: [`${app.command} doctor reports show`],
-  })
-    .description("what a problem report holds; writes nothing")
-    .summary("what a report holds and never holds, and where to send it; writes nothing")
-    .action(function (this: Command) {
-      const output = outputFor(this)
-      const create = lineOf(this, "doctor reports create")
-      renderAnswer(
-        this,
-        output,
-        itemOf(
-          { includes: INCLUDES, excludes: EXCLUDES, ...(app.issues ? { send_to: app.issues } : {}) },
-          { next: [nextStep("doctor.report-create", { args: {} })] },
-        ),
-        () =>
-          [
-            `A problem report is one file for the author of ${app.command}.`,
-            "",
-            "It holds:",
-            ...INCLUDES.map((line) => `- ${line}`),
-            "",
-            `It never holds: ${EXCLUDES.join(", ")}.`,
-            "",
-            `Create one:          ${create}`,
-            `About a given run:   ${create} --run <id>   (ids: ${lineOf(this, "runs list")})`,
-          ].join("\n"),
-      )
-    })
-
-  destroysNothing(
-    annotate(report.command("create"), {
-      effects: LOCAL_WRITE,
-      examples: [`${app.command} personal doctor reports create --output ./problem-report.json`],
-    }),
-  )
-    .description("write a problem report to a file, and say where to send it")
-    .summary("the report file written: its path, the run it is about, and where to send it")
-    .option("--run <id>", "the run the report is about; the newest failed one if not given")
-    .option("--output <file>", "where to write it; a new file in this directory if not given")
-    .action(async function (this: Command) {
-      const options = this.opts<{ run?: string; output?: string }>()
-      const env = environmentOf(this).env ?? process.env
-      const { report: doctor, renderer, profile } = await diagnose(this, messenger)
-      const now = new Date()
-      const built = buildReport({
-        doctor,
-        runsDir: runsDirFor(app, env),
-        command: app.command,
-        sends: profile ? new SendJournal(sendsPathFor(app, profile, env)).entries() : [],
-        now,
-        home: env.HOME ?? env.USERPROFILE,
-        program: rootOf(this),
-        ...(options.run === undefined ? {} : { runId: options.run }),
-      })
-      const path = resolve(options.output ?? reportFileName(app.command, now))
-      writeSecurely(path, `${JSON.stringify(built, null, 2)}\n`, 0o600)
-      const output = outputFor(this)
-      const out = renderer ?? output.renderer
-      renderAnswer(
-        this,
-        { ...output, renderer: out },
-        itemOf({ path, run: built.run?.metadata.runId ?? null, ...(app.issues ? { send_to: app.issues } : {}) }),
-      )
-      if (!built.run) {
-        out.note("no failed run is recorded — run the failing command again, and the failure is kept by itself")
+const reportCommand = (messenger: Messenger): Command =>
+  doctorReportsCommand({
+    app: messenger.app,
+    includes: INCLUDES,
+    excludes: EXCLUDES,
+    example: `${messenger.app.command} personal`,
+    check: "no message text, and ids are labels",
+    collect: async (command) => {
+      const env = environmentOf(command).env ?? process.env
+      const { report, renderer, profile } = await diagnose(command, messenger)
+      return {
+        doctor: report,
+        sends: profile ? new SendJournal(sendsPathFor(messenger.app, profile, env)).entries() : [],
+        ...(renderer ? { renderer } : {}),
       }
-      out.note(
-        `read it before sending: no message text, and ids are labels${app.issues ? ` — attach it to a new issue at ${app.issues}` : ""}`,
-      )
-    })
-
-  return report
-}
+    },
+  })
 
 const rememberedOf = (report: Record<string, unknown>) =>
   (report.account as { remembered?: string | null } | undefined)?.remembered ?? undefined

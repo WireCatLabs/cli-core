@@ -327,6 +327,7 @@ export { csvCell, csvRecords, writeCsv } from "./csv.js"
 export { type Closeable, withDeadline } from "./deadline.js"
 export { DEFAULT_CONFIG, ensureDefaultConfig } from "./default-config.js"
 export { DISCOVERY_DESCRIPTIONS } from "./discovery-descriptions.js"
+export { type DoctorReportsSource, doctorReportsCommand } from "./doctor-reports-command.js"
 export { refuseOffline } from "./early-refusal.js"
 export {
   admittedUnderLock,
