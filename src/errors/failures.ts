@@ -20,6 +20,14 @@ export const isCommanderFailure = (value: unknown): value is Error & { code: str
   )
 }
 
+const USAGE_REASONS: Record<string, string> = {
+  "commander.unknownCommand": "usage.unknown-command",
+  "commander.unknownOption": "usage.unknown-option",
+}
+
+/** The reason of a commander usage error a caller matches instead of commander's English, when it has one. */
+export const usageReason = (code: string): string | undefined => USAGE_REASONS[code]
+
 /** What failed, never what it said: a messenger's refusal can quote the message back. */
 export const failureKey = (error: unknown): string =>
   isCliFailure(error) ? error.code : error instanceof Error ? error.name : "error"

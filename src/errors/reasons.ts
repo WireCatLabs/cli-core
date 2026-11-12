@@ -48,6 +48,7 @@ const SIGN_IN: Entry[] = [
   ["sign-in.secret-without-id", "configuration_error", "an OAuth client secret is set without its client id"],
   validation("account-remove.no-choice", "account remove needs --keep-data or --delete-data, one of them"),
   ["account-remove.unknown-profile", "not_found", "no profile by this name on this computer"],
+  ["profile.unknown", "not_found", "no profile by this name on this computer; details.profiles lists the ones here"],
   ["account-remove.busy", "conflict", "a serve or a sync runs for this profile; stop it first"],
   ["account-remove.unconfirmed", "confirmation_required", "removing an account asks first; add --yes"],
   ["account-remove.path-outside", "configuration_error", "the tool named a path outside its own folders"],
@@ -71,6 +72,8 @@ const PROVIDER_API: Entry[] = [
 
 const OTHERS: Entry[] = [
   validation("doctor.report-exists", "the report's file exists; a problem report never overwrites a file"),
+  validation("usage.unknown-command", "no command by this name; the CLI's help lists them"),
+  validation("usage.unknown-option", "the command takes no option by this name; its help lists them"),
   ["query.time-limit", "timeout", "the search took longer than its time limit; the query itself is valid"],
   ["enrichment.owner-only", "permission_error", "only the owner turns enrichment on, not an agent"],
   ["search-harder.owner-only", "permission_error", "only the owner allows search all --harder, not an agent"],
@@ -267,6 +270,7 @@ const OTHERS: Entry[] = [
     "another program deleted or replaced the store's journal file while it was open; store recover says what to do",
   ],
   validation("store.file-damaged", "the named store file is damaged or not a database"),
+  ["store.unopenable", "configuration_error", "the store file cannot be opened at its path; details.path names it"],
   [
     "store.unreadable",
     "configuration_error",

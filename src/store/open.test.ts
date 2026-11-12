@@ -4,6 +4,7 @@ import { join } from "node:path"
 import { DatabaseSync } from "node:sqlite"
 import { afterEach, expect, it, vi } from "vitest"
 import { openCache } from "./open.js"
+import { openStore } from "./store.js"
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -21,4 +22,14 @@ it("closes the database when a file that is not a store fails to open", async ()
   const reopened = await openCache(path)
   expect(reopened.prepare("PRAGMA journal_mode").get()).toEqual({ journal_mode: "wal" })
   reopened.close()
+})
+
+it("a store path SQLite cannot open is a configuration error naming the path, not a crash", async () => {
+  const folder = mkdtempSync(join(tmpdir(), "open-folder-"))
+
+  await expect(openStore({ path: folder })).rejects.toMatchObject({
+    code: "configuration_error",
+    details: { reason: "store.unopenable", path: folder },
+  })
+  rmSync(folder, { recursive: true })
 })

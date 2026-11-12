@@ -44,6 +44,13 @@ export interface AccountRemovalContext {
   mayRevoke: boolean
 }
 
+/**
+ * Whether a sign-out may revoke the sign-in at the provider. A run with moved folders shares the owner's keyring
+ * entry and session (WC-SECR-24), so it only forgets its own copy. An injected keyring is a test's own.
+ */
+export const mayRevoke = (app: AppIdentity, env: NodeJS.ProcessEnv, keyring?: KeyringStore): boolean =>
+  keyring !== undefined || !isMovedRun({ appName: app.appName, prefix: app.envPrefix, env })
+
 export interface SignedOut {
   /** Whether the provider confirmed it took the sign-in back; `null` when the tool does not revoke. */
   revoked: boolean | null
@@ -242,7 +249,7 @@ export const accountRemoveCommand = (
           { reason: "account-remove.unknown-profile", profiles: settings.profilesHere },
         )
 
-      const moved = context.keyring === undefined && isMovedRun({ appName: app.appName, prefix: app.envPrefix, env })
+      const moved = !mayRevoke(app, env, context.keyring)
       const hooks: AccountRemovalContext = {
         env,
         ...(context.keyring ? { keyring: context.keyring } : {}),

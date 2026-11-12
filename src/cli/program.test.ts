@@ -1,4 +1,4 @@
-import { mkdtempSync, readdirSync, readFileSync } from "node:fs"
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { CliError, captureStreams } from "@wirecat/cli-base"
@@ -1227,6 +1227,44 @@ describe("a run with no profile named", () => {
       details: { profiles: [] },
     })
     expect(suggested.code).toBe(0)
+  })
+
+  it("**answers a mistyped profile with the profiles here**, a known one with its sign-in refusal", async () => {
+    const env = sandbox()
+    mkdirSync(join(env.APP_STATE_DIR ?? "", "accounts"), { recursive: true })
+    writeFileSync(join(env.APP_STATE_DIR ?? "", "accounts", "work.json"), '{"account":"1"}')
+    const signedOut = (): ProgramDefinition => ({
+      app,
+      commands: () => [
+        new Command("chats").addCommand(
+          new Command("list").action(() => {
+            throw new CliError("authentication_error", "not signed in", { reason: "session.missing" })
+          }),
+        ),
+      ],
+    })
+    const tryAs = async (profile: string) => {
+      const streams = captureStreams()
+      await run([profile, "chats", "list"], signedOut(), { streams, tty: false, env })
+      return JSON.parse(streams.stderr[0] ?? "").error
+    }
+
+    expect(await tryAs("wrok")).toMatchObject({
+      code: "not_found",
+      reason: "profile.unknown",
+      details: { profiles: ["work"] },
+    })
+    expect(await tryAs("work")).toMatchObject({ code: "authentication_error", reason: "session.missing" })
+  })
+
+  it("**gives commander's usage errors a reason**", async () => {
+    const env = sandbox()
+
+    const command = await go(["personal", "chts"], false, env)
+    const option = await go(["personal", "chats", "list", "--missing"], false, env)
+
+    expect(command.error.reason).toBe("usage.unknown-command")
+    expect(option.error.reason).toBe("usage.unknown-option")
   })
 
   it("**records no profile for the owner** — not `default` — and the one named, even one called default", async () => {

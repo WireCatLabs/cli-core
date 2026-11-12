@@ -34,6 +34,9 @@ describe("withoutSecrets", () => {
 
   it("keeps the name and hides the value of a secret-named pair, and a Bearer or Basic credential", () => {
     expect(withoutSecrets("password=hunter2")).toBe("password=[redacted]")
+    expect(withoutSecrets("POST https://acme.bitrix24.ru/rest/1/abcdwxyz12345678/crm.deal.list failed")).toBe(
+      "POST https://acme.bitrix24.ru/rest/1/[redacted]/crm.deal.list failed",
+    )
     expect(withoutSecrets("API_TOKEN=abc123 next")).toBe("API_TOKEN=[redacted] next")
     expect(withoutSecrets("client_secret:abc")).toBe("client_secret:[redacted]")
     expect(withoutSecrets('{"accessToken":"abc"}')).toBe('{"accessToken":"[redacted]"}')

@@ -200,6 +200,7 @@ export {
   type AccountRemoveOptions,
   type AccountSecrets,
   accountRemoveCommand,
+  mayRevoke,
   type SignedOut,
 } from "./account-remove.js"
 export { liftOptionsAfterDashes } from "./after-dashes.js"

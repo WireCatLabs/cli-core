@@ -1,6 +1,7 @@
 import { accessSync, constants, existsSync, mkdirSync, statSync, writeFileSync } from "node:fs"
 import { dirname } from "node:path"
 import { CliError } from "@wirecat/cli-base"
+import { sqliteCode } from "../../errors/failures.js"
 import { DEFAULT_DECISION_POLICY, type DecisionPolicy } from "../decisions.js"
 import { noteShmWithoutWal, watchJournal } from "../journal.js"
 import { refuseDamagedStore } from "../marks.js"
@@ -87,6 +88,18 @@ const openReadable = async (file: string, options: StoreOptions): Promise<Opened
   }
 }
 
+const SQLITE_CANTOPEN = 14
+
+/** A store path SQLite cannot open, such as a folder, is the owner's setting to fix, not a bug (BUG-753). */
+const unopenable = (error: unknown, file: string): unknown => {
+  const cannot =
+    sqliteCode(error) === SQLITE_CANTOPEN ||
+    (error instanceof Error && /unable to open database file/.test(error.message))
+  if (!cannot) return error
+  const message = `the store at ${file} cannot be opened: it is a folder, or this user may not open it`
+  return new CliError("configuration_error", message, { reason: "store.unopenable", path: file })
+}
+
 export const openStoreContext = async (options: StoreOptions = {}): Promise<StoreContext> => {
   const {
     path,
@@ -110,7 +123,9 @@ export const openStoreContext = async (options: StoreOptions = {}): Promise<Stor
     refuseDamagedStore(file, command)
     noteShmWithoutWal(file, command ?? "unknown")
   }
-  const opened = readOnly ? await openReadable(file, options) : await openSqlite(file, { readOnly })
+  const opened = await (readOnly ? openReadable(file, options) : openSqlite(file, { readOnly })).catch((error) => {
+    throw unopenable(error, file)
+  })
   const database = opened.database
   try {
     if (!readOnly) {
