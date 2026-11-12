@@ -53,13 +53,14 @@ interface HarnessKind {
 const modelFlag = (flag: string, model: string) => (model ? [flag, model] : [])
 
 /**
- * A command that chains, pipes, substitutes or runs in the background: more than the one CLI command a prefix rule
- * allows. `<` and `>` stay allowed, as queries such as `date>1d` use them, and a CLI's argument is not a redirect
- * unless a shell splits it so; the prefix rule's command is quoted by the agent as one word.
+ * Gemini tests a rule's regex against the call's arguments as JSON, after `"command":"`, so a pattern starts at the
+ * command's first character and `^` never matches. This one denies a command that chains, pipes, substitutes or runs
+ * in the background anywhere in its quoted text, a newline being `\n` there: more than the one CLI command a prefix
+ * rule allows. `<` and `>` stay allowed, as queries such as `date>1d` use them.
  */
-const CHAINED = "[;&|`$\\n]"
+const CHAINED = '(?:[^"\\\\]|\\\\.)*?(?:[;&|`$]|\\\\n)'
 /** A command that starts by setting variables (`MEMO_READ_ONLY=0 memo …`, `env -u …`): never a plain CLI command. */
-const ENV_PREFIX = "^\\s*(env\\b|[A-Za-z_][A-Za-z0-9_]*=)"
+const ENV_PREFIX = "\\s*(?:env\\s|[A-Za-z_][A-Za-z0-9_]*=)"
 
 /** One Gemini policy rule as TOML; every value is a string or a number. */
 const rule = (fields: Record<string, string | number>) =>
@@ -151,6 +152,8 @@ const AGENT_HARNESSES = {
           general: { defaultApprovalMode: "default" },
         }),
         "gemini/policy.toml": [
+          // The system settings' empty mcpServers is merged into the owner's, so their servers' tools are denied here.
+          rule({ toolName: "*", decision: "deny", priority: 1 }),
           rule({ toolName: "run_shell_command", decision: "deny", priority: 10 }),
           ...clis.map((one) =>
             rule({ toolName: "run_shell_command", commandPrefix: `${one.command} `, decision: "allow", priority: 100 }),

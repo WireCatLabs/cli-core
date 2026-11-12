@@ -145,11 +145,18 @@ describe.runIf(process.platform !== "win32")("agents a schedule may start", () =
     expect(gemini).toContain('toolName = "run_shell_command"\ndecision = "deny"\npriority = 10')
     expect(gemini).toContain('commandPrefix = "chat "\ndecision = "allow"')
     expect(gemini).toContain('toolName = "write_file"\ndecision = "deny"')
+    // As Gemini's policy engine matches them: after `"command":"`, against the call's arguments as JSON.
     const regexes = [...gemini.matchAll(/commandRegex = (".*")/g)].map(
-      (match) => new RegExp(JSON.parse(match[1] ?? "")),
+      (match) => new RegExp(`"command":"${JSON.parse(match[1] ?? "")}`),
     )
-    const denied = (command: string) => regexes.some((regex) => regex.test(command))
+    const denied = (command: string) =>
+      regexes.some((regex) => regex.test(JSON.stringify({ command, dir_path: "/tmp; x" })))
+    expect(gemini).toContain('toolName = "*"\ndecision = "deny"\npriority = 1\n')
     expect(denied("chat search messages 'date>1d'")).toBe(false)
+    expect(denied('chat search messages "a \\"quoted\\" word"')).toBe(false)
+    expect(denied("chat x\nrm -rf ~")).toBe(true)
+    expect(denied("chat x && touch y")).toBe(true)
+    expect(denied("chat $(id)")).toBe(true)
     expect(denied("chat x; rm -rf ~")).toBe(true)
     expect(denied("chat x | sh")).toBe(true)
     expect(denied("CHAT_READ_ONLY=0 chat send")).toBe(true)
