@@ -48,7 +48,7 @@ export const commandsCommand = (app: AppIdentity): Command => {
           return {
             ...info,
             ...(availability ? { availability } : {}),
-            ...(own && hasSharedContract(own) ? { provided_by: "cli-core" as const } : {}),
+            ...(own && hasSharedContract(own) ? { origin: "cli-core" as const } : {}),
             commands: annotateAvailability(info.commands, own),
           }
         })

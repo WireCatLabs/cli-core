@@ -30,12 +30,12 @@ it("marks what cli-core mounted, and leaves it out of the CLI's own catalogue", 
   expect(code).toBe(0)
   const commands = JSON.parse(streams.stdout.join("")).commands as {
     name: string
-    provided_by?: string
-    commands: { name: string; provided_by?: string }[]
+    origin?: string
+    commands: { name: string; origin?: string }[]
   }[]
   const at = (name: string) => commands.find((command) => command.name === name)
-  expect(at("commands")?.provided_by).toBe("cli-core")
-  expect(at("commands")?.commands.map((command) => command.provided_by)).toEqual(["cli-core"])
-  expect(at("deals")).not.toHaveProperty("provided_by")
-  expect(at("deals")?.commands.every((command) => command.provided_by === undefined)).toBe(true)
+  expect(at("commands")?.origin).toBe("cli-core")
+  expect(at("commands")?.commands.map((command) => command.origin)).toEqual(["cli-core"])
+  expect(at("deals")?.origin).toBe("handwritten")
+  expect(at("deals")?.commands.every((command) => command.origin === "handwritten")).toBe(true)
 })
