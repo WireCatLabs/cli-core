@@ -13,19 +13,19 @@ const notesText = (node: Predicate) => {
 }
 
 /**
- * The store matches `name:` against the name, the local alias and the @username at once, and `notes:` against
- * the owner's private notes about them; nothing else is filtered.
+ * The store matches `name:` against the name, the local alias and the @username at once, `notes:` against
+ * the owner's private notes about them, `email:` and `phone:` against a part of the address or the number.
  */
 export const CONTACTS_QUERY: QueryRegistry = {
   entity: "contact",
   backend: "native",
   fields: queryFieldsOf(contact, {
-    native: ["name", "notes"],
+    native: ["name", "notes", "email", "phone"],
     text: ["name"],
     relations: {
       notes: { type: "txt", example: "notes:valencia", relation: "text in one of your private notes about them" },
     },
-    examples: { name: "name:ana*" },
+    examples: { name: "name:ana*", email: "email:example.com", phone: "phone:600" },
     validate: { notes: notesText },
   }),
 }

@@ -390,6 +390,45 @@ describe("search mail over the mail tables", () => {
     ])
   })
 
+  it("reads title: and sender: as one concept in mail and chats, and field:* as having a value", async () => {
+    const { store } = await seeded()
+    const TG: AccountKey = { provider: "tg", account: "1" }
+    await store.chats.saveChats(TG, [
+      { id: "5", title: "Проект Альфа", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: null },
+      { id: "6", title: "Lunch club", kind: "group", unreadCount: 0, lastMessageAt: null, participantsCount: 4 },
+    ])
+    const message = (id: string, chatId: string, text: string) => ({
+      id,
+      chatId,
+      senderId: "9",
+      senderName: "Carol Example",
+      timestamp: new Date(at(3)).toISOString(),
+      editedAt: null,
+      text,
+      outgoing: false,
+      attachments: [],
+      replyTo: null,
+      forwardedFrom: null,
+      reactions: null,
+    })
+    await store.messages.saveMessages(TG, "5", [message("1", "5", "the roadmap call")], { via: "history" })
+    await store.messages.saveMessages(TG, "6", [message("2", "6", "menu of the day")], { via: "history" })
+    const chat = async (text: string) =>
+      (await searchStore(store, TG, { text, limit: 10 })).items.map(({ id }) => id).sort()
+    expect(await chat("title:альфа")).toEqual(["1"])
+    expect(await chat('title:"lunch club"')).toEqual(["2"])
+    expect(await found(store, "title:lunch")).toEqual(["<three@example.com>"])
+    expect(await chat("sender:Carol")).toEqual(["1", "2"])
+    expect(await found(store, "sender:Bob")).toEqual(["<two@example.com>"])
+    expect(await chat("participants_count:* AND title:*")).toEqual(["2"])
+    expect(await chat("_exists_:from AND chat:*")).toEqual(["1", "2"])
+    expect((await found(store, "_exists_:cc")).length).toBe(0)
+    expect(await found(store, "subject:* AND roadmap")).toEqual(["<one@example.com>"])
+    await expect(chat("author:carol")).rejects.toThrow("author: is a notes field — search notes reads it; who wrote")
+    await expect(chat("text:*")).rejects.toThrow("write has:text")
+    await expect(chat("kind:*")).rejects.toThrow("kind:* asks whether kind has a value")
+  })
+
   it("puts their mail in a person's context", async () => {
     const { store } = await seeded()
     const context = await personContext(store, MAIL, "bob@example.com")

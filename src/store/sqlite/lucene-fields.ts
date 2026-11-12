@@ -658,7 +658,12 @@ const recipient: FieldCompiler = (node, { mail }) => {
 }
 
 // What a page says about itself, and whether a note is written or a file, exist for notes only.
-const notesOnly: FieldCompiler = () => always(bound("0"))
+const notesOnly: FieldCompiler = (node) =>
+  searchError(
+    "query.unsupported-field",
+    node.span,
+    `${node.field}: is a notes field — search notes reads it${node.field === "author" ? "; who wrote a message is from:" : ""}`,
+  )
 
 const mailbox: FieldCompiler = (node, scope) => {
   const { value, operator } = node
@@ -751,6 +756,33 @@ const subject: FieldCompiler = (node, scope) => {
 
 const headingOf = (text: string) => normalize(text.slice(0, Math.max(0, text.indexOf("\n\n"))))
 
+// One concept, one name: a message's title is its chat's, a mail's is its subject.
+const title: FieldCompiler = (node, scope) => {
+  if (scope.mail) return subject(node, scope)
+  const wanted = fold(node.value)
+  const parts = node.operator === "phrase" ? [wanted] : (wanted.match(/[\p{L}\p{N}]+/gu) ?? [])
+  if (!parts.length) return always(bound("0"))
+  return always(
+    combine(
+      parts.map((part) => bound("instr(c.title_folded, ?) > 0", part)),
+      "AND",
+    ),
+  )
+}
+
+const SUBJECT_PRESENT = "substr(m.text, 1, 2) <> char(10, 10)"
+/** `field:*` of a field in `PRESENCE`: the message or mail has a value there. */
+export const present: FieldCompiler = (node, scope) => {
+  const { field } = node
+  if (field === "topic") return messengerOnly(() => always(bound("m.thread_external_id IS NOT NULL")))(node, scope)
+  if (field === "participants_count")
+    return messengerOnly(() => always(bound("c.participants_count IS NOT NULL")))(node, scope)
+  if (field === "from") return always(bound("m.sender_identity_id IS NOT NULL"))
+  if (!scope.mail) return always(bound(field === "title" ? "coalesce(c.title, '') <> ''" : "0"))
+  if (field === "title" || field === "subject") return always(bound(SUBJECT_PRESENT))
+  return always(bound("m.id IN (SELECT r.email_id FROM email_recipients r WHERE r.role = ?)", field))
+}
+
 /** One compiler per field of `QUERY_FIELDS`, by its name: a leaf compiles by a lookup, never a branch. */
 export const FIELD_COMPILERS: Readonly<Record<string, FieldCompiler>> = {
   text: words,
@@ -781,7 +813,7 @@ export const FIELD_COMPILERS: Readonly<Record<string, FieldCompiler>> = {
   to: recipient,
   cc: recipient,
   bcc: recipient,
-  title: notesOnly,
+  title,
   site: notesOnly,
   lang: notesOnly,
   author: notesOnly,

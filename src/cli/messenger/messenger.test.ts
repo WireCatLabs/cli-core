@@ -472,6 +472,23 @@ it("names in a recorded answer's meta.run_id the run that was kept", async () =>
   expect(readdirSync(join(root, "state", "runs"), { recursive: true })).toContainEqual(expect.stringMatching(runId))
 })
 
+it("names in messages sync's meta.run_id the run that fetched, not the task rules or the mention count after it", async () => {
+  const root = mkdtempSync(join(tmpdir(), "messenger-"))
+  const env = {
+    CHAT_PROFILE: "default",
+    CHAT_STATE_DIR: join(root, "state"),
+    CHAT_CONFIG_DIR: join(root, "config"),
+    MESSAGING_STORE: join(root, "m.db"),
+  }
+  const { stdout, code } = await call(["messages", "sync", "--", "-100", "--json", "--record"], async () => fake, env)
+  expect(code).toBe(0)
+  const runId = JSON.parse(stdout.join("")).meta.run_id
+  const runs = readdirSync(join(root, "state", "runs"), { recursive: true }).map(String)
+
+  expect(runs.filter((path) => path.endsWith("run.json")).length).toBeGreaterThan(1)
+  expect(runs).toContainEqual(expect.stringMatching(new RegExp(`${runId}/events\\.jsonl$`)))
+})
+
 describe("the shared read commands", () => {
   it("**messages list --offline says how much of the chat the store holds**: incomplete, with the sync that fills it", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))

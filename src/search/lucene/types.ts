@@ -53,3 +53,20 @@ export function exhausted(budget: string): never {
     complete: false,
   })
 }
+
+/** A pattern checked word by word over more messages than a search may read: what to write instead. */
+export function tooWideTerm([term]: string[], budget: string): never {
+  if (term === undefined) exhausted(budget)
+  const part =
+    term
+      .replace(/[*?]+/gu, " ")
+      .trim()
+      .split(/\s+/u)
+      .sort((a, b) => b.length - a.length)[0] ?? term
+  throw new CliError(
+    "validation_error",
+    `search exceeded its ${budget} budget: ${term} is checked word by word, and too many messages hold it — ` +
+      `write *${part}* (any word holding it, read from the index), more of the word, or add chat: or date:`,
+    { reason: "query.too-large", budget, term, complete: false },
+  )
+}

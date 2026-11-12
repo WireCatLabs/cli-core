@@ -73,6 +73,11 @@ export interface ChatsStore {
   /** Per chat that has messages: how many, the oldest and newest, and when the last one was stored. */
   chatStats(key: AccountKey, chatId?: Id): Promise<ChatStats[]>
   /**
+   * Per chat that has messages: its title, count and newest message, as `chatStats` gives them, read off the
+   * trigger-kept count and the chat's time index rather than every message; what search's coverage reads.
+   */
+  chatsNewest(key: AccountKey): Promise<Pick<ChatStats, "chatId" | "title" | "messages" | "newestAt">[]>
+  /**
    * The id a chat re-keyed from `chatId` has now, from `chat_revisions`; `undefined` while a chat is stored under
    * `chatId` itself. Only for finding the chat: the old id and its history are never shown or searched.
    */
@@ -205,6 +210,11 @@ export const chatsStoreOver = (context: StoreContext): ChatsStore => {
     chatStats: async (key, chatId) => {
       const accountKey = findAccountPk(key)
       return accountKey === undefined ? [] : reads.chatStats(context, accountKey, chatId)
+    },
+
+    chatsNewest: async (key) => {
+      const accountKey = findAccountPk(key)
+      return accountKey === undefined ? [] : reads.chatsNewest(context, accountKey)
     },
 
     renamedChatId: async (key, chatId) => {

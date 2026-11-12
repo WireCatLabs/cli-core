@@ -203,7 +203,7 @@ export const titleWords = (
   const words = clauses.map(({ node, occur }) =>
     occur !== "must_not" &&
     node.kind === "predicate" &&
-    node.field === "text" &&
+    (node.field === "text" || node.field === "title") &&
     (node.operator === "term" || node.operator === "phrase")
       ? // A title holds "invoice", not the question mark of "invoice?".
         node.value.replace(/\?+$/u, "") || node.value
@@ -483,13 +483,6 @@ export const searchAll = async (
           )
           accounts.push(...read.map(({ provider, account }) => ({ resource, provider, account })))
         } else if (resource === "crm") {
-          // `plainQuery` made `stage:won` a phrase, which would find nothing and still call the answer complete.
-          const field = /(?:^|\s)[+-]?(stage|status|pipeline):/iu.exec(asked.text)?.[1]?.toLowerCase()
-          if (field)
-            throw new CliError(
-              "validation_error",
-              `deals and leads are not searched by ${field}; list them by it with \`deals list ${field}:<value>\``,
-            )
           const { words, anyWord } = titleWords(request.text)
           const chosen = scope?.crm
           const found = await store.deals.find({
@@ -501,18 +494,21 @@ export const searchAll = async (
             ...(chosen === undefined ? {} : { accounts: chosen }),
           })
           hasMore ||= found.hasMore
+          const titled = /(?:^|[\s(+])title:/u.test(request.text)
           lists.push(
-            found.items.map((deal) => ({
-              kind: deal.kind,
-              ref: deal.ref,
-              provider: deal.account?.provider ?? "crm",
-              account: deal.account?.account ?? INTERNAL_NOTES,
-              title: deal.title,
-              timestamp: deal.updatedAt,
-              text: deal.summary,
-              foundBy: deal.matched.includes("title") ? ["title"] : ["words"],
-              ...(deal.corrections ? { match: "corrected" as const, corrections: deal.corrections } : {}),
-            })),
+            found.items
+              .filter((deal) => !titled || deal.matched.includes("title"))
+              .map((deal) => ({
+                kind: deal.kind,
+                ref: deal.ref,
+                provider: deal.account?.provider ?? "crm",
+                account: deal.account?.account ?? INTERNAL_NOTES,
+                title: deal.title,
+                timestamp: deal.updatedAt,
+                text: deal.summary,
+                foundBy: deal.matched.includes("title") ? ["title"] : ["words"],
+                ...(deal.corrections ? { match: "corrected" as const, corrections: deal.corrections } : {}),
+              })),
           )
           const read = chosen ?? [...(await crmAccounts(store)), { provider: "crm", account: INTERNAL_NOTES }]
           for (const { provider, account } of read) accounts.push({ resource, provider, account })

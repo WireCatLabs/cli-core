@@ -50,6 +50,7 @@ describe("error reasons", () => {
     const raised = sources(join(import.meta.dirname, "..")).flatMap((path) =>
       [
         ...readFileSync(path, "utf8").matchAll(/(?:reason: |queryError\(|fail\([^)]*, )"([a-z][a-z-]*\.[a-z.-]+)"/g),
+        ...readFileSync(path, "utf8").matchAll(/(?:searchError|queryError)\(\s*"([^"]+)"/g),
       ].map((match) => match[1] ?? ""),
     )
     expect(raised.length).toBeGreaterThan(30)

@@ -397,7 +397,14 @@ describe("tasks", () => {
     expect([paged.items.length, paged.page.has_more, paged.next[0].step]).toEqual([1, true, "page.next"])
     const unknown = await call("tasks", "list", "type:question", "--json")
     expect([unknown.code, unknown.stderr]).toEqual([2, expect.stringContaining("query.unknown-field")])
-    expect((await call("tasks", "list", "invoice", "--json")).stderr).toContain("query.bare-word")
+    const titles = async (...words: string[]) =>
+      json(await call("tasks", "list", ...words, "--json")).items.map((task: { title: string }) => task.title)
+    const all = await titles()
+    const [first = ""] = all
+    const word = first.split(/\s+/u).find((one: string) => one.length > 3) ?? first
+    expect(await titles(word.toUpperCase())).toContain(first)
+    expect(await titles(`title:${word.slice(1, -1)}`)).toContain(first)
+    expect(await titles("title:zzzz")).toEqual([])
   })
 
   it("**a backup keeps the tasks**: restored, a closed one is open again", async () => {

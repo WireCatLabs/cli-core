@@ -45,6 +45,20 @@ const glob = (value: string) =>
     })
     .join("")
 
+/** A folded text column read by its words: each word of a term, or a whole phrase, is found inside it; a pattern matches it whole. */
+export const foldedWords = (column: string): { where: (node: Predicate) => Where } => ({
+  where: (node) => {
+    if (node.operator === "wildcard")
+      return node.value === "*"
+        ? { sql: `${column} IS NOT NULL AND ${column} <> ''`, params: [], known: true }
+        : { sql: `${column} IS NOT NULL AND ${column} GLOB ?`, params: [glob(node.value)], known: true }
+    const wanted = fold(node.value)
+    const parts = node.operator === "phrase" ? [wanted] : (wanted.match(/[\p{L}\p{N}]+/gu) ?? [])
+    if (!parts.length) return { sql: "0", params: [], known: true }
+    return { sql: parts.map(() => `instr(${column}, ?) > 0`).join(" AND "), params: parts }
+  },
+})
+
 const like = (value: string) =>
   value
     .toLowerCase()

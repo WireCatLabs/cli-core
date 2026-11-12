@@ -43,7 +43,15 @@ export interface PeopleService {
    * `name` matches the name, the local alias or the @username, as the store searches them; `notes` the owner's
    * private notes. Both are answered only from the contacts the store keeps: never filtered in memory.
    */
-  list(options: { order: "recent" | "name"; name?: Predicate; notes?: Predicate } & PageWindow): Promise<Page<Contact>>
+  list(
+    options: {
+      order: "recent" | "name"
+      name?: Predicate
+      notes?: Predicate
+      email?: Predicate
+      phone?: Predicate
+    } & PageWindow,
+  ): Promise<Page<Contact>>
   show(person: string, options?: { notes?: boolean }): Promise<PersonCard>
   /**
    * What the messenger says about them, and their stored activity in each shared chat. `known`: their card, already
@@ -142,7 +150,7 @@ export const peopleService = (deps: ServiceDeps): PeopleService => {
       const held = stored ? { store: await deps.store(), account: await deps.account() } : await storeIfOpen(deps)
       if (held && (await held.store.people.countContacts(held.account)) > 0)
         return storedContacts(held.store, held.account, options)
-      for (const term of [options.name, options.notes])
+      for (const term of [options.name, options.notes, options.email, options.phone])
         if (term)
           queryError(
             "query.unsupported-field",
@@ -402,7 +410,21 @@ export const phoneOf = (typed: string): string => {
 const storedContacts = async (
   store: MessageStore,
   account: AccountKey,
-  { order, name, notes, limit, offset }: { order: "recent" | "name"; name?: Predicate; notes?: Predicate } & PageWindow,
+  {
+    order,
+    name,
+    notes,
+    email,
+    phone,
+    limit,
+    offset,
+  }: {
+    order: "recent" | "name"
+    name?: Predicate
+    notes?: Predicate
+    email?: Predicate
+    phone?: Predicate
+  } & PageWindow,
 ): Promise<Page<Contact>> => {
   // Chats saved since the last refresh may have moved someone up; the order is worked out again here.
   if (order === "recent") await store.people.refreshRecency(account)
@@ -410,6 +432,8 @@ const storedContacts = async (
   const filter = {
     ...(query === undefined ? {} : { query }),
     ...(notes ? { notes: notes.value.replace(/^\*+|\*+$/g, "") } : {}),
+    ...(email ? { email: email.value.replace(/^\*+|\*+$/g, "") } : {}),
+    ...(phone ? { phone: phone.value.replace(/^\*+|\*+$/g, "") } : {}),
   }
   return store.people.contacts(account, {
     order,
