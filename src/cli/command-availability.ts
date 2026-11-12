@@ -18,6 +18,8 @@ import type { CommandPermissions } from "./permission-keys.js"
 export type AvailabilityCommand = Pick<CommandInfo, "path" | "effects" | "lifetime" | "reaches">
 export interface DiscoveredCommand extends CommandInfo {
   availability?: CommandAvailability
+  /** cli-core built it: cli-core pins it, so a CLI pins only the commands without this field. */
+  provided_by?: "cli-core"
   commands: readonly DiscoveredCommand[]
 }
 

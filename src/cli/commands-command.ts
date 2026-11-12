@@ -12,6 +12,7 @@ import { NO_EFFECTS } from "./effects.js"
 import { renderDocument } from "./envelope.js"
 import { commandsText } from "./help/commands-text.js"
 import { rootOf } from "./profile.js"
+import { hasSharedContract } from "./shared-contracts.js"
 
 /**
  * The major version of the JSON every command prints. The output types live in this package, so the
@@ -40,12 +41,18 @@ export const commandsCommand = (app: AppIdentity): Command => {
       const root = rootOf(this)
       const output = outputFor(this)
       const available = environmentOf(this).discoveryAvailability
-      const annotateAvailability = (infos: readonly CommandInfo[]): DiscoveredCommand[] =>
+      const annotateAvailability = (infos: readonly CommandInfo[], parent: Command | undefined): DiscoveredCommand[] =>
         infos.map((info) => {
           const availability = available?.(info)
-          return { ...info, ...(availability ? { availability } : {}), commands: annotateAvailability(info.commands) }
+          const own = parent?.commands.find((child) => child.name() === info.name)
+          return {
+            ...info,
+            ...(availability ? { availability } : {}),
+            ...(own && hasSharedContract(own) ? { provided_by: "cli-core" as const } : {}),
+            commands: annotateAvailability(info.commands, own),
+          }
         })
-      const all = annotateAvailability(describeProgram(root))
+      const all = annotateAvailability(describeProgram(root), root)
       const scoped = path.length > 0 ? scopeOf(root, all, path) : undefined
       const commands = scoped ? [scoped.command] : all
       const { json, jsonl } = this.optsWithGlobals<{ json?: unknown; jsonl?: boolean }>()
