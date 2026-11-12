@@ -99,6 +99,8 @@ export interface TurnOptions {
   /** Waits; a timer when absent. A test or a cancellable run passes its own. */
   sleep?: (ms: number) => Promise<void>
   now?: () => number
+  /** Refuse instead of waiting longer than this; five minutes when absent. A CLI an agent waits on sets less. */
+  longestWaitMs?: number
 }
 
 /**
@@ -121,7 +123,7 @@ export const waitForTurn = async (pacer: Pacer, options: TurnOptions): Promise<v
   }
   const waitMs = at - now()
   if (waitMs <= 0) return
-  if (waitMs > LONGEST_PACE_WAIT_MS)
+  if (waitMs > (options.longestWaitMs ?? LONGEST_PACE_WAIT_MS))
     throw new CliError(
       "rate_limited",
       `this profile's next request to ${name} has to wait ${Math.ceil(waitMs / 1000)} s more — nothing was sent to ${name}`,
