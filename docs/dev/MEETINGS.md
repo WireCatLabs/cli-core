@@ -351,6 +351,42 @@ Shared CLI/MCP participant reads adapt this store packet to the standard list en
 `page.has_more`, optional `page.cursor` and a `page.next` step retaining the query and read budgets.
 The host adds run metadata. Coverage and page-local ambiguity stay alongside the envelope.
 
+## Calls and the people they link to
+
+A phone line's source (beeline, Asterisk) saves the other side of a call as the identity `phone:<E.164>` under its
+own provider, and gives the number in `SourceParticipant.phone` too. The store reads that number with `e164Of`
+(written with `+` or `00`; anything else is left out) and keeps it in `identities.phone`, where the people matcher
+reads every source's numbers.
+
+**When a call's number joins a person (NEED-2600).** `scanMatches` joins the call's person and one other person when
+exactly the two of them hold the number, one of the holders is keyed by the number itself (`phone:<number>`), and the
+number is a mobile one (`isMobilePhone`). A landline only proposes the pair (score 0.7), since an office's main
+line is everyone's who works there. Two CRM contacts on one number, or an organization holding it, join and propose
+no one (`sharedLine`). A CRM's number is read only when it is written with `+` or `00`: a national number such as
+`8 916 …` names no country and matches nothing (`storedPhone`). The scan runs in `memo people scan` and in
+`memo sync`; nothing else starts it.
+
+**Where the link shows.** Once linked, the call is the person's, with no new concept:
+
+- `meetings show <id>` and `meetings people <query>`: each participant's `person` (`person:<uid>` and the person's
+  name, `null` when the identity is linked to no one); `meetings people` also finds a participant by that name.
+- `contacts context` and the canonical person context: `meetings[]`, the person's recorded meetings and calls,
+  newest first, in the accounts the read may see (`personMeetings`).
+- `communicationsOf`, so the deal and organization contexts: each call is a touch of kind `meeting` with its
+  `meeting:` ref, and counts in `counts.meetings`; one held for a calendar event already counted counts once.
+- `deals show` and `leads show` of a CRM copy: `meetings[]`, the newest 10 of the people on it (never the owner), in
+  the accounts of the CRM account's scope.
+
+Each item carries `ref` (`meeting:<account>/<meeting>`), `meeting_id`, `account` (`provider`, `account`), `title`,
+`started_at`, `duration_ms`, `has_transcript`, `event` and `people`. It opens with `meetings show <meeting_id>` or
+`meetings transcript <meeting_id>` of the CLI and profile that own `account`.
+
+**Calls of the people on deal X.** In one step: `<crm> <profile> deals show deal:<id>` lists them under `meetings`.
+By hand, with the same result: `deals show deal:<id>` names its `people` (`person:<uid>`); `contacts context
+person:<uid>` (or memo's `context`) lists each one's `meetings`; `<phone-line> <profile> meetings transcript
+<meeting_id>` reads one. The call's account and the CRM's must be in one scope (`work`): a read never crosses into
+the other scope.
+
 ## Cue context and compact passages
 
 Read-budget, metadata, transcript-page and atomic cue-context contracts are exported from

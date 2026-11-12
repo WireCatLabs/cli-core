@@ -598,7 +598,8 @@ proposes them instead. A no-reply address (`isNoReplyAddress`) is no one's: it n
   country and matches nothing). `scanMatches` (`person-match-scan.ts`) reads the holders of each phone and address and
   one `linkIndex` of the proposals outside any transaction, then writes each group in its own short `write`; its
   cursor (`store_settings` `people.scan`: the newest identity, move, revision, guest row and update time, and `RULES`) limits a
-  later pass to what changed; a cursor of other rules makes the next pass full once. The owner's pending rulings are one predicate each: `phonePairJoins` (NEED-2445),
+  later pass to what changed; a cursor of other rules makes the next pass full once. The owner's pending rulings are one predicate each: `phonePairJoins` (NEED-2445; NEED-2600: also a mobile number
+  one holder is keyed by, `phone:<number>`, as a phone line keeps a call's other side),
   `addressGroupJoins` (NEED-2446), and the rejection check in `join` (NEED-2444), which proposes a
   rejected pair on evidence new to the owner. SEC-177: a pair with the owner's person on either side is never joined
   or proposed by a rule, at import (`joinByAddress`) or in the scan (`touchesOwner`, skipped as `identity.owner`); only
