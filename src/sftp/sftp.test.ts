@@ -265,6 +265,18 @@ describe("openSftp", () => {
     await expect.poll(() => server.seen.closed).toBe(1)
   })
 
+  it("reconnects once for operations that fail together, and leaves no connection open", async () => {
+    const server = serve({ silent: "STAT" })
+    const client = await connect(server, { operationTimeoutMs: 7000 }).open()
+    const failures = await Promise.all(
+      ["/rec", "/rec/small.txt", "/rec/empty"].map((path) => failure(client.stat(path))),
+    )
+    expect(failures.map((one) => one.details.reason)).toEqual(["sftp.timeout", "sftp.timeout", "sftp.timeout"])
+    expect(server.seen.connections).toBe(3)
+    await client.close()
+    await expect.poll(() => server.seen.closed).toBe(3)
+  })
+
   it("signs in with a private key", async () => {
     const server = serve({ acceptKey: true })
     const client = await connect(server, { auth: { privateKey: clientKeys.private } }).open()

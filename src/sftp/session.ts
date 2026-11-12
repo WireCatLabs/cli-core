@@ -240,18 +240,17 @@ export const openSftp = async (input: SftpOptions): Promise<SftpClient> => {
       : { privateKey: options.auth.privateKey, passphrase: options.auth.passphrase }),
   }
   let wire: Wire | undefined
+  let connecting: Promise<Wire> | undefined
   let closed = false
 
-  const drop = () => {
-    wire?.close()
-    wire = undefined
+  const drop = (failed: Wire | undefined = wire) => {
+    if (wire === failed) wire = undefined
+    failed?.close()
   }
   const abort = () => drop()
   options.signal?.addEventListener("abort", abort, { once: true })
 
-  const connected = async (): Promise<Wire> => {
-    if (closed) throw closedError()
-    if (wire) return wire
+  const open = async (): Promise<Wire> => {
     const opened = await connectOnce(options, async (signal) =>
       openWire(wireOptions(options, credentials), (key) => normalized(key.fingerprint) === pinned, signal),
     )
@@ -261,6 +260,15 @@ export const openSftp = async (input: SftpOptions): Promise<SftpClient> => {
     }
     wire = opened
     return opened
+  }
+  // Operations started together share one connection attempt, so none opens a connection that close() cannot reach.
+  const connected = async (): Promise<Wire> => {
+    if (closed) throw closedError()
+    if (wire) return wire
+    connecting ??= open().finally(() => {
+      connecting = undefined
+    })
+    return connecting
   }
 
   const operation = <T>(
@@ -281,17 +289,22 @@ export const openSftp = async (input: SftpOptions): Promise<SftpClient> => {
           )
         } catch (error) {
           if (error instanceof Expired) {
-            drop()
+            drop(current)
             throw timedOut("request", operationMs)
           }
-          if (isCliError(error) && error.details.retryable === true) drop()
+          if (isCliError(error) && error.details.retryable === true) drop(current)
           throw error
         }
       },
       ...(answer ? { answer } : {}),
     })
 
-  await retrying(options, { operation: "sftp.connect", run: () => connected() })
+  try {
+    await retrying(options, { operation: "sftp.connect", run: () => connected() })
+  } catch (error) {
+    options.signal?.removeEventListener("abort", abort)
+    throw error
+  }
 
   return {
     list: (path) =>

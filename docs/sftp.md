@@ -44,25 +44,30 @@ It saves the fingerprint only after the owner says yes.
 ## Read
 
 ```ts
+import { baseContext, environmentOf } from "@wirecat/cli-core/cli"
 import { openSftp } from "@wirecat/cli-core/sftp"
 
-const sftp = await openSftp({
-  host: "pbx.example.com",
-  username: "recordings",
-  auth: { password },                         // or { privateKey, passphrase }
-  hostKey: "SHA256:Xb9…",                     // the fingerprint the owner confirmed
-  signal: context.signal,                     // the run's signal
-  events,                                     // the run's events; the current run when left out
+const context = baseContext(command, configuration.resolveSettings)
+const { signal } = environmentOf(command)
+await context.run(async (events) => {
+  const sftp = await openSftp({
+    host: "pbx.example.com",
+    username: "recordings",
+    auth: { password },                     // or { privateKey, passphrase }
+    hostKey: "SHA256:Xb9…",                 // the fingerprint the owner confirmed
+    events,                                 // the run's events (WC-LIFE-17)
+    ...(signal ? { signal } : {}),
+  })
+  context.track(sftp)                       // a timeout or Ctrl-C closes it too
+  try {
+    const entries = await sftp.list(folder)
+    // [{ name: "out-….wav", kind: "file", size: 482316, modifiedAt: "2026-11-12T10:04:31.000Z" }, …]
+    const one = await sftp.stat(`${folder}/${entries[0].name}`)
+    const bytes = await sftp.readFile(`${folder}/${entries[0].name}`, { maxBytes: 200 * 1024 * 1024 })
+  } finally {
+    await sftp.close()
+  }
 })
-context.trackCloseable(sftp)
-try {
-  const entries = await sftp.list("/var/spool/asterisk/monitor/2026/11/12")
-  // [{ name: "out-….wav", kind: "file", size: 482316, modifiedAt: "2026-11-12T10:04:31.000Z" }, …]
-  const one = await sftp.stat(`${folder}/${entries[0].name}`)
-  const bytes = await sftp.readFile(`${folder}/${entries[0].name}`, { maxBytes: 200 * 1024 * 1024 })
-} finally {
-  await sftp.close()
-}
 ```
 
 - `list(path)` gives the folder's entries without `.` and `..`: `name`, `kind` (`file`, `directory`, `symlink`,
@@ -70,7 +75,7 @@ try {
 - `stat(path)` gives the same fields for one path; `name` is its last part.
 - `readFile(path, { maxBytes })` gives the file's bytes. A file larger than `maxBytes` is refused before its first
   byte is read, and so is a file that grows past it while it is read.
-- `close()` ends the connection. Pass the client to `trackCloseable`, so a timeout or Ctrl-C closes it too.
+- `close()` ends the connection. Pass the client to the context's `track`, so `--timeout` or Ctrl-C closes it too.
 
 Secrets come from the caller, which keeps them in the keyring. They never reach an error, a log record or the run's
 events.
@@ -93,7 +98,9 @@ file and a denied path are never tried again. A read that fails halfway starts a
 
 Waits go through the `sleep` option (cli-base's `SleepLike`), with reason `timeout` for a deadline and `retry` for a
 backoff, so a test decides when time passes. A test connects through `socket`, a function that returns a stream
-already connected to a server, such as ssh2's `Server` given the other end with `injectSocket`.
+already connected to a server, such as ssh2's `Server` given the other end with `injectSocket`. The two ends must
+hand each write over on `setImmediate`: Node's `duplexPair` hands it over in the same tick, and ssh2's key exchange
+then fails (`KEY_EXCHANGE_FAILED`). `src/sftp/sftp.test.ts` has such a pair and a scripted server.
 
 ## Errors
 
