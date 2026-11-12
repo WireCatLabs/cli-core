@@ -245,6 +245,7 @@ export const purgeAccount = ({ orm, database, now }: StoreContext, accountKey: n
   orm.run(sql`DELETE FROM links WHERE to_type = 'document' AND to_id IN ${documentsOf}`)
   orm.run(sql`UPDATE files SET document_id = NULL WHERE document_id IN ${documentsOf}`)
   orm.run(sql`DELETE FROM documents WHERE account_id = ${accountKey}`)
+  purgeCrmCopies(database, accountKey)
   orm.run(sql`DELETE FROM crm_fields WHERE account_id = ${accountKey}`)
   // An entity made from a record is the owner's and stays; only what the source said goes.
   const recordsOf = sql`(SELECT id FROM records WHERE account_id = ${accountKey})`
@@ -254,6 +255,49 @@ export const purgeAccount = ({ orm, database, now }: StoreContext, accountKey: n
   dropOrphanPeople(database, unseenBefore)
   forgetDanglingEvidence(database, at)
   dropUnusedVectors(database, hashes)
+  // The links' delete trigger writes a revision naming the account it is purging; the history goes with the links.
+  orm.run(sql`DELETE FROM link_revisions WHERE account_id = ${accountKey}`)
+}
+
+/**
+ * A CRM's deals, leads and pipelines with their stages, children first. Another account's lead converted from one
+ * of these deals, and an order or contract that names one, keep their row and lose only the link.
+ */
+const purgeCrmCopies = (database: CacheDatabase, accountKey: number): void => {
+  const run = (statement: string, ...params: (string | number)[]) => database.prepare(statement).run(...params)
+  const dealsOf = "(SELECT id FROM deals WHERE account_id = ?)"
+  const leadsOf = "(SELECT id FROM leads WHERE account_id = ?)"
+  const pipelinesOf = "(SELECT id FROM pipelines WHERE account_id = ?)"
+  const stagesOf = `(SELECT id FROM pipeline_stages WHERE pipeline_id IN ${pipelinesOf})`
+  for (const [type, ids] of [
+    ["deal", dealsOf],
+    ["lead", leadsOf],
+  ] as const) {
+    run(
+      `DELETE FROM links WHERE (from_type = ? AND from_id IN ${ids}) OR (to_type = ? AND to_id IN ${ids})`,
+      type,
+      accountKey,
+      type,
+      accountKey,
+    )
+    for (const [table, pointer] of [
+      ["taggings", "taggable"],
+      ["aliases", "aliasable"],
+      ["attachments", "attachable"],
+      ["link_reviews", "linkable"],
+      ["entity_link_events", "linkable"],
+    ])
+      run(`DELETE FROM ${table} WHERE ${pointer}_type = ? AND ${pointer}_id IN ${ids}`, type, accountKey)
+    run(`DELETE FROM pipeline_stage_changes WHERE item_type = ? AND item_id IN ${ids}`, type, accountKey)
+  }
+  run(`DELETE FROM pipeline_stage_changes WHERE pipeline_id IN ${pipelinesOf}`, accountKey)
+  for (const table of ["leads", "orders", "contracts"])
+    run(`UPDATE ${table} SET deal_id = NULL WHERE deal_id IN ${dealsOf}`, accountKey)
+  run("DELETE FROM leads WHERE account_id = ?", accountKey)
+  run("DELETE FROM deals WHERE account_id = ?", accountKey)
+  run(`UPDATE pipeline_stages SET base_stage_id = NULL WHERE base_stage_id IN ${stagesOf}`, accountKey)
+  run(`DELETE FROM pipeline_stages WHERE pipeline_id IN ${pipelinesOf}`, accountKey)
+  run("DELETE FROM pipelines WHERE account_id = ?", accountKey)
 }
 
 /** Identity and person rows a person's own record keeps, not evidence that anyone saw them. */

@@ -18,6 +18,8 @@ const TG: AccountKey = { provider: "tg", account: "1" }
 const TG_2: AccountKey = { provider: "tg", account: "2" }
 const MEET_A: AccountKey = { provider: "example", account: "meet-a" }
 const MEET_B: AccountKey = { provider: "example", account: "meet-b" }
+const PORTAL_A: AccountKey = { provider: "example-crm", account: "portal-a" }
+const PORTAL_B: AccountKey = { provider: "example-crm", account: "portal-b" }
 const MODEL = "test:model:2"
 
 const tablesWithAccount = (db: CacheDatabase): string[] =>
@@ -222,5 +224,49 @@ describe("purging one account", () => {
     expect((await store.people.people("email", {})).get("carol@example.com")).toBeDefined()
     expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([])
     expect(orphanPointers(db).filter(({ count }) => count > 0)).toEqual([])
+  })
+
+  it("removes a CRM account's deals, leads and pipelines and leaves another portal's as they were", async () => {
+    const { store, db } = await seeded()
+    const crm = async (key: AccountKey) => {
+      const stages = (prefix: string) => [
+        { externalId: `${prefix}1`, name: "New", position: 10, outcome: "open" as const },
+        { externalId: `${prefix}2`, name: "Won", position: 20, outcome: "won" as const },
+      ]
+      await store.crm.savePipelines(key, "deal", [{ externalId: "p1", name: "Sales", stages: stages("s") }])
+      await store.crm.savePipelines(key, "lead", [{ externalId: "l", name: "Leads", stages: stages("n") }])
+      await store.crm.saveOrganizations(key, [{ externalId: "c1", name: `${key.account} LLC` }])
+      await store.crm.savePeople(key, [{ externalId: "5", name: "Ana Example", email: "ana@example.com" }])
+      await store.crm.saveItems(key, "deal", [
+        {
+          externalId: "d1",
+          title: "Website",
+          pipeline: "p1",
+          stage: "s1",
+          organization: "c1",
+          people: [{ externalId: "5", role: "contact" }],
+        },
+      ])
+      await store.crm.saveItems(key, "lead", [{ externalId: "e1", title: "Inbound", pipeline: "l", stage: "n1" }])
+    }
+    await crm(PORTAL_A)
+    await crm(PORTAL_B)
+    const portal = Number(db.prepare("SELECT id FROM accounts WHERE external_id = 'portal-a'").get()?.id)
+    const ofItsDeals = Number(
+      db
+        .prepare(
+          "SELECT count(*) AS n FROM involvements WHERE account_id IS NULL AND subject_type = 'deal' " +
+            "AND subject_id IN (SELECT id FROM deals WHERE account_id = ?)",
+        )
+        .get(portal)?.n,
+    )
+    expect(ofItsDeals).toBeGreaterThan(0)
+    const before = others(db, portal)
+    await store.accounts.purge(PORTAL_A)
+    expect(leftovers(db, portal)).toEqual([])
+    expect(others(db, portal)).toEqual({ ...before, involvements: Number(before.involvements) - ofItsDeals })
+    expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([])
+    expect(orphanPointers(db).filter(({ count }) => count > 0)).toEqual([])
+    expect((await store.deals.list({ account: PORTAL_B })).map(({ externalId }) => externalId)).toEqual(["d1"])
   })
 })
