@@ -1,6 +1,16 @@
 import { spawn } from "node:child_process"
 import { createHash } from "node:crypto"
-import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs"
+import { tmpdir } from "node:os"
 import { basename, dirname, join, relative } from "node:path"
 import { CliError, errorCodes, writeSecurely } from "@wirecat/cli-base"
 import { linkConfigOf, linkFor } from "../domain/links.js"
@@ -60,9 +70,12 @@ export interface Schedule {
   to?: string[]
   /** Kept with no timer: `schedule run` still runs it, and `schedule resume` puts the timer back. */
   paused?: true
-  /** An agent's: files its harness reads its limits from, by path in the schedule's folder; written before each run. */
+  /** An agent's: files its harness reads its limits from, by path in the run's work folder; written before each run. */
   files?: Record<string, string>
 }
+
+/** Stands for an agent run's own work folder in its harness's variables and files; the run puts the real path in. */
+export const WORK_FOLDER = "{wirecat-work-folder}"
 
 export const NOTIFY_WHEN = ["always", "failures", "never"] as const
 export type Notify = (typeof NOTIFY_WHEN)[number]
@@ -187,6 +200,7 @@ export const SKIP_REASONS = {
   mailNone: "mail.none-new",
   mailBelowThreshold: "mail.below-threshold",
   mailSameInput: "mail.same-input",
+  agentRefused: "agent.refused",
 } as const
 export type SkipReason = (typeof SKIP_REASONS)[keyof typeof SKIP_REASONS]
 
@@ -799,9 +813,14 @@ export const attemptSchedule = async (
   const errors = agent ? join(runs, `${stamp}.log`) : output
   const [program = "", ...args] = agent ? priced(schedule.argv) : [...system.entry, ...schedule.argv]
   const trace = childTrace()
+  // An agent works in an empty folder of its own: one that could write where it runs never reaches its schedule file.
+  const work = agent ? mkdtempSync(join(tmpdir(), "wirecat-agent-")) : folder
+  const inWork = (text: string) => text.replaceAll(WORK_FOLDER, work)
   const childEnv = {
     ...env,
-    ...schedule.environment,
+    ...(agent
+      ? Object.fromEntries(Object.entries(schedule.environment).map(([name, value]) => [name, inWork(value)]))
+      : schedule.environment),
     TRACEPARENT: trace.traceparent,
     [`${app.envPrefix}_SCHEDULED`]: schedule.name,
     ...(schedule.onNewMail ? { [mailHolderVariable(app)]: schedule.onNewMail } : {}),
@@ -829,17 +848,18 @@ export const attemptSchedule = async (
   if (before?.exitCode === 0 && before.inputHash === inputHash) {
     // A skip every few minutes would otherwise push the kept runs' files out of runs/.
     rmSync(join(runs, `${stamp}.jsonl`), { force: true })
+    if (agent) rmSync(work, { recursive: true, force: true })
     return { repeated: before }
   }
   for (const [path, body] of Object.entries(agent ? (schedule.files ?? {}) : {})) {
-    const file = join(folder, path)
-    if (relative(folder, file).startsWith("..")) continue
+    const file = join(work, path)
+    if (relative(work, file).startsWith("..")) continue
     mkdirSync(dirname(file), { recursive: true })
-    writeFileSync(file, body, { mode: 0o600 })
+    writeFileSync(file, inWork(body), { mode: 0o600 })
   }
   let costUsd: number | undefined
   const exitCode = await new Promise<number>((resolve) => {
-    const child = spawn(program, args, { env: childEnv, cwd: folder, stdio: ["pipe", "pipe", "pipe"] })
+    const child = spawn(program, args, { env: childEnv, cwd: work, stdio: ["pipe", "pipe", "pipe"] })
     // An agent that stops reading its stdin may close it first; that is no failure of the run.
     child.stdin?.on("error", () => {})
     child.stdin?.end(input)
@@ -872,6 +892,7 @@ export const attemptSchedule = async (
       resolve("failed" in report && exited === 0 ? 1 : exited)
     })
   })
+  if (agent) rmSync(work, { recursive: true, force: true })
   const ended = now()
   if (costUsd !== undefined) addSpend(folder, costUsd, ended)
   log[exitCode === 0 ? "info" : "error"]({

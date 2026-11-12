@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest"
 import { runSchedule, type Schedule, scheduleFile } from "../../background/schedules.js"
 import type { Ran, ServerSystem } from "../../background/system.js"
 import { scheduledJob, scheduleHarness } from "../../entities/list-results.js"
+import { lockedByAncestor } from "../../ports/app.js"
 import { baseContext } from "../context.js"
 import { run } from "../program.js"
 import { settingsFor } from "../settings.js"
@@ -62,14 +63,20 @@ const setup = (programs: string[]) => {
   return { root, bin, env, call, argvOf }
 }
 
-describe.runIf(process.platform !== "win32")("agents other than claude", () => {
+describe.runIf(process.platform !== "win32")("agents a schedule may start", () => {
   it("lists every agent, which are on PATH, whether each reports cost, and why one may not run", async () => {
     const { bin, call } = setup(["claude", "kimi", "agent"])
     const listed = await call("agents", "list", "--json")
     expect(listed.code, listed.err).toBe(0)
-    const items = JSON.parse(listed.out).items as { id: string; installed: boolean; path: string | null }[]
+    const items = JSON.parse(listed.out).items as {
+      id: string
+      installed: boolean
+      path: string | null
+      restricted: boolean
+    }[]
     expect(items.map((one) => one.id)).toEqual([...HARNESSES])
     for (const item of items) expect(v.safeParse(scheduleHarness, item).success).toBe(true)
+    expect(items.filter((one) => one.restricted).map((one) => one.id)).toEqual(["claude", "gemini", "opencode"])
     expect(items.filter((one) => one.installed).map((one) => [one.id, one.path])).toEqual([
       ["claude", join(bin, "claude")],
       ["cursor", join(bin, "agent")],
@@ -79,104 +86,105 @@ describe.runIf(process.platform !== "win32")("agents other than claude", () => {
       name: "Gemini CLI",
       programs: ["gemini"],
       reports_cost: false,
-      restricted: true,
       restricted_reason: null,
       installed: false,
       path: null,
     })
-    expect(items.find((one) => one.id === "kimi")).toMatchObject({
-      restricted: false,
-      restricted_reason: expect.stringContaining("approves every tool call"),
+    expect(items.find((one) => one.id === "cursor")).toMatchObject({
+      restricted_reason: expect.stringContaining("chained command"),
     })
   })
 
-  it("refuses an agent that would run any command, saying why", async () => {
-    const { call } = setup(["openclaw", "hermes", "kimi"])
-    for (const harness of ["openclaw", "hermes", "kimi"]) {
-      const refused = await call("agent", "x", harness, "brief me", "--at", "08:30")
-      expect(refused.code).not.toBe(0)
-      expect(refused.err).toContain("agent.unrestricted")
+  it("refuses an agent its own limits do not hold to the CLI's commands, saying why", async () => {
+    const refused = ["codex", "cursor", "openclaw", "hermes", "grok", "kimi"]
+    const { call } = setup(["codex", "cursor-agent", "openclaw", "hermes", "grok", "kimi"])
+    for (const harness of refused) {
+      const answer = await call("agent", "x", harness, "brief me", "--at", "08:30")
+      expect(answer.code).not.toBe(0)
+      expect(answer.err).toContain("agent.unrestricted")
     }
   })
 
-  it("starts each agent in its one-shot mode, held to the CLI's commands, with its own model flag", async () => {
-    const { bin, call, argvOf } = setup(["gemini", "grok", "opencode", "cursor-agent"])
+  it("starts gemini and opencode in their one-shot modes with their own model flags", async () => {
+    const { bin, call, argvOf } = setup(["gemini", "opencode"])
     expect((await call("agent", "g", "gemini", "brief me", "--at", "08:30", "--model", "gemini-pro")).code).toBe(0)
     expect(argvOf("g")).toEqual([join(bin, "gemini"), "-p", "brief me", "-m", "gemini-pro"])
-    expect((await call("agent", "k", "grok", "brief me", "--at", "08:30")).code).toBe(0)
-    expect(argvOf("k")).toEqual([
-      join(bin, "grok"),
-      "-p",
-      "brief me",
-      "--permission-mode",
-      "dontAsk",
-      "--allow",
-      "Bash(chat *)",
-      "--allow",
-      "Read",
-      "--allow",
-      "Grep",
-    ])
     expect(
       (await call("agent", "o", "opencode", "brief me", "--at", "08:30", "--model", "provider/model-a")).code,
     ).toBe(0)
     expect(argvOf("o")).toEqual([join(bin, "opencode"), "run", "-m", "provider/model-a", "brief me"])
-    expect((await call("agent", "c", "cursor", "brief me", "--at", "08:30")).code).toBe(0)
-    expect(argvOf("c")).toEqual([join(bin, "cursor-agent"), "-p", "brief me", "--output-format", "text"])
-    expect(argvOf("c")).not.toContain("--force")
+    expect(harnessOfArgv(argvOf("o"))).toBe("opencode")
   })
 
-  it("gives every agent it may start the prompt and its model, and reads the agent back from what it saved", async () => {
-    const { call, argvOf } = setup(["claude", "codex", "gemini", "cursor-agent", "opencode", "grok"])
-    for (const harness of ["claude", "codex", "gemini", "cursor", "opencode", "grok"]) {
-      const added = await call("agent", harness, harness, "brief me", "--at", "08:30", "--model", "model-a")
-      expect(added.code, added.err).toBe(0)
-      const argv = argvOf(harness)
-      expect(argv).toEqual(expect.arrayContaining(["brief me", "model-a"]))
-      expect(harnessOfArgv(argv)).toBe(harness)
-    }
-  })
-
-  it("gives gemini, cursor and opencode their limits when the run starts", async () => {
+  it("gives gemini and opencode their limits in a work folder of their own, never the schedule's", async () => {
     const { bin, env, call } = setup([])
     const script = (body: string) => `#!/bin/sh\n${body}\n`
     writeFileSync(
       join(bin, "gemini"),
-      script('/bin/cat "$GEMINI_CLI_SYSTEM_SETTINGS_PATH"; echo; /bin/cat gemini/policy.toml'),
+      script('/bin/cat "$GEMINI_CLI_SYSTEM_SETTINGS_PATH"; echo; /bin/cat gemini/policy.toml; echo x > schedule.json'),
     )
-    writeFileSync(join(bin, "cursor-agent"), script("/bin/cat .cursor/cli.json"))
     writeFileSync(join(bin, "opencode"), script('printf %s "$OPENCODE_CONFIG_CONTENT"'))
-    for (const name of ["gemini", "cursor-agent", "opencode"]) chmodSync(join(bin, name), 0o755)
+    for (const name of ["gemini", "opencode"]) chmodSync(join(bin, name), 0o755)
     const ran = async (harness: string) => {
       expect((await call("agent", harness, harness, "brief me", "--at", "08:30")).code).toBe(0)
-      const last = await runSchedule(app, system, env, scheduleFile(env.CHAT_STATE_DIR, harness), {})
+      const file = scheduleFile(env.CHAT_STATE_DIR, harness)
+      const saved = readFileSync(file, "utf8")
+      const last = await runSchedule(app, system, env, file, {})
       expect(last.exitCode).toBe(0)
+      expect(readFileSync(file, "utf8")).toBe(saved)
       return readFileSync(last.output, "utf8")
     }
     const gemini = await ran("gemini")
-    expect(gemini).toContain('"policyPaths":[')
+    const settings = JSON.parse(gemini.split("\n")[0] ?? "")
+    expect(settings).toMatchObject({
+      tools: { allowed: [] },
+      mcpServers: {},
+      security: { disableYoloMode: true },
+    })
+    expect(settings.adminPolicyPaths[0]).not.toContain(env.CHAT_STATE_DIR)
     expect(gemini).toContain('toolName = "run_shell_command"\ndecision = "deny"\npriority = 10')
     expect(gemini).toContain('commandPrefix = "chat "\ndecision = "allow"')
-    expect(gemini).toContain("commandRegex")
-    expect(JSON.parse(await ran("cursor"))).toEqual({
-      permissions: { allow: ["Shell(chat)", "Read(**)"], deny: ["Write(**)"] },
-    })
-    expect(JSON.parse(await ran("opencode")).permissions).toEqual([
-      { action: "shell", resource: "*", effect: "deny" },
+    expect(gemini).toContain('toolName = "write_file"\ndecision = "deny"')
+    const regexes = [...gemini.matchAll(/commandRegex = (".*")/g)].map(
+      (match) => new RegExp(JSON.parse(match[1] ?? "")),
+    )
+    const denied = (command: string) => regexes.some((regex) => regex.test(command))
+    expect(denied("chat search messages 'date>1d'")).toBe(false)
+    expect(denied("chat x; rm -rf ~")).toBe(true)
+    expect(denied("chat x | sh")).toBe(true)
+    expect(denied("CHAT_READ_ONLY=0 chat send")).toBe(true)
+    expect(denied("env -u CHAT_READ_ONLY chat send")).toBe(true)
+    const opencode = JSON.parse(await ran("opencode"))
+    expect(opencode.permissions).toEqual([
+      { action: "*", resource: "*", effect: "deny" },
       { action: "shell", resource: "chat *", effect: "allow" },
-      { action: "edit", resource: "*", effect: "deny" },
     ])
+    expect(opencode.permission).toMatchObject({ "*": "deny", bash: { "*": "deny", "chat *": "allow" } })
+  })
+
+  it("does not run a schedule whose file changed after it was saved, nor one that starts another program", async () => {
+    const { env, call } = setup(["claude"])
+    expect((await call("agent", "brief", "claude", "brief me", "--at", "08:30")).code).toBe(0)
+    const file = scheduleFile(env.CHAT_STATE_DIR, "brief")
+    const saved = JSON.parse(readFileSync(file, "utf8")) as Schedule
+    writeFileSync(file, JSON.stringify({ ...saved, argv: ["/bin/sh", "-c", "echo escaped"] }))
+    const ran = await call("run", "brief")
+    expect(ran.code).not.toBe(0)
+    expect(ran.err).toContain("agent.refused")
+    const sealed = await call("exec", file, "0".repeat(64))
+    expect(sealed.code).not.toBe(0)
+    expect(sealed.err).toContain("changed since it was saved")
   })
 
   it("refuses a cost cap for an agent that reports no cost, and lists its cost as unknown", async () => {
-    const { call } = setup(["codex"])
-    const capped = await call("agent", "c", "codex", "brief me", "--at", "08:30", "--max-cost-per-day", "2")
+    const { call } = setup(["gemini"])
+    const capped = await call("agent", "c", "gemini", "brief me", "--at", "08:30", "--max-cost-per-day", "2")
     expect(capped.code).not.toBe(0)
     expect(capped.err).toContain("agent.cost-unknown")
-    expect((await call("agent", "c", "codex", "brief me", "--at", "08:30")).code).toBe(0)
+    expect((await call("agent", "c", "gemini", "brief me", "--at", "08:30")).code).toBe(0)
     const [row] = JSON.parse((await call("list", "--json")).out).items
     expect(row).toMatchObject({
-      harness: "codex",
+      harness: "gemini",
       reports_cost: false,
       spent_today_usd: null,
       max_cost_usd: null,
@@ -187,9 +195,27 @@ describe.runIf(process.platform !== "win32")("agents other than claude", () => {
 
   it("names an agent that is not installed by every program it is looked for by", async () => {
     const { call } = setup([])
-    expect((await call("agent", "x", "cursor", "p", "--at", "08:30")).err).toContain(
-      "cursor-agent or agent is not on PATH",
-    )
+    const missing = await call("agent", "x", "gemini", "p", "--at", "08:30")
+    expect(missing.err).toContain("gemini is not on PATH")
+  })
+})
+
+describe("the read-only lock", () => {
+  const proc = (tree: Record<number, { ppid: number; environ: string[] }>) => (path: string) => {
+    const [, pid = "", kind] = /^\/proc\/(\d+)\/(\w+)$/.exec(path) ?? []
+    const one = tree[Number(pid)]
+    if (!one) throw new Error("gone")
+    return kind === "environ" ? one.environ.join("\0") : `${pid} (sh) S ${one.ppid} 0 0`
+  }
+
+  it.runIf(process.platform === "linux")("holds when a process this one descends from was started with it", () => {
+    const tree = {
+      30: { ppid: 20, environ: ["CHAT_READ_ONLY=0"] },
+      20: { ppid: 10, environ: ["CHAT_READ_ONLY=1"] },
+      10: { ppid: 1, environ: [] },
+    }
+    expect(lockedByAncestor("CHAT_READ_ONLY", { read: proc(tree), from: 30, cache: new Map() })).toBe(true)
+    expect(lockedByAncestor("CHAT_READ_ONLY", { read: proc(tree), from: 10, cache: new Map() })).toBe(false)
   })
 })
 

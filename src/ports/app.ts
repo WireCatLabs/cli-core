@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs"
 import { CliError } from "@wirecat/cli-base"
 import type { AppErrors } from "../errors/reasons.js"
 
@@ -39,11 +40,41 @@ export interface AppIdentity {
 
 export const envName = (app: AppIdentity, name: string): string => `${app.envPrefix}_${name}`
 
-/** The variable that locks this process read-only, when it is set to anything but "0". */
+const locking = (value: string | undefined) => value !== undefined && value.trim() !== "" && value !== "0"
+
+const lockedAbove = new Map<string, boolean>()
+
+/**
+ * Whether a process this one descends from was started with the lock. A process's starting environment
+ * (`/proc/<pid>/environ`) is fixed, so an agent that runs `MEMO_READ_ONLY=0 memo …` or `env -u` under a locked run
+ * cannot lift it. Linux only; elsewhere the variable alone decides.
+ */
+export const lockedByAncestor = (
+  name: string,
+  { read = (path: string) => readFileSync(path, "utf8"), from = process.ppid, cache = lockedAbove } = {},
+): boolean => {
+  if (process.platform !== "linux") return false
+  const known = cache.get(name)
+  if (known !== undefined) return known
+  let locked = false
+  try {
+    for (let pid = from, depth = 0; pid > 1 && depth < 64 && !locked; depth++) {
+      const environ = read(`/proc/${pid}/environ`).split("\0")
+      locked = environ.some((entry) => entry.startsWith(`${name}=`) && locking(entry.slice(name.length + 1)))
+      const stat = read(`/proc/${pid}/stat`)
+      pid = Number(stat.slice(stat.lastIndexOf(")") + 2).split(" ")[1])
+    }
+  } catch {
+    // An ancestor of another user, or one that ended, cannot be read; the variable still decides.
+  }
+  cache.set(name, locked)
+  return locked
+}
+
+/** The variable that locks this process read-only: set to anything but "0" here or in any process it descends from. */
 export const readOnlyLockOf = (app: AppIdentity, env: NodeJS.ProcessEnv): string | undefined => {
   const name = envName(app, "READ_ONLY")
-  const value = env[name]
-  return value === undefined || value.trim() === "" || value === "0" ? undefined : name
+  return locking(env[name]) || lockedByAncestor(name) ? name : undefined
 }
 
 /** The holder a scheduled run was started for (`schedule agent --on-new-mail`): the only mark that run may move. */

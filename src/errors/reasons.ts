@@ -122,6 +122,11 @@ const OTHERS: Entry[] = [
     "permission_error",
     "nothing holds this agent to the CLI's commands, so no schedule starts it",
   ],
+  [
+    "agent.refused",
+    "permission_error",
+    "the schedule changed since it was saved, or starts no agent a schedule may run",
+  ],
   validation("agent.cost-unknown", "the agent reports no cost, so a cost cap cannot stop it"),
   validation("document.changed", "the document changed while it was read; nothing was saved"),
   ["document.not-imported", "not_found", "the document is not imported in this source account"],

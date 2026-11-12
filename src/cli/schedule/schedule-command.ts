@@ -1,4 +1,5 @@
-import { existsSync, rmSync } from "node:fs"
+import { createHash } from "node:crypto"
+import { existsSync, readFileSync, rmSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { CliError, resolvePaths, writeSecurely } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
@@ -54,6 +55,7 @@ import type { DeclaredSetting } from "../setting-defaults.js"
 import { lineOf } from "../steps.js"
 import {
   AGENT_MODELS,
+  agentRefusal,
   COSTED,
   HARNESSES,
   type Harness,
@@ -334,6 +336,28 @@ const reportTemplatesOf =
     }
   }
 
+const sealOf = (text: string) => createHash("sha256").update(text).digest("hex")
+
+/**
+ * Refuses to run the schedule in `file` when it changed since cli-core wrote it (`seal`, which only its timer holds),
+ * or when it is an agent's and starts anything but an agent held to the CLIs' commands, as its harness finds it on the
+ * run's PATH. The refusal is kept as the run's skip, so `schedule list` says why it stopped.
+ */
+export const guardSchedule = (file: string, env: NodeJS.ProcessEnv, platform: NodeJS.Platform, seal?: string) => {
+  if (!existsSync(file)) return
+  const text = readFileSync(file, "utf8")
+  const schedule = JSON.parse(text) as Schedule
+  const why =
+    seal !== undefined && sealOf(text) !== seal
+      ? "its file changed since it was saved; save it again to run it"
+      : schedule.kind === "agent"
+        ? agentRefusal(schedule.argv, { ...env, ...schedule.environment }, platform)
+        : undefined
+  if (why === undefined) return
+  recordSkip(file, why, SKIP_REASONS.agentRefused)
+  throw new CliError("permission_error", `schedule ${schedule.name} does not run: ${why}`, { reason: "agent.refused" })
+}
+
 /**
  * One past day's run of the agent schedule in `file`, as `backfillSchedule` makes it, with the owner's language and
  * templates as `schedule run` renders them; a stop of the command stops the agent.
@@ -344,23 +368,20 @@ export const backfillScheduleRun = (
   env: NodeJS.ProcessEnv,
   file: string,
   { at, input, agentRuns = [] }: { at: Date; input?: string; agentRuns?: readonly AgentCli[] },
-) =>
-  untilChildEnds(command, (signal) =>
-    backfillSchedule(
-      app,
-      environmentOf<BaseEnvironment & { system?: ServerSystem }>(command).system ?? thisMachine(),
-      env,
-      file,
-      {
-        at,
-        agentRuns,
-        ownerLanguage: ownerLanguageOf,
-        reportTemplates: reportTemplatesOf,
-        ...(input === undefined ? {} : { input }),
-        ...(signal ? { signal } : {}),
-      },
-    ),
+) => {
+  const system = environmentOf<BaseEnvironment & { system?: ServerSystem }>(command).system ?? thisMachine()
+  guardSchedule(file, env, system.platform)
+  return untilChildEnds(command, (signal) =>
+    backfillSchedule(app, system, env, file, {
+      at,
+      agentRuns,
+      ownerLanguage: ownerLanguageOf,
+      reportTemplates: reportTemplatesOf,
+      ...(input === undefined ? {} : { input }),
+      ...(signal ? { signal } : {}),
+    }),
   )
+}
 
 /** Where a schedule is written and for whom: the CLI, the machine, the run's variables and its profile. */
 export interface ScheduleSite {
@@ -452,7 +473,6 @@ export const agentSchedule = (site: ScheduleSite, spec: AgentScheduleSpec): Sche
     clis,
     folders: [dirname(storePath(env)), ...folders],
     leanStart: limits.leanStart ?? true,
-    folder: dirname(scheduleFile(scheduleState(site), name)),
     ...(spec.maxCost && kind.reportsCost ? { maxCost: spec.maxCost } : {}),
   })
   return {
@@ -493,10 +513,11 @@ export const writeSchedule = async (
       )
     }
   }
-  writeSecurely(file, `${JSON.stringify(schedule, null, 2)}\n`, 0o600)
+  const text = `${JSON.stringify(schedule, null, 2)}\n`
+  writeSecurely(file, text, 0o600)
   const timer = timerFor(app, system, env)
   if (schedule.paused) await timer.remove(schedule.name)
-  else await timer.install(schedule, [...system.entry, "schedule", "exec", file])
+  else await timer.install(schedule, [...system.entry, "schedule", "exec", file, sealOf(text)])
   return { file, timer: timer.where(schedule.name), replaced }
 }
 
@@ -552,6 +573,7 @@ export const runScheduleNow = async (
   file: string,
   { routes, agentInput }: { routes?: readonly string[]; agentInput?: AgentInput } = {},
 ): Promise<LastRun | { skipped: { why: string; reason: SkipReason } }> => {
+  guardSchedule(file, site.env, site.system.platform)
   const schedule = readSchedule(file)
   ownRoutes(schedule, routes)
   const maxCostPerDay = schedule.maxCostPerDay ?? site.limits?.maxCostPerDay ?? SCHEDULE_DEFAULTS.maxCostPerDay
@@ -968,11 +990,13 @@ export const scheduleCommandFor = ({
   })
     .description("what a timer runs, given the schedule's file; to run one by hand, use run")
     .argument("<file>", "the schedule's schedule.json in the state folder, as the timer passes it")
-    .action(async function (this: Command, file: string) {
+    .argument("[seal]", "the file's SHA-256 as it was saved, which the timer passes; a file that differs does not run")
+    .action(async function (this: Command, file: string, seal: string | undefined) {
       // A timer starts it with no profile named; the schedule's own environment carries the profile.
       const { context, system, timer } = prepare(this, { needsProfile: false })
       // A timer left behind by a pause that could not remove it must not run the schedule.
       if (existsSync(file) && readSchedule(file).paused) return
+      guardSchedule(file, context.env, system.platform, seal)
       if ((await waits(this, file, { timed: true })) !== undefined) return
       const last = await untilChildEnds(this, (signal) =>
         runSchedule(app, system, context.env, file, {

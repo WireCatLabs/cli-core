@@ -1,11 +1,11 @@
-import { basename, join } from "node:path"
-import { type AgentCli, findProgram } from "../../background/schedules.js"
+import { basename } from "node:path"
+import { type AgentCli, findProgram, WORK_FOLDER } from "../../background/schedules.js"
 
 /**
- * Claude starts without the owner's MCP servers, skills, settings and CLAUDE.md: a run reads its instructions
- * through the CLI, and the rest was most of its starting context. Auth, `--permission-mode` and `--allowedTools` hold.
+ * Claude starts without the owner's MCP servers, skills and slash commands: a run reads its instructions through the
+ * CLI, and the rest was most of its starting context. `--permission-mode` and `--allowedTools` hold either way.
  */
-const LEAN_CLAUDE = ["--tools", "Bash", "--strict-mcp-config", "--disable-slash-commands", "--setting-sources", ""]
+const LEAN_CLAUDE = ["--tools", "Bash", "--strict-mcp-config", "--disable-slash-commands"]
 
 /** What a harness's argv is built from; the schedule keeps the argv, so a harness never sees the schedule. */
 interface HarnessRun {
@@ -19,15 +19,16 @@ interface HarnessRun {
   folders: string[]
   leanStart: boolean
   maxCost?: number
-  /** The schedule's own folder, the run's working folder, where `files` are written before each run. */
-  folder: string
 }
 
-/** How a harness starts: its argv, the variables it reads its limits from, and files written into the run's folder. */
+/**
+ * How a harness starts: its argv, the variables it reads its limits from, and files written into the run's own empty
+ * work folder before each run. `WORK_FOLDER` in a variable or a file stands for that folder.
+ */
 interface HarnessStart {
   argv: string[]
   environment?: Record<string, string>
-  /** Paths relative to the schedule's folder, and what each holds. */
+  /** Paths relative to the work folder, and what each holds. */
   files?: Record<string, string>
 }
 
@@ -40,8 +41,8 @@ interface HarnessKind {
   /** It reports what a run cost, so the cost caps can stop it; one that does not is never stopped by cost. */
   reportsCost: boolean
   /**
-   * The harness itself holds the agent to the CLIs' commands, as its docs say its one-shot mode does, or to their
-   * folders (codex's sandbox). One that is not would run any command, so no schedule starts it, as the owner ruled.
+   * Its own docs show a one-shot run held to the CLIs' commands, every other command denied without a prompt. One that
+   * is not would run any command, so no schedule starts it, as the owner ruled.
    */
   restricted: boolean
   /** Why it is not restricted: what its docs offer for a one-shot run, and why that does not hold it to the CLIs. */
@@ -51,8 +52,14 @@ interface HarnessKind {
 
 const modelFlag = (flag: string, model: string) => (model ? [flag, model] : [])
 
-/** A command that chains, pipes, substitutes or redirects: more than the one CLI command a prefix rule allows. */
-const CHAINED = "[;&|`$<>\\n]"
+/**
+ * A command that chains, pipes, substitutes or runs in the background: more than the one CLI command a prefix rule
+ * allows. `<` and `>` stay allowed, as queries such as `date>1d` use them, and a CLI's argument is not a redirect
+ * unless a shell splits it so; the prefix rule's command is quoted by the agent as one word.
+ */
+const CHAINED = "[;&|`$\\n]"
+/** A command that starts by setting variables (`MEMO_READ_ONLY=0 memo …`, `env -u …`): never a plain CLI command. */
+const ENV_PREFIX = "^\\s*(env\\b|[A-Za-z_][A-Za-z0-9_]*=)"
 
 /** One Gemini policy rule as TOML; every value is a string or a number. */
 const rule = (fields: Record<string, string | number>) =>
@@ -66,7 +73,8 @@ const rule = (fields: Record<string, string | number>) =>
 
 /**
  * The coding agents a schedule may start, by the ids WireCat Desktop's Agents page uses. Only agents whose vendor
- * documents a one-shot mode that answers on stdout and exits are here; GLM has no agent CLI of its own, Z.ai runs it inside these agents.
+ * documents a one-shot mode that answers on stdout and exits are here; GLM has no agent CLI of its own, Z.ai runs it
+ * inside these agents.
  */
 const AGENT_HARNESSES = {
   // https://code.claude.com/docs/en/headless
@@ -76,18 +84,21 @@ const AGENT_HARNESSES = {
     // A mid-tier model by default.
     model: "sonnet",
     reportsCost: true,
+    // https://code.claude.com/docs/en/iam: dontAsk denies every tool its allow rules do not name.
     restricted: true,
     start: ({ program, prompt, model, clis, leanStart, maxCost }) => ({
       argv: [
         program,
         "-p",
         prompt,
-        // The owner's own settings may let every tool run (bypassPermissions); here only the CLI may.
         "--permission-mode",
         "dontAsk",
         "--allowedTools",
         ...clis.map((one) => `Bash(${one.command}:*)`),
         "--no-session-persistence",
+        // The owner's own settings may allow other commands (python, node); none of them is read, lean or not.
+        "--setting-sources",
+        "",
         ...modelFlag("--model", model),
         ...(leanStart ? LEAN_CLAUDE : []),
         ...(maxCost ? ["--max-budget-usd", String(maxCost)] : []),
@@ -98,10 +109,12 @@ const AGENT_HARNESSES = {
   codex: {
     name: "Codex",
     programs: ["codex"],
-    // No alias of claude's tier, so codex's own default.
     model: "",
     reportsCost: false,
-    restricted: true,
+    restricted: false,
+    restrictedReason:
+      "its sandbox limits where it writes, not which commands it runs, and it reads the whole disk; its rules " +
+      "(https://learn.chatgpt.com/docs/agent-configuration/rules) match listed prefixes only and cannot deny every other command",
     start: ({ program, prompt, model, folders }) => ({
       argv: [
         program,
@@ -110,9 +123,6 @@ const AGENT_HARNESSES = {
         "--ephemeral",
         "--sandbox",
         "workspace-write",
-        // The CLIs reach their provider and write the store and their own state, and nothing else.
-        "-c",
-        "sandbox_workspace_write.network_access=true",
         ...modelFlag("--model", model),
         ...folders.flatMap((dir) => ["--add-dir", dir]),
         prompt,
@@ -126,14 +136,20 @@ const AGENT_HARNESSES = {
     model: "",
     reportsCost: false,
     // https://github.com/google-gemini/gemini-cli/blob/main/docs/reference/policy-engine.md: a rule that would ask "is
-    // treated as deny" in non-interactive mode, and write tools ask by default. A project's own policies do not apply,
-    // so the system settings file names this policy.
+    // treated as deny" in non-interactive mode. The policy is an admin one, the top tier, so no user setting or rule
+    // outranks it; the system settings also drop the owner's allowed tools and MCP servers and turn yolo off.
     restricted: true,
-    start: ({ program, prompt, model, clis, folder }) => ({
+    start: ({ program, prompt, model, clis }) => ({
       argv: [program, "-p", prompt, ...modelFlag("-m", model)],
-      environment: { GEMINI_CLI_SYSTEM_SETTINGS_PATH: join(folder, "gemini", "settings.json") },
+      environment: { GEMINI_CLI_SYSTEM_SETTINGS_PATH: `${WORK_FOLDER}/gemini/settings.json` },
       files: {
-        "gemini/settings.json": JSON.stringify({ policyPaths: [join(folder, "gemini", "policy.toml")] }),
+        "gemini/settings.json": JSON.stringify({
+          adminPolicyPaths: [`${WORK_FOLDER}/gemini/policy.toml`],
+          tools: { allowed: [], core: ["run_shell_command"] },
+          mcpServers: {},
+          security: { disableYoloMode: true },
+          general: { defaultApprovalMode: "default" },
+        }),
         "gemini/policy.toml": [
           rule({ toolName: "run_shell_command", decision: "deny", priority: 10 }),
           ...clis.map((one) =>
@@ -141,6 +157,10 @@ const AGENT_HARNESSES = {
           ),
           // How a prefix rule treats `memo x && rm …` is not documented; a chained or substituted command is refused.
           rule({ toolName: "run_shell_command", commandRegex: CHAINED, decision: "deny", priority: 200 }),
+          rule({ toolName: "run_shell_command", commandRegex: ENV_PREFIX, decision: "deny", priority: 200 }),
+          ...["write_file", "replace", "web_fetch", "google_web_search"].map((toolName) =>
+            rule({ toolName, decision: "deny", priority: 200 }),
+          ),
         ].join("\n"),
       },
     }),
@@ -152,16 +172,12 @@ const AGENT_HARNESSES = {
     programs: ["cursor-agent", "agent"],
     model: "",
     reportsCost: false,
-    // https://cursor.com/docs/cli/reference/permissions: without --force "anything that would need approval is
-    // rejected"; print mode writes files even so, and a deny wins over an allow.
-    restricted: true,
-    start: ({ program, prompt, model, clis }) => ({
+    restricted: false,
+    restrictedReason:
+      "its Shell(<command>) rule matches the first word only, and its docs (https://cursor.com/docs/cli/reference/permissions) " +
+      "do not say a chained command such as `memo x; other` is denied",
+    start: ({ program, prompt, model }) => ({
       argv: [program, "-p", prompt, "--output-format", "text", ...modelFlag("--model", model)],
-      files: {
-        ".cursor/cli.json": JSON.stringify({
-          permissions: { allow: [...clis.map((one) => `Shell(${one.command})`), "Read(**)"], deny: ["Write(**)"] },
-        }),
-      },
     }),
   },
   // https://opencode.ai/docs/cli
@@ -171,8 +187,8 @@ const AGENT_HARNESSES = {
     model: "",
     reportsCost: false,
     // https://opencode.ai/docs/permissions/: "configured deny rules always remain enforced", the last matching rule
-    // wins, and a rule applies to every part of a chained command. Never --auto. The variable, as a project file is
-    // looked for from the working folder up to the root.
+    // wins, and a rule applies to every part of a chained command. Everything is denied but the CLIs' commands; the
+    // older `permission` form is given too, so a version that reads only it is held as well. Never --auto.
     restricted: true,
     start: ({ program, prompt, model, clis }) => ({
       // Its models are `provider/model`.
@@ -180,10 +196,15 @@ const AGENT_HARNESSES = {
       environment: {
         OPENCODE_CONFIG_CONTENT: JSON.stringify({
           permissions: [
-            { action: "shell", resource: "*", effect: "deny" },
+            { action: "*", resource: "*", effect: "deny" },
             ...clis.map((one) => ({ action: "shell", resource: `${one.command} *`, effect: "allow" })),
-            { action: "edit", resource: "*", effect: "deny" },
           ],
+          permission: {
+            "*": "deny",
+            edit: "deny",
+            webfetch: "deny",
+            bash: { "*": "deny", ...Object.fromEntries(clis.map((one) => [`${one.command} *`, "allow"])) },
+          },
         }),
       },
     }),
@@ -212,7 +233,9 @@ const AGENT_HARNESSES = {
     restrictedReason:
       "it checks only commands on its list of dangerous patterns and runs any other " +
       "(https://hermes-agent.nousresearch.com/docs/user-guide/security/); it has no allow-list",
-    start: ({ program, prompt, model }) => ({ argv: [program, "chat", "-q", prompt, "-Q", ...modelFlag("-m", model)] }),
+    start: ({ program, prompt, model }) => ({
+      argv: [program, "chat", "-q", prompt, "-Q", ...modelFlag("-m", model)],
+    }),
   },
   // https://docs.x.ai/build/cli/headless-scripting
   grok: {
@@ -220,9 +243,10 @@ const AGENT_HARNESSES = {
     programs: ["grok"],
     model: "",
     reportsCost: false,
-    // https://docs.x.ai/build/features/permissions: dontAsk "silently denies anything without an explicit allow rule",
-    // for headless runs. superagent's grok-cli, which installs `grok` too, has no such flags and refuses the run.
-    restricted: true,
+    restricted: false,
+    restrictedReason:
+      "its dontAsk mode denies what no --allow rule names (https://docs.x.ai/build/features/permissions), but its docs " +
+      "do not say a chained command such as `memo x; other` is denied; superagent's grok-cli, also `grok`, has no rules",
     start: ({ program, prompt, model, clis }) => ({
       argv: [
         program,
@@ -231,10 +255,6 @@ const AGENT_HARNESSES = {
         "--permission-mode",
         "dontAsk",
         ...clis.flatMap((one) => ["--allow", `Bash(${one.command} *)`]),
-        "--allow",
-        "Read",
-        "--allow",
-        "Grep",
         ...modelFlag("-m", model),
       ],
     }),
@@ -294,6 +314,19 @@ export const harnessOfArgv = (argv: readonly string[]): Harness | null => {
     .replace(/\.(exe|cmd)$/i, "")
     .toLowerCase()
   return HARNESSES.find((id) => (harnessOf(id).programs as readonly string[]).includes(name)) ?? null
+}
+
+/**
+ * Why a saved agent schedule may not run, or nothing: its program must be the one its harness finds on the run's PATH,
+ * and the harness one that is held to the CLIs' commands. A schedule file changed to start anything else is refused.
+ */
+export const agentRefusal = (argv: readonly string[], env: NodeJS.ProcessEnv, platform: NodeJS.Platform) => {
+  const harness = harnessOfArgv(argv)
+  if (harness === null) return "it starts a program that is no agent a schedule may run"
+  const kind = harnessOf(harness)
+  if (!kind.restricted) return `${kind.name} cannot run on a schedule: ${kind.restrictedReason}`
+  if (programOf(harness, env, platform) !== argv[0]) return `it starts ${argv[0]}, not ${kind.name} as found on PATH`
+  return undefined
 }
 
 /** Each harness, with its program when it is on PATH: what `schedule agents list` answers. */
