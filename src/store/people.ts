@@ -130,7 +130,8 @@ export interface PeopleStore extends AccountPeople {
   proposeLink(input: IdentityLinkInput): Promise<ProposedAction>
   /**
    * The owner's decision on an `identity_link`; confirm is refused with `identity.stale` when either person changed.
-   * `company` turns down a shared-mailbox proposal and gives its address to an organization (NEED-2528).
+   * `company` turns down a shared-mailbox proposal and gives its address to an organization (NEED-2528);
+   * `organization` turns down a match whose two sides are a company's mailboxes and gives them all to it (NEED-2573).
    */
   decideLink(id: string, decision: IdentityLinkDecision): Promise<ProposedAction>
   /**

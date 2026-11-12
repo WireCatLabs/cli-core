@@ -27,7 +27,16 @@ import {
 import type { Author } from "./memories.js"
 import { currentPerson } from "./merged-persons.js"
 import type { StoreContext } from "./open.js"
-import { linkIdentityToPerson, mergePerson, move, recordOf, required, survivorOf } from "./person-links.js"
+import {
+  isOwner,
+  linkIdentityToPerson,
+  mergePerson,
+  move,
+  recordOf,
+  required,
+  survivorOf,
+  unlinkIdentity,
+} from "./person-links.js"
 import { resolvePersonLinks } from "./person-resolution.js"
 import { identitySeparated, separated } from "./person-separation.js"
 import { type ProposedAction, proposalOperationsOver, proposerOfAction } from "./proposed-actions.js"
@@ -331,6 +340,174 @@ const toCompany = (
   return rejected
 }
 
+interface MatchIdentity {
+  pk: number
+  provider: string
+  id: string
+  person: number
+  address: string | null
+}
+
+/** The match's own identities as they are now, each with the address it is (`email`) or carries. */
+const identitiesOfMatch = ({ database }: StoreContext, payload: IdentityLinkPayload): MatchIdentity[] =>
+  [payload.identity, payload.with].flatMap((ref) => {
+    if (ref === null) return []
+    const { provider, id } = parseIdentityRef(ref)
+    const row = database
+      .prepare(
+        "SELECT i.id, l.person_id, lower(trim(coalesce(CASE WHEN i.provider = 'email' THEN i.external_id END, i.email))) " +
+          "AS address FROM identities i JOIN identity_links l ON l.identity_id = i.id " +
+          "WHERE i.provider = ? AND i.external_id = ?",
+      )
+      .get(provider, id)
+    if (row === undefined) return []
+    const address = typeof row.address === "string" && isEmailAddress(row.address) ? row.address : null
+    return [{ pk: Number(row.id), provider, id, person: Number(row.person_id), address }]
+  })
+
+/** The one organization that already holds any of the addresses, else none; two are refused. */
+const holderOf = ({ database }: StoreContext, addresses: string[]): number | undefined => {
+  const found = [
+    ...new Set(
+      database
+        .prepare(
+          "SELECT DISTINCT o.id FROM organizations o JOIN organization_identities oi ON oi.organization_id = o.id " +
+            "JOIN identities i ON i.id = oi.identity_id WHERE o.deleted_at IS NULL AND i.provider = 'email' " +
+            "AND lower(i.external_id) IN (SELECT value FROM json_each(?)) ORDER BY o.id",
+        )
+        .all(JSON.stringify(addresses))
+        .map(({ id }) => Number(id)),
+    ),
+  ]
+  if (found.length > 1)
+    throw new CliError(
+      "validation_error",
+      `${found.length} organizations hold these addresses (${found.map((id) => `organization:${id}`).join(", ")}); ` +
+        "name the one meant as a reference",
+      { reason: "organization.ambiguous" },
+    )
+  return found[0]
+}
+
+/**
+ * NEED-2573 A: the two "people" are the company's mailboxes. Every address of the match's identities goes to one
+ * organization. A person who is nothing but those addresses becomes the company's (an organization holds all their
+ * identities, so they are listed as an organization, not a person); one who also holds something else keeps it and
+ * stays a person, their address identity moved off them. Nobody is joined and the match is turned down.
+ */
+const toOrganization = (
+  context: StoreContext,
+  proposal: ProposedAction,
+  asked: NonNullable<IdentityLinkDecision["organization"]>,
+  author: Author,
+  noted: { reason?: string },
+): ProposedAction => {
+  const payload = proposal.payload as IdentityLinkPayload
+  if (proposal.status !== "proposed")
+    throw new CliError("validation_error", `${proposal.id} is already ${proposal.status}`, {
+      reason: "proposal.wrong-state",
+    })
+  const matched = identitiesOfMatch(context, payload)
+  const addresses = [
+    ...new Set([...matched.flatMap(({ address }) => address ?? []), ...(payload.mailbox ? [payload.mailbox] : [])]),
+  ].sort()
+  if (addresses.length === 0)
+    throw new CliError("validation_error", `${proposal.id} names no mail address to give to an organization`, {
+      reason: "identity.not-shared",
+    })
+  const persons = [...new Set(matched.map(({ person }) => person))]
+  if (persons.some((person) => isOwner(context, person)))
+    throw new CliError("validation_error", `${proposal.id} names the owner; the owner's address is no company's`, {
+      reason: "identity.owner",
+    })
+  const name = asked.name?.trim() || undefined
+  const company = addresses.find((address) => !FREE_MAIL.has(address.split("@")[1] ?? ""))
+  const how = { method: CONFIRMED, author: "owner" }
+  let organization: number
+  if (asked.organization !== undefined) {
+    if (!organizationExists(context, asked.organization))
+      throw new CliError("not_found", `no organization:${asked.organization}`, { reason: "organization.not-found" })
+    organization = asked.organization
+  } else {
+    if (name === undefined && company === undefined)
+      throw new CliError(
+        "validation_error",
+        `${addresses.join(", ")} ${addresses.length > 1 ? "are free mailboxes" : "is a free mailbox"}; ` +
+          "name the company or its organization",
+        { reason: "organization.unnamed" },
+      )
+    const shared =
+      payload.signal === "name"
+        ? context.database
+            .prepare(
+              "SELECT coalesce(p.name, i.name) AS name FROM identities i JOIN identity_links l ON l.identity_id = i.id " +
+                "JOIN persons p ON p.id = l.person_id WHERE i.id = ?",
+            )
+            .get(matched[0]?.pk ?? 0)?.name
+        : undefined
+    organization =
+      holderOf(context, addresses) ??
+      organizationOfAddress(context, {
+        name:
+          name ?? (typeof shared === "string" && shared.trim() ? shared.trim() : ((company ?? "").split("@")[1] ?? "")),
+        ...(company === undefined ? {} : { email: company }),
+        ...how,
+        reason: "organization.ambiguous",
+      })
+  }
+  for (const address of addresses) holdAddress(context, organization, address, how)
+  const held = context.database.prepare(
+    "INSERT INTO organization_identities (identity_id, organization_id, method, author, created_at, updated_at) " +
+      "VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (identity_id, organization_id) DO NOTHING",
+  )
+  const people: string[] = []
+  for (const person of persons) {
+    const theirs = matched.filter((one) => one.person === person && one.address !== null)
+    const all = context.database
+      .prepare(
+        "SELECT lower(trim(coalesce(CASE WHEN i.provider = 'email' THEN i.external_id END, i.email, ''))) AS address " +
+          "FROM identity_links l JOIN identities i ON i.id = l.identity_id WHERE l.person_id = ?",
+      )
+      .all(person)
+      .map(({ address }) => String(address))
+    if (all.every((address) => addresses.includes(address))) {
+      const at = context.now()
+      for (const one of theirs) held.run(one.pk, organization, how.method, how.author, at, at)
+      people.push(`person:${person}`)
+    } else
+      for (const one of theirs)
+        if (one.provider === "email")
+          unlinkIdentity(context, { provider: one.provider, id: one.id }, { method: "unlink", by: "owner" })
+  }
+  const operations = proposalOperationsOver(context)
+  const refs = addresses.map((address) => `email:${address}`)
+  const others = asked.all
+    ? context.database
+        .prepare(
+          "SELECT id FROM proposed_actions WHERE kind = ? AND status = 'proposed' AND id <> ? AND (" +
+            "json_extract(payload, '$.mailbox') IN (SELECT value FROM json_each(?)) " +
+            "OR json_extract(payload, '$.identity') IN (SELECT value FROM json_each(?)) " +
+            "OR json_extract(payload, '$.with') IN (SELECT value FROM json_each(?))) ORDER BY id",
+        )
+        .all(
+          IDENTITY_LINK_KIND,
+          Number(proposal.id),
+          JSON.stringify(addresses),
+          JSON.stringify(refs),
+          JSON.stringify(refs),
+        )
+        .map((row) => String(row.id))
+    : []
+  const result = { dismissed: true, organization: `organization:${organization}`, mailboxes: addresses, ...noted }
+  for (const other of others) {
+    const closed = operations.reject(other, author, { ...result, with: proposal.id })
+    settleMentions(context, closed.payload as IdentityLinkPayload, "found")
+  }
+  const rejected = operations.reject(proposal.id, author, { ...result, people, closed: [proposal.id, ...others] })
+  settleMentions(context, payload, "found")
+  return rejected
+}
+
 /**
  * Decides an `identity_link`, the owner's alone. Confirm links the two people as the owner's link, refused with
  * `identity.stale` when either person changed since it was proposed; reject keeps them apart, and only new evidence
@@ -350,6 +527,11 @@ export const decideIdentityLink = (context: StoreContext, id: string, decision: 
     const author = deciderAuthor(decision.by)
     const reason = decision.reason?.trim() || undefined
     const noted = reason === undefined ? {} : { reason }
+    if (decision.organization !== undefined) {
+      if (decision.confirm || decision.company !== undefined)
+        throw new CliError("validation_error", "the company's mailboxes keep the two apart; it is not a confirm")
+      return toOrganization(context, proposal, decision.organization, author, noted)
+    }
     if (decision.company !== undefined) {
       if (decision.confirm)
         throw new CliError("validation_error", "a company's mailbox keeps the two people apart; it is not a confirm")
