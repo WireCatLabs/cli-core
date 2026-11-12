@@ -103,7 +103,10 @@ const OTHERS: Entry[] = [
     "only the owner chooses, unsets, checks or removes the AI model and its key, or revokes its consent",
   ],
   ["ai.setting-invalid", "configuration_error", "the ai section or the model given is not one WireCat can use"],
-  validation("ai.address-refused", "the model address must be https, or http only on this computer"),
+  validation(
+    "ai.address-refused",
+    "the AI model setting names an address WireCat refuses: plain http to another computer, or Ollama off this computer",
+  ),
   ["ai.not-set", "configuration_error", "no AI model is chosen; models ai set chooses one"],
   ["ai.key-missing", "configuration_error", "no API key is stored for the AI model's address"],
   ["ai.ok", "invalid_response", "models ai check: the model answered (a result, never raised)"],
