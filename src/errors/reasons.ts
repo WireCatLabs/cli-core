@@ -70,6 +70,18 @@ const PROVIDER_API: Entry[] = [
   ["file.denied", "permission_error", "the file cannot be opened: permission denied"],
 ]
 
+/** The read-only SFTP client (`./sftp`). */
+const SFTP: Entry[] = [
+  ["sftp.host-key-missing", "configuration_error", "no host key is pinned for the SFTP server"],
+  ["sftp.host-key-mismatch", "authentication_error", "the SFTP server's host key is not the pinned one"],
+  ["sftp.auth-missing", "configuration_error", "an SFTP connection needs a password or a private key"],
+  ["sftp.key-invalid", "configuration_error", "the SFTP private key or its passphrase cannot be read"],
+  ["sftp.library-missing", "configuration_error", "SFTP needs the ssh2 package in the CLI's dependencies"],
+  ["sftp.timeout", "timeout", "the SFTP server did not answer in time"],
+  validation("sftp.too-large", "the file is larger than the read's byte limit"),
+  validation("sftp.closed", "the SFTP connection was closed before the operation"),
+]
+
 const OTHERS: Entry[] = [
   validation("doctor.report-exists", "the report's file exists; a problem report never overwrites a file"),
   validation("usage.unknown-command", "no command by this name; the CLI's help lists them"),
@@ -627,7 +639,7 @@ export const INPUT_FIELD_REASONS: ErrorReason[] = defineReasons([
 export const REASONS: ErrorReason[] = defineReasons([
   ...QUERY_REASONS,
   ...INPUT_FIELD_REASONS,
-  ...[...QUERY, ...SIGN_IN, ...PROVIDER_API, ...OTHERS].map(([reason, code, message]) => ({
+  ...[...QUERY, ...SIGN_IN, ...PROVIDER_API, ...SFTP, ...OTHERS].map(([reason, code, message]) => ({
     reason,
     code,
     message,

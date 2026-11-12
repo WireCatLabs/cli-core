@@ -183,6 +183,10 @@
       "types": "./dist/update/index.d.ts",
       "default": "./dist/update/index.js"
     },
+    "./sftp": {
+      "types": "./dist/sftp/index.d.ts",
+      "default": "./dist/sftp/index.js"
+    },
     "./oauth": {
       "types": "./dist/oauth/index.d.ts",
       "default": "./dist/oauth/index.js"
@@ -277,6 +281,7 @@
     "@types/mdast": "4.0.4",
     "@types/node": "^22.20.5",
     "@types/pngjs": "6.0.5",
+    "@types/ssh2": "1.15.5",
     "@vitest/coverage-v8": "^5.0.5",
     "@wirecat/cli-base": "0.98.0",
     "@wirecat/cli-core-legacy-tags": "npm:@wirecat/cli-core@0.414.0",
@@ -291,6 +296,7 @@
     "libphonenumber-js": "1.13.15",
     "markdownlint-cli2": "0.24.0",
     "pngjs": "7.0.0",
+    "ssh2": "1.17.0",
     "typescript": "^7.0.2",
     "vitest": "^5.0.5"
   },
@@ -300,13 +306,17 @@
   "peerDependencies": {
     "@napi-rs/canvas": ">=0.1.69 <2",
     "@wirecat/cli-base": ">=0.98.0 <1.0.0",
-    "commander": ">=15"
+    "commander": ">=15",
+    "ssh2": "^1.17.0"
   },
   "bin": {
     "cli-core-parity": "dist/parity/bin.js"
   },
   "peerDependenciesMeta": {
     "@napi-rs/canvas": {
+      "optional": true
+    },
+    "ssh2": {
       "optional": true
     }
   }
