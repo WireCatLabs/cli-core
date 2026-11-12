@@ -55,8 +55,9 @@
   file saved before this release keeps no `agent` and is refused (`agent.refused`) with a hint to save it again. A codex
   schedule saved without `--allow-dangerous` is refused too.
 - **A schedule's variables are checked before it runs**: only the profile, the file locations, PATH, the lock and a
-  harness's own variables, by absolute paths; any other is refused. A run by hand (`schedule run`, a backfill) takes
-  PATH and the locations from the shell it runs in. The checked schedule is what runs; the file is not read again.
+  harness's own variables, by absolute paths; any other is refused. A timer's run keeps the saved locations. A run by
+  hand (`schedule run`, a backfill) takes PATH from its shell and is refused when the shell's file locations differ
+  from the saved ones. The checked schedule is what runs; the file is not read again.
 - **An agent works in an empty folder of its own**, not in its schedule's folder, and a timer passes the schedule
   file's SHA-256 to `schedule exec`, which refuses a file that changed since it was saved.
 - **Under `<PREFIX>_READ_ONLY` a command writes a file only inside its scheduled run's work folder.** `--output`,

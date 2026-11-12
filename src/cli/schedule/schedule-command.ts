@@ -347,7 +347,7 @@ export const backfillScheduleRun = (
   { at, input, agentRuns = [] }: { at: Date; input?: string; agentRuns?: readonly AgentCli[] },
 ) => {
   const system = environmentOf<BaseEnvironment & { system?: ServerSystem }>(command).system ?? thisMachine()
-  const checked = guardSchedule(file, { app, env, platform: system.platform, agentRuns })
+  const checked = guardSchedule(file, { app, env, platform: system.platform, agentRuns }, { byHand: true })
   return untilChildEnds(command, (signal) =>
     backfillSchedule(app, system, env, file, {
       at,
@@ -540,8 +540,11 @@ export const runScheduleNow = async (
   { routes, agentInput }: { routes?: readonly string[]; agentInput?: AgentInput } = {},
 ): Promise<LastRun | { skipped: { why: string; reason: SkipReason } }> => {
   const schedule =
-    guardSchedule(file, { app: site.app, env: site.env, platform: site.system.platform, agentRuns: site.agentRuns }) ??
-    readSchedule(file)
+    guardSchedule(
+      file,
+      { app: site.app, env: site.env, platform: site.system.platform, agentRuns: site.agentRuns },
+      { byHand: true },
+    ) ?? readSchedule(file)
   ownRoutes(schedule, routes)
   const maxCostPerDay = schedule.maxCostPerDay ?? site.limits?.maxCostPerDay ?? SCHEDULE_DEFAULTS.maxCostPerDay
   const capped = dayCapReached(file, schedule, maxCostPerDay)
@@ -971,7 +974,7 @@ export const scheduleCommandFor = ({
       const { context, system, timer } = prepare(this, { needsProfile: false })
       // A timer left behind by a pause that could not remove it must not run the schedule.
       if (existsSync(file) && readSchedule(file).paused) return
-      const checked = guardSchedule(file, { app, env: context.env, platform: system.platform, agentRuns }, seal)
+      const checked = guardSchedule(file, { app, env: context.env, platform: system.platform, agentRuns }, { seal })
       if ((await waits(this, file, { timed: true })) !== undefined) return
       const last = await untilChildEnds(this, (signal) =>
         runSchedule(app, system, context.env, file, {

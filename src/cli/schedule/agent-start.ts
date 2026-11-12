@@ -73,13 +73,14 @@ export const agentStart = (site: StartSite, spec: AgentSpec): HarnessStart => {
 
 /**
  * The saved variables a run may take, or why not: the profile, where the files are, PATH and the lock, and an agent's
- * harness variables, which are rebuilt. A timer's run holds its seal, so the file is as it was saved; a run by hand
- * takes PATH and the locations from the shell it runs in instead of the file.
+ * harness variables, which are rebuilt. A timer's run keeps the saved ones, as its timer starts with none. A run by hand
+ * takes PATH from the shell it runs in, and its files must be where the schedule's are: a run against another store
+ * is refused, never moved there.
  */
 const checkedEnvironment = (
   site: StartSite,
   saved: Record<string, string>,
-  sealed: boolean,
+  byHand: boolean,
   rebuilt: readonly string[],
 ): Record<string, string> | string => {
   const { app } = site
@@ -92,10 +93,14 @@ const checkedEnvironment = (
   if (path.split(delimiter).some((dir) => dir !== "" && !isAbsolute(dir))) relativeAt.push("PATH")
   if (relativeAt.length > 0)
     return `its file names ${relativeAt.join(", ")} by a relative path; save it again to run it`
-  const fromHere = sealed ? rebuilt : [...rebuilt, ...locations, "PATH"]
-  const kept = Object.fromEntries(Object.entries(saved).filter(([name]) => !fromHere.includes(name)))
-  if (sealed) return kept
-  return { ...kept, ...locationVariables(app, site.env), ...(site.env.PATH ? { PATH: site.env.PATH } : {}) }
+  const kept = Object.fromEntries(Object.entries(saved).filter(([name]) => !rebuilt.includes(name)))
+  if (!byHand) return kept
+  const here = locationVariables(app, site.env)
+  const moved = locations.filter((name) => saved[name] !== here[name])
+  if (moved.length > 0)
+    return `it was saved with other file locations (${moved.join(", ")}) than this shell's; run it where it was saved, or save it again here`
+  const { PATH: _, ...rest } = kept
+  return { ...rest, ...(site.env.PATH ? { PATH: site.env.PATH } : {}) }
 }
 
 /**
@@ -104,7 +109,11 @@ const checkedEnvironment = (
  * the harness's current limits and as the harness finds it on the run's PATH, never taken from the file. The refusal is
  * kept as the run's skip, so `schedule list` says why it stopped. The caller runs what this returns, not the file.
  */
-export const guardSchedule = (file: string, site: StartSite, seal?: string): Schedule | undefined => {
+export const guardSchedule = (
+  file: string,
+  site: StartSite,
+  { seal, byHand = false }: { seal?: string; byHand?: boolean } = {},
+): Schedule | undefined => {
   if (!existsSync(file)) return undefined
   const text = readFileSync(file, "utf8")
   const saved = JSON.parse(text) as Schedule
@@ -117,7 +126,7 @@ export const guardSchedule = (file: string, site: StartSite, seal?: string): Sch
   const spec = saved.agent
   if (saved.kind === "agent" && spec === undefined)
     refuse("it was saved by an older version, which kept no agent to rebuild its start from; save it again to run it")
-  const asSaved = checkedEnvironment(site, saved.environment ?? {}, seal !== undefined, HARNESS_VARIABLES)
+  const asSaved = checkedEnvironment(site, saved.environment ?? {}, byHand, HARNESS_VARIABLES)
   if (typeof asSaved === "string") return refuse(asSaved)
   const { files: _, ...rest } = saved
   if (saved.kind !== "agent" || spec === undefined) return { ...rest, environment: asSaved }

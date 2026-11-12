@@ -220,6 +220,37 @@ describe.runIf(process.platform !== "win32")("agents a schedule may start", () =
     expect(ran.err).toContain(why)
   })
 
+  it("keeps a timer's saved file locations without a seal, and refuses a run by hand against other ones", async () => {
+    const { root, bin, env, call } = setup([])
+    writeFileSync(join(bin, "claude"), `#!/bin/sh\nprintf %s "$MESSAGING_STORE" > "${root}/store-seen"\n`)
+    chmodSync(join(bin, "claude"), 0o755)
+    expect((await call("agent", "brief", "claude", "brief me", "--at", "08:30")).code).toBe(0)
+    const file = scheduleFile(env.CHAT_STATE_DIR, "brief")
+    const elsewhere = async (argv: string[], changed: NodeJS.ProcessEnv) => {
+      const resolveSettings = settingsFor(app).resolveSettings
+      const host = {
+        app,
+        context: (command: Command) => {
+          const base = baseContext(command, resolveSettings)
+          return { ...base, profile: base.settings.profile }
+        },
+      }
+      const streams = captureStreams()
+      const code = await run(
+        ["default", "schedule", ...argv],
+        { app, commands: () => [scheduleCommandFor(host)] },
+        { streams, env: changed, system },
+      )
+      return { code, err: streams.stderr.join("") }
+    }
+    const { MESSAGING_STORE: _, ...timerEnv } = env
+    expect((await elsewhere(["exec", file], { ...timerEnv, PATH: "/usr/bin" })).code).toBe(0)
+    expect(readFileSync(join(root, "store-seen"), "utf8")).toBe(env.MESSAGING_STORE)
+    const moved = await elsewhere(["run", "brief"], { ...env, MESSAGING_STORE: join(root, "other.db") })
+    expect(moved.code).not.toBe(0)
+    expect(moved.err).toContain("other file locations (MESSAGING_STORE)")
+  })
+
   it("does not run a sealed schedule whose file changed after it was saved", async () => {
     const { env, call } = setup(["claude"])
     expect((await call("agent", "brief", "claude", "brief me", "--at", "08:30")).code).toBe(0)
