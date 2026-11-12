@@ -22,6 +22,8 @@ export interface IdentityInput {
   provider: string
   externalId: string
   name: string | null
+  /** As the source gave it; the store keeps it only when it reads as E.164. */
+  phone?: string | null
   metadata: Metadata
 }
 export interface ParticipantInput extends Omit<NewRecord<Participant>, "meetingId" | "identityId"> {

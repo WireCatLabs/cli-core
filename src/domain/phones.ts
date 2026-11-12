@@ -110,6 +110,11 @@ export const e164Of = (phone: string, region: string | undefined): string | null
   return nationalPhone(digits, [region], { anyType: true })?.value
 }
 
+/** An E.164 number that some country's plan reads as a mobile: a person's own line, not an office's. */
+export const isMobilePhone = (e164: string): boolean =>
+  /^\+\d+$/.test(e164) &&
+  PHONE_COUNTRIES.some((country) => nationalPhone(e164.slice(1), [country], { anyType: false })?.value === e164)
+
 /** The messengers that keep a contact's number as bare international digits, the `+` left off. */
 export const BARE_INTERNATIONAL_PROVIDERS: readonly string[] = ["telegram", "max", "whatsapp"]
 

@@ -1,5 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import type { Contact, Id, Page, PersonAlias, Provider } from "../../domain/models.js"
+import { e164Of } from "../../domain/phones.js"
 import type { IdentityInput } from "../../meetings/index.js"
 import type { PeopleLookup } from "../../resolve.js"
 import { fold } from "../normalize.js"
@@ -515,12 +516,13 @@ const aliasOf = (name: string | null, username: string | null) => ({
 export const meetingIdentityPk = (context: StoreContext, accountId: number, identity: IdentityInput): number => {
   if (!identity.provider || !identity.externalId) throw new CliError("validation_error", "Invalid identity key")
   const associatePerson = identity.associatePerson === true
+  const phone = identity.phone ? e164Of(identity.phone, undefined) : undefined
   const saved = saveIdentity(
     context,
     identity.provider,
     identity.externalId,
     identity.name,
-    { metadata: identity.metadata },
+    { metadata: identity.metadata, ...(phone ? { phone } : {}) },
     false,
     associatePerson,
   )

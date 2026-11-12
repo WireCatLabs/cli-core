@@ -41,7 +41,7 @@ const participantInput = (
   position: number,
   accountId: number,
 ): ParticipantInput => {
-  const { identityExternalId, ...fields } = p
+  const { identityExternalId, phone, ...fields } = p
   const externalId =
     identityExternalId ??
     (p.email ? `email:${p.email.toLowerCase()}` : p.externalId) ??
@@ -52,6 +52,7 @@ const participantInput = (
       provider,
       externalId,
       name: p.displayName,
+      ...(phone?.trim() ? { phone } : {}),
       metadata: p.metadata,
       associatePerson: Boolean(identityExternalId?.trim() || p.email?.trim() || p.externalId?.trim()),
     },
