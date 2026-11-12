@@ -203,11 +203,26 @@ describe("generated command help", () => {
     expect(commandHelpMarkdown(createProgram(tool), ["messages"])).toEqual([])
   })
 
+  it("keeps the lines of a command that runs itself beside its subcommands", () => {
+    expect(commandHelpMarkdown(createProgram(tool), ["commands"])).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/^\*\*Returns:\*\* /),
+        expect.stringMatching(/^\*\*Example:\*\* /),
+      ]),
+    )
+  })
+
   it("reports the commands still on a generated example", () => {
     const report = exampleReport(createProgram(tool))
 
     expect(report.written).toEqual(["commands info", "messages link"])
-    expect(report.generated).toEqual(["messages list", "messages send", "messages delete", "search messages"])
-    expect(report.text).toMatch(/^tg: 2 of 6 commands have a written example; 4 show a generated one:/)
+    expect(report.generated).toEqual([
+      "commands",
+      "messages list",
+      "messages send",
+      "messages delete",
+      "search messages",
+    ])
+    expect(report.text).toMatch(/^tg: 2 of 7 commands have a written example; 5 show a generated one:/)
   })
 })

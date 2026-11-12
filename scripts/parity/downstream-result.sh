@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Sums parity.yml's downstream matrix into one check. A CLI that no longer builds, typechecks, starts or passes its
 # tests is broken and fails the check, unless the pull request carries the label $LABEL: then it passes and the
-# summary names the broken CLIs. Command lint and docs failures only warn.
+# summary names the broken CLIs. A failed `pnpm generate` breaks too: the tests read what it writes. Command lint and
+# docs failures only warn.
 #
 #   outcomes dir   one <repo>.json per matrix leg, written by its "Record the outcome" step
 #   RESULT         needs.downstream.result
@@ -32,6 +33,7 @@ for repo in $(jq -r '.[].repo' "$here/downstream.json"); do
     "$file" >>"$summary"
   failed=()
   for step in build typecheck start; do [ "$(get "$step")" = success ] || failed+=("$step"); done
+  [ "$(get generate)" != failure ] || failed+=(generate)
   [ "$(get tests)" != failure ] || failed+=(tests)
   [ ${#failed[@]} -eq 0 ] || broken+=("$repo (${failed[*]})")
   soft=()

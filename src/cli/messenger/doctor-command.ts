@@ -101,12 +101,13 @@ const EXCLUDES = ["message text", "chat titles", "names", "phone numbers", "the 
 
 const reportCommand = (messenger: Messenger): Command => {
   const { app } = messenger
-  const report = new Command("reports").description("problem reports")
+  const report = annotate(new Command("reports"), { effects: NO_EFFECTS }).description("problem reports")
   annotate(report.command("show"), {
     effects: NO_EFFECTS,
     examples: [`${app.command} doctor reports show`],
   })
     .description("what a problem report holds; writes nothing")
+    .summary("what a report holds and never holds, and where to send it; writes nothing")
     .action(function (this: Command) {
       const output = outputFor(this)
       const create = lineOf(this, "doctor reports create")
@@ -139,6 +140,7 @@ const reportCommand = (messenger: Messenger): Command => {
     }),
   )
     .description("write a problem report to a file, and say where to send it")
+    .summary("the report file written: its path, the run it is about, and where to send it")
     .option("--run <id>", "the run the report is about; the newest failed one if not given")
     .option("--output <file>", "where to write it; a new file in this directory if not given")
     .action(async function (this: Command) {
