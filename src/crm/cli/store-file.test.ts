@@ -71,7 +71,7 @@ describe("the shared store file, from a CRM CLI", () => {
     expect(restored.item).toMatchObject({ restored_from: backup, kept_at: expect.stringContaining("before-restore") })
     const deals = await openStore({ path: join(root, "wirecat.db"), readOnly: true })
     try {
-      expect(await deals.deals.list()).toHaveLength(1)
+      expect((await deals.deals.list()).items).toHaveLength(1)
     } finally {
       await deals.close()
     }
