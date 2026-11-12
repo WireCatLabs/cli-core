@@ -877,14 +877,12 @@ export const tasksStatsCommand = (messenger: Messenger): Command => {
       "chat (default) or meeting: this account's tasks; project: the owner's project tasks, every project",
       statsByOf,
     )
-    .option("--chat <chat>", `only this chat; ${messenger.chatArgument}`)
     .option("--type <type>", "only this type: question, request, mention or promise", taskTypeOf)
     .option("--timezone <zone>", "the IANA timezone for calendar days in the period, such as created>=today")
     .action(async function (this: Command, words: string[]) {
       const context = messengerContext(this, messenger)
-      const { by, chat, type, timezone } = this.opts<{
+      const { by, type, timezone } = this.opts<{
         by?: TaskStatsBy
-        chat?: string
         type?: TaskView["kind"]
         timezone?: string
       }>()
@@ -894,7 +892,6 @@ export const tasksStatsCommand = (messenger: Messenger): Command => {
       const { stats, account } = await context.withServices(async (services) => ({
         stats: await services.tasks.stats({
           ...(by === undefined ? {} : { by }),
-          ...(chat === undefined ? {} : { chat }),
           ...(type === undefined ? {} : { kind: type }),
           ...(query === undefined ? {} : { query }),
           ...(timezone === undefined ? {} : { timezone }),

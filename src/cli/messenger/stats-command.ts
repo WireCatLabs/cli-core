@@ -130,7 +130,7 @@ export const statsCommand = (messenger: Messenger, loadRenderer = chartRenderer)
     "messages top": 'chat:"Book club" --limit 10',
     "messages unanswered": 'chat:"Project room"',
     "messages waiting": "kind:private",
-    "tasks show": '--chat "Project room"',
+    "tasks show": '-- chat:"Project room"',
   }
   for (const [path, args] of Object.entries(examples)) {
     const command = commandAt(stats, path)

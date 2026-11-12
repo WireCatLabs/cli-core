@@ -4792,9 +4792,6 @@
         "--by": {
           "in": "all"
         },
-        "--chat": {
-          "in": "all"
-        },
         "--timezone": {
           "in": "all"
         },
