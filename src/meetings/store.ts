@@ -60,10 +60,14 @@ export interface MeetingSave {
    */
   fromFile?: boolean
 }
+/** A participant with the person their identity is linked to, when the store knows people. */
+export interface MeetingParticipant extends Participant {
+  person?: { uid: string; name: string | null }
+}
 export interface MeetingDetails {
   meeting: Meeting
   series: MeetingSeries | null
-  participants: Participant[]
+  participants: MeetingParticipant[]
   transcripts: { transcript: Transcript; rows: TranscriptRow[] }[]
   chat: ChatLine[]
   summaries: Summary[]

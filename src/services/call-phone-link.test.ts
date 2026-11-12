@@ -2,7 +2,7 @@ import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
-import { pull, type SourceParticipant } from "../meetings/index.js"
+import { meetingDetailsAnswer, meetingPeople, pull, type SourceParticipant } from "../meetings/index.js"
 import { fakeMeetingSource } from "../meetings/testing/index.js"
 import { type MessageStore, openStore } from "../store/store.js"
 import { personMeetingContext } from "./person-meeting-context.js"
@@ -56,6 +56,12 @@ describe("a call's client and the CRM contact with that number (NEED-2600)", () 
     const context = await personMeetingContext(store, `person:${callPerson?.uid}`, { accountIds: [accountId] })
     expect(context.person.name).toBe("Ana Example")
     expect(context.items.map(({ reference }) => reference)).toEqual([expect.stringMatching(/^meeting:/)])
+    const [call] = (await store.meetings.meetings({ accountId })) as [{ id: number }]
+    const person = { ref: `person:${callPerson?.uid}`, name: "Ana Example" }
+    expect((await meetingDetailsAnswer(store.meetings, call.id, accountId)).item.participants).toMatchObject([
+      { name: null, person },
+    ])
+    expect((await meetingPeople(store.meetings, "ana", accountId)).items).toMatchObject([{ person }])
   })
 
   it("are only proposed on a landline: an office's number is everyone's who works there", async () => {
