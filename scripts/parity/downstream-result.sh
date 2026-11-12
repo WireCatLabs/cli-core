@@ -42,7 +42,8 @@ for repo in $(jq -r '.[].repo' "$here/downstream.json"); do
   [ "$(get tests)" != failure ] || failed+=(tests)
   until=$(known_until "$repo")
   if [ ${#failed[@]} -eq 0 ]; then
-    [ -z "$until" ] || echo "::warning title=$repo::$repo passes; remove it from scripts/parity/known-broken.json"
+    [ -z "$until" ] || [ "$(get tests)" != success ] ||
+      echo "::warning title=$repo::$repo passes; remove it from scripts/parity/known-broken.json"
   elif [ -n "$until" ]; then
     known+=("$repo (${failed[*]})")
   else
