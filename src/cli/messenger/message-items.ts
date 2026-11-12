@@ -38,6 +38,7 @@ const attachmentItem = (attachment: Attachment) =>
     width: attachment.width,
     height: attachment.height,
     duration: attachment.duration,
+    local_path: attachment.localPath,
     contact:
       attachment.contact &&
       defined({
