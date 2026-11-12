@@ -161,6 +161,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `lookup` | ask the messenger who is behind a phone number |  |
 | `inspect` | look at a source before taking anything from it: a chat link without joining, a mailbox without importing |  |
 | `send` | send a message |  |
+| `call` | call one provider API method by its own name, generated from the provider's method list |  |
 | `edit` | change a sent message |  |
 | `forward` | send an existing message on to another chat |  |
 | `pin` | pin a message or chat |  |
@@ -784,6 +785,12 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--phone-number` | `<who>` | choice | who sees the number: everyone, contacts or nobody |  |
 | `--profile-photo` | `<who>` | choice | who sees the profile photo: everyone, contacts or nobody |  |
 | `--read-receipts` | `<on\|off>` | choice | send read receipts |  |
+| `--client-id` | `<id>` | id | sign in through the owner's own OAuth app with this client ID instead of WireCat's (WC-SECR-25) |  |
+| `--client-file` | `<file>` | path | sign in through the owner's own OAuth app read from this client JSON instead of WireCat's (WC-SECR-25) |  |
+| `--keep-data` |  | switch | remove the account but leave what the store holds of it, still searchable |  |
+| `--delete-data` |  | switch | remove the account and delete what the store and the tool's files hold of it |  |
+| `--answer-stdin` |  | switch | a sign-in step asks its question as a JSON line and reads the answer from stdin |  |
+| `--hide-phone` |  | switch | leave the phone number out of the answer |  |
 | `--end-time` | `<time>` | time | when it ends |  |
 | `--start-date` | `<date>` | time | the first day of something that lasts whole days, such as an all-day event or a contract |  |
 | `--end-date` | `<date>` | time | the last day of something that lasts whole days, such as an all-day event or a contract |  |
@@ -849,7 +856,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `missing-command-help` | high | command | every command has a summary |
 | `missing-command-effects` | high | command | every command that runs declares its effects: each leaf, and a group with an action of its own |
 | `command-help-too-long` | low | command | a summary is at most 80 characters |
-| `command-example-count` | medium | command | a leaf command has one to three examples; generated commands are exempt |
+| `command-example-count` | low | command | a leaf command has one to three examples; generated commands are exempt |
 | `faulty-help-example-parameters` | high | command | an example starts with the tool, runs its own command, and gives only arguments and options it takes |
 | `missing-argument-help` | high | argument | every argument is described |
 | `missing-option-help` | high | option | every option is described |
