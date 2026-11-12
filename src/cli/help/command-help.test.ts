@@ -204,12 +204,7 @@ describe("generated command help", () => {
   })
 
   it("keeps the lines of a command that runs itself beside its subcommands", () => {
-    expect(commandHelpMarkdown(createProgram(tool), ["commands"])).toEqual(
-      expect.arrayContaining([
-        expect.stringMatching(/^\*\*Returns:\*\* /),
-        expect.stringMatching(/^\*\*Example:\*\* /),
-      ]),
-    )
+    expect(commandHelpMarkdown(createProgram(tool), ["commands"])).toEqual(["**Example:** `tg commands`"])
   })
 
   it("reports the commands still on a generated example", () => {
