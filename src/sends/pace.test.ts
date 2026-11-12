@@ -130,4 +130,16 @@ describe("waiting for a turn", () => {
     await expect(refused).rejects.toMatchObject({ code: "rate_limited", details: { remembered: true } })
     await expect(refused).rejects.toThrow("has to wait")
   })
+
+  it("refuses sooner when the caller sets a shorter longest wait", async () => {
+    const pacer = new Pacer(fresh(), { perMinute: 60, burst: 1 }, () => T)
+    await pacer.holdFor(90_000)
+    const refused = waitForTurn(pacer, {
+      name: "Example CRM",
+      operation: "deals.list",
+      now: () => T,
+      longestWaitMs: 60_000,
+    })
+    await expect(refused).rejects.toMatchObject({ code: "rate_limited", details: { retry_after_ms: 90_000 } })
+  })
 })
