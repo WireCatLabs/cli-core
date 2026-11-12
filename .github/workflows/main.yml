@@ -2,6 +2,8 @@ name: Main validation
 
 # The full tests on every commit that lands on main, so a merge that breaks them shows up now
 # and not at the next release. Nothing here publishes or tags: release.yml alone does that.
+# A squash commit whose tree equals its pull request's head, green on every required check and built on the main it
+# landed on, is not validated again (scripts/release-reuse.sh): the same tree already passed the same checks.
 on:
   push:
     branches: [main]
@@ -14,5 +16,27 @@ permissions:
   contents: read
 
 jobs:
+  reuse:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+      checks: read
+    outputs:
+      reuse: ${{ steps.decide.outputs.reuse }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: decide
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMMIT: ${{ github.sha }}
+          PULL_REQUEST: "true"
+        run: bash scripts/release-reuse.sh
+
+  # Also when the decision itself failed: no answer means the full validation.
   validation:
+    needs: reuse
+    if: ${{ !cancelled() && needs.reuse.outputs.reuse != 'true' }}
     uses: ./.github/workflows/ci.yml

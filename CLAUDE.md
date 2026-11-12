@@ -20,7 +20,8 @@ vulnerabilities are reported as the [security policy](SECURITY.md) says.
    No test and no branch build may open the real file (`~/.local/share/WireCat/wirecat.db`) — `MESSAGING_STORE` points elsewhere.
 3. **Other sessions work here at the same time.** Work in a worktree off `origin/main`, rebase before
    pushing, and take a migration number in [COORDINATION.md](docs/dev/COORDINATION.md#store-migrations) before writing it.
-4. **A change reaches tg-cli and max-cli only through a release.** Both pin an exact version.
+4. **A change reaches the CLIs only through a release.** Each pins an exact version
+   ([`scripts/parity/downstream.json`](scripts/parity/downstream.json) lists them).
 5. **Merge when green, release in batches** ([COORDINATION.md, "Releases"](docs/dev/COORDINATION.md#releases)).
    Squash merge your green pull request yourself and comment `merged #NNN` on
    [issue #849](https://github.com/WireCatLabs/cli-core/issues/849); never release only for your own pull request.
@@ -68,8 +69,9 @@ Every pull request runs three checks. The fast standards job (`standards.yml`) c
 `CHANGELOG.md`, config integrity, lint, Markdown, `ci:quick` (the typecheck and the command lint) and the new commits for secrets.
 The pull request validation (`pr.yml`) runs the full Linux validation, `ci.yml`: lint, typecheck, the tests
 on two runners with the coverage floor checked on their merged report, build, `docs:check`, the schema and
-dist checks, Bun, old Node, the SQLite restart and parity, which builds tg-cli, max-cli, whatsapp-cli and
-cli-template against the branch. The security checks (`security.yml`) run CodeQL, zizmor and gitleaks; CodeQL
+dist checks, Bun, old Node, the SQLite restart and parity, which builds cli-template and every CLI in
+`scripts/parity/downstream.json` against the branch, checking the manifests and wording of tg, max and wa on the
+same builds. The security checks (`security.yml`) run CodeQL, zizmor and gitleaks; CodeQL
 analyses python, c-cpp and java-kotlin only when a file of theirs changes.
 A pull request that changes only `CHANGELOG.md`, the `changes/` fragments and the version against a `main` already
 proven green (bin/release's fold and version pull requests) runs only `docs:check` and the changelog shape tests,

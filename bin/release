@@ -6,7 +6,7 @@
 #
 #   bin/release           # publishes from GitHub Actions (.github/workflows/release.yml)
 #   bin/release --local   # publishes from this machine: NPM_TOKEN if exported, else the keyring
-#   bin/release --app-ref <branch>   # Parity builds tg-cli and max-cli at <branch> instead of their main
+#   bin/release --app-ref <branch>   # Parity builds each downstream CLI at <branch>, or its main when it lacks one
 #
 # The npm token is never printed and never written to a file — not on success, not in an error.
 set -eu

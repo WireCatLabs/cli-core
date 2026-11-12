@@ -3199,16 +3199,10 @@
       "in": "all"
     },
     "flood": {
-      "in": ["max", "tg"],
-      "planned": {
-        "wa": "wa backlog: mount the shared flood command"
-      }
+      "in": ["max", "tg", "wa"]
     },
     "flood clear": {
-      "in": ["max", "tg"],
-      "planned": {
-        "wa": "wa backlog: mount the shared flood command"
-      }
+      "in": ["max", "tg", "wa"]
     },
     "guide": {
       "in": ["max", "tg"],
