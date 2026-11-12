@@ -80,7 +80,7 @@ export const tokenKeeper = (options: TokenKeeperOptions): TokenKeeper => {
     provider.exchange ? provider.exchange(params, ctx) : requestTokens(provider, params, ctx)
   const notSignedIn = () =>
     new CliError("authentication_error", `not signed in to ${provider.name}; run ${options.signInCommand}`, {
-      reason: "oauth.missing",
+      reason: "session.missing",
     })
 
   const busy = (error: unknown) => isCliError(error) && error.details.reason === "file.locked"

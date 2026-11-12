@@ -1,6 +1,7 @@
 import { CliError, isCliError } from "@wirecat/cli-base"
 import type { Settings } from "./settings.js"
 
+// gcal-cli raised its own oauth.missing before cli-core merged it into session.missing (FIND-2583).
 const NOT_SIGNED_IN = new Set([undefined, "session.missing", "oauth.missing"])
 
 /**

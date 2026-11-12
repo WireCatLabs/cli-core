@@ -30,8 +30,7 @@ const SIGN_IN: Entry[] = [
   ["oauth.declined", "authentication_error", "the provider's consent was declined"],
   ["oauth.timeout", "timeout", "the sign-in was not finished in time"],
   ["oauth.mismatch", "authentication_error", "the pasted sign-in result belongs to another sign-in"],
-  ["oauth.missing", "authentication_error", "this profile is not signed in to the provider"],
-  ["session.missing", "authentication_error", "this profile has no API token saved"],
+  ["session.missing", "authentication_error", "this profile is not signed in: no saved sign-in or API token"],
   ["oauth.locked", "provider_unavailable", "another process holds this sign-in's lock"],
   ["oauth.no-response", "outcome_unknown", "the token request did not finish"],
   ["oauth.unavailable", "provider_unavailable", "the provider's token endpoint is unavailable"],
@@ -97,7 +96,10 @@ const OTHERS: Entry[] = [
     "invalid_response",
     "the model answered nothing; given a picture, it may not read pictures — choose a vision model",
   ],
-  validation("model.address-refused", "the model address must be https, or http only on this computer"),
+  validation(
+    "model.address-refused",
+    "the model address is refused: https, or plain http and Ollama only on this computer",
+  ),
   [
     "local-only.refused",
     "permission_error",
@@ -119,10 +121,6 @@ const OTHERS: Entry[] = [
     "only the owner chooses, unsets, checks or removes the AI model and its key, or revokes its consent",
   ],
   ["ai.setting-invalid", "configuration_error", "the ai section or the model given is not one WireCat can use"],
-  validation(
-    "ai.address-refused",
-    "the AI model setting names an address WireCat refuses: plain http to another computer, or Ollama off this computer",
-  ),
   ["ai.not-set", "configuration_error", "no AI model is chosen; models ai set chooses one"],
   ["ai.key-missing", "configuration_error", "no API key is stored for the AI model's address"],
   ["ai.ok", "invalid_response", "models ai check: the model answered (a result, never raised)"],

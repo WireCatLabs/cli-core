@@ -94,7 +94,7 @@ describe("models ai", () => {
 
     for (const address of ["http://192.168.1.5:11434/v1", "http://localhost.evil.com/v1", "http://127.0.0.1.nip.io/v1"])
       await expect(run(undefined, "set", "openai", "--model", "m", "--base-url", address)).rejects.toMatchObject({
-        details: { reason: "ai.address-refused" },
+        details: { reason: "model.address-refused" },
       })
     await run(undefined, "set", "openai", "--model", "m", "--base-url", "http://localhost:1234/v1")
     expect(last()).toMatchObject({ origin: "http://localhost:1234" })

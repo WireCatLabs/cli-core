@@ -90,11 +90,11 @@ export const aiSettingOf = (given: {
         : field === "base_url"
           ? "this address is not allowed: use https, or http only on this computer"
           : "name the model, 1 to 200 characters",
-      { reason: field === "base_url" ? "ai.address-refused" : "ai.setting-invalid" },
+      { reason: field === "base_url" ? "model.address-refused" : "ai.setting-invalid" },
     )
   }
   if (checked.output.provider === "ollama" && !onThisComputer(aiBaseUrl(checked.output)))
-    throw new CliError("validation_error", "Ollama is read only on this computer", { reason: "ai.address-refused" })
+    throw new CliError("validation_error", "Ollama is read only on this computer", { reason: "model.address-refused" })
   return given.allowImages
     ? {
         ...checked.output,
