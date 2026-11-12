@@ -62,6 +62,15 @@ export interface IdentityLinkDecision {
    * name), `mailbox` names which of the two people's addresses is the company's.
    */
   company?: { organization?: number; name?: string; all?: boolean; mailbox?: string }
+  /**
+   * With `confirm: false`: the two "people" are a company's mailboxes. Every address of the match's identities goes to
+   * one organization: `organization`, else the one holding an address or its company domain, else one of `name`, else
+   * a new company named after the people's shared name (a match by name) or the domain. A person who is only those
+   * addresses becomes the company's; one who holds more keeps the rest and stays a person. `all` closes every open
+   * proposal on those addresses. The result names `organization`, `mailboxes`, `people` (who became the company's)
+   * and `closed`.
+   */
+  organization?: { organization?: number; name?: string; all?: boolean }
 }
 
 /** One `identity_link`, naming the people as they are now, not as they were when it was proposed. */

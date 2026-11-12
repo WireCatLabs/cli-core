@@ -339,6 +339,124 @@ describe("a company's address on a match that is not about a shared mailbox (Des
   })
 })
 
+describe("a match whose two people are a company's mailboxes (NEED-2573)", () => {
+  const MAIL: AccountKey = { provider: "email", account: "me@home.example" }
+  const kindOf = async (store: MessageStore, provider: string, id: string) => {
+    const uid = await uidOf(store, provider, id)
+    return (await store.people.list({ kind: "all", limit: 50 })).items.find((one) => one.person === `person:${uid}`)
+      ?.kind
+  }
+  const mailboxPair = async () => {
+    const store = await open()
+    await store.people.savePeople(MAIL, [
+      { id: "pro@synthetic-telco.com", name: "Telco Business", email: "pro@synthetic-telco.com" },
+      { id: "b2b@synthetic-telco.com", name: "telco business", email: "b2b@synthetic-telco.com" },
+    ])
+    await store.people.scanMatches({ full: true })
+    const [proposal] = (await store.people.linkProposals({ limit: 50, offset: 0 })).items
+    return { store, proposal }
+  }
+
+  it("gives every address to one company named after them; they become the company's, and are not proposed again", async () => {
+    const { store, proposal } = await mailboxPair()
+
+    const decided = await store.people.decideLink(proposal?.id as string, {
+      confirm: false,
+      by: "owner",
+      organization: {},
+    })
+    const rescan = await store.people.scanMatches({ full: true })
+
+    expect(proposal?.signal).toBe("name")
+    expect(decided).toMatchObject({
+      status: "rejected",
+      result: {
+        mailboxes: ["b2b@synthetic-telco.com", "pro@synthetic-telco.com"],
+        closed: [proposal?.id],
+      },
+    })
+    const result = decided.result as { organization: string; people: string[] }
+    expect([...result.people].sort()).toEqual([...(proposal?.persons ?? [])].sort())
+    const named = (await raw()).prepare("SELECT name FROM organizations").all()
+    expect(named).toHaveLength(1)
+    expect(String(named[0]?.name).toLowerCase()).toBe("telco business")
+    expect(await kindOf(store, "email", "pro@synthetic-telco.com")).toBe("organization")
+    expect(await kindOf(store, "email", "b2b@synthetic-telco.com")).toBe("organization")
+    expect(await uidOf(store, "email", "pro@synthetic-telco.com")).not.toBe(
+      await uidOf(store, "email", "b2b@synthetic-telco.com"),
+    )
+    expect(rescan.proposed).toEqual([])
+    expect((await store.people.linkProposals({ limit: 50, offset: 0 })).items).toEqual([])
+  })
+
+  it("leaves a person who holds more their other identities, and they stay a person", async () => {
+    const store = await open()
+    await store.people.savePeople(MAIL, [
+      { id: "desk@synthetic-telco.com", name: "Kai Berg", email: "desk@synthetic-telco.com" },
+    ])
+    await store.people.savePeople(PERSONAL, [{ id: "5", name: "Kai Berg" }])
+    await store.people.linkIdentities(
+      { provider: "email", id: "desk@synthetic-telco.com" },
+      { provider: "telegram", id: "5" },
+      owner,
+    )
+    await store.people.savePeople(MAIL, [
+      { id: "info@synthetic-telco.com", name: "Kai Berg", email: "info@synthetic-telco.com" },
+    ])
+    const proposed = await store.people.proposeLink({
+      identity: { provider: "email", id: "info@synthetic-telco.com" },
+      with: { provider: "email", id: "desk@synthetic-telco.com" },
+      signal: "agent",
+      by: { bot: "helper" },
+    })
+    const kai = await uidOf(store, "telegram", "5")
+
+    const decided = await store.people.decideLink(proposed.id, {
+      confirm: false,
+      by: "owner",
+      organization: { name: "Telco" },
+    })
+
+    expect(decided.result).toMatchObject({ mailboxes: ["desk@synthetic-telco.com", "info@synthetic-telco.com"] })
+    expect((decided.result as { people: string[] }).people).toEqual([
+      `person:${await uidOf(store, "email", "info@synthetic-telco.com")}`,
+    ])
+    expect(await uidOf(store, "telegram", "5")).toBe(kai)
+    expect(await uidOf(store, "email", "desk@synthetic-telco.com")).not.toBe(kai)
+    expect(["person", "stranger"]).toContain(await kindOf(store, "telegram", "5"))
+  })
+
+  it("asks for a name on free mail, and refuses an unknown organization and an agent", async () => {
+    const store = await open()
+    await store.people.savePeople(MAIL, [
+      { id: "a.shop@gmail.com", name: "Shop", email: "a.shop@gmail.com" },
+      { id: "b.shop@gmail.com", name: "Shop", email: "b.shop@gmail.com" },
+    ])
+    const proposed = await store.people.proposeLink({
+      identity: { provider: "email", id: "a.shop@gmail.com" },
+      with: { provider: "email", id: "b.shop@gmail.com" },
+      signal: "agent",
+      by: { bot: "helper" },
+    })
+
+    await expect(
+      store.people.decideLink(proposed.id, { confirm: false, by: "owner", organization: {} }),
+    ).rejects.toMatchObject({ details: { reason: "organization.unnamed" } })
+    await expect(
+      store.people.decideLink(proposed.id, { confirm: false, by: "owner", organization: { organization: 999 } }),
+    ).rejects.toMatchObject({ details: { reason: "organization.not-found" } })
+    await expect(
+      store.people.decideLink(proposed.id, { confirm: false, by: { bot: "helper", reason: "x" }, organization: {} }),
+    ).rejects.toMatchObject({ code: "permission_error" })
+    const decided = await store.people.decideLink(proposed.id, {
+      confirm: false,
+      by: "owner",
+      organization: { name: "Shop" },
+    })
+    expect((decided.result as { people: string[] }).people).toHaveLength(2)
+  })
+})
+
 describe("a phone", () => {
   it("joins the two people who have it, whether kept with or without the +", async () => {
     const store = await open()
