@@ -196,7 +196,7 @@ const filtersBeside = (text: string): string | undefined => {
  */
 export const titleWords = (
   text: string,
-  refused = "deals and leads are found by the words of their title, company and contacts only",
+  refused = "deals and leads are found by the words of their title, company, contacts and activities only",
 ): { words: string[]; anyWord: boolean } => {
   const { root } = parseLucene(text, SEARCH_QUERY)
   const clauses = root.kind === "boolean" ? root.clauses : [{ node: root, occur: "must" as const }]
