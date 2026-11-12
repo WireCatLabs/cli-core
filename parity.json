@@ -4023,6 +4023,12 @@
         "wa": "wa backlog: mount the shared schedule command"
       },
       "options": {
+        "--allow-dangerous": {
+          "in": ["max", "tg"],
+          "planned": {
+            "wa": "wa backlog: mount the shared schedule command"
+          }
+        },
         "--at": {
           "in": ["max", "tg"],
           "planned": {
@@ -4071,6 +4077,18 @@
             "wa": "wa backlog: mount the shared schedule command"
           }
         }
+      }
+    },
+    "schedule agents": {
+      "in": ["max", "tg"],
+      "planned": {
+        "wa": "wa backlog: mount the shared schedule command"
+      }
+    },
+    "schedule agents list": {
+      "in": ["max", "tg"],
+      "planned": {
+        "wa": "wa backlog: mount the shared schedule command"
       }
     },
     "schedule command": {

@@ -267,6 +267,6 @@ describe("purging one account", () => {
     expect(others(db, portal)).toEqual({ ...before, involvements: Number(before.involvements) - ofItsDeals })
     expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([])
     expect(orphanPointers(db).filter(({ count }) => count > 0)).toEqual([])
-    expect((await store.deals.list({ account: PORTAL_B })).map(({ externalId }) => externalId)).toEqual(["d1"])
+    expect((await store.deals.list({ account: PORTAL_B })).items.map(({ externalId }) => externalId)).toEqual(["d1"])
   })
 })

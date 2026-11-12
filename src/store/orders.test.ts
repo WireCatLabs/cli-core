@@ -52,7 +52,7 @@ it("keeps an agent's order proposed until the owner decides, and refuses the sam
   const refused = await registry.decide([proposed.ref], { confirm: true, by: { bot: "other", reason: "ok" } })
   expect(refused.refused).toHaveLength(1)
   await registry.decide([proposed.ref], { confirm: true, by: "owner" })
-  expect(await store.orders.list({ supplierName: "shop one", number: "A-1" })).toMatchObject([
+  expect((await store.orders.list({ supplierName: "shop one", number: "A-1" })).items).toMatchObject([
     { ref: proposed.ref, review: "confirmed" },
   ])
   expect((await store.orders.setStatus(proposed.ref, { status: "returned", by: "owner" })).status).toBe("returned")

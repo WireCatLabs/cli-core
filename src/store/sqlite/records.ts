@@ -1,4 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
+import type { ListResult } from "@wirecat/cli-base/standards"
 import { IDENTITY_TYPES } from "../../domain/record-types.js"
 import type { EnvelopeSource, IngestError } from "../../domain/records.js"
 import type { AccountKey } from "../types.js"
@@ -12,6 +13,7 @@ import { noteError, type RelationshipNote, recordRelationshipsOver } from "./rec
 import { recordRemapOver } from "./record-remap.js"
 import { type RecordsRun, type RunItem, type RunOptions, recordRunOver } from "./record-run.js"
 import { recordWritesOver } from "./record-writes.js"
+import { pageOfRows } from "./rows-page.js"
 import { storedThing } from "./things.js"
 import { read, rehearse, write } from "./transaction.js"
 
@@ -108,7 +110,8 @@ export interface RecordStore {
     deleted?: boolean
     /** 1–500, 100 by default. */
     limit?: number
-  }): Promise<SourceRecord[]>
+    offset?: number
+  }): Promise<ListResult<SourceRecord>>
   /**
    * The relations of live records that point at a record of the account, or at an entity: by its ref, or through a
    * record mapped to it. An entity's are read across every account, and each names its own. Oldest relation first.
@@ -225,11 +228,23 @@ export const recordStoreOver = (context: StoreContext): RecordStore => {
         const row = rowOf(key)
         return row ? sourceRecordOf(row) : undefined
       }),
-    list: async ({ provider, account, type, waiting, unmatched, flagged, entity, batch, deleted, limit = 100 }) => {
+    list: async ({
+      provider,
+      account,
+      type,
+      waiting,
+      unmatched,
+      flagged,
+      entity,
+      batch,
+      deleted,
+      limit = 100,
+      offset = 0,
+    }) => {
       checkLimit(limit)
       return read(database, () => {
         const accountId = findAccountPk(context, { provider, account })
-        if (accountId === undefined) return []
+        if (accountId === undefined) return pageOfRows<SourceRecord>([], limit)
         const where = ["r.account_id = ?"]
         const params: (string | number)[] = [accountId]
         const and = (condition: string, ...values: (string | number)[]) => {
@@ -251,10 +266,11 @@ export const recordStoreOver = (context: StoreContext): RecordStore => {
         }
         if (batch !== undefined) and("r.batch_id = ?", batch)
         if (deleted !== undefined) and(`r.deleted_at IS ${deleted ? "NOT " : ""}NULL`)
-        return database
-          .prepare(`${SELECT}WHERE ${where.join(" AND ")} ORDER BY r.updated_at DESC, r.id DESC LIMIT ?`)
-          .all(...params, limit)
+        const rows = database
+          .prepare(`${SELECT}WHERE ${where.join(" AND ")} ORDER BY r.updated_at DESC, r.id DESC LIMIT ? OFFSET ?`)
+          .all(...params, limit + 1, Math.max(offset, 0))
           .map(sourceRecordOf)
+        return pageOfRows(rows, limit, Math.max(offset, 0))
       })
     },
     incoming: async (target, { limit = 100 } = {}) => {

@@ -69,7 +69,7 @@ export const keyDocumentKind = (store: KeyDocumentStore): ProposalKind => {
     stored: ["key_document"],
     list: async (filter) => {
       const status = storedStatus(filter)
-      const stored = await store.proposedActions.list({
+      const { items: stored } = await store.proposedActions.list({
         kinds: ["key_document"],
         ...(status === undefined ? {} : { status }),
         ...pushed(filter),

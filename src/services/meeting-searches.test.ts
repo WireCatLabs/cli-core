@@ -33,7 +33,7 @@ it("saves, lists, runs and deletes a meeting search with its options", async () 
     options: { limit: 5, project: "RES" },
   })
   expect((await meetings.show("weekly-plan")).runs).toBe(1)
-  expect((await store.searches.searchHistory(5, 0, ["meetings-search"])).length).toBe(2)
+  expect((await store.searches.searchHistory(5, 0, ["meetings-search"])).items.length).toBe(2)
   await meetings.delete("weekly-plan")
   await expect(meetings.show("weekly-plan")).rejects.toMatchObject({ code: "not_found" })
 })

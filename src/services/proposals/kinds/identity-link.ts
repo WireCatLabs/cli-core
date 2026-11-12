@@ -31,7 +31,7 @@ export const identityLinkKind = (store: Pick<MessageStore, "people" | "proposedA
   ownerOnly: true,
   list: async (filter) => {
     const status = storedStatus(filter)
-    const stored = await store.proposedActions.list({
+    const { items: stored } = await store.proposedActions.list({
       kinds: [IDENTITY_LINK_KIND],
       ...(status === undefined ? {} : { status }),
       ...pushed(filter),

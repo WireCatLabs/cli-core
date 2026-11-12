@@ -56,7 +56,7 @@ describe("memories", () => {
       details: { reason: "memory.evidence-required" },
     })
     await expect(store.memories.add({ ...input, evidence: ["note:999"] })).rejects.toMatchObject({ code: "not_found" })
-    expect(await store.memories.list()).toEqual([])
+    expect((await store.memories.list()).items).toEqual([])
   })
 
   it("keep their evidence, author and model, are found by their words, and give way to a newer one", async () => {
@@ -72,8 +72,8 @@ describe("memories", () => {
     })
     expect(first).toMatchObject({ status: "proposed", scope: "work", model: "synthetic-model-1", evidence: [note.ref] })
     expect(first.author).toMatchObject({ type: "bot", name: "digest-writer" })
-    expect((await store.memories.search("friday")).map(({ author }) => author.name)).toEqual(["digest-writer"])
-    expect(await store.memories.search("friday", { scope: "personal" })).toEqual([])
+    expect((await store.memories.search("friday")).items.map(({ author }) => author.name)).toEqual(["digest-writer"])
+    expect((await store.memories.search("friday", { scope: "personal" })).items).toEqual([])
 
     const newer = await store.memories.add({
       kind: "summary",
@@ -87,8 +87,8 @@ describe("memories", () => {
     expect(await store.memories.get(first.ref)).toMatchObject({ status: "superseded" })
     expect(newer).toMatchObject({ status: "confirmed", supersedes: first.ref, lastVerifiedAt: expect.any(String) })
     expect(newer.author).toMatchObject({ type: "person", name: null })
-    expect((await store.memories.list()).map(({ author }) => author.name)).toEqual([null, "digest-writer"])
-    expect((await store.memories.search("review")).map(({ id }) => id)).toEqual([newer.id])
+    expect((await store.memories.list()).items.map(({ author }) => author.name)).toEqual([null, "digest-writer"])
+    expect((await store.memories.search("review")).items.map(({ id }) => id)).toEqual([newer.id])
     expect(await store.memories.indexState()).toMatchObject({ pending: 0 })
   })
 
@@ -108,14 +108,14 @@ describe("memories", () => {
     for (let index = 0; index < 3; index += 1) await remember(busy.ref)
     const mine = await remember(quiet.ref)
 
-    expect((await store.memories.search("review", { limit: 3 })).map(({ subject }) => subject)).toEqual([
+    expect((await store.memories.search("review", { limit: 3 })).items.map(({ subject }) => subject)).toEqual([
       busy.ref,
       busy.ref,
       busy.ref,
     ])
-    expect((await store.memories.search("review", { subject: quiet.ref, limit: 1 })).map(({ id }) => id)).toEqual([
-      mine.id,
-    ])
+    expect((await store.memories.search("review", { subject: quiet.ref, limit: 1 })).items.map(({ id }) => id)).toEqual(
+      [mine.id],
+    )
     await expect(store.memories.search("review", { subject: "note:999" })).rejects.toMatchObject({ code: "not_found" })
   })
 })
@@ -140,7 +140,7 @@ describe("a memory's project", () => {
     const loose = await add()
     expect(inHarbour).toMatchObject({ project: harbour.ref, projectName: "Project Harbour" })
     expect(loose).toMatchObject({ project: null, projectName: null })
-    expect((await store.memories.list({ project: harbour.ref })).map((one) => one.ref)).toEqual([inHarbour.ref])
+    expect((await store.memories.list({ project: harbour.ref })).items.map((one) => one.ref)).toEqual([inHarbour.ref])
     await expect(add(note.ref)).rejects.toThrow("is not a project")
 
     expect(await store.memories.update(loose.ref, { project: lighthouse.ref })).toMatchObject({
@@ -313,7 +313,7 @@ describe("forgetting a memory", () => {
       evidence: [note.ref],
       author: agent,
     })
-    expect((await store.memories.search("zanzibarcalls")).map(({ ref }) => ref)).toEqual([wrong.ref])
+    expect((await store.memories.search("zanzibarcalls")).items.map(({ ref }) => ref)).toEqual([wrong.ref])
     const [piece] = (await sql(
       path,
       `SELECT content_hash FROM chunks WHERE chunkable_type = 'memory' AND chunkable_id = ${wrong.id}`,
@@ -351,7 +351,7 @@ describe("forgetting a memory", () => {
       ["note", false],
       ["memory", true],
     ])
-    expect((await store.memories.search("friday")).map(({ ref }) => ref)).toEqual([right.ref])
+    expect((await store.memories.search("friday")).items.map(({ ref }) => ref)).toEqual([right.ref])
     expect(await store.notes.note(note.ref)).toMatchObject({ ref: note.ref })
     const id = Number(wrong.id)
     expect(
@@ -369,7 +369,7 @@ describe("forgetting a memory", () => {
     await expect(store.memories.remove(wrong.ref, "owner")).rejects.toMatchObject({ code: "not_found" })
 
     expect(await store.memories.remove(kept.ref, "owner")).toMatchObject({ removed: true, links: 2 })
-    expect(await store.memories.search("harbour")).toEqual([])
+    expect((await store.memories.search("harbour")).items).toEqual([])
     expect(await sql(path, "SELECT count(*) AS n FROM memory_words_vocab WHERE term LIKE 'harbour%'")).toEqual([
       { n: 0 },
     ])
@@ -477,9 +477,9 @@ describe("facts", () => {
     })
     expect(replacement).toMatchObject({ status: "accepted", author: { type: "person", name: null } })
     expect(await store.facts.get(proposed.ref)).toMatchObject({ status: "superseded" })
-    expect((await store.facts.list({ project: project.ref })).map(({ ref, author }) => [ref, author.name])).toEqual([
-      [proposed.ref, "digest-writer"],
-    ])
+    expect(
+      (await store.facts.list({ project: project.ref })).items.map(({ ref, author }) => [ref, author.name]),
+    ).toEqual([[proposed.ref, "digest-writer"]])
     expect(await store.facts.reverse(replacement.ref, "owner")).toMatchObject({ status: "reversed" })
   })
 
@@ -502,10 +502,10 @@ describe("facts", () => {
     await expect(store.facts.add({ type: "rumour" as "fact", statement: "x", by: "owner" })).rejects.toMatchObject({
       code: "validation_error",
     })
-    expect((await store.facts.list({ type: "question" })).map(({ ref }) => ref)).toEqual([question.ref])
-    expect((await store.facts.list({ subject: note.ref })).map(({ ref }) => ref)).toEqual([question.ref])
-    expect((await store.facts.list({ status: "proposed" })).map(({ ref }) => ref)).toEqual([statement.ref])
-    expect(await store.facts.list({ project: person.ref })).toEqual([])
+    expect((await store.facts.list({ type: "question" })).items.map(({ ref }) => ref)).toEqual([question.ref])
+    expect((await store.facts.list({ subject: note.ref })).items.map(({ ref }) => ref)).toEqual([question.ref])
+    expect((await store.facts.list({ status: "proposed" })).items.map(({ ref }) => ref)).toEqual([statement.ref])
+    expect((await store.facts.list({ project: person.ref })).items).toEqual([])
   })
 
   it("correct a fact of any kind, proposed or accepted, and the old one is superseded once the new one holds", async () => {
@@ -627,7 +627,7 @@ describe("facts", () => {
     const owned = await store.facts.add({ type: "fact", statement: "The draft is due", by: "owner" })
     await expect(store.facts.reject(owned.ref, "owner")).rejects.toMatchObject({ code: "validation_error" })
     expect(await store.facts.reject(proposed.ref, "owner")).toMatchObject({ status: "rejected" })
-    expect((await store.facts.list({ status: "rejected" })).map(({ ref }) => ref)).toEqual([proposed.ref])
+    expect((await store.facts.list({ status: "rejected" })).items.map(({ ref }) => ref)).toEqual([proposed.ref])
 
     const first = await store.facts.add({
       type: "decision",

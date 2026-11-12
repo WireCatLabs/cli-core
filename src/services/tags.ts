@@ -1,5 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import { type QueryAst, type QueryRegistry, queryFieldsOf } from "@wirecat/cli-base/query"
+import type { ListResult } from "@wirecat/cli-base/standards"
 import type * as v from "valibot"
 import { formatLocator, isLocator, parseLocator } from "../domain/locator.js"
 import type { Id } from "../domain/models.js"
@@ -48,11 +49,7 @@ export interface TagsRemoved {
 export interface TagsService {
   add(target: TagTargetInput, tags: string[]): Promise<TagsAdded>
   remove(target: TagTargetInput, tags: string[], source?: "manual" | "auto"): Promise<TagsRemoved>
-  list(request: {
-    query?: QueryAst
-    limit: number
-    offset: number
-  }): Promise<{ items: TaggingItem[]; has_more: boolean }>
+  list(request: { query?: QueryAst; limit: number; offset: number }): Promise<ListResult<TaggingItem>>
 }
 
 export type TaggingItem = v.InferOutput<typeof tagging>
@@ -167,7 +164,7 @@ export const tagsService = (deps: ServiceDeps): TagsService => {
           ...(where ? { where } : {}),
           window: { limit: limit + 1, offset },
         })
-        return { items: rows.slice(0, limit).map((one) => taggingOf(account, one)), has_more: rows.length > limit }
+        return { items: rows.slice(0, limit).map((one) => taggingOf(account, one)), hasMore: rows.length > limit }
       }),
   }
 }

@@ -351,7 +351,7 @@ describe("administrator stored reports", () => {
       "resolved query",
     )
     const history = await store.searches.searchHistory(10)
-    expect(history.every((one) => one.command === "admin-statistics")).toBe(true)
+    expect(history.items.every((one) => one.command === "admin-statistics")).toBe(true)
   })
   it("refuses oversized evidence bodies and supports cancellation", async () => {
     const { store, service } = await setup()

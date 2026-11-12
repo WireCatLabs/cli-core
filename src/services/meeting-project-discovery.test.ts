@@ -125,9 +125,9 @@ it("discovers unlinked meetings through canonical names, keys and aliases with b
   do {
     const page = await readMeetingProjectDiscovery(f.ports, "RES", { ...f.options, cursor })
     pages.push(page)
-    expect(page.hits.length).toBeLessThanOrEqual(1)
+    expect(page.items.length).toBeLessThanOrEqual(1)
     expect(
-      page.hits.every((hit) => hit.meetingId === f.first.meeting.id && hit.ref.startsWith(`meeting:${f.accountId}/`)),
+      page.items.every((hit) => hit.meetingId === f.first.meeting.id && hit.ref.startsWith(`meeting:${f.accountId}/`)),
     ).toBe(true)
     expect(page).toMatchObject({
       association: "unconfirmed-word-evidence",
@@ -145,7 +145,7 @@ it("discovers unlinked meetings through canonical names, keys and aliases with b
     "исследование",
   ])
   expect(pages.at(-1)).toMatchObject({ hasMore: false, nextCursor: null, coverage: { remainingTerms: 0 } })
-  expect(pages[0]?.hits[0]?.ref).toBe(pages[1]?.hits[0]?.ref)
+  expect(pages[0]?.items[0]?.ref).toBe(pages[1]?.items[0]?.ref)
   expect(read).toHaveBeenCalledTimes(pages.length)
   for (const [, options] of read.mock.calls) expect(options).toMatchObject(f.options)
   expect(await f.store.knowledge.vocabulary({ kind: "project" })).toEqual(before)
@@ -154,7 +154,7 @@ it("discovers unlinked meetings through canonical names, keys and aliases with b
 it("keeps empty alias pages resumable and applies the same account/date behavior for another provider", async () => {
   const f = await fixture("sample-assistant")
   const first = await readMeetingProjectDiscovery(f.ports, "RES", { ...f.options, since: 9000, until: 9001 })
-  expect(first).toMatchObject({ hits: [], hasMore: true, term: { kind: "canonical" } })
+  expect(first).toMatchObject({ items: [], hasMore: true, term: { kind: "canonical" } })
   const next = await readMeetingProjectDiscovery(f.ports, "res", {
     ...f.options,
     since: 9000,
@@ -163,13 +163,13 @@ it("keeps empty alias pages resumable and applies the same account/date behavior
     limit: 2,
     maxReadBytes: 2048,
   })
-  expect(next).toMatchObject({ hits: [], hasMore: true, term: { kind: "key" }, coverage: { termIndex: 1 } })
+  expect(next).toMatchObject({ items: [], hasMore: true, term: { kind: "key" }, coverage: { termIndex: 1 } })
   const ordinary = await readMeetingProjectDiscovery(f.ports, "исследование", f.options)
-  expect(ordinary.hits).toHaveLength(1)
+  expect(ordinary.items).toHaveLength(1)
   expect(ordinary.project.id).toBe(f.project.id)
   await f.store.knowledge.addProject({ name: "CODE", key: "CODE", scope: "work" })
   const duplicate = await readMeetingProjectDiscovery(f.ports, "CODE", { ...f.options, maxTerms: 1 })
-  expect(duplicate).toMatchObject({ hits: [], hasMore: false, coverage: { termsTotal: 1 } })
+  expect(duplicate).toMatchObject({ items: [], hasMore: false, coverage: { termsTotal: 1 } })
 })
 
 it("rejects changed scopes, queries and vocabulary before reading another alias", async () => {
@@ -290,7 +290,7 @@ it("captures the selected account and stops after cancellation during asynchrono
   }
   const page = await readMeetingProjectDiscovery({ ...f.ports, vocabulary }, "RES", original)
   expect(page.accountId).toBe(f.accountId)
-  expect(page.hits.every((hit) => hit.ref.startsWith(`meeting:${f.accountId}/`))).toBe(true)
+  expect(page.items.every((hit) => hit.ref.startsWith(`meeting:${f.accountId}/`))).toBe(true)
   const controller = new AbortController()
   const read = vi.spyOn(f.store.meetings, "searchHits")
   const cancelledVocabulary = {

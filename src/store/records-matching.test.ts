@@ -80,7 +80,7 @@ it("leaves a person whose identifiers name two people unmatched, with both as ca
     },
   ])
   expect(receipt.waiting).toEqual([])
-  expect(await store.records.list({ ...SOURCE, unmatched: true })).toEqual([
+  expect((await store.records.list({ ...SOURCE, unmatched: true })).items).toEqual([
     expect.objectContaining({ externalId: "p-3", entity: null }),
   ])
 })
@@ -201,7 +201,9 @@ it("lets the owner map an unmatched person, and projects what waited on it", asy
 
   const mapped = await store.records.map({ ...SOURCE, type: "person", externalId: "p-5" }, one.ref, "owner")
   expect(mapped).toMatchObject({ entity: one.ref, createdEntity: false, unused: null })
-  const [payment] = await store.finance.payments()
+  const {
+    items: [payment],
+  } = await store.finance.payments()
   expect(payment).toMatchObject({ review: "proposed", payer: { ref: one.ref } })
   await expect(
     store.records.map({ ...SOURCE, type: "person", externalId: "p-5" }, "person:999", "owner"),

@@ -237,10 +237,10 @@ it("lists full pages of deals from the accounts given, with the owner's own, in 
   await store.deals.add({ by: "owner", title: "Own deal", stage: "Talk" })
 
   const page = (offset: number) =>
-    store.deals.list({ accounts: [ACME_PORTAL], limit: 1, offset }).then((rows) => rows.map((one) => one.title))
+    store.deals.list({ accounts: [ACME_PORTAL], limit: 1, offset }).then((rows) => rows.items.map((one) => one.title))
 
   expect([...(await page(0)), ...(await page(1)), ...(await page(2))]).toEqual(["Own deal", "Acme renewal"])
-  expect(await store.deals.list({ accounts: [other] })).toHaveLength(4)
+  expect((await store.deals.list({ accounts: [other] })).items).toHaveLength(4)
 })
 
 it("keeps the owner's own link out when its other end is a deal of an account outside the scope", async () => {

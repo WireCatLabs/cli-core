@@ -417,7 +417,7 @@ export const jobsCommand = (messenger: Messenger): Command => {
     renderAnswer(
       this,
       context,
-      pagedList("store jobs list", context.settings, { items, has_more: jobs.length > offset + limit }),
+      pagedList("store jobs list", context.settings, { items, hasMore: jobs.length > offset + limit }),
       () => items.map((one) => `${jobLine(one)}\n`).join(""),
     )
     if (jobs.length === 0 && context.format === "pretty")

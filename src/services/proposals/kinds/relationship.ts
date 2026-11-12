@@ -79,7 +79,7 @@ export const relationshipKind = (store: RelationshipStore): ProposalKind => {
     stored: ["relationship"],
     list: async (filter) => {
       const status = storedStatus(filter)
-      const stored = await store.proposedActions.list({
+      const { items: stored } = await store.proposedActions.list({
         kinds: ["relationship"],
         ...(status === undefined ? {} : { status }),
         ...pushed(filter),

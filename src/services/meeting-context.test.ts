@@ -82,12 +82,12 @@ it("shares meeting notes, tags and memories with existing records and retains or
     },
     { apply: true },
   )
-  expect(await store.memories.list({ subject: root })).toHaveLength(1)
-  expect(await store.facts.list({ subject: root })).toHaveLength(1)
+  expect((await store.memories.list({ subject: root })).items).toHaveLength(1)
+  expect((await store.facts.list({ subject: root })).items).toHaveLength(1)
   const reopened = await openStore({ path, env })
   handles.push(reopened)
   expect((await reopened.notes.notes({ about: root })).items[0]?.text).toBe("Invented memo")
-  expect(await reopened.memories.list({ subject: root })).toHaveLength(1)
+  expect((await reopened.memories.list({ subject: root })).items).toHaveLength(1)
   expect(
     (
       await reopened.meetings.transcriptMetadata({
@@ -134,8 +134,8 @@ it("denies foreign/deleted meeting and memory evidence before writing", async ()
       { apply: true },
     ),
   ).rejects.toMatchObject({ code: "not_found" })
-  expect(await store.memories.list()).toHaveLength(0)
-  expect(await store.facts.list()).toHaveLength(0)
+  expect((await store.memories.list()).items).toHaveLength(0)
+  expect((await store.facts.list()).items).toHaveLength(0)
   expect((await store.notes.notes({ about: root })).items).toHaveLength(0)
   input.meeting.deletedAt = 6000
   await store.meetings.saveMeeting(input)

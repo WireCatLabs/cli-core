@@ -296,8 +296,8 @@ it("records invoices, payments, orders and certificate facts only when the owner
     ],
     "mail-triage:22",
   )
-  expect(await f.store.finance.invoices()).toEqual([])
-  expect(await f.store.orders.list()).toEqual([])
+  expect((await f.store.finance.invoices()).items).toEqual([])
+  expect((await f.store.orders.list()).items).toEqual([])
 
   const reviewed = await f.store.mailFindings.review(batch.id, {
     fingerprint: batch.fingerprint,

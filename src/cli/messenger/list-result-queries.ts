@@ -1,6 +1,6 @@
 import { type QueryRegistry, queryFieldsOf } from "@wirecat/cli-base/query"
 import type { Schedule } from "../../background/schedules.js"
-import { callRecord, scheduledJob, stickerInventory, topic } from "../../entities/index.js"
+import { callRecord, scheduledJob, scheduleHarness, stickerInventory, topic } from "../../entities/index.js"
 import { type QueryWords, queryTerms, unfilteredQuery } from "../list-query.js"
 
 const termsOnly = (registry: QueryRegistry): QueryRegistry => ({
@@ -34,3 +34,4 @@ export const topicTitle = (words: QueryWords) => queryTerms(words, TOPICS_QUERY,
 
 export const CALLS_QUERY = unfilteredQuery("call_record", callRecord)
 export const STICKERS_QUERY = unfilteredQuery("sticker_inventory", stickerInventory)
+export const SCHEDULE_HARNESSES_QUERY = unfilteredQuery("schedule_harness", scheduleHarness)

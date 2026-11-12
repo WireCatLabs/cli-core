@@ -50,7 +50,7 @@ it("keeps a deal with its people, moves it within its pipeline, and closes it in
   })
   const won = await store.deals.close(deal.ref, { status: "won", date: "2026-11-20", reason: "signed", by: "owner" })
   expect(won).toMatchObject({ status: "won", stage: "Успех", closedDate: "2026-11-20", closedReason: "signed" })
-  expect(await store.deals.list({ status: "open" })).toEqual([])
+  expect((await store.deals.list({ status: "open" })).items).toEqual([])
   expect((await store.refs.summaries([deal.ref])).get(deal.ref)).toMatchObject({
     title: "Сайт для клиники · Успех, 500 000.00 RUB (won)",
   })
@@ -128,8 +128,8 @@ it("starts a lead in the seeded lead pipeline, and asks for a reference when a n
     "lost",
   ])
   await expect(store.deals.get(lead.ref.replace("lead:", "deal:"))).rejects.toThrow()
-  expect(await store.deals.list()).toEqual([])
-  expect(await store.deals.list({ kind: "lead" })).toMatchObject([{ ref: lead.ref }])
+  expect((await store.deals.list()).items).toEqual([])
+  expect((await store.deals.list({ kind: "lead" })).items).toMatchObject([{ ref: lead.ref }])
 
   await store.deals.addPipeline({ name: "Продажи", kind: "lead", stages: ["Звонок"], by: "owner" })
   await expect(store.deals.pipeline("продажи")).rejects.toMatchObject({ details: { reason: "pipeline.ambiguous" } })

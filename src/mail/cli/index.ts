@@ -12,6 +12,7 @@ import { answerLocally, type ShownTime } from "../../cli/local-times.js"
 import { messagesAnswer, offsetOf, shownOf } from "../../cli/messenger/search-answers.js"
 import { backendRequest, noteServer, serverSearchOptions } from "../../cli/messenger/search-backend-options.js"
 import { positiveCount } from "../../cli/paging.js"
+import { marksUntrusted } from "../../cli/untrusted-marks.js"
 import { formatReference, parseReference } from "../../domain/references.js"
 import { count, reference, text, time, untrusted } from "../../entities/fields.js"
 import { POLICY_SKIPS } from "../../mail/attachments.js"
@@ -290,13 +291,15 @@ const shownText = (emails: ShownMail[], local: ShownTime) =>
 
 const messagesCommand = (mail: MailReads): Command => {
   const messages = new Command("messages").summary("read stored emails").description("read the emails sync stored")
-  annotate(messages.command("show"), {
-    effects: mail.whole ? FETCH : LOCAL_READ,
-    examples: [
-      `${mail.app.command} personal messages show 'msg:email/me%40example.com/thread-1/%3Cid%40example.com%3E'`,
-      `${mail.app.command} personal messages show 'msg:email/me%40example.com/thread-1/%3Cid%40example.com%3E' --before-n 2`,
-    ],
-  })
+  marksUntrusted(
+    annotate(messages.command("show"), {
+      effects: mail.whole ? FETCH : LOCAL_READ,
+      examples: [
+        `${mail.app.command} personal messages show 'msg:email/me%40example.com/thread-1/%3Cid%40example.com%3E'`,
+        `${mail.app.command} personal messages show 'msg:email/me%40example.com/thread-1/%3Cid%40example.com%3E' --before-n 2`,
+      ],
+    }),
+  )
     .summary("one stored email whole, with the text of its attachments")
     .description(
       "one stored email: its people, folders, whole text and the first 4000 characters of each attachment's text; " +
@@ -367,13 +370,15 @@ const conversationsCommand = (mail: MailReads): Command => {
     .summary("email threads")
     .description("the threads of the stored mail: an email and its replies")
   const list = withQuery(
-    annotate(conversations.command("list"), {
-      effects: LOCAL_READ,
-      examples: [
-        `${mail.app.command} personal conversations list`,
-        `${mail.app.command} personal conversations list subject:invoice emails_count>1`,
-      ],
-    })
+    marksUntrusted(
+      annotate(conversations.command("list"), {
+        effects: LOCAL_READ,
+        examples: [
+          `${mail.app.command} personal conversations list`,
+          `${mail.app.command} personal conversations list subject:invoice emails_count>1`,
+        ],
+      }),
+    )
       .summary("stored email threads, newest first")
       .description("this profile's email threads, the newest activity first: subject, how many emails, when"),
     THREAD_QUERY,
@@ -426,13 +431,15 @@ const conversationsCommand = (mail: MailReads): Command => {
     })
   answerEntity(list, "mail_thread", mailThread)
 
-  annotate(conversations.command("show"), {
-    effects: LOCAL_READ,
-    examples: [
-      `${mail.app.command} personal conversations show 'chat:email/me%40example.com/thread-1'`,
-      `${mail.app.command} personal conversations show 'msg:email/me%40example.com/thread-1/%3Cid%40example.com%3E'`,
-    ],
-  })
+  marksUntrusted(
+    annotate(conversations.command("show"), {
+      effects: LOCAL_READ,
+      examples: [
+        `${mail.app.command} personal conversations show 'chat:email/me%40example.com/thread-1'`,
+        `${mail.app.command} personal conversations show 'msg:email/me%40example.com/thread-1/%3Cid%40example.com%3E'`,
+      ],
+    }),
+  )
     .summary("one email thread, every email oldest first")
     .description("every stored email of one thread, oldest first, each with the text of its attachments")
     .argument("<conversation>", "a chat:email/… thread from conversations list, or a msg:email/… email in it")

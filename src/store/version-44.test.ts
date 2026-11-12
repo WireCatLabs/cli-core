@@ -69,9 +69,9 @@ it("moves an older build's agent and rule suggestions into proposals and keeps D
     expect(left.every((link) => link.purpose === null)).toBe(true)
 
     const moved = await upgraded.proposedActions.list({ kinds: ["relationship", "key_document"] })
-    expect(moved).toHaveLength(3)
+    expect(moved.items).toHaveLength(3)
     const byLink = (id: string) =>
-      moved.find((action) => (action.payload as { suggestedLink: { id: string } }).suggestedLink.id === id)
+      moved.items.find((action) => (action.payload as { suggestedLink: { id: string } }).suggestedLink.id === id)
     expect(byLink(agent.id)).toMatchObject({
       kind: "relationship",
       status: "proposed",
@@ -122,7 +122,7 @@ it("moves an older build's agent and rule suggestions into proposals and keeps D
   const again = await openStore({ path })
   try {
     expect(
-      await again.proposedActions.list({ kinds: ["relationship", "key_document"], status: "proposed" }),
+      (await again.proposedActions.list({ kinds: ["relationship", "key_document"], status: "proposed" })).items,
     ).toHaveLength(2)
   } finally {
     await again.close()

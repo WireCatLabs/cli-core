@@ -572,10 +572,18 @@ export {
 export { STATUS_ROWS, STATUS_SIGNAL_ROWS } from "./project-status-rows.js"
 export { fieldsOf, projectFields } from "./result-fields.js"
 export {
+  HARNESSES,
+  type Harness,
+  harnessesOn,
+  harnessInfo,
+  harnessOfArgv,
+  isHarness,
+  reportsCost,
+} from "./schedule/harnesses.js"
+export {
   type AgentScheduleSpec,
   agentSchedule,
   backfillScheduleRun,
-  type Harness,
   pauseSchedule,
   removeSchedule,
   runScheduleNow,

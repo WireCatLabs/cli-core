@@ -32,16 +32,16 @@ describe("log pruning", () => {
       await store.agentActions.record(call(now))
       const payloads = Object.fromEntries(store.botUpdates.recent(account).map((u) => [u.externalId, u.payload]))
       expect(payloads).toEqual({ handled: null, waiting: { text: "Synthetic" } })
-      expect(await store.agentActions.list()).toHaveLength(2)
+      expect((await store.agentActions.list()).items).toHaveLength(2)
 
       now = START + LOG_RETENTION.agentActionsMs + DAY
       await store.agentActions.record(call(now))
-      expect((await store.agentActions.list()).map((a) => Date.parse(a.startedAt))).not.toContain(START)
+      expect((await store.agentActions.list()).items.map((a) => Date.parse(a.startedAt))).not.toContain(START)
 
       await store.agentActions.record(call(START))
       now += DAY - 1
       await store.agentActions.record(call(now))
-      expect((await store.agentActions.list()).map((a) => Date.parse(a.startedAt))).toContain(START)
+      expect((await store.agentActions.list()).items.map((a) => Date.parse(a.startedAt))).toContain(START)
     } finally {
       await store.close()
     }
@@ -57,7 +57,7 @@ describe("log pruning", () => {
     now = START + LOG_RETENTION.agentActionsMs + DAY
     const second = await openStore({ path, now: () => now })
     try {
-      expect(await second.agentActions.list()).toEqual([])
+      expect((await second.agentActions.list()).items).toEqual([])
     } finally {
       await second.close()
     }

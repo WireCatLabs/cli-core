@@ -51,8 +51,8 @@ describe("search --backend both", () => {
     const archived: EventsFound = {
       query: "planning",
       by: "words",
-      hits: [stored("event:6", "Weekly planning"), stored("event:7", "One planning")],
-      has_more: false,
+      items: [stored("event:6", "Weekly planning"), stored("event:7", "One planning")],
+      hasMore: false,
     }
     const found = await bothSearchAnswer(
       store,

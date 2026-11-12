@@ -444,26 +444,26 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
           ...(terms.has("stage") ? { stage: terms.get("stage") as string } : {}),
           ...(terms.has("pipeline") ? { pipeline: terms.get("pipeline") as string } : {}),
           ...(terms.has("organization") ? { organization: terms.get("organization") as string } : {}),
-          limit: Math.min(opts.limit + 1, MOST),
+          limit: Math.min(opts.limit, MOST),
           offset: (opts.page - 1) * opts.limit,
         })
       if (opts.format === "csv")
         return renderCsv(command, options.open, async (run) => {
           const found = await read(run)
           return {
-            items: marked(found.slice(0, opts.limit), DEAL_UNTRUSTED) as Record<string, unknown>[],
+            items: marked(found.items, DEAL_UNTRUSTED) as Record<string, unknown>[],
             fields: await run.store.crm.fields(run.account, kind),
             page: opts.page,
-            hasMore: found.length > opts.limit,
+            hasMore: found.hasMore,
           }
         })
       await within(command, async (run) => {
         const found = await read(run)
         return listOf(pathOf(command).join(" "), {
-          items: marked(found.slice(0, opts.limit), DEAL_UNTRUSTED),
+          items: marked(found.items, DEAL_UNTRUSTED),
           limit: opts.limit,
           page: opts.page,
-          has_more: found.length > opts.limit,
+          has_more: found.hasMore,
           ...(words.length ? { args: { query: words } } : {}),
         })
       })

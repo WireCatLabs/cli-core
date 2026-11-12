@@ -1,7 +1,17 @@
 import { spawn } from "node:child_process"
-import { createHash } from "node:crypto"
-import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
-import { basename, join } from "node:path"
+import { createHash, randomBytes } from "node:crypto"
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs"
+import { tmpdir } from "node:os"
+import { basename, dirname, join, relative } from "node:path"
 import { CliError, errorCodes, writeSecurely } from "@wirecat/cli-base"
 import { linkConfigOf, linkFor } from "../domain/links.js"
 import { type AppIdentity, mailHolderVariable, readOnlyLockOf } from "../ports/app.js"
@@ -60,7 +70,28 @@ export interface Schedule {
   to?: string[]
   /** Kept with no timer: `schedule run` still runs it, and `schedule resume` puts the timer back. */
   paused?: true
+  /** An agent's: files its harness reads its limits from, by path in the run's work folder; written before each run. */
+  files?: Record<string, string>
+  /** An agent's: what its start is rebuilt from before each run, so the saved argv is never what runs. */
+  agent?: AgentSpec
 }
+
+/** An agent schedule's harness and what it was asked; the argv, variables and files are built from it. */
+export interface AgentSpec {
+  harness: string
+  prompt: string
+  /** An alias or a model id; "" for the harness's own default. */
+  model: string
+  leanStart: boolean
+  maxCost?: number
+  /** The owner accepted an agent its own limits cannot hold to the CLIs' commands (`--allow-dangerous`). */
+  allowDangerous?: true
+}
+
+/** Stands for an agent run's own work folder in its harness's variables and files; the run puts the real path in. */
+export const WORK_FOLDER = "{wirecat-work-folder}"
+/** Stands for the run's own mark in an agent's prompt, which the CLIs put around other people's text in that run. */
+export const UNTRUSTED_MARK = "{wirecat-untrusted-mark}"
 
 export const NOTIFY_WHEN = ["always", "failures", "never"] as const
 export type Notify = (typeof NOTIFY_WHEN)[number]
@@ -102,7 +133,7 @@ const addSpend = (folder: string, usd: number, at: Date) => {
 
 /**
  * Claude reports a run's cost only in its JSON answer, so a scheduled claude run asks for it; the report kept is the
- * answer's text. Codex reports none.
+ * answer's text. No other agent reports one.
  */
 const priced = (argv: string[]): string[] => {
   const [program = ""] = argv
@@ -112,13 +143,20 @@ const priced = (argv: string[]): string[] => {
     : argv
 }
 
-const reportOf = (stdout: Buffer): { text: Buffer; costUsd?: number } => {
+/** `failed`: claude answered an error, such as no credit left, which it may do with exit 0. */
+const reportOf = (stdout: Buffer): { text: Buffer; costUsd?: number; failed?: true } => {
   try {
-    const answer = JSON.parse(stdout.toString("utf8")) as { type?: unknown; result?: unknown; total_cost_usd?: unknown }
+    const answer = JSON.parse(stdout.toString("utf8")) as {
+      type?: unknown
+      result?: unknown
+      total_cost_usd?: unknown
+      is_error?: unknown
+    }
     if (answer?.type !== "result") return { text: stdout }
     return {
       text: typeof answer.result === "string" ? Buffer.from(answer.result) : stdout,
       ...(typeof answer.total_cost_usd === "number" ? { costUsd: answer.total_cost_usd } : {}),
+      ...(answer.is_error === true ? { failed: true as const } : {}),
     }
   } catch {
     return { text: stdout }
@@ -178,6 +216,7 @@ export const SKIP_REASONS = {
   mailNone: "mail.none-new",
   mailBelowThreshold: "mail.below-threshold",
   mailSameInput: "mail.same-input",
+  agentRefused: "agent.refused",
 } as const
 export type SkipReason = (typeof SKIP_REASONS)[keyof typeof SKIP_REASONS]
 
@@ -487,6 +526,7 @@ export const runSchedule = async (
     reportTemplates,
     skipRepeatedInput = false,
     routes: chosen,
+    schedule: checked,
   }: {
     now?: () => Date
     timer?: Timer
@@ -508,9 +548,11 @@ export const runSchedule = async (
     skipRepeatedInput?: boolean
     /** Where this run goes instead of the schedule's own routes; `[]` keeps it here. */
     routes?: readonly string[]
+    /** The schedule as its guard checked and rebuilt it, run as it is: the file is not read again. */
+    schedule?: Schedule
   } = {},
 ): Promise<LastRun> => {
-  const schedule = readSchedule(file)
+  const schedule = checked ?? readSchedule(file)
   const folder = join(file, "..")
   const runs = join(folder, "runs")
   mkdirSync(runs, { recursive: true, mode: 0o700 })
@@ -788,24 +830,29 @@ export const attemptSchedule = async (
   const agent = schedule.kind === "agent"
   const output = join(runs, `${stamp}.${agent ? "md" : "log"}`)
   const errors = agent ? join(runs, `${stamp}.log`) : output
-  const [program = "", ...args] = agent ? priced(schedule.argv) : [...system.entry, ...schedule.argv]
   const trace = childTrace()
+  // An agent works in an empty folder of its own: one that could write where it runs never reaches its schedule file.
+  const work = agent ? mkdtempSync(join(tmpdir(), "wirecat-agent-")) : folder
+  const mark = randomBytes(8).toString("hex")
+  const inWork = (text: string) => text.replaceAll(WORK_FOLDER, work).replaceAll(UNTRUSTED_MARK, mark)
+  const [program = "", ...args] = agent ? priced(schedule.argv).map(inWork) : [...system.entry, ...schedule.argv]
+  const agentOnly = (one: Pick<AgentCli, "envPrefix">) => [
+    [`${one.envPrefix}_READ_ONLY`, "1"],
+    [`${one.envPrefix}_SCHEDULED`, schedule.name],
+    [`${one.envPrefix}_WORK_FOLDER`, work],
+    [`${one.envPrefix}_UNTRUSTED_MARK`, mark],
+  ]
   const childEnv = {
     ...env,
-    ...schedule.environment,
+    ...(agent
+      ? Object.fromEntries(Object.entries(schedule.environment).map(([name, value]) => [name, inWork(value)]))
+      : schedule.environment),
     TRACEPARENT: trace.traceparent,
     [`${app.envPrefix}_SCHEDULED`]: schedule.name,
     ...(schedule.onNewMail ? { [mailHolderVariable(app)]: schedule.onNewMail } : {}),
     // A run started under the lock stays under it, whatever the schedule file says.
     ...(agent || readOnlyLockOf(app, env) ? { [`${app.envPrefix}_READ_ONLY`]: "1" } : {}),
-    ...(agent
-      ? Object.fromEntries(
-          agentRuns.flatMap((other) => [
-            [`${other.envPrefix}_READ_ONLY`, "1"],
-            [`${other.envPrefix}_SCHEDULED`, schedule.name],
-          ]),
-        )
-      : {}),
+    ...(agent ? Object.fromEntries([app, ...agentRuns].flatMap(agentOnly)) : {}),
   }
   // The child's output is data, and an agent's is another program's: it is kept as it came. These lines say
   // only when it ran and how it ended.
@@ -820,11 +867,18 @@ export const attemptSchedule = async (
   if (before?.exitCode === 0 && before.inputHash === inputHash) {
     // A skip every few minutes would otherwise push the kept runs' files out of runs/.
     rmSync(join(runs, `${stamp}.jsonl`), { force: true })
+    if (agent) rmSync(work, { recursive: true, force: true })
     return { repeated: before }
+  }
+  for (const [path, body] of Object.entries(agent ? (schedule.files ?? {}) : {})) {
+    const file = join(work, path)
+    if (relative(work, file).startsWith("..")) continue
+    mkdirSync(dirname(file), { recursive: true })
+    writeFileSync(file, inWork(body), { mode: 0o600 })
   }
   let costUsd: number | undefined
   const exitCode = await new Promise<number>((resolve) => {
-    const child = spawn(program, args, { env: childEnv, cwd: folder, stdio: ["pipe", "pipe", "pipe"] })
+    const child = spawn(program, args, { env: childEnv, cwd: work, stdio: ["pipe", "pipe", "pipe"] })
     // An agent that stops reading its stdin may close it first; that is no failure of the run.
     child.stdin?.on("error", () => {})
     child.stdin?.end(input)
@@ -850,10 +904,14 @@ export const attemptSchedule = async (
       const report = agent ? reportOf(Buffer.concat(out)) : { text: Buffer.concat([...out, ...err]) }
       costUsd = report.costUsd
       writeFileSync(output, report.text, { mode: 0o600 })
-      if (agent) writeFileSync(errors, Buffer.concat(err), { mode: 0o600 })
-      resolve(code ?? (killedBy === "SIGKILL" ? 137 : killedBy === "SIGTERM" ? 143 : 1))
+      // The error is the agent's answer, so the log keeps it beside its stderr.
+      if (agent)
+        writeFileSync(errors, Buffer.concat([...err, ...("failed" in report ? [report.text] : [])]), { mode: 0o600 })
+      const exited = code ?? (killedBy === "SIGKILL" ? 137 : killedBy === "SIGTERM" ? 143 : 1)
+      resolve("failed" in report && exited === 0 ? 1 : exited)
     })
   })
+  if (agent) rmSync(work, { recursive: true, force: true })
   const ended = now()
   if (costUsd !== undefined) addSpend(folder, costUsd, ended)
   log[exitCode === 0 ? "info" : "error"]({

@@ -146,7 +146,8 @@ const owed = (item: StatusItem) => {
 const keepsBooks = async (store: MessageStore, projects: string[]) => {
   for (const project of projects) {
     const filter = { project, review: "confirmed" as const, limit: 1 }
-    if ((await store.finance.invoices(filter)).length || (await store.finance.payments(filter)).length) return true
+    if ((await store.finance.invoices(filter)).items.length || (await store.finance.payments(filter)).items.length)
+      return true
   }
   return false
 }

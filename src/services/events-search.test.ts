@@ -116,9 +116,9 @@ describe("searchEvents", () => {
 
     for (const words of ["budget", "quarter", "tagus", "lopez"]) {
       const found = await searchEvents(store, words)
-      expect(found.hits.map(({ title }) => title)).toEqual(["Budget review"])
+      expect(found.items.map(({ title }) => title)).toEqual(["Budget review"])
     }
-    const [hit] = (await searchEvents(store, "budget")).hits
+    const [hit] = (await searchEvents(store, "budget")).items
     expect(hit).toMatchObject({
       ref: expect.stringMatching(/^event:\d+$/),
       provider: "google-calendar",
@@ -136,8 +136,8 @@ describe("searchEvents", () => {
 
     const found = await searchEvents(store, "sync")
 
-    expect(found.hits).toHaveLength(1)
-    expect(found.hits[0]).toMatchObject({ occurrences: 6, starts_at: new Date(NOW + DAY).toISOString() })
+    expect(found.items).toHaveLength(1)
+    expect(found.items[0]).toMatchObject({ occurrences: 6, starts_at: new Date(NOW + DAY).toISOString() })
   })
 
   it("cuts the occurrences of a series into pieces of one text, so they share one vector", async () => {
@@ -161,7 +161,7 @@ describe("searchEvents", () => {
       entry("m1", "Valencia trip", NOW),
     ])
 
-    expect((await searchEvents(store, "valencia")).hits.map(({ title }) => title)).toEqual(["Valencia trip"])
+    expect((await searchEvents(store, "valencia")).items.map(({ title }) => title)).toEqual(["Valencia trip"])
   })
 
   it("never returns a busy-only private slot, even to a query of filters alone", async () => {
@@ -173,7 +173,7 @@ describe("searchEvents", () => {
 
     const found = await searchEvents(store, "in:events date:[2026-10-01 TO 2026-11-30]", { timezone: "UTC" })
 
-    expect(found.hits.map(({ title }) => title)).toEqual(["Dentist"])
+    expect(found.items.map(({ title }) => title)).toEqual(["Dentist"])
   })
 
   it("reads date: as the event's start", async () => {
@@ -181,7 +181,7 @@ describe("searchEvents", () => {
 
     const found = await searchEvents(store, "retro date:[2026-10-20 TO 2026-11-30]", { timezone: "UTC" })
 
-    expect(found.hits.map(({ starts_at }) => starts_at)).toEqual([new Date(NOW + 10 * DAY).toISOString()])
+    expect(found.items.map(({ starts_at }) => starts_at)).toEqual([new Date(NOW + 10 * DAY).toISOString()])
   })
 
   it("refuses a field events do not have", async () => {
@@ -194,10 +194,10 @@ describe("searchEvents", () => {
     const store = await calendarStore([entry("a", "Retro", NOW)])
 
     expect(
-      (await searchEvents(store, "retro", { accounts: [{ provider: "google-calendar", account: "owner-1" }] })).hits,
+      (await searchEvents(store, "retro", { accounts: [{ provider: "google-calendar", account: "owner-1" }] })).items,
     ).toHaveLength(1)
     expect(
-      (await searchEvents(store, "retro", { accounts: [{ provider: "google-calendar", account: "other" }] })).hits,
+      (await searchEvents(store, "retro", { accounts: [{ provider: "google-calendar", account: "other" }] })).items,
     ).toEqual([])
   })
 
@@ -211,12 +211,12 @@ describe("searchEvents", () => {
     const first = await searchEvents(store, "planning", { limit: 2 })
     const second = await searchEvents(store, "planning", { limit: 2, offset: 2 })
 
-    expect(first.hits).toHaveLength(2)
-    expect(first.has_more).toBe(true)
-    expect(first.next_offset).toBe(2)
-    expect(second.hits).toHaveLength(1)
-    expect(second.has_more).toBe(false)
-    expect(new Set([...first.hits, ...second.hits].map(({ title }) => title)).size).toBe(3)
+    expect(first.items).toHaveLength(2)
+    expect(first.hasMore).toBe(true)
+    expect(first.nextOffset).toBe(2)
+    expect(second.items).toHaveLength(1)
+    expect(second.hasMore).toBe(false)
+    expect(new Set([...first.items, ...second.items].map(({ title }) => title)).size).toBe(3)
   })
 })
 
@@ -284,9 +284,9 @@ describe("which calendar copies make an event searchable", () => {
     )
     const owner = (account: string) => [{ provider: "google-calendar", account }]
 
-    expect((await searchEvents(store, "board")).hits.map(({ title }) => title)).toEqual(["Board meeting"])
-    expect((await searchEvents(store, "board", { accounts: owner("owner-1") })).hits).toHaveLength(1)
-    expect((await searchEvents(store, "board", { accounts: owner("owner-2") })).hits).toEqual([])
+    expect((await searchEvents(store, "board")).items.map(({ title }) => title)).toEqual(["Board meeting"])
+    expect((await searchEvents(store, "board", { accounts: owner("owner-1") })).items).toHaveLength(1)
+    expect((await searchEvents(store, "board", { accounts: owner("owner-2") })).items).toEqual([])
   })
 
   it("keeps the title of the copy with text when a busy-only copy changed later", async () => {
@@ -313,7 +313,7 @@ describe("which calendar copies make an event searchable", () => {
       .run(NOW)
     database.close()
 
-    expect((await searchEvents(store, "retro")).hits).toEqual([
+    expect((await searchEvents(store, "retro")).items).toEqual([
       expect.objectContaining({ title: "Zoom retro", account: null }),
     ])
   })
@@ -330,8 +330,8 @@ describe("an event deleted in Google", () => {
     await store.calendar.markUnseen(calendar, NOW, { from: NOW - 30 * DAY, to: NOW + 30 * DAY }, NOW)
 
     const found = await searchEvents(store, "offsite")
-    expect(found.hits.map(({ starts_at }) => starts_at)).toEqual([new Date(NOW - DAY).toISOString()])
-    expect(found.hits[0]?.account).toBe("owner-1")
+    expect(found.items.map(({ starts_at }) => starts_at)).toEqual([new Date(NOW - DAY).toISOString()])
+    expect(found.items[0]?.account).toBe("owner-1")
     const all = await searchAll(
       store,
       { provider: "telegram", account: "500" },
@@ -350,7 +350,7 @@ describe("an event deleted in Google", () => {
       2,
     )
 
-    expect((await searchEvents(store, "offsite")).hits).toEqual([])
+    expect((await searchEvents(store, "offsite")).items).toEqual([])
   })
 })
 
@@ -364,8 +364,8 @@ describe("a search past what one search reads", () => {
 
     const found = await searchEvents(store, "standup", { candidates: 2 })
 
-    expect(found.hits).toHaveLength(2)
-    expect(found.has_more).toBe(false)
+    expect(found.items).toHaveLength(2)
+    expect(found.hasMore).toBe(false)
     expect(found.truncated).toBe(true)
   })
 })

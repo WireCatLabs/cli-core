@@ -60,11 +60,11 @@ it("writes SMS threads both ways as chats of the sms account, the person matched
   const receipt = await take(store, phoneEnvelope(thread), { account: PHONE.account })
   expect(receipt).toMatchObject({ created: 5, refused: 0, waiting: [], unmatched: [], errors: [] })
   const records = await store.records.list({ provider: PHONE.provider, account: PHONE.account, type: "person" })
-  expect(records.find((one) => one.externalId === ANNA)).toMatchObject({
+  expect(records.items.find((one) => one.externalId === ANNA)).toMatchObject({
     entity: `person:${anna}`,
     createdEntity: false,
   })
-  const oleg = records.find((one) => one.externalId === OLEG)
+  const oleg = records.items.find((one) => one.externalId === OLEG)
   expect(oleg?.createdEntity).toBe(true)
 
   const db = sql()
@@ -354,11 +354,11 @@ it("imports a vCard file: makes or links persons by number, and one organization
   const receipt = await ingestVcard(store, CARDS, { provider: "contacts", account: "pixel", batchId: "b-1" })
   expect(receipt).toMatchObject({ created: 3, errors: [], unmatched: [], vcard: [] })
   const people = await store.records.list({ provider: "contacts", account: "pixel", type: "person" })
-  const byName = Object.fromEntries(people.map((one) => [String(one.fields.name), one]))
+  const byName = Object.fromEntries(people.items.map((one) => [String(one.fields.name), one]))
   expect(byName["Анна Иванова"]).toMatchObject({ entity: `person:${anna}`, createdEntity: false })
   expect(byName["Борис Сидоров"]).toMatchObject({ externalId: "card-boris", createdEntity: true })
   const organizations = await store.records.list({ provider: "contacts", account: "pixel", type: "organization" })
-  expect(organizations).toEqual([expect.objectContaining({ externalId: "org:ооо ромашка", createdEntity: true })])
+  expect(organizations.items).toEqual([expect.objectContaining({ externalId: "org:ооо ромашка", createdEntity: true })])
   const relations = byName["Анна Иванова"]?.relations
   expect(relations).toEqual([expect.objectContaining({ role: "member-of", as: "cto", resolved: true })])
   const again = await ingestVcard(store, CARDS, { provider: "contacts", account: "pixel", batchId: "b-2" })

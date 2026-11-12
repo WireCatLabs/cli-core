@@ -3771,7 +3771,7 @@ describe("the shared read commands", () => {
 
     const reopened = await openStore({ path: env.MESSAGING_STORE })
     const proposals = await reopened.proposedActions.list({ kinds: ["identity_link"] })
-    expect(proposals).toMatchObject([
+    expect(proposals.items).toMatchObject([
       { id: answer.proposal, status: "proposed", reason: "the same phone in both", payload: { signal: "agent" } },
     ])
     await reopened.close()

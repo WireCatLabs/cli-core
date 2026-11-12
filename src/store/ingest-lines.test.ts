@@ -56,8 +56,8 @@ it("streams a file in chunks, and a dry run gives the true receipt across chunks
   const options = { account: SOURCE.account, chunk: 2 }
   const dry = await ingestLines(store, jsonlLines(createReadStream(path)), { ...options, dryRun: true })
   expect(dry).toMatchObject({ dryRun: true, created: 7, waiting: [], proposed: [expect.stringMatching(/^invoice:/)] })
-  expect(await store.records.list(SOURCE)).toEqual([])
-  expect(await store.finance.invoices()).toEqual([])
+  expect((await store.records.list(SOURCE)).items).toEqual([])
+  expect((await store.finance.invoices()).items).toEqual([])
 
   const real = await ingestLines(store, jsonlLines(createReadStream(path)), options)
   expect(real).toMatchObject({ dryRun: false, created: 7, waiting: [], proposed: dry.proposed })

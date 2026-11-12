@@ -70,7 +70,9 @@ describe("the agent log", () => {
       startedAt: 1,
       finishedAt: 2,
     })
-    const [row] = await store.agentActions.list()
+    const {
+      items: [row],
+    } = await store.agentActions.list()
     expect(row).toMatchObject({ tool: "messages_send", tier: "write-public", status: "failed", error: "error" })
     const database = await openCache(path)
     const raw = JSON.stringify(database.prepare("SELECT * FROM agent_actions").all())
@@ -86,8 +88,8 @@ describe("listing proposals and the agent log", () => {
     const second = await store.proposedActions.propose({ kind: "ban", by: { bot: "helper" } })
     await store.proposedActions.reject(first.id, "owner")
 
-    expect((await store.proposedActions.list()).map(({ id }) => id)).toEqual([second.id, first.id])
-    expect((await store.proposedActions.list({ status: "rejected" })).map(({ id }) => id)).toEqual([first.id])
+    expect((await store.proposedActions.list()).items.map(({ id }) => id)).toEqual([second.id, first.id])
+    expect((await store.proposedActions.list({ status: "rejected" })).items.map(({ id }) => id)).toEqual([first.id])
     await expect(store.proposedActions.list({ status: "lost" as never })).rejects.toMatchObject({
       code: "validation_error",
     })
@@ -99,6 +101,8 @@ describe("listing proposals and the agent log", () => {
       },
     )
     await store.agentActions.record({ ...call, actor: { bot: "memo-mcp" }, tool: "memories_add" })
-    expect((await store.agentActions.list({ agent: "memo-mcp" })).map(({ tool }) => tool)).toEqual(["memories_add"])
+    expect((await store.agentActions.list({ agent: "memo-mcp" })).items.map(({ tool }) => tool)).toEqual([
+      "memories_add",
+    ])
   })
 })

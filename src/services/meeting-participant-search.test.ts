@@ -44,7 +44,7 @@ it("pages observations by account and query, preserving duplicate-name ambiguity
   await f.add("Alice Example", "foreign-alice", f.foreign)
   const first = await f.store.meetings.participantCandidates("ALICE", { accountId: f.accountId, limit: 1 })
   expect(first).toMatchObject({
-    has_more: true,
+    hasMore: true,
     ambiguity: { scope: "page", multiple_identities: false },
     coverage: { scanned: 1, read_bytes: 13, truncated_by: "limit", archive_completeness: "unknown" },
   })
@@ -53,10 +53,11 @@ it("pages observations by account and query, preserving duplicate-name ambiguity
   await f.add("Alice Example", "new-alice")
   const second = await f.store.meetings.participantCandidates("alice", {
     accountId: f.accountId,
-    cursor: first.next_cursor ?? undefined,
+    cursor: first.nextCursor,
     limit: 1,
   })
-  expect(second).toMatchObject({ has_more: false, next_cursor: null })
+  expect(second).toMatchObject({ hasMore: false })
+  expect(second.nextCursor).toBeUndefined()
   expect(second.items[0]?.identity_id).not.toBe(first.items[0]?.identity_id)
   const fresh = await f.store.meetings.participantCandidates("alice", { accountId: f.accountId })
   expect(fresh.items).toHaveLength(3)
@@ -64,13 +65,13 @@ it("pages observations by account and query, preserving duplicate-name ambiguity
   await expect(
     f.store.meetings.participantCandidates("bob", {
       accountId: f.accountId,
-      cursor: first.next_cursor ?? undefined,
+      cursor: first.nextCursor,
     }),
   ).rejects.toMatchObject({ code: "validation_error" })
   await expect(
     f.store.meetings.participantCandidates("alice", {
       accountId: f.foreign,
-      cursor: first.next_cursor ?? undefined,
+      cursor: first.nextCursor,
     }),
   ).rejects.toMatchObject({ code: "validation_error" })
 })
@@ -82,10 +83,10 @@ it("matches Unicode names literally and reports continuation even when a scan pa
   await f.add("АЛИСА ПРИМЕР", "alice-cyrillic")
   await f.add("Ａｌｉｃｅ Example")
   const empty = await f.store.meetings.participantCandidates("алиса", { accountId: f.accountId, scanLimit: 1 })
-  expect(empty).toMatchObject({ items: [], has_more: true, coverage: { scanned: 1, truncated_by: "scan_limit" } })
+  expect(empty).toMatchObject({ items: [], hasMore: true, coverage: { scanned: 1, truncated_by: "scan_limit" } })
   const matches = await f.store.meetings.participantCandidates("АлИсА", {
     accountId: f.accountId,
-    cursor: empty.next_cursor ?? undefined,
+    cursor: empty.nextCursor,
   })
   expect(matches.items).toHaveLength(2)
   expect(matches.ambiguity).toMatchObject({ multiple_identities: false })
@@ -113,7 +114,7 @@ it("preflights UTF-8 name bytes without reading metadata or oversized out-of-win
     .prepare("UPDATE meeting_participants SET display_name = ? WHERE id = (SELECT max(id) FROM meeting_participants)")
     .run("Я".repeat(1024 ** 2))
   const page = await f.store.meetings.participantCandidates("example", { accountId: f.accountId, maxReadBytes: 13 })
-  expect(page).toMatchObject({ has_more: true, coverage: { read_bytes: 13, truncated_by: "read_bytes" } })
+  expect(page).toMatchObject({ hasMore: true, coverage: { read_bytes: 13, truncated_by: "read_bytes" } })
   const limited = await f.store.meetings.participantCandidates("example", {
     accountId: f.accountId,
     limit: 1,
@@ -123,7 +124,7 @@ it("preflights UTF-8 name bytes without reading metadata or oversized out-of-win
   await expect(
     f.store.meetings.participantCandidates("example", {
       accountId: f.accountId,
-      cursor: page.next_cursor ?? undefined,
+      cursor: page.nextCursor,
     }),
   ).rejects.toThrow("before text read")
   await expect(
@@ -140,9 +141,9 @@ it("preflights UTF-8 name bytes without reading metadata or oversized out-of-win
   expect(
     await f.store.meetings.participantCandidates("example", {
       accountId: f.accountId,
-      cursor: page.next_cursor ?? undefined,
+      cursor: page.nextCursor,
     }),
-  ).toMatchObject({ items: [], has_more: false, coverage: { scanned: 0, read_bytes: 0 } })
+  ).toMatchObject({ items: [], hasMore: false, coverage: { scanned: 0, read_bytes: 0 } })
 })
 
 it("exposes equivalent bounded CLI and MCP reads while retaining older adapter compatibility", async () => {

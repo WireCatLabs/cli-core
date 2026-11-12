@@ -1,4 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
+import type { ListResult } from "@wirecat/cli-base/standards"
 import {
   type Interval,
   intervalOf,
@@ -28,6 +29,7 @@ import {
   text,
   type Written,
 } from "./reviewed.js"
+import { pageOfRows } from "./rows-page.js"
 import { write } from "./transaction.js"
 
 export interface SubscriptionPrice extends Money {
@@ -130,6 +132,7 @@ export interface SubscriptionFilter {
   renewsBy?: string
   /** 1–500, 100 by default; newest written first. */
   limit?: number
+  offset?: number
 }
 
 export interface PriceFilter {
@@ -137,6 +140,7 @@ export interface PriceFilter {
   proposedBy?: ProposedByFilter
   /** 1–500, 100 by default; newest written first. */
   limit?: number
+  offset?: number
 }
 
 /**
@@ -148,7 +152,7 @@ export interface PriceFilter {
 export interface SubscriptionsStore {
   add(input: SubscriptionInput): Promise<SubscriptionDetail>
   get(reference: string): Promise<SubscriptionDetail>
-  list(filter?: SubscriptionFilter): Promise<Subscription[]>
+  list(filter?: SubscriptionFilter): Promise<ListResult<Subscription>>
   /** The owner changes any; a bot only one it proposed that is still proposed. */
   update(reference: string, input: SubscriptionUpdate): Promise<SubscriptionDetail>
   addPrice(reference: string, input: PriceInput & Omit<Written, "project" | "evidence">): Promise<SubscriptionPrice>
@@ -158,7 +162,7 @@ export interface SubscriptionsStore {
   /** `subscription_price:<id>`. */
   price(reference: string): Promise<SubscriptionPrice>
   /** Proposed or decided prices, newest written first, as the review inbox lists them. */
-  prices(filter?: PriceFilter): Promise<SubscriptionPrice[]>
+  prices(filter?: PriceFilter): Promise<ListResult<SubscriptionPrice>>
 }
 
 type Row = Record<string, unknown>
@@ -503,6 +507,8 @@ export const subscriptionOperationsOver = (context: StoreContext): SubscriptionO
     },
     get: (reference) => detailOf(reference),
     list: (filter = {}) => {
+      const limit = limitOf(filter.limit)
+      const offset = Math.max(filter.offset ?? 0, 0)
       const project = filter.project === undefined ? null : projectId(database, filter.project)
       const supplier = partyThing(filter.supplier, "the supplier")
       const customer = partyThing(filter.customer, "the customer")
@@ -512,13 +518,13 @@ export const subscriptionOperationsOver = (context: StoreContext): SubscriptionO
       const review = filter.review === undefined ? null : oneOf(filter.review, FINANCE_REVIEWS, "a review")
       const renews = isoDate(filter.renewsBy, "the last renewal day")
       const by = proposedBySql("s.author_type", "s.author_id", filter.proposedBy)
-      return database
+      const rows = database
         .prepare(
           `${SUBSCRIPTIONS} WHERE s.deleted_at IS NULL AND (? IS NULL OR s.status = ?) AND (? IS NULL OR s.direction = ?) ` +
             "AND (? IS NULL OR s.review = ?) AND (? IS NULL OR s.project_id = ?) " +
             "AND (? IS NULL OR (s.supplier_type = ? AND s.supplier_id = ?)) " +
             "AND (? IS NULL OR (s.customer_type = ? AND s.customer_id = ?)) " +
-            `AND (? IS NULL OR s.next_renewal_date <= ?) AND ${by.sql} ORDER BY s.created_at DESC, s.id DESC LIMIT ?`,
+            `AND (? IS NULL OR s.next_renewal_date <= ?) AND ${by.sql} ORDER BY s.created_at DESC, s.id DESC LIMIT ? OFFSET ?`,
         )
         .all(
           status,
@@ -538,9 +544,11 @@ export const subscriptionOperationsOver = (context: StoreContext): SubscriptionO
           renews,
           renews,
           ...by.params,
-          limitOf(filter.limit),
+          limit + 1,
+          offset,
         )
         .map(subscriptionOf)
+      return pageOfRows(rows, limit, offset)
     },
     update: (reference, { by, ...fields }) => {
       const row = rowOf(reference)
@@ -590,14 +598,17 @@ export const subscriptionOperationsOver = (context: StoreContext): SubscriptionO
     reject: (reference, by, reason) => decide(reference, by, reason, false),
     price: (reference) => priceOf(priceRowOf(reference)),
     prices: (filter = {}) => {
+      const limit = limitOf(filter.limit)
+      const offset = Math.max(filter.offset ?? 0, 0)
       const review = filter.review === undefined ? null : oneOf(filter.review, FINANCE_REVIEWS, "a review")
       const by = proposedBySql("p.author_type", "p.author_id", filter.proposedBy)
-      return database
+      const rows = database
         .prepare(
-          `${PRICES} WHERE (? IS NULL OR p.review = ?) AND ${by.sql} ORDER BY p.created_at DESC, p.id DESC LIMIT ?`,
+          `${PRICES} WHERE (? IS NULL OR p.review = ?) AND ${by.sql} ORDER BY p.created_at DESC, p.id DESC LIMIT ? OFFSET ?`,
         )
-        .all(review, review, ...by.params, limitOf(filter.limit))
+        .all(review, review, ...by.params, limit + 1, offset)
         .map(priceOf)
+      return pageOfRows(rows, limit, offset)
     },
   }
 }

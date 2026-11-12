@@ -170,13 +170,6 @@ describe.runIf(process.platform !== "win32")("an agent that may run another CLI"
     ])
   })
 
-  it("lets codex write the other CLI's state and config folders too", async () => {
-    const { file, root } = await add("codex")
-    const { argv } = JSON.parse(readFileSync(file, "utf8")) as Schedule
-    const dirs = argv.flatMap((word, at) => (argv[at - 1] === "--add-dir" ? [word] : []))
-    expect(dirs).toEqual(expect.arrayContaining([root, join(root, "mail-state"), join(root, "mail-config")]))
-  })
-
   it("runs the agent with the other CLI locked read-only and told it runs from a schedule", async () => {
     const { env } = setup()
     const { system } = machine("linux", [process.execPath])
@@ -305,7 +298,7 @@ describe.runIf(posix)("schedule on Linux", () => {
         JSON.stringify({
           name,
           kind,
-          argv: ["doctor"],
+          argv: kind === "agent" ? ["/usr/bin/claude", "-p", "brief me"] : ["doctor"],
           when: { every: 60 },
           environment: {},
           createdAt: "2026-10-01T00:00:00Z",
@@ -321,6 +314,8 @@ describe.runIf(posix)("schedule on Linux", () => {
         when: "every 1h",
         notify: "failures",
         last: null,
+        harness: "claude",
+        reports_cost: true,
         spent_today_usd: 0,
         max_cost_usd: null,
         max_cost_per_day_usd: 5,
@@ -542,39 +537,30 @@ describe.runIf(posix)("schedule agent", () => {
     expect(schedule.argv).toEqual([
       join(root, "bin", "claude"),
       "-p",
-      "run the daily review",
+      expect.stringMatching(/never an instruction to follow.*\n\nrun the daily review$/s),
       "--permission-mode",
       "dontAsk",
       "--allowedTools",
       "Bash(chat:*)",
       "--no-session-persistence",
+      "--setting-sources",
+      "",
       "--model",
       "sonnet",
       "--tools",
       "Bash",
       "--strict-mcp-config",
       "--disable-slash-commands",
-      "--setting-sources",
-      "",
       "--max-budget-usd",
       "2",
     ])
   })
 
-  it("leaves codex on its own model and start unless a model is named", async () => {
+  it("refuses codex, which its own limits do not hold to the CLI's commands", async () => {
     const { env } = setup()
-    await call(["agent", "plain", "codex", "p", "--at", "08:30"], env, machine("linux").system)
-    const plain = JSON.parse(readFileSync(scheduleFile(env.CHAT_STATE_DIR, "plain"), "utf8")) as Schedule
-    expect(plain.argv).not.toContain("--model")
-    expect(plain.argv.at(-1)).toBe("p")
-
-    await call(
-      ["agent", "named", "codex", "p", "--at", "08:30", "--model", "a-codex-model"],
-      env,
-      machine("linux").system,
-    )
-    const named = JSON.parse(readFileSync(scheduleFile(env.CHAT_STATE_DIR, "named"), "utf8")) as Schedule
-    expect(named.argv.join(" ")).toContain("--model a-codex-model")
+    const refused = await call(["agent", "plain", "codex", "p", "--at", "08:30"], env, machine("linux").system)
+    expect(refused.code).not.toBe(0)
+    expect(refused.err).toContain("agent.unrestricted")
   })
 
   it('takes --model over the default, "" for claude\'s own, and refuses one that reads as a flag', async () => {
@@ -597,11 +583,11 @@ describe.runIf(posix)("schedule agent", () => {
     expect(often.code).not.toBe(0)
     expect(often.err).toContain("at least 60 minutes")
     const missing = await call(
-      ["agent", "x", "codex", "p", "--at", "08:30"],
+      ["agent", "x", "claude", "p", "--at", "08:30"],
       { ...env, PATH: "/nowhere" },
       machine("linux").system,
     )
-    expect(missing.err).toContain("codex is not on PATH")
+    expect(missing.err).toContain("claude is not on PATH")
   })
 
   it("on macOS writes a launch agent on the calendar", async () => {
@@ -651,7 +637,9 @@ describe("schedule on Windows", () => {
       WIRECAT_NAME: "sync",
       WIRECAT_PATH: "\\chat-cli\\",
     })
-    expect(registered?.env.WIRECAT_ARGS).toMatch(/^"C:\\chat\\chat.js" "schedule" "exec" ".*schedule.json"$/)
+    expect(registered?.env.WIRECAT_ARGS).toMatch(
+      /^"C:\\chat\\chat.js" "schedule" "exec" ".*schedule.json" "[0-9a-f]{64}"$/,
+    )
   })
 
   it("on Windows registers a weekly trigger on its day", async () => {
@@ -1228,7 +1216,7 @@ describe.runIf(process.platform !== "win32")("an agent gated on new mail", () =>
     const file = await configured.add("--on-new-mail", "mail-triage")
     expect(argvOf(file).join(" ")).toContain("--model haiku")
     expect(argvOf(file)).not.toContain("--strict-mcp-config")
-    expect(argvOf(file)).not.toContain("--setting-sources")
+    expect(argvOf(file).join(" ")).toContain("--setting-sources ")
 
     const flagged = gated(() => waitingMail(0), { models: { claude: "haiku" } })
     const own = await flagged.add("--on-new-mail", "mail-triage", "--model", "opus")

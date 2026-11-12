@@ -383,11 +383,11 @@ export interface NotesFound {
   by: "words" | "words and meaning"
   /** Why meaning was not searched, when it was not. */
   meaning_skipped?: string
-  hits: FoundNote[]
+  items: FoundNote[]
   /** How many notes match the query, every page together, as Elasticsearch's `hits.total`. */
   total?: SearchTotal
-  has_more: boolean
-  next_offset?: number
+  hasMore: boolean
+  nextOffset?: number
   /** What the notes found link to, most linked first. */
   linked: LinkedRecord[]
   /** Documents whose picture is nearest the words, best first; only when `pictures` was asked for. Never in `hits`. */
@@ -853,10 +853,10 @@ export const searchNotes = async (
     ...(filter === undefined ? {} : { filter }),
     by: meaning === undefined ? "words" : "words and meaning",
     ...(meaningSkipped === undefined ? {} : { meaning_skipped: meaningSkipped }),
-    hits,
+    items: hits,
     total,
-    has_more: hasMore,
-    ...(hasMore && window <= MAX_NOTES_OFFSET ? { next_offset: window } : {}),
+    hasMore: hasMore,
+    ...(hasMore && window <= MAX_NOTES_OFFSET ? { nextOffset: window } : {}),
     linked: [...counts.values()].sort(
       (a, b) => b.notes - a.notes || (a.name ?? a.ref ?? "").localeCompare(b.name ?? b.ref ?? ""),
     ),

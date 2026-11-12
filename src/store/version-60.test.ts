@@ -34,7 +34,7 @@ it("adds base stages to a version 59 file's CRM pipelines, unmapped, and suggest
       { name: "New", baseStage: null, confirmed: false },
       { name: "Won", baseStage: null, confirmed: false },
     ])
-    expect((await store.deals.list())[0]).toMatchObject({ title: "Acme renewal", stage: "New", baseStage: null })
+    expect((await store.deals.list()).items[0]).toMatchObject({ title: "Acme renewal", stage: "New", baseStage: null })
     const base = await store.baseStages.show("deal")
     expect(base.unsorted).toEqual({ open: 1, stages: 2 })
     expect(await store.baseStages.mappings()).toMatchObject([

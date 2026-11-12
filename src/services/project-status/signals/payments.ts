@@ -58,8 +58,10 @@ export const payments: StatusSignal<PaymentsData> = {
     const projects = [context.project.ref, ...context.project.children.map((child) => child.ref)]
     const rows = await Promise.all(
       projects.map(async (project) => [
-        ...(await context.store.finance.payments({ project, limit: 500 })).filter(holding).map(paid),
-        ...(await context.store.finance.invoices({ project, open: true, limit: 500 })).filter(holding).map(expected),
+        ...(await context.store.finance.payments({ project, limit: 500 })).items.filter(holding).map(paid),
+        ...(await context.store.finance.invoices({ project, open: true, limit: 500 })).items
+          .filter(holding)
+          .map(expected),
       ]),
     )
     return rows.flat()

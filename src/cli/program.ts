@@ -24,6 +24,7 @@ import { recorded, wasSettled } from "../runs/recording.js"
 import { runContextOf } from "../runs/run-context.js"
 import { processRun, useAsProcessRun } from "../runs/scope.js"
 import { AUTHORITY_KEY, BOT_API_KEY, isBotApi, keyForCommand } from "../sends/permissions.js"
+import { refuseLockedOutput } from "../sends/upload.js"
 import type { AppUpdate, UpdateEnvironment } from "../update/index.js"
 import { liftOptionsAfterDashes } from "./after-dashes.js"
 import { logParsedArgv, logVersion } from "./argv-log.js"
@@ -38,6 +39,7 @@ import {
   admittedUnderLock,
   changesAuthorityAt,
   changesAuthorityNow,
+  fileOptionOf,
   isLogin,
   isStoreChange,
   judgedEffects,
@@ -77,6 +79,20 @@ import { assertSharedContracts } from "./shared-contracts.js"
 import { skillSourceOf } from "./skill-command.js"
 import { refreshSkills, skipsSkillRefresh } from "./skill-refresh.js"
 import { commandAt, failureSteps, lineOf, withLines } from "./steps.js"
+
+const OUTPUT_OPTIONS = [
+  ["output", "--output"],
+  ["outputDir", "--output-dir"],
+] as const
+
+/** Every file a read-only command writes stays inside its working folder, whichever command names it. */
+const refuseLockedOutputs = (action: Command, app: AppIdentity, env: NodeJS.ProcessEnv): void => {
+  const values = action.opts()
+  const owned = fileOptionOf(action)
+  const options = owned === undefined ? OUTPUT_OPTIONS : [...OUTPUT_OPTIONS, [owned, `--${owned}`] as const]
+  for (const [key, flag] of options)
+    if (typeof values[key] === "string") refuseLockedOutput(values[key], app, env, flag)
+}
 
 export interface ProgramDefinition {
   app: AppIdentity
@@ -464,6 +480,7 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
     await refuseOutsideGroup(action, { app: definition.app, env: commandEnv })
     if (lock && isLogin(action) && !flags.dryRun) throw readOnlyRefusal(lock, "log in or out")
     if (lock && isStoreChange(action) && !flags.dryRun) throw readOnlyRefusal(lock, storeChangeRefusal(definition.app))
+    if (lock) refuseLockedOutputs(action, definition.app, commandEnv)
     refuseWriteBeforeConnecting(action, {
       app: definition.app,
       env: commandEnv,

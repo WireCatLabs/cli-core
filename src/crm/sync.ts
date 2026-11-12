@@ -478,15 +478,17 @@ const syncKind = async (run: Run, kind: CrmKind, options: CrmSyncOptions, result
       result.outOfScope += await store.crm.remove(account, kind, left)
     }
     run.moved()
-    if (page.nextPage === undefined) {
+    if (!page.hasMore) {
       listed = true
       await save({ token: page.cursor ?? null })
       break
     }
-    if (pages.has(page.nextPage))
+    if (page.nextCursor === undefined)
+      throw new CliError("invalid_response", `${source.provider} said there are more pages but gave no cursor`)
+    if (pages.has(page.nextCursor))
       throw new CliError("invalid_response", `${source.provider} returned the same page twice`)
-    pages.add(page.nextPage)
-    round = { ...round, page: page.nextPage }
+    pages.add(page.nextCursor)
+    round = { ...round, page: page.nextCursor }
     await save()
     if (stop) return stop
   }
@@ -504,9 +506,11 @@ const syncKind = async (run: Run, kind: CrmKind, options: CrmSyncOptions, result
       }
       const page = await ids.call(source, kind, pass.page ?? undefined, run.context)
       if (signal?.aborted) return "cancelled" as const
-      pass = { ...pass, seen: [...pass.seen, ...page.ids], page: page.nextPage ?? null }
+      if (page.hasMore && page.nextCursor === undefined)
+        throw new CliError("invalid_response", `${source.provider} said there are more ids but gave no cursor`)
+      pass = { ...pass, seen: [...pass.seen, ...page.items], page: page.hasMore ? (page.nextCursor ?? null) : null }
       run.moved()
-      if (page.nextPage === undefined) break
+      if (!page.hasMore) break
       await save({ pass })
     }
     const before = pass.startedAt - CLOCK_MARGIN

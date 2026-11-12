@@ -3,7 +3,15 @@ import { join } from "node:path"
 import { CliError } from "@wirecat/cli-base"
 import type { AppIdentity } from "../ports/app.js"
 import { prepareReport, type StoredTemplates } from "./report/render.js"
-import { type AgentCli, attemptSchedule, KILL_AFTER_MS, type LastRun, readSchedule, sharedLinks } from "./schedules.js"
+import {
+  type AgentCli,
+  attemptSchedule,
+  KILL_AFTER_MS,
+  type LastRun,
+  readSchedule,
+  type Schedule,
+  sharedLinks,
+} from "./schedules.js"
 import type { ServerSystem } from "./system.js"
 
 /**
@@ -26,6 +34,7 @@ export const backfillSchedule = async (
     agentRuns = [],
     ownerLanguage = async () => "ru",
     reportTemplates,
+    schedule: checked,
   }: {
     at: Date
     /** What the agent reads on its stdin before its first turn: here, which day it writes and the window it reads. */
@@ -36,9 +45,11 @@ export const backfillSchedule = async (
     agentRuns?: readonly AgentCli[]
     ownerLanguage?: (env: NodeJS.ProcessEnv) => Promise<string>
     reportTemplates?: (env: NodeJS.ProcessEnv, schedule: string) => StoredTemplates
+    /** The schedule as its guard checked and rebuilt it, run as it is: the file is not read again. */
+    schedule?: Schedule
   },
 ): Promise<LastRun> => {
-  const schedule = readSchedule(file)
+  const schedule = checked ?? readSchedule(file)
   if (schedule.kind !== "agent")
     throw new CliError(
       "validation_error",

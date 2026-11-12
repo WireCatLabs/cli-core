@@ -28,15 +28,16 @@ export interface Unit {
  * development checkout must open that checkout's session and store, never the owner's real ones.
  * Nothing that could hold a credential is copied.
  */
-export const locationVariables = (app: AppIdentity, env: NodeJS.ProcessEnv): Record<string, string> => {
-  const names = [
-    ...["CONFIG_DIR", "STATE_DIR", "CACHE_DIR"].map((name) => `${app.envPrefix}_${name}`),
-    "MESSAGING_STORE",
-    "MESSAGING_STATE_DIR",
-    "WIRECAT_STATE_DIR",
-  ]
-  return Object.fromEntries(names.flatMap((name) => (env[name] === undefined ? [] : [[name, env[name]]])))
-}
+/** The variables that move a CLI's files elsewhere. */
+export const locationNames = (app: AppIdentity): string[] => [
+  ...["CONFIG_DIR", "STATE_DIR", "CACHE_DIR"].map((name) => `${app.envPrefix}_${name}`),
+  "MESSAGING_STORE",
+  "MESSAGING_STATE_DIR",
+  "WIRECAT_STATE_DIR",
+]
+
+export const locationVariables = (app: AppIdentity, env: NodeJS.ProcessEnv): Record<string, string> =>
+  Object.fromEntries(locationNames(app).flatMap((name) => (env[name] === undefined ? [] : [[name, env[name]]])))
 
 /**
  * A unit written with location variables runs another installation — a development checkout — so

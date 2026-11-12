@@ -1,3 +1,4 @@
+import type { ListResult } from "@wirecat/cli-base/standards"
 import { CATALOG_KINDS, type CatalogKind, productLine } from "../../domain/business.js"
 import { currencyOf, formatDecimal, minorUnits, scaleOf } from "../../domain/money.js"
 import { fold } from "../normalize.js"
@@ -15,6 +16,7 @@ import {
   reviewedRowsOver,
   text,
 } from "./reviewed.js"
+import { pageOfRows } from "./rows-page.js"
 import { write } from "./transaction.js"
 
 export interface Product {
@@ -80,13 +82,14 @@ export interface ProductFilter {
   name?: string
   /** 1–500, 100 by default; by name. */
   limit?: number
+  offset?: number
 }
 
 /** What the owner or a supplier sells, written directly by the owner or an agent. */
 export interface ProductsStore {
   add(input: ProductInput): Promise<Product>
   get(reference: string): Promise<Product>
-  list(filter?: ProductFilter): Promise<Product[]>
+  list(filter?: ProductFilter): Promise<ListResult<Product>>
   update(reference: string, input: ProductUpdate): Promise<Product>
 }
 
@@ -211,7 +214,8 @@ export const productOperationsOver = (context: StoreContext): ProductOperations 
       const archived = filter.archived === undefined ? null : filter.archived ? 1 : 0
       const words = filter.name === undefined ? [] : fold(filter.name).split(/\s+/).filter(Boolean)
       const limit = limitOf(filter.limit)
-      return database
+      const offset = Math.max(filter.offset ?? 0, 0)
+      const rows = database
         .prepare(
           `${PRODUCTS} WHERE c.deleted_at IS NULL AND (? IS NULL OR c.kind = ?) ` +
             "AND (? IS NULL OR (c.supplier_type = ? AND c.supplier_id = ?)) " +
@@ -219,8 +223,9 @@ export const productOperationsOver = (context: StoreContext): ProductOperations 
         )
         .all(kind, kind, supplier?.type ?? null, supplier?.type ?? null, supplier?.id ?? null, archived, archived)
         .filter((row) => words.every((word) => String(row.name_folded).includes(word)))
-        .slice(0, limit)
+        .slice(offset, offset + limit + 1)
         .map(productOf)
+      return pageOfRows(rows, limit, offset)
     },
     update: (reference, input) => {
       const row = rowOf(reference)

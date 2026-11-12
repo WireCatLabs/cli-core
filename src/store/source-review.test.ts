@@ -889,7 +889,7 @@ describe("reading a review's sources", () => {
       author: agent,
       status: "proposed",
     })
-    const proposal = (await f.store.proposedActions.list({})).find((one) => one.target === memory.ref)
+    const proposal = (await f.store.proposedActions.list({})).items.find((one) => one.target === memory.ref)
     await expect(f.store.knowledge.sourceReviewTexts(proposal?.id ?? "1")).rejects.toMatchObject({
       code: expect.stringMatching(/validation_error|not_found/),
     })

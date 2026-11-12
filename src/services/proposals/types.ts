@@ -1,3 +1,4 @@
+import type { ListResult } from "@wirecat/cli-base/standards"
 import type { Decider, Proposer, Refusal } from "../../store/decisions.js"
 
 export interface ProposalRow {
@@ -65,7 +66,7 @@ export interface ProposalKind {
   /** Only the owner decides it, whatever the host's `agent_decisions` says. */
   readonly ownerOnly?: boolean
   /** Bounded: at most `offset + limit` rows, newest first. */
-  list(filter: ProposalFilter): Promise<ProposalRow[]>
+  list(filter: ProposalFilter): Promise<ListResult<ProposalRow>>
   get(id: string): Promise<ProposalRow>
   /** Called only after `mayDecide` allowed it. */
   decide(id: string, decision: Decision): Promise<Decided>

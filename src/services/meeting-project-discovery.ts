@@ -190,7 +190,7 @@ export const readMeetingProjectDiscovery = async (
     limits: { limit: input.limit, maxReadBytes: input.maxReadBytes, maxVocabularyReadBytes, maxTerms },
     project,
     term,
-    hits: result.items.map((hit) => cited(hit, input.accountId)),
+    items: result.items.map((hit) => cited(hit, input.accountId)),
     association: "unconfirmed-word-evidence",
     vocabularyFingerprint: found.fingerprint,
     hasMore,

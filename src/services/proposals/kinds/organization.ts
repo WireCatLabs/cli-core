@@ -45,7 +45,7 @@ export const organizationKind = (store: Pick<MessageStore, "proposedActions" | "
   stored: [ORGANIZATION_ADD_KIND, ORGANIZATION_RENAME_KIND],
   list: async (filter) => {
     const status = storedStatus(filter)
-    const actions = await store.proposedActions.list({
+    const { items: actions } = await store.proposedActions.list({
       kinds: [ORGANIZATION_ADD_KIND, ORGANIZATION_RENAME_KIND],
       ...(status === undefined ? {} : { status }),
       ...pushed(filter),

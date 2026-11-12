@@ -113,7 +113,7 @@ describe("the owner's person", () => {
 
     expect((await store.people.owner())?.uid).toBe(me)
     expect(await ownerRefs(store)).toEqual(["bitrix24:contact/1"])
-    expect(await openLinks(store)).toEqual([])
+    expect((await openLinks(store)).items).toEqual([])
   })
 
   it("keeps its uid when the owner links one of its identities to another person", async () => {
@@ -156,7 +156,7 @@ describe("a phone two people share (NEED-2445, safe option)", () => {
     await store.people.savePeople(MAX, [{ id: "7", name: "Bea", phone: "79001234567" }])
     await store.people.scanMatches()
     const ana = [await uidOf(store, "telegram", "5"), await uidOf(store, "bitrix24", "contact/20")]
-    const pair = (await openLinks(store)).find(({ payload }) =>
+    const pair = (await openLinks(store)).items.find(({ payload }) =>
       ana.every((uid) => (payload as { persons: string[] }).persons.includes(uid)),
     )
     await store.people.decideLink(pair?.id as string, { confirm: true, by: "owner" })
@@ -165,7 +165,7 @@ describe("a phone two people share (NEED-2445, safe option)", () => {
 
     expect(second.merged).toEqual([])
     expect(await uidOf(store, "max", "7")).not.toBe(await uidOf(store, "telegram", "5"))
-    expect(await openLinks(store)).toHaveLength(1)
+    expect((await openLinks(store)).items).toHaveLength(1)
   })
 })
 
@@ -202,7 +202,7 @@ describe("an address more than two people share (NEED-2446, safe option)", () =>
     expect(await uidOf(store, "bitrix24", "contact/1")).not.toBe(contact)
     expect(await uidOf(store, "bitrix24", "contact/2")).not.toBe(contact)
     expect(scan.merged).toEqual([])
-    expect((await openLinks(store)).map(({ payload }) => payload)).toMatchObject([{ shared: "role" }])
+    expect((await openLinks(store)).items.map(({ payload }) => payload)).toMatchObject([{ shared: "role" }])
   })
 
   it("opens a proposal for each pair when three people have it", async () => {
@@ -247,7 +247,7 @@ describe("the owner's rejection (NEED-2444)", () => {
         by: agent,
       }),
     ).rejects.toMatchObject({ details: { reason: "identity.rejected" } })
-    expect(await openLinks(store)).toEqual([])
+    expect((await openLinks(store)).items).toEqual([])
   })
 
   it("proposes the pair again on a new signal in a scan, and once that is rejected too, never a third time", async () => {
@@ -267,7 +267,7 @@ describe("the owner's rejection (NEED-2444)", () => {
 
     expect(again.proposed).toEqual([])
     expect(again.skipped).toMatchObject([{ reason: "identity.rejected" }])
-    expect(await openLinks(store)).toEqual([])
+    expect((await openLinks(store)).items).toEqual([])
   })
 
   it("proposes the pair again on a new identity", async () => {
@@ -294,7 +294,9 @@ describe("the owner's rejection (NEED-2444)", () => {
     await store.people.savePeople(MAX, [{ id: "7", name: "Ana B", email: "ana@example.com" }])
 
     expect(await uidOf(store, "telegram", "5")).not.toBe(await uidOf(store, "max", "7"))
-    const [opened] = await openLinks(store)
+    const {
+      items: [opened],
+    } = await openLinks(store)
     expect(opened?.payload).toMatchObject({ signal: "email" })
     await store.people.decideLink(String(opened?.id), { confirm: false, by: "owner" })
 
@@ -302,7 +304,7 @@ describe("the owner's rejection (NEED-2444)", () => {
 
     expect(scan.proposed).toEqual([])
     expect(scan.merged).toEqual([])
-    expect(await openLinks(store)).toEqual([])
+    expect((await openLinks(store)).items).toEqual([])
   })
 
   it("never proposes a pair the owner separated, even on new evidence", async () => {
@@ -317,7 +319,7 @@ describe("the owner's rejection (NEED-2444)", () => {
 
     expect(scan.proposed).toEqual([])
     expect(scan.skipped).toMatchObject([{ reason: "identity.separated" }])
-    expect(await openLinks(store)).toEqual([])
+    expect((await openLinks(store)).items).toEqual([])
   })
 })
 
@@ -344,7 +346,7 @@ describe("a role address", () => {
 
     expect(scan.merged).toEqual([])
     expect(scan.proposed).toEqual([])
-    expect(await openLinks(store)).toEqual([])
+    expect((await openLinks(store)).items).toEqual([])
   })
 
   it("is the whole local part only: a personal address that contains a role word still joins", async () => {
@@ -375,7 +377,7 @@ describe("a proposal whose people changed", () => {
     const scan = await store.people.scanMatches()
 
     expect(scan.merged).toHaveLength(1)
-    expect(await openLinks(store)).toEqual([])
+    expect((await openLinks(store)).items).toEqual([])
   })
 
   it("keeps a phone pair it names a proposal, never an automatic join", async () => {
@@ -442,6 +444,6 @@ describe("a proposal whose people changed", () => {
     await store.accounts.purge(MAX)
 
     expect(await store.people.personOf({ provider: "max", id: "7" })).toBeUndefined()
-    expect(await store.proposedActions.list({ kinds: [IDENTITY_LINK_KIND] })).toEqual([])
+    expect((await store.proposedActions.list({ kinds: [IDENTITY_LINK_KIND] })).items).toEqual([])
   })
 })

@@ -490,7 +490,9 @@ describe("related:", () => {
     await store.crm.saveItems(portal, "deal", [
       { externalId: "d1", title: "Website", pipeline: "p1", stage: "s1", organization: "c1" },
     ])
-    const [deal] = await store.deals.list({ account: portal, kind: "deal" })
+    const {
+      items: [deal],
+    } = await store.deals.list({ account: portal, kind: "deal" })
     const organization = deal?.organization?.ref as string
     const harbour = (await store.knowledge.projects()).find(({ key }) => key === "HRB")?.ref as string
     await store.deals.setProject(deal?.ref as string, { project: harbour, by: "owner" })

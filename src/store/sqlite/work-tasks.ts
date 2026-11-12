@@ -1,6 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import type { QueryAst } from "@wirecat/cli-base/query"
 import { timezoneOf } from "@wirecat/cli-base/query"
+import type { ListResult } from "@wirecat/cli-base/standards"
 import { externalIdOf, externalIdText, sourceUrlOf } from "../../domain/external-links.js"
 import { TASK_TYPES, WORK_TASK_TYPES } from "../../domain/knowledge.js"
 import {
@@ -25,6 +26,7 @@ import { CORPORA, drainCorpus } from "./note-index.js"
 import { requiredThing } from "./notes.js"
 import type { StoreContext } from "./open.js"
 import { queryFilter, type Where } from "./query-filter.js"
+import { pageOfRows } from "./rows-page.js"
 import { stemmerCache } from "./stems.js"
 import {
   BOARD_SCOPE,
@@ -39,6 +41,7 @@ import {
 } from "./task-board.js"
 import { type CloseSuggestion, closeSuggestionOf, SUGGESTION_COLUMNS } from "./task-close.js"
 import { addComment, authorNamed, commentsOf, type NamedAuthor, type TaskComment } from "./task-comments.js"
+import type { TaskFind } from "./task-find.js"
 import { INBOX_KEY_LENGTH, inboxKey } from "./task-keys.js"
 import { type TaskRelationsStore, taskRelationsStoreOver } from "./task-relations.js"
 import { displayTitleOf } from "./task-titles.js"
@@ -250,16 +253,7 @@ export interface WorkTasks extends TaskRelationsStore {
    * account's task, a deleted one or none.
    */
   projectTask(id: string): Promise<boolean>
-  find(filter: {
-    project?: string
-    type?: TaskType
-    status?: TaskState
-    /** `person:<id>`, in any role. */
-    assignee?: string
-    /** A compiled list query over `tasks t`. */
-    where?: Where
-    limit?: number
-  }): Promise<TaskDetails[]>
+  find(filter: TaskFind): Promise<ListResult<TaskDetails>>
   events(id: string): Promise<TaskEvent[]>
   /** A note about the task in the author's name, as an agent's comment is the agent's; the revision stays. */
   comment(id: string, text: string, by: Author): Promise<TaskComment>
@@ -816,17 +810,19 @@ export const workTaskOperationsOver = (context: StoreContext): WorkTaskOperation
         .get(row)
       return project !== undefined && String(project.key) !== inboxKey(String(project.name))
     },
-    find: async ({ project, type, status, assignee, where, limit = 100 }) => {
+    find: async ({ project, type, status, assignee, where, limit = 100, offset = 0 }) => {
       if (type !== undefined && !TASK_TYPES.includes(type))
         throw new CliError("validation_error", `a task's type is one of ${TASK_TYPES.join(", ")}`)
       const projectId = project === undefined ? null : projectOf(project)
       const person = assignee === undefined ? null : personOf(assignee)
-      return database
+      const most = Math.min(Math.max(limit, 1), 500)
+      const from = Math.max(0, Math.trunc(offset))
+      const rows = database
         .prepare(
           "SELECT * FROM tasks t WHERE deleted_at IS NULL AND (? IS NULL OR project_id = ?) AND (? IS NULL OR type = ?) " +
             "AND (? IS NULL OR status = ?) AND (? IS NULL OR EXISTS (SELECT 1 FROM task_assignments a " +
             "WHERE a.task_id = t.id AND a.assignee_type = 'person' AND a.assignee_id = ?)) " +
-            `AND (${where?.sql || "1"}) ORDER BY priority_score IS NULL, priority_score DESC, created_at, id LIMIT ?`,
+            `AND (${where?.sql || "1"}) ORDER BY priority_score IS NULL, priority_score DESC, created_at, id LIMIT ? OFFSET ?`,
         )
         .all(
           projectId,
@@ -838,9 +834,11 @@ export const workTaskOperationsOver = (context: StoreContext): WorkTaskOperation
           person,
           person,
           ...(where?.params ?? []),
-          Math.min(Math.max(limit, 1), 500),
+          most + 1,
+          from,
         )
         .map(detailsOf)
+      return pageOfRows(rows, most, from)
     },
     claim: async (id, holder, until) => {
       const task = required(id)

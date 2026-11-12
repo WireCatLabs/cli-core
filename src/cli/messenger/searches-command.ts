@@ -145,7 +145,7 @@ export const searchesCommand = (messenger: Messenger): Command => {
         context,
         pagedList("searches history", context.settings, {
           items: found.items.map(savedSearchItem),
-          has_more: found.has_more,
+          hasMore: found.hasMore,
         }),
         () => found.items.map((one) => `${line(one)}\n`).join(""),
       )

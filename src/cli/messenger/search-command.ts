@@ -223,10 +223,10 @@ const notesCommand = (messenger: Messenger): Command =>
         ...(options.timezone === undefined ? {} : { timezone: options.timezone }),
       }
       renderAnswer(this, context, notesAnswer("search notes", found, { limit, page: options.page ?? 1, again }), () => {
-        if (found.hits.length === 0) context.renderer.note("no note matches")
-        const shown = shownOf(found.hits.length, ((options.page ?? 1) - 1) * limit, found.total)
+        if (found.items.length === 0) context.renderer.note("no note matches")
+        const shown = shownOf(found.items.length, ((options.page ?? 1) - 1) * limit, found.total)
         if (shown) context.renderer.note(shown)
-        return found.hits
+        return found.items
           .map(
             (hit) =>
               `${singleLine(hit.title ?? hit.path ?? hit.ref)}  ${hit.ref}  (${hit.found_by.join(", ")})${hit.url ? `\n  ${singleLine(hit.url)}` : ""}\n  ${singleLine(hit.excerpt)}\n`,

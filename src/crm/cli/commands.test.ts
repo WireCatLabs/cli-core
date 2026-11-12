@@ -497,7 +497,7 @@ describe("CRM write commands", () => {
     const negotiation = base.stages[3]?.ref as string
     const first = (await store.baseStages.mappings({ kind: "deal" })).find(({ name }) => name === "New")?.ref as string
     await store.baseStages.map(first, negotiation)
-    const ref = (await store.deals.list({ status: "open" }))[0]?.ref as string
+    const ref = (await store.deals.list({ status: "open" })).items[0]?.ref as string
     const definition = {
       app: APP,
       commands: () => {
@@ -690,7 +690,9 @@ describe("CRM stage tasks", () => {
     source.put("deal", exampleDeal("d3", { stage: "quote" }))
     source.put("lead", exampleLead("l1", { stage: "lead-good" }))
     expect(await stageTasks(cli)).toBe(3)
-    const [task] = await tasksOf(store, d1)
+    const {
+      items: [task],
+    } = await tasksOf(store, d1)
     expect(task).toMatchObject({
       title: "Send the quote",
       status: "open",
@@ -705,7 +707,7 @@ describe("CRM stage tasks", () => {
     expect(await stageTasks(cli)).toBe(0)
     update("quote")
     expect(await stageTasks(cli)).toBe(1)
-    expect(await tasksOf(store, d1)).toHaveLength(2)
+    expect((await tasksOf(store, d1)).items).toHaveLength(2)
     expect((await dealContext(store, d1)).tasks.items.map(({ title }) => title)).toEqual([
       "Send the quote",
       "Send the quote",
@@ -720,13 +722,15 @@ describe("CRM stage tasks", () => {
     expect(await stageTasks(cli)).toBe(1)
     const ref = (await cli("deals", "list", "status:open")).items.find(({ external_id }) => external_id === "d2")
       ?.ref as string
-    const [task] = await tasksOf(store, ref)
+    const {
+      items: [task],
+    } = await tasksOf(store, ref)
     await store.tasks.edit(task?.ref as string, { status: "dismissed" }, "owner")
     const database = await openCache(path)
     database.prepare("UPDATE store_settings SET value = '0' WHERE key LIKE '%.stage-tasks.after'").run()
     database.close()
     expect(await stageTasks(cli)).toBe(0)
-    expect((await tasksOf(store, ref)).map(({ status }) => status)).toEqual(["dismissed"])
+    expect((await tasksOf(store, ref)).items.map(({ status }) => status)).toEqual(["dismissed"])
   })
 
   it("moves made before the rule was set open none, and a deals move counts at the next sync", async () => {
@@ -740,6 +744,6 @@ describe("CRM stage tasks", () => {
     expect(await stageTasks(cli)).toBe(0)
     await cli("deals", "move", ref, "Quote sent")
     expect(await stageTasks(cli)).toBe(1)
-    expect(await tasksOf(store, ref)).toHaveLength(1)
+    expect((await tasksOf(store, ref)).items).toHaveLength(1)
   })
 })

@@ -60,7 +60,9 @@ describe("transcript languages in the SQLite meeting store", () => {
     const { store } = await seeded()
     await store.fillTranscriptLanguages({ accountId: 1, apply: true, now: 5000 })
 
-    const [legacy] = await store.search("screen")
+    const {
+      items: [legacy],
+    } = await store.search("screen")
     expect(legacy).toMatchObject({ scope: "transcript", language: "ru", line: 3, linesTotal: 3 })
     const { items } = await store.searchHits("screen", { accountId: 1 })
     expect(items[0]).toMatchObject({ scope: "transcript", language: "ru", line: 3, linesTotal: 3 })

@@ -397,7 +397,7 @@ describe("accounts", () => {
         people: [{ externalId: "5", role: "contact" }],
       },
     ])
-    const ana = (await store.deals.list({ account: PORTAL, kind: "deal" }))[0]?.people[0]?.ref
+    const ana = (await store.deals.list({ account: PORTAL, kind: "deal" })).items[0]?.people[0]?.ref
     const boris = knownPerson(sql, "Boris")
     const envelope = envelopeOf(
       [

@@ -150,8 +150,8 @@ it("writes products directly for anyone and keeps a code once per supplier", asy
   expect(await reasonOf(f.store.products.add({ by: "owner", name: "Чай 2", sku: "TEA-1" }))).toBe("product.duplicate")
   expect(await reasonOf(f.store.products.add({ by: "owner", name: "Кофе", unitPrice: "1.00" }))).toBe("product.field")
   await f.store.products.update(made.ref, { by: "owner", archivedDate: "2026-11-07" })
-  expect((await f.store.products.list({ archived: false })).map((one) => one.ref)).toEqual([])
-  expect((await f.store.products.list({ name: "чай" })).map((one) => one.title)).toEqual([
+  expect((await f.store.products.list({ archived: false })).items.map((one) => one.ref)).toEqual([])
+  expect((await f.store.products.list({ name: "чай" })).items.map((one) => one.title)).toEqual([
     "Чай · 250.00 RUB (product, archived)",
   ])
 })

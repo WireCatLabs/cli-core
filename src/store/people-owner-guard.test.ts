@@ -56,7 +56,9 @@ describe("an account the owner connects (SEC-177)", () => {
     await store.accounts.saveAccount(MAX, { name: null })
 
     expect(await ownerRefs(store)).toEqual(["telegram:1"])
-    const [proposal] = await openLinks(store)
+    const {
+      items: [proposal],
+    } = await openLinks(store)
     expect(proposal).toMatchObject({ payload: { signal: "account" } })
     expect(proposal?.reason).toMatch(/someone else's/)
     await store.people.decideLink(proposal?.id as string, { confirm: true, by: "owner" })
@@ -72,7 +74,7 @@ describe("an account the owner connects (SEC-177)", () => {
     await store.accounts.saveAccount(OWN, { name: null })
 
     expect(await ownerRefs(store)).toEqual([])
-    expect((await openLinks(store)).map(({ payload }) => (payload as { signal: string }).signal)).toEqual([
+    expect((await openLinks(store)).items.map(({ payload }) => (payload as { signal: string }).signal)).toEqual([
       "account",
       "account",
     ])
@@ -85,7 +87,7 @@ describe("an account the owner connects (SEC-177)", () => {
     await store.accounts.saveAccount(bot, { name: null })
 
     expect(await ownerRefs(store)).toEqual(["telegram:1"])
-    expect(await openLinks(store)).toEqual([])
+    expect((await openLinks(store)).items).toEqual([])
   })
 })
 

@@ -34,7 +34,7 @@ export const sourceReviewKind = (store: Pick<MessageStore, "knowledge" | "propos
   ownerOnly: true,
   list: async (filter) => {
     const status = storedStatus(filter)
-    const stored = await store.proposedActions.list({
+    const { items: stored } = await store.proposedActions.list({
       kinds: [SOURCE_REVIEW_KIND],
       ...(status === undefined ? {} : { status }),
       ...pushed(filter),

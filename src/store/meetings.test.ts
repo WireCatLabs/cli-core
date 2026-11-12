@@ -51,13 +51,13 @@ describe("SQLite meeting store", () => {
     expect(rowId).toBe(saved.summaries[0]?.id)
     expect(meetingRowid("meeting_transcript_row", 1)).not.toBe(meetingRowid("meeting_summary", 1))
 
-    expect((await store.search("overlap")).map((hit) => [hit.scope, hit.id])).toEqual([
+    expect((await store.search("overlap")).items.map((hit) => [hit.scope, hit.id])).toEqual([
       ["transcript", rowId],
       ["summary", rowId],
     ])
 
     database.prepare("DELETE FROM meeting_summaries WHERE id = ?").run(Number(rowId))
-    expect((await store.search("overlap")).map((hit) => hit.scope)).toEqual(["transcript"])
+    expect((await store.search("overlap")).items.map((hit) => hit.scope)).toEqual(["transcript"])
     expect(database.prepare("SELECT count(*) AS n FROM meeting_index_pending").get()?.n).toBe(0)
   })
 

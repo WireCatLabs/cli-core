@@ -258,7 +258,9 @@ describe("the owner-only meeting findings and task close kinds", () => {
       evidence,
     })
     await store.tasks.create({ project: project.ref, title: "Send the signed lease", type: "chore" }, "owner")
-    const [board] = await store.tasks.find({ project: project.ref, status: "open", limit: 1 })
+    const {
+      items: [board],
+    } = await store.tasks.find({ project: project.ref, status: "open", limit: 1 })
     const note = await store.notes.addNote({ text: "Synthetic request" })
     const app = { command: "chat", appName: "chat-cli", envPrefix: "CHAT", description: "", version: "1.0.0" }
     const { task: noted } = await tasksService(storeOnlyDeps(store, account, { app })).add(note.ref, "request", "owner")
@@ -318,7 +320,7 @@ describe("the owner-only meeting findings and task close kinds", () => {
       { kind: "task_close", status: "confirmed", made: [f.lease.ref] },
       { kind: "task_close", status: "confirmed", made: [f.request.ref] },
     ])
-    const titles = (await f.store.tasks.find({ project: f.project.ref, limit: 10 })).map((one) => one.title)
+    const titles = (await f.store.tasks.find({ project: f.project.ref, limit: 10 })).items.map((one) => one.title)
     expect(titles).toContain("Draft")
     expect(titles).not.toContain("Budget")
     expect(await f.store.tasks.details(f.lease.id)).toMatchObject({ status: "done", closeSuggestion: null })

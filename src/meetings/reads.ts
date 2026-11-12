@@ -68,7 +68,12 @@ export const meetingPeople = async (
   if (store.participantCandidates && accountId === undefined)
     throw new MeetingError("configuration_error", "select an account for bounded participant lookup")
   if (accountId !== undefined && store.participantCandidates) {
-    const { limit, has_more, next_cursor, ...packet } = await store.participantCandidates(query, {
+    const {
+      limit,
+      hasMore: has_more,
+      nextCursor: next_cursor,
+      ...packet
+    } = await store.participantCandidates(query, {
       ...options,
       accountId,
     })
@@ -107,12 +112,12 @@ export type MeetingList = Omit<ListEnvelope<MeetingItem>, "meta">
 
 const PAGE_NEXT = STEPS.find((step) => step.id === "page.next") as StepDefinition
 
-/** Newest first; `filter.query` is a list query `meetingsQuery` validated. */
-export const meetingsList = async (store: MeetingStore, filter: MeetingFilter = {}, page = 1): Promise<MeetingList> => {
+/** Newest first; `filter.query` is a list query `meetingsQuery` validated. The answer pages by `limit`. */
+export const meetingsList = async (store: MeetingStore, filter: MeetingFilter = {}): Promise<MeetingList> => {
   validateFilter(filter)
-  positiveInteger(page)
   const limit = positiveInteger(filter.limit ?? 100)
-  const offset = (page - 1) * limit
+  const offset = filter.offset ?? 0
+  const page = Math.floor(offset / limit) + 1
   if (!Number.isSafeInteger(offset + limit + 1))
     throw new MeetingError("validation_error", "pagination exceeds safe integer range")
   const rows = await store.meetings({ ...filter, limit: limit + 1, offset })
@@ -189,5 +194,5 @@ export const meetingSummaryAnswer = async (
 export const meetingsSearch = async (store: MeetingStore, query: string, filter: MeetingFilter = {}) => {
   validateFilter(filter)
   if (!query.trim()) throw new MeetingError("validation_error", "query must not be empty")
-  return listed(await store.search(query, filter))
+  return listed((await store.search(query, filter)).items)
 }

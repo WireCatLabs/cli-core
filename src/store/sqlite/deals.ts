@@ -1,4 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
+import type { ListResult } from "@wirecat/cli-base/standards"
 import type { CrmValue } from "../../domain/crm.js"
 import {
   DEAL_KINDS,
@@ -25,6 +26,7 @@ import { type Author, authorActor, authorOf, evidenceOf, linkEvidence, projectId
 import { requiredThing } from "./notes.js"
 import type { StoreContext } from "./open.js"
 import { type AuthorInfo, isoDate, limitOf, oneOf, type Party, refuse, reviewedRowsOver, text } from "./reviewed.js"
+import { pageOfRows } from "./rows-page.js"
 import { type StageAmounts, stageAmountsOf } from "./stage-amounts.js"
 import { write } from "./transaction.js"
 
@@ -193,6 +195,7 @@ export interface DealSearch {
   kinds?: readonly DealKind[]
   /** 1–500, 100 by default. */
   limit?: number
+  offset?: number
 }
 
 /** Where a deal's or a lead's words are searched: its title, its company, the people on it. */
@@ -232,13 +235,13 @@ export interface DealsStore {
   get(reference: string): Promise<Deal>
   /** Every stage it entered, in the order it entered them: a CRM's own stamps may run out of order. */
   stages(reference: string): Promise<StageChange[]>
-  list(filter?: DealFilter): Promise<Deal[]>
+  list(filter?: DealFilter): Promise<ListResult<Deal>>
   /**
    * Deals and leads together, by the words of their title, company and contacts: a query word matches a stored word
    * it begins or one of the same stem. The most words matched first, then the latest changed. When nothing matches,
    * a misspelt word is corrected to the stored words nearest to it, once.
    */
-  find(search: DealSearch): Promise<FoundDeal[]>
+  find(search: DealSearch): Promise<ListResult<FoundDeal>>
   /**
    * The project it belongs to; `null` clears it. A CRM copy takes it too: the project is the store's own field, which
    * a CRM has none of and its sync never writes.
@@ -757,7 +760,7 @@ export const dealOperationsOver = (context: StoreContext) => {
           at: iso(change.changed_at),
         }))
     },
-    list: (filter: DealFilter = {}): Deal[] => {
+    list: (filter: DealFilter = {}): ListResult<Deal> => {
       const kind = kindOf(filter.kind)
       const project = filter.project === undefined ? null : projectId(database, filter.project)
       const organization = partyThing(filter.organization, "the organization")
@@ -776,7 +779,8 @@ export const dealOperationsOver = (context: StoreContext) => {
         keys === undefined
           ? ""
           : `AND (d.account_id IS NULL OR a.provider || ':' || a.external_id IN (${keys.map(() => "?").join(", ") || "NULL"})) `
-      return database
+      const offset = Math.max(0, Math.trunc(filter.offset ?? 0))
+      const rows = database
         .prepare(
           `${itemsSql(kind)} WHERE d.deleted_at IS NULL AND (? IS NULL OR d.status = ?) ` +
             "AND (? IS NULL OR d.project_id = ?) AND (? IS NULL OR s.name_folded = ?) AND (? IS NULL OR p.id = ?) " +
@@ -801,12 +805,14 @@ export const dealOperationsOver = (context: StoreContext) => {
           account,
           ...(keys ?? []),
           ...by.params,
-          limit,
-          Math.max(0, Math.trunc(filter.offset ?? 0)),
+          limit + 1,
+          offset,
         )
         .map(itemOf(kind))
+      return pageOfRows(rows, limit, offset)
     },
-    find: async ({ words, anyWord, exact = false, accounts, kinds = DEAL_KINDS, limit }: DealSearch) => {
+    find: async (wanted: DealSearch): Promise<ListResult<FoundDeal>> => {
+      const { words, anyWord, exact = false, accounts, kinds = DEAL_KINDS, limit, offset = 0 } = wanted
       const seen = new Set<string>()
       const clauses = words
         .map((word) => tokensOf(word).filter((token) => fold(token)))
@@ -816,8 +822,8 @@ export const dealOperationsOver = (context: StoreContext) => {
           seen.add(key)
           return true
         })
-      if (!clauses.length) return []
       const most = Math.min(Math.max(limit ?? 100, 1), 500)
+      if (!clauses.length) return { items: [], hasMore: false }
       const within = accounts?.map(({ provider, account }) => `${provider}\u0000${account}`)
       const stored = new Map<string, StoredWord>()
       const wordsOf = (text: string) =>
@@ -927,14 +933,14 @@ export const dealOperationsOver = (context: StoreContext) => {
           found = search(queryWith(fixes))
         }
       }
-      return found
+      const ranked = found
         .sort(
           (a, b) =>
             b.score - a.score ||
             Number(b.row.updated_at) - Number(a.row.updated_at) ||
             Number(b.row.id) - Number(a.row.id),
         )
-        .slice(0, most)
+        .slice(offset, offset + most + 1)
         .map(
           ({ kind, row, matched }): FoundDeal => ({
             ...read(`${kind}:${row.id}`),
@@ -942,6 +948,7 @@ export const dealOperationsOver = (context: StoreContext) => {
             ...(corrections ? { corrections } : {}),
           }),
         )
+      return pageOfRows(ranked, most, offset)
     },
     setProject: (reference: string, { project, by }: { project: string | null; by: Author }): Deal => {
       authorActor(context, by)

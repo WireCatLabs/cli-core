@@ -184,7 +184,12 @@ interface Proposed {
 
 /** Pending `member-of` proposals to the project, oldest first, so a cut at a limit always drops the same ones. */
 const proposedLinksOf = async (store: MessageStore, project: string): Promise<Proposed[]> => {
-  const stored = await store.proposedActions.list({ kinds: ["relationship"], status: "proposed", project, limit: 500 })
+  const { items: stored } = await store.proposedActions.list({
+    kinds: ["relationship"],
+    status: "proposed",
+    project,
+    limit: 500,
+  })
   const proposals = stored
     .flatMap((action): Proposed[] => {
       const payload = action.payload as { from?: unknown; to?: unknown; kind?: unknown; role?: unknown }

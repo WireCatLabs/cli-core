@@ -101,11 +101,12 @@ const addMeetingCommandsDefinition = (program: Command, deps: MeetingCommandDeps
     .action(async (words: string[], opts: { limit: number; page: number }, command: Command) => {
       const query = meetingsQuery(words.join(" "))
       print(
-        await meetingsList(
-          deps.store,
-          { accountId: deps.accountId, limit: opts.limit, ...(query ? { query } : {}) },
-          opts.page,
-        ),
+        await meetingsList(deps.store, {
+          accountId: deps.accountId,
+          limit: opts.limit,
+          offset: (opts.page - 1) * opts.limit,
+          ...(query ? { query } : {}),
+        }),
         command,
       )
     })

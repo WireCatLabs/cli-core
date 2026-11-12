@@ -1,4 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
+import type { ListResult } from "@wirecat/cli-base/standards"
 import { ORDER_DIRECTIONS, type OrderDirection } from "../../domain/business.js"
 import { sourceUrlOf } from "../../domain/external-links.js"
 import { FINANCE_REVIEWS, type FinanceReview } from "../../domain/finance.js"
@@ -22,6 +23,7 @@ import {
   text,
   type Written,
 } from "./reviewed.js"
+import { pageOfRows } from "./rows-page.js"
 import { write } from "./transaction.js"
 
 export interface Order extends Reviewed {
@@ -99,6 +101,7 @@ export interface OrderFilter {
   proposedBy?: ProposedByFilter
   /** 1–500, 100 by default; newest written first. */
   limit?: number
+  offset?: number
 }
 
 /**
@@ -108,7 +111,7 @@ export interface OrderFilter {
 export interface OrdersStore {
   add(input: OrderInput): Promise<OrderDetail>
   get(reference: string): Promise<OrderDetail>
-  list(filter?: OrderFilter): Promise<Order[]>
+  list(filter?: OrderFilter): Promise<ListResult<Order>>
   /** The owner moves an order on, such as a later mail saying it shipped; `date` is the delivery day. */
   setStatus(reference: string, input: { status: OrderStatus; date?: string; by: Author }): Promise<Order>
   confirm(reference: string, by: Decider, reason?: string): Promise<Order>
@@ -368,6 +371,7 @@ export const orderOperationsOver = (context: StoreContext): OrderOperations => {
       const number = filter.number === undefined ? null : filter.number.trim()
       const shop = filter.supplierName === undefined ? null : fold(filter.supplierName)
       const limit = limitOf(filter.limit)
+      const offset = Math.max(filter.offset ?? 0, 0)
       const rows = database
         .prepare(
           `${ORDERS} WHERE o.deleted_at IS NULL AND (? IS NULL OR o.status = ?) AND (? IS NULL OR o.purpose = ?) ` +
@@ -395,10 +399,11 @@ export const orderOperationsOver = (context: StoreContext): OrderOperations => {
           supplier?.id ?? null,
           ...by.params,
         )
-      return rows
+      const page = rows
         .filter((row) => shop === null || fold(String(row.supplier_name)) === shop)
-        .slice(0, limit)
+        .slice(offset, offset + limit + 1)
         .map(orderOf)
+      return pageOfRows(page, limit, offset)
     },
     setStatus: (reference, { status, date, by }) => {
       ownerOnly(by, "moves an order on")

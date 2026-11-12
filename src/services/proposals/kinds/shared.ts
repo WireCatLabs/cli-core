@@ -1,3 +1,4 @@
+import type { ListResult } from "@wirecat/cli-base/standards"
 import type { DecidedType } from "../../../domain/record-types.js"
 import type { Proposer } from "../../../store/decisions.js"
 import type { Decision, ProposalFilter, ProposalKind, ProposalRow } from "../types.js"
@@ -23,13 +24,13 @@ const byMatches = (row: ProposalRow, by: ProposalFilter["by"]): boolean => {
 }
 
 /** What a kind keeps of the rows it read: the filter's status and proposer, newest first, at most `limit`. */
-export const kept = (rows: ProposalRow[], filter: ProposalFilter): ProposalRow[] => {
+export const kept = (rows: ProposalRow[], filter: ProposalFilter): ListResult<ProposalRow> => {
   const status = filter.status ?? "proposed"
-  return rows
+  const matching = rows
     .filter((row) => (status === "all" || row.status === status) && byMatches(row, filter.by))
     .filter((row) => filter.project === undefined || row.project === filter.project)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-    .slice(0, filter.limit)
+  return { items: matching.slice(0, filter.limit), hasMore: matching.length > filter.limit }
 }
 
 /** The filters every store list takes, so a page is filled by the query and not cut after it. */
@@ -95,7 +96,9 @@ export const reviewedRow = (kind: string, entry: ReviewedEntry, object: string |
 export const reviewedKind = <T>(spec: {
   /** A type the record registry marks reviewed: its kind and its ref prefix both. */
   type: DecidedType
-  list: (options: ReturnType<typeof pushed> & { review?: "proposed" | "confirmed" | "rejected" }) => Promise<T[]>
+  list: (
+    options: ReturnType<typeof pushed> & { review?: "proposed" | "confirmed" | "rejected" },
+  ) => Promise<ListResult<T>>
   get: (id: string) => Promise<T>
   row: (entry: T) => ProposalRow
   decide: (id: string, confirm: boolean, decision: Pick<Decision, "by" | "reason">) => Promise<string>
@@ -105,7 +108,7 @@ export const reviewedKind = <T>(spec: {
   list: async (filter) => {
     const status = filter.status ?? "proposed"
     const entries = await spec.list({ ...pushed(filter), ...(status === "all" ? {} : { review: status }) })
-    return kept(entries.map(spec.row), filter)
+    return kept(entries.items.map(spec.row), filter)
   },
   get: async (id) => spec.row(await spec.get(id)),
   decide: async (id, { confirm, by, reason }) => {

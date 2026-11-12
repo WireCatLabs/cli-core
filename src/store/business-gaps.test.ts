@@ -91,14 +91,14 @@ it("lists contracts by status, kind and expiry, and products by kind and supplie
     expirationDate: "2026-12-31",
   })
   await f.store.contracts.add({ by: "owner", name: "NDA", kind: "nda", status: "draft" })
-  expect((await f.store.contracts.list({ kind: "lease" })).map((one) => one.ref)).toEqual([lease.ref])
-  expect((await f.store.contracts.list({ status: "draft" })).map((one) => one.name)).toEqual(["NDA"])
-  expect((await f.store.contracts.list({ expiresBy: "2027-01-01" })).map((one) => one.ref)).toEqual([lease.ref])
+  expect((await f.store.contracts.list({ kind: "lease" })).items.map((one) => one.ref)).toEqual([lease.ref])
+  expect((await f.store.contracts.list({ status: "draft" })).items.map((one) => one.name)).toEqual(["NDA"])
+  expect((await f.store.contracts.list({ expiresBy: "2027-01-01" })).items.map((one) => one.ref)).toEqual([lease.ref])
 
   const theirs = await f.store.products.add({ by: "owner", name: "Подшипник", supplier: f.client.ref })
   await f.store.products.add({ by: "owner", name: "Консультация", kind: "service" })
-  expect((await f.store.products.list({ supplier: f.client.ref })).map((one) => one.ref)).toEqual([theirs.ref])
-  expect((await f.store.products.list({ kind: "service" })).map((one) => one.name)).toEqual(["Консультация"])
+  expect((await f.store.products.list({ supplier: f.client.ref })).items.map((one) => one.ref)).toEqual([theirs.ref])
+  expect((await f.store.products.list({ kind: "service" })).items.map((one) => one.name)).toEqual(["Консультация"])
 })
 
 it("removes a split, and changes a transaction's amount only within its splits and its payment", async () => {

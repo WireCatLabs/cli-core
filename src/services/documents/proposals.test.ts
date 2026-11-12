@@ -90,9 +90,9 @@ describe("document extraction workflow", () => {
       hash: "snapshot-one",
     })
     expect(saved.saved.map((item) => item.status)).toEqual(["proposed", "proposed"])
-    expect(await f.knowledge.facts("account", f.note.ref)).toHaveLength(1)
-    expect((await f.knowledge.memories("account", f.note.ref))[0]?.body).toContain("Snapshot: snapshot-one")
-    expect((await f.knowledge.memories("account", f.note.ref))[0]?.author.name).toBe("synthetic-extractor")
+    expect((await f.knowledge.facts("account", f.note.ref)).items).toHaveLength(1)
+    expect((await f.knowledge.memories("account", f.note.ref)).items[0]?.body).toContain("Snapshot: snapshot-one")
+    expect((await f.knowledge.memories("account", f.note.ref)).items[0]?.author.name).toBe("synthetic-extractor")
   })
   it("rejects missing tabs and invalid evidence before acquiring a write port", async () => {
     const f = await setup()
@@ -105,7 +105,7 @@ describe("document extraction workflow", () => {
     })
     await expect(extractDocumentMemories({ ...f.options, save: true })).rejects.toThrow("source quote")
     expect(f.withWrite.mock.calls).toHaveLength(0)
-    expect(await f.knowledge.facts("account", f.note.ref)).toEqual([])
+    expect((await f.knowledge.facts("account", f.note.ref)).items).toEqual([])
   })
   it("rejects a changed source after model execution and again inside the write lock", async () => {
     const first = await setup()
@@ -127,7 +127,7 @@ describe("document extraction workflow", () => {
         },
       }),
     ).rejects.toThrow("source changed")
-    expect(await second.knowledge.memories("account", second.note.ref)).toEqual([])
+    expect((await second.knowledge.memories("account", second.note.ref)).items).toEqual([])
     await expect(
       extractDocumentMemories({
         ...second.options,
@@ -135,6 +135,6 @@ describe("document extraction workflow", () => {
         withWrite: async (write) => write(second.knowledge, "account", "document:wrong-source"),
       }),
     ).rejects.toThrow("source changed")
-    expect(await second.knowledge.facts("account", second.note.ref)).toEqual([])
+    expect((await second.knowledge.facts("account", second.note.ref)).items).toEqual([])
   })
 })

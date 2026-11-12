@@ -15,6 +15,7 @@ import { itemOf, listOf, renderAnswer } from "../envelope.js"
 import { queryHelp } from "../list-query.js"
 import { withOptionHints } from "../option-hints.js"
 import { positiveCount } from "../paging.js"
+import { marksUntrusted } from "../untrusted-marks.js"
 import { syncCommand } from "./backfill-command.js"
 import { type Messenger, type MessengerContext, messengerContext } from "./context.js"
 import { linksCommand } from "./conversations-command.js"
@@ -55,11 +56,13 @@ export const messagesCommand = (messenger: Messenger): Command => {
   messages.addCommand(evidenceCommand(messenger))
 
   const history = historyQuery(messenger)
-  const list = annotate(messages.command("list"), {
-    examples: [`${messenger.app.command} personal messages list "Book club" --limit 20`],
-    effects: REMOTE_READ,
-    partial: true,
-  })
+  const list = marksUntrusted(
+    annotate(messages.command("list"), {
+      examples: [`${messenger.app.command} personal messages list "Book club" --limit 20`],
+      effects: REMOTE_READ,
+      partial: true,
+    }),
+  )
     .description("a chat's messages, oldest to newest")
     .addHelpText("after", SAVE_HELP)
     .addHelpText("after", queryHelp(history))
@@ -177,11 +180,13 @@ export const messagesCommand = (messenger: Messenger): Command => {
 
   messages.addCommand(sendCommand(messenger))
 
-  annotate(messages.command("show"), {
-    output: { entity: "message" },
-    examples: [`${messenger.app.command} personal messages show "Book club" 101`],
-    effects: REMOTE_READ,
-  })
+  marksUntrusted(
+    annotate(messages.command("show"), {
+      output: { entity: "message" },
+      examples: [`${messenger.app.command} personal messages show "Book club" 101`],
+      effects: REMOTE_READ,
+    }),
+  )
     .description("one message, by its chat and id or by its msg: locator")
     .argument("<chat>", `${messenger.chatArgument}; or a msg: locator, with no message id after it`)
     .argument("[message]", "the message id")
@@ -191,11 +196,13 @@ export const messagesCommand = (messenger: Messenger): Command => {
     })
 
   threadOptions(
-    annotate(messages.command("context"), {
-      output: { entity: "message_context" },
-      examples: [`${messenger.app.command} personal messages context "Book club" 101 --before-n 3 --after-n 3`],
-      effects: REMOTE_READ,
-    }),
+    marksUntrusted(
+      annotate(messages.command("context"), {
+        output: { entity: "message_context" },
+        examples: [`${messenger.app.command} personal messages context "Book club" 101 --before-n 3 --after-n 3`],
+        effects: REMOTE_READ,
+      }),
+    ),
   )
     .description("a message and what came either side of it, oldest first")
     .addHelpText("after", SAVE_HELP)

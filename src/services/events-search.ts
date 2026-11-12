@@ -66,11 +66,11 @@ export interface EventsFound {
   by: "words" | "words and meaning"
   /** Why meaning was not searched, when it was not. */
   meaning_skipped?: string
-  hits: FoundEvent[]
-  has_more: boolean
+  items: FoundEvent[]
+  hasMore: boolean
   /** More events matched than one search reads (50,000); the later ones were not read — narrow the query. */
   truncated?: true
-  next_offset?: number
+  nextOffset?: number
 }
 
 const MAX_EVENTS_OFFSET = 1000
@@ -178,7 +178,7 @@ export const searchEvents = async (
     ...(timezone === undefined ? {} : { timezone }),
   })
   const accountIds = accounts === undefined ? undefined : await accountIdsOf(store, accounts)
-  if (accountIds?.length === 0) return { query, by: "words", hits: [], has_more: false }
+  if (accountIds?.length === 0) return { query, by: "words", items: [], hasMore: false }
   const words = plainQueryWords(asked === undefined ? query : questionText(query))
   const window = offset + limit
   let meaningSkipped: string | undefined
@@ -217,9 +217,9 @@ export const searchEvents = async (
       query,
       by,
       ...skipped,
-      hits: found.items.map((hit) => foundEvent(hit, query, ["words"])),
-      has_more: found.hasMore,
-      ...(found.hasMore && window <= MAX_EVENTS_OFFSET ? { next_offset: window } : {}),
+      items: found.items.map((hit) => foundEvent(hit, query, ["words"])),
+      hasMore: found.hasMore,
+      ...(found.hasMore && window <= MAX_EVENTS_OFFSET ? { nextOffset: window } : {}),
       ...truncated,
     }
   const ranked = new Map<string, { hit: Omit<EventHit, "relevance">; score: number; by: FoundEvent["found_by"] }>()
@@ -238,12 +238,12 @@ export const searchEvents = async (
   return {
     query,
     by,
-    hits: ordered.slice(offset, window).map(({ hit, by: halves }) => {
+    items: ordered.slice(offset, window).map(({ hit, by: halves }) => {
       const cosine = cosines.get(keyOf(hit))
       return { ...foundEvent(hit, query, halves), ...(cosine === undefined ? {} : { meaning_score: cosine }) }
     }),
-    has_more: hasMore,
-    ...(hasMore && window <= MAX_EVENTS_OFFSET ? { next_offset: window } : {}),
+    hasMore: hasMore,
+    ...(hasMore && window <= MAX_EVENTS_OFFSET ? { nextOffset: window } : {}),
     ...truncated,
   }
 }

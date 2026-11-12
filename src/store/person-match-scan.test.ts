@@ -44,7 +44,7 @@ describe("the same address", () => {
     await store.people.savePeople(PERSONAL, [{ id: "5", name: "Alice", email: "Alice@Acme.example" }])
 
     expect(await uidOf(store, "telegram", "5")).toBe(await uidOf(store, "bitrix24", "contact/20"))
-    expect(await linkProposals(store)).toEqual([])
+    expect((await linkProposals(store)).items).toEqual([])
   })
 
   it("joins people an older write left apart, and the scan records it as a rule's merge", async () => {
@@ -426,7 +426,7 @@ describe("a phone", () => {
       first.proposed.slice(1).map(({ id }) => ({ id, opened: false })),
     )
     expect(again.skipped).toMatchObject([{ reason: "identity.rejected" }])
-    expect(await linkProposals(store)).toHaveLength(3)
+    expect((await linkProposals(store)).items).toHaveLength(3)
     expect((await store.people.linkProposals({ limit: 50, offset: 0 })).items.map(({ score }) => score)).toEqual([
       0.4, 0.4,
     ])
@@ -463,7 +463,7 @@ describe("scores on one scale (NEED-2529)", () => {
     await store.people.savePeople(CRM, [{ id: "c3", name: "Lu D", phone: "+7 900 555-11-11" }])
     await store.people.savePeople(CARDS, [{ id: "c4", name: "Lu E", phone: "+79005551111" }])
     await store.people.scanMatches({ full: true })
-    const [open, decided] = (await linkProposals(store)).map(({ id }) => id)
+    const [open, decided] = (await linkProposals(store)).items.map(({ id }) => id)
     await store.people.decideLink(decided as string, { confirm: false, by: "owner" })
     const database = await raw()
     database.prepare("UPDATE proposed_actions SET payload = json_set(payload, '$.score', json('null'))").run()

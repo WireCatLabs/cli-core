@@ -33,7 +33,7 @@ export const memoryKind = (store: Pick<MessageStore, "memories">): ProposalKind 
   prefix: "memory",
   list: async (filter) => {
     const status = filter.status ?? "proposed"
-    const memories = await store.memories.list({
+    const { items: memories } = await store.memories.list({
       ...pushed(filter),
       ...(status === "all" ? {} : { status: status === "rejected" ? ("stale" as const) : status }),
     })

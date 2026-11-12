@@ -369,8 +369,8 @@ describe("untrusted text in search answers", () => {
     })
     const found = {
       query: "budget",
-      hits: [noteOf("document"), noteOf("note")],
-      has_more: false,
+      items: [noteOf("document"), noteOf("note")],
+      hasMore: false,
       accounts: [],
       skipped: [],
     }

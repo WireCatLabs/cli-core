@@ -812,6 +812,7 @@ describe("the MCP server", () => {
       "runs list",
       "runs path",
       "runs show",
+      "schedule agents list",
       "schedule list",
       "search all",
       "search conversations",

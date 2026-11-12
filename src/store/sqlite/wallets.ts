@@ -1,3 +1,4 @@
+import type { ListResult } from "@wirecat/cli-base/standards"
 import { WALLET_KINDS, type WalletKind, walletLine } from "../../domain/business.js"
 import { currencyOf, formatDecimal, type Money, moneyOf, scaleOf, signedMinorUnits } from "../../domain/money.js"
 import { fold } from "../normalize.js"
@@ -15,6 +16,7 @@ import {
   reviewedRowsOver,
   text,
 } from "./reviewed.js"
+import { pageOfRows } from "./rows-page.js"
 import { write } from "./transaction.js"
 
 export interface Wallet {
@@ -86,6 +88,7 @@ export interface WalletFilter {
   closed?: boolean
   /** 1–500, 100 by default; by name. */
   limit?: number
+  offset?: number
 }
 
 /** Bank accounts, cards, cash and wallets (`wallet:<id>`), written directly; their balances are computed. */
@@ -93,7 +96,7 @@ export interface WalletsStore {
   add(input: WalletInput): Promise<Wallet>
   /** `until` is `YYYY-MM-DD`, today when left out. */
   get(reference: string, options?: { until?: string }): Promise<Wallet>
-  list(filter?: WalletFilter): Promise<Wallet[]>
+  list(filter?: WalletFilter): Promise<ListResult<Wallet>>
   update(reference: string, input: WalletUpdate): Promise<Wallet>
 }
 
@@ -246,16 +249,19 @@ export const walletOperationsOver = (context: StoreContext): WalletOperations =>
     get: (reference, options = {}) =>
       walletOf(rowOf(reference), isoDate(options.until, "the last day counted") ?? today()),
     list: (filter = {}) => {
+      const limit = limitOf(filter.limit)
+      const offset = Math.max(filter.offset ?? 0, 0)
       const kind = filter.kind === undefined ? null : oneOf(filter.kind, WALLET_KINDS, "a kind")
       const currency = filter.currency === undefined ? null : currencyOf(filter.currency)
       const closed = filter.closed === undefined ? null : filter.closed ? 1 : 0
-      return database
+      const rows = database
         .prepare(
           `${WALLETS} WHERE w.deleted_at IS NULL AND (? IS NULL OR w.kind = ?) AND (? IS NULL OR w.currency = ?) ` +
-            "AND (? IS NULL OR (w.closed_date IS NOT NULL) = ?) ORDER BY w.name_folded, w.id LIMIT ?",
+            "AND (? IS NULL OR (w.closed_date IS NOT NULL) = ?) ORDER BY w.name_folded, w.id LIMIT ? OFFSET ?",
         )
-        .all(kind, kind, currency, currency, closed, closed, limitOf(filter.limit))
+        .all(kind, kind, currency, currency, closed, closed, limit + 1, offset)
         .map((row) => walletOf(row, today()))
+      return pageOfRows(rows, limit, offset)
     },
     update: (reference, input) => {
       const row = rowOf(reference)

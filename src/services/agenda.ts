@@ -169,6 +169,7 @@ export const agendaService = (deps: ServiceDeps, now: () => number = Date.now): 
             params: where?.params ?? [],
           },
         })
+        .then((found) => found.items)
         .catch((error: unknown) => {
           // An account that never had a task has no inbox project yet.
           if (error instanceof Error && "code" in error && error.code === "not_found") return []

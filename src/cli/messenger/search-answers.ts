@@ -422,9 +422,9 @@ export const notesAnswer = (
   exact = false,
 ): ListBody<NoteHitItem> =>
   listOf(command, {
-    items: found.hits.map(noteHitItem),
+    items: found.items.map(noteHitItem),
     limit,
-    has_more: found.has_more && found.next_offset !== undefined,
+    has_more: found.hasMore && found.nextOffset !== undefined,
     page: page ?? 1,
     total: found.total,
     ...(again ? { args: again } : {}),

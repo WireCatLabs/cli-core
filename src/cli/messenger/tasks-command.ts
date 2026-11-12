@@ -487,7 +487,7 @@ export const tasksCommand = (messenger: Messenger): Command => {
         context,
         pagedList("tasks duplicates list", context.settings, {
           items: shown.map(snakeKeys),
-          has_more: rows.length > limit,
+          hasMore: rows.length > limit,
         }),
         () => (shown.length === 0 ? "" : `${shown.map(pairLine).join("\n")}\n`),
       )

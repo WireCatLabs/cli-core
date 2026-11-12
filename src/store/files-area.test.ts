@@ -86,7 +86,7 @@ describe("documentSource", () => {
     })
     const env = { WIRECAT_STATE_DIR: mkdtempSync(join(tmpdir(), "no-model-")) }
     const shown = async (query: string) =>
-      (await searchNotes(store, query, { env, timezone: "UTC" })).hits.map(({ updated_at }) => updated_at)
+      (await searchNotes(store, query, { env, timezone: "UTC" })).items.map(({ updated_at }) => updated_at)
     expect(await shown("plan")).toEqual(["2026-02-01T00:00:00.000Z"])
     expect(await shown("date:2026-02-01")).toEqual(["2026-02-01T00:00:00.000Z"])
     expect(await shown(`date:${fresh.updatedAt.slice(0, 10)}`)).toEqual([])

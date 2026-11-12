@@ -201,11 +201,11 @@ it("deals show their base stage only once its mapping is confirmed, one stage or
   const [pipeline] = await store.deals.pipelines({ account: PORTAL })
   const base = await store.baseStages.show("deal")
   const negotiation = base.stages.find(({ name }) => name === "Negotiation")?.ref as string
-  expect((await store.deals.list()).map(({ baseStage }) => baseStage)).toEqual([null, null])
+  expect((await store.deals.list()).items.map(({ baseStage }) => baseStage)).toEqual([null, null])
 
   const one = await store.baseStages.map(await refOf(store, "Proposal"), negotiation)
   expect(one).toMatchObject({ baseStage: { ref: negotiation, name: "Negotiation" }, confirmed: true })
-  const kitchen = (await store.deals.list()).find(({ title }) => title === "Kitchen")
+  const kitchen = (await store.deals.list()).items.find(({ title }) => title === "Kitchen")
   expect(kitchen?.baseStage).toEqual({ ref: negotiation, name: "Negotiation" })
   expect(kitchen?.stage).toBe("Proposal")
 

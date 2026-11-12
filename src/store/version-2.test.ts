@@ -33,7 +33,9 @@ it("moves a memory of kind fact to facts with what points at it, keeps other mem
 
   const store = await openStore({ path })
   try {
-    const [fact] = await store.facts.list()
+    const {
+      items: [fact],
+    } = await store.facts.list()
     expect(fact).toMatchObject({
       type: "fact",
       statement: "The review is on Fridays",
@@ -45,8 +47,8 @@ it("moves a memory of kind fact to facts with what points at it, keeps other mem
       source: "memory",
       evidence: ["person:1"],
     })
-    expect(await store.facts.list()).toHaveLength(1)
-    expect((await store.memories.list()).map(({ body }) => body)).toEqual(["Reviews move often"])
+    expect((await store.facts.list()).items).toHaveLength(1)
+    expect((await store.memories.list()).items.map(({ body }) => body)).toEqual(["Reviews move often"])
     await expect(store.memories.get("memory:1")).rejects.toMatchObject({ code: "not_found" })
     expect((await store.notes.links({ to: fact?.ref as string })).map((link) => link.from)).toEqual(["memory:3"])
   } finally {

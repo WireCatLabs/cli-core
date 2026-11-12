@@ -43,7 +43,7 @@ export const relationshipUpdateKind = (store: Pick<MessageStore, "knowledge" | "
   stored: [KIND],
   list: async (filter) => {
     const status = storedStatus(filter)
-    const stored = await store.proposedActions.list({
+    const { items: stored } = await store.proposedActions.list({
       kinds: [KIND],
       ...(status === undefined ? {} : { status }),
       ...pushed(filter),

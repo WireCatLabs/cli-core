@@ -85,7 +85,7 @@ describe("an identity_link proposal", () => {
     const again = await store.people.proposeLink({ identity: anya, with: ana, signal: "agent", by: { bot: "codex" } })
 
     expect(again.id).toBe(first.id)
-    expect(await store.proposedActions.list({ kinds: [IDENTITY_LINK_KIND] })).toHaveLength(1)
+    expect((await store.proposedActions.list({ kinds: [IDENTITY_LINK_KIND] })).items).toHaveLength(1)
   })
 
   it("is not proposed for people the owner separated", async () => {
@@ -97,7 +97,7 @@ describe("an identity_link proposal", () => {
     await expect(
       store.people.proposeLink({ identity: ana, with: anya, signal: "agent", by: agent }),
     ).rejects.toMatchObject({ code: "conflict", details: { reason: "identity.separated" } })
-    expect(await store.proposedActions.list({ kinds: [IDENTITY_LINK_KIND] })).toEqual([])
+    expect((await store.proposedActions.list({ kinds: [IDENTITY_LINK_KIND] })).items).toEqual([])
   })
 
   it("is not proposed again once the owner rejected the pair", async () => {

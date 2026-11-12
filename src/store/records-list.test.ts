@@ -26,7 +26,7 @@ const keyOf = (type: string, externalId: string) => ({
   type,
   externalId,
 })
-const idsOf = (records: { type: string; externalId: string }[]) =>
+const idsOf = ({ items: records }: { items: { type: string; externalId: string }[] }) =>
   records.map(({ type, externalId }) => `${type} ${externalId}`)
 
 it("lists one account's records by entity, batch and deletion", async () => {
@@ -46,9 +46,9 @@ it("lists one account's records by entity, batch and deletion", async () => {
     "organization c",
   ])
   expect(idsOf(await store.records.list({ ...SOURCE, deleted: true }))).toEqual(["custom:note n"])
-  expect(await store.records.list({ ...SOURCE, deleted: false })).toHaveLength(3)
-  expect(await store.records.list(SOURCE)).toHaveLength(4)
-  expect(await store.records.list({ ...SOURCE, batch: "second", type: "payment" })).toHaveLength(1)
+  expect((await store.records.list({ ...SOURCE, deleted: false })).items).toHaveLength(3)
+  expect((await store.records.list(SOURCE)).items).toHaveLength(4)
+  expect((await store.records.list({ ...SOURCE, batch: "second", type: "payment" })).items).toHaveLength(1)
   await expect(store.records.list({ ...SOURCE, entity: "organization:999" })).rejects.toMatchObject({
     code: "not_found",
   })

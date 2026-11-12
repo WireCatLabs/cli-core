@@ -76,7 +76,7 @@ describe("shared document knowledge", () => {
       const mine = await f.k.addMemory(f.principal, f.ref, memory)
       expect(await f.k.searchMemories(f.principal, f.ref, "budget")).toEqual({
         items: [expect.objectContaining({ ref: mine.ref })],
-        limit_reached: false,
+        hasMore: false,
       })
     } finally {
       await f.index.close()
@@ -108,7 +108,7 @@ describe("shared document knowledge", () => {
           supersedes: memory.ref,
         }),
       ).rejects.toThrow("attached")
-      expect(await f.k.memories(f.principal, f.ref, { scope: "work" })).toEqual([])
+      expect((await f.k.memories(f.principal, f.ref, { scope: "work" })).items).toEqual([])
       expect(await f.k.searchMemories(f.principal, f.ref, "budget", "personal")).toMatchObject({
         items: [{ ref: memory.ref }],
       })
@@ -177,7 +177,9 @@ describe("shared document knowledge", () => {
         by: { bot: "drive-memory", model: "example-model" },
       })
       expect(drawn).toMatchObject({ status: "proposed", model: "example-model", scope: "work" })
-      expect((await f.k.facts(f.principal, f.ref, { status: "proposed" })).map((fact) => fact.ref)).toEqual([drawn.ref])
+      expect((await f.k.facts(f.principal, f.ref, { status: "proposed" })).items.map((fact) => fact.ref)).toEqual([
+        drawn.ref,
+      ])
       expect((await f.k.fact(f.principal, f.ref, drawn.ref, "confirm", "owner")).status).toBe("accepted")
       await expect(
         f.k.addMemory(f.principal, f.ref, { author: "owner", body: "A fact", kind: "fact" as never, scope: "work" }),
@@ -233,7 +235,7 @@ describe("shared document knowledge", () => {
           supersedes: replacement.ref,
         }),
       ).rejects.toThrow("account")
-      expect(await f.k.facts(f.principal, other)).toEqual([])
+      expect((await f.k.facts(f.principal, other)).items).toEqual([])
       expect((await f.k.fact(f.principal, f.ref, replacement.ref)).status).toBe("accepted")
       expect((await f.k.fact(f.principal, f.ref, replacement.ref, "reverse", "owner")).status).toBe("reversed")
       const ordinary = await f.k.addFact(f.principal, f.ref, {
@@ -249,7 +251,7 @@ describe("shared document knowledge", () => {
         supersedes: ordinary.ref,
       })
       expect((await f.k.fact(f.principal, f.ref, ordinary.ref)).status).toBe("superseded")
-      expect(await f.k.facts(f.principal, f.ref)).toHaveLength(5)
+      expect((await f.k.facts(f.principal, f.ref)).items).toHaveLength(5)
     } finally {
       await f.index.close()
     }

@@ -1,4 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
+import type { ListResult } from "@wirecat/cli-base/standards"
 import { TRANSACTION_STATUSES, type TransactionStatus, transactionLine } from "../../domain/business.js"
 import { FINANCE_REVIEWS, type FinanceReview, MONEY_DIRECTIONS, type MoneyDirection } from "../../domain/finance.js"
 import { formatDecimal, type Money, minorUnits, moneyLabel, moneyOf, scaleOf } from "../../domain/money.js"
@@ -19,6 +20,7 @@ import {
   text,
   type Written,
 } from "./reviewed.js"
+import { pageOfRows } from "./rows-page.js"
 import { write } from "./transaction.js"
 
 export interface TransactionSplit {
@@ -114,6 +116,7 @@ export interface TransactionFilter {
   uncategorized?: boolean
   /** 1–500, 100 by default; latest statement day first. */
   limit?: number
+  offset?: number
 }
 
 export interface CategoryTotal extends Money {
@@ -128,7 +131,7 @@ export interface CategoryTotal extends Money {
 export interface TransactionsStore {
   add(input: TransactionInput): Promise<MoneyTransaction>
   get(reference: string): Promise<MoneyTransaction>
-  list(filter?: TransactionFilter): Promise<MoneyTransaction[]>
+  list(filter?: TransactionFilter): Promise<ListResult<MoneyTransaction>>
   update(reference: string, input: TransactionUpdate): Promise<MoneyTransaction>
   addSplit(reference: string, input: SplitInput & { by: Author }): Promise<MoneyTransaction>
   removeSplit(reference: string, input: { position: number; by: Author }): Promise<MoneyTransaction>
@@ -367,6 +370,8 @@ export const transactionOperationsOver = (context: StoreContext): TransactionOpe
     },
     get: (reference) => transactionOf(rowOf(reference)),
     list: (filter = {}) => {
+      const limit = limitOf(filter.limit)
+      const offset = Math.max(filter.offset ?? 0, 0)
       const wallet = filter.wallet === undefined ? null : linkedId(filter.wallet, "wallet", "transaction.ref")
       const project = filter.project === undefined ? null : projectId(database, filter.project)
       const direction = filter.direction === undefined ? null : oneOf(filter.direction, MONEY_DIRECTIONS, "a direction")
@@ -374,7 +379,7 @@ export const transactionOperationsOver = (context: StoreContext): TransactionOpe
       const review = filter.review === undefined ? null : oneOf(filter.review, FINANCE_REVIEWS, "a review")
       const category = filter.category === undefined ? null : fold(filter.category.trim())
       const by = proposedBySql("t.author_type", "t.author_id", filter.proposedBy)
-      return database
+      const rows = database
         .prepare(
           `${TRANSACTIONS} WHERE t.deleted_at IS NULL AND (? IS NULL OR t.financial_account_id = ?) ` +
             "AND (? IS NULL OR t.direction = ?) AND (? IS NULL OR t.status = ?) AND (? IS NULL OR t.review = ?) " +
@@ -382,7 +387,7 @@ export const transactionOperationsOver = (context: StoreContext): TransactionOpe
             "AND s.project_id = ?)) AND (? IS NULL OR EXISTS (SELECT 1 FROM transaction_splits s " +
             "WHERE s.transaction_id = t.id AND s.category_folded = ?)) " +
             `${filter.uncategorized ? "AND split < t.amount " : ""}AND ${by.sql} ` +
-            "ORDER BY t.statement_date DESC, t.id DESC LIMIT ?",
+            "ORDER BY t.statement_date DESC, t.id DESC LIMIT ? OFFSET ?",
         )
         .all(
           wallet,
@@ -399,9 +404,11 @@ export const transactionOperationsOver = (context: StoreContext): TransactionOpe
           category,
           category,
           ...by.params,
-          limitOf(filter.limit),
+          limit + 1,
+          offset,
         )
         .map(transactionOf)
+      return pageOfRows(rows, limit, offset)
     },
     update: (reference, input) => {
       const row = rowOf(reference)

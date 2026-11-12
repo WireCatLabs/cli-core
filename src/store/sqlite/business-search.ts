@@ -1,7 +1,9 @@
+import type { ListResult } from "@wirecat/cli-base/standards"
 import { BUSINESS_KINDS, type BusinessKind } from "../../domain/business.js"
 import { fold } from "../normalize.js"
 import type { AccountKey } from "../types.js"
 import type { StoreContext } from "./open.js"
+import { pageOfRows } from "./rows-page.js"
 
 /** The most rows one `find` answers: a `search all` page read as deep as its offset allows, and one more. */
 export const BUSINESS_FIND_MAX = 2001
@@ -41,7 +43,7 @@ export interface BusinessHit {
 
 /** Invoices, payments, orders, contracts, subscriptions, products and wallets, found by their numbers and names. */
 export interface BusinessSearchStore {
-  find(search: BusinessSearch): Promise<BusinessHit[]>
+  find(search: BusinessSearch): Promise<ListResult<BusinessHit>>
   /** Every account with a live record of a row the lane reads. */
   accounts(): Promise<AccountKey[]>
 }
@@ -165,9 +167,9 @@ export const businessSearchOver = ({ database }: StoreContext): BusinessSearchSt
     return sources
   }
 
-  const find = ({ words, anyWord = false, accounts, limit }: BusinessSearch): BusinessHit[] => {
+  const find = ({ words, anyWord = false, accounts, limit }: BusinessSearch): ListResult<BusinessHit> => {
     const wanted = [...new Set(words.map((word) => fold(word).trim()).filter(Boolean))]
-    if (!wanted.length) return []
+    if (!wanted.length) return { items: [], hasMore: false }
     const most = Math.min(Math.max(limit ?? 100, 1), BUSINESS_FIND_MAX)
     const within = accounts === undefined ? undefined : new Set(accounts.map(keyOf))
     // Numbers and names are short; folding them here is cheaper than an index the store would keep in step.
@@ -175,7 +177,7 @@ export const businessSearchOver = ({ database }: StoreContext): BusinessSearchSt
       (a, b) => b.score - a.score || b.updatedAt - a.updatedAt || a.kind.localeCompare(b.kind) || b.id - a.id,
     )
     // Without a scope only the page needs its records; with one, every match is checked against it first.
-    const candidates = within === undefined ? matched.slice(0, most) : matched.filter((one) => one.imported)
+    const candidates = within === undefined ? matched.slice(0, most + 1) : matched.filter((one) => one.imported)
     const sources = sourcesOf(candidates)
     const kept =
       within === undefined
@@ -185,8 +187,8 @@ export const businessSearchOver = ({ database }: StoreContext): BusinessSearchSt
               const source = sources.get(`${one.kind}:${one.id}`)
               return source !== undefined && within.has(keyOf(source))
             })
-            .slice(0, most)
-    return kept.map((one) => {
+            .slice(0, most + 1)
+    const hits = kept.map((one): BusinessHit => {
       const ref = `${one.kind}:${one.id}`
       const source = sources.get(ref)
       return {
@@ -199,6 +201,7 @@ export const businessSearchOver = ({ database }: StoreContext): BusinessSearchSt
         updatedAt: one.updatedAt,
       }
     })
+    return pageOfRows(hits, most)
   }
 
   const sourceAccounts = (): AccountKey[] =>

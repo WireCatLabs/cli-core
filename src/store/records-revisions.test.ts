@@ -57,7 +57,7 @@ it("re-proposes a changed order in place while it is the import's proposal, and 
   const again = await take(store, envelopeOf([order("3", 2)], { batch: "second" }))
   expect(again).toMatchObject({ updated: 1, proposed: [ref], flagged: [] })
   expect(await store.orders.get(ref as string)).toMatchObject({ review: "proposed", total: "30.00" })
-  expect(await store.orders.list()).toHaveLength(1)
+  expect((await store.orders.list()).items).toHaveLength(1)
 
   await store.orders.confirm(ref as string, "owner")
   const late = await take(store, envelopeOf([order("5", 3)], { batch: "third" }))

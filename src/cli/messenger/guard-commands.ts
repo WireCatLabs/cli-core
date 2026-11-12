@@ -123,7 +123,7 @@ export const sendsCommand = (messenger: Messenger): Command =>
         pagedList("sends list", settings, {
           items: shown.map(sendAttemptItem),
           args: words.length ? { query: typedQuery(words) } : {},
-          has_more: from + shown.length < entries.length,
+          hasMore: from + shown.length < entries.length,
         }),
       )
       if (entries.length === 0)

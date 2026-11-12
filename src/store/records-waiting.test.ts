@@ -35,7 +35,7 @@ it("keeps records whose references are not imported yet, and projects them when 
     { key: "deal-d-1", pointer: "/records/1/fields/pipeline", missing: ["fields.pipeline"] },
     { key: "transaction-t-1", pointer: "/records/2/relations", missing: ["wallet"] },
   ])
-  expect(await store.records.list({ ...SOURCE, waiting: true })).toHaveLength(3)
+  expect((await store.records.list({ ...SOURCE, waiting: true })).items).toHaveLength(3)
 
   const second = await take(
     store,
@@ -57,7 +57,7 @@ it("keeps records whose references are not imported yet, and projects them when 
     lines: [expect.objectContaining({ description: "Bike" })],
   })
   expect((await store.records.get({ ...SOURCE, type: "deal", externalId: "d-1" }))?.entity).toMatch(/^deal:/)
-  expect(await store.records.list({ ...SOURCE, waiting: true })).toEqual([])
+  expect((await store.records.list({ ...SOURCE, waiting: true })).items).toEqual([])
 })
 
 it("never resolves a reference to another account's record, and keeps the same external ids apart", async () => {

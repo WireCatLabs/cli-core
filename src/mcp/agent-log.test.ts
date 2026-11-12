@@ -57,7 +57,7 @@ describe("the MCP agent log", () => {
     await run("chats_show", refusing as AnyTool, { text: "more secret words" }, ctx)
 
     const rows = await store.agentActions.list()
-    expect(rows.map(({ tool, tier, status, error }) => ({ tool, tier, status, error }))).toEqual([
+    expect(rows.items.map(({ tool, tier, status, error }) => ({ tool, tier, status, error }))).toEqual([
       { tool: "chats_show", tier: "read", status: "refused", error: "permission_error" },
       { tool: "messages_send", tier: "write-public", status: "ok", error: null },
     ])
@@ -80,7 +80,7 @@ describe("the MCP agent log", () => {
 
     await run("messages_send", echo as AnyTool, { text: "" }, ctx)
 
-    expect((await store.agentActions.list()).map(({ actor }) => actor.name)).toEqual(["hermes"])
+    expect((await store.agentActions.list()).items.map(({ actor }) => actor.name)).toEqual(["hermes"])
   })
 
   it("logs a pin as a write others see where every pin tells the chat's members", async () => {
@@ -90,7 +90,10 @@ describe("the MCP agent log", () => {
     await runner(store, { quietPins: false })("messages_pin", echo as AnyTool, { text: "" }, ctx)
     await runner(store)("messages_pin", echo as AnyTool, { text: "" }, ctx)
 
-    expect((await store.agentActions.list()).map(({ tier }) => tier).sort()).toEqual(["write-private", "write-public"])
+    expect((await store.agentActions.list()).items.map(({ tier }) => tier).sort()).toEqual([
+      "write-private",
+      "write-public",
+    ])
   })
 
   it("opens its store once for many calls, and again only after it is closed", async () => {
@@ -112,7 +115,7 @@ describe("the MCP agent log", () => {
     expect(opened).toBe(2)
     const store = await openStore({ path })
     live.push(store)
-    expect(await store.agentActions.list()).toHaveLength(5)
+    expect((await store.agentActions.list()).items).toHaveLength(5)
   })
 
   it("reads a tool's tier from what it declares", () => {

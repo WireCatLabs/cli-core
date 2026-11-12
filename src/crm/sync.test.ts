@@ -99,7 +99,7 @@ const scoped = async ({ self = "7", removedInChanges = false } = {}) => {
   const set = (name: "scope" | "unassigned", value: string) => raw(name, parseCrmSettingValue(name, value))
   const sync = (options: CrmSyncOptions = {}) => syncCrm(source, store, PORTAL, options)
   const deals = async () =>
-    (await store.deals.list({ account: PORTAL, kind: "deal" })).map(({ externalId }) => externalId).sort()
+    (await store.deals.list({ account: PORTAL, kind: "deal" })).items.map(({ externalId }) => externalId).sort()
   const signIn = (other: string) => {
     const next = fakeCrmSource({ self: other, traits: { removedInChanges } })
     for (const id of ["d1", "d2", "d3"]) next.put("deal", exampleDeal(id, { assignee: other }))
@@ -304,7 +304,7 @@ it("after a held narrowing, scope all lists in full: deals made or given away du
   await set("scope", "all")
   expect(dealOf(await sync())).toMatchObject({ round: "full" })
   expect(await deals()).toHaveLength(23)
-  const [moved] = (await store.deals.list({ account: PORTAL, kind: "deal" })).filter(
+  const [moved] = (await store.deals.list({ account: PORTAL, kind: "deal" })).items.filter(
     ({ externalId }) => externalId === "d1",
   )
   expect(moved?.title).toBe("Moved on")
@@ -369,7 +369,7 @@ it("copies every deal of a CRM that names no own user, and says so", async () =>
   const source = fakeCrmSource()
   source.put("deal", exampleDeal("d1", { assignee: "9" }))
   expect((await syncCrm(source, store, PORTAL)).scope).toEqual({ mode: "all" })
-  expect(await store.deals.list({ account: PORTAL, kind: "deal" })).toHaveLength(1)
+  expect((await store.deals.list({ account: PORTAL, kind: "deal" })).items).toHaveLength(1)
 })
 
 it("takes a scope of mine or all and the CRM's user ids as unassigned", () => {

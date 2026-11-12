@@ -1,5 +1,7 @@
 import { CliError, singleLine } from "@wirecat/cli-base"
+import type { ListResult } from "@wirecat/cli-base/standards"
 import type { StoreContext } from "./open.js"
+import { pageOfRows } from "./rows-page.js"
 import { toIso } from "./values.js"
 
 /** Unnamed runs kept, newest first; a saved search is never pruned. */
@@ -126,14 +128,15 @@ export const searchHistory = (
   limit: number,
   offset = 0,
   commands?: readonly SearchCommand[],
-): StoredSearch[] => {
+): ListResult<StoredSearch> => {
   const only = commandFilter(commands)
-  return database
+  const rows = database
     .prepare(
       `SELECT ${COLUMNS} FROM searches WHERE last_run_at IS NOT NULL${only.sql} ORDER BY last_run_at DESC, id DESC LIMIT ? OFFSET ?`,
     )
     .all(...only.values, limit + 1, offset)
     .map(searchOf)
+  return pageOfRows(rows, limit, offset)
 }
 
 export const deleteSearch = (context: StoreContext, reference: string): StoredSearch => {

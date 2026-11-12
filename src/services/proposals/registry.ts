@@ -75,7 +75,7 @@ export const emptyProposalRegistry = (
       const asked = filter.kinds === undefined ? kinds : kinds.filter((kind) => filter.kinds?.includes(kind.kind))
       const wide: ProposalFilter = { ...filter, offset: 0, limit: filter.offset + filter.limit + 1 }
       const rows = (
-        await Promise.all(asked.map(async (kind) => (await kind.list(wide)).map((row) => marked(kind, row))))
+        await Promise.all(asked.map(async (kind) => (await kind.list(wide)).items.map((row) => marked(kind, row))))
       )
         .flat()
         .filter((row) => filter.via === undefined || row.evidence.includes(filter.via))

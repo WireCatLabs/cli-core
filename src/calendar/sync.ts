@@ -350,14 +350,14 @@ const syncOne = async (
     }
     if (signal?.aborted) return "cancelled"
     const groups: SeriesSlots[] = []
-    const listed = page.entries.filter((entry) => entry.kind === "series" && entry.status !== "cancelled")
+    const listed = page.items.filter((entry) => entry.kind === "series" && entry.status !== "cancelled")
     const kept = new Set<string>()
     if (source.traits.expands === "on-request")
       for (const entry of listed) if (await unchanged(entry)) kept.add(entry.externalId)
-    if (page.entries.length) {
-      await store.saveEntries(calendar.id, page.entries, now)
-      result.saved += page.entries.length
-      cursor = { ...cursor, done: cursor.done + page.entries.length }
+    if (page.items.length) {
+      await store.saveEntries(calendar.id, page.items, now)
+      result.saved += page.items.length
+      cursor = { ...cursor, done: cursor.done + page.items.length }
       for (const entry of listed) {
         if (source.traits.expands === "local")
           groups.push({ series: entry.externalId, slots: await (expand as CalendarExpander)(entry, round.window) })
@@ -367,14 +367,16 @@ const syncOne = async (
       }
     }
     if (page.removed.length) result.removed += await store.removeEntries(calendar.id, page.removed, now)
-    if (page.unchanged && source.traits.fullListOnly && page.entries.length === 0 && page.nextPage === undefined)
+    if (page.unchanged && source.traits.fullListOnly && page.items.length === 0 && !page.hasMore)
       round = { ...round, page: null, listed: true, next: page.cursor ?? null, unchanged: true }
-    else if (page.nextPage === undefined) round = { ...round, page: null, listed: true, next: page.cursor ?? null }
+    else if (!page.hasMore) round = { ...round, page: null, listed: true, next: page.cursor ?? null }
     else {
-      if (seen.has(page.nextPage))
+      if (page.nextCursor === undefined)
+        throw new CliError("invalid_response", `${source.provider} said there are more pages but gave no cursor`)
+      if (seen.has(page.nextCursor))
         throw new CliError("invalid_response", `${source.provider} returned the same page twice`)
-      seen.add(page.nextPage)
-      round = { ...round, page: page.nextPage }
+      seen.add(page.nextCursor)
+      round = { ...round, page: page.nextCursor }
     }
     await commit(groups)
     moved()

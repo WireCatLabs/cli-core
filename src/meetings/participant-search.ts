@@ -23,8 +23,8 @@ export interface MeetingParticipantPage {
   query: string
   items: MeetingParticipantCandidate[]
   limit: number
-  has_more: boolean
-  next_cursor: string | null
+  hasMore: boolean
+  nextCursor?: string
   /** Page-local identities are observations, never speaker attribution or person links. */
   ambiguity: { scope: "page"; multiple_identities: boolean; identity_ids: number[] }
   coverage: {

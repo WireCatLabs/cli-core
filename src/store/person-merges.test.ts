@@ -317,8 +317,8 @@ describe("a merged-away person", () => {
     const current = `person:${alice}`
 
     expect(memory.subject).toBe(`person:${telegram}`)
-    expect((await store.memories.list({ subject: current })).map(({ ref }) => ref)).toEqual([memory.ref])
-    expect((await store.facts.list({ subject: current })).map(({ ref }) => ref)).toEqual([fact.ref])
+    expect((await store.memories.list({ subject: current })).items.map(({ ref }) => ref)).toEqual([memory.ref])
+    expect((await store.facts.list({ subject: current })).items.map(({ ref }) => ref)).toEqual([fact.ref])
     expect((await store.notes.notes({ about: current })).items.map(({ ref }) => ref)).toContain(note.ref)
     const board = await store.tasks.board(parseLucene(`assignee:"${current}"`, { defaultField: "text" }), { limit: 5 })
     expect(board.items.map(({ key }) => key)).toEqual(["HRB-1"])

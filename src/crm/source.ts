@@ -15,8 +15,9 @@ export interface CrmPage<T> {
   items: T[]
   /** Ids the CRM says it deleted since the cursor; never one that only left a filter. */
   removed?: string[]
-  /** More pages in this round. */
-  nextPage?: string
+  /** More pages in this round, read from `nextCursor`. */
+  hasMore: boolean
+  nextCursor?: string
   /** On the last page: the cursor the next run reads changes after; `null` when the CRM keeps none. */
   cursor?: string | null
 }
@@ -25,8 +26,9 @@ export interface CrmPage<T> {
 export type CrmChanges<T> = CrmPage<T> | { reset: true }
 
 export interface CrmIdPage {
-  ids: string[]
-  nextPage?: string
+  items: string[]
+  hasMore: boolean
+  nextCursor?: string
 }
 
 /**

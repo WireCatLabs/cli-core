@@ -1,6 +1,7 @@
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import type { ListResult } from "@wirecat/cli-base/standards"
 import { afterEach, describe, expect, it } from "vitest"
 import { openCache } from "./open.js"
 import { type MessageStore, openStore } from "./store.js"
@@ -25,9 +26,9 @@ const sameTime = async (path: string, table: string, column: string) => {
 }
 const ROWS = 520
 
-const pages = async (read: (offset: number) => Promise<{ id: string }[]>) => {
-  const first = await read(0)
-  const second = await read(500)
+const pages = async (read: (offset: number) => Promise<ListResult<{ id: string }>>) => {
+  const { items: first } = await read(0)
+  const { items: second } = await read(500)
   return { first: first.map(({ id }) => id), second: second.map(({ id }) => id) }
 }
 const descending = (ids: string[]) => [...ids].sort((a, b) => Number(b) - Number(a))

@@ -45,7 +45,7 @@ it("writes an envelope's deal on the row CRM sync keeps for the same account: on
   )
   expect(receipt).toMatchObject({ created: 1, waiting: [], errors: [] })
   expect((await store.records.get({ ...SOURCE, type: "deal", externalId: "D-7" }))?.entity).toBe(synced)
-  expect(await store.deals.list({ account: key })).toEqual([
+  expect((await store.deals.list({ account: key })).items).toEqual([
     expect.objectContaining({ ref: synced, title: "Rental fleet", amount: "5.00" }),
   ])
 })

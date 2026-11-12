@@ -26,7 +26,7 @@ const titles = async (
   store: MessageStore,
   query: string,
   options: { exact?: boolean; limit?: number; offset?: number } = {},
-) => (await searchNotes(store, query, { env, ...options })).hits.map(({ title }) => title)
+) => (await searchNotes(store, query, { env, ...options })).items.map(({ title }) => title)
 
 const filler = Array.from({ length: 3000 }, (_, index) => `filler${index}`).join(" ")
 const repeated = Array.from({ length: 12 }, (_, index) => ({
@@ -39,7 +39,7 @@ describe("a title that holds the query comes first", () => {
     "ranks a long file whose only match is its title above short files repeating the words (exact=%s)",
     async (exact) => {
       const { store } = await seeded([...repeated, { title: "Quokka plan", text: filler }])
-      const hits = (await searchNotes(store, "quokka plan", { env, exact })).hits
+      const hits = (await searchNotes(store, "quokka plan", { env, exact })).items
       expect(hits[0]).toMatchObject({ title: "Quokka plan", found_by: expect.arrayContaining(["title"]) })
       expect(hits).toHaveLength(13)
     },
@@ -47,7 +47,7 @@ describe("a title that holds the query comes first", () => {
 
   it("lifts a title whose capitals are not Latin", async () => {
     const { store } = await seeded([...repeated, { title: "СемЯдро План", text: filler }])
-    const hits = (await searchNotes(store, "семядро план", { env })).hits
+    const hits = (await searchNotes(store, "семядро план", { env })).items
     expect(hits[0]).toMatchObject({ title: "СемЯдро План", found_by: expect.arrayContaining(["title"]) })
     expect(await titles(store, "title:ЯДРО")).toEqual(["СемЯдро План"])
   })
@@ -92,14 +92,14 @@ describe("a title that holds the query comes first", () => {
     const second = await searchNotes(store, "quokka plan", { env, limit: 3, offset: 3 })
     const all = await titles(store, "quokka plan", { limit: 20 })
     expect(
-      first.hits
+      first.items
         .slice(0, 2)
         .map(({ title }) => title)
         .sort(),
     ).toEqual(["Quokka plan A", "Quokka plan B"])
-    expect([...first.hits, ...second.hits].map(({ title }) => title)).toEqual(all.slice(0, 6))
+    expect([...first.items, ...second.items].map(({ title }) => title)).toEqual(all.slice(0, 6))
     expect(new Set(all).size).toBe(all.length)
-    expect(first.has_more).toBe(true)
+    expect(first.hasMore).toBe(true)
   })
 
   it("leaves a query with syntax in its own order", async () => {
@@ -113,7 +113,9 @@ describe("a title that holds the query comes first", () => {
       "quokka OR plan",
     ])
       expect(
-        (await searchNotes(store, query, { env, limit: 20 })).hits.every(({ found_by }) => !found_by.includes("title")),
+        (await searchNotes(store, query, { env, limit: 20 })).items.every(
+          ({ found_by }) => !found_by.includes("title"),
+        ),
       ).toBe(true)
   })
 
@@ -121,7 +123,7 @@ describe("a title that holds the query comes first", () => {
     const { store, folder } = await seeded([{ title: "Quokka plan", text: "x" }])
     const other = await store.notes.addFolder({ name: "other" })
     await store.notes.saveFileNote({ folderId: other.id, path: "o.md", title: "Quokka plan", text: "x" })
-    const hits = (await searchNotes(store, "quokka plan", { env, folderIds: [folder.id] })).hits
+    const hits = (await searchNotes(store, "quokka plan", { env, folderIds: [folder.id] })).items
     expect(hits.map(({ folder_id }) => folder_id)).toEqual([folder.id])
   })
 })

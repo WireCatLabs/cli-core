@@ -1,3 +1,4 @@
+import type { ListResult } from "@wirecat/cli-base/standards"
 import type { StoreContext } from "./sqlite/open.js"
 import type { SearchCommand, SearchRecord, StoredSearch } from "./sqlite/searches.js"
 import * as searchRecords from "./sqlite/searches.js"
@@ -12,8 +13,8 @@ export interface SearchesStore {
   storedSearch(reference: string): Promise<StoredSearch | undefined>
   /** `commands`: only rows of these kinds; the table is shared by every CLI on the store. */
   savedSearches(commands?: readonly SearchCommand[]): Promise<StoredSearch[]>
-  /** Runs, newest first, one more than `limit` when there are more. */
-  searchHistory(limit: number, offset?: number, commands?: readonly SearchCommand[]): Promise<StoredSearch[]>
+  /** Runs, newest first. */
+  searchHistory(limit: number, offset?: number, commands?: readonly SearchCommand[]): Promise<ListResult<StoredSearch>>
   deleteSearch(reference: string): Promise<StoredSearch>
   /** Drops the unnamed runs; answers how many. */
   clearSearchHistory(commands?: readonly SearchCommand[]): Promise<number>

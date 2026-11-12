@@ -65,7 +65,7 @@ export const findingsKind = (store: Pick<MessageStore, "evidenceFindings" | "pro
           limit: 50,
           offset,
         })
-        rows.push(...kept(await Promise.all(page.items.map(created)), { ...filter, limit: 50 }))
+        rows.push(...kept(await Promise.all(page.items.map(created)), { ...filter, limit: 50 }).items)
         if (!page.hasMore) break
       }
       return kept(rows, filter)

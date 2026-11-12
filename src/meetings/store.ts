@@ -1,4 +1,5 @@
 import type { QueryAst } from "@wirecat/cli-base/query"
+import type { ListResult } from "@wirecat/cli-base/standards"
 import type { MeetingOwner } from "./item.js"
 import type {
   Attachment,
@@ -131,7 +132,7 @@ export interface MeetingStore {
   account(id: number): Promise<MeetingOwner | null>
   meeting(id: number): Promise<MeetingDetails | null>
   participants(query: string, accountId?: number): Promise<Participant[]>
-  search(query: string, filter?: MeetingFilter): Promise<SearchHit[]>
+  search(query: string, filter?: MeetingFilter): Promise<ListResult<SearchHit>>
   events(): Promise<Event[]>
   /** Filters at the store; adapters without this method refuse nonempty event queries. */
   queryEvents?(query: QueryAst): Promise<Event[]>
