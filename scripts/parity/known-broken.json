@@ -1,1 +1,52 @@
-[]
+[
+  {
+    "repo": "mail-cli",
+    "pr": 2896,
+    "until": "2026-11-26"
+  },
+  {
+    "repo": "cli-memo",
+    "pr": 2896,
+    "until": "2026-11-26"
+  },
+  {
+    "repo": "tg-cli",
+    "pr": 2896,
+    "until": "2026-11-26"
+  },
+  {
+    "repo": "max-cli",
+    "pr": 2896,
+    "until": "2026-11-26"
+  },
+  {
+    "repo": "whatsapp-cli",
+    "pr": 2896,
+    "until": "2026-11-26"
+  },
+  {
+    "repo": "drive-cli",
+    "pr": 2896,
+    "until": "2026-11-26"
+  },
+  {
+    "repo": "gcal-cli",
+    "pr": 2896,
+    "until": "2026-11-26"
+  },
+  {
+    "repo": "zoom-cli",
+    "pr": 2896,
+    "until": "2026-11-26"
+  },
+  {
+    "repo": "bitrix24-cli",
+    "pr": 2896,
+    "until": "2026-11-26"
+  },
+  {
+    "repo": "cli-template",
+    "pr": 2896,
+    "until": "2026-11-26"
+  }
+]
