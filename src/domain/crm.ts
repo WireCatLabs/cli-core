@@ -155,6 +155,32 @@ export interface CrmRecords {
   organization: CrmOrganization
 }
 
+/** What a CRM activity is: a call, an e-mail, a meeting, a to-do, a task of the CRM's task tracker, or a comment. */
+export const CRM_ACTIVITY_KINDS = ["call", "email", "meeting", "todo", "task", "comment", "other"] as const
+export type CrmActivityKind = (typeof CRM_ACTIVITY_KINDS)[number]
+
+/**
+ * An activity on the CRM's deals and leads, as the CRM has it. `externalId` is unique among the account's activities
+ * of every kind (a source with separate lists prefixes them). Contact data the CRM keeps on it, such as a call's
+ * phone number, is never part of it: it would bypass the limits on reading clients' contacts.
+ */
+export interface CrmActivity {
+  externalId: string
+  kind: CrmActivityKind
+  subject: string
+  /** The text: an e-mail's body, a comment, a task's description; `null` when it has none. */
+  body?: string | null
+  /** Epoch milliseconds. */
+  dueAt?: number | null
+  done: boolean
+  /** The CRM user responsible for it, by the CRM's id. */
+  assignee?: string | null
+  createdAt: number
+  updatedAt: number
+  /** The deals and leads it is on, by the CRM's ids; one on neither is not stored. */
+  on: { kind: DealKind; externalId: string }[]
+}
+
 /** The account's scope settings: `also` are the users whose deals the owner counts as nobody's. */
 export type CrmScopeSetting = { mode: "all" } | { mode: "mine"; also: readonly string[]; explicit: boolean }
 

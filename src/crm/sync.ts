@@ -3,6 +3,7 @@ import { type BudgetStop, type RunBudget, runBudget } from "../background/budget
 import { progressLine, progressOf } from "../background/checkpoints.js"
 import {
   CRM_KINDS,
+  type CrmActivity,
   type CrmItem,
   type CrmKind,
   type CrmScope,
@@ -119,6 +120,7 @@ export interface CrmSyncIssue {
     | "crm.unassigned-dropped"
     | "crm.not-reported"
     | "crm.pending-dropped"
+    | "crm.activities-failed"
   message: string
   externalId?: string
 }
@@ -173,6 +175,8 @@ export interface CrmSyncReport {
     /** Pages saved: 0 means this run moved nothing on. */
     steps: number
   }
+  /** With the `activities` setting on: what this run read of the activities and tasks on kept deals and leads. */
+  activities?: { saved: number; outOfScope: number; state: "partial" | "complete" }
   hint?: string
   /**
    * On the first sync of an account no saved group lists: how to add it to a work group. Not `next`, which in an answer
@@ -306,6 +310,66 @@ const readUsers = async (run: Run): Promise<BudgetStop | null> => {
   noted(run, "user", await run.store.crm.saveUsers(run.account, users, departments))
   run.report.users = users.length
   return null
+}
+
+const ACTIVITIES = "crm:activities"
+/** A first read goes this far back: older calls and e-mails rarely matter, and a busy portal holds years of them. */
+const ACTIVITY_DAYS = 90
+
+interface ActivityCursor {
+  since: number
+  page?: string
+  newest: number
+}
+
+const activityCursor = (value: string | undefined): ActivityCursor | undefined => {
+  try {
+    const parsed = value === undefined ? undefined : (JSON.parse(value) as ActivityCursor)
+    return typeof parsed?.since === "number" ? parsed : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * Activities and tasks changed since the last read, after every deal and lead of the run is stored: each is kept only
+ * on the deals and leads this copy holds. Pages go on from where a stopped run left them.
+ */
+const readActivities = async (run: Run): Promise<BudgetStop | null> => {
+  const { source, store, account } = run
+  if (!source.activities || !(await store.crm.activitiesOn(account))) return null
+  const read = { saved: 0, outOfScope: 0, state: "partial" as "partial" | "complete" }
+  run.report.activities = read
+  const saved = activityCursor((await store.sync.syncState(account, ACTIVITIES))?.value)
+  const cursor: ActivityCursor = saved ?? { since: run.now - ACTIVITY_DAYS * DAY, newest: 0 }
+  for (;;) {
+    const why = run.budget.take()
+    if (why) return why
+    let page: CrmPage<CrmActivity>
+    try {
+      page = await source.activities.call(source, cursor.since, cursor.page, run.context)
+    } catch (error) {
+      if (run.signal?.aborted || error instanceof BudgetSpent) throw error
+      if (!scopeOf(error)) throw error
+      run.gaps.push(refusal("activities", "no activity or task was read", error, source.provider))
+      return null
+    }
+    const done = await store.crm.saveActivities(account, page.items)
+    read.saved += done.saved
+    read.outOfScope += done.outOfScope
+    cursor.newest = Math.max(cursor.newest, ...page.items.map((one) => one.updatedAt))
+    run.moved()
+    if (page.hasMore && page.nextCursor !== undefined) {
+      cursor.page = page.nextCursor
+      await store.sync.setSyncState(account, ACTIVITIES, JSON.stringify(cursor))
+      if (run.signal?.aborted) return "cancelled"
+      continue
+    }
+    const next = page.cursor != null ? Number(page.cursor) : cursor.newest || cursor.since
+    await store.sync.setSyncState(account, ACTIVITIES, JSON.stringify({ since: next, newest: 0 }))
+    read.state = "complete"
+    return null
+  }
 }
 
 /** Runs a step whose source call may spend the budget mid-way: a spent budget is a stop, not a failure. */
@@ -694,6 +758,19 @@ export const syncCrm = async (
   }
   // A relationship held back for an end a later page or kind brought is written now; it costs no request.
   run.droppedPending += (await store.crm.retryPending(account)).dropped
+  if (!stopped && kinds.some(isItemKind)) {
+    try {
+      stopped = await stopping(() => readActivities(run))
+    } catch (error) {
+      if (options.signal?.aborted) stopped = "cancelled"
+      else
+        report.issues.push({
+          kind: "deal",
+          reason: "crm.activities-failed",
+          message: isCliFailure(error) ? error.message : "the activities could not be read",
+        })
+    }
+  }
   const narrowed = report.synced.some((one) => one.outOfScope > 0)
   const whole = report.synced.every(
     (one) => one.state === "complete" && one.error === undefined && !one.held && one.pass !== "held",

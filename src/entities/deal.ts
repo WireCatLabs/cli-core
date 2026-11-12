@@ -1,4 +1,5 @@
 import * as v from "valibot"
+import { CRM_ACTIVITY_KINDS, type CrmActivityKind } from "../domain/crm.js"
 import { DEAL_ROLES } from "../domain/deals.js"
 import { count, id, reference, text, time, untrusted } from "./fields.js"
 
@@ -7,6 +8,33 @@ const party = v.strictObject({ ref: reference, name: nullableText, owner: v.bool
 const outcome = v.picklist(["open", "won", "lost"])
 const crmAccount = v.nullable(v.strictObject({ provider: text, account: text }))
 const day = v.nullable(v.pipe(v.string(), v.regex(/^\d{4}-\d{2}-\d{2}$/)))
+
+/** A call, e-mail, meeting, to-do, task or comment the CRM keeps on a deal or lead: what `show` lists. */
+export interface DealActivity {
+  external_id: string
+  kind: CrmActivityKind
+  subject: string
+  body: string | null
+  due_at: string | null
+  done: boolean
+  assignee: string | null
+  created_at: string
+  updated_at: string
+}
+
+// Typed by name: inferred, it makes every entity map that holds a deal too long for the compiler to write out.
+const activity: v.GenericSchema<DealActivity> = v.strictObject({
+  external_id: text,
+  kind: v.picklist(CRM_ACTIVITY_KINDS),
+  subject: text,
+  body: nullableText,
+  due_at: v.nullable(time),
+  done: v.boolean(),
+  /** The identity `<account>/user/<id>` responsible for it. */
+  assignee: nullableText,
+  created_at: time,
+  updated_at: time,
+})
 
 /**
  * A deal (`deal:<id>`), the owner's own or a CRM's copy: one shape for memo and every CRM CLI. Money is a decimal
@@ -66,6 +94,8 @@ export const deal = v.strictObject({
   project_name: nullableText,
   created_at: time,
   updated_at: time,
+  /** `show` of a CRM copy whose `activities` setting is on: its activities and tasks, open ones first. */
+  activities: v.optional(v.array(activity)),
   untrusted,
 })
 
