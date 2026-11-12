@@ -215,9 +215,10 @@ const EXCLUDES = ["what the tool reads or writes", "names", "e-mail addresses", 
 
 /** `doctor reports`: one file for the author, as a messenger's `doctor reports` writes it, without the send journal. */
 const reportsCommand = (app: AppIdentity, configuration: Configuration, options: AppDoctorOptions): Command => {
-  const reports = new Command("reports").description("problem reports")
+  const reports = annotate(new Command("reports"), { effects: NO_EFFECTS }).description("problem reports")
   annotate(reports.command("show"), { effects: NO_EFFECTS, examples: [`${app.command} doctor reports show`] })
     .description("what a problem report holds; writes nothing")
+    .summary("what a report holds and never holds, and where to send it; writes nothing")
     .action(function (this: Command) {
       const create = lineOf(this, "doctor reports create")
       renderAnswer(
@@ -248,6 +249,7 @@ const reportsCommand = (app: AppIdentity, configuration: Configuration, options:
     }),
   )
     .description("write a problem report to a file, and say where to send it")
+    .summary("the report file written: its path, the run it is about, and where to send it")
     .option("--run <id>", "the run the report is about; the newest failed one if not given")
     .option("--output <file>", "where to write it; a new file in this directory if not given")
     .action(function (this: Command) {

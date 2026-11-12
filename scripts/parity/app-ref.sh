@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Prints `ref=<ref>` of <app>-cli (or [repo], where the repository is named otherwise) for Parity to build. APP_REF, when set, names it outright and must exist: a
-# release whose apps adopt it on a branch is validated against that branch (bin/release --app-ref). Otherwise,
+# Prints `ref=<ref>` of <app>-cli (or [repo], where the repository is named otherwise) for Parity to build. APP_REF, when
+# set, names it outright, and an app without that branch builds its main: a release whose apps adopt it on a branch is
+# validated against that branch (bin/release --app-ref). Otherwise,
 # on a pull request whose branch also exists in the app, that branch: a change the app must adopt goes green
 # against the app's adoption branch, which merges after the release. Otherwise the app's main.
 set -euo pipefail
@@ -18,10 +19,9 @@ if [ -n "$branch" ] && [ "$branch" != main ]; then
   case $status in
     0) ref=$branch ;;
     2)
-      if [ -n "$explicit" ]; then
-        echo "::error title=$repo::WireCatLabs/$repo has no branch $branch" >&2
-        exit 1
-      fi
+      # A release names one adoption branch for every app, and an app that needed no adoption has none: its main is
+      # what ships beside the release, so that is what is built, said out loud.
+      [ -z "$explicit" ] || echo "::warning title=$repo::WireCatLabs/$repo has no branch $branch; building its main" >&2
       ;;
     *) echo "::error title=$repo::cannot list the branches of WireCatLabs/$repo" >&2; exit 1 ;;
   esac

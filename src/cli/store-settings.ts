@@ -72,9 +72,9 @@ export const STORE_SETTINGS = [
 const GROUP_PREFIX = `${ACCOUNT_GROUPS_SETTING}.`
 /**
  * A CRM account's: whether what it reports is a relationship or waits for review, what its company types mean, whose
- * deals and leads its sync copies, and which stages open a task.
+ * deals and leads its sync copies, which stages open a task, and whether activities and tasks are read.
  */
-const CRM_SETTINGS = ["links", "company-types", "scope", "unassigned", "self", "stage-tasks"].map(
+const CRM_SETTINGS = ["links", "company-types", "scope", "unassigned", "self", "stage-tasks", "activities"].map(
   (name) => `crm.<provider>:<account>.${name}`,
 )
 
@@ -91,12 +91,12 @@ export const offersStoreSetting = (app: Pick<AppIdentity, "messenger">, setting:
   app.messenger !== false || setting in SCRIPTS || setting === OWNER_LANGUAGES || parseCrmSetting(setting) !== undefined
 
 /**
- * Whose deals a CRM copy holds and what opens the owner's tasks: the owner's to set; an agent's run is stopped from
- * changing them by mistake.
+ * Whose deals a CRM copy holds, what opens the owner's tasks and whether clients' activities are copied: the owner's
+ * to set; an agent's run is stopped from changing them by mistake.
  */
 export const isOwnerOnlyStoreSetting = (setting: string): boolean => {
   const name = parseCrmSetting(setting)?.name
-  return name === "scope" || name === "self" || name === "unassigned" || name === "stage-tasks"
+  return name === "scope" || name === "self" || name === "unassigned" || name === "stage-tasks" || name === "activities"
 }
 
 export const isStoreSetting = (setting: string): boolean =>
@@ -327,6 +327,7 @@ const CRM_DEFAULTS = {
   unassigned: [],
   self: "",
   "stage-tasks": {},
+  activities: "off",
 } as const
 
 const crmNote = (name: keyof typeof CRM_DEFAULTS, now: unknown): string => {
@@ -343,6 +344,11 @@ const crmNote = (name: keyof typeof CRM_DEFAULTS, now: unknown): string => {
           "of the unassigned users, and marks the others deleted here; contacts and companies stay whole"
   if (name === "unassigned")
     return "store-wide — with scope mine, the next sync also copies the deals and leads of these users"
+  if (name === "activities")
+    return now === "on"
+      ? "store-wide — the next sync also reads the activities and tasks on the deals and leads it keeps, from the " +
+          "last 90 days on its first run; `deals show` lists them"
+      : "store-wide — no activity or task is read; those already stored stay"
   if (name === "stage-tasks")
     return Object.keys(now as object).length === 0
       ? "store-wide — no stage opens a task"

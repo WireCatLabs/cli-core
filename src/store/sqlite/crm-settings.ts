@@ -15,7 +15,10 @@ export type CompanyTypeMeaning = (typeof COMPANY_TYPE_MEANINGS)[number]
 /** `mine`: only the deals and leads of the sign-in's own user and of the `unassigned` users; `all`: every one. */
 export const CRM_SCOPES = ["mine", "all"] as const
 
-const NAMES = ["links", "company-types", "scope", "unassigned", "self", "stage-tasks"] as const
+/** `activities`: whether a sync also reads the activities and tasks on the deals and leads it keeps; off by default. */
+export const CRM_ACTIVITIES = ["on", "off"] as const
+
+const NAMES = ["links", "company-types", "scope", "unassigned", "self", "stage-tasks", "activities"] as const
 type CrmSettingName = (typeof NAMES)[number]
 const SETTING = new RegExp(`^crm\\.([a-z0-9-]+):(.+)\\.(${NAMES.join("|")})$`)
 
@@ -45,6 +48,10 @@ export const crmLinkMode = (database: CacheDatabase, key: AccountKey): CrmLinkMo
   const value = stored(database, crmSettingKey(key, "links"))
   return value === "review" ? "review" : "reported"
 }
+
+/** Activities and tasks hold what clients wrote and said: read only once the owner turns them on. */
+export const crmActivitiesOn = (database: CacheDatabase, key: AccountKey): boolean =>
+  stored(database, crmSettingKey(key, "activities")) === "on"
 
 /** Only the owner's mapping gives a company type a meaning; none by default. */
 export const crmCompanyTypes = (database: CacheDatabase, key: AccountKey): Record<string, CompanyTypeMeaning> => {
@@ -211,6 +218,7 @@ export const parseCrmSettingValue = (name: CrmSettingName, value: string): unkno
   if (name === "stage-tasks") return parseStageTasks(text)
   if (name === "links") return picked(name, text, CRM_LINK_MODES)
   if (name === "scope") return picked(name, text, CRM_SCOPES)
+  if (name === "activities") return picked(name, text, CRM_ACTIVITIES)
   if (name === "self") {
     if (!isCrmUserId(text))
       throw new CliError("validation_error", `self takes the CRM's numeric user id: not "${text}"`)
@@ -268,6 +276,7 @@ const settingValue = (database: CacheDatabase, key: AccountKey, name: CrmSetting
   if (name === "scope") return crmScope(database, key).mode
   if (name === "self") return crmOwnUser(database, key) ?? null
   if (name === "stage-tasks") return stored(database, crmSettingKey(key, name)) ?? {}
+  if (name === "activities") return crmActivitiesOn(database, key) ? "on" : "off"
   return userIds(stored(database, crmSettingKey(key, name)))
 }
 

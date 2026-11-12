@@ -12,6 +12,7 @@ import { commandsCommand } from "../../cli/commands-command.js"
 import { provide } from "../../cli/context.js"
 import { run } from "../../cli/program.js"
 import { runsCommand } from "../../cli/runs/command.js"
+import type { CrmActivity } from "../../domain/crm.js"
 import { CRM_OPENS } from "../../domain/providers.js"
 import { toolsFromCommands } from "../../mcp/agent.js"
 import type { AppIdentity } from "../../ports/app.js"
@@ -745,5 +746,85 @@ describe("CRM stage tasks", () => {
     await cli("deals", "move", ref, "Quote sent")
     expect(await stageTasks(cli)).toBe(1)
     expect((await tasksOf(store, ref)).items).toHaveLength(1)
+  })
+})
+
+describe("CRM activities", () => {
+  const NOW = Date.UTC(2026, 10, 12)
+  const HOUR = 3_600_000
+  const activity = (externalId: string, on: CrmActivity["on"], fields: Partial<CrmActivity> = {}): CrmActivity => ({
+    externalId,
+    kind: "call",
+    subject: `Example call ${externalId}`,
+    body: null,
+    dueAt: null,
+    done: true,
+    assignee: "7",
+    createdAt: NOW - 2 * HOUR,
+    updatedAt: NOW - HOUR,
+    on,
+    ...fields,
+  })
+  const withActivities = async (listed: CrmActivity[]) => {
+    const harness = await setup({}, { now: () => NOW })
+    const asked: number[] = []
+    Object.assign(harness.source, {
+      activities: async (since: number) => {
+        asked.push(since)
+        return { items: listed, hasMore: false, cursor: String(NOW) }
+      },
+    })
+    return { ...harness, asked }
+  }
+  const turnOn = async (path: string) => {
+    const database = await openCache(path)
+    saveCrmSetting(database, crmSettingKey(PORTAL, "activities"), "on", NOW)
+    database.close()
+  }
+
+  it("reads none until the owner turns them on", async () => {
+    const { cli, asked } = await withActivities([activity("a1", [{ kind: "deal", externalId: "d1" }])])
+    const synced = await cli("sync")
+    expect(synced.item.activities).toBeUndefined()
+    expect(asked).toEqual([])
+    const ref = (await cli("deals", "list", "status:open")).items[0]?.ref as string
+    expect((await cli("deals", "show", ref)).item.activities).toBeUndefined()
+  })
+
+  it("keeps those on kept deals, lists open ones first in show, and reads after the last read next time", async () => {
+    const { cli, path, source, asked } = await withActivities([
+      activity("a1", [{ kind: "deal", externalId: "d1" }], { subject: "Example done call" }),
+      activity("t1", [{ kind: "deal", externalId: "d1" }], {
+        kind: "task",
+        subject: "Example open task",
+        body: "Send the contract",
+        done: false,
+        dueAt: NOW + HOUR,
+      }),
+      activity("a2", [{ kind: "deal", externalId: "elsewhere" }]),
+    ])
+    source.put("deal", exampleDeal("d1"))
+    await turnOn(path)
+    const synced = await cli("sync")
+    expect(synced.item.activities).toEqual({ saved: 2, out_of_scope: 1, state: "complete" })
+    expect(asked).toEqual([NOW - 90 * 24 * HOUR])
+
+    const ref = (await cli("deals", "list", "status:open")).items.find(
+      (one) => (one as { external_id?: string }).external_id === "d1",
+    )?.ref as string
+    const shown = (await cli("deals", "show", ref)).item
+    expect((shown.activities as { subject: string }[]).map(({ subject }) => subject)).toEqual([
+      "Example open task",
+      "Example done call",
+    ])
+    expect(shown.activities).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: "task", body: "Send the contract", done: false, assignee: "portal/user/7" }),
+      ]),
+    )
+    expect(shown.untrusted).toEqual(expect.arrayContaining(["activities.subject", "activities.body"]))
+
+    await cli("sync")
+    expect(asked.at(-1)).toBe(NOW)
   })
 })

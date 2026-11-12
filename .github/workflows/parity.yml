@@ -226,12 +226,17 @@ jobs:
         continue-on-error: true
         run: pnpm lint:commands --allow-stale
         working-directory: cli
-      # Regenerated first: the pages always differ from the ones generated with the pinned release, and that alone
-      # is not a break. What must hold is that they still generate and pass the CLI's own docs check.
+      # Regenerated first, and it must succeed: the tests read the generated contracts (wirecat.json), so a failed
+      # generate would surface as a misleading test failure. The pages always differ from the ones generated with the
+      # pinned release, and that alone is not a break, so only the docs check warns.
+      - id: generate
+        name: Generate
+        run: pnpm generate
+        working-directory: cli
       - id: docs
         name: Generated docs (warns)
         continue-on-error: true
-        run: pnpm generate && pnpm docs:check
+        run: pnpm docs:check
         working-directory: cli
       - id: tests
         name: Tests
@@ -249,12 +254,13 @@ jobs:
           TYPECHECK: ${{ steps.typecheck.outcome }}
           START: ${{ steps.start.outcome }}
           LINT: ${{ steps.lint.outcome }}
+          GENERATE: ${{ steps.generate.outcome }}
           DOCS: ${{ steps.docs.outcome }}
           TESTS: ${{ steps.tests.outcome }}
         run: |
           mkdir -p downstream-outcome
           jq -n '{repo: env.REPO, ref: env.REF, build: env.BUILD, typecheck: env.TYPECHECK, start: env.START,
-            lint: env.LINT, docs: env.DOCS, tests: env.TESTS}' > "downstream-outcome/$REPO.json"
+            lint: env.LINT, generate: env.GENERATE, docs: env.DOCS, tests: env.TESTS}' > "downstream-outcome/$REPO.json"
           for step in lint docs; do
             [ "$(jq -r ".$step" "downstream-outcome/$REPO.json")" != failure ] ||
               echo "::warning title=$REPO::$step fails against this cli-core (a warning, not a break)"

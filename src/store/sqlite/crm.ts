@@ -1,5 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import {
+  type CrmActivity,
   type CrmDepartment,
   type CrmField,
   type CrmItem,
@@ -19,11 +20,13 @@ import type { AccountPeople } from "../people.js"
 import type { AccountKey } from "../types.js"
 import { accountPk, findAccountPk } from "./accounts.js"
 import { suggestBaseStages } from "./base-suggest.js"
+import { type CrmActivitiesSaved, crmActivitiesOver, type StoredActivity } from "./crm-activities.js"
 import { type CrmContactsRemoved, removeCrmContacts } from "./crm-contacts.js"
 import { type CrmSkipped, crmAccountPrefix, crmIdentityId, crmRowsOver, SOURCE, TABLES, textOf } from "./crm-rows.js"
 import {
   type CrmStageMove,
   type CrmStageTasks,
+  crmActivitiesOn,
   crmCompanyTypes,
   crmOwnUser,
   crmScope,
@@ -172,6 +175,12 @@ export interface CrmCopies {
    */
   stageMoves(key: AccountKey): Promise<{ moves: CrmStageMove[]; through: number }>
   markStageMoves(key: AccountKey, through: number): Promise<void>
+  /** Whether the owner turned on reading activities and tasks (`activities` setting). */
+  activitiesOn(key: AccountKey): Promise<boolean>
+  /** Activities and tasks, each on the kept deals and leads it names; one on none of them is not stored. */
+  saveActivities(key: AccountKey, activities: readonly CrmActivity[]): Promise<CrmActivitiesSaved>
+  /** One deal's or lead's activities, open ones first. */
+  activitiesOf(key: AccountKey, kind: DealKind, externalId: string, limit: number): Promise<StoredActivity[]>
   /**
    * Marks deleted every stored deal or lead of the kind assigned to a user outside `userIds`; one with no assignee
    * stays. Reads only the store. Answers how many; `dryRun` only counts them.
@@ -199,6 +208,7 @@ export interface CrmCopies {
 
 type Row = Record<string, unknown>
 
+export type { CrmActivitiesSaved, StoredActivity } from "./crm-activities.js"
 export type { CrmContactsRemoved } from "./crm-contacts.js"
 export { type CrmSkipped, crmIdentityId, crmRowsOver, type ItemWriter } from "./crm-rows.js"
 
@@ -220,6 +230,7 @@ export const crmCopiesOver = (context: StoreContext, people: AccountPeople): Crm
   const { database, now } = context
   const { savePipeline, saveItemRow } = crmRowsOver(context)
   const account = (key: AccountKey) => accountPk(context, key)
+  const activityStore = crmActivitiesOver(context)
 
   /**
    * One kind's whole list: a pipeline it lacks is marked deleted, one listed again comes back. An empty list marks
@@ -861,6 +872,9 @@ export const crmCopiesOver = (context: StoreContext, people: AccountPeople): Crm
     stageTasks: async (key) => crmStageTasks(database, key),
     stageMoves: async (key) => crmStageMoves(database, key, findAccountPk(context, key)),
     markStageMoves: async (key, through) => saveStageMovesMark(database, key, through, now()),
+    activitiesOn: async (key) => crmActivitiesOn(database, key),
+    saveActivities: async (key, activities) => activityStore.save(key, activities),
+    activitiesOf: async (key, kind, externalId, limit) => activityStore.of(key, kind, externalId, limit),
     removeOutOfScope: async (key, kind, userIds, { dryRun } = {}) =>
       write(database, () => {
         const keep = new Set(userIds.map((id) => crmIdentityId(key, id, "user")))

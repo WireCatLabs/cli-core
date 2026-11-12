@@ -1,4 +1,13 @@
-import type { CrmDepartment, CrmField, CrmKind, CrmPipeline, CrmRecords, CrmScope, CrmUser } from "../domain/crm.js"
+import type {
+  CrmActivity,
+  CrmDepartment,
+  CrmField,
+  CrmKind,
+  CrmPipeline,
+  CrmRecords,
+  CrmScope,
+  CrmUser,
+} from "../domain/crm.js"
 import type { DealKind } from "../domain/deals.js"
 
 export interface CrmSourceTraits {
@@ -37,7 +46,7 @@ export interface CrmIdPage {
  * said it could not read.
  */
 export interface CrmGap {
-  kind: CrmKind | "users" | "departments"
+  kind: CrmKind | "users" | "departments" | "activities"
   reason: "not-listed" | "refused" | "partial"
   code?: string
   scope?: string
@@ -99,4 +108,10 @@ export interface CrmSource {
   users?(context?: CrmCallContext): Promise<CrmUser[]>
   /** Every department; left out, reporting lines are unknown and none stored is withdrawn. */
   departments?(context?: CrmCallContext): Promise<CrmDepartment[]>
+  /**
+   * Activities and tasks on deals and leads changed after `since` (epoch ms), a page at a time; the last page's `cursor`
+   * is the time the next sync reads after. Read only when the account's `activities` setting is on; a CRM without
+   * them leaves it out. A list the sign-in may not read is a `gap`, and the others are still read.
+   */
+  activities?(since: number, page?: string, context?: CrmCallContext): Promise<CrmPage<CrmActivity>>
 }

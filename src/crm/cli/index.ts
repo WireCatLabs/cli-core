@@ -125,6 +125,8 @@ const DEAL_UNTRUSTED = [
   "people.name",
   "provider_metadata",
 ]
+/** `show` lists this many of a deal's activities: the open ones come first, so a long history does not hide them. */
+const SHOWN_ACTIVITIES = 20
 const PIPELINE_UNTRUSTED = ["name", "stages.name"]
 const STAGE_UNTRUSTED = ["name", "pipeline_name"]
 
@@ -149,6 +151,9 @@ const crmSync = v.strictObject({
   skipped_owner_rejected: count,
   contacts_removed: v.optional(crmContactsRemoved),
   stage_tasks: count,
+  activities: v.optional(
+    v.strictObject({ saved: count, out_of_scope: count, state: v.picklist(["partial", "complete"]) }),
+  ),
   synced: v.array(
     v.strictObject({
       kind: v.picklist(CRM_KINDS),
@@ -289,8 +294,9 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
     ).description(
       "bring the CRM's copy in the local store up to date: pipelines, companies, contacts, deals and leads that " +
         "changed since the last sync, or everything with --rescan; a run stops before its deadline or --max-pages " +
-        "and the next one goes on from there. Then each deal or lead that moved into a stage the stage-tasks setting " +
-        "names opens a local task, once per move",
+        "and the next one goes on from there. With the activities setting on, also the activities and tasks on the " +
+        "deals and leads it keeps. Then each deal or lead that moved into a stage the stage-tasks setting names " +
+        "opens a local task, once per move",
     ),
     "sync",
     "sync --rescan",
@@ -476,13 +482,34 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
     })
     example(
       annotate(group.command("show"), { effects: LOCAL_READ, output: { entity: kind } })
-        .description(`one ${kind} with its pipeline, stage, status, amount and the people on it`)
+        .description(
+          `one ${kind} with its pipeline, stage, status, amount and the people on it; with the activities setting ` +
+            "on, its activities and tasks too",
+        )
         .argument(`<${kind}>`, `${kind}:<id>, as a list shows it`),
       `${plural} show ${kind}:12`,
     ).action(async (reference: string, _opts: unknown, command: Command) => {
       await within(command, async (run) => {
         const found = await ownCopy(run, kind, reference)
-        return itemOf({ ...(dealKeys(found) as object), untrusted: DEAL_UNTRUSTED })
+        const activities =
+          found.externalId !== null && (await run.store.crm.activitiesOn(run.account))
+            ? (await run.store.crm.activitiesOf(run.account, kind, found.externalId, SHOWN_ACTIVITIES)).map((one) => ({
+                external_id: one.externalId,
+                kind: one.kind,
+                subject: one.subject,
+                body: one.body,
+                due_at: one.dueAt === null ? null : new Date(one.dueAt).toISOString(),
+                done: one.done,
+                assignee: one.assignee,
+                created_at: new Date(one.createdAt).toISOString(),
+                updated_at: new Date(one.updatedAt).toISOString(),
+              }))
+            : undefined
+        return itemOf({
+          ...(dealKeys(found) as object),
+          ...(activities ? { activities } : {}),
+          untrusted: activities ? [...DEAL_UNTRUSTED, "activities.subject", "activities.body"] : DEAL_UNTRUSTED,
+        })
       })
     })
     addWrites(group, kind)
