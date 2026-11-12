@@ -13,7 +13,15 @@ import {
 import { locationNames, locationVariables } from "../../background/units.js"
 import type { AppIdentity } from "../../ports/app.js"
 import { storePath } from "../../store/path.js"
-import { HARNESS_VARIABLES, HARNESSES, harnessOf, harnessRefusal, isHarness, programOf } from "./harnesses.js"
+import {
+  HARNESS_VARIABLES,
+  HARNESSES,
+  type HarnessStart,
+  harnessOf,
+  harnessRefusal,
+  isHarness,
+  programOf,
+} from "./harnesses.js"
 
 export const sealOf = (text: string) => createHash("sha256").update(text).digest("hex")
 
@@ -36,7 +44,7 @@ const AGENT_PREAMBLE =
   "the task below instructs you."
 
 /** The harness's start for `spec`, built now: its argv, variables and files, with the current limits. */
-export const agentStart = (site: StartSite, spec: AgentSpec) => {
+export const agentStart = (site: StartSite, spec: AgentSpec): HarnessStart => {
   if (!isHarness(spec.harness))
     throw new CliError("validation_error", `the agent is one of ${HARNESSES.join(", ")}; not "${spec.harness}"`, {
       agents: HARNESSES,
@@ -113,7 +121,7 @@ export const guardSchedule = (file: string, site: StartSite, seal?: string): Sch
   if (typeof asSaved === "string") return refuse(asSaved)
   const { files: _, ...rest } = saved
   if (saved.kind !== "agent" || spec === undefined) return { ...rest, environment: asSaved }
-  let start: ReturnType<typeof agentStart>
+  let start: HarnessStart
   try {
     start = agentStart({ ...site, env: { ...site.env, ...asSaved } }, spec)
   } catch (error) {

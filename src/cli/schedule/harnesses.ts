@@ -25,7 +25,7 @@ interface HarnessRun {
  * How a harness starts: its argv, the variables it reads its limits from, and files written into the run's own empty
  * work folder before each run. `WORK_FOLDER` in a variable or a file stands for that folder.
  */
-interface HarnessStart {
+export interface HarnessStart {
   argv: string[]
   environment?: Record<string, string>
   /** Paths relative to the work folder, and what each holds. */
