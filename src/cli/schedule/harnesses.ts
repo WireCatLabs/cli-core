@@ -47,6 +47,11 @@ interface HarnessKind {
   restricted: boolean
   /** Why it is not restricted: what its docs offer for a one-shot run, and why that does not hold it to the CLIs. */
   restrictedReason?: string
+  /**
+   * Not restricted, yet a schedule may start it once the owner accepts that with `--allow-dangerous`: its sandbox blocks
+   * writes outside a few folders and the network, though it may run any program.
+   */
+  allowedWithAck?: boolean
   start(run: HarnessRun): HarnessStart
 }
 
@@ -113,17 +118,28 @@ const AGENT_HARNESSES = {
     model: "",
     reportsCost: false,
     restricted: false,
+    allowedWithAck: true,
     restrictedReason:
-      "its sandbox limits where it writes, not which commands it runs, and it reads the whole disk; its rules " +
-      "(https://learn.chatgpt.com/docs/agent-configuration/rules) match listed prefixes only and cannot deny every other command",
+      "it may run any program, and its rules (https://learn.chatgpt.com/docs/agent-configuration/rules) cannot deny " +
+      "every command but the CLIs'. Its sandbox (https://learn.chatgpt.com/docs/sandboxing) blocks the network and " +
+      "every write outside its run's folder, the message store's folder and the CLIs' state and cache folders. The " +
+      "store must stay writable, as SQLite cannot read it otherwise, so a program such as sqlite3 can change or " +
+      "delete the store and the read-only lock does not stop it; it reads every file the owner can",
+    // --ignore-user-config and --ignore-rules keep the owner's ~/.codex config and rules from widening the sandbox.
     start: ({ program, prompt, model, folders }) => ({
       argv: [
         program,
         "exec",
         "--skip-git-repo-check",
         "--ephemeral",
+        "--ignore-user-config",
+        "--ignore-rules",
         "--sandbox",
         "workspace-write",
+        "-c",
+        "sandbox_workspace_write.network_access=false",
+        "--cd",
+        WORK_FOLDER,
         ...modelFlag("--model", model),
         ...folders.flatMap((dir) => ["--add-dir", dir]),
         prompt,
@@ -277,6 +293,9 @@ const AGENT_HARNESSES = {
 } as const satisfies Record<string, HarnessKind>
 
 export type Harness = keyof typeof AGENT_HARNESSES
+
+/** The variables a harness reads its limits from; a run rebuilds them, so a saved one is never taken from the file. */
+export const HARNESS_VARIABLES = ["GEMINI_CLI_SYSTEM_SETTINGS_PATH", "OPENCODE_CONFIG_CONTENT"] as const
 /** Every agent a schedule may start, as `schedule agent <harness>` and a digest's agent take it. */
 export const HARNESSES = Object.keys(AGENT_HARNESSES) as readonly Harness[]
 export const AGENT_MODELS = Object.fromEntries(HARNESSES.map((id) => [id, AGENT_HARNESSES[id].model])) as Record<
@@ -291,7 +310,7 @@ export const isHarness = (id: string): id is Harness => (HARNESSES as readonly s
 
 /** An agent's name, programs and what holds it, as `schedule agents list` answers them. */
 export const harnessInfo = (harness: Harness) => {
-  const { name, programs, reportsCost, restricted, restrictedReason } = harnessOf(harness)
+  const { name, programs, reportsCost, restricted, restrictedReason, allowedWithAck } = harnessOf(harness)
   return {
     id: harness,
     name,
@@ -299,6 +318,7 @@ export const harnessInfo = (harness: Harness) => {
     reportsCost,
     restricted,
     restrictedReason: restrictedReason ?? null,
+    allowedWithAck: allowedWithAck === true,
   }
 }
 
@@ -320,16 +340,15 @@ export const harnessOfArgv = (argv: readonly string[]): Harness | null => {
 }
 
 /**
- * Why a saved agent schedule may not run, or nothing: its program must be the one its harness finds on the run's PATH,
- * and the harness one that is held to the CLIs' commands. A schedule file changed to start anything else is refused.
+ * Why no schedule may start the harness, or nothing: one held to the CLIs' commands may run, and one the owner
+ * accepted with `--allow-dangerous` where its sandbox allows that.
  */
-export const agentRefusal = (argv: readonly string[], env: NodeJS.ProcessEnv, platform: NodeJS.Platform) => {
-  const harness = harnessOfArgv(argv)
-  if (harness === null) return "it starts a program that is no agent a schedule may run"
+export const harnessRefusal = (harness: Harness, accepted: boolean): string | undefined => {
   const kind = harnessOf(harness)
-  if (!kind.restricted) return `${kind.name} cannot run on a schedule: ${kind.restrictedReason}`
-  if (programOf(harness, env, platform) !== argv[0]) return `it starts ${argv[0]}, not ${kind.name} as found on PATH`
-  return undefined
+  if (kind.restricted) return undefined
+  if (kind.allowedWithAck === true)
+    return accepted ? undefined : `${kind.name} runs only with --allow-dangerous, as ${kind.restrictedReason}`
+  return `${kind.name} cannot run on a schedule: ${kind.restrictedReason}`
 }
 
 /** Each harness, with its program when it is on PATH: what `schedule agents list` answers. */

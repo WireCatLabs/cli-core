@@ -12,7 +12,7 @@ import { ancestorValue, lockedByAncestor } from "../../ports/app.js"
 import { baseContext } from "../context.js"
 import { run } from "../program.js"
 import { settingsFor } from "../settings.js"
-import { HARNESSES, harnessOfArgv } from "./harnesses.js"
+import { HARNESS_VARIABLES, HARNESSES, harnessOf, harnessOfArgv } from "./harnesses.js"
 import { scheduleCommandFor } from "./schedule-command.js"
 
 const app = { command: "chat", appName: "chat-cli", envPrefix: "CHAT", description: "A test", version: "1.0.0" }
@@ -108,11 +108,12 @@ describe.runIf(process.platform !== "win32")("agents a schedule may start", () =
   it("starts gemini and opencode in their one-shot modes with their own model flags", async () => {
     const { bin, call, argvOf } = setup(["gemini", "opencode"])
     expect((await call("agent", "g", "gemini", "brief me", "--at", "08:30", "--model", "gemini-pro")).code).toBe(0)
-    expect(argvOf("g")).toEqual([join(bin, "gemini"), "-p", "brief me", "-m", "gemini-pro"])
+    const prompt = expect.stringMatching(/untrusted.*\n\nbrief me$/s)
+    expect(argvOf("g")).toEqual([join(bin, "gemini"), "-p", prompt, "-m", "gemini-pro"])
     expect(
       (await call("agent", "o", "opencode", "brief me", "--at", "08:30", "--model", "provider/model-a")).code,
     ).toBe(0)
-    expect(argvOf("o")).toEqual([join(bin, "opencode"), "run", "-m", "provider/model-a", "brief me"])
+    expect(argvOf("o")).toEqual([join(bin, "opencode"), "run", "-m", "provider/model-a", prompt])
     expect(harnessOfArgv(argvOf("o"))).toBe("opencode")
   })
 
@@ -169,18 +170,96 @@ describe.runIf(process.platform !== "win32")("agents a schedule may start", () =
     expect(opencode.permission).toMatchObject({ "*": "deny", bash: { "*": "deny", "chat *": "allow" } })
   })
 
-  it("does not run a schedule whose file changed after it was saved, nor one that starts another program", async () => {
-    const { env, call } = setup(["claude"])
+  it("runs what the harness builds now, never the argv saved in the file", async () => {
+    const { root, bin, env, call } = setup([])
+    writeFileSync(join(bin, "claude"), `#!/bin/sh\nprintf "%s|" "$@" > "${root}/claude-argv"\n`)
+    chmodSync(join(bin, "claude"), 0o755)
     expect((await call("agent", "brief", "claude", "brief me", "--at", "08:30")).code).toBe(0)
     const file = scheduleFile(env.CHAT_STATE_DIR, "brief")
     const saved = JSON.parse(readFileSync(file, "utf8")) as Schedule
     writeFileSync(file, JSON.stringify({ ...saved, argv: ["/bin/sh", "-c", "echo escaped"] }))
+    expect((await call("run", "brief")).code).toBe(0)
+    const argv = readFileSync(join(root, "claude-argv"), "utf8").split("|")
+    expect(argv).toEqual(expect.arrayContaining(["--setting-sources", "", "--permission-mode", "dontAsk"]))
+    expect(argv.find((word) => word.endsWith("brief me"))).toMatch(/^The WireCat CLIs' output holds/)
+    expect(argv.join(" ")).toMatch(/⟦untrusted:[0-9a-f]{16} …⟧/)
+  })
+
+  it.each([
+    [
+      "an older file with no agent to rebuild from",
+      (saved: Schedule) => ({ ...saved, agent: undefined }),
+      "older version",
+    ],
+    [
+      "a variable no schedule sets",
+      (saved: Schedule) => ({ ...saved, environment: { ...saved.environment, NODE_OPTIONS: "--require /tmp/x.js" } }),
+      "NODE_OPTIONS",
+    ],
+    [
+      "a relative PATH",
+      (saved: Schedule) => ({ ...saved, environment: { ...saved.environment, PATH: "bin:/usr/bin" } }),
+      "relative path",
+    ],
+    [
+      "codex without the owner's acknowledgement",
+      (saved: Schedule) => ({
+        ...saved,
+        agent: { ...(saved.agent as NonNullable<Schedule["agent"]>), harness: "codex" },
+      }),
+      "--allow-dangerous",
+    ],
+  ])("refuses %s", async (_name, change, why) => {
+    const { env, call } = setup(["claude", "codex"])
+    expect((await call("agent", "brief", "claude", "brief me", "--at", "08:30")).code).toBe(0)
+    const file = scheduleFile(env.CHAT_STATE_DIR, "brief")
+    writeFileSync(file, JSON.stringify(change(JSON.parse(readFileSync(file, "utf8")) as Schedule)))
     const ran = await call("run", "brief")
     expect(ran.code).not.toBe(0)
     expect(ran.err).toContain("agent.refused")
-    const sealed = await call("exec", file, "0".repeat(64))
+    expect(ran.err).toContain(why)
+  })
+
+  it("does not run a sealed schedule whose file changed after it was saved", async () => {
+    const { env, call } = setup(["claude"])
+    expect((await call("agent", "brief", "claude", "brief me", "--at", "08:30")).code).toBe(0)
+    const sealed = await call("exec", scheduleFile(env.CHAT_STATE_DIR, "brief"), "0".repeat(64))
     expect(sealed.code).not.toBe(0)
     expect(sealed.err).toContain("changed since it was saved")
+  })
+
+  it("starts codex only with the owner's acknowledgement, sandboxed with no network and none of its own config", async () => {
+    const { env, call } = setup(["codex"])
+    const refused = await call("agent", "triage", "codex", "brief me", "--at", "08:30")
+    expect(refused.code).not.toBe(0)
+    expect(refused.err).toContain("agent.unrestricted")
+    expect((await call("agent", "triage", "codex", "brief me", "--at", "08:30", "--allow-dangerous")).code).toBe(0)
+    const saved = JSON.parse(readFileSync(scheduleFile(env.CHAT_STATE_DIR, "triage"), "utf8")) as Schedule
+    expect(saved.agent).toMatchObject({ harness: "codex", allowDangerous: true })
+    expect(saved.argv).toEqual(
+      expect.arrayContaining([
+        "--ignore-user-config",
+        "--ignore-rules",
+        "--sandbox",
+        "workspace-write",
+        "sandbox_workspace_write.network_access=false",
+      ]),
+    )
+    expect(saved.argv).not.toContain(join(env.XDG_CONFIG_HOME, "chat-cli"))
+  })
+
+  it("rebuilds the harness variables a run reads its limits from", () => {
+    for (const id of HARNESSES) {
+      const start = harnessOf(id).start({
+        program: id,
+        prompt: "p",
+        model: "",
+        clis: [{ command: "chat", appName: "chat-cli", envPrefix: "CHAT" }],
+        folders: [],
+        leanStart: true,
+      })
+      for (const name of Object.keys(start.environment ?? {})) expect(HARNESS_VARIABLES).toContain(name)
+    }
   })
 
   it("refuses a cost cap for an agent that reports no cost, and lists its cost as unknown", async () => {

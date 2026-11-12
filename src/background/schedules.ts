@@ -72,10 +72,26 @@ export interface Schedule {
   paused?: true
   /** An agent's: files its harness reads its limits from, by path in the run's work folder; written before each run. */
   files?: Record<string, string>
+  /** An agent's: what its start is rebuilt from before each run, so the saved argv is never what runs. */
+  agent?: AgentSpec
+}
+
+/** An agent schedule's harness and what it was asked; the argv, variables and files are built from it. */
+export interface AgentSpec {
+  harness: string
+  prompt: string
+  /** An alias or a model id; "" for the harness's own default. */
+  model: string
+  leanStart: boolean
+  maxCost?: number
+  /** The owner accepted an agent its own limits cannot hold to the CLIs' commands (`--allow-dangerous`). */
+  allowDangerous?: true
 }
 
 /** Stands for an agent run's own work folder in its harness's variables and files; the run puts the real path in. */
 export const WORK_FOLDER = "{wirecat-work-folder}"
+/** Stands for the run's own mark in an agent's prompt, which the CLIs put around other people's text in that run. */
+export const UNTRUSTED_MARK = "{wirecat-untrusted-mark}"
 
 export const NOTIFY_WHEN = ["always", "failures", "never"] as const
 export type Notify = (typeof NOTIFY_WHEN)[number]
@@ -510,6 +526,7 @@ export const runSchedule = async (
     reportTemplates,
     skipRepeatedInput = false,
     routes: chosen,
+    schedule: checked,
   }: {
     now?: () => Date
     timer?: Timer
@@ -531,9 +548,11 @@ export const runSchedule = async (
     skipRepeatedInput?: boolean
     /** Where this run goes instead of the schedule's own routes; `[]` keeps it here. */
     routes?: readonly string[]
+    /** The schedule as its guard checked and rebuilt it, run as it is: the file is not read again. */
+    schedule?: Schedule
   } = {},
 ): Promise<LastRun> => {
-  const schedule = readSchedule(file)
+  const schedule = checked ?? readSchedule(file)
   const folder = join(file, "..")
   const runs = join(folder, "runs")
   mkdirSync(runs, { recursive: true, mode: 0o700 })
@@ -811,12 +830,12 @@ export const attemptSchedule = async (
   const agent = schedule.kind === "agent"
   const output = join(runs, `${stamp}.${agent ? "md" : "log"}`)
   const errors = agent ? join(runs, `${stamp}.log`) : output
-  const [program = "", ...args] = agent ? priced(schedule.argv) : [...system.entry, ...schedule.argv]
   const trace = childTrace()
   // An agent works in an empty folder of its own: one that could write where it runs never reaches its schedule file.
   const work = agent ? mkdtempSync(join(tmpdir(), "wirecat-agent-")) : folder
-  const inWork = (text: string) => text.replaceAll(WORK_FOLDER, work)
   const mark = randomBytes(8).toString("hex")
+  const inWork = (text: string) => text.replaceAll(WORK_FOLDER, work).replaceAll(UNTRUSTED_MARK, mark)
+  const [program = "", ...args] = agent ? priced(schedule.argv).map(inWork) : [...system.entry, ...schedule.argv]
   const agentOnly = (one: Pick<AgentCli, "envPrefix">) => [
     [`${one.envPrefix}_READ_ONLY`, "1"],
     [`${one.envPrefix}_SCHEDULED`, schedule.name],

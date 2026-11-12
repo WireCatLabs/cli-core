@@ -1,5 +1,4 @@
-import { createHash } from "node:crypto"
-import { existsSync, readFileSync, rmSync } from "node:fs"
+import { existsSync, rmSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { CliError, resolvePaths, writeSecurely } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
@@ -11,6 +10,7 @@ import { reportKeysOf } from "../../background/report/stored-templates.js"
 import {
   type AgentCli,
   type AgentInput,
+  type AgentSpec,
   calendarOf,
   describeWhen,
   isCalendar,
@@ -53,9 +53,9 @@ import { listQuery, typedQuery, withQuery } from "../list-query.js"
 import { SCHEDULE_HARNESSES_QUERY, SCHEDULES_QUERY, scheduleFilter } from "../messenger/list-result-queries.js"
 import type { DeclaredSetting } from "../setting-defaults.js"
 import { lineOf } from "../steps.js"
+import { agentStart, guardSchedule, sealOf } from "./agent-start.js"
 import {
   AGENT_MODELS,
-  agentRefusal,
   COSTED,
   HARNESSES,
   type Harness,
@@ -63,7 +63,6 @@ import {
   harnessOf,
   harnessOfArgv,
   isHarness,
-  programOf,
   reportsCost,
 } from "./harnesses.js"
 
@@ -211,7 +210,7 @@ export interface ScheduleHost {
   limits?: (command: Command) => ScheduleLimits
   /**
    * Other CLIs the scheduled agent may run besides this one, each under its own `<PREFIX>_READ_ONLY`: memo's mail
-   * triage runs `mail`. Claude may run them; codex may write their state, config and cache folders.
+   * triage runs `mail`. Claude may run them; codex may write their state and cache folders.
    */
   agentRuns?: readonly AgentCli[]
 }
@@ -336,28 +335,6 @@ const reportTemplatesOf =
     }
   }
 
-const sealOf = (text: string) => createHash("sha256").update(text).digest("hex")
-
-/**
- * Refuses to run the schedule in `file` when it changed since cli-core wrote it (`seal`, which only its timer holds),
- * or when it is an agent's and starts anything but an agent held to the CLIs' commands, as its harness finds it on the
- * run's PATH. The refusal is kept as the run's skip, so `schedule list` says why it stopped.
- */
-export const guardSchedule = (file: string, env: NodeJS.ProcessEnv, platform: NodeJS.Platform, seal?: string) => {
-  if (!existsSync(file)) return
-  const text = readFileSync(file, "utf8")
-  const schedule = JSON.parse(text) as Schedule
-  const why =
-    seal !== undefined && sealOf(text) !== seal
-      ? "its file changed since it was saved; save it again to run it"
-      : schedule.kind === "agent"
-        ? agentRefusal(schedule.argv, { ...env, ...schedule.environment }, platform)
-        : undefined
-  if (why === undefined) return
-  recordSkip(file, why, SKIP_REASONS.agentRefused)
-  throw new CliError("permission_error", `schedule ${schedule.name} does not run: ${why}`, { reason: "agent.refused" })
-}
-
 /**
  * One past day's run of the agent schedule in `file`, as `backfillSchedule` makes it, with the owner's language and
  * templates as `schedule run` renders them; a stop of the command stops the agent.
@@ -370,10 +347,11 @@ export const backfillScheduleRun = (
   { at, input, agentRuns = [] }: { at: Date; input?: string; agentRuns?: readonly AgentCli[] },
 ) => {
   const system = environmentOf<BaseEnvironment & { system?: ServerSystem }>(command).system ?? thisMachine()
-  guardSchedule(file, env, system.platform)
+  const checked = guardSchedule(file, { app, env, platform: system.platform, agentRuns })
   return untilChildEnds(command, (signal) =>
     backfillSchedule(app, system, env, file, {
       at,
+      ...(checked ? { schedule: checked } : {}),
       agentRuns,
       ownerLanguage: ownerLanguageOf,
       reportTemplates: reportTemplatesOf,
@@ -423,6 +401,8 @@ export interface AgentScheduleSpec {
   /** Claude only: a run that costs more is stopped, in US dollars. */
   maxCost?: number
   maxCostPerDay?: number
+  /** The owner accepts an agent its own limits cannot hold to the CLIs' commands, where its sandbox allows that. */
+  allowDangerous?: boolean
   onNewMail?: string
   mailWaitMinutes?: number
   mailBatch?: number
@@ -450,35 +430,21 @@ export const agentSchedule = (site: ScheduleSite, spec: AgentScheduleSpec): Sche
       agents: HARNESSES,
     })
   const kind = harnessOf(harness)
-  // The owner's ruling: a background agent that may run any command is never started.
-  if (!kind.restricted)
-    throw new CliError(
-      "permission_error",
-      `${kind.name} cannot run on a schedule: ${kind.restrictedReason ?? "nothing holds it to this tool's commands"}`,
-      { reason: "agent.unrestricted" },
-    )
-  const model = spec.model ?? limits.models?.[harness] ?? AGENT_MODELS[harness]
-  const program = programOf(harness, env, system.platform)
-  if (!program) throw new CliError("not_found", `${kind.programs.join(" or ")} is not on PATH`)
-  const clis = [app, ...agentRuns]
-  const folders = clis.flatMap((one) => {
-    const paths = resolvePaths({ appName: one.appName, prefix: one.envPrefix, env })
-    return [paths.state, paths.config, paths.cache]
-  })
-  const name = scheduleName(spec.name)
-  const start = kind.start({
-    program,
+  const agent: AgentSpec = {
+    harness,
     prompt,
-    model,
-    clis,
-    folders: [dirname(storePath(env)), ...folders],
+    model: spec.model ?? limits.models?.[harness] ?? AGENT_MODELS[harness],
     leanStart: limits.leanStart ?? true,
     ...(spec.maxCost && kind.reportsCost ? { maxCost: spec.maxCost } : {}),
-  })
+    ...(spec.allowDangerous ? { allowDangerous: true } : {}),
+  }
+  const start = agentStart({ app, env, platform: system.platform, agentRuns }, agent)
+  const name = scheduleName(spec.name)
   return {
     name,
     kind: "agent",
     argv: start.argv,
+    agent,
     when: spec.when,
     environment: { ...scheduleEnvironment(site), ...start.environment },
     ...(start.files ? { files: start.files } : {}),
@@ -573,14 +539,16 @@ export const runScheduleNow = async (
   file: string,
   { routes, agentInput }: { routes?: readonly string[]; agentInput?: AgentInput } = {},
 ): Promise<LastRun | { skipped: { why: string; reason: SkipReason } }> => {
-  guardSchedule(file, site.env, site.system.platform)
-  const schedule = readSchedule(file)
+  const schedule =
+    guardSchedule(file, { app: site.app, env: site.env, platform: site.system.platform, agentRuns: site.agentRuns }) ??
+    readSchedule(file)
   ownRoutes(schedule, routes)
   const maxCostPerDay = schedule.maxCostPerDay ?? site.limits?.maxCostPerDay ?? SCHEDULE_DEFAULTS.maxCostPerDay
   const capped = dayCapReached(file, schedule, maxCostPerDay)
   if (capped) return { skipped: capped }
   return untilChildEnds(command, (signal) =>
     runSchedule(site.app, site.system, site.env, file, {
+      schedule,
       timer: timerFor(site.app, site.system, site.env),
       agentRuns: site.agentRuns ?? [],
       ownerLanguage: ownerLanguageOf,
@@ -651,7 +619,8 @@ export const scheduleCommandFor = ({
   })
   /** An agent that reports no cost answers null for what it spent and for its caps: unknown, not $0 and not capped. */
   const agentCostsOf = (self: Command, state: string, schedule: Schedule) => {
-    const harness = harnessOfArgv(schedule.argv)
+    const harness =
+      schedule.agent && isHarness(schedule.agent.harness) ? schedule.agent.harness : harnessOfArgv(schedule.argv)
     const costed = harness !== null && reportsCost(harness)
     return {
       harness,
@@ -725,7 +694,7 @@ export const scheduleCommandFor = ({
         effects: LOCAL_WRITE,
         examples: [
           `${app.command} personal schedule agent review claude "review what came in overnight and draft replies" --at 08:30`,
-          `${app.command} personal schedule agent triage codex "list what needs an answer today" --every 2h --max-cost 1`,
+          `${app.command} personal schedule agent triage gemini "list what needs an answer today" --every 2h`,
           `${app.command} personal schedule agent weekly claude "review the week's open threads" --at 09:00 --model opus`,
         ],
       }),
@@ -745,6 +714,10 @@ export const scheduleCommandFor = ({
           Number,
         ),
       )
+      .option(
+        "--allow-dangerous",
+        "start an agent its own limits cannot hold to these CLIs' commands, where `schedule agents list` says allowed_with_ack: it may then run any program inside its sandbox",
+      )
       .addOption(
         new Option(
           "--max-cost-per-day <usd>",
@@ -761,6 +734,7 @@ export const scheduleCommandFor = ({
         onNewMail?: string
         mailWait?: string
         mailBatch?: string
+        allowDangerous?: boolean
       }
     >()
     if (options.onNewMail !== undefined && !HOLDER.test(options.onNewMail))
@@ -789,6 +763,7 @@ export const scheduleCommandFor = ({
         ...(options.model === undefined ? {} : { model: options.model }),
         ...(options.maxCost ? { maxCost: options.maxCost } : {}),
         ...(options.maxCostPerDay === undefined ? {} : { maxCostPerDay: options.maxCostPerDay }),
+        ...(options.allowDangerous ? { allowDangerous: true } : {}),
         ...(options.onNewMail ? { onNewMail: options.onNewMail } : {}),
         ...(mailWaitMinutes === undefined ? {} : { mailWaitMinutes }),
         ...(mailBatch === undefined ? {} : { mailBatch }),
@@ -996,10 +971,11 @@ export const scheduleCommandFor = ({
       const { context, system, timer } = prepare(this, { needsProfile: false })
       // A timer left behind by a pause that could not remove it must not run the schedule.
       if (existsSync(file) && readSchedule(file).paused) return
-      guardSchedule(file, context.env, system.platform, seal)
+      const checked = guardSchedule(file, { app, env: context.env, platform: system.platform, agentRuns }, seal)
       if ((await waits(this, file, { timed: true })) !== undefined) return
       const last = await untilChildEnds(this, (signal) =>
         runSchedule(app, system, context.env, file, {
+          ...(checked ? { schedule: checked } : {}),
           timer: timer(),
           agentRuns,
           ownerLanguage: ownerLanguageOf,

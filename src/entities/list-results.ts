@@ -101,13 +101,15 @@ export const scheduleHarness = v.strictObject({
   programs: v.array(text),
   /** It reports what a run costs, so `--max-cost` and `--max-cost-per-day` hold. */
   reports_cost: v.boolean(),
-  /**
-   * The agent itself holds a run to the CLI's commands or folders (claude, codex). False: it approves every command in
-   * its one-shot mode, and only the read-only variable keeps it from sending.
-   */
+  /** The agent's own limits hold a one-shot run to the CLIs' commands (claude, gemini, opencode). */
   restricted: v.boolean(),
-  /** Why an agent that is not restricted is not: a schedule refuses it (`agent.unrestricted`), and a client greys it. */
+  /** Why an agent that is not restricted is not, and what it may still do: a client shows it before the owner picks. */
   restricted_reason: v.nullable(text),
+  /**
+   * Not restricted, yet a schedule starts it once the owner accepts that with `--allow-dangerous` (codex, whose sandbox
+   * blocks the network and most writes); refused without it (`agent.unrestricted`). False for the rest.
+   */
+  allowed_with_ack: v.boolean(),
   installed: v.boolean(),
   /** Where its program is, or null when it is not on PATH. */
   path: v.nullable(text),

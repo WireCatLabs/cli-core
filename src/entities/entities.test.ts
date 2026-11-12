@@ -258,6 +258,7 @@ const samples: Record<EntityName, unknown> = {
     reports_cost: false,
     restricted: false,
     restricted_reason: "print mode approves every tool",
+    allowed_with_ack: false,
     installed: false,
     path: null,
   },
