@@ -18,6 +18,7 @@ import type { NextStep } from "@wirecat/cli-base/standards"
 import { Command } from "commander"
 import { holdersOf } from "../../background/processes.js"
 import { RULES_VERSION } from "../../conversations/link.js"
+import type { AppIdentity } from "../../ports/app.js"
 import { syncsOneChat } from "../../ports/traits.js"
 import { isSealed, sealFile, unsealFile } from "../../sealed.js"
 import { refuseLockedOutput } from "../../sends/upload.js"
@@ -54,7 +55,7 @@ import {
 import { environmentOf, outputFor } from "../context.js"
 import { destroysNothing, LOCAL_READ, LOCAL_WRITE } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
-import { lineOf, nextStep } from "../steps.js"
+import { commandAt, lineOf, nextStep } from "../steps.js"
 import { storeInfoCommand } from "../store-info.js"
 import { storeRecoverCommand } from "../store-recover.js"
 import { answerOf } from "./ask.js"
@@ -182,33 +183,75 @@ export const storeSummary = async (
 const result = (command: Command, value: unknown, next: NextStep[] = []) =>
   renderAnswer(command, outputFor(command), itemOf(snakeKeys(value), { next }))
 
-export const storeMaintenanceCommands = (messenger: Messenger): Command[] => [
+/**
+ * Who mounts the store file's commands: a messenger, or any CLI on the shared store. Without a `provider` nothing is
+ * said about chats.
+ */
+export type StoreOwner = { app: AppIdentity } & Partial<Pick<Messenger, "provider" | "history" | "historyOnDemand">>
+
+/** Whether the owner is a messenger, whose words are chats and an archive. */
+const chatty = (owner: StoreOwner) => owner.provider !== undefined
+
+const archive = (owner: StoreOwner) => (chatty(owner) ? "local archive" : "local store")
+
+const createdBy = (owner: StoreOwner) =>
+  chatty(owner)
+    ? `the first \`${owner.app.command}\` command that reads a chat creates it`
+    : `the first \`${owner.app.command}\` command that saves anything creates it`
+
+export const storeMaintenanceCommands = (owner: StoreOwner): Command[] => [
   storeInfoCommand(),
-  checkCommand(messenger),
-  migrateCommand(messenger),
-  reindexCommand(messenger),
+  checkCommand(owner),
+  migrateCommand(owner),
+  reindexCommand(owner),
   backupCommand(),
-  restoreCommand(messenger),
+  restoreCommand(owner),
   decryptCommand(),
-  repairCommand(messenger),
-  resetCommand(messenger),
+  repairCommand(owner),
+  resetCommand(owner),
   copiesCommand(),
-  storeTablesCommand(messenger),
-  storeRecoverCommand({ command: messenger.app.command, version: messenger.app.version }),
+  storeTablesCommand(owner),
+  storeRecoverCommand({ command: owner.app.command, version: owner.app.version }),
 ]
 
+const EXAMPLES: Record<string, string> = {
+  backup: "./backup.db",
+  check: "",
+  "copies delete": "messages_copy_1",
+  decrypt: "./backup.enc --output ./restored.db",
+  info: "",
+  migrate: "",
+  rebuild: "",
+  repair: "--dry-run",
+  reset: "",
+  restore: "./backup.db",
+}
+
+/**
+ * Mounts the store file's commands — `store info`, `check`, `backup`, `restore`, `repair` and the rest — on a CLI's
+ * `store` group, with examples under `profile`. Every WireCat tool shares the one file, so any of them looks after it.
+ */
+export const addStoreMaintenanceCommands = (store: Command, owner: StoreOwner, profile: string): Command => {
+  for (const command of storeMaintenanceCommands(owner)) store.addCommand(command)
+  for (const [path, args] of Object.entries(EXAMPLES)) {
+    const command = commandAt(store, path)
+    if (command) annotate(command, { examples: [`${owner.app.command} ${profile} store ${path} ${args}`.trimEnd()] })
+  }
+  return store
+}
+
 /** Renaming tables under a running `serve` would pull them from under its statements. */
-const refuseWhileServing = (command: Command, messenger: Messenger) => {
-  const serving = servingProfiles(messenger.app, environmentOf(command).env ?? process.env)
+const refuseWhileServing = (command: Command, owner: StoreOwner) => {
+  const serving = servingProfiles(owner.app, environmentOf(command).env ?? process.env)
   if (serving.length > 0) {
     throw new CliError(
       "validation_error",
-      `${messenger.app.command} serve is running for ${serving.join(", ")} — ${serving.map((profile) => `\`${messenger.app.command} ${profile} server stop\``).join(", ")} first`,
+      `${owner.app.command} serve is running for ${serving.join(", ")} — ${serving.map((profile) => `\`${owner.app.command} ${profile} server stop\``).join(", ")} first`,
     )
   }
 }
 
-const repairCommand = (messenger: Messenger): Command =>
+const repairCommand = (owner: StoreOwner): Command =>
   annotate(new Command("repair"), { output: { entity: "store_repair" }, effects: LOCAL_WRITE })
     .summary("repair table shapes while keeping the old tables")
     .description(
@@ -223,12 +266,12 @@ const repairCommand = (messenger: Messenger): Command =>
         result(this, { path, exists: false })
         return
       }
-      if (!dryRun) refuseWhileServing(this, messenger)
+      if (!dryRun) refuseWhileServing(this, owner)
       const fresh = await openCache(":memory:")
       try {
         const report = await reading(path, (database) => repairStore(database, fresh, { dryRun: dryRun === true }))
         result(this, { path, ...report })
-        if (format === "pretty") for (const note of notesOf(report, messenger.app.command)) renderer.note(note)
+        if (format === "pretty") for (const note of notesOf(report, owner.app.command)) renderer.note(note)
       } finally {
         fresh.close()
       }
@@ -277,10 +320,12 @@ const copiesCommand = (): Command =>
  * fetched" (NEED-399 A). Times are the chat's newest message by the messenger's list against the
  * newest message held, not `sync_ranges`: those are in message ids, which a chat list does not give.
  */
-const checkCommand = (messenger: Messenger): Command =>
+const checkCommand = (owner: StoreOwner): Command =>
   annotate(new Command("check"), { output: { entity: "store_check" }, effects: LOCAL_READ })
-    .summary("check the local archive for problems")
-    .description("whether the store is healthy — integrity, search indexes, disk, and which chats are behind")
+    .summary(`check the ${archive(owner)} for problems`)
+    .description(
+      `whether the store is healthy — integrity, search indexes, disk${chatty(owner) ? ", and which chats are behind" : ""}`,
+    )
     .action(async function (this: Command) {
       const { renderer } = outputFor(this)
       const path = storePath(environmentOf(this).env ?? process.env)
@@ -295,7 +340,7 @@ const checkCommand = (messenger: Messenger): Command =>
         result(this, { path, exists: true, ok: false, opens: false, error: messageOf(error) })
         return
       }
-      const { command } = messenger.app
+      const { command } = owner.app
       const next = new Map<string, NextStep>()
       const step = (id: string, args: Record<string, unknown> = {}) => {
         if (!next.has(id)) next.set(id, nextStep(id, { args }))
@@ -306,9 +351,9 @@ const checkCommand = (messenger: Messenger): Command =>
       if (words && (words.filledThrough < words.watermark || (words.ready && !words.termsReady))) step("store.migrate")
       if (stems?.cause === "stemmer_changed") step("store.reindex")
       else if (stems && !stems.ready) step("store.migrate")
-      const behind = answer.chatsBehind.find((chat) => chat.provider === messenger.provider)
-      if (behind && messenger.history !== "store") step("messages.sync")
-      else if (behind && syncsOneChat(messenger)) step("messages.sync", { chat: behind.chat })
+      const behind = answer.chatsBehind.find((chat) => chat.provider === owner.provider)
+      if (behind && owner.history !== "store") step("messages.sync")
+      else if (behind && syncsOneChat(owner)) step("messages.sync", { chat: behind.chat })
       result(this, answer, [...next.values()])
       if (answer.schema.version < SPEAKS) {
         renderer.note(
@@ -333,7 +378,7 @@ const checkCommand = (messenger: Messenger): Command =>
         renderer.note(
           `${answer.vectors.unused} vectors belong to no text the store still holds — \`${command} store rebuild\` drops them`,
         )
-      const older = answer.conversations.filter((chat) => chat.provider === messenger.provider && !chat.current).length
+      const older = answer.conversations.filter((chat) => chat.provider === owner.provider && !chat.current).length
       if (older > 0) {
         renderer.note(
           `${older} chats' conversations were built by older rules — \`${command} conversations links rebuild --chat <chat>\``,
@@ -478,9 +523,9 @@ const chatsBehind = (database: CacheDatabase) =>
       refreshed: isoOf(row.refreshed),
     }))
 
-const migrateCommand = (messenger: Messenger): Command =>
+const migrateCommand = (owner: StoreOwner): Command =>
   annotate(new Command("migrate"), { output: { entity: "store_migration" }, effects: LOCAL_WRITE })
-    .summary("migrate an older local archive")
+    .summary(`migrate an older ${archive(owner)}`)
     .description(
       "bring the store up to this build's schema, then normalize, index and stem the messages and notes stored before it",
     )
@@ -489,14 +534,14 @@ const migrateCommand = (messenger: Messenger): Command =>
       const path = storePath(environmentOf(this).env ?? process.env)
       if (!existsSync(path)) {
         result(this, { path, exists: false })
-        renderer.note(`no store yet — the first \`${messenger.app.command}\` command that reads a chat creates it`)
+        renderer.note(`no store yet — ${createdBy(owner)}`)
         return
       }
       const answer = await reading(path, (database) => {
         const from = schemaOf(database).version
         migrate(database, {
-          command: messenger.app.command,
-          version: messenger.app.version,
+          command: owner.app.command,
+          version: owner.app.version,
           rollback: { store: path, warn: (line) => renderer.warn(line) },
         })
         const { normalized, indexed, terms } = buildWordIndex(database, (note) => renderer.note(note))
@@ -552,10 +597,10 @@ const buildNoteIndex = (database: CacheDatabase, note: (text: string) => void, {
   return { notesIndexed: drainNoteIndex(database, stemmerCache()) }
 }
 
-const reindexCommand = (messenger: Messenger): Command =>
+const reindexCommand = (owner: StoreOwner): Command =>
   destroysNothing(annotate(new Command("rebuild"), { output: { entity: "store_reindex" }, effects: LOCAL_WRITE }))
 
-    .summary("rebuild the local archive's search indexes")
+    .summary(`rebuild the ${archive(owner)}'s search indexes`)
     .description(
       "rebuild the word index, its typo vocabulary, the stems, the files' word index, the notes' indexes and who took part in what, from what is stored, and drop the vectors no stored text uses; loses nothing",
     )
@@ -675,7 +720,7 @@ const decryptCommand = (): Command =>
  * process has the file open — it would go on writing to the file set aside — or while this CLI's
  * `serve` runs: that opens the store on its first write, so until then it holds nothing to see.
  */
-const restoreCommand = (messenger: Messenger): Command =>
+const restoreCommand = (owner: StoreOwner): Command =>
   annotate(new Command("restore"), { output: { entity: "store_restore" }, effects: LOCAL_WRITE })
     .summary("restore a backup and keep the current store, or roll back a breaking upgrade")
     .description(
@@ -691,32 +736,32 @@ const restoreCommand = (messenger: Messenger): Command =>
       const path = storePath(environmentOf(this).env ?? process.env)
       const given = resolve(file)
       if (!existsSync(given)) throw new CliError("not_found", `no file at ${given}`)
-      refuseWhileServing(this, messenger)
-      if (!isSealed(given)) return restoreFrom(this, messenger, given, given)
+      refuseWhileServing(this, owner)
+      if (!isSealed(given)) return restoreFrom(this, owner, given, given)
       const opened = `${path}.unsealing-${process.pid}`
       mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
       try {
         await unsealFile(given, opened, await passwordOf(this, { twice: false }))
-        await restoreFrom(this, messenger, opened, given)
+        await restoreFrom(this, owner, opened, given)
       } finally {
         rmSync(opened, { force: true })
       }
     })
 
-const restoreFrom = async (command: Command, messenger: Messenger, backup: string, given: string) => {
+const restoreFrom = async (command: Command, owner: StoreOwner, backup: string, given: string) => {
   const { renderer } = outputFor(command)
   const path = storePath(environmentOf(command).env ?? process.env)
   if (existsSync(path) && realpathSync(backup) === realpathSync(path)) {
     throw new CliError("validation_error", `${backup} is the store itself`)
   }
-  if (await isRollbackCopy(backup)) return rollBackFrom(command, messenger, backup)
+  if (await isRollbackCopy(backup)) return rollBackFrom(command, owner, backup)
   const schema = await backupSchema(backup)
 
   const stamp = stampNow()
   const kept = existsSync(path) ? `${path}.before-restore-${stamp}` : null
   if (kept) {
     const waitMs = environmentOf(command).storeLockWaitMs
-    await quiesce(path, messenger, "restore", (message) => renderer.warn(message), waitMs)
+    await quiesce(path, owner, "restore", (message) => renderer.warn(message), waitMs)
   } else mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
 
   const incoming = `${path}.restoring-${stamp}`
@@ -752,12 +797,12 @@ const isRollbackCopy = async (file: string): Promise<boolean> => {
 }
 
 /** In place, in one transaction: the copy holds only the tables the upgrade changed, never a whole store. */
-const rollBackFrom = async (command: Command, messenger: Messenger, copy: string) => {
+const rollBackFrom = async (command: Command, owner: StoreOwner, copy: string) => {
   const { renderer } = outputFor(command)
   const path = storePath(environmentOf(command).env ?? process.env)
   if (!existsSync(path)) throw new CliError("not_found", `no store at ${path} to roll back`)
   const waitMs = environmentOf(command).storeLockWaitMs
-  await quiesce(path, messenger, "restore", (message) => renderer.warn(message), waitMs)
+  await quiesce(path, owner, "restore", (message) => renderer.warn(message), waitMs)
   const { database } = await openSqlite(path)
   let rolled: ReturnType<typeof rollBack>
   try {
@@ -817,12 +862,12 @@ const STORE_LOCK_WAIT_MS = 1_000
  */
 const quiesce = async (
   path: string,
-  messenger: Messenger,
+  owner: StoreOwner,
   then: string,
   warn: (message: string) => void,
   waitMs = STORE_LOCK_WAIT_MS,
 ) => {
-  const { command } = messenger.app
+  const { command } = owner.app
   const files = [path, `${path}-wal`, `${path}-shm`]
     .filter((file) => existsSync(file))
     .map((file) => realpathSync(file))
@@ -857,9 +902,9 @@ const quiesce = async (
  * the delete. A new file rather than `DELETE FROM` every table: deleted rows would stay readable in free
  * pages until a VACUUM, and every table comes back in this build's shape.
  */
-const resetCommand = (messenger: Messenger): Command =>
+const resetCommand = (owner: StoreOwner): Command =>
   annotate(new Command("reset"), { output: { entity: "store_reset" }, effects: LOCAL_WRITE })
-    .summary("back up the local archive and replace it with an empty one")
+    .summary(`back up the ${archive(owner)} and replace it with an empty one`)
     .description(
       "back the store up beside itself, then delete it and start an empty one at this build's schema; asks first, or --yes",
     )
@@ -867,28 +912,26 @@ const resetCommand = (messenger: Messenger): Command =>
     .option("--dry-run", "list every table it would empty, with its rows, and delete nothing")
     .action(async function (this: Command, { backup: keep, dryRun }: { backup: boolean; dryRun?: boolean }) {
       const { renderer } = outputFor(this)
-      const { command } = messenger.app
+      const { command } = owner.app
       const env = environmentOf(this).env ?? process.env
       const path = storePath(env)
       if (!existsSync(path)) {
         result(this, { path, exists: false, reset: false })
-        renderer.note(
-          `no store at ${path} — nothing to reset; the first \`${command}\` command that reads a chat creates it`,
-        )
+        renderer.note(`no store at ${path} — nothing to reset; ${createdBy(owner)}`)
         return
       }
       if (dryRun) {
-        result(this, await resetPreview(path, messenger, env, keep))
+        result(this, await resetPreview(path, owner, env, keep))
         return
       }
-      refuseWhileServing(this, messenger)
+      refuseWhileServing(this, owner)
       if (this.optsWithGlobals<{ yes?: boolean }>().yes !== true) {
         const what = `this deletes the store at ${path} and starts an empty one, ${keep ? "after a backup beside it" : "with no backup"}`
         const answer = await answerOf(this, `${what}. Go ahead? [y/N] `)
         if (answer === null) throw new CliError("confirmation_required", `${what} — add --yes to go ahead`)
         if (!/^\s*y(es)?\s*$/i.test(answer)) throw new CliError("cancelled", "cancelled — the store is unchanged")
       }
-      await quiesce(path, messenger, "reset", (message) => renderer.warn(message), environmentOf(this).storeLockWaitMs)
+      await quiesce(path, owner, "reset", (message) => renderer.warn(message), environmentOf(this).storeLockWaitMs)
 
       const backup = keep ? `${path}.backup-${stampNow()}` : null
       let backedUp = null
@@ -929,10 +972,10 @@ const STORE_PARTS = ["", "-wal", "-shm"]
  * What a reset would delete, read without a write lock so it answers while a sync runs. `in_use` is what the
  * real run would refuse over now; `null` where this system cannot say who has the file open.
  */
-const resetPreview = async (path: string, messenger: Messenger, env: NodeJS.ProcessEnv, keep: boolean) => {
+const resetPreview = async (path: string, owner: StoreOwner, env: NodeJS.ProcessEnv, keep: boolean) => {
   const files = STORE_PARTS.map((suffix) => `${path}${suffix}`).filter((file) => existsSync(file))
   const holders = holdersOf(files.map((file) => realpathSync(file)))
-  const serving = servingProfiles(messenger.app, env).length > 0
+  const serving = servingProfiles(owner.app, env).length > 0
   const read = await readingOnly(path, (database) => ({
     schema: schemaOf(database).version,
     tables: emptiedTables(database),

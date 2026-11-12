@@ -23,7 +23,7 @@ import { historyLimitGaps } from "./history-gaps.js"
 import { messageItems } from "./message-items.js"
 import { ENCRYPT_OPTION, passwordOf } from "./password.js"
 import { storeImportCommand } from "./store-import-command.js"
-import { storeMaintenanceCommands } from "./store-maintenance-command.js"
+import { addStoreMaintenanceCommands } from "./store-maintenance-command.js"
 
 /** `store`: the local store of messages — what it holds, filling it, reading it out, and looking after the file. */
 export const storeCommand = (messenger: Messenger): Command => {
@@ -36,29 +36,19 @@ export const storeCommand = (messenger: Messenger): Command => {
     .addCommand(exportCommand(messenger))
     .addCommand(clearCommand(messenger))
     .addCommand(storeImportCommand(messenger))
-  for (const command of storeMaintenanceCommands(messenger)) store.addCommand(command)
+  addStoreMaintenanceCommands(store, messenger, "personal")
   const examples: Record<string, string> = {
-    backup: "./backup.db",
-    check: "",
     "chats status": "",
     clear: "--left --dry-run",
-    "copies delete": "messages_copy_1",
-    decrypt: "./backup.enc --output ./restored.db",
     export: '"Book club" --output ./messages.jsonl',
     "gaps show": '"Book club"',
     "gaps repair": '"Book club" --limit 100',
     import: "./synthetic-chats.json --yes",
-    info: "",
     "jobs cancel": "job-101",
     "jobs clear": "",
     "jobs list": "",
     "jobs retry": "--failed",
     "jobs show": "",
-    migrate: "",
-    rebuild: "",
-    repair: "--dry-run",
-    reset: "",
-    restore: "./backup.db",
     status: '"Book club"',
   }
   for (const [path, args] of Object.entries(examples)) {

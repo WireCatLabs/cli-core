@@ -64,6 +64,7 @@ import { searchesCommand as searchesCommandDefinition } from "./messenger/search
 import { serveCommand as serveCommandDefinition } from "./messenger/serve-command.js"
 import { serverCommand as serverCommandDefinition } from "./messenger/server-command.js"
 import { statsCommand as statsCommandDefinition } from "./messenger/stats-command.js"
+import { addStoreMaintenanceCommands as addStoreMaintenanceCommandsDefinition } from "./messenger/store-maintenance-command.js"
 import { tagsCommand as tagsCommandDefinition } from "./messenger/tags-command.js"
 import {
   tasksCommand as tasksCommandDefinition,
@@ -80,6 +81,7 @@ import { upgradeCommand as upgradeCommandDefinition } from "./upgrade-command.js
 
 const sharedCommand: typeof protectedCommand = (factory) => honoursDryRun(protectedCommand(factory))
 
+export const addStoreMaintenanceCommands = sharedCommand(addStoreMaintenanceCommandsDefinition)
 export const appDoctorCommand = sharedCommand(appDoctorCommandDefinition)
 export const appCompleteCommand = sharedCommand(appCompleteCommandDefinition)
 export const appMcpCommand = sharedCommand(appMcpCommandDefinition)

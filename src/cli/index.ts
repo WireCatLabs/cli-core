@@ -521,7 +521,7 @@ export { DAY_MS, FIRST_FETCH_MS, type MemberFetches, memberFetches } from "./mes
 export { OUTDATED_CHECK_MS, outdatedReason, ownPackageRoot, watchOutdated } from "./messenger/serve-outdated.js"
 export { STEMS_EVERY_MS, STEMS_SLICE_MS, type StemFills, stemFills } from "./messenger/serve-stems.js"
 export type { Running, ServerOptions, ServerProcess, ServerSystem } from "./messenger/server-command.js"
-export { storeSummary } from "./messenger/store-maintenance-command.js"
+export { type StoreOwner, storeSummary } from "./messenger/store-maintenance-command.js"
 export { type Saving, stored } from "./messenger/stored.js"
 export { dateOrNone } from "./messenger/tasks-command.js"
 export { MODEL_CATALOGUE_QUERY, type ModelCatalogueOptions } from "./model-catalogue-command.js"
@@ -625,6 +625,7 @@ export {
   addMeetingPreparationCommand,
   addMeetingProjectCandidatesCommand,
   addMeetingSeriesInventoryCommand,
+  addStoreMaintenanceCommands,
   appCompleteCommand,
   appDoctorCommand,
   appMcpCommand,

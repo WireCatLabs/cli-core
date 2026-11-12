@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs"
+import { mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { PassThrough } from "node:stream"
@@ -254,6 +254,34 @@ describe("appDoctorCommand", () => {
       expect(code).toBe(0)
       expect(item.local).toEqual({ error: "unreadable run file" })
     })
+  })
+
+  it("doctor reports create writes one private file about the newest failed run", async () => {
+    const env = home()
+    const failing = {
+      ...definition(),
+      commands: () => [
+        ...definition().commands(),
+        annotate(new Command("deals"), { effects: REMOTE_READ }).action(() => {
+          throw new Error("portal refused deal 4711")
+        }),
+      ],
+    }
+    expect(await run(["work", "deals"], failing, { streams: captureStreams(), tty: false, env })).not.toBe(0)
+    const file = join(mkdtempSync(join(tmpdir(), "app-report-")), "report.json")
+    const streams = captureStreams()
+    const argv = ["doctor", "reports", "create", "--output", file, "--json"]
+    expect(await run(argv, failing, { streams, tty: false, env })).toBe(0)
+    const { item } = JSON.parse(streams.stdout[0] ?? "{}")
+    expect(item).toMatchObject({ path: file, run: expect.any(String) })
+    const report = JSON.parse(readFileSync(file, "utf8"))
+    expect(report.doctor).toMatchObject({ version: "1.0.0", config: { found: true } })
+    expect(report.run.metadata.runId).toBe(item.run)
+    expect(report.sends).toEqual([])
+    expect(statSync(file).mode & 0o777).toBe(0o600)
+    const shown = captureStreams()
+    expect(await run(["doctor", "reports", "show", "--json"], failing, { streams: shown, tty: false, env })).toBe(0)
+    expect(JSON.parse(shown.stdout[0] ?? "{}").item.excludes).toContain("the sign-in")
   })
 
   describe("--online", () => {

@@ -44,13 +44,18 @@ interface Remote {
   partial: boolean
 }
 
+/** Commander keeps it private; a group with an action of its own, as `doctor` beside `doctor reports`, runs too. */
+const acts = (command: Command): boolean => (command as unknown as { _actionHandler?: unknown })._actionHandler != null
+
 const remoteCommands = (program: Command, path: string[] = []): Remote[] =>
   program.commands.flatMap((command) => {
     const at = [...path, command.name()]
-    if (command.commands.length > 0) return remoteCommands(command, at)
+    const below = command.commands.length > 0 ? remoteCommands(command, at) : []
+    if (command.commands.length > 0 && !acts(command)) return below
     const meta = metaOf(command)
     const remote = meta.effects?.remote
-    return remote && remote !== "none" ? [{ path: at.join(" "), remote, partial: meta.partial === true }] : []
+    const own = remote && remote !== "none" ? [{ path: at.join(" "), remote, partial: meta.partial === true }] : []
+    return [...own, ...below]
   })
 
 interface Ran {

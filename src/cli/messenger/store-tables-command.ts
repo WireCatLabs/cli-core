@@ -10,7 +10,6 @@ import { environmentOf, outputFor } from "../context.js"
 import { LOCAL_READ } from "../effects.js"
 import { listOf, renderAnswer } from "../envelope.js"
 import { type QueryWords, queryTerms, typedQuery, withQuery } from "../list-query.js"
-import type { Messenger } from "./context.js"
 
 const PATH = "store tables list"
 
@@ -34,15 +33,15 @@ const filterOf = (words: QueryWords) => {
   return { ...(name === undefined ? {} : { name }), ...(kind === undefined ? {} : { kind }) }
 }
 
-export const storeTablesCommand = (messenger: Messenger): Command => {
-  const tables = new Command("tables").description("the tables of the local archive")
+export const storeTablesCommand = (owner: { app: { command: string } }): Command => {
+  const tables = new Command("tables").description("the tables of the local store")
   withQuery(
     annotate(tables.command("list"), {
       effects: LOCAL_READ,
       examples: [
-        `${messenger.app.command} store tables list`,
-        `${messenger.app.command} store tables list kind:data`,
-        `${messenger.app.command} store tables list --full --json`,
+        `${owner.app.command} store tables list`,
+        `${owner.app.command} store tables list kind:data`,
+        `${owner.app.command} store tables list --full --json`,
       ],
     }),
     STORE_TABLES_QUERY,
