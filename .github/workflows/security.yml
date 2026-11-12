@@ -1,8 +1,8 @@
 name: Pull request security checks
 
-# CodeQL, zizmor and gitleaks on every pull request, so release.yml can reuse them when the release commit has
-# the pull request head's tree (scripts/release-reuse.sh). The same reusable workflow as the release's own
-# `checks`, minus the npm audits, which read the registry and stay in the release.
+# zizmor, gitleaks and CodeQL of the workflows on every pull request, through the same reusable workflow as the
+# release's own `checks`, minus the npm audits, which read the registry and stay in the release. CodeQL of the code
+# runs only at release (PERF-105, NEED-2596): it was the slowest check of every pull request.
 on:
   pull_request:
 
@@ -14,8 +14,7 @@ permissions:
   contents: read
 
 jobs:
-  # actions and javascript-typescript on every pull request; python, c-cpp and java-kotlin (a few scripts and
-  # fixtures that do not ship) only when a file of theirs changes. The release and the monthly run analyse all.
+  # Only actions on a pull request; the release and the monthly run analyse every language.
   languages:
     runs-on: ubuntu-latest
     permissions:
@@ -45,19 +44,10 @@ jobs:
           # Their token cannot write check runs, so they analyse everything.
           CAN_REPORT: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]' && github.event.pull_request.user.login != 'dependabot[bot]' }}
         run: |
-          # The checkout is the merge of the head into the base, so this is exactly what the pull request changes.
-          changed=$(git diff --name-only HEAD^1 HEAD)
-          analyze='"actions","javascript-typescript"' unchanged=""
-          pick() {
-            if [ "$CAN_REPORT" != true ] || grep -q '^\.github/' <<<"$changed" || grep -qE "$2" <<<"$changed"; then
-              analyze="$analyze,\"$1\""
-            else
-              unchanged="$unchanged${unchanged:+,}\"$1\""
-            fi
-          }
-          pick python '\.pyi?$'
-          pick c-cpp '\.(c|h|cc|cpp|cxx|hh|hpp|hxx|inl|ipp)$'
-          pick java-kotlin '\.(java|kts?)$'
+          analyze='"actions"' unchanged='"javascript-typescript","python","c-cpp","java-kotlin"'
+          if [ "$CAN_REPORT" != true ]; then
+            analyze="$analyze,$unchanged" unchanged=""
+          fi
           echo "analyze=[$analyze]" >>"$GITHUB_OUTPUT"
           echo "unchanged=[$unchanged]" >>"$GITHUB_OUTPUT"
           echo "analyse [$analyze]; unchanged [$unchanged]"
@@ -74,7 +64,7 @@ jobs:
       dependencies: false
       languages: ${{ needs.languages.outputs.analyze }}
 
-  # The ruleset requires a source check per language; the languages this pull request does not touch pass here.
+  # The ruleset requires a source check per language; the languages left to the release pass here.
   not-analysed:
     needs: languages
     if: needs.languages.outputs.reuse == 'true' || needs.languages.outputs.unchanged != '[]'
@@ -89,10 +79,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           UNCHANGED: ${{ needs.languages.outputs.unchanged }}
-          TITLE: Not analysed — no file of this language changed
+          TITLE: Not analysed here — CodeQL analyses the code at release
           SUMMARY: >-
-            This pull request changes no file of this language, so CodeQL did not analyse it here.
-            The release and the monthly validation analyse every language.
+            CodeQL analyses only the workflows of a pull request. The release analyses every language before it
+            publishes, and the monthly validation does too.
         if: needs.languages.outputs.reuse != 'true'
         run: jq -r '.[] | "security / source (\(.))"' <<<"$UNCHANGED" | bash scripts/ci-pass-checks.sh
       - env:

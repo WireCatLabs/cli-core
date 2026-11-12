@@ -71,8 +71,9 @@ The pull request validation (`pr.yml`) runs the full Linux validation, `ci.yml`:
 on two runners with the coverage floor checked on their merged report, build, `docs:check`, the schema and
 dist checks, Bun, old Node, the SQLite restart and parity, which builds cli-template and every CLI in
 `scripts/parity/downstream.json` against the branch, checking the manifests and wording of tg, max and wa on the
-same builds. The security checks (`security.yml`) run CodeQL, zizmor and gitleaks; CodeQL
-analyses python, c-cpp and java-kotlin only when a file of theirs changes.
+same builds. The security checks (`security.yml`) run zizmor, gitleaks and CodeQL of the workflows; CodeQL of the
+code (javascript-typescript, python, c-cpp, java-kotlin) runs only in the release's `checks` and the monthly run, and
+the pull request reports those checks as passed.
 A pull request that changes only `CHANGELOG.md`, the `changes/` fragments and the version against a `main` already
 proven green (bin/release's fold and version pull requests) runs only `docs:check` and the changelog shape tests,
 and reports the other required checks as passed ([`docs/dev/TESTING.md`](docs/dev/TESTING.md)). The same `ci.yml`

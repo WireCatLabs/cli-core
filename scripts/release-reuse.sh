@@ -95,6 +95,6 @@ echo "pr=$pr" >>"$out"
     "$tree" "$COMMIT" "$pr" "$head" "$parent"
   printf 'All %s required checks are green on that head and are not run again.\n' "$(jq length "$work/required.json")"
   [ "${PULL_REQUEST:-}" = true ] ||
-    printf 'Run again here: the npm audits, Parity (it reads other repositories'"'"' main, not this tree) and the package build.\n'
+    printf 'Run again here: the release checks (CodeQL of every language, zizmor, gitleaks, the npm audits), Parity (it reads other repositories'"'"' main, not this tree) and the package build.\n'
 } >>"$summary"
 echo "reusing the checks of #$pr ($head)"
