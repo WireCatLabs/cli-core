@@ -240,6 +240,9 @@ export const baseContext = (command: Command, resolveSettings: Resolve): BaseCon
   })
   const closeables: Closeable[] = []
   const ranFor = namedProfile(settings)
+  // A command can open several runs: `messages sync` fetches, then applies task rules, then counts mentions.
+  // Its answer's meta.run_id names the first, the one with the requests; a named side run never takes it.
+  let namedTheAnswer = false
 
   return {
     settings,
@@ -258,6 +261,8 @@ export const baseContext = (command: Command, resolveSettings: Resolve): BaseCon
         )
       // An agent's run is named `mcp <command>`, so `search runs` and `sends list` tell it from the owner's.
       const runName = name ?? `${environment.agent ? "mcp " : ""}${commandPath(command)}`
+      const answersFor = !environment.agent && name === undefined && !namedTheAnswer
+      if (answersFor) namedTheAnswer = true
       return recorded(
         {
           app: environment.app,
@@ -287,7 +292,7 @@ export const baseContext = (command: Command, resolveSettings: Resolve): BaseCon
             : { keepSuccessDays: settings.keepSuccessfulRunsForDays }),
           ...(settings.keepStoreRunsForDays === undefined ? {} : { keepStoreDays: settings.keepStoreRunsForDays }),
           ...(settings.runsSizeLimitMb === undefined ? {} : { maxBytes: settings.runsSizeLimitMb * 1024 * 1024 }),
-          processRun: !environment.agent,
+          processRun: answersFor,
           format,
           streams,
           env,
