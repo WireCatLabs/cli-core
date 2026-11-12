@@ -122,7 +122,14 @@ jobs:
         run: shared/scripts/parity/build-app.sh template cli cli-core.tgz "$APP_REF"
         env:
           APP_REF: ${{ steps.app.outputs.ref }}
+      # cli-template is not in downstream.json, so downstream-result.sh never reads its known-broken.json entry.
+      - id: known
+        run: |
+          until=$(jq -r --arg t "$(date -u +%F)" '.[] | select(.repo == "cli-template" and .until >= $t) | .until' \
+            shared/scripts/parity/known-broken.json | head -n1)
+          echo "until=$until" >> "$GITHUB_OUTPUT"
       - name: Check and test cli-template against this cli-core
+        continue-on-error: ${{ steps.known.outputs.until != '' }}
         run: pnpm ci:quick && pnpm test
         working-directory: cli
 
