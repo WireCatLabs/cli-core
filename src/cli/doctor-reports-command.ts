@@ -78,10 +78,10 @@ export const doctorReportsCommand = (source: DoctorReportsSource): Command => {
       examples: [`${source.example} doctor reports create --output ./problem-report.json`],
     }),
   )
-    .description("write a problem report to a new file, and say where to send it")
+    .description("write a problem report to a file, and say where to send it")
     .summary("the report file written: its path, the run it is about, and where to send it")
     .option("--run <id>", "the run the report is about; the newest failed one if not given")
-    .option("--output <file>", "the new file to write it to; a new file in this directory if not given")
+    .option("--output <file>", "where to write it; a new file in this directory if not given")
     .action(async function (this: Command) {
       const given = this.opts<{ run?: string; output?: string }>()
       const env = environmentOf(this).env ?? process.env

@@ -56,7 +56,7 @@ jobs:
 
   # The manifest check reads the `commands --json` the downstream leg of the same CLI recorded from its build: one build
   # per CLI per run. It runs even when a leg failed, so a CLI that never built fails here: a skipped required check
-  # would pass.
+  # would pass. A CLI in known-broken.json only warns, as in downstream-result.sh.
   main:
     needs: [pack, downstream]
     if: ${{ !cancelled() }}
@@ -69,10 +69,18 @@ jobs:
           - { cli: tg, repo: tg-cli }
           - { cli: wa, repo: whatsapp-cli }
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: shared
+          persist-credentials: false
+          sparse-checkout: scripts/parity
+      - id: known
+        run: shared/scripts/parity/known-broken.sh ${{ matrix.repo }} >> "$GITHUB_OUTPUT"
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: parity-cli-core
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        continue-on-error: ${{ steps.known.outputs.until != '' }}
         with:
           name: commands-${{ matrix.repo }}
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -81,6 +89,7 @@ jobs:
           package-manager-cache: false
       - run: mkdir core && tar -xzf cli-core.tgz -C core
       - name: Check ${{ matrix.cli }}-cli against this manifest
+        continue-on-error: ${{ steps.known.outputs.until != '' }}
         run: node core/package/dist/parity/bin.js ${{ matrix.cli }} < commands.json
 
   # A separate job, not a row of `main`: the template has no parity manifest, so its check is its own build,
@@ -122,12 +131,8 @@ jobs:
         run: shared/scripts/parity/build-app.sh template cli cli-core.tgz "$APP_REF"
         env:
           APP_REF: ${{ steps.app.outputs.ref }}
-      # cli-template is not in downstream.json, so downstream-result.sh never reads its known-broken.json entry.
       - id: known
-        run: |
-          until=$(jq -r --arg t "$(date -u +%F)" '.[] | select(.repo == "cli-template" and .until >= $t) | .until' \
-            shared/scripts/parity/known-broken.json | head -n1)
-          echo "until=$until" >> "$GITHUB_OUTPUT"
+        run: shared/scripts/parity/known-broken.sh cli-template >> "$GITHUB_OUTPUT"
       - name: Check and test cli-template against this cli-core
         continue-on-error: ${{ steps.known.outputs.until != '' }}
         run: pnpm ci:quick && pnpm test
@@ -210,7 +215,9 @@ jobs:
         working-directory: cli
         env:
           CLI: ${{ matrix.cli }}
+      # The manifest and wording jobs judge this file; a CLI that cannot list its commands still gets lint and tests.
       - name: Record its commands for the manifest and wording checks
+        continue-on-error: true
         run: |
           home=$(mktemp -d)
           HOME=$home XDG_CONFIG_HOME=$home/.config XDG_STATE_HOME=$home/.local/state XDG_CACHE_HOME=$home/.cache \
@@ -307,14 +314,23 @@ jobs:
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: shared
+          persist-credentials: false
+          sparse-checkout: scripts/parity
+      - id: known
+        run: shared/scripts/parity/known-broken.sh max-cli tg-cli >> "$GITHUB_OUTPUT"
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: parity-cli-core
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        continue-on-error: ${{ steps.known.outputs.until != '' }}
         with:
           name: commands-max-cli
           path: max
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        continue-on-error: ${{ steps.known.outputs.until != '' }}
         with:
           name: commands-tg-cli
           path: tg
@@ -323,4 +339,5 @@ jobs:
           node-version: 24
           package-manager-cache: false
       - run: mkdir core && tar -xzf cli-core.tgz -C core
-      - run: node core/package/dist/parity/bin.js wording max/commands.json tg/commands.json
+      - continue-on-error: ${{ steps.known.outputs.until != '' }}
+        run: node core/package/dist/parity/bin.js wording max/commands.json tg/commands.json
