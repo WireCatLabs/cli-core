@@ -20,6 +20,7 @@ import { fold } from "../normalize.js"
 import type { AccountKey } from "../types.js"
 import { type ProposedByFilter, proposedBySql } from "./actors.js"
 import { suggestBaseStages } from "./base-suggest.js"
+import { activityTexts } from "./crm-activities.js"
 import { crmAccountPrefix } from "./crm-rows.js"
 import { linkKind } from "./link-kinds.js"
 import { type Author, authorActor, authorOf, evidenceOf, linkEvidence, projectId, projectOf } from "./memories.js"
@@ -198,8 +199,8 @@ export interface DealSearch {
   offset?: number
 }
 
-/** Where a deal's or a lead's words are searched: its title, its company, the people on it. */
-export type DealPart = "title" | "company" | "contact"
+/** Where a deal's or a lead's words are searched: its title, its company, the people on it, its CRM activities. */
+export type DealPart = "title" | "company" | "contact" | "activity"
 
 export interface FoundDeal extends Deal {
   /** Where the query's words were found, in the order of `DealPart`. */
@@ -237,7 +238,8 @@ export interface DealsStore {
   stages(reference: string): Promise<StageChange[]>
   list(filter?: DealFilter): Promise<ListResult<Deal>>
   /**
-   * Deals and leads together, by the words of their title, company and contacts: a query word matches a stored word
+   * Deals and leads together, by the words of their title, company, contacts and the subjects and texts of their CRM
+   * activities (calls, e-mails, meetings, tasks): a query word matches a stored word
    * it begins or one of the same stem. The most words matched first, then the latest changed. When nothing matches,
    * a misspelt word is corrected to the stored words nearest to it, once.
    */
@@ -300,7 +302,7 @@ const providerMetadataOf = (metadata: unknown): Record<string, CrmValue> => {
 const accountOf = (provider: unknown, external: unknown) =>
   provider == null ? null : { provider: String(provider), account: String(external) }
 
-const DEAL_PARTS: readonly DealPart[] = ["title", "company", "contact"]
+const DEAL_PARTS: readonly DealPart[] = ["title", "company", "contact", "activity"]
 const TOKEN = /[\p{L}\p{N}\p{M}]+/gu
 /** A query word shorter than this matches only a whole word: «с» or "a" begins half the words of any title. */
 const SHORTEST_BEGINNING = 4
@@ -870,9 +872,10 @@ export const dealOperationsOver = (context: StoreContext) => {
           // `+7 916 123-45-67` is one number to whoever types `79161234567`.
           for (const phone of phones) texts.add(phone.replace(/\D/g, ""))
         }
+        const activities = activityTexts(database, kind)
         return database
           .prepare(
-            `SELECT d.id, d.title, d.updated_at, a.provider, a.external_id AS account, o.name AS company, ` +
+            `SELECT d.id, d.account_id, d.external_id, d.title, d.updated_at, a.provider, a.external_id AS account, o.name AS company, ` +
               "CASE WHEN json_valid(d.metadata) THEN json_extract(d.metadata, '$.company_name') END AS own_company, " +
               "CASE WHEN json_valid(d.metadata) THEN json_extract(d.metadata, '$.contact_name') END AS own_contact " +
               `FROM ${TABLES[kind]} d LEFT JOIN accounts a ON a.id = d.account_id ` +
@@ -891,6 +894,10 @@ export const dealOperationsOver = (context: StoreContext) => {
               ...[row.own_contact, ...(contacts.get(Number(row.id)) ?? [])]
                 .filter((text) => typeof text === "string")
                 .map((text) => ({ part: "contact" as const, words: wordsOf(text) })),
+              ...(activities.get(`${row.account_id}\u0000${row.external_id}`) ?? []).map((text) => ({
+                part: "activity" as const,
+                words: wordsOf(text),
+              })),
             ],
           }))
       })

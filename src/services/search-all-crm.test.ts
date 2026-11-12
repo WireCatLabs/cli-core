@@ -67,10 +67,10 @@ it("skips deals with the reason when the query names a field a title does not ha
     {
       resource: "crm",
       code: "validation_error",
-      reason: "deals and leads are found by the words of their title, company and contacts only",
+      reason: "deals and leads are found by the words of their title, company, contacts and activities only",
     },
   ])
-  expect(() => titleWords("NOT клиника")).toThrow(/contacts only/)
+  expect(() => titleWords("NOT клиника")).toThrow(/activities only/)
 })
 
 it("reads only the accounts a scope names, so a locked profile never sees the owner's own deals", async () => {
