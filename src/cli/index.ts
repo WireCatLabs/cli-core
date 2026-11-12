@@ -213,6 +213,7 @@ export {
 export { answerEntity } from "./answer-entity.js"
 export { type AppDoctorOptions, appDoctorReport } from "./app-doctor-command.js"
 export type { AppMcpOptions } from "./app-mcp-command.js"
+export { openAppStore } from "./app-store.js"
 export { actorOf } from "./author.js"
 export { type BaseStagesCommandOptions, baseStagesCommand } from "./base-stages-command.js"
 export type { ApiCommandInput, ApiCommands } from "./bot/api.js"

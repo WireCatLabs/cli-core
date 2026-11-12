@@ -13,3 +13,11 @@
   answers `{ "<path>": "read" | "write" }` for the CLI's own commands only: cli-core pins its own catalogue, so a CLI
   that pins this no longer rewrites its catalogue on every cli-core release. A command a CLI adds with `.command()`
   to a group cli-core built is its own; `customizeSharedCommand` keeps a changed shared command marked.
+- **`openAppStore(env, { app, provider, readOnly })` opens the shared store as gcal, mail and b24 each did in their
+  own `store.ts`.** A writable open writes the CLI's provider entry; a read-only one writes nothing and fails on a
+  missing file or a needed migration. `registerProvider` is exported from `@wirecat/cli-core/store` too.
+- **`settingsFor` takes `personal` entries: a CLI's own settings that a bot's section refuses.** A CLI that replaced
+  the shared schema with `schema` only to keep such a setting out of `bot` extends the shared one instead, and takes
+  every shared setting again.
+- **`googleProvider(client, { loginHint })` and `googleTokenCodec` in `@wirecat/cli-core/oauth`.** Google's endpoints
+  and the entry that keeps a Desktop client's secret, which gcal, mail and drive each copied.
