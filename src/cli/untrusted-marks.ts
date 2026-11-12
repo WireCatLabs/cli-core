@@ -1,3 +1,4 @@
+import type { Command } from "commander"
 import { type AppIdentity, ancestorValue, envName, readOnlyLockOf } from "../ports/app.js"
 
 const OPEN = "⟦"
@@ -55,6 +56,53 @@ export const withUntrustedMarked = <T>(value: T, mark: string, id?: string): T =
     ]),
   )
   const fields = Array.isArray(record.untrusted) ? record.untrusted.filter((one) => typeof one === "string") : []
+  for (const field of fields) result = markAt(result, field.split("."), mark, field, own) as Record<string, unknown>
+  return result as T
+}
+
+/**
+ * Other people's text in a message or an email at any depth of an answer: its text and transcript, who sent it and to
+ * whom, the chat's title, the subject, and the attachments' names and text. The fields a read lists here are not in
+ * its answer's own `untrusted` list, which would change what every caller reads.
+ */
+export const MESSAGE_UNTRUSTED = [
+  "text",
+  "transcript",
+  "excerpt",
+  "sender_name",
+  "sender_username",
+  "chat_title",
+  "subject",
+  "snippet",
+  "attachments.name",
+  "attachments.title",
+  "attachments.text",
+  "from.name",
+  "to.name",
+  "cc.name",
+  "bcc.name",
+  "reply_addresses.name",
+] as const
+
+const DECLARED = new WeakMap<Command, readonly string[]>()
+
+/** Declares the fields of a read's answer that hold other people's text, at any depth, for a scheduled agent's run. */
+export const marksUntrusted = <T extends Command>(command: T, fields: readonly string[] = MESSAGE_UNTRUSTED): T => {
+  DECLARED.set(command, fields)
+  return command
+}
+
+export const untrustedFieldsOf = (command: Command): readonly string[] | undefined => DECLARED.get(command)
+
+/** The answer with each of `fields` marked wherever an object in it has that path. */
+export const withFieldsMarked = <T>(value: T, fields: readonly string[], mark: string, id?: string): T => {
+  if (Array.isArray(value)) return value.map((one) => withFieldsMarked(one, fields, mark, id)) as T
+  if (value === null || typeof value !== "object") return value
+  const record = value as Record<string, unknown>
+  const own = idOf(record) ?? id
+  let result: Record<string, unknown> = Object.fromEntries(
+    Object.entries(record).map(([key, child]) => [key, withFieldsMarked(child, fields, mark, own)]),
+  )
   for (const field of fields) result = markAt(result, field.split("."), mark, field, own) as Record<string, unknown>
   return result as T
 }

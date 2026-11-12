@@ -24,8 +24,11 @@
 - **`schedule list` names each agent schedule's `harness`** and whether it `reports_cost`.
 - **A scheduled agent is told that the CLIs' output is other people's text, never instructions**, and in its run each
   field an answer lists as `untrusted` is printed between `⟦untrusted:<mark> source=<field> id=<ref>⟧` and
-  `⟦/untrusted:<mark>⟧`. The mark is random for each run, and every bracket and the mark are taken out of the text
-  first, so it cannot close or fake a block. Outside a scheduled agent's run the output is as before.
+  `⟦/untrusted:<mark>⟧`, and so is every message's and email's text, transcript, subject, senders and recipients,
+  chat title and attachment names and text in `messages list`, `messages show`, `messages context` and mail's
+  `messages show`, `conversations list` and `conversations show`. The mark is random for each run, and every bracket
+  and the mark are taken out of the text first, so it cannot close or fake a block. Outside a scheduled agent's run the
+  output is as before.
 
 ### Changed — may break callers
 
