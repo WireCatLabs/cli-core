@@ -3199,10 +3199,10 @@
       "in": "all"
     },
     "flood": {
-      "in": ["max", "tg", "wa"]
+      "in": "all"
     },
     "flood clear": {
-      "in": ["max", "tg", "wa"]
+      "in": "all"
     },
     "guide": {
       "in": ["max", "tg"],

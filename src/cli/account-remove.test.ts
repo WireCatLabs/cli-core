@@ -281,10 +281,9 @@ describe("account remove", () => {
 
 describe("a messenger's account group", () => {
   it("has remove only when the messenger opts in", () => {
+    const { accountRemoval: _, ...without } = messenger
     const names = (removal?: AccountRemoval) =>
-      accountCommand({ ...messenger, ...(removal ? { accountRemoval: removal } : {}) }).commands.map((one) =>
-        one.name(),
-      )
+      accountCommand({ ...without, ...(removal ? { accountRemoval: removal } : {}) }).commands.map((one) => one.name())
 
     expect(names()).not.toContain("remove")
     expect(names({ signOut: async () => ({ revoked: null, removed: [] }) })).toContain("remove")
