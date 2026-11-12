@@ -22,6 +22,7 @@ import { environmentOf, setExitCode } from "./context.js"
 import { largeAnswerSteps, SOFT_OUTPUT_BYTES } from "./output-budget.js"
 import { withoutProviderRefs } from "./provider-refs.js"
 import { nextStep, rootOf, runnable, stepLine, withLines, withSafety } from "./steps.js"
+import { untrustedMarkOf, withUntrustedMarked } from "./untrusted-marks.js"
 
 export type ListBody<T> = Omit<ListEnvelope<T>, "meta"> & { meta?: Partial<Meta> }
 export type ItemBody<T> = Omit<ItemEnvelope<T>, "meta"> & { meta?: Partial<Meta> }
@@ -232,7 +233,10 @@ export const renderAnswer = <T>(
   const root = rootOf(command)
   const runnableSteps = runnable(root, body.next)
   const next = environmentOf(command).agent ? runnableSteps : withLines(root, runnableSteps)
-  const kept = withoutProviderRefs({ ...body, ...(next.length > 0 ? { next } : {}) }) as Body<T>
+  const { app, env } = environmentOf(command)
+  const mark = app ? untrustedMarkOf(app, env ?? process.env) : undefined
+  const shown = mark === undefined ? body : withUntrustedMarked(body, mark)
+  const kept = withoutProviderRefs({ ...shown, ...(next.length > 0 ? { next } : {}) }) as Body<T>
   if (next.length === 0) delete (kept as { next?: unknown }).next
   const sealedBody = sealed(kept) as ListEnvelope<T> | ItemEnvelope<T>
   const environment = environmentOf(command)
