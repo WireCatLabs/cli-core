@@ -59,7 +59,7 @@ describe("a call's client and the CRM contact with that number (NEED-2600)", () 
     const context = await personMeetingContext(store, `person:${callPerson?.uid}`, { accountIds: [accountId] })
     expect(context.person.name).toBe("Ana Example")
     expect(context.items.map(({ reference }) => reference)).toEqual([expect.stringMatching(/^meeting:/)])
-    const [stored] = (await store.meetings.meetings({ accountId })) as [{ id: number }]
+    const stored = (await store.meetings.meetings({ accountId }))[0] as { id: number }
     const person = { ref: `person:${callPerson?.uid}`, name: "Ana Example" }
     expect((await meetingDetailsAnswer(store.meetings, stored.id, accountId)).item.participants).toMatchObject([
       { name: null, person },

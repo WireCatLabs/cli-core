@@ -1,6 +1,6 @@
 ### Added
 
-- **A call links to the CRM contact with the same phone (NEED-2600).** A meeting source gives a participant's number
+- **A call links to the CRM contact with the same phone.** A meeting source gives a participant's number
   in `SourceParticipant.phone` (written with `+`); the store keeps it in `identities.phone`. The people scan then
   joins the call's person and one other person when exactly the two hold the number, one of them is keyed by the
   number itself (`phone:<E.164>`, as a phone line keeps a call's other side) and the number is a mobile; a landline
@@ -15,7 +15,7 @@
 
 ### Changed — may break callers
 
-- **`oauth.missing` is now `session.missing`, and `ai.address-refused` is now `model.address-refused` (FIND-2583).**
+- **`oauth.missing` is now `session.missing`, and `ai.address-refused` is now `model.address-refused`.**
   One reason for each: a profile that is not signed in, and a model address WireCat refuses. A CLI that raises or
   checks the old names moves to the new ones.
 - **The output schemas of `meetings show`, `meetings people`, `contacts context`, the person context and `deals
