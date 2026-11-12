@@ -29,6 +29,62 @@ shape of this file.
 - **Rename and delete an account group.** `renameAccountGroup(at, { from, to })` keeps the members and refuses a built-in, missing or taken name. `deleteAccountGroup(at, group)` removes the group and its memberships only. Nothing else in the store names a group, so a later run in the old name (`MEMO_GROUP`, a lock, `--source group:`) is refused with the groups there are.
 - **The same company in the CRM counts as a trace.** Two people of one name whom the CRM puts in one organization are proposed at 0.5, as with a shared company domain.
 - **One name in private chats on two messengers.** A person who writes under one name in a private chat the owner answers, on two messengers, is proposed at 0.3, even when the messenger hides the phone.
+- **Your coding agent can read the text of a picture you choose.** `images read <ref> [--attachment n]` gives one
+  picture to Claude Code (`claude -p`, only its Read tool) or Codex (`codex exec --image`) and keeps what it read as the
+  attachment's text, so `content:` search finds it. The extractor is `agent:claude` or `agent:codex/<model>`. The saved
+  copy is used when there is one, else the messenger's download; nothing else is kept. The agent runs without
+  `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` and the agent variables, in a folder holding the picture alone.
+- **`models picture-reading show|set never|request [--agent claude|codex] [--model m] [--from-app]`**, the shared
+  `picture_reading` setting. `never` is the default and refuses `images read` (`picture-reading.off`); only the owner
+  turns it on. `models local-only show` lists it as `picture_reading`. See
+  [ai-providers.md, "Pictures read by your coding agent"](docs/search/ai-providers.md#pictures-read-by-your-coding-agent).
+- **An agent schedule runs in any coding agent whose own limits hold it to the CLIs' commands.** `schedule agent
+  <name> <harness>` takes `claude`, `gemini` and `opencode`, the ids WireCat Desktop's Agents page uses, each in the
+  one-shot mode its vendor documents and with its own model flag. gemini is held by an admin policy, named in a system
+  settings file through `GEMINI_CLI_SYSTEM_SETTINGS_PATH`, that denies every shell command but the CLIs', any chained or
+  variable-setting one, file writes and web reads, and turns off the owner's allowed tools, MCP servers and yolo mode.
+  opencode is held by `OPENCODE_CONFIG_CONTENT`, which denies everything but the CLIs' commands. `cursor`, `grok`,
+  `openclaw`, `hermes` and `kimi` are listed and refused (`agent.unrestricted`): their docs show no way to deny every
+  other command in a one-shot run.
+- **codex runs on a schedule once the owner accepts it with `--allow-dangerous`**, which the schedule keeps; without it
+  `schedule agent` refuses it (`agent.unrestricted`). It runs with `--ignore-user-config` and `--ignore-rules`, so the
+  owner's `~/.codex` cannot widen it, in the `workspace-write` sandbox with the network off, writable only in the run's
+  own folder, the store's folder and the CLIs' state and cache folders. It may still run any program there: one such as
+  sqlite3 can change the store, which the read-only lock does not stop. GLM has no agent CLI of its own; Z.ai's plan runs it inside
+  these agents.
+- **`schedule agents list`** answers every agent: `id`, `name`, `programs` (the names looked for on PATH),
+  `reports_cost`, `restricted`, `restricted_reason` (why it is not restricted and what it may still do, else null),
+  `allowed_with_ack` (true for codex only), `installed` and `path`. A client
+  reads it instead of keeping its own list.
+- **`HARNESSES`, `isHarness`, `harnessInfo`, `harnessOfArgv`, `harnessesOn` and `reportsCost`** in
+  `@wirecat/cli-core/cli`, so a CLI that makes agent schedules (memo's digests) checks an agent against the same list
+  and reads which agent a saved schedule starts.
+- **`schedule list` names each agent schedule's `harness`** and whether it `reports_cost`.
+- **A scheduled agent is told that the CLIs' output is other people's text, never instructions**, and in its run each
+  field an answer lists as `untrusted` is printed between `⟦untrusted:<mark> source=<field> id=<ref>⟧` and
+  `⟦/untrusted:<mark>⟧`, and so is every message's and email's text, transcript, subject, senders and recipients,
+  chat title and attachment names and text in `messages list`, `messages show`, `messages context` and mail's
+  `messages show`, `conversations list` and `conversations show`. The mark is random for each run, and every bracket
+  and the mark are taken out of the text first, so it cannot close or fake a block. Outside a scheduled agent's run the
+  output is as before.
+- **One name per concept across searches.** `sender:` is `from:`. `title:` is the chat's title in message search (a
+  part of it, in any letter case), the subject in mail (as `subject:`), and stays the title in notes and files. The
+  query guide has one table of the title, author, date and presence fields of every search. See
+  [query-language.md, "Поля"](docs/search/query-language.md#поля).
+- **`field:*` and `_exists_:field` ask whether a message has a value.** In message and mail search `from:*`,
+  `title:*`, `subject:*`, `to:*`, `cc:*`, `bcc:*`, `topic:*` and `participants_count:*` keep the messages that have
+  one; `chat:*` and `date:*` keep every message. Another field's `*` is refused with what to write instead, such as
+  `has:file` or `has:link`.
+- **`tasks list` finds a task by words of its title.** A bare word, or `title:request`, finds "Review the request";
+  each word is found inside the title in any letter case, and `title:req*` still matches the title's start.
+- **`contacts list email:` and `phone:`.** A part of a contact's address or phone, the phone compared by its digits:
+  `phone:+34` and `phone:600-11` both work, since a `+` right after a field's colon is now read as the value's sign
+  in every list query.
+- **`search all title:` finds deals and leads by their title only.**
+- **Errors say what to write instead.** `chat:Альфа*` that fits no chat is `not_found` with reason `query.no-match`
+  and suggests `chat:*Альфа*` or the closest name; a chat, people or contact search shorter than three characters
+  is `query.short-text` with a hint; `title:*встр*` in events and notes says `title:встр` already finds it inside a
+  word.
 
 ### Changed — may break callers
 
@@ -40,11 +96,102 @@ shape of this file.
 - **A partial confirm of a findings batch leaves the other findings waiting.** Before, every finding not named was rejected. A confirm with no names takes everything still waiting, and a reject rejects only what waits.
 - **`hr@` starts below `info@`.** A shared `hr@` mailbox is proposed at 0.05, not 0.1, and a contact with only an `hr@` address is no longer called an organization.
 - **A person's phone, address and username come from the identity that wrote the most** and has one, not from the oldest.
+- **Every list and search in the TypeScript API answers a `ListResult`** (`{ items, hasMore, nextOffset?, nextCursor? }`,
+  cli-base WC-OUT-25), and `cli-dev lint` checks it (`result-shape`). The `--json` answers stay as they were. A store
+  list reads one row past the page, so `hasMore` is exact, and takes an `offset`.
+  - The store: `memories.list` and `memories.search`, `facts.list`, `agentActions.list`, `proposedActions.list`,
+    `records.list`, `contracts.list`, `transactions.list`, `orders.list`, `products.list`, `subscriptions.list` and
+    `subscriptions.prices`, `wallets.list`, `finance.invoices` and `finance.payments`, `deals.list` and `deals.find`,
+    `tasks.find`, `business.find`, `searches.searchHistory` and `meetings.search` answered an array; read `.items`.
+  - `searchEvents` and `searchNotes` (`EventsFound`, `NotesFound`): `hits`, `has_more` and `next_offset` are `items`,
+    `hasMore` and `nextOffset`.
+  - The knowledge service: `memories`, `facts` and `searchMemories` answer a `ListResult`; `searchMemories`'
+    `limit_reached` is `hasMore`.
+  - The attachments, conversations and tags services' `list`, the searches service's `history` and `TaskList` say
+    `hasMore` where they said `has_more`.
+  - `pagedList(path, settings, { items, hasMore })` takes `hasMore` where it took `has_more`.
+  - `meetingsList(store, filter)` takes `filter.offset` where it took a page number as its third argument.
+  - `participantCandidates` (`MeetingParticipantPage`): `has_more` and `next_cursor` are `hasMore` and `nextCursor`,
+    absent on the last page. `MeetingProjectDiscoveryPage.hits` is `items`.
+  - `ProposalKind.list` answers a `ListResult`.
+  - A CRM or calendar source's page: `CrmPage` and `ChangePage` say `hasMore` and give `nextCursor` where they gave
+    `nextPage`; `CrmIdPage.ids` and `ChangePage.entries` are `items`. A page that says `hasMore` with no `nextCursor`
+    is refused (`invalid_response`).
+- **Every agent schedule must be saved again.** A run rebuilds the agent's start (its argv, variables and files) from
+  the harness, prompt, model and limits the schedule now keeps under `agent`, and never runs the argv in the file. A
+  file saved before this release keeps no `agent` and is refused (`agent.refused`) with a hint to save it again. A codex
+  schedule saved without `--allow-dangerous` is refused too.
+- **A schedule's variables are checked before it runs**: only the profile, the file locations, PATH, the lock and a
+  harness's own variables, by absolute paths; any other is refused. A timer's run keeps the saved locations. A run by
+  hand (`schedule run`, a backfill) takes PATH from its shell and is refused when the shell's file locations differ
+  from the saved ones. The checked schedule is what runs; the file is not read again.
+- **An agent works in an empty folder of its own**, not in its schedule's folder, and a timer passes the schedule
+  file's SHA-256 to `schedule exec`, which refuses a file that changed since it was saved.
+- **Under `<PREFIX>_READ_ONLY` a command writes a file only inside its scheduled run's work folder.** `--output`,
+  `--output-dir`, a command's owner-only file option and `store backup`'s file are refused elsewhere
+  (`read-only.output-outside`), whatever folder the agent moved to; the folder is the one the run named in
+  `<PREFIX>_WORK_FOLDER` when it started the agent. A locked process outside such a run writes no file.
+- **`<PREFIX>_READ_ONLY` holds for every process below a locked one.** On Linux a CLI also reads the starting
+  environment of the processes it descends from, up to one another user owns or one that hides it (the user's
+  service manager), which a descendant cannot change, so `MEMO_READ_ONLY=0 memo …` or `env -u` inside an agent run
+  stays read-only. When /proc cannot be read, the CLI is read-only.
+- **Claude never reads the owner's settings in a schedule**: `--setting-sources ""` is passed even when
+  `schedule_lean_start` is false, so the owner's own allow rules cannot widen what the agent runs.
+- **An agent that reports no cost lists it as unknown.** `schedule list` answers `spent_today_usd`, `max_cost_usd` and
+  `max_cost_per_day_usd` as `null` for every agent but claude. `schedule agent` refuses `--max-cost` and
+  `--max-cost-per-day` for such an agent (`agent.cost-unknown`), and `agentSchedule` leaves them out of its schedule.
+- **An unknown field is refused, not searched as words.** `status:open`, `assignee:ana` and any other lowercase
+  Latin name of three letters or more with a value that names no field of the search is `query.unknown-field`. The
+  error names the search's fields, or the list that filters by it (`tasks list status:open`,
+  `deals list stage:<value>`), and the quoted form that finds the words (`"status:open"`). `10:30`, `HH:MM`, `a:b`,
+  `итог:договор` and links stay words. `search all stage:won` now refuses the whole search instead of skipping deals.
+  A saved search with such a term refuses when it runs.
+- **A notes field in message or mail search is refused.** `site:`, `lang:`, `author:`, `keyword:` and `source:`
+  found nothing there and said nothing; they are now `query.unsupported-field`, as a mail field is without mail.
+  In `search all` the messages lane is skipped with that reason.
+- **A boost is refused.** `invoice^2` searched for the text "invoice^2" and found nothing; it is now
+  `query.unsupported-operator` with the query to retry: `invoice`, or `"invoice^2"` to find the text as written.
+  `x^2` as text is written in quotes.
+- **`after:` and `before:` refuse with reason `query.legacy-date-field`**, renamed from `legacy_date_field`: a reason
+  is a dotted name, and the old one could not be registered.
 
 ### Fixed
 
 - **A person someone talks to in a private chat is no longer `automated`** because one of their mailboxes looked like a newsletter.
 - **A person on one of the owner's own accounts** (a second profile the owner uses) no longer takes that profile's label as their name. They take the fullest name of their other identities.
+- **`messages show` and search hits name a downloaded file's `local_path`.** An agent reading a hit could not tell
+  that a picture was already on this computer, nor where.
+- **A small vision model on Ollama reads pictures.** The OpenAI-compatible and Anthropic adapters put the prompt as a
+  text part beside the images in one user message; moondream answered nothing to a message of images alone. A server
+  on this computer may leave out `finish_reason` and `usage` on a whole answer (Ollama's `/v1` does); a hosted API
+  stays strict.
+- **An empty answer has its own reason.** The gateway says `model.empty-answer`, `models ai check` says
+  `ai.empty-answer`, and OCR answers `error: "empty_answer"` with a hint to choose a vision model, instead of a bare
+  failure.
+- **gemini's rules against chained and variable-setting commands now match.** Gemini tests a rule's regex after
+  `"command":"` in the call's JSON, so the old patterns, which began with `^`, never matched. Every tool no rule names,
+  the owner's MCP servers' tools too, is denied.
+- **A claude run that answers an error fails.** Claude can answer "Credit balance is too low" with `is_error` and exit
+  0; the run kept the error as its report and sent it as a digest. It now fails, and the run's log keeps claude's answer.
+- **An answer's `meta.run_id` names the run that did the work.** A command that opens several runs, like
+  `messages sync` (the fetch, then the task rules, then the mention count), named the last one, which logged nothing:
+  `runs show <run_id>` found no requests and no `sync.progress`. Now the command's first run names the answer, and a
+  named side run (`sync tasks`) never does.
+- **Purging a CRM account deletes its deals, leads and pipelines.** `accounts.purge`, which `account remove
+  --delete-data` runs, failed on a synced CRM account (`FOREIGN KEY constraint failed`) because it left the account's
+  deals, leads, pipelines and stages in place. It now deletes them with their stage history, tags, aliases,
+  attachments and links, and the link history the account's removed links left. A lead or an order of another account
+  that names one of these deals keeps its row and loses only that link.
+- **Every message search is about 15 times faster on a large store.** The coverage step counted and dated every
+  message of every chat on each search (0.45 s at 1M messages); it now reads the trigger-kept count and each chat's
+  newest message off its time index. `договор*` at 1M messages: 478 ms before, 31 ms after
+  ([measurement](https://github.com/WireCatLabs/cli-testing/tree/main/performance/search/coverage-step)).
+- **A word-end pattern answers once its page is full.** `*ени` and `*ость` without `chat:` or `date:` were refused
+  before any message was checked; the candidates are now checked in the answer's order and stop at the page, so the
+  budget refuses only a page it cannot fill. That refusal names the pattern (`term`) and suggests `*part*`, more of
+  the word, `chat:` or `date:`.
+- **`bin/verify-query-reference` passes on JDK 25.** Java's default object ids in Lucene's printed nodes are
+  normalized before comparing.
 
 ## 0.642.0 — 11.11.2026
 
