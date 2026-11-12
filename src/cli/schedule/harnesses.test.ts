@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest"
 import { runSchedule, type Schedule, scheduleFile } from "../../background/schedules.js"
 import type { Ran, ServerSystem } from "../../background/system.js"
 import { scheduledJob, scheduleHarness } from "../../entities/list-results.js"
-import { lockedByAncestor } from "../../ports/app.js"
+import { ancestorValue, lockedByAncestor } from "../../ports/app.js"
 import { baseContext } from "../context.js"
 import { run } from "../program.js"
 import { settingsFor } from "../settings.js"
@@ -201,21 +201,49 @@ describe.runIf(process.platform !== "win32")("agents a schedule may start", () =
 })
 
 describe("the read-only lock", () => {
-  const proc = (tree: Record<number, { ppid: number; environ: string[] }>) => (path: string) => {
+  type Tree = Record<number, { ppid: number; uid?: number; environ?: string[] }>
+  const proc = (tree: Tree) => (path: string) => {
     const [, pid = "", kind] = /^\/proc\/(\d+)\/(\w+)$/.exec(path) ?? []
     const one = tree[Number(pid)]
     if (!one) throw new Error("gone")
-    return kind === "environ" ? one.environ.join("\0") : `${pid} (sh) S ${one.ppid} 0 0`
+    if (kind === "status") return `Name:\tsh\nPPid:\t${one.ppid}\nUid:\t${one.uid ?? 501}\t${one.uid ?? 501}\n`
+    if (!one.environ) throw Object.assign(new Error("denied"), { code: "EACCES" })
+    return one.environ.join("\0")
   }
+  const locked = (tree: Tree, from: number) =>
+    lockedByAncestor("CHAT_READ_ONLY", { read: proc(tree), from, uid: 501, cache: new Map() })
 
   it.runIf(process.platform === "linux")("holds when a process this one descends from was started with it", () => {
     const tree = {
       30: { ppid: 20, environ: ["CHAT_READ_ONLY=0"] },
       20: { ppid: 10, environ: ["CHAT_READ_ONLY=1"] },
-      10: { ppid: 1, environ: [] },
+      10: { ppid: 0, environ: [] },
     }
-    expect(lockedByAncestor("CHAT_READ_ONLY", { read: proc(tree), from: 30, cache: new Map() })).toBe(true)
-    expect(lockedByAncestor("CHAT_READ_ONLY", { read: proc(tree), from: 10, cache: new Map() })).toBe(false)
+    expect([locked(tree, 30), locked(tree, 10)]).toEqual([true, false])
+  })
+
+  it.runIf(process.platform === "linux")("holds when /proc cannot be read", () => {
+    expect(locked({}, 30)).toBe(true)
+    expect(locked({ 30: { ppid: 20, environ: [] } }, 30)).toBe(true)
+  })
+
+  it.runIf(process.platform === "linux")("stops at an ancestor another user owns or one that hides its start", () => {
+    expect(locked({ 30: { ppid: 20, environ: [] }, 20: { ppid: 1, uid: 0, environ: ["CHAT_READ_ONLY=1"] } }, 30)).toBe(
+      false,
+    )
+    expect(
+      locked({ 30: { ppid: 20, environ: [] }, 20: { ppid: 10 }, 10: { ppid: 0, environ: ["CHAT_READ_ONLY=1"] } }, 30),
+    ).toBe(false)
+  })
+
+  it.runIf(process.platform === "linux")("reads a value from the farthest ancestor that sets it", () => {
+    const tree = {
+      30: { ppid: 20, environ: ["CHAT_WORK_FOLDER=/home/me"] },
+      20: { ppid: 10, environ: ["CHAT_WORK_FOLDER=/tmp/wirecat-agent-1"] },
+      10: { ppid: 1, uid: 0 },
+    }
+    const ancestry = { read: proc(tree), from: 30, uid: 501, cache: new Map() }
+    expect(ancestorValue("CHAT_WORK_FOLDER", { CHAT_WORK_FOLDER: "/" }, ancestry)).toBe("/tmp/wirecat-agent-1")
   })
 })
 

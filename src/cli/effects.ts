@@ -189,6 +189,9 @@ export const writesFileOnlyWith = <T extends Command>(command: T, option: string
 export const writesNewFileOnlyWith = <T extends Command>(command: T, option: string): T =>
   destroysNothing(writesFileOnlyWith(command, option))
 
+/** The option a command writes its one file through, as `writesFileOnlyWith` named it. */
+export const fileOptionOf = (command: Command): string | undefined => FILE_OPTION.get(command)
+
 const writesFileNow = (command: Command): boolean => {
   const option = FILE_OPTION.get(command)
   return option === undefined || command.opts()[option] !== undefined

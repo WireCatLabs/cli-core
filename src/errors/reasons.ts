@@ -135,6 +135,7 @@ const OTHERS: Entry[] = [
     "permission_error",
     "nothing holds this agent to the CLI's commands, so no schedule starts it",
   ],
+  ["read-only.output-outside", "permission_error", "a read-only process writes files only inside its working folder"],
   [
     "agent.refused",
     "permission_error",

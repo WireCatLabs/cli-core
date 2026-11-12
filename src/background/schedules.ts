@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process"
-import { createHash } from "node:crypto"
+import { createHash, randomBytes } from "node:crypto"
 import {
   copyFileSync,
   existsSync,
@@ -816,6 +816,13 @@ export const attemptSchedule = async (
   // An agent works in an empty folder of its own: one that could write where it runs never reaches its schedule file.
   const work = agent ? mkdtempSync(join(tmpdir(), "wirecat-agent-")) : folder
   const inWork = (text: string) => text.replaceAll(WORK_FOLDER, work)
+  const mark = randomBytes(8).toString("hex")
+  const agentOnly = (one: Pick<AgentCli, "envPrefix">) => [
+    [`${one.envPrefix}_READ_ONLY`, "1"],
+    [`${one.envPrefix}_SCHEDULED`, schedule.name],
+    [`${one.envPrefix}_WORK_FOLDER`, work],
+    [`${one.envPrefix}_UNTRUSTED_MARK`, mark],
+  ]
   const childEnv = {
     ...env,
     ...(agent
@@ -826,14 +833,7 @@ export const attemptSchedule = async (
     ...(schedule.onNewMail ? { [mailHolderVariable(app)]: schedule.onNewMail } : {}),
     // A run started under the lock stays under it, whatever the schedule file says.
     ...(agent || readOnlyLockOf(app, env) ? { [`${app.envPrefix}_READ_ONLY`]: "1" } : {}),
-    ...(agent
-      ? Object.fromEntries(
-          agentRuns.flatMap((other) => [
-            [`${other.envPrefix}_READ_ONLY`, "1"],
-            [`${other.envPrefix}_SCHEDULED`, schedule.name],
-          ]),
-        )
-      : {}),
+    ...(agent ? Object.fromEntries([app, ...agentRuns].flatMap(agentOnly)) : {}),
   }
   // The child's output is data, and an agent's is another program's: it is kept as it came. These lines say
   // only when it ran and how it ended.

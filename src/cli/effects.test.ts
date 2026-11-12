@@ -1,5 +1,5 @@
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs"
-import { tmpdir } from "node:os"
+import { existsSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs"
+import { homedir, tmpdir } from "node:os"
 import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
 import { annotate, describeProgram, flatten, metaOf } from "@wirecat/cli-base/commands"
@@ -422,7 +422,7 @@ describe("the read-only lock on the message store", () => {
     const code = await run([...argv, "--json"], sharedProgram, {
       streams,
       tty: false,
-      env: { ...process.env, CHAT_READ_ONLY: "1", MESSAGING_STORE: store },
+      env: { ...process.env, CHAT_READ_ONLY: "1", CHAT_WORK_FOLDER: root, MESSAGING_STORE: store },
     })
     const error = JSON.parse(streams.stderr.find((line) => line.startsWith("{")) ?? "{}").error
     return { code, error }
@@ -520,5 +520,84 @@ describe("reads a pushed history answers from the store", () => {
 
     for (const path of ["chats list", "chats show"])
       expect(metaOf(commandAt(chats, path) as Command).effects).toEqual({ remote, local: "read" })
+  })
+})
+
+describe("files a read-only command writes", () => {
+  const exportTo = async (argv: string[], { cwd, work }: { cwd: string; work?: string }) => {
+    let ran = false
+    const streams = captureStreams()
+    const before = process.cwd()
+    process.chdir(cwd)
+    try {
+      const code = await run(
+        ["export", ...argv],
+        {
+          app: sharedProgram.app,
+          commands: () => [
+            new Command("export")
+              .option("--output <file>")
+              .option("--output-dir <dir>")
+              .action(() => {
+                ran = true
+              }),
+          ],
+        },
+        { streams, tty: false, env: { CHAT_READ_ONLY: "1", ...(work ? { CHAT_WORK_FOLDER: work } : {}) } },
+      )
+      const error = JSON.parse(streams.stderr.find((line) => line.startsWith("{")) ?? "{}").error
+      return { code, ran, reason: error?.reason }
+    } finally {
+      process.chdir(before)
+    }
+  }
+  const refused = { code: 5, ran: false, reason: "read-only.output-outside" }
+
+  it.each([
+    ["--output", ["--output", join(homedir(), ".bashrc.d", "x.sh")]],
+    ["--output-dir", ["--output-dir", join(homedir(), ".ssh")]],
+    ["--output-dir climbing out", ["--output-dir", "../elsewhere"]],
+  ])("refuses %s outside the run's work folder", async (_name, argv) => {
+    const work = mkdtempSync(join(tmpdir(), "locked-work-"))
+    expect(await exportTo(argv, { cwd: work, work })).toEqual(refused)
+  })
+
+  it("refuses a relative path after a cd out of the work folder", async () => {
+    const work = mkdtempSync(join(tmpdir(), "locked-work-"))
+    const elsewhere = mkdtempSync(join(tmpdir(), "locked-elsewhere-"))
+    expect(await exportTo(["--output-dir", "."], { cwd: elsewhere, work })).toEqual(refused)
+  })
+
+  it("refuses a symlink in the work folder that leads out of it", async () => {
+    const work = mkdtempSync(join(tmpdir(), "locked-work-"))
+    symlinkSync(homedir(), join(work, "home"))
+    expect(await exportTo(["--output-dir", "home/.ssh"], { cwd: work, work })).toEqual(refused)
+  })
+
+  it("writes no file when no scheduled run names a work folder", async () => {
+    const work = mkdtempSync(join(tmpdir(), "locked-work-"))
+    expect(await exportTo(["--output", "digest.jsonl"], { cwd: work })).toEqual(refused)
+  })
+
+  it("writes inside the run's work folder", async () => {
+    const work = mkdtempSync(join(tmpdir(), "locked-work-"))
+    const out = await exportTo(["--output", "digest.jsonl", "--output-dir", "files"], { cwd: work, work })
+    expect(out).toMatchObject({ ran: true })
+  })
+
+  it("refuses a store backup outside the run's work folder", async () => {
+    const work = mkdtempSync(join(tmpdir(), "locked-work-"))
+    const streams = captureStreams()
+    const code = await run(
+      ["store", "backup", join(homedir(), ".config", "autostart", "x.desktop"), "--json"],
+      sharedProgram,
+      {
+        streams,
+        tty: false,
+        env: { ...process.env, CHAT_READ_ONLY: "1", CHAT_WORK_FOLDER: work, MESSAGING_STORE: join(work, "m.db") },
+      },
+    )
+    const error = JSON.parse(streams.stderr.find((line) => line.startsWith("{")) ?? "{}").error
+    expect([code, error.reason]).toEqual([5, "read-only.output-outside"])
   })
 })

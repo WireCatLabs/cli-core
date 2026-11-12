@@ -20,6 +20,7 @@ import { holdersOf } from "../../background/processes.js"
 import { RULES_VERSION } from "../../conversations/link.js"
 import { syncsOneChat } from "../../ports/traits.js"
 import { isSealed, sealFile, unsealFile } from "../../sealed.js"
+import { refuseLockedOutput } from "../../sends/upload.js"
 import { fileSchemaOf, SPEAKS, writableBy } from "../../store/compatibility.js"
 import { storeDamageReport } from "../../store/damage.js"
 import type { CacheDatabase } from "../../store/driver.js"
@@ -620,6 +621,8 @@ const backupCommand = (): Command =>
       const { encrypt } = this.opts<{ encrypt?: boolean }>()
       const path = storePath(environmentOf(this).env ?? process.env)
       const target = resolve(file)
+      const { app, env } = environmentOf(this)
+      if (app) refuseLockedOutput(target, app, env ?? process.env, "<file>")
       if (!existsSync(path)) throw new CliError("not_found", `no store at ${path} to back up`)
       if (existsSync(target))
         throw new CliError("validation_error", `${target} exists — a backup never overwrites a file`)

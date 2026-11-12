@@ -3,7 +3,7 @@ import { open, stat } from "node:fs/promises"
 import { basename, dirname, extname, isAbsolute, relative, resolve, sep } from "node:path"
 import { CliError, resolvePaths } from "@wirecat/cli-base"
 import type { StickerFile, Upload, UploadKind, UploadSource } from "../domain/attachments.js"
-import type { AppIdentity } from "../ports/app.js"
+import { type AppIdentity, ancestorValue, envName, readOnlyLockOf } from "../ports/app.js"
 import { storePath, wirecatDirectory } from "../store/path.js"
 
 /** The most `uploadBytes` holds in memory; an adapter that can stream uses `uploadBlob` and has no such cap. */
@@ -132,6 +132,42 @@ const WIRECAT_APPS: readonly { appName: string; prefix: string }[] = [
   { appName: "cli-common", prefix: "CLI_COMMON" },
 ]
 
+/** Where `path` really is: its nearest existing ancestor's real path, as a write may create the rest under a symlink. */
+const realPathOf = (path: string): string => {
+  let ancestor = resolve(path)
+  for (;;) {
+    try {
+      return resolve(realpathSync(ancestor), relative(ancestor, resolve(path)))
+    } catch {
+      const parent = dirname(ancestor)
+      if (parent === ancestor) return resolve(path)
+      ancestor = parent
+    }
+  }
+}
+
+/**
+ * Refuses a file or folder a read-only process would write outside its scheduled run's work folder. The run names
+ * that empty folder in `<PREFIX>_WORK_FOLDER` on the agent it starts, and it is read from there, so neither a `cd` nor
+ * a variable the agent sets moves it: a download or an export it asks for can never name a start-up file, an SSH key
+ * or another tool's settings. Locked with no run's folder, it writes no file.
+ */
+export const refuseLockedOutput = (path: string, app: AppIdentity, env: NodeJS.ProcessEnv, flag: string): void => {
+  const lock = readOnlyLockOf(app, env)
+  if (lock === undefined) return
+  const named = ancestorValue(envName(app, "WORK_FOLDER"), env)
+  const work = named ? realPathOf(named) : undefined
+  const real = realPathOf(path)
+  if (work !== undefined && (real === work || real.startsWith(`${work}${sep}`))) return
+  throw new CliError(
+    "permission_error",
+    work === undefined
+      ? `this process is read-only (${lock}) — ${flag} writes a file only inside a scheduled run's work folder`
+      : `this process is read-only (${lock}) — ${flag} writes only inside its run's work folder, ${work}`,
+    { reason: "read-only.output-outside", param: flag },
+  )
+}
+
 /** Protect known credential/state paths without refusing ordinary hidden developer folders. */
 export const refusedPlace = (
   path: string,
@@ -148,19 +184,7 @@ export const refusedPlace = (
   ]
   // The store file and its -wal and -shm, not its folder: MESSAGING_STORE may sit in the home folder.
   const store = resolve(storePath(env))
-  let ancestor = resolve(path)
-  let real = ancestor
-  // Downloads may create missing descendants of a symlinked directory.
-  for (;;) {
-    try {
-      real = resolve(realpathSync(ancestor), relative(ancestor, resolve(path)))
-      break
-    } catch {
-      const parent = dirname(ancestor)
-      if (parent === ancestor) break
-      ancestor = parent
-    }
-  }
+  const real = realPathOf(path)
   // macOS and Windows find `~/.SSH` at `~/.ssh`, so the names are compared the way their file systems do.
   const folded = platform === "darwin" || platform === "win32"
   const fold = (text: string) => (folded ? text.toLowerCase() : text)

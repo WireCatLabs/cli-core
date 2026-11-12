@@ -42,34 +42,80 @@ export const envName = (app: AppIdentity, name: string): string => `${app.envPre
 
 const locking = (value: string | undefined) => value !== undefined && value.trim() !== "" && value !== "0"
 
-const lockedAbove = new Map<string, boolean>()
+/** Where a process's ancestry is read from: injectable, so a test can give its own process tree. */
+interface Ancestry {
+  read?: (path: string) => string
+  from?: number
+  uid?: number
+  cache?: Map<string, string[][] | null>
+}
+
+const ancestries = new Map<string, string[][] | null>()
+
+/** A file's text, or undefined when reading it is denied; any other failure throws. */
+const readable = (read: (path: string) => string, path: string): string | undefined => {
+  try {
+    return read(path)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "EACCES") return undefined
+    throw error
+  }
+}
 
 /**
- * Whether a process this one descends from was started with the lock. A process's starting environment
- * (`/proc/<pid>/environ`) is fixed, so an agent that runs `MEMO_READ_ONLY=0 memo …` or `env -u` under a locked run
- * cannot lift it. Linux only; elsewhere the variable alone decides.
+ * The starting environments of the processes this one descends from, nearest first, up to the first one another user
+ * owns or one whose environment is hidden. A process's starting environment (`/proc/<pid>/environ`) is fixed, so an agent that runs `MEMO_READ_ONLY=0
+ * memo …` or `env -u` under a locked run cannot change what is read here. Null when /proc cannot be read, or an
+ * ancestor ended mid-walk: the caller fails closed. Linux only; elsewhere an empty list, and the variables alone decide.
  */
-export const lockedByAncestor = (
-  name: string,
-  { read = (path: string) => readFileSync(path, "utf8"), from = process.ppid, cache = lockedAbove } = {},
-): boolean => {
-  if (process.platform !== "linux") return false
-  const known = cache.get(name)
+const ancestorEnvironments = ({
+  read = (path: string) => readFileSync(path, "utf8"),
+  from = process.ppid,
+  uid = process.getuid?.() ?? -1,
+  cache = ancestries,
+}: Ancestry = {}): string[][] | null => {
+  if (process.platform !== "linux") return []
+  const key = `${from}:${uid}`
+  const known = cache.get(key)
   if (known !== undefined) return known
-  let locked = false
+  let found: string[][] | null = []
   try {
-    for (let pid = from, depth = 0; pid > 1 && depth < 64 && !locked; depth++) {
-      const environ = read(`/proc/${pid}/environ`).split("\0")
-      locked = environ.some((entry) => entry.startsWith(`${name}=`) && locking(entry.slice(name.length + 1)))
-      const stat = read(`/proc/${pid}/stat`)
-      pid = Number(stat.slice(stat.lastIndexOf(")") + 2).split(" ")[1])
+    // A sandbox's own process list (codex's) starts at pid 1, which is then the agent's own helper.
+    for (let pid = from, depth = 0; pid >= 1 && depth < 64; depth++) {
+      const status = read(`/proc/${pid}/status`)
+      const field = (name: string) => new RegExp(`^${name}:\\s*(\\d+)`, "m").exec(status)?.[1]
+      if (Number(field("Uid")) !== uid) break
+      const environ = readable(read, `/proc/${pid}/environ`)
+      // The user's own service manager (systemd --user) hides its environment; nothing an agent starts is above it.
+      if (environ === undefined) break
+      found.push(environ.split("\0"))
+      pid = Number(field("PPid"))
     }
   } catch {
-    // An ancestor of another user, or one that ended, cannot be read; the variable still decides.
+    found = null
   }
-  cache.set(name, locked)
-  return locked
+  cache.set(key, found)
+  return found
 }
+
+const valuesOf = (environments: string[][], name: string) =>
+  environments.flatMap((environ) =>
+    environ.filter((entry) => entry.startsWith(`${name}=`)).map((entry) => entry.slice(name.length + 1)),
+  )
+
+/** Whether a process this one descends from was started with the lock, or its ancestry cannot be read. */
+export const lockedByAncestor = (name: string, ancestry: Ancestry = {}): boolean => {
+  const environments = ancestorEnvironments(ancestry)
+  return environments === null || valuesOf(environments, name).some(locking)
+}
+
+/**
+ * The value the farthest ancestor that sets `name` was started with: the scheduled run sets it on the agent it starts,
+ * and nothing the agent runs can change an ancestor above itself. The variable itself where no ancestor sets it, as
+ * off Linux.
+ */
+export const ancestorValue = (name: string, env: NodeJS.ProcessEnv, ancestry: Ancestry = {}): string | undefined =>
+  valuesOf(ancestorEnvironments(ancestry) ?? [], name).at(-1) ?? env[name]
 
 /** The variable that locks this process read-only: set to anything but "0" here or in any process it descends from. */
 export const readOnlyLockOf = (app: AppIdentity, env: NodeJS.ProcessEnv): string | undefined => {
