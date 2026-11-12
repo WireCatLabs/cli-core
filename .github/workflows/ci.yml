@@ -85,7 +85,7 @@ jobs:
       - run: |
           # shellcheck disable=SC2046 # one flag per mirror, split on purpose
           docker run --rm $(bash .github/scripts/ubuntu-hosts.sh) -v "$PWD:/w" -w /w ubuntu:26.04 sh -ec '
-            apt-get update >/dev/null && apt-get install -y nodejs gcc curl unzip procps >/dev/null
+            apt-get update >/dev/null && apt-get install -y nodejs gcc libc6-dev curl unzip procps >/dev/null
             curl -sSfL --retry 5 --retry-all-errors --retry-delay 5 --connect-timeout 20 --max-time 60 --retry-max-time 120 \
               https://www.sqlite.org/2023/sqlite-amalgamation-3420000.zip -o /tmp/old.zip
             unzip -q /tmp/old.zip -d /tmp && mkdir /old
