@@ -173,6 +173,26 @@ export const driveSessionCodec: TokenCodec = {
   },
 }
 
+const googleStandard = standardCodec("google")
+
+/**
+ * Google's entry: the standard one plus the client secret, which a Google Desktop client needs to refresh while its
+ * client file is read only at sign-in. A client without a secret drops the one the profile signed in with before.
+ */
+export const googleTokenCodec: TokenCodec = {
+  decode: (raw) => {
+    const stored = googleStandard.decode(raw)
+    const clientSecret = text(parse(raw).clientSecret)
+    return clientSecret ? { ...stored, client: { clientId: stored.client?.clientId ?? "", clientSecret } } : stored
+  },
+  encode: (input) => {
+    const entry = parse(googleStandard.encode(input))
+    if (input.client.clientSecret) entry.clientSecret = input.client.clientSecret
+    else delete entry.clientSecret
+    return JSON.stringify(entry)
+  },
+}
+
 /** zm's entry as zoom-cli writes it today: `{accessToken, refreshToken, expiresAt, scopes}`, all four required. */
 export const zoomTokenCodec: TokenCodec = {
   decode: (raw) => {

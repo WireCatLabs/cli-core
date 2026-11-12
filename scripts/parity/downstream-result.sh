@@ -2,7 +2,9 @@
 # Sums parity.yml's downstream matrix into one check. A CLI that no longer builds, typechecks, starts or passes its
 # tests is broken and fails the check, unless the pull request carries the label $LABEL: then it passes and the
 # summary names the broken CLIs. A failed `pnpm generate` breaks too: the tests read what it writes. Command lint and
-# docs failures only warn.
+# docs failures only warn. A CLI listed in known-broken.json until a
+# date not yet past only warns too: a break made on purpose stays known on main and at release, where no label is
+# read, until the CLI adopts the change.
 #
 #   outcomes dir   one <repo>.json per matrix leg, written by its "Record the outcome" step
 #   RESULT         needs.downstream.result
@@ -14,7 +16,10 @@ here=$(cd "$(dirname "$0")" && pwd)
 summary=${GITHUB_STEP_SUMMARY:-/dev/stdout}
 LABEL=${LABEL:-breaks-downstream}
 
-broken=() warned=()
+broken=() warned=() known=()
+today=$(date -u +%F)
+known_until() { jq -r --arg r "$1" --arg t "$today" '.[] | select(.repo == $r and .until >= $t) | .until' \
+  "$here/known-broken.json" | head -n1; }
 {
   echo "### Downstream CLIs against this cli-core"
   echo
@@ -35,7 +40,15 @@ for repo in $(jq -r '.[].repo' "$here/downstream.json"); do
   for step in build typecheck start; do [ "$(get "$step")" = success ] || failed+=("$step"); done
   [ "$(get generate)" != failure ] || failed+=(generate)
   [ "$(get tests)" != failure ] || failed+=(tests)
-  [ ${#failed[@]} -eq 0 ] || broken+=("$repo (${failed[*]})")
+  until=$(known_until "$repo")
+  if [ ${#failed[@]} -eq 0 ]; then
+    [ -z "$until" ] || [ "$(get tests)" != success ] ||
+      echo "::warning title=$repo::$repo passes; remove it from scripts/parity/known-broken.json"
+  elif [ -n "$until" ]; then
+    known+=("$repo (${failed[*]})")
+  else
+    broken+=("$repo (${failed[*]})")
+  fi
   soft=()
   for step in lint docs; do [ "$(get "$step")" = success ] || soft+=("$step"); done
   [ ${#soft[@]} -eq 0 ] || warned+=("$repo (${soft[*]})")
@@ -48,12 +61,18 @@ if [ ${#warned[@]} -gt 0 ]; then
   echo "Warnings (do not block): ${list%, }" >>"$summary"
 fi
 
+if [ ${#known[@]} -gt 0 ]; then
+  printf -v list '%s, ' "${known[@]}"
+  echo "::notice title=downstream broken on purpose::listed in scripts/parity/known-broken.json: ${list%, }"
+  echo "Known breaks (scripts/parity/known-broken.json): ${list%, }" >>"$summary"
+fi
+
 if [ ${#broken[@]} -eq 0 ]; then
-  if [ "${RESULT:-}" != success ]; then
+  if [ "${RESULT:-}" != success ] && [ ${#known[@]} -eq 0 ]; then
     echo "::error::the downstream matrix ended as '${RESULT:-}', and no recorded step says why: see its jobs"
     exit 1
   fi
-  echo "No CLI breaks against this cli-core." >>"$summary"
+  [ ${#known[@]} -gt 0 ] || echo "No CLI breaks against this cli-core." >>"$summary"
   exit 0
 fi
 
@@ -72,6 +91,7 @@ if [ "$labelled" = true ]; then
   exit 0
 fi
 echo "::error title=downstream::these CLIs break against this cli-core: $list. Fix it, or, if the break is on purpose," \
-  "add the label '$LABEL', say why in the pull request body and re-run this job"
+  "list them in scripts/parity/known-broken.json with this pull request and a date to adopt by," \
+  "and say why in its body"
 printf '**Broken**: %s.\n' "$list" >>"$summary"
 exit 1

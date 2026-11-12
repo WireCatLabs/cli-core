@@ -10,7 +10,7 @@ import type { ServerSystem } from "../background/system.js"
 import { unitScope } from "../background/units.js"
 import { openStore } from "../store/store.js"
 import { messenger } from "../testing/shared-program.js"
-import { type AccountRemoval, type AccountRemovalContext, accountRemoveCommand } from "./account-remove.js"
+import { type AccountRemoval, type AccountRemovalContext, accountRemoveCommand, mayRevoke } from "./account-remove.js"
 import { accountCommand } from "./messenger/account-command.js"
 import { accountFileFor, rememberAccount } from "./messenger/accounts.js"
 import { run } from "./program.js"
@@ -281,10 +281,9 @@ describe("account remove", () => {
 
 describe("a messenger's account group", () => {
   it("has remove only when the messenger opts in", () => {
+    const { accountRemoval: _, ...without } = messenger
     const names = (removal?: AccountRemoval) =>
-      accountCommand({ ...messenger, ...(removal ? { accountRemoval: removal } : {}) }).commands.map((one) =>
-        one.name(),
-      )
+      accountCommand({ ...without, ...(removal ? { accountRemoval: removal } : {}) }).commands.map((one) => one.name())
 
     expect(names()).not.toContain("remove")
     expect(names({ signOut: async () => ({ revoked: null, removed: [] }) })).toContain("remove")
@@ -403,5 +402,15 @@ describe("account remove and what cli-core keeps for the profile", () => {
       expect(result.error).toMatchObject({ code: "configuration_error", reason: "account-remove.folder-outside" })
     }
     expect(existsSync(given.session)).toBe(true)
+  })
+})
+
+describe("mayRevoke", () => {
+  it("**never lets a run with a moved folder revoke the owner's sign-in**; a test's own keyring may", () => {
+    const elsewhere = mkdtempSync(join(tmpdir(), "may-revoke-"))
+
+    expect(mayRevoke(app, { CHAT_CONFIG_DIR: elsewhere })).toBe(false)
+    expect(mayRevoke(app, { CHAT_CACHE_DIR: elsewhere })).toBe(false)
+    expect(mayRevoke(app, { CHAT_CONFIG_DIR: elsewhere }, memoryKeyring())).toBe(true)
   })
 })

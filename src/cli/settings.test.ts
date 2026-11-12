@@ -682,3 +682,17 @@ describe("a setting no schema knows", () => {
     expect(() => settings()).not.toThrowError(/mark-read|name the profile/)
   })
 })
+
+describe("a CLI's own settings", () => {
+  it("extend the shared schema, and a personal-only one stays out of a bot's section", () => {
+    const { schema } = settingsFor(
+      { command: "chat", appName: "chat-cli", envPrefix: "CHAT", description: "", version: "0.0.0" },
+      { personal: { serve: v.optional(v.boolean()) }, defaults: { transcribe_model: v.optional(v.string()) } },
+    )
+    const parses = (config: unknown) => v.safeParse(schema, config).success
+    expect(parses({ defaults: { serve: true, history_muted: true, transcribe_model: "small" } })).toBe(true)
+    expect(parses({ personal: { profiles: { work: { serve: false, picture_search: true } } } })).toBe(true)
+    expect(parses({ bot: { defaults: { read_other_bots: ["helper"] } } })).toBe(true)
+    expect(parses({ bot: { defaults: { serve: true } } })).toBe(false)
+  })
+})

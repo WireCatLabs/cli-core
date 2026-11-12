@@ -161,6 +161,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `lookup` | ask the messenger who is behind a phone number |  |
 | `inspect` | look at a source before taking anything from it: a chat link without joining, a mailbox without importing |  |
 | `send` | send a message |  |
+| `call` | call one provider API method by its own name, generated from the provider's method list |  |
 | `edit` | change a sent message |  |
 | `forward` | send an existing message on to another chat |  |
 | `pin` | pin a message or chat |  |
@@ -784,6 +785,12 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--phone-number` | `<who>` | choice | who sees the number: everyone, contacts or nobody |  |
 | `--profile-photo` | `<who>` | choice | who sees the profile photo: everyone, contacts or nobody |  |
 | `--read-receipts` | `<on\|off>` | choice | send read receipts |  |
+| `--client-id` | `<id>` | id | sign in through the owner's own OAuth app with this client ID instead of WireCat's (WC-SECR-25) |  |
+| `--client-file` | `<file>` | path | sign in through the owner's own OAuth app read from this client JSON instead of WireCat's (WC-SECR-25) |  |
+| `--keep-data` |  | switch | remove the account but leave what the store holds of it, still searchable |  |
+| `--delete-data` |  | switch | remove the account and delete what the store and the tool's files hold of it |  |
+| `--answer-stdin` |  | switch | a sign-in step asks its question as a JSON line and reads the answer from stdin |  |
+| `--hide-phone` |  | switch | leave the phone number out of the answer |  |
 | `--end-time` | `<time>` | time | when it ends |  |
 | `--start-date` | `<date>` | time | the first day of something that lasts whole days, such as an all-day event or a contract |  |
 | `--end-date` | `<date>` | time | the last day of something that lasts whole days, such as an all-day event or a contract |  |
@@ -849,7 +856,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `missing-command-help` | high | command | every command has a summary |
 | `missing-command-effects` | high | command | every command that runs declares its effects: each leaf, and a group with an action of its own |
 | `command-help-too-long` | low | command | a summary is at most 80 characters |
-| `command-example-count` | medium | command | a leaf command has one to three examples; generated commands are exempt |
+| `command-example-count` | low | command | a leaf command has one to three examples; generated commands are exempt |
 | `faulty-help-example-parameters` | high | command | an example starts with the tool, runs its own command, and gives only arguments and options it takes |
 | `missing-argument-help` | high | argument | every argument is described |
 | `missing-option-help` | high | option | every option is described |
@@ -1011,7 +1018,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--certainty` | `<n>` | how sure an agent is, 0 to 1, that a task needs nothing more; below the owner's threshold its close waits on the owner |  | `tasks close` (planned) |
 | `--channel` |  | a private channel instead of a group; people join it by its link |  | `chats create` |
 | `--chart-kind` | `<messages\|active\|membership>` | what to draw: messages, active authors, or joins and leaves | `messages` | `stats charts` |
-| `--chat` | `<chat>` | a chat, by id or name; repeat it for more. **chat addressing follows each messenger's supported names, usernames and Saved Messages aliases, so it differs on purpose (Help text rule 4)** |  | `attachments download`, `attachments extract`, `attachments jobs install`, `chats folders create`, `contacts context`, `conversations batches show`, `conversations batches status`, `conversations consents remove`, `conversations embed`, `conversations embeddings clear`, `conversations embeddings status`, `conversations links clear`, `conversations links rebuild`, `conversations rebuild`, `conversations status`, `images embed`, `metadata show` (planned), `metadata sync` (planned), `search conversations`, `searches create`, `stats messages counters show`, `stats messages counters sync`, `stats messages show`, `stats tasks show`, `tags add`, `tags rebuild`, `tags remove`, `tasks link` |
+| `--chat` | `<chat>` | a chat, by id or name; repeat it for more. **chat addressing follows each messenger's supported names, usernames and Saved Messages aliases, so it differs on purpose (Help text rule 4)** |  | `attachments download`, `attachments extract`, `attachments jobs install`, `chats folders create`, `contacts context`, `conversations batches show`, `conversations batches status`, `conversations consents remove`, `conversations embed`, `conversations embeddings clear`, `conversations embeddings status`, `conversations links clear`, `conversations links rebuild`, `conversations rebuild`, `conversations status`, `images embed`, `metadata show` (planned), `metadata sync` (planned), `search conversations`, `searches create`, `stats messages counters show`, `stats messages counters sync`, `stats messages show`, `tags add`, `tags rebuild`, `tags remove`, `tasks link` |
 | `--chat-invites` | `<who>` | who may add the account to groups and channels: everyone, contacts or nobody |  | `account privacy set` (planned) |
 | `--check` |  | say whether a newer version exists, and install nothing |  | `bot list` (planned), `upgrade` |
 | `--checkpoints` | `<durations>` | elapsed joining ages to inspect, such as 1d,7d,30d |  | `stats chats retention` |

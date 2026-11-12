@@ -123,15 +123,17 @@ const fileOf = (path: string): string => {
 
 /**
  * Where a request went, with nothing in it that names a person or opens an account: no query string, no user, an id
- * or a token in the path as `:id` / `:token`. The host stays — which service refused is the point.
+ * or a token in the path as `:id` / `:token`, a webhook's secret after `/rest/<user id>/` among them. The host stays — which service refused is the point.
  */
 export const endpointTemplate = (raw: string): string => {
   const trimmed = raw.trim().split(/[?#]/)[0] ?? ""
   const origin = /^[a-z][a-z0-9+.-]*:\/\/(?:[^@/]*@)?([^/]*)/i.exec(trimmed)
   const path = origin ? trimmed.slice(origin[0].length) : trimmed
   const scheme = origin ? `${trimmed.slice(0, trimmed.indexOf("://"))}://${origin[1]}` : ""
-  const segments = path.split("/").map((segment) => {
+  const parts = path.split("/")
+  const segments = parts.map((segment, at) => {
     if (segment === "" || /^[:{].+/.test(segment)) return segment
+    if (at >= 2 && parts[at - 2] === "rest" && /^\d+$/.test(parts[at - 1] ?? "")) return ":token"
     if (/^bot\d+:/.test(segment) || /^\d{6,}:[\w-]{20,}$/.test(segment)) return ":token"
     if (/^-?\d+$/.test(segment) || /^[0-9a-f-]{16,}$/i.test(segment)) return ":id"
     if (!/^[A-Za-z0-9._~-]{1,40}$/.test(segment)) return ":value"

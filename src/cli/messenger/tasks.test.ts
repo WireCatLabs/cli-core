@@ -541,7 +541,7 @@ describe("tasks", () => {
     )
     expect(item(await across([other]))).toMatchObject({ accounts: ["chat:600"], open: 1 })
     expect(item(await across([account, other], "--", "chat:*")).open).toBe(2)
-    const chat = await across([account, other], "--chat", "7")
+    const chat = await across([account, other], "--", "chat:7")
     expect([chat.code, chat.stderr]).toEqual([2, expect.stringContaining("name the account")])
   })
 

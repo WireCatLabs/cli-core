@@ -56,6 +56,9 @@ const KNOWN_TOKENS = new RegExp(
   "g",
 )
 
+// A Bitrix24 inbound webhook carries its secret as a path segment: `/rest/<user id>/<secret>/<method>`.
+const WEBHOOK_PATH = /(\/rest\/\d+\/)[^/\s?#"']+/g
+
 const PRIVATE_KEY = /-----BEGIN[A-Z ]* PRIVATE KEY-----[\s\S]*?(?:-----END[A-Z ]* PRIVATE KEY-----|$)/g
 
 // Capitalised, as in a header, and not followed by a plain word: "the Basic plan" is somebody's words.
@@ -97,13 +100,15 @@ const entropy = (text: string): number => {
 }
 
 /**
- * Text with each secret inside it replaced by `mark` and the words around it kept: a token of a known vendor format,
- * a private key, a `Bearer`/`Basic` credential, the value of a secret-named `name=value`, `name: value`, `name => value`
- * or `name value`, a random-looking string of 20 or more printable characters (`looksRandom`), and a run of 20 or more
- * lower-case hex characters with a Shannon entropy of 3 bits per character or more.
+ * Text with each secret inside it replaced by `mark` and the words around it kept: a webhook secret in a URL path, a
+ * token of a known vendor format, a private key, a `Bearer`/`Basic` credential, the value of a secret-named
+ * `name=value`, `name: value`, `name => value` or `name value`, a random-looking string of 20 or more printable
+ * characters (`looksRandom`), and a run of 20 or more lower-case hex characters with a Shannon entropy of 3 bits per
+ * character or more.
  */
 export const withoutSecrets = (text: string, mark = "[redacted]"): string =>
   text
+    .replace(WEBHOOK_PATH, `$1${mark}`)
     .replace(PRIVATE_KEY, mark)
     .replace(KNOWN_TOKENS, mark)
     .replace(SCHEME, `$1$2${mark}`)

@@ -200,6 +200,7 @@ export {
   type AccountRemoveOptions,
   type AccountSecrets,
   accountRemoveCommand,
+  mayRevoke,
   type SignedOut,
 } from "./account-remove.js"
 export { liftOptionsAfterDashes } from "./after-dashes.js"
@@ -213,6 +214,7 @@ export {
 export { answerEntity } from "./answer-entity.js"
 export { type AppDoctorOptions, appDoctorReport } from "./app-doctor-command.js"
 export type { AppMcpOptions } from "./app-mcp-command.js"
+export { openAppStore } from "./app-store.js"
 export { actorOf } from "./author.js"
 export { type BaseStagesCommandOptions, baseStagesCommand } from "./base-stages-command.js"
 export type { ApiCommandInput, ApiCommands } from "./bot/api.js"
@@ -327,6 +329,7 @@ export { csvCell, csvRecords, writeCsv } from "./csv.js"
 export { type Closeable, withDeadline } from "./deadline.js"
 export { DEFAULT_CONFIG, ensureDefaultConfig } from "./default-config.js"
 export { DISCOVERY_DESCRIPTIONS } from "./discovery-descriptions.js"
+export { type DoctorReportsSource, doctorReportsCommand } from "./doctor-reports-command.js"
 export { refuseOffline } from "./early-refusal.js"
 export {
   admittedUnderLock,

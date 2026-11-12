@@ -3199,16 +3199,10 @@
       "in": "all"
     },
     "flood": {
-      "in": ["max", "tg"],
-      "planned": {
-        "wa": "wa backlog: mount the shared flood command"
-      }
+      "in": "all"
     },
     "flood clear": {
-      "in": ["max", "tg"],
-      "planned": {
-        "wa": "wa backlog: mount the shared flood command"
-      }
+      "in": "all"
     },
     "guide": {
       "in": ["max", "tg"],
@@ -4796,9 +4790,6 @@
       "in": "all",
       "options": {
         "--by": {
-          "in": "all"
-        },
-        "--chat": {
           "in": "all"
         },
         "--timezone": {

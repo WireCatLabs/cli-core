@@ -17,7 +17,7 @@ import { Command, Help } from "commander"
 import { relayCommand } from "../background/relay.js"
 import { failingNotice, scheduledRuns } from "../background/schedules.js"
 import { parseDuration } from "../domain/duration.js"
-import { isCliFailure, isCommanderFailure, storeDamaged } from "../errors/failures.js"
+import { isCliFailure, isCommanderFailure, storeDamaged, usageReason } from "../errors/failures.js"
 import { failureContext } from "../errors/reasons.js"
 import { type AppIdentity, envName, readOnlyLockOf, readOnlyRefusal } from "../ports/app.js"
 import { recorded, wasSettled } from "../runs/recording.js"
@@ -79,6 +79,7 @@ import { assertSharedContracts } from "./shared-contracts.js"
 import { skillSourceOf } from "./skill-command.js"
 import { refreshSkills, skipsSkillRefresh } from "./skill-refresh.js"
 import { commandAt, failureSteps, lineOf, withLines } from "./steps.js"
+import { unknownProfile } from "./unknown-profile.js"
 
 const OUTPUT_OPTIONS = [
   ["output", "--output"],
@@ -734,12 +735,17 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
         message = message.trimEnd()
         message += ` — "${profile}" is not a command, so it was read as a profile name — which left "${rest[0]}" to be one.`
       }
-      const failure = new CliError("validation_error", message)
+      const reason = usageReason(error.code)
+      const failure = new CliError("validation_error", message, reason ? { reason } : {})
       const settled = await settleFailure(failure, { definition, program, rest, argv, profile, options })
       return report(streams, reporting, failed(definition, program, rest, failure, settled, debug))
     }
     const settled = await settleFailure(error, { definition, program, rest, argv, profile, options })
-    const exit = report(streams, reporting, failed(definition, program, rest, error, settled, debug))
+    // An MCP call's profile is the one its server was started for, not a word typed now.
+    const told = options.agent
+      ? error
+      : unknownProfile(error, () => failureSettings(definition, program, rest, profile, options))
+    const exit = report(streams, reporting, failed(definition, program, rest, told, settled, debug))
     return signalExit ?? exit
   } finally {
     restoreInput?.()
@@ -853,6 +859,31 @@ const settleFailure = async (failure: unknown, state: Failed): Promise<{ settlem
  * Its words are kept as `record_input` says (`maskArgv`); a configuration that did not load masks them, since it may
  * be the one that turned recording input off.
  */
+/** The settings a failed run had, read again without asking for a profile; `undefined` when they do not load. */
+const failureSettings = (
+  definition: ProgramDefinition,
+  program: Command,
+  rest: string[],
+  profile: string | undefined,
+  options: RunOptions,
+) => {
+  const path = commandPath(program, program.args.length > 0 ? program.args : rest)
+  const { resolveSettings } = definition.configuration ?? settingsFor(definition.app)
+  try {
+    return resolveSettings(
+      { ...program.opts(), ...(profile === undefined ? {} : { profile }) },
+      {
+        env: options.env ?? process.env,
+        kind: path.split(" ")[0] === "bot" ? "bot" : "personal",
+        needsProfile: false,
+        readOnly: true,
+      },
+    ) as ReturnType<typeof resolveSettings> & Partial<Pick<Settings, "profilesHere">>
+  } catch {
+    return undefined
+  }
+}
+
 const keepFailure = async (
   failure: unknown,
   { definition, program, rest, argv, profile, options }: Failed,
@@ -860,16 +891,8 @@ const keepFailure = async (
   if (wasSettled(failure)) return
   const env = options.env ?? process.env
   const path = commandPath(program, program.args.length > 0 ? program.args : rest)
-  const { resolveSettings } = definition.configuration ?? settingsFor(definition.app)
-  let settings: ReturnType<typeof resolveSettings> | undefined
-  try {
-    settings = resolveSettings(
-      { ...program.opts(), ...(profile === undefined ? {} : { profile }) },
-      { env, kind: path.split(" ")[0] === "bot" ? "bot" : "personal", needsProfile: false, readOnly: true },
-    )
-  } catch {
-    // A configuration that will not load is a failure worth keeping too; the flags are all there is to go on.
-  }
+  // A configuration that will not load is a failure worth keeping too; the flags are all there is to go on.
+  const settings = failureSettings(definition, program, rest, profile, options)
   const command = `${options.agent ? "mcp " : ""}${path || definition.app.command}`
   await recorded(
     {

@@ -186,6 +186,7 @@ export type {
   ProjectAnnotationStore,
   ProjectAnnotationTargetRequest,
 } from "./project-transfer/store.js"
+export { registerProvider } from "./providers.js"
 export {
   type ChangedSource,
   SOURCE_REVIEW_CAUSES,

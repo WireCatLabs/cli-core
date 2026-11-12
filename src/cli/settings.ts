@@ -273,6 +273,8 @@ export interface SettingsExtension<T extends object = Record<never, never>> {
   parseDuration?: (value: string, source: string) => number
   resolve?: (context: SettingsExtensionContext) => { values: T; sources: Record<string, Source> }
   profile?: v.ObjectEntries
+  /** Like `profile`, but a bot's section refuses them: settings only a personal account reads. */
+  personal?: v.ObjectEntries
   /** For the whole program only, never per profile. */
   defaults?: v.ObjectEntries
   /** Its own scalar settings, written into the file's `defaults` beside the shared ones (WC-CMD-30). */
@@ -515,11 +517,12 @@ export const settingsFor = <T extends object = Record<never, never>>(
   extension: SettingsExtension<T> = {},
 ) => {
   const declared = extension.permissions
-  const profileEntries = {
+  const botEntries = {
     ...SHARED_PROFILE_ENTRIES,
     ...(declared ? { permissions: v.optional(commandPathLevels) } : {}),
     ...extension.profile,
   }
+  const profileEntries = { ...botEntries, ...extension.personal }
   const defaultsOnly = { ...SHARED_DEFAULTS_ONLY, ...extension.defaults }
   const defaultsEntries = { ...profileEntries, ...defaultsOnly }
   const strictOf = <E extends v.ObjectEntries>(entries: E) => v.strictObject(entries, objectMessage)
@@ -538,7 +541,7 @@ export const settingsFor = <T extends object = Record<never, never>>(
       {},
     ),
     personal: v.optional(kindSection(profileEntries)),
-    bot: v.optional(kindSection({ ...profileEntries, ...BOT_ONLY_ENTRIES })),
+    bot: v.optional(kindSection({ ...botEntries, ...BOT_ONLY_ENTRIES })),
   }
   const schema = strictOf(configEntries)
   const defaultsOnlyKeys = Object.keys(defaultsOnly)

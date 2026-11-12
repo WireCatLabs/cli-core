@@ -39,6 +39,7 @@ export const DEFAULT_PERMISSIONS: Readonly<Record<PermissionKey, Level>> = {
   "store.clear": "ask",
   "store.decrypt": "ask",
   "store.copies.delete": "ask",
+  "store.recover.run": "ask",
   "server.start": "ask",
   "server.stop": "ask",
   "server.restart": "ask",
@@ -54,7 +55,7 @@ export const DEFAULT_PERMISSIONS: Readonly<Record<PermissionKey, Level>> = {
 }
 
 /** Commands under a housekeeping word, or store maintenance, that still have a key of their own: their path. */
-const KEYED_UNDER_HOUSEKEEPING = new Set(
+export const KEYED_UNDER_HOUSEKEEPING: ReadonlySet<PermissionKey> = new Set(
   Object.keys(DEFAULT_PERMISSIONS).filter((key) => /^(store|server|models|images|schedule|doctor)\./.test(key)),
 )
 
@@ -382,6 +383,7 @@ export const readKeysForCommand = (path: readonly string[]): PermissionKey[] => 
   if (path[0] === "store" && path[1] === "gaps" && path[2] === "repair") return [key, "messages"]
   // Checked as `messages` before they had keys of their own: `deny messages` keeps stopping them.
   if (path[0] === "store" && ["reset", "clear", "decrypt"].includes(path[1] ?? "")) return [key, "messages"]
+  if (key === "store.recover.run") return [key, "messages"]
   // A search shows what people wrote, so `deny messages` reaches every leaf that reads messages.
   if (path[0] === "search") {
     if (path[1] === "notes") return [key]

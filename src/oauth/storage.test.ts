@@ -8,6 +8,8 @@ import { describe, expect, it } from "vitest"
 import {
   credentialStorage,
   driveSessionCodec,
+  googleProvider,
+  googleTokenCodec,
   type OAuthProvider,
   oauthAccount,
   standardCodec,
@@ -263,7 +265,7 @@ describe("new entries", () => {
 
 it("never quotes an unreadable entry in its error", () => {
   const secret = "synthetic-secret-in-broken-json"
-  for (const codec of [standardCodec("google"), driveSessionCodec, zoomTokenCodec])
+  for (const codec of [standardCodec("google"), googleTokenCodec, driveSessionCodec, zoomTokenCodec])
     for (const raw of [`{"refreshToken": "${secret}"`, JSON.stringify({ refreshToken: secret }), "[]"]) {
       let message = ""
       try {
@@ -324,5 +326,19 @@ describe("a keyring that cannot be reached", () => {
     const cause = (failure as Error).cause as Error
     expect(cause.message).toContain("collection is locked")
     expect(cause.message).not.toContain(SECRET)
+  })
+})
+
+it("keeps a Google Desktop client's secret in its entry, and drops it for a client without one", () => {
+  const tokens = { accessToken: "synthetic-access", refreshToken: "synthetic-refresh", scopes: ["openid"] }
+  const withSecret = googleTokenCodec.encode({ tokens, client: { clientId: "id", clientSecret: "synthetic-secret" } })
+  expect(googleTokenCodec.decode(withSecret).client).toEqual({ clientId: "id", clientSecret: "synthetic-secret" })
+  const without = googleTokenCodec.encode({ tokens, client: { clientId: "other" }, previous: withSecret })
+  expect(JSON.parse(without)).not.toHaveProperty("clientSecret")
+  expect(googleTokenCodec.decode(without).tokens.refreshToken).toBe("synthetic-refresh")
+  expect(googleProvider({ clientId: "id" }, { loginHint: "a@example.com" }).authorizeParams).toEqual({
+    access_type: "offline",
+    prompt: "select_account consent",
+    login_hint: "a@example.com",
   })
 })

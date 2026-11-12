@@ -14,6 +14,9 @@ describe("endpointTemplate", () => {
     expect(endpointTemplate("/v21.0/104837261/messages")).toBe("/v21.0/:id/messages")
     expect(endpointTemplate("/chats/{chatId}/pin")).toBe("/chats/{chatId}/pin")
     expect(endpointTemplate("/files/Мой%20отчёт.pdf")).toBe("/files/:value")
+    expect(endpointTemplate("https://acme.bitrix24.ru/rest/1/abcdwxyz12345678/crm.deal.list")).toBe(
+      "https://acme.bitrix24.ru/rest/:id/:token/crm.deal.list",
+    )
   })
 })
 
