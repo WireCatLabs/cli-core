@@ -177,6 +177,26 @@
       }
     },
     {
+      "ref": "project:north-wind",
+      "path": "/v1/project/north-wind",
+      "web": "https://wirecat.dev/o#/v1/project/north-wind",
+      "app": "wirecat://open/v1/project/north-wind",
+      "target": {
+        "type": "project",
+        "id": "north-wind"
+      }
+    },
+    {
+      "ref": "project:офис",
+      "path": "/v1/project/%D0%BE%D1%84%D0%B8%D1%81",
+      "web": "https://wirecat.dev/o#/v1/project/%D0%BE%D1%84%D0%B8%D1%81",
+      "app": "wirecat://open/v1/project/%D0%BE%D1%84%D0%B8%D1%81",
+      "target": {
+        "type": "project",
+        "id": "офис"
+      }
+    },
+    {
       "ref": "digest:2026-11-08",
       "path": "/v1/digest/2026-11-08",
       "web": "https://wirecat.dev/o#/v1/digest/2026-11-08",
@@ -234,6 +254,10 @@
       "why": "a person with a part too many"
     },
     {
+      "path": "/v1/person/77/notes",
+      "why": "a person with a named part after the id"
+    },
+    {
       "path": "/v1/project",
       "why": "a project with no key"
     },
@@ -256,6 +280,10 @@
     {
       "path": "/v1/tasks/someday",
       "why": "an unknown task filter"
+    },
+    {
+      "path": "/v1/tasks/undated/x",
+      "why": "a task filter that takes no value given one"
     },
     {
       "path": "/v1/tasks/new/yesterday",
