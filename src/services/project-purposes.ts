@@ -10,7 +10,7 @@ export const LINK_PURPOSE = "work"
 /** The purposes a host's config lists; core knows only the built-in ones and takes the rest as given. */
 export interface PurposeConfig {
   purposes: readonly string[]
-  /** Read when no `--purpose` is given. */
+  /** Read when no `--purposes` is given. */
   defaults: readonly string[]
   /** A project's own defaults, by its key or `project:<id>`. */
   projects?: Readonly<Record<string, readonly string[]>>
@@ -27,7 +27,7 @@ const unknown = (asked: readonly string[], config: PurposeConfig) => {
     throw new CliError(
       "validation_error",
       `unknown purpose ${wrong.join(", ")}; the configured ones are ${config.purposes.join(", ")}, or all`,
-      { param: "purpose", purposes: [...config.purposes] },
+      { param: "purposes", purposes: [...config.purposes] },
     )
 }
 
@@ -42,7 +42,7 @@ export const purposesOf = (
 ): PurposeChoice => {
   const words = (asked ?? []).map((one) => one.trim()).filter(Boolean)
   if (words.includes("all")) {
-    if (words.length > 1) throw new CliError("validation_error", "--purpose all reads every purpose; give it alone")
+    if (words.length > 1) throw new CliError("validation_error", "--purposes all reads every purpose; give it alone")
     return "all"
   }
   if (words.length) {
