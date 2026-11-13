@@ -154,10 +154,13 @@ jobs:
   # Each CLI that depends on cli-core, built against this checkout: what its own pull request would run first. A build,
   # typecheck or start that fails is a break and fails `downstream`; command lint and docs only warn: they flag cleanup
   # the CLI owes, not a CLI that stopped working. A release (`tests`) also runs each CLI's tests, which block.
+  # downstream-result.sh judges each leg from its recorded step outcomes, known breaks included; a failed leg must not
+  # fail the workflow by itself, or a release's gate refuses a break known-broken.json already accepts.
   downstream:
     needs: [pack, downstream-list]
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    continue-on-error: true
     strategy:
       fail-fast: false
       matrix:
