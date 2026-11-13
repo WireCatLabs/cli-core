@@ -46,6 +46,8 @@ export const hit = v.strictObject({
   review: v.optional(v.picklist(["proposed", "confirmed"])),
   /** A business hit's record in the import that made it; absent for one the owner or an agent wrote. */
   source_record: v.optional(v.strictObject({ provider: text, account: text, external_id: text })),
+  /** A document's: the meeting it is the transcript, recording or notes of. */
+  meeting: v.optional(reference),
   /** A message's files; absent when it has none. */
   attachments: v.optional(v.array(hitFile)),
   /** Absent on a note hit: the owner wrote it. */

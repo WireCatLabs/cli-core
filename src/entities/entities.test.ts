@@ -935,6 +935,10 @@ const samples: Record<EntityName, unknown> = {
     chat: [{ sent_at: at, sender: "Ana", recipient: null, text: "hello" }],
     summaries: [],
     attachments: [{ position: 0, kind: "file", name: "plan.pdf", mime: "application/pdf", size: 10, url: null }],
+    documents: [
+      { file_id: "doc-transcript", role: "transcript", title: "Weekly – Transcript", document: "document:4" },
+      { file_id: "doc-notes", role: "notes", title: null, document: null },
+    ],
   },
   meeting_hit: {
     ref: "meeting:1/2/3/0",

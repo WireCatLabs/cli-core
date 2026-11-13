@@ -406,6 +406,7 @@ export const allHitItem = (item: SearchAllItem): HitItem =>
                 external_id: item.sourceRecord.externalId,
               },
         attachments: item.attachments === undefined ? undefined : nonEmpty(item.attachments),
+        meeting: item.meeting,
         untrusted: ALL_HIT_UNTRUSTED[item.kind],
       })
 

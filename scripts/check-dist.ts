@@ -204,6 +204,12 @@ signIn.write({ tokens: { refreshToken: "invented", scopes: [] }, client: { clien
 if (signIn.read()?.tokens.refreshToken !== "invented") throw new Error("./oauth did not read back an invented sign-in")
 console.log("dist: ./oauth saves and reads an invented sign-in")
 
+const { googleError, googlePages } = await import("@wirecat/cli-core/google")
+if (googleError({ status: 404, body: null, mutates: false }).code !== "not_found")
+  throw new Error("./google did not map a 404 to not_found")
+if ((await googlePages("items", async () => ({ items: [1] }))).length !== 1) throw new Error("./google lost a page")
+console.log("dist: ./google maps a refusal and reads pages")
+
 const { prepareReport } = await import(join(root, "background/report/render.js"))
 const digest = await prepareReport(
   JSON.stringify({ format: "wirecat.report/1", kind: "morning-digest", date: "2026-11-06", sections: [] }),

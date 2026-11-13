@@ -42,6 +42,26 @@ export interface TranscriptInput extends Omit<NewRecord<Transcript>, "meetingId"
    */
   driveFileId?: string
 }
+export const MEETING_DOCUMENT_ROLES = ["transcript", "recording", "notes"] as const
+export type MeetingDocumentRole = (typeof MEETING_DOCUMENT_ROLES)[number]
+/**
+ * A Drive file the meeting service saved for the meeting: its transcript, its recording or its notes (Meet's
+ * `docsDestination.document`, `driveDestination.file`, Gemini's notes). Keyed by the Drive file id alone, so the Drive
+ * profile that imports the file may differ from the meeting's.
+ */
+export interface MeetingDocumentInput {
+  fileId: string
+  role: MeetingDocumentRole
+  title?: string | null
+}
+/** A meeting's Drive file, and the document it is once a Drive account has stored it. */
+export interface MeetingDocument {
+  fileId: string
+  role: MeetingDocumentRole
+  title: string | null
+  /** `null` while no Drive account holds the file, while two do (CORE-54), or while its document is deleted. */
+  documentId: number | null
+}
 export interface ChatInput extends Omit<NewRecord<ChatLine>, "meetingId" | "senderParticipantId"> {
   senderParticipantPosition: number | null
 }
@@ -57,6 +77,8 @@ export interface MeetingSave {
   chat?: ChatInput[]
   summaries?: Omit<NewRecord<Summary>, "meetingId">[]
   attachments?: Omit<NewRecord<Attachment>, "attachableType" | "attachableId">[]
+  /** Adds to the documents held and retitles them; one left out stays linked, since the service forgets its files. */
+  documents?: MeetingDocumentInput[]
   now: number
   /**
    * A copy of the occurrence read from a file, not from the provider. It joins the provider's record of the same
@@ -77,6 +99,8 @@ export interface MeetingDetails {
   chat: ChatLine[]
   summaries: Summary[]
   attachments: Attachment[]
+  /** Left out by a store that keeps no Drive links. */
+  documents?: MeetingDocument[]
 }
 export interface MeetingFilter {
   accountId?: number

@@ -1,5 +1,5 @@
 import type { Metadata, SourceChatLine, SourceMeeting, SummaryContent, TranscriptLine } from "./model.js"
-import type { MeetingSave } from "./store.js"
+import type { MeetingDocumentInput, MeetingSave } from "./store.js"
 
 export interface SourceParticipant {
   identityExternalId: string | null
@@ -40,4 +40,6 @@ export interface MeetingSource {
   chat(occurrenceId: string): Promise<SourceChatLine[] | null>
   summary(occurrenceId: string): Promise<SummaryContent | null>
   files(occurrenceId: string): Promise<NonNullable<MeetingSave["attachments"]> | null>
+  /** The Drive files the service saved for the occurrence: its transcript, recording and notes documents. */
+  documents?(occurrenceId: string): Promise<MeetingDocumentInput[] | null>
 }

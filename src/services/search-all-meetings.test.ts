@@ -616,8 +616,29 @@ describe("a Meet transcript that Drive also imported", () => {
   it("keeps the document's hit when the meeting is not among the hits", async () => {
     const { store, save } = await fixture()
     const id = await transcriptDoc(store, "needle and a haystack only the document has")
-    await withDocument(save, store)
+    const saved = await withDocument(save, store)
     const found = await searchAll(store, caller, { ...asked, text: "haystack" })
     expect(found.items.map(({ ref }) => ref)).toEqual([`document:${id}`])
+    const [item] = found.items
+    const named = `meeting:${saved.accountId}/${saved.meeting.id}`
+    expect(item && v.parse(hitEntity, allHitItem(item))).toMatchObject({ kind: "document", meeting: named })
+  })
+
+  const unread: [string, Partial<AccountKey>, Partial<SearchAllRequest>][] = [
+    ["documents only", {}, { only: ["notes"] }],
+    ["a meeting account of a scope the search does not read", { scope: "work" }, {}],
+    ["meeting scopes that leave its account out", {}, { meetingScopes: ["work"] }],
+    ["--source naming the Drive account only", {}, { source: "google-drive:owner@example.invalid" }],
+    ["meeting accounts chosen without its own", {}, { scope: { meetings: [bob] } }],
+  ]
+  it.each(unread)("names no meeting the search did not read: %s", async (_, account, request) => {
+    const { store, save } = await fixture()
+    await save(bob, "b", ["nothing here"])
+    const id = await transcriptDoc(store, "needle and a haystack only the document has")
+    await withDocument(async (_key, ...rest) => save({ ...alice, ...account }, ...rest), store)
+    const found = await searchAll(store, caller, { ...asked, ...request, text: "haystack" })
+    const document = found.items.find(({ ref }) => ref === `document:${id}`)
+    expect(document).toBeDefined()
+    expect(document).not.toHaveProperty("meeting")
   })
 })

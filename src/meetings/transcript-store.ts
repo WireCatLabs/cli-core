@@ -1,4 +1,4 @@
-import type { MeetingDetails, TranscriptInput, TranscriptRowInput } from "./store.js"
+import type { MeetingDetails, MeetingDocumentRole, TranscriptInput, TranscriptRowInput } from "./store.js"
 
 export type UnlinkedTranscriptInput = Omit<TranscriptInput, "rows" | "contentHash"> & {
   contentHash: string
@@ -36,7 +36,16 @@ export interface MeetingTranscriptReceiptStore {
   appendTranscriptsWithReceipt(input: TranscriptAppend): Promise<TranscriptAppendReceipt>
 }
 
+/** The meeting a Drive document belongs to, and as what. */
+export interface DocumentMeeting {
+  meetingId: number
+  accountId: number
+  role: MeetingDocumentRole
+}
+
 /** The meeting whose transcript a Drive document is, by the `driveFileId` the meeting's transcript named. */
 export interface MeetingTranscriptDocumentStore {
   transcriptMeetings(documentIds: readonly number[]): Promise<Map<number, number>>
+  /** The meeting each document is a transcript, recording or notes of; a document of two meetings names the first. */
+  documentMeetings(documentIds: readonly number[]): Promise<Map<number, DocumentMeeting>>
 }

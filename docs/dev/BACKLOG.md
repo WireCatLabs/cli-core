@@ -23,6 +23,25 @@ None open.
 
 ## Next (P2)
 
+- **CORE-55** · P2 · Move gcal-cli and drive-cli onto `@wirecat/cli-core/google`: their own `googleError` and page
+  loops (gcal `src/errors.ts`, `src/calendar-source.ts` `allPages`) become imports, after a release carries it.
+  gcal keeps its own Calendar-only `forbiddenForNonOrganizer` → `event.organizer-only` mapping and its reason
+  registration before calling `googleError`, which maps that reason to the generic 403 `access.denied`. `src/google/`.
+- **CORE-56** · P2 · A Drive document's own answer (drive's `documents show`, built in drive-cli from the `document`
+  entity) does not name its meeting yet; `search all` hits do (`meeting`). Add an optional `meeting` ref to the
+  entity, read through `store.meetings.documentMeetings`. `src/entities/document.ts`.
+- **CORE-57** · P2 · A `search all` document hit linked to two meetings is given one owner before the scope check:
+  when that owner's account was not read, no `meeting` ref is named even if the other meeting's account was. Choose
+  among the meetings of the accounts read. `src/services/search-all.ts` (`withMeetingDocuments`),
+  `src/store/sqlite/meeting-documents.ts` (`documentMeetings`).
+- **CORE-58** · P2 · `meetings show` resolves a meeting's Drive file to a document of any Drive account, whatever its
+  scope. It shows only ids (`document:<id>`, the Drive file id), never the text; decide whether a meeting of one
+  scope may name a document of another. `src/store/sqlite/meeting-documents.ts` (`meetingDocumentsOf`).
+- **CORE-59** · P2 · A meeting's `attached` link keeps pointing at a deleted document when Drive later stores the same
+  file as a new document: only a link with no document is resolved again (`linkAttached`), so `meetings show` says
+  `null`. Re-resolve links whose document is deleted. `src/store/sqlite/files.ts` (`linkAttached`).
+- **CORE-60** · P3 · `MeetingTranscriptDocumentStore.transcriptMeetings` has no caller but tests since `search all`
+  reads `documentMeetings`. Drop it at the next breaking release. `src/meetings/transcript-store.ts`.
 - **CORE-54** · P2 · A Drive file two Drive profiles both imported (a Meet transcript shared with both) never resolves
   its `attached` link: `driveDocumentOf` refuses two documents, so the meeting and its document both show in
   `search all`. Pick one document or link both. `src/store/sqlite/files.ts` (`driveDocumentOf`).
