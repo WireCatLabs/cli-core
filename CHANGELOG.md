@@ -5,6 +5,14 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## 0.657.0 — 13.11.2026
+
+### Fixed
+
+- **Telemost meeting notes in Yandex's older layout get their summary.** Those emails have no «Итоги» heading: the
+  summary is now the text before the first heading, and Yandex's footer («Оцените точность конспекта» and below) is
+  no longer stored with the notes.
+
 ## 0.656.0 — 13.11.2026
 
 ### Changed — may break callers
