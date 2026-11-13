@@ -1285,6 +1285,32 @@ describe("a run with no profile named", () => {
     expect(message.match(/no profile named/g)).toHaveLength(1)
   })
 
+  it("**keeps a provider's refusal during `session start`** of a new profile, not an unknown profile", async () => {
+    const env = sandbox()
+    mkdirSync(join(env.APP_STATE_DIR ?? "", "accounts"), { recursive: true })
+    writeFileSync(join(env.APP_STATE_DIR ?? "", "accounts", "work.json"), '{"account":"1"}')
+    const streams = captureStreams()
+    await run(
+      ["new", "session", "start"],
+      {
+        app,
+        commands: () => [
+          new Command("session").addCommand(
+            new Command("start").action(() => {
+              throw new CliError("authentication_error", "the provider refused the account check")
+            }),
+          ),
+        ],
+      },
+      { streams, tty: false, env },
+    )
+
+    expect(JSON.parse(streams.stderr[0] ?? "").error).toMatchObject({
+      code: "authentication_error",
+      message: "the provider refused the account check",
+    })
+  })
+
   it("**gives commander's usage errors a reason**", async () => {
     const env = sandbox()
 

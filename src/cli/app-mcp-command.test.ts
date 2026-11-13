@@ -274,6 +274,7 @@ describe("appDoctorCommand", () => {
     expect(await run(argv, failing, { streams, tty: false, env })).toBe(0)
     const { item } = JSON.parse(streams.stdout[0] ?? "{}")
     expect(item).toMatchObject({ path: file, run: expect.any(String) })
+    expect(item).not.toHaveProperty("issue_url")
     const report = JSON.parse(readFileSync(file, "utf8"))
     expect(report.doctor).toMatchObject({ version: "1.0.0", config: { found: true } })
     expect(report.run.metadata.runId).toBe(item.run)

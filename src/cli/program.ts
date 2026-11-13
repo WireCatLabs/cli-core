@@ -79,7 +79,7 @@ import { assertSharedContracts } from "./shared-contracts.js"
 import { skillSourceOf } from "./skill-command.js"
 import { refreshSkills, skipsSkillRefresh } from "./skill-refresh.js"
 import { commandAt, failureSteps, lineOf, withLines } from "./steps.js"
-import { unknownProfile } from "./unknown-profile.js"
+import { isSignIn, unknownProfile } from "./unknown-profile.js"
 
 const OUTPUT_OPTIONS = [
   ["output", "--output"],
@@ -868,6 +868,7 @@ const failureSettings = (
   options: RunOptions,
 ) => {
   const path = commandPath(program, program.args.length > 0 ? program.args : rest)
+  if (isSignIn(path)) return undefined
   const { resolveSettings } = definition.configuration ?? settingsFor(definition.app)
   try {
     return resolveSettings(
