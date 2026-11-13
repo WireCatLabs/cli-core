@@ -4,6 +4,7 @@ import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import type { AppIdentity } from "../ports/app.js"
+import type { RunMetadata } from "../runs/run.js"
 import { runsDirFor } from "../runs/run.js"
 import type { SendEntry } from "../sends/journal.js"
 import { type BaseContext, environmentOf, outputFor } from "./context.js"
@@ -37,6 +38,33 @@ const writeNew = (path: string, text: string) => {
       reason: "doctor.report-exists",
     })
   }
+}
+
+/**
+ * A new issue with its title and body filled in through GitHub's `title` and `body` parameters. An issue is public, so
+ * the body holds only the version, the platform and the failed run's codes; the person attaches the file.
+ */
+export const issueUrlFor = (
+  app: AppIdentity,
+  run: RunMetadata | undefined,
+  platform = process.platform,
+  arch = process.arch,
+) => {
+  const code = run ? (run.errorCode ?? "failed") : undefined
+  const body = [
+    "What I did:",
+    "",
+    "What I expected:",
+    "",
+    "What happened:",
+    "",
+    "---",
+    `${app.command} ${app.version}, ${platform} ${arch}`,
+    ...(code ? [`error: ${code}${run?.providerError ? ` (${run.providerError})` : ""}`] : []),
+    "The problem report file is attached.",
+  ].join("\n")
+  const title = `${app.command} ${app.version}: ${code ?? "problem report"}`
+  return `${app.issues}?title=${encodeURIComponent(title)}&body=${encodeURIComponent(body)}`
 }
 
 /** `doctor reports show|create`: one file for the author, the same for every CLI; `collect` says what it holds. */
@@ -101,15 +129,20 @@ export const doctorReportsCommand = (source: DoctorReportsSource): Command => {
       writeNew(path, `${JSON.stringify(built, null, 2)}\n`)
       const output = outputFor(this)
       const out = renderer ?? output.renderer
+      const issue = app.issues ? issueUrlFor(app, built.run?.metadata) : undefined
       renderAnswer(
         this,
         { ...output, renderer: out },
-        itemOf({ path, run: built.run?.metadata.runId ?? null, ...(app.issues ? { send_to: app.issues } : {}) }),
+        itemOf({
+          path,
+          run: built.run?.metadata.runId ?? null,
+          ...(issue ? { send_to: app.issues, issue_url: issue } : {}),
+        }),
       )
       if (!built.run)
         out.note("no failed run is recorded — run the failing command again, and the failure is kept by itself")
       out.note(
-        `read it before sending: ${source.check}${app.issues ? ` — attach it to a new issue at ${app.issues}` : ""}`,
+        `read it before sending: ${source.check}${issue ? ` — then open ${issue} and attach the file; the issue is public` : ""}`,
       )
     })
   return reports
