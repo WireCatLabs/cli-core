@@ -22,6 +22,8 @@ export interface IdentityInput {
   provider: string
   externalId: string
   name: string | null
+  /** As the source gave it; the store keeps it only when it reads as E.164. */
+  phone?: string | null
   metadata: Metadata
 }
 export interface ParticipantInput extends Omit<NewRecord<Participant>, "meetingId" | "identityId"> {
@@ -58,10 +60,14 @@ export interface MeetingSave {
    */
   fromFile?: boolean
 }
+/** A participant with the person their identity is linked to, when the store knows people. */
+export interface MeetingParticipant extends Participant {
+  person?: { uid: string; name: string | null }
+}
 export interface MeetingDetails {
   meeting: Meeting
   series: MeetingSeries | null
-  participants: Participant[]
+  participants: MeetingParticipant[]
   transcripts: { transcript: Transcript; rows: TranscriptRow[] }[]
   chat: ChatLine[]
   summaries: Summary[]

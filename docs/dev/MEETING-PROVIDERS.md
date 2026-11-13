@@ -33,6 +33,14 @@ writes. A recording service can implement a catalog and transfers without managi
 The SDK contains no filesystem, database, vendor client, credentials or automatic provider setup.
 cli-core implements the durable meeting store and its evidence/context/semantic services.
 
+## A participant's phone
+
+A phone line's source gives the other side's number in `SourceParticipant.phone`, as the network reported it and
+written with `+`, beside `identityExternalId: "phone:<E.164>"`. The store keeps it in `identities.phone`, and the
+people matcher links the call to the CRM contact or messenger with that number
+([MEETINGS.md](MEETINGS.md#calls-and-the-people-they-link-to)). Leave it out for anyone whose number is not their own
+line, such as an operator's extension.
+
 ## Stored meeting reads
 
 Import the read interfaces from `@wirecat/cli-core/meetings`. A provider using the shared SQLite
@@ -48,7 +56,8 @@ filters through the shared query registry and returns shared meeting entities in
 The generic MCP adapter accepts equivalent queries; a provider host fixes/removes `account_id`
 from caller arguments before dispatch, as Zoom does. Never expose another account through a cursor.
 
-The optional `participantCandidates(query, options)` port reads only observed IDs, names and emails;
+The optional `participantCandidates(query, options)` port reads only observed IDs, names and emails, and the name
+of the person each participant is linked to;
 it never requires session history or transcript text. Enforce `limit`, `scanLimit`, `maxReadBytes`
 and cancellation, and check stored text sizes before loading them. Cursors bind the selected
 account and normalized literal query. An empty scan page may still have continuation; edits and

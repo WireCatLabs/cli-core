@@ -12,6 +12,7 @@ import type {
   StoredAccount,
 } from "../store/store.js"
 import { messageOfEmail } from "../store/store.js"
+import { type PersonMeeting, personMeetings } from "./person-meetings.js"
 
 export const CONTEXT_MESSAGES = 10
 export const CONTEXT_BYTES = 64 * 1024
@@ -68,6 +69,8 @@ export interface PersonContext {
   mentions: ContextMessage[]
   /** Calendar events they are invited to, one occurrence per series: the next ones, then the latest past ones. */
   events: { upcoming: ContextEvent[]; recent: ContextEvent[] }
+  /** Recorded meetings and calls they took part in, newest first, in the accounts read. */
+  meetings: PersonMeeting[]
   limits: { messages: number; bytes: number }
   /** A list was cut by `limits`. */
   hasMore: boolean
@@ -359,6 +362,11 @@ export const recordContext = async (
       )
     : nothing
   cut ||= upcoming.cut || past.cut
+  const recorded = await personMeetings(store, [record.uid], readable, {
+    limit: messages,
+    ...(since === undefined ? {} : { since }),
+  })
+  cut ||= recorded.hasMore
 
   direct.sort(newestFirst)
   const each = [...direct, ...beyond].sort(newestFirst)
@@ -382,7 +390,8 @@ export const recordContext = async (
   const read = [
     ...reads.map(({ key, scope }) => ({ ...key, scope })),
     ...calendars.map(({ provider, account, scope }) => ({ provider, account, scope })),
-  ]
+    ...recorded.items.flatMap(({ account }) => readable.filter((one) => nameOf(one) === nameOf(account))),
+  ].map(({ provider, account, scope }) => ({ provider, account, scope }))
   const accounts = [...new Map(read.map((one) => [nameOf(one), one])).values()].sort((a, b) =>
     nameOf(a).localeCompare(nameOf(b)),
   )
@@ -400,6 +409,7 @@ export const recordContext = async (
       upcoming: upcoming.items.map(contextEvent),
       recent: past.items.filter(({ id }) => !upcomingIds.has(id)).map(contextEvent),
     },
+    meetings: recorded.items,
     limits: { messages, bytes },
     hasMore: cut || kept.cut,
     complete: notRead.length === 0,

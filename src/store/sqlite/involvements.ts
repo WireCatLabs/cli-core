@@ -37,6 +37,8 @@ export interface InvolvementStore {
     personId: number,
     options?: {
       scopes?: readonly string[]
+      /** Only rows of these subjects, such as `["meeting"]`; left out, every subject. */
+      subjectTypes?: readonly string[]
       since?: number
       until?: number
       only?: { provider: string; account: string }
@@ -69,13 +71,16 @@ export const involvementStoreOver = ({ database, now }: Pick<StoreContext, "data
     return { recomputed, pending: pendingInvolvements(database) }
   },
   pending: () => pendingInvolvements(database),
-  forPerson: (personId, { scopes, since, until, only, before, limit = 100 } = {}) => {
+  forPerson: (personId, { scopes, subjectTypes, since, until, only, before, limit = 100 } = {}) => {
     if (!Number.isSafeInteger(limit) || limit < 1 || limit > 1000)
       throw new CliError("validation_error", "involvement limit takes 1–1000")
     const filters = [
       ...(scopes === undefined
         ? []
         : [["AND i.scope IN (SELECT value FROM json_each(?))", JSON.stringify(scopes)] as const]),
+      ...(subjectTypes === undefined
+        ? []
+        : [["AND i.subject_type IN (SELECT value FROM json_each(?))", JSON.stringify(subjectTypes)] as const]),
       ...(since === undefined ? [] : [["AND i.occurred_at>=?", since] as const]),
       ...(until === undefined ? [] : [["AND i.occurred_at<=?", until] as const]),
     ]

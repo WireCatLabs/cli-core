@@ -2,6 +2,7 @@ import { setTimeout as wait } from "node:timers/promises"
 import { backoffMs, CliError, DEFAULT_RETRY, type RetryConfig } from "@wirecat/cli-base"
 import { providerWaitMs } from "@wirecat/cli-base/http"
 import { type Fetch, OPENAI_URL } from "../embeddings/remote.js"
+import { endpointFetch } from "../models/endpoint.js"
 import { refuseModelAddress } from "../models/local-only.js"
 import type { Pcm } from "./decode.js"
 import { filesPresent, modelsDirectory, vadPath } from "./install.js"
@@ -107,13 +108,16 @@ const failureOf = async (response: Response): Promise<{ code?: string; type?: st
   }
 }
 
+// A piece runs up to ten minutes of audio; the provider may take minutes to answer it.
+const TRANSCRIPTION_TIMEOUT_MS = 600_000
+
 /** One file, one request. 429, 408 and server errors are tried again; the provider's `Retry-After` beats our backoff. */
 const send = async (wav: Uint8Array, options: OpenAITranscription): Promise<string> => {
-  const post = options.fetch ?? fetch
+  const url = `${(options.baseUrl ?? OPENAI_URL).replace(/\/+$/, "")}/audio/transcriptions`
+  const post = options.fetch ?? endpointFetch(url, TRANSCRIPTION_TIMEOUT_MS)
   const retry = options.retry ?? RETRY
   const sleep = options.sleep ?? sleeping
   const random = options.random ?? Math.random
-  const url = `${(options.baseUrl ?? OPENAI_URL).replace(/\/+$/, "")}/audio/transcriptions`
   for (let attempt = 1; ; attempt++) {
     interrupted(options.signal)
     let response: Response

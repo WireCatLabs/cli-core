@@ -62,14 +62,18 @@ export const meetingParticipantSearchOver = (context: StoreContext): MeetingPart
       const rows = database
         .prepare(
           `SELECT p.id,
-             coalesce(length(CAST(p.display_name AS BLOB)), 0) + coalesce(length(CAST(p.email AS BLOB)), 0) AS bytes
+             coalesce(length(CAST(p.display_name AS BLOB)), 0) + coalesce(length(CAST(p.email AS BLOB)), 0) +
+               coalesce(length(CAST(n.name AS BLOB)), 0) AS bytes
            FROM meeting_participants p JOIN meetings m ON m.id = p.meeting_id
+           LEFT JOIN identity_links l ON l.identity_id = p.identity_id LEFT JOIN persons n ON n.id = l.person_id
            WHERE m.account_id = ? AND m.deleted_at IS NULL AND p.id > ? AND p.id <= ?
            ORDER BY p.id LIMIT ?`,
         )
         .all(limits.accountId, previous?.after ?? 0, until, limits.scanLimit + 1)
       const read = database.prepare(
-        "SELECT id, meeting_id, identity_id, display_name, email FROM meeting_participants WHERE id = ?",
+        "SELECT p.id, p.meeting_id, p.identity_id, p.display_name, p.email, l.person_id, n.name AS person_name " +
+          "FROM meeting_participants p LEFT JOIN identity_links l ON l.identity_id = p.identity_id " +
+          "LEFT JOIN persons n ON n.id = l.person_id WHERE p.id = ?",
       )
       const result: MeetingParticipantPage = {
         schema_version: 1,
@@ -97,16 +101,21 @@ export const meetingParticipantSearchOver = (context: StoreContext): MeetingPart
         if (!found) throw new CliError("invalid_response", "participant observation disappeared within its snapshot")
         const name = found.display_name === null ? null : String(found.display_name)
         const email = found.email === null ? null : String(found.email)
+        const personName = found.person_name == null ? null : String(found.person_name)
         after = Number(row.id)
         result.coverage.scanned++
         result.coverage.read_bytes += Number(row.bytes)
-        if (!normalizeMeetingParticipantQuery(`${name ?? ""} ${email ?? ""}`).includes(limits.query)) continue
+        if (
+          !normalizeMeetingParticipantQuery(`${name ?? ""} ${email ?? ""} ${personName ?? ""}`).includes(limits.query)
+        )
+          continue
         result.items.push({
           participant_id: after,
           meeting_id: Number(found.meeting_id),
           identity_id: Number(found.identity_id),
           display_name: name,
           email,
+          person: found.person_id == null ? null : { ref: `person:${found.person_id}`, name: personName },
         })
       }
       result.hasMore = result.coverage.truncated_by !== null

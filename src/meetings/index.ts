@@ -389,6 +389,7 @@ export type {
   MeetingFilter,
   MeetingHitSource,
   MeetingInput,
+  MeetingParticipant,
   MeetingSave,
   MeetingStore,
   NewRecord,

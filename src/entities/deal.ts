@@ -2,6 +2,7 @@ import * as v from "valibot"
 import { CRM_ACTIVITY_KINDS, type CrmActivityKind } from "../domain/crm.js"
 import { DEAL_ROLES } from "../domain/deals.js"
 import { count, id, reference, text, time, untrusted } from "./fields.js"
+import { recordedMeeting } from "./recorded-meeting.js"
 
 const nullableText = v.nullable(text)
 const party = v.strictObject({ ref: reference, name: nullableText, owner: v.boolean() })
@@ -96,6 +97,8 @@ export const deal = v.strictObject({
   updated_at: time,
   /** `show` of a CRM copy whose `activities` setting is on: its activities and tasks, open ones first. */
   activities: v.optional(v.array(activity)),
+  /** `show` of a CRM copy: the newest recorded meetings and calls of its people, in its account's scope. */
+  meetings: v.optional(v.array(recordedMeeting)),
   untrusted,
 })
 

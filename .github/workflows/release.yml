@@ -6,7 +6,8 @@ name: Release
 # Full validation builds, checks and packs once; `build` verifies the immutable tarball.
 # When the release commit has the tree of its pull request's head and every required check is green there,
 # `reuse` skips that validation and `pack` only builds and packs (scripts/release-reuse.sh); the run summary
-# says which path ran and why. The npm audits and Parity run on both paths.
+# says which path ran and why. `checks` (CodeQL of every language, zizmor, gitleaks, the npm audits) and Parity
+# run on both paths.
 # The job able to publish runs no code from our dependencies; `publish` holds the OIDC permission and only
 # runs `npm publish` on that file; `tag` is the only one that may write to the repository.
 on:
@@ -67,15 +68,11 @@ jobs:
           COMMIT: ${{ github.sha }}
           DRY_RUN: ${{ inputs.dry_run }}
           APP_REF: ${{ inputs.app_ref }}
-          # security.yml's checks; the ruleset does not require them yet.
+          # security.yml's checks of the pull request's workflows; `checks` analyses the code itself.
           EXTRA_CONTEXTS: |
             security / workflows
             security / secrets
             security / source (actions)
-            security / source (javascript-typescript)
-            security / source (python)
-            security / source (c-cpp)
-            security / source (java-kotlin)
         run: bash scripts/release-reuse.sh
 
   validation:
@@ -89,9 +86,10 @@ jobs:
       app_ref: ${{ inputs.app_ref }}
       downstream_tests: true
 
+  # On the reuse path too: a pull request runs CodeQL only on its workflows (security.yml).
   checks:
     needs: [checked-commit, reuse]
-    if: (github.ref == 'refs/heads/main' || inputs.dry_run) && needs.reuse.outputs.reuse != 'true'
+    if: github.ref == 'refs/heads/main' || inputs.dry_run
     permissions:
       contents: read
       actions: read
@@ -99,34 +97,6 @@ jobs:
     uses: WireCatLabs/cli-base/.github/workflows/release-checks.yml@92f177f38b68ad8fa5eda46f72815648e211c795 # v0.98.0
     with:
       languages: '["actions","javascript-typescript","python","c-cpp","java-kotlin"]'
-
-  # The reuse path's share of `checks`: the same two audits as cli-base's release-checks.yml, which cannot run them
-  # alone. They read the registry, not this tree, so a pull request's result says nothing about them.
-  audits:
-    needs: reuse
-    if: needs.reuse.outputs.reuse == 'true'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 24
-          package-manager-cache: false
-      # The audit reads only the lockfile; installing would run dependency lifecycle scripts for nothing.
-      - run: pnpm audit --prod --audit-level high
-      - name: Audit a fresh production install of the package
-        run: |
-          audit_dir=$(mktemp -d)
-          npm pack --ignore-scripts --pack-destination "$audit_dir" > /dev/null
-          cd "$audit_dir"
-          npm init --yes > /dev/null
-          npm install --package-lock-only --ignore-scripts --omit=dev --no-audit --no-fund "$audit_dir"/*.tgz
-          npm audit --omit=dev --audit-level=high
 
   parity:
     needs: reuse
@@ -174,7 +144,7 @@ jobs:
 
   # Exactly one path must have run, and all of it must have passed: a skipped job is success to `needs`.
   gate:
-    needs: [reuse, validation, checks, audits, parity, pack]
+    needs: [reuse, validation, checks, parity, pack]
     if: ${{ always() && (github.ref == 'refs/heads/main' || inputs.dry_run) }}
     runs-on: ubuntu-latest
     permissions: {}
@@ -187,9 +157,9 @@ jobs:
           result() { echo "$NEEDS" | jq -r --arg job "$1" '.[$job].result'; }
           [ "$(result reuse)" = success ] || { echo "::error::reuse: $(result reuse)"; exit 1; }
           if [ "$(echo "$NEEDS" | jq -r '.reuse.outputs.reuse')" = true ]; then
-            ran="audits parity pack" skipped="validation checks"
+            ran="checks parity pack" skipped="validation"
           else
-            ran="validation checks" skipped="audits parity pack"
+            ran="validation checks" skipped="parity pack"
           fi
           for job in $ran; do
             [ "$(result "$job")" = success ] || { echo "::error::$job: $(result "$job")"; exit 1; }
@@ -200,7 +170,7 @@ jobs:
 
   build:
     needs: gate
-    # A reused release skips validation and checks; without always() that skip would cascade to here.
+    # A reused release skips validation; without always() that skip would cascade to here.
     if: ${{ always() && needs.gate.result == 'success' && (github.ref == 'refs/heads/main' || inputs.dry_run) }}
     runs-on: ubuntu-latest
     permissions:

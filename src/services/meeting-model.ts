@@ -8,6 +8,7 @@ import {
 } from "../embeddings/embed.js"
 import { textModel, vectorModelKey } from "../embeddings/models.js"
 import { type Fetch, OPENAI_URL, openRemote, type RemoteModel, remoteKey, remoteModel } from "../embeddings/remote.js"
+import { endpointFetch } from "../models/endpoint.js"
 import type { ModelChoice } from "./embeddings.js"
 
 export interface MeetingEmbeddingModel {
@@ -150,7 +151,7 @@ export const openMeetingEmbedder = async (
       choice.apiKey ?? (remote.provider === "openai" ? (options.env ?? process.env).OPENAI_API_KEY : undefined)
     if (remote.provider === "openai" && !key)
       throw new CliError("authentication_error", "The explicit remote embedding model requires an API key")
-    const post = options.fetch ?? fetch
+    const post = options.fetch ?? endpointFetch(remote.baseUrl, 120_000)
     const guarded: Fetch = async (url, init) => {
       try {
         cancelled(signal)

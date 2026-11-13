@@ -21,7 +21,7 @@ import type { Provider } from "../domain/models.js"
 import { httpLockFile } from "../mcp/http/state.js"
 import type { AppIdentity } from "../ports/app.js"
 import { sendsPathFor } from "../sends/journal.js"
-import { storePath } from "../store/path.js"
+import { accountHome, inOwnerFolder, storePath } from "../store/path.js"
 import { openStore } from "../store/store.js"
 import type { AccountKey } from "../store/types.js"
 import { readConfigFile, withoutPath } from "./config-issues.js"
@@ -98,6 +98,8 @@ export interface AccountRemoveOptions {
   provider?: Provider
   /** Unset: the one `run()` set. */
   resolveSettings?: (flags: GlobalFlags, options?: ResolveOptions) => Settings
+  /** The owner's own home; unset, the account's from the user database. A test names its sandbox. */
+  ownerHome?: string
 }
 
 type Kind = "sign_in" | "keyring" | "config" | "file" | "store" | "unit" | "schedule"
@@ -144,6 +146,26 @@ const insideOwnFolders = (app: AppIdentity, env: NodeJS.ProcessEnv, extra: reado
       )
     return full
   }
+}
+
+const within = (path: string, root: string) => path === root || path.startsWith(`${root}${sep}`)
+
+/**
+ * WC-SECR-24: the tool's folders as the owner's own run has them. A run with moved folders shares the rest with the
+ * owner (only the config folder moved leaves the state folder the owner's), so it removes nothing inside these.
+ */
+const ownerFolders = (
+  app: AppIdentity,
+  removal: AccountRemoval,
+  hooks: AccountRemovalContext,
+  home: string | undefined,
+): string[] => {
+  if (home === undefined) return []
+  const env = { HOME: home, USERPROFILE: home }
+  return [
+    ...Object.values(resolvePaths({ appName: app.appName, prefix: app.envPrefix, env })),
+    ...(removal.ownFolders?.({ ...hooks, env }) ?? []),
+  ].map((root) => absolute(root))
 }
 
 /** The profile's own serve unit, by its exact name, when one is installed; never a pattern over the unit folder. */
@@ -270,18 +292,32 @@ export const accountRemoveCommand = (
         )
 
       const own = insideOwnFolders(app, env, removal.ownFolders?.(hooks) ?? [])
-      const schedules = listSchedules(state).filter(
-        (schedule) => schedule.environment[`${app.envPrefix}_PROFILE`] === profile,
-      )
+      const ownerHome = options.ownerHome ?? accountHome()
+      const movedFolders = isMovedRun({ appName: app.appName, prefix: app.envPrefix, env })
+      const owners = movedFolders ? ownerFolders(app, removal, hooks, ownerHome) : []
+      const inOwners = (path: string) => owners.some((root) => within(absolute(path), root))
+      const ownerHomeHere = movedFolders && ownerHome !== undefined && absolute(env.HOME ?? "") === absolute(ownerHome)
+      const ownersReason = "a run with moved folders never removes what lies in the owner's own folders"
+      const ownersKept: Kept[] = []
+      const theRun = (paths: string[]) =>
+        paths.flatMap((path) => {
+          if (!inOwners(path)) return [own(path)]
+          if (existsSync(path)) ownersKept.push({ kind: "file", target: absolute(path), reason: ownersReason })
+          return []
+        })
+      const schedules =
+        movedFolders && (inOwners(state) || ownerHomeHere)
+          ? []
+          : listSchedules(state).filter((schedule) => schedule.environment[`${app.envPrefix}_PROFILE`] === profile)
       const serveLock = lockPath(app, profile, env)
       const staleLock = readLock(serveLock)
-      const stateFiles = [
+      const stateFiles = theRun([
         accountFile,
         ...profileFiles(app, profile, env, listSchedules(state)),
         ...(staleLock && !alive(staleLock.pid) ? [serveLock] : []),
         ...(removal.stateFiles?.(profile, hooks) ?? []),
-      ].map(own)
-      const dataFiles = (removal.dataFiles?.(profile, hooks) ?? []).map(own)
+      ])
+      const dataFiles = theRun(removal.dataFiles?.(profile, hooks) ?? [])
       const account =
         removal.account?.(profile, hooks) ??
         (options.provider === undefined ? undefined : recalledAccount(app, options.provider, profile, env))
@@ -294,10 +330,13 @@ export const accountRemoveCommand = (
         }),
         accounts,
       }))
-      const sections = removal.forgetConfig ? [] : configSections(settings.configPath, profile)
+      const ownersConfig = inOwners(settings.configPath)
+      const sections = removal.forgetConfig || ownersConfig ? [] : configSections(settings.configPath, profile)
+      if (ownersConfig) ownersKept.push({ kind: "config", target: settings.configPath, reason: ownersReason })
+      const ownersStore = movedFolders && inOwnerFolder(storePath(env), ownerHome)
       const storeHere = existsSync(storePath(env))
       const system = environmentOf<BaseEnvironment & { system?: ServerSystem }>(this).system ?? thisMachine()
-      const unit = serveUnit(app, system, profile, env)
+      const unit = ownerHomeHere ? undefined : serveUnit(app, system, profile, env)
       if (unit && (await platformFor(app, system, env).state(unit)).active)
         throw new CliError(
           "conflict",
@@ -306,7 +345,7 @@ export const accountRemoveCommand = (
         )
 
       const removed: Entry[] = [{ kind: "sign_in", target: `${app.command} sign-in of ${profile}` }]
-      const kept: Kept[] = []
+      const kept: Kept[] = [...ownersKept]
       // An entry the environment supplies is not this tool's to remove.
       const saved = (store: Credentials, name: string) => (store.read(name)?.source ?? "environment") !== "environment"
       for (const { store, accounts } of secrets)
@@ -322,7 +361,9 @@ export const accountRemoveCommand = (
       const accountName = account ? `${account.provider}:${account.account}` : undefined
       if (data === "deleted") {
         for (const file of dataFiles.filter(present)) removed.push({ kind: "file", target: file })
-        if (accountName && storeHere) removed.push({ kind: "store", target: accountName })
+        if (accountName && storeHere && ownersStore)
+          kept.push({ kind: "store", target: accountName, reason: ownersReason })
+        else if (accountName && storeHere) removed.push({ kind: "store", target: accountName })
         else
           kept.push({
             kind: "store",
@@ -404,7 +445,7 @@ export const accountRemoveCommand = (
         if (unit) await removeUnit(app, system, unit, env)
         if (schedules.length > 0) await removeSchedules(app, system, state, schedules, env)
         for (const entry of removed) if (entry.kind === "file") rmSync(entry.target, { recursive: true, force: true })
-        if (removal.forgetConfig)
+        if (removal.forgetConfig && !ownersConfig)
           for (const target of removal.forgetConfig(profile, hooks)) removed.push({ kind: "config", target })
         else if (sections.length > 0) removeSections(settings.configPath, sections)
 

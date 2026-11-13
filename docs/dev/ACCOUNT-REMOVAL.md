@@ -16,8 +16,10 @@ In this order, and stopping at the first failure:
 2. **Plans** every keyring entry, config section, file and store account it would remove, and every one it keeps.
    A path a hook names outside the tool's own config, state or cache folder, or the folders its `ownFolders` hook
    names, stops the command before anything is removed (`account-remove.path-outside`); an `ownFolders` folder that is
-   not absolute and inside the home folder stops it too (`account-remove.folder-outside`). `--dry-run` answers the
-   plan and changes nothing.
+   not absolute and inside the home folder stops it too (`account-remove.folder-outside`). In a run with moved
+   folders (WC-SECR-24), what lies in the tool's folders as the owner's own run has them is kept, with its reason
+   under `kept`: with only `<PREFIX>_CONFIG_DIR` moved, the state folder, the WireCat store and the serve unit and
+   schedules are still the owner's, so none of them is touched. `--dry-run` answers the plan and changes nothing.
 3. **Asks**, or takes `--yes`. Under `--json` without `--yes` it answers `confirmation_required`
    (`account-remove.unconfirmed`); nobody is signed out.
 4. **Signs out** with the tool's `signOut`. If it throws, nothing is forgotten.

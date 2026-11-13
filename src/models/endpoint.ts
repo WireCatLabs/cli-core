@@ -1,3 +1,5 @@
+import { type FetchLike, hostFetch } from "@wirecat/cli-base/http"
+
 export const endpoint = (value: string): boolean => {
   try {
     const url = new URL(value)
@@ -24,3 +26,13 @@ export const modelAddressAllowed = (value: string): boolean =>
   endpoint(value) && (new URL(value).protocol === "https:" || onThisComputer(value))
 
 export const PLAIN_HTTP_REFUSED = "this address is not allowed: use https, or http only on this computer"
+
+/**
+ * `fetch` that reaches only the host of this model address, through `hostFetch`. The address was checked when it was
+ * saved; its host is the one the person configured. `[::1]` is not a name `hostFetch` takes, and the loopback cannot
+ * leave this computer, so it goes through the plain `fetch`.
+ */
+export const endpointFetch = (address: string, timeoutMs: number): FetchLike => {
+  const { hostname } = new URL(address)
+  return hostname === "[::1]" ? fetch : hostFetch({ hosts: [hostname], timeoutMs })
+}

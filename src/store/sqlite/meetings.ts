@@ -152,9 +152,16 @@ const details = (database: CacheDatabase, id: number): MeetingDetails | null => 
     meeting,
     series,
     participants: database
-      .prepare("SELECT * FROM meeting_participants WHERE meeting_id = ? ORDER BY id")
+      .prepare(
+        "SELECT mp.*, l.person_id AS person_uid, p.name AS person_name FROM meeting_participants mp " +
+          "LEFT JOIN identity_links l ON l.identity_id = mp.identity_id LEFT JOIN persons p ON p.id = l.person_id " +
+          "WHERE mp.meeting_id = ? ORDER BY mp.id",
+      )
       .all(id)
-      .map(participantOf),
+      .map((row) => ({
+        ...participantOf(row),
+        ...(row.person_uid == null ? {} : { person: { uid: String(row.person_uid), name: str(row.person_name) } }),
+      })),
     transcripts: database
       .prepare("SELECT * FROM meeting_transcripts WHERE meeting_id = ? ORDER BY id")
       .all(id)

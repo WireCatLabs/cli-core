@@ -36,14 +36,15 @@ projects, money and communications — so memo, Desktop and MCP read the same th
 - **Communications.** One-to-one chats, mail with their address and calendar events they are invited to, in the
   accounts read; a group chat is not read, since what another member wrote there is not theirs. Each message, mail
   and event counts once however many of the people it involves. The owner is never one of the people read, even as a
-  participant or a member: through him every chat of his would count. A Zoom recording counts only through its
-  calendar event.
+  participant or a member: through him every chat of his would count. A recorded meeting or call counts through
+  the people who took part in it (`personMeetings`), with its `meeting:` ref; one held for a calendar event already
+  counted counts once ([MEETINGS.md, "Calls and the people they link to"](MEETINGS.md#calls-and-the-people-they-link-to)).
 
 ## Person — `canonicalPersonContext(store, "person:<uid>", options)`
 
 Any canonical person: a CRM contact or user with no messenger, a name the owner added with no identity, someone
 seen by several accounts. Every identity is read in every stored account of its provider that saw it, inside the
-scope. Returns the sections of `personContext` (`shared`, `last`, `recent`, `mentions`, `events`, `limits`,
+scope. Returns the sections of `personContext` (`shared`, `last`, `recent`, `mentions`, `events`, `meetings`, `limits`,
 `hasMore`, `complete`, `notRead` for chats not held whole), `person` as the canonical record (`uid`, `name`,
 `identities`), and:
 

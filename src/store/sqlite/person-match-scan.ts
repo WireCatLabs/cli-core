@@ -1,7 +1,7 @@
 import { isEmailAddress, isNoReplyAddress, isPersonLikeRoleAddress, isRoleAddress } from "../../domain/addresses.js"
 import { displayName, isReadable } from "../../domain/display-names.js"
 import { variantKey } from "../../domain/name-variants.js"
-import { BARE_INTERNATIONAL_PROVIDERS, storedPhone } from "../../domain/phones.js"
+import { BARE_INTERNATIONAL_PROVIDERS, isMobilePhone, nationalPhone, storedPhone } from "../../domain/phones.js"
 import type { CacheDatabase } from "../driver.js"
 import type { IdentityLinkSignal, MatchScan, SharedMailbox } from "../identity-links.js"
 import { type LinkIndex, linkIndex, settleLinks } from "./identity-link-rows.js"
@@ -13,6 +13,7 @@ import { isOwner, mergePerson } from "./person-links.js"
 import { personsByIdentifiers } from "./person-matcher.js"
 import { resolvePersonLinks } from "./person-resolution.js"
 import { separated } from "./person-separation.js"
+import { storePhoneCountries } from "./phone-countries.js"
 import { referenceOfThing } from "./things.js"
 import { write } from "./transaction.js"
 
@@ -26,7 +27,7 @@ const MOST_SHARING = 6
 const CURSOR = "people.scan"
 
 /** Raised when a rule changes what a pass finds in values nobody touched: the next pass then reads everything once. */
-const RULES = 4
+const RULES = 5
 
 /**
  * NEED-2526: a shared mailbox says little alone, so its proposal is scored by what else the two people have in common.
@@ -54,9 +55,12 @@ export const PROPOSAL_SCORE = {
 /**
  * NEED-2445, safe option until the owner rules: a number two people share joins them only when a messenger, which
  * keeps its user's own number, holds it; a CRM's or a card's number is someone's word and waits as a proposal.
+ * NEED-2600: a call's other side, kept as `phone:<number>`, is that number as the phone network gave it, as strong
+ * as a messenger's; it joins only on a mobile number, since an office's landline is everyone's who works there.
  */
-const phonePairJoins = (holders: Holder[]): boolean =>
-  holders.some(({ provider }) => BARE_INTERNATIONAL_PROVIDERS.includes(provider))
+const phonePairJoins = (phone: string, holders: Holder[]): boolean =>
+  holders.some(({ provider }) => BARE_INTERNATIONAL_PROVIDERS.includes(provider)) ||
+  (holders.some(({ externalId }) => externalId === `phone:${phone}`) && isMobilePhone(phone))
 
 /** NEED-2446, safe option until the owner rules: an address more than two people have is shared, so it proposes. */
 const addressGroupJoins = (people: number): boolean => people <= 2
@@ -64,6 +68,7 @@ const addressGroupJoins = (people: number): boolean => people <= 2
 interface Holder {
   identity: number
   provider: string
+  externalId: string
   /** The list it comes from: its source, and for a CRM the kind of record, `<portal>/contact/` or `<portal>/user/`. */
   list: string
   /** An organization holds this identity: its number or address is the company's. */
@@ -142,6 +147,7 @@ const holderOf = (row: Record<string, unknown>): Holder => {
   return {
     identity: Number(row.id),
     provider,
+    externalId: String(row.external_id),
     list: `${provider}:${String(row.external_id).replace(/[^/]*$/u, "")}`,
     company: row.company === 1,
   }
@@ -154,19 +160,38 @@ const add = (found: Holders, key: string | undefined, holder: Holder) => {
   found.set(key, held)
 }
 
+/**
+ * NEED-2600: a CRM keeps a number as someone typed it, `8 (912) 345-67-89`; without a `+` it is read in the store's
+ * `phone_countries` (Russian by default), so a call from that number finds the contact. A messenger's bare digits stay
+ * international (`storedPhone`).
+ */
+const phoneKey = (raw: string, provider: string, countries: readonly string[]): string | undefined =>
+  storedPhone(raw, provider) ??
+  (/^\s*(\+|00)/.test(raw) || BARE_INTERNATIONAL_PROVIDERS.includes(provider)
+    ? undefined
+    : nationalPhone(raw.replace(/\(0\)/, "").replace(/\D/g, ""), countries, { anyType: true })?.value)
+
+/** The numbers an identity holds: its phone column, and the other numbers a CRM keeps in its metadata's `phones`. */
+const phonesOf = (row: Record<string, unknown>): string[] => {
+  const raws = [row.provider === "phone" ? row.external_id : row.phone]
+  try {
+    const more = row.metadata == null ? undefined : (JSON.parse(String(row.metadata)) as { phones?: unknown }).phones
+    if (Array.isArray(more)) raws.push(...more)
+  } catch {}
+  return raws.filter((raw): raw is string => typeof raw === "string" && raw.trim() !== "")
+}
+
 const phoneHolders = (database: CacheDatabase): Holders => {
   const found: Holders = new Map()
+  const countries = storePhoneCountries(database)
   for (const row of database
     .prepare(
-      `SELECT i.id, i.provider, i.external_id, i.phone, ${COMPANY} FROM identities i ` +
-        `JOIN identity_links l ON l.identity_id = i.id WHERE (i.provider = 'phone' OR i.phone IS NOT NULL) AND ${NOT_A_BOT} ` +
-        "ORDER BY i.id",
+      `SELECT i.id, i.provider, i.external_id, i.phone, i.metadata, ${COMPANY} FROM identities i ` +
+        "JOIN identity_links l ON l.identity_id = i.id WHERE (i.provider = 'phone' OR i.phone IS NOT NULL OR " +
+        `(json_valid(i.metadata) AND json_extract(i.metadata, '$.phones') IS NOT NULL)) AND ${NOT_A_BOT} ORDER BY i.id`,
     )
-    .all()) {
-    const provider = String(row.provider)
-    const raw = String(provider === "phone" ? row.external_id : row.phone)
-    add(found, storedPhone(raw, provider), holderOf(row))
-  }
+    .all())
+    for (const raw of phonesOf(row)) add(found, phoneKey(raw, String(row.provider), countries), holderOf(row))
   return found
 }
 
@@ -321,12 +346,12 @@ const skipShared = (pass: Pass, people: Map<number, number>, signal: string) =>
  * A number two people have joins them (NEED-2445); one that more share, or that once proposed, proposes. A company's
  * line does neither.
  */
-const samePhone = (pass: Pass, holders: Holder[]) => {
+const samePhone = (pass: Pass, phone: string, holders: Holder[]) => {
   const people = peopleOf(pass.context, holders)
   if (people.size < 2 || tooMany(pass, people, "identity.shared-phone", "phone")) return
   if (sharedLine(pass.context, holders)) return skipShared(pass, people, "phone")
   const [into, from] = [...people.keys()].sort((a, b) => a - b) as [number, number]
-  if (people.size === 2 && phonePairJoins(holders) && !pass.index.known(from, into))
+  if (people.size === 2 && phonePairJoins(phone, holders) && !pass.index.known(from, into))
     join(pass, { from, into, identity: people.get(from) as number, with: people.get(into) as number }, "phone")
   else proposeEachPair(pass, people, "phone")
 }
@@ -625,8 +650,8 @@ export const scanMatches = (context: StoreContext, { full = false }: { full?: bo
   }
   for (const [address, holders] of emailHolders(database))
     if (holders.length > 1 && touched(holders)) write(database, () => sameEmail(pass, address, holders))
-  for (const holders of phoneHolders(database).values())
-    if (holders.length > 1 && touched(holders)) write(database, () => samePhone(pass, holders))
+  for (const [phone, holders] of phoneHolders(database))
+    if (holders.length > 1 && touched(holders)) write(database, () => samePhone(pass, phone, holders))
   for (const group of pass.shared) write(database, () => proposeShared(pass, group))
   for (const row of guestRows(database))
     if ((changed === undefined || changed.has(row.identity)) && !pass.index.names(row.ref))

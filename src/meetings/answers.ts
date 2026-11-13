@@ -98,6 +98,8 @@ export const meetingDetails = v.strictObject({
       name: v.nullable(text),
       email: v.nullable(text),
       role: v.nullable(text),
+      /** Who they are across the owner's sources: `person:<uid>`, and that person's name once linked. */
+      person: v.nullable(v.strictObject({ ref: text, name: v.nullable(text) })),
       joined_at: v.nullable(isoTime),
       left_at: v.nullable(isoTime),
       duration_ms: v.nullable(count),
@@ -182,6 +184,7 @@ export const meetingDetailsItem = (details: MeetingDetails, owner: MeetingOwner)
       name: one.displayName,
       email: one.email,
       role: one.role,
+      person: one.person ? { ref: `person:${one.person.uid}`, name: one.person.name } : null,
       joined_at: iso(one.joinedAt),
       left_at: iso(one.leftAt),
       duration_ms: one.durationMs,

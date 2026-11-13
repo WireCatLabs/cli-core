@@ -14,6 +14,8 @@ export interface MeetingParticipantCandidate {
   identity_id: number
   display_name: string | null
   email: string | null
+  /** The person their identity is linked to; a linked person's name is searched too. */
+  person: { ref: string; name: string | null } | null
 }
 
 export interface MeetingParticipantPage {

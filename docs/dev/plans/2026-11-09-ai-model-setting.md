@@ -403,7 +403,7 @@ The gateway learns to tell these apart, which also improves every other job's er
 | `ai.unreachable` | network error, refused connection | "Cannot reach {host}." For Ollama: "Ollama is not running. Start it, then check again." |
 | `ai.bad-answer` | 200 with an `error` body (OpenRouter), or no text | "{host} answered, but not with text. The model may not support chat." |
 | `ai.provider-error` | 5xx, Anthropic 529 `overloaded_error`, OpenRouter 502/503 | "{host} has a problem on its side. Try again later." |
-| `ai.address-refused` | the endpoint rule in §6 | "This address is not allowed: use https, or http only on this computer." |
+| `model.address-refused` | the endpoint rule in §6 | "This address is not allowed: use https, or http only on this computer." |
 | `ai.failed` | anything else, a 400 included | "{host} refused the request ({status})." |
 
 Anthropic also documents a 429 for a tier spend cap with the same `rate_limit_error` type. It cannot be told apart

@@ -4,6 +4,11 @@ import type { MeetingSave } from "./store.js"
 export interface SourceParticipant {
   identityExternalId: string | null
   email: string | null
+  /**
+   * The number the participant called from or was called on, as the phone network gave it: what links a call's
+   * client to the CRM contact with that number. E.164, or written with `+`; anything else is left out.
+   */
+  phone?: string | null
   displayName: string | null
   externalId: string | null
   role: string | null

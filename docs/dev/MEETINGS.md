@@ -324,7 +324,8 @@ The raw discovery export itself mounts no command and performs no indexing.
 The optional `MeetingParticipantSearchStore.participantCandidates` capability searches observed
 participant names and emails in one selected account. SQLite scans names in stable ID order with
 literal Unicode NFKC/case-insensitive matching; a query is not a wildcard or a person identity.
-It reads only IDs, names and emails, checking their UTF-8 byte sizes before hydration. Session
+It reads only IDs, names, emails and the name of the person each participant's identity is linked to, checking
+their UTF-8 byte sizes before hydration; a participant matches by that person's name too. Session
 history, metadata and transcript text are excluded. Deleted meetings are excluded.
 
 `limit` bounds matches (default 50, maximum 1000), `scanLimit` bounds observations examined (default
@@ -350,6 +351,43 @@ SDK adoption before these new options become available.
 Shared CLI/MCP participant reads adapt this store packet to the standard list envelope: `page.limit`,
 `page.has_more`, optional `page.cursor` and a `page.next` step retaining the query and read budgets.
 The host adds run metadata. Coverage and page-local ambiguity stay alongside the envelope.
+
+## Calls and the people they link to
+
+A phone line's source (beeline, Asterisk) saves the other side of a call as the identity `phone:<E.164>` under its
+own provider, and gives the number in `SourceParticipant.phone` too. The store reads that number with `e164Of`
+(written with `+` or `00`; anything else is left out) and keeps it in `identities.phone`, where the people matcher
+reads every source's numbers.
+
+**When a call's number joins a person (NEED-2600).** `scanMatches` joins the call's person and one other person when
+exactly the two of them hold the number, one of the holders is keyed by the number itself (`phone:<number>`), and the
+number is a mobile one (`isMobilePhone`). A landline only proposes the pair (score 0.7), since an office's main
+line is everyone's who works there. Two CRM contacts on one number, or an organization holding it, join and propose
+no one (`sharedLine`). A CRM's or a card's number written without `+`, such as `8 (912) 345-67-89`, is read in the
+store's `phone_countries` (Russian by default), and every number a CRM keeps in the identity's metadata `phones`
+counts beside the first one in `identities.phone`. The scan runs in `memo people scan` and in `memo sync`; nothing
+else starts it.
+
+**Where the link shows.** Once linked, the call is the person's, with no new concept:
+
+- `meetings show <id>` and `meetings people <query>`: each participant's `person` (`person:<uid>` and the person's
+  name, `null` when the identity is linked to no one); `meetings people` also finds a participant by that name.
+- `contacts context` and the canonical person context: `meetings[]`, the person's recorded meetings and calls,
+  newest first, in the accounts the read may see (`personMeetings`).
+- `communicationsOf`, so the deal and organization contexts: each call is a touch of kind `meeting` with its
+  `meeting:` ref, and counts in `counts.meetings`; one held for a calendar event already counted counts once.
+- `deals show` and `leads show` of a CRM copy: `meetings[]`, the newest 10 of the people on it (never the owner), in
+  the accounts of the CRM account's scope.
+
+Each item carries `ref` (`meeting:<account>/<meeting>`), `meeting_id`, `account` (`provider`, `account`), `title`,
+`started_at`, `duration_ms`, `has_transcript`, `event` and `people`. It opens with `meetings show <meeting_id>` or
+`meetings transcript <meeting_id>` of the CLI and profile that own `account`.
+
+**Calls of the people on deal X.** In one step: `<crm> <profile> deals show deal:<id>` lists them under `meetings`.
+By hand, with the same result: `deals show deal:<id>` names its `people` (`person:<uid>`); memo's `context
+person:<uid>` lists each one's `meetings` (a messenger's `contacts context person:<uid>` does too, for a person with
+an identity in that messenger); `<phone-line> <profile> meetings transcript <meeting_id>` reads one. The call's account and the CRM's must be in one scope (`work`): a read never crosses into
+the other scope.
 
 ## Cue context and compact passages
 

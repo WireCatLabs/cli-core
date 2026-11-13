@@ -1,6 +1,6 @@
 import { realpathSync } from "node:fs"
 import { fileURLToPath } from "node:url"
-import type { FetchLike } from "@wirecat/cli-base/http"
+import { type FetchLike, hostFetch } from "@wirecat/cli-base/http"
 import {
   type Installer,
   installerOf,
@@ -8,6 +8,8 @@ import {
   runUpdate as runPackageManager,
   updateNotice as sharedNotice,
 } from "@wirecat/cli-base/update"
+
+const npmRegistry = () => hostFetch({ hosts: ["registry.npmjs.org"] })
 
 /** npm, the clock, the terminal and the package manager as `<app> upgrade` sees them — faked in a test. */
 export interface UpdateEnvironment {
@@ -74,7 +76,7 @@ export const appUpdate = (app: AppUpdateOptions) => {
   return {
     installer,
     latest: (environment: UpdateEnvironment = {}) =>
-      latestVersion(app.packageName, environment.fetch ?? fetch, { timeoutMs: 3000 }),
+      latestVersion(app.packageName, environment.fetch ?? npmRegistry(), { timeoutMs: 3000 }),
     /** The package manager's output goes to stderr, so stdout stays one result. */
     runUpdate: (argv: string[], environment: UpdateEnvironment = {}): number =>
       environment.spawn ? environment.spawn(argv) : runPackageManager(argv),
@@ -100,7 +102,7 @@ export const appUpdate = (app: AppUpdateOptions) => {
           command: app.command,
           version: app.version,
           statePath: app.statePath(env),
-          fetch: environment.fetch ?? fetch,
+          fetch: environment.fetch ?? npmRegistry(),
           ...(environment.now ? { now: environment.now } : {}),
           format: pretty ? "pretty" : "json",
           stderrIsTTY: environment.stderrIsTTY ?? process.stderr.isTTY === true,

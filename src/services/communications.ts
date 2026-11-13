@@ -3,15 +3,18 @@ import { kindIn } from "../domain/providers.js"
 import type { AccountKey, LinkedIdentity, MessageStore, PersonRecord, StoredAccount } from "../store/store.js"
 import { type Coverage, keyOf, newestFirst, type Scope } from "./business-context.js"
 import { eventsOnce } from "./person-context.js"
+import { personMeetings } from "./person-meetings.js"
 
 /** Mail read per address when counting: past it the count says `hasMore`. */
 const MAIL_ROWS = 500
 const EVENT_ROWS = 1000
+/** Recorded meetings and calls listed: past it the count still counts each, and the read says `hasMore`. */
+const RECORDED_ROWS = 100
 
-/** A one-to-one chat, a mail or a calendar event with some of the people asked about. */
+/** A one-to-one chat, a mail, a calendar event or a recorded meeting or call with some of the people asked about. */
 export interface Touch {
   kind: "message" | "mail" | "meeting"
-  /** A message's or mail's locator, an `event:<id>`. */
+  /** A message's or mail's locator, an `event:<id>`, or a recorded meeting's `meeting:<account>/<id>`. */
   ref: string
   /** The chat's title, the mail's subject, the event's title. */
   title: string | null
@@ -92,6 +95,7 @@ export const communicationsOf = async (
   const messages = new Map<string, Touch>()
   const mail = new Map<number, Touch>()
   const meetings = new Map<number, Touch>()
+  const recordedTouches: Touch[] = []
   let messageCount = 0
   let cut = false
   const sinceIso = since === undefined ? undefined : new Date(since).toISOString()
@@ -195,10 +199,33 @@ export const communicationsOf = async (
       )
   }
   for (const key of calendars) read.add(keyOf(key))
+  const recorded = await personMeetings(
+    store,
+    people.map(({ uid }) => uid),
+    stored.filter((one) => scope.has(one)),
+    { limit: RECORDED_ROWS, ...(since === undefined ? {} : { since }), ...(until === undefined ? {} : { until }) },
+  )
+  cut ||= recorded.hasMore
+  let held = 0
+  for (const meeting of recorded.items) {
+    read.add(keyOf(meeting.account))
+    const event = meeting.event === null ? undefined : Number(meeting.event.slice("event:".length))
+    if (event !== undefined && meetings.has(event)) {
+      held++
+      continue
+    }
+    recordedTouches.push({
+      kind: "meeting",
+      ref: meeting.ref,
+      title: meeting.title,
+      at: meeting.startedAt,
+      people: meeting.people,
+    })
+  }
 
   return {
-    counts: { messages: messageCount, mail: mail.size, meetings: meetings.size },
-    items: [...messages.values(), ...mail.values(), ...meetings.values()].sort(newestFirst),
+    counts: { messages: messageCount, mail: mail.size, meetings: meetings.size + recorded.total - held },
+    items: [...messages.values(), ...mail.values(), ...meetings.values(), ...recordedTouches].sort(newestFirst),
     hasMore: cut,
     coverage: coverageOf(people, read, calendars.length > 0),
   }

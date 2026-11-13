@@ -3,6 +3,7 @@ import { chat } from "./chat.js"
 import { linkedPerson } from "./contact-activity.js"
 import { count, id, reference, text, time } from "./fields.js"
 import { message } from "./message.js"
+import { recordedMeeting } from "./recorded-meeting.js"
 
 const contextPerson = v.strictObject({ ...linkedPerson.entries, provider: text, id })
 export const contextMessage = v.strictObject({
@@ -49,6 +50,8 @@ const context = v.strictObject({
   mentions: v.array(contextMessage),
   /** Calendar events they are invited to, one occurrence per series. */
   events: v.optional(v.strictObject({ upcoming: v.array(contextEvent), recent: v.array(contextEvent) })),
+  /** Recorded meetings and calls they took part in, newest first. */
+  meetings: v.optional(v.array(recordedMeeting)),
   limits: v.strictObject({ messages: count, bytes: count }),
   complete: v.boolean(),
   not_read: v.array(
