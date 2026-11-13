@@ -139,16 +139,18 @@ export const oauthClientReport = (
 export type { AppSource }
 
 /**
- * The hosts cli-core itself reaches in any tool: npm for `upgrade`, the default model providers, and the model
- * downloads with the hosts they redirect to. A tool spreads them into its WCAT identity's `hosts`, so `cli-dev manifest`
- * lists them; a model endpoint or calendar feed the person configures belongs in `userHosts`.
+ * The hosts cli-core itself reaches in any tool: the default model providers, then cli-base's `SHARED_HOSTS` (npm for
+ * `upgrade`, the model downloads and the hosts they redirect to), which `cli-dev manifest` adds to every CLI's hosts.
+ * Typed out, not imported, so a CLI on an older cli-base still loads this module; a test keeps the two equal. A model
+ * endpoint or calendar feed the person configures belongs in `userHosts`.
  */
 export const CORE_HOSTS: readonly string[] = [
-  "registry.npmjs.org",
   "api.openai.com",
   "api.anthropic.com",
+  "registry.npmjs.org",
   "huggingface.co",
+  "*.huggingface.co",
   "*.hf.co",
   "github.com",
-  "release-assets.githubusercontent.com",
+  "*.githubusercontent.com",
 ]

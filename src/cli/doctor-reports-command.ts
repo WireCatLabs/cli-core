@@ -1,5 +1,5 @@
-import { mkdirSync, writeFileSync } from "node:fs"
-import { dirname, resolve } from "node:path"
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
+import { dirname, join, resolve } from "node:path"
 import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
@@ -11,6 +11,7 @@ import { type BaseContext, environmentOf, outputFor } from "./context.js"
 import { destroysNothing, LOCAL_WRITE, NO_EFFECTS } from "./effects.js"
 import { itemOf, renderAnswer } from "./envelope.js"
 import { buildReport, reportFileName } from "./messenger/report.js"
+import { ownPackageRoot } from "./messenger/serve-outdated.js"
 import { lineOf, nextStep, rootOf } from "./steps.js"
 
 export interface DoctorReportsSource {
@@ -37,6 +38,30 @@ const writeNew = (path: string, text: string) => {
     throw new CliError("validation_error", `${path} exists — a problem report never overwrites a file`, {
       reason: "doctor.report-exists",
     })
+  }
+}
+
+const urlOf = (field: unknown): string | undefined => {
+  const url = typeof field === "string" ? field : (field as { url?: unknown } | undefined)?.url
+  return typeof url === "string" ? url : undefined
+}
+
+/**
+ * The new-issue page: the app definition's `issues`, else the GitHub repository its installed package names in
+ * `bugs` or `repository`. Only GitHub's: the link fills the issue through GitHub's own parameters.
+ */
+export const issuesPage = (app: AppIdentity, script = process.argv[1]): string | undefined => {
+  if (app.issues) return app.issues
+  const root = ownPackageRoot(app.version, script)
+  if (!root) return undefined
+  try {
+    const manifest = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as Record<string, unknown>
+    const repository = /github\.com[/:]([\w.-]+)\/([\w.-]+?)(?:\.git)?(?:\/issues)?\/?$/.exec(
+      urlOf(manifest.bugs) ?? urlOf(manifest.repository) ?? "",
+    )
+    return repository ? `https://github.com/${repository[1]}/${repository[2]}/issues/new` : undefined
+  } catch {
+    return undefined
   }
 }
 
@@ -79,11 +104,12 @@ export const doctorReportsCommand = (source: DoctorReportsSource): Command => {
     .summary("what a report holds and never holds, and where to send it; writes nothing")
     .action(function (this: Command) {
       const create = lineOf(this, "doctor reports create")
+      const page = issuesPage(app)
       renderAnswer(
         this,
         outputFor(this),
         itemOf(
-          { includes, excludes, ...(app.issues ? { send_to: app.issues } : {}) },
+          { includes, excludes, ...(page ? { send_to: page } : {}) },
           { next: [nextStep("doctor.report-create", { args: {} })] },
         ),
         () =>
@@ -129,14 +155,15 @@ export const doctorReportsCommand = (source: DoctorReportsSource): Command => {
       writeNew(path, `${JSON.stringify(built, null, 2)}\n`)
       const output = outputFor(this)
       const out = renderer ?? output.renderer
-      const issue = app.issues ? issueUrlFor(app, built.run?.metadata) : undefined
+      const page = issuesPage(app)
+      const issue = page ? issueUrlFor({ ...app, issues: page }, built.run?.metadata) : undefined
       renderAnswer(
         this,
         { ...output, renderer: out },
         itemOf({
           path,
           run: built.run?.metadata.runId ?? null,
-          ...(issue ? { send_to: app.issues, issue_url: issue } : {}),
+          ...(issue ? { send_to: page, issue_url: issue } : {}),
         }),
       )
       if (!built.run)

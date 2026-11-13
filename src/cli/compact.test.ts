@@ -189,6 +189,40 @@ describe("compactText", () => {
     ])
   })
 
+  it("**draws one thing as its list row when the row opts in**, and a declared list in it still as rows", () => {
+    const proposal = { ref: "17070", kind: "fact", status: "proposed", title: "Ana works at Acme", evidence: ["m1"] }
+    const row: RowShape = {
+      columns: [{ field: "ref" }, { field: "kind" }, { field: "status" }],
+      text: ["title"],
+      oneLine: true,
+    }
+    const decided: RowShape = { columns: [], sections: { decided: "generic" }, oneLine: true }
+
+    expect(compactText(itemOf(proposal), row, zone)).toBe(compactText(list([proposal]), row, zone))
+    const fact = { ...proposal, ref: "fact:512", at: "2026-10-01T07:11:00.000Z" }
+    const timed: RowShape = { ...row, columns: [...row.columns, { field: "at", as: "time" }] }
+    expect(compactText(itemOf(fact), timed, zone)).toBe(compactText(list([fact]), timed, zone))
+    expect(compactText(itemOf(fact), timed, zone)).toContain("fact:512")
+    expect(compactText(itemOf(msg(1)), { ...message, oneLine: true }, zone)).toBe(
+      compactText(list([msg(1)]), message, zone),
+    )
+    expect(compactText(itemOf(proposal), row, zone)).toBe("17070 · fact · proposed · Ana works at Acme")
+    expect(
+      compactText(
+        itemOf({
+          decided: [
+            { id: "17070", status: "confirmed" },
+            { id: "fact:5", status: "rejected" },
+          ],
+        }),
+        decided,
+        zone,
+      )
+        .split("\n")
+        .filter((line) => !line.startsWith("# ")),
+    ).toEqual(["17070 · confirmed", "fact:5 · rejected"])
+  })
+
   it("says the days and zone of all sections once, above the first", () => {
     const shape: RowShape = { columns: [], sections: { first: "message", second: "message" } }
     const late = msg(3, { timestamp: "2026-10-06T18:31:00.000Z" })

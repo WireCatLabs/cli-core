@@ -285,6 +285,21 @@ describe("appDoctorCommand", () => {
     expect(JSON.parse(shown.stdout[0] ?? "{}").item.excludes).toContain("the sign-in")
   })
 
+  it("doctor reports create names the pre-filled issue link in its note, for a person to open", async () => {
+    const env = home()
+    const issues = "https://github.com/example/cal-cli/issues/new"
+    const own = { ...app, issues }
+    const program = { ...definition(), app: own, commands: () => [appDoctorCommand(own, configuration)] }
+    const file = join(mkdtempSync(join(tmpdir(), "app-report-")), "report.txt")
+    const streams = captureStreams()
+
+    expect(await run(["doctor", "reports", "create", "--output", file], program, { streams, tty: false, env })).toBe(0)
+
+    const link = streams.stderr.join("").match(/open (\S+) and attach the file/)?.[1] ?? ""
+    expect(`${new URL(link).origin}${new URL(link).pathname}`).toBe(issues)
+    expect(new URL(link).searchParams.get("title")).toBe("cal 1.0.0: problem report")
+  })
+
   describe("--online", () => {
     const answer = async (
       options: Parameters<typeof appDoctorCommand>[2],

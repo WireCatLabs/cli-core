@@ -31,6 +31,11 @@ export interface RowShape {
   whole?: readonly string[]
   /** An item answer's fields left out: bookkeeping an agent reads in `--json` if it ever needs it. */
   hidden?: readonly string[]
+  /**
+   * An item answer drawn as the one row a list of it draws, not as `key: value` lines; its `sections` still follow
+   * as rows. Opt-in: a `show` whose help promises one line under `--compact`.
+   */
+  oneLine?: boolean
 }
 
 export interface CompactOptions {
@@ -486,8 +491,9 @@ export const compactText = <T>(
     const rest = Object.fromEntries(
       Object.entries(body.item).filter(([name]) => !Object.hasOwn(sections, name) && !shape.hidden?.includes(name)),
     )
-    lines = blockOf(rest, chars, "", shape.whole).map(guarded)
-    let dates: string[] = []
+    const own = shape.oneLine ? rowsOfItems([rest], shape, clock, chars) : undefined
+    lines = own ? own.lines.filter((line) => line !== "") : blockOf(rest, chars, "", shape.whole).map(guarded)
+    let dates: string[] = own?.dates ?? []
     let drawn: string[] = []
     for (const [name, entity] of Object.entries(sections)) {
       const list = body.item[name]
@@ -497,7 +503,10 @@ export const compactText = <T>(
       drawn = drawn.concat([`# ${[`${clean(name)}: ${list.length}`, ...header].join(" · ")}`], rows)
     }
     const when = spanOf(dates, clock)
-    lines = lines.concat(when.length ? [`# ${when.join(" · ")}`] : [], drawn)
+    const head = [...(own?.header ?? []), ...when]
+    lines = own
+      ? (head.length ? [`# ${head.join(" · ")}`] : []).concat(lines, drawn)
+      : lines.concat(when.length ? [`# ${when.join(" · ")}`] : [], drawn)
   } else if (present(body.item)) lines = [guarded(cut(clean(String(body.item)), chars))]
   return lines.concat(footerOf(body as Body)).join("\n")
 }

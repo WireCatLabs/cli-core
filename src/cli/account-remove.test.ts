@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { captureStreams, type KeyringStore } from "@wirecat/cli-base"
@@ -271,6 +271,56 @@ describe("account remove", () => {
     )
     for (const file of [accountFileFor(app, "personal", env), session, lock]) expect(existsSync(file)).toBe(true)
     expect((await storeState(env)).accounts).toEqual(["500"])
+  })
+
+  it("**never runs the tool's sign-out when only the config folder is moved**: it would end the owner's session (WC-SECR-24)", async () => {
+    const root = mkdtempSync(join(tmpdir(), "account-remove-moved-signout-"))
+    const env: NodeJS.ProcessEnv = { HOME: root, CHAT_CONFIG_DIR: join(root, "moved-config") }
+    mkdirSync(join(root, "moved-config"), { recursive: true })
+    writeFileSync(join(root, "moved-config", "config.json"), JSON.stringify({ profiles: { personal: {} } }))
+    const device = join(root, ".local", "share", "chat-cli", "personal", "device.db")
+    mkdirSync(join(device, ".."), { recursive: true })
+    writeFileSync(device, "synthetic")
+    const removal: AccountRemoval = {
+      signOut: async () => {
+        rmSync(device, { force: true })
+        return { revoked: false, removed: ["the personal device"] }
+      },
+      account: () => ({ provider: "telegram", account: "500" }),
+    }
+
+    const result = await call(
+      ["personal", "--json", "account", "remove", "--keep-data", "--yes"],
+      { env, keyring: memoryKeyring(), ownerHome: root },
+      removal,
+    )
+
+    expect(result.code).toBe(0)
+    expect(existsSync(device)).toBe(true)
+    expect(result.item.removed.filter(({ kind }: { kind: string }) => kind === "sign_in")).toEqual([])
+    expect(result.item.kept).toContainEqual(expect.objectContaining({ kind: "sign_in" }))
+  })
+
+  it("**keeps the owner's config when the moved config folder is a link to it** (WC-SECR-24)", async () => {
+    const root = mkdtempSync(join(tmpdir(), "account-remove-linked-config-"))
+    const owners = join(root, ".config", "chat-cli")
+    mkdirSync(owners, { recursive: true })
+    const written = JSON.stringify({ profiles: { personal: {} } })
+    writeFileSync(join(owners, "config.json"), written)
+    symlinkSync(owners, join(root, "linked-config"))
+    const env: NodeJS.ProcessEnv = { HOME: root, CHAT_CONFIG_DIR: join(root, "linked-config") }
+
+    const result = await call(
+      ["personal", "--json", "account", "remove", "--keep-data", "--yes"],
+      { env, keyring: memoryKeyring(), ownerHome: root },
+      {
+        signOut: async () => ({ revoked: null, removed: [] }),
+        account: () => ({ provider: "telegram", account: "500" }),
+      },
+    )
+
+    expect(result.code).toBe(0)
+    expect(readFileSync(join(owners, "config.json"), "utf8")).toBe(written)
   })
 
   it("refuses while a serve runs for the profile, or the tool says a sync holds it", async () => {

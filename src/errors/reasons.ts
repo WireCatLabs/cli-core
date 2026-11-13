@@ -101,6 +101,11 @@ const OTHERS: Entry[] = [
     "the model address is refused: https, or plain http and Ollama only on this computer",
   ),
   [
+    "network.host-undeclared",
+    "configuration_error",
+    "the request went to a host the CLI does not declare, or not the model address's own; nothing was sent",
+  ],
+  [
     "local-only.refused",
     "permission_error",
     "local only is on and the address is not on this computer; nothing was sent",

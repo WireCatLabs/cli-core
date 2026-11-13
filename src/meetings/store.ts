@@ -153,6 +153,8 @@ export interface MeetingStore {
   reviewMeetingLink?(meetingId: number, eventIds: number[], now: number): Promise<void>
   cursor(accountId: number): Promise<string | null>
   setCursor(accountId: number, value: string, now: number): Promise<void>
+  /** Links the callers a sync saved, by `provider` and identity external id, to the people with their number. */
+  linkCallers?(provider: string, externalIds: readonly string[]): Promise<void>
   /** Detects the language of the account's transcripts that have none; stores it only with `apply`. */
   fillTranscriptLanguages?(input: { accountId: number; apply: boolean; now: number }): Promise<TranscriptLanguageFill>
 }

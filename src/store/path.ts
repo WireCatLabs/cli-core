@@ -37,7 +37,7 @@ export const inOwnerFolder = (file: string, home: string | undefined = accountHo
 }
 
 /** The path with every link in its existing part followed, so a link into the owner's folder is seen as one. */
-const settled = (path: string): string => {
+export const settled = (path: string): string => {
   try {
     return realpathSync(path)
   } catch {
