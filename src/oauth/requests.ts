@@ -142,6 +142,19 @@ const exchangeTokens = async (
   }
 }
 
+/**
+ * Google answers 400 `invalid_token` for a grant the owner or Google already took back: nothing is left to revoke.
+ * RFC 7009 §2.2 has such a token answered 200; this is the same outcome said another way.
+ */
+const alreadyRevoked = async (response: Response): Promise<boolean> => {
+  if (response.status !== 400) return false
+  try {
+    return object(JSON.parse(await response.text())).error === "invalid_token"
+  } catch {
+    return false
+  }
+}
+
 /** Revokes the refresh token at `revokeUrl`. A provider without one, or with another method, declares `revoke`. */
 export const revokeToken = async (
   provider: OAuthProvider,
@@ -153,16 +166,20 @@ export const revokeToken = async (
     throw new CliError("validation_error", `${provider.name} declares no way to revoke a sign-in`)
   const { revokeUrl } = provider
   const form = new URLSearchParams({ token: tokens.refreshToken, ...clientFields(context) })
-  const response = await withTimeLimit(REQUEST_LIMIT_MS, (deadline) => post(revokeUrl, form, context, deadline))
-  context.log?.[response?.ok ? "info" : "warn"]({
+  const { response, gone } = await withTimeLimit(REQUEST_LIMIT_MS, async (deadline) => {
+    const response = await post(revokeUrl, form, context, deadline)
+    return { response, gone: response ? await alreadyRevoked(response) : false }
+  })
+  const done = response?.ok || gone
+  context.log?.[done ? "info" : "warn"]({
     event: TOKEN_LOG_EVENT,
     provider: provider.id,
     operation: "revoke",
     pid: process.pid,
-    outcome: response?.ok ? "revoked" : response ? "rejected" : "no_response",
+    outcome: response?.ok ? "revoked" : gone ? "already_revoked" : response ? "rejected" : "no_response",
     ...(response ? { status: response.status } : {}),
   })
-  if (!response?.ok)
+  if (!done)
     throw new CliError("outcome_unknown", `${provider.name} did not confirm the revoke`, {
       reason: "oauth.revoke-failed",
       ...(response ? { status: response.status } : {}),

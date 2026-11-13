@@ -54,3 +54,30 @@ describe("the request time limit", () => {
     await outcome
   })
 })
+
+describe("revokeToken", () => {
+  const revokeAnswering = (status: number, body: string) =>
+    revokeToken(
+      provider,
+      { refreshToken: "r", scopes: [] },
+      contextFor(async () => new Response(body, { status })),
+    )
+
+  it("takes Google's 400 invalid_token as a sign-in already taken back", async () => {
+    await expect(revokeAnswering(400, JSON.stringify({ error: "invalid_token" }))).resolves.toBeUndefined()
+  })
+
+  it("still refuses every other 400 and any other failure", async () => {
+    for (const [status, body] of [
+      [400, JSON.stringify({ error: "invalid_request" })],
+      [400, "not json"],
+      [400, ""],
+      [401, JSON.stringify({ error: "invalid_token" })],
+      [500, ""],
+    ] as const)
+      await expect(revokeAnswering(status, body)).rejects.toMatchObject({
+        code: "outcome_unknown",
+        details: { reason: "oauth.revoke-failed", status },
+      })
+  })
+})
