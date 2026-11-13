@@ -423,8 +423,13 @@ stage, pipeline and responsible user, and a due date `due_days` after the sync. 
 and re-entering the stage opens a new one. The duplicate review is skipped: every deal entering a stage shares the
 title. The mark is set to the newest change when the setting is first saved and dropped when it is unset, so earlier
 moves open nothing. A local `deals move` is a move like the CRM's and counts at the next sync. Changes are compared
-between syncs, so A→B→C in between is seen as A→C. `dealContext` lists the deal's open tasks by group with its
-project's.
+between syncs, so A→B→C in between is seen as A→C. A source with `stageHistory` (Bitrix24's
+`crm.stagehistory.list`) closes that gap: `sync` reads each kind with rules after the last history id it read
+(`crm:stage-history:<kind>`; the first read goes from the mark's time, so nothing before the rules counts), keeps the
+entries on kept deals and leads as `crm.stage-entry` records, and `openStageTasks` opens tasks from those instead of
+from `pipeline_stage_changes`, with source `deal:<id>/history/<history id>`, then marks them handled. A kind without
+rules reads no history and drops its place. The funnel still counts `pipeline_stage_changes`. `dealContext` lists the
+deal's open tasks by group with its project's.
 
 A mail findings batch (`store.mailFindings`) also takes `invoice`, `payment`, `order` and `order_update` findings.
 Staging runs what accepting would write through `store.finance` or `store.orders` and rolls it back, so a batch the

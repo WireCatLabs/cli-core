@@ -201,3 +201,19 @@ export const normalCrmUserId = (id: string): string => {
 }
 
 export const isItemKind = (kind: CrmKind): kind is DealKind => kind === "deal" || kind === "lead"
+
+/**
+ * One entry of a deal or lead into a stage, as the CRM's own history recorded it: also a stage passed between two
+ * syncs, which the copy never stood in. A row's first stage is no entry.
+ */
+export interface CrmStageEntry {
+  /** The history row's id in the CRM, ascending within a kind: the next read goes on after the last one. */
+  externalId: string
+  kind: DealKind
+  /** The deal's or lead's own id. */
+  item: string
+  pipeline: string
+  stage: string
+  /** When it entered the stage, epoch ms. */
+  at: number
+}

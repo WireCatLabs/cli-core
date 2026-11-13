@@ -6,6 +6,7 @@ import type {
   CrmPipeline,
   CrmRecords,
   CrmScope,
+  CrmStageEntry,
   CrmUser,
 } from "../domain/crm.js"
 import type { DealKind } from "../domain/deals.js"
@@ -114,4 +115,16 @@ export interface CrmSource {
    * them leaves it out. A list the sign-in may not read is a `gap`, and the others are still read.
    */
   activities?(since: number, page?: string, context?: CrmCallContext): Promise<CrmPage<CrmActivity>>
+  /**
+   * The kind's entries into a stage that the CRM's own history recorded, oldest first, a page at a time: after the
+   * entry `after` (its `externalId`), or from `since` (epoch ms) without it; the last page's `cursor` is the last entry
+   * read, or `after` when none came. With it, stage tasks open on each stage entered, one passed between two syncs too.
+   * Read only while the account has `stage-tasks` rules for the kind.
+   */
+  stageHistory?(
+    kind: DealKind,
+    since: number,
+    after?: string,
+    context?: CrmCallContext,
+  ): Promise<CrmPage<CrmStageEntry>>
 }

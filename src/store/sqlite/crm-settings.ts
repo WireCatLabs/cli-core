@@ -189,6 +189,7 @@ export const crmStageMoves = (
       id: Number(row.id),
       kind: row.item_type as DealKind,
       ref: `${String(row.item_type)}:${String(row.item_id)}`,
+      source: `${String(row.item_type)}:${String(row.item_id)}/move/${String(row.id)}`,
       stage: String(row.stage),
       stageName: String(row.stage_name),
       pipelineName: String(row.pipeline_name),
@@ -197,14 +198,24 @@ export const crmStageMoves = (
 }
 
 export interface CrmStageMove {
-  /** The stage change's own id: one task per entry into a stage, never two. */
+  /** The stage change's own id. */
   id: number
   kind: DealKind
   ref: string
+  /** What its task is opened from: one task per entry into a stage, never two. */
+  source: string
   /** The CRM's id of the stage entered. */
   stage: string
   stageName: string
   pipelineName: string
+}
+
+/** When stage tasks were last opened, or the rules first set: where the CRM's stage history is first read from. */
+export const crmStageTasksSince = (database: CacheDatabase, key: AccountKey): number | null => {
+  const row = database
+    .prepare("SELECT at FROM store_settings WHERE key = ?")
+    .get(stageTasksMark(crmSettingKey(key, "stage-tasks")))
+  return row ? Number(row.at) : null
 }
 
 export const saveStageMovesMark = (database: CacheDatabase, key: AccountKey, through: number, now: number): void => {

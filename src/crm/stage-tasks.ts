@@ -10,10 +10,17 @@ const DAY = 86_400_000
  * one per entry, so a dismissed task never comes back and a later entry into the same stage opens a new one.
  * Answers how many it opened.
  */
-export const openStageTasks = async (store: MessageStore, account: AccountKey, now: number): Promise<number> => {
+export const openStageTasks = async (
+  store: MessageStore,
+  account: AccountKey,
+  now: number,
+  { history = false }: { history?: boolean } = {},
+): Promise<number> => {
   const rules = await store.crm.stageTasks(account)
   if (Object.keys(rules.deal).length + Object.keys(rules.lead).length === 0) return 0
-  const { moves, through } = await store.crm.stageMoves(account)
+  const changes = await store.crm.stageMoves(account)
+  // A CRM with a stage history names every stage entered; the copy's own changes miss one passed between two syncs.
+  const moves = history ? await store.crm.stageEntries(account) : changes.moves
   // Every deal entering a stage gets the same title, so the duplicate review would pair tasks of different deals.
   const { reviewDuplicates: _review, ...tasks } = store.tasks
   const service = createTaskService({ store: tasks, now: () => new Date(now) })
@@ -26,7 +33,7 @@ export const openStageTasks = async (store: MessageStore, account: AccountKey, n
       item.people.find((one) => one.role === "owner")?.name ??
       (item.assignee === null ? "nobody" : `CRM user ${item.assignee.split("/").at(-1)}`)
     const { created } = await service.add({
-      source: `${move.ref}/move/${move.id}`,
+      source: move.source,
       sourceKind: move.kind,
       account: taskAccount(account),
       group: move.ref,
@@ -40,6 +47,7 @@ export const openStageTasks = async (store: MessageStore, account: AccountKey, n
     })
     if (created) opened += 1
   }
-  await store.crm.markStageMoves(account, through)
+  if (history) await store.crm.handleStageEntries(moves.map(({ id }) => id))
+  await store.crm.markStageMoves(account, changes.through)
   return opened
 }

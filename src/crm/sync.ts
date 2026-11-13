@@ -121,6 +121,7 @@ export interface CrmSyncIssue {
     | "crm.not-reported"
     | "crm.pending-dropped"
     | "crm.activities-failed"
+    | "crm.stage-history-failed"
   message: string
   externalId?: string
 }
@@ -370,6 +371,43 @@ const readActivities = async (run: Run): Promise<BudgetStop | null> => {
     read.state = "complete"
     return null
   }
+}
+
+const STAGE_HISTORY = "crm:stage-history:"
+
+/**
+ * The CRM's own stage history of each kind with `stage-tasks` rules, after the last entry read: the first read goes
+ * from when stage tasks were last opened, so no entry is missed and none before the rules counts. Without rules the
+ * history is not read, and its place is dropped, so rules set again later start from then.
+ */
+const readStageHistory = async (run: Run): Promise<BudgetStop | null> => {
+  const { source, store, account } = run
+  if (!source.stageHistory) return null
+  const rules = await store.crm.stageTasks(account)
+  const since = await store.crm.stageTasksSince(account)
+  for (const kind of DEAL_KINDS) {
+    const key = `${STAGE_HISTORY}${kind}`
+    if (since === null || Object.keys(rules[kind]).length === 0) {
+      await store.sync.clearSyncState(account, key)
+      continue
+    }
+    let after = (await store.sync.syncState(account, key))?.value
+    for (;;) {
+      const why = run.budget.take()
+      if (why) return why
+      const page = await source.stageHistory.call(source, kind, since, after, run.context)
+      await store.crm.saveStageEntries(account, page.items)
+      run.moved()
+      const next = page.hasMore ? page.nextCursor : (page.cursor ?? after)
+      if (next !== undefined && next !== null) {
+        after = next
+        await store.sync.setSyncState(account, key, next)
+      }
+      if (!page.hasMore || page.nextCursor === undefined) break
+      if (run.signal?.aborted) return "cancelled"
+    }
+  }
+  return null
 }
 
 /** Runs a step whose source call may spend the budget mid-way: a spent budget is a stop, not a failure. */
@@ -768,6 +806,19 @@ export const syncCrm = async (
           kind: "deal",
           reason: "crm.activities-failed",
           message: isCliFailure(error) ? error.message : "the activities could not be read",
+        })
+    }
+  }
+  if (!stopped && kinds.some(isItemKind)) {
+    try {
+      stopped = await stopping(() => readStageHistory(run))
+    } catch (error) {
+      if (options.signal?.aborted) stopped = "cancelled"
+      else
+        report.issues.push({
+          kind: "deal",
+          reason: "crm.stage-history-failed",
+          message: isCliFailure(error) ? error.message : "the stage history could not be read",
         })
     }
   }
