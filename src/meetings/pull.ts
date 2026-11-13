@@ -219,7 +219,7 @@ export const pull = async (source: MeetingSource, store: MeetingStore, options: 
           transcripts: [await transcriptInput(lines, [], source.name, `${JSON.stringify(lines)}\nunlinked`, format)],
           now,
         })
-      await linkEvent(store, details, now)
+      await linkEvent(store, details, now, { create: source.createsEvents !== false })
       for (const p of participants) if (p.identity.phone) callers.add(p.identity.externalId)
       report.meetings++
       report.participants += participants.length

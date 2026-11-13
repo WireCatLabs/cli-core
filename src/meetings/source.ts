@@ -29,6 +29,11 @@ export interface MeetingSource {
    * meeting only once it has ended, or adds its recording later, sets it. 0 when absent; `--lookback-days` widens it.
    */
   readonly overlapMs?: number
+  /**
+   * False for a source that knows a meeting's day but not its hours, such as meeting notes from mail: its meetings
+   * link to an event the owner already has and never make one. True when absent.
+   */
+  readonly createsEvents?: boolean
   meetings(since: string): Promise<SourceMeeting[]>
   participants(occurrenceId: string): Promise<SourceParticipant[] | null>
   transcript(occurrenceId: string): Promise<TranscriptLine[] | null>

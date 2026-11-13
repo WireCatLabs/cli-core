@@ -5,6 +5,22 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## Unreleased
+
+### Added
+
+- **Mail can be a meeting's notes.** A mail rule's `meeting_notes: "<provider>"` saves each email it matches as a
+  meeting of that provider too, in the account named by the mailbox's address, at the end of every mail sync;
+  `saveMeetingNotes(store, address, rules, { since })` reads mail stored earlier the same way. The first provider is
+  `telemost`: Yandex Telemost mails its notes from `keeper@telemost.yandex.ru` (`MEETING_NOTES`). The notes give the
+  day, not the hours, so the meeting takes its times and its event from the owner's calendar entry in the same room
+  that day, or starts at the day's start with `metadata.time_precision: "day"`; no event is made for it. Every link
+  in the saved notes is cut to its path.
+- **`MeetingSource.createsEvents: false`** links a source's meetings to an event the owner already has and never
+  makes one; `linkEvent` takes `{ create: false }` for it.
+- **`telemost` is a provider** (kind `meetings`), and `joinKeyOf` gives `telemost:<id>` for a
+  `telemost.360.yandex.ru/j/<id>` link.
+
 ## 0.652.0 — 13.11.2026
 
 ### Added

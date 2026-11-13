@@ -49,11 +49,13 @@ export const storedMailRule = (stored: StoredRule): MailRule | undefined => {
     skipped !== null && typeof skipped === "object" && !Array.isArray(skipped)
       ? Object.fromEntries(Object.entries(skipped).filter(([, why]) => typeof why === "string"))
       : {}
+  const meetingNotes = stored.actions.meeting_notes
   return {
     id: stored.id,
     match: Object.fromEntries(entries) as MailRuleMatch,
     action,
     ...(tags.length ? { tags: tags as string[] } : {}),
+    ...(typeof meetingNotes === "string" && meetingNotes ? { meeting_notes: meetingNotes } : {}),
     ...(Object.keys(tagsSkipped).length ? { tags_skipped: tagsSkipped as Record<string, string> } : {}),
     ...(stored.reason === null ? {} : { reason: stored.reason }),
     ...(stored.protected ? { protected: true } : {}),

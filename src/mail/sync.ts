@@ -12,6 +12,7 @@ import { GMAIL_ALL_MAIL, mailFolders } from "./folders.js"
 import { dropMissing, tooManyGone } from "./gone.js"
 import { mailHeadersOf } from "./headers.js"
 import { flagsToRefresh, proveByLocation } from "./locations.js"
+import { saveMeetingNotes } from "./meeting-notes.js"
 import { MAX_BODY_CHARS, type ParsedMail, parseMail } from "./parse.js"
 import { completePartial } from "./partial.js"
 import { FETCH_SLICE, keyOf, type QuickPlan, readQuick } from "./quick.js"
@@ -931,7 +932,11 @@ const syncRound = async (
     await store.sync.setSyncState(key, "mail_coverage", JSON.stringify(coverage))
   const tagging = tagger.outcome()
   await settleRuleTags(store, accountId, rules, tagging)
+  const meetingNotes = rules.some(({ meeting_notes }) => meeting_notes)
+    ? await saveMeetingNotes(store, account.address, rules, { since: since.toISOString(), now: startedAt })
+    : undefined
   return {
+    ...(meetingNotes === undefined ? {} : { meetingNotes }),
     account: key.account,
     since: since.toISOString(),
     listed: listed.length,

@@ -5,6 +5,7 @@ export const linkEvent = async (
   store: MeetingStore,
   details: MeetingDetails,
   now = Date.now(),
+  { create = true }: { create?: boolean } = {},
 ): Promise<Event | null> => {
   const current = await store.meeting(details.meeting.id)
   if (!current) return null
@@ -28,6 +29,7 @@ export const linkEvent = async (
     return null
   }
   let event = candidates[0]
+  if (!event && !create) return null
   if (!event) {
     let eventSeriesId = series?.eventSeriesId ?? null
     if (series?.kind === "recurring" && eventSeriesId === null) {

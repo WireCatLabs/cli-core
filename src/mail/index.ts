@@ -41,6 +41,13 @@ export {
   type SkipReason,
 } from "./marks.js"
 export {
+  MEETING_NOTES,
+  MEETING_NOTES_PROVIDERS,
+  mailMeetingSource,
+  notesOf,
+  saveMeetingNotes,
+} from "./meeting-notes.js"
+export {
   BULK_TRIAGE_DEFAULTS,
   type BulkSorted,
   type BulkTriage,
