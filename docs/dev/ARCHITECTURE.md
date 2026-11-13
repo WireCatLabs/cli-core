@@ -87,6 +87,9 @@ alias, keyword and person lanes and returns cited evidence with a resume checkpo
 | `./google` | `src/google/` | what every Google API client shares: `googleError` turns a refusal into a `CliError` by Google's reasons, and `googlePages` reads every `pageToken` page, refusing a repeated token |
 | `./sftp` | `src/sftp/` | a read-only SFTP client: `session.ts` holds the host-key pin, deadlines, retries and run events; `ssh2.ts` is the only file that loads `ssh2` (an optional peer, imported on first use) — see [SFTP](../sftp.md) |
 
+Every document and every meeting of every account, as a page lists them, are [Listings](LISTINGS.md): services over
+`store.listings`, with the request builders in `./cli`.
+
 The README's table lists what each export offers; this page does not repeat it.
 
 ## The store

@@ -362,6 +362,12 @@ export const fileOf = (row: Row): StoredFile => ({
 export const PREFERRED_FILE =
   "f.deleted_at IS NOT NULL, f.id IS NOT d.pinned_file_id, coalesce(f.external_updated_at, f.updated_at) DESC, f.id DESC"
 
+/** The folded paths under a folder, as one range over the index: `/` sorts just before `0`. */
+export const subtreeOf = (folder: string): [low: string, high: string] => {
+  const prefix = fold(folder.replace(/\/+$/u, ""))
+  return [`${prefix}/`, `${prefix}0`]
+}
+
 export const filesStoreOver = ({ database, now }: { database: CacheDatabase; now: () => number }): FilesStore => {
   const account = (id: string) => {
     if (!/^\d+$/.test(id) || !database.prepare("SELECT 1 FROM accounts WHERE id = ?").get(Number(id)))
@@ -381,10 +387,9 @@ export const filesStoreOver = ({ database, now }: { database: CacheDatabase; now
         params.push(query.kind)
       }
       if (query.under !== undefined) {
-        const prefix = fold(query.under.replace(/\/+$/u, ""))
-        // `/` sorts just before `0`, so the subtree is one range over the index.
+        const [low, high] = subtreeOf(query.under)
         clauses.push("(f.path_folded = ? OR (f.path_folded >= ? AND f.path_folded < ?))")
-        params.push(prefix, `${prefix}/`, `${prefix}0`)
+        params.push(fold(query.under.replace(/\/+$/u, "")), low, high)
       }
       if (query.pathContains !== undefined) {
         clauses.push("instr(f.path_folded, ?) > 0")

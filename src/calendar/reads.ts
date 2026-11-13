@@ -114,7 +114,7 @@ export const eventIdOf = (reference: string | number): number => {
   return Number(text)
 }
 
-const localDate = (at: number, zone: string) =>
+export const localDate = (at: number, zone: string) =>
   new Intl.DateTimeFormat("en-CA", { timeZone: zone, year: "numeric", month: "2-digit", day: "2-digit" }).format(at)
 
 export const plusDays = (date: string, days: number) => {

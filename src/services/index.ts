@@ -466,6 +466,22 @@ export {
   searchEvents,
 } from "./events-search.js"
 export { type GroupGuard, groupGuardOf, lockedRegistry } from "./group-guard.js"
+export {
+  DOCUMENT_TEXT_CANDIDATES,
+  type DocumentEntry,
+  type DocumentEntryDetails,
+  type DocumentListRequest,
+  type DocumentSourceEntry,
+  type Listed,
+  listDocumentSources,
+  listDocuments,
+  listMeetingEntries,
+  type MeetingEntry,
+  type MeetingEntryDetails,
+  type MeetingListRequest,
+  showDocument,
+  showMeetingEntry,
+} from "./listings.js"
 export { createMeetingBatchReader } from "./meeting-batch.js"
 export {
   type MeetingCombinedHit,
