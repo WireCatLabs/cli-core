@@ -184,10 +184,14 @@ const rowsOf = (context: StoreContext, filter: MeetingListFilter): Built => {
     groupParams.push(filter.to)
   }
   // An event whose meeting runs into the window is on it, though the event itself ended before the window starts.
-  const eventInWindow =
+  // A UNION, not an OR, so the window still reads the events' time index.
+  const byMeeting =
     window.clauses.length === 0
       ? ""
-      : ` AND ((${window.clauses.join(" AND ")}) OR e.id IN (SELECT event_id FROM mg WHERE 1${and(groupWindow)}))`
+      : `UNION ALL
+        SELECT 'event', e.id, e.starts_at, e.ends_at, e.title FROM mg JOIN events e ON e.id = mg.event_id
+        WHERE e.deleted_at IS NULL AND NOT coalesce((${window.clauses.join(" AND ")}), 0)${and(groupWindow)}
+        `
   return {
     sql: `WITH mh AS MATERIALIZED (
         SELECT m.id AS meeting_id, m.account_id, m.started_at, coalesce(m.ended_at, m.started_at + 1) AS ended_at,
@@ -201,10 +205,10 @@ const rowsOf = (context: StoreContext, filter: MeetingListFilter): Built => {
       ),
       u AS (
         SELECT 'event' AS type, e.id, e.starts_at AS starts_at, e.ends_at AS ends_at, e.title FROM events e
-        WHERE e.deleted_at IS NULL${eventInWindow}
+        WHERE e.deleted_at IS NULL${and(window.clauses)}
           AND (EXISTS (SELECT 1 FROM calendar_entries rc WHERE rc.event_id = e.id)
             OR e.id IN (SELECT event_id FROM mg) OR e.origin = 'owner')
-        UNION ALL
+        ${byMeeting}UNION ALL
         SELECT 'meeting', m.id, m.started_at, m.ended_at, m.title FROM meetings m JOIN mh ON mh.meeting_id = m.id
         WHERE mh.event_id IS NULL${and(ownWindow)}
       ),
@@ -212,7 +216,12 @@ const rowsOf = (context: StoreContext, filter: MeetingListFilter): Built => {
         SELECT u.*, CASE WHEN u.type = 'meeting' THEN json_array(u.id) ELSE coalesce(mg.meetings, '[]') END AS meetings
         FROM u LEFT JOIN mg ON u.type = 'event' AND mg.event_id = u.id
       )`,
-    params: [...meetingParams, ...window.params, ...(window.clauses.length === 0 ? [] : groupParams), ...ownParams],
+    params: [
+      ...meetingParams,
+      ...window.params,
+      ...(window.clauses.length === 0 ? [] : [...window.params, ...groupParams]),
+      ...ownParams,
+    ],
   }
 }
 

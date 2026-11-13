@@ -314,9 +314,14 @@ export const documentListingOver = (context: StoreContext): DocumentListing => {
         const total = Number(
           database.prepare(`SELECT count(*) AS n ${from} WHERE ${where.sql}`).get(...ranked, ...where.params)?.n,
         )
-        const found = database
-          .prepare(`SELECT ${COLUMNS} ${from} WHERE ${where.sql} ORDER BY ${order} LIMIT ? OFFSET ?`)
+        // The page's ids first, then its columns: SQLite would build every row's kind and path before the cut.
+        const page = database
+          .prepare(`SELECT d.id ${from} WHERE ${where.sql} ORDER BY ${order} LIMIT ? OFFSET ?`)
           .all(...ranked, ...where.params, filter.limit, filter.offset)
+          .map(({ id }) => Number(id))
+        const found = database
+          .prepare(`SELECT ${COLUMNS} ${FROM} JOIN json_each(?) p ON p.value = d.id ORDER BY p.key`)
+          .all(JSON.stringify(page))
         return { items: found.map(rowOf), total }
       })
     },
