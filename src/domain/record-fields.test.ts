@@ -81,6 +81,11 @@ const FIXTURES: Record<string, unknown[]> = {
     { kind: "call", direction: "missed", phone: "+447700900111", started_at: "2026-11-01T10:00:00Z", duration: 0 },
     { kind: "call", direction: "in", phone: "+447700900111", started_at: "2026-11-01T10:00:00Z", duration: -1 },
   ],
+  document: [
+    { title: "Call", text: "", updated_at: "2026-11-01T10:00:00Z", url: null, metadata: { duration: 3 } },
+    { title: "Call", text: "a", metadata: "not an object" },
+    { title: "" },
+  ],
 }
 
 it("checks every type's fields as a standard JSON Schema 2020-12 validator does", () => {

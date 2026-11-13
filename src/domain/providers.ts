@@ -47,6 +47,8 @@ export const PROVIDERS: readonly ProviderEntry[] = [
   { name: "zoom", kind: "meetings", aliases: [] },
   // A phone export's records: its SMS and its calls in the one account the import names.
   { name: "phone", kind: "messages", kinds: ["messages", "events"], aliases: [], imported: true },
+  // Any other import: a folder of notes, a CRM's export, a script's records, under `import:<what it is>`.
+  { name: "import", kind: "documents", kinds: ["documents", "messages", "events"], aliases: [], imported: true },
 ]
 
 const LABELS: Readonly<Record<string, string>> = {
@@ -241,11 +243,15 @@ export const providerNamed = (word: string): ProviderEntry | undefined => {
 export const kindIn = (provider: Provider): Kind | undefined =>
   isFolderProvider(provider) ? "notes" : registry.find(({ name }) => name === provider)?.kind
 
-/** Every kind a provider's accounts hold, its `kind` first; empty for one no entry names. */
+/**
+ * Every kind a provider's accounts hold, its `kind` first; empty for one no entry names. An import-only provider's
+ * accounts hold documents too: a records import writes them beside its calls and SMS.
+ */
 export const kindsIn = (provider: Provider): readonly Kind[] => {
   if (isFolderProvider(provider)) return ["notes"]
   const entry = registry.find(({ name }) => name === provider)
-  return entry ? kindsOfEntry(entry) : []
+  if (!entry) return []
+  return entry.imported ? unitedKinds(kindsOfEntry(entry), ["documents"]) : kindsOfEntry(entry)
 }
 
 /**

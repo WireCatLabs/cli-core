@@ -13,7 +13,7 @@ import {
 
 /** The types a table can carry: an SMS and a call come from a phone's own export, never from a hand-made sheet. */
 export const TABLE_RECORD_TYPES = Object.keys(RECORD_TYPES).filter(
-  (type) => !(RECORD_TYPES[type as keyof typeof RECORD_TYPES] as RecordTypeSpec).importOnly,
+  (type) => (RECORD_TYPES[type as keyof typeof RECORD_TYPES] as RecordTypeSpec).sheet !== false,
 ) as readonly string[]
 
 export type ColumnShape = "text" | "decimal" | "day" | "instant" | "currency" | "integer" | "boolean" | "list"
@@ -107,7 +107,7 @@ const roleColumn = (name: string, role: RecordRoleSpec): TableColumn => ({
 /** A type's columns: the external id, its flat fields, one per role, then one per key of each list of items. */
 export const recordColumns = (type: string): TableColumn[] => {
   const spec = specOf(type)
-  if (!spec || spec.importOnly) return []
+  if (!spec || spec.sheet === false) return []
   const fields = spec.fields.properties ?? {}
   const required = spec.fields.required ?? []
   const lists = Object.entries(fields).filter(([, schema]) => !flat(schema))
@@ -183,7 +183,8 @@ export const recordTemplate = (
   const envelope: RecordsEnvelope = {
     schema_version: RECORDS_SCHEMA_VERSION,
     source: {
-      provider: source?.provider ?? "sheet",
+      // An import-only type is refused under a sheet's provider: `import` is the one any folder or export may use.
+      provider: source?.provider ?? (specOf(type)?.importOnly ? "import" : "sheet"),
       account: source?.account ?? "main",
       batch_id: source?.batch_id ?? "first-import",
     },

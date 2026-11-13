@@ -14,6 +14,7 @@ const source = { provider: "sheet", account: "rentals", batch_id: "b1" }
 describe("templates", () => {
   it("has a template for every type a sheet can carry, and each one is an envelope the store accepts", () => {
     expect(TABLE_RECORD_TYPES).not.toContain("message")
+    expect(JSON.parse(recordTemplate("document", "json")).source.provider).toBe("import")
     for (const type of TABLE_RECORD_TYPES) {
       const json = JSON.parse(recordTemplate(type, "json", { source }))
       expect(envelopeErrors(json, "rentals"), type).toEqual([])

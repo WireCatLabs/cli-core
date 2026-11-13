@@ -10,6 +10,7 @@ import {
   RECORD_ENTITY_TYPES,
   RECORD_TYPES,
   type RecordType,
+  type RecordTypeSpec,
   referencesOf,
   roleOf,
   rolesOf,
@@ -319,8 +320,10 @@ export const recordErrors = (record: unknown, index: number): IngestError[] => {
     return withKey([invalid([...at, "fields"], "an upsert carries its fields as an object")])
   if (record.fields !== undefined && !isObject(record.fields))
     return withKey([invalid([...at, "fields"], "fields is an object")])
-  if (record.fields !== undefined && Buffer.byteLength(JSON.stringify(record.fields)) > MAX_FIELDS_BYTES)
-    return withKey([invalid([...at, "fields"], `fields take at most ${MAX_FIELDS_BYTES} bytes`, "record.too-large")])
+  const most =
+    (isRecordType(record.type) && (RECORD_TYPES[record.type] as RecordTypeSpec).fieldsBytes) || MAX_FIELDS_BYTES
+  if (record.fields !== undefined && Buffer.byteLength(JSON.stringify(record.fields)) > most)
+    return withKey([invalid([...at, "fields"], `fields take at most ${most} bytes`, "record.too-large")])
   const secret = record.fields === undefined ? undefined : secretIn(record.fields, [...at, "fields"])
   if (secret)
     return withKey([

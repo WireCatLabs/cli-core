@@ -25,7 +25,7 @@ made (§ Matching).
 - `source.account` must be the account the caller names (`envelope.account-mismatch`). A provider and account pair is
   created on first use; an envelope that names a CRM's own provider and account writes that CRM's deals.
 - A record is `key` (unique in the envelope; the receipt cites it), `type`, `external_id`, `operation` (`upsert` or
-  `delete`), `fields` (an upsert needs them, at most 64 KiB), `revision`, `relations` (at most 100). A key a type
+  `delete`), `fields` (an upsert needs them, at most 64 KiB; a `document`'s 1 MiB), `revision`, `relations` (at most 100). A key a type
   types may also be `null`, as v1 read a missing value, unless the type requires it.
 - `options.lines`: `text` (the default) keeps an invoice line's `product` as data, as v1 did; `products` reads it as the
   product record's external id. Order lines always read it. `product_ref` (`product:4`) names a store product on any
@@ -59,6 +59,7 @@ with its fields and relations, never projected. `task` is refused (`record.type`
 | `transaction` | proposed | re-proposed (splits replaced), else flagged | `wallet` (required), `counterparty`, `payment`, `project` | `splits` |
 | `message` (kind `sms`) | written, an SMS of the account | in place, as an edit | `counterpart` | — |
 | `event` (kind `call`) | written, a call of the account | in place | `counterpart` | — |
+| `document` | written, a document of the account | in place; changed text is its next revision | `about`* | — |
 
 Each type's known `fields` keys are typed in the schema (`$defs/fields-<type>`); any other key is kept as sent. An
 import never writes confirmed money: what feeds a total is a proposal of the bot `import` that only the owner decides.
@@ -265,7 +266,32 @@ turns a receipt's pointer into the sheet's line and column.
 - **What Excel writes.** The separator is read from the header (`;`, `,` or a tab); a byte-order mark is skipped;
   `10 000,50` is read as `10000.50` and `09.11.2026` as `2026-11-09`; a currency is upper-cased. Anything else is left
   for the envelope's own checks.
-- SMS and calls have no table: they come from a phone's own export.
+- SMS and calls have no table: they come from a phone's own export. A `document` has one (`metadata` excepted), and
+  its template's provider is `import`: it is import-only.
+
+## Documents: text search finds
+
+A `document` record carries text from any source: a call's transcript, a CRM note, a file of a notes folder. Its
+fields are `text` (required, may be empty), `title` (the external id when left out), `created_at`, `updated_at`, `url`
+and `metadata` (any object, kept on the record only: `records.get` returns it). It relates `about` people,
+organizations, deals and call events, by external id or by their store ref (`event:12`, `person:4`).
+
+- **Import-only.** Taken only under an import-only provider, as an SMS or a call is: a messenger's or Drive's account
+  belongs to its sync (`record.provider-not-imported`). A folder of notes, a CRM's export or a script's records go to
+  the seeded `import` (`--account import:crm-notes`), a phone system's transcripts beside its calls
+  (`--account phone:office-pbx`).
+- **Keyed by its external id**, not by its content: the account's `documents` row of that external id. The same
+  record again is `unchanged`; changed text is the same document's next revision (the text before kept, as a
+  folder file's is); a changed title or address alone changes them in place. Its content takes no part in any match by
+  content: a folder file or a hand-added source with the same text stays another document.
+- **`delete`** empties its text and marks it deleted, as a removed folder file is; sent again, it is live again.
+- **`updated_at`** is the time `date:` reads, `created_at` the source's own; without them, the time of the import.
+- **`about`** links are the import's (`source: import`, confirmed), written again from the record each time; the
+  owner's own links stay. A document waits, as any record does, until what it is about has its entity.
+- **Mentions.** A phone number, an e-mail or a link in its text is queued for mentions as any document's is.
+- **Search.** An import-only provider's accounts hold `documents` beside their own kinds, and stay listed under their
+  own name: notes search, `search all` and meaning search read them, and `--source phone:office-pbx` reads only that
+  account's documents (and, in `search all`, its SMS and calls). A hit names `phone:office-pbx` and kind `document`.
 
 ## Phone data: SMS, calls, contacts
 
@@ -277,12 +303,12 @@ they carry no money.
 **One account per phone.** The records, the SMS and the calls of an import all stay in the account it names
 (`--account phone:pixel`), so an account group (WC-ACCT-13) lists the phone once and reaches all of it. A search lane
 reads the accounts whose provider **holds** its kind, and a provider may hold several (`kinds`): the seeded `phone`
-holds `messages` and `events`. A call's calendar entry has `event_type: call`, so `events list event_type:call` lists
+holds `messages` and `events`, and `documents` as every import-only provider does. A call's calendar entry has `event_type: call`, so `events list event_type:call` lists
 calls among the calendars' events. No column is added.
 
 **Only an import-only provider takes them.** A messenger's or a calendar's account belongs to its sync, so a
 `message` or `event` record under any provider whose entry is not marked `imported` is refused
-(`record.provider-not-imported`) before anything is written: the seeded `phone` is marked, `telegram`, a calendar
+(`record.provider-not-imported`) before anything is written: the seeded `phone` and `import` are marked, `telegram`, a calendar
 provider or an unregistered `sheet` are not. A built-in's flag is its own; another provider takes it only from the
 first entry of its name, and a later entry can neither strip nor add it. An SMS is never written into a chat of the account whose membership is not `imported` (`record.chat`),
 and its counterpart's identity is under the import's own provider.

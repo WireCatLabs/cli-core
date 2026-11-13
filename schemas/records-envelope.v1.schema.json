@@ -74,7 +74,7 @@
         },
         "type": {
           "type": "string",
-          "pattern": "^(invoice|payment|person|organization|project|order|product|contract|subscription|wallet|transaction|deal|lead|message|event|pipeline|custom:[a-z0-9][a-z0-9_-]{0,62})$"
+          "pattern": "^(invoice|payment|person|organization|project|order|product|contract|subscription|wallet|transaction|deal|lead|message|event|document|pipeline|custom:[a-z0-9][a-z0-9_-]{0,62})$"
         },
         "external_id": {
           "type": "string",
@@ -361,6 +361,23 @@
           "if": {
             "properties": {
               "type": {
+                "const": "document"
+              }
+            },
+            "required": ["type"]
+          },
+          "then": {
+            "properties": {
+              "fields": {
+                "$ref": "#/$defs/fields-document"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
                 "const": "pipeline"
               }
             },
@@ -395,7 +412,7 @@
         },
         "type": {
           "type": "string",
-          "pattern": "^(invoice|payment|person|organization|project|order|product|contract|subscription|wallet|transaction|deal|lead|message|event|pipeline|custom:[a-z0-9][a-z0-9_-]{0,62})$"
+          "pattern": "^(invoice|payment|person|organization|project|order|product|contract|subscription|wallet|transaction|deal|lead|message|event|document|pipeline|custom:[a-z0-9][a-z0-9_-]{0,62})$"
         },
         "external_id": {
           "type": "string",
@@ -1213,6 +1230,44 @@
         }
       },
       "required": ["kind", "direction", "phone", "started_at"],
+      "additionalProperties": true
+    },
+    "fields-document": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "maxLength": 500,
+          "description": "What the document is called; its external id when left out"
+        },
+        "text": {
+          "type": "string",
+          "maxLength": 1000000,
+          "description": "The text search reads"
+        },
+        "created_at": {
+          "type": ["string", "null"],
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}(:[0-9]{2}(\\.[0-9]{1,9})?)?(Z|[+-][0-9]{2}:[0-9]{2})$",
+          "description": "When the source made it"
+        },
+        "updated_at": {
+          "type": ["string", "null"],
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}(:[0-9]{2}(\\.[0-9]{1,9})?)?(Z|[+-][0-9]{2}:[0-9]{2})$",
+          "description": "When the source last changed it: what date: reads"
+        },
+        "url": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "maxLength": 4096,
+          "description": "Where the original is"
+        },
+        "metadata": {
+          "type": ["object", "null"],
+          "description": "Anything else the source knows about it, kept as sent"
+        }
+      },
+      "required": ["text"],
       "additionalProperties": true
     },
     "fields-pipeline": {

@@ -10,7 +10,10 @@ import { type TextModel, vectorModelKey } from "../embeddings/models.js"
 import { meaningWords } from "../search/lucene/meaning-parts.js"
 import { SEARCH_QUERY } from "../search/lucene/types.js"
 import { type MessageStore, openStore } from "../store/store.js"
-import { fieldsOfQuery, searchNotes } from "./notes-search.js"
+import { envelopeOf, take, upsert } from "../testing/records.js"
+import { fieldsOfQuery, searchNotes, searchNotesOf } from "./notes-search.js"
+
+const OWNER = { provider: "telegram", account: "100" }
 
 const tiny: TextModel = {
   id: "e5-small",
@@ -260,5 +263,30 @@ describe("a question worded differently from its note", () => {
     })
 
     expect(found.titles).toContain("Memo five")
+  })
+})
+
+describe("an import-only account's documents", () => {
+  it("are found by meaning, and only that account's with --source", async () => {
+    const store = await seeded(NOTES)
+    const imported = (provider: string, account: string, title: string, text: string) =>
+      take(store, envelopeOf([upsert("document", title, { title, text })], { provider, account, batch: "b1" }), {
+        account,
+      })
+    await imported("phone", "office-pbx", "Call transcript", "the tenant called")
+    await imported("import", "crm-notes", "CRM note", "the tenant wrote")
+    await vectors(store, (text) => text.includes("tenant"))
+    const all = await searchNotesOf(store, OWNER, "plan", { env, embedders, timezone: "UTC", limit: 20 })
+    expect(all.items.filter(({ found_by }) => found_by.includes("meaning")).map(({ title }) => title)).toEqual(
+      expect.arrayContaining(["Call transcript", "CRM note"]),
+    )
+    const one = await searchNotesOf(store, OWNER, "plan", {
+      accounts: "phone:office-pbx",
+      env,
+      embedders,
+      timezone: "UTC",
+      limit: 20,
+    })
+    expect(one.items.map(({ title, found_by }) => [title, found_by])).toEqual([["Call transcript", ["meaning"]]])
   })
 })

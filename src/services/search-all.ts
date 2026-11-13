@@ -8,7 +8,7 @@ import { holdsKind, INTERNAL_NOTES } from "../domain/providers.js"
 import { runEmbedders } from "../embeddings/embed.js"
 import { chosenTextModel } from "../embeddings/models.js"
 import type { MessengerTraits } from "../ports/traits.js"
-import { entriesOfList, fitting, listedHolds } from "../search/account-list.js"
+import { entriesOfList, fitting, type ListedAccount, listedHolds } from "../search/account-list.js"
 import { plainQuery } from "../search/lucene/plain.js"
 import { MESSAGE_PARSING, SEARCH_QUERY } from "../search/lucene/types.js"
 import { type Period, questionPeriod } from "../search/question-period.js"
@@ -20,7 +20,7 @@ import type { FoundMessage, SearchFound, SearchQuery } from "./messages.js"
 import { MAX_SEARCH_OFFSET, searchStore } from "./messages-archive-search.js"
 import { type MeaningLane, type MeaningSkipped, nearEligible } from "./messages-discovery.js"
 import type { SearchCoverage } from "./messages-search.js"
-import { notesScopeOf, RRF_K, searchNotes } from "./notes-search.js"
+import { importAccounts, notesScopeOf, RRF_K, searchNotes } from "./notes-search.js"
 import { BUSINESS_WORDS_ONLY, searchBusiness } from "./search-all-business.js"
 import { type MeetingAccountCoverage, type MeetingSearchItem, meetingLane } from "./search-all-meetings.js"
 import { HARDER_CANDIDATES, type HarderOptions, type HarderResult, reorderHarder } from "./search-harder.js"
@@ -242,18 +242,24 @@ const sourceScope = async (
     ? new Set((await store.business.accounts()).map(accountKeyOf))
     : new Set<string>()
   const holdsBusiness = (one: AccountKey) => imported.has(accountKeyOf(one))
+  // An import's account holds documents under its own key, and the notes lane reads them.
+  const holdsDocuments = (one: AccountKey) => asked.includes("notes") && holdsKind(one.provider, "documents")
   const { skipped } = fitting(
     entries,
     asked.filter((one): one is Exclude<SearchedResource, "business"> => one !== "business"),
     "search all",
     (kind) => `--only leaves ${kind} out`,
-    holdsBusiness,
+    (one) => holdsBusiness(one) || holdsDocuments(one),
   )
+  const holds = (resource: SearchedResource, one: ListedAccount) =>
+    resource === "business"
+      ? holdsBusiness(one)
+      : listedHolds(one, resource) || (resource === "notes" && holdsDocuments(one))
   const named = (resource: SearchedResource): AccountKey[] => [
     ...new Map(
       entries
         .flatMap(({ accounts }) => accounts)
-        .filter((one) => (resource === "business" ? holdsBusiness(one) : listedHolds(one, resource)))
+        .filter((one) => holds(resource, one))
         .map(({ provider, account }) => [`${provider}\u0000${account}`, { provider, account }] as const),
     ).values(),
   ]
@@ -416,7 +422,7 @@ export const searchAll = async (
             limit: depth,
             command,
             embedders,
-            ...(chosen === undefined ? {} : notesScopeOf(chosen)),
+            ...(chosen === undefined ? {} : notesScopeOf(chosen, await store.accounts.storedAccounts())),
             ...(request.exact ? { exact: true } : {}),
             ...(discover ? { discover: true } : {}),
             ...(request.timezone === undefined ? {} : { timezone: request.timezone }),
@@ -441,13 +447,16 @@ export const searchAll = async (
               foundBy: hit.found_by,
             })),
           )
-          const read = chosen?.map(({ account }) => account) ?? [
-            INTERNAL_NOTES,
-            ...(await store.notes.folders()).map(({ id }) => id),
-            ...(await store.notes.documentsAccounts()).map(({ id }) => id),
-            ...[await store.notes.addedAccount()].flatMap((added) => (added ? [added.id] : [])),
+          const read = chosen ?? [
+            ...[
+              INTERNAL_NOTES,
+              ...(await store.notes.folders()).map(({ id }) => id),
+              ...(await store.notes.documentsAccounts()).map(({ id }) => id),
+              ...[await store.notes.addedAccount()].flatMap((added) => (added ? [added.id] : [])),
+            ].map((account) => ({ provider: "notes", account })),
+            ...(await importAccounts(store)).map(({ provider, account }) => ({ provider, account })),
           ]
-          accounts.push(...read.map((account) => ({ resource, provider: "notes", account })))
+          accounts.push(...read.map(({ provider, account }) => ({ resource, provider, account })))
         } else if (resource === "events") {
           const read = scope?.events ?? (await calendarAccounts(store))
           if (!read.length) continue
