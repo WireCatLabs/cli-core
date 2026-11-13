@@ -55,17 +55,16 @@ export const writeSetupAnswers = (path: string, answers: SetupAnswers): void => 
 }
 
 /**
- * The level no command of any WireCat tool goes above, or `undefined` when the owner chose to leave them as they
- * are. A file that cannot be read keeps everything read-only: reads still work, and `setup` writes it again.
+ * The level no command of any WireCat tool goes above, or `undefined` when the owner did not choose "read only".
+ * Only that explicit answer limits: a missing, unreadable or malformed file leaves every tool as each profile
+ * allows, so a fresh install syncs (owner ruling, 2026-11-13).
  */
 export const permissionCeiling = (path: string): Level | undefined => {
-  let answer: PermissionAnswer | undefined
   try {
-    answer = readSetupAnswers(path).permissions
+    return readSetupAnswers(path).permissions === "readonly" ? "readonly" : undefined
   } catch {
-    return "readonly"
+    return undefined
   }
-  return answer === "allow" ? undefined : answer
 }
 
 /** `permissionCeiling` of this machine's shared config, for a tool that keeps its own levels: add it as `CEILING_KEY`. */

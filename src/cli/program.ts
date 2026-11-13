@@ -39,6 +39,7 @@ import {
   admittedUnderLock,
   changesAuthorityAt,
   changesAuthorityNow,
+  fetchesOnlyAt,
   fileOptionOf,
   isLogin,
   isStoreChange,
@@ -382,11 +383,7 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
         const overrides = options.agent?.overrides ?? []
         const settings = (definition.configuration ?? settingsFor(definition.app)).resolveSettings(
           overrides.length ? { ...flags, permission: [...overrides, ...(flags.permission ?? [])] } : flags,
-          {
-            env,
-            needsProfile: false,
-            kind: info.path[0] === "bot" || flags.bot ? "bot" : "personal",
-          },
+          { env, needsProfile: false, kind: info.path[0] === "bot" || flags.bot ? "bot" : "personal" },
         )
         if (!settings.permissions) return undefined
         return commandAvailability(
@@ -397,6 +394,7 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
           readOnlyLockOf(definition.app, env) !== undefined,
           options.agent !== undefined,
           definition.configuration?.permissions,
+          fetchesOnlyAt(program),
         )
       } catch {
         // Help must still work when the configuration needs repair.

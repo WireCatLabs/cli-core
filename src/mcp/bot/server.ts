@@ -37,6 +37,8 @@ export interface BotServerOptions {
   authority?: (path: readonly string[]) => boolean
   /** Whether a command only fetches into this machine (`fetchesOnlyAt`): offered through the read tool. */
   fetchOnly?: (path: readonly string[]) => boolean
+  /** Whether a command only fetches into the store (`fetchesOnlyAt`): setup's "read only" answer lets it run. */
+  fetches?: (path: readonly string[]) => boolean
   env: NodeJS.ProcessEnv
   skill?: URL
 }
@@ -63,6 +65,7 @@ export const createBotServer = (options: BotServerOptions) => {
     ...(options.keyOf ? { keyOf: options.keyOf } : {}),
     authority,
     ...(options.fetchOnly ? { fetchOnly: options.fetchOnly } : {}),
+    ...(options.fetches ? { fetches: options.fetches } : {}),
     offline: true,
     // Another bot's copy is this bot's to read only where `read_other_bots` says so.
     ...(settings.readOtherBots ? {} : { omit: ["all_bots", "bots"] }),
@@ -97,6 +100,7 @@ export const createBotServer = (options: BotServerOptions) => {
         levels,
         ...(options.keyOf ? { keyOf: options.keyOf } : {}),
         authority,
+        ...(options.fetches ? { fetches: options.fetches } : {}),
         ...(caller ? { caller } : {}),
       }),
     )

@@ -2,8 +2,16 @@ import { CliError } from "@wirecat/cli-base"
 import { metaOf } from "@wirecat/cli-base/commands"
 import { writes as writesAnything } from "@wirecat/cli-base/standards"
 import type { Command } from "commander"
-import { keyForCommand, levelFor, type PermissionKey, readKeysForCommand, WRITE_KEYS } from "../sends/permissions.js"
+import {
+  CEILING_KEY,
+  keyForCommand,
+  levelFor,
+  type PermissionKey,
+  readKeysForCommand,
+  WRITE_KEYS,
+} from "../sends/permissions.js"
 import { commandPathOf } from "./command-contract.js"
+import { fetchesOnly } from "./effects.js"
 import { type CommandPermissions, refuseUnknownPermissionKeys } from "./permission-keys.js"
 import type { Settings } from "./settings.js"
 
@@ -22,15 +30,18 @@ export const preview = (
   const keyOf = typeof keys === "object" ? keys.keyOf : keys
   refuseUnknownPermissionKeys(command, settings, tool, declared ?? (keyOf && ((one) => keyOf(commandPathOf(one)))))
   const key = declared ? declared.keyOf(path) : (keyOf?.(path) ?? keyForCommand(path))
-  const level = key ? levelFor(permissions, key, declared?.defaults).level : "allow"
+  const { level, key: named } = key
+    ? levelFor(permissions, key, declared?.defaults)
+    : { level: "allow" as const, key: null }
   for (const source of declared ? [] : readKeysForCommand(path)) {
     if (levelFor(permissions, source).level === "deny")
       throw new CliError("permission_error", `this profile does not permit ${source}`, { permission: source })
   }
   const meta = metaOf(command)
   const writes =
-    (meta.effects !== undefined && writesAnything(meta.effects)) ||
-    (!declared && key !== null && key !== undefined && WRITE_KEYS.includes(key))
+    ((meta.effects !== undefined && writesAnything(meta.effects)) ||
+      (!declared && key !== null && key !== undefined && WRITE_KEYS.includes(key))) &&
+    !(named === CEILING_KEY && fetchesOnly(command))
   if (level === "deny" || (writes && level === "readonly"))
     throw new CliError("permission_error", `this profile does not permit ${path.join(" ")}`, { permission: key })
   const also = (declared?.alsoChecks?.(path) ?? []).map((one) => {
