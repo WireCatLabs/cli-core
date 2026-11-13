@@ -94,6 +94,24 @@ it("cuts Telemost's notes at their headings, the summary first", () => {
   expect(notes.content).toContain("ЗАДАЧА 1")
 })
 
+it("reads older notes with no summary heading, and leaves Yandex's footer out", () => {
+  const older = [
+    "Конспект встречи",
+    "",
+    "Обсудили синтетический релиз и договорились о сроках.",
+    "",
+    "Задачи",
+    "ЗАДАЧА 1. Написать пример",
+    "",
+    "Оцените точность конспекта",
+    "Используйте все сервисы Яндекс 360",
+  ].join("\n")
+  const notes = notesOf(older, MEETING_NOTES.telemost as (typeof MEETING_NOTES)[string])
+  expect(notes.overview).toBe("Обсудили синтетический релиз и договорились о сроках.")
+  expect(notes.sections).toEqual([{ label: "Задачи", text: "ЗАДАЧА 1. Написать пример" }])
+  expect(notes.content).not.toContain("Яндекс 360")
+})
+
 it("saves one meeting per notes email the rule matches, again and again as the same one, and makes no event", async () => {
   const store = await seeded()
   const since = "2026-01-01T00:00:00Z"
