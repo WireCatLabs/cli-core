@@ -37,7 +37,8 @@ const readJson = (path: string): Record<string, unknown> | undefined => {
   }
   let parsed: unknown
   try {
-    parsed = JSON.parse(text)
+    // Windows editors save JSON with a byte-order mark, which JSON.parse refuses.
+    parsed = JSON.parse(text.replace(/^\uFEFF/u, ""))
   } catch (error) {
     throw new CliError("configuration_error", `${path} is not valid JSON: ${(error as Error).message}`)
   }
