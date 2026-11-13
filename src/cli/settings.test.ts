@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import type { CliError } from "@wirecat/cli-base"
 import * as v from "valibot"
 import { beforeEach, describe, expect, expectTypeOf, it } from "vitest"
 import { levelFor } from "../sends/permissions.js"
@@ -169,6 +170,21 @@ describe("the order a setting is decided in", () => {
     mkdirSync(join(env.APP_STATE_DIR, "accounts"))
     writeFileSync(join(env.APP_STATE_DIR, "accounts", "personal.json"), '{"account":"1"}')
     expect(() => strict({}, env)).toThrow("profiles here: personal, work (or set APP_PROFILE)")
+  })
+
+  it("names the missing profile with a reason a caller can match, with or without profiles here", () => {
+    const env = { APP_STATE_DIR: mkdtempSync(join(tmpdir(), "app-state-")) }
+    const reasonOf = () => {
+      try {
+        strict({}, env)
+      } catch (error) {
+        return (error as CliError).details?.reason
+      }
+    }
+    expect(reasonOf()).toBe("profile.missing")
+
+    withConfig(JSON.stringify({ profiles: { work: {} } }))
+    expect(reasonOf()).toBe("profile.missing")
   })
 
   it("counts the profiles a messenger keeps in its own files, in the error and in `profilesHere`", () => {
