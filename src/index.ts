@@ -39,6 +39,7 @@ export {
   type CrmScope,
   type CrmScopeSetting,
   type CrmStage,
+  type CrmStageEntry,
   type CrmUser,
   type CrmValue,
   isCrmUserId,

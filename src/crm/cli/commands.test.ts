@@ -12,7 +12,8 @@ import { commandsCommand } from "../../cli/commands-command.js"
 import { provide } from "../../cli/context.js"
 import { run } from "../../cli/program.js"
 import { runsCommand } from "../../cli/runs/command.js"
-import type { CrmActivity } from "../../domain/crm.js"
+import type { CrmActivity, CrmStageEntry } from "../../domain/crm.js"
+import type { DealKind } from "../../domain/deals.js"
 import { CRM_OPENS } from "../../domain/providers.js"
 import { toolsFromCommands } from "../../mcp/agent.js"
 import { pull } from "../../meetings/index.js"
@@ -751,6 +752,65 @@ describe("CRM stage tasks", () => {
       "Send the quote",
       "Send the quote",
     ])
+  })
+
+  describe("from the CRM's own stage history", () => {
+    const HOUR = 3_600_000
+    const withHistory = async (entries: CrmStageEntry[]) => {
+      const harness = await setup({}, { now: () => NOW })
+      const asked: (string | undefined)[] = []
+      Object.assign(harness.source, {
+        stageHistory: async (kind: DealKind, since: number, after?: string) => {
+          asked.push(after)
+          const items = entries.filter(
+            (one) => one.kind === kind && one.at >= since && Number(one.externalId) > Number(after ?? 0),
+          )
+          return { items, hasMore: false, cursor: items.at(-1)?.externalId ?? after }
+        },
+      })
+      return { ...harness, asked }
+    }
+    const entry = (externalId: string, item: string, stage: string, at: number): CrmStageEntry => ({
+      externalId,
+      kind: "deal",
+      item,
+      pipeline: SALES_PIPELINE.externalId,
+      stage,
+      at,
+    })
+
+    it("opens a task for each stage entered, one passed between two syncs too, and none again", async () => {
+      const history: CrmStageEntry[] = []
+      const { path, cli, source, store, asked } = await withHistory(history)
+      source.put("deal", exampleDeal("d1"))
+      await rules(path, { quote: { title: "Send the quote", due_days: 2 }, won: { title: "Say thanks", due_days: 1 } })
+      expect(await stageTasks(cli)).toBe(0)
+
+      // The store stamps when stage tasks last ran by the wall clock, and the history is read from then.
+      const later = Date.now() + HOUR
+      history.push(
+        entry("11", "d1", "quote", later),
+        entry("12", "d1", "won", later + HOUR),
+        entry("13", "elsewhere", "quote", later + HOUR),
+      )
+      source.put("deal", exampleDeal("d1", { stage: "won" }))
+      expect(await stageTasks(cli)).toBe(2)
+      const ref = (await cli("deals", "list")).items.find(({ external_id }) => external_id === "d1")?.ref as string
+      expect((await tasksOf(store, ref)).items.map(({ title }) => title).sort()).toEqual([
+        "Say thanks",
+        "Send the quote",
+      ])
+
+      expect(await stageTasks(cli)).toBe(0)
+      expect(asked.at(-1)).toBe("13")
+    })
+
+    it("reads no history while the account has no stage rules", async () => {
+      const { cli, asked } = await withHistory([entry("1", "d1", "quote", NOW + HOUR)])
+      await cli("sync")
+      await cli("sync")
+      expect(asked).toEqual([])
+    })
   })
 
   it("a dismissed task stays dismissed when its move is read again", async () => {

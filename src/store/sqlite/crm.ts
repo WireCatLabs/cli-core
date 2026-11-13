@@ -9,6 +9,7 @@ import {
   type CrmPerson,
   type CrmPipeline,
   type CrmScopeSetting,
+  type CrmStageEntry,
   type CrmUser,
   isItemKind,
   normalCrmUserId,
@@ -34,9 +35,11 @@ import {
   crmSettingKey,
   crmStageMoves,
   crmStageTasks,
+  crmStageTasksSince,
   saveCrmSetting,
   saveStageMovesMark,
 } from "./crm-settings.js"
+import { crmStageEntriesOver } from "./crm-stage-entries.js"
 import type { StoreContext } from "./open.js"
 import { type ReportedRelation, type ReportedScope, syncReportedIn } from "./reported-relations.js"
 import { clearState, syncStateOf, writeState } from "./sync.js"
@@ -175,6 +178,13 @@ export interface CrmCopies {
    */
   stageMoves(key: AccountKey): Promise<{ moves: CrmStageMove[]; through: number }>
   markStageMoves(key: AccountKey, through: number): Promise<void>
+  /** When stage tasks were last opened, or the rules first set; null without rules. */
+  stageTasksSince(key: AccountKey): Promise<number | null>
+  /** Entries from the CRM's stage history on kept deals and leads; answers how many were new. */
+  saveStageEntries(key: AccountKey, entries: readonly CrmStageEntry[]): Promise<number>
+  /** The stored history entries whose stage task is not handled yet, oldest first. */
+  stageEntries(key: AccountKey): Promise<CrmStageMove[]>
+  handleStageEntries(ids: readonly number[]): Promise<void>
   /** Whether the owner turned on reading activities and tasks (`activities` setting). */
   activitiesOn(key: AccountKey): Promise<boolean>
   /** Activities and tasks, each on the kept deals and leads it names; one on none of them is not stored. */
@@ -231,6 +241,7 @@ export const crmCopiesOver = (context: StoreContext, people: AccountPeople): Crm
   const { savePipeline, saveItemRow } = crmRowsOver(context)
   const account = (key: AccountKey) => accountPk(context, key)
   const activityStore = crmActivitiesOver(context)
+  const stageEntryStore = crmStageEntriesOver(context)
 
   /**
    * One kind's whole list: a pipeline it lacks is marked deleted, one listed again comes back. An empty list marks
@@ -872,6 +883,10 @@ export const crmCopiesOver = (context: StoreContext, people: AccountPeople): Crm
     stageTasks: async (key) => crmStageTasks(database, key),
     stageMoves: async (key) => crmStageMoves(database, key, findAccountPk(context, key)),
     markStageMoves: async (key, through) => saveStageMovesMark(database, key, through, now()),
+    stageTasksSince: async (key) => crmStageTasksSince(database, key),
+    saveStageEntries: async (key, entries) => stageEntryStore.save(key, entries),
+    stageEntries: async (key) => stageEntryStore.pending(key),
+    handleStageEntries: async (ids) => stageEntryStore.handled(ids),
     activitiesOn: async (key) => crmActivitiesOn(database, key),
     saveActivities: async (key, activities) => activityStore.save(key, activities),
     activitiesOf: async (key, kind, externalId, limit) => activityStore.of(key, kind, externalId, limit),

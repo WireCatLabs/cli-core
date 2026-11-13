@@ -311,13 +311,16 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
     .action(async (opts: { maxPages?: number; rescan?: boolean }, command: Command) => {
       const { signal } = environmentOf(command)
       await within(command, async (run) => {
-        const report = await syncCrm(run.source(), run.store, run.account, {
+        const source = run.source()
+        const report = await syncCrm(source, run.store, run.account, {
           now: now(),
           budget: runBudgetOf(command, opts.maxPages),
           ...(signal ? { signal } : {}),
           ...(opts.rescan ? { rescan: true } : {}),
         })
-        const stageTasks = await openStageTasks(run.store, run.account, now())
+        const stageTasks = await openStageTasks(run.store, run.account, now(), {
+          history: source.stageHistory !== undefined,
+        })
         const failed = report.synced.filter((one) => one.error !== undefined)
         // A kind that failed on a setting fails the same way again until the owner changes it: no retry is offered.
         const retried = failed.filter((one) => one.setting === undefined)
