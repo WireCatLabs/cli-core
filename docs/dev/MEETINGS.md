@@ -324,7 +324,8 @@ The raw discovery export itself mounts no command and performs no indexing.
 The optional `MeetingParticipantSearchStore.participantCandidates` capability searches observed
 participant names and emails in one selected account. SQLite scans names in stable ID order with
 literal Unicode NFKC/case-insensitive matching; a query is not a wildcard or a person identity.
-It reads only IDs, names and emails, checking their UTF-8 byte sizes before hydration. Session
+It reads only IDs, names, emails and the name of the person each participant's identity is linked to, checking
+their UTF-8 byte sizes before hydration; a participant matches by that person's name too. Session
 history, metadata and transcript text are excluded. Deleted meetings are excluded.
 
 `limit` bounds matches (default 50, maximum 1000), `scanLimit` bounds observations examined (default
@@ -382,9 +383,9 @@ Each item carries `ref` (`meeting:<account>/<meeting>`), `meeting_id`, `account`
 `meetings transcript <meeting_id>` of the CLI and profile that own `account`.
 
 **Calls of the people on deal X.** In one step: `<crm> <profile> deals show deal:<id>` lists them under `meetings`.
-By hand, with the same result: `deals show deal:<id>` names its `people` (`person:<uid>`); `contacts context
-person:<uid>` (or memo's `context`) lists each one's `meetings`; `<phone-line> <profile> meetings transcript
-<meeting_id>` reads one. The call's account and the CRM's must be in one scope (`work`): a read never crosses into
+By hand, with the same result: `deals show deal:<id>` names its `people` (`person:<uid>`); memo's `context
+person:<uid>` lists each one's `meetings` (a messenger's `contacts context person:<uid>` does too, for a person with
+an identity in that messenger); `<phone-line> <profile> meetings transcript <meeting_id>` reads one. The call's account and the CRM's must be in one scope (`work`): a read never crosses into
 the other scope.
 
 ## Cue context and compact passages

@@ -23,7 +23,7 @@ export interface PersonMeeting {
 
 /**
  * The newest recorded meetings of these people in `accounts`, each once, newest first, and how many there are;
- * `hasMore` when there are more than `limit`, or a person has more than `SCAN` involvements to read. A meeting reaches
+ * `hasMore` when there are more than `limit`, or a person took part in more than `SCAN`. A meeting reaches
  * a person through the identity it was saved under, and through every identity linked to them since, such as a
  * call's number matched to a CRM contact.
  */
@@ -39,6 +39,7 @@ export const personMeetings = async (
   for (const uid of people) {
     const rows = store.involvements.forPerson(Number(uid), {
       limit: SCAN,
+      subjectTypes: ["meeting"],
       ...(since === undefined ? {} : { since }),
       ...(until === undefined ? {} : { until }),
     })

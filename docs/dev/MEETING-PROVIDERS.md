@@ -56,7 +56,8 @@ filters through the shared query registry and returns shared meeting entities in
 The generic MCP adapter accepts equivalent queries; a provider host fixes/removes `account_id`
 from caller arguments before dispatch, as Zoom does. Never expose another account through a cursor.
 
-The optional `participantCandidates(query, options)` port reads only observed IDs, names and emails;
+The optional `participantCandidates(query, options)` port reads only observed IDs, names and emails, and the name
+of the person each participant is linked to;
 it never requires session history or transcript text. Enforce `limit`, `scanLimit`, `maxReadBytes`
 and cancellation, and check stored text sizes before loading them. Cursors bind the selected
 account and normalized literal query. An empty scan page may still have continuation; edits and
