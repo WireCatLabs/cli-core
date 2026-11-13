@@ -116,6 +116,94 @@ export interface AddedSourceDetails {
 
 type Row = Record<string, unknown>
 
+/** What a document's text and description write, whichever account holds it. */
+export interface DocumentText {
+  kind: string
+  title: string | null
+  fileName: string | null
+  extension: string | null
+  url: string | null
+  mime: string | null
+  size: number | null
+  /** `null` keeps it out of every match by content: an imported document is its source's, never a folder file's. */
+  hash: string | null
+  text: string
+  extraction: "text" | "none"
+  metadata: string | null
+  language: string | null
+}
+
+const TEXT_COLUMNS =
+  "kind = ?, title = ?, file_name = ?, extension = ?, url = ?, mime = ?, size = ?, content_hash = ?, body = ?, " +
+  "extraction = ?, metadata = ?, language = ?"
+
+const textValues = (document: DocumentText) => [
+  document.kind,
+  document.title,
+  document.fileName,
+  document.extension,
+  document.url,
+  document.mime,
+  document.size,
+  document.hash,
+  document.text,
+  document.extraction,
+  document.metadata,
+  document.language,
+]
+
+/** Where a copy of the file is kept, when one is: `text` keeps the text alone. */
+export interface DocumentStorage {
+  storage: "text" | "copy"
+  localPath: string | null
+}
+
+/**
+ * The writes of a document in a given account: the added sources' (`added:owner`) and a records import's (the
+ * envelope's own account) go through the same columns.
+ */
+export const documentWritesOver = ({ database }: Pick<StoreContext, "database">) => ({
+  insert: (accountId: number, externalId: string, document: DocumentText, kept: DocumentStorage, at: number): number =>
+    Number(
+      database
+        .prepare(
+          "INSERT INTO documents (account_id, external_id, kind, title, file_name, extension, url, mime, size, " +
+            "content_hash, body, extraction, metadata, language, storage, local_path, revision, created_at, updated_at) " +
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?) RETURNING id",
+        )
+        .get(accountId, externalId, ...textValues(document), kept.storage, kept.localPath, at, at)?.id,
+    ),
+  /** Its next revision, the text before kept; `revised: false` changes what describes it and keeps the revision. */
+  update: (row: Row, document: DocumentText, at: number, revised = true) => {
+    if (revised) keepRevision(database, row, at)
+    database
+      .prepare(`UPDATE documents SET ${TEXT_COLUMNS}, revision = revision + ?, updated_at = ? WHERE id = ?`)
+      .run(...textValues(document), revised ? 1 : 0, at, Number(row.id))
+  },
+  /** A removed document back, as written now. */
+  revive: (id: number, document: DocumentText, kept: DocumentStorage, at: number) => {
+    database
+      .prepare(
+        `UPDATE documents SET ${TEXT_COLUMNS}, storage = ?, local_path = ?, updated_at = ?, deleted_at = NULL WHERE id = ?`,
+      )
+      .run(...textValues(document), kept.storage, kept.localPath, at, id)
+  },
+  /** Its `files` row, named as its source names it, not by a hash or a key. */
+  place: (id: number, at: number, name: string) => {
+    syncFile(database, at, id)
+    database
+      .prepare("UPDATE files SET name = ?, path = ?, path_folded = ? WHERE document_id = ? AND kind <> 'folder'")
+      .run(name, name, fold(name), id)
+  },
+  /** Its text goes, its row stays as deleted: what a folder file's removal does. */
+  remove: (id: number, at: number) => {
+    database
+      .prepare("UPDATE files SET deleted_at = ?, updated_at = ? WHERE document_id = ? AND deleted_at IS NULL")
+      .run(at, at, id)
+    database.prepare("UPDATE documents SET deleted_at = ?, body = '' WHERE id = ?").run(at, id)
+  },
+})
+
 const sha256 = (value: Uint8Array | string) => createHash("sha256").update(value).digest("hex")
 
 // `sha256:` is the content's own name, so no key may take it.
@@ -178,8 +266,24 @@ const checked = (input: AddedSourceInput) => {
   }
 }
 
+const documentTextOf = (source: ReturnType<typeof checked>, input: AddedSourceInput): DocumentText => ({
+  kind: source.kind,
+  title: source.title,
+  fileName: source.fileName,
+  extension: source.extension,
+  url: source.url,
+  mime: input.mime ?? null,
+  size: input.size ?? input.bytes?.byteLength ?? null,
+  hash: source.hash,
+  text: source.text,
+  extraction: source.read === "extracted" ? "text" : "none",
+  metadata: encodeDocumentMetadata(input.metadata, input.sections),
+  language: languageOf(input.metadata),
+})
+
 export const addedSourcesOver = (context: StoreContext): AddedSources => {
   const { database, now } = context
+  const writes = documentWritesOver(context)
   const accountRow = (): Row | undefined =>
     database.prepare("SELECT * FROM accounts WHERE provider = ? AND external_id = ?").get(ADDED_PROVIDER, ADDED_ACCOUNT)
   const documentAt = (id: number) => documentOf(database.prepare("SELECT * FROM documents WHERE id = ?").get(id) as Row)
@@ -245,13 +349,6 @@ export const addedSourcesOver = (context: StoreContext): AddedSources => {
       .get(JSON.stringify(hashes))
     return row ? Number(row.id) : undefined
   }
-  /** Its `files` row is named as the owner named the source, not by its hash. */
-  const placeFile = (id: number, at: number, name: string) => {
-    syncFile(database, at, id)
-    database
-      .prepare("UPDATE files SET name = ?, path = ?, path_folded = ? WHERE document_id = ? AND kind <> 'folder'")
-      .run(name, name, fold(name), id)
-  }
 
   return {
     addedAccount: async () => {
@@ -303,11 +400,7 @@ export const addedSourcesOver = (context: StoreContext): AddedSources => {
           )
           .get(id, ADDED_PROVIDER)
         if (!row) throw new CliError("not_found", `no live added source ${reference} in the local store`)
-        const at = now()
-        database
-          .prepare("UPDATE files SET deleted_at = ?, updated_at = ? WHERE document_id = ? AND deleted_at IS NULL")
-          .run(at, at, id)
-        database.prepare("UPDATE documents SET deleted_at = ?, body = '' WHERE id = ?").run(at, id)
+        writes.remove(id, now())
         return {
           ref: `document:${id}`,
           removed: true as const,
@@ -317,7 +410,8 @@ export const addedSourcesOver = (context: StoreContext): AddedSources => {
     },
     saveAddedSource: async (input) => {
       const source = checked(input)
-      const metadata = encodeDocumentMetadata(input.metadata, input.sections)
+      const document = documentTextOf(source, input)
+      const kept: DocumentStorage = { storage: source.copy === null ? "text" : "copy", localPath: source.copy }
       const subjects = input.subjects ?? []
       return write(database, () => {
         const at = now()
@@ -326,41 +420,18 @@ export const addedSourcesOver = (context: StoreContext): AddedSources => {
           const id = Number(own.id)
           const revised = input.sourceKey !== undefined && own.content_hash !== source.hash
           if (revised) {
-            keepRevision(database, own, at)
-            database
-              .prepare(
-                "UPDATE documents SET kind = ?, title = ?, file_name = ?, extension = ?, url = ?, mime = ?, size = ?, " +
-                  "content_hash = ?, body = ?, extraction = ?, metadata = ?, language = ?, revision = revision + 1, " +
-                  "updated_at = ? WHERE id = ?",
-              )
-              .run(
-                source.kind,
-                source.title,
-                source.fileName,
-                source.extension,
-                source.url,
-                input.mime ?? null,
-                input.size ?? input.bytes?.byteLength ?? null,
-                source.hash,
-                source.text,
-                source.read === "extracted" ? "text" : "none",
-                metadata,
-                languageOf(input.metadata),
-                at,
-                id,
-              )
-            placeFile(id, at, source.fileName ?? source.title ?? source.externalId)
+            writes.update(own, document, at)
+            writes.place(id, at, source.fileName ?? source.title ?? source.externalId)
           }
           if (source.copy !== null && own.storage !== "copy")
             database
               .prepare("UPDATE documents SET storage = 'copy', local_path = ?, updated_at = ? WHERE id = ?")
               .run(source.copy, at, id)
-          const kept = source.copy !== null || own.storage === "copy" ? "copy" : "text"
           return {
             note: documentAt(id),
             created: false,
             duplicateOf: null,
-            kept,
+            kept: source.copy !== null || own.storage === "copy" ? "copy" : "text",
             changed: revised,
             subjects: about(id, subjects, input.by),
           }
@@ -371,32 +442,10 @@ export const addedSourcesOver = (context: StoreContext): AddedSources => {
           const note = documentAt(duplicate)
           return { note, created: false, duplicateOf: note.ref, kept: null, changed: false, subjects: linked }
         }
-        const values = [
-          source.kind,
-          source.title,
-          source.fileName,
-          source.extension,
-          source.url,
-          source.copy === null ? "text" : "copy",
-          source.copy,
-          input.mime ?? null,
-          input.size ?? input.bytes?.byteLength ?? null,
-          source.hash,
-          source.text,
-          source.read === "extracted" ? "text" : "none",
-          metadata,
-          languageOf(input.metadata),
-        ]
         let id: number
         if (own) {
           id = Number(own.id)
-          database
-            .prepare(
-              "UPDATE documents SET kind = ?, title = ?, file_name = ?, extension = ?, url = ?, storage = ?, local_path = ?, " +
-                "mime = ?, size = ?, content_hash = ?, body = ?, extraction = ?, metadata = ?, language = ?, " +
-                "updated_at = ?, deleted_at = NULL WHERE id = ?",
-            )
-            .run(...values, at, id)
+          writes.revive(id, document, kept, at)
         } else {
           const holder =
             accountRow()?.id ??
@@ -406,22 +455,14 @@ export const addedSourcesOver = (context: StoreContext): AddedSources => {
                   "VALUES (?, ?, NULL, ?, ?, ?) RETURNING id",
               )
               .get(ADDED_PROVIDER, ADDED_ACCOUNT, JSON.stringify({ format: "markdown" }), at, at)?.id
-          id = Number(
-            database
-              .prepare(
-                "INSERT INTO documents (account_id, external_id, kind, title, file_name, extension, url, storage, local_path, " +
-                  "mime, size, content_hash, body, extraction, metadata, language, revision, created_at, updated_at) " +
-                  "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?) RETURNING id",
-              )
-              .get(Number(holder), source.externalId, ...values, at, at)?.id,
-          )
+          id = writes.insert(Number(holder), source.externalId, document, kept, at)
         }
-        placeFile(id, at, source.fileName ?? source.title ?? source.externalId)
+        writes.place(id, at, source.fileName ?? source.title ?? source.externalId)
         return {
           note: documentAt(id),
           created: !own,
           duplicateOf: null,
-          kept: source.copy === null ? "text" : "copy",
+          kept: kept.storage,
           changed: true,
           subjects: about(id, subjects, input.by),
         }

@@ -496,8 +496,11 @@ needs one.
 entries when it opens (`src/store/sqlite/open-store.ts:78`) on top of the built-ins (`PROVIDERS`,
 `src/domain/providers.ts:17`), so `kindOf` and `providerNamed` keep their signatures. `kinds` lists every kind a provider's accounts
 hold, `kind` first (the seeded `phone` holds messages and events), and search lanes pick accounts by `holdsKind`.
+An import-only provider holds documents as well (`kindsIn`), so notes search reads an import's documents under the
+account's own key; `notesScopeOf` turns that key into the store id the notes query takes.
 Entries of one name join their kinds; two that start with different kinds fail with both names. `imported`
-marks a provider no sync writes (the seeded `phone`): only there may a records import write SMS and calls. A built-in's flag is
+marks a provider no sync writes (the seeded `phone`, and `import` for any other source): only there may a records
+import write SMS, calls and documents. A built-in's flag is
 fixed; another provider takes it from the first entry of its name only, and a later entry can neither strip nor add it. Searches skip the accounts of a provider nobody registered and list them under `skipped`
 (`UNKNOWN_PROVIDER`, `src/search/account-list.ts:258`). `opens` names the read command, after `<command> <profile>`,
 that opens each kind of reference (`{ document: "documents show" }`); the tg, max and wa seeds open chats, messages

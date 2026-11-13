@@ -1,4 +1,4 @@
-import { isFolderProvider, kindIn } from "../domain/providers.js"
+import { isFolderProvider, isImportedProvider, kindIn } from "../domain/providers.js"
 import type { Profiles } from "../search/account-list.js"
 import type { Note, StoredAccount, StoredFile } from "../store/index.js"
 
@@ -15,6 +15,14 @@ export const documentSource = (
 ) => {
   const metadata = note.frontMatter as Record<string, unknown> | null
   const account = accounts.find(({ id }) => String(id) === note.folderId)
+  // An import's document stays in its source's account, beside that source's calls and SMS.
+  if (note.source === "file" && account !== undefined && isImportedProvider(account.provider))
+    return {
+      kind: "document" as const,
+      provider: account.provider,
+      account: account.account,
+      ...(file?.url ? { url: file.url } : {}),
+    }
   const remote =
     note.source === "file" &&
     ((account !== undefined && kindIn(account.provider) === "documents") || metadata?.source === "google-drive")

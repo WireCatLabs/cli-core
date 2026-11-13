@@ -35,8 +35,9 @@ describe("the provider registry", () => {
   })
 
   it("lets one provider hold several kinds, the first its kind, and leaves a one-kind entry as it was", () => {
-    expect(kindsIn("phone")).toEqual(["messages", "events"])
+    expect(kindsIn("phone")).toEqual(["messages", "events", "documents"])
     expect(kindIn("phone")).toBe("messages")
+    expect(kindsIn("import")).toEqual(["documents", "messages", "events"])
     expect(holdsKind("phone", "events")).toBe(true)
     expect(kindsIn("telegram")).toEqual(["messages"])
     expect(holdsKind("telegram", "events")).toBe(false)
@@ -55,7 +56,7 @@ describe("the provider registry", () => {
   it("joins an older one-kind entry to a provider that holds more, and still refuses one that disagrees", () => {
     try {
       useProviders([{ name: "phone", kind: "messages", aliases: ["mobile"] }])
-      expect(kindsIn("phone")).toEqual(["messages", "events"])
+      expect(kindsIn("phone")).toEqual(["messages", "events", "documents"])
       expect(providerNamed("mobile")?.name).toBe("phone")
       expect(() => addProvider({ name: "phone", kind: "events", aliases: [] })).toThrow(/disagree on the kind/)
       expect(() => addProvider({ name: "telegram", kind: "events", aliases: [] })).toThrow(/disagree on the kind/)

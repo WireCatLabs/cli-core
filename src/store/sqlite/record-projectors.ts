@@ -1,5 +1,6 @@
 import type { RecordProjectors } from "./record-projection.js"
 import { DIRECT_PROJECTORS } from "./record-projectors-direct.js"
+import { DOCUMENT_PROJECTORS } from "./record-projectors-document.js"
 import { MONEY_PROJECTORS } from "./record-projectors-money.js"
 import { PHONE_PROJECTORS } from "./record-projectors-phone.js"
 
@@ -8,6 +9,7 @@ export const RECORD_PROJECTORS: RecordProjectors = {
   ...MONEY_PROJECTORS,
   ...DIRECT_PROJECTORS,
   ...PHONE_PROJECTORS,
+  ...DOCUMENT_PROJECTORS,
   person: null,
   organization: null,
   project: null,

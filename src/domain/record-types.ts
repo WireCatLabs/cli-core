@@ -82,6 +82,10 @@ export interface RecordTypeSpec {
    * never land in a messenger's chat or a calendar's account.
    */
   importOnly?: boolean
+  /** A phone's own export carries it, never a hand-made sheet: no template and no CSV. */
+  sheet?: false
+  /** How many bytes its `fields` may take as JSON, when more than every type's 64 KiB: a document's text. */
+  fieldsBytes?: number
   /** The type's `fields`: known keys typed, any other key kept as sent. */
   fields: FieldSchema
   /** The roles the entity is made from; any other role word is kept as the source's own. */
@@ -440,6 +444,7 @@ export const RECORD_TYPES = {
     update: "in-place",
     tombstone: true,
     importOnly: true,
+    sheet: false,
     fields: objectOf(
       {
         kind: enumOf(["sms"], "sms: a text message of the phone"),
@@ -460,6 +465,7 @@ export const RECORD_TYPES = {
     update: "in-place",
     tombstone: true,
     importOnly: true,
+    sheet: false,
     fields: objectOf(
       {
         kind: enumOf(["call"], "call: a phone call"),
@@ -471,6 +477,28 @@ export const RECORD_TYPES = {
       { required: ["kind", "direction", "phone", "started_at"] },
     ),
     roles: COUNTERPART,
+  },
+  document: {
+    table: "documents",
+    review: "direct",
+    update: "in-place",
+    tombstone: true,
+    importOnly: true,
+    fieldsBytes: 1_048_576,
+    fields: objectOf(
+      {
+        title: text("What the document is called; its external id when left out", 500),
+        text: { type: "string", maxLength: 1_000_000, description: "The text search reads" },
+        created_at: instant("When the source made it"),
+        updated_at: instant("When the source last changed it: what date: reads"),
+        url: text("Where the original is", 4096),
+        metadata: { type: "object", description: "Anything else the source knows about it, kept as sent" },
+      },
+      { required: ["text"] },
+    ),
+    roles: {
+      about: { targets: ["person", "organization", "deal", "event"], many: true },
+    },
   },
   pipeline: {
     table: "pipelines",
@@ -511,11 +539,11 @@ export const isRecordType = (type: string): type is RecordType => Object.hasOwn(
 
 type Identity<T> = { [K in keyof T]: T[K] extends { review: "identity" } ? K : never }[keyof T]
 export type IdentityType = Identity<typeof RECORD_TYPES>
-export type BusinessType = Exclude<RecordType, IdentityType>
+export type BusinessType = Exclude<RecordType, IdentityType | "document">
 
-/** A business record (an invoice, a deal, a wallet): not a person, organization or project. */
+/** A business record (an invoice, a deal, a wallet): not a person, organization, project or document. */
 export const isBusinessType = (type: string): type is BusinessType =>
-  isRecordType(type) && RECORD_TYPES[type].review !== "identity"
+  isRecordType(type) && RECORD_TYPES[type].review !== "identity" && type !== "document"
 
 export const isIdentityType = (type: unknown): type is IdentityType =>
   typeof type === "string" && isRecordType(type) && RECORD_TYPES[type].review === "identity"

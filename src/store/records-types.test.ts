@@ -82,6 +82,12 @@ const EVERY_TYPE = [
     { kind: "call", direction: "missed", phone: "+44 7700 900001", started_at: "2026-11-01T11:00:00Z" },
     { relations: [{ role: "counterpart", type: "person", external_id: "p-1" }] },
   ),
+  upsert(
+    "document",
+    "notes/call-1.md",
+    { title: "Call notes", text: "Иван ждёт счёт" },
+    { relations: [{ role: "about", type: "event", external_id: "call-1" }] },
+  ),
 ]
 
 it("imports one record of every type into its entity: a proposal where money counts, a direct row elsewhere", async () => {

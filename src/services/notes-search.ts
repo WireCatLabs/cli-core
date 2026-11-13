@@ -1,6 +1,6 @@
 import { CliError, type KeyringStore } from "@wirecat/cli-base"
 import { dateRange, parseLucene, type QueryNode, timezoneOf } from "@wirecat/cli-base/query"
-import { INTERNAL_NOTES } from "../domain/providers.js"
+import { INTERNAL_NOTES, isImportedProvider } from "../domain/providers.js"
 import { normalizeTag } from "../domain/tags.js"
 import {
   defaultThreads,
@@ -25,7 +25,7 @@ import { questionLookup, questionText } from "../search/question-plan.js"
 import { createStemmer, DEFAULT_STEMMERS, type Stemmer } from "../search/stem.js"
 import { type SearchTotal, TOTAL_CAP, totalOf } from "../search/total.js"
 import type { Link, NearestNote, Note, NoteHit } from "../store/index.js"
-import type { AccountKey, EnrichmentSubject, MessageStore } from "../store/store.js"
+import type { AccountKey, EnrichmentSubject, MessageStore, StoredAccount } from "../store/store.js"
 import { openPictureEmbedderFor } from "./document-pictures.js"
 import { documentSource } from "./document-source.js"
 import { type EnrichOptions, type EnrichRun, enrichRecords } from "./enrichment.js"
@@ -864,18 +864,32 @@ export const searchNotes = async (
   }
 }
 
-/** What `notes:internal` and `notes:<folder id>` ask of the store: one query, so a page of it is one page. */
+/**
+ * What `notes:internal`, `notes:<folder id>` and an import's own account (`phone:office-pbx`) ask of the store: one
+ * query, so a page of it is one page. `stored` gives an import's account its store id.
+ */
 export const notesScopeOf = (
   accounts: readonly AccountKey[],
+  stored: readonly StoredAccount[] = [],
 ): Pick<NotesQuery, "folderIds" | "withInternal" | "source"> => {
-  const folderIds = accounts.map(({ account }) => account).filter((account) => account !== INTERNAL_NOTES)
+  const folderIds = accounts
+    .filter(({ provider, account }) => provider !== "notes" || account !== INTERNAL_NOTES)
+    .map(({ provider, account }) =>
+      provider === "notes"
+        ? account
+        : String(stored.find((one) => one.provider === provider && one.account === account)?.id ?? 0),
+    )
   if (!folderIds.length) return { source: "internal" }
   return { folderIds, ...(accounts.length > folderIds.length ? { withInternal: true } : {}) }
 }
 
+/** The accounts of import-only providers: their documents stay under their own key, `phone:office-pbx`. */
+export const importAccounts = async (store: MessageStore): Promise<StoredAccount[]> =>
+  (await store.accounts.storedAccounts()).filter(({ provider }) => isImportedProvider(provider))
+
 export interface NotesFoundOf extends NotesFound {
-  /** Every notes account read: `internal` and each folder's id. */
-  accounts: { resource: "notes"; provider: "notes"; account: string }[]
+  /** Every notes account read: `internal`, each folder's id, and each import's account by its own key. */
+  accounts: { resource: "notes"; provider: string; account: string }[]
   /** A `--source` entry naming nothing `search notes` reads. */
   skipped: SkippedSource[]
 }
@@ -903,6 +917,7 @@ export const searchNotesOf = async (
     ...(await store.notes.folders()).map(({ id }) => ({ provider: "notes", account: id })),
     ...(await store.notes.documentsAccounts()).map(({ id }) => ({ provider: "notes", account: id })),
     ...[await store.notes.addedAccount()].flatMap((added) => (added ? [{ provider: "notes", account: added.id }] : [])),
+    ...(await importAccounts(store)).map(({ provider, account }) => ({ provider, account })),
   ]
   const lock = groupLockOf(app, env)
   const typedScope = list ?? (lock === undefined ? undefined : `group:${lock}`)
@@ -920,9 +935,8 @@ export const searchNotesOf = async (
           what,
         )
   const source = query.source ?? noteSourceOfQuery(text).source
-  const typed = named.accounts.filter(
-    ({ account }) => source === undefined || (account === INTERNAL_NOTES) === (source === "internal"),
-  )
+  const internal = ({ provider, account }: AccountKey) => provider === "notes" && account === INTERNAL_NOTES
+  const typed = named.accounts.filter((one) => source === undefined || internal(one) === (source === "internal"))
   if (!typed.length && list !== undefined)
     throw new CliError(
       "validation_error",
@@ -932,15 +946,16 @@ export const searchNotesOf = async (
         : "the query's source:file keeps the files from notes folders, and the --source list names none of them: " +
             "add notes:<folder id> to --source, or drop source:file from the query",
     )
-  const scope = list === undefined ? {} : notesScopeOf(typed)
+  const scope = list === undefined ? {} : notesScopeOf(typed, await store.accounts.storedAccounts())
   const found = await searchNotes(store, text, {
     ...query,
     ...scope,
     ...(source ? { source } : {}),
+    ...(env === undefined ? {} : { env }),
   })
   return {
     ...found,
-    accounts: typed.map(({ account }) => ({ resource: "notes", provider: "notes", account })),
+    accounts: typed.map(({ provider, account }) => ({ resource: "notes", provider, account })),
     skipped: named.skipped,
   }
 }
