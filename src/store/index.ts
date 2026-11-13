@@ -275,6 +275,17 @@ export type {
   DecisionRequestStore,
   TakeResult,
 } from "./sqlite/decision-requests.js"
+export {
+  DOCUMENT_KINDS,
+  type DocumentDetail,
+  type DocumentFolderNode,
+  type DocumentKind,
+  type DocumentLink,
+  type DocumentListFilter,
+  type DocumentListing,
+  type DocumentListRow,
+  type DocumentSourceNode,
+} from "./sqlite/document-listing.js"
 export type {
   Email,
   EmailAddress,
@@ -338,6 +349,17 @@ export type {
 } from "./sqlite/knowledge.js"
 export { ORGANIZATION_KINDS, PROJECT_TYPES, SCOPES } from "./sqlite/knowledge.js"
 export type { MailRule, MailRuleCount, MailRuleInput, MailRulesStore } from "./sqlite/mail-rules.js"
+export {
+  type ListedAccount,
+  MEETING_ROW_KINDS,
+  type MeetingListFilter,
+  type MeetingListing,
+  type MeetingRow,
+  type MeetingRowDocument,
+  type MeetingRowKind,
+  type MeetingRowParticipant,
+  type MeetingRowSource,
+} from "./sqlite/meeting-listing.js"
 export type { MeetingProjectLink, MeetingProjectsStore } from "./sqlite/meeting-projects.js"
 export type {
   MeetingContextReadCapabilities,

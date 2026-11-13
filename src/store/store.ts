@@ -38,6 +38,7 @@ import { contextEvidenceOver, contextIndexOver, contextRecordsOver } from "./sql
 import { type CrmCopies, crmCopiesOver } from "./sqlite/crm.js"
 import { type DealsStore, dealsStoreOver } from "./sqlite/deals.js"
 import { type DecisionRequestStore, decisionRequestStoreOver } from "./sqlite/decision-requests.js"
+import { type DocumentListing, documentListingOver } from "./sqlite/document-listing.js"
 import { type MailStore, mailStoreOver } from "./sqlite/emails.js"
 import { type EnrichmentStore, enrichmentsOver } from "./sqlite/enrichments.js"
 import { type EventSearch, eventSearchOver } from "./sqlite/event-search.js"
@@ -50,6 +51,7 @@ import { type KnowledgeStore, knowledgeStoreOver } from "./sqlite/knowledge.js"
 import { logPruner } from "./sqlite/log-pruning.js"
 import { mailFindingsStoreOver } from "./sqlite/mail-findings.js"
 import { meetingFindingsStoreOver } from "./sqlite/meeting-findings.js"
+import { type MeetingListing, meetingListingOver } from "./sqlite/meeting-listing.js"
 import { type MeetingVectors, meetingVectorsOver } from "./sqlite/meeting-vectors.js"
 import { meetingStoreOver, type StoredMeetings } from "./sqlite/meetings.js"
 import { type MemoriesStore, memoriesStoreOver } from "./sqlite/memories.js"
@@ -124,6 +126,8 @@ export interface MessageStore {
   readonly catalog: CatalogStore
   /** Where each document is kept: its files, their folders and paths. */
   readonly files: FilesStore
+  /** Every document of every account, and every meeting, call and event as one row each: what a page lists. */
+  readonly listings: DocumentListing & MeetingListing
   /** Calendars and their entries, the source records of events: the `EventStore` a calendar CLI writes through. */
   readonly calendar: EventStore & EventSearch
   /** Choices that hold until replaced, each with its evidence. */
@@ -270,6 +274,7 @@ const storeOver = (context: StoreContext): MessageStore => {
   const notes = once(() => ({ ...notesStoreOver(context), ...addedSourcesOver(context), ...noteSearchOver(context) }))
   const catalog = once(() => catalogStoreOver(context))
   const files = once(() => filesStoreOver(context))
+  const listings = once(() => ({ ...documentListingOver(context), ...meetingListingOver(context) }))
   const calendar = once(() => ({ ...eventStoreOver(context), ...eventSearchOver(context) }))
   const meetingFindings = once(() => meetingFindingsStoreOver(context))
   const evidenceFindings = once(() => evidenceFindingsStoreOver(context))
@@ -381,6 +386,9 @@ const storeOver = (context: StoreContext): MessageStore => {
     },
     get files() {
       return files()
+    },
+    get listings() {
+      return listings()
     },
     get calendar() {
       return calendar()

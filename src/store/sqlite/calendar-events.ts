@@ -17,12 +17,24 @@ const accountsOf = (filter: EventFilter): readonly number[] | undefined => {
   return filter.accountIds ?? (filter.accountId === undefined ? undefined : [filter.accountId])
 }
 
-/** The events of a filter, earliest first (`EventStore.events`). */
-export const listEvents = (database: CacheDatabase, filter: EventFilter): Event[] => {
-  const clauses = ["e.deleted_at IS NULL"]
+const longestEvent = (database: CacheDatabase) =>
+  Number(
+    database.prepare("SELECT coalesce(max(ends_at - starts_at), 0) AS ms FROM events WHERE deleted_at IS NULL").get()
+      ?.ms ?? 0,
+  )
+
+type WindowFilter = Pick<EventFilter, "from" | "fromDate" | "to" | "toDate" | "startsFrom" | "startsFromDate">
+
+/**
+ * The SQL over `events e` for a filter's time bounds: timed events by instant, all-day ones by their local days, plus
+ * bounds on `starts_at` alone so SQLite can seek its index.
+ */
+export const eventWindow = (
+  database: CacheDatabase,
+  filter: WindowFilter,
+): { clauses: string[]; params: (string | number)[] } => {
+  const clauses: string[] = []
   const params: (string | number)[] = []
-  const entries = (extra: string) =>
-    `EXISTS (SELECT 1 FROM calendar_entries ce JOIN calendars c ON c.id = ce.calendar_id WHERE ce.event_id = e.id AND ${extra})`
   const dated = (column: string, date: string | undefined, instant: string, at: number | undefined) => {
     if (at === undefined) return
     if (date === undefined) {
@@ -40,14 +52,9 @@ export const listEvents = (database: CacheDatabase, filter: EventFilter): Event[
   dated("start_date >= ?", filter.startsFromDate, "e.starts_at >= ?", filter.startsFrom)
   // Bounds on starts_at alone let SQLite seek its index; the CASE above cannot. They are wider than the CASE: by the
   // longest stored event back, and by a day each way for an all-day event's zone.
-  const longest = () =>
-    Number(
-      database.prepare("SELECT coalesce(max(ends_at - starts_at), 0) AS ms FROM events WHERE deleted_at IS NULL").get()
-        ?.ms ?? 0,
-    )
   if (filter.from !== undefined) {
     clauses.push("e.starts_at >= ?")
-    params.push(filter.from - longest() - DAY)
+    params.push(filter.from - longestEvent(database) - DAY)
   }
   if (filter.to !== undefined && filter.toDate !== undefined) {
     clauses.push("e.starts_at < ?")
@@ -57,6 +64,16 @@ export const listEvents = (database: CacheDatabase, filter: EventFilter): Event[
     clauses.push("e.starts_at >= ?")
     params.push(filter.startsFrom - DAY)
   }
+  return { clauses, params }
+}
+
+/** The events of a filter, earliest first (`EventStore.events`). */
+export const listEvents = (database: CacheDatabase, filter: EventFilter): Event[] => {
+  const window = eventWindow(database, filter)
+  const clauses = ["e.deleted_at IS NULL", ...window.clauses]
+  const params: (string | number)[] = [...window.params]
+  const entries = (extra: string) =>
+    `EXISTS (SELECT 1 FROM calendar_entries ce JOIN calendars c ON c.id = ce.calendar_id WHERE ce.event_id = e.id AND ${extra})`
   if (filter.id !== undefined) {
     clauses.push("e.id = ?")
     params.push(filter.id)
@@ -119,7 +136,7 @@ export const listEvents = (database: CacheDatabase, filter: EventFilter): Event[
            AND coalesce(bce.transparency, '') <> 'transparent'
            AND coalesce(bce.event_type, '') <> 'working-location')`
     const own = busy("e")
-    params.push(longest())
+    params.push(longestEvent(database))
     const clash = `${own} AND EXISTS (SELECT 1 FROM events e2 WHERE e2.id <> e.id AND e2.starts_at < e.ends_at
          AND e2.ends_at > e.starts_at AND e2.starts_at >= e.starts_at - ? AND ${busy("e2")})`
     clauses.push(filter.overlapping ? clash : `NOT (${clash})`)
