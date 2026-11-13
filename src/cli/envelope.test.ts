@@ -5,7 +5,9 @@ import * as v from "valibot"
 import { describe, expect, it } from "vitest"
 import { ENTITIES } from "../entities/index.js"
 import { inRun } from "../runs/scope.js"
+import { outputFor } from "./context.js"
 import { itemOf, listOf, printItem, renderAnswer, sealed, snakeKeys, snakeKeysKeeping } from "./envelope.js"
+import { run } from "./program.js"
 import { nextStep } from "./steps.js"
 
 const at = "2026-10-13T10:00:00.000Z"
@@ -150,4 +152,29 @@ describe("snakeKeys", () => {
     expect(snakeKeysKeeping(["front_matter"])(answer)).toMatchObject({ front_matter: { createdBy: "owner" } })
     expect(snakeKeys(answer)).toMatchObject({ front_matter: { created_by: "owner", tags: [{ added_at: 2 }] } })
   })
+})
+
+// memo's own `store recover` read `--json` from the child's opts, and commander gave it to the parent (memo #829).
+it("answers JSON when a runnable parent and its child both take --json", async () => {
+  const recover = new Command("recover").option("--json", "print JSON").action(() => {})
+  recover
+    .command("run")
+    .option("--json", "print JSON")
+    .action(function (this: Command) {
+      renderAnswer(this, outputFor(this), itemOf({ rebuilt: true }), () => "rebuilt")
+    })
+  const app = { command: "app", appName: "app-cli", envPrefix: "APP", description: "x", version: "1.0.0" }
+  const streams = captureStreams()
+
+  await run(
+    ["store", "recover", "run", "--json"],
+    { app, commands: () => [new Command("store").addCommand(recover)] },
+    {
+      streams,
+      tty: false,
+      env: process.env,
+    },
+  )
+
+  expect(JSON.parse(streams.stdout.join(""))).toMatchObject({ item: { rebuilt: true } })
 })
