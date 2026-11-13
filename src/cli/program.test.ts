@@ -1255,6 +1255,34 @@ describe("a run with no profile named", () => {
       details: { profiles: ["work"] },
     })
     expect(await tryAs("work")).toMatchObject({ code: "authentication_error", reason: "session.missing" })
+
+    const streams = captureStreams()
+    await run(["chats", "list"], signedOut(), { streams, tty: false, env: { ...env, APP_PROFILE: "wrok" } })
+    expect(JSON.parse(streams.stderr[0] ?? "").error).toMatchObject({ reason: "profile.unknown" })
+  })
+
+  it('**says "no profile named" once** when the CLI\'s own refusal already says it', async () => {
+    const env = sandbox()
+    mkdirSync(join(env.APP_STATE_DIR ?? "", "accounts"), { recursive: true })
+    writeFileSync(join(env.APP_STATE_DIR ?? "", "accounts", "work.json"), '{"account":"1"}')
+    const streams = captureStreams()
+    await run(
+      ["wrok", "chats", "list"],
+      {
+        app,
+        commands: () => [
+          new Command("chats").addCommand(
+            new Command("list").action(() => {
+              throw new CliError("authentication_error", "no profile named wrok", { reason: "session.missing" })
+            }),
+          ),
+        ],
+      },
+      { streams, tty: false, env },
+    )
+
+    const { message } = JSON.parse(streams.stderr[0] ?? "").error
+    expect(message.match(/no profile named/g)).toHaveLength(1)
   })
 
   it("**gives commander's usage errors a reason**", async () => {
