@@ -26,13 +26,6 @@
 - **The output schemas of `meetings show`, `meetings people`, `contacts context`, the person context and `deals
   show` / `leads show` gain the fields above.** A CLI that pins its MCP output schemas updates its contract.
 
-### Fixed
-
-- **A mistyped profile in `<PREFIX>_PROFILE` gets the profiles here too** (`profile.unknown`), as a mistyped first
-  word does, and a CLI's own "no profile named …" is no longer said twice in the message.
-- **`ownCatalogue` keeps a generated Bot API command as the CLI's own**, as `commands --json` marks it, so a
-  bot's contract test pins its generated commands.
-
 ### Security
 
 - **The update check, the model calls, the meeting embeddings and OpenAI transcription reach only their own host.**
