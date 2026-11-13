@@ -40,11 +40,15 @@ it("keeps agent membership proposed until an owner reviews its fingerprint, and 
   expect((await store.knowledge.meetingProjects(key, { confirmed: true })).items).toEqual([])
   const accepted = await store.knowledge.linkMeetingProject(key, meeting, project, {
     expectedFingerprint: proposed.link.fingerprint,
+    provenance: "Owner: the client's harbour project",
   })
-  expect(accepted).toMatchObject({ changed: true, link: { confirmed: true } })
+  expect(accepted).toMatchObject({
+    changed: true,
+    link: { confirmed: true, provenance: "Owner: the client's harbour project" },
+  })
   await expect(
     store.knowledge.linkMeetingProject(key, meeting, project, { expectedFingerprint: proposed.link.fingerprint }),
-  ).rejects.toMatchObject({ details: { reason: "meeting-project.stale" } })
+  ).rejects.toMatchObject({ code: "conflict", details: { reason: "meeting-project.stale" } })
   expect(await store.knowledge.linkMeetingProject(key, meeting, project)).toMatchObject({ changed: false })
   const reopened = await openStore({ path })
   opened.push(reopened)

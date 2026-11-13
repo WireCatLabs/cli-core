@@ -106,7 +106,7 @@ export const meetingProjectsStoreOver = ({ database, now }: StoreContext): Meeti
           options.expectedFingerprint !== undefined &&
           (!held || linkOf(held, accountId).fingerprint !== options.expectedFingerprint)
         )
-          throw new CliError("configuration_error", "meeting membership changed since review", {
+          throw new CliError("conflict", "meeting membership changed since review", {
             reason: "meeting-project.stale",
           })
         if (held && (Number(held.confirmed) === 1 || by === "agent"))
@@ -117,8 +117,10 @@ export const meetingProjectsStoreOver = ({ database, now }: StoreContext): Meeti
         const at = now()
         if (held)
           database
-            .prepare("UPDATE links SET confirmed=1,source='owner',author='owner',updated_at=? WHERE id=?")
-            .run(at, Number(held.id))
+            .prepare(
+              "UPDATE links SET confirmed=1,source='owner',author='owner',evidence=COALESCE(?,evidence),updated_at=? WHERE id=?",
+            )
+            .run(options.provenance ?? null, at, Number(held.id))
         else
           database
             .prepare(
