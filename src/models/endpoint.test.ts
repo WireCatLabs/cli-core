@@ -54,3 +54,17 @@ it("gives up on an IPv6 model address after its deadline", async () => {
     code: "timeout",
   })
 })
+
+it("names an unreachable IPv6 model address as a network error, and a caller's cancel as cancelled", async () => {
+  vi.stubGlobal("fetch", async () => {
+    throw new TypeError("fetch failed")
+  })
+  const reach = endpointFetch("https://[fd00::1]/v1", 1000)
+  const cancel = new AbortController()
+  cancel.abort()
+
+  await expect(reach("https://[fd00::1]/v1/chat")).rejects.toMatchObject({ code: "network_error" })
+  await expect(reach("https://[fd00::1]/v1/chat", { signal: cancel.signal })).rejects.toMatchObject({
+    code: "cancelled",
+  })
+})

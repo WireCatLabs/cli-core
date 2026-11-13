@@ -678,6 +678,8 @@ export const scanMatches = (context: StoreContext, { full = false }: { full?: bo
  */
 export const linkPhones = (context: StoreContext, identities: ReadonlySet<number>): MatchScan => {
   const { database } = context
+  const people = [...peopleOfIdentities(context, new Set(identities))]
+  write(database, () => settleLinks(database, people))
   const pass: Pass = {
     context,
     index: linkIndex(database),

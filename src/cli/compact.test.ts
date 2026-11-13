@@ -199,6 +199,13 @@ describe("compactText", () => {
     const decided: RowShape = { columns: [], sections: { decided: "generic" }, oneLine: true }
 
     expect(compactText(itemOf(proposal), row, zone)).toBe(compactText(list([proposal]), row, zone))
+    const fact = { ...proposal, ref: "fact:512", at: "2026-10-01T07:11:00.000Z" }
+    const timed: RowShape = { ...row, columns: [...row.columns, { field: "at", as: "time" }] }
+    expect(compactText(itemOf(fact), timed, zone)).toBe(compactText(list([fact]), timed, zone))
+    expect(compactText(itemOf(fact), timed, zone)).toContain("fact:512")
+    expect(compactText(itemOf(msg(1)), { ...message, oneLine: true }, zone)).toBe(
+      compactText(list([msg(1)]), message, zone),
+    )
     expect(compactText(itemOf(proposal), row, zone)).toBe("17070 · fact · proposed · Ana works at Acme")
     expect(
       compactText(

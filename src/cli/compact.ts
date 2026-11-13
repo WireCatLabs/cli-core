@@ -491,10 +491,9 @@ export const compactText = <T>(
     const rest = Object.fromEntries(
       Object.entries(body.item).filter(([name]) => !Object.hasOwn(sections, name) && !shape.hidden?.includes(name)),
     )
-    lines = shape.oneLine
-      ? rowsOfItems([rest], shape, clock, chars).lines.filter((line) => line !== "")
-      : blockOf(rest, chars, "", shape.whole).map(guarded)
-    let dates: string[] = []
+    const own = shape.oneLine ? rowsOfItems([rest], shape, clock, chars) : undefined
+    lines = own ? own.lines.filter((line) => line !== "") : blockOf(rest, chars, "", shape.whole).map(guarded)
+    let dates: string[] = own?.dates ?? []
     let drawn: string[] = []
     for (const [name, entity] of Object.entries(sections)) {
       const list = body.item[name]
@@ -504,7 +503,10 @@ export const compactText = <T>(
       drawn = drawn.concat([`# ${[`${clean(name)}: ${list.length}`, ...header].join(" · ")}`], rows)
     }
     const when = spanOf(dates, clock)
-    lines = lines.concat(when.length ? [`# ${when.join(" · ")}`] : [], drawn)
+    const head = [...(own?.header ?? []), ...when]
+    lines = own
+      ? (head.length ? [`# ${head.join(" · ")}`] : []).concat(lines, drawn)
+      : lines.concat(when.length ? [`# ${when.join(" · ")}`] : [], drawn)
   } else if (present(body.item)) lines = [guarded(cut(clean(String(body.item)), chars))]
   return lines.concat(footerOf(body as Body)).join("\n")
 }
