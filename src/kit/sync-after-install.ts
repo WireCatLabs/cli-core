@@ -55,18 +55,17 @@ const errorCodeOf = (text: string): unknown => {
 
 /**
  * Cases that a CLI's sync runs right after install, whatever state the shared config is in. The kit points
- * `WIRECAT_CONFIG_DIR` at a folder of its own, so the owner's config never hides the failure, and gives a store of its
- * own when the test names none in `MESSAGING_STORE`.
+ * `WIRECAT_CONFIG_DIR` at a folder of its own, so the owner's config never hides the failure; the store is the one
+ * the CLI's own harness gives.
  */
 export const syncAfterInstallCases = (options: SyncAfterInstallOptions): SyncAfterInstallCase[] => {
   const { sync, refusedUnderReadOnly } = options
   const cli = async (argv: readonly string[], shared: (typeof SHARED_CONFIGS)[number]) => {
     const configDir = mkdtempSync(join(tmpdir(), "sync-after-install-"))
     shared.write?.(configDir)
-    const env: NodeJS.ProcessEnv = { WIRECAT_CONFIG_DIR: configDir }
-    if (!process.env.MESSAGING_STORE)
-      env.MESSAGING_STORE = join(mkdtempSync(join(tmpdir(), "sync-after-install-store-")), "store.db")
-    const ran = await options.run(argv.includes("--json") ? [...argv] : [...argv, "--json"], env)
+    const ran = await options.run(argv.includes("--json") ? [...argv] : [...argv, "--json"], {
+      WIRECAT_CONFIG_DIR: configDir,
+    })
     return { code: ran.code, out: ran.out ?? "", err: ran.err }
   }
   return [

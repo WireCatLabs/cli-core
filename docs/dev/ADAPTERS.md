@@ -461,7 +461,7 @@ for (const one of runScopeCases({
 (`~/.config/WireCat/config.json`) can be in on a new or damaged machine: no file, not JSON, a byte-order mark, a folder,
 a `setup` section in an older shape, and the owner's explicit "read only" answer. Each run must exit 0 without a
 `permission_error`. The kit passes `WIRECAT_CONFIG_DIR`, a folder of its own, in the `env` your `run` lays over the
-test's, and a store of its own when `MESSAGING_STORE` names none. `refusedUnderReadOnly` names a local-only write that the "read only" answer must still refuse.
+test's; the store is the one your harness gives. `refusedUnderReadOnly` names a local-only write that the "read only" answer must still refuse.
 
 ```ts
 import { syncAfterInstallCases } from "@wirecat/cli-core/testing"
