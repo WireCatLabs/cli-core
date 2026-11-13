@@ -21,7 +21,7 @@ import type { Provider } from "../domain/models.js"
 import { httpLockFile } from "../mcp/http/state.js"
 import type { AppIdentity } from "../ports/app.js"
 import { sendsPathFor } from "../sends/journal.js"
-import { accountHome, inOwnerFolder, storePath } from "../store/path.js"
+import { accountHome, inOwnerFolder, settled, storePath } from "../store/path.js"
 import { openStore } from "../store/store.js"
 import type { AccountKey } from "../store/types.js"
 import { readConfigFile, withoutPath } from "./config-issues.js"
@@ -148,7 +148,8 @@ const insideOwnFolders = (app: AppIdentity, env: NodeJS.ProcessEnv, extra: reado
   }
 }
 
-const within = (path: string, root: string) => path === root || path.startsWith(`${root}${sep}`)
+const under = (path: string, root: string) => path === root || path.startsWith(`${root}${sep}`)
+const within = (path: string, root: string) => under(path, root) || under(settled(path), settled(root))
 
 /**
  * WC-SECR-24: the tool's folders as the owner's own run has them. A run with moved folders shares the rest with the
@@ -344,8 +345,11 @@ export const accountRemoveCommand = (
           { reason: "account-remove.busy" },
         )
 
-      const removed: Entry[] = [{ kind: "sign_in", target: `${app.command} sign-in of ${profile}` }]
-      const kept: Kept[] = [...ownersKept]
+      const signIn: Entry = { kind: "sign_in", target: `${app.command} sign-in of ${profile}` }
+      // The tool's own sign-out deletes its session where the run's state folder says; here that folder is the owner's.
+      const signsOut = !(movedFolders && inOwners(state))
+      const removed: Entry[] = signsOut ? [signIn] : []
+      const kept: Kept[] = [...ownersKept, ...(signsOut ? [] : [{ ...signIn, reason: ownersReason }])]
       // An entry the environment supplies is not this tool's to remove.
       const saved = (store: Credentials, name: string) => (store.read(name)?.source ?? "environment") !== "environment"
       for (const { store, accounts } of secrets)
@@ -415,8 +419,9 @@ export const accountRemoveCommand = (
       }
 
       await context.run(async () => {
-        const signedOut = await removal.signOut(profile, hooks)
-        removed.splice(0, 1, ...signedOut.removed.map((target) => ({ kind: "sign_in" as const, target })))
+        const signedOut = signsOut ? await removal.signOut(profile, hooks) : undefined
+        if (signedOut)
+          removed.splice(0, 1, ...signedOut.removed.map((target) => ({ kind: "sign_in" as const, target })))
 
         const keyringEntries = removed.filter((one) => one.kind === "keyring")
         const gone = new Set<string>()
