@@ -261,6 +261,26 @@ describe("setup's permission answer", () => {
     withConfig(JSON.stringify({ profiles: { agent: { permissions: { "*": "allow" } } } }))
     expect(() => resolveSettings({ profile: "agent" }, { env: {}, configDir })).toThrow(/permissions\.\*/)
   })
+
+  it("**limits nothing unless the owner chose read only**: no file, a broken one, a BOM, a folder, an old shape", () => {
+    withConfig(JSON.stringify({ profiles: { agent: {} } }))
+    const shared = (write: (path: string) => void) => {
+      const dir = mkdtempSync(join(tmpdir(), "wirecat-config-"))
+      write(join(dir, "config.json"))
+      return { WIRECAT_CONFIG_DIR: dir }
+    }
+    for (const env of [
+      shared(() => {}),
+      shared((path) => writeFileSync(path, "{ setup: ")),
+      shared((path) => writeFileSync(path, '﻿{"setup":{"permissions":"allow"}}')),
+      shared((path) => mkdirSync(path)),
+      answered({ languages: ["en"], permissions: "ask" }),
+    ]) {
+      const { permissions } = resolveSettings({ profile: "agent" }, { env, configDir })
+      expect(permissions["*"]).toBeUndefined()
+      expect(levelFor(permissions, "messages.send").level).toBe("allow")
+    }
+  })
 })
 
 describe("permissions across sections", () => {

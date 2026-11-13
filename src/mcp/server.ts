@@ -10,7 +10,7 @@ import * as v from "valibot"
 import { findCommand } from "../cli/command-contract.js"
 import { environmentOf } from "../cli/context.js"
 import { refuseWriteBeforeConnecting } from "../cli/early-refusal.js"
-import { changesAuthorityAt, judgedTargets, readsOverMcpAt } from "../cli/effects.js"
+import { changesAuthorityAt, fetchesOnlyAt, judgedTargets, readsOverMcpAt } from "../cli/effects.js"
 import { itemOf } from "../cli/envelope.js"
 import { DEFAULT_OUTPUT_BYTES } from "../cli/execution.js"
 import { recalledAccount } from "../cli/messenger/accounts.js"
@@ -133,6 +133,7 @@ export const createServer = (
     }
   }
   const authority = changesAuthorityAt(root)
+  const fetches = fetchesOnlyAt(root)
   const stdin = (path: readonly string[]) => {
     try {
       return stdinFieldOf(findCommand(root, path))
@@ -157,6 +158,7 @@ export const createServer = (
     keyOf,
     authority,
     fetchOnly: readsOverMcpAt(root),
+    fetches,
     offline: true,
     stdin,
   }).map((one) =>
@@ -272,6 +274,7 @@ export const createServer = (
         overrides,
         keyOf,
         authority,
+        fetches,
         stdin,
         connection,
         environment: agentEnvironment,

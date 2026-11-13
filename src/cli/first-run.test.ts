@@ -118,13 +118,13 @@ describe("the questions every WireCat tool shares", () => {
     expect(await stemmers(env)).toEqual({ cyrillic: "russian", latin: "none" })
   })
 
-  it("**keeps everything read-only while the answers cannot be read**, and setup writes them again", async () => {
+  it("**limits nothing while the answers cannot be read**; only a written read-only answer does", async () => {
     const env = place()
     const path = join(env.WIRECAT_CONFIG_DIR, "config.json")
     writeFileSync(path, JSON.stringify({ setup: { permissions: "everything" } }))
-    expect(permissionCeiling(path)).toBe("readonly")
-    writeSetupAnswers(path, { permissions: "allow" })
     expect(permissionCeiling(path)).toBeUndefined()
+    writeSetupAnswers(path, { permissions: "readonly" })
+    expect(permissionCeiling(path)).toBe("readonly")
   })
 })
 

@@ -6,7 +6,7 @@ import { describeProgram } from "@wirecat/cli-base/commands"
 import { skillResource } from "@wirecat/cli-base/skill"
 import type { ErrorObject } from "@wirecat/cli-base/standards"
 import { type BaseContext, environmentOf } from "../cli/context.js"
-import { changesAuthorityAt, judgedTargets, readsOverMcpAt } from "../cli/effects.js"
+import { changesAuthorityAt, fetchesOnlyAt, judgedTargets, readsOverMcpAt } from "../cli/effects.js"
 import { DEFAULT_OUTPUT_BYTES } from "../cli/execution.js"
 import type { CommandPermissions } from "../cli/permission-keys.js"
 import type { GlobalFlags, ResolveOptions, Settings } from "../cli/settings.js"
@@ -73,6 +73,7 @@ export const createAppServer = (command: Command, context: BaseContext, options:
   const levels = () => options.resolveSettings(flags, { env: context.env }).permissions
   const readOnly = () => readOnlyLockOf(app, context.env) !== undefined
   const authority = changesAuthorityAt(root)
+  const fetches = fetchesOnlyAt(root)
   const targets = judgedTargets(root)
   const passed = Object.fromEntries(Object.entries(environment).filter(([key]) => !PER_RUN.has(key)))
   const tools = toolsFromCommands(program.commands, {
@@ -83,6 +84,7 @@ export const createAppServer = (command: Command, context: BaseContext, options:
     readOnly: readOnly(),
     authority,
     fetchOnly: readsOverMcpAt(root),
+    fetches,
     permissions: options.permissions,
   })
   const availability = (one: (typeof tools)[number]) => (): CommandAvailability => {
@@ -119,6 +121,7 @@ export const createAppServer = (command: Command, context: BaseContext, options:
             levels,
             overrides,
             authority,
+            fetches,
             permissions: options.permissions,
             environment: passed,
           })

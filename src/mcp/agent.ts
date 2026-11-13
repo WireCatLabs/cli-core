@@ -47,6 +47,7 @@ export interface AgentContext {
   /** A declared CLI's keys and defaults (`configuration.permissions`); in place of `keyOf`. */
   permissions?: CommandPermissions | undefined
   authority?: CatalogueOptions["authority"]
+  fetches?: CatalogueOptions["fetches"]
   /** The server's one open connection. The command borrows it: it cannot close it, and never opens its own. */
   connection?: () => Promise<MessengerAdapter>
   /** What a command reads on stdin, as the field an agent gives it in. */
@@ -93,6 +94,8 @@ export interface CatalogueOptions {
   authority?: (path: readonly string[]) => boolean
   /** Whether a command only fetches into this machine (`fetchesOnlyAt`): offered as a read. Unset, every write stays one. */
   fetchOnly?: (path: readonly string[]) => boolean
+  /** Whether a command only fetches into the store (`fetchesOnlyAt`): setup's "read only" answer lets it run. */
+  fetches?: (path: readonly string[]) => boolean
   /** Arguments left out of every tool, by name. */
   omit?: readonly string[]
   /** Offer `offline` on commands that read the messenger: answer from the copy on this machine. */
@@ -262,7 +265,7 @@ const keywordsOf = (examples: readonly string[]): string[] => [
 ]
 
 export const toolsFromCommands = (commands: readonly CommandInfo[], options: CatalogueOptions = {}): AgentTool[] => {
-  const { root = [], exclude = [], levels, keyOf, authority, readOnly = false, permissions } = options
+  const { root = [], exclude = [], levels, keyOf, authority, readOnly = false, permissions, fetches } = options
   return flatten(commands)
     .filter(
       (info) =>
@@ -277,7 +280,8 @@ export const toolsFromCommands = (commands: readonly CommandInfo[], options: Cat
           (!(readOnly && (changesMessenger(info) || authority?.(info.path))) &&
             (levels === undefined && !(readOnly && permissions)
               ? true
-              : commandAvailability(info, levels ?? {}, keyOf, authority, readOnly, true, permissions).available))),
+              : commandAvailability(info, levels ?? {}, keyOf, authority, readOnly, true, permissions, fetches)
+                  .available))),
     )
     .map((info) => ({
       availability: () =>
@@ -289,6 +293,7 @@ export const toolsFromCommands = (commands: readonly CommandInfo[], options: Cat
           readOnly,
           true,
           permissions,
+          fetches,
         ),
       command: info.path.slice(root.length).join(" "),
       path: info.path,
@@ -351,7 +356,16 @@ export const runCommandForAgent = async (
     const levels = ctx.levels?.()
     const availability =
       (levels || ctx.readOnly || ctx.permissions) &&
-      commandAvailability(info, levels ?? {}, ctx.keyOf, ctx.authority, ctx.readOnly, true, ctx.permissions)
+      commandAvailability(
+        info,
+        levels ?? {},
+        ctx.keyOf,
+        ctx.authority,
+        ctx.readOnly,
+        true,
+        ctx.permissions,
+        ctx.fetches,
+      )
     if (availability && !availability.available)
       throw new CliError("permission_error", `${path.join(" ")}: ${availability.reason}`, {
         sent: false,

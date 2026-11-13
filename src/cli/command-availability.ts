@@ -5,6 +5,7 @@ import {
   authorityAllowed,
   BOT_API_KEY,
   botApiAllowed,
+  CEILING_KEY,
   isBotApi,
   keyForCommand,
   type Level,
@@ -39,10 +40,12 @@ export const commandAvailability = (
   readOnly = false,
   mcp = true,
   declared?: CommandPermissions,
+  /** Whether a command only fetches into the store (`fetchesOnlyAt`): setup's "read only" answer lets it run. */
+  fetches?: (path: readonly string[]) => boolean,
 ): CommandAvailability => {
   const declaredKey = declared?.keyOf(info.path)
   const key = declared ? declaredKey : (keyOf?.(info.path) ?? keyForCommand(info.path))
-  const level = key ? levelFor(levels, key, declared?.defaults).level : "allow"
+  const { level, key: named } = key ? levelFor(levels, key, declared?.defaults) : { level: "allow" as const, key: null }
   const judged = { ...(key ? { permission: key } : {}), level }
   const blocked = (reason: string, permission?: string): CommandAvailability => ({
     available: false,
@@ -61,7 +64,8 @@ export const commandAvailability = (
   if (mcp && isBotApi(info.path) && !botApiAllowed(levels))
     return blocked(`the profile requires ${BOT_API_KEY}: allow`, BOT_API_KEY)
   if (level === "deny") return blocked(`the profile denies ${key}`)
-  if (level === "readonly" && writes(info.effects)) return blocked(`${key} is readonly in this profile`)
+  if (level === "readonly" && writes(info.effects) && !(named === CEILING_KEY && fetches?.(info.path) === true))
+    return blocked(`${key} is readonly in this profile`)
   const denied = (declared ? [] : readKeysForCommand(info.path)).find((read) => levelFor(levels, read).level === "deny")
   return denied ? blocked(`the profile denies ${denied}`, denied) : { available: true, ...judged }
 }

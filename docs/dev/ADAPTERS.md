@@ -12,7 +12,7 @@ contract. This page is the order to read them in, and the rules that are not in 
 | Entry point | What a connector takes from it |
 |---|---|
 | `@wirecat/cli-core/cli` | `Messenger`, `MessengerAdapter`, `MessengerCore` and the optional groups |
-| `@wirecat/cli-core/testing` | the messenger contract kit: `contractSeed`, `contractCases`, `fakeAdapter`; `mcpOverStdio` for MCP tests; `runScopeCases` for the run scope |
+| `@wirecat/cli-core/testing` | the messenger contract kit: `contractSeed`, `contractCases`, `fakeAdapter`; `mcpOverStdio` for MCP tests; `runScopeCases` for the run scope; `syncAfterInstallCases` for sync after install |
 | `@wirecat/cli-core/meetings` | `MeetingSource` and `MeetingStore`, for a meeting provider ([MEETING-PROVIDERS.md](MEETING-PROVIDERS.md)) |
 | `@wirecat/cli-core/meetings/testing` | the meeting contract kit: `meetingStoreContract`, `fakeMeetingSource`, `memoryMeetingStore` |
 | `@wirecat/cli-core/calendar` | `CalendarSource` and `syncCalendars`, for a calendar provider ([CALENDARS.md](CALENDARS.md)) |
@@ -451,6 +451,24 @@ for (const one of runScopeCases({
   skip: { "mcp serve": "listens until stopped" },
   answering: () => ({ keyring: signedIn(), fetch: fakeComments().fetch }),
   silent: () => ({ keyring: signedIn(), fetch: neverAnswers }),
+}))
+  it(one.name, () => one.run())
+```
+
+### Testing that sync runs right after install
+
+`syncAfterInstallCases` runs your sync, through the `run` your own tests use, once for each state the shared config
+(`~/.config/WireCat/config.json`) can be in on a new or damaged machine: no file, not JSON, a byte-order mark, a folder,
+a `setup` section in an older shape, and the owner's explicit "read only" answer. Each run must exit 0 without a
+`permission_error`. The kit passes `WIRECAT_CONFIG_DIR`, a folder of its own, in the `env` your `run` lays over the
+test's; the store is the one your harness gives. `refusedUnderReadOnly` names a local-only write that the "read only" answer must still refuse.
+
+```ts
+import { syncAfterInstallCases } from "@wirecat/cli-core/testing"
+
+for (const one of syncAfterInstallCases({
+  sync: ["personal", "sync"],
+  run: (argv, env) => cli(argv, { keyring: signedIn(), fetch: fakeComments().fetch, env }),
 }))
   it(one.name, () => one.run())
 ```
