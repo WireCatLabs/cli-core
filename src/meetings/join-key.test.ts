@@ -7,7 +7,6 @@ describe("a meeting's join key", () => {
     ["https://zoom.us/w/81234567890?tk=x", "zoom:81234567890"],
     ["https://us02web.zoom.us/wc/join/81234567890", "zoom:81234567890"],
     ["https://meet.google.com/abc-defg-hij?authuser=1", "meet:abc-defg-hij"],
-    ["https://telemost.360.yandex.ru/j/1234567890?code=SECRET", "telemost:1234567890"],
     [
       "https://teams.microsoft.com/l/meetup-join/19%3ameeting/0?context=x",
       "teams.microsoft.com/l/meetup-join/19%3ameeting/0",

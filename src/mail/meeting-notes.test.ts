@@ -88,7 +88,7 @@ const seeded = async () => {
 }
 
 it("cuts Telemost's notes at their headings, the summary first", () => {
-  const notes = notesOf(NOTES, MEETING_NOTES.telemost as never)
+  const notes = notesOf(NOTES, MEETING_NOTES.telemost as (typeof MEETING_NOTES)[string])
   expect(notes.overview).toBe("Договорились выпустить синтетическую версию.")
   expect(notes.sections.map(({ label }) => label)).toEqual(["Что обсудили", "Задачи", "Открытые вопросы"])
   expect(notes.content).toContain("ЗАДАЧА 1")
@@ -153,6 +153,66 @@ it("takes the hours and the event from the owner's calendar entry in the same ro
     eventId: entry?.eventId,
     metadata: { time_precision: "event" },
   })
+})
+
+it("finds a meeting just after midnight in Moscow, which is still the evening before here", async () => {
+  const store = await seeded()
+  const calendarAccount = await store.accounts.saveAccount({ provider: "google-calendar", account: ME }, { name: null })
+  const [calendar] = await store.calendar.saveCalendars(
+    calendarAccount,
+    [{ externalId: "c", title: "Work", timezone: null, accessRole: "owner", primary: true, syncByDefault: true }],
+    0,
+  )
+  const startsAt = Date.UTC(2026, 10, 12) - 3 * 3_600_000 + 30 * 60_000
+  await store.calendar.saveEntries(
+    calendar?.id as number,
+    [
+      {
+        externalId: "e1",
+        kind: "single",
+        status: "confirmed",
+        title: "Late call",
+        startsAt,
+        endsAt: startsAt + 1_800_000,
+        joinUrl: ROOM,
+      },
+    ],
+    0,
+  )
+  await saveMeetingNotes(store, ME, [RULE], { since: "2026-01-01T00:00:00Z", now: 10 })
+  const account = await store.accounts.storedAccount({ provider: "telemost", account: ME })
+  const [meeting] = await store.meetings.meetings({ accountId: account.id, limit: 10 })
+  expect(meeting).toMatchObject({ title: "Late call", startedAt: startsAt })
+})
+
+it("keeps a linked meeting's hours when its event is no longer the only one that day", async () => {
+  const store = await seeded()
+  const calendarAccount = await store.accounts.saveAccount({ provider: "google-calendar", account: ME }, { name: null })
+  const [calendar] = await store.calendar.saveCalendars(
+    calendarAccount,
+    [{ externalId: "c", title: "Work", timezone: null, accessRole: "owner", primary: true, syncByDefault: true }],
+    0,
+  )
+  const entry = (externalId: string, hour: number) => {
+    const startsAt = new Date(2026, 10, 12, hour).getTime()
+    return {
+      externalId,
+      kind: "single" as const,
+      status: "confirmed" as const,
+      title: externalId,
+      startsAt,
+      endsAt: startsAt + 3_600_000,
+      joinUrl: ROOM,
+    }
+  }
+  await store.calendar.saveEntries(calendar?.id as number, [entry("first", 11)], 0)
+  await saveMeetingNotes(store, ME, [RULE], { since: "2026-01-01T00:00:00Z", now: 10 })
+  await store.calendar.saveEntries(calendar?.id as number, [entry("second", 15)], 1)
+  await saveMeetingNotes(store, ME, [RULE], { since: "2026-01-01T00:00:00Z", now: 20 })
+
+  const account = await store.accounts.storedAccount({ provider: "telemost", account: ME })
+  const [meeting] = await store.meetings.meetings({ accountId: account.id, limit: 10 })
+  expect(meeting).toMatchObject({ title: "first", startedAt: new Date(2026, 10, 12, 11).getTime() })
 })
 
 it("keeps the meeting-notes provider when a rule is stored and read back", () => {

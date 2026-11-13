@@ -74,6 +74,21 @@ export const syncMail = async (
   store: MessageStore,
   options: MailSyncOptions,
 ): Promise<MailSyncResult> => {
+  const result = await syncAndComplete(source, store, options)
+  const rules = options.account.rules ?? []
+  if (!rules.some(({ meeting_notes }) => meeting_notes) || options.signal?.aborted) return result
+  const now = (options.now ?? Date.now)()
+  return {
+    ...result,
+    meetingNotes: await saveMeetingNotes(store, options.account.address, rules, { since: result.since, now }),
+  }
+}
+
+const syncAndComplete = async (
+  source: MailSource,
+  store: MessageStore,
+  options: MailSyncOptions,
+): Promise<MailSyncResult> => {
   const result = await syncRounds(source, store, options)
   if (options.completePartial === false || options.retryAttachments || options.account.mode === "mbox") return result
   if (result.stopped !== undefined || options.signal?.aborted) return result
@@ -932,11 +947,7 @@ const syncRound = async (
     await store.sync.setSyncState(key, "mail_coverage", JSON.stringify(coverage))
   const tagging = tagger.outcome()
   await settleRuleTags(store, accountId, rules, tagging)
-  const meetingNotes = rules.some(({ meeting_notes }) => meeting_notes)
-    ? await saveMeetingNotes(store, account.address, rules, { since: since.toISOString(), now: startedAt })
-    : undefined
   return {
-    ...(meetingNotes === undefined ? {} : { meetingNotes }),
     account: key.account,
     since: since.toISOString(),
     listed: listed.length,

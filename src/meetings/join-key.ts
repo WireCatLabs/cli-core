@@ -1,6 +1,5 @@
 /**
- * What one meeting room is, whatever link it was shared by: `zoom:<number>`, `meet:<code>`, `telemost:<id>`, else the
- * host and path.
+ * What one meeting room is, whatever link it was shared by: `zoom:<number>`, `meet:<code>`, else the host and path.
  * A query string carries passcodes (`pwd=`), so it never reaches the key or a stored link.
  */
 export const joinKeyOf = (url: string | null | undefined): string | null => {
@@ -15,11 +14,6 @@ export const joinKeyOf = (url: string | null | undefined): string | null => {
   if (host === "meet.google.com") {
     const code = /^\/([a-z]{3}-[a-z]{4}-[a-z]{3})$/iu.exec(path)?.[1]
     if (code) return `meet:${code.toLowerCase()}`
-  }
-  // Only the host Telemost's own meeting notes link to; whether telemost.yandex.ru shares its ids is not known.
-  if (host === "telemost.360.yandex.ru") {
-    const id = /^\/j\/([A-Za-z0-9_-]+)$/u.exec(path)?.[1]
-    if (id) return `telemost:${id}`
   }
   return `${host}${path}`
 }

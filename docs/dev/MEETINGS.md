@@ -200,13 +200,14 @@ and are checked before execution. Results include JSON text and structured conte
 
 A provider that mails its notes instead of offering an API is a `MeetingSource` over stored mail
 ([`src/mail/meeting-notes.ts`](../../src/mail/meeting-notes.ts)). A mail rule with `meeting_notes: "<provider>"`
-picks the emails; `MEETING_NOTES` holds each provider's senders, the day in its subject and the headings its notes
-are cut under. Each email is one meeting, keyed by its Message-ID, so a room used for many meetings never merges
-them. The notes give the day only: an owner's calendar entry in the same room that day gives the hours and the
-event; without one the meeting starts at the day's start, `metadata.time_precision` is `day`, and `createsEvents:
-false` keeps `linkEvent` from making an event at midnight. The mail sync calls `saveMeetingNotes` at its end; a
-caller backfills older mail with an early `since`. Telemost is the first provider: its web app keeps no notes, and
-its API reads only scheduled meetings for Yandex 360 for Business.
+picks the emails; `MEETING_NOTES` holds each provider's senders, the day in its subject, the zones that day may be
+written in and the headings its notes are cut under. Each email is one meeting, keyed by its Message-ID, so a room
+used for many meetings never merges them. The notes give the day only: the event the meeting is already linked to,
+or the owner's one calendar entry in the same room that day, gives the hours; without one the meeting starts at the
+day's start, `metadata.time_precision` is `day`, and `createsEvents: false` keeps `linkEvent` from making an event
+at midnight. `syncMail` calls `saveMeetingNotes` once, after its rounds, reading only the rules' senders' mail when
+every rule names one; a caller backfills older mail with an early `since`. Telemost is the first provider: its web
+app keeps no notes, and its API reads only scheduled meetings for Yandex 360 for Business.
 
 ## Providers next
 
