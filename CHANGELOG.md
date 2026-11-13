@@ -5,6 +5,19 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## 0.656.0 — 13.11.2026
+
+### Changed — may break callers
+
+- **`syncAfterInstallCases` asks only "no `permission_error`" of a shared config that is not JSON or is a folder.** A
+  step that reads such a file may fail and name it; the other states must still exit 0.
+
+### Fixed
+
+- **The shared config is read with a byte-order mark.** `~/.config/WireCat/config.json` saved by a Windows editor
+  starts with one; every reader of the file (setup's answer, task categories, models, search settings) refused it as
+  not JSON, and a sync that reads the meaning-search model ended incomplete.
+
 ## 0.655.0 — 13.11.2026
 
 ### Added
