@@ -32,6 +32,10 @@ interface NotesKind {
   /** The headings the notes are split under, in the case they are written. */
   headings: readonly string[]
   overview: string
+  /** The first line of the notes, before any heading; not part of them. */
+  title: string
+  /** The lines where the provider's own footer starts: the notes end before the first of them. */
+  ends: readonly string[]
 }
 
 /** The meeting-notes mail each provider sends. A provider not here cannot be named by a rule. */
@@ -46,6 +50,8 @@ export const MEETING_NOTES: Readonly<Record<string, NotesKind>> = {
     offsets: [3],
     headings: ["Итоги", "Что обсудили", "Задачи", "Открытые вопросы", "Следующая встреча"],
     overview: "Итоги",
+    title: "Конспект встречи",
+    ends: ["Оцените точность конспекта"],
   },
 }
 
@@ -64,23 +70,37 @@ const headingOf = (line: string, headings: readonly string[]): string | undefine
   return headings.find((heading) => heading.toLowerCase() === plain)
 }
 
-/** The notes cut at their headings; text before the first heading stays only in `content`. */
-export const notesOf = (text: string, kind: Pick<NotesKind, "headings" | "overview">): SummaryContent => {
+/**
+ * The notes cut at their headings, without the provider's footer. Older notes have no overview heading: their
+ * overview is the text before the first heading.
+ */
+export const notesOf = (
+  text: string,
+  kind: Pick<NotesKind, "headings" | "overview" | "title" | "ends">,
+): SummaryContent => {
+  const all = text.split("\n")
+  const end = all.findIndex((line) => kind.ends.includes(line.trim()))
+  const lines = end === -1 ? all : all.slice(0, end)
+  const lead: string[] = []
   const parts: { label: string; lines: string[] }[] = []
-  for (const line of text.split("\n")) {
+  for (const line of lines) {
     const heading = headingOf(line, kind.headings)
     if (heading !== undefined) parts.push({ label: heading, lines: [] })
-    else parts.at(-1)?.lines.push(line)
+    else (parts.at(-1)?.lines ?? lead).push(line)
   }
   const sections = parts
     .map(({ label, lines }) => ({ label, text: lines.join("\n").trim() }))
     .filter(({ text }) => text !== "")
+  const opening = lead
+    .filter((line) => line.trim() !== kind.title)
+    .join("\n")
+    .trim()
   return {
     title: null,
-    overview: sections.find(({ label }) => label === kind.overview)?.text ?? null,
+    overview: sections.find(({ label }) => label === kind.overview)?.text ?? (opening || null),
     sections: sections.filter(({ label }) => label !== kind.overview),
     nextSteps: [],
-    content: text.trim() || null,
+    content: lines.join("\n").trim() || null,
   }
 }
 
