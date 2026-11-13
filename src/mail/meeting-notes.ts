@@ -95,7 +95,9 @@ const dayWindow = (kind: NotesKind, date: { year: number; month: number; day: nu
   const local = new Date(date.year, date.month - 1, date.day).getTime()
   const utc = Date.UTC(date.year, date.month - 1, date.day)
   const starts = [local, ...kind.offsets.map((offset) => utc - offset * HOUR_MS)]
-  return { start: Math.min(...starts), end: Math.max(...starts) + DAY_MS, local }
+  const start = starts.reduce((low, at) => Math.min(low, at))
+  const end = starts.reduce((high, at) => Math.max(high, at)) + DAY_MS
+  return { start, end, local }
 }
 
 interface Note {
