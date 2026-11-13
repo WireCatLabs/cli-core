@@ -20,6 +20,7 @@ import { mentionsCommand } from "./messenger/mentions-command.js"
 import { messagesCommand } from "./messenger/messages-command.js"
 import { modelsCommand } from "./messenger/models-command.js"
 import { reviewCommand } from "./messenger/review.js"
+import { searchCommand } from "./messenger/search-command.js"
 import { serverCommand } from "./messenger/server-command.js"
 import { tasksCommand } from "./messenger/tasks-command.js"
 import { commandWords, liftProfile } from "./profile.js"
@@ -36,6 +37,7 @@ const messenger: Messenger = {
   connect: async () => {
     throw new Error("no connection in this test")
   },
+  serverSearch: true,
 }
 const program = createProgram({
   app,
@@ -47,6 +49,7 @@ const program = createProgram({
     mentionsCommand(messenger),
     inboxCommand(messenger),
     reviewCommand(messenger),
+    searchCommand(messenger),
     storeCommand(messenger),
     tasksCommand(messenger),
     attachmentsCommand(messenger),
@@ -71,14 +74,19 @@ const program = createProgram({
 })
 const parity = JSON.parse(readFileSync(join(import.meta.dirname, "../../parity.json"), "utf8")) as Manifest
 
+// Options that take one of a few words reject the generic "7".
+const WORDS: Record<string, string> = { backend: "server" }
+
 /** A value of the right kind for each argument, so the line parses as typed. */
 const sample = (command: Command, name: string): unknown =>
-  command.options.find((option) => option.attributeName() === name.replace(/_(\w)/g, (_, c: string) => c.toUpperCase()))
-    ?.required ||
+  WORDS[name] ??
+  (command.options.find(
+    (option) => option.attributeName() === name.replace(/_(\w)/g, (_, c: string) => c.toUpperCase()),
+  )?.required ||
   command.options.find((option) => option.long === `--${name.replaceAll("_", "-")}`)?.optional ||
   command.registeredArguments.some((argument) => argument.name() === name)
     ? "7"
-    : true
+    : true)
 
 const ONLY_AFTER: Record<string, readonly [command: string, option: string]> = {
   "messages.scheduled": ["messages send", "--at-time"],

@@ -8,3 +8,8 @@
   they already passed a flood hold. The profile's permission level still applies to each. Found by an agent test in
   which tg under `TG_READ_ONLY` answered 6 of 10 questions and a Telegram MCP server 9
   (tg-cli [#874](https://github.com/WireCatLabs/tg-cli/issues/874)).
+- **An archive-only search over a partial history points at the server's search.** `search messages --backend
+  archive` on a messenger with its own search now leads `next` with `search.server` (the same query, `--backend
+  server`) when the local store misses part of a chat. Agents told to stay on the archive stopped there and answered
+  "not found" for messages the store never held
+  (tg-cli [#873](https://github.com/WireCatLabs/tg-cli/issues/873)).

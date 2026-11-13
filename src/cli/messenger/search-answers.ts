@@ -292,6 +292,8 @@ export interface Paging {
   page?: number
   /** The query and options `page.next` repeats. */
   again?: Record<string, unknown>
+  /** Asked for the archive alone where the messenger's server could search too. */
+  archiveOnly?: boolean
 }
 
 /** "showing 20 of 144", for the human view under a page of hits; `+` when the total is a lower bound. */
@@ -304,13 +306,15 @@ export const shownOf = (shown: number, offset: number, total: SearchTotal | unde
 export const messagesAnswer = (
   command: string,
   found: SearchFound,
-  { limit, page, again }: Paging,
+  { limit, page, again, archiveOnly }: Paging,
   query = "",
   skips: StoredHistorySkip[] = [],
 ): ListBody<MessageHitItem> => {
   const accounts = found.coverage?.accounts ?? found.accounts ?? []
   const gaps = gapsOf(found)
   const limited = historyLimitGaps(skips)
+  if (archiveOnly && query !== "" && gaps.missing.length + limited.missing.length > 0)
+    gaps.next.unshift(nextStep("search.server", { args: { query, backend: "server" } }))
   return listOf(command, {
     items: [...found.items.map((hit) => messageHitItem(hit, query)), ...pictureItems(found)],
     limit,
