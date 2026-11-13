@@ -316,7 +316,7 @@ const OTHERS: Entry[] = [
   validation("input.empty", "a hidden prompt got an empty answer three times"),
   validation("input.required", "the command needs an answer and cannot ask for one"),
   validation("input.too-large", "the input is over its size limit"),
-  ["meeting-project.stale", "configuration_error", "the meeting's project changed meanwhile"],
+  ["meeting-project.stale", "conflict", "the meeting's project changed meanwhile"],
   validation("fact.not-accepted", "only an accepted fact can be revoked"),
   validation("fact.owner-written", "the owner wrote this fact; it was never proposed, so it cannot be revoked"),
   validation("fact.payment-retired", "a payment is a payments row in store.finance, not a fact"),
