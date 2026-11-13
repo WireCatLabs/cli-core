@@ -35,11 +35,14 @@ export const addCrmSearchAll = (
   const all = annotate(new Command("all"), { effects: LOCAL_READ, partial: true, output: { entity: "hit" } })
     .summary("search stored deals and leads, messages, notes, calendar events and meetings")
     .description(
-      "search the CRM's deals and leads by the words of their title, company and contacts, and messages, notes, " +
-        "calendar events and meetings other WireCat tools stored — best match first. Use it when you do not know " +
-        "where something was written",
+      "search the CRM's deals and leads by the words of their title, company, contacts and activities, and the " +
+        "messages, notes, calendar events and meetings other WireCat tools stored — best match first. Use it when " +
+        "you do not know where something was written",
     )
-    .argument("<query...>", 'words and "phrases"; deals and leads match the words of their title, company and contacts')
+    .argument(
+      "<query...>",
+      'words and "phrases"; deals and leads match the words of their title, company, contacts and activities',
+    )
     .addHelpText("after", SAVE_HELP)
   searches.addCommand(searchAllOptions(all, SEARCHED))
   example(all, "search all Example LLC", "search all website --only crm --json")

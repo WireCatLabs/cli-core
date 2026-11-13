@@ -107,6 +107,7 @@ export {
   type OrderPurpose,
   type OrderStatus,
 } from "./domain/orders.js"
+export { e164Of, PHONE_COUNTRIES, type PhoneCountry } from "./domain/phones.js"
 export { countedPoll } from "./domain/polls.js"
 export {
   ADDED_ACCOUNT,

@@ -84,6 +84,7 @@ alias, keyword and person lanes and returns cited evidence with a resume checkpo
 | `./calendar`, `/calendar/cli`, `/calendar/mcp`, `/calendar/testing` | `src/calendar/` | the calendar provider port, the sync engine over `EventStore`, the shared commands and MCP reads; the store types stay in `src/meetings/`, which depends on nothing else — see [Calendars](CALENDARS.md) |
 | `./constants` | `src/constants/` | the packaged constants (`constants`, `constantsSchema`), the app a sign-in uses (`googleApp`, `microsoftApp`, `oauthApp`) and `doctor`'s report of it (`oauthClientReport`) — see [Constants](CONSTANTS.md) |
 | `./mail`, `/mail/testing` | `src/mail/` | the mail source port, the sync engine over `store.mail` (resume points, rules, deletions, attachment text), sender scoring and the contract kit — see [Mail](MAIL.md) |
+| `./sftp` | `src/sftp/` | a read-only SFTP client: `session.ts` holds the host-key pin, deadlines, retries and run events; `ssh2.ts` is the only file that loads `ssh2` (an optional peer, imported on first use) — see [SFTP](../sftp.md) |
 
 The README's table lists what each export offers; this page does not repeat it.
 

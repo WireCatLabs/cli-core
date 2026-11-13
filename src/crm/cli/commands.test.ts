@@ -827,4 +827,17 @@ describe("CRM activities", () => {
     await cli("sync")
     expect(asked.at(-1)).toBe(NOW)
   })
+  it("search all finds a deal by the words of its activities", async () => {
+    const { cli, path, source } = await withActivities([
+      activity("m1", [{ kind: "deal", externalId: "d1" }], {
+        kind: "email",
+        body: "the warehouse lease in Example Park",
+      }),
+    ])
+    source.put("deal", exampleDeal("d1"))
+    await turnOn(path)
+    await cli("sync")
+    const found = await cli("search", "all", "warehouse", "lease", "--only", "crm")
+    expect(found.items).toEqual([expect.objectContaining({ kind: "deal", title: "Example deal d1" })])
+  })
 })

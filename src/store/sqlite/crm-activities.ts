@@ -27,6 +27,24 @@ export interface StoredActivity {
   updatedAt: number
 }
 
+/** The subjects and texts of the activities on each deal or lead of a kind, by `<account id>\u0000<external id>`. */
+export const activityTexts = (database: StoreContext["database"], kind: DealKind): Map<string, string[]> => {
+  const found = new Map<string, string[]>()
+  for (const row of database
+    .prepare(
+      "SELECT r.account_id, rr.target_external_id, json_extract(r.fields, '$.subject') AS subject, " +
+        "json_extract(r.fields, '$.body') AS body FROM records r JOIN record_relations rr ON rr.record_id = r.id " +
+        "WHERE r.type = ? AND r.deleted_at IS NULL AND rr.role = 'on' AND rr.target_type = ?",
+    )
+    .all(ACTIVITY_RECORD, kind)) {
+    const key = `${row.account_id}\u0000${row.target_external_id}`
+    const texts = found.get(key) ?? []
+    found.set(key, texts)
+    for (const text of [row.subject, row.body]) if (typeof text === "string" && text) texts.push(text)
+  }
+  return found
+}
+
 export interface CrmActivitiesSaved {
   saved: number
   /** On no deal or lead this copy keeps, so not stored. */
