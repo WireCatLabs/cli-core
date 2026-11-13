@@ -80,6 +80,11 @@ export const WIRECAT_TOOLS: readonly Tool[] = [
     package: "@wirecat/bitrix24-cli",
     does: "Bitrix24 CRM: deals, leads and pipelines, searchable with your other WireCat data",
   },
+  {
+    command: "pbx",
+    package: "@wirecat/asterisk-cli",
+    does: "Asterisk PBX calls and recordings, searchable with your other WireCat data",
+  },
 ]
 
 const WIDTH = 100
