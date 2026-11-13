@@ -14,7 +14,7 @@ describe("googleError", () => {
     [403, legacy("insufficientPermissions"), false, "permission_error", "oauth.scope-missing"],
     [403, rpc("ACCESS_TOKEN_SCOPE_INSUFFICIENT"), false, "permission_error", "oauth.scope-missing"],
     [403, legacy("quotaExceeded"), false, "rate_limited", "provider.usage-limit"],
-    [403, legacy("forbiddenForNonOrganizer"), true, "permission_error", "event.organizer-only"],
+    [403, legacy("forbiddenForNonOrganizer"), true, "permission_error", "access.denied"],
     [403, {}, false, "permission_error", "access.denied"],
     [404, {}, false, "not_found", "item.not-found"],
   ])("HTTP %i %j answers %s", (status, body, mutates, code, reason) => {

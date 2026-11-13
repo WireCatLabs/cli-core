@@ -21,31 +21,23 @@ const roleOf = (value: unknown): MeetingDocumentRole | undefined =>
  * The meeting's Drive file as an `attached` link to the file's document, waiting by its Drive id when Drive has not
  * stored it yet. Drive's later import resolves it (`linkAttached`), so either order ends in one link.
  *
- * A file the source listed (`MeetingSave.documents`) keeps its metadata, even `{}`; a transcript version's file
- * (`TranscriptInput.driveFileId`) has none. A new transcript version that names another file replaces only the old
- * version's link, never a listed one; a replay of an old version keeps it.
+ * Metadata tells who named the file: `{ listed: true, title? }` the source's list (`MeetingSave.documents`), or
+ * `{ source }` a transcript version (`TranscriptInput.driveFileId`). A listing wins: it sets the role and title, and a
+ * transcript version never changes a listed link.
  */
-export const attachMeetingDocument = (
+const attach = (
   database: CacheDatabase,
   meetingId: number,
-  { fileId, role, title }: MeetingDocumentInput,
+  fileId: string,
+  role: MeetingDocumentRole,
+  metadata: string,
+  listed: boolean,
   now: number,
-  how: "listed" | "replaces" | "keeps",
 ): void => {
-  const file = fileId.trim()
-  if (!file) return
-  const target = driveFileTarget(file)
-  if (how === "replaces")
-    database
-      .prepare(
-        "DELETE FROM links WHERE from_type = 'meeting' AND from_id = ? AND kind = 'attached' AND role = ? " +
-          "AND target_text <> ? AND metadata IS NULL",
-      )
-      .run(meetingId, TRANSCRIPT_ROLE, target)
-  const metadata = how === "listed" ? JSON.stringify(title ? { title } : {}) : null
+  const target = driveFileTarget(fileId)
   const held = database
     .prepare(
-      "SELECT id, to_id, metadata FROM links WHERE from_type = 'meeting' AND from_id = ? AND kind = 'attached' " +
+      "SELECT id, to_id, role, metadata FROM links WHERE from_type = 'meeting' AND from_id = ? AND kind = 'attached' " +
         "AND target_text = ?",
     )
     .get(meetingId, target)
@@ -56,17 +48,54 @@ export const attachMeetingDocument = (
            author, created_at, updated_at) VALUES ('meeting', ?, 'document', ?, 'attached', 'meeting', ?, ?, ?, 1, 'rule',
            ?, ?)`,
       )
-      .run(meetingId, driveDocumentOf(database, file), target, role, metadata, now, now)
+      .run(meetingId, driveDocumentOf(database, fileId), target, role, metadata, now, now)
     return
   }
-  const document = held.to_id == null ? driveDocumentOf(database, file) : int(held.to_id)
-  const kept = how === "listed" ? metadata : str(held.metadata)
+  const document = held.to_id == null ? driveDocumentOf(database, fileId) : int(held.to_id)
+  const nextRole = listed ? role : str(held.role)
+  const nextMetadata = listed ? metadata : str(held.metadata)
   database
     .prepare(
       "UPDATE links SET to_id = ?, role = ?, metadata = ?, updated_at = ? WHERE id = ? " +
         "AND (to_id IS NOT ? OR role IS NOT ? OR metadata IS NOT ?)",
     )
-    .run(document, role, kept, now, Number(held.id), document, role, kept)
+    .run(document, nextRole, nextMetadata, now, Number(held.id), document, nextRole, nextMetadata)
+}
+
+/** A file the meeting's source listed. Listed links only grow: a file left out of a later list stays linked. */
+export const attachListedDocument = (
+  database: CacheDatabase,
+  meetingId: number,
+  { fileId, role, title }: MeetingDocumentInput,
+  now: number,
+): void => {
+  const file = fileId.trim()
+  if (file)
+    attach(database, meetingId, file, role, JSON.stringify({ listed: true, ...(title ? { title } : {}) }), true, now)
+}
+
+/**
+ * The file one transcript source saved its transcript as. A new version (`replaces`) drops the links an earlier
+ * version of the same source named, never a listed link or another source's; a replay of an old version keeps them.
+ */
+export const attachTranscriptFile = (
+  database: CacheDatabase,
+  meetingId: number,
+  fileId: string,
+  source: string,
+  now: number,
+  replaces: boolean,
+): void => {
+  const file = fileId.trim()
+  if (!file) return
+  if (replaces)
+    database
+      .prepare(
+        "DELETE FROM links WHERE from_type = 'meeting' AND from_id = ? AND kind = 'attached' AND role = ? " +
+          "AND target_text <> ? AND json_extract(metadata, '$.source') = ? AND json_extract(metadata, '$.listed') IS NULL",
+      )
+      .run(meetingId, TRANSCRIPT_ROLE, driveFileTarget(file), source)
+  attach(database, meetingId, file, TRANSCRIPT_ROLE, JSON.stringify({ source }), false, now)
 }
 
 /** The meeting's Drive files, in the order they were first named. */

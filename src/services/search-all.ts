@@ -23,12 +23,7 @@ import { type MeaningLane, type MeaningSkipped, nearEligible } from "./messages-
 import type { SearchCoverage } from "./messages-search.js"
 import { importAccounts, notesScopeOf, RRF_K, searchNotes } from "./notes-search.js"
 import { BUSINESS_WORDS_ONLY, searchBusiness } from "./search-all-business.js"
-import {
-  type MeetingAccountCoverage,
-  type MeetingSearchItem,
-  meetingAccountsInScope,
-  meetingLane,
-} from "./search-all-meetings.js"
+import { type MeetingAccountCoverage, type MeetingSearchItem, meetingLane } from "./search-all-meetings.js"
 import { HARDER_CANDIDATES, type HarderOptions, type HarderResult, reorderHarder } from "./search-harder.js"
 import { listContextOf } from "./search-kind.js"
 import type { Backend, ServerOptions, ServerSearched } from "./server-search.js"
@@ -328,6 +323,7 @@ export const searchAll = async (
   /** Each hit found by meaning, by its cosine: one model for every source, so these compare across them. */
   const cosines = new Map<string, number>()
   let coverage: SearchCoverage | undefined
+  const meetingAccountsRead = new Set<number>()
   let meetings: MeetingAccountCoverage[] | undefined
 
   const messagesOf = async (kind: "messages" | "mail") => {
@@ -557,6 +553,7 @@ export const searchAll = async (
           if (!found.read.length) continue
           hasMore ||= found.hasMore
           meetings = found.coverage
+          for (const { id } of found.read) meetingAccountsRead.add(id)
           lists.push(found.items)
           for (const { provider, account } of found.read) accounts.push({ resource, provider, account })
         } else lists.push(await messagesOf(resource))
@@ -571,10 +568,7 @@ export const searchAll = async (
   }
 
   let ordered = insidePeriodFirst(
-    oneList(
-      await withMeetingDocuments(store, lists, () => meetingAccountsInScope(store, account, request.meetingScopes)),
-      cosines,
-    ),
+    oneList(await withMeetingDocuments(store, lists, meetingAccountsRead), cosines),
     period,
   )
   let harder: HarderResult | undefined
@@ -619,16 +613,17 @@ export const searchAll = async (
 }
 
 /**
- * A document that is a meeting's transcript, recording or notes names that meeting, when the meeting's account is of
- * a scope this search may read: a personal search never names a work meeting. A transcript that Drive also
+ * A document that is a meeting's transcript, recording or notes names that meeting, when this search read the
+ * meeting's account: a search that may not read meetings, or not that account, never learns of it. A transcript that Drive also
  * imported as a document is one thing with its meeting: when the meeting is among the hits, the document's hit is
  * dropped. Alone, the document stays, so nothing found is lost.
  */
 const withMeetingDocuments = async (
   store: MessageStore,
   lists: SearchAllItem[][],
-  readable: () => Promise<Set<number>>,
+  read: ReadonlySet<number>,
 ): Promise<SearchAllItem[][]> => {
+  if (!read.size) return lists
   const documentOf = (item: SearchAllItem) =>
     item.kind === "document" && /^document:\d+$/.test(item.ref) ? Number(item.ref.slice("document:".length)) : undefined
   const documents = lists.flat().flatMap((item) => documentOf(item) ?? [])
@@ -636,14 +631,13 @@ const withMeetingDocuments = async (
   const owners = await store.meetings.documentMeetings(documents)
   if (!owners.size) return lists
   const meetings = new Set(lists.flat().flatMap((item) => (item.kind === "meeting" ? [item.meetingId] : [])))
-  const accounts = await readable()
   return lists.map((list) =>
     list.flatMap((item) => {
       const document = documentOf(item)
       const owner = document === undefined ? undefined : owners.get(document)
       if (owner === undefined || item.kind === "meeting") return [item]
       if (owner.role === "transcript" && meetings.has(owner.meetingId)) return []
-      if (!accounts.has(owner.accountId)) return [item]
+      if (!read.has(owner.accountId)) return [item]
       return [
         {
           ...item,

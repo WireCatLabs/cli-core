@@ -70,12 +70,6 @@ export const googleError = ({
         (errorsGuide ? ` (${errorsGuide})` : ""),
       { reason: "provider.usage-limit", retryable: false, status },
     )
-  if (reasons.includes("forbiddenForNonOrganizer"))
-    return new CliError(
-      "permission_error",
-      "only the organizer can change this; change your own copy's fields only, such as your answer or reminders",
-      { reason: "event.organizer-only", status },
-    )
   if (status === 429 || reasons.some((reason) => RATE.has(reason)))
     // Google turned the request away before acting on it, so even a write is safe to send again.
     return new CliError("rate_limited", "Google rate limit reached; retry the command", {

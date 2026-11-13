@@ -39,7 +39,12 @@ import { meetingIdentityPk } from "./identities.js"
 import { reviewLink } from "./link-reviews.js"
 import { meetingChatLinesOver } from "./meeting-chat-lines.js"
 import { meetingContextLinksOver } from "./meeting-context-links.js"
-import { attachMeetingDocument, meetingDocumentsOf, meetingTranscriptDocumentsOver } from "./meeting-documents.js"
+import {
+  attachListedDocument,
+  attachTranscriptFile,
+  meetingDocumentsOf,
+  meetingTranscriptDocumentsOver,
+} from "./meeting-documents.js"
 import { meetingHitIndexOver } from "./meeting-hit-index.js"
 import { meetingHitSearchOver } from "./meeting-hit-search.js"
 import { INDEX_CODES, type Indexable, indexedText, meetingRowid, summaryOf } from "./meeting-index-values.js"
@@ -465,7 +470,7 @@ const save = (context: StoreContext, input: MeetingSave): number => {
     )
 
   for (const a of input.attachments ?? []) saveAttachment(database, "meeting", meetingId, a, now)
-  for (const document of input.documents ?? []) attachMeetingDocument(database, meetingId, document, now, "listed")
+  for (const document of input.documents ?? []) attachListedDocument(database, meetingId, document, now)
   return meetingId
 }
 
@@ -494,14 +499,7 @@ const saveTranscripts = (
   )
   for (const { rows, driveFileId, ...t } of transcripts) {
     const replayed = t.contentHash !== null && Boolean(sameContent.get(meetingId, t.source, t.contentHash))
-    if (driveFileId !== undefined)
-      attachMeetingDocument(
-        database,
-        meetingId,
-        { fileId: driveFileId, role: "transcript" },
-        now,
-        replayed ? "keeps" : "replaces",
-      )
+    if (driveFileId !== undefined) attachTranscriptFile(database, meetingId, driveFileId, t.source, now, !replayed)
     if (replayed) {
       counts.replayedTranscripts++
       continue

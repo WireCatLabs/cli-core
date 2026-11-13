@@ -146,10 +146,19 @@ describe("a meeting's Drive documents", () => {
     expect((await shown(store, meetingId)).map(({ document }) => document)).toEqual([null, null])
   })
 
-  it("a new transcript version replaces only the old version's link, never a listed one", async () => {
-    const { store, accountId } = await fixture()
-    const { meetingId } = await pullWith(store, accountId, async () => [transcript])
-    const version = (contentHash: string, driveFileId: string, now: number) =>
+  const versions = (store: MessageStore, accountId: number) => {
+    const transcriptOf = (source: string, contentHash: string, driveFileId: string) => ({
+      source,
+      format: null,
+      language: null,
+      contentHash,
+      externalCreatedAt: null,
+      metadata: null,
+      deletedAt: null,
+      driveFileId,
+      rows: [],
+    })
+    return (now: number, ...transcripts: [source: string, contentHash: string, driveFileId: string][]) =>
       store.meetings.saveMeeting({
         meeting: {
           accountId,
@@ -166,23 +175,37 @@ describe("a meeting's Drive documents", () => {
           metadata: null,
           deletedAt: null,
         },
-        transcripts: [
-          {
-            source: "meet-version",
-            format: null,
-            language: null,
-            contentHash,
-            externalCreatedAt: null,
-            metadata: null,
-            deletedAt: null,
-            driveFileId,
-            rows: [],
-          },
-        ],
+        transcripts: transcripts.map((one) => transcriptOf(...one)),
         now,
       })
-    await version("v1", "doc-v1", 5000)
-    await version("v2", "doc-v2", 6000)
+  }
+
+  it("a new transcript version replaces only its source's old link, never a listed one", async () => {
+    const { store, accountId } = await fixture()
+    const { meetingId } = await pullWith(store, accountId, async () => [transcript])
+    const version = versions(store, accountId)
+    await version(5000, ["meet-version", "v1", "doc-v1"])
+    await version(6000, ["meet-version", "v2", "doc-v2"])
     expect((await shown(store, meetingId)).map(({ file_id }) => file_id)).toEqual(["doc-t", "doc-v2"])
+    await version(7000, ["meet-version", "v1", "doc-v1"])
+    expect((await shown(store, meetingId)).map(({ file_id }) => file_id)).toEqual(["doc-t", "doc-v2", "doc-v1"])
+  })
+
+  it("two transcripts of two sources in one save keep both links", async () => {
+    const { store, accountId } = await fixture()
+    const { meetingId } = await pullWith(store, accountId, async () => [])
+    const version = versions(store, accountId)
+    await version(5000, ["meet", "a1", "doc-a"], ["bot", "b1", "doc-b"])
+    await version(6000, ["bot", "b2", "doc-b2"])
+    expect((await shown(store, meetingId)).map(({ file_id }) => file_id)).toEqual(["doc-a", "doc-b2"])
+  })
+
+  it("a transcript version naming a listed file keeps the listing's role and title", async () => {
+    const { store, accountId } = await fixture()
+    const { meetingId } = await pullWith(store, accountId, async () => [
+      { fileId: "doc-n", role: "notes", title: "Notes" },
+    ])
+    await versions(store, accountId)(5000, ["meet-version", "v1", "doc-n"])
+    expect(await shown(store, meetingId)).toEqual([{ file_id: "doc-n", role: "notes", title: "Notes", document: null }])
   })
 })

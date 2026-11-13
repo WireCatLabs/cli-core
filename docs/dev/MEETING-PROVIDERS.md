@@ -39,10 +39,17 @@ A service that saves a meeting's transcript, recording or notes as Drive files (
 `MeetingSource.documents(occurrenceId)`: `{ fileId, role: "transcript" | "recording" | "notes", title? }[]`. `pull`
 saves them as `MeetingSave.documents`. The store writes an `attached` link from the meeting, keyed by the Drive file
 id and not by account, so it resolves when any Drive profile imports the file (`linkAttached` in
-`src/store/sqlite/files.ts`), in either order; no migration. Links only grow: a file the service no longer lists
-stays linked, since Meet forgets a meeting's files after 30 days while the Doc stays. `meetings show` lists them as
-`documents[]`; a `search all` document hit names its meeting (`meeting`), and a transcript's hit is dropped when its
-meeting is among the hits. A file two Drive profiles imported stays unresolved (CORE-54).
+`src/store/sqlite/files.ts`), in either order; no migration.
+
+- **Listed links only grow.** A file the service no longer lists, an empty list, `null` or a failed read keeps every
+  listed link, since Meet forgets a meeting's files after 30 days while the Doc stays. A later listing of a file sets
+  its role and title.
+- **A transcript version's file** (`TranscriptInput.driveFileId`) is a `transcript` link of that transcript's source.
+  A new version of the same source that names another file replaces the link the previous version of that source
+  named; a replay of an old version replaces nothing. It never removes or changes a listed link, nor another source's.
+- **Where it shows.** `meetings show` lists the links as `documents[]`. A `search all` document hit names its meeting
+  (`meeting`) when the search read the meeting's account, and a transcript's hit is dropped when its meeting is among
+  the hits. A file two Drive profiles imported stays unresolved (CORE-54).
 
 ## A participant's phone
 
