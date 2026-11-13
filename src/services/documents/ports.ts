@@ -1,11 +1,13 @@
 import type { CliError } from "@wirecat/cli-base"
 import type { DocumentSource, SourceFile, SourceIndex, SourceSkip, SourceStatePort } from "../../documents/model.js"
+import type { SourceQuery } from "../../documents/scope.js"
 export interface SyncOptions<M extends SourceFile> {
   source: DocumentSource<M> | undefined
   index: SourceIndex<M>
   state: SourceStatePort<M>
   principal: string
   roots: string[]
+  query?: SourceQuery<M>
   textLimit: number
   max: number
   maxEntries: number

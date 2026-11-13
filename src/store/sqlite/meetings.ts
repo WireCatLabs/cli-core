@@ -20,6 +20,7 @@ import type {
   MeetingSeriesHistoryStore,
   MeetingStatsStore,
   MeetingStore,
+  MeetingTranscriptDocumentStore,
   MeetingTranscriptReceiptStore,
   MeetingTranscriptStore,
   NewRecord,
@@ -52,6 +53,7 @@ import { meetingReviewOver } from "./meeting-review.js"
 import { meetingSeriesHistoryOver } from "./meeting-series-history.js"
 import { meetingStatsOver } from "./meeting-stats.js"
 import { invalidateMeetingStems } from "./meeting-stem-state.js"
+import { attachTranscriptDocument, meetingTranscriptDocumentsOver } from "./meeting-transcript-documents.js"
 import { meetingOf, transcriptOf, transcriptRowOf } from "./meeting-values.js"
 import type { StoreContext } from "./open.js"
 import { linkPhones } from "./person-match-scan.js"
@@ -488,8 +490,10 @@ const saveTranscripts = (
     `INSERT INTO meeting_transcript_rows (meeting_transcript_id, position, start_ms, end_ms, speaker_participant_id,
        speaker_name, text, normalized_text, metadata, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
-  for (const { rows, ...t } of transcripts) {
-    if (t.contentHash !== null && sameContent.get(meetingId, t.source, t.contentHash)) {
+  for (const { rows, driveFileId, ...t } of transcripts) {
+    const replayed = t.contentHash !== null && Boolean(sameContent.get(meetingId, t.source, t.contentHash))
+    if (driveFileId !== undefined) attachTranscriptDocument(database, meetingId, driveFileId, now, !replayed)
+    if (replayed) {
       counts.replayedTranscripts++
       continue
     }
@@ -805,7 +809,8 @@ export type StoredMeetings = MeetingStore &
   MeetingStatsStore &
   MeetingReviewStore &
   MeetingChatLinesStore &
-  MeetingLanguageStore
+  MeetingLanguageStore &
+  MeetingTranscriptDocumentStore
 
 /** The `MeetingStore` of `src/meetings/` over the shared store. */
 export const meetingStoreOver = (context: StoreContext): StoredMeetings => {
@@ -825,6 +830,7 @@ export const meetingStoreOver = (context: StoreContext): StoredMeetings => {
     ...meetingHitIndexOver(context),
     ...meetingContextLinksOver(context),
     ...meetingLanguagesOver(context),
+    ...meetingTranscriptDocumentsOver(context),
     async linkCallers(provider, externalIds) {
       const marks = externalIds.map(() => "?").join(", ")
       const ids = database

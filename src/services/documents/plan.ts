@@ -1,11 +1,12 @@
 import { createHash } from "node:crypto"
 import { CliError } from "@wirecat/cli-base"
 import type { DocumentSource, SourceFile, SourceState, SourceWalk, SourceWork } from "../../documents/model.js"
-import { within } from "../../documents/scope.js"
+import { inScope, type SourceQuery, within } from "../../documents/scope.js"
 import type { SyncOptions } from "./ports.js"
-export const scopeHash = (roots: string[]) =>
+// Without a query the hash stays what it was, so a profile that never set one keeps its checkpoint.
+export const scopeHash = (roots: string[], query?: Pick<SourceQuery, "key" | "mode">) =>
   createHash("sha256")
-    .update(JSON.stringify([...roots].sort()))
+    .update(JSON.stringify(query ? [[...roots].sort(), query.mode, query.key] : [...roots].sort()))
     .digest("hex")
 export const changedSince = (previous: SourceFile, file: SourceFile) =>
   previous.version !== file.version ||
@@ -30,11 +31,11 @@ export const planDocuments = async <M extends SourceFile>(
   abandoned: string[] = [],
   walks?: WalkStore<M>,
 ): Promise<NonNullable<SourceState<M>["pending"]>> => {
-  const { isFolder, skipReason, retryable, maxEntries: MAX_ENTRIES, errorOf } = options
+  const { isFolder, skipReason, retryable, maxEntries: MAX_ENTRIES, errorOf, query } = options
   const tooManyEntries = () =>
     options.limitError?.() ?? new CliError("validation_error", `selected folders exceed the ${MAX_ENTRIES} entry limit`)
-  const scope = scopeHash(roots)
-  if (!roots.length)
+  const scope = scopeHash(roots, query)
+  if (!roots.length && query?.mode !== "include")
     return {
       scope,
       cursor: state.cursor ?? "",
@@ -42,7 +43,12 @@ export const planDocuments = async <M extends SourceFile>(
       skipped: [],
       jobs: [...new Set([...Object.keys(state.documents), ...abandoned])].map((id) => ({ id, kind: "remove" })),
     }
-  if (!source) throw new CliError("configuration_error", "selected folders require an authenticated source")
+  if (!source)
+    throw new CliError("configuration_error", "selected folders or a saved query require an authenticated source")
+  if (query?.mode === "include" && !query.list)
+    throw new CliError("configuration_error", "a query that includes files must list them")
+  // Listed before the walk: a failure here then costs no folder already walked.
+  const found = query?.mode === "include" && query.list ? await query.list() : []
   const initial = !state.cursor || scope !== state.scope
   const resumed = initial ? walks?.read(scope) : undefined
   const cursor = initial ? (resumed?.cursor ?? (await source.startToken())) : (state.cursor as string)
@@ -156,12 +162,22 @@ export const planDocuments = async <M extends SourceFile>(
     }
     for (const folder of entering) if (!visited.has(folder.id) && within(folder, roots, folders)) await crawl(folder)
   }
+  const matched = new Set<string>()
+  for (const file of found) {
+    if (isFolder(file) || file.trashed || !query?.matches(file) || matched.has(file.id)) continue
+    if (!files.has(file.id) && ++discovered > MAX_ENTRIES) throw tooManyEntries()
+    // Listed again on every sync, so only a new or changed file is work; a skipped one keeps its skip.
+    const prior = state.documents[file.id]?.metadata ?? state.skipped.find((item) => item.id === file.id)?.file
+    if (initial || !prior || changedSince(prior, file)) changed.add(file.id)
+    files.set(file.id, file)
+    matched.add(file.id)
+  }
   const jobs: SourceWork<M>[] = []
   const skipped: SourceState<M>["skipped"] = []
   for (const root of roots)
     if (folders[root]?.trashed) skipped.push({ id: root, reason: "selected folder is unavailable" })
   for (const [id, file] of files) {
-    if (!within(file, roots, folders)) continue
+    if (!inScope(file, roots, folders, matched, query)) continue
     const previousSkip = state.skipped.find((item) => item.id === id)
     const reason = skipReason(file)
     const retry = previousSkip && !reason && retryable(previousSkip, limit)
@@ -185,11 +201,18 @@ export const planDocuments = async <M extends SourceFile>(
   }
   for (const id of new Set([...Object.keys(state.documents), ...abandoned])) {
     const file = files.get(id)
-    if (!file || !within(file, roots, folders)) jobs.push({ id, kind: "remove" })
+    if (!file || !inScope(file, roots, folders, matched, query)) jobs.push({ id, kind: "remove" })
   }
   // Only retain metadata for selected ancestry; the account-wide feed includes unrelated folders.
   const scopedFolders = Object.fromEntries(
     Object.entries(folders).filter(([, file]) => within(file, roots, folders) || roots.includes(file.id)),
   )
-  return { scope, cursor: finalCursor, folders: scopedFolders, jobs, skipped }
+  return {
+    scope,
+    cursor: finalCursor,
+    folders: scopedFolders,
+    jobs,
+    skipped,
+    ...(query?.mode === "include" ? { matched: [...matched] } : {}),
+  }
 }

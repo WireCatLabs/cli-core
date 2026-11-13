@@ -26,8 +26,8 @@ export type LinkKind = (typeof LINK_KINDS)[number]
 /** Where a caller may say a link came from. */
 export const LINK_ORIGINS = ["file", "owner", "suggested", "message"] as const
 
-/** Where a stored link came from: an origin a caller gives, or `calendar`, which only the store writes. */
-export const LINK_SOURCES = [...LINK_ORIGINS, "calendar"] as const
+/** Where a stored link came from: an origin a caller gives, or `calendar` or `meeting`, which only the store writes. */
+export const LINK_SOURCES = [...LINK_ORIGINS, "calendar", "meeting"] as const
 
 export { RELATION_KINDS } from "../../domain/relations.js"
 

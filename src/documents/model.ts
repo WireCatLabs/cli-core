@@ -75,7 +75,10 @@ export interface SourceState<M extends SourceFile = SourceFile> {
     folders: Record<string, M>
     jobs: SourceWork<M>[]
     skipped: SourceSkip<M>[]
+    /** Files a saved query found, in scope wherever they sit. */
+    matched?: string[]
   }
+  matched?: string[]
   lastSync?: string
 }
 export interface PictureWriter {

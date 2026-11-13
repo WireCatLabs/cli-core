@@ -35,3 +35,8 @@ export interface TranscriptAppendReceipt {
 export interface MeetingTranscriptReceiptStore {
   appendTranscriptsWithReceipt(input: TranscriptAppend): Promise<TranscriptAppendReceipt>
 }
+
+/** The meeting whose transcript a Drive document is, by the `driveFileId` the meeting's transcript named. */
+export interface MeetingTranscriptDocumentStore {
+  transcriptMeetings(documentIds: readonly number[]): Promise<Map<number, number>>
+}

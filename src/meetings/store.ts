@@ -36,6 +36,11 @@ export interface TranscriptRowInput
 }
 export interface TranscriptInput extends Omit<NewRecord<Transcript>, "meetingId" | "supersededAt"> {
   rows: TranscriptRowInput[]
+  /**
+   * The Drive file the meeting service saved this transcript as (Meet's `docsDestination.document`). Drive may import
+   * the same Google Doc, before or after; the store joins the two, so search shows the meeting once.
+   */
+  driveFileId?: string
 }
 export interface ChatInput extends Omit<NewRecord<ChatLine>, "meetingId" | "senderParticipantId"> {
   senderParticipantPosition: number | null

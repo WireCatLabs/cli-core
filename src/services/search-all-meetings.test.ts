@@ -5,10 +5,12 @@ import { CliError } from "@wirecat/cli-base"
 import * as v from "valibot"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { allHitItem } from "../cli/messenger/search-answers.js"
+import type { SourceFile } from "../documents.js"
 import { hit as hitEntity } from "../entities/hit.js"
 import { type MeetingSave, READ_BUDGET_EXCEEDED } from "../meetings/index.js"
 import { sampleMeeting } from "../meetings/testing/index.js"
 import { type AccountKey, type MessageStore, openStore } from "../store/store.js"
+import { documentIngestion } from "./documents/ingestion.js"
 import { refreshMeetingIndex } from "./meeting-hit-search.js"
 import { readMeetingPassage } from "./meeting-passage-format.js"
 import type { SearchFound } from "./messages.js"
@@ -513,5 +515,109 @@ describe("meetings in search all", () => {
     })
     expect(texts(found.items)).toEqual(["needle from alice"])
     expect(found.meetings).toBeUndefined()
+  })
+})
+
+describe("a Meet transcript that Drive also imported", () => {
+  const drive = (store: MessageStore) =>
+    documentIngestion<SourceFile>(store, {
+      provider: "google-drive",
+      externalId: (id) => `${id}.md`,
+      catalogInput: (file) => ({
+        externalId: `${file.id}.md`,
+        name: file.name,
+        parents: [],
+        kind: "file",
+        url: file.url,
+      }),
+      frontMatter: (content) => ({
+        source: "google-drive",
+        fileId: content.metadata.id,
+        sourceUrl: content.metadata.url,
+      }),
+    })
+  const transcriptDoc = async (store: MessageStore, text: string) => {
+    const file: SourceFile = {
+      id: "doc-transcript-1",
+      name: "Invented call - Transcript",
+      mime: "application/vnd.google-apps.document",
+      parents: [],
+      url: "https://docs.google.com/document/d/doc-transcript-1",
+      trashed: false,
+      canDownload: true,
+    }
+    const ref = await drive(store).save(
+      "owner@example.invalid",
+      { metadata: file, text, markdown: text, tabs: [] },
+      text,
+    )
+    return Number(ref.slice("document:".length))
+  }
+  const withDocument = async (save: Awaited<ReturnType<typeof fixture>>["save"], store: MessageStore) => {
+    const saved = await save(alice, "meet-1", ["needle in the transcript"])
+    const sample = sampleMeeting()
+    await store.meetings.saveMeeting({
+      meeting: { ...sample.meeting, accountId: saved.accountId, externalId: "meet-1", title: "Invented call" },
+      transcripts: [
+        {
+          ...sample.transcripts[0],
+          source: "meet",
+          contentHash: "meet-transcript",
+          driveFileId: "doc-transcript-1",
+          rows: [
+            { ...sample.transcripts[0].rows[0], speakerParticipantPosition: null, text: "needle in the transcript" },
+          ],
+        },
+      ],
+      now: 4000,
+    })
+    await refreshMeetingIndex(store.meetings, saved.accountId)
+    return saved
+  }
+  const asked = meetingsOnly({ only: ["notes", "meetings"] })
+
+  it("shows the meeting once, whichever of the two the store holds first", async () => {
+    for (const driveFirst of [true, false]) {
+      const { store, save } = await fixture()
+      const document = driveFirst ? await transcriptDoc(store, "needle in the transcript") : undefined
+      const saved = await withDocument(save, store)
+      const id = document ?? (await transcriptDoc(store, "needle in the transcript"))
+      expect(await store.meetings.transcriptMeetings([id])).toEqual(new Map([[id, saved.meeting.id]]))
+      const found = await searchAll(store, caller, asked)
+      expect(found.items.filter((item) => item.ref === `document:${id}`)).toEqual([])
+      expect(meetingHits(found.items).length).toBeGreaterThan(0)
+    }
+  })
+
+  it("resolves on a replay after Drive stored the file, and a new version naming another file replaces the link", async () => {
+    const { store, save } = await fixture()
+    const saved = await withDocument(save, store)
+    const id = await transcriptDoc(store, "needle in the transcript")
+    expect(await store.meetings.transcriptMeetings([id])).toEqual(new Map([[id, saved.meeting.id]]))
+    await withDocument(save, store)
+    expect(await store.meetings.transcriptMeetings([id])).toEqual(new Map([[id, saved.meeting.id]]))
+    const sample = sampleMeeting()
+    await store.meetings.saveMeeting({
+      meeting: { ...sample.meeting, accountId: saved.accountId, externalId: "meet-1", title: "Invented call" },
+      transcripts: [
+        {
+          ...sample.transcripts[0],
+          source: "meet",
+          contentHash: "meet-transcript-2",
+          driveFileId: "doc-transcript-2",
+          rows: [{ ...sample.transcripts[0].rows[0], speakerParticipantPosition: null, text: "a newer version" }],
+        },
+      ],
+      now: 5000,
+    })
+    expect(await store.meetings.transcriptMeetings([id])).toEqual(new Map())
+  })
+
+  it("keeps the document's hit when the meeting is not among the hits", async () => {
+    const { store, save } = await fixture()
+    const id = await transcriptDoc(store, "needle and a haystack only the document has")
+    await withDocument(save, store)
+    const found = await searchAll(store, caller, { ...asked, text: "haystack" })
+    expect(found.items.map(({ ref }) => ref)).toEqual([`document:${id}`])
   })
 })
