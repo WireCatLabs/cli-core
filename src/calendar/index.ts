@@ -45,9 +45,12 @@ export {
   EVENTS_QUERY,
   EVENTS_QUERY_NOTE,
   eventAnswer,
+  eventIdOf,
   eventOf,
   eventsAnswer,
   eventsFilter,
+  localDate,
+  plusDays,
   type ReadAccount,
   sourceAccounts,
 } from "./reads.js"

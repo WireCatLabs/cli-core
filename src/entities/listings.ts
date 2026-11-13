@@ -50,7 +50,7 @@ export const documentEntryDetails = v.strictObject({
   /** The whole text's length, in characters. */
   text_length: count,
   /** More text follows `text`: read it with a larger offset. */
-  truncated: v.boolean(),
+  has_more: v.boolean(),
   extraction: v.nullable(text),
   extraction_error: v.nullable(text),
   language: v.nullable(text),
@@ -71,10 +71,13 @@ export const documentSource = v.strictObject({
   folders: v.array(v.strictObject({ path: text, name: text, depth: count, count })),
 })
 
+/** The person the store links a name or address to, as `meetings participants` gives it. */
+const personLink = v.strictObject({ ref: reference, name: v.nullable(text) })
+
 const participant = v.strictObject({
   name: v.nullable(text),
   email: v.nullable(text),
-  person: v.nullable(reference),
+  person: v.nullable(personLink),
   organizer: v.boolean(),
 })
 
@@ -147,13 +150,16 @@ export const meetingEntryDetails = v.strictObject({
           offset_ms: count,
           end_ms: count,
           speaker: v.nullable(text),
-          person: v.nullable(reference),
+          person: v.nullable(personLink),
           text,
         }),
       ),
     }),
   ),
-  findings: v.array(v.strictObject({ id, status: text, findings: count })),
+  /** `findings` cite the row's meetings; `pending` of them wait for the owner's decision. */
+  findings: v.array(
+    v.strictObject({ id, status: v.picklist(["proposed", "reviewed"]), findings: count, pending: count }),
+  ),
 })
 
 /**

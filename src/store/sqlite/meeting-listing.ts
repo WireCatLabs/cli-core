@@ -1,5 +1,10 @@
 import { CliError } from "@wirecat/cli-base"
-import { joinKeyOf, MEETING_FINDINGS_KIND, parseMeetingReference } from "../../meetings/index.js"
+import {
+  formatMeetingReference,
+  joinKeyOf,
+  MEETING_FINDINGS_KIND,
+  parseMeetingReference,
+} from "../../meetings/index.js"
 import type { SqlValue } from "../driver.js"
 import { fold } from "../normalize.js"
 import { eventWindow } from "./calendar-events.js"
@@ -24,12 +29,13 @@ const JOINED = `(SELECT ce.event_id FROM calendar_entries ce JOIN events je ON j
   ORDER BY abs(je.starts_at - m.started_at), je.id LIMIT 1)`
 
 /**
- * Each meeting's row: the calendar event it is linked to; else the event it shares a room and a time with; else the
- * event made from it (`origin = 'auto'`); else its own row.
+ * Each meeting's row: the event it is linked to, when a calendar holds it or the owner made it; else the event it
+ * shares a room and a time with; else the event made from it (`origin = 'auto'`); else its own row. A link the owner
+ * or a calendar made outranks a room match, which is only a guess.
  */
 const HOME = `CASE
-  WHEN m.event_id IS NOT NULL AND EXISTS (SELECT 1 FROM calendar_entries hc WHERE hc.event_id = m.event_id)
-    AND EXISTS (SELECT 1 FROM events he WHERE he.id = m.event_id AND he.deleted_at IS NULL) THEN m.event_id
+  WHEN EXISTS (SELECT 1 FROM events he WHERE he.id = m.event_id AND he.deleted_at IS NULL
+    AND (he.origin <> 'auto' OR EXISTS (SELECT 1 FROM calendar_entries hc WHERE hc.event_id = he.id))) THEN m.event_id
   ELSE coalesce(${JOINED}, (SELECT he.id FROM events he WHERE he.id = m.event_id AND he.deleted_at IS NULL)) END`
 
 export interface MeetingListFilter {
@@ -67,8 +73,8 @@ export interface MeetingRowSource {
 export interface MeetingRowParticipant {
   name: string | null
   email: string | null
-  /** `person:<id>` when the store links the address or account to a person. */
-  person: string | null
+  /** The person the store links the address or account to. */
+  person: { ref: string; name: string | null } | null
   organizer: boolean
 }
 
@@ -102,7 +108,7 @@ export interface MeetingRow {
   /** Findings in batches still waiting for the owner that cite one of the row's meetings. */
   pendingFindings: number
   /** Every findings batch citing one of its meetings, newest first, with how many of its findings do. */
-  findings: { id: string; status: "proposed" | "reviewed"; findings: number }[]
+  findings: { id: string; status: "proposed" | "reviewed"; findings: number; pending: number }[]
 }
 
 export interface ListedAccount {
@@ -142,7 +148,6 @@ interface Built {
   params: SqlValue[]
 }
 
-/** The rows of a window, before any filter: `type`, `id`, its times, and the meetings on it. */
 const rowsOf = (context: StoreContext, filter: MeetingListFilter): Built => {
   const { database } = context
   const window = eventWindow(database, filter)
@@ -168,17 +173,35 @@ const rowsOf = (context: StoreContext, filter: MeetingListFilter): Built => {
     ownParams.push(filter.to)
   }
   const and = (clauses: string[]) => clauses.map((clause) => ` AND ${clause}`).join("")
+  const groupWindow: string[] = []
+  const groupParams: SqlValue[] = []
+  if (filter.from !== undefined) {
+    groupWindow.push("ended_at > ?")
+    groupParams.push(filter.from)
+  }
+  if (filter.to !== undefined) {
+    groupWindow.push("started_at < ?")
+    groupParams.push(filter.to)
+  }
+  // An event whose meeting runs into the window is on it, though the event itself ended before the window starts.
+  const eventInWindow =
+    window.clauses.length === 0
+      ? ""
+      : ` AND ((${window.clauses.join(" AND ")}) OR e.id IN (SELECT event_id FROM mg WHERE 1${and(groupWindow)}))`
   return {
     sql: `WITH mh AS MATERIALIZED (
-        SELECT m.id AS meeting_id, m.account_id, ${HOME} AS event_id FROM meetings m
+        SELECT m.id AS meeting_id, m.account_id, m.started_at, coalesce(m.ended_at, m.started_at + 1) AS ended_at,
+          ${HOME} AS event_id FROM meetings m
         WHERE m.deleted_at IS NULL AND m.started_at IS NOT NULL${and(meetingWindow)}
       ),
       mg AS MATERIALIZED (
-        SELECT event_id, json_group_array(meeting_id) AS meetings FROM mh WHERE event_id IS NOT NULL GROUP BY event_id
+        SELECT event_id, json_group_array(meeting_id) AS meetings, min(started_at) AS started_at,
+          max(ended_at) AS ended_at
+        FROM mh WHERE event_id IS NOT NULL GROUP BY event_id
       ),
       u AS (
         SELECT 'event' AS type, e.id, e.starts_at AS starts_at, e.ends_at AS ends_at, e.title FROM events e
-        WHERE e.deleted_at IS NULL${and(window.clauses)}
+        WHERE e.deleted_at IS NULL${eventInWindow}
           AND (EXISTS (SELECT 1 FROM calendar_entries rc WHERE rc.event_id = e.id)
             OR e.id IN (SELECT event_id FROM mg) OR e.origin = 'owner')
         UNION ALL
@@ -186,26 +209,26 @@ const rowsOf = (context: StoreContext, filter: MeetingListFilter): Built => {
         WHERE mh.event_id IS NULL${and(ownWindow)}
       ),
       r AS (
-        SELECT u.*, CASE WHEN u.type = 'meeting' THEN json_array(u.id) ELSE coalesce(mg.meetings, '[]') END AS meetings,
-          mg.event_id IS NOT NULL AS has_meeting
+        SELECT u.*, CASE WHEN u.type = 'meeting' THEN json_array(u.id) ELSE coalesce(mg.meetings, '[]') END AS meetings
         FROM u LEFT JOIN mg ON u.type = 'event' AND mg.event_id = u.id
       )`,
-    params: [...meetingParams, ...window.params, ...ownParams],
+    params: [...meetingParams, ...window.params, ...(window.clauses.length === 0 ? [] : groupParams), ...ownParams],
   }
 }
 
-/** The meetings on a row of `r`, a JSON list of their ids. */
 const ROW_MEETINGS = "r.meetings"
-
-const KIND = `(CASE
-  WHEN r.type = 'meeting' THEN (SELECT CASE WHEN a.provider = 'phone' THEN 'call' ELSE 'meeting' END
-    FROM meetings km JOIN accounts a ON a.id = km.account_id WHERE km.id = r.id)
-  WHEN EXISTS (SELECT 1 FROM calendar_entries kc WHERE kc.event_id = r.id AND kc.event_type = 'call') THEN 'call'
-  WHEN r.has_meeting THEN 'meeting'
-  ELSE 'event' END)`
 
 const inRowMeetings = (condition: string) =>
   `EXISTS (SELECT 1 FROM json_each(${ROW_MEETINGS}) rm WHERE ${condition.replaceAll("{m}", "rm.value")})`
+
+const PHONE_MEETING =
+  "(SELECT a.provider FROM meetings km JOIN accounts a ON a.id = km.account_id WHERE km.id = {m}) = 'phone'"
+
+const KIND = `(CASE
+  WHEN (r.type = 'event' AND EXISTS (SELECT 1 FROM calendar_entries kc WHERE kc.event_id = r.id
+      AND kc.deleted_at IS NULL AND kc.event_type = 'call')) OR ${inRowMeetings(PHONE_MEETING)} THEN 'call'
+  WHEN json_array_length(${ROW_MEETINGS}) > 0 THEN 'meeting'
+  ELSE 'event' END)`
 
 const filtersOf = (database: StoreContext["database"], filter: MeetingListFilter): Built => {
   const clauses: string[] = []
@@ -228,7 +251,7 @@ const filtersOf = (database: StoreContext["database"], filter: MeetingListFilter
     clauses.push(
       `((r.type = 'event' AND (EXISTS (SELECT 1 FROM calendar_entries pc JOIN calendar_entry_participants pp
             ON pp.entry_id = pc.id JOIN identity_links pl ON pl.identity_id = pp.identity_id
-          WHERE pc.event_id = r.id AND pl.person_id IN (SELECT value FROM json_each(?)))
+          WHERE pc.event_id = r.id AND pc.deleted_at IS NULL AND pp.resource = 0 AND pl.person_id IN (SELECT value FROM json_each(?)))
         OR EXISTS (SELECT 1 FROM links cl WHERE cl.from_type = 'event' AND cl.from_id = r.id AND cl.to_type = 'person'
           AND cl.kind = ${linkKind("related-to")} AND cl.role = '${COUNTERPART_ROLE}'
           AND cl.to_id IN (SELECT value FROM json_each(?)))))
@@ -250,24 +273,35 @@ const filtersOf = (database: StoreContext["database"], filter: MeetingListFilter
   return { sql: clauses.length ? `WHERE ${clauses.join(" AND ")}` : "", params }
 }
 
+interface CitingBatch {
+  id: string
+  status: "proposed" | "reviewed"
+  cited: Map<number, number>
+  /** Of those, the findings the owner has not decided yet. */
+  pending: Map<number, number>
+}
+
 /** Every findings batch citing one of these meetings, with how many of its findings cite each. */
-const citingBatches = (
-  database: StoreContext["database"],
-  meetingIds: ReadonlySet<number>,
-): { id: string; status: "proposed" | "reviewed"; cited: Map<number, number> }[] => {
+const citingBatches = (database: StoreContext["database"], meetingIds: ReadonlySet<number>): CitingBatch[] => {
   if (meetingIds.size === 0) return []
+  // A batch is filed under the account of the meetings it reads, so only those accounts' batches are parsed.
   const batches = database
-    .prepare("SELECT id, status, payload FROM proposed_actions WHERE kind = ? ORDER BY id DESC")
-    .all(MEETING_FINDINGS_KIND)
-  const found: { id: string; status: "proposed" | "reviewed"; cited: Map<number, number> }[] = []
+    .prepare(
+      `SELECT id, status, payload FROM proposed_actions WHERE kind = ? AND account_id IN
+         (SELECT DISTINCT account_id FROM meetings WHERE id IN (SELECT value FROM json_each(?))) ORDER BY id DESC`,
+    )
+    .all(MEETING_FINDINGS_KIND, ids([...meetingIds]))
+  const found: CitingBatch[] = []
   for (const batch of batches) {
-    let payload: { findings?: { evidence?: { reference?: unknown }[] }[] }
+    let payload: { findings?: { id?: unknown; evidence?: { reference?: unknown }[] }[]; decided?: { id?: unknown }[] }
     try {
       payload = JSON.parse(String(batch.payload))
     } catch {
       continue
     }
     const cited = new Map<number, number>()
+    const pending = new Map<number, number>()
+    const decided = new Set((payload.decided ?? []).map(({ id }) => id))
     for (const finding of payload.findings ?? []) {
       const meetings = new Set<number>()
       for (const evidence of finding.evidence ?? []) {
@@ -277,10 +311,16 @@ const citingBatches = (
           if (meetingIds.has(meeting)) meetings.add(meeting)
         } catch {}
       }
-      for (const meeting of meetings) cited.set(meeting, (cited.get(meeting) ?? 0) + 1)
+      const open = batch.status === "proposed" && !decided.has(finding.id)
+      for (const meeting of meetings) {
+        cited.set(meeting, (cited.get(meeting) ?? 0) + 1)
+        if (open) pending.set(meeting, (pending.get(meeting) ?? 0) + 1)
+      }
     }
-    if (cited.size > 0)
-      found.push({ id: String(batch.id), status: batch.status === "proposed" ? "proposed" : "reviewed", cited })
+    if (cited.size > 0) {
+      const status = batch.status === "proposed" ? "proposed" : "reviewed"
+      found.push({ id: String(batch.id), status, cited, pending })
+    }
   }
   return found
 }
@@ -303,8 +343,8 @@ const hydrate = (database: StoreContext["database"], page: Page[]): MeetingRow[]
   )
   const entries = database
     .prepare(
-      `SELECT ce.id, ce.event_id, ce.join_url, ce.timezone, ce.status, ce.deleted_at, ce.event_type, c.title AS calendar, a.provider,
-         a.external_id AS account FROM calendar_entries ce JOIN calendars c ON c.id = ce.calendar_id
+      `SELECT ce.id, ce.event_id, ce.join_url, ce.timezone, ce.status, ce.deleted_at, ce.event_type,
+         c.title AS calendar, a.provider, a.external_id AS account FROM calendar_entries ce JOIN calendars c ON c.id = ce.calendar_id
          JOIN accounts a ON a.id = c.account_id WHERE ce.event_id IN (SELECT value FROM json_each(?))
          ORDER BY ce.deleted_at IS NOT NULL, ce.id`,
     )
@@ -327,24 +367,25 @@ const hydrate = (database: StoreContext["database"], page: Page[]): MeetingRow[]
   )
   const people = database
     .prepare(
-      `SELECT 'event' AS type, ce.event_id AS owner, p.name, p.email, p.organizer, l.person_id
+      `SELECT 'event' AS type, ce.event_id AS owner, p.name, p.email, p.organizer, l.person_id, pn.name AS person_name
          FROM calendar_entries ce JOIN calendar_entry_participants p ON p.entry_id = ce.id
-         LEFT JOIN identity_links l ON l.identity_id = p.identity_id
+         LEFT JOIN identity_links l ON l.identity_id = p.identity_id LEFT JOIN persons pn ON pn.id = l.person_id
          WHERE ce.event_id IN (SELECT value FROM json_each(?)) AND ce.deleted_at IS NULL AND p.resource = 0
        UNION ALL
-       SELECT 'meeting', mp.meeting_id, mp.display_name, mp.email, mp.role = 'host', l.person_id
+       SELECT 'meeting', mp.meeting_id, mp.display_name, mp.email, mp.role = 'host', l.person_id, pn.name
          FROM meeting_participants mp LEFT JOIN identity_links l ON l.identity_id = mp.identity_id
+         LEFT JOIN persons pn ON pn.id = l.person_id
          WHERE mp.meeting_id IN (SELECT value FROM json_each(?))
        UNION ALL
-       SELECT 'event', cl.from_id, pe.name, NULL, 0, cl.to_id FROM links cl JOIN persons pe ON pe.id = cl.to_id
+       SELECT 'event', cl.from_id, pe.name, NULL, 0, cl.to_id, pe.name FROM links cl JOIN persons pe ON pe.id = cl.to_id
          WHERE cl.from_type = 'event' AND cl.from_id IN (SELECT value FROM json_each(?)) AND cl.to_type = 'person'
            AND cl.kind = ${linkKind("related-to")} AND cl.role = '${COUNTERPART_ROLE}'`,
     )
     .all(ids(eventIds), ids(meetingIds), ids(eventIds))
   const documents = database
     .prepare(
-      `SELECT 'meeting' AS type, l.from_id AS owner, l.to_id, l.role, d.title FROM links l JOIN documents d ON d.id = l.to_id
-         WHERE l.from_type = 'meeting' AND l.from_id IN (SELECT value FROM json_each(?)) AND l.kind = 'attached'
+      `SELECT 'meeting' AS type, l.from_id AS owner, l.to_id, l.role, d.title
+         FROM links l JOIN documents d ON d.id = l.to_id WHERE l.from_type = 'meeting' AND l.from_id IN (SELECT value FROM json_each(?)) AND l.kind = 'attached'
            AND l.to_type = 'document' AND d.deleted_at IS NULL
        UNION ALL
        SELECT 'event', ce.event_id, l.to_id, l.role, d.title FROM links l JOIN calendar_entries ce ON ce.id = l.from_id
@@ -354,6 +395,7 @@ const hydrate = (database: StoreContext["database"], page: Page[]): MeetingRow[]
     .all(ids(meetingIds), ids(eventIds))
   const batches = citingBatches(database, new Set(meetingIds))
   return page.map(({ type, id, meetingIds: own }) => {
+    const countOf = (counts: Map<number, number>) => own.reduce((sum, meeting) => sum + (counts.get(meeting) ?? 0), 0)
     const held = own.flatMap((one) => {
       const row = meetings.get(one)
       return row ? [row] : []
@@ -364,7 +406,8 @@ const hydrate = (database: StoreContext["database"], page: Page[]): MeetingRow[]
     const copies = type === "event" ? entries.filter((entry) => Number(entry.event_id) === id) : []
     const live = copies.filter((entry) => entry.deleted_at == null)
     const sources: MeetingRowSource[] = [
-      ...copies.map((entry) => ({
+      // A copy deleted in its calendar names the source only when no live copy is left.
+      ...(live.length > 0 ? live : copies).map((entry) => ({
         provider: String(entry.provider),
         account: String(entry.account),
         via: "calendar" as const,
@@ -376,7 +419,11 @@ const hydrate = (database: StoreContext["database"], page: Page[]): MeetingRow[]
         account: String(meeting.account),
         via: "meeting" as const,
         calendar: null,
-        ref: `meeting:${meeting.account_id}/${meeting.id}`,
+        ref: formatMeetingReference({
+          type: "meeting",
+          accountId: Number(meeting.account_id),
+          meetingId: Number(meeting.id),
+        }),
       })),
     ].filter(
       (source, index, all) =>
@@ -401,7 +448,7 @@ const hydrate = (database: StoreContext["database"], page: Page[]): MeetingRow[]
       participants.set(key, {
         name: held?.name ?? str(person.name),
         email: held?.email ?? email,
-        person: ref,
+        person: ref === null ? null : { ref, name: str(person.person_name) },
         organizer: (held?.organizer ?? false) || Number(person.organizer) === 1,
       })
     }
@@ -420,20 +467,16 @@ const hydrate = (database: StoreContext["database"], page: Page[]): MeetingRow[]
     const startsAt = num(event ? event.starts_at : first?.started_at)
     // The same order as KIND, which a filter by kind reads in SQL.
     const kind: MeetingRowKind =
-      type === "meeting"
-        ? first?.provider === "phone"
-          ? "call"
-          : "meeting"
-        : copies.some((entry) => entry.event_type === "call")
-          ? "call"
-          : held.length > 0
-            ? "meeting"
-            : "event"
+      live.some((entry) => entry.event_type === "call") || held.some((meeting) => meeting.provider === "phone")
+        ? "call"
+        : held.length > 0
+          ? "meeting"
+          : "event"
     return {
       type,
       id,
       kind,
-      title: str(event?.title ?? first?.title) ?? str(first?.title),
+      title: str(event?.title ?? first?.title),
       startsAt,
       endsAt: num(event ? event.ends_at : first?.ended_at),
       allDay: Number(event?.all_day ?? 0) === 1,
@@ -458,12 +501,10 @@ const hydrate = (database: StoreContext["database"], page: Page[]): MeetingRow[]
       hasTranscript: held.some((meeting) => Number(meeting.has_transcript) === 1),
       hasSummary: held.some((meeting) => Number(meeting.has_summary) === 1),
       documents: [...linked.values()],
-      pendingFindings: batches
-        .filter(({ status }) => status === "proposed")
-        .reduce((sum, { cited }) => sum + own.reduce((mine, meeting) => mine + (cited.get(meeting) ?? 0), 0), 0),
-      findings: batches.flatMap(({ id, status, cited }) => {
-        const findings = own.reduce((mine, meeting) => mine + (cited.get(meeting) ?? 0), 0)
-        return findings > 0 ? [{ id, status, findings }] : []
+      pendingFindings: batches.reduce((sum, { pending }) => sum + countOf(pending), 0),
+      findings: batches.flatMap(({ id, status, cited, pending }) => {
+        const findings = countOf(cited)
+        return findings > 0 ? [{ id, status, findings, pending: countOf(pending) }] : []
       }),
     }
   })
@@ -537,18 +578,16 @@ export const meetingListingOver = (context: StoreContext): MeetingListing => {
         }
         const event = database.prepare("SELECT * FROM events WHERE id = ? AND deleted_at IS NULL").get(eventId)
         if (!event) return undefined
-        const at = num(event.starts_at)
-        // Its own meetings are found as a list finds them: by their homes, around its time.
-        const filter: MeetingListFilter =
-          at === null ? { limit: 1, offset: 0 } : { from: at - 1, to: at + 1, limit: 1, offset: 0 }
-        const rows = rowsOf(context, filter)
-        const found = database
+        // Only a meeting linked to it or in one of its rooms can have it as home.
+        const meetingIds = database
           .prepare(
-            `${rows.sql} SELECT r.type, r.id, ${ROW_MEETINGS} AS meetings FROM r WHERE r.type = 'event' AND r.id = ?`,
+            `SELECT m.id FROM meetings m WHERE m.deleted_at IS NULL AND m.started_at IS NOT NULL
+               AND (m.event_id = ? OR m.join_key IN (SELECT join_key FROM calendar_entries WHERE event_id = ?
+                 AND join_key <> '')) AND ${HOME} = ? ORDER BY m.id`,
           )
-          .get(...rows.params, eventId)
-        const page: Page = found ? pageOf(found) : { type: "event", id: eventId, meetingIds: [] }
-        return hydrate(database, [page])[0]
+          .all(eventId, eventId, eventId)
+          .map((row) => Number(row.id))
+        return hydrate(database, [{ type: "event", id: eventId, meetingIds }])[0]
       }),
   }
 }

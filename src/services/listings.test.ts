@@ -11,23 +11,25 @@ import {
   meetingEntry,
   meetingEntryDetails,
 } from "../entities/listings.js"
-import type { EntryInput } from "../meetings/index.js"
+import type { EntryInput, MeetingFindingsInput } from "../meetings/index.js"
 import { sampleMeeting } from "../meetings/testing/index.js"
+import { openCache } from "../store/open.js"
 import { type MessageStore, openStore } from "../store/store.js"
 import { listDocumentSources, listDocuments, listMeetingEntries, showDocument, showMeetingEntry } from "./listings.js"
+import { cueEvidence } from "./meeting-evidence.js"
 
-const opened: MessageStore[] = []
+const opened: { close(): unknown }[] = []
 afterEach(async () => {
   for (const store of opened.splice(0)) await store.close()
 })
+const paths = new WeakMap<MessageStore, string>()
 
 const open = async () => {
   let at = Date.parse("2026-11-02T09:00:00Z")
-  const store = await openStore({
-    path: join(mkdtempSync(join(tmpdir(), "listings-")), "store.db"),
-    now: () => (at += 1000),
-  })
+  const path = join(mkdtempSync(join(tmpdir(), "listings-")), "store.db")
+  const store = await openStore({ path, now: () => (at += 1000) })
   opened.push(store)
+  paths.set(store, path)
   return store
 }
 
@@ -65,6 +67,10 @@ describe("the documents of every account", () => {
     const found = await listDocuments(store, documentListRequest([], { ...page, limit: 2 }))
     expect(found.total).toEqual({ value: 6, relation: "eq" })
     expect(found.items).toHaveLength(2)
+    const third = await listDocuments(store, documentListRequest([], { ...page, limit: 2, page: 3 }))
+    const second = await listDocuments(store, documentListRequest([], { ...page, limit: 2, page: 2 }))
+    const refs = [...found.items, ...second.items, ...third.items].map(({ ref }) => ref)
+    expect(new Set(refs).size).toBe(6)
     expect(found.accounts.sort()).toEqual(expect.arrayContaining(["added:owner", "google-drive:ana"]))
     const all = await listDocuments(store, documentListRequest([], page))
     for (const item of all.items) expect(v.safeParse(documentEntry, item).issues).toBeUndefined()
@@ -87,6 +93,7 @@ describe("the documents of every account", () => {
     ])
     expect((await list("budget")).sort()).toEqual(["Pasted", "Projects/Acme/brief.md", "Shared/plan.pdf"])
     expect(await list("budget source:google-drive")).toEqual(["Shared/plan.pdf"])
+    expect(await list('folder:"Projects/Acme/brief.md"')).toEqual([])
     await expect(list("source:dropbox")).rejects.toMatchObject({ code: "not_found" })
   })
 
@@ -111,7 +118,7 @@ describe("the documents of every account", () => {
     const { items } = await listDocuments(store, documentListRequest('folder:"Projects/Acme" kind:md', page))
     const shown = await showDocument(store, items[0]?.ref as string, { offset: 4, limit: 6 })
     expect(v.safeParse(documentEntryDetails, shown).issues).toBeUndefined()
-    expect(shown).toMatchObject({ text: "budget", text_offset: 4, truncated: true, tags: [], meetings: [] })
+    expect(shown).toMatchObject({ text: "budget", text_offset: 4, has_more: true, tags: [], meetings: [] })
     await expect(showDocument(store, "document:999999", { offset: 0, limit: 10 })).rejects.toMatchObject({
       code: "not_found",
     })
@@ -197,7 +204,7 @@ describe("meetings, calls and events as one row per real meeting", () => {
         series: { ...base.meeting.series, externalId: "adhoc" },
       } as typeof base.meeting,
     })
-    return { store, zoom, zoomed, alone }
+    return { store, zoom, zoomed, alone, base }
   }
   const month = "started_at:[2026-11-01 TO 2026-12-01}"
 
@@ -260,5 +267,88 @@ describe("meetings, calls and events as one row per real meeting", () => {
     ).rejects.toMatchObject({
       code: "not_found",
     })
+  })
+
+  it("keeps a meeting that runs into the window on its event's row, though the event ended before it", async () => {
+    const { store, zoom, base } = await setup()
+    await store.meetings.saveMeeting({
+      ...base,
+      transcripts: [],
+      meeting: {
+        ...base.meeting,
+        accountId: zoom,
+        externalId: "zoom-overrun",
+        title: "Weekly sync, part two",
+        joinUrl: ZOOM,
+        startedAt: at("2026-11-10T10:55:00Z"),
+        endedAt: at("2026-11-10T11:30:00Z"),
+      },
+    })
+    const window = { ...page, from: "2026-11-10T11:10:00Z", to: "2026-11-10T12:00:00Z" }
+    const found = await listMeetingEntries(store, meetingListRequest("", window).request)
+    expect(found.items.map(({ title, meetings }) => `${title}:${meetings.length}`)).toEqual(["Weekly sync:2"])
+    expect(found.total.value).toBe(1)
+  })
+
+  it("puts a meeting on the event the owner linked it to, over a calendar event in the same room", async () => {
+    const { store, zoomed } = await setup()
+    const db = await openCache(paths.get(store) as string)
+    opened.push(db)
+    const own = Number(
+      db
+        .prepare(
+          "INSERT INTO events (title, starts_at, ends_at, origin, created_at, updated_at) " +
+            "VALUES ('Owner made', ?, ?, 'owner', 1, 1) RETURNING id",
+        )
+        .get(at("2026-11-10T10:00:00Z"), at("2026-11-10T11:00:00Z"))?.id,
+    )
+    await store.meetings.linkMeeting(zoomed.meeting.id, own, NOW, "owner")
+    const found = await listMeetingEntries(store, meetingListRequest(month, page).request)
+    const meetings = (title: string) => found.items.find((item) => item.title === title)?.meetings.length
+    expect([meetings("Owner made"), meetings("Weekly sync")]).toEqual([1, 0])
+    expect((await showMeetingEntry(store, `event:${own}`, { offset: 0, limit: 1 })).meetings).toHaveLength(1)
+  })
+
+  it("counts only the findings the owner has not decided yet as pending", async () => {
+    const { store, zoom, zoomed } = await setup()
+    const account = { provider: "zoom", account: "ana" }
+    const project = await store.knowledge.addProject({ name: "Invented Harbour", key: "IHB" })
+    await store.knowledge.linkMeetingProject(account, String(zoomed.meeting.id), project.id, { by: "owner" })
+    const transcript = zoomed.transcripts[0]
+    if (!transcript?.rows[0]) throw new Error("the sample meeting has a transcript")
+    const cue = cueEvidence(zoom, zoomed.meeting.id, transcript.transcript, transcript.rows[0])
+    const evidence = [{ reference: cue.reference, fingerprint: cue.fingerprint }]
+    const input: MeetingFindingsInput = {
+      schemaVersion: 1,
+      key: "listing-batch",
+      extractor: "synthetic",
+      findings: [
+        { id: "decision", kind: "fact", type: "decision", statement: "Ship it", project: project.ref, evidence },
+        {
+          id: "followup",
+          kind: "task",
+          type: "chore",
+          title: "Write the note",
+          reason: "Agreed",
+          commitment: "inferred",
+          project: project.ref,
+          evidence,
+        },
+      ],
+    }
+    const batch = await store.meetingFindings.stage(account, input, { bot: "listing-test", model: "synthetic" })
+    const weekly = async () =>
+      (await listMeetingEntries(store, meetingListRequest(month, page).request)).items.find(
+        ({ title }) => title === "Weekly sync",
+      )
+    expect((await weekly())?.pending_findings).toBe(2)
+    await store.meetingFindings.review(account, batch.id, {
+      fingerprint: batch.fingerprint,
+      accept: ["decision"],
+      by: "owner",
+    })
+    expect((await weekly())?.pending_findings).toBe(1)
+    const shown = await showMeetingEntry(store, (await weekly())?.ref as string, { offset: 0, limit: 1 })
+    expect(shown.findings).toEqual([{ id: batch.id, status: "proposed", findings: 2, pending: 1 }])
   })
 })

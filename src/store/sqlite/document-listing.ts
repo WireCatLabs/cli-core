@@ -2,7 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import type { QueryAst } from "@wirecat/cli-base/query"
 import { normalizeTag } from "../../domain/tags.js"
 import type { SqlValue } from "../driver.js"
-import { fold } from "../normalize.js"
+import { PREFERRED_FILE, subtreeOf } from "./files.js"
 import { accountOf, type ListedAccount } from "./meeting-listing.js"
 import { idsOf } from "./merged-persons.js"
 import type { StoreContext } from "./open.js"
@@ -40,15 +40,17 @@ const TRANSCRIPT_LINK =
   "EXISTS (SELECT 1 FROM links tl WHERE tl.to_type = 'document' AND tl.to_id = d.id AND tl.from_type = 'meeting' " +
   "AND tl.kind = 'attached' AND tl.role = 'transcript')"
 
+const OFFICE = "application/vnd.openxmlformats-officedocument"
+
 export const DOCUMENT_KIND_SQL = `CASE
   WHEN ${among(["vtt", "srt"])} OR ${TRANSCRIPT_LINK} THEN 'transcript'
   WHEN ${mime} = 'application/vnd.google-apps.document' THEN 'doc'
   WHEN ${mime} = 'application/vnd.google-apps.spreadsheet' THEN 'sheet'
   WHEN ${mime} = 'application/vnd.google-apps.presentation' THEN 'slides'
   WHEN ${mime} = 'application/pdf' OR ${among(["pdf"])} THEN 'pdf'
-  WHEN ${among(["docx", "doc", "odt", "rtf", "epub"])} OR ${mime} LIKE 'application/vnd.openxmlformats-officedocument.wordprocessingml%' THEN 'docx'
-  WHEN ${among(["xlsx", "xls", "ods"])} OR ${mime} LIKE 'application/vnd.openxmlformats-officedocument.spreadsheetml%' THEN 'xlsx'
-  WHEN ${among(["pptx", "ppt", "odp"])} OR ${mime} LIKE 'application/vnd.openxmlformats-officedocument.presentationml%' THEN 'pptx'
+  WHEN ${among(["docx", "doc", "odt", "rtf", "epub"])} OR ${mime} LIKE '${OFFICE}.wordprocessingml%' THEN 'docx'
+  WHEN ${among(["xlsx", "xls", "ods"])} OR ${mime} LIKE '${OFFICE}.spreadsheetml%' THEN 'xlsx'
+  WHEN ${among(["pptx", "ppt", "odp"])} OR ${mime} LIKE '${OFFICE}.presentationml%' THEN 'pptx'
   WHEN ${among(["csv", "tsv"])} OR ${mime} IN ('text/csv', 'text/tab-separated-values') THEN 'csv'
   WHEN ${among(["md", "markdown"])} OR ${mime} = 'text/markdown' THEN 'md'
   WHEN ${among(["txt", "text", "log"])} OR ${mime} = 'text/plain' THEN 'txt'
@@ -58,11 +60,9 @@ export const DOCUMENT_KIND_SQL = `CASE
   WHEN d.kind = 'text' THEN 'txt'
   ELSE 'other' END`
 
-/** The file a document shows: live first, the owner's pin, then the newest (`PREFERRED_FILE`), joined as `f`. */
 const PREFERRED =
-  "LEFT JOIN files f ON f.id = (SELECT f2.id FROM files f2 WHERE f2.document_id = d.id AND f2.kind <> 'folder' " +
-  "ORDER BY f2.deleted_at IS NOT NULL, f2.id IS NOT d.pinned_file_id, coalesce(f2.external_updated_at, f2.updated_at) DESC, " +
-  "f2.id DESC LIMIT 1)"
+  "LEFT JOIN files f ON f.id = (SELECT f.id FROM files f WHERE f.document_id = d.id AND f.kind <> 'folder' " +
+  `ORDER BY ${PREFERRED_FILE} LIMIT 1)`
 
 /** Documents a list shows: not deleted, not a folder, and still in its source's catalog. */
 const LISTED =
@@ -72,6 +72,8 @@ const MODIFIED = "coalesce(f.external_updated_at, d.external_updated_at, d.updat
 
 /** A document's place: its preferred file's path, else where a folder import put it. */
 const PATH = "coalesce(f.path, CASE WHEN d.storage = 'local' THEN d.external_id END)"
+// lower() folds ASCII only; the files' own paths are folded in full when stored.
+const PATH_FOLDED = "coalesce(f.path_folded, CASE WHEN d.storage = 'local' THEN lower(d.external_id) END)"
 
 export interface DocumentListFilter {
   /** Stored account ids; every account when left out. */
@@ -207,10 +209,8 @@ const columns = (context: StoreContext): ColumnMap => {
     has_text: { type: "bool", sql: "(d.body IS NOT NULL)" },
     folder: {
       where: (node) => {
-        const wanted = fold(node.value.replace(/^\/+|\/+$/gu, ""))
-        // A folder holds what is in it and under it; GLOB keeps a `*` or `?` in a name literal.
-        const literal = wanted.replace(/[*?[]/gu, (character) => `[${character}]`)
-        return { sql: "(f.path_folded GLOB ? OR f.path_folded GLOB ?)", params: [`${literal}/*`, literal], known: true }
+        const [low, high] = subtreeOf(node.value.replace(/^\/+/u, ""))
+        return { sql: `(${PATH_FOLDED} >= ? AND ${PATH_FOLDED} < ?)`, params: [low, high], known: true }
       },
     },
     tag: {

@@ -8,6 +8,7 @@ import {
   type QueryRegistry,
   timezoneOf,
 } from "@wirecat/cli-base/query"
+import { localDate, plusDays } from "../calendar/index.js"
 import type { DocumentListRequest, MeetingListRequest } from "../services/listings.js"
 import { DOCUMENT_KINDS, MEETING_ROW_KINDS, type MeetingRowKind } from "../store/index.js"
 import { listQuery, nativeField, nativeTermLists, type QueryWords, termField, typedQuery } from "./list-query.js"
@@ -128,14 +129,6 @@ export const documentListRequest = (
     limit,
     offset: (page - 1) * limit,
   }
-}
-
-const localDate = (at: number, zone: string) =>
-  new Intl.DateTimeFormat("en-CA", { timeZone: zone, year: "numeric", month: "2-digit", day: "2-digit" }).format(at)
-
-const plusDays = (date: string, days: number) => {
-  const [year, month, day] = date.split("-").map(Number) as [number, number, number]
-  return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10)
 }
 
 const midnight = (date: string, zone: string) => dayBoundary(date, zone, false, { start: 0, end: date.length })

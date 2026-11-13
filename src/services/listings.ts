@@ -1,6 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import type { QueryAst } from "@wirecat/cli-base/query"
 import type * as v from "valibot"
+import { eventIdOf } from "../calendar/index.js"
 import { providerLabel } from "../domain/providers.js"
 import type {
   documentEntry,
@@ -9,6 +10,7 @@ import type {
   meetingEntry,
   meetingEntryDetails,
 } from "../entities/listings.js"
+import { formatMeetingReference, type MeetingReference, parseMeetingReference } from "../meetings/index.js"
 import { type SearchTotal, TOTAL_CAP } from "../search/total.js"
 import type { DocumentListRow, ListedAccount, MeetingRow, MeetingRowKind, MessageStore } from "../store/index.js"
 import { storeQuery } from "./notes-search.js"
@@ -46,7 +48,7 @@ const chosenAccounts = (held: readonly ListedAccount[], sources: readonly string
       throw new CliError(
         "not_found",
         `source:${wanted} names no account holding ${what} — the store holds ${held.map(sourceName).join(", ") || "none"}`,
-        { reason: "listing.source-unknown" },
+        { reason: "listing.source-not-found" },
       )
     for (const account of found) chosen.set(account.id, account)
   }
@@ -175,14 +177,14 @@ export const showDocument = async (
   text: { offset: number; limit: number },
 ): Promise<DocumentEntryDetails> => {
   const found = await store.listings.document(documentId(reference), text)
-  if (!found) throw new CliError("not_found", `no document ${reference} in the store`, { reason: "document.unknown" })
+  if (!found) throw new CliError("not_found", `no document ${reference} in the store`, { reason: "document.not-found" })
   const accounts = new Map((await store.listings.documentAccounts()).map((account) => [account.id, account]))
   return {
     ...documentItem(found, accounts),
     text: found.text,
     text_offset: Math.min(text.offset, found.textLength),
     text_length: found.textLength,
-    truncated: found.text !== null && text.offset + found.text.length < found.textLength,
+    has_more: found.text !== null && text.offset + found.text.length < found.textLength,
     extraction: found.extraction,
     extraction_error: found.extractionError,
     language: found.language,
@@ -211,8 +213,11 @@ export interface MeetingListRequest {
   offset: number
 }
 
+const ref = ({ id, accountId }: { id: number; accountId: number }) =>
+  formatMeetingReference({ type: "meeting", accountId, meetingId: id })
+
 const meetingItem = (row: MeetingRow, accounts: ReadonlyMap<string, ListedAccount>): MeetingEntry => {
-  const meetings = row.meetings.map(({ id, accountId }) => `meeting:${accountId}/${id}`)
+  const meetings = row.meetings.map(({ id, accountId }) => ref({ id, accountId }))
   const named = (provider: string, account: string) =>
     accounts.get(`${provider}:${account}`) ?? { provider, account, name: null }
   return {
@@ -286,12 +291,10 @@ export const listMeetingEntries = async (
   }
 }
 
-const targetOf = (reference: string): { event: number } | { meeting: number; account: number } => {
+const targetOf = (reference: string): { event: number } | MeetingReference => {
   const text = reference.trim()
-  const event = /^event:([1-9]\d*)$/u.exec(text)
-  if (event) return { event: Number(event[1]) }
-  const meeting = /^meeting:([1-9]\d*)\/([1-9]\d*)$/u.exec(text)
-  if (meeting) return { account: Number(meeting[1]), meeting: Number(meeting[2]) }
+  if (text.startsWith("event:")) return { event: eventIdOf(text) }
+  if (text.startsWith("meeting:") && text.split("/").length === 2) return parseMeetingReference(text)
   throw new CliError("validation_error", `${reference} is not a meeting; give its event:<id> or meeting:<account>/<id>`)
 }
 
@@ -305,9 +308,11 @@ export const showMeetingEntry = async (
   lines: { offset: number; limit: number },
 ): Promise<MeetingEntryDetails> => {
   const target = targetOf(reference)
-  const row = await store.listings.meetingRow("event" in target ? target : { meeting: target.meeting })
-  if (!row || ("account" in target && !row.meetings.some(({ accountId }) => accountId === target.account)))
-    throw new CliError("not_found", `no meeting ${reference} in the store`, { reason: "meeting.unknown" })
+  const row = await store.listings.meetingRow("event" in target ? target : { meeting: target.meetingId })
+  const asked = (one: { id: number; accountId: number }) =>
+    "meetingId" in target && one.id === target.meetingId && one.accountId === target.accountId
+  if (!row || ("meetingId" in target && !row.meetings.some(asked)))
+    throw new CliError("not_found", `no meeting ${reference} in the store`, { reason: "meeting.not-found" })
   const byName = new Map((await store.listings.meetingAccounts()).map((account) => [sourceName(account), account]))
   const event = row.type === "event" ? await store.calendar.event(row.id) : null
   const details = []
@@ -315,7 +320,6 @@ export const showMeetingEntry = async (
     const one = await store.meetings.meeting(id)
     if (one) details.push(one)
   }
-  const ref = (meeting: { accountId: number; id: number }) => `meeting:${meeting.accountId}/${meeting.id}`
   const live = event?.entries.find(({ deletedAt }) => deletedAt === null) ?? event?.entries[0]
   const first = details[0]?.meeting
   const spoken = details.flatMap((one) =>
@@ -324,7 +328,7 @@ export const showMeetingEntry = async (
       .map((transcript) => ({ meeting: one, ...transcript })),
   )[0]
   const people = new Map(
-    (spoken?.meeting.participants ?? []).map((participant) => [participant.id, participant.person?.uid ?? null]),
+    (spoken?.meeting.participants ?? []).map((participant) => [participant.id, participant.person ?? null]),
   )
   return {
     ...meetingItem(row, byName),
@@ -356,13 +360,13 @@ export const showMeetingEntry = async (
               offset_ms: line.startMs,
               end_ms: line.endMs,
               speaker: line.speakerName,
-              person: person === null ? null : `person:${person}`,
+              person: person === null ? null : { ref: `person:${person.uid}`, name: person.name ?? null },
               text: line.text,
             }
           }),
         }
       : null,
-    findings: row.findings.map(({ id, status, findings }) => ({ id, status, findings })),
+    findings: row.findings,
     untrusted: [
       "title",
       "description",
