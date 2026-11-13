@@ -3022,6 +3022,18 @@ describe("the shared read commands", () => {
     expect(searchMessages).toHaveBeenCalledTimes(1)
     expect(messageIds(unasked)).toContain("40")
 
+    searchMessages.mockClear()
+    const locked = await call(
+      ["search", "all", "chapter", "--backend", "server", "--json"],
+      server,
+      { ...env, CHAT_READ_ONLY: "1" },
+      {},
+      { serverSearch: true },
+    )
+    expect(locked.code).toBe(0)
+    expect(searchMessages).toHaveBeenCalledTimes(1)
+    expect(messageIds(JSON.parse(locked.stdout[0] ?? ""))).toEqual(["40"])
+
     const offline = await search(never, "--backend", "server", "--offline")
     expect(offline.meta.issues).toContainEqual({ code: "validation_error", source: "messages" })
     expect(never).not.toHaveBeenCalled()

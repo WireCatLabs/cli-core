@@ -19,9 +19,9 @@ const HOUR_MS = 60 * 60 * 1000
 
 /**
  * Asked of the guard for their permission level, yet they only read from the messenger or work here: reads go on
- * during a hold.
+ * during a hold and under the read-only lock, which promises reads and syncs.
  */
-const READS_UNDER_HOLD = new Set<PermissionKey>([
+const READS = new Set<PermissionKey>([
   "attachments.extract",
   "conversations.embeddings",
   "conversations.links",
@@ -190,13 +190,14 @@ export const sendGuard = ({
   let reservation: string | undefined
   const answered = new WeakSet<GuardRequest>()
 
-  const refuseReadOnly = () => {
+  const refuseReadOnly = ({ key }: GuardRequest) => {
+    if (key !== undefined && READS.has(key)) return
     if (readOnlyLock) throw readOnlyRefusal(readOnlyLock, MESSENGER_CHANGE_REFUSAL)
   }
 
   // Every write, counted or not: a reaction or a read receipt sent through a ban is what makes the ban stick.
   const refuseHeld = ({ key }: GuardRequest) => {
-    if (key !== undefined && READS_UNDER_HOLD.has(key)) return
+    if (key !== undefined && READS.has(key)) return
     const block = flood?.sendBlock()
     if (!block) return
     throw new CliError(
@@ -210,7 +211,7 @@ export const sendGuard = ({
 
   const permitted = (request: GuardRequest) => {
     const { chatId, kind = "message", action, personIds } = request
-    refuseReadOnly()
+    refuseReadOnly(request)
     const levels = currentPermissions()
     if (levels !== undefined) {
       const key = request.key ?? keyForWrite(kind, action)
@@ -359,7 +360,7 @@ export const sendGuard = ({
 
   return {
     ask: async (request) => {
-      refuseReadOnly()
+      refuseReadOnly(request)
       const levels = currentPermissions()
       if (levels === undefined) return
       const key = request.key ?? keyForWrite(request.kind ?? "message", request.action)
