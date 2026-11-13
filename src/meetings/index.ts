@@ -402,6 +402,7 @@ export type {
 export { READ_BUDGET_EXCEEDED } from "./store.js"
 export { meetingTimestamp } from "./timestamp.js"
 export type {
+  MeetingTranscriptDocumentStore,
   MeetingTranscriptReceiptStore,
   MeetingTranscriptStore,
   TranscriptAppend,

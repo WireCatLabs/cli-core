@@ -66,4 +66,4 @@ export type {
   PushStatePort,
   RemoteChange,
 } from "./push-model.js"
-export { within } from "./scope.js"
+export { inScope, type SourceQuery, within } from "./scope.js"

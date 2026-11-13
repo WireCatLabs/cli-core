@@ -562,7 +562,7 @@ export const searchAll = async (
     await embedders.close()
   }
 
-  let ordered = insidePeriodFirst(oneList(lists, cosines), period)
+  let ordered = insidePeriodFirst(oneList(await withoutTranscriptCopies(store, lists), cosines), period)
   let harder: HarderResult | undefined
   if (request.harder) {
     const asking = {
@@ -602,6 +602,27 @@ export const searchAll = async (
     ...(meetings === undefined ? {} : { meetings }),
     ...(harder === undefined ? {} : { harder }),
   }
+}
+
+/**
+ * A meeting's transcript that Drive also imported as a document is one thing: when the meeting is among the hits, its
+ * document's hit is dropped. Alone, the document stays, so nothing found is lost.
+ */
+const withoutTranscriptCopies = async (store: MessageStore, lists: SearchAllItem[][]): Promise<SearchAllItem[][]> => {
+  const meetings = new Set(lists.flat().flatMap((item) => (item.kind === "meeting" ? [item.meetingId] : [])))
+  if (!meetings.size) return lists
+  const documentOf = (item: SearchAllItem) =>
+    item.kind === "document" && /^document:\d+$/.test(item.ref) ? Number(item.ref.slice("document:".length)) : undefined
+  const documents = lists.flat().flatMap((item) => documentOf(item) ?? [])
+  const transcripts = await store.meetings.transcriptMeetings(documents)
+  if (!transcripts.size) return lists
+  return lists.map((list) =>
+    list.filter((item) => {
+      const document = documentOf(item)
+      const meeting = document === undefined ? undefined : transcripts.get(document)
+      return meeting === undefined || !meetings.has(meeting)
+    }),
+  )
 }
 
 /** Passages of one meeting share its `ref`, the reference evidence cites; each is still a hit of its own. */

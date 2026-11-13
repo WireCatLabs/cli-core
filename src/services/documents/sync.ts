@@ -2,7 +2,7 @@ import { createHash } from "node:crypto"
 import { CliError, isCliError } from "@wirecat/cli-base"
 import { catalogFiles } from "../../documents/catalog.js"
 import type { IndexedSource, PictureWriter, SourceContent, SourceFile, SourceSkip } from "../../documents/model.js"
-import { within } from "../../documents/scope.js"
+import { inScope } from "../../documents/scope.js"
 import { changedSince, planDocuments, scopeHash } from "./plan.js"
 import type { SyncOptions } from "./ports.js"
 
@@ -40,6 +40,7 @@ export const syncDocuments = async <M extends SourceFile>(options: SyncOptions<M
     errorOf,
     skipReason,
     storeVersion: VERSION,
+    query,
   } = options
   if (![max, limit, options.maxEntries].every((value) => Number.isSafeInteger(value) && value > 0))
     throw new CliError("validation_error", "sync limits must be positive whole numbers")
@@ -55,20 +56,28 @@ export const syncDocuments = async <M extends SourceFile>(options: SyncOptions<M
     pending: 0,
     skipped: [],
     errors: [],
-    coverage: "selected folders only; unsupported files are reported",
+    coverage:
+      query?.mode === "include"
+        ? "selected folders and the files a saved query finds; unsupported files are reported"
+        : query?.mode === "exclude"
+          ? "selected folders only, without the files a saved query keeps out; unsupported files are reported"
+          : "selected folders only; unsupported files are reported",
     ...(profile.picture_search ? { pictures: 0 } : {}),
   }
   let writer: PictureWriter | undefined
   let flush: (() => void) | undefined
   try {
-    if (profile.roots.length && (!source || (await source.identity()) !== profile.principal))
+    if (
+      (profile.roots.length || query?.mode === "include") &&
+      (!source || (await source.identity()) !== profile.principal)
+    )
       throw new CliError("authentication_error", "signed-in source account does not match this profile", {
         reason: "profile.wrong-account",
       })
     const state = statePort.read()
     if (state.principal !== principal)
       throw new CliError("configuration_error", "sync state belongs to another source account")
-    const currentScope = scopeHash(profile.roots)
+    const currentScope = scopeHash(profile.roots, query)
     const abandoned =
       state.pending && (state.pending.scope !== currentScope || rescan) ? state.pending.jobs.map((job) => job.id) : []
     if (state.pending?.scope !== currentScope || rescan) delete state.pending
@@ -96,7 +105,7 @@ export const syncDocuments = async <M extends SourceFile>(options: SyncOptions<M
     }
     const pending = state.pending
     if (!pending) throw new CliError("invalid_response", "could not prepare a sync batch")
-    if (index.catalog) await index.catalog.import(profile.principal, catalogFiles(state, profile.roots))
+    if (index.catalog) await index.catalog.import(profile.principal, catalogFiles(state, profile.roots, query))
     result.skipped = state.skipped.map(({ id, reason }) => ({ id, reason }))
     const saveNamesOnly = async (file: M, reason: string) => {
       const doc: SourceContent<M> = { metadata: file, markdown: "", text: "", tabs: [], notRead: reason }
@@ -164,7 +173,7 @@ export const syncDocuments = async <M extends SourceFile>(options: SyncOptions<M
         } else {
           if (!source) throw new CliError("configuration_error", "a pending save requires source sign-in")
           const content = await source.content(job.id, limit)
-          if (!within(content.metadata, profile.roots, pending.folders)) {
+          if (!inScope(content.metadata, profile.roots, pending.folders, new Set(pending.matched ?? []), query)) {
             await index.remove(profile.principal, job.id)
             statePort.removeSnapshot(job.id)
             delete state.documents[job.id]
@@ -220,6 +229,8 @@ export const syncDocuments = async <M extends SourceFile>(options: SyncOptions<M
       state.cursor = pending.cursor
       state.scope = pending.scope
       state.folders = pending.folders
+      if (pending.matched) state.matched = pending.matched
+      else delete state.matched
       delete state.pending
       state.lastSync = new Date(now()).toISOString()
       statePort.save(state)
