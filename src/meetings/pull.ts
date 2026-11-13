@@ -81,6 +81,18 @@ export const pull = async (source: MeetingSource, store: MeetingStore, options: 
   let failed = false
   /** The start of the first meeting that failed: the cursor of a stopped pull goes no further. */
   let firstFailed: number | undefined
+  const callers = new Set<string>()
+  const linkCallers = async () => {
+    if (callers.size === 0 || !store.linkCallers) return
+    try {
+      await store.linkCallers(source.provider, [...callers])
+    } catch (error) {
+      report.warnings.push({
+        externalId: source.provider,
+        message: `callers not linked to people: ${error instanceof Error ? error.message : "failed"}`,
+      })
+    }
+  }
   const from = timestamp(since) - lookbackMs
   // Oldest first, so a stopped pull leaves everything before its cursor done.
   const meetings = (await source.meetings(lookbackMs === 0 ? since : new Date(from).toISOString())).toSorted(
@@ -94,6 +106,7 @@ export const pull = async (source: MeetingSource, store: MeetingStore, options: 
       const reached = Math.min(startOf(m), firstFailed ?? Number.POSITIVE_INFINITY)
       if (Number.isFinite(reached) && reached > timestamp(since))
         await store.setCursor(options.accountId, new Date(reached).toISOString(), now)
+      await linkCallers()
       return report
     }
     const id = m.occurrence.id
@@ -207,6 +220,7 @@ export const pull = async (source: MeetingSource, store: MeetingStore, options: 
           now,
         })
       await linkEvent(store, details, now)
+      for (const p of participants) if (p.identity.phone) callers.add(p.identity.externalId)
       report.meetings++
       report.participants += participants.length
       report.transcriptRows += lines?.length ?? 0
@@ -216,6 +230,7 @@ export const pull = async (source: MeetingSource, store: MeetingStore, options: 
       report.warnings.push({ externalId: id, message: error instanceof Error ? error.message : "Meeting pull failed" })
     }
   }
+  await linkCallers()
   // A failed occurrence must remain inside the next pull's retry window.
   if (!failed) await store.setCursor(options.accountId, new Date(now).toISOString(), now)
   return report

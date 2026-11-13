@@ -40,7 +40,7 @@ const fixture = async (contacts: { id: string; name: string; phone: string; phon
   const accountId = await store.accounts.saveAccount(CALLS, { name: null })
   await store.people.savePeople(CRM, contacts)
   const source = fakeMeetingSource({ provider: CALLS.provider, participants: async () => [client(called)] })
-  await pull(source, store.meetings, { accountId, now: 4000 })
+  await pull(source, { ...store.meetings, linkCallers: undefined }, { accountId, now: 4000 })
   const scan = await store.people.scanMatches()
   const callPerson = await store.people.personOf({ provider: CALLS.provider, id: `phone:${called}` })
   const contactPerson = await store.people.personOf({ provider: CRM.provider, id: contacts[0]?.id as string })
@@ -124,5 +124,29 @@ describe("a call's client and the CRM contact with that number (NEED-2600)", () 
     expect(scan.proposed).toEqual([])
     expect(scan.skipped).toMatchObject([{ reason: "identity.shared-phone" }])
     expect(callPerson?.uid).not.toBe(contactPerson?.uid)
+  })
+})
+
+describe("a sync that saved a call's client, with no people scan run (memo absent)", () => {
+  it("**links the call to the CRM contact by the number**, and leaves the scan's other rules and cursor to the scan", async () => {
+    const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "phone-link-sync-")), "store.db") })
+    opened.push(store)
+    await store.accounts.saveAccount(CRM, { name: null })
+    const accountId = await store.accounts.saveAccount(CALLS, { name: null })
+    await store.people.savePeople(CRM, [
+      { id: "contact/20", name: "Ana Example", phone: "8 (916) 123-45-67" },
+      { id: "contact/30", name: "Bo Sample", phone: "+7 495 000-00-01" },
+      { id: "contact/31", name: "Bo Sample", phone: "+7 495 000-00-02" },
+    ])
+    const source = fakeMeetingSource({ provider: CALLS.provider, participants: async () => [client("+79161234567")] })
+
+    await pull(source, store.meetings, { accountId, now: 4000 })
+
+    const caller = await store.people.personOf({ provider: CALLS.provider, id: "phone:+79161234567" })
+    const contact = await store.people.personOf({ provider: CRM.provider, id: "contact/20" })
+    expect(caller?.uid).toBe(contact?.uid)
+    const bo = await store.people.personOf({ provider: CRM.provider, id: "contact/30" })
+    expect((await store.people.personOf({ provider: CRM.provider, id: "contact/31" }))?.uid).not.toBe(bo?.uid)
+    expect((await store.people.scanMatches()).full).toBe(true)
   })
 })

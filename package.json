@@ -305,7 +305,7 @@
   },
   "peerDependencies": {
     "@napi-rs/canvas": ">=0.1.69 <2",
-    "@wirecat/cli-base": ">=0.99.0 <1.0.0",
+    "@wirecat/cli-base": ">=0.98.0 <1.0.0",
     "commander": ">=15",
     "ssh2": "^1.17.0"
   },

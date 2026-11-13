@@ -671,3 +671,22 @@ export const scanMatches = (context: StoreContext, { full = false }: { full?: bo
   )
   return pass.result
 }
+
+/**
+ * The phone rule alone, for the identities named: a meetings sync that saved callers links them to their CRM contact
+ * without memo's `people scan`. It moves no cursor, so the next scan still looks at these identities by every rule.
+ */
+export const linkPhones = (context: StoreContext, identities: ReadonlySet<number>): MatchScan => {
+  const { database } = context
+  const pass: Pass = {
+    context,
+    index: linkIndex(database),
+    result: { full: false, merged: [], proposed: [], skipped: [] },
+    shared: [],
+  }
+  for (const [phone, holders] of phoneHolders(database))
+    if (holders.length > 1 && holders.some(({ identity }) => identities.has(identity)))
+      write(database, () => samePhone(pass, phone, holders))
+  for (const group of pass.shared) write(database, () => proposeShared(pass, group))
+  return pass.result
+}

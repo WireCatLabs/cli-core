@@ -136,6 +136,6 @@ it("CORE_HOSTS covers every fixed host the update, the model calls and the model
   expect(fetched.filter((host) => !hostCovered(host, CORE_HOSTS))).toEqual([])
 })
 
-it("CORE_HOSTS adds only the model providers to cli-base's SHARED_HOSTS, so the shared hosts are listed once", () => {
-  expect(CORE_HOSTS.filter((host) => !SHARED_HOSTS.includes(host))).toEqual(["api.openai.com", "api.anthropic.com"])
+it("CORE_HOSTS is cli-base's SHARED_HOSTS and the two default model providers, so the lists cannot drift", () => {
+  expect(CORE_HOSTS).toEqual(["api.openai.com", "api.anthropic.com", ...SHARED_HOSTS])
 })

@@ -54,6 +54,7 @@ import { meetingStatsOver } from "./meeting-stats.js"
 import { invalidateMeetingStems } from "./meeting-stem-state.js"
 import { meetingOf, transcriptOf, transcriptRowOf } from "./meeting-values.js"
 import type { StoreContext } from "./open.js"
+import { linkPhones } from "./person-match-scan.js"
 import { type ColumnMap, queryFilter } from "./query-filter.js"
 import { read, write } from "./transaction.js"
 
@@ -824,6 +825,14 @@ export const meetingStoreOver = (context: StoreContext): StoredMeetings => {
     ...meetingHitIndexOver(context),
     ...meetingContextLinksOver(context),
     ...meetingLanguagesOver(context),
+    async linkCallers(provider, externalIds) {
+      const marks = externalIds.map(() => "?").join(", ")
+      const ids = database
+        .prepare(`SELECT id FROM identities WHERE provider = ? AND external_id IN (${marks})`)
+        .all(provider, ...externalIds)
+        .map(({ id }) => Number(id))
+      linkPhones(context, new Set(ids))
+    },
     async appendTranscriptsWithReceipt(input) {
       try {
         return append(context, input)
