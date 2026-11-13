@@ -363,9 +363,10 @@ reads every source's numbers.
 exactly the two of them hold the number, one of the holders is keyed by the number itself (`phone:<number>`), and the
 number is a mobile one (`isMobilePhone`). A landline only proposes the pair (score 0.7), since an office's main
 line is everyone's who works there. Two CRM contacts on one number, or an organization holding it, join and propose
-no one (`sharedLine`). A CRM's number is read only when it is written with `+` or `00`: a national number such as
-`8 916 …` names no country and matches nothing (`storedPhone`). The scan runs in `memo people scan` and in
-`memo sync`; nothing else starts it.
+no one (`sharedLine`). A CRM's or a card's number written without `+`, such as `8 (912) 345-67-89`, is read in the
+store's `phone_countries` (Russian by default), and every number a CRM keeps in the identity's metadata `phones`
+counts beside the first one in `identities.phone`. The scan runs in `memo people scan` and in `memo sync`; nothing
+else starts it.
 
 **Where the link shows.** Once linked, the call is the person's, with no new concept:
 

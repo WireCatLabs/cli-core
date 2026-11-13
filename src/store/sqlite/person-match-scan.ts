@@ -1,7 +1,7 @@
 import { isEmailAddress, isNoReplyAddress, isPersonLikeRoleAddress, isRoleAddress } from "../../domain/addresses.js"
 import { displayName, isReadable } from "../../domain/display-names.js"
 import { variantKey } from "../../domain/name-variants.js"
-import { BARE_INTERNATIONAL_PROVIDERS, isMobilePhone, storedPhone } from "../../domain/phones.js"
+import { BARE_INTERNATIONAL_PROVIDERS, isMobilePhone, nationalPhone, storedPhone } from "../../domain/phones.js"
 import type { CacheDatabase } from "../driver.js"
 import type { IdentityLinkSignal, MatchScan, SharedMailbox } from "../identity-links.js"
 import { type LinkIndex, linkIndex, settleLinks } from "./identity-link-rows.js"
@@ -13,6 +13,7 @@ import { isOwner, mergePerson } from "./person-links.js"
 import { personsByIdentifiers } from "./person-matcher.js"
 import { resolvePersonLinks } from "./person-resolution.js"
 import { separated } from "./person-separation.js"
+import { storePhoneCountries } from "./phone-countries.js"
 import { referenceOfThing } from "./things.js"
 import { write } from "./transaction.js"
 
@@ -159,19 +160,38 @@ const add = (found: Holders, key: string | undefined, holder: Holder) => {
   found.set(key, held)
 }
 
+/**
+ * NEED-2600: a CRM keeps a number as someone typed it, `8 (912) 345-67-89`; without a `+` it is read in the store's
+ * `phone_countries` (Russian by default), so a call from that number finds the contact. A messenger's bare digits stay
+ * international (`storedPhone`).
+ */
+const phoneKey = (raw: string, provider: string, countries: readonly string[]): string | undefined =>
+  storedPhone(raw, provider) ??
+  (/^\s*(\+|00)/.test(raw) || BARE_INTERNATIONAL_PROVIDERS.includes(provider)
+    ? undefined
+    : nationalPhone(raw.replace(/\(0\)/, "").replace(/\D/g, ""), countries, { anyType: true })?.value)
+
+/** The numbers an identity holds: its phone column, and the other numbers a CRM keeps in its metadata's `phones`. */
+const phonesOf = (row: Record<string, unknown>): string[] => {
+  const raws = [row.provider === "phone" ? row.external_id : row.phone]
+  try {
+    const more = row.metadata == null ? undefined : (JSON.parse(String(row.metadata)) as { phones?: unknown }).phones
+    if (Array.isArray(more)) raws.push(...more)
+  } catch {}
+  return raws.filter((raw): raw is string => typeof raw === "string" && raw.trim() !== "")
+}
+
 const phoneHolders = (database: CacheDatabase): Holders => {
   const found: Holders = new Map()
+  const countries = storePhoneCountries(database)
   for (const row of database
     .prepare(
-      `SELECT i.id, i.provider, i.external_id, i.phone, ${COMPANY} FROM identities i ` +
-        `JOIN identity_links l ON l.identity_id = i.id WHERE (i.provider = 'phone' OR i.phone IS NOT NULL) AND ${NOT_A_BOT} ` +
-        "ORDER BY i.id",
+      `SELECT i.id, i.provider, i.external_id, i.phone, i.metadata, ${COMPANY} FROM identities i ` +
+        "JOIN identity_links l ON l.identity_id = i.id WHERE (i.provider = 'phone' OR i.phone IS NOT NULL OR " +
+        `(json_valid(i.metadata) AND json_extract(i.metadata, '$.phones') IS NOT NULL)) AND ${NOT_A_BOT} ORDER BY i.id`,
     )
-    .all()) {
-    const provider = String(row.provider)
-    const raw = String(provider === "phone" ? row.external_id : row.phone)
-    add(found, storedPhone(raw, provider), holderOf(row))
-  }
+    .all())
+    for (const raw of phonesOf(row)) add(found, phoneKey(raw, String(row.provider), countries), holderOf(row))
   return found
 }
 

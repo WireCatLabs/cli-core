@@ -4,7 +4,9 @@
   in `SourceParticipant.phone` (written with `+`); the store keeps it in `identities.phone`. The people scan then
   joins the call's person and one other person when exactly the two hold the number, one of them is keyed by the
   number itself (`phone:<E.164>`, as a phone line keeps a call's other side) and the number is a mobile; a landline
-  only proposes the pair, since an office's main line is everyone's who works there. See [MEETINGS.md, "Calls and the people they link to"](../docs/dev/MEETINGS.md#calls-and-the-people-they-link-to).
+  only proposes the pair, since an office's main line is everyone's who works there. The scan reads a CRM's number
+  written without `+` (`8 (912) 345-67-89`) in the store's `phone_countries`, and the contact's other numbers too.
+  See [MEETINGS.md, "Calls and the people they link to"](../docs/dev/MEETINGS.md#calls-and-the-people-they-link-to).
 - **`meetings show` and `meetings people` name each participant's person**: `person: { ref, name }`, `null` when the
   identity is linked to no one; `meetings people` also finds a participant by that name.
 - **A person's, an organization's and a deal's context list their recorded calls.** `contacts context` and the

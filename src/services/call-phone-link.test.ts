@@ -32,7 +32,7 @@ const client = (phone: string): SourceParticipant => ({
   metadata: null,
 })
 
-const fixture = async (contacts: { id: string; name: string; phone: string }[], called: string) => {
+const fixture = async (contacts: { id: string; name: string; phone: string; phones?: string[] }[], called: string) => {
   const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "phone-link-")), "store.db") })
   opened.push(store)
   await store.accounts.saveAccount(CRM, { name: null })
@@ -76,6 +76,26 @@ describe("a call's client and the CRM contact with that number (NEED-2600)", () 
     const touches = await communicationsOf(store, [callPerson as NonNullable<typeof callPerson>], scopeOf(undefined))
     expect(touches.counts.meetings).toBe(1)
     expect(touches.items).toMatchObject([{ kind: "meeting", ref: call.ref, people: [person.ref] }])
+  })
+
+  it("are one person when the CRM wrote the number nationally, first or among its other numbers", async () => {
+    const first = await fixture([{ id: "contact/20", name: "Ana Example", phone: "8 (912) 345-67-89" }], "+79123456789")
+    expect(first.scan.merged).toMatchObject([{ signal: "same-phone" }])
+    expect(first.callPerson?.uid).toBe(first.contactPerson?.uid)
+
+    const other = await fixture(
+      [
+        {
+          id: "contact/20",
+          name: "Ana Example",
+          phone: "+7 495 123-45-67",
+          phones: ["+7 495 123-45-67", "8 916 123-45-67"],
+        },
+      ],
+      "+79161234567",
+    )
+    expect(other.scan.merged).toMatchObject([{ signal: "same-phone" }])
+    expect(other.callPerson?.uid).toBe(other.contactPerson?.uid)
   })
 
   it("are only proposed on a landline: an office's number is everyone's who works there", async () => {
