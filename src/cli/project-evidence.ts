@@ -113,7 +113,7 @@ export interface ProjectTextHints {
 const leftOutLine = (one: LeftOutChat, read: string | null) =>
   `${one.title ? `«${one.title}» (${one.ref})` : one.ref}, purpose ${one.purpose}` +
   `${one.proposed ? `, proposed ${one.proposed}` : ""}, not read: ${heldInWindow(one)}` +
-  (read ? `; read it: ${read}` : `; add --purpose ${one.purpose} to read it here`)
+  (read ? `; read it: ${read}` : `; add --purposes ${one.purpose} to read it here`)
 
 const purposeHintLine = (hint: NonNullable<StoredProjectGathering["purposeHint"]>) =>
   `${hint.chat} gave ${hint.items} of ${hint.of} items by membership alone; if it is not a work chat, ask the owner ` +
