@@ -4,7 +4,7 @@ import { Command } from "commander"
 import { expect, it } from "vitest"
 import { LOCAL_READ, LOCAL_WRITE } from "../cli/effects.js"
 import { run } from "../cli/program.js"
-import { commandsCommand } from "../cli/shared-command-exports.js"
+import { commandsCommand, generatedApiCommand } from "../cli/shared-command-exports.js"
 import { addMeetingCommands } from "../meetings/cli/index.js"
 import { memoryMeetingStore } from "../meetings/testing/index.js"
 import { ownCatalogue } from "./own-catalogue.js"
@@ -72,4 +72,25 @@ it("marks the meeting commands cli-core mounts, as every other shared command (I
   const group = commands.find((command) => command.name === "meetings")
   expect(group?.origin).toBe("cli-core")
   expect(group?.commands.every((command) => command.origin === "cli-core")).toBe(true)
+})
+
+it("keeps a generated Bot API command in the CLI's own catalogue, as `commands --json` marks it", () => {
+  const api = generatedApiCommand({
+    operations: [
+      {
+        id: "getUpdates",
+        command: "get-updates",
+        binding: { kind: "http", method: "GET", path: "/updates" },
+        effect: "read",
+        tags: [],
+        parameters: [],
+      },
+    ],
+    checkParameter: () => {},
+    checkBody: () => {},
+    execute: async () => {},
+  })
+  const program = new Command("app").addCommand(commandsCommand(app)).addCommand(new Command("bot").addCommand(api))
+
+  expect(ownCatalogue(program)).toEqual({ "bot api get-updates": "read" })
 })
