@@ -1,10 +1,19 @@
-import { chmodSync, mkdtempSync, writeFileSync } from "node:fs"
+import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { pathToFileURL } from "node:url"
+import { hostCovered, hostProblems } from "@wirecat/cli-base/http"
 import * as v from "valibot"
 import { describe, expect, it } from "vitest"
-import { constants, constantsSchema, googleApp, microsoftApp, oauthApp, oauthClientReport } from "./index.js"
+import {
+  CORE_HOSTS,
+  constants,
+  constantsSchema,
+  googleApp,
+  microsoftApp,
+  oauthApp,
+  oauthClientReport,
+} from "./index.js"
 
 const folder = () => mkdtempSync(join(tmpdir(), "core-constants-"))
 
@@ -105,4 +114,23 @@ describe("oauthApp", () => {
     expect(oauthClientReport(app)).toEqual({ client: "wirecat", source: "constants" })
     expect(microsoftApp({ env: { MAIL_MICROSOFT_CLIENT_ID: "own" }, prefix: "MAIL" }).source).toBe("env")
   })
+})
+
+it("CORE_HOSTS covers every fixed host the update, the model calls and the model downloads reach", () => {
+  const sources = [
+    "models/ai.ts",
+    "embeddings/remote.ts",
+    "embeddings/models.ts",
+    "embeddings/onnx-runtime.ts",
+    "speech/models.ts",
+  ]
+  const named = sources.flatMap((path) =>
+    [...readFileSync(new URL(`../${path}`, import.meta.url), "utf8").matchAll(/https:\/\/([a-z0-9.-]+)/g)].map(
+      ([, host]) => host as string,
+    ),
+  )
+  const fetched = [...new Set(named)].filter((host) => host !== "ai.google.dev")
+
+  expect(hostProblems(CORE_HOSTS)).toEqual([])
+  expect(fetched.filter((host) => !hostCovered(host, CORE_HOSTS))).toEqual([])
 })

@@ -137,3 +137,18 @@ export const oauthClientReport = (
     : { client: null, source: null, ...(reason ? { reason } : {}) }
 
 export type { AppSource }
+
+/**
+ * The hosts cli-core itself reaches in any tool: npm for `upgrade`, the default model providers, and the model
+ * downloads with the hosts they redirect to. A tool spreads them into its WCAT identity's `hosts`, so `cli-dev manifest`
+ * lists them; a model endpoint or calendar feed the person configures belongs in `userHosts`.
+ */
+export const CORE_HOSTS: readonly string[] = [
+  "registry.npmjs.org",
+  "api.openai.com",
+  "api.anthropic.com",
+  "huggingface.co",
+  "*.hf.co",
+  "github.com",
+  "release-assets.githubusercontent.com",
+]

@@ -1,13 +1,8 @@
 [
-  "src/analysis/anthropic.ts fetch",
   "src/background/relay.ts node:net",
   "src/calendar/feeds.ts fetch",
   "src/fetch/page.ts node:http",
   "src/fetch/page.ts node:https",
-  "src/models/index.ts fetch",
   "src/services/archive.ts fetch",
-  "src/services/meeting-model.ts fetch",
-  "src/services/project-gathering.ts fetch",
-  "src/speech/openai.ts fetch",
-  "src/update/index.ts fetch"
+  "src/services/project-gathering.ts fetch"
 ]

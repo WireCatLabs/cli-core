@@ -1,5 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
-import { endpoint, modelAddressAllowed, PLAIN_HTTP_REFUSED } from "./endpoint.js"
+import { endpoint, endpointFetch, modelAddressAllowed, PLAIN_HTTP_REFUSED } from "./endpoint.js"
 import { refuseOffComputer } from "./local-only.js"
 import { openai } from "./openai.js"
 import {
@@ -67,7 +67,7 @@ export const modelGateway = (deps: GatewayDeps) => ({
       throw new CliError("permission_error", `model consent for ${request.purpose} is missing; no data was sent`)
     const apiKey = await deps.key?.(target.provider, target)
     if (deps.signal?.aborted) throw new CliError("cancelled", "model request cancelled")
-    const fetcher = deps.fetch ?? fetch
+    const fetcher = deps.fetch ?? endpointFetch(baseUrl, 120_000)
     let limited = false
     let unreachable = false
     let refused = false

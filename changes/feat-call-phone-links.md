@@ -14,6 +14,9 @@
   organization contexts, counts each call as a `meeting` touch with its `meeting:` ref; `deals show` and `leads show`
   of a CRM copy answer `meetings[]`, the newest 10 of the people on it. Each item opens with `meetings show
   <meeting_id>` of the CLI that owns its `account`.
+- **`CORE_HOSTS` in `@wirecat/cli-core/constants`**: the hosts cli-core itself reaches in any tool (npm for
+  `upgrade`, the default model providers, the model downloads and the hosts they redirect to). A tool spreads them
+  into its WCAT identity's `hosts`, so `cli-dev manifest` lists them.
 
 ### Changed — may break callers
 
@@ -24,6 +27,10 @@
   show` / `leads show` gain the fields above.** A CLI that pins its MCP output schemas updates its contract.
 
 ### Security
+
+- **The update check, the model calls, the meeting embeddings and OpenAI transcription reach only their own host.**
+  They go through cli-base's `hostFetch`: npm's registry, or the host of the model address the person set. A
+  redirect to another host is refused, and each exchange has a deadline (2 minutes; 10 for a transcription).
 
 - **A run with moved folders removes nothing in the owner's folders (WC-SECR-24).** With only `<PREFIX>_CONFIG_DIR`
   moved, `account remove` deleted the account file, the profile files and a stale serve lock in the owner's real
