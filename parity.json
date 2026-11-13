@@ -866,7 +866,7 @@
       "value": "<url>",
       "meaning": "the tunnel's https address: the browser apps reach mcp serve --http through it, a messenger delivers to bot watch"
     },
-    "--purpose": {
+    "--purposes": {
       "value": "<purposes>",
       "meaning": "the linked chats' purposes to read, comma-separated, or all; a chat left out is counted"
     },

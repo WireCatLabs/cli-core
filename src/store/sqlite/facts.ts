@@ -52,7 +52,7 @@ export interface Fact {
   evidence: string[]
   /** The open review of its sources (`memory_source_review`), when one waits for the owner. */
   sourceReview: SourceReviewMarker | null
-  /** Who reversed a decision, when and why; only on a reversed decision. */
+  /** Who reversed a decision, when and why; only on a decision reversed with a reason or by an agent. */
   reversal?: { by: "owner" | "agent"; bot: string | null; at: string; reason: string | null }
   createdAt: string
   updatedAt: string
@@ -361,19 +361,18 @@ export const factOperationsOver = (context: StoreContext): FactOperations => {
       if (row.status !== "accepted") throw new CliError("validation_error", "only an accepted decision can be reversed")
       write(database, () => {
         const at = now()
-        const step = {
-          step: "reversed",
-          by: by === "owner" ? "owner" : "agent",
-          bot: by === "owner" ? null : by.bot,
-          at: iso(at),
-          reason: whyOf(by, reason),
+        const why = whyOf(by, reason)
+        database.prepare("UPDATE facts SET status = 'reversed', updated_at = ? WHERE id = ?").run(at, Number(row.id))
+        // Metadata keeps a project's facts out of a project transfer, so a bare owner's reversal writes none.
+        if (by !== "owner" || why !== null) {
+          const step = { step: "reversed", by: by === "owner" ? "owner" : "agent", bot: by === "owner" ? null : by.bot }
+          database
+            .prepare(
+              "UPDATE facts SET metadata = json_set(coalesce(metadata, '{}'), '$.history', " +
+                "json(coalesce(json_extract(metadata, '$.history'), '[]')), '$.history[#]', json(?)) WHERE id = ?",
+            )
+            .run(JSON.stringify({ ...step, at: iso(at), reason: why }), Number(row.id))
         }
-        database
-          .prepare(
-            "UPDATE facts SET status = 'reversed', updated_at = ?, metadata = json_set(coalesce(metadata, '{}'), " +
-              "'$.history', json(coalesce(json_extract(metadata, '$.history'), '[]')), '$.history[#]', json(?)) WHERE id = ?",
-          )
-          .run(at, JSON.stringify(step), Number(row.id))
         closing(Number(row.id), by, "reversed")
       })
       return factOf(rowOf(reference))
