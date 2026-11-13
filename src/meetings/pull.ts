@@ -110,6 +110,7 @@ export const sourceMeetingInput = (
     timezone: m.timezone ?? kept?.timezone ?? null,
     hostIdentityId: kept?.hostIdentityId ?? null,
     ...(count === undefined ? {} : { participantsCount: count }),
+    ...(m.call ? { direction: m.call.direction ?? null, clientPhone: m.call.clientPhone ?? null } : {}),
     metadata,
     deletedAt: null,
   }

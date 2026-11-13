@@ -52,8 +52,22 @@ export interface Fact {
   evidence: string[]
   /** The open review of its sources (`memory_source_review`), when one waits for the owner. */
   sourceReview: SourceReviewMarker | null
+  /** Who reversed a decision, when and why; only on a reversed decision. */
+  reversal?: { by: "owner" | "agent"; bot: string | null; at: string; reason: string | null }
   createdAt: string
   updatedAt: string
+}
+
+/** That a fact was removed, by whom, when and why: never what it said. */
+export interface FactRemoval {
+  /** The removed fact's `fact:<id>`; it no longer opens. */
+  fact: string
+  /** What it was about, as it was then; `null` for nothing. */
+  subject: string | null
+  removedBy: "owner" | "agent"
+  bot: string | null
+  reason: string | null
+  removedAt: string
 }
 
 export interface FactInput {
@@ -90,8 +104,8 @@ export interface FactsStore {
   }): Promise<ListResult<Fact>>
   /** The owner, or an agent for the owner, accepts a proposed fact; the fact it supersedes stops holding. */
   accept(reference: string, by: Decider, reason?: string): Promise<Fact>
-  /** An accepted decision no longer holds and nothing replaced it. */
-  reverse(reference: string, by: Decider): Promise<Fact>
+  /** An accepted decision no longer holds and nothing replaced it; the reason is kept in `reversal`. */
+  reverse(reference: string, by: Decider, reason?: string): Promise<Fact>
   /**
    * The owner takes back the approval of an accepted fact an agent proposed: it waits as `proposed` again. The step is
    * kept in `metadata.history`, with the decision it took back.
@@ -102,9 +116,12 @@ export interface FactsStore {
   /**
    * Erases the fact: its row, its links, its tags, and the memory it was migrated from, which still held its text.
    * Evidence of memories and facts that cited it stays with no pointer and shows as a missing source; `links` counts
-   * the links erased. A decision that replaced it no longer names it. A backup made before keeps it.
+   * the links erased. A decision that replaced it no longer names it. A backup made before keeps it. The removal is
+   * logged without the fact's text or value: its id, what it was about, who removed it, when and why (`removed`).
    */
-  remove(reference: string, by: Decider): Promise<{ ref: string; removed: true; links: number }>
+  remove(reference: string, by: Decider, reason?: string): Promise<{ ref: string; removed: true; links: number }>
+  /** The removal log, newest first: what `remove` kept of each removed fact. */
+  removed(options?: { limit?: number; offset?: number }): Promise<ListResult<FactRemoval>>
   /** Each reference it rests on, read back; one deleted since is `missing`. */
   sources(reference: string): Promise<EvidenceSource[]>
 }
@@ -149,6 +166,7 @@ export const factOperationsOver = (context: StoreContext): FactOperations => {
     source: String(row.source),
     evidence: evidenceOf(context, { type: "fact", id: Number(row.id) }),
     sourceReview: sourceReviewOf(database, { type: "fact", id: Number(row.id) }),
+    ...reversalOf(row),
     createdAt: iso(row.created_at),
     updatedAt: iso(row.updated_at),
   })
@@ -182,9 +200,12 @@ export const factOperationsOver = (context: StoreContext): FactOperations => {
     row.supersedes_id != null &&
     database.prepare("SELECT 1 FROM facts WHERE id = ? AND status = 'accepted'").get(Number(row.supersedes_id)) !==
       undefined
+  /** Who removed or reversed it and why: the agent's own reason first, then the one given. */
+  const whyOf = (by: Decider, reason?: string) =>
+    [by === "owner" ? undefined : by.reason.trim(), reason?.trim() || undefined].filter(Boolean).join(": ") || null
   /** Keeps who decided for the owner and why in `metadata.decision`; the decider's actor is in `confirmed_by`. */
   const keepDecision = (id: number, by: Decider, reason?: string) => {
-    const why = [by === "owner" ? undefined : by.reason.trim(), reason?.trim() || undefined].filter(Boolean).join(": ")
+    const why = whyOf(by, reason) ?? ""
     if (by === "owner" && !why) return
     const decision = by === "owner" ? { by: "owner", reason: why } : { by: "agent", bot: by.bot, reason: why }
     database
@@ -333,13 +354,26 @@ export const factOperationsOver = (context: StoreContext): FactOperations => {
       write(database, () => accept(id, by))
       return factOf(rowOf(reference))
     },
-    reverse: (reference, by) => {
+    reverse: (reference, by, reason) => {
       const row = rowOf(reference)
       assertMayWithdraw({ id: `fact:${row.id}`, proposedBy: { type: "unknown" }, proposed: false }, by)
       if (row.type !== "decision") throw new CliError("validation_error", "only a decision can be reversed")
       if (row.status !== "accepted") throw new CliError("validation_error", "only an accepted decision can be reversed")
       write(database, () => {
-        database.prepare("UPDATE facts SET status = 'reversed', updated_at = ? WHERE id = ?").run(now(), Number(row.id))
+        const at = now()
+        const step = {
+          step: "reversed",
+          by: by === "owner" ? "owner" : "agent",
+          bot: by === "owner" ? null : by.bot,
+          at: iso(at),
+          reason: whyOf(by, reason),
+        }
+        database
+          .prepare(
+            "UPDATE facts SET status = 'reversed', updated_at = ?, metadata = json_set(coalesce(metadata, '{}'), " +
+              "'$.history', json(coalesce(json_extract(metadata, '$.history'), '[]')), '$.history[#]', json(?)) WHERE id = ?",
+          )
+          .run(at, JSON.stringify(step), Number(row.id))
         closing(Number(row.id), by, "reversed")
       })
       return factOf(rowOf(reference))
@@ -406,10 +440,11 @@ export const factOperationsOver = (context: StoreContext): FactOperations => {
       })
       return factOf(rowOf(reference))
     },
-    remove: (reference, by) => {
+    remove: (reference, by, reason) => {
       const row = rowOf(reference)
       withdrawn(row, by)
       const id = Number(row.id)
+      const { subject } = subjectOf(database, row)
       const twin = row.source === "memory" && row.metadata != null ? migratedFrom(String(row.metadata)) : undefined
       const links = erase(database, () => {
         keepHighestId(database, "facts", now())
@@ -420,13 +455,58 @@ export const factOperationsOver = (context: StoreContext): FactOperations => {
         database.prepare("DELETE FROM links WHERE from_type = 'fact' AND from_id = ?").run(id)
         database.prepare("DELETE FROM taggings WHERE taggable_type = 'fact' AND taggable_id = ?").run(id)
         database.prepare("DELETE FROM facts WHERE id = ?").run(id)
+        database
+          .prepare(
+            "INSERT INTO fact_removals (fact_id, subject, removed_by, bot, reason, removed_at) VALUES (?, ?, ?, ?, ?, ?)",
+          )
+          .run(
+            id,
+            subject,
+            by === "owner" ? "owner" : "agent",
+            by === "owner" ? null : by.bot,
+            whyOf(by, reason),
+            now(),
+          )
         if (twin !== undefined)
           database.prepare("DELETE FROM memories WHERE id = ? AND deleted_at IS NOT NULL").run(twin)
         return count
       })
       return { ref: `fact:${id}`, removed: true, links }
     },
+    removed: (options = {}) => {
+      const limit = Math.min(Math.max(options.limit ?? 100, 1), 500)
+      const offset = Math.max(options.offset ?? 0, 0)
+      const rows = database
+        .prepare("SELECT * FROM fact_removals ORDER BY removed_at DESC, id DESC LIMIT ? OFFSET ?")
+        .all(limit + 1, offset)
+        .map(
+          (one): FactRemoval => ({
+            fact: `fact:${one.fact_id}`,
+            subject: one.subject == null ? null : String(one.subject),
+            removedBy: one.removed_by === "agent" ? "agent" : "owner",
+            bot: one.bot == null ? null : String(one.bot),
+            reason: one.reason == null ? null : String(one.reason),
+            removedAt: iso(one.removed_at),
+          }),
+        )
+      return pageOfRows(rows, limit, offset)
+    },
     sources: (reference) => evidenceSourcesOf(database, { type: "fact", id: Number(rowOf(reference).id) }),
+  }
+}
+
+const reversalOf = (row: Row): Pick<Fact, "reversal"> => {
+  if (row.status !== "reversed" || row.metadata == null) return {}
+  const { history } = JSON.parse(String(row.metadata)) as { history?: Record<string, unknown>[] }
+  const step = history?.findLast((one) => one.step === "reversed")
+  if (!step) return {}
+  return {
+    reversal: {
+      by: step.by === "agent" ? "agent" : "owner",
+      bot: typeof step.bot === "string" ? step.bot : null,
+      at: String(step.at),
+      reason: typeof step.reason === "string" ? step.reason : null,
+    },
   }
 }
 
@@ -446,10 +526,11 @@ export const factsStoreOver = (context: StoreContext): FactsStore => {
     get: async (reference) => operations.get(reference),
     list: async (options) => operations.list(options),
     accept: async (reference, by, reason) => operations.accept(reference, by, reason),
-    reverse: async (reference, by) => operations.reverse(reference, by),
+    reverse: async (reference, by, reason) => operations.reverse(reference, by, reason),
     revoke: async (reference, by, reason) => operations.revoke(reference, by, reason),
     reject: async (reference, by, reason) => operations.reject(reference, by, reason),
-    remove: async (reference, by) => operations.remove(reference, by),
+    remove: async (reference, by, reason) => operations.remove(reference, by, reason),
+    removed: async (options) => operations.removed(options),
     sources: async (reference) => operations.sources(reference),
   }
 }

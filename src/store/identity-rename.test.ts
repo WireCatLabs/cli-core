@@ -137,7 +137,7 @@ describe("renameIdentities", () => {
     expect(kept).toEqual({ name: "Client", phone: "9161234567" })
     const person = await s.people.personOf({ provider: "beeline", id: NEW })
     expect(person?.identities.map(({ id }) => id)).toEqual([NEW])
-    expect(db.prepare("SELECT count(*) AS n FROM identity_links WHERE person_id = ?").get(oldPerson)?.n).toBe(0)
+    expect(db.prepare("SELECT count(*) AS n FROM identity_links WHERE person_id = ?").get(Number(oldPerson))?.n).toBe(0)
   })
 
   it("keeps the owner's person when the old identity was the owner's", async () => {
