@@ -189,6 +189,33 @@ describe("compactText", () => {
     ])
   })
 
+  it("**draws one thing as its list row when the row opts in**, and a declared list in it still as rows", () => {
+    const proposal = { ref: "17070", kind: "fact", status: "proposed", title: "Ana works at Acme", evidence: ["m1"] }
+    const row: RowShape = {
+      columns: [{ field: "ref" }, { field: "kind" }, { field: "status" }],
+      text: ["title"],
+      oneLine: true,
+    }
+    const decided: RowShape = { columns: [], sections: { decided: "generic" }, oneLine: true }
+
+    expect(compactText(itemOf(proposal), row, zone)).toBe(compactText(list([proposal]), row, zone))
+    expect(compactText(itemOf(proposal), row, zone)).toBe("17070 · fact · proposed · Ana works at Acme")
+    expect(
+      compactText(
+        itemOf({
+          decided: [
+            { id: "17070", status: "confirmed" },
+            { id: "fact:5", status: "rejected" },
+          ],
+        }),
+        decided,
+        zone,
+      )
+        .split("\n")
+        .filter((line) => !line.startsWith("# ")),
+    ).toEqual(["17070 · confirmed", "fact:5 · rejected"])
+  })
+
   it("says the days and zone of all sections once, above the first", () => {
     const shape: RowShape = { columns: [], sections: { first: "message", second: "message" } }
     const late = msg(3, { timestamp: "2026-10-06T18:31:00.000Z" })

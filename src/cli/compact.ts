@@ -31,6 +31,11 @@ export interface RowShape {
   whole?: readonly string[]
   /** An item answer's fields left out: bookkeeping an agent reads in `--json` if it ever needs it. */
   hidden?: readonly string[]
+  /**
+   * An item answer drawn as the one row a list of it draws, not as `key: value` lines; its `sections` still follow
+   * as rows. Opt-in: a `show` whose help promises one line under `--compact`.
+   */
+  oneLine?: boolean
 }
 
 export interface CompactOptions {
@@ -486,7 +491,9 @@ export const compactText = <T>(
     const rest = Object.fromEntries(
       Object.entries(body.item).filter(([name]) => !Object.hasOwn(sections, name) && !shape.hidden?.includes(name)),
     )
-    lines = blockOf(rest, chars, "", shape.whole).map(guarded)
+    lines = shape.oneLine
+      ? rowsOfItems([rest], shape, clock, chars).lines.filter((line) => line !== "")
+      : blockOf(rest, chars, "", shape.whole).map(guarded)
     let dates: string[] = []
     let drawn: string[] = []
     for (const [name, entity] of Object.entries(sections)) {
