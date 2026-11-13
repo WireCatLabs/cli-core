@@ -7,15 +7,26 @@ import type { StoreContext } from "./open.js"
 import { mergePerson } from "./person-links.js"
 import { write } from "./transaction.js"
 
-export type IdentityRenameOutcome = "renamed" | "merged" | "untouched"
+export type IdentityRekeyOutcome = "renamed" | "merged" | "unchanged" | "skipped"
 
-export interface IdentityRenames {
+export interface IdentityRekey {
+  from: Id
+  to: Id
+  /** The identity's phone under its new id, such as the E.164 number the new id holds; left as it is when absent. */
+  phone?: string | null
+}
+
+export interface IdentityRekeys {
   /** How many of the pairs this pass got to, from the first: the rest wait for another call. */
   taken: number
   renamed: number
   merged: number
-  untouched: number
+  unchanged: number
+  /** Pairs with an empty `to`. */
+  skipped: number
   refused: { from: Id; to: Id; error: unknown }[]
+  /** The identities a pair renamed or merged into, by their new id: what the phone rule then looked at. */
+  touched: number[]
 }
 
 type Row = Record<string, unknown>
@@ -164,30 +175,31 @@ const personOfIdentity = (database: CacheDatabase, identity: number): number | u
  * that points at `from`, through a foreign key or an `<x>_type = 'identity'` pointer, points at `to`. Replaying it
  * changes nothing. Runs inside `write`.
  */
-export const renameIdentity = (
+export const rekeyIdentity = (
   context: StoreContext,
   provider: Provider,
-  from: Id,
-  to: Id,
+  { from, to, phone }: IdentityRekey,
   by: string,
-): IdentityRenameOutcome => {
+): IdentityRekeyOutcome => {
   const { database } = context
-  if (from === to) return "untouched"
+  if (!to.trim()) return "skipped"
+  if (from === to) return "unchanged"
   const find = database.prepare("SELECT * FROM identities WHERE provider = ? AND external_id = ?")
   const old = find.get(provider, from)
-  if (!old) return "untouched"
+  if (!old) return "unchanged"
   const oldId = Number(old.id)
   const kept = find.get(provider, to)
   const persons = renameInProposals(database, provider, from, to)
   if (!kept) {
     database.prepare("UPDATE identities SET external_id = ?, updated_at = ? WHERE id = ?").run(to, context.now(), oldId)
+    if (phone !== undefined) database.prepare("UPDATE identities SET phone = ? WHERE id = ?").run(phone, oldId)
     settleLinks(database, persons)
     return "renamed"
   }
   const keptId = Number(kept.id)
   const [mine, theirs] = [personOfIdentity(database, oldId), personOfIdentity(database, keptId)]
   if (mine !== undefined && theirs !== undefined && mine !== theirs)
-    persons.push(mergePerson(context, mine, theirs, { method: "identity-rename", by }))
+    persons.push(mergePerson(context, mine, theirs, { method: "identity-rekey", by }))
   for (const { table, pointer } of pointerPairs(database)) {
     const where = `WHERE ${pointer}_type = 'identity' AND ${pointer}_id = ?`
     database.prepare(`UPDATE OR IGNORE ${quoted(table)} SET ${pointer}_id = ? ${where}`).run(keptId, oldId)
@@ -201,29 +213,34 @@ export const renameIdentity = (
     )
     .run(...fill.map(() => oldId), context.now(), keptId)
   database.prepare("DELETE FROM identities WHERE id = ?").run(oldId)
+  if (phone !== undefined) database.prepare("UPDATE identities SET phone = ? WHERE id = ?").run(phone, keptId)
   settleLinks(database, [...persons, ...(theirs === undefined ? [] : [theirs])])
   return "merged"
 }
 
 /**
- * `renameIdentity` for a run of pairs, in order, each in its own savepoint so a refused one leaves the others applied,
+ * `rekeyIdentity` for a run of pairs, in order, each in its own savepoint so a refused one leaves the others applied,
  * stopping once `lockMs` has passed so other processes get the write lock. Runs inside `write`.
  */
-export const renameIdentities = (
+export const rekeyIdentities = (
   context: StoreContext,
   provider: Provider,
-  pairs: readonly { from: Id; to: Id }[],
+  pairs: readonly IdentityRekey[],
   { lockMs, by }: { lockMs: number; by: string },
-): IdentityRenames => {
-  const done: IdentityRenames = { taken: 0, renamed: 0, merged: 0, untouched: 0, refused: [] }
+): IdentityRekeys => {
+  const done: IdentityRekeys = { taken: 0, renamed: 0, merged: 0, unchanged: 0, skipped: 0, refused: [], touched: [] }
   const started = performance.now()
-  for (const { from, to } of pairs) {
+  const now = context.database.prepare("SELECT id FROM identities WHERE provider = ? AND external_id = ?")
+  for (const pair of pairs) {
     if (done.taken > 0 && performance.now() - started >= lockMs) break
     done.taken += 1
     try {
-      done[write(context.database, () => renameIdentity(context, provider, from, to, by))] += 1
+      const outcome = write(context.database, () => rekeyIdentity(context, provider, pair, by))
+      done[outcome] += 1
+      const id = now.get(provider, pair.to)?.id
+      if ((outcome === "renamed" || outcome === "merged") && id != null) done.touched.push(Number(id))
     } catch (error) {
-      done.refused.push({ from, to, error })
+      done.refused.push({ from: pair.from, to: pair.to, error })
     }
   }
   return done
