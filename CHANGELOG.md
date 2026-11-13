@@ -5,6 +5,58 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## 0.651.0 — 13.11.2026
+
+### Added
+
+- **The first screen and first run list `pbx`**, the Asterisk tool (`@wirecat/asterisk-cli`), under "Works with" and
+  among the tools first run offers to install.
+- **`doctor reports create` gives a pre-filled issue link** in `issue_url` and in its note, when the CLI's app
+  definition names `issues`. The title and body hold only the version, the platform and the failed run's error code
+  and provider key; the report file stays on the computer until the person attaches it.
+- **`RowShape.oneLine` draws one thing as one line under `--compact`.** An item answer then prints as the row a list
+  of it prints, and its `sections` still follow as rows, so a decision result can list one line per decision. Opt-in:
+  a row without it prints `key: value` lines as before.
+- **`doctor reports show` and `create` find the issue page in the CLI's package.json** when its app definition names
+  no `issues`: the GitHub repository in `bugs` or `repository`, as `<repository>/issues/new`. A repository elsewhere
+  gives no link, since the link fills the issue through GitHub's own parameters.
+- **A meetings sync links the callers it saved to their people by number**, without memo's `people scan`. It runs the
+  scan's phone rule alone, for those callers only, and moves no scan cursor
+  ([MEETINGS.md](docs/dev/MEETINGS.md#calls-and-the-people-they-link-to)). `MeetingStore.linkCallers` is optional;
+  the shared store has it.
+
+### Changed — may break callers
+
+- **A stale meeting project fingerprint is `conflict`, not `configuration_error`** (reason `meeting-project.stale`).
+  A caller that checks the code moves to `conflict`.
+- **`CORE_HOSTS` is cli-base's `SHARED_HOSTS` and the two default model providers.** It gains `*.huggingface.co` and
+  `*.githubusercontent.com` (in place of `release-assets.githubusercontent.com`), and a test keeps it equal to cli-base's
+  list. No published CLI reads it. cli-core's own tests and checks move to `@wirecat/cli-base` 0.99.0.
+
+### Fixed
+
+- **A mistyped profile in `<PREFIX>_PROFILE` gets the profiles here too** (`profile.unknown`), as a mistyped first
+  word does, and a CLI's own "no profile named …" is no longer said twice in the message.
+- **`ownCatalogue` keeps a generated Bot API command as the CLI's own**, as `commands --json` marks it, so a
+  bot's contract test pins its generated commands.
+- **`session start` and `setup` keep a provider's refusal.** A sign-in that failed for a new profile was reported as
+  `profile.unknown` ("no profile named …"), hiding why the provider refused it.
+- **`schedule command` saves PATH without its relative folders.** Under pnpm, PATH holds `./node_modules/.bin`, and
+  `schedule exec` refused the saved schedule; a schedule saved this way runs again once it is saved again.
+- **Confirming a proposed meeting project keeps the owner's reason.** `linkMeetingProject` with
+  `expectedFingerprint` and `provenance` now stores the owner's reason; before, the agent's stayed.
+- **An IPv6 model address such as `https://[fd00::1]` is reached again.** It was refused as "not a host", because
+  `hostFetch` takes no IPv6 literal. It now goes only to that host, with the same deadline and no redirect followed.
+  As for IPv4, plain http is allowed only to this computer (`[::1]`).
+
+### Security
+
+- **`account remove` in a run with only the config folder moved no longer runs the tool's own sign-out.** With
+  `<PREFIX>_CONFIG_DIR` (or the cache folder) moved, the state folder is the owner's, and the tool's `signOut` hook
+  deleted the session there: the owner's own (WC-SECR-24). The sign-in is now listed under `kept` with the moved-run
+  reason. The check of the owner's folders also follows links, so a moved config folder that is a link to the owner's
+  own no longer rewrites the owner's `config.json`. A tool's own guard, such as wa's `device.owners`, can stay.
+
 ## 0.650.0 — 13.11.2026
 
 ### Added
