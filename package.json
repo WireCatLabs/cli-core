@@ -187,6 +187,10 @@
       "types": "./dist/sftp/index.d.ts",
       "default": "./dist/sftp/index.js"
     },
+    "./google": {
+      "types": "./dist/google/index.d.ts",
+      "default": "./dist/google/index.js"
+    },
     "./oauth": {
       "types": "./dist/oauth/index.d.ts",
       "default": "./dist/oauth/index.js"

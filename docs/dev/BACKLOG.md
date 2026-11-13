@@ -23,6 +23,12 @@ None open.
 
 ## Next (P2)
 
+- **CORE-55** · P2 · Move gcal-cli and drive-cli onto `@wirecat/cli-core/google`: their own `googleError` and page
+  loops (gcal `src/errors.ts`, `src/calendar-source.ts` `allPages`) become imports, after a release carries it.
+  `src/google/`.
+- **CORE-56** · P2 · A Drive document's own answer (drive's `documents show`, built in drive-cli from the `document`
+  entity) does not name its meeting yet; `search all` hits do (`meeting`). Add an optional `meeting` ref to the
+  entity, read through `store.meetings.documentMeetings`. `src/entities/document.ts`.
 - **CORE-54** · P2 · A Drive file two Drive profiles both imported (a Meet transcript shared with both) never resolves
   its `attached` link: `driveDocumentOf` refuses two documents, so the meeting and its document both show in
   `search all`. Pick one document or link both. `src/store/sqlite/files.ts` (`driveDocumentOf`).

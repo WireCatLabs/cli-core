@@ -33,6 +33,17 @@ writes. A recording service can implement a catalog and transfers without managi
 The SDK contains no filesystem, database, vendor client, credentials or automatic provider setup.
 cli-core implements the durable meeting store and its evidence/context/semantic services.
 
+## A meeting's Drive documents
+
+A service that saves a meeting's transcript, recording or notes as Drive files (Google Meet) implements the optional
+`MeetingSource.documents(occurrenceId)`: `{ fileId, role: "transcript" | "recording" | "notes", title? }[]`. `pull`
+saves them as `MeetingSave.documents`. The store writes an `attached` link from the meeting, keyed by the Drive file
+id and not by account, so it resolves when any Drive profile imports the file (`linkAttached` in
+`src/store/sqlite/files.ts`), in either order; no migration. Links only grow: a file the service no longer lists
+stays linked, since Meet forgets a meeting's files after 30 days while the Doc stays. `meetings show` lists them as
+`documents[]`; a `search all` document hit names its meeting (`meeting`), and a transcript's hit is dropped when its
+meeting is among the hits. A file two Drive profiles imported stays unresolved (CORE-54).
+
 ## A participant's phone
 
 A phone line's source gives the other side's number in `SourceParticipant.phone`, as the network reported it and

@@ -7,6 +7,7 @@ import { type MailFields, senderIsMe } from "../domain/models.js"
 import { holdsKind, INTERNAL_NOTES } from "../domain/providers.js"
 import { runEmbedders } from "../embeddings/embed.js"
 import { chosenTextModel } from "../embeddings/models.js"
+import { formatMeetingReference } from "../meetings/index.js"
 import type { MessengerTraits } from "../ports/traits.js"
 import { entriesOfList, fitting, type ListedAccount, listedHolds } from "../search/account-list.js"
 import { plainQuery } from "../search/lucene/plain.js"
@@ -64,6 +65,8 @@ export interface SearchAllRecordItem {
   review?: "proposed" | "confirmed"
   /** A business hit's source record, when an import made it. */
   sourceRecord?: BusinessSource
+  /** A document's: the meeting it is the transcript, recording or notes of (`meeting:<account>/<meeting>`). */
+  meeting?: string
 }
 
 /** One account a search read, by the kind it was read for: the shape memo's `search all` answers too. */
@@ -562,7 +565,7 @@ export const searchAll = async (
     await embedders.close()
   }
 
-  let ordered = insidePeriodFirst(oneList(await withoutTranscriptCopies(store, lists), cosines), period)
+  let ordered = insidePeriodFirst(oneList(await withMeetingDocuments(store, lists), cosines), period)
   let harder: HarderResult | undefined
   if (request.harder) {
     const asking = {
@@ -605,22 +608,30 @@ export const searchAll = async (
 }
 
 /**
- * A meeting's transcript that Drive also imported as a document is one thing: when the meeting is among the hits, its
- * document's hit is dropped. Alone, the document stays, so nothing found is lost.
+ * A document that is a meeting's transcript, recording or notes names that meeting. A transcript that Drive also
+ * imported as a document is one thing with its meeting: when the meeting is among the hits, the document's hit is
+ * dropped. Alone, the document stays, so nothing found is lost.
  */
-const withoutTranscriptCopies = async (store: MessageStore, lists: SearchAllItem[][]): Promise<SearchAllItem[][]> => {
-  const meetings = new Set(lists.flat().flatMap((item) => (item.kind === "meeting" ? [item.meetingId] : [])))
-  if (!meetings.size) return lists
+const withMeetingDocuments = async (store: MessageStore, lists: SearchAllItem[][]): Promise<SearchAllItem[][]> => {
   const documentOf = (item: SearchAllItem) =>
     item.kind === "document" && /^document:\d+$/.test(item.ref) ? Number(item.ref.slice("document:".length)) : undefined
   const documents = lists.flat().flatMap((item) => documentOf(item) ?? [])
-  const transcripts = await store.meetings.transcriptMeetings(documents)
-  if (!transcripts.size) return lists
+  if (!documents.length) return lists
+  const owners = await store.meetings.documentMeetings(documents)
+  if (!owners.size) return lists
+  const meetings = new Set(lists.flat().flatMap((item) => (item.kind === "meeting" ? [item.meetingId] : [])))
   return lists.map((list) =>
-    list.filter((item) => {
+    list.flatMap((item) => {
       const document = documentOf(item)
-      const meeting = document === undefined ? undefined : transcripts.get(document)
-      return meeting === undefined || !meetings.has(meeting)
+      const owner = document === undefined ? undefined : owners.get(document)
+      if (owner === undefined || item.kind === "meeting") return [item]
+      if (owner.role === "transcript" && meetings.has(owner.meetingId)) return []
+      return [
+        {
+          ...item,
+          meeting: formatMeetingReference({ type: "meeting", accountId: owner.accountId, meetingId: owner.meetingId }),
+        },
+      ]
     }),
   )
 }

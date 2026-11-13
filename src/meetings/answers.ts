@@ -14,7 +14,7 @@ import { type MeetingOwner, meeting, meetingItem } from "./item.js"
 import type { Summary, Transcript, TranscriptRow } from "./model.js"
 import { formatMeetingReference, parseMeetingReference } from "./reference.js"
 import type { MeetingSearchPage } from "./search-store.js"
-import type { MeetingDetails, SearchHit } from "./store.js"
+import { MEETING_DOCUMENT_ROLES, type MeetingDetails, type SearchHit } from "./store.js"
 
 const text = v.string()
 const count = v.pipe(v.number(), v.integer(), v.minValue(0))
@@ -120,6 +120,18 @@ export const meetingDetails = v.strictObject({
       url: v.nullable(text),
     }),
   ),
+  /**
+   * The Drive files the meeting service saved for it, by role. `document` is the stored document (`document:<id>`) once
+   * a Drive profile has imported the file, else `null`: then `drive` can fetch it by `file_id`.
+   */
+  documents: v.array(
+    v.strictObject({
+      file_id: text,
+      role: v.picklist(MEETING_DOCUMENT_ROLES),
+      title: v.nullable(text),
+      document: v.nullable(reference),
+    }),
+  ),
 })
 
 export type MeetingHitItem = v.InferOutput<typeof meetingHit>
@@ -216,6 +228,12 @@ export const meetingDetailsItem = (details: MeetingDetails, owner: MeetingOwner)
       mime: one.mime,
       size: one.size,
       url: one.url,
+    })),
+    documents: (details.documents ?? []).map((one) => ({
+      file_id: one.fileId,
+      role: one.role,
+      title: one.title,
+      document: one.documentId === null ? null : `document:${one.documentId}`,
     })),
   }
 }

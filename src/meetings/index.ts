@@ -386,6 +386,9 @@ export type {
   EventCandidateFilter,
   IdentityInput,
   MeetingDetails,
+  MeetingDocument,
+  MeetingDocumentInput,
+  MeetingDocumentRole,
   MeetingFilter,
   MeetingHitSource,
   MeetingInput,
@@ -399,9 +402,10 @@ export type {
   TranscriptLanguageFill,
   TranscriptRowInput,
 } from "./store.js"
-export { READ_BUDGET_EXCEEDED } from "./store.js"
+export { MEETING_DOCUMENT_ROLES, READ_BUDGET_EXCEEDED } from "./store.js"
 export { meetingTimestamp } from "./timestamp.js"
 export type {
+  DocumentMeeting,
   MeetingTranscriptDocumentStore,
   MeetingTranscriptReceiptStore,
   MeetingTranscriptStore,

@@ -65,6 +65,11 @@ export const WIRECAT_TOOLS: readonly Tool[] = [
     does: "Google Calendar events, searchable with your other WireCat data",
   },
   {
+    command: "meet",
+    package: "@wirecat/meet-cli",
+    does: "Google Meet meetings: transcripts and Gemini notes, searchable with your other WireCat data",
+  },
+  {
     command: "memo",
     package: "@wirecat/cli-memo",
     shown: "memo context <person>",

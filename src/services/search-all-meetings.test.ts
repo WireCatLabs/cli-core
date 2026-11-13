@@ -616,8 +616,11 @@ describe("a Meet transcript that Drive also imported", () => {
   it("keeps the document's hit when the meeting is not among the hits", async () => {
     const { store, save } = await fixture()
     const id = await transcriptDoc(store, "needle and a haystack only the document has")
-    await withDocument(save, store)
+    const saved = await withDocument(save, store)
     const found = await searchAll(store, caller, { ...asked, text: "haystack" })
     expect(found.items.map(({ ref }) => ref)).toEqual([`document:${id}`])
+    const [item] = found.items
+    const named = `meeting:${saved.accountId}/${saved.meeting.id}`
+    expect(item && v.parse(hitEntity, allHitItem(item))).toMatchObject({ kind: "document", meeting: named })
   })
 })

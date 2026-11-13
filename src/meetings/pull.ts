@@ -142,6 +142,8 @@ export const pull = async (source: MeetingSource, store: MeetingStore, options: 
       const chat = await read("chat", () => source.chat(id))
       const summary = await read("summary", () => source.summary(id))
       const attachments = await read("files", () => source.files(id))
+      const listDocuments = source.documents?.bind(source)
+      const documents = listDocuments ? await read("documents", () => listDocuments(id)) : undefined
       const startedAt = timestamp(m.occurrence.startedAt)
       const endedAt = m.occurrence.endedAt === null ? null : timestamp(m.occurrence.endedAt)
       if (endedAt !== null && endedAt < startedAt) throw new Error("Meeting ends before it starts")
@@ -205,6 +207,7 @@ export const pull = async (source: MeetingSource, store: MeetingStore, options: 
             ]
           : undefined,
         attachments: attachments ?? undefined,
+        documents: documents ?? undefined,
         now,
       })
       // Without participants the rows cannot be linked: they are saved only when the meeting has no current

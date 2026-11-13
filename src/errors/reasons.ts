@@ -211,6 +211,11 @@ const OTHERS: Entry[] = [
   validation("event.repeat-split", "the series cannot be split at this occurrence, or was split there already"),
   validation("event.repeat-count", "a COUNT series is split only with a rule for its new part"),
   validation("event.unmovable", "the provider keeps this kind of event on its calendar"),
+  [
+    "event.organizer-only",
+    "permission_error",
+    "only the event's organizer can change this; change your own copy's fields",
+  ],
   validation("event.quick-add-ambiguous", "more than one event could be the one a lost quick add made"),
   validation("event.text-with-fields", "--text takes the whole event from its line, so no field option goes with it"),
   validation("calendar.ambiguous", "two or more calendars have this name; name one by its id"),

@@ -39,6 +39,7 @@ import { meetingIdentityPk } from "./identities.js"
 import { reviewLink } from "./link-reviews.js"
 import { meetingChatLinesOver } from "./meeting-chat-lines.js"
 import { meetingContextLinksOver } from "./meeting-context-links.js"
+import { attachMeetingDocument, meetingDocumentsOf, meetingTranscriptDocumentsOver } from "./meeting-documents.js"
 import { meetingHitIndexOver } from "./meeting-hit-index.js"
 import { meetingHitSearchOver } from "./meeting-hit-search.js"
 import { INDEX_CODES, type Indexable, indexedText, meetingRowid, summaryOf } from "./meeting-index-values.js"
@@ -53,7 +54,6 @@ import { meetingReviewOver } from "./meeting-review.js"
 import { meetingSeriesHistoryOver } from "./meeting-series-history.js"
 import { meetingStatsOver } from "./meeting-stats.js"
 import { invalidateMeetingStems } from "./meeting-stem-state.js"
-import { attachTranscriptDocument, meetingTranscriptDocumentsOver } from "./meeting-transcript-documents.js"
 import { meetingOf, transcriptOf, transcriptRowOf } from "./meeting-values.js"
 import type { StoreContext } from "./open.js"
 import { linkPhones } from "./person-match-scan.js"
@@ -178,6 +178,7 @@ const details = (database: CacheDatabase, id: number): MeetingDetails | null => 
       .prepare("SELECT * FROM attachments WHERE attachable_type = 'meeting' AND attachable_id = ? ORDER BY position")
       .all(id)
       .map(attachmentOf),
+    documents: meetingDocumentsOf(database, id),
   }
 }
 
@@ -464,6 +465,7 @@ const save = (context: StoreContext, input: MeetingSave): number => {
     )
 
   for (const a of input.attachments ?? []) saveAttachment(database, "meeting", meetingId, a, now)
+  for (const document of input.documents ?? []) attachMeetingDocument(database, meetingId, document, now, "listed")
   return meetingId
 }
 
@@ -492,7 +494,14 @@ const saveTranscripts = (
   )
   for (const { rows, driveFileId, ...t } of transcripts) {
     const replayed = t.contentHash !== null && Boolean(sameContent.get(meetingId, t.source, t.contentHash))
-    if (driveFileId !== undefined) attachTranscriptDocument(database, meetingId, driveFileId, now, !replayed)
+    if (driveFileId !== undefined)
+      attachMeetingDocument(
+        database,
+        meetingId,
+        { fileId: driveFileId, role: "transcript" },
+        now,
+        replayed ? "keeps" : "replaces",
+      )
     if (replayed) {
       counts.replayedTranscripts++
       continue
