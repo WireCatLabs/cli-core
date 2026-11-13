@@ -1,5 +1,5 @@
 import { existsSync, rmSync } from "node:fs"
-import { dirname, join } from "node:path"
+import { delimiter, dirname, isAbsolute, join } from "node:path"
 import { CliError, resolvePaths, writeSecurely } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Argument, Command, Option } from "commander"
@@ -377,15 +377,23 @@ export interface ScheduleSite {
 export const scheduleState = ({ app, env }: Pick<ScheduleSite, "app" | "env">) =>
   resolvePaths({ appName: app.appName, prefix: app.envPrefix, env }).state
 
+const absolutePath = (path: string | undefined) =>
+  (path ?? "")
+    .split(delimiter)
+    .filter((folder) => folder !== "" && isAbsolute(folder))
+    .join(delimiter)
+
 /** The variables a run gets on top of the timer's: the profile, where the files are, PATH. Never a credential. */
 const scheduleEnvironment = ({ app, env, profile }: ScheduleSite): Record<string, string> => {
   // The command line refuses a schedule under the lock; a caller that gets here still passes the lock on.
   const readOnly = readOnlyLockOf(app, env)
+  const path = absolutePath(env.PATH)
   return {
     [`${app.envPrefix}_PROFILE`]: profile,
     ...locationVariables(app, env),
-    // The timer starts with almost no PATH; an agent runs the CLI and its own tools by name.
-    ...(env.PATH ? { PATH: env.PATH } : {}),
+    // The timer starts with almost no PATH; an agent runs the CLI and its own tools by name. A relative folder (pnpm's
+    // ./node_modules/.bin) means another folder from the timer's, and `schedule exec` refuses it.
+    ...(path ? { PATH: path } : {}),
     ...(readOnly ? { [readOnly]: "1" } : {}),
   }
 }

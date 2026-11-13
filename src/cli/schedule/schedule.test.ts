@@ -9,7 +9,7 @@ import {
   writeFileSync,
 } from "node:fs"
 import { tmpdir } from "node:os"
-import { join } from "node:path"
+import { delimiter, join } from "node:path"
 import { captureStreams, errorObjectOf, NOT_ALLOWED, renderError } from "@wirecat/cli-base"
 import { logRecordSchema } from "@wirecat/cli-base/standards"
 import { Command } from "commander"
@@ -379,6 +379,25 @@ describe.runIf(posix)("schedule on Linux", () => {
     expect((await call(["remove", "sync"], env, system)).code).toBe(0)
     expect(existsSync(join(units, "chat-schedule-sync.timer"))).toBe(false)
     expect(existsSync(file)).toBe(false)
+  })
+
+  it("saves PATH without its relative folders, which `schedule exec` refuses (pnpm puts ./node_modules/.bin there)", async () => {
+    const { env } = setup()
+    const { system } = machine("linux")
+    const path = ["./node_modules/.bin", env.PATH, "bin"].join(delimiter)
+
+    expect(
+      (
+        await call(
+          ["command", "sync", "--every", "15m", "--", "messages", "list", "42"],
+          { ...env, PATH: path },
+          system,
+        )
+      ).code,
+    ).toBe(0)
+
+    const saved = JSON.parse(readFileSync(scheduleFile(env.CHAT_STATE_DIR, "sync"), "utf8")) as Schedule
+    expect(saved.environment.PATH).toBe(env.PATH)
   })
 
   it("puts a daily run on the calendar and catches up after sleep", async () => {
