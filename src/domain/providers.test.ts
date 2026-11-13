@@ -20,6 +20,10 @@ describe("the provider registry", () => {
     expect(new Set(words).size).toBe(words.length)
   })
 
+  it("names gmeet as the tool that holds Google Meet meetings", () => {
+    expect(providerNamed("google-meet")?.command).toBe("gmeet")
+  })
+
   it("resolves an alias to its provider and a provider to its kind", () => {
     expect(providerNamed("TG")?.name).toBe("telegram")
     expect(providerNamed("tg-bot")?.name).toBe("telegram-bot")
