@@ -138,10 +138,13 @@ export { type ImportFile, importFiles } from "./import.js"
 export {
   MEETING_ISSUES,
   MEETING_QUERY,
+  type MeetingCallItem,
   type MeetingIssue,
   type MeetingItem,
   type MeetingOwner,
   meeting,
+  meetingCall,
+  meetingCallItem,
   meetingIssuesOf,
   meetingItem,
 } from "./item.js"
@@ -188,6 +191,8 @@ export {
 } from "./meeting-management.js"
 export type {
   Attachment,
+  CallDirection,
+  CallManager,
   ChatLine,
   Event,
   EventSeries,
@@ -206,6 +211,7 @@ export type {
   TranscriptLine,
   TranscriptRow,
 } from "./model.js"
+export { CALL_DIRECTIONS } from "./model.js"
 export {
   type MeetingParticipantCandidate,
   type MeetingParticipantPage,

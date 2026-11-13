@@ -1388,6 +1388,8 @@ export const meetings = sqliteTable(
     deletedAt: integer("deleted_at"),
     titleFolded: text("title_folded"),
     joinKey: text("join_key"),
+    direction: text("direction"),
+    clientPhone: text("client_phone"),
   },
   (table) => [
     unique().on(table.accountId, table.externalId),
@@ -1801,6 +1803,21 @@ export const facts = sqliteTable(
     index("facts_by_author_type_author_id").on(table.authorType, table.authorId),
     index("facts_by_confirmed_by_type_confirmed_by_id").on(table.confirmedByType, table.confirmedById),
   ],
+)
+
+/** One row per removed fact: that it was removed, by whom, when and why; never its text or value. */
+export const factRemovals = sqliteTable(
+  "fact_removals",
+  {
+    id: integer("id").primaryKey(),
+    factId: integer("fact_id").notNull(),
+    subject: text("subject"),
+    removedBy: text("removed_by").notNull(),
+    bot: text("bot"),
+    reason: text("reason"),
+    removedAt: integer("removed_at").notNull(),
+  },
+  (table) => [index("fact_removals_by_removed_at").on(table.removedAt)],
 )
 
 /** An invoice the owner issued or received; its total is the sum of its lines, its status follows allocations. */

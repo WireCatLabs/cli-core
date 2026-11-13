@@ -1,7 +1,7 @@
 import { type QueryRegistry, queryFieldsOf } from "@wirecat/cli-base/query"
 import { isoTime, reference } from "@wirecat/cli-base/standards"
 import * as v from "valibot"
-import type { Meeting } from "./model.js"
+import { CALL_DIRECTIONS, type CallDirection, type Meeting } from "./model.js"
 import { formatMeetingReference } from "./reference.js"
 
 const text = v.string()
@@ -20,6 +20,30 @@ export const meetingIssuesOf = (metadata: Meeting["metadata"]): MeetingIssue[] =
   return Array.isArray(listed) ? MEETING_ISSUES.filter((issue) => listed.includes(issue)) : []
 }
 
+export interface MeetingCallItem {
+  direction: CallDirection | null
+  /** The participant who took or made the call for the owner, and their person once linked. */
+  manager: { name: string | null; person: string | null } | null
+  /** The other side's number, as the source wrote it. */
+  client_phone: string | null
+}
+
+// Typed by name: inferred, every entity map that holds a meeting grows too long for the compiler.
+/** A phone call's fields, which a phone-line source sets; a meeting has none. */
+export const meetingCall: v.GenericSchema<MeetingCallItem> = v.strictObject({
+  direction: v.nullable(v.picklist(CALL_DIRECTIONS)),
+  manager: v.nullable(v.strictObject({ name: v.nullable(text), person: v.nullable(reference) })),
+  client_phone: v.nullable(text),
+})
+
+/** A call's fields as answers give them; `undefined` for a meeting, so its answer has no `call`. */
+export const meetingCallItem = (
+  row: Pick<Meeting, "direction" | "clientPhone" | "manager">,
+): MeetingCallItem | undefined =>
+  row.direction == null && row.clientPhone == null
+    ? undefined
+    : { direction: row.direction ?? null, manager: row.manager ?? null, client_phone: row.clientPhone ?? null }
+
 const meetingEntries = {
   ref: reference,
   id: v.pipe(v.string(), v.minLength(1)),
@@ -37,6 +61,8 @@ const meetingEntries = {
   duration_ms: v.nullable(count),
   timezone: v.optional(v.nullable(text)),
   participants_count: v.nullable(count),
+  /** Present only on a phone call. */
+  call: v.optional(meetingCall),
   /** Present only when something about this meeting is doubtful. */
   issues: v.optional(v.array(v.picklist(MEETING_ISSUES))),
   /**
@@ -70,6 +96,7 @@ const iso = (ms: number | null) => (ms === null ? null : new Date(ms).toISOStrin
 
 export const meetingItem = (row: Meeting, owner: MeetingOwner): MeetingItem => {
   const issues = meetingIssuesOf(row.metadata)
+  const call = meetingCallItem(row)
   return {
     ref: formatMeetingReference({ type: "meeting", accountId: row.accountId, meetingId: row.id }),
     id: String(row.id),
@@ -85,6 +112,7 @@ export const meetingItem = (row: Meeting, owner: MeetingOwner): MeetingItem => {
     duration_ms: row.durationMs,
     timezone: row.timezone,
     participants_count: row.participantsCount,
+    ...(call ? { call } : {}),
     ...(issues.length ? { issues } : {}),
     untrusted: [...MEETING_UNTRUSTED],
     created_at: new Date(row.createdAt).toISOString(),

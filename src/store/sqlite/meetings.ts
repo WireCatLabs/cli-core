@@ -31,7 +31,13 @@ import type {
   TranscriptAppend,
   TranscriptAppendReceipt,
 } from "../../meetings/index.js"
-import { formatMeetingReference, joinKeyOf, MeetingError } from "../../meetings/index.js"
+import {
+  CALL_DIRECTIONS,
+  type CallDirection,
+  formatMeetingReference,
+  joinKeyOf,
+  MeetingError,
+} from "../../meetings/index.js"
 import type { CacheDatabase, SqlValue } from "../driver.js"
 import { normalize } from "../normalize.js"
 import * as eventQueries from "./events.js"
@@ -151,7 +157,7 @@ export const attachmentOf = (row: Row): Attachment => ({
 const details = (database: CacheDatabase, id: number): MeetingDetails | null => {
   const row = database.prepare("SELECT * FROM meetings WHERE id = ?").get(id)
   if (!row) return null
-  const meeting = meetingOf(row)
+  const meeting = meetingOf(database, row)
   const series =
     meeting.meetingSeriesId === null
       ? null
@@ -326,6 +332,11 @@ const fillGap = (context: StoreContext, input: MeetingSave, meetingId: number): 
   return meetingId
 }
 
+const callDirection = (value: CallDirection | null): CallDirection | null => {
+  if (value === null || CALL_DIRECTIONS.includes(value)) return value
+  throw new CliError("validation_error", `a call's direction is in or out, not ${String(value)}`)
+}
+
 const save = (context: StoreContext, input: MeetingSave): number => {
   const { database } = context
   const {
@@ -388,6 +399,8 @@ const save = (context: StoreContext, input: MeetingSave): number => {
       ...(meeting.participantsCount === undefined ? {} : { participants_count: meeting.participantsCount }),
       metadata: toJson(meeting.metadata),
       deleted_at: meeting.deletedAt,
+      ...(meeting.direction === undefined ? {} : { direction: callDirection(meeting.direction) }),
+      ...(meeting.clientPhone === undefined ? {} : { client_phone: meeting.clientPhone?.trim() || null }),
     },
     now,
   )
@@ -878,7 +891,7 @@ export const meetingStoreOver = (context: StoreContext): StoredMeetings => {
       return database
         .prepare(sql)
         .all(...params)
-        .map(meetingOf)
+        .map((row) => meetingOf(database, row))
     },
     async account(id) {
       const row = database.prepare("SELECT provider, external_id FROM accounts WHERE id = ?").get(id)
