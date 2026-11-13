@@ -10,6 +10,12 @@
   listing stays linked. `meetings show` lists them as `documents[]`: `file_id`, `role`, `title` and `document`, the
   stored `document:<id>` once Drive has the file, else `null`.
 - **A `search all` document hit names its meeting** (`meeting`, `meeting:<account>/<id>`) when it is a meeting's
-  transcript, recording or notes; a listed transcript is shown once with its meeting, as a `driveFileId` one is.
+  transcript, recording or notes, and the meeting's account is of a scope the search reads. A listed transcript is
+  shown once with its meeting, as a `driveFileId` one is.
 - **`meet`, the Google Meet tool**, in the WireCat tools of the first screen, and `google-meet` among the known
   providers (meetings).
+
+### Changed — may break callers
+
+- **`MeetingTranscriptDocumentStore` has a new method, `documentMeetings`**: the meeting each document is a
+  transcript, recording or notes of. The store implements it; a caller's own implementation of the interface adds it.

@@ -623,4 +623,13 @@ describe("a Meet transcript that Drive also imported", () => {
     const named = `meeting:${saved.accountId}/${saved.meeting.id}`
     expect(item && v.parse(hitEntity, allHitItem(item))).toMatchObject({ kind: "document", meeting: named })
   })
+
+  it("names no meeting of a scope the search does not read", async () => {
+    const { store, save } = await fixture()
+    const id = await transcriptDoc(store, "needle and a haystack only the document has")
+    await withDocument(async (_, ...rest) => save({ ...alice, scope: "work" }, ...rest), store)
+    const found = await searchAll(store, caller, { ...asked, text: "haystack" })
+    expect(found.items.map(({ ref }) => ref)).toEqual([`document:${id}`])
+    expect(found.items[0]).not.toHaveProperty("meeting")
+  })
 })

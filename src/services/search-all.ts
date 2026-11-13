@@ -23,7 +23,12 @@ import { type MeaningLane, type MeaningSkipped, nearEligible } from "./messages-
 import type { SearchCoverage } from "./messages-search.js"
 import { importAccounts, notesScopeOf, RRF_K, searchNotes } from "./notes-search.js"
 import { BUSINESS_WORDS_ONLY, searchBusiness } from "./search-all-business.js"
-import { type MeetingAccountCoverage, type MeetingSearchItem, meetingLane } from "./search-all-meetings.js"
+import {
+  type MeetingAccountCoverage,
+  type MeetingSearchItem,
+  meetingAccountsInScope,
+  meetingLane,
+} from "./search-all-meetings.js"
 import { HARDER_CANDIDATES, type HarderOptions, type HarderResult, reorderHarder } from "./search-harder.js"
 import { listContextOf } from "./search-kind.js"
 import type { Backend, ServerOptions, ServerSearched } from "./server-search.js"
@@ -565,7 +570,13 @@ export const searchAll = async (
     await embedders.close()
   }
 
-  let ordered = insidePeriodFirst(oneList(await withMeetingDocuments(store, lists), cosines), period)
+  let ordered = insidePeriodFirst(
+    oneList(
+      await withMeetingDocuments(store, lists, () => meetingAccountsInScope(store, account, request.meetingScopes)),
+      cosines,
+    ),
+    period,
+  )
   let harder: HarderResult | undefined
   if (request.harder) {
     const asking = {
@@ -608,11 +619,16 @@ export const searchAll = async (
 }
 
 /**
- * A document that is a meeting's transcript, recording or notes names that meeting. A transcript that Drive also
+ * A document that is a meeting's transcript, recording or notes names that meeting, when the meeting's account is of
+ * a scope this search may read: a personal search never names a work meeting. A transcript that Drive also
  * imported as a document is one thing with its meeting: when the meeting is among the hits, the document's hit is
  * dropped. Alone, the document stays, so nothing found is lost.
  */
-const withMeetingDocuments = async (store: MessageStore, lists: SearchAllItem[][]): Promise<SearchAllItem[][]> => {
+const withMeetingDocuments = async (
+  store: MessageStore,
+  lists: SearchAllItem[][],
+  readable: () => Promise<Set<number>>,
+): Promise<SearchAllItem[][]> => {
   const documentOf = (item: SearchAllItem) =>
     item.kind === "document" && /^document:\d+$/.test(item.ref) ? Number(item.ref.slice("document:".length)) : undefined
   const documents = lists.flat().flatMap((item) => documentOf(item) ?? [])
@@ -620,12 +636,14 @@ const withMeetingDocuments = async (store: MessageStore, lists: SearchAllItem[][
   const owners = await store.meetings.documentMeetings(documents)
   if (!owners.size) return lists
   const meetings = new Set(lists.flat().flatMap((item) => (item.kind === "meeting" ? [item.meetingId] : [])))
+  const accounts = await readable()
   return lists.map((list) =>
     list.flatMap((item) => {
       const document = documentOf(item)
       const owner = document === undefined ? undefined : owners.get(document)
       if (owner === undefined || item.kind === "meeting") return [item]
       if (owner.role === "transcript" && meetings.has(owner.meetingId)) return []
+      if (!accounts.has(owner.accountId)) return [item]
       return [
         {
           ...item,

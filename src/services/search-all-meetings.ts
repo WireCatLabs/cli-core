@@ -171,6 +171,20 @@ const callerScopes = async (all: readonly StoredAccount[], caller: AccountKey): 
   return scope === undefined ? [] : [scope]
 }
 
+/** The meeting accounts a caller's search may name: those of its scope, or of the scopes it was given. */
+export const meetingAccountsInScope = async (
+  store: MessageStore,
+  caller: AccountKey,
+  given?: readonly StoredAccount["scope"][],
+): Promise<Set<number>> => {
+  const all = await store.accounts.storedAccounts()
+  const own = all.find((one) => sameAccount(one, caller))?.scope ?? caller.scope
+  const scopes = given ?? (own === undefined ? [] : [own])
+  return new Set(
+    all.filter((one) => holdsKind(one.provider, "meetings") && scopes.includes(one.scope)).map(({ id }) => id),
+  )
+}
+
 /**
  * Meetings for `search all`, from each meeting account's search index: never refreshed here, since search all only
  * reads. A query meetings cannot answer is refused before any account is read; a failure of one account is that
