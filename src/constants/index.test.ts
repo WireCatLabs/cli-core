@@ -3,6 +3,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { pathToFileURL } from "node:url"
 import { hostCovered, hostProblems } from "@wirecat/cli-base/http"
+import { SHARED_HOSTS } from "@wirecat/cli-base/wcat/manifest"
 import * as v from "valibot"
 import { describe, expect, it } from "vitest"
 import {
@@ -133,4 +134,8 @@ it("CORE_HOSTS covers every fixed host the update, the model calls and the model
 
   expect(hostProblems(CORE_HOSTS)).toEqual([])
   expect(fetched.filter((host) => !hostCovered(host, CORE_HOSTS))).toEqual([])
+})
+
+it("CORE_HOSTS adds only the model providers to cli-base's SHARED_HOSTS, so the shared hosts are listed once", () => {
+  expect(CORE_HOSTS.filter((host) => !SHARED_HOSTS.includes(host))).toEqual(["api.openai.com", "api.anthropic.com"])
 })

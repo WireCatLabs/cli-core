@@ -1,4 +1,5 @@
 import { BASE_CONSTANTS, baseConstantsSchema, CliError, loadConstants } from "@wirecat/cli-base"
+import { SHARED_HOSTS } from "@wirecat/cli-base/wcat/manifest"
 import * as v from "valibot"
 import { readClientFile } from "../oauth/client-file.js"
 import type { AppSource, OAuthClient } from "../oauth/provider.js"
@@ -139,16 +140,8 @@ export const oauthClientReport = (
 export type { AppSource }
 
 /**
- * The hosts cli-core itself reaches in any tool: npm for `upgrade`, the default model providers, and the model
- * downloads with the hosts they redirect to. A tool spreads them into its WCAT identity's `hosts`, so `cli-dev manifest`
- * lists them; a model endpoint or calendar feed the person configures belongs in `userHosts`.
+ * The hosts cli-core itself reaches in any tool: cli-base's `SHARED_HOSTS` (npm for `upgrade`, the model downloads and
+ * the hosts they redirect to), which `cli-dev manifest` adds to every CLI's hosts, and the default model providers. A
+ * model endpoint or calendar feed the person configures belongs in `userHosts`.
  */
-export const CORE_HOSTS: readonly string[] = [
-  "registry.npmjs.org",
-  "api.openai.com",
-  "api.anthropic.com",
-  "huggingface.co",
-  "*.hf.co",
-  "github.com",
-  "release-assets.githubusercontent.com",
-]
+export const CORE_HOSTS: readonly string[] = [...SHARED_HOSTS, "api.openai.com", "api.anthropic.com"]
