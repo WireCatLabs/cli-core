@@ -43,7 +43,12 @@ export const planDocuments = async <M extends SourceFile>(
       skipped: [],
       jobs: [...new Set([...Object.keys(state.documents), ...abandoned])].map((id) => ({ id, kind: "remove" })),
     }
-  if (!source) throw new CliError("configuration_error", "selected folders require an authenticated source")
+  if (!source)
+    throw new CliError("configuration_error", "selected folders or a saved query require an authenticated source")
+  if (query?.mode === "include" && !query.list)
+    throw new CliError("configuration_error", "a query that includes files must list them")
+  // Listed before the walk: a failure here then costs no folder already walked.
+  const found = query?.mode === "include" && query.list ? await query.list() : []
   const initial = !state.cursor || scope !== state.scope
   const resumed = initial ? walks?.read(scope) : undefined
   const cursor = initial ? (resumed?.cursor ?? (await source.startToken())) : (state.cursor as string)
@@ -158,16 +163,14 @@ export const planDocuments = async <M extends SourceFile>(
     for (const folder of entering) if (!visited.has(folder.id) && within(folder, roots, folders)) await crawl(folder)
   }
   const matched = new Set<string>()
-  if (query?.mode === "include" && query.list) {
-    const found = await query.list()
-    if (discovered + found.length > MAX_ENTRIES) throw tooManyEntries()
-    discovered += found.length
-    for (const file of found)
-      if (!isFolder(file) && !file.trashed && query.matches(file)) {
-        files.set(file.id, file)
-        changed.add(file.id)
-        matched.add(file.id)
-      }
+  for (const file of found) {
+    if (isFolder(file) || file.trashed || !query?.matches(file) || matched.has(file.id)) continue
+    if (!files.has(file.id) && ++discovered > MAX_ENTRIES) throw tooManyEntries()
+    // Listed again on every sync, so only a new or changed file is work; a skipped one keeps its skip.
+    const prior = state.documents[file.id]?.metadata ?? state.skipped.find((item) => item.id === file.id)?.file
+    if (initial || !prior || changedSince(prior, file)) changed.add(file.id)
+    files.set(file.id, file)
+    matched.add(file.id)
   }
   const jobs: SourceWork<M>[] = []
   const skipped: SourceState<M>["skipped"] = []

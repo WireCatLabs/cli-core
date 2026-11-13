@@ -255,6 +255,35 @@ describe("provider-neutral document sync", () => {
       expect(await syncDocuments(f.options)).toMatchObject({ removed: 1 })
       expect(Object.keys(f.state().documents).sort()).toEqual(["a", "b"])
     })
+    it("does not read a listed file again that keeps failing, and keeps the checkpoint when listing fails", async () => {
+      const f = await setup()
+      const list = vi.fn(async () => [transcript("gone")])
+      const query = { key: "transcripts", mode: "include" as const, matches, list }
+      const options = { ...f.options, roots: [], query, retryable: () => false }
+      vi.mocked(f.source.content).mockRejectedValue(new CliError("not_found", "gone"))
+      for (let run = 0; run < 3; run++) await syncDocuments(options)
+      expect(f.source.content).toHaveBeenCalledOnce()
+      const cursor = f.state().cursor
+      list.mockRejectedValueOnce(new CliError("provider_error", "listing failed"))
+      await expect(syncDocuments(options)).rejects.toThrow("listing failed")
+      expect(f.state().cursor).toBe(cursor)
+      await expect(
+        syncDocuments({ ...options, query: { key: "transcripts", mode: "include", matches } }),
+      ).rejects.toThrow("must list them")
+    })
+    it("finishes a pending batch of listed files across runs", async () => {
+      const f = await setup()
+      for (const id of ["one", "two", "three"]) f.files.set(id, transcript(id))
+      const query = {
+        key: "transcripts",
+        mode: "include" as const,
+        matches,
+        list: async () => ["one", "two", "three"].map((id) => transcript(id)),
+      }
+      expect(await syncDocuments({ ...f.options, roots: [], query, max: 2 })).toMatchObject({ saved: 2, pending: 1 })
+      expect(await syncDocuments({ ...f.options, roots: [], query, max: 2 })).toMatchObject({ saved: 1, pending: 0 })
+      expect(Object.keys(f.state().documents).sort()).toEqual(["one", "three", "two"])
+    })
     it("exclude keeps matching files out even inside a selected folder", async () => {
       const f = await setup()
       f.files.set("b", transcript("b", ["root"]))

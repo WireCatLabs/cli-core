@@ -173,7 +173,9 @@ export const syncDocuments = async <M extends SourceFile>(options: SyncOptions<M
         } else {
           if (!source) throw new CliError("configuration_error", "a pending save requires source sign-in")
           const content = await source.content(job.id, limit)
-          if (!inScope(content.metadata, profile.roots, pending.folders, new Set(pending.matched ?? []), query)) {
+          const listed =
+            query?.mode === "include" && (pending.matched?.includes(job.id) ?? query.matches(content.metadata))
+          if (!listed && !inScope(content.metadata, profile.roots, pending.folders, new Set(), query)) {
             await index.remove(profile.principal, job.id)
             statePort.removeSnapshot(job.id)
             delete state.documents[job.id]

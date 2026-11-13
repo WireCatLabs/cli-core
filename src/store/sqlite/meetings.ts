@@ -491,8 +491,9 @@ const saveTranscripts = (
        speaker_name, text, normalized_text, metadata, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
   for (const { rows, driveFileId, ...t } of transcripts) {
-    if (driveFileId !== undefined) attachTranscriptDocument(database, meetingId, driveFileId, now)
-    if (t.contentHash !== null && sameContent.get(meetingId, t.source, t.contentHash)) {
+    const replayed = t.contentHash !== null && Boolean(sameContent.get(meetingId, t.source, t.contentHash))
+    if (driveFileId !== undefined) attachTranscriptDocument(database, meetingId, driveFileId, now, !replayed)
+    if (replayed) {
       counts.replayedTranscripts++
       continue
     }

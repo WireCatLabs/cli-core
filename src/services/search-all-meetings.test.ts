@@ -589,6 +589,30 @@ describe("a Meet transcript that Drive also imported", () => {
     }
   })
 
+  it("resolves on a replay after Drive stored the file, and a new version naming another file replaces the link", async () => {
+    const { store, save } = await fixture()
+    const saved = await withDocument(save, store)
+    const id = await transcriptDoc(store, "needle in the transcript")
+    expect(await store.meetings.transcriptMeetings([id])).toEqual(new Map([[id, saved.meeting.id]]))
+    await withDocument(save, store)
+    expect(await store.meetings.transcriptMeetings([id])).toEqual(new Map([[id, saved.meeting.id]]))
+    const sample = sampleMeeting()
+    await store.meetings.saveMeeting({
+      meeting: { ...sample.meeting, accountId: saved.accountId, externalId: "meet-1", title: "Invented call" },
+      transcripts: [
+        {
+          ...sample.transcripts[0],
+          source: "meet",
+          contentHash: "meet-transcript-2",
+          driveFileId: "doc-transcript-2",
+          rows: [{ ...sample.transcripts[0].rows[0], speakerParticipantPosition: null, text: "a newer version" }],
+        },
+      ],
+      now: 5000,
+    })
+    expect(await store.meetings.transcriptMeetings([id])).toEqual(new Map())
+  })
+
   it("keeps the document's hit when the meeting is not among the hits", async () => {
     const { store, save } = await fixture()
     const id = await transcriptDoc(store, "needle and a haystack only the document has")

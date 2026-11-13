@@ -9,16 +9,25 @@ const TRANSCRIPT_ROLE = "transcript"
 /**
  * The meeting's transcript is this Drive file: an `attached` link to the file's document, waiting by its Drive id when
  * Drive has not stored it yet. Drive's later import resolves it (`linkAttached`), so either order ends in one link.
+ * A new transcript version that names another file replaces the old link; a replay of an old version keeps it.
  */
 export const attachTranscriptDocument = (
   database: CacheDatabase,
   meetingId: number,
   fileId: string,
   now: number,
+  replaces: boolean,
 ): void => {
   const file = fileId.trim()
   if (!file) return
   const target = driveFileTarget(file)
+  if (replaces)
+    database
+      .prepare(
+        "DELETE FROM links WHERE from_type = 'meeting' AND from_id = ? AND kind = 'attached' AND role = ? " +
+          "AND target_text <> ?",
+      )
+      .run(meetingId, TRANSCRIPT_ROLE, target)
   const held = database
     .prepare(
       "SELECT id, to_id FROM links WHERE from_type = 'meeting' AND from_id = ? AND kind = 'attached' AND target_text = ?",
