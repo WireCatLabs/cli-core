@@ -48,5 +48,10 @@
     "repo": "cli-template",
     "pr": 2896,
     "until": "2026-11-26"
+  },
+  {
+    "repo": "gcal-cli",
+    "pr": 2903,
+    "until": "2026-11-27"
   }
 ]
