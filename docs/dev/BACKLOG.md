@@ -42,6 +42,8 @@ None open.
   `null`. Re-resolve links whose document is deleted. `src/store/sqlite/files.ts` (`linkAttached`).
 - **CORE-60** · P3 · `MeetingTranscriptDocumentStore.transcriptMeetings` has no caller but tests since `search all`
   reads `documentMeetings`. Drop it at the next breaking release. `src/meetings/transcript-store.ts`.
+- **CORE-61** · P2 · A shared Google sign-in module in `./google` (`accountEmail`, `session start`/`status`/`end`):
+  gcal, drive and meet each copy ~450 lines of it. `src/google/`.
 - **CORE-54** · P2 · A Drive file two Drive profiles both imported (a Meet transcript shared with both) never resolves
   its `attached` link: `driveDocumentOf` refuses two documents, so the meeting and its document both show in
   `search all`. Pick one document or link both. `src/store/sqlite/files.ts` (`driveDocumentOf`).

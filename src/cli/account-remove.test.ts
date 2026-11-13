@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest"
 import { lockPath } from "../background/lock.js"
 import type { ServerSystem } from "../background/system.js"
 import { unitScope } from "../background/units.js"
+import { credentialStorage, oauthAccount, standardCodec, tokenKeeper } from "../oauth/index.js"
 import { openStore } from "../store/store.js"
 import { messenger } from "../testing/shared-program.js"
 import { type AccountRemoval, type AccountRemovalContext, accountRemoveCommand, mayRevoke } from "./account-remove.js"
@@ -374,6 +375,83 @@ describe("account remove", () => {
     expect(existsSync(given.session)).toBe(true)
     expect(given.keyring.get(SERVICE, "app-keys:personal")).toBe("synthetic-secret")
     expect((await storeState(given.env)).accounts).toContain("500")
+  })
+})
+
+describe("account remove of an OAuth sign-in", () => {
+  const OAUTH_ENTRY = "oauth:example:personal"
+
+  const signedInRemoval = (given: Setup, answer: Response) => {
+    const revokes: string[] = []
+    const fetch = (async (url: string | URL | Request) => {
+      revokes.push(String(url))
+      return answer
+    }) as typeof globalThis.fetch
+    given.keyring.set(
+      SERVICE,
+      OAUTH_ENTRY,
+      JSON.stringify({
+        version: 1,
+        provider: "example",
+        clientId: "synthetic-client",
+        scopes: ["s"],
+        refreshToken: "synthetic-refresh",
+      }),
+    )
+    const storage = credentialStorage({
+      credentials: {
+        service: SERVICE,
+        configDir: join(given.root, "config"),
+        storage: "keyring",
+        keyring: given.keyring,
+      },
+      account: oauthAccount("example", "personal"),
+      codec: standardCodec("example"),
+    })
+    const keeper = tokenKeeper({
+      provider: {
+        id: "example",
+        name: "Example",
+        authorizeUrl: "https://example.test/authorize",
+        tokenUrl: "https://example.test/token",
+        revokeUrl: "https://example.test/revoke",
+        client: { clientId: "synthetic-client" },
+        redirect: { kind: "loopback" },
+      },
+      storage,
+      lockDir: join(given.root, "config"),
+      fetch,
+      signInCommand: "chat personal session start",
+    })
+    const removal: AccountRemoval = {
+      ...removalOf(given),
+      signOut: async (_profile, context) => {
+        const { revoked } = await keeper.signOut({ revoke: context.mayRevoke })
+        return { revoked, removed: ["the personal sign-in"] }
+      },
+    }
+    return { removal, revokes }
+  }
+
+  it("finishes when Google already dropped the grant (400 invalid_token)", async () => {
+    const given = await setup()
+    const { removal, revokes } = signedInRemoval(given, Response.json({ error: "invalid_token" }, { status: 400 }))
+    const result = await call(["personal", "--json", "account", "remove", "--keep-data", "--yes"], given, removal)
+
+    expect(result.code).toBe(0)
+    expect(result.item).toMatchObject({ revoked: true })
+    expect(revokes).toEqual(["https://example.test/revoke"])
+    expect(given.keyring.get(SERVICE, OAUTH_ENTRY)).toBeNull()
+  })
+
+  it("keeps the sign-in when the provider refuses the revoke for another reason", async () => {
+    const given = await setup()
+    const { removal } = signedInRemoval(given, Response.json({ error: "invalid_request" }, { status: 400 }))
+    const result = await call(["personal", "--json", "account", "remove", "--keep-data", "--yes"], given, removal)
+
+    expect(result.code).not.toBe(0)
+    expect(result.error).toMatchObject({ code: "outcome_unknown", reason: "oauth.revoke-failed" })
+    expect(given.keyring.get(SERVICE, OAUTH_ENTRY)).not.toBeNull()
   })
 })
 
