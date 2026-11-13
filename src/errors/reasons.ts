@@ -47,6 +47,10 @@ const SIGN_IN: Entry[] = [
   ["sign-in.secret-without-id", "configuration_error", "an OAuth client secret is set without its client id"],
   validation("account-remove.no-choice", "account remove needs --keep-data or --delete-data, one of them"),
   ["account-remove.unknown-profile", "not_found", "no profile by this name on this computer"],
+  validation(
+    "profile.missing",
+    "no profile named, and none is picked for the owner; details.profiles lists the ones here",
+  ),
   ["profile.unknown", "not_found", "no profile by this name on this computer; details.profiles lists the ones here"],
   ["account-remove.busy", "conflict", "a serve or a sync runs for this profile; stop it first"],
   ["account-remove.unconfirmed", "confirmation_required", "removing an account asks first; add --yes"],
@@ -509,6 +513,11 @@ const OTHERS: Entry[] = [
     "identity.stale",
     "conflict",
     "the people a merge or a proposed link names changed since; undo the later merge, or propose the link again",
+  ],
+  [
+    "identity.merge-conflict",
+    "conflict",
+    "a row of the renamed identity has no counterpart on the identity it merges into; the pair is left as it was",
   ],
   ["identity.no-merge", "not_found", "nothing of that person is merged into the other; people show lists the merges"],
   validation(
