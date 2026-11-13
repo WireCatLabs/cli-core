@@ -21,6 +21,7 @@ import { ownerPerson } from "./sqlite/actors.js"
 import type { ContactFilter } from "./sqlite/identities.js"
 import * as identities from "./sqlite/identities.js"
 import * as identityProposals from "./sqlite/identity-proposals.js"
+import { type IdentityRenames, renameIdentities } from "./sqlite/identity-rename.js"
 import * as identitySplits from "./sqlite/identity-split-proposals.js"
 import type { StoreContext } from "./sqlite/open.js"
 import { linkToOwner } from "./sqlite/own-identities.js"
@@ -117,6 +118,19 @@ export interface PeopleStore extends AccountPeople {
   /** Records the decision in `identity_link_events`; `unlinkIdentity` undoes it. */
   linkIdentities(person: IdentityRef, other: IdentityRef, options: LinkOptions): Promise<PersonRecord>
   unlinkIdentity(identity: IdentityRef, options: UnlinkOptions): Promise<PersonRecord>
+  /**
+   * The provider now names its identities by other ids, such as a phone number written another way. Each pair, in
+   * order and each in its own transaction: with no `to` stored the identity takes the new id (`renamed`); with `to`
+   * stored, `from` merges into it, with its person and every row that points at it (`merged`); with no `from`, or
+   * `from` equal to `to`, nothing changes (`untouched`), so a second run is all `untouched`. Stops once it has held
+   * the write lock for `lockMs` (default 250): `taken` says how many pairs it got to, so the caller passes the rest
+   * again. A pair that cannot merge is in `refused`, and the others still apply.
+   */
+  renameIdentities(
+    provider: Provider,
+    pairs: readonly { from: Id; to: Id }[],
+    options?: { lockMs?: number; by?: string },
+  ): Promise<IdentityRenames>
   /** The people merged into this one, newest first, each with the identities that came from it. */
   merges(uid: string): Promise<PersonMerge[]>
   /** The owner's undo of a merge: the identities that came from `from` go back to it. Gives `from` again. */
@@ -312,6 +326,8 @@ export const peopleStoreOver = (context: StoreContext, keyed: AccountPeople): Pe
     unlinkIdentity: async (identity, options) => {
       return write(database, () => personLinks.unlinkIdentity(context, identity, options))
     },
+    renameIdentities: async (provider, pairs, { lockMs = 250, by = provider } = {}) =>
+      write(database, () => renameIdentities(context, provider, pairs, { lockMs, by })),
     merges: async (uid) => personMerges.merges(context, uid),
     undoMerge: async (to, from, by) => write(database, () => personMerges.undoMerge(context, to, from, by)),
     split: async (uid, chosen, by) => write(database, () => personMerges.split(context, uid, chosen, by)),
