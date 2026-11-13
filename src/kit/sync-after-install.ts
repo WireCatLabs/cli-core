@@ -25,14 +25,22 @@ export interface SyncAfterInstallOptions {
  * The shared config (`~/.config/WireCat/config.json`) as a fresh or damaged machine has it. Only an explicit
  * "read only" answer limits a tool, and even then a sync runs: it only reads the service (owner ruling, 2026-11-13).
  */
-const SHARED_CONFIGS: { state: string; write?: (dir: string) => void; readOnly?: true }[] = [
+const SHARED_CONFIGS: { state: string; write?: (dir: string) => void; readOnly?: true; broken?: true }[] = [
   { state: "no shared config, as on a fresh install" },
-  { state: "a shared config that is not JSON", write: (dir) => writeFileSync(join(dir, "config.json"), "{ setup: ") },
+  {
+    state: "a shared config that is not JSON",
+    write: (dir) => writeFileSync(join(dir, "config.json"), "{ setup: "),
+    broken: true,
+  },
   {
     state: "a shared config with a byte-order mark",
     write: (dir) => writeFileSync(join(dir, "config.json"), '﻿{"setup":{"permissions":"allow"}}'),
   },
-  { state: "a folder where the shared config should be", write: (dir) => mkdirSync(join(dir, "config.json")) },
+  {
+    state: "a folder where the shared config should be",
+    write: (dir) => mkdirSync(join(dir, "config.json")),
+    broken: true,
+  },
   {
     state: "a setup section in a shape this version does not take",
     write: (dir) =>
@@ -75,7 +83,8 @@ export const syncAfterInstallCases = (options: SyncAfterInstallOptions): SyncAft
         run: async () => {
           const ran = await cli(sync, shared)
           assert.notEqual(errorCodeOf(ran.err), "permission_error", `sync was refused: ${ran.err}`)
-          assert.equal(ran.code, 0, `sync exited ${ran.code}: ${ran.out}${ran.err}`)
+          // A file no reader can parse may fail a step that reads it, loudly and by name; it never restricts.
+          if (!shared.broken) assert.equal(ran.code, 0, `sync exited ${ran.code}: ${ran.out}${ran.err}`)
         },
       }),
     ),

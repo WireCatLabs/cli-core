@@ -281,6 +281,14 @@ describe("setup's permission answer", () => {
       expect(levelFor(permissions, "messages.send").level).toBe("allow")
     }
   })
+
+  it("reads a shared config saved with a byte-order mark, as a Windows editor saves it", () => {
+    withConfig(JSON.stringify({ profiles: { agent: {} } }))
+    const dir = mkdtempSync(join(tmpdir(), "wirecat-config-"))
+    writeFileSync(join(dir, "config.json"), '\uFEFF{"setup":{"permissions":"readonly"}}')
+    const { permissions } = resolveSettings({ profile: "agent" }, { env: { WIRECAT_CONFIG_DIR: dir }, configDir })
+    expect(permissions["*"]).toBe("readonly")
+  })
 })
 
 describe("permissions across sections", () => {
