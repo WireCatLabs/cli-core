@@ -272,7 +272,18 @@ const searchAction = (messenger: Messenger) =>
     renderAnswer(
       this,
       context,
-      messagesAnswer("search messages", found, { limit, page: page ?? 1, again }, given.join(" "), skips),
+      messagesAnswer(
+        "search messages",
+        found,
+        {
+          limit,
+          page: page ?? 1,
+          again,
+          archiveOnly: !discover && Boolean(messenger.serverSearch) && backendRequest(this).backend === "archive",
+        },
+        given.join(" "),
+        skips,
+      ),
       view,
     )
   }

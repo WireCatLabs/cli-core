@@ -617,7 +617,7 @@ describe("a read-only lock", () => {
     })
     const act = vi.fn(async () => "done")
     const write = () => guardedWrite(guard, { chatId: "1", key: "messages.delete", operationId: newSendId() }, act)
-    return { asker, act, write }
+    return { asker, act, write, guard }
   }
 
   it("refuses an ask-level write as read-only before it asks", async () => {
@@ -640,4 +640,20 @@ describe("a read-only lock", () => {
     expect(asker).toHaveBeenCalledOnce()
     expect(act).toHaveBeenCalledOnce()
   })
+
+  it.each(["messages.server-search", "messages.sync-first", "conversations.embeddings"] as const)(
+    "lets %s read under the read-only lock, and keeps its permission level",
+    async (key) => {
+      const allowed = guarded({ [key]: "allow" }, "APP_READ_ONLY")
+      const read = vi.fn(async () => "read")
+      await expect(guardedWrite(allowed.guard, { chatId: "1", key, operationId: newSendId() }, read)).resolves.toBe(
+        "read",
+      )
+
+      const denied = guarded({ [key]: "deny" }, "APP_READ_ONLY")
+      await expect(
+        guardedWrite(denied.guard, { chatId: "1", key, operationId: newSendId() }, read),
+      ).rejects.toMatchObject({ code: "permission_error" })
+    },
+  )
 })

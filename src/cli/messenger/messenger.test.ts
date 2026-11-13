@@ -2552,6 +2552,47 @@ describe("the shared read commands", () => {
     expect(answer.stderr.join("\n")).toContain("nothing found in the local store or on the messenger's server")
   })
 
+  it("**search messages --backend archive** over a partial chat offers the server's search first", async () => {
+    const root = mkdtempSync(join(tmpdir(), "messenger-"))
+    const env = {
+      ...process.env,
+      CHAT_PROFILE: "default",
+      CHAT_STATE_DIR: join(root, "state"),
+      CHAT_CONFIG_DIR: join(root, "config"),
+      MESSAGING_STORE: join(root, "m.db"),
+    }
+    await call(["chats", "list", "--json"], async () => fake, env)
+    await call(["messages", "list", "Book", "--json"], async () => fake, env)
+    const store = await openStore({ path: env.MESSAGING_STORE })
+    try {
+      await store.sync.markRange({ provider: "chat", account: "500" }, "7", 1, 1)
+    } finally {
+      await store.close()
+    }
+    const search = async (...extra: string[]) =>
+      JSON.parse(
+        (
+          await call(
+            ["search", "messages", "chapter", ...extra, "--json"],
+            async () => fake,
+            env,
+            {},
+            { serverSearch: true },
+          )
+        ).stdout[0] ?? "",
+      )
+
+    const archive = await search("--backend", "archive")
+    expect(archive.missing?.length).toBeGreaterThan(0)
+    expect(archive.next[0]).toMatchObject({
+      step: "search.server",
+      args: { query: "chapter", backend: "server" },
+      line: expect.stringContaining("--backend server"),
+    })
+    const discover = await search("--discover")
+    expect(discover.next?.map(({ step }: { step: string }) => step) ?? []).not.toContain("search.server")
+  })
+
   it("**--backend both** on a read-only profile answers from the archive and never asks the server", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
     const env = {
@@ -3021,6 +3062,18 @@ describe("the shared read commands", () => {
     const unasked = await search(server)
     expect(searchMessages).toHaveBeenCalledTimes(1)
     expect(messageIds(unasked)).toContain("40")
+
+    searchMessages.mockClear()
+    const locked = await call(
+      ["search", "all", "chapter", "--backend", "server", "--json"],
+      server,
+      { ...env, CHAT_READ_ONLY: "1" },
+      {},
+      { serverSearch: true },
+    )
+    expect(locked.code).toBe(0)
+    expect(searchMessages).toHaveBeenCalledTimes(1)
+    expect(messageIds(JSON.parse(locked.stdout[0] ?? ""))).toEqual(["40"])
 
     const offline = await search(never, "--backend", "server", "--offline")
     expect(offline.meta.issues).toContainEqual({ code: "validation_error", source: "messages" })

@@ -31,6 +31,15 @@ export const STEPS = defineSteps([
     why: "the local copy is missing messages; syncing brings them in",
   },
   {
+    id: "search.server",
+    command: "search messages",
+    args: [
+      { name: "query", required: true },
+      { name: "backend", required: true },
+    ],
+    why: "only the local copy was searched, and it does not hold every message; the messenger's own search reaches the rest",
+  },
+  {
     id: "messages.transcribe",
     command: "messages transcribe",
     args: [
