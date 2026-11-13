@@ -1,4 +1,5 @@
 import type { BudgetStop, RunBudget } from "../background/budget.js"
+import type { RunReport } from "../meetings/index.js"
 import type { LoadEngine } from "../readers/types.js"
 import type { AccountKey, MessageStore } from "../store/index.js"
 import type { MailAttachmentPolicy } from "./attachments.js"
@@ -63,6 +64,8 @@ export interface MailSyncResult {
   partial?: PartialOutcome
   /** `--retry-attachments`: emails read again for attachments a missing reader left unread. */
   retried?: { emails: number; extracted: number; stillFailed: number; missing: number }
+  /** Per provider, the meetings saved from mail a meeting-notes rule matches. */
+  meetingNotes?: Record<string, RunReport>
 }
 
 export interface MailSyncOptions {

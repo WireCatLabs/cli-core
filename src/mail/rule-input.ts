@@ -32,6 +32,7 @@ export const ruleInput = (rule: MailRule, source = rule.source ?? "owner") => ({
     store: STORE_ACTION[rule.action],
     ...(rule.tags?.length ? { tags: rule.tags } : {}),
     ...(rule.tags_skipped && Object.keys(rule.tags_skipped).length ? { tags_skipped: rule.tags_skipped } : {}),
+    ...(rule.meeting_notes ? { meeting_notes: rule.meeting_notes } : {}),
   },
   protected: rule.protected === true,
   source,

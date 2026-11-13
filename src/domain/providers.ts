@@ -45,6 +45,8 @@ export const PROVIDERS: readonly ProviderEntry[] = [
   { name: "obsidian", kind: "notes", aliases: [] },
   { name: "added", kind: "notes", aliases: [] },
   { name: "zoom", kind: "meetings", aliases: [] },
+  // Its meetings come from the notes Telemost mails (`keeper@telemost.yandex.ru`), read by a mail rule.
+  { name: "telemost", kind: "meetings", aliases: [] },
   // A phone export's records: its SMS and its calls in the one account the import names.
   { name: "phone", kind: "messages", kinds: ["messages", "events"], aliases: [], imported: true },
   // Any other import: a folder of notes, a CRM's export, a script's records, under `import:<what it is>`.
@@ -61,6 +63,7 @@ const LABELS: Readonly<Record<string, string>> = {
   "google-drive": "Google Drive",
   added: "added by hand",
   email: "mail",
+  telemost: "Telemost",
 }
 
 /** How a text names a provider to a person: `MAX`, not `max`. */

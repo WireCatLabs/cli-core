@@ -12,6 +12,7 @@ import { GMAIL_ALL_MAIL, mailFolders } from "./folders.js"
 import { dropMissing, tooManyGone } from "./gone.js"
 import { mailHeadersOf } from "./headers.js"
 import { flagsToRefresh, proveByLocation } from "./locations.js"
+import { saveMeetingNotes } from "./meeting-notes.js"
 import { MAX_BODY_CHARS, type ParsedMail, parseMail } from "./parse.js"
 import { completePartial } from "./partial.js"
 import { FETCH_SLICE, keyOf, type QuickPlan, readQuick } from "./quick.js"
@@ -69,6 +70,21 @@ const STORE_BUSY_TRIES = 5
 const STORE_BUSY_WAIT_MS = 2_000
 
 export const syncMail = async (
+  source: MailSource,
+  store: MessageStore,
+  options: MailSyncOptions,
+): Promise<MailSyncResult> => {
+  const result = await syncAndComplete(source, store, options)
+  const rules = options.account.rules ?? []
+  if (!rules.some(({ meeting_notes }) => meeting_notes) || options.signal?.aborted) return result
+  const now = (options.now ?? Date.now)()
+  return {
+    ...result,
+    meetingNotes: await saveMeetingNotes(store, options.account.address, rules, { since: result.since, now }),
+  }
+}
+
+const syncAndComplete = async (
   source: MailSource,
   store: MessageStore,
   options: MailSyncOptions,

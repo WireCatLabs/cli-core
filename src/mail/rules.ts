@@ -42,6 +42,8 @@ export interface MailRule {
   reason?: string
   /** Stored in full, and no cleanup may cut, archive or trash it, whatever other rules or presets say. */
   protected?: boolean
+  /** The mail is a meeting's notes from this provider (`telemost`): each email it matches is saved as a meeting too. */
+  meeting_notes?: string
   /** owner, preset:<name>, probe or gmail-filter. */
   source?: string
   decided_at: string
