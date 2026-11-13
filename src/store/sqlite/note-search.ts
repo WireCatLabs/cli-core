@@ -201,7 +201,7 @@ export const searchNotes = (context: StoreContext, query: NoteQuery): { items: N
   return {
     items: rows.slice(offset, offset + query.limit).map((row) => {
       const found = read[row.type === "document" ? "document" : "note"].get(row.id) as Record<string, unknown>
-      const note = row.type === "document" ? documentOf(found) : noteOf(found)
+      const note = row.type === "document" ? documentOf(found) : noteOf(found, context.database)
       return {
         ref: note.ref,
         note,
@@ -539,7 +539,7 @@ export const noteSearchOver = (context: StoreContext): NoteSearch => {
   const drain = () => drainNoteIndex(database, stemmerFor)
   const read = (type: string, id: number): Note | undefined => {
     const row = database.prepare(`SELECT * FROM ${type === "document" ? "documents" : "notes"} WHERE id = ?`).get(id)
-    return row ? (type === "document" ? documentOf(row) : noteOf(row)) : undefined
+    return row ? (type === "document" ? documentOf(row) : noteOf(row, database)) : undefined
   }
   const live = (folderIds: string[] | undefined, source: Note["source"] | undefined, withInternal = false) => {
     const folders = folderIds?.length ? JSON.stringify(folderIds) : null
