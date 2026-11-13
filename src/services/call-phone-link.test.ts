@@ -7,6 +7,7 @@ import { fakeMeetingSource } from "../meetings/testing/index.js"
 import { type MessageStore, openStore } from "../store/store.js"
 import { scopeOf } from "./business-context.js"
 import { communicationsOf } from "./communications.js"
+import { canonicalPersonContext } from "./person-business.js"
 import { personContext } from "./person-context.js"
 import { personMeetingContext } from "./person-meeting-context.js"
 
@@ -73,6 +74,7 @@ describe("a call's client and the CRM contact with that number (NEED-2600)", () 
       people: [person.ref],
     }
     expect((await personContext(store, CRM, "Ana Example")).meetings).toMatchObject([call])
+    expect((await canonicalPersonContext(store, person.ref)).meetings).toMatchObject([call])
     const touches = await communicationsOf(store, [callPerson as NonNullable<typeof callPerson>], scopeOf(undefined))
     expect(touches.counts.meetings).toBe(1)
     expect(touches.items).toMatchObject([{ kind: "meeting", ref: call.ref, people: [person.ref] }])
