@@ -20,8 +20,10 @@ the commands above except `test:slow`, with the coverage floor, plus `pnpm build
 Node, the SQLite restart and parity, which builds tg-cli, max-cli, whatsapp-cli and cli-template against the branch
 ([WC-CI-5](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/ci.md#wc-ci-5--run-the-full-linux-validation-on-every-pull-request-and-keep-platform-suites-out)).
 On a pull request parity builds each CLI at the branch with the same name as the pull request's branch when
-that CLI has one, and at its `main` otherwise, so a change paired with adoption branches in the CLIs can pass
-before they merge ([`scripts/parity/app-ref.sh`](../../scripts/parity/app-ref.sh)).
+that CLI has an open pull request (a draft counts) from that branch, and at its `main` otherwise, so a change paired
+with adoption pull requests in the CLIs can pass before they merge. A branch with no pull request is not built
+([`scripts/parity/app-ref.sh`](../../scripts/parity/app-ref.sh)). A release takes the adoption branches with
+`bin/release --app-ref <branch>`.
 Parity's `downstream` job builds every CLI listed in
 [`scripts/parity/downstream.json`](../../scripts/parity/downstream.json) against the branch, in parallel. One required
 check, `validation / parity / downstream`, sums the matrix
