@@ -1,4 +1,4 @@
-import { purgeAccount } from "./accounts.js"
+import { purgeAccount } from "./account-purge.js"
 import type { StoreContext } from "./open.js"
 import { write } from "./transaction.js"
 

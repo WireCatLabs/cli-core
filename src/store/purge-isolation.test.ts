@@ -192,6 +192,57 @@ describe("purging one account", () => {
     expect(orphanVectors(db)).toBe(0)
   })
 
+  it("removes a calendar account with its calendars, mail rules, reminders and proposals", async () => {
+    const { store, db } = await seeded()
+    const key: AccountKey = { provider: "google-calendar", account: "owner-1" }
+    const account = await store.accounts.saveAccount(key, { name: null })
+    const run = (sql: string, ...params: number[]) => db.prepare(sql).run(...params)
+    run(
+      `INSERT INTO mail_rules (account_id, conditions, actions, source, decided_at, created_at, updated_at)
+       VALUES (?, '{}', '[]', 'owner', 1, 1, 1)`,
+      account,
+    )
+    run(`INSERT INTO projects (key, name, type, created_at, updated_at) VALUES ('PURGE', 'Purge', 'work', 1, 1)`)
+    run(`INSERT INTO tasks (project_id, number, key, title, type, status, author_type, author_id, source, created_at,
+           updated_at) VALUES (last_insert_rowid(), 1, 'PURGE-1', 'Call back', 'promise', 'open', 'person', 1, 'owner', 1, 1)`)
+    run(
+      `INSERT INTO reminders (task_id, account_id, due_at, timezone, state, created_at, updated_at)
+       VALUES (last_insert_rowid(), ?, 5, 'UTC', 'pending', 1, 1)`,
+      account,
+    )
+    run(
+      `INSERT INTO proposed_actions (kind, account_id, status, proposed_by_type, proposed_by_id, created_at, updated_at)
+       VALUES ('send', ?, 'pending', 'agent', 1, 1, 1)`,
+      account,
+    )
+    const [calendar] = await store.calendar.saveCalendars(
+      account,
+      [
+        {
+          externalId: "primary",
+          title: "Work",
+          timezone: "UTC",
+          accessRole: "owner",
+          primary: true,
+          syncByDefault: true,
+        },
+      ],
+      1,
+    )
+    await store.calendar.saveEntries(
+      calendar?.id as number,
+      [{ externalId: "e1", kind: "single", status: "confirmed", title: "Review", startsAt: 5000, endsAt: 9000 }],
+      1,
+    )
+    const before = others(db, account)
+    await store.accounts.purge(key)
+    expect(leftovers(db, account)).toEqual([])
+    expect(others(db, account)).toEqual(before)
+    expect(db.prepare("SELECT count(*) AS n FROM calendar_entries").get()).toEqual({ n: 0 })
+    expect(db.prepare("SELECT count(*) AS n FROM tasks").get()).toEqual({ n: 1 })
+    expect(orphanPointers(db).filter(({ count }) => count > 0)).toEqual([])
+  })
+
   it("removes the people only that account had seen, and keeps the tagged and the shared ones", async () => {
     const { store, db } = await seeded()
     await store.accounts.saveAccount(TG_2, { name: null })
