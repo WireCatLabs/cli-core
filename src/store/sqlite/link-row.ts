@@ -10,6 +10,9 @@ const iso = (value: unknown) => new Date(Number(value)).toISOString()
 export const thingRef = (database: CacheDatabase, type: unknown, id: unknown): string | null =>
   type == null || id == null ? null : (referenceOfThing(database, storedThing(type, id)) ?? null)
 
+// A chat or meeting deleted since leaves its links behind with no end to name.
+export const hasBothEnds = (link: Link): boolean => link.from !== null && link.to !== null
+
 export const linkOf = (database: CacheDatabase, row: Row): Link => {
   const metadata: Partial<Record<string, unknown>> = row.metadata == null ? {} : JSON.parse(String(row.metadata))
   // An older row holds one word; every reader gets a list.
