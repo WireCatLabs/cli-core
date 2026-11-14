@@ -25,13 +25,18 @@ export interface FakeCalendarWriter extends CalendarWriter {
   loseNextAnswer(): void
   held(calendar: string): EntryInput[]
   readonly calls: FakeCalendarWriterCall[]
+  /** Every conference request id it was sent, in order. */
+  readonly conferenceRequests: string[]
 }
 
-export const fakeCalendarWriter = (options: { provider?: string; now?: () => number } = {}): FakeCalendarWriter => {
+export const fakeCalendarWriter = (
+  options: { provider?: string; now?: () => number; conferences?: readonly string[] } = {},
+): FakeCalendarWriter => {
   const now = options.now ?? Date.now
   const calendars = new Map<string, Map<string, EntryInput>>()
   const made = new Map<string, number>()
   const calls: FakeCalendarWriterCall[] = []
+  const conferenceRequests: string[] = []
   let version = 0
   let lose = false
   const of = (calendar: string) => {
@@ -51,9 +56,13 @@ export const fakeCalendarWriter = (options: { provider?: string; now?: () => num
     return found
   }
   const fields = (patch: EventPatch): Partial<EntryInput> => {
-    const { attendees, title, ...rest } = patch
+    const { attendees, title, conference, ...rest } = patch
+    if (conference) conferenceRequests.push(conference.requestId)
     return {
       ...rest,
+      ...(conference
+        ? { conference: conference.provider, joinUrl: `https://meet.example.com/${conference.requestId.slice(0, 8)}` }
+        : {}),
       ...(title === undefined ? {} : { title }),
       ...(patch.startDate === undefined ? {} : { allDay: true, startsAt: null, endsAt: null }),
       ...(patch.startsAt === undefined ? {} : { allDay: false, startDate: null, endDate: null }),
@@ -65,7 +74,9 @@ export const fakeCalendarWriter = (options: { provider?: string; now?: () => num
 
   return {
     provider: options.provider ?? "example-calendar",
+    ...(options.conferences ? { conferences: options.conferences } : {}),
     calls,
+    conferenceRequests,
     put(calendar, ...entries) {
       return entries.map((entry) => {
         const held = entry.etag ? entry : stamp(entry)
