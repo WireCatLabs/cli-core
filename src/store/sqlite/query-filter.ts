@@ -6,6 +6,7 @@ import {
   type QueryContext,
   type QueryNode,
   queryError,
+  timezoneOf,
 } from "@wirecat/cli-base/query"
 import type { SqlValue } from "../driver.js"
 import { fold } from "../normalize.js"
@@ -32,6 +33,7 @@ export type ColumnMap = Readonly<
 >
 
 export interface FilterOptions extends QueryContext {
+  /** Where `today` and a bare date start; the machine's zone when absent, as search reads them. */
   zone?: string
   now?: number
 }
@@ -95,7 +97,7 @@ const leaf = (node: Predicate, columns: ColumnMap, options: FilterOptions): Wher
         range[1] as string,
         range[2] as boolean,
         range[3] as boolean,
-        options.zone ?? "UTC",
+        timezoneOf(options.zone),
         node.span,
         options.now,
       )

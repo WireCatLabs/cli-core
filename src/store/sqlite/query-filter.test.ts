@@ -151,6 +151,18 @@ const viaOracle = (query: string): number[] => {
   ).map(({ id }) => id)
 }
 
+describe("a date in a list query", () => {
+  it("starts in the machine's zone when none is given, as search reads it", () => {
+    const ast = validateQuery(parseLucene("created_at:2026-01-02", { defaultField: "none" }), registry)
+    const local = queryFilter(ast, COLUMNS)
+    const machine = queryFilter(ast, COLUMNS, { zone: Intl.DateTimeFormat().resolvedOptions().timeZone })
+    const tokyo = queryFilter(ast, COLUMNS, { zone: "Asia/Tokyo" })
+
+    expect(local.params).toEqual(machine.params)
+    expect(tokyo.params).not.toEqual(queryFilter(ast, COLUMNS, { zone: "America/Los_Angeles" }).params)
+  })
+})
+
 describe("a list query as SQL", () => {
   it.each([
     "state:open",

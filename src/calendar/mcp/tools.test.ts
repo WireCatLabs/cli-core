@@ -71,6 +71,41 @@ describe("calendar MCP tools", () => {
     expect((one.items as { external_id: string }[]).map(({ external_id }) => external_id)).toEqual(["cal-2"])
   })
 
+  it("an event both accounts hold is read only from the account named, never the first one", async () => {
+    const store = memoryEventStore()
+    let shared = 0
+    for (const accountId of [1, 2]) {
+      const [calendar] = await store.saveCalendars(
+        accountId,
+        [{ externalId: `cal-${accountId}`, title: "Work", timezone: "UTC", accessRole: "owner", primary: true }],
+        NOW,
+      )
+      const [entry] = await store.saveEntries(
+        calendar?.id as number,
+        [
+          {
+            externalId: `e-${accountId}`,
+            icalUid: "uid-1",
+            kind: "single",
+            status: "confirmed",
+            title: "Sync",
+            startsAt: NOW,
+            endsAt: NOW + HOUR,
+          },
+        ],
+        NOW,
+      )
+      shared = entry?.eventId as number
+    }
+    const read = (input: object) => callCalendarTool(store, "event_show", input, { accountIds: [1, 2], now: NOW })
+
+    expect(body(await read({ event: String(shared) })).error).toMatchObject({
+      code: "validation_error",
+      message: `event ${shared} is in accounts 1, 2; name one with account_id`,
+    })
+    expect(body(await read({ event: String(shared), account_id: 2 })).accounts).toEqual([2])
+  })
+
   it("store_status answers each account's synced calendars in the shared progress shape", async () => {
     const { store } = await setup()
     const status = body(
@@ -182,6 +217,14 @@ describe("calendar MCP tools", () => {
       expect(writer.calls).toEqual([expect.objectContaining({ write: "create", calendar: "cal-2", notify: false })])
       const calendar = (await store.calendars(2))[0]?.id as number
       expect((await store.entry(calendar, made.operation_id as string))?.title).toBe("Example planning")
+    })
+
+    it("reads a time without a zone in the computer's zone, as the CLI does", async () => {
+      const { call, store } = await writable()
+      const made = body(await call("event_create", { calendar: "cal-1", ...planning }))
+      const calendar = (await store.calendars(1))[0]?.id as number
+      const local = new Date(2026, 10, 2, 10).getTime()
+      expect((await store.entry(calendar, made.operation_id as string))?.startsAt).toBe(local)
     })
 
     it("a lost create names its operation_id, and a retry with it finds the event instead of making another", async () => {
