@@ -170,9 +170,9 @@ export {
   dispatchMeetingMutation,
   type ManagedMeeting,
   type ManagedMeetingChange,
+  MEETING_FIELD_KEYS,
   MEETING_FIELDS,
   type MeetingChangeRules,
-  type MeetingCreateFields,
   type MeetingField,
   type MeetingFields,
   type MeetingManagement,
@@ -183,6 +183,7 @@ export {
   type MeetingOperationOptions,
   type MeetingProviderContext,
   type MeetingSetting,
+  meetingFieldFlag,
   validateMeetingChange,
 } from "./meeting-management.js"
 export type {
