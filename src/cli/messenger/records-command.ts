@@ -128,11 +128,15 @@ export const callsCommand = (messenger: Messenger): Command => {
   return calls
 }
 
-/** `chats delete` and `chats clear` — for this account only; at the default level they ask first. */
+/**
+ * `chats delete` and `chats clear` — for this account only; at the default level they ask first. No MCP server offers
+ * them: over MCP an ask level goes ahead, and a whole chat gone cannot be undone (owner ruling, 2026-11-14).
+ */
 export const chatDeletionCommands = (messenger: Messenger): Command[] => [
   annotate(new Command("delete"), {
     output: { entity: "chat_removal" },
     effects: REMOTE_WRITE,
+    mcp: false,
     examples: [`${messenger.app.command} personal chats delete "Book club"`],
   })
     .description("delete a chat from this account; the others in it keep it and its messages")
@@ -151,6 +155,7 @@ export const chatDeletionCommands = (messenger: Messenger): Command[] => [
   annotate(new Command("clear"), {
     output: { entity: "chat_removal" },
     effects: REMOTE_WRITE,
+    mcp: false,
     examples: [`${messenger.app.command} personal chats clear "Book club"`],
   })
     .description("delete every message in a chat for this account; the others in it keep theirs")
