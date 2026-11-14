@@ -218,6 +218,13 @@ export { type OutputOptions, resolveOutput } from "./output.js"
 export { pollLines, type RenderOptions, renderMessage, renderMessages } from "./render/messages.js"
 export { foldName, isId, type PeopleLookup, pickChat, pickPerson } from "./resolve.js"
 export {
+  type QueryTree,
+  type ServiceCalls,
+  type ServiceCapability,
+  type ServiceOperator,
+  serviceCallsOf,
+} from "./search/service-query.js"
+export {
   atTerminal,
   type LoginQr,
   type LoginQrOptions,
