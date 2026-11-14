@@ -61,5 +61,6 @@ export const pagingOf = (command: Command): Pick<Settings, "limit" | "page"> => 
     needsProfile: false,
     readOnly: true,
   })
-  return { limit, page }
+  // A host's settings are force-cast to `Settings`; one that leaves these out must still page, not offset by NaN.
+  return { limit: limit ?? DEFAULT_CONFIG.defaults.limit, page: page ?? 1 }
 }
