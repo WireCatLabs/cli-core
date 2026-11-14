@@ -6,7 +6,7 @@ import { afterEach, expect, it, vi } from "vitest"
 import { addMeetingCommands } from "../meetings/cli/index.js"
 import { meetingPeople, validateMeetingParticipantSearch } from "../meetings/index.js"
 import { callMeetingTool } from "../meetings/mcp/index.js"
-import { memoryMeetingStore, sampleMeeting } from "../meetings/testing/index.js"
+import { flagPaging, memoryMeetingStore, sampleMeeting } from "../meetings/testing/index.js"
 import { openCache } from "../store/open.js"
 import { openStore } from "../store/store.js"
 
@@ -154,6 +154,7 @@ it("exposes equivalent bounded CLI and MCP reads while retaining older adapter c
   const program = new Command("example").option("--json")
   addMeetingCommands(program, {
     store: f.store.meetings,
+    pagingOf: flagPaging,
     accountId: f.accountId,
     write: output,
     inRun: (_command, body) => body(),
@@ -176,26 +177,36 @@ it("exposes equivalent bounded CLI and MCP reads while retaining older adapter c
   })
   expect(page).not.toHaveProperty("next_cursor")
   expect(page).not.toHaveProperty("has_more")
-  const mcp = await callMeetingTool(f.store.meetings, "meeting_people", {
-    query: "Alice",
-    account_id: f.accountId,
-    limit: 1,
-    scan_limit: 2,
-    max_read_bytes: 100,
-  })
+  const mcp = await callMeetingTool(
+    f.store.meetings,
+    "meeting_people",
+    {
+      query: "Alice",
+      account_id: f.accountId,
+      limit: 1,
+      scan_limit: 2,
+      max_read_bytes: 100,
+    },
+    { limit: 100 },
+  )
   expect(mcp).toMatchObject({ structuredContent: page })
   const legacyRead = vi.spyOn(f.store.meetings, "participants")
-  expect(await callMeetingTool(f.store.meetings, "meeting_people", { query: "Alice" })).toMatchObject({
+  expect(await callMeetingTool(f.store.meetings, "meeting_people", { query: "Alice" }, { limit: 100 })).toMatchObject({
     isError: true,
     structuredContent: { error: { code: "configuration_error" } },
   })
   expect(legacyRead).not.toHaveBeenCalled()
   expect(
-    await callMeetingTool(f.store.meetings, "meeting_people", {
-      query: "Alice",
-      account_id: f.accountId,
-      cursor: "bad-cursor",
-    }),
+    await callMeetingTool(
+      f.store.meetings,
+      "meeting_people",
+      {
+        query: "Alice",
+        account_id: f.accountId,
+        cursor: "bad-cursor",
+      },
+      { limit: 100 },
+    ),
   ).toMatchObject({ isError: true })
   const legacy = memoryMeetingStore()
   await legacy.saveMeeting(sampleMeeting())

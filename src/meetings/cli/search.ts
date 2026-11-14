@@ -73,7 +73,7 @@ const createMeetingSearchCommandDefinition = (program: Command): Command => {
       "meetings starting at or before this ISO 8601 date or time; a date alone covers that whole local day",
       moment("--until-time", true, readIn),
     )
-    .option("--limit <n>", "how many hits, 1 through 1000 (default 100)", integer)
+    .option("--limit <n>", "how many hits, 1 through 1000; the profile's defaults.limit when absent", integer)
     .option("--cursor <cursor>", "continue from the previous page's page.next_cursor, with the same query and filters")
     .option("--max-read-bytes <bytes>", "most stored bytes to read, 1 through 67108864 (default 4194304)", integer)
   annotate(command, {
@@ -84,10 +84,14 @@ const createMeetingSearchCommandDefinition = (program: Command): Command => {
   return command
 }
 
-/** Transport fields become one validated word request before a host opens its selected source. */
+/**
+ * Transport fields become one validated word request before a host opens its selected source. `limit` is the page
+ * without `--limit`: the profile's `defaults.limit`, which `pagingOf` from `@wirecat/cli-core/cli` reads.
+ */
 export const meetingHitSearchRequest = (
   query: string,
   options: MeetingSearchFlags,
+  limit: number,
   signal?: AbortSignal,
 ): MeetingHitSearchOptions => {
   const request: MeetingHitSearchOptions = {
@@ -101,7 +105,7 @@ export const meetingHitSearchRequest = (
     topic: options.topicName ?? options.topic,
     since: options.sinceTime,
     until: options.untilTime,
-    limit: options.limit,
+    limit: options.limit ?? limit,
     after: options.cursor,
     maxReadBytes: options.maxReadBytes,
     signal,
@@ -151,16 +155,18 @@ const addMeetingSearchCommandDefinition = (
       options: MeetingSearchFlags & Record<string, unknown>,
     ) => Promise<MeetingSearchPage>
     signal: () => AbortSignal | undefined
+    /** The page without `--limit`: `pagingOf` from `@wirecat/cli-core/cli`, which reads the profile's limit. */
+    pagingOf: (command: Command) => { limit: number }
     output: (value: unknown) => void
   },
 ): Command =>
   createMeetingSearchCommand(program).action(
-    async (query: string, options: MeetingSearchFlags & Record<string, unknown>) => {
-      const request = meetingHitSearchRequest(query, options, deps.signal())
+    async (query: string, options: MeetingSearchFlags & Record<string, unknown>, command: Command) => {
+      const request = meetingHitSearchRequest(query, options, deps.pagingOf(command).limit, deps.signal())
       deps.output(
         meetingHitsList(
           await deps.search(query, request, options),
-          request.limit ?? 100,
+          request.limit as number,
           "search meetings",
           meetingSearchArguments(query, options),
           meetingSearchMeta(options),

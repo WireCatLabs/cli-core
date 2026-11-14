@@ -6,7 +6,7 @@ import { Command } from "commander"
 import { describe, expect, it } from "vitest"
 import { toolsFromCommands } from "../mcp/agent.js"
 import { addMeetingCommands, type MeetingCommandDeps } from "../meetings/cli/index.js"
-import { memoryMeetingStore, sampleMeeting } from "../meetings/testing/index.js"
+import { flagPaging, memoryMeetingStore, sampleMeeting } from "../meetings/testing/index.js"
 import { isStoreChange, readsOverMcpAt, writesNewFileOnlyWith } from "./effects.js"
 import { writeNewFile } from "./new-file.js"
 
@@ -16,6 +16,7 @@ const program = async (deps: Partial<MeetingCommandDeps> = {}) => {
   const root = new Command("meet").exitOverride().configureOutput({ writeErr() {}, writeOut() {} })
   addMeetingCommands(root, {
     store,
+    pagingOf: flagPaging,
     accountId: 1,
     write() {},
     inRun: (_command, body) => body(),

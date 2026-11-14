@@ -122,8 +122,15 @@ export const callMeetingTool = async (
   store: MeetingStore,
   name: string,
   input: unknown,
-  /** The host's error registry (`failureContext`), so its reasons and detail keys survive. */
-  failure: FailureContext = {},
+  {
+    limit: configured,
+    failure = {},
+  }: {
+    /** A list's page without `limit`: the profile's `defaults.limit`, as the messenger MCP lists take it. */
+    limit: number
+    /** The host's error registry (`failureContext`), so its reasons and detail keys survive. */
+    failure?: FailureContext
+  },
 ) => {
   try {
     const args = argumentsOf(name, input)
@@ -135,7 +142,7 @@ export const callMeetingTool = async (
     let result: object
     switch (name) {
       case "meetings_list": {
-        const limit = (args.limit as number | undefined) ?? 100
+        const limit = (args.limit as number | undefined) ?? configured
         result = await meetingsList(store, {
           ...filter,
           limit,

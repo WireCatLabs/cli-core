@@ -7,6 +7,7 @@ import { addCalendarCommands } from "../calendar/cli/index.js"
 import { fakeCalendarSource } from "../calendar/testing/index.js"
 import { environmentOf, inCommandRun, outputFor } from "../cli/context.js"
 import { itemOf, renderAnswer } from "../cli/envelope.js"
+import { pagingOf } from "../cli/paging.js"
 import type { ProgramDefinition, RunOptions } from "../cli/program.js"
 import { settingsFor } from "../cli/settings.js"
 import { addMeetingCommands } from "../meetings/cli/index.js"
@@ -57,6 +58,7 @@ describe("cli-core's meetings commands run inside its run", () => {
       let sync: Command | undefined
       addMeetingCommands(root, {
         store: memoryMeetingStore(),
+        pagingOf,
         accountId: 1,
         get source() {
           return silentNext ? hanging(source) : source

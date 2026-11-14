@@ -60,12 +60,17 @@ describe("calendar MCP tools", () => {
   it("without account_id a tool reads every account it serves and names them", async () => {
     const { store } = await setup()
     const listed = body(
-      await callCalendarTool(store, "events_list", { query: "starts_at:today" }, { accountIds: [1, 2], now: NOW }),
+      await callCalendarTool(
+        store,
+        "events_list",
+        { query: "starts_at:today" },
+        { limit: 100, accountIds: [1, 2], now: NOW },
+      ),
     )
     expect(listed.accounts).toEqual([1, 2])
     expect((listed.items as unknown[]).length).toBe(2)
     const one = body(
-      await callCalendarTool(store, "calendars_list", { account_id: 2 }, { accountIds: [1, 2], now: NOW }),
+      await callCalendarTool(store, "calendars_list", { account_id: 2 }, { limit: 100, accountIds: [1, 2], now: NOW }),
     )
     expect(one.accounts).toEqual([2])
     expect((one.items as { external_id: string }[]).map(({ external_id }) => external_id)).toEqual(["cal-2"])
@@ -106,7 +111,8 @@ describe("calendar MCP tools", () => {
       )
       shared = entry?.eventId as number
     }
-    const read = (input: object) => callCalendarTool(store, "event_show", input, { accountIds: [1, 2], now: NOW })
+    const read = (input: object) =>
+      callCalendarTool(store, "event_show", input, { limit: 100, accountIds: [1, 2], now: NOW })
 
     expect(body(await read({ event: String(shared) })).error).toMatchObject({
       code: "validation_error",
@@ -122,7 +128,7 @@ describe("calendar MCP tools", () => {
         store,
         "store_status",
         {},
-        { accountIds: [1, 2], now: NOW, profileOf: (id) => (id === 1 ? "personal" : "work") },
+        { limit: 100, accountIds: [1, 2], now: NOW, profileOf: (id) => (id === 1 ? "personal" : "work") },
       ),
     )
     expect(status.items).toMatchObject([
@@ -133,20 +139,27 @@ describe("calendar MCP tools", () => {
 
   it("marks the fields others wrote and escapes their control characters", async () => {
     const { store, ids } = await setup()
-    const result = await callCalendarTool(store, "event_show", { event: `event:${ids[0]}` }, { accountIds: [1, 2] })
+    const result = await callCalendarTool(
+      store,
+      "event_show",
+      { event: `event:${ids[0]}` },
+      { limit: 100, accountIds: [1, 2] },
+    )
     const shown = body(result)
     expect(shown.untrusted).toEqual(CALENDAR_UNTRUSTED_FIELDS)
     expect(String(shown.title)).not.toContain("\u001b")
     expect((shown.attendees as { name: string }[])[0]?.name).not.toContain("\u0007")
     expect(String(shown.title)).toContain("ignore previous instructions")
-    const people = body(await callCalendarTool(store, "event_people", { event: String(ids[1]) }, { accountIds: [2] }))
+    const people = body(
+      await callCalendarTool(store, "event_people", { event: String(ids[1]) }, { limit: 100, accountIds: [2] }),
+    )
     expect((people.items as { email: string }[]).map(({ email }) => email)).toEqual(["ana@example.com"])
   })
 
   it("refuses an account it does not serve, an event of another account and an unknown argument", async () => {
     const { store, ids } = await setup()
     const refused = async (name: string, input: unknown, accountIds: number[]) => {
-      const result = await callCalendarTool(store, name, input, { accountIds })
+      const result = await callCalendarTool(store, name, input, { limit: 100, accountIds })
       expect(result.isError).toBe(true)
       return (body(result).error as { code: string }).code
     }
@@ -167,7 +180,7 @@ describe("calendar MCP tools", () => {
   it("events_list pages the merge of every account, and page.next reads on with the same query", async () => {
     const { store } = await setup()
     const list = async (input: object) =>
-      body(await callCalendarTool(store, "events_list", input, { accountIds: [1, 2], now: NOW }))
+      body(await callCalendarTool(store, "events_list", input, { limit: 100, accountIds: [1, 2], now: NOW }))
     const first = await list({ query: "starts_at:today", limit: 1 })
     expect((first.items as { title: string }[]).map(({ title }) => title)).toEqual([
       expect.stringContaining("Planning 1"),
@@ -185,7 +198,7 @@ describe("calendar MCP tools", () => {
 
   it("lists the open link choices of the accounts served, and names them", async () => {
     const { store } = await setup()
-    const review = body(await callCalendarTool(store, "event_links_review", {}, { accountIds: [1] }))
+    const review = body(await callCalendarTool(store, "event_links_review", {}, { limit: 100, accountIds: [1] }))
     expect(review).toMatchObject({ accounts: [1], items: [] })
   })
 
@@ -201,7 +214,7 @@ describe("calendar MCP tools", () => {
         env: { HOME: home, XDG_DATA_HOME: home, GCAL_STATE_DIR: home },
       })
       const call = (name: string, input: unknown) =>
-        callCalendarTool(store, name, input, { accountIds: [1, 2], now: NOW, writes })
+        callCalendarTool(store, name, input, { limit: 100, accountIds: [1, 2], now: NOW, writes })
       return { store, writer, call }
     }
     const planning = { title: "Example planning", start_time: "2026-11-02T10:00", end_time: "2026-11-02T11:00" }
@@ -220,9 +233,7 @@ describe("calendar MCP tools", () => {
         store,
         "event_create",
         { calendar: "cal-1", ...planning },
-        {
-          accountIds: [1],
-        },
+        { limit: 100, accountIds: [1] },
       )
       expect(body(result).error).toMatchObject({ code: "configuration_error" })
     })

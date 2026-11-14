@@ -1,7 +1,7 @@
 import { Command } from "commander"
 import { expect, it } from "vitest"
 import { addMeetingCommands } from "./cli/index.js"
-import { fakeMeetingSource, memoryMeetingStore } from "./testing/index.js"
+import { fakeMeetingSource, flagPaging, memoryMeetingStore } from "./testing/index.js"
 
 it("CLI lookback revisits the cursor window for late transcripts and subtracts from explicit since", async () => {
   const store = memoryMeetingStore()
@@ -22,6 +22,7 @@ it("CLI lookback revisits the cursor window for late transcripts and subtracts f
     addMeetingCommands(program, {
       store,
       source,
+      pagingOf: flagPaging,
       accountId: 1,
       write() {},
       inRun: (_command, body) => body(),
@@ -62,6 +63,7 @@ it("CLI rejects invalid lookback bounds before requesting provider records", asy
     addMeetingCommands(program, {
       store: memoryMeetingStore(),
       source,
+      pagingOf: flagPaging,
       accountId: 1,
       write() {},
       inRun: (_command, body) => body(),
@@ -85,6 +87,7 @@ it("CLI reads --since-time 7d as seven days before now, as the other past-time f
         return []
       },
     }),
+    pagingOf: flagPaging,
     accountId: 1,
     write() {},
     inRun: (_command, body) => body(),

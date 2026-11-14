@@ -6,7 +6,7 @@ import { LOCAL_READ, LOCAL_WRITE } from "../cli/effects.js"
 import { run } from "../cli/program.js"
 import { commandsCommand, generatedApiCommand } from "../cli/shared-command-exports.js"
 import { addMeetingCommands } from "../meetings/cli/index.js"
-import { memoryMeetingStore } from "../meetings/testing/index.js"
+import { flagPaging, memoryMeetingStore } from "../meetings/testing/index.js"
 import { ownCatalogue } from "./own-catalogue.js"
 
 const app = { command: "app", appName: "app-cli", envPrefix: "APP", description: "Own", version: "1.0.0" }
@@ -47,6 +47,7 @@ it("marks the meeting commands cli-core mounts, as every other shared command (I
     const program = new Command("app")
     addMeetingCommands(program, {
       store: memoryMeetingStore(),
+      pagingOf: flagPaging,
       accountId: 1,
       write: () => {},
       inRun: (_command, body) => body(),

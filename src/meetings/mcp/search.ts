@@ -39,8 +39,16 @@ export const meetingSearchTool = {
 export const callMeetingSearchTool = async (
   search: MeetingHitSearch,
   input: unknown,
-  signal?: AbortSignal,
-  failure: FailureContext = {},
+  {
+    limit,
+    signal,
+    failure = {},
+  }: {
+    /** The page without `limit`: the profile's `defaults.limit`, as the messenger MCP lists take it. */
+    limit: number
+    signal?: AbortSignal
+    failure?: FailureContext
+  },
 ) => {
   try {
     if (!input || typeof input !== "object" || Array.isArray(input))
@@ -59,7 +67,7 @@ export const callMeetingSearchTool = async (
       topic: args.topic as string | undefined,
       since: args.since_time as number | undefined,
       until: args.until_time as number | undefined,
-      limit: args.limit as number | undefined,
+      limit: (args.limit as number | undefined) ?? limit,
       after: args.cursor as string | undefined,
       maxReadBytes: args.max_read_bytes as number | undefined,
       signal,
@@ -73,7 +81,7 @@ export const callMeetingSearchTool = async (
     }
     const result = meetingHitsList(
       await search(query, options),
-      options.limit ?? 100,
+      options.limit,
       "search meetings",
       { ...args, max_read_bytes: options.maxReadBytes ?? 4194304 },
       Object.keys(window).length === 0 ? {} : { window },

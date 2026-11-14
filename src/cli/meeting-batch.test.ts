@@ -68,6 +68,7 @@ it("refreshes once and keeps duplicate queries and their own cursors in the sele
       ]),
       f.reader,
       meta,
+      100,
     ),
   )
   expect(index).toHaveBeenCalledTimes(1)
@@ -100,6 +101,7 @@ it("retains overlapping passages while isolating stale fingerprints and foreign 
       ]),
       f.reader,
       meta,
+      100,
     ),
     { failureContext: failureContext() },
   )
@@ -116,7 +118,7 @@ it("retains overlapping passages while isolating stale fingerprints and foreign 
 
 it("renders source context safely alongside word hits", async () => {
   const f = await fixture()
-  const report = await runBatch(prepareMeetingBatch(input([request("q", "search", "budget")]), f.reader, meta))
+  const report = await runBatch(prepareMeetingBatch(input([request("q", "search", "budget")]), f.reader, meta, 100))
   const result = report.items[0]
   if (result?.status !== "ok") throw Error("missing search result")
   const answer = result.answer as { items: { source: { title: string; started_at: string; url: string } }[] }
@@ -144,16 +146,16 @@ it("rejects unsupported or malformed arguments before any reader callback", () =
     ["budget", "extra"],
     ["budget", "--since-time", "2026-02-30"],
   ])
-    expect(() => prepareMeetingBatch(input([request("q", "search", ...args)]), reader, meta)).toThrow(CliError)
+    expect(() => prepareMeetingBatch(input([request("q", "search", ...args)]), reader, meta, 100)).toThrow(CliError)
   for (const args of [
     ["meeting:1/1"],
     ["invalid"],
     ["meeting:1/1/1/0", "--expected-fingerprint", "bad"],
     ["meeting:1/1/1/0", "--before-n", "1000"],
   ])
-    expect(() => prepareMeetingBatch(input([request("p", "passage", ...args)]), reader, meta)).toThrow(CliError)
+    expect(() => prepareMeetingBatch(input([request("p", "passage", ...args)]), reader, meta, 100)).toThrow(CliError)
   expect(() =>
-    prepareMeetingBatch(input([{ id: "write", command: ["meetings", "sync"], args: [] }]), reader, meta),
+    prepareMeetingBatch(input([{ id: "write", command: ["meetings", "sync"], args: [] }]), reader, meta, 100),
   ).toThrow("unsupported")
   expect(callback).not.toHaveBeenCalled()
 })
@@ -173,12 +175,12 @@ it("keeps partial indexing visible, memoizes an index failure and still reads a 
     request("q2", "search", "sample"),
     request("p", "passage", f.ref(1)),
   ]
-  const failed = await runBatch(prepareMeetingBatch(input(requests), failing, meta))
+  const failed = await runBatch(prepareMeetingBatch(input(requests), failing, meta, 100))
   expect(failed.items.map((item) => item.status)).toEqual(["error", "error", "ok"])
   expect(failing.index).toHaveBeenCalledTimes(1)
   expect(search).not.toHaveBeenCalled()
   const pending = { ...f.reader, index: vi.fn(async () => ({ indexed: 0, remaining: 1 })) }
-  const report = await runBatch(prepareMeetingBatch(input([request("q", "search", "budget")]), pending, meta))
+  const report = await runBatch(prepareMeetingBatch(input([request("q", "search", "budget")]), pending, meta, 100))
   expect(report.items[0]).toMatchObject({
     status: "ok",
     complete: false,
@@ -217,6 +219,7 @@ it("uses compact passage formatting with one coverage statement for each result"
       input([request("p1", "passage", f.ref(1)), request("p2", "passage", f.ref(2))]),
       f.reader,
       meta,
+      100,
     ),
   )
   const text = formatMeetingBatch(report, "text"),

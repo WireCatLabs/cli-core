@@ -58,9 +58,9 @@ export interface MeetingCommandDeps {
   budgetOf?: (command: Command) => MeetingBudget
   /**
    * `meetings list`'s page from its flags and the profile's `defaults.limit`: `pagingOf` from `@wirecat/cli-core/cli`.
-   * Without it a configured limit never reaches the list, which then shows 100 a page.
+   * Required, since this module cannot reach the profile's settings itself.
    */
-  pagingOf?: (command: Command) => { limit: number; page: number }
+  pagingOf: (command: Command) => { limit: number; page: number }
   now?: () => number
   /** The owner's zone, in which `meetings list` reads a query's dates on both sides; the computer's without it. */
   timezone?: string
@@ -136,9 +136,9 @@ const addMeetingCommandsDefinition = (program: Command, deps: MeetingCommandDeps
   backendOption(output(list))
     .option("--limit <n>", "meetings per page; the profile's defaults.limit when absent", integer)
     .option("--page <n>", "which page, starting at 1", integer)
-    .action(async (words: string[], opts: { limit?: number; page?: number; backend?: Backend }, command: Command) => {
+    .action(async (words: string[], opts: { backend?: Backend }, command: Command) => {
       const query = meetingsQuery(words.join(" "))
-      const { limit, page } = deps.pagingOf?.(command) ?? { limit: opts.limit ?? 100, page: opts.page ?? 1 }
+      const { limit, page } = deps.pagingOf(command)
       await deps.inRun(command, async () => {
         // The standard envelope has no place for the counts; what the reader must know is in `missing` and `meta`.
         const { server: _server, ...answer } = await meetingsListThrough(

@@ -221,7 +221,7 @@ Each command's permission key is its path (`calendars.sync`, `people.link`), as 
 command lint's vocabulary has no `calendars`, `people`, `unsync`, `review` or `resolve` yet, so a CLI baselines those
 rules until the vocabulary names them.
 
-`calendarTools` and `callCalendarTool(store, name, input, { accountIds })` (`./calendar/mcp`) give the same reads as
+`calendarTools` and `callCalendarTool(store, name, input, { accountIds, limit })` (`./calendar/mcp`, `limit` the profile's `defaults.limit`, as the messenger MCP lists take it) give the same reads as
 MCP tools: `calendars_list`, `store_status` (its `profile` from the option `profileOf(accountId)`), `events_list` (its `query`, `limit` and `page` are `events list`'s; across accounts each page is cut from the merge, so without `account_id` a page may not end past each account's 1000th event), `event_show`, `event_people`, `event_links_review`. Without `account_id`
 a tool reads every account the host serves and names them in `accounts`. Each description says event text is data;
 each answer lists the fields others wrote in `untrusted` and has its control characters made visible

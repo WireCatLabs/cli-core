@@ -35,6 +35,7 @@ import { formatMeetingEvidenceText, formatMeetingPassage } from "../services/mee
 import { answerEntity } from "./answer-entity.js"
 import { destroysNothing } from "./effects.js"
 import { answerSchema, type Body, itemOf, listOf } from "./envelope.js"
+import { pagingOf } from "./paging.js"
 
 const INDEX_BYTES = 4194304
 const parse = (command: Command, args: readonly string[]) => {
@@ -54,7 +55,7 @@ const parse = (command: Command, args: readonly string[]) => {
   }
   return command
 }
-const handlers = (reader: MeetingBatchReader, meta: () => Meta): BatchHandler[] => {
+const handlers = (reader: MeetingBatchReader, meta: () => Meta, limit: number): BatchHandler[] => {
   let indexed: Promise<{ remaining: number }> | undefined
   return [
     {
@@ -63,7 +64,7 @@ const handlers = (reader: MeetingBatchReader, meta: () => Meta): BatchHandler[] 
         const command = parse(createMeetingSearchCommand(new Command()), args)
         const query = command.processedArgs[0] as string
         const flags = command.opts<MeetingSearchFlags>()
-        const request = meetingHitSearchRequest(query, flags)
+        const request = meetingHitSearchRequest(query, flags, limit)
         return {
           run: async (ctx) => {
             ctx.reserveReadBytes(request.maxReadBytes ?? 4194304)
@@ -76,7 +77,12 @@ const handlers = (reader: MeetingBatchReader, meta: () => Meta): BatchHandler[] 
             if (index.remaining > 0) found.coverage = { ...found.coverage, indexing: "pending" }
             const complete = found.coverage.indexing === "ready"
             const answer = {
-              ...meetingHitsList(found, request.limit ?? 100, "search meetings", meetingSearchArguments(query, flags)),
+              ...meetingHitsList(
+                found,
+                request.limit as number,
+                "search meetings",
+                meetingSearchArguments(query, flags),
+              ),
               meta: {
                 ...meta(),
                 ...meetingSearchMeta(flags),
@@ -126,8 +132,9 @@ const handlers = (reader: MeetingBatchReader, meta: () => Meta): BatchHandler[] 
   ]
 }
 
-export const prepareMeetingBatch = (input: string, reader: MeetingBatchReader, meta: () => Meta) =>
-  prepareBatch(input, handlers(reader, meta))
+/** `limit` is a search's page without `--limit`: the profile's `defaults.limit`. */
+export const prepareMeetingBatch = (input: string, reader: MeetingBatchReader, meta: () => Meta, limit: number) =>
+  prepareBatch(input, handlers(reader, meta, limit))
 
 const textResult = (result: BatchResult, format: "text" | "markdown") => {
   const title = `${result.id}: ${result.command.join(" ")}`
@@ -191,7 +198,7 @@ export const addMeetingBatchCommand = (
       if (fields && format !== "json")
         throw new CliError("validation_error", "batch field selection requires JSON output")
       const input = await deps.input(path, deps.signal())
-      const requests = prepareMeetingBatch(input, deps.reader, deps.meta)
+      const requests = prepareMeetingBatch(input, deps.reader, deps.meta, pagingOf(action).limit)
       const report = await runBatch(requests, {
         signal: deps.signal(),
         maxReadBytes: options.maxReadBytes,

@@ -5,8 +5,15 @@ import { captureStreams } from "@wirecat/cli-base"
 import { Command } from "commander"
 import { afterAll, describe, expect, it } from "vitest"
 import { addCalendarCommands } from "../calendar/cli/index.js"
-import { fakeCalendarSource } from "../calendar/testing/index.js"
-import { addMeetingCommands } from "../meetings/cli/index.js"
+import { callCalendarTool } from "../calendar/mcp/index.js"
+import { fakeCalendarSource, memoryEventStore } from "../calendar/testing/index.js"
+import {
+  addMeetingCommands,
+  addMeetingSearchCommand,
+  type MeetingCommandDeps,
+  type MeetingHitSearchOptions,
+} from "../meetings/cli/index.js"
+import { callMeetingSearchTool, callMeetingTool } from "../meetings/mcp/index.js"
 import { memoryMeetingStore, sampleMeeting } from "../meetings/testing/index.js"
 import type { AppIdentity } from "../ports/app.js"
 import { type MessageStore, openStore } from "../store/store.js"
@@ -169,5 +176,71 @@ describe("calendar lists page as the shared listings do", () => {
     const next = await cli(env, "work", "search", "events", "roadmap", "--exact", "--cursor", "2", "--json")
     expect(next.items).toHaveLength(1)
     expect(next.page).toMatchObject({ has_more: false })
+  })
+})
+
+describe("search meetings and the MCP lists take the configured limit", () => {
+  const empty = {
+    items: [],
+    hasMore: false,
+    nextCursor: null,
+    coverage: {
+      archiveCompleteness: "unknown" as const,
+      currentRevisions: true as const,
+      indexing: "ready" as const,
+      indexCompleteness: "unknown" as const,
+    },
+  }
+
+  it("search meetings asks for the profile's defaults.limit when --limit is not given", async () => {
+    const asked: MeetingHitSearchOptions[] = []
+    let running: Command | undefined
+    const cli = cliOf({
+      app,
+      configuration: settingsFor(app),
+      commands: () => {
+        const root = new Command(app.command)
+        addMeetingSearchCommand(root, {
+          search: async (_query, request) => {
+            asked.push(request)
+            return empty
+          },
+          signal: () => undefined,
+          pagingOf: (command) => {
+            running = command
+            return pagingOf(command)
+          },
+          output: (value) => {
+            if (running) renderAnswer(running, outputFor(running), value as Body)
+          },
+        })
+        return [...root.commands]
+      },
+    })
+    const env = homeWith(2)
+    expect((await cli(env, "work", "search", "meetings", "budget", "--json")).page.limit).toBe(2)
+    expect(asked[0]?.limit).toBe(2)
+    await cli(env, "work", "search", "meetings", "budget", "--limit", "5", "--json")
+    expect(asked[1]?.limit).toBe(5)
+  })
+
+  it("meetings_list, events_list and the meeting search tool page by the limit the host passes", async () => {
+    const meetings = await callMeetingTool(memoryMeetingStore(), "meetings_list", {}, { limit: 2 })
+    expect(meetings.structuredContent).toMatchObject({ page: { limit: 2 } })
+    const events = await callCalendarTool(memoryEventStore(), "events_list", {}, { accountIds: [1], limit: 2 })
+    expect(events.structuredContent).toMatchObject({ page: { limit: 2 } })
+    const found = await callMeetingSearchTool(async () => empty, { query: "budget" }, { limit: 2 })
+    expect(found.structuredContent).toMatchObject({ page: { limit: 2 } })
+  })
+
+  it("a host must pass pagingOf to the meetings commands", () => {
+    const deps: Omit<MeetingCommandDeps, "pagingOf"> = {
+      store: memoryMeetingStore(),
+      accountId: 1,
+      write: () => {},
+      inRun: (_command, body) => body(),
+    }
+    // @ts-expect-error pagingOf is required: without it a configured limit never reaches meetings list
+    addMeetingCommands(new Command(), deps)
   })
 })

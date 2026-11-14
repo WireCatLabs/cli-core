@@ -20,7 +20,7 @@ import {
   meetingsListThrough,
   saveSourceMeeting,
 } from "../meetings/index.js"
-import { fakeMeetingSource } from "../meetings/testing/index.js"
+import { fakeMeetingSource, flagPaging } from "../meetings/testing/index.js"
 import type { AppIdentity } from "../ports/app.js"
 import { DEFAULT_PERMISSIONS } from "../sends/permissions.js"
 import { openStore } from "./store.js"
@@ -130,6 +130,7 @@ const fixture = async (source?: MeetingSource, extra: Partial<MeetingCommandDeps
     addMeetingCommands(program, {
       store: store.meetings,
       ...(source ? { source } : {}),
+      pagingOf: flagPaging,
       accountId,
       write: (value) => answers.push(value),
       inRun: (_command, body) => body(),
@@ -510,6 +511,7 @@ describe("meetings create, update and cancel", () => {
       program.option("--dry-run")
       addMeetingCommands(program, {
         store: store.meetings,
+        pagingOf: flagPaging,
         accountId: 1,
         management,
         askFirst: async () => {},
@@ -555,6 +557,7 @@ describe("meetings invitation", () => {
     handles.push(store)
     addMeetingCommands(program, {
       store: store.meetings,
+      pagingOf: flagPaging,
       accountId: 1,
       management,
       write: (value) => answers.push(value),
@@ -595,6 +598,7 @@ describe("meetings in a real run", () => {
         let current: Command | undefined
         addMeetingCommands(root, {
           store: store.meetings,
+          pagingOf: flagPaging,
           accountId,
           write: (value) => {
             if (!current) return

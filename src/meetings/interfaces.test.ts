@@ -8,7 +8,7 @@ import { addMeetingCommands, addMeetingProjectEvidenceCommand, type MeetingComma
 import { meeting } from "./item.js"
 import { callMeetingTool, meetingTools } from "./mcp/index.js"
 import { meetingDetailsAnswer, meetingsList, meetingsQuery } from "./reads.js"
-import { fakeMeetingSource, memoryMeetingStore, sampleMeeting } from "./testing/index.js"
+import { fakeMeetingSource, flagPaging, memoryMeetingStore, sampleMeeting } from "./testing/index.js"
 
 const meta = { run_id: "run", duration_ms: 0, complete: true }
 
@@ -18,6 +18,7 @@ const setup = async (overrides: Partial<MeetingCommandDeps> = {}) => {
   const outputs: { value: unknown; format: string }[] = []
   const deps: MeetingCommandDeps = {
     store,
+    pagingOf: flagPaging,
     accountId: 1,
     source: fakeMeetingSource(),
     readFiles: async () => [],
@@ -40,6 +41,7 @@ describe("meeting commands", () => {
     const program = new Command("meet")
     addMeetingCommands(program, {
       store: memoryMeetingStore(),
+      pagingOf: flagPaging,
       accountId: 1,
       write() {},
       inRun: (_command, body) => body(),
@@ -105,6 +107,7 @@ describe("meeting commands", () => {
       const program = new Command("meet")
       addMeetingCommands(program, {
         store: memoryMeetingStore(),
+        pagingOf: flagPaging,
         accountId: 1,
         write() {},
         inRun: (_c, b) => b(),
@@ -146,12 +149,17 @@ describe("MCP meeting reads", () => {
   it("provides schemas and structured read results consistent with the CLI", async () => {
     const { store, d } = await setup()
     expect(meetingTools.every((t) => t.annotations.readOnlyHint && !t.inputSchema.additionalProperties)).toBe(true)
-    const list = await callMeetingTool(store, "meetings_list", {
-      account_id: 1,
-      limit: 1,
-      page: 1,
-      query: "started_at:[1970-01-01 TO 1970-01-02]",
-    })
+    const list = await callMeetingTool(
+      store,
+      "meetings_list",
+      {
+        account_id: 1,
+        limit: 1,
+        page: 1,
+        query: "started_at:[1970-01-01 TO 1970-01-02]",
+      },
+      { limit: 100 },
+    )
     expect(list.structuredContent).toEqual(
       await meetingsList(store, {
         accountId: 1,
@@ -160,20 +168,23 @@ describe("MCP meeting reads", () => {
       }),
     )
     expect(list.structuredContent).toMatchObject({ items: [{ id: String(d.meeting.id) }] })
-    const show = await callMeetingTool(store, "meeting_show", { meeting: d.meeting.id })
+    const show = await callMeetingTool(store, "meeting_show", { meeting: d.meeting.id }, { limit: 100 })
     expect(show.structuredContent).toEqual(await meetingDetailsAnswer(store, d.meeting.id))
     expect(JSON.parse(show.content[0]?.text ?? "null")).toEqual(show.structuredContent)
     expect(show.structuredContent).not.toHaveProperty("next_steps")
-    const transcript = await callMeetingTool(store, "meeting_transcript", { meeting: d.meeting.id })
+    const transcript = await callMeetingTool(store, "meeting_transcript", { meeting: d.meeting.id }, { limit: 100 })
     expect(
       v.parse(listEnvelopeSchema(meetingTranscript), { ...transcript.structuredContent, meta }).items,
     ).toHaveLength(d.transcripts.length)
-    const summary = await callMeetingTool(store, "meeting_summary", { meeting: d.meeting.id })
+    const summary = await callMeetingTool(store, "meeting_summary", { meeting: d.meeting.id }, { limit: 100 })
     expect(() => v.parse(listEnvelopeSchema(meetingSummary), { ...summary.structuredContent, meta })).not.toThrow()
     expect(
-      (await callMeetingTool(store, "meeting_people", { query: "Alice", account_id: 1 })).structuredContent,
+      (await callMeetingTool(store, "meeting_people", { query: "Alice", account_id: 1 }, { limit: 100 }))
+        .structuredContent,
     ).toMatchObject({ items: d.participants })
-    expect((await callMeetingTool(store, "meetings_list", {})).structuredContent).toEqual(await meetingsList(store))
+    expect((await callMeetingTool(store, "meetings_list", {}, { limit: 100 })).structuredContent).toEqual(
+      await meetingsList(store),
+    )
   })
   it("refuses unknown names/arguments and malformed inputs before reads", async () => {
     const store = memoryMeetingStore()
@@ -192,14 +203,14 @@ describe("MCP meeting reads", () => {
       ["meetings_list", { query: "nofield:1" }],
       ["meeting_show", { meeting: 999 }],
     ] as [string, unknown][]) {
-      const result = await callMeetingTool(store, name, args)
+      const result = await callMeetingTool(store, name, args, { limit: 100 })
       expect(result.isError).toBe(true)
       expect(result.structuredContent).toHaveProperty("error")
     }
     store.meetings = async () => {
       throw new Error("Read failed")
     }
-    expect((await callMeetingTool(store, "meetings_list", {})).structuredContent).toEqual({
+    expect((await callMeetingTool(store, "meetings_list", {}, { limit: 100 })).structuredContent).toEqual({
       error: {
         code: "internal_error",
         reason: "command.crashed",
@@ -210,7 +221,7 @@ describe("MCP meeting reads", () => {
     store.meetings = async () => {
       throw "failure"
     }
-    expect((await callMeetingTool(store, "meetings_list", {})).structuredContent).toEqual({
+    expect((await callMeetingTool(store, "meetings_list", {}, { limit: 100 })).structuredContent).toEqual({
       error: {
         code: "internal_error",
         reason: "command.crashed",
