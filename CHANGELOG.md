@@ -5,6 +5,34 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## 0.664.0 — 14.11.2026
+
+### Added
+
+- **Search by meaning for any host of stored meetings, from cli-core.** `addMeetingCombinedSearchCommand` in
+  `@wirecat/cli-core/cli` mounts `search meetings`: words by default, and words and meaning ranked together with
+  `--model <model>`, which first splits new transcripts and builds the missing vectors. A hit says how it was found
+  (`by`), its similarity (`score`) and the passage meaning matched, and marks `excerpt`, the passage and the title
+  untrusted. `addMeetingEmbeddingCommand` mounts `meetings embeddings`: a preview, and `--yes` builds one batch.
+  Without `--model` it uses the `models` command's default local text model, so the transcripts stay on this
+  computer; `--base-url` sends passages to a remote service only when given, and `--offline` refuses it. Both run over
+  `meetingMeaning(store, accountId)` in `@wirecat/cli-core/services`. These moved from zoom-cli, which can mount them
+  in place of its own copies; pbx and beeline mount them for calls.
+- `meeting_hit` takes the optional `by`, `score` and `passage` of a search by meaning.
+
+### Changed — may break callers
+
+- **No MCP server offers `chats delete` or `chats clear`.** Over MCP an `ask` level goes ahead without a question, so
+  an agent could delete a whole chat or its history from the account. Both stay on the command line, where `ask` still
+  asks first.
+
+### Fixed
+
+- **A command's own `--fields` is no longer read as `--json`'s field list.** A generated Google API command such as
+  `gcal <profile> api calendar-events-list --fields 'items(id)' --json` failed with "--json takes comma-separated field
+  paths", because the command's `--fields` (Google's partial-response mask) stood in for the root's. Only
+  `--json=a,b` now picks the answer's fields, in `outputFor`, `baseContext` and the program's own output.
+
 ## 0.663.0 — 14.11.2026
 
 ### Added
