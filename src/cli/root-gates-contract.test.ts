@@ -11,6 +11,7 @@ import { type AgentTool, toolsFromCommands } from "../mcp/agent.js"
 import { addMeetingCommands } from "../meetings/cli/index.js"
 import { MEETING_STEPS } from "../meetings/index.js"
 import { messenger, sharedCommands, sharedProgram } from "../testing/shared-program.js"
+import { pagingOf } from "./paging.js"
 import { createProgram, type ProgramDefinition } from "./program.js"
 import { STEPS } from "./steps.js"
 
@@ -46,6 +47,7 @@ const KITS: Record<string, ProgramDefinition> = {
       },
       accountId: 0,
       write: refuse,
+      pagingOf,
       inRun: refuse,
     }),
   ),
