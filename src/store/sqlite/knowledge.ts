@@ -20,7 +20,7 @@ import { type MeetingProjectsStore, meetingProjectsStoreOver } from "./meeting-p
 import type { Author } from "./memories.js"
 import { idsOf } from "./merged-persons.js"
 import { holdingText } from "./note-index.js"
-import { insertLink, type Link, linkOf } from "./notes.js"
+import { hasBothEnds, insertLink, type Link, linkOf } from "./notes.js"
 import type { StoreContext } from "./open.js"
 import { type OrganizationsStore, organizationOf, organizationsStoreOver } from "./organizations.js"
 import type { ProposedAction } from "./proposed-actions.js"
@@ -798,7 +798,9 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
           `${RELATIONS} AND ${notOverriddenSql("links")} AND (? IS NULL OR (from_type=? AND from_id IN (SELECT value FROM json_each(?))) OR (to_type=? AND to_id IN (SELECT value FROM json_each(?)))) ORDER BY deleted_at IS NOT NULL, created_at, id LIMIT 500`,
         )
         .all(thing?.type ?? null, thing?.type ?? null, ids(thing), thing?.type ?? null, ids(thing))
-        .map((row) => relationOf(linkOf(database, row)))
+        .map((row) => linkOf(database, row))
+        .filter(hasBothEnds)
+        .map(relationOf)
     },
     removeRelation: async (key, id, by) => {
       checked(key)

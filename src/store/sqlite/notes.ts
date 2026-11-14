@@ -29,7 +29,7 @@ import { LINK_KINDS, LINK_ORIGINS, type LINK_SOURCES, linkKind, RELATION_KINDS }
 import { reviewLink } from "./link-reviews.js"
 import { linkOf } from "./link-row.js"
 
-export { linkOf, thingRef } from "./link-row.js"
+export { hasBothEnds, linkOf, thingRef } from "./link-row.js"
 
 import { currentPerson, idsOf } from "./merged-persons.js"
 import { dateFileNotes } from "./note-dates.js"

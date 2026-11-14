@@ -312,3 +312,13 @@ it("offers the related list for a tie between people and organizations, with lab
     details: { reason: "relationship.role-in-use", count: 1 },
   })
 })
+
+it("leaves out a link whose chat is gone, so a project's status still reads", async () => {
+  const { path, store, acme, alice } = await fixture()
+  const kept = await store.knowledge.relate(null, { by: "owner", from: alice, to: acme, kind: "member-of" })
+  const orphan = await store.knowledge.relate(null, { by: "owner", from: alice, to: acme, kind: "related-to" })
+  const database = await openCache(path)
+  database.prepare("UPDATE links SET from_type = 'chat', from_id = 99999 WHERE id = ?").run(Number(orphan.id))
+  database.close()
+  expect((await store.knowledge.relations(null, acme)).map((link) => link.id)).toEqual([kept.id])
+})
