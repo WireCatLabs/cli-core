@@ -329,6 +329,21 @@ so its report has `known.outcome: 0` and no `by_outcome`, `missed`, talk or wait
 calls whose participants link to the person: pbx keeps only the extensions that placed or answered a call as
 participants, so a person's calls that only rang them are not selected.
 
+## Search by meaning
+
+`addMeetingCombinedSearchCommand` (`src/cli/meeting-meaning-command.ts`) mounts `search meetings` for a host of stored
+meetings. Without `--model` it is the word search (`searchMeetingHits`); with `--model` it opens the embedder, splits
+new transcripts and embeds the passages that have no vector for that model, then ranks words and meaning together
+(`searchMeetingsCombined`). It returns the run, so a host's saved searches replay it. `addMeetingEmbeddingCommand`
+mounts `meetings embeddings` under the host's `meetings` group: a preview of what has vectors, and `--yes` builds one
+batch. Its `--model` defaults to the host's `defaultModel()`, which is `chosenTextModel(env).id`: a local model, so no
+text leaves the computer. A remote model needs `--model`, `--base-url` and `--dims` together and is refused under the
+root `--offline`. Both take `meetingMeaning(store, accountId, { env })` from the services export; its `load` option
+swaps the embedding runtime in tests.
+
+zoom-cli still mounts its own copies (`src/meeting-semantic-commands.ts`, `src/meeting-search-commands.ts`); moving
+it onto these is its own pull request.
+
 ## Project-word discovery SDK
 
 `readMeetingProjectDiscovery` from the services export resolves one existing project through

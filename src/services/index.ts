@@ -244,6 +244,17 @@ export { inboxService } from "./inbox.js"
 export { readMail } from "./mail-search.js"
 export { type MeetingHitSearchRequest, refreshMeetingIndex, searchMeetingHits } from "./meeting-hit-search.js"
 export { type MeetingLink, type MeetingLinksRequest, readMeetingLinks } from "./meeting-links.js"
+export {
+  type MeetingEmbeddingOptions,
+  type MeetingMeaning,
+  type MeetingMeaningApi,
+  type MeetingMeaningSearchOptions,
+  type MeetingModelOptions,
+  meetingMeaning,
+  validateMeetingEmbeddings,
+  validateMeetingMeaningSearch,
+  validateMeetingModel,
+} from "./meeting-meaning.js"
 export { createMeetingProjectCandidateReader } from "./meeting-project-candidates.js"
 export { readMeetingProjectDiscovery } from "./meeting-project-discovery.js"
 export { type MeetingReviewRequest, readMeetingReview } from "./meeting-review.js"
