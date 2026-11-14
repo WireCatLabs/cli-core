@@ -1,4 +1,5 @@
 import { mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { CliError, isCliError } from "@wirecat/cli-base"
 import { describe, expect, it, vi } from "vitest"
@@ -8,7 +9,7 @@ import { conflictReport, fileMirrorState, type Mirror, mirrorId, mirrorStatus, s
 type Snapshot = { kind: "doc"; text: string }
 
 const folder = (files: Record<string, string> = {}) => {
-  const root = mkdtempSync("/var/tmp/document-mirrors-")
+  const root = mkdtempSync(join(tmpdir(), "document-mirrors-"))
   for (const [path, text] of Object.entries(files)) writeFileSync(join(root, path), text)
   return root
 }

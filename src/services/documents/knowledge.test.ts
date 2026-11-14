@@ -1,4 +1,5 @@
 import { mkdtempSync } from "node:fs"
+import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
 import type { SourceFile } from "../../documents/model.js"
@@ -17,7 +18,7 @@ const file = (id: string): SourceFile => ({
 })
 const content = (metadata: SourceFile, text = "budget decision") => ({ metadata, text, markdown: text, tabs: [] })
 const setup = async () => {
-  const store = await openStore({ path: join(mkdtempSync("/var/tmp/shared-knowledge-"), "store.db") })
+  const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "shared-knowledge-")), "store.db") })
   const principal = "synthetic-account"
   const metadata = file("doc-a")
   const ingest = documentIngestion(store, {

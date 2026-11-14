@@ -1,4 +1,5 @@
 import { mkdtempSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { CliError } from "@wirecat/cli-base"
 import { describe, expect, it } from "vitest"
@@ -10,7 +11,7 @@ type Snapshot = { kind: "doc" }
 const kindOf = (path: string) => (path.endsWith(".md") ? "doc" : undefined)
 
 const mirrorAt = (id: string, files: Record<string, string>): Mirror => {
-  const path = mkdtempSync("/var/tmp/mirror-watch-")
+  const path = mkdtempSync(join(tmpdir(), "mirror-watch-"))
   for (const [name, text] of Object.entries(files)) writeFileSync(join(path, name), text)
   return { id, path, folder: `folder-${id}` }
 }
@@ -22,7 +23,7 @@ const mirrorAt = (id: string, files: Record<string, string>): Mirror => {
 const harness = (mirrors: Mirror[], cycles: number) => {
   let clock = 0
   const stop = new AbortController()
-  const stateDir = mkdtempSync("/var/tmp/mirror-watch-state-")
+  const stateDir = mkdtempSync(join(tmpdir(), "mirror-watch-state-"))
   const stateOf = (mirror: Mirror) => fileMirrorState<Snapshot>(stateDir, mirror, "alpha", ["doc"])
   const saved = new Map<string, () => void>()
   const scripted: { ms: number; act: () => void | Promise<void> }[] = []
@@ -187,7 +188,8 @@ describe("watchMirrors", () => {
       mirrors: [a],
       signal: stop.signal,
       kindOf,
-      stateOf: (mirror) => fileMirrorState(mkdtempSync("/var/tmp/mirror-watch-state-"), mirror, "alpha", ["doc"]),
+      stateOf: (mirror) =>
+        fileMirrorState(mkdtempSync(join(tmpdir(), "mirror-watch-state-")), mirror, "alpha", ["doc"]),
       quietMs: 50,
     })
     setTimeout(() => writeFileSync(join(a.path, "one.md"), "edited"), 200)
