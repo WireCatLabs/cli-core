@@ -1,7 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import { walkQuery } from "@wirecat/cli-base/query"
 import type { SourceContent, SourceFile } from "../../documents/model.js"
-import type { CatalogInput, CatalogQuery, MessageStore, Note } from "../../store/index.js"
+import type { CatalogInput, CatalogQuery, MessageStore } from "../../store/index.js"
 export interface IngestionOptions<M extends SourceFile> {
   /**
    * The documents account's provider (`google-drive`): each principal's documents live under
@@ -27,23 +27,6 @@ export const documentIngestion = <M extends SourceFile>(
     const found = (await store.notes.folders()).find((item) => item.name === name)
     return found ?? (create ? await store.notes.addFolder({ name, format: "markdown" }) : undefined)
   }
-  const documents = new Map<string, Map<string, Note>>()
-  const cached = async (principal: string) => {
-    const known = documents.get(principal)
-    if (known) return known
-    const notes = new Map<string, Note>()
-    const selected = await folder(principal, false)
-    if (selected) {
-      for (let offset = 0; ; offset += 500) {
-        const page = await store.notes.notes({ folderId: selected.id, source: "file", limit: 500, offset })
-        for (const note of page.items) if (note.path) notes.set(note.path, note)
-        if (!page.hasMore) break
-        if (offset >= 10000) throw new CliError("provider_error", "local document listing exceeded its bound")
-      }
-    }
-    documents.set(principal, notes)
-    return notes
-  }
   const stale = async (ref: string) => {
     for (const status of ["proposed", "confirmed"] as const) {
       for (let batch = 0; ; batch++) {
@@ -57,24 +40,20 @@ export const documentIngestion = <M extends SourceFile>(
   return {
     catalog: {
       import: async (principal: string, files: M[]) => {
-        if (files.length > 10000)
-          throw new CliError("validation_error", "catalog scope exceeds 10000 entries", {
-            reason: "catalog.scope-limit",
-          })
         const selected = await folder(principal, true)
         if (!selected) throw new CliError("configuration_error", "catalog collection could not be registered")
         for (let start = 0; start < files.length; start += 200) {
-          await store.catalog.upsert(selected.id, files.slice(start, start + 200).map(options.catalogInput))
-        }
-        for (const file of files) {
-          const entry = await store.catalog.get(selected.id, options.externalId(file.id))
-          if (entry) await options.observed?.(principal, file, entry.ref.slice("document:".length))
+          const chunk = files.slice(start, start + 200)
+          await store.catalog.upsert(selected.id, chunk.map(options.catalogInput))
+          for (const file of chunk) {
+            const entry = await store.catalog.get(selected.id, options.externalId(file.id))
+            if (entry) await options.observed?.(principal, file, entry.ref.slice("document:".length))
+          }
         }
         const retired = await store.catalog.reconcile(
           selected.id,
           files.map((file) => options.externalId(file.id)),
         )
-        documents.delete(principal)
         return { entries: files.length, retired }
       },
       get: async (principal: string, id: string) => {
@@ -100,13 +79,12 @@ export const documentIngestion = <M extends SourceFile>(
     save: async (principal: string, content: SourceContent<M>, hash: string) => {
       const selected = await folder(principal, true)
       if (!selected) throw new Error("folder registration failed")
-      const notes = await cached(principal)
       const path = options.externalId(content.metadata.id)
-      const before = notes.get(path)
+      const before = await store.notes.fileNote(selected.id, path)
       if (before && before.contentHash !== hash) await stale(before.ref)
       const { note } = await store.notes.saveFileNote({
         folderId: selected.id,
-        path: options.externalId(content.metadata.id),
+        path,
         title: content.metadata.name,
         text: content.text,
         contentHash: hash,
@@ -114,20 +92,17 @@ export const documentIngestion = <M extends SourceFile>(
       })
       await store.catalog.upsert(selected.id, [options.catalogInput(content.metadata)])
       await options.observed?.(principal, content.metadata, note.id)
-      notes.set(path, note)
       return note.ref
     },
     remove: async (principal: string, id: string) => {
       const selected = await folder(principal, false)
       if (selected) {
-        const notes = await cached(principal)
         const path = options.externalId(id)
-        const note = notes.get(path)
+        const note = await store.notes.fileNote(selected.id, path)
         const retired = note ? undefined : await store.catalog.get(selected.id, path, true)
         const ref = note?.ref ?? retired?.ref
         if (ref) await stale(ref)
         await store.notes.deleteFileNotes(selected.id, [path])
-        notes.delete(path)
       }
     },
   }
