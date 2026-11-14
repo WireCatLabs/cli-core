@@ -12,6 +12,7 @@ import { searchMeetingHits } from "../services/meeting-hit-search.js"
 import { meetingTags } from "../services/meeting-tags.js"
 import { type MessageStore, openStore } from "../store/store.js"
 import { addMeetingTagsCommand } from "./meeting-tags-command.js"
+import { pagingOf } from "./paging.js"
 import { run } from "./program.js"
 
 const stores: MessageStore[] = []
@@ -73,6 +74,7 @@ const definitionFor = (store: MessageStore, accountId: number) => ({
     addMeetingSearchCommand(holder, {
       search: (query, request) => searchMeetingHits(store, query, { ...request, accountId }),
       signal: () => undefined,
+      pagingOf,
       output: (body) => answers.push(body),
     })
     return [...holder.commands]

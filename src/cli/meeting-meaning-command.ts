@@ -177,22 +177,23 @@ export interface MeetingEmbeddingCommandDeps {
   examples: string[]
 }
 
-/** `meetings embeddings`: previews the vectors a search by meaning needs, and `--yes` builds one batch of them. */
+/**
+ * `meetings embed`: previews the vectors a search by meaning needs, and `--yes` splits every transcript and embeds one
+ * batch of the passages without a vector; run it again for the next batch.
+ */
 export const addMeetingEmbeddingCommand = (program: Command, deps: MeetingEmbeddingCommandDeps): void => {
   const meetings = program.commands.find((command) => command.name() === "meetings")
   if (!meetings) throw new CliError("configuration_error", "meeting command group is unavailable")
   annotate(
     meetings
-      .command("embeddings")
-      .description("preview building the vectors search by meaning reads; --yes builds one batch")
+      .command("embed")
+      .description("preview building the vectors search by meaning reads; --yes builds one batch, rerun for the next")
       .option("--model <model>", "embedding model: a local one (default: the models command's default text model)")
       .option("--base-url <url>", "remote embedding service; the passages are sent there. OpenAI reads OPENAI_API_KEY")
       .option("--dims <n>", "vector size the remote service returns, in dimensions", count)
-      .option("--limit <n>", "how many transcripts and passages in one batch, 1 through 1000", count)
+      .option("--limit <n>", "how many passages in one batch, 1 through 1000 (default 100)", count)
       .option("--max-rows <n>", "most transcript lines to read, 1 through 100000", count)
       .option("--max-text-bytes <bytes>", "most transcript text to read, in bytes (default 4 MiB)", count)
-      .option("--after-transcript-id <id>", "continue splitting transcripts after this one", count)
-      .option("--after-hash <hash>", "continue embedding after this passage")
       .option("--yes", "split transcripts and build their vectors; otherwise only preview")
       .action(async (flags: Omit<MeetingEmbeddingOptions, "model"> & { model?: string }, command: Command) => {
         if (flags.baseUrl !== undefined && flags.model === undefined)

@@ -3,15 +3,15 @@ import { mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
-import { annotate, metaOf, overrideSharedContract } from "@wirecat/cli-base/commands"
+import { metaOf } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { expect, it } from "vitest"
 import { ENTITIES } from "../entities/index.js"
-import { addMeetingSearchCommand } from "../meetings/cli/index.js"
 import { sharedProgram } from "../testing/shared-program.js"
 import { addCallStatsCommand } from "./call-stats-command.js"
 import { commandPathOf } from "./command-contract.js"
 import { commandsCommand } from "./commands-command.js"
+import { addMeetingCombinedSearchCommand, addMeetingEmbeddingCommand } from "./meeting-meaning-command.js"
 import { addMeetingTagsCommand } from "./meeting-tags-command.js"
 import { createProgram, type ProgramDefinition, run } from "./program.js"
 import { runsCommand } from "./runs/command.js"
@@ -39,7 +39,7 @@ it("the shared commands pass the command lint with no overrides, apart from the 
   expect(lint.status).toBe(0)
 })
 
-// pbx and beeline mount these over their calls; a messenger never does, so the shared program above leaves them out.
+// pbx and beeline mount these over their calls, zoom the search; a messenger never does, so the shared program above leaves them out.
 it("a calls host's shared commands pass the command lint with no overrides", async () => {
   const refuse = async (): Promise<never> => {
     throw new Error("not read in a lint")
@@ -51,14 +51,22 @@ it("a calls host's shared commands pass the command lint with no overrides", asy
       commands: () => {
         const holder = new Command("pbx").addCommand(commandsCommand(app))
         addCallStatsCommand(holder, { read: refuse, examples: ["pbx office stats calls show --since-time 30d --json"] })
-        const search = addMeetingSearchCommand(holder, {
-          search: refuse,
+        holder.command("meetings").description("stored calls")
+        addMeetingCombinedSearchCommand(holder, {
+          words: refuse,
+          meaning: refuse,
+          signal: () => undefined,
+          pagingOf: () => ({ limit: 100 }),
+          output: () => undefined,
+          examples: ['pbx office search meetings "what did they say about the refund" --model e5-small --json'],
+        })
+        addMeetingEmbeddingCommand(holder, {
+          meaning: refuse,
+          defaultModel: () => "e5-small",
           signal: () => undefined,
           output: () => undefined,
+          examples: ["pbx office meetings embed --yes --json"],
         })
-        overrideSharedContract(search, "a host's examples name its own command and profile", (one) =>
-          annotate(one, { examples: ['pbx office search meetings "refund" --tag complaint --json'] }),
-        )
         addMeetingTagsCommand(holder, {
           read: refuse,
           examples: {

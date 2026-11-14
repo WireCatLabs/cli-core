@@ -335,7 +335,7 @@ participants, so a person's calls that only rang them are not selected.
 meetings. Without `--model` it is the word search (`searchMeetingHits`); with `--model` it opens the embedder, splits
 new transcripts and embeds the passages that have no vector for that model, then ranks words and meaning together
 (`searchMeetingsCombined`). It returns the run, so a host's saved searches replay it. `addMeetingEmbeddingCommand`
-mounts `meetings embeddings` under the host's `meetings` group: a preview of what has vectors, and `--yes` builds one
+mounts `meetings embed` under the host's `meetings` group: a preview of what has vectors, and `--yes` builds one
 batch. Its `--model` defaults to the host's `defaultModel()`, which is `chosenTextModel(env).id`: a local model, so no
 text leaves the computer. A remote model needs `--model`, `--base-url` and `--dims` together and is refused under the
 root `--offline`. Both take `meetingMeaning(store, accountId, { env })` from the services export; its `load` option

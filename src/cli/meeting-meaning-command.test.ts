@@ -116,7 +116,7 @@ const pbx = async (store: MessageStore, accountId: number, opened: string[], ...
         defaultModel: () => "topics",
         signal: () => undefined,
         output,
-        examples: ["pbx office meetings embeddings --yes --json"],
+        examples: ["pbx office meetings embed --yes --json"],
       })
       return [...holder.commands]
     },
@@ -131,11 +131,11 @@ it("builds the vectors with the local default model, then finds a call by meanin
   const { store, accountId, ids } = await seed()
   const opened: string[] = []
 
-  const preview = await pbx(store, accountId, opened, "meetings", "embeddings")
+  const preview = await pbx(store, accountId, opened, "meetings", "embed")
   expect(preview.stderr).toBe("")
   expect(preview.code).toBe(0)
   expect(preview.answer.item).toMatchObject({ applied: false, model: { kind: "local", model: "topics" } })
-  const built = await pbx(store, accountId, opened, "meetings", "embeddings", "--yes")
+  const built = await pbx(store, accountId, opened, "meetings", "embed", "--yes")
   expect(built.answer.item).toMatchObject({ applied: true, model: { kind: "local", model: "topics" } })
   expect(opened.every((choice) => choice === "topics")).toBe(true)
 

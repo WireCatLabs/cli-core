@@ -316,6 +316,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `files` | collection | files in the source, such as Google Drive, read and changed there |  |
 | `comments` | collection | comments people left on a thing in the source: a channel post or a file |  |
 | `meetings` | collection | stored meetings, from Zoom or another provider |  |
+| `calls` | collection | phone calls a phone system recorded, stored as meetings with their transcripts |  |
 | `calendars` | collection | calendars of an account, each synced or not |  |
 | `events` | collection | calendar entries: meetings, appointments and other things on a calendar |  |
 | `people` | collection | persons the owner deals with, such as the attendees of events |  |
@@ -813,6 +814,8 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--suggest` | `<text>` | string | wording offered for the owner to take or leave; it decides nothing |  |
 | `--keep-copy` |  | switch | keep a copy of the original file as well as its text |  |
 | `--max-chars` | `<n>` | count | at most this many characters read | characters |
+| `--tag` | `<name>` | string | a tag, by its name or an alias: only what carries it is read |  |
+| `--matching` | `<query>` | string | every stored thing a search with this query finds, in its query language; the command acts on each |  |
 | `--pipeline` | `<pipeline>` | string | a CRM pipeline: pipeline:<id>, or a name only one pipeline has |  |
 | `--stage` | `<stage>` | string | a stage of the record's pipeline, by the CRM's id or its name |  |
 | `--amount` | `<decimal>` | string | a sum of money as a decimal, such as 1500.50, in --currency |  |

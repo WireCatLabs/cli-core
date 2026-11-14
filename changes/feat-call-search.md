@@ -15,3 +15,4 @@
 
 - **`knowledge.labelled` with an account lists only that account's meetings, and never a deleted meeting.** With
   `null`, as memo calls it, it still lists every account's meetings, now without the deleted ones.
+- cli-base 0.101.0, whose vocabulary has `calls`, `--matching` and `--tag`; the peer range moves to it.
