@@ -5,10 +5,14 @@ import type { Listed } from "./source.js"
 
 export type StoredMail = Listed & { envelope: boolean }
 
-/** A stored email in the shape a Gmail listing has; it has no UID until Gmail is asked. */
+/**
+ * A stored email in the shape a Gmail listing has; it has no UID until Gmail is asked. A stored email has no folder,
+ * so the owner's own mail is labelled Sent here: that is how a listing tells which senders the owner wrote to.
+ */
 export const listedOf = (email: EmailFacts): StoredMail => {
   const labels = email.mailboxes.filter(({ kind }) => kind === "label").map(({ name }) => name)
   if (email.flagged && !labels.includes("Starred")) labels.push("Starred")
+  if (email.outgoing && !labels.includes("Sent")) labels.push("Sent")
   return {
     uid: "",
     messageId: email.externalId,
