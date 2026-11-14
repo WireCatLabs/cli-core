@@ -17,13 +17,20 @@ export interface SyncAfterInstallOptions {
    * on cli-core's program passes `run(argv, definition, { ...fakes, env: { ...process.env, ...env } })`.
    */
   run: (argv: string[], env: NodeJS.ProcessEnv) => Promise<{ code: number; err: string; out?: string }>
-  /** Words of a local-only change that the "read only" answer must still refuse, as a check it opens no more. */
+  /** Words of a change that a `readonly` level must still refuse, as a check it opens no more. */
   refusedUnderReadOnly?: readonly string[]
+  /**
+   * The profile's own levels, set in a config of its own: `variable` names the CLI's config folder
+   * (`TG_CONFIG_DIR`), and each of `keys` (`messages`, the key the sync's command names) is set to `readonly`, which
+   * the sync must pass, and to `deny`, which must refuse it.
+   */
+  profileLevels?: { variable: string; keys: readonly string[] }
 }
 
 /**
  * The shared config (`~/.config/WireCat/config.json`) as a fresh or damaged machine has it. Only an explicit
- * "read only" answer limits a tool, and even then a sync runs: it only reads the service (owner ruling, 2026-11-13).
+ * "read only" answer limits a tool, and even then a sync runs: it only reads the service (owner rulings, 2026-11-13
+ * and 2026-11-14, which extends it to a profile's own `readonly`).
  * A slip with one reading is mended in place (2026-11-14), so only `broken` states may fail a step.
  */
 const SHARED_CONFIGS: { state: string; write?: (dir: string) => void; readOnly?: true; broken?: true }[] = [
@@ -73,15 +80,42 @@ const errorCodeOf = (text: string): unknown => {
  * the CLI's own harness gives.
  */
 export const syncAfterInstallCases = (options: SyncAfterInstallOptions): SyncAfterInstallCase[] => {
-  const { sync, refusedUnderReadOnly } = options
-  const cli = async (argv: readonly string[], shared: (typeof SHARED_CONFIGS)[number]) => {
+  const { sync, refusedUnderReadOnly, profileLevels } = options
+  const profile = sync[0] as string
+  const cli = async (
+    argv: readonly string[],
+    shared: (typeof SHARED_CONFIGS)[number],
+    levels?: Record<string, "readonly" | "deny">,
+  ) => {
     const configDir = mkdtempSync(join(tmpdir(), "sync-after-install-"))
     shared.write?.(configDir)
+    const own: NodeJS.ProcessEnv = {}
+    if (levels && profileLevels) {
+      const dir = mkdtempSync(join(tmpdir(), "sync-after-install-own-"))
+      writeFileSync(join(dir, "config.json"), JSON.stringify({ profiles: { [profile]: { permissions: levels } } }))
+      own[profileLevels.variable] = dir
+    }
     const ran = await options.run(argv.includes("--json") ? [...argv] : [...argv, "--json"], {
       WIRECAT_CONFIG_DIR: configDir,
+      ...own,
     })
     return { code: ran.code, out: ran.out ?? "", err: ran.err }
   }
+  const fresh = SHARED_CONFIGS[0] as (typeof SHARED_CONFIGS)[number]
+  const readOnly = SHARED_CONFIGS.find((one) => one.readOnly) as (typeof SHARED_CONFIGS)[number]
+  type Levels = Parameters<typeof cli>[2]
+  const refused = (
+    name: string,
+    argv: readonly string[],
+    shared: (typeof SHARED_CONFIGS)[number],
+    levels?: Levels,
+  ): SyncAfterInstallCase => ({
+    name,
+    run: async () => {
+      const ran = await cli(argv, shared, levels)
+      assert.equal(errorCodeOf(ran.err), "permission_error", `it was not refused: ${ran.out}${ran.err}`)
+    },
+  })
   return [
     ...SHARED_CONFIGS.map(
       (shared): SyncAfterInstallCase => ({
@@ -94,16 +128,26 @@ export const syncAfterInstallCases = (options: SyncAfterInstallOptions): SyncAft
         },
       }),
     ),
+    ...(profileLevels?.keys ?? []).flatMap((key): SyncAfterInstallCase[] => [
+      {
+        name: `${sync.join(" ")} runs with permissions.${key} readonly in the profile`,
+        run: async () => {
+          const ran = await cli(sync, fresh, { [key]: "readonly" })
+          assert.notEqual(errorCodeOf(ran.err), "permission_error", `sync was refused: ${ran.err}`)
+          assert.equal(ran.code, 0, `sync exited ${ran.code}: ${ran.out}${ran.err}`)
+        },
+      },
+      refused(`${sync.join(" ")} is refused with permissions.${key} deny in the profile`, sync, fresh, {
+        [key]: "deny",
+      }),
+    ]),
     ...(refusedUnderReadOnly
       ? [
-          {
-            name: `${refusedUnderReadOnly.join(" ")} is still refused under the explicit "read only" answer`,
-            run: async () => {
-              const readOnly = SHARED_CONFIGS.find((one) => one.readOnly) as (typeof SHARED_CONFIGS)[number]
-              const ran = await cli(refusedUnderReadOnly, readOnly)
-              assert.equal(errorCodeOf(ran.err), "permission_error", `it was not refused: ${ran.out}${ran.err}`)
-            },
-          },
+          refused(
+            `${refusedUnderReadOnly.join(" ")} is still refused under the explicit "read only" answer`,
+            refusedUnderReadOnly,
+            readOnly,
+          ),
         ]
       : []),
   ]

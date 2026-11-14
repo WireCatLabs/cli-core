@@ -143,6 +143,48 @@ export const layerPermissions = (layers: readonly [string, Readonly<Record<Permi
  */
 export const CEILING_KEY = "*"
 
+/**
+ * Asked of the guard for their permission level, yet they only read from the messenger or work here: reads go on
+ * during a hold and under the read-only lock, which promises reads and syncs.
+ */
+export const STORE_ONLY_KEYS = new Set<PermissionKey>([
+  "attachments.extract",
+  "conversations.embeddings",
+  "conversations.links",
+  "messages.server-search",
+  "messages.sync-first",
+  "metadata.sync",
+  "stats.contacts.top.sync-first",
+  "stats.messages.counters.sync",
+  "stats.messages.show.sync-first",
+  "stats.messages.top.sync-first",
+  "store.gaps.repair",
+])
+
+/**
+ * Those of `STORE_ONLY_KEYS` that only fetch from the messenger into the store: a `readonly` level lets them run, as it
+ * lets a sync (owner ruling, 2026-11-14). Work done here on what is stored, such as a file's text or a link between
+ * conversations, stays a write that `readonly` stops.
+ */
+const FETCH_KEYS = new Set<PermissionKey>(
+  [...STORE_ONLY_KEYS].filter(
+    (key) => !["attachments.extract", "conversations.embeddings", "conversations.links"].includes(key),
+  ),
+)
+
+/** Whether `level` lets a key that only fetches into the store run: `readonly` does, `deny` and `ask` decide alone. */
+export const fetchesUnder = (level: Level, key: PermissionKey): boolean => level === "readonly" && FETCH_KEYS.has(key)
+
+/**
+ * Whether a fetch a read adds on its own (a sync first, a server search) runs at `level`: it is never asked, so `ask`
+ * does not, and `readonly` still fetches.
+ */
+export const fetchesAt = (level: Level): boolean => level === "allow" || level === "readonly"
+
+/** Whether `level` stops a write under `key` outright: `deny` always, `readonly` unless the key only fetches. */
+export const stops = (level: Level, key: PermissionKey): boolean =>
+  level === "deny" || (level === "readonly" && !FETCH_KEYS.has(key))
+
 const ALLOWED = { level: "allow", key: null } as const
 
 const ORDER: Record<Level, number> = { deny: 0, readonly: 1, ask: 2, allow: 3 }

@@ -135,7 +135,3 @@ Read from source, not run.
   Keep `folders` for the messenger's and prefix the others (`notes folders`, `drive folders`), or
   accept one word per CLI?
 - **NEED-990 · key document:** what does it mean, and which CLI has it?
-- **NEED-992 · One permission for syncing:** `messages sync` (like `store fetch` before it) is
-  checked against the read key `messages`, but `--sync-first` on a search is the write key
-  `messages.sync-first`. A read-only profile can sync directly but not through `--sync-first`.
-  Make both reads, or both writes?

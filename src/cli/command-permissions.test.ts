@@ -10,7 +10,7 @@ import { runCommandForAgent, toolsFromCommands } from "../mcp/agent.js"
 import type { Level } from "../sends/permissions.js"
 import { commandsCommand } from "./commands-command.js"
 import { configCommand } from "./config-command.js"
-import { LOCAL_READ, REMOTE_READ, REMOTE_WRITE } from "./effects.js"
+import { FETCH, LOCAL_READ, logsInOrOut, REMOTE_READ, REMOTE_WRITE } from "./effects.js"
 import { commandPathKey, commandPermissions, knownPermissionKeys } from "./permission-keys.js"
 import { createProgram, type ProgramDefinition, run } from "./program.js"
 import { settingsFor } from "./settings.js"
@@ -75,6 +75,32 @@ describe("a CLI that declares its own permission keys", () => {
     expect(commandPathKey(["events", "list"])).toBe("events.list")
     expect(commandPathKey(["doctor", "reports", "create"])).toBe("doctor.reports.create")
     expect(commandPathKey(["doctor", "reports", "show"])).toBeNull()
+  })
+
+  it("**lets the owner sign in under readonly**, the profile's or setup's: a sign-in is housekeeping", async () => {
+    const { definition, env } = fixture()
+    const signedIn = vi.fn()
+    const session = new Command("session").addCommand(
+      logsInOrOut(annotate(new Command("start").action(signedIn), { effects: FETCH })),
+    )
+    const withSession: ProgramDefinition = { ...definition, commands: () => [...definition.commands(), session] }
+    const shared = mkdtempSync(join(tmpdir(), "command-permissions-shared-"))
+    const signIn = async (saved: Record<string, Level>, answer?: "readonly") => {
+      writeFileSync(
+        join(env.CAL_CONFIG_DIR, "config.json"),
+        JSON.stringify({ profiles: { work: { permissions: saved } } }),
+      )
+      writeFileSync(join(shared, "config.json"), JSON.stringify(answer ? { setup: { permissions: answer } } : {}))
+      const streams = captureStreams()
+      return run(["work", "session", "start", "--json"], withSession, {
+        streams,
+        env: { ...env, WIRECAT_CONFIG_DIR: shared },
+        tty: false,
+      })
+    }
+    expect(await signIn({ session: "readonly" })).toBe(0)
+    expect(await signIn({}, "readonly")).toBe(0)
+    expect(signedIn).toHaveBeenCalledTimes(2)
   })
 
   it("**saves a key that names a command or group, and refuses one that names none**, listing the ones beside it", async () => {

@@ -26,7 +26,7 @@ import { readOnlyLockOf } from "../ports/app.js"
 import type { MessengerAdapter } from "../ports/messenger.js"
 import type { RunCaller } from "../runs/run-context.js"
 import { guardFor } from "../sends/guard.js"
-import { levelFor, type PermissionKey, readKeysForCommand } from "../sends/permissions.js"
+import { fetchesAt, levelFor, type PermissionKey, readKeysForCommand } from "../sends/permissions.js"
 import { openStore } from "../store/store.js"
 import { type AgentAnswer, type AgentProgram, type AgentTool, runCommandForAgent, toolsFromCommands } from "./agent.js"
 import { agentLog } from "./agent-log.js"
@@ -143,8 +143,8 @@ export const createServer = (
   }
   const syncAllowed = (path: readonly string[]) =>
     syncsFirst(messenger) &&
-    levelOf("messages.sync-first") === "allow" &&
-    (path[0] !== "stats" || levelOf(`${path.join(".")}.sync-first`) === "allow")
+    fetchesAt(levelOf("messages.sync-first")) &&
+    (path[0] !== "stats" || fetchesAt(levelOf(`${path.join(".")}.sync-first`)))
   // Discovery stays complete while availability follows changes to the profile.
   const generated = toolsFromCommands(program.commands, {
     includeUnavailable: true,
@@ -386,7 +386,7 @@ export const createServer = (
         spawnJob: sessionOptions.spawnJob,
         limit: settings.limit,
         get syncAllowed() {
-          return syncsFirst(messenger) && levelOf("messages.sync-first") === "allow"
+          return syncsFirst(messenger) && fetchesAt(levelOf("messages.sync-first"))
         },
         guard,
         settings,

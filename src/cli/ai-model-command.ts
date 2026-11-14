@@ -21,7 +21,7 @@ import type { AppIdentity } from "../ports/app.js"
 import { agentOf } from "../runs/run-context.js"
 import { readSecret } from "../terminal/prompt.js"
 import { environmentOf } from "./context.js"
-import { FETCH, grantsAuthority, LOCAL_READ, LOCAL_WRITE, NO_EFFECTS } from "./effects.js"
+import { FETCH, grantsAuthority, LOCAL_READ, LOCAL_WRITE, NO_EFFECTS, reachesOtherService } from "./effects.js"
 import { type Body, itemOf } from "./envelope.js"
 
 export interface AiModelCommandOptions {
@@ -219,12 +219,14 @@ export const aiModelCommand = (app: AppIdentity, options: AiModelCommandOptions)
       if (images !== undefined) writeAiSetting(path, kept)
       options.output(itemOf({ ...view(app, options, kept), changed: images !== undefined }), this)
     })
-  annotate(ai.command("check"), {
-    effects: FETCH,
-    mcp: false,
-    output: { entity: "ai_model_check" },
-    examples: [`${app.command} models ai check`],
-  })
+  reachesOtherService(
+    annotate(ai.command("check"), {
+      effects: FETCH,
+      mcp: false,
+      output: { entity: "ai_model_check" },
+      examples: [`${app.command} models ai check`],
+    }),
+  )
     .summary("send one short paid request and say what is wrong")
     .description("send one short request (billed by the provider, usually under a cent) and say what is wrong")
     .option("--from-app", "you did this in WireCat Desktop")
