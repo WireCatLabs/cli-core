@@ -265,6 +265,7 @@ const syncRound = async (
       now,
       loadEngine,
       index,
+      ...(signal ? { signal } : {}),
     })
   const startedAt = now()
   const key = mailAccountKey(account.address)
@@ -465,8 +466,9 @@ const syncRound = async (
   }
   // A listing that came back after the stop writes nothing: the command has answered, and the next run lists again.
   if (signal?.aborted) throw signal.reason
-  const listed = [...new Map(collected.map((item) => [item.messageId, item])).values()].sort((a, b) =>
-    b.receivedAt.localeCompare(a.receivedAt),
+  // By the instant, not the text: a source may give times with an offset, and "+02:00" sorts as text, not as time.
+  const listed = [...new Map(collected.map((item) => [item.messageId, item])).values()].sort(
+    (a, b) => Date.parse(b.receivedAt) - Date.parse(a.receivedAt),
   )
   const present = new Set(listed.map(({ messageId }) => messageId))
   const factsFor = factsOf(listed, rules, ages)
@@ -621,10 +623,13 @@ const syncRound = async (
   const settled = new Set<string>()
   let full = false
   for (const item of listed) {
-    const rule = decide(rules, factsFor(item))
+    const facts = factsFor(item)
+    const rule = decide(rules, facts)
     const boxes = enveloped.get(item.messageId)
     // An envelope whose rule is gone or now keeps the mail is read in full; one a skip now matches stays as it is.
-    if (boxes !== undefined && rule?.action !== ENVELOPE && rule?.action !== "skip") {
+    // With rules, headers that could not be read decide nothing: the envelope stays until a run reads them.
+    const decided = rules.length === 0 || facts?.headers !== undefined
+    if (boxes !== undefined && decided && rule?.action !== ENVELOPE && rule?.action !== "skip") {
       if (pending.length < max) {
         upgraded.set(item.messageId, boxes)
         pending.push(item)

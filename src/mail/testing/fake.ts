@@ -32,6 +32,8 @@ export interface FakeMail {
   folder?: "trash"
   /** Folders that do not hold it although its `folder` says they do, as a server's delete from one folder leaves it. */
   absentFrom?: string[]
+  /** Listed without headers even when they are asked for, as a server does when it cannot read them. */
+  headersUnread?: boolean
 }
 
 /** The mailbox a fake source reads live, so a test changes it between syncs; the switches make the source fail. */
@@ -139,7 +141,9 @@ const listingOf = (m: FakeMail, headers: boolean, folder: string): Listed => ({
   ...quickOf(m, folder),
   messageId: m.messageId,
   threadId: m.threadId,
-  ...(headers ? { headers: headersOf(Buffer.from(rawOf(m)).toString().split("\r\n\r\n")[0] ?? "") } : {}),
+  ...(headers && !m.headersUnread
+    ? { headers: headersOf(Buffer.from(rawOf(m)).toString().split("\r\n\r\n")[0] ?? "") }
+    : {}),
 })
 
 /**

@@ -86,14 +86,23 @@ export const within = (ranges: Ranges, value: number): boolean => {
   return false
 }
 
-/** Only what decides mail: a changed reason or date is the same rule. */
+/**
+ * Only what decides mail: the action, whether it is protected, and every match field (subject, to, preset, age… as
+ * well as the sender). A changed reason or date is the same rule.
+ */
 export const rulesKey = (rules: readonly MailRule[]): string =>
   createHash("sha256")
     .update(
       JSON.stringify(
         rules
-          .map(({ match, action }) =>
-            JSON.stringify([action, match.from ?? null, match.domain ?? null, match.list_id ?? null]),
+          .map(({ match, action, protected: guarded }) =>
+            JSON.stringify([
+              action,
+              guarded === true,
+              Object.entries(match)
+                .filter(([, value]) => value !== undefined)
+                .sort(([a], [b]) => a.localeCompare(b)),
+            ]),
           )
           .sort(),
       ),
