@@ -45,10 +45,11 @@ export const documentIngestion = <M extends SourceFile>(
         for (let start = 0; start < files.length; start += 200) {
           const chunk = files.slice(start, start + 200)
           await store.catalog.upsert(selected.id, chunk.map(options.catalogInput))
-          for (const file of chunk) {
-            const entry = await store.catalog.get(selected.id, options.externalId(file.id))
-            if (entry) await options.observed?.(principal, file, entry.ref.slice("document:".length))
-          }
+          if (options.observed)
+            for (const file of chunk) {
+              const entry = await store.catalog.get(selected.id, options.externalId(file.id))
+              if (entry) await options.observed(principal, file, entry.ref.slice("document:".length))
+            }
         }
         const retired = await store.catalog.reconcile(
           selected.id,

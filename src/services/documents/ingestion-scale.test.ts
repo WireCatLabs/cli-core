@@ -49,9 +49,20 @@ describe("a documents account past 10 000 entries", () => {
       "h1",
     )
     expect((await store.notes.note(ref)).text).toBe("late text")
+    const account = await store.notes.documentsAccount({ provider: "google-drive", account: "ana@example.com" })
+    expect((await store.notes.fileNote(account?.id ?? "", `${last.id}.md`))?.ref).toBe(ref)
+    const memory = await store.memories.add({
+      kind: "summary",
+      body: "Late summary",
+      scope: "work",
+      subject: ref,
+      evidence: [ref],
+      author: "owner",
+    })
     expect(
       await ingest.save("ana@example.com", { metadata: last, text: "later text", markdown: "", tabs: [] }, "h2"),
     ).toBe(ref)
+    expect((await store.memories.get(memory.ref)).status).toBe("stale")
 
     expect(await ingest.catalog.import("ana@example.com", files.slice(1))).toEqual({ entries: 10049, retired: 1 })
     await ingest.remove("ana@example.com", last.id)
