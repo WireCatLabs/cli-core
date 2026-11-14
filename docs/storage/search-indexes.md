@@ -91,13 +91,16 @@ The vocabulary never searches messages itself; it only turns a typo into a real 
 ## 4 · The substring index
 
 It keeps every three-letter piece of every message, so it finds any three or more letters anywhere,
-including inside a word. It cannot find fewer than three letters, and ranking over letter pieces is
-weak.
+including inside a word. It cannot find fewer than three letters: `find AI bot` asks the index for
+`bot` and checks `AI` in those messages' text, in any case; a search of short words only is refused.
+The index keeps the text as written, so a search asks each part with е and ё either way, as the name
+indexes below do. Ranking over letter pieces is weak.
 
 ## 5 · Name indexes
 
 Answer "which chat or person did you mean": `--chat expats` finds «Valencia Expats», `--from ptsa`
-finds «@ptsarev_v»; `contacts search` uses them. Small, and they exist today.
+finds «@ptsarev_v»; `contacts search` uses them. Small, and they exist today. They keep names as
+written, so `title:елка` asks for «елка» and «ёлка» both and finds «Ёлка».
 
 ## Scenarios — measured
 

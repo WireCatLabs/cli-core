@@ -24,6 +24,7 @@ import {
   messages,
   persons,
 } from "./schema.js"
+import { trigramPart } from "./trigram-match.js"
 import { toIso } from "./values.js"
 
 type Facts = Omit<PersonFacts, "id" | "name"> & {
@@ -359,7 +360,7 @@ const contactsWhere = (accountKey: number, key: AccountKey, { query, notes, emai
                   AND ${chats.kind} = 'dialog')`,
     query === undefined
       ? undefined
-      : sql`(${identities.id} IN (SELECT rowid FROM identities_fts WHERE identities_fts MATCH ${`"${query.trim().replaceAll('"', '""')}"`}) OR EXISTS (SELECT 1 FROM aliases ca WHERE ca.aliasable_type='identity' AND ca.display=1 AND ca.account_id=${accountKey} AND ca.aliasable_id=${identities.id} AND instr(ca.name_folded, ${fold(query.trim())}) > 0))`,
+      : sql`(${identities.id} IN (SELECT rowid FROM identities_fts WHERE identities_fts MATCH ${trigramPart(query.trim())}) OR EXISTS (SELECT 1 FROM aliases ca WHERE ca.aliasable_type='identity' AND ca.display=1 AND ca.account_id=${accountKey} AND ca.aliasable_id=${identities.id} AND instr(ca.name_folded, ${fold(query.trim())}) > 0))`,
     notes === undefined
       ? undefined
       : sql`EXISTS (SELECT 1 FROM notes n WHERE n.notable_type='identity' AND n.notable_id=${identities.id} AND n.deleted_at IS NULL${noted ? sql` AND ${bound(noted)}` : sql``})`,

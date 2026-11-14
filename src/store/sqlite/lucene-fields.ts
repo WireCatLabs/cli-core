@@ -15,6 +15,7 @@ import { fold, normalize } from "../normalize.js"
 import { linkMatch } from "./mention-links.js"
 import { valueMatch } from "./phone-countries.js"
 import { canonicalTagNamed } from "./tags.js"
+import { yoSpellings } from "./trigram-match.js"
 
 export interface Fragment {
   sql: string
@@ -259,17 +260,6 @@ const literalRuns = (value: string): string[] => {
   }
   return runs.filter(Boolean)
 }
-const MOST_YO_SPELLINGS = 64
-/** Every spelling of `run` with each е or ё as either: the trigram index keeps the text as written. */
-const yoSpellings = (run: string): string[] | undefined => {
-  let spellings = [""]
-  for (const c of run) {
-    spellings = spellings.flatMap((start) => (c === "е" || c === "ё" ? [`${start}е`, `${start}ё`] : [`${start}${c}`]))
-    if (spellings.length > MOST_YO_SPELLINGS) return undefined
-  }
-  return spellings
-}
-
 /**
  * A pattern with no start to read the word list from (`*договор*`, `*ость`), in chat messages: the trigram index of
  * their text finds where its longest part occurs, so a large store does not refuse it: the whole search took 0.5–1 s at

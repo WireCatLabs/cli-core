@@ -7,6 +7,7 @@ import { alias, and, desc, eq, inArray, isNull, lte, type SQL, sql } from "./dri
 import type { StoreContext } from "./open.js"
 import { MESSAGE_FIELDS, type MessageRow, newestFirst, toMessages } from "./reads.js"
 import { accounts, chats, identities, messages } from "./schema.js"
+import { anyCaseGlob, trigramPart } from "./trigram-match.js"
 
 const HIT_FIELDS = {
   ...MESSAGE_FIELDS,
@@ -17,11 +18,19 @@ const HIT_FIELDS = {
 
 type HitRow = MessageRow & { chatTitle: string | null; provider: string; accountNativeId: string }
 
-/** Every word of three characters or more, found anywhere inside the text; a trigram index cannot match a shorter one. */
-const wordsOf = (text: string): string => {
-  const words = (text.match(/[\p{L}\p{N}]+/gu) ?? []).filter((word) => [...word].length >= 3)
-  if (words.length === 0) throw new CliError("validation_error", "search needs a word of three letters or more")
-  return words.map((word) => `"${word}"`).join(" ")
+/**
+ * Every word of three characters or more through the trigram index, found anywhere inside the text; a shorter word,
+ * which a trigram cannot match, is checked on those messages' text.
+ */
+const wordsOf = (text: string): SQL => {
+  const words = text.match(/[\p{L}\p{N}]+/gu) ?? []
+  const long = words.filter((word) => [...word].length >= 3)
+  if (long.length === 0) throw new CliError("validation_error", "search needs a word of three letters or more")
+  const short = words.filter((word) => [...word].length < 3)
+  return and(
+    sql`${messages.id} IN (SELECT rowid FROM messages_fts WHERE messages_fts MATCH ${long.map(trigramPart).join(" AND ")})`,
+    ...short.map((word) => sql`${messages.text} GLOB ${anyCaseGlob(word)}`),
+  ) as SQL
 }
 
 /** What `find` keeps, as one condition. */
@@ -45,9 +54,7 @@ export const matching = (
   const ids = senders?.length ? [...new Set(senders)] : undefined
   return and(
     isNull(messages.deletedAt),
-    trimmed
-      ? sql`${messages.id} IN (SELECT rowid FROM messages_fts WHERE messages_fts MATCH ${wordsOf(trimmed)})`
-      : undefined,
+    trimmed ? wordsOf(trimmed) : undefined,
     scopeProvider === undefined ? undefined : eq(accounts.provider, scopeProvider),
     account ? eq(accounts.externalId, account.account) : undefined,
     within ? inArray(accounts.externalId, within) : undefined,
