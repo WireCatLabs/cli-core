@@ -1,4 +1,4 @@
-import { access, mkdtemp, writeFile } from "node:fs/promises"
+import { access, mkdtemp, readFile, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
@@ -172,9 +172,7 @@ describe("media archive commands", () => {
     const f = await fixture()
     expect((await f.call(["attachments", "download", f.directory, "--offline", "--json"])).code).not.toBe(0)
     expect((await f.call(["attachments", "download", f.env.CHAT_CONFIG_DIR, "--json"])).code).not.toBe(0)
-    expect(
-      (await f.call(["attachments", "download", f.directory, "--since-time", "yesterday", "--json"])).code,
-    ).not.toBe(0)
+    expect((await f.call(["attachments", "download", f.directory, "--since-time", "soon", "--json"])).code).not.toBe(0)
     expect(f.connect).not.toHaveBeenCalled()
   })
   it("honors message and chat read denials before connecting", async () => {
@@ -199,6 +197,21 @@ describe("media archive commands", () => {
     expect(execute.mock.calls).toHaveLength(1)
     const started = await f.call(["attachments", "jobs", "start", f.directory, "--json"], { system })
     expect(started.code, started.stderr).toBe(0)
+    expect(f.connect).not.toHaveBeenCalled()
+  })
+  it("fixes a timer's start when it is installed, from any form the shared time grammar takes", async () => {
+    const f = await fixture()
+    const system = {
+      platform: "linux",
+      entry: ["/usr/bin/node", "/example/chat.js"],
+      run: vi.fn(async () => ({ code: 0, stdout: "", stderr: "" })),
+    }
+    const install = (since: string) =>
+      f.call(["attachments", "jobs", "install", f.directory, "--since-time", since, "--json"], { system })
+    const installed = await install("2026-10-01 09:00+02:00")
+    expect(installed.code, installed.stderr).toBe(0)
+    const unit = await readFile(JSON.parse(installed.stdout).item.service_path, "utf8")
+    expect(unit).toContain(`"--since-time" "2026-10-01T07:00:00.000Z"`)
     expect(f.connect).not.toHaveBeenCalled()
   })
 })

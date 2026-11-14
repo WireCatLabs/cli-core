@@ -4,7 +4,8 @@ import type { Command } from "commander"
 import { parseDuration } from "../../domain/duration.js"
 import { refusedPlace } from "../../sends/upload.js"
 import { FETCHING } from "../../services/archive.js"
-import { archiveMedia, checkMediaArchive, validateMediaSince } from "../../services/media-archive.js"
+import { archiveMedia, checkMediaArchive } from "../../services/media-archive.js"
+import { momentOf } from "../../services/moment.js"
 import { environmentOf, setExitCode } from "../context.js"
 import { FETCH, LOCAL_READ } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
@@ -31,12 +32,12 @@ export const addMediaArchiveCommands = (archive: Command, messenger: Messenger):
       (value: string, previous: string[]) => [...previous, value],
       [],
     )
-    .option("--since-time <time>", "include messages from this ISO timestamp with a time zone")
+    .option("--since-time <time>", "include messages from this time: ISO 8601, a date, today, yesterday, or 2h, 7d ago")
     .option("--pause <duration>", "pause between history pages", messenger.fetching?.pause ?? FETCHING.pause)
     .action(async function (this: Command, directory: string) {
       const context = messengerContext(this, messenger)
       const options = this.opts<{ chat?: string[]; sinceTime?: string; pause: string }>()
-      validateMediaSince(options.sinceTime)
+      const sinceTime = options.sinceTime && new Date(momentOf(options.sinceTime, "--since-time")).toISOString()
       const pauseMs = parseDuration(options.pause, "--pause")
       if (context.settings.offline) throw new CliError("validation_error", "archiving media needs online mode")
       if (refusedPlace(directory, messenger.app, context.env))
@@ -55,7 +56,7 @@ export const addMediaArchiveCommands = (archive: Command, messenger: Messenger):
           archiveMedia(services, {
             directory,
             chats: options.chat,
-            sinceTime: options.sinceTime,
+            ...(sinceTime ? { sinceTime } : {}),
             pauseMs,
             signal,
             pageSize: messenger.history === "store" ? 100 : (messenger.fetching ?? FETCHING).page,

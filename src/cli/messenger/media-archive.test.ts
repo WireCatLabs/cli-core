@@ -218,7 +218,7 @@ describe("independent media archive", () => {
       saved: 2,
     })
     expect(f.list.mock.calls[1]).toEqual([chat.id, { limit: 100, before: "3" }])
-    await expect(f.run({ sinceTime: "yesterday" })).rejects.toThrow("ISO timestamp")
+    await expect(f.run({ sinceTime: "soon" })).rejects.toThrow("--since-time takes an ISO 8601 time")
   })
   it("fails rather than claiming a saturated time boundary is complete", async () => {
     const f = await fixture()

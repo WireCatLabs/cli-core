@@ -10,7 +10,7 @@ import {
 } from "../../background/daily-archive-timer.js"
 import { type ServerSystem, thisMachine } from "../../background/system.js"
 import { refusedPlace } from "../../sends/upload.js"
-import { validateMediaSince } from "../../services/media-archive.js"
+import { momentOf } from "../../services/moment.js"
 import { type BaseEnvironment, environmentOf } from "../context.js"
 import { grantsAuthority, LOCAL_READ, LOCAL_WRITE } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
@@ -45,7 +45,10 @@ export const addMediaArchiveTimers = (attachments: Command, messenger: Messenger
           (value: string, previous: string[]) => [...previous, value],
           [],
         )
-        .option("--since-time <time>", "include messages from this ISO timestamp with a time zone")
+        .option(
+          "--since-time <time>",
+          "include messages from this time: ISO 8601, a date, today, yesterday, or 2h, 7d ago; fixed when installed",
+        )
     command.action(async function (this: Command, directory: string) {
       const context = messengerContext(this, messenger)
       const environment = environmentOf<BaseEnvironment & { system?: ServerSystem }>(this)
@@ -55,7 +58,8 @@ export const addMediaArchiveTimers = (attachments: Command, messenger: Messenger
         run: (args: string[], env: NodeJS.ProcessEnv) => runArchiveTimerCommand(args, env, signal),
       }
       const options = this.opts<{ at?: string; timezone?: string; chat?: string[]; sinceTime?: string }>()
-      validateMediaSince(options.sinceTime)
+      // Fixed now: `2h` read again at every daily run would be a different start each night.
+      const sinceTime = options.sinceTime && new Date(momentOf(options.sinceTime, "--since-time")).toISOString()
       if (action === "install" && refusedPlace(directory, messenger.app, context.env))
         throw new CliError(
           "validation_error",
@@ -73,7 +77,7 @@ export const addMediaArchiveTimers = (attachments: Command, messenger: Messenger
         entry: system.entry,
         env: context.env,
         chats: options.chat,
-        sinceTime: options.sinceTime,
+        sinceTime,
         at: options.at,
         timeZone: options.timezone,
       })

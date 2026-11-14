@@ -78,7 +78,7 @@ export const registerPrompts = (server: McpServer, { command, name }: { command:
               v.string(),
               v.description(
                 "unread (the messenger's read marks, the default), new (since the last catch-up with new), " +
-                  "or a time: ISO 8601, or 2h / 1d ago",
+                  "or a time: ISO 8601, today, yesterday, or 2h / 1d ago",
               ),
             ),
           ),
@@ -170,7 +170,10 @@ export const registerPrompts = (server: McpServer, { command, name }: { command:
       argsSchema: toStandardJsonSchema(
         v.object({
           since: v.optional(
-            v.pipe(v.string(), v.description("where the last review ended: an ISO 8601 time, or 2h / 1d ago")),
+            v.pipe(
+              v.string(),
+              v.description("where the last review ended: an ISO 8601 time, today, yesterday, or 2h / 1d ago"),
+            ),
           ),
           groups: v.optional(
             v.pipe(v.string(), v.description("group chats where work gets done, by name or id, comma-separated")),

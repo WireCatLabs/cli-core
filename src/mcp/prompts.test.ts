@@ -24,7 +24,14 @@ const SAMPLES: Record<string, string[]> = {
   kind: ["group"],
   mode: ["unread", "new", "2h", "2026-10-01T09:00:00Z"],
   chat: ["Book club"],
-  since: ["1d ago", "2026-10-01T09:00:00Z", "2026-10-01T09:00+02:00"],
+  since: [
+    "1d ago",
+    "2h",
+    "2026-10-01T09:00:00Z",
+    "2026-10-01T09:00+02:00",
+    "2026-11-13T18:00+01:00",
+    "2026-11-13 18:00",
+  ],
   groups: ["Work"],
   text: ["invoice"],
 }
@@ -109,6 +116,12 @@ describe("MCP prompts", () => {
     expect(calls).toContainEqual({ command: "review", arguments: { query: "date>1d" } })
     expect(calls).toContainEqual({ command: "review", arguments: { query: 'date>"2026-10-01T09:00:00.000Z"' } })
     expect(calls).toContainEqual({ command: "review", arguments: { query: 'date>"2026-10-01T07:00:00.000Z"' } })
+    expect(calls).toContainEqual({ command: "review", arguments: { query: "date>2h" } })
+    expect(calls).toContainEqual({ command: "review", arguments: { query: 'date>"2026-11-13T17:00:00.000Z"' } })
+    expect(calls).toContainEqual({
+      command: "review",
+      arguments: { query: `date>"${new Date(2026, 10, 13, 18).toISOString()}"` },
+    })
     expect(calls.some((call) => call.arguments !== undefined && "since" in call.arguments)).toBe(false)
   })
 })

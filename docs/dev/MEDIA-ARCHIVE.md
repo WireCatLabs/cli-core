@@ -8,9 +8,10 @@ own archive paths, so deleting a message or clearing stored history cannot delet
 ## Save and verify
 
 `attachments download <dir>` walks the active account's available chats and messages. Repeat
-`--chat <chat>` to select chats, and use `--since-time <ISO timestamp with zone>` for an inclusive
-lower time bound. WhatsApp reads the history already held locally; keeping its background receiver
-running is still necessary to receive new messages. Telegram and MAX read their available history.
+`--chat <chat>` to select chats, and use `--since-time <time>` for an inclusive lower time bound: an
+ISO 8601 time (no zone means the computer's), a date, `today`, `yesterday`, or `2h`, `7d` ago. A daily
+job fixes that start when it is installed. WhatsApp reads the history already held locally; keeping its
+background receiver running is still necessary to receive new messages. Telegram and MAX read their available history.
 
 ```sh
 chat example attachments download ./media-archive --chat "Example group" --since-time 2026-10-01T00:00:00Z
@@ -54,9 +55,9 @@ Foreign or edited unit files are preserved. Non-Linux platforms can run download
 
 ## Move older images
 
-Use `attachments move <dir> <archive-dir> --before-time <ISO timestamp with zone>` to move images
-whose message date is strictly before the cutoff into another verified archive. Photos and attachments
-with an `image/*` MIME type are selected; other files and images at the cutoff stay in place.
+Use `attachments move <dir> <archive-dir> --before-time <time>` (the same forms; a date means its
+start) to move images whose message date is strictly before the cutoff into another verified
+archive. Photos and attachments with an `image/*` MIME type are selected; other files and images at the cutoff stay in place.
 
 ```sh
 chat example attachments move ./media-archive /mnt/archive/older-images --before-time 2026-10-01T00:00:00Z --dry-run
