@@ -468,6 +468,16 @@ export type {
   TranscriptRowInput,
 } from "./store.js"
 export { MEETING_DOCUMENT_ROLES, READ_BUDGET_EXCEEDED } from "./store.js"
+export {
+  type MeetingTagChange,
+  type MeetingTagChangeItem,
+  type MeetingTagged,
+  type MeetingTaggingItem,
+  meetingTagChange,
+  meetingTagChangeItem,
+  meetingTagging,
+  meetingTaggingItem,
+} from "./tag-answers.js"
 export { meetingTimestamp } from "./timestamp.js"
 export type {
   DocumentMeeting,

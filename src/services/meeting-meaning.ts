@@ -26,8 +26,6 @@ export interface MeetingMeaningSearchOptions extends MeetingModelOptions {
 
 export interface MeetingEmbeddingOptions extends MeetingModelOptions {
   limit?: number
-  afterTranscriptId?: number
-  afterHash?: string
   maxRows?: number
   maxTextBytes?: number
   yes?: boolean
@@ -95,12 +93,10 @@ export const validateMeetingEmbeddings = (options: MeetingEmbeddingOptions): voi
   validateMeetingModel(options)
   if (
     !bounded(options.limit, 1000) ||
-    !bounded(options.afterTranscriptId, Number.MAX_SAFE_INTEGER) ||
     !bounded(options.maxRows, 100000) ||
-    !bounded(options.maxTextBytes, 64 * 1024 * 1024) ||
-    (options.afterHash !== undefined && !/^[a-f0-9]{64}$/.test(options.afterHash))
+    !bounded(options.maxTextBytes, 64 * 1024 * 1024)
   )
-    throw new CliError("validation_error", "meeting embedding generation requires valid bounded limits and cursors")
+    throw new CliError("validation_error", "meeting embedding generation requires valid bounded limits")
 }
 
 export type MeetingMeaningApi = Pick<
@@ -150,18 +146,23 @@ export const meetingMeaning = (
   })
   // rebuild has no "new transcripts only" mode, so every pass splits every current transcript again; only
   // passages without a vector for this model reach the embedder.
+  const splitAll = async (input: { maxRows?: number; maxTextBytes?: number; signal?: AbortSignal }) => {
+    let afterTranscriptId: number | undefined
+    let pages = 0
+    for (;;) {
+      checkCancelled(input.signal)
+      const page = await store.meetingVectors.rebuild({ accountId, limit: 1000, afterTranscriptId, ...budget(input) })
+      pages += 1
+      if (!page.hasMore || page.nextTranscriptId === undefined) return { pages }
+      afterTranscriptId = page.nextTranscriptId
+    }
+  }
   const buildMissing = async (
     api: MeetingMeaningApi,
     embedder: MeetingEmbedder,
     input: MeetingMeaningSearchOptions,
   ) => {
-    let afterTranscriptId: number | undefined
-    for (;;) {
-      checkCancelled(input.signal)
-      const page = await store.meetingVectors.rebuild({ accountId, limit: 1000, afterTranscriptId, ...budget(input) })
-      if (!page.hasMore || page.nextTranscriptId === undefined) break
-      afterTranscriptId = page.nextTranscriptId
-    }
+    await splitAll(input)
     let afterHash: string | undefined
     for (;;) {
       checkCancelled(input.signal)
@@ -208,16 +209,11 @@ export const meetingMeaning = (
       const embedder = await api.openMeetingEmbedder(selected, { env: options.env, signal: input.signal })
       try {
         checkCancelled(input.signal)
-        const rebuild = await store.meetingVectors.rebuild({
-          accountId,
-          limit: input.limit,
-          afterTranscriptId: input.afterTranscriptId,
-          ...budget(input),
-        })
+        // Passages that already have a vector are never offered again, so the next run takes the next batch.
+        const rebuild = await splitAll(input)
         checkCancelled(input.signal)
         const result = await api.applyMeetingEmbedding(store.meetingVectors, accountId, embedder, {
           maxChunks: input.limit,
-          afterHash: input.afterHash,
           ...budget(input),
         })
         return { ...result, applied: true, model: descriptor, rebuild }

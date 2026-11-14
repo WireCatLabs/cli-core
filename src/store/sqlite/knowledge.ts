@@ -14,7 +14,7 @@ import type { AccountKey } from "../types.js"
 import { ulid } from "../ulid.js"
 import { ownerPerson } from "./actors.js"
 import { forgetEvidenceToRow } from "./evidence-signature.js"
-import { LABELLED, type LabelledType } from "./labelled.js"
+import { accountMeetingTagging, LABELLED, type LabelledType } from "./labelled.js"
 import { linkKind, RELATION_KINDS, REPORTER_SQL } from "./link-kinds.js"
 import { type MeetingProjectsStore, meetingProjectsStoreOver } from "./meeting-projects.js"
 import type { Author } from "./memories.js"
@@ -159,7 +159,7 @@ export interface KnowledgeStore
   createTag(name: string, options?: { kind?: TagKind; by?: "owner" | "agent" } & TagCreationOptions): Promise<TagRow>
   /** Marks a topic as the thing's main one, or clears it with `null`; one per thing. */
   setMainTopic(key: KnowledgeScope, target: KnowledgeTarget, topic: string | null): Promise<void>
-  /** Every labelled note, document, person, organization, project, task and folder. */
+  /** Every labelled note, document, person, organization, project, task, meeting and folder; an account: its meetings. */
   labelled(
     key: KnowledgeScope,
     options?: { tag?: string; type?: LabelledType; limit?: number; offset?: number },
@@ -670,6 +670,7 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
     labelled: async (key, options = {}) => {
       const { limit, offset } = bounded(options.limit, options.offset)
       checked(key)
+      const meetingAccount = key === null ? null : account(key)
       const tag = options.tag === undefined ? null : canonicalTagName(options.tag)
       const types = Object.entries(LABELLED)
         .filter(([, type]) => options.type === undefined || type === options.type)
@@ -680,11 +681,12 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
           "SELECT * FROM (" +
             "SELECT DISTINCT g.taggable_type AS type, g.taggable_id AS id, NULL AS path FROM taggings g JOIN resolved_tags t ON t.id=g.tag_id " +
             `WHERE g.taggable_type IN (${types.map(() => "?").join(",") || "NULL"}) AND (? IS NULL OR t.name = ?) AND ${liveTagging("g")} ` +
+            `AND ${accountMeetingTagging("g")} ` +
             "UNION SELECT DISTINCT 'account' AS type, l.from_id AS id, l.anchor AS path FROM links l JOIN resolved_tags t ON t.id=l.to_id " +
             `WHERE ? = 1 AND l.from_type = 'account' AND l.kind = ${linkKind("labelled")} AND l.to_type = 'tag' AND (? IS NULL OR t.name = ?)` +
             ") ORDER BY type = 'account', type, id, path LIMIT ? OFFSET ?",
         )
-        .all(...types, tag, tag, subfolders ? 1 : 0, tag, tag, limit + 1, offset)
+        .all(...types, tag, tag, meetingAccount, meetingAccount, subfolders ? 1 : 0, tag, tag, limit + 1, offset)
       return {
         items: rows.slice(0, limit).flatMap((row) => {
           const thing = storedThing(row.type, row.id)

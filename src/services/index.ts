@@ -270,6 +270,7 @@ export {
   readMeetingCounts,
   readMeetingStats,
 } from "./meeting-stats.js"
+export { type MeetingTags, type MeetingTagTarget, meetingTags } from "./meeting-tags.js"
 export { chatIdIn, storedChatId } from "./message-resolution.js"
 export type {
   AroundWindow,

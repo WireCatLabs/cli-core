@@ -1165,6 +1165,19 @@ const samples: Record<EntityName, unknown> = {
     weeks: [{ week_start: "2026-10-19", meetings: 1, talk_ms: 5000 }],
     top_speakers: [],
   },
+  meeting_tag_change: {
+    tags: ["complaint"],
+    matched: 2,
+    changed: [{ meeting: "meeting:1/12", meeting_id: 12, tags: ["complaint"] }],
+  },
+  meeting_tagging: {
+    meeting: "meeting:1/12",
+    meeting_id: 12,
+    title: "Incoming call from +34600000001",
+    started_at: "2026-11-02T09:00:00.000Z",
+    tags: ["complaint", "vip"],
+    untrusted: ["title"],
+  },
   call_stats: {
     time_zone: "Europe/Madrid",
     callback_within_ms: 86_400_000,
