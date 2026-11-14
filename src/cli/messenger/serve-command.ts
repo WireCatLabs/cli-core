@@ -23,6 +23,7 @@ import { storePath } from "../../store/path.js"
 import { environmentOf } from "../context.js"
 import { REMOTE_WRITE } from "../effects.js"
 import { itemOf, renderAnswer } from "../envelope.js"
+import type { Settings } from "../settings.js"
 import { recalledAccount } from "./accounts.js"
 import { type Messenger, type MessengerContext, messengerContext } from "./context.js"
 import { START_SYNC_PER_CHAT, startSync } from "./serve-catch-up.js"
@@ -87,7 +88,9 @@ export const serveCommand = (messenger: Messenger): Command => {
     }
 
     const counts: Record<string, number> = {}
-    const rules = replying(context, messenger, Date.parse(startedAt))
+    const rules = replying(context, messenger, Date.parse(startedAt), () =>
+      messenger.resolveSettings(this.optsWithGlobals(), { env: context.env }),
+    )
     const tasks = tasking(context, warn)
     const { handled, startSyncDelayMs, outdated: outdatedHook } = environmentOf(this)
     const count = (event: MessageEvent) => {
@@ -245,7 +248,7 @@ const NO_REPLIES = {
   summary: () => ({}),
 }
 
-const replying = (context: MessengerContext, messenger: Messenger, since: number) => {
+const replying = (context: MessengerContext, messenger: Messenger, since: number, reload: () => Settings) => {
   if (messenger.autoReplies === false) return NO_REPLIES
   const controller = new AbortController()
   const { app, provider } = messenger
@@ -267,6 +270,11 @@ const replying = (context: MessengerContext, messenger: Messenger, since: number
   const handle = async (message: Message) => {
     if (connection === undefined || controller.signal.aborted) return
     const open = connection
+    // serve runs for days: `config set permissions.replies.send deny` must stop the next reply, as it stops the next
+    // MCP call. The send guard reads the same settings.
+    const current = reload()
+    settings.permissions = current.permissions
+    settings.permissionSources = current.permissionSources
     const answer: Replied = await replyTo(
       {
         rulesPath: repliesPathFor(app, profile, env),

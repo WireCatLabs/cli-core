@@ -60,6 +60,12 @@ describe("callerOf", () => {
     const stranger = callerOf(ctx, "tg_chats_list", { env: {}, client: () => ({ name: "evil" }) })
     expect(stranger.mcp?.proxied).toBeUndefined()
     expect(stranger.agent?.client?.name).toBe("evil")
+    const overHttp = callerOf(
+      { ...ctx, http: { authInfo: { clientId: "c", extra: { clientName: "web" } } } },
+      "tg_chats_list",
+      { env: {}, client: () => ({ name: PROXY_CLIENT_NAME }) },
+    )
+    expect([overHttp.via, overHttp.mcp?.proxied, overHttp.agent?.client?.name]).toEqual(["mcp-http", undefined, "web"])
   })
 })
 

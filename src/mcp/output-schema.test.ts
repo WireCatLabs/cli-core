@@ -87,3 +87,14 @@ describe("the answer read and write list", () => {
     await client.close()
   })
 })
+
+describe("an answer's byte limit", () => {
+  it("counts the answer once, as the CLI does, though structuredContent repeats it", () => {
+    const answer = itemOf({ id: "1", text: "x".repeat(600) })
+    const unbounded = answered(answer, 0)
+    const once = Buffer.byteLength(JSON.stringify(unbounded.content))
+    expect(Buffer.byteLength(JSON.stringify(unbounded))).toBeGreaterThan(once + 600)
+    expect(() => answered(answer, once + 10)).not.toThrow()
+    expect(() => answered(answer, once - 10)).toThrow(expect.objectContaining({ code: "invalid_response" }))
+  })
+})

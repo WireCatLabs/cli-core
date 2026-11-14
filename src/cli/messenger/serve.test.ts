@@ -176,7 +176,7 @@ describe("serve with reply rules", () => {
       writeFileSync(join(config, "config.json"), JSON.stringify({ profiles: { default: { permissions } } }))
   }
 
-  const serving = async (env: NodeJS.ProcessEnv, own: Partial<Messenger> = {}) => {
+  const serving = async (env: NodeJS.ProcessEnv, own: Partial<Messenger> = {}, whileListening = () => {}) => {
     rememberAccount(app, "default", "500", env)
     const sent: { chatId: string; text: string }[] = []
     const now = new Date(Date.now() + 1000).toISOString()
@@ -192,6 +192,7 @@ describe("serve with reply rules", () => {
         },
         watch: async (onEvent: (event: MessageEvent) => void, stop: AbortSignal, onReady?: () => void) => {
           onReady?.()
+          whileListening()
           onEvent({ event: "message", message: { ...hit, id: "1", chatId: "9", senderId: "9", timestamp: now } })
           onEvent({ event: "message", message: { ...hit, id: "2", chatId: "77", senderId: "77", timestamp: now } })
           await new Promise((resolve) => stop.addEventListener("abort", resolve, { once: true }))
@@ -289,6 +290,17 @@ describe("serve with reply rules", () => {
     rulesFor(withConfig, { "replies.send": "deny" })
 
     const { sent, answer } = await serving(withConfig)
+
+    expect(sent).toEqual([])
+    expect(answer.replies.skipped).toMatchObject({ [NOT_ALLOWED]: 1 })
+  })
+
+  it("stops replying when replies.send is denied while it runs, with no restart", async () => {
+    const { root, env } = setup()
+    const withConfig = { ...env, CHAT_CONFIG_DIR: join(root, "config") }
+    rulesFor(withConfig, { "replies.send": "allow" })
+
+    const { sent, answer } = await serving(withConfig, {}, () => rulesFor(withConfig, { "replies.send": "deny" }))
 
     expect(sent).toEqual([])
     expect(answer.replies.skipped).toMatchObject({ [NOT_ALLOWED]: 1 })
