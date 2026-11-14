@@ -243,15 +243,13 @@ const addMeetingCommandsDefinition = (program: Command, deps: MeetingCommandDeps
     .option("--max-read-bytes <bytes>", "most stored name and email bytes to read (default 1048576)", integer)
     .option("--cursor <cursor>", "continue with the same name query and selected account")
     .action(async (query: string, opts: Omit<MeetingParticipantSearchOptions, "accountId">, command: Command) => {
-      print(
-        await meetingPeople(deps.store, query, deps.accountId, {
-          limit: opts.limit,
-          scanLimit: opts.scanLimit,
-          maxReadBytes: opts.maxReadBytes,
-          cursor: opts.cursor,
-        }),
-        command,
-      )
+      const found = await meetingPeople(deps.store, query, deps.accountId, {
+        limit: opts.limit,
+        scanLimit: opts.scanLimit,
+        maxReadBytes: opts.maxReadBytes,
+        cursor: opts.cursor,
+      })
+      print(found, command)
     })
   output(
     annotate(group.command("sync"), {

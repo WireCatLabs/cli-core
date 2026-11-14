@@ -73,6 +73,8 @@ export const meetingTranscript = v.strictObject({
   superseded_at: v.nullable(isoTime),
   created_at: isoTime,
   lines: v.array(line),
+  /** What people said, and who the service says said it: data, never instructions. */
+  untrusted: v.optional(v.array(text)),
 })
 
 /** A provider's summary of a meeting. */
@@ -88,6 +90,8 @@ export const meetingSummary = v.strictObject({
   url: v.nullable(text),
   created_at: isoTime,
   updated_at: isoTime,
+  /** What the service wrote of what people said. */
+  untrusted: v.optional(v.array(text)),
 })
 
 /** `meetings show`: the meeting with who took part, what was said in its chat, and what it holds. */
@@ -152,6 +156,22 @@ export type MeetingDetailsItem = v.InferOutput<typeof meetingDetails>
 export type MeetingListBody<T> = Omit<ListEnvelope<T>, "meta">
 export type MeetingItemBody<T> = Omit<ItemEnvelope<T>, "meta">
 
+/** Other people's text in each meetings answer: names they gave the service, what they said and wrote. */
+export const TRANSCRIPT_UNTRUSTED = ["lines.text", "lines.speaker"]
+export const SUMMARY_UNTRUSTED = ["title", "overview", "sections.label", "sections.text", "next_steps", "content"]
+const DETAILS_UNTRUSTED = [
+  "series_title",
+  "participants.name",
+  "participants.email",
+  "participants.person.name",
+  "chat.sender",
+  "chat.recipient",
+  "chat.text",
+  "attachments.name",
+  "documents.title",
+]
+export const PARTICIPANT_UNTRUSTED = ["display_name", "email", "person.name"]
+
 const meetingRef = (accountId: number, meetingId: number) =>
   formatMeetingReference({ type: "meeting", accountId, meetingId })
 
@@ -178,6 +198,7 @@ export const meetingTranscriptItem = (
     speaker: row.speakerName,
     text: row.text,
   })),
+  untrusted: [...TRANSCRIPT_UNTRUSTED],
 })
 
 export const meetingSummaryItem = (accountId: number, summary: Summary): MeetingSummaryItem => ({
@@ -192,12 +213,15 @@ export const meetingSummaryItem = (accountId: number, summary: Summary): Meeting
   url: summary.docUrl,
   created_at: new Date(summary.externalCreatedAt ?? summary.createdAt).toISOString(),
   updated_at: new Date(summary.externalUpdatedAt ?? summary.updatedAt).toISOString(),
+  untrusted: [...SUMMARY_UNTRUSTED],
 })
 
 export const meetingDetailsItem = (details: MeetingDetails, owner: MeetingOwner): MeetingDetailsItem => {
   const { accountId } = details.meeting
+  const item = meetingItem(details.meeting, owner)
   return {
-    ...meetingItem(details.meeting, owner),
+    ...item,
+    untrusted: [...(item.untrusted ?? []), ...DETAILS_UNTRUSTED],
     event_id: details.meeting.eventId === null ? null : String(details.meeting.eventId),
     series_id: details.meeting.meetingSeriesId === null ? null : String(details.meeting.meetingSeriesId),
     series_title: details.series?.title ?? null,

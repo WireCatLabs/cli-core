@@ -2,6 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import { describe, expect, it } from "vitest"
 import {
   createMeetingManagement,
+  declareMeetingFields,
   dispatchMeetingMutation,
   type ManagedMeeting,
   type ManagedMeetingChange,
@@ -75,6 +76,22 @@ for (const fixture of providers) {
   })
 }
 
+describe("a service with no title or time, whose changes are settings", () => {
+  const make = () => ({
+    scope: { provider: "example-meet", account: "alice@example.invalid" },
+    id: "spaces/abc",
+    ports: {
+      create: async () => meeting("spaces/abc"),
+      update: async () => {},
+      fields: {
+        create: { fields: [], settings: [{ name: "moderation", description: "hosts only", type: "boolean" as const }] },
+        update: { fields: [], settings: [{ name: "moderation", description: "hosts only", type: "boolean" as const }] },
+      },
+    },
+  })
+  for (const contract of meetingManagementContract(make)) it(contract.name, contract.run)
+})
+
 it("snapshots provider, account, capabilities and change before asynchronous work", async () => {
   const scope = { provider: "example-provider", account: "Alice Example" }
   const change: ManagedMeetingChange = { title: "Alice Example", kind: "instant" }
@@ -87,7 +104,7 @@ it("snapshots provider, account, capabilities and change before asynchronous wor
     create: async (input, context) => {
       await gate
       expect(context.scope).toEqual({ provider: "example-provider", account: "Alice Example" })
-      expect(input).toEqual({ title: "Alice Example", kind: "instant" })
+      expect(input).toEqual({ title: "Alice Example", kind: "instant", startTime: expect.any(String) })
       return meeting("opaque-example")
     },
   }
@@ -180,10 +197,13 @@ it("validates calendar timestamps, portable description, duration and timezone w
   for (const value of [
     null,
     [],
-    { settings: {} },
+    { settings: { access_type: "open" } },
+    { settings: [] },
+    {},
+    { title: "Example" },
     { title: " " },
     { kind: "recurring" },
-    { title: "Example" },
+    { kind: "scheduled" },
     { title: "Example", startTime: "bad" },
     { title: "Example", startTime: "2026-02-30T12:00:00Z" },
     { title: "Example", startTime: "2026-02-30T12:00:00+23:59" },
@@ -209,6 +229,112 @@ it("validates calendar timestamps, portable description, duration and timezone w
     {},
   ])
     expect(() => validateMeetingChange(value as ManagedMeetingChange, false)).toThrow()
+})
+
+const MEET = declareMeetingFields({
+  fields: [],
+  settings: [
+    { name: "access_type", description: "who joins without asking", type: "choice", values: ["open", "trusted"] },
+    { name: "moderation", description: "only hosts manage the call", type: "boolean" },
+    { name: "label", description: "a label", type: "text" },
+    { name: "note", description: "a note", type: "text", clearable: true },
+  ],
+})
+
+it("takes only what a port declares, naming the options it takes", () => {
+  expect(
+    validateMeetingChange({ settings: { access_type: "trusted", moderation: "true" } }, true, { declared: MEET }),
+  ).toEqual({ kind: "instant", settings: { access_type: "trusted", moderation: true } })
+  expect(() => validateMeetingChange({ title: "Example" }, false, { declared: MEET })).toThrow(
+    "this service does not take --title on update; it takes --setting access_type, --setting moderation, --setting label, --setting note",
+  )
+  expect(() => validateMeetingChange({ startTime: "2026-11-20T10:00:00Z" }, true, { declared: MEET })).toThrow(
+    "does not take --start-time on create",
+  )
+  expect(() => validateMeetingChange({ settings: { recording: "on" } }, false, { declared: MEET })).toThrow(
+    "does not take --setting recording",
+  )
+  expect(() => validateMeetingChange({ constructor: "x" } as never, false, { declared: MEET })).toThrow(
+    "does not take constructor",
+  )
+  expect(() => validateMeetingChange({ settings: { access_type: "closed" } }, false, { declared: MEET })).toThrow(
+    "access_type must be one of open, trusted",
+  )
+  expect(() => validateMeetingChange({ settings: { moderation: "yes" } }, false, { declared: MEET })).toThrow(
+    "moderation must be true or false",
+  )
+})
+
+it("refuses blank text for a setting unless the declaration lets it clear", () => {
+  expect(() => validateMeetingChange({ settings: { label: " " } }, false, { declared: MEET })).toThrow(
+    "label must be nonempty text: this service cannot clear it",
+  )
+  expect(validateMeetingChange({ settings: { note: " " } }, false, { declared: MEET })).toEqual({
+    settings: { note: "" },
+  })
+})
+
+it("needs a start or an explicit instant kind from a service that can schedule", () => {
+  expect(() => validateMeetingChange({ title: "Example" }, true)).toThrow(
+    "give --start-time, or --kind instant for a meeting that starts now",
+  )
+  const scheduledOnly = declareMeetingFields({ fields: ["title", "startTime"] })
+  expect(() => validateMeetingChange({ title: "Example" }, true, { declared: scheduledOnly })).toThrow(
+    "give --start-time: this service has no meeting that starts now",
+  )
+  expect(validateMeetingChange({}, true, { declared: MEET })).toEqual({ kind: "instant" })
+})
+
+it("refuses a declaration it cannot use", () => {
+  for (const wrong of [
+    { fields: ["topic" as never] },
+    { fields: ["title", "kind"] as const },
+    { settings: [{ name: "accessType", description: "x", type: "text" as const }] },
+    { settings: [{ name: "__proto__", description: "x", type: "text" as const }] },
+    { settings: [{ name: "access", description: "", type: "text" as const }] },
+    { settings: [{ name: "access", description: "x", type: "choice" as const, values: [] }] },
+    {
+      settings: [
+        { name: "access", description: "x", type: "text" as const },
+        { name: "access", description: "y", type: "boolean" as const },
+      ],
+    },
+  ])
+    expect(() => declareMeetingFields(wrong)).toThrow(expect.objectContaining({ code: "configuration_error" }))
+  expect(declareMeetingFields({ fields: ["kind"] }, "update").fields).toEqual(["kind"])
+})
+
+it("starts an instant meeting when it is sent, after the question, and an abort during it stops the send", async () => {
+  let clock = Date.parse("2026-11-14T12:00:00Z")
+  const sent: ManagedMeetingChange[] = []
+  const sdk = createMeetingManagement(
+    { provider: "example-meet", account: "Alice Example" },
+    {
+      create: async (change) => {
+        sent.push(change)
+        return meeting("spaces/abc")
+      },
+      fields: { create: { fields: [] } },
+    },
+    { now: () => clock },
+  )
+  const receipt = await sdk.create(
+    {},
+    {
+      apply: true,
+      confirm: async () => {
+        clock += 60_000
+      },
+    },
+  )
+  expect(sent).toEqual([{ kind: "instant", startTime: "2026-11-14T12:01:00.000Z" }])
+  expect(receipt.change).toEqual(sent[0])
+  expect((await sdk.create({})).change).toEqual({ kind: "instant" })
+  const abort = new AbortController()
+  await expect(
+    sdk.create({}, { apply: true, signal: abort.signal, confirm: async () => abort.abort() }),
+  ).rejects.toMatchObject({ code: "cancelled" })
+  expect(sent).toHaveLength(1)
 })
 
 it("rejects invalid scope and ids before provider work without normalizing identity", async () => {

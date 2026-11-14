@@ -1,5 +1,12 @@
 import assert from "node:assert/strict"
-import { createMeetingManagement, type MeetingManagementPorts } from "../meeting-management.js"
+import {
+  createMeetingManagement,
+  type DeclaredMeetingFields,
+  declareMeetingFields,
+  type ManagedMeetingChange,
+  type MeetingManagementPorts,
+  type MeetingSetting,
+} from "../meeting-management.js"
 import type { MeetingProviderScope } from "../provider.js"
 import type { ContractCase } from "../store.js"
 
@@ -7,6 +14,25 @@ export interface MeetingManagementContractFixture {
   scope: MeetingProviderScope
   ports: MeetingManagementPorts
   id: string
+}
+
+const sampleSetting = (setting: MeetingSetting): string | boolean =>
+  setting.type === "choice" ? (setting.values[0] as string) : setting.type === "boolean" ? true : "Bob Sample note"
+
+/** A change that uses only what the port declares, so a service without a title or an agenda is checked too. */
+const sampleChange = (declared: DeclaredMeetingFields, create: boolean): ManagedMeetingChange => {
+  const has = (field: (typeof declared.fields)[number]) => declared.fields.includes(field)
+  const first = declared.settings[0]
+  const settings = first ? { settings: { [first.name]: sampleSetting(first) } } : {}
+  if (create)
+    return {
+      ...(has("title") ? { title: "Alice Example planning" } : {}),
+      ...(has("kind") ? { kind: "instant" as const } : has("startTime") ? { startTime: "2026-11-20T10:00:00Z" } : {}),
+      ...settings,
+    }
+  if (has("agenda")) return { agenda: "Bob Sample agenda" }
+  if (has("title")) return { title: "Alice Example planning" }
+  return settings
 }
 
 /** Factories must use invented fixtures and injected transports; cases can apply writes. */
@@ -26,13 +52,14 @@ export const meetingManagementContract = (
         ...(ports.create ? { create: fail } : {}),
         ...(ports.update ? { update: fail } : {}),
         ...(ports.cancel ? { cancel: fail } : {}),
+        ...(ports.fields ? { fields: ports.fields } : {}),
       })
       if (ports.create) {
-        const receipt = await sdk.create({ title: "Alice Example planning", kind: "instant" })
+        const receipt = await sdk.create(sampleChange(sdk.fields.create, true))
         assert.equal(receipt.applied, false)
         assert.deepEqual(receipt.scope, scope)
       }
-      if (ports.update) assert.equal((await sdk.update(id, { agenda: "Bob Sample agenda" })).applied, false)
+      if (ports.update) assert.equal((await sdk.update(id, sampleChange(sdk.fields.update, false))).applied, false)
       if (ports.cancel) assert.equal((await sdk.cancel(id, { apply: true, dryRun: true })).applied, false)
     }),
     test("management dispatches one explicit create with fixed scope", async ({ scope, ports }) => {
@@ -46,8 +73,9 @@ export const meetingManagementContract = (
           assert.equal(Object.isFrozen(context.scope), true)
           return create(change, context)
         },
+        ...(ports.fields ? { fields: ports.fields } : {}),
       })
-      const receipt = await sdk.create({ title: "Alice Example planning", kind: "instant" }, { apply: true })
+      const receipt = await sdk.create(sampleChange(sdk.fields.create, true), { apply: true })
       assert.equal(calls, 1)
       assert.equal(receipt.applied, true)
       assert.ok(receipt.meeting?.id)
@@ -87,9 +115,11 @@ export const meetingManagementContract = (
               },
             }
           : {}),
+        ...(ports.fields ? { fields: ports.fields } : {}),
       })
       if (update) {
-        assert.equal((await sdk.update(id, { agenda: "Bob Sample agenda" }, { apply: true })).applied, true)
+        const change = sampleChange(declareMeetingFields(ports.fields?.update, "update"), false)
+        assert.equal((await sdk.update(id, change, { apply: true })).applied, true)
         assert.equal(updates, 1)
       }
       if (cancel) {

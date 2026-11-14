@@ -65,6 +65,7 @@ import {
 } from "../writes.js"
 import { CALENDARS_QUERY, declareCalendarAnswers, PEOPLE_QUERY } from "./answers.js"
 import { hitsBody, itemBody, listBody, messagesOf, pathOf } from "./bodies.js"
+import { withConference } from "./conference.js"
 import { ICS_MAX_BYTES, readIcsFile, writeIcsFile } from "./files.js"
 import { localTimesView } from "./local-times.js"
 import { addPeopleLink } from "./people-link.js"
@@ -117,7 +118,7 @@ export interface CalendarCommandOptions {
   /** The profile may follow iCalendar feeds: mounts `calendars add|remove`. */
   feeds?: boolean
   /** The provider takes writes: mounts `events create|update|delete|respond|remind`, and what its writer adds. */
-  writes?: { quickAdd?: boolean; move?: boolean; importEvent?: boolean }
+  writes?: { quickAdd?: boolean; move?: boolean; importEvent?: boolean; conferences?: readonly string[] }
   /** Reads `events import`'s file; a file on disk, at most 10 MB, when absent. */
   readFile?: (path: string) => Promise<string>
   /** Writes `events export --output`'s file; owner-only (0600), whole or not at all, when absent. */
@@ -789,6 +790,7 @@ const addEventWrites = (
         series: "--series",
         following: "--following",
         repeat: "--repeat",
+        conference: "--conference",
       },
     }
   }
@@ -845,7 +847,7 @@ const addEventWrites = (
   const quick = traits.quickAdd === true
   const create = example(
     notify(
-      fields(write("create"), false)
+      withConference(fields(write("create"), false), traits.conferences)
         .description(
           quick
             ? "add an event to a calendar; with --repeat, one that repeats; with --text, one the provider reads " +
@@ -895,7 +897,7 @@ const addEventWrites = (
   )
   example(
     notify(
-      target(fields(write("update"), true))
+      target(withConference(fields(write("update"), true), traits.conferences))
         .description(
           "change an event; with --series every occurrence of the repeating event, with --following this " +
             "occurrence and every later one; new times or dates switch it between timed and all-day",

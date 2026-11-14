@@ -212,6 +212,7 @@ const OTHERS: Entry[] = [
     "the reminder program failed for some events; the next run retries them",
   ],
   ["sync.failed", "provider_error", "the sync failed; the answer comes from what the store already holds"],
+  validation("event.conference-exists", "the event has a meeting link already, which its attendees use"),
   validation("event.repeat-invalid", "the repeat rule is outside the RFC 5545 subset the calendars take"),
   validation("event.repeat-kind", "the series' rule holds a date or a time of the kind the event is leaving"),
   validation("event.repeat-split", "the series cannot be split at this occurrence, or was split there already"),

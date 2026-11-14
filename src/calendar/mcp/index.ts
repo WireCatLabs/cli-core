@@ -121,6 +121,10 @@ const fields = {
   description: { ...anyText, description: "empty clears it" },
   attendees: { type: "array", items: text, description: "email addresses; on a change, the whole new list" },
   repeat: { ...text, description: `how it repeats: ${REPEAT_HELP}; on a change, only with series` },
+  conference: {
+    ...text,
+    description: "a meeting service to make a new meeting link with, one the calendar offers; never replaces a link",
+  },
 }
 const target = {
   account_id: integer,
@@ -416,6 +420,7 @@ const fieldsOf = (args: Record<string, unknown>): EventFields => ({
   ...(args.description === undefined ? {} : { description: args.description as string }),
   ...(args.attendees === undefined ? {} : { attendees: args.attendees as string[] }),
   ...(args.repeat === undefined ? {} : { repeat: args.repeat as string }),
+  ...(args.conference === undefined ? {} : { conference: args.conference as string }),
 })
 
 /** The one account a write acts in: the one named, or the only one that holds what it names; never a guess. */
@@ -486,6 +491,7 @@ const writeTool = async (
       series: "series",
       following: "following",
       repeat: "repeat",
+      conference: "conference",
     },
   }
   const choice = args.notify === undefined ? {} : { notify: args.notify as boolean }
