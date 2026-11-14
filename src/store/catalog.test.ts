@@ -137,7 +137,12 @@ it("validates whole batches before writing and rejects unknown accounts and inva
   await expect(store.catalog.list("unknown")).rejects.toThrow("account")
   await expect(store.catalog.list(account, { limit: 0 })).rejects.toThrow("bounds")
   await expect(store.catalog.list(account, { offset: -1 })).rejects.toThrow("bounds")
-  await expect(store.catalog.reconcile(account, Array(10001).fill("x"))).rejects.toThrow("10000")
+  await expect(
+    store.catalog.reconcile(
+      account,
+      Array.from({ length: 10001 }, (_, i) => `id-${i}`),
+    ),
+  ).resolves.toBe(0)
 })
 
 it("reactivates removed file metadata without claiming deleted content is indexed", async () => {

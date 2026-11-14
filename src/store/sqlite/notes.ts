@@ -22,6 +22,7 @@ import { ownerPerson } from "./actors.js"
 import type { AddedSources } from "./added-sources.js"
 import { type DocumentMetadata, encodeDocumentMetadata, languageOf } from "./document-metadata.js"
 import { deleteDocumentRow, forgetEvidenceToRow } from "./evidence-signature.js"
+import { fileNoteRow } from "./file-note.js"
 import { PREFERRED_FILE, syncFile } from "./files.js"
 import { type ImportedDocuments, importedDocumentWhere } from "./imported-documents.js"
 import { LINK_KINDS, LINK_ORIGINS, type LINK_SOURCES, linkKind, RELATION_KINDS } from "./link-kinds.js"
@@ -174,6 +175,8 @@ export interface NotesStore extends NoteSearch, ImportedDocuments, AddedSources 
   note(reference: string): Promise<Note>
   resolveNote(reference: string): Promise<Note | undefined>
   noteReferences(reference: string): Promise<string[]>
+  /** The live file note at this path of a folder or documents account, as `notes({ folderId })` lists it. */
+  fileNote(folderId: string, path: string): Promise<Note | undefined>
   notes(options?: {
     folderId?: string
     source?: Note["source"]
@@ -807,6 +810,11 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
       return parsed.type === "note" || parsed.type === "document" ? noteRowOf(database, reference) : undefined
     },
     noteReferences: async (reference) => [anyNote(reference).ref],
+    fileNote: async (folderId, path) => {
+      const folder = Number(folderRow(folderId).id)
+      const row = fileNoteRow(database, folder, isLocal(folder), path)
+      return row ? documentOf(row) : undefined
+    },
     notes: async (options = {}) => {
       const { limit, offset } = bounded(options.limit, options.offset)
       if (options.source !== undefined) oneOf(options.source, ["file", "internal"] as const, "a note's source")

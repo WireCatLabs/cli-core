@@ -130,18 +130,6 @@ export const catalogStoreOver = ({ database, now }: StoreContext): CatalogStore 
       throw new CliError("not_found", "catalog account is not in the local store")
     return Number(id)
   }
-  const bound = (id: number, includeInactive = false) => {
-    const scope =
-      "account_id = ? AND json_type(metadata, '$.catalog') = 'object'" +
-      (includeInactive ? "" : " AND json_extract(metadata, '$.catalog.active') = 1 AND deleted_at IS NULL")
-    const budget = database
-      .prepare(`SELECT count(*) AS entries, sum(length(metadata)) AS bytes FROM documents WHERE ${scope}`)
-      .get(id)
-    if (Number(budget?.bytes ?? 0) > 32 * 1024 * 1024)
-      throw new CliError("validation_error", "catalog scope exceeds its metadata budget")
-    if (Number(budget?.entries ?? 0) > 10000)
-      throw new CliError("validation_error", "catalog scope exceeds 10000 entries")
-  }
   return {
     upsert: async (accountId, inputs) => {
       const id = account(accountId)
@@ -255,7 +243,6 @@ export const catalogStoreOver = ({ database, now }: StoreContext): CatalogStore 
     },
     reconcile: async (accountId, externalIds) => {
       const id = account(accountId)
-      if (externalIds.length > 10000) throw new CliError("validation_error", "catalog scope exceeds 10000 entries")
       const current = [...new Set(externalIds.map((key) => field(key)))]
       return write(database, () => {
         const retired = database
@@ -342,7 +329,6 @@ export const catalogStoreOver = ({ database, now }: StoreContext): CatalogStore 
         const compiled = queryFilter(ast, columns)
         if (compiled.sql) add(compiled.sql, ...compiled.params)
       }
-      bound(id, query.includeInactive)
       const found = database
         .prepare(
           `SELECT d.id, d.external_id, d.title, d.front_matter, d.metadata, d.deleted_at, d.body IS NOT NULL AS has_body FROM documents d WHERE ${clauses.join(" AND ")} ORDER BY d.external_id LIMIT ? OFFSET ?`,

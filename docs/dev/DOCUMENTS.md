@@ -27,6 +27,11 @@ domain, SQL/transport/vendor imports in services, and private document imports f
 2. Bind `documentIngestion` to the public store. Supply the provider/account collection name,
    external-ID mapping, catalog metadata and content front matter. The optional `observed` callback
    registers provider identities/roles. Identity mapping remains the provider's responsibility.
+   The external id of a source file is `<id>.md` (``externalId: (id) => `${id}.md` ``), in the catalog
+   entry, its parents and the saved note alike: the catalog commands strip `.md` to show the source's id.
+   The store sets no ceiling on an account's entries; one catalog write takes at most 200 and one
+   list page at most 1000, and a save or a removal reads only its own document. The sync's own
+   bound is the `maxEntries` the CLI passes (drive passes 10 000).
 3. Supply `SourceStatePort` for validated account-specific checkpoints, discovery walks and
    snapshots. Existing Drive v1 checkpoints remain compatible; no database migration is required.
 4. Acquire the account/profile lock before `syncDocuments` and release it in `finally`. Supply
