@@ -106,6 +106,8 @@ import {
   meetingSpeaker,
   meetingStats,
   meetingSummary,
+  meetingTagChange,
+  meetingTagging,
   meetingTranscript,
 } from "./meeting.js"
 import { meetingEvidence, meetingPersonContext } from "./meeting-evidence.js"
@@ -577,6 +579,8 @@ export const ENTITIES = {
   meeting_stats: meetingStats,
   meeting_counts: meetingCounts,
   call_stats: callStats,
+  meeting_tag_change: meetingTagChange,
+  meeting_tagging: meetingTagging,
   meeting_speaker: meetingSpeaker,
   meeting_participants: meetingParticipants,
   meeting_passage: meetingPassage,

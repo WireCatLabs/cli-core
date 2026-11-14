@@ -13,5 +13,7 @@ export {
   meetingSpeaker,
   meetingStats,
   meetingSummary,
+  meetingTagChange,
+  meetingTagging,
   meetingTranscript,
 } from "../meetings/index.js"

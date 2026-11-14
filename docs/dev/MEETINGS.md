@@ -344,6 +344,46 @@ swaps the embedding runtime in tests.
 zoom-cli still mounts its own copies (`src/meeting-semantic-commands.ts`, `src/meeting-search-commands.ts`); moving
 it onto these is its own pull request.
 
+## Tags on calls and other meetings
+
+A meeting is a tag target in the knowledge store (`{ type: "meeting", id }`), with the same `taggings` rows as every
+other label, so `search meetings --tag` and `tag:` select the meetings that carry one. `addMeetingTagsCommand`
+(`src/cli/meeting-tags-command.ts`) mounts `tags add|remove|list` for a host whose things to label are its meetings
+(pbx, beeline), over `meetingTags(store, accountId)` from the services export. A messenger mounts its own `tags`.
+
+- `tags add <tag...> --meeting <id>` labels meetings by store id; `--meeting` repeats. A meeting of another account
+  is `not_found`.
+- `tags add <tag...> --matching <query>` labels every meeting of the account with at least one hit of that
+  `search meetings` query, reading every page of hits and indexing new transcripts first. It is idempotent: a rerun
+  after new calls are transcribed changes only those, and the answer's `changed` lists them. That is how marks stay
+  current; nothing runs by itself. A mark stays when a new transcript of the call no longer says the words.
+- `tags remove` takes the same targets. `tags list [tag:<name>]` lists this account's tagged meetings with all their
+  tags, newest id last; `knowledge.labelled` with an account reads only that account's meetings, never a deleted one.
+
+A host mounts the search and the tags beside `addCallStatsCommand`:
+
+```ts
+addMeetingCombinedSearchCommand(program, {
+  words: async () => (query, request) => searchMeetingHits(store, query, { ...request, accountId }),
+  meaning: async () => meetingMeaning(store, accountId, { env }),
+  signal,
+  pagingOf,
+  output,
+  examples: […],
+})
+addMeetingEmbeddingCommand(program, {
+  meaning: async () => meetingMeaning(store, accountId, { env }),
+  defaultModel: () => chosenTextModel(env).id,
+  signal,
+  output,
+  examples: […],
+})
+addMeetingTagsCommand(program, {
+  read: async () => meetingTags(store, accountId),
+  examples: { add: […], remove: […], list: […] },
+})
+```
+
 ## Project-word discovery SDK
 
 `readMeetingProjectDiscovery` from the services export resolves one existing project through

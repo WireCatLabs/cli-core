@@ -511,6 +511,7 @@ export {
 export { readMeetingProjectCandidates } from "./meeting-project-candidates-read.js"
 export { meetingResultItem } from "./meeting-results.js"
 export { type MeetingSeriesInventoryReader, readMeetingSeriesInventory } from "./meeting-series-inventory-read.js"
+export { addMeetingTagsCommand, type MeetingTagsCommandDeps } from "./meeting-tags-command.js"
 export { accountFileFor, profilesHere, rememberAccount } from "./messenger/accounts.js"
 export { terminalAsker } from "./messenger/ask.js"
 export type { CompletionOptions } from "./messenger/complete-command.js"

@@ -11,3 +11,11 @@ export const LABELLED: Record<string, LabelledType> = {
   meeting: "meeting",
   account: "folder",
 }
+
+/**
+ * A meeting is one account's, like a chat: with the account id bound twice, a tagging of another account's meeting is
+ * left out, and with `NULL` none is; a deleted meeting's never counts.
+ */
+export const accountMeetingTagging = (alias: string): string =>
+  `(${alias}.taggable_type <> 'meeting' OR EXISTS (SELECT 1 FROM meetings mt WHERE mt.id = ${alias}.taggable_id ` +
+  "AND mt.deleted_at IS NULL AND (? IS NULL OR mt.account_id = ?)))"
