@@ -16,7 +16,7 @@ const outputSchema: Record<string, unknown> = {
 }
 export const meetingSeriesInventoryTool = {
   name: "meeting_series_inventory",
-  description: `Discover one bounded page of series candidates in the host's selected provider/account. ISO after/until default to now and seven days ahead. Provider inventory may contain undated or past recurring start hints; these never prove the next occurrence or calendar completeness. Continue with page.next_cursor and the returned absolute after/until. No store writes or automatic selection. ${UNTRUSTED_NEUTRAL}`,
+  description: `Discover one bounded page of series candidates in the host's selected provider/account. after/until (an ISO date or time, local without a zone, or 7d ago) default to now and seven days ahead. Provider inventory may contain undated or past recurring start hints; these never prove the next occurrence or calendar completeness. Continue with page.next_cursor and the returned absolute after/until. No store writes or automatic selection. ${UNTRUSTED_NEUTRAL}`,
   annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
   inputSchema: { ...inputSchema, type: "object" as const },
   outputSchema: { ...outputSchema, type: "object" as const },
