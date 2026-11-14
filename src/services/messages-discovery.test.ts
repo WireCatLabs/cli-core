@@ -83,6 +83,15 @@ describe("archive discovery", () => {
       (await searchStore(store, account, { ...request("What time does Helix export run?"), discover: false })).items,
     ).toEqual([])
   })
+  it("finds a name written as one word when the question spells it with a hyphen", async () => {
+    const store = await open()
+    await store.messages.saveMessages(account, "102", [msg("6", "AlfaBank was fine", { chatId: "102" })], {
+      via: "synthetic",
+    })
+    await store.searchIndex.fillSearchIndex({})
+    await store.searchIndex.fillStems({})
+    expect(ids(await searchStore(store, account, request("which Alfa-bank?")))).toContain("6")
+  })
   it("reads a question mark as punctuation when the planner leaves the question as written", async () => {
     const store = await open()
     for (const text of ["Why do Helix logs expire?", "Почему Helix logs expire?"]) {

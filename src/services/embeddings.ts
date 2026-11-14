@@ -68,6 +68,8 @@ export interface EmbeddingsService {
       signal?: AbortSignal
       /** Local graph catch-up after any network refresh and before searching. */
       refresh?: RefreshOptions
+      /** The word half's budget, from an explicit `--timeout`; the default limit otherwise. */
+      timeLimitMs?: number
     },
   ): Promise<FoundConversations>
   /**
@@ -126,6 +128,8 @@ export interface FoundConversations {
   model: string
   /** `unavailable`: the local model is not downloaded, and only words were searched. */
   meaning: "searched" | "unavailable"
+  /** `out-of-time`: the word half hit its time limit, so the hits are by meaning alone. */
+  words?: "out-of-time"
   hits: FoundConversation[]
   readiness: SearchReadiness
   /** Kept for callers of 0.141.0 and before; `readiness.wordsOnly` says more. */

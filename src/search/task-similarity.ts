@@ -36,7 +36,7 @@ export type PreparedTask = {
   createdMs: number
 }
 
-const STOP_WORDS = new Set(
+export const STOP_WORDS: ReadonlySet<string> = new Set(
   [
     // Russian and English as the test set ran them, already folded (пожалуйста → пожалуиста).
     "и в во не что он на я с со как а то все она так его но да ты к у же вы за бы по только ее мне было вот от",
