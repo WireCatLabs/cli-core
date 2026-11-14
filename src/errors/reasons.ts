@@ -81,6 +81,22 @@ const SFTP: Entry[] = [
   ["sftp.timeout", "timeout", "the SFTP server did not answer in time"],
   validation("sftp.too-large", "the file is larger than the read's byte limit"),
   validation("sftp.closed", "the SFTP connection was closed before the operation"),
+  validation("sftp.file-changed", "the file changed on the server while a stream read it; read it again"),
+  ["ssh.forward-refused", "permission_error", "the SSH server does not allow forwarding to that address"],
+  ["ssh.forward-failed", "network_error", "the SSH server could not reach the address behind it"],
+]
+
+/** The read-only SQL reader (`./sql`). */
+const SQL: Entry[] = [
+  validation("sql.bad-identifier", "a table or column name is not a plain identifier"),
+  ["sql.library-missing", "configuration_error", "this database needs the mysql2 or pg package in the CLI"],
+  ["db.refused", "authentication_error", "the database server refused the user or password"],
+  ["db.no-database", "not_found", "the database server has no such database"],
+  ["db.no-table", "not_found", "the database has no such table"],
+  ["db.no-select", "permission_error", "the database user may not read the table; grant it SELECT"],
+  ["db.read-only", "permission_error", "the database refused a write: the connection only reads"],
+  ["db.timeout", "timeout", "the database server did not answer in time"],
+  ["db.failed", "provider_error", "the database server failed the query"],
 ]
 
 const OTHERS: Entry[] = [
@@ -661,7 +677,7 @@ export const INPUT_FIELD_REASONS: ErrorReason[] = defineReasons([
 export const REASONS: ErrorReason[] = defineReasons([
   ...QUERY_REASONS,
   ...INPUT_FIELD_REASONS,
-  ...[...QUERY, ...SIGN_IN, ...PROVIDER_API, ...SFTP, ...OTHERS].map(([reason, code, message]) => ({
+  ...[...QUERY, ...SIGN_IN, ...PROVIDER_API, ...SFTP, ...SQL, ...OTHERS].map(([reason, code, message]) => ({
     reason,
     code,
     message,
