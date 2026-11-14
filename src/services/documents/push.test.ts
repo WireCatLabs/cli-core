@@ -1,4 +1,5 @@
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { CliError, isCliError } from "@wirecat/cli-base"
 import { describe, expect, it, vi } from "vitest"
@@ -17,7 +18,7 @@ interface Remote {
 }
 
 const setup = () => {
-  const root = mkdtempSync("/var/tmp/document-push-")
+  const root = mkdtempSync(join(tmpdir(), "document-push-"))
   const write = (path: string, text: string) => {
     mkdirSync(join(root, path, ".."), { recursive: true })
     writeFileSync(join(root, path), text)
@@ -287,7 +288,7 @@ describe("pushDocuments", () => {
 
   it("does not follow a symbolic link out of the folder", async () => {
     const t = setup()
-    const outside = mkdtempSync("/var/tmp/document-push-outside-")
+    const outside = mkdtempSync(join(tmpdir(), "document-push-outside-"))
     writeFileSync(join(outside, "private.md"), "secret")
     symlinkSync(outside, join(t.root, "linked"))
     symlinkSync(join(outside, "private.md"), join(t.root, "private.md"))

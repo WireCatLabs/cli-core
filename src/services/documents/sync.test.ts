@@ -1,4 +1,5 @@
 import { mkdtempSync } from "node:fs"
+import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { CliError, isCliError } from "@wirecat/cli-base"
 import { afterEach, describe, expect, it, vi } from "vitest"
@@ -29,7 +30,7 @@ const file = (id: string, parents: string[] = ["root"], mime = "text/plain"): So
   version: "1",
 })
 const setup = async (provider = "synthetic-box") => {
-  const store = await openStore({ path: join(mkdtempSync("/var/tmp/document-services-"), "store.db") })
+  const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "document-services-")), "store.db") })
   live.push(store)
   const files = new Map([
     ["root", file("root", [], "inode/directory")],

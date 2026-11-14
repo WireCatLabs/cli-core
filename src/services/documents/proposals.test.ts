@@ -1,4 +1,5 @@
 import { mkdtempSync } from "node:fs"
+import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { type MessageStore, openStore } from "../../store/index.js"
@@ -10,7 +11,7 @@ afterEach(async () => {
   for (const store of stores.splice(0)) await store.close()
 })
 const setup = async () => {
-  const store = await openStore({ path: join(mkdtempSync("/var/tmp/source-proposals-"), "store.db") })
+  const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "source-proposals-")), "store.db") })
   stores.push(store)
   const folder = await store.notes.addFolder({ name: "synthetic-provider:account" })
   const { note } = await store.notes.saveFileNote({
