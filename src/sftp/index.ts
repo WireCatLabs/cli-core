@@ -1,6 +1,7 @@
 export {
   type HostKey,
   openSftp,
+  openSshTunnel,
   SFTP_CONNECT_TIMEOUT_MS,
   SFTP_OPERATION_TIMEOUT_MS,
   SFTP_RETRY,
@@ -10,6 +11,9 @@ export {
   type SftpKind,
   type SftpOptions,
   type SftpReadOptions,
+  type SftpStreamOptions,
   type SftpTarget,
+  type SshTunnel,
+  type SshTunnelOptions,
   sftpHostKey,
 } from "./session.js"

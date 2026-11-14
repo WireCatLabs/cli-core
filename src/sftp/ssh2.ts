@@ -31,11 +31,29 @@ export interface WireOptions {
   socket?: (() => Duplex | Promise<Duplex>) | undefined
 }
 
+/** An open file, read by position: a stream reads it piece by piece and never holds it whole. */
+export interface OpenFile {
+  size: number
+  /** Whole seconds since 1970, to tell a file replaced between two connections. */
+  mtime: number
+  /** Up to `length` bytes from `position`, fewer only at the end of the file. */
+  read(position: number, length: number): Promise<Buffer>
+  close(): void
+}
+
 export interface Wire {
   list(path: string): Promise<SftpEntry[]>
   stat(path: string): Promise<SftpEntry>
   read(path: string, maxBytes: number, progress: () => void): Promise<Uint8Array>
+  open(path: string): Promise<OpenFile>
   close(): void
+}
+
+/** An SSH connection that only forwards: each `forward` is one TCP connection the server opens on the owner's behalf. */
+export interface Forwarder {
+  forward(host: string, port: number): Promise<Duplex>
+  close(): void
+  readonly closed: boolean
 }
 
 type Ssh2 = typeof import("ssh2")
@@ -87,8 +105,8 @@ const CONNECTION_LOST = 7
  * lost, too many connections. */
 const DISCONNECTS_TO_RETRY = new Set([7, 10, 12])
 
-const lost = () =>
-  new CliError("network_error", "the connection to the SFTP server broke", {
+const lost = (server = "SFTP server") =>
+  new CliError("network_error", `the connection to the ${server} broke`, {
     reason: "network.failed",
     retryable: true,
   })
@@ -97,17 +115,17 @@ const lost = () =>
  * The vendor's error as a CliError with fixed wording: an SFTP server's message and the path asked can name a caller's
  * phone number, and a key error can quote the key (WC-SECR-6).
  */
-const failureOf = (error: unknown, from: "ssh" | "sftp" = "sftp"): CliError => {
+const failureOf = (error: unknown, from: "ssh" | "sftp" = "sftp", server = "SFTP server"): CliError => {
   if (isCliError(error)) return error
   const { code, level, message } = (error ?? {}) as { code?: unknown; level?: unknown; message?: unknown }
   if (level === "client-authentication")
-    return new CliError("authentication_error", "the SFTP server refused the user name and password or key", {
+    return new CliError("authentication_error", `the ${server} refused the user name and password or key`, {
       reason: "auth.failed",
     })
   if (from === "ssh" && typeof code === "number")
     return new CliError(
       DISCONNECTS_TO_RETRY.has(code) ? "provider_unavailable" : "provider_error",
-      `the SFTP server ended the connection (SSH disconnect reason ${code})`,
+      `the ${server} ended the connection (SSH disconnect reason ${code})`,
       {
         reason: DISCONNECTS_TO_RETRY.has(code) ? "provider.unavailable" : "provider.refused",
         ...(DISCONNECTS_TO_RETRY.has(code) ? { retryable: true } : {}),
@@ -119,7 +137,7 @@ const failureOf = (error: unknown, from: "ssh" | "sftp" = "sftp"): CliError => {
     return new CliError("permission_error", "the SFTP server denied access to the path", { reason: "file.denied" })
   if (code === NO_CONNECTION || code === CONNECTION_LOST || message === "No response from server") return lost()
   if (level === "client-dns" || code === "ENOTFOUND")
-    return new CliError("network_error", "the SFTP server's host name was not found", { reason: "network.failed" })
+    return new CliError("network_error", `the ${server}'s host name was not found`, { reason: "network.failed" })
   if (
     (typeof code === "string" && TRANSIENT_CODES.has(code)) ||
     level === "client-socket" ||
@@ -217,6 +235,52 @@ const readAll = async (sftp: SFTPWrapper, path: string, maxBytes: number, progre
   }
 }
 
+const openFile = async (
+  sftp: SFTPWrapper,
+  path: string,
+  guarded: <T>(work: () => Promise<T>) => Promise<T>,
+): Promise<OpenFile> => {
+  const call = <T>(work: (done: (error: unknown, value?: T) => void) => void) =>
+    new Promise<T>((resolve, reject) =>
+      work((error, value) => (error ? reject(failureOf(error)) : resolve(value as T))),
+    )
+  const handle = await call<Buffer>((done) => sftp.open(path, "r", (error, value) => done(error, value)))
+  const close = () => sftp.close(handle, () => {})
+  try {
+    const stats = await call<Stats>((done) => sftp.fstat(handle, (error, value) => done(error, value)))
+    if (kindOf(stats.mode) !== "file")
+      throw new CliError("validation_error", "the path names a folder or another thing that is not a file", {
+        reason: "file.not-a-file",
+      })
+    const readAt = (position: number, length: number) =>
+      call<Buffer>((done) => {
+        const into = Buffer.alloc(length)
+        sftp.read(handle, into, 0, length, position, (error, bytes) => done(error, into.subarray(0, bytes)))
+      })
+    return {
+      size: Number(stats.size),
+      mtime: stats.mtime,
+      // A server may answer a read with fewer bytes than asked; only an empty answer is the end of the file.
+      read: (position, length) =>
+        guarded(async () => {
+          const parts: Buffer[] = []
+          let got = 0
+          while (got < length) {
+            const part = await readAt(position + got, length - got)
+            if (part.length === 0) break
+            parts.push(part)
+            got += part.length
+          }
+          return Buffer.concat(parts, got)
+        }),
+      close,
+    }
+  } catch (error) {
+    close()
+    throw error
+  }
+}
+
 const validKey = (library: Ssh2, options: WireOptions): void => {
   if (options.privateKey === undefined) return
   const key = typeof options.privateKey === "string" ? options.privateKey : Buffer.from(options.privateKey)
@@ -248,14 +312,15 @@ const configOf = async (options: WireOptions, verify: (key: Buffer) => boolean):
 })
 
 /**
- * Connects, checks the host key with `accept` before any credential is sent, and opens the SFTP channel. `signal`
- * ends the attempt and destroys the connection.
+ * Connects, checks the host key with `accept` before any credential is sent, and signs in. `signal` ends the attempt
+ * and destroys the connection.
  */
-export const openWire = async (
+const connectClient = async (
   options: WireOptions,
   accept: (key: HostKey) => boolean,
   signal: AbortSignal,
-): Promise<Wire> => {
+  server: string,
+): Promise<Client> => {
   const library = await ssh2()
   validKey(library, options)
   signal.throwIfAborted()
@@ -269,7 +334,7 @@ export const openWire = async (
   }
   const config = await configOf(options, verify)
   signal.throwIfAborted()
-  const sftp = await new Promise<SFTPWrapper>((resolve, reject) => {
+  return new Promise<Client>((resolve, reject) => {
     const stop = () => {
       client.destroy()
       reject(signal.reason)
@@ -282,27 +347,123 @@ export const openWire = async (
         refused
           ? new CliError(
               "authentication_error",
-              `the SFTP server's host key (${refused.algorithm} ${refused.fingerprint}) is not the pinned one; ` +
+              `the ${server}'s host key (${refused.algorithm} ${refused.fingerprint}) is not the pinned one; ` +
                 "check it with the server's owner before pinning it again",
               { reason: "sftp.host-key-mismatch" },
             )
-          : failureOf(error, "ssh"),
+          : failureOf(error, "ssh", server),
       )
     }
+    const closed = () => fail(lost(server))
     client.once("error", fail)
-    client.once("close", () => fail(lost()))
-    client.once("ready", () =>
-      client.sftp((error, channel) => {
-        if (error) return fail(error)
-        signal.removeEventListener("abort", stop)
-        client.removeListener("error", fail)
-        client.on("error", () => {})
-        resolve(channel)
-      }),
-    )
+    client.once("close", closed)
+    client.once("ready", () => {
+      signal.removeEventListener("abort", stop)
+      client.removeListener("error", fail)
+      client.removeListener("close", closed)
+      client.on("error", () => {})
+      resolve(client)
+    })
     client.connect(config)
   })
+}
+
+/** Signs in as `connectClient` does and opens the SFTP channel. */
+export const openWire = async (
+  options: WireOptions,
+  accept: (key: HostKey) => boolean,
+  signal: AbortSignal,
+): Promise<Wire> => {
+  const client = await connectClient(options, accept, signal, "SFTP server")
+  const sftp = await new Promise<SFTPWrapper>((resolve, reject) => {
+    const stop = () => {
+      client.destroy()
+      reject(signal.reason)
+    }
+    signal.addEventListener("abort", stop, { once: true })
+    client.once("close", () => reject(lost()))
+    client.sftp((error, channel) => {
+      signal.removeEventListener("abort", stop)
+      if (!error) return resolve(channel)
+      client.destroy()
+      reject(failureOf(error, "ssh"))
+    })
+  })
   return wireOf(client, sftp)
+}
+
+/** SSH channel-open failure reasons (RFC 4254, section 5.1). */
+const PROHIBITED = 1
+const CONNECT_FAILED = 2
+
+const forwardFailure = (error: unknown): CliError => {
+  const reason = (error as { reason?: unknown } | null)?.reason
+  if (reason === PROHIBITED)
+    return new CliError("permission_error", "the SSH server does not allow forwarding to that address", {
+      reason: "ssh.forward-refused",
+    })
+  if (reason === CONNECT_FAILED)
+    return new CliError("network_error", "the SSH server could not reach the address behind it", {
+      reason: "ssh.forward-failed",
+      retryable: true,
+    })
+  return failureOf(error, "ssh", "SSH server")
+}
+
+/**
+ * What a database driver expects of a socket, on a forwarded channel: `pg` calls `connect` and waits for its
+ * `connect` event, and both drivers set keep-alive and Nagle options that mean nothing inside an SSH channel.
+ */
+const socketLike = (channel: Duplex): Duplex => {
+  const same = () => channel
+  return Object.assign(channel, {
+    connect: () => {
+      setImmediate(() => channel.emit("connect"))
+      return channel
+    },
+    setNoDelay: same,
+    setKeepAlive: same,
+    setTimeout: same,
+    ref: same,
+    unref: same,
+  })
+}
+
+/** Signs in as `connectClient` does, for forwarding only: no shell, no command, no SFTP. */
+export const openForwarder = async (
+  options: WireOptions,
+  accept: (key: HostKey) => boolean,
+  signal: AbortSignal,
+): Promise<Forwarder> => {
+  const client = await connectClient(options, accept, signal, "SSH server")
+  let closed = false
+  const channels = new Set<Duplex>()
+  const close = () => {
+    if (closed) return
+    closed = true
+    for (const channel of channels) channel.destroy()
+    client.destroy()
+  }
+  client.once("close", close)
+  return {
+    get closed() {
+      return closed
+    },
+    forward: (host, port) =>
+      new Promise<Duplex>((resolve, reject) => {
+        if (closed) return reject(lost("SSH server"))
+        const gone = () => reject(lost("SSH server"))
+        client.once("close", gone)
+        client.forwardOut("127.0.0.1", 0, host, port, (error, channel) => {
+          client.removeListener("close", gone)
+          if (error) return reject(forwardFailure(error))
+          channels.add(channel)
+          channel.once("close", () => channels.delete(channel))
+          resolve(socketLike(channel))
+        })
+      }),
+    close,
+  }
 }
 
 const wireOf = (client: Client, sftp: SFTPWrapper): Wire => {
@@ -357,6 +518,7 @@ const wireOf = (client: Client, sftp: SFTPWrapper): Wire => {
           ),
       ),
     read: (path, maxBytes, progress) => guarded(() => readAll(sftp, path, maxBytes, progress)),
+    open: (path) => guarded(() => openFile(sftp, path, guarded)),
     close,
   }
 }

@@ -85,7 +85,8 @@ alias, keyword and person lanes and returns cited evidence with a resume checkpo
 | `./constants` | `src/constants/` | the packaged constants (`constants`, `constantsSchema`), the app a sign-in uses (`googleApp`, `microsoftApp`, `oauthApp`) and `doctor`'s report of it (`oauthClientReport`) — see [Constants](CONSTANTS.md) |
 | `./mail`, `/mail/testing` | `src/mail/` | the mail source port, the sync engine over `store.mail` (resume points, rules, deletions, attachment text), sender scoring and the contract kit — see [Mail](MAIL.md) |
 | `./google` | `src/google/` | what every Google API client shares: `googleError` turns a refusal into a `CliError` by Google's reasons, and `googlePages` reads every `pageToken` page, refusing a repeated token |
-| `./sftp` | `src/sftp/` | a read-only SFTP client: `session.ts` holds the host-key pin, deadlines, retries and run events; `ssh2.ts` is the only file that loads `ssh2` (an optional peer, imported on first use) — see [SFTP](../sftp.md) |
+| `./sftp` | `src/sftp/` | a read-only SFTP client and an SSH tunnel that only forwards: `session.ts` holds the host-key pin, deadlines, retries and run events; `ssh2.ts` is the only file that loads `ssh2` (an optional peer, imported on first use) — see [SFTP](../sftp.md) |
+| `./sql` | `src/sql/` | a read-only SQL reader: `reader.ts` opens mysql2 or pg (optional peers, imported on first use) read-only, pages a host's table and maps driver errors — see [SQL](../sql.md) |
 
 Every document and every meeting of every account, as a page lists them, are [Listings](LISTINGS.md): services over
 `store.listings`, with the request builders in `./cli`.

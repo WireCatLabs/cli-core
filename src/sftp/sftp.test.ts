@@ -6,7 +6,7 @@ import { CliError, isCliError, type SleepLike } from "@wirecat/cli-base"
 import { type Connection, Server, utils } from "ssh2"
 import { afterEach, describe, expect, it } from "vitest"
 import type { RequestEvent } from "../runs/events.js"
-import { openSftp, type SftpOptions, sftpHostKey } from "./index.js"
+import { openSftp, openSshTunnel, type SftpOptions, type SshTunnelOptions, sftpHostKey } from "./index.js"
 
 const { STATUS_CODE } = utils.sftp
 
@@ -52,8 +52,10 @@ const clientKeys = utils.generateKeyPairSync("ed25519")
 
 const MTIME = Date.UTC(2026, 10, 12, 10, 0, 0) / 1000
 const recording = Buffer.from(Array.from({ length: 200_000 }, (_, index) => index % 251))
+const long = Buffer.from(Array.from({ length: 2_000_000 }, (_, index) => (index * 7) % 253))
 const FILES: Record<string, Buffer> = {
   "/rec/out-89161234567.wav": recording,
+  "/cdr/Master.csv": long,
   "/rec/small.txt": Buffer.from("hello"),
 }
 const DIRS = new Set(["/", "/rec", "/rec/empty"])
@@ -77,6 +79,12 @@ interface Behaviour {
   /** A different host key than the pinned one. */
   otherKey?: boolean
   acceptKey?: boolean
+  /** On the first connection, drops it after this many READ requests. */
+  dropAfterReads?: number
+  /** From the second connection on, the files hold other bytes, as a file replaced between two connections. */
+  replacedLater?: boolean
+  /** Refuses every forwarded connection. */
+  refuseForward?: boolean
 }
 
 const servers: Server[] = []
@@ -85,7 +93,15 @@ afterEach(() => {
 })
 
 const serve = (behaviour: Behaviour = {}) => {
-  const seen = { connections: 0, authAttempts: 0, closed: 0, passwords: [] as string[] }
+  const seen = {
+    connections: 0,
+    authAttempts: 0,
+    closed: 0,
+    passwords: [] as string[],
+    handlesClosed: 0,
+    forwards: [] as { destIP: string; destPort: number }[],
+    received: [] as Buffer[],
+  }
   const server = new Server({ hostKeys: [behaviour.otherKey ? OTHER.private : hostKeys.private] }, (client) =>
     session(client, behaviour, seen),
   )
@@ -106,8 +122,28 @@ const serve = (behaviour: Behaviour = {}) => {
   return { socket, seen }
 }
 
-const session = (client: Connection, behaviour: Behaviour, seen: { authAttempts: number; passwords: string[] }) => {
+interface Seen {
+  connections: number
+  authAttempts: number
+  passwords: string[]
+  handlesClosed: number
+  forwards: { destIP: string; destPort: number }[]
+  received: Buffer[]
+}
+
+const session = (client: Connection, behaviour: Behaviour, seen: Seen) => {
+  const connection = seen.connections
+  let reads = 0
   client.on("error", () => {})
+  client.on("tcpip", (accept, reject, info) => {
+    seen.forwards.push({ destIP: info.destIP, destPort: info.destPort })
+    if (behaviour.refuseForward) return reject()
+    const channel = accept()
+    channel.on("data", (chunk: Buffer) => {
+      seen.received.push(chunk)
+      channel.write(Buffer.concat([Buffer.from("echo:"), chunk]))
+    })
+  })
   client.on("authentication", (context) => {
     seen.authAttempts += 1
     if (context.method === "password") {
@@ -165,12 +201,17 @@ const session = (client: Connection, behaviour: Behaviour, seen: { authAttempts:
         })
         sftp.on("FSTAT", (id, handle) => sftp.attrs(id, attrsOf(stateOf(handle)?.path ?? "")))
         sftp.on("READ", (id, handle, offset, length) => {
-          const data = FILES[stateOf(handle)?.path ?? ""] ?? Buffer.alloc(0)
+          reads += 1
+          if (connection === 1 && behaviour.dropAfterReads !== undefined && reads > behaviour.dropAfterReads)
+            return client.end()
+          const original = FILES[stateOf(handle)?.path ?? ""] ?? Buffer.alloc(0)
+          const data = behaviour.replacedLater && connection > 1 ? Buffer.alloc(original.length, 7) : original
           if (offset >= data.length) return sftp.status(id, STATUS_CODE.EOF)
           // Half of what was asked, at most, to exercise short reads.
           sftp.data(id, data.subarray(offset, offset + Math.min(length, 20_000)))
         })
         sftp.on("CLOSE", (id, handle) => {
+          if (handles.get(handle.readUInt32BE(0))?.path.startsWith("/rec/")) seen.handlesClosed += 1
           handles.delete(handle.readUInt32BE(0))
           sftp.status(id, STATUS_CODE.OK)
         })
@@ -412,6 +453,168 @@ describe("openSftp", () => {
     controller.abort(reason)
     expect(await failure(listing)).toBe(reason)
     await client.close()
+  })
+})
+
+const collect = async (stream: AsyncIterable<Uint8Array>) => {
+  const pieces: Buffer[] = []
+  for await (const piece of stream) pieces.push(Buffer.from(piece))
+  return { bytes: Buffer.concat(pieces), pieces: pieces.length }
+}
+
+describe("readStream", () => {
+  it("**gives the whole file in order, piece by piece**, as one traced request without a path", async () => {
+    const server = serve()
+    const { open, events } = connect(server)
+    const client = await open()
+
+    const { bytes, pieces } = await collect(client.readStream("/rec/out-89161234567.wav"))
+
+    expect(bytes.equals(recording)).toBe(true)
+    expect(pieces).toBe(Math.ceil(recording.length / (64 * 1024)))
+    expect(events.filter((one) => one.operation === "sftp.stream" && one.event === "response")).toMatchObject([
+      { outcome: "ok", bytes: recording.length, ids: { host: "pbx.example" } },
+    ])
+    expect(JSON.stringify(events)).not.toContain("89161234567")
+    await expect.poll(() => server.seen.handlesClosed).toBe(1)
+    await client.close()
+  })
+
+  it("refuses a file larger than maxBytes before its first byte", async () => {
+    const client = await connect(serve()).open()
+
+    await expect(collect(client.readStream("/rec/out-89161234567.wav", { maxBytes: 1000 }))).rejects.toMatchObject({
+      details: { reason: "sftp.too-large", max_bytes: 1000 },
+    })
+    await client.close()
+  })
+
+  it("**goes on where it stopped when the connection breaks halfway**", async () => {
+    const server = serve({ dropAfterReads: 100 })
+    const { open, events } = connect(server)
+    const client = await open()
+
+    const { bytes } = await collect(client.readStream("/cdr/Master.csv"))
+
+    expect(bytes.equals(long)).toBe(true)
+    expect(server.seen.connections).toBe(2)
+    expect(
+      events.filter((one) => one.operation === "sftp.stream" && one.event === "response").map((one) => one.outcome),
+    ).toEqual(["error", "ok"])
+    await client.close()
+  })
+
+  it("**refuses to join a file that was replaced while the connection was down**", async () => {
+    const client = await connect(serve({ dropAfterReads: 100, replacedLater: true })).open()
+
+    await expect(collect(client.readStream("/cdr/Master.csv"))).rejects.toMatchObject({
+      details: { reason: "sftp.file-changed" },
+    })
+    await client.close()
+  })
+
+  it("closes the file when the reader stops early", async () => {
+    const server = serve()
+    const client = await connect(server).open()
+
+    for await (const _ of client.readStream("/rec/out-89161234567.wav")) break
+
+    await expect.poll(() => server.seen.handlesClosed).toBe(1)
+    await client.close()
+  })
+})
+
+const tunnelOf = (server: ReturnType<typeof serve>, extra: Partial<SshTunnelOptions> = {}) => {
+  const events: RequestEvent[] = []
+  const options: SshTunnelOptions = {
+    host: "pbx.example",
+    username: "cdr",
+    auth: { password: PASSWORD },
+    hostKey: FINGERPRINT,
+    socket: server.socket,
+    events: (event) => events.push(event),
+    sleep: clock().sleep,
+    random: () => 0.5,
+    ...extra,
+  }
+  return { open: () => openSshTunnel(options), events }
+}
+
+const answerOf = (stream: Duplex) =>
+  new Promise<string>((resolve) => stream.once("data", (chunk: Buffer) => resolve(chunk.toString())))
+
+describe("openSshTunnel", () => {
+  it("**forwards to the address behind the SSH server** and carries bytes both ways, tracing no address", async () => {
+    const server = serve()
+    const { open, events } = tunnelOf(server)
+    const tunnel = await open()
+
+    const stream = await tunnel.connect("127.0.0.1", 3306)
+    stream.write("ping")
+
+    expect(await answerOf(stream)).toBe("echo:ping")
+    expect(server.seen.forwards).toEqual([{ destIP: "127.0.0.1", destPort: 3306 }])
+    expect(events.filter((one) => one.event === "response").map((one) => [one.operation, one.outcome])).toEqual([
+      ["ssh.connect", "ok"],
+      ["ssh.forward", "ok"],
+    ])
+    expect(JSON.stringify(events)).not.toContain("3306")
+    await tunnel.close()
+    await expect.poll(() => server.seen.closed).toBe(1)
+  })
+
+  it("acts as a socket for a database driver: connect, then the connect event", async () => {
+    const tunnel = await tunnelOf(serve()).open()
+    const stream = (await tunnel.connect("127.0.0.1", 5432)) as Duplex & { connect(): Duplex; setNoDelay(): Duplex }
+
+    const connected = new Promise((resolve) => stream.once("connect", resolve))
+    stream.setNoDelay()
+    stream.connect()
+
+    await expect(connected).resolves.toBeUndefined()
+    await tunnel.close()
+  })
+
+  it("**lets pg sign in through it**: the server behind receives pg's startup message", async () => {
+    const server = serve()
+    const tunnel = await tunnelOf(server).open()
+    const stream = await tunnel.connect("127.0.0.1", 5432)
+    const { default: pg } = await import("pg")
+    const client = new pg.Client({ user: "cdr-reader", database: "asteriskcdrdb", stream: () => stream })
+
+    const signingIn = client.connect().catch(() => undefined)
+    await expect.poll(() => Buffer.concat(server.seen.received).includes("cdr-reader")).toBe(true)
+    await tunnel.close()
+    await signingIn
+  })
+
+  it("refuses a host key that is not the pinned one before sending a credential", async () => {
+    const server = serve({ otherKey: true })
+
+    await expect(tunnelOf(server).open()).rejects.toMatchObject({
+      code: "authentication_error",
+      details: { reason: "sftp.host-key-mismatch" },
+      message: expect.stringContaining("SSH server"),
+    })
+    expect(server.seen.authAttempts).toBe(0)
+  })
+
+  it("says when the SSH server cannot reach the address, after trying again on the same connection", async () => {
+    const server = serve({ refuseForward: true })
+    const tunnel = await tunnelOf(server).open()
+
+    await expect(tunnel.connect("10.0.0.5", 5432)).rejects.toMatchObject({
+      code: "network_error",
+      details: { reason: "ssh.forward-failed", attempts: 3 },
+    })
+    expect([server.seen.forwards.length, server.seen.connections]).toEqual([3, 1])
+    await tunnel.close()
+  })
+
+  it("refuses to start without a pinned host key", async () => {
+    await expect(tunnelOf(serve(), { hostKey: "" }).open()).rejects.toMatchObject({
+      details: { reason: "sftp.host-key-missing" },
+    })
   })
 })
 

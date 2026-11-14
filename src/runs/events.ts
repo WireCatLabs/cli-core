@@ -37,7 +37,7 @@ export interface RequestEvent {
    * requests when it has any, so one operation over three frames is three requests, never four.
    */
   level?: "operation" | "wire"
-  transport?: "http" | "mtproto" | "max-ws" | "wa-engine" | "sftp"
+  transport?: "http" | "mtproto" | "max-ws" | "wa-engine" | "sftp" | "ssh" | "sql"
   /** 1 for the first try, 2 and up for a retry of the same call. */
   attempt?: number
   /** How long the client waited before this attempt: a flood wait or a `Retry-After`. */

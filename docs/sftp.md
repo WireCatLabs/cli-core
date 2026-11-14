@@ -75,7 +75,17 @@ await context.run(async (events) => {
 - `stat(path)` gives the same fields for one path; `name` is its last part.
 - `readFile(path, { maxBytes })` gives the file's bytes. A file larger than `maxBytes` is refused before its first
   byte is read, and so is a file that grows past it while it is read.
+- `readStream(path, { maxBytes })` gives the file in order, in pieces of 64 KiB, with about a megabyte read ahead,
+  so a Master.csv of gigabytes or a recording for ffmpeg is never held whole. `maxBytes` is optional and works as for
+  `readFile`. When the connection breaks halfway, the read opens a new one and goes on where it stopped, once the
+  bytes just before that point read the same; a file replaced meanwhile is refused with `sftp.file-changed`. A reader
+  that stops early (`break`) closes the file.
 - `close()` ends the connection. Pass the client to the context's `track`, so `--timeout` or Ctrl-C closes it too.
+
+```ts
+for await (const piece of sftp.readStream("/var/log/asterisk/cdr-csv/Master.csv"))
+  parser.push(decoder.decode(piece, { stream: true }))
+```
 
 Secrets come from the caller, which keeps them in the keyring. They never reach an error, a log record or the run's
 events.
@@ -94,7 +104,8 @@ reason is the error.
 Every operation only reads, so a transient failure is tried again: a dropped or refused connection, a broken pipe, a
 step past its deadline, and a server that disconnects as busy (SSH reasons 7, 10 and 12). Each retry opens a new
 connection, after full-jitter backoff from 500 ms up to 5 s. A refused password or key, a host key mismatch, a missing
-file and a denied path are never tried again. A read that fails halfway starts again from the first byte.
+file and a denied path are never tried again. A `readFile` that fails halfway starts again from the first byte; a
+`readStream` goes on from where it stopped.
 
 Waits go through the `sleep` option (cli-base's `SleepLike`), with reason `timeout` for a deadline and `retry` for a
 backoff, so a test decides when time passes. A test connects through `socket`, a function that returns a stream
@@ -116,6 +127,9 @@ then fails (`KEY_EXCHANGE_FAILED`). `src/sftp/sftp.test.ts` has such a pair and 
 | `permission_error` | `file.denied` | the server denied access to the path | no |
 | `validation_error` | `file.not-a-file` | `readFile` on a folder | no |
 | `validation_error` | `sftp.too-large` | the file is over `maxBytes` (`details.max_bytes`) | no |
+| `validation_error` | `sftp.file-changed` | `readStream` reconnected and the file was no longer the same | no |
+| `permission_error` | `ssh.forward-refused` | the SSH server does not allow forwarding (a tunnel) | no |
+| `network_error` | `ssh.forward-failed` | the SSH server could not reach the address behind it (a tunnel) | yes |
 | `timeout` | `sftp.timeout` | a step passed its deadline | yes |
 | `network_error` | `network.failed` | the connection could not be made or broke | yes, unless the host name is unknown |
 | `provider_unavailable` | `provider.unavailable` | the server disconnected as busy | yes |
@@ -128,5 +142,38 @@ wording or a secret: a recording's file name often holds a caller's phone number
 ## The run's events
 
 Each attempt is a pair of `request` and `response` events with `transport: "sftp"`, `level: "wire"` and the attempt
-number: `sftp.connect`, `sftp.list` (`counts.entries`), `sftp.stat`, `sftp.read` (`bytes`) and `sftp.host-key`. The
-response carries `ids.host`, and an error its code. No event carries a path, a file name or content.
+number: `sftp.connect`, `sftp.list` (`counts.entries`), `sftp.stat`, `sftp.read` (`bytes`), `sftp.stream` (`bytes`
+read in that attempt) and `sftp.host-key`. A tunnel's are `ssh.connect` and `ssh.forward`, with `transport: "ssh"`.
+The response carries `ids.host`, and an error its code. No event carries a path, a file name, the address a tunnel
+forwards to, or content.
+
+## A tunnel to a database behind the server
+
+A database that listens only on its own server (a FreePBX CDR database) is reached through an SSH tunnel, as
+`ssh -L` does, but with no port opened on this computer: no other program here can reach the database through it.
+
+```ts
+import { openSshTunnel } from "@wirecat/cli-core/sftp"
+import { openSqlReader } from "@wirecat/cli-core/sql"
+
+const tunnel = await openSshTunnel({
+  host: "pbx.example.com",
+  username: "cdr",
+  auth: { privateKey },                     // or { password }
+  hostKey: "SHA256:Xb9…",                   // the SSH server's fingerprint the owner confirmed
+  events,
+  ...(signal ? { signal } : {}),
+})
+try {
+  const db = await openSqlReader({ kind: "mysql", host: "localhost", database: "asteriskcdrdb", user, password,
+    socket: () => tunnel.connect("127.0.0.1", 3306), events, signal })
+  // …
+} finally {
+  await tunnel.close()
+}
+```
+
+`connect(host, port)` opens one connection to `host:port` as the SSH server sees it, and answers a stream shaped as
+a socket, which `pg` and `mysql2` take as their `stream`. The host key is pinned as for SFTP, `sftpHostKey` shows it,
+and the connection only forwards: it opens no shell, runs no command and starts no SFTP. A connection that breaks is
+opened again by the next `connect`. `close()` ends it and every forwarded connection; call it at the end of the run.
