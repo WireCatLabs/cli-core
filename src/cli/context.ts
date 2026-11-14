@@ -177,14 +177,25 @@ const detailOf = ({ brief, full }: { brief?: boolean; full?: boolean }): { hitDe
 
 const COMPACT_KEY = new Option(COMPACT_FLAG).attributeName()
 
+/**
+ * `--json=a,b` sets the root's `fields`. A command may declare a `--fields` of its own (Google's partial-response
+ * mask), which `optsWithGlobals` would put in its place.
+ */
+export const outputFieldsOf = (command: Command): { fields?: string } => {
+  const fields: unknown = rootOf(command).getOptionValue("fields")
+  return typeof fields === "string" ? { fields } : {}
+}
+
 /** Whether the run asked for one line per item (WC-OUT-24). */
 export const compactOf = (command: Command): boolean => command.optsWithGlobals()[COMPACT_KEY] === true
 
 /** For the commands that print but never need settings or a connection. */
 export const outputFor = (command: Command) => {
   const { streams, tty, env, agent } = environmentOf(command)
+  const { fields: _own, ...flags } = command.optsWithGlobals()
   return resolveOutput({
-    ...command.optsWithGlobals(),
+    ...flags,
+    ...outputFieldsOf(command),
     ...detailOf(command.optsWithGlobals<{ brief?: boolean; full?: boolean }>()),
     compact: compactOf(command),
     ...(agent ? { capture: agent.result } : {}),
@@ -231,9 +242,7 @@ export const baseContext = (command: Command, resolveSettings: Resolve): BaseCon
     env,
     compact: compactOf(command),
     ...detailOf(command.optsWithGlobals<{ brief?: boolean; full?: boolean }>()),
-    ...(command.optsWithGlobals<{ fields?: string }>().fields
-      ? { fields: command.optsWithGlobals<{ fields?: string }>().fields }
-      : {}),
+    ...outputFieldsOf(command),
     ...(environment.agent ? { capture: environment.agent.result } : {}),
     ...(environment.streams ? { streams: environment.streams } : {}),
     ...(environment.tty === undefined ? {} : { tty: environment.tty }),

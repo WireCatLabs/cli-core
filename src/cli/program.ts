@@ -33,7 +33,7 @@ import { commandPathOf } from "./command-contract.js"
 import { enterCommandServer } from "./command-server.js"
 import { exitCodeSet } from "./command-server-request.js"
 import { entityRows, type RowTable } from "./compact.js"
-import { type BaseEnvironment, outputFor, provide } from "./context.js"
+import { type BaseEnvironment, outputFieldsOf, outputFor, provide } from "./context.js"
 import { refuseByCommandPermissions, refuseOfflineCommand, refuseWriteBeforeConnecting } from "./early-refusal.js"
 import {
   admittedUnderLock,
@@ -431,7 +431,6 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
         input?: boolean
         maxInputBytes?: string
         maxOutputBytes?: string
-        fields?: string
         dryRun?: boolean
       }
     >()
@@ -443,7 +442,7 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
     checkJson(action, requested, !flags.jsonl && (options.tty ?? process.stdout.isTTY) === true)
     control.configure({
       // Beside `--format csv`, `--json=a,b` names the table's columns: a CSV is no JSON to pick fields from.
-      ...(flags.fields === undefined || action.getOptionValue("format") === "csv" ? {} : { fields: flags.fields }),
+      ...(action.getOptionValue("format") === "csv" ? {} : outputFieldsOf(action)),
       maxOutputBytes:
         flags.maxOutputBytes === undefined
           ? machine || (options.tty ?? process.stdout.isTTY) !== true
