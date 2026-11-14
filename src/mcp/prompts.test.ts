@@ -1,7 +1,7 @@
 import { Client } from "@modelcontextprotocol/client"
 import { InMemoryTransport, McpServer } from "@modelcontextprotocol/server"
 import { describeProgram } from "@wirecat/cli-base/commands"
-import { describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 import type { Messenger } from "../cli/messenger/context.js"
 import { createProgram } from "../cli/program.js"
 import { settingsFor } from "../cli/settings.js"
@@ -110,13 +110,18 @@ describe("MCP prompts", () => {
     expect(refused).toEqual([])
   })
 
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it("asks review for its window as a query, never with since", async () => {
+    vi.useFakeTimers({ toFake: ["Date"], now: Date.parse("2026-11-14T12:00:00Z") })
     const review = (await promptTexts()).filter(({ prompt }) => prompt === "review")
     const calls = review.flatMap(({ text }) => callsIn(text)).filter((call) => call.command === "review")
-    expect(calls).toContainEqual({ command: "review", arguments: { query: "date>1d" } })
+    expect(calls).toContainEqual({ command: "review", arguments: { query: 'date>"2026-11-13T12:00:00.000Z"' } })
     expect(calls).toContainEqual({ command: "review", arguments: { query: 'date>"2026-10-01T09:00:00.000Z"' } })
     expect(calls).toContainEqual({ command: "review", arguments: { query: 'date>"2026-10-01T07:00:00.000Z"' } })
-    expect(calls).toContainEqual({ command: "review", arguments: { query: "date>2h" } })
+    expect(calls).toContainEqual({ command: "review", arguments: { query: 'date>"2026-11-14T10:00:00.000Z"' } })
     expect(calls).toContainEqual({ command: "review", arguments: { query: 'date>"2026-11-13T17:00:00.000Z"' } })
     expect(calls).toContainEqual({
       command: "review",

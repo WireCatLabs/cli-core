@@ -20,15 +20,13 @@ const call = (tool: string, command: string, args: Record<string, unknown> = {})
   `${tool} with ${JSON.stringify(Object.keys(args).length > 0 ? { command, arguments: args } : { command })}`
 
 /**
- * The owner's time as a query term the query language reads: `1d ago` as `1d`, and an ISO time as the full UTC instant,
- * since the query refuses a time without seconds or a zone that `--since-time` takes. A time that does not read stays
- * as typed, so the tool's error names it.
+ * The owner's time as a query term every query language version reads: the full UTC instant, whatever the owner
+ * typed (`1d ago`, `today`, a time without seconds or a zone). A time that does not read stays as typed, so the
+ * tool's error names it.
  */
 const after = (time: string): string => {
-  const ago = /^(\d+[mhd])(?:\s+ago)?$/.exec(time.trim())?.[1]
-  if (ago) return `date>${ago}`
   try {
-    return `date>${JSON.stringify(new Date(momentOf(time)).toISOString())}`
+    return `date>${JSON.stringify(new Date(momentOf(time.trim().replace(/\s+ago$/i, ""))).toISOString())}`
   } catch {
     return `date>${JSON.stringify(time)}`
   }

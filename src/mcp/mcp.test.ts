@@ -4424,7 +4424,9 @@ describe("MCP prompts and resources", () => {
     expect(channels).toContain(
       JSON.stringify({ command: "inbox", arguments: { query: 'kind:"channel,group"', new: true } }),
     )
-    expect(since).toContain('"arguments":{"query":"date>2h"}')
+    expect(JSON.parse(since.match(/\{"command":"inbox".*?\}\}/)?.[0] ?? "{}").arguments.query).toMatch(
+      /^date>"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z"$/,
+    )
   })
 
   it("lists no chats before anything was read, then the kept ones without connecting, and reads one", async () => {
