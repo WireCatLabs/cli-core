@@ -29,7 +29,16 @@ describe("references", () => {
   })
 
   it("refuses a reference whose kind or shape it does not know", () => {
-    for (const text of ["P1", "people:P1", "chat:telegram/500", "contact:telegram", "note:", "msg:telegram/1/2"])
+    for (const text of [
+      "P1",
+      "people:P1",
+      "chat:telegram/500",
+      "contact:telegram",
+      "note:",
+      "msg:telegram/1/2",
+      "chat:telegram/1/%E0",
+      "folder:%E0",
+    ])
       expect(() => parseReference(text)).toThrow(expect.objectContaining({ code: "validation_error" }))
   })
 

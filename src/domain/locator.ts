@@ -24,12 +24,19 @@ export const isLocator = (reference: string): boolean => reference.trim().starts
 export const parseLocator = (reference: string): MessageLocator => {
   const trimmed = reference.trim()
   const parts = trimmed.startsWith(SCHEME) ? trimmed.slice(SCHEME.length).split("/") : []
-  if (parts.length !== 4 || parts.some((part) => part === "")) {
-    throw new CliError(
+  const malformed = () =>
+    new CliError(
       "validation_error",
       `"${singleLine(reference)}" is not a message locator — expected msg:<provider>/<account>/<chat>/<message>`,
     )
+  if (parts.length !== 4 || parts.some((part) => part === "")) throw malformed()
+  const decoded = (part: string) => {
+    try {
+      return decodeURIComponent(part)
+    } catch {
+      throw malformed()
+    }
   }
-  const [provider, account, chat, message] = parts.map(decodeURIComponent) as [string, string, string, string]
+  const [provider, account, chat, message] = parts.map(decoded) as [string, string, string, string]
   return { provider, account, chat, message }
 }

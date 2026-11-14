@@ -62,9 +62,11 @@ export const authOf = (unfolded: string): AuthVerdicts | undefined => {
 
 export const addressesOf = (value: string | undefined): string[] => {
   if (value === undefined) return []
-  const bracketed = [...value.matchAll(/<([^<>\s]+@[^<>\s]+)>/g)].map(([, address]) => address as string)
-  const found = bracketed.length ? bracketed : (value.match(/[^\s<>,;:"()]+@[^\s<>,;:"()]+/g) ?? [])
-  return found.map((address) => address.toLowerCase())
+  // A display name may itself look like an address ("bob@y.com" <real@z.com>), so quoted names and comments go first.
+  const bare = value.replace(/"(?:[^"\\]|\\.)*"/g, " ").replace(/\([^()]*\)/g, " ")
+  return [...bare.matchAll(/<([^<>\s]+@[^<>\s]+)>|([^\s<>,;:"()]+@[^\s<>,;:"()]+)/g)].map(([, bracketed, plain]) =>
+    String(bracketed ?? plain).toLowerCase(),
+  )
 }
 
 const nameOf = (value: string): string | undefined => {

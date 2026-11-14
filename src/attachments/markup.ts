@@ -1,4 +1,5 @@
 import iconv from "iconv-lite"
+import { decodeEntities } from "../domain/html-entities.js"
 import { ReaderLimit } from "./container.js"
 import { MAX_TEXT_CHARS } from "./limits.js"
 
@@ -125,7 +126,6 @@ const HTML_DROPPED_CLOSE = new Map(
   ]),
 )
 const HTML_BLOCK = /<\/?(p|div|br|li|ul|ol|tr|h[1-6]|blockquote|pre|section|article|header|footer|table|hr)\b[^>]*>/gi
-const ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: "\u00a0" }
 
 // Past the last `>` no tag can close, yet `[^>]*` would rescan to the end from every `<` there: quadratic on `<<<<…`.
 const replaceTags = (source: string, tag: RegExp, replacement: string): string => {
@@ -163,19 +163,10 @@ export const htmlText = (source: string): string => {
   const uncommented = source.replace(/<!--[\s\S]*?(-->|$)/g, (comment, close: string) => (close ? "" : comment))
   const blocks = replaceTags(dropHidden(uncommented).replace(/<\/t[dh]\s*>/gi, "\t"), HTML_BLOCK, "\n")
   return (
-    replaceTags(blocks, /<[^>]*>/g, "")
-      .replace(/&(#x[0-9a-f]{1,6}|#\d{1,7}|[a-z]{2,8});/gi, (entity, body: string) => {
-        const lower = body.toLowerCase()
-        if (lower.startsWith("#x")) return safeChar(Number.parseInt(lower.slice(2), 16), entity)
-        if (lower.startsWith("#")) return safeChar(Number(lower.slice(1)), entity)
-        return ENTITIES[lower] ?? entity
-      })
+    decodeEntities(replaceTags(blocks, /<[^>]*>/g, ""))
       // From the start of a run only: `[ \t]+\n` alone rescans a long run of spaces from each of them.
       .replace(/(?<![ \t\u00a0])[ \t\u00a0]+\n/g, "\n")
       .replace(/\n{3,}/g, "\n\n")
       .trim()
   )
 }
-
-const safeChar = (code: number, fallback: string) =>
-  code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : fallback

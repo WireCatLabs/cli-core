@@ -63,10 +63,18 @@ const malformed = (text: string, shape: string) =>
     reason: "ref.malformed",
   })
 
+const decoded = (part: string, text: string, shape: string): string => {
+  try {
+    return decodeURIComponent(part)
+  } catch {
+    throw malformed(text, shape)
+  }
+}
+
 const parts = (rest: string, count: number, text: string, shape: string) => {
   const split = rest.split("/")
   if (split.length !== count || split.some((part) => part === "")) throw malformed(text, shape)
-  return split.map(decodeURIComponent)
+  return split.map((part) => decoded(part, text, shape))
 }
 
 const encoded = (...values: string[]) => values.map(encodeURIComponent).join("/")
@@ -144,8 +152,8 @@ export const REF_KINDS: readonly RefKindSpec[] = [
     shape: "folder:<id>[/<path>]",
     parse: (rest, text) => {
       const slash = rest.indexOf("/")
-      const id = decodeURIComponent(slash < 0 ? rest : rest.slice(0, slash))
-      const path = slash < 0 ? null : folderPath(decodeURIComponent(rest.slice(slash + 1)))
+      const id = decoded(slash < 0 ? rest : rest.slice(0, slash), text, "folder:<id>[/<path>]")
+      const path = slash < 0 ? null : folderPath(decoded(rest.slice(slash + 1), text, "folder:<id>[/<path>]"))
       if (!id.trim() || path === "") throw malformed(text, "folder:<id>[/<path>]")
       return { type: "folder", id, path }
     },

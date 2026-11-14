@@ -19,5 +19,6 @@ describe("a message locator", () => {
   it("refuses anything short of four parts, with a typed error", () => {
     expect(() => parseLocator("msg:telegram/1/2")).toThrow(expect.objectContaining({ code: "validation_error" }))
     expect(() => parseLocator("42")).toThrow(/not a message locator/)
+    expect(() => parseLocator("msg:telegram/1/2/%E0")).toThrow(expect.objectContaining({ code: "validation_error" }))
   })
 })
