@@ -5,6 +5,7 @@ import { outputFor } from "./context.js"
 import { changesAuthority } from "./effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "./envelope.js"
 import { previewBody } from "./preview.js"
+import { shareShadowedOptions } from "./shadowed-options.js"
 
 const descendants = (command: Command, into = new Set<Command>()): Set<Command> => {
   into.add(command)
@@ -19,12 +20,11 @@ const descendants = (command: Command, into = new Set<Command>()): Set<Command> 
  */
 const previewWrites = (messenger: boolean) => (hooked: Command, action: Command) => {
   // Each command carries its own hook, so one a CLI moves under its own group keeps it.
-  if (hooked !== action || action.optsWithGlobals<{ dryRun?: boolean }>().dryRun !== true) return
-  // `run` hands the global flag to a command's own --dry-run; another host's program does not.
-  if (action.options.some((option) => option.long === "--dry-run")) {
-    action.setOptionValue("dryRun", true)
-    return
-  }
+  if (hooked !== action) return
+  // `run` hands a global flag to the command's own option of that name; another host's program does not.
+  shareShadowedOptions(action)
+  if (action.optsWithGlobals<{ dryRun?: boolean }>().dryRun !== true) return
+  if (action.options.some((option) => option.long === "--dry-run")) return
   if (!writes(metaOf(action).effects) && !changesAuthority(action)) return
   // Commander reads the handler after the hooks, so swapping it here stops the write; each run builds its program anew.
   action.action(function (this: Command) {

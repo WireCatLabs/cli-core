@@ -4,7 +4,7 @@ import { Command } from "commander"
 import { describe, MAX_ACTIONS } from "../../moderation/check.js"
 import { RULE_KEYS } from "../../moderation/rules.js"
 import { dateWindow } from "../../services/moment.js"
-import { grantsAuthority, LOCAL_READ, LOCAL_WRITE, REMOTE_WRITE } from "../effects.js"
+import { grantsAuthority, LOCAL_READ, LOCAL_WRITE, ownerOnlyOption, REMOTE_WRITE } from "../effects.js"
 import { itemOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { answerOf } from "./ask.js"
 import { renderItem } from "./chat-answers.js"
@@ -57,7 +57,7 @@ export const moderateCommand = (messenger: Messenger): Command =>
     .argument("<chat>", messenger.chatArgument)
     .option("--since-time <time>", "judge what came after this ISO 8601 time, or 2h / 1d ago; the saved point stays")
     .option("--dry-run", "judge and plan; do nothing")
-    .option("--allow-dangerous", "yes to every action whose level in the group's rules is ask")
+    .addOption(ownerOnlyOption("--allow-dangerous", "yes to every action whose level in the group's rules is ask"))
     .option("--max-actions <n>", `at most this many actions in one run; ${MAX_ACTIONS} if not given`)
     .action(async function (this: Command, chat: string) {
       const context = messengerContext(this, messenger)
