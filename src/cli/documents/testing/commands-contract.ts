@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import { hasSharedContract, metaOf } from "@wirecat/cli-base/commands"
+import { hasSharedContract, metaOf, sharedContractOverrides } from "@wirecat/cli-base/commands"
 import type { Command } from "commander"
 import type { ContractCase } from "../../../meetings/index.js"
 import type { DocumentWords } from "../words.js"
@@ -78,6 +78,68 @@ export const SHARED_MIRROR_PATHS = [
   "mirrors watch",
 ] as const
 
+type Effect = { remote: "none" | "read" | "write"; local: "none" | "read" | "write" }
+const READ: Effect = { remote: "none", local: "read" }
+const WRITE: Effect = { remote: "none", local: "write" }
+const FETCH: Effect = { remote: "read", local: "write" }
+const PUSH: Effect = { remote: "write", local: "write" }
+
+/** What each shared path reads and writes: the MCP server offers or holds back a tool by it. */
+export const SHARED_EFFECTS: Record<
+  (typeof SHARED_DOCUMENT_PATHS)[number] | (typeof SHARED_MIRROR_PATHS)[number],
+  Effect
+> = {
+  "folders add": FETCH,
+  "folders list": READ,
+  "folders remove": WRITE,
+  sync: FETCH,
+  status: READ,
+  "documents list": READ,
+  "documents show": READ,
+  "documents export": WRITE,
+  "documents context": READ,
+  search: READ,
+  "catalog import": WRITE,
+  "catalog show": READ,
+  "catalog list": READ,
+  "catalog search": READ,
+  "catalog tree": READ,
+  "catalog tags list": READ,
+  "catalog tags add": WRITE,
+  "catalog tags remove": WRITE,
+  "tags list": READ,
+  "tags add": WRITE,
+  "tags remove": WRITE,
+  "relationships list": READ,
+  "relationships add": WRITE,
+  "relationships remove": WRITE,
+  "notes add": WRITE,
+  "notes list": READ,
+  "notes show": READ,
+  "notes edit": WRITE,
+  "notes remove": WRITE,
+  "memories add": WRITE,
+  "memories list": READ,
+  "memories show": READ,
+  "memories confirm": WRITE,
+  "memories stale": WRITE,
+  "memories search": READ,
+  "memories extract": PUSH,
+  "facts add": WRITE,
+  "facts list": READ,
+  "facts show": READ,
+  "facts confirm": WRITE,
+  "facts reverse": WRITE,
+  "identities list": READ,
+  "identities link": WRITE,
+  "mirrors add": FETCH,
+  "mirrors list": READ,
+  "mirrors remove": WRITE,
+  "mirrors status": READ,
+  "mirrors sync": PUSH,
+  "mirrors watch": PUSH,
+}
+
 const find = (program: Command, path: string): Command | undefined => {
   let at: Command | undefined = program
   for (const name of path.split(" ")) at = at?.commands.find((command) => command.name() === name)
@@ -96,8 +158,17 @@ const json = (stdout: string): unknown => {
 const ok = async (fixture: DocumentCommandsFixture, argv: string[]) => {
   const answer = await fixture.run(argv)
   assert.equal(answer.exit, 0, `${argv.join(" ")} exits 0`)
-  return JSON.stringify(json(answer.stdout))
+  return json(answer.stdout) as Record<string, unknown>
 }
+
+/** Every value under `key` anywhere in an answer, so a check does not depend on one CLI's envelope. */
+const valuesOf = (value: unknown, key: string): unknown[] => {
+  if (Array.isArray(value)) return value.flatMap((one) => valuesOf(one, key))
+  if (typeof value !== "object" || value === null) return []
+  return Object.entries(value).flatMap(([name, one]) => [...(name === key ? [one] : []), ...valuesOf(one, key)])
+}
+const items = (answer: Record<string, unknown>) =>
+  (Array.isArray(answer.items) ? answer.items : []) as Record<string, unknown>[]
 
 /** What every documents CLI's shared commands are and answer: run each case in the CLI's tests. */
 export const documentCommandsContract = (
@@ -112,8 +183,16 @@ export const documentCommandsContract = (
         const command = find(fixture.program, path)
         assert.ok(command, `${path} is mounted`)
         assert.ok(hasSharedContract(command), `${path} is the shared definition`)
-        assert.ok(metaOf(command).effects, `${path} declares its effects`)
+        const { remote, local } = metaOf(command).effects ?? {}
+        assert.deepEqual({ remote, local }, SHARED_EFFECTS[path], `${path} reads and writes what cli-core says`)
       }
+      const name = fixture.program.name()
+      const overridden = sharedContractOverrides(fixture.program)
+        .map((override) => (override.command[0] === name ? override.command.slice(1) : override.command).join(" "))
+        .filter((path) =>
+          paths.some((shared) => shared === path || shared.startsWith(`${path} `) || path.startsWith(`${shared} `)),
+        )
+      assert.deepEqual(overridden, [], "the CLI overrides no shared contract")
     },
   },
   {
@@ -135,10 +214,17 @@ export const documentCommandsContract = (
     async run() {
       const fixture = await make()
       await ok(fixture, ["sync"])
-      assert.match(await ok(fixture, ["documents", "list"]), new RegExp(fixture.document))
-      assert.match(await ok(fixture, ["documents", "show", fixture.document]), new RegExp(fixture.word))
+      const listed = items(await ok(fixture, ["documents", "list"])).map((item) => item.id)
+      assert.ok(listed.includes(fixture.document), `documents list answers ${fixture.document} by its id`)
+      const shown = await ok(fixture, ["documents", "show", fixture.document])
+      assert.ok(valuesOf(shown, "id").includes(fixture.document), `documents show answers ${fixture.document}`)
+      assert.ok(
+        valuesOf(shown, "text").some((text) => typeof text === "string" && text.includes(fixture.word)),
+        `documents show gives the text with "${fixture.word}"`,
+      )
       await ok(fixture, ["status"])
-      assert.match(await ok(fixture, ["search", fixture.word]), new RegExp(fixture.document))
+      const found = await ok(fixture, ["search", fixture.word])
+      assert.ok(valuesOf(found, "id").includes(fixture.document), `search "${fixture.word}" finds ${fixture.document}`)
     },
   },
   {
@@ -147,11 +233,13 @@ export const documentCommandsContract = (
       const fixture = await make()
       await ok(fixture, ["sync"])
       await ok(fixture, ["tags", "add", fixture.document, "contract-tag"])
-      assert.match(await ok(fixture, ["tags", "list", fixture.document]), /contract-tag/)
+      const tags = async () => items(await ok(fixture, ["tags", "list", fixture.document])).map((item) => item.tag)
+      assert.deepEqual(await tags(), ["contract-tag"])
       await ok(fixture, ["tags", "remove", fixture.document, "contract-tag"])
-      assert.doesNotMatch(await ok(fixture, ["tags", "list", fixture.document]), /contract-tag/)
+      assert.deepEqual(await tags(), [])
       await ok(fixture, ["notes", "add", fixture.document, "check the contract numbers"])
-      assert.match(await ok(fixture, ["notes", "list", fixture.document]), /check the contract numbers/)
+      const notes = items(await ok(fixture, ["notes", "list", fixture.document])).map((item) => item.text)
+      assert.deepEqual(notes, ["check the contract numbers"])
     },
   },
 ]

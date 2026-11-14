@@ -139,10 +139,11 @@ one builder per group lets a CLI place its own groups between them (drive puts `
 `status`). The CLI passes:
 
 - **`words`**: its command, the provider in sentences, the store provider name and the word for the
-  remote side. `mirrors sync --keep local|<remote>|both` maps `<remote>` to the engine's `remote`, and identities are
-  `<remote>_id`. Texts that read differently for the provider go in `words.text`. Entity names are the same in every CLI: `document`
-  (views `imported` and `catalog`), `document_tag`, `document_relationship`, `document_identity`, `selected_folder`,
-  `mirror`.
+  remote side. `mirrors sync --keep local|<remote>|both` maps `<remote>` to the engine's `remote`, and
+  `identities link` takes `<remote>-id`. Texts that read differently for the provider go in `words.text`. Entity names
+  and fields are the same in every CLI: `document` (views `imported` and `catalog`), `document_tag`,
+  `document_relationship`, `document_identity` (`remote_id`, `provider`, `role` of `owner` or `last-editor`,
+  `person`), `selected_folder`, `mirror`.
 - **`output`**: its own envelope, keys and `--fields`. The builders answer through it and never print themselves.
 - **Ports per group**, called when the command runs: the selected profile's store, its lock and principal, the
   provider's source and the item shapes. The builders never pick a profile, open a store or take a lock.
@@ -151,11 +152,23 @@ one builder per group lets a CLI place its own groups between them (drive puts `
 The `documents` group the builders return takes the CLI's live subcommands (`get`, `create`, `update`, …), added after
 the shared ones. `folders` takes the CLI's `browse`, which stays outside the shared contract. Catalog entries use the
 `<id>.md` external ids the ingestion writes. Permissions, `--read-only`, the profile lock and MCP stay with the
-CLI's run.
+CLI's run; the builders honour a global `--dry-run`.
 
-`@wirecat/cli-core/documents/testing` checks both halves: `documentSourceContract` an adapter, and
-`documentCommandsContract` the CLI's mounted commands over its fakes. `fakeDocumentSource` is a provider in memory,
-and the kit's own test runs both contracts over a reference CLI on a temporary store.
+- **`catalog tree`** reads each shown entry's children from the store, 1 000 a page, and asks about the branches it
+  cuts at `--depth` 200 at a time. Any entry with children can be a root or a branch, so a page with sub-pages
+  (`isDocument`, kind `file`) works. An entry in two folders is shown in full once and marked `repeated` at its other
+  place. Over 10 000 entries the answer is `catalog.tree-limit`: name a smaller folder or lower `--depth`. The
+  store's `parent` filter scans the account's catalog, so a tree of 1 000 entries in a 12 000-entry account takes
+  some seconds.
+- **`mirrors watch`** polls the connection's `changes`. When the feed cannot go on from its cursor (expired, or
+  over its bound), `changes` throws a `listing.too-large` CliError: watch then starts a new feed and checks every
+  mirror once.
+
+`@wirecat/cli-core/documents/testing` checks both halves: `documentSourceContract` an adapter (pass `isDocument`
+for pages with sub-pages, and `change` to check the change feed), and `documentCommandsContract` the CLI's mounted
+commands over its fakes: every shared path, its effects, no override of a shared contract, and the answers by id.
+`fakeDocumentSource` is a provider in memory, and the kit's own test runs both contracts over a reference CLI on a
+temporary store.
 
 <a id="push-local-files-to-a-provider"></a>
 

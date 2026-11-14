@@ -14,6 +14,7 @@ import {
   watchMirrors,
 } from "../../documents.js"
 import { parseDuration } from "../../domain/duration.js"
+import { honoursDryRun } from "../dry-run-guard.js"
 import { FETCH, LOCAL_READ, LOCAL_WRITE, REMOTE_WRITE } from "../effects.js"
 import { type Body, itemOf, jsonlRecords, listOf } from "../envelope.js"
 import { bindQuery, documentQueries, mirrorRow, termsOf } from "./queries.js"
@@ -25,6 +26,10 @@ export interface DocumentMirrorConnection<S> {
   sync: Omit<MirrorSyncOptions<S>, "mirrors" | "keep" | "recreate" | "remote" | "stateOf">
   /** The provider's change feed, which `mirrors watch` polls. */
   startToken(): Promise<string>
+  /**
+   * The changes since `token`. Throws a `listing.too-large` CliError when the feed cannot go on from it (expired, or
+   * over its bound): `mirrors watch` then starts a new feed and checks every mirror once.
+   */
   changes(token: string): Promise<{ cursor: string; items: { id: string }[] }>
 }
 
@@ -52,7 +57,7 @@ const addDocumentMirrorCommandsDefinition = <S>(program: Command, helpers: Docum
   const { output } = helpers
   const wording = wordsOf(helpers.words)
   const { app, prefix, provider, remote, text } = wording
-  const queries = documentQueries(wording)
+  const queries = documentQueries()
   const mirrors = annotate(program.command("mirrors"), { effects: LOCAL_READ }).description(text.mirrors)
   const find = (id: string): Mirror => {
     const mirror = helpers.mirrors().find((item) => item.id === id)
@@ -168,7 +173,7 @@ const addDocumentMirrorCommandsDefinition = <S>(program: Command, helpers: Docum
         ]),
       )
       .option("--replace", `same as --keep local, and create again files deleted in ${provider}`)
-      .description("sync both ways with Docs and Sheets; a part changed on both sides is reported"),
+      .description(text.mirrorsSync),
     [
       `${prefix} mirrors sync`,
       `${prefix} mirrors sync 1a2b3c4d --keep ${remote}`,
@@ -287,4 +292,4 @@ const describeCycle = (cycle: {
 }
 
 /** `mirrors add|list|remove|status|sync|watch`: local folders kept in step with the provider both ways. */
-export const addDocumentMirrorCommands = sharedCommand(addDocumentMirrorCommandsDefinition)
+export const addDocumentMirrorCommands = honoursDryRun(sharedCommand(addDocumentMirrorCommandsDefinition))

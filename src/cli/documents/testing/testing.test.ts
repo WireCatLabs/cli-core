@@ -2,8 +2,9 @@ import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { CliError, isCliError } from "@wirecat/cli-base"
+import { annotate, overrideSharedContract } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
-import { afterEach, describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 import {
   catalogFiles,
   documentIngestion,
@@ -19,6 +20,7 @@ import type { Body } from "../../envelope.js"
 import {
   addDocumentCommands,
   type CatalogTreeSource,
+  catalogSource,
   catalogTree,
   type DocumentKnowledgePort,
   type DocumentWords,
@@ -29,7 +31,14 @@ import {
   FAKE_FOLDER,
   type FakeDocumentSource,
   fakeDocumentSource,
+  fakeFile,
 } from "./index.js"
+
+const engine = vi.hoisted(() => ({ sync: vi.fn() }))
+vi.mock("../../../documents.js", async (importOriginal) => {
+  const real = await importOriginal<typeof import("../../../documents.js")>()
+  return { ...real, syncMirrors: engine.sync }
+})
 
 const stores: MessageStore[] = []
 afterEach(async () => {
@@ -225,9 +234,11 @@ const reference = async (source: FakeDocumentSource = fakeDocumentSource(PRINCIP
         }),
         save: () => {},
       }),
-      connect: async () => {
-        throw new CliError("configuration_error", "the synthetic provider takes no writes")
-      },
+      connect: async () => ({
+        sync: {} as never,
+        startToken: async () => "cursor-0",
+        changes: async () => ({ cursor: "cursor-1", items: [] }),
+      }),
       endsOnStop: () => undefined,
     },
   })
@@ -244,12 +255,25 @@ const reference = async (source: FakeDocumentSource = fakeDocumentSource(PRINCIP
 }
 
 describe("documents source contract over the fake provider", () => {
-  for (const c of documentSourceContract(() => ({
-    source: fakeDocumentSource(),
-    root: "root",
-    isFolder,
-    missing: "gone",
-  })))
+  for (const c of documentSourceContract(() => {
+    const source = fakeDocumentSource()
+    return { source, root: "root", isFolder, missing: "gone", change: async () => source.put(fakeFile("c"), "new") }
+  }))
+    it(c.name, c.run)
+})
+
+const PAGE = "application/x-synthetic-page"
+const isPage = (file: SourceFile) => file.mime === PAGE
+
+describe("documents source contract over pages with sub-pages and no plain file", () => {
+  for (const c of documentSourceContract(() => {
+    const source = fakeDocumentSource()
+    for (const id of ["root", "nested", "a", "b"]) source.files.delete(id)
+    source.put(fakeFile("root", [], PAGE))
+    source.put(fakeFile("child", ["root"], PAGE), "a page with its own text")
+    source.put(fakeFile("grandchild", ["child"], PAGE), "a page below it")
+    return { source, root: "root", isFolder: isPage, isDocument: isPage, missing: "gone" }
+  }))
     it(c.name, c.run)
 })
 
@@ -259,6 +283,37 @@ describe("documents commands contract over a reference CLI", () => {
     return { program: cli.program, words: WORDS, run: cli.run, document: "a", word: "quarterly", mirrors: true }
   }))
     it(c.name, c.run)
+})
+
+describe("documents commands contract over a broken CLI", () => {
+  it("refuses a CLI that overrides a shared command", async () => {
+    const cli = await reference()
+    const search = must(cli.program.commands.find((one) => one.name() === "search"))
+    overrideSharedContract(search, "a broken CLI", (one) => one.description("something else"))
+    const [tree] = documentCommandsContract(() => ({
+      program: cli.program,
+      words: WORDS,
+      run: cli.run,
+      document: "a",
+      word: "quarterly",
+      mirrors: true,
+    }))
+    await expect(must(tree).run()).rejects.toThrow("overrides no shared contract")
+  })
+  it("refuses a CLI whose shared command reads where cli-core writes", async () => {
+    const cli = await reference()
+    const sync = must(cli.program.commands.find((one) => one.name() === "sync"))
+    annotate(sync, { effects: { remote: "none", local: "read" } })
+    const [tree] = documentCommandsContract(() => ({
+      program: cli.program,
+      words: WORDS,
+      run: cli.run,
+      document: "a",
+      word: "quarterly",
+      mirrors: true,
+    }))
+    await expect(must(tree).run()).rejects.toThrow("reads and writes what cli-core says")
+  })
 })
 
 describe("shared documents commands", () => {
@@ -272,9 +327,11 @@ describe("shared documents commands", () => {
     const refused = await cli.run(["mirrors", "sync", "--replace", "--keep", "box"])
     expect(refused.exit).toBe(1)
     expect((refused.error as Error).message).toContain("cannot be combined with --keep box or both")
-    expect((await cli.run(["mirrors", "sync", "--keep", "box"])).error).toMatchObject({
-      message: "the synthetic provider takes no writes",
-    })
+    engine.sync.mockResolvedValue({ items: [], issues: [] })
+    expect((await cli.run(["mirrors", "sync", "--keep", "box"])).exit).toBe(0)
+    expect(engine.sync).toHaveBeenCalledWith(
+      expect.objectContaining({ keep: "remote", remote: "box", recreate: false }),
+    )
   })
 
   it("mirrors add keeps one mirror per folder pair, and list narrows it by id", async () => {
@@ -345,17 +402,29 @@ describe("catalog tree", () => {
       kind,
       parents: parents.map((p) => `${p}.md`),
     }) as CatalogEntry
-  const over = (entries: CatalogEntry[]): CatalogTreeSource & { reads: number } => {
-    const source = {
-      reads: 0,
-      get: async (externalId: string) => entries.find((one) => one.externalId === externalId),
-      children: async (externalId: string, max?: number) => {
-        source.reads += 1
-        const found = entries.filter((one) => one.parents.includes(externalId))
-        return max === undefined ? found : found.slice(0, max)
-      },
-    }
-    return source
+  const over = (entries: CatalogEntry[]): CatalogTreeSource => ({
+    get: async (externalId) => entries.find((one) => one.externalId === externalId),
+    children: async (externalId, { limit, offset }) => {
+      const found = entries.filter((one) => one.parents.includes(externalId))
+      return { items: found.slice(offset, offset + limit), hasMore: found.length > offset + limit }
+    },
+  })
+  const fileRows = (count: number, parent: string) =>
+    Array.from({ length: count }, (_, i) => ({
+      externalId: `${parent}-${i}.md`,
+      name: `${parent}-${i}`,
+      parents: [`${parent}.md`],
+      kind: "file" as const,
+      url: `https://example.invalid/${parent}-${i}`,
+    }))
+  const upsert = async (
+    cli: Awaited<ReturnType<typeof reference>>,
+    rows: Parameters<MessageStore["catalog"]["upsert"]>[1],
+  ) => {
+    const collection = must(await cli.collection())
+    for (let start = 0; start < rows.length; start += 200)
+      await cli.store.catalog.upsert(collection, rows.slice(start, start + 200))
+    return collection
   }
 
   it("walks the chosen folders to the depth, marks the branches it cut and refuses cycles, gaps and bad depths", async () => {
@@ -374,28 +443,107 @@ describe("catalog tree", () => {
     await expect(catalogTree(over([]), ["absent.md"], 5)).rejects.toMatchObject({
       details: { reason: "catalog.not-found" },
     })
+    await expect(catalogTree(over([entry("leaf", [], "file")]), ["leaf.md"], 5)).rejects.toMatchObject({
+      details: { reason: "catalog.not-found" },
+    })
     await expect(catalogTree(over([]), [], 51)).rejects.toMatchObject({ details: { reason: "catalog.depth-invalid" } })
   })
 
-  it("lists a folder of 12 000 files whole, page by page from the store", async () => {
+  it("takes a page with sub-pages as a root, whatever its kind", async () => {
+    const tree = await catalogTree(
+      over([entry("page", [], "file"), entry("sub", ["page"], "file"), entry("subsub", ["sub"], "file")]),
+      ["page.md"],
+      5,
+    )
+    expect(tree[0]?.children[0]?.item.id).toBe("sub")
+    expect(tree[0]?.children[0]?.children[0]?.item.id).toBe("subsub")
+  })
+
+  it("shows an entry in two folders once in full and marks the second place as a repeat", async () => {
+    const tree = await catalogTree(
+      over([
+        entry("root", []),
+        entry("x", ["root"]),
+        entry("y", ["root"]),
+        entry("shared", ["x", "y"]),
+        entry("deep", ["shared"], "file"),
+      ]),
+      ["root.md"],
+      5,
+    )
+    const [x, y] = tree[0]?.children ?? []
+    expect(x?.children[0]).toMatchObject({ item: { id: "shared" }, children: [{ item: { id: "deep" } }] })
+    expect(y?.children[0]).toMatchObject({ item: { id: "shared" }, children: [], repeated: true })
+  })
+
+  it("refuses a tree over its entry limit and names how to narrow it", async () => {
+    await expect(
+      catalogTree(
+        over([entry("root", []), entry("a", ["root"]), entry("b", ["root"]), entry("c", ["root"])]),
+        ["root.md"],
+        1,
+        3,
+      ),
+    ).rejects.toMatchObject({
+      message: expect.stringMatching(/smaller FOLDER or lower --depth/),
+      details: { reason: "catalog.tree-limit" },
+    })
+  })
+
+  it("reads only the folder it shows out of an account of 12 000 entries", async () => {
     const cli = await reference()
     await cli.run(["sync"])
-    const collection = must(await cli.collection())
-    const files = Array.from({ length: 12_000 }, (_, i) => ({
-      externalId: `f${i}.md`,
-      name: `f${i}`,
-      parents: ["root.md"],
-      kind: "file" as const,
-      url: `https://example.invalid/f${i}`,
-    }))
-    for (let start = 0; start < files.length; start += 200)
-      await cli.store.catalog.upsert(collection, files.slice(start, start + 200))
-    await cli.store.catalog.upsert(collection, [{ externalId: "root.md", name: "root", parents: [], kind: "folder" }])
+    const collection = await upsert(cli, [
+      ...fileRows(12_000, "big"),
+      { externalId: "big.md", name: "big", parents: [], kind: "folder" },
+      { externalId: "small.md", name: "small", parents: [], kind: "folder" },
+      ...fileRows(3, "small"),
+    ])
+    let read = 0
+    const source = catalogSource(
+      {
+        get: (_principal, id) => cli.store.catalog.get(collection, `${id}.md`),
+        list: async (_principal, query) => {
+          const page = await cli.store.catalog.list(collection, { ...query, parent: `${must(query?.parent)}.md` })
+          read += page.items.length
+          return page
+        },
+      },
+      PRINCIPAL,
+    )
+    const tree = await catalogTree(source, ["small.md"], 5)
+    expect(tree[0]?.children.map((child) => child.item.id)).toEqual(["small-0", "small-1", "small-2"])
+    expect(read).toBe(3)
+  })
+
+  it("answers catalog.tree-limit for a folder of 12 000 files, which the store now holds", async () => {
+    const cli = await reference()
+    await cli.run(["sync"])
+    await upsert(cli, [
+      ...fileRows(12_000, "root"),
+      { externalId: "root.md", name: "root", parents: [], kind: "folder" },
+    ])
     const answer = await cli.run(["catalog", "tree", "--depth", "1"])
-    expect(answer.error).toBeUndefined()
-    const tree = answer.printed[0] as {
-      items: { children: { item: { id: string } }[] }[]
-    }
-    expect(tree.items[0]?.children.filter((child) => /^f\d+$/.test(child.item.id))).toHaveLength(12_000)
+    expect(answer.error).toMatchObject({ details: { reason: "catalog.tree-limit" } })
+    expect((await cli.run(["catalog", "tree", "--depth", "0"])).error).toBeUndefined()
+  })
+
+  it("marks a cut branch whatever its id holds, asking about the cut branches together", async () => {
+    const cli = await reference()
+    await cli.run(["sync"])
+    const odd = 'é "odd" (id):*'
+    await upsert(cli, [
+      { externalId: "top.md", name: "top", parents: [], kind: "folder" },
+      { externalId: `${odd}.md`, name: "odd", parents: ["top.md"], kind: "file" },
+      { externalId: "plain.md", name: "plain", parents: ["top.md"], kind: "folder" },
+      { externalId: "below.md", name: "below", parents: [`${odd}.md`], kind: "file" },
+    ])
+    const answer = await cli.run(["catalog", "tree", "top", "--depth", "1"])
+    const children = (answer.printed[0] as { items: { children: { item: { id: string }; truncated: boolean }[] }[] })
+      .items[0]?.children
+    expect(children?.map((child) => [child.item.id, child.truncated])).toEqual([
+      ["plain", false],
+      [odd, true],
+    ])
   })
 })

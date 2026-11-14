@@ -1,5 +1,6 @@
 import { annotate, sharedCommand } from "@wirecat/cli-base/commands"
 import type { Command } from "commander"
+import { honoursDryRun } from "../dry-run-guard.js"
 import { FETCH, LOCAL_READ, LOCAL_WRITE } from "../effects.js"
 import { type Body, itemOf } from "../envelope.js"
 import { bindQuery, documentQueries, folderRow, termsOf } from "./queries.js"
@@ -22,7 +23,7 @@ const addDocumentFolderCommandsDefinition = (program: Command, helpers: Document
   const { output } = helpers
   const wording = wordsOf(helpers.words)
   const { prefix, text } = wording
-  const queries = documentQueries(wording)
+  const queries = documentQueries()
   const folders = annotate(program.command("folders"), { effects: LOCAL_READ }).description(text.folders)
   examples(
     annotate(folders.command("add"), { effects: FETCH })
@@ -55,7 +56,7 @@ const addDocumentFolderCommandsDefinition = (program: Command, helpers: Document
   return folders
 }
 
-const sharedFolderCommands = sharedCommand(addDocumentFolderCommandsDefinition)
+const sharedFolderCommands = honoursDryRun(sharedCommand(addDocumentFolderCommandsDefinition))
 
 /** `folders add|list|remove`: the folders the selected profile's sync imports. */
 export const addDocumentFolderCommands = (program: Command, helpers: DocumentFolderCommands): Command => {

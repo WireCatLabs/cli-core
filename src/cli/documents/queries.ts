@@ -21,7 +21,6 @@ import {
   typedQuery,
   withQuery,
 } from "../list-query.js"
-import type { Words } from "./words.js"
 
 const registry = (
   entity: string,
@@ -48,16 +47,17 @@ export const linkRow = v.looseObject({
   confirmed: v.boolean(),
   origin: v.picklist(["file", "owner", "suggested", "message"]),
 })
-export const identityRowOf = (words: Pick<Words, "remote" | "identityRoles">) =>
-  v.looseObject({
-    [`${words.remote}_id`]: v.nullable(v.string()),
-    role: v.picklist(words.identityRoles),
-    person: v.nullable(v.record(v.string(), v.unknown())),
-  })
+/** Who a document names, in every documents CLI: the provider's id of the account, the provider, and the person. */
+export const IDENTITY_ROLES = ["owner", "last-editor"] as const
+export const identityRow = v.looseObject({
+  remote_id: v.nullable(v.string()),
+  provider: v.string(),
+  role: v.picklist(IDENTITY_ROLES),
+  person: v.nullable(v.record(v.string(), v.unknown())),
+})
 
 /** The list queries of the shared documents commands: the same entities in every documents CLI. */
-export const documentQueries = (words: Words) => {
-  const identity = `${words.remote}_id`
+export const documentQueries = () => {
   return {
     folders: registry("selected_folder", folderRow, ["id"], { id: "id:FOLDER_ID" }),
     mirrors: registry("mirror", mirrorRow, ["id", "path", "folder"], {
@@ -73,9 +73,9 @@ export const documentQueries = (words: Words) => {
       origin: "origin:owner",
       confirmed: "confirmed:true",
     }),
-    identities: registry("document_identity", identityRowOf(words), [identity, "role"], {
-      [identity]: `${identity}:example`,
-      role: `role:${words.identityRoles[0]}`,
+    identities: registry("document_identity", identityRow, ["remote_id", "role"], {
+      remote_id: "remote_id:example",
+      role: "role:owner",
     }),
   }
 }

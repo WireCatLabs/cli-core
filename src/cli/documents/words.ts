@@ -18,8 +18,6 @@ export interface DocumentWords {
   place?: string
   /** The store's provider name, which an issue names as its `source` (`google-drive`). */
   source: string
-  /** The roles `identities list` answers; owner and last editor when absent. */
-  identityRoles?: readonly [string, ...string[]]
   /** Texts that differ from the ones made from the words above. */
   text?: Partial<DocumentTexts>
 }
@@ -41,6 +39,7 @@ export interface DocumentTexts {
   identityArgument: string
   mirrors: string
   mirrorsAdd: string
+  mirrorsSync: string
   mirrorParent: string
 }
 
@@ -58,7 +57,6 @@ export const wordsOf = (words: DocumentWords): Words => {
     ...words,
     profile,
     place,
-    identityRoles: words.identityRoles ?? ["owner", "last-editor"],
     prefix: `${words.app} ${profile}`,
     text: {
       documents: `read imported documents and ${provider} documents`,
@@ -77,6 +75,7 @@ export const wordsOf = (words: DocumentWords): Words => {
       identityArgument: `${provider} account id, as identities list prints it`,
       mirrors: `keep local folders mirrored into ${place}`,
       mirrorsAdd: `mirror a local folder into ${place}`,
+      mirrorsSync: `sync both ways with ${place}; a part changed on both sides is reported`,
       mirrorParent: `the ${place} folder to write into, by id or URL`,
       ...words.text,
     },

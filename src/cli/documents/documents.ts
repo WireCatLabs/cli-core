@@ -5,6 +5,7 @@ import type { QueryAst } from "@wirecat/cli-base/query"
 import type { Command } from "commander"
 import type { SourceContent } from "../../documents.js"
 import { IMPORTED_DOCUMENT_QUERY } from "../../store/index.js"
+import { honoursDryRun } from "../dry-run-guard.js"
 import { LOCAL_READ, LOCAL_WRITE } from "../effects.js"
 import { type Body, itemOf, listOf } from "../envelope.js"
 import { listQuery, typedQuery, withQuery } from "../list-query.js"
@@ -116,4 +117,4 @@ const addLocalDocumentCommandsDefinition = (program: Command, helpers: LocalDocu
  * `documents list|show|export` over the selected profile's local copy, in the `documents` group it returns: the CLI
  * adds its live subcommands (`get`, `create`, …) to that group after these.
  */
-export const addLocalDocumentCommands = sharedCommand(addLocalDocumentCommandsDefinition)
+export const addLocalDocumentCommands = honoursDryRun(sharedCommand(addLocalDocumentCommandsDefinition))

@@ -10,6 +10,10 @@ export interface DocumentSourceFixture<M extends SourceFile = SourceFile> {
   root: string
   /** The provider's folder test, as the CLI passes it to `syncDocuments`. */
   isFolder(file: M): boolean
+  /** A folder that is also a document (a page with sub-pages), as the CLI passes it to `syncDocuments`. */
+  isDocument?(file: M): boolean
+  /** Makes a change on the provider's side (a new or edited file) for the change feed to list; absent skips that check. */
+  change?(): Promise<void>
   /** An id the provider does not know; absent skips that case. */
   missing?: string
 }
@@ -31,6 +35,10 @@ const walk = async <M extends SourceFile>({ source, root, isFolder }: DocumentSo
   }
   return [...seen.values()]
 }
+
+/** What the sync imports: a file, or a folder the provider calls a document too. */
+const isImported = <M extends SourceFile>(fixture: DocumentSourceFixture<M>, entry: M) =>
+  !fixture.isFolder(entry) || fixture.isDocument?.(entry) === true
 
 const isTime = (value: string | undefined) => value === undefined || !Number.isNaN(Date.parse(value))
 
@@ -65,8 +73,8 @@ export const documentSourceContract = <M extends SourceFile>(
         const fixture = await make()
         const entries = await walk(fixture)
         assert.ok(
-          entries.some((entry) => !fixture.isFolder(entry)),
-          "the root has at least one file below it",
+          entries.some((entry) => isImported(fixture, entry)),
+          "the root has at least one document below it",
         )
         for (const entry of entries) {
           assert.ok(entry.id && entry.name.trim(), `${entry.id} has an id and a name`)
@@ -78,10 +86,10 @@ export const documentSourceContract = <M extends SourceFile>(
       },
     },
     {
-      name: "content: a file's text, Markdown and tabs, under the file's own metadata",
+      name: "content: a document's text, Markdown, tabs and bytes, under its own metadata",
       async run() {
         const fixture = await make()
-        const files = (await walk(fixture)).filter((entry) => !fixture.isFolder(entry) && entry.canDownload)
+        const files = (await walk(fixture)).filter((entry) => isImported(fixture, entry) && entry.canDownload)
         assert.ok(files.length > 0, "the root has a file that can be downloaded")
         for (const file of files.slice(0, 5)) {
           const content = await fixture.source.content(file.id)
@@ -91,17 +99,22 @@ export const documentSourceContract = <M extends SourceFile>(
           assert.ok(Array.isArray(content.tabs), "tabs is a list, empty for a document without tabs")
           for (const tab of content.tabs)
             assert.ok(typeof tab.id === "string" && typeof tab.title === "string" && typeof tab.text === "string")
+          const bytes = await fixture.source.bytes(file.id)
+          assert.ok(bytes instanceof Uint8Array, `bytes(${file.id}) is a Uint8Array`)
         }
       },
     },
     {
       name: "changes: a start token, then pages that each give the next cursor and say what was removed",
       async run() {
-        const { source } = await make()
+        const fixture = await make()
+        const { source } = fixture
         const token = await source.startToken()
         assert.ok(typeof token === "string" && token, "startToken() gives a cursor")
+        await fixture.change?.()
         const page = await source.changes(token)
         assert.ok(Array.isArray(page.items), "a change page has items")
+        if (fixture.change) assert.ok(page.items.length > 0, "the change made after startToken() is in the feed")
         assert.ok(typeof page.cursor === "string" && page.cursor, "a change page gives the next cursor")
         for (const item of page.items) {
           assert.equal(typeof item.removed, "boolean", `change ${item.id} says whether it was removed`)

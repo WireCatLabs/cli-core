@@ -3,6 +3,7 @@ import { annotate, sharedCommand } from "@wirecat/cli-base/commands"
 import { parseLucene, validateQuery } from "@wirecat/cli-base/query"
 import type { Command } from "commander"
 import { CATALOG_QUERY, type CatalogEntry, type CatalogQuery } from "../../store/index.js"
+import { honoursDryRun } from "../dry-run-guard.js"
 import { LOCAL_READ, LOCAL_WRITE } from "../effects.js"
 import { type Body, itemOf, listOf } from "../envelope.js"
 import type { DocumentKnowledgePort } from "./knowledge.js"
@@ -39,83 +40,139 @@ export interface CatalogTree {
   item: Pick<CatalogEntry, "ref" | "name" | "kind" | "url" | "content"> & { id: string }
   children: CatalogTree[]
   truncated: boolean
+  /** The entry is already in this answer (a file in two folders): its children are shown at its first place. */
+  repeated?: true
 }
 
-/** Reads one profile's catalog for `catalog tree`: an entry by its external id, and a folder's children. */
+/** How many entries one `catalog tree` answer holds before it asks for a smaller folder or depth. */
+export const CATALOG_TREE_LIMIT = 10_000
+const CATALOG_PAGE = 1000
+
+/** Reads one profile's catalog for `catalog tree`: an entry by its external id, and one page of its children. */
 export interface CatalogTreeSource {
   get(externalId: string): Promise<CatalogEntry | undefined>
-  /**
-   * The entries whose parents name this one, paged through the store with no cap on the total; at most `max` when
-   * given, which is all a branch below the depth needs to say it was cut.
-   */
-  children(externalId: string, max?: number): Promise<CatalogEntry[]>
+  children(
+    externalId: string,
+    page: { limit: number; offset: number },
+  ): Promise<{ items: CatalogEntry[]; hasMore: boolean }>
+  /** Which of these entries have children, in one read; the tree asks each one when absent. */
+  withChildren?(externalIds: string[]): Promise<Set<string>>
 }
 
-/**
- * Reads the account's whole catalog once, page by page. A `parent` filter scans every entry, so asking per folder
- * costs the square of the entries.
- */
-export const catalogSource = async (list: DocumentCatalog["list"], principal: string): Promise<CatalogTreeSource> => {
-  const entries = new Map<string, CatalogEntry>()
-  const children = new Map<string, CatalogEntry[]>()
-  for (let offset = 0; ; offset += 1000) {
-    const page = await list(principal, { limit: 1000, offset })
-    for (const entry of page.items) {
-      entries.set(entry.externalId, entry)
-      for (const parent of entry.parents) {
-        const siblings = children.get(parent)
-        if (siblings) siblings.push(entry)
-        else children.set(parent, [entry])
+const PARENT_BATCH = 200
+/** `parent:a OR parent:b …` over ids as they are: the values go into a parsed template, so none needs escaping. */
+const anyParent = (ids: string[]): CatalogQuery["ast"] => {
+  const ast = parseLucene(Array.from({ length: Math.max(2, ids.length) }, () => "parent:x").join(" OR "), {
+    defaultField: "none",
+  })
+  const clauses = (ast.root as { clauses: { node: { value: string } }[] }).clauses
+  clauses.forEach((clause, i) => {
+    clause.node.value = ids[Math.min(i, ids.length - 1)] as string
+  })
+  return validateQuery(ast, CATALOG_QUERY)
+}
+
+/** The tree's reads through the CLI's catalog, which takes ids without the `.md` the store's entries carry. */
+export const catalogSource = (
+  catalog: Pick<DocumentCatalog, "get" | "list">,
+  principal: string,
+): CatalogTreeSource => ({
+  get: (externalId) => catalog.get(principal, catalogId({ externalId })),
+  children: (externalId, page) => catalog.list(principal, { parent: catalogId({ externalId }), ...page }),
+  // Each read scans the account's catalog, so the branches cut at the depth are asked about 200 at a time.
+  withChildren: async (externalIds) => {
+    const found = new Set<string>()
+    for (let start = 0; start < externalIds.length; start += PARENT_BATCH) {
+      const batch = new Set(externalIds.slice(start, start + PARENT_BATCH))
+      const ast = anyParent([...batch].map((externalId) => catalogId({ externalId })))
+      for (let offset = 0; ; offset += CATALOG_PAGE) {
+        const page = await catalog.list(principal, { ast, limit: CATALOG_PAGE, offset })
+        for (const item of page.items) for (const parent of item.parents) if (batch.delete(parent)) found.add(parent)
+        if (!page.hasMore || batch.size === 0) break
       }
     }
-    if (!page.hasMore) break
-  }
-  return {
-    get: async (externalId) => entries.get(externalId),
-    children: async (externalId, max) => (children.get(externalId) ?? []).slice(0, max),
-  }
-}
+    return found
+  },
+})
 
+const tooLarge = (limit: number) =>
+  new CliError("validation_error", `the tree is over ${limit} entries; name a smaller FOLDER or lower --depth`, {
+    reason: "catalog.tree-limit",
+  })
+
+/**
+ * Builds the tree by reading each shown entry's children from the store, page by page, so what it holds is what it
+ * answers. Any entry can have children: a page with sub-pages is a `file`.
+ */
 export const catalogTree = async (
   source: CatalogTreeSource,
   roots: string[],
   depth: number,
+  limit = CATALOG_TREE_LIMIT,
 ): Promise<CatalogTree[]> => {
   if (!Number.isSafeInteger(depth) || depth < 0 || depth > 50)
     throw new CliError("validation_error", "tree depth must be between 0 and 50", { reason: "catalog.depth-invalid" })
-  const node = async (item: CatalogEntry, level: number, ancestors: Set<string>): Promise<CatalogTree> => {
-    if (ancestors.has(item.externalId))
-      throw new CliError("invalid_response", "local folder ancestry contains a cycle", { reason: "catalog.cycle" })
-    const found = await source.children(item.externalId, level < depth ? undefined : 1)
-    const next = new Set([...ancestors, item.externalId])
-    const children: CatalogTree[] = []
-    if (level < depth) for (const child of found) children.push(await node(child, level + 1, next))
-    return {
-      item: {
-        id: catalogId(item),
-        ref: item.ref,
-        name: item.name,
-        kind: item.kind,
-        url: item.url,
-        content: item.content,
-      },
-      children,
-      truncated: level >= depth && found.length > 0,
+  let nodes = 0
+  const seen = new Set<string>()
+  const cut: CatalogTree[] = []
+  const cutIds: string[] = []
+  const hasChildren = async (externalId: string) =>
+    (await source.children(externalId, { limit: 1, offset: 0 })).items.length > 0
+  const childrenOf = async (externalId: string) => {
+    const items: CatalogEntry[] = []
+    for (let offset = 0; ; offset += CATALOG_PAGE) {
+      const page = await source.children(externalId, { limit: CATALOG_PAGE, offset })
+      for (const item of page.items) items.push(item)
+      if (nodes + items.length > limit) throw tooLarge(limit)
+      if (!page.hasMore) return items
     }
+  }
+  const node = async (entry: CatalogEntry, level: number, ancestors: Set<string>): Promise<CatalogTree> => {
+    if (ancestors.has(entry.externalId))
+      throw new CliError("invalid_response", "local folder ancestry contains a cycle", { reason: "catalog.cycle" })
+    if (++nodes > limit) throw tooLarge(limit)
+    const tree: CatalogTree = {
+      item: {
+        id: catalogId(entry),
+        ref: entry.ref,
+        name: entry.name,
+        kind: entry.kind,
+        url: entry.url,
+        content: entry.content,
+      },
+      children: [],
+      truncated: false,
+    }
+    if (seen.has(entry.externalId)) return { ...tree, repeated: true }
+    seen.add(entry.externalId)
+    if (level >= depth) {
+      cut.push(tree)
+      cutIds.push(entry.externalId)
+      return tree
+    }
+    const next = new Set(ancestors).add(entry.externalId)
+    for (const child of await childrenOf(entry.externalId)) tree.children.push(await node(child, level + 1, next))
+    return tree
   }
   const trees: CatalogTree[] = []
   for (const id of roots) {
     const entry = await source.get(id)
-    if (entry?.kind !== "folder")
-      throw new CliError("not_found", "folder is not in the active local catalog; run catalog import or sync", {
+    if (!entry || (entry.kind !== "folder" && !(await hasChildren(entry.externalId))))
+      throw new CliError("not_found", "no folder or page with sub-pages by that id in the active local catalog", {
         reason: "catalog.not-found",
       })
     trees.push(await node(entry, 0, new Set()))
   }
+  const parents = source.withChildren
+    ? await source.withChildren(cutIds)
+    : new Set((await Promise.all(cutIds.map(async (id) => ((await hasChildren(id)) ? id : "")))).filter(Boolean))
+  cut.forEach((tree, i) => {
+    tree.truncated = parents.has(cutIds[i] as string)
+  })
   return trees
 }
 
-export const catalogId = (entry: CatalogEntry): string => entry.externalId.replace(/\.md$/, "")
+export const catalogId = (entry: Pick<CatalogEntry, "externalId">): string => entry.externalId.replace(/\.md$/, "")
 
 export const catalogOutput = (entry: CatalogEntry) => ({
   id: catalogId(entry),
@@ -161,7 +218,7 @@ const addDocumentCatalogCommandsDefinition = (program: Command, helpers: Documen
   const { output } = helpers
   const wording = wordsOf(helpers.words)
   const { prefix, text } = wording
-  const queries = documentQueries(wording)
+  const queries = documentQueries()
   const view = "catalog"
   const catalog = local(program.command("catalog")).description(text.catalog)
   const run = <T>(
@@ -255,7 +312,7 @@ const addDocumentCatalogCommandsDefinition = (program: Command, helpers: Documen
         await run(async (index, principal) => {
           const roots = id ? [helpers.id(id)] : helpers.roots()
           const tree = await catalogTree(
-            await catalogSource((owner, query) => index.catalog.list(owner, query), principal),
+            catalogSource(index.catalog, principal),
             roots.map((root) => `${root}.md`),
             args.depth,
           )
@@ -294,4 +351,4 @@ const addDocumentCatalogCommandsDefinition = (program: Command, helpers: Documen
 }
 
 /** `catalog import|show|list|search|tree|tags` over the selected profile's files and folders in the shared store. */
-export const addDocumentCatalogCommands = sharedCommand(addDocumentCatalogCommandsDefinition)
+export const addDocumentCatalogCommands = honoursDryRun(sharedCommand(addDocumentCatalogCommandsDefinition))

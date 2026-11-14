@@ -199,6 +199,7 @@ const OTHERS: Entry[] = [
   ["document.not-imported", "not_found", "the document is not imported in this source account"],
   ["document.not-found", "not_found", "no listed document has that reference"],
   ["meeting.not-found", "not_found", "no meeting row has that event or meeting reference"],
+  ["listing.too-large", "provider_error", "the listing is over its bound; the checkpoint was kept"],
   ["listing.source-not-found", "not_found", "a source: term names no account holding what is listed"],
   validation("query.empty-window", "the time window ends before it starts, so no row can fall in it"),
   ["extraction.invalid-proposals", "invalid_response", "the model's memory proposals could not be used"],
@@ -223,6 +224,7 @@ const OTHERS: Entry[] = [
   ["catalog.not-found", "not_found", "the file or folder is not in the local catalog; run catalog import or sync"],
   validation("catalog.depth-invalid", "tree depth must be between 0 and 50"),
   ["catalog.cycle", "invalid_response", "local folder ancestry contains a cycle"],
+  validation("catalog.tree-limit", "the tree is over 10000 entries; name a smaller folder or lower --depth"),
   validation("export.exists", "the output file already exists"),
   ["profile.wrong-account", "authentication_error", "the signed-in source account does not match this profile"],
   validation("push.too-many-files", "the folder holds more files than one push takes"),
@@ -234,7 +236,7 @@ const OTHERS: Entry[] = [
     "the settings file's damage has more than one reading; nothing was changed, so it is fixed by hand",
   ],
   ["state.invalid", "configuration_error", "the saved sync state is unreadable or invalid; it is kept, not reset"],
-  ["sync.partial", "provider_error", "some calendars did not sync; the next sync retries them"],
+  ["sync.partial", "provider_error", "some sources did not sync; the next sync retries them"],
   validation("event.conflict", "the event changed at the provider since the last sync; sync and try again"),
   validation("event.notify-required", "the event has other attendees; say whether to notify them"),
   validation("remind.window", "--due-within is outside 1m to 1d"),
@@ -784,11 +786,11 @@ export interface AppErrors {
 const SHARED: FailureContext = { reasons: REASONS, details: DETAILS }
 const merged = new WeakMap<AppErrors, FailureContext>()
 
-/** The registry every error handler reads — the CLI's, MCP's and the meeting tools' — so none drops an app's keys. */
 const coreCodes = new Map(REASONS.map((entry) => [entry.reason, entry.code]))
 // A CLI still lists a reason it raised before the command moved into cli-core; the same code is the same failure.
 const sameAsCore = (entry: ErrorReason) => coreCodes.get(entry.reason) === entry.code
 
+/** The registry every error handler reads — the CLI's, MCP's and the meeting tools' — so none drops an app's keys. */
 export const failureContext = (errors?: AppErrors): FailureContext => {
   if (!errors) return SHARED
   const known = merged.get(errors)

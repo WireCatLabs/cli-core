@@ -4,6 +4,7 @@ import { type Command, Option } from "commander"
 import { type Complete, type DocumentKnowledge, extractDocumentMemories, type ImportedSource } from "../../documents.js"
 import { FACT_TYPES, MEMORY_KINDS } from "../../domain/knowledge.js"
 import type { Author, Decider, Fact, Memory } from "../../store/index.js"
+import { honoursDryRun } from "../dry-run-guard.js"
 import { LOCAL_READ, LOCAL_WRITE, REMOTE_WRITE } from "../effects.js"
 import { type Body, itemOf, listOf } from "../envelope.js"
 import { queryHelp, queryTerms, withQuery } from "../list-query.js"
@@ -12,7 +13,7 @@ import {
   documentQueries,
   FACT_QUERY,
   factItem,
-  identityRowOf,
+  identityRow,
   linkRow,
   MEMORY_QUERY,
   MEMORY_SEARCH_QUERY,
@@ -26,7 +27,10 @@ import { allOf, type DocumentWords, documentsGroup, examples, positive, wordsOf 
 /** The shared knowledge port, and what only the provider knows: a document's context and the accounts seen on it. */
 export interface DocumentKnowledgePort extends DocumentKnowledge {
   context(principal: string, ref: string): Promise<unknown>
-  /** Filtered by `role` and `<remote>_id`, as `identities list` names them. */
+  /**
+   * The accounts seen on the document, as `identity` rows (`remote_id`, `provider`, `role`, `person`), filtered by
+   * `role` and `remote_id` as `identities list` names them.
+   */
   people(principal: string, ref: string, filter?: Record<string, string>): Promise<unknown>
   linkPerson(principal: string, ref: string, remoteId: string, personRef: string): Promise<unknown>
 }
@@ -55,7 +59,7 @@ const addDocumentKnowledgeCommandsDefinition = (program: Command, helpers: Docum
   const { run, output, author, decider } = helpers
   const wording = wordsOf(helpers.words)
   const { prefix, text } = wording
-  const queries = documentQueries(wording)
+  const queries = documentQueries()
   const documentArgument = text.knowledgeArgument
   const scopes = ["personal", "work"]
   const documents = documentsGroup(program, wording)
@@ -416,7 +420,7 @@ const addDocumentKnowledgeCommandsDefinition = (program: Command, helpers: Docum
       `${prefix} identities list DOC_ID`,
     ]).argument("<document>", documentArgument),
     queries.identities,
-    identityRowOf(wording),
+    identityRow,
   ).action(async (doc: string, words: string[]) => {
     const filter = termsOf(words, queries.identities, "identities list")
     output(itemOf(await run(doc, (k, p, ref) => k.people(p, ref, filter))))
@@ -436,4 +440,4 @@ const addDocumentKnowledgeCommandsDefinition = (program: Command, helpers: Docum
  * `documents context`, `tags`, `relationships`, `notes`, `memories`, `facts` and `identities` over one imported
  * document of the selected profile: the same commands, options and answers in every documents CLI.
  */
-export const addDocumentKnowledgeCommands = sharedCommand(addDocumentKnowledgeCommandsDefinition)
+export const addDocumentKnowledgeCommands = honoursDryRun(sharedCommand(addDocumentKnowledgeCommandsDefinition))

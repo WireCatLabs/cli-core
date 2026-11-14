@@ -1,6 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import { annotate, sharedCommand } from "@wirecat/cli-base/commands"
 import type { Command } from "commander"
+import { honoursDryRun } from "../dry-run-guard.js"
 import { FETCH, LOCAL_READ } from "../effects.js"
 import { type Body, itemOf } from "../envelope.js"
 import { type DocumentWords, examples, positive, wordsOf } from "./words.js"
@@ -79,4 +80,4 @@ const addDocumentSyncCommandsDefinition = (program: Command, helpers: DocumentSy
 }
 
 /** `sync` into the shared store and `status` of the local copy, for the selected profile. */
-export const addDocumentSyncCommands = sharedCommand(addDocumentSyncCommandsDefinition)
+export const addDocumentSyncCommands = honoursDryRun(sharedCommand(addDocumentSyncCommandsDefinition))

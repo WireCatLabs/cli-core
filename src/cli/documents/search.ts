@@ -1,5 +1,6 @@
 import { annotate, sharedCommand } from "@wirecat/cli-base/commands"
 import type { Command } from "commander"
+import { honoursDryRun } from "../dry-run-guard.js"
 import { LOCAL_READ } from "../effects.js"
 import { type Body, itemOf } from "../envelope.js"
 import { type DocumentWords, examples, positive, wordsOf } from "./words.js"
@@ -54,4 +55,4 @@ const addDocumentSearchCommandDefinition = (program: Command, helpers: DocumentS
 }
 
 /** `search` over the selected profile's imported documents; a documents CLI has no messenger `search` group. */
-export const addDocumentSearchCommand = sharedCommand(addDocumentSearchCommandDefinition)
+export const addDocumentSearchCommand = honoursDryRun(sharedCommand(addDocumentSearchCommandDefinition))
