@@ -1,6 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import { parseLocator } from "../domain/locator.js"
 import type { Chat, Message, Page } from "../domain/models.js"
+import { fuseRanked } from "../search/fusion.js"
 import type { AccountKey, ChatsStore, MessageStore, ScoredHit, StoredHit } from "../store/store.js"
 import { messageOfEmail } from "../store/store.js"
 
@@ -46,16 +47,8 @@ export const withMailThreads = (store: MessageStore): MessageStore => {
   })
 }
 
-const before = (newest: boolean) => (a: ScoredHit, b: ScoredHit) => {
-  if (!newest) {
-    if ((a.exact ?? false) !== (b.exact ?? false)) return a.exact ? -1 : 1
-    if (a.score !== b.score) return a.score === null ? 1 : b.score === null ? -1 : b.score - a.score
-  }
-  return b.timestamp.localeCompare(a.timestamp)
-}
-
 /**
- * One page from mail stored as messages and mail in its own tables, in the order one search gives. An email
+ * One page from mail stored as messages and mail in its own tables, two word indexes fused by rank (`fuseRanked`). An email
  * imported again into the mail tables keeps its locator, so its older message copy is dropped.
  */
 export const mergeMail = (
@@ -65,7 +58,14 @@ export const mergeMail = (
   newest = false,
 ): Page<ScoredHit> => {
   const moved = new Set(mail.items.map(({ locator }) => locator))
-  const items = [...messages.items.filter(({ locator }) => !moved.has(locator)), ...mail.items].sort(before(newest))
+  const kept = messages.items.filter(({ locator }) => !moved.has(locator))
+  const items = newest
+    ? [...kept, ...mail.items].sort((a, b) => b.timestamp.localeCompare(a.timestamp))
+    : fuseRanked([kept, mail.items], (hit) => ({
+        exact: hit.exact,
+        ranked: hit.score !== null,
+        at: Date.parse(hit.timestamp),
+      }))
   return {
     items: items.slice(0, limit),
     hasMore: messages.hasMore || mail.hasMore || items.length > limit,

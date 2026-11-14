@@ -15,6 +15,7 @@ import type { PictureEmbedder } from "../images/picture/embedder.js"
 import { DEFAULT_IMAGE_MODEL, imageModel } from "../images/picture/models.js"
 import type { AppIdentity } from "../ports/app.js"
 import { entriesOfList, fitting, type SkippedSource, sourceOf } from "../search/account-list.js"
+import { RRF_K } from "../search/fusion.js"
 import { OWNER_NOTES } from "../search/groups.js"
 import { fieldsOfQuery as fieldsOf, meaningWords } from "../search/lucene/meaning-parts.js"
 import { plainQuery } from "../search/lucene/plain.js"
@@ -428,8 +429,6 @@ const MAX_LINE = 200
 const MAX_NOTES_OFFSET = 1000
 /** How deep each half is read before the two are merged. */
 const CANDIDATES = 50
-/** Reciprocal rank fusion's usual constant, as conversations use. */
-export const RRF_K = 60
 
 const firstLine = (text: string, query: string): string => {
   const words = query

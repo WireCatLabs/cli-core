@@ -4,9 +4,10 @@ import { join } from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
 import { formatLocator } from "../domain/locator.js"
 import type { AttachmentInput, EmailInput } from "../store/index.js"
-import { type AccountKey, type MessageStore, openStore } from "../store/store.js"
+import { type AccountKey, type MessageStore, openStore, type ScoredHit } from "../store/store.js"
 import { storeOnlyDeps } from "./deps.js"
 import { embeddingsService } from "./embeddings.js"
+import { mergeMail } from "./mail-search.js"
 import { searchStore } from "./messages-archive-search.js"
 import { personContext } from "./person-context.js"
 
@@ -541,5 +542,38 @@ describe("mail by meaning", () => {
     expect(hits.map(({ summary, chunk, locator }) => [summary.chatId, chunk.firstMessageId, locator])).toEqual([
       ["thread-2", "<three@example.com>", formatLocator({ ...MAIL, chat: "thread-2", message: "<three@example.com>" })],
     ])
+  })
+})
+
+describe("mergeMail", () => {
+  const hit = (id: string, score: number | null, minute: number, exact?: boolean): ScoredHit =>
+    ({
+      id,
+      chatId: "1",
+      locator: `msg:x/1/${id}`,
+      timestamp: new Date(Date.UTC(2026, 0, 1, 0, minute)).toISOString(),
+      score,
+      ...(exact === undefined ? {} : { exact }),
+    }) as ScoredHit
+  const ids = (page: { items: ScoredHit[] }) => page.items.map(({ id }) => id)
+
+  it("orders two indexes by each hit's place in its own list, never by their raw scores", () => {
+    const messages = { items: [hit("m1", 2, 1), hit("m2", 1, 2)], hasMore: false }
+    const mail = { items: [hit("e1", 90, 3), hit("e2", 80, 4), hit("e3", 70, 5)], hasMore: false }
+
+    expect(ids(mergeMail(messages, mail, 10))).toEqual(["e1", "m1", "e2", "m2", "e3"])
+  })
+
+  it("keeps exact hits first, an unranked transcript hit at its list's place, and time with nothing ranked", () => {
+    const messages = {
+      items: [hit("m1", 5, 1, true), hit("voice", null, 1, false), hit("plain", null, 9, false)],
+      hasMore: false,
+    }
+    const mail = { items: [hit("e1", 50, 3, false), hit("e2", null, 5, false)], hasMore: false }
+
+    expect(ids(mergeMail(messages, mail, 10))).toEqual(["m1", "e1", "e2", "voice", "plain"])
+    const unranked = { items: [hit("m1", null, 1), hit("m2", null, 6)], hasMore: false }
+    expect(ids(mergeMail(unranked, { items: [hit("e1", null, 4)], hasMore: false }, 10))).toEqual(["m2", "e1", "m1"])
+    expect(ids(mergeMail(messages, mail, 10, true))).toEqual(["plain", "e2", "e1", "m1", "voice"])
   })
 })
