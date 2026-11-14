@@ -140,19 +140,21 @@ const addMeetingCommandsDefinition = (program: Command, deps: MeetingCommandDeps
     .option("--page <n>", "page number", integer, 1)
     .action(async (words: string[], opts: { limit: number; page: number; backend?: Backend }, command: Command) => {
       const query = meetingsQuery(words.join(" "))
-      // The standard envelope has no place for the counts; what the reader must know is in `missing`.
-      const { server: _server, ...answer } = await meetingsListThrough(
-        deps.source,
-        deps.store,
-        {
-          accountId: deps.accountId,
-          limit: opts.limit,
-          offset: (opts.page - 1) * opts.limit,
-          ...(query ? { query } : {}),
-        },
-        access(command, opts.backend),
-      )
-      print(answer, command)
+      await deps.inRun(command, async () => {
+        // The standard envelope has no place for the counts; what the reader must know is in `missing` and `meta`.
+        const { server: _server, ...answer } = await meetingsListThrough(
+          deps.source,
+          deps.store,
+          {
+            accountId: deps.accountId,
+            limit: opts.limit,
+            offset: (opts.page - 1) * opts.limit,
+            ...(query ? { query } : {}),
+          },
+          access(command, opts.backend),
+        )
+        print(answer, command)
+      })
     })
   backendOption(
     output(
@@ -162,21 +164,24 @@ const addMeetingCommandsDefinition = (program: Command, deps: MeetingCommandDeps
         .addHelpText("after", `${SAVE_HELP}\n${BACKEND_HELP}`),
     ),
   ).action(async (meeting: string, opts: { backend?: Backend }, command: Command) => {
-    const shown = await meetingShowThrough(
-      deps.source,
-      deps.store,
-      deps.accountId,
-      meeting,
-      access(command, opts.backend),
-    )
-    const { item } = await meetingDetailsBody(deps.store, shown.details)
-    print(
-      {
-        item: shown.foundIn ? { ...item, found_in: shown.foundIn } : item,
-        ...(shown.missing ? { missing: shown.missing } : {}),
-      },
-      command,
-    )
+    await deps.inRun(command, async () => {
+      const shown = await meetingShowThrough(
+        deps.source,
+        deps.store,
+        deps.accountId,
+        meeting,
+        access(command, opts.backend),
+      )
+      const { item } = await meetingDetailsBody(deps.store, shown.details)
+      print(
+        {
+          item: shown.foundIn ? { ...item, found_in: shown.foundIn } : item,
+          ...(shown.missing ? { missing: shown.missing } : {}),
+          ...(shown.meta ? { meta: shown.meta } : {}),
+        },
+        command,
+      )
+    })
   })
   output(
     annotate(group.command("transcript"), { effects: LOCAL_READ, output: { entity: "meeting_transcript" } })

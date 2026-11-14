@@ -226,6 +226,7 @@ describe("meetings list reads the service and the store at once", () => {
     )
     expect(many.asked).toHaveLength(3)
     expect(capped.missing).toEqual([{ field: "server", why: expect.stringContaining("asked 3 time(s)") }])
+    expect(capped.meta).toEqual({ truncated: true })
 
     const paged = serviceOf([ROADMAP, WEEKLY, LOCAL], { pageSize: 1 })
     const answer = await (await fixture(paged.source)).run("list")
@@ -243,6 +244,10 @@ describe("meetings list reads the service and the store at once", () => {
     expect(offline.asked).toHaveLength(0)
     expect(titles(answer)).toEqual([["Example retro", "archive"]])
     expect(answer.missing).toEqual([{ field: "server", why: expect.stringContaining("--offline") }])
+    expect(answer.meta).toEqual({
+      complete: false,
+      issues: [{ code: "permission_error", reason: "meetings.server-offline", source: "Example Meet" }],
+    })
 
     const signedOut = serviceOf([ROADMAP], { fail: new CliError("authentication_error", "sign in first") })
     const out = await fixture(signedOut.source)
@@ -250,6 +255,7 @@ describe("meetings list reads the service and the store at once", () => {
     const fallback = await out.run("list")
     expect(titles(fallback)).toEqual([["Example retro", "archive"]])
     expect(fallback.missing).toEqual([{ field: "server", why: expect.stringContaining("not signed in") }])
+    expect(fallback.meta).toMatchObject({ complete: false, issues: [{ reason: "meetings.server-signed-out" }] })
     await expect(out.run("list", "--backend", "server")).rejects.toMatchObject({ code: "authentication_error" })
     await expect(quiet.run("--offline", "list", "--backend", "server")).rejects.toMatchObject({
       code: "validation_error",
@@ -273,6 +279,7 @@ describe("meetings list reads the service and the store at once", () => {
     const answer = await run("list")
     expect(titles(answer)).toEqual([["Example retro", "archive"]])
     expect(answer.missing).toEqual([{ field: "server", why: expect.stringContaining("cannot be asked") }])
+    expect(answer.meta).toBeUndefined()
     await expect(run("list", "--backend", "server")).rejects.toMatchObject({ code: "validation_error" })
   })
 

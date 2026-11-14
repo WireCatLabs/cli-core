@@ -1,6 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import { dateRange, type Predicate, type QueryAst, type QueryNode, timezoneOf } from "@wirecat/cli-base/query"
-import type { Missing } from "@wirecat/cli-base/standards"
+import type { Issue, Meta, Missing } from "@wirecat/cli-base/standards"
 import type { MeetingItem } from "./item.js"
 import { saveSourceMeeting } from "./pull.js"
 import { MeetingError, type MeetingList, meetingsList } from "./reads.js"
@@ -53,6 +53,21 @@ interface ServerStep {
   /** Store meeting id → whether the store held it before the service returned it. */
   found: Map<number, Exclude<FoundIn, "archive">>
   missing: Missing[]
+  /** What the host's `meta` says of it: not complete when the service could not be read, cut at the call cap. */
+  meta?: Partial<Meta>
+}
+
+// A source that has no live read, or no upcoming meetings, answers in full what it can: only a failed read is partial.
+const ISSUES: Partial<Record<MeetingServerSkip, [Issue["code"], string]>> = {
+  offline: ["permission_error", "meetings.server-offline"],
+  read_only: ["permission_error", "meetings.server-read-only"],
+  not_signed_in: ["authentication_error", "meetings.server-signed-out"],
+  refused: ["permission_error", "meetings.server-refused"],
+  failed: ["provider_error", "meetings.server-failed"],
+}
+const metaOf = (reason: MeetingServerSkip, provider: string): Partial<Meta> | undefined => {
+  const issue = ISSUES[reason]
+  return issue && { complete: false, issues: [{ code: issue[0], reason: issue[1], source: provider }] }
 }
 
 const WHY: Record<MeetingServerSkip, (provider: string) => string> = {
@@ -195,6 +210,8 @@ export const askServerForList = async (
     step.report.skipped = reason
     step.report.complete = false
     step.missing.push({ field: "server", why: WHY[reason](provider) })
+    const meta = metaOf(reason, provider)
+    if (meta) step.meta = meta
     return step
   }
   if (!source?.find || !source.finds) return skip("unsupported")
@@ -243,6 +260,7 @@ export const askServerForList = async (
     }
   }
   if (!step.report.complete) {
+    step.meta = { truncated: true }
     const { calls, returned } = step.report
     step.missing.push({
       field: "server",
@@ -267,7 +285,7 @@ const anyId = (ids: number[]): QueryNode => {
 }
 
 /** `meetings list` with the service asked first, as `--backend` says; the store's query and paging decide. */
-export type MeetingListThrough = MeetingList & { server?: MeetingServerReport }
+export type MeetingListThrough = MeetingList & { server?: MeetingServerReport; meta?: Partial<Meta> }
 
 export const meetingsListThrough = async (
   source: MeetingSource | undefined,
@@ -277,7 +295,11 @@ export const meetingsListThrough = async (
 ): Promise<MeetingListThrough> => {
   const step = await askServerForList(source, store, filter.accountId, filter.query, access)
   if (!step) return meetingsList(store, filter)
-  const extras = { server: step.report, ...(step.missing.length ? { missing: step.missing } : {}) }
+  const extras = {
+    server: step.report,
+    ...(step.missing.length ? { missing: step.missing } : {}),
+    ...(step.meta ? { meta: step.meta } : {}),
+  }
   let narrowed = filter
   if (access.backend === "server") {
     const ids = [...step.found.keys()]
@@ -328,6 +350,7 @@ export interface MeetingShowThrough {
   foundIn?: FoundIn
   server?: MeetingServerReport
   missing?: Missing[]
+  meta?: Partial<Meta>
 }
 
 /**
@@ -356,11 +379,13 @@ export const meetingShowThrough = async (
     if (!stored) throw error instanceof CliError && reason !== "failed" ? error : notFound()
     step.report.skipped = reason
     step.report.complete = false
+    const meta = metaOf(reason, provider)
     return {
       details: stored,
       foundIn: "archive",
       server: step.report,
       missing: [{ field: "server", why: WHY[reason](provider) }],
+      ...(meta ? { meta } : {}),
     }
   }
   const providerId = stored?.meeting.externalId ?? (meeting.trim().startsWith("meeting:") ? undefined : meeting.trim())
