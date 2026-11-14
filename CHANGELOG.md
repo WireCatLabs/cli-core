@@ -5,6 +5,94 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## 0.663.0 — 14.11.2026
+
+### Added
+
+- **`stats calls show` reports a business's phone calls as one JSON answer (`call_stats`).** A CLI whose meetings are
+  calls (pbx, beeline) mounts it with `addCallStatsCommand` from `@wirecat/cli-core/cli`. It counts calls by
+  direction and outcome; per employee the calls placed, answered and rung but not answered, with talk and wait time;
+  calls by hour and by day in `--timezone`; missed incoming calls and whether the client was called back within
+  `--within` (default 1d), even when the callback falls after `--until-time`; and answered calls shorter than 30
+  seconds. A number the phone system does not record, such as Beeline's outcome and wait, is left out and
+  counted under `known`, never shown as zero. The parts are separate: `callOf` reads a meeting as a call, `aggregateCallStats` is
+  the arithmetic, `meetingCalls` on the store reads the selection, and `readCallStats` joins them.
+- **A synced node can be a folder and a document at once.** `syncDocuments` takes an optional
+  `isDocument(file)`: a folder it answers yes for, such as a Notion or Confluence page with sub-pages, is walked
+  for its children and imported itself, a selected root page included. Without it nothing changes: Drive's
+  folders are still only walked. See [DOCUMENTS.md, "Bind a provider"](docs/dev/DOCUMENTS.md#bind-a-provider).
+- **Any documents provider gets documents accounts, not only Google Drive.** A CLI whose provider entry has
+  kind `documents` (and is not `imported`) can call `notes.documentsAccount` and `documentIngestion({ provider })`
+  for its own principals, and `documentsAccounts()` lists them beside Drive's. A document whose front matter names
+  such a provider in `source` is kept as Drive's are: placed by its catalog parents, never joined by content to a
+  copy in a notes folder, and its `sourceUrl` and `modifiedAt` stand in when no file row gives them. `google-drive`
+  is now in the provider seed, so Drive behaves the same before drive has written its entry. See
+  [DOCUMENTS.md, "Bind a provider"](docs/dev/DOCUMENTS.md#bind-a-provider).
+
+### Changed — may break callers
+
+- **The store has no ceiling of 10 000 entries on a documents account any more** (owner's ruling, 2026-11-14). `catalog.list`
+  no longer refuses an account over 10 000 entries or 32 MB of metadata, `catalog.reconcile` takes any number of
+  ids, and `documentIngestion`'s catalog import takes any number of files, written 200 at a time. A sync no longer
+  reads every document of the account into memory before its first save: each save and removal looks up its one
+  document with the new `notes.fileNote(folderId, path)`. One catalog write still takes at most 200 entries and one
+  list page at most 1000, and a sync still walks at most the `maxEntries` its CLI passes (drive passes 10 000), so
+  a CLI raises that to sync more. Speed and memory at 10 000, 50 000 and 100 000 entries are measured in
+  [cli-testing](https://github.com/WireCatLabs/cli-testing/tree/main/performance/documents/catalog-scale).
+  A store that implements `NotesStore` itself must add `fileNote`. The `catalog.scope-limit` reason is gone;
+  nothing raised it any more. The `observed` callback is the only reason the import reads its entries back, so an
+  import without one no longer does.
+- **`meetings` commands take the program's `--json [fields]` and `--jsonl`,** not their own on/off flags, so
+  `meetings list --json id,title` keeps those fields and `--json --jsonl` together is no longer refused.
+- **Lists without `--limit` show the configured `defaults.limit`** (20 unless set), capped at the command's maximum,
+  not their own number: `meetings list`, `events list`, `search events`, `search meetings` (also inside
+  `meetings batch`), `runs list`, `search runs`, admin reports, rankings evidence, `stats messages counters`,
+  `metadata sync` and `tags rebuild` (these two drop from 50 to 20). The MCP tools `meetings_list`, `events_list` and
+  `search_meetings` page by the host's configured limit, not 100.
+- **Hosts pass `pagingOf`** (exported from `@wirecat/cli-core/cli`) to `addMeetingCommands` and
+  `addMeetingSearchCommand`. Changed signatures: `meetingHitSearchRequest(query, flags, limit, signal?)`,
+  `prepareMeetingBatch(input, reader, meta, limit)`, `callMeetingTool(store, name, input, { limit, failure? })`,
+  `callCalendarTool(…, { accountIds, limit, … })`, `callMeetingSearchTool(search, input, { limit, signal?,
+  failure? })`. `flagPaging` in `@wirecat/cli-core/meetings/testing` pages bare test roots.
+- **`search events --cursor 0` is refused;** a cursor comes from `page.next_cursor`.
+- **`zonedTime` is `typedTime`** and no longer demands a zone.
+- **Moderation needs a named profile** and never falls back to `default`; a missing one lists the profiles to name.
+- **`factsOf` (mail) is async** and takes a required "written to" lookup.
+- **`find` also matches words shorter than three letters,** so `find AI bot` returns fewer, more exact hits.
+- **Time errors read** `--x takes an ISO 8601 time, today, yesterday, or 30m, 2h, 1d ago — not "…"` (and `… from
+  now` for future times).
+- **Needs `@wirecat/cli-base` 0.100.0,** whose query dates take a time without seconds or without an offset.
+- **`store clear --allow-dangerous` and `admin moderate --allow-dangerous` are the owner's alone.** Their MCP tools
+  no longer take `allow_dangerous`, as with every other delete that cannot be undone: an agent previews with
+  `dry_run`, and the owner runs the command in a terminal.
+
+### Fixed
+
+- **Every time flag takes one grammar:** ISO with or without seconds and zone, a space for `T`, a date alone,
+  `today`, `yesterday`, `30m`/`2h`/`7d`. This now holds for `meetings sync`, `search meetings`, `meetings prepare`,
+  `meetings scheduled` (CLI and MCP), the media archive (`download`, `jobs install --since-time`,
+  `move --before-time`) and `schedule --at-time`. One parser reads every future time.
+- **A list query's dates read the computer's zone** for every list (`created_at>"2026-11-14 23:00"` too), and the
+  answer names it in `meta.timezone`.
+- **The MCP review and catch-up prompts pass `since` as a full instant,** so `2026-11-13T18:00+01:00` and `2h` work.
+- **Mail presets count a correspondent from stored outgoing mail too,** so a resumed sync, or an account synced
+  without Sent, no longer skips their new mail.
+- **`--discover` never fails with "use a longer prefix"** on words the user typed whole, and `search all` keeps its
+  messages part.
+- **Trigram searches treat ё and е as one letter** (`find`, `chats list title:`, people and contacts search).
+- **Mail beside messages, and files beside written notes, are ordered by rank in each source,** not by raw scores
+  from different indexes; conversations search too.
+- **`changes` reports a message a later fetch brought back after its deletion** as new.
+- **Removing an account clears its calendars, mail rules, reminders and proposed actions** instead of failing on a
+  foreign key.
+- **A command's own `--yes` or `--timeout` gets its value.** The root program declares both, and the value went to
+  the root alone, so `meetings repair --yes` only previewed, `models consents set --yes` and
+  `models search-consents set --yes` changed nothing, and `search-consents set --timeout 2m` stored no wait. Every
+  option a command shares with the root now gets the value too, through the command's own parser. A CLI that copied
+  the root's values itself can drop that copy.
+- **`tasks scan` and the CRM kit's `store apply` take `yes` over MCP.** Both read the root's `--yes`, which a tool
+  call cannot pass, so an agent could only preview them.
+
 ## 0.662.0 — 14.11.2026
 
 ### Added
