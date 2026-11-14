@@ -227,6 +227,7 @@ export { askBeforeWrite } from "./ask-before-write.js"
 export { actorOf } from "./author.js"
 export { type BaseStagesCommandOptions, baseStagesCommand } from "./base-stages-command.js"
 export type { ApiCommandInput, ApiCommands } from "./bot/api.js"
+export { type HttpApiExecutorOptions, type HttpApiRequest, httpApiExecutor, httpApiRequest } from "./bot/api-http.js"
 export {
   apiFlagOf,
   apiJson,
