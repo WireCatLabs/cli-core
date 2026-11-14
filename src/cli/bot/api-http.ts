@@ -6,7 +6,7 @@ import { providerRequest } from "../command-runs.js"
 import { outputFor } from "../context.js"
 import { itemOf, renderAnswer } from "../envelope.js"
 import type { ApiCommandInput } from "./api.js"
-import { apiJson, parseApiJson } from "./api-input.js"
+import { parseApiJson } from "./api-input.js"
 
 export interface HttpApiRequest {
   method: string
@@ -31,7 +31,10 @@ export interface HttpApiExecutorOptions {
   write: (command: Command, operation: ManifestOperation, send: () => Promise<unknown>) => Promise<unknown>
   /** A read's scope, such as the CLI's run; by default the request is just sent. */
   read?: (command: Command, operation: ManifestOperation, send: () => Promise<unknown>) => Promise<unknown>
-  /** The service's own refusal, from its status and parsed answer; `undefined` keeps the shared one. */
+  /**
+   * The service's own refusal, from its status and parsed answer; `undefined` keeps the shared one. Never asked for a
+   * write that failed on the service's side: that is always `outcome_unknown`.
+   */
   failure?: (status: number, answer: unknown, operation: ManifestOperation) => CliError | undefined
   maxBytes?: number
 }
@@ -43,21 +46,6 @@ const segment = (name: string, value: string | undefined): string => {
   if (value === undefined || value === "" || value === "." || value === "..")
     throw new CliError("validation_error", `${name} must name one item; an empty, "." or ".." id is refused`)
   return encodeURIComponent(value)
-}
-
-const jsonBody = (operation: ManifestOperation, input: ApiCommandInput): string | undefined => {
-  const fields = Object.entries(input.fields)
-  if (fields.length === 0) return input.body
-  const parsed = input.body?.trim() ? parseApiJson(input.body) : {}
-  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed))
-    throw new CliError("validation_error", `${operation.command} takes a JSON object as its body`)
-  const value = parsed as Record<string, unknown>
-  for (const [name, raw] of fields) {
-    if (Object.hasOwn(value, name))
-      throw new CliError("validation_error", `${name} was given in both the body and a flag`)
-    value[name] = raw
-  }
-  return apiJson(value)
 }
 
 /** One generated HTTP operation and its flags as the request they stand for; nothing is sent. */
@@ -75,6 +63,16 @@ export const httpApiRequest = (
       `${operation.command} sends ${operation.request.contentType}, which the generated command cannot send; nothing was sent`,
       { sent: false },
     )
+  if (operation.response?.sensitive)
+    throw new CliError(
+      "validation_error",
+      `${operation.command} answers with a credential, which the generated command never prints; nothing was sent`,
+      { sent: false },
+    )
+  if (Object.keys(input.fields).length > 0)
+    throw new CliError("configuration_error", `${operation.command} has body fields as flags, which HTTP cannot send`)
+  if (!/^\/(?!\/)/.test(binding.path))
+    throw new CliError("configuration_error", `${operation.command} has a path that does not start with one /`)
   const base = new URL(baseUrl)
   const path = binding.path.replace(/\{([^}]+)\}/g, (_, name: string) => segment(name, input.path[name]))
   const url = new URL(`${base.pathname.replace(/\/$/, "")}${path}`, base.origin)
@@ -85,7 +83,9 @@ export const httpApiRequest = (
     else url.searchParams.set(name, raw)
   }
   const headers = new Headers(input.headers)
-  const body = jsonBody(operation, input)
+  const body = input.body?.trim() ? input.body : undefined
+  // The command's checkBody may not parse the body; text that is not JSON never reaches the service.
+  if (body !== undefined) parseApiJson(body)
   if (body !== undefined) headers.set("content-type", "application/json")
   headers.set("accept", "application/json")
   return { method: binding.method, url, headers, ...(body === undefined ? {} : { body }) }
@@ -95,7 +95,7 @@ export const httpApiRequest = (
 const templateOf = (path: string): string => path.replace(/\{([^}]+)\}/g, ":$1")
 
 const answerOf = async (response: Response, maxBytes: number): Promise<unknown> => {
-  if (response.status === 204 || response.headers.get("content-length") === "0") return {}
+  if (response.status === 204 || !response.body || response.headers.get("content-length") === "0") return {}
   return readJsonResponse(response, { maxBytes })
 }
 
@@ -131,17 +131,25 @@ export const httpApiExecutor =
         end({ error: failed })
         throw failed
       }
-      const answer = await answerOf(response, options.maxBytes ?? LARGEST_ANSWER).catch((error: unknown) => {
-        if (response.ok) throw error
-        return undefined
-      })
+      const { status } = response
+      let answer: unknown
+      try {
+        answer = await answerOf(response, options.maxBytes ?? LARGEST_ANSWER)
+      } catch {
+        if (response.ok) {
+          end({ status })
+          throw unreadable(options.service, writes, status)
+        }
+      }
       if (!response.ok) {
         const failed =
-          options.failure?.(response.status, answer, operation) ?? refusal(options.service, operation, response, writes)
-        end({ status: response.status, error: failed })
+          status >= 500 && writes
+            ? refusal(options.service, operation, response, writes)
+            : (options.failure?.(status, answer, operation) ?? refusal(options.service, operation, response, writes))
+        end({ status, error: failed })
         throw failed
       }
-      end({ status: response.status })
+      end({ status })
       return answer
     }
     const answer = writes
@@ -162,6 +170,19 @@ const unanswered = (service: string, writes: boolean, error: unknown): CliError 
     : new CliError("network_error", `${service} could not be reached`, { retryable: true })
 }
 
+/** The service took the request; only its answer is lost, so a write must not look safe to send again. */
+const unreadable = (service: string, writes: boolean, status: number): CliError =>
+  writes
+    ? new CliError(
+        "outcome_unknown",
+        `${service} took the write but its answer could not be read; check it before repeating the write`,
+        {
+          status,
+          retryable: false,
+        },
+      )
+    : new CliError("invalid_response", `${service} sent an answer that could not be read`, { status, retryable: true })
+
 const refusal = (service: string, operation: ManifestOperation, response: Response, writes: boolean): CliError => {
   const { status } = response
   if (status === 429) {
@@ -176,6 +197,16 @@ const refusal = (service: string, operation: ManifestOperation, response: Respon
     return new CliError("outcome_unknown", `${service} failed during a write; check it before repeating the write`, {
       status,
       retryable: false,
+    })
+  if (status === 401)
+    return new CliError("authentication_error", `${service} refused the sign-in; sign in again`, {
+      reason: "auth.failed",
+      status,
+    })
+  if (status === 403)
+    return new CliError("permission_error", `${service} denied ${operation.command} to this account`, {
+      reason: "access.denied",
+      status,
     })
   return new CliError(statusToCode(status), `${service} refused ${operation.command} (HTTP ${status})`, {
     status,

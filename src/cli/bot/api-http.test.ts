@@ -5,8 +5,8 @@ import { Command } from "commander"
 import { describe, expect, it } from "vitest"
 import { run } from "../program.js"
 import { generatedApiCommand } from "./api.js"
-import { httpApiExecutor, httpApiRequest } from "./api-http.js"
-import { checkApiParameter } from "./api-input.js"
+import { type HttpApiExecutorOptions, httpApiExecutor, httpApiRequest } from "./api-http.js"
+import { checkApiBody, checkApiParameter } from "./api-input.js"
 
 const app = { command: "pages", appName: "pages-cli", envPrefix: "PAGES", description: "A test", version: "1" }
 
@@ -48,6 +48,16 @@ const upload: ManifestOperation = {
   request: { required: true, confidence: "contract", contentType: "multipart/form-data" },
 }
 
+const token: ManifestOperation = {
+  id: "create-a-token",
+  command: "create-a-token",
+  binding: { kind: "http", method: "POST", path: "/v1/oauth/token" },
+  effect: "write",
+  tags: [],
+  parameters: [],
+  response: { confidence: "contract", schema: "Token", sensitive: true },
+}
+
 interface Sent {
   method: string
   url: string
@@ -57,9 +67,17 @@ interface Sent {
 
 type Reply = (sent: Sent) => Response | Promise<Response>
 
+interface Hooks {
+  reply?: Reply
+  write?: () => void
+  read?: HttpApiExecutorOptions["read"]
+  failure?: HttpApiExecutorOptions["failure"]
+  path?: string
+}
+
 const call = async (
   words: string[],
-  { reply = () => Response.json({ object: "page", id: "p1" }), write }: { reply?: Reply; write?: () => void } = {},
+  { reply = () => Response.json({ object: "page", id: "p1" }), write, read, failure, path }: Hooks = {},
 ) => {
   const streams = captureStreams()
   const sent: Sent[] = []
@@ -80,9 +98,16 @@ const call = async (
       app,
       commands: () => [
         generatedApiCommand({
-          operations: [retrieve, update, remove, upload],
+          operations: [
+            path ? { ...retrieve, binding: { kind: "http", method: "GET", path } } : retrieve,
+            update,
+            remove,
+            upload,
+            token,
+          ],
           description: "every operation of the example API",
           checkParameter: (name, node, raw) => checkApiParameter(name, node, raw, {}),
+          checkBody: (operation, text) => checkApiBody(operation, text, {}),
           execute: httpApiExecutor({
             service: "Example",
             baseUrl: "https://api.example.com",
@@ -93,6 +118,8 @@ const call = async (
               journal.push(operation.id)
               return { operation_id: "op-1", result: await send() }
             },
+            ...(read ? { read } : {}),
+            ...(failure ? { failure } : {}),
           }),
         }),
       ],
@@ -215,5 +242,95 @@ describe("the generated HTTP API executor", () => {
     )
     expect(code).not.toBe(0)
     expect(streams.stderr.join("")).toContain("network.host-undeclared")
+  })
+
+  it("refuses an operation that answers with a credential before sending it", async () => {
+    const result = await call(["api", "--store-token", "personal", "create-a-token", "--json"])
+    expect(result.code).toBe(2)
+    expect(result.err).toContain("credential")
+    expect(result.sent).toEqual([])
+  })
+
+  it("never makes a landed write look safe to repeat when its 2xx answer cannot be read", async () => {
+    for (const reply of [
+      () => new Response("<html>ok</html>", { status: 200 }),
+      () => new Response("{}", { status: 200, headers: { "content-length": String(64 * 1024 * 1024) } }),
+    ]) {
+      const result = await call(["api", "patch-page", "--page-id", "p1", "--body", "{}", "--json"], { reply })
+      expect(result.err).toContain("outcome_unknown")
+      expect(result.sent).toHaveLength(1)
+    }
+    const read = await call(["api", "retrieve-a-page", "--page-id", "p1", "--json"], {
+      reply: () => new Response("not json", { status: 200 }),
+    })
+    expect(read.err).toContain("invalid_response")
+    expect(read.err).not.toContain("not json")
+    for (const reply of [() => new Response(null, { status: 204 }), () => new Response(null, { status: 200 })]) {
+      const empty = await call(["api", "delete-a-block", "--block-id", "b1", "--json"], { reply })
+      expect(empty.code).toBe(0)
+      expect(JSON.parse(empty.out).item).toEqual({ operation_id: "op-1", result: {} })
+    }
+  })
+
+  it("refuses a body that is not JSON, and a path template that does not start with one /", async () => {
+    const text = await call(["api", "patch-page", "--page-id", "p1", "--body", "in_trash=true", "--json"])
+    expect(text.code).toBe(2)
+    expect(text.sent).toEqual([])
+    expect(() =>
+      httpApiRequest(update, { path: { page_id: "p1" }, query: {}, headers: {}, fields: {}, body: "x" }, "https://a.b"),
+    ).toThrow(/JSON/)
+    const relative = await call(["api", "retrieve-a-page", "--page-id", "p1", "--json"], { path: "//evil.example/x" })
+    expect(relative.code).not.toBe(0)
+    expect(relative.sent).toEqual([])
+  })
+
+  it("names the sign-in or the access on a 401 or 403, and a 4xx on a write is a plain refusal", async () => {
+    const signIn = await call(["api", "retrieve-a-page", "--page-id", "p1", "--json"], {
+      reply: () => new Response("{}", { status: 401 }),
+    })
+    expect(JSON.parse(signIn.err).error).toMatchObject({ code: "authentication_error", reason: "auth.failed" })
+    const denied = await call(["api", "patch-page", "--page-id", "p1", "--body", "{}", "--json"], {
+      reply: () => new Response("{}", { status: 403 }),
+    })
+    expect(JSON.parse(denied.err).error).toMatchObject({ code: "permission_error", reason: "access.denied" })
+    const invalid = await call(["api", "patch-page", "--page-id", "p1", "--body", "{}", "--json"], {
+      reply: () => Response.json({ code: "validation_error" }, { status: 400 }),
+    })
+    expect(JSON.parse(invalid.err).error.code).toBe("validation_error")
+  })
+
+  it("asks the failure hook for the service's refusal, but never for a write that failed on its side", async () => {
+    const seen: unknown[] = []
+    const failure: HttpApiExecutorOptions["failure"] = (status, answer) => {
+      seen.push(answer)
+      return new CliError("conflict", `the service's own reason for ${status}`)
+    }
+    const conflict = await call(["api", "patch-page", "--page-id", "p1", "--body", "{}", "--json"], {
+      failure,
+      reply: () => Response.json({ code: "conflict_error" }, { status: 409 }),
+    })
+    expect(JSON.parse(conflict.err).error.code).toBe("conflict")
+    expect(seen).toEqual([{ code: "conflict_error" }])
+    const broken = await call(["api", "patch-page", "--page-id", "p1", "--body", "{}", "--json"], {
+      failure,
+      reply: () => new Response("{}", { status: 503 }),
+    })
+    expect(JSON.parse(broken.err).error.code).toBe("outcome_unknown")
+    expect(seen).toHaveLength(1)
+  })
+
+  it("runs a read inside the read hook, and refuses a redirect to an undeclared host", async () => {
+    const scoped: string[] = []
+    const read: HttpApiExecutorOptions["read"] = async (_command, operation, send) => {
+      scoped.push(operation.id)
+      return send()
+    }
+    expect((await call(["api", "retrieve-a-page", "--page-id", "p1", "--json"], { read })).code).toBe(0)
+    expect(scoped).toEqual(["retrieve-a-page"])
+    const moved = await call(["api", "retrieve-a-page", "--page-id", "p1", "--json"], {
+      reply: () => new Response(null, { status: 302, headers: { location: "https://evil.example.org/steal" } }),
+    })
+    expect(moved.err).toContain("network.host-undeclared")
+    expect(moved.sent.map((one) => new URL(one.url).host)).toEqual(["api.example.com"])
   })
 })
