@@ -621,6 +621,7 @@ describe("meetings create and update take what the service declares", () => {
       addMeetingCommands(root, {
         store: store.meetings,
         accountId: 1,
+        pagingOf: flagPaging,
         management,
         askFirst: async () => {
           asked++
@@ -893,7 +894,7 @@ describe("meetings in a real run", () => {
     const [stored] = (await store.meetings.meetings()).filter((one) => one.accountId === accountId)
     const MARK = "0123456789abcdef"
     const env = { MEETS_READ_ONLY: "1", MEETS_UNTRUSTED_MARK: MARK }
-    const deps = { store: store.meetings, accountId, newFileOutput: writesNewFileOnlyWith }
+    const deps = { store: store.meetings, accountId, pagingOf: flagPaging, newFileOutput: writesNewFileOnlyWith }
     const marked = new RegExp(`⟦untrusted:${MARK} [^⟧]*⟧[^⟦]*${injected}`, "u")
     const block = new RegExp(`⟦untrusted:${MARK} [^⟧]*⟧[^⟦]*⟦/untrusted:${MARK}⟧`, "gu")
     const shown = await ranWith(["work", "meetings", "show", "--offline", String(stored?.id)], deps, env)
