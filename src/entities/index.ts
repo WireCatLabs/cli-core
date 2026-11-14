@@ -92,6 +92,7 @@ import { mailCounts } from "./mail-counts.js"
 import { mailFindings } from "./mail-findings.js"
 import { mediaArchive, mediaArchiveCheck, mediaArchiveMove, mediaArchiveTimer } from "./media-archive.js"
 import {
+  callStats,
   event,
   meeting,
   meetingCounts,
@@ -575,6 +576,7 @@ export const ENTITIES = {
   meeting_link: meetingLink,
   meeting_stats: meetingStats,
   meeting_counts: meetingCounts,
+  call_stats: callStats,
   meeting_speaker: meetingSpeaker,
   meeting_participants: meetingParticipants,
   meeting_passage: meetingPassage,

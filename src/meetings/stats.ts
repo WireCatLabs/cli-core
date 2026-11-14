@@ -114,7 +114,7 @@ export interface MeetingStatsStore {
   meetingCounts(input: MeetingCountsInput): Promise<MeetingCounts>
 }
 
-const zoneOf = (timeZone: string | undefined): string => {
+export const zoneOf = (timeZone: string | undefined): string => {
   const zone = timeZone ?? "UTC"
   try {
     new Intl.DateTimeFormat("en", { timeZone: zone })
@@ -131,12 +131,12 @@ const weekStart = (at: number, format: Intl.DateTimeFormat): string => {
   return new Date(day - DAYS.indexOf(parts.weekday ?? "Mon") * 86_400_000).toISOString().slice(0, 10)
 }
 
-const dayKey = (at: number, format: Intl.DateTimeFormat): string => {
+export const dayKey = (at: number, format: Intl.DateTimeFormat): string => {
   const parts = Object.fromEntries(format.formatToParts(new Date(at)).map((part) => [part.type, part.value]))
   return `${parts.year}-${parts.month}-${parts.day}`
 }
 
-const zoneFormat = (zone: string) =>
+export const zoneFormat = (zone: string) =>
   new Intl.DateTimeFormat("en-US", {
     timeZone: zone,
     year: "numeric",

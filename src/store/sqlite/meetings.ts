@@ -3,6 +3,7 @@ import type { ListResult } from "@wirecat/cli-base/standards"
 import type {
   Attachment,
   ChatLine,
+  MeetingCallsStore,
   MeetingChatLinesStore,
   MeetingContextStore,
   MeetingDetails,
@@ -37,6 +38,7 @@ import { fromJson, int, page, str, toJson } from "./events.js"
 import { folded } from "./folded.js"
 import { meetingIdentityPk } from "./identities.js"
 import { reviewLink } from "./link-reviews.js"
+import { meetingCallsOver } from "./meeting-calls.js"
 import { meetingChatLinesOver } from "./meeting-chat-lines.js"
 import { meetingContextLinksOver } from "./meeting-context-links.js"
 import {
@@ -821,6 +823,7 @@ export type StoredMeetings = MeetingStore &
   MeetingContextStore &
   MeetingSearchIndexStore &
   MeetingStatsStore &
+  MeetingCallsStore &
   MeetingReviewStore &
   MeetingChatLinesStore &
   MeetingLanguageStore &
@@ -838,6 +841,7 @@ export const meetingStoreOver = (context: StoreContext): StoredMeetings => {
     ...meetingRelatedHistoryOver(context),
     ...meetingHitSearchOver(context),
     ...meetingStatsOver(context),
+    ...meetingCallsOver(context),
     ...meetingReviewOver(context),
     ...meetingChatLinesOver(context),
     ...meetingParticipantSearchOver(context),
