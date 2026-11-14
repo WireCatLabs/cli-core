@@ -21,6 +21,16 @@ const QUESTION_STARTS = new Set(
 const QUESTION_FILLER = new Set(
   words("about any did does why whom whose would will это мы вы я они он она о об про ли"),
 )
+const LINKING = new Set(
+  words(
+    "and or but not nor with without this that these those there their they them you your our its his her all any " +
+      "and for into onto over then than also just and при для без над под или либо его её их все всё уже ещё так " +
+      "тоже также был была были было будет это эта этот эти там тут",
+  ),
+)
+/** Words that carry no topic of their own: widening one to a prefix (`про*`) finds only noise. */
+export const isFunctionWord = (word: string): boolean =>
+  scaffolding.has(word) || QUESTION_STARTS.has(word) || QUESTION_FILLER.has(word) || LINKING.has(word)
 /**
  * A question's content words — «что решили по цене?» → решили, цене — or null when the text is not a question: it
  * ends with «?» or starts with a question word.

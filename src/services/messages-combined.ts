@@ -6,8 +6,9 @@ import type { MessengerTraits } from "../ports/traits.js"
 import { correctWords } from "../search/correct.js"
 import { PRESET_VERSION } from "../search/lucene/presets.js"
 import { FIELD_VERSION } from "../search/lucene/registry.js"
-import type { QueryExecution, ResolvedNode } from "../search/lucene/resolved.js"
+import type { QueryExecution, ResolvedNode, ResolvedPredicate } from "../search/lucene/resolved.js"
 import { exhausted, outOfTime, QUERY_LIMITS } from "../search/lucene/types.js"
+import { isFunctionWord } from "../search/question-plan.js"
 import { normalize } from "../store/normalize.js"
 import type { AccountKey, MessageStore, ScoredHit } from "../store/store.js"
 import { withExcerpt } from "./excerpt.js"
@@ -85,6 +86,17 @@ export const searchCombined = async (
     : new Map<string, string[]>()
   check()
   const bySpan = new Map(eligible.map((leaf) => [leaf.span.start, leaf]))
+  const widenable = (node: ResolvedNode): node is ResolvedPredicate =>
+    node.kind === "predicate" &&
+    bySpan.has(node.span.start) &&
+    [...normalize(node.value)].length >= 3 &&
+    !isFunctionWord(normalize(node.value))
+  const beginning = (node: ResolvedPredicate): ResolvedPredicate => ({
+    ...node,
+    operator: "wildcard",
+    value: `${normalize(node.value)}*`,
+    widened: true,
+  })
   const transform = (node: ResolvedNode, source: Source, exact = false): ResolvedNode => {
     if (node.kind === "boolean")
       return {
@@ -94,8 +106,7 @@ export const searchCombined = async (
     if (exact && node.field === "text" && (node.operator === "term" || node.operator === "phrase"))
       return { ...node, field: "exact" }
     if (!bySpan.has(node.span.start)) return node
-    if (source === "beginnings" && [...normalize(node.value)].length >= 3)
-      return { ...node, operator: "wildcard", value: `${normalize(node.value)}*` }
+    if (source === "beginnings" && widenable(node)) return beginning(node)
     if (source !== "corrected") return node
     const fixes = corrections.get(normalize(node.value))
     if (!fixes) return node
@@ -128,8 +139,8 @@ export const searchCombined = async (
   const correctedBeginnings = (node: ResolvedNode): ResolvedNode =>
     node.kind === "boolean"
       ? { ...node, clauses: node.clauses.map((clause) => ({ ...clause, node: correctedBeginnings(clause.node) })) }
-      : bySpan.has(node.span.start) && [...normalize(node.value)].length >= 3
-        ? { ...node, field: "exact", operator: "wildcard", value: `${normalize(node.value)}*` }
+      : widenable(node)
+        ? { ...beginning(node), field: "exact" }
         : node
   const fixedPrefix = corrections.size
     ? await read(correctedBeginnings(fixedPrefixRoot), depth)

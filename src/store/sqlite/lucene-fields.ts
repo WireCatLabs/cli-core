@@ -324,8 +324,14 @@ const words: FieldCompiler = (node, scope) => {
       `SELECT term FROM ${corpus.vocab} WHERE col='normalized_text'${prefix ? " AND term>=? AND term<=?" : ""} ORDER BY term LIMIT ?`,
     )
     .all(...(prefix ? [prefix, `${prefix}\u{10ffff}`] : []), QUERY_LIMITS.expansions + 1)
-  if (scope.expand(terms.length) > QUERY_LIMITS.expansions)
+  if (scope.expand(terms.length) > QUERY_LIMITS.expansions) {
+    if (node.widened) {
+      scope.expand(-terms.length)
+      const { widened: _, ...typed } = node
+      return words({ ...typed, operator: "term", value: node.value.replace(/\*$/u, "") }, scope)
+    }
     tooManyWords(node, terms.length > QUERY_LIMITS.expansions, prefix, scope.mail)
+  }
   const matches = terms.flatMap(({ term }) => {
     scope.check()
     return automaton.test(String(term), scope.budget) ? [quoted(String(term))] : []

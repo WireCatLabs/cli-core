@@ -3,6 +3,8 @@ import type { AccountKey } from "../../store/store.js"
 import type { Stemmer } from "../stem.js"
 
 export type ResolvedPredicate = Predicate & {
+  /** A prefix the search made of a word typed whole: past the expansions budget it reads as that word instead. */
+  widened?: true
   resolution?: {
     chat?: { account: AccountKey; chatId: string }
     sender?: { provider: string; id: string }
