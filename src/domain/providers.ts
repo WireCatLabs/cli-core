@@ -45,7 +45,7 @@ export const PROVIDERS: readonly ProviderEntry[] = [
   { name: "obsidian", kind: "notes", aliases: [] },
   { name: "added", kind: "notes", aliases: [] },
   { name: "zoom", kind: "meetings", aliases: [] },
-  { name: "google-meet", kind: "meetings", aliases: [], command: "meet" },
+  { name: "google-meet", kind: "meetings", aliases: [], command: "gmeet" },
   // Its meetings come from the notes Telemost mails (`keeper@telemost.yandex.ru`), read by a mail rule.
   { name: "telemost", kind: "meetings", aliases: [] },
   // A phone export's records: its SMS and its calls in the one account the import names.
