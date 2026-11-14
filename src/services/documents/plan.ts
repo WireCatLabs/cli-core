@@ -3,10 +3,15 @@ import { CliError } from "@wirecat/cli-base"
 import type { DocumentSource, SourceFile, SourceState, SourceWalk, SourceWork } from "../../documents/model.js"
 import { inScope, type SourceQuery, within } from "../../documents/scope.js"
 import type { SyncOptions } from "./ports.js"
-// Without a query the hash stays what it was, so a profile that never set one keeps its checkpoint.
-export const scopeHash = (roots: string[], query?: Pick<SourceQuery, "key" | "mode">) =>
+// Without a query or pages the hash stays what it was, so a profile that never set them keeps its checkpoint. Turning
+// pages on changes it, so the next sync walks again and imports the pages an incremental one would never revisit.
+export const scopeHash = (roots: string[], query?: Pick<SourceQuery, "key" | "mode">, pages = false) =>
   createHash("sha256")
-    .update(JSON.stringify(query ? [[...roots].sort(), query.mode, query.key] : [...roots].sort()))
+    .update(
+      JSON.stringify(
+        query || pages ? [[...roots].sort(), query?.mode, query?.key, ...(pages ? ["pages"] : [])] : [...roots].sort(),
+      ),
+    )
     .digest("hex")
 export const changedSince = (previous: SourceFile, file: SourceFile) =>
   previous.version !== file.version ||
@@ -34,7 +39,7 @@ export const planDocuments = async <M extends SourceFile>(
   const { isFolder, skipReason, retryable, maxEntries: MAX_ENTRIES, errorOf, query } = options
   const tooManyEntries = () =>
     options.limitError?.() ?? new CliError("validation_error", `selected folders exceed the ${MAX_ENTRIES} entry limit`)
-  const scope = scopeHash(roots, query)
+  const scope = scopeHash(roots, query, options.isDocument !== undefined)
   if (!roots.length && query?.mode !== "include")
     return {
       scope,

@@ -214,6 +214,20 @@ describe("provider-neutral document sync", () => {
     expect(Object.keys(drive.state().documents).sort()).toEqual(["a", "b"])
   })
 
+  it("walks again and imports the existing pages once a profile synced without pages turns them on", async () => {
+    const f = await setup()
+    const pages = new Set(["root", "nested"])
+    expect(await syncDocuments(f.options)).toMatchObject({ saved: 2 })
+    expect(await syncDocuments(f.options)).toMatchObject({ saved: 0 })
+    const options: SyncOptions<SourceFile> = {
+      ...f.options,
+      isDocument: (item) => pages.has(item.id),
+      skipReason: (item) => (pages.has(item.id) ? undefined : f.options.skipReason(item)),
+    }
+    await syncDocuments(options)
+    expect(Object.keys(f.state().documents).sort()).toEqual(["a", "b", "nested", "root"])
+  })
+
   it("removes abandoned pending work when selected scope changes, and supports a full rescan", async () => {
     const f = await setup()
     await syncDocuments({ ...f.options, max: 1 })
