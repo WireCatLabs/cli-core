@@ -541,10 +541,10 @@ accounts become `local` or `obsidian` (NEED-1738).
 **Drive documents live in a `google-drive` account**, one per Google account (`external_id` = the principal), since
 store version 31 moved them there from the stand-in notes folder named `google-drive:<principal>`. The account's
 `settings` keep `format` and `movedFrom` (the folder's id, external id and name). The notes code reads and writes
-such an account as it does a folder (`DOCUMENT_ACCOUNT_PROVIDERS`, `src/domain/providers.ts`), but
-`notes.folders()` leaves it out: `notes.documentsAccount(key)` and `documentsAccounts()` find it, and
-`documentIngestion({ provider })` writes into it. Search still lists it as `notes:<id>`, until Drive becomes kind
-`documents` (Wave 3 R2). Annotation transfers name it `google-drive:<principal>` on both sides of version 31.
+such an account as it does a folder, but `notes.folders()` leaves it out: `notes.documentsAccount(key)` and
+`documentsAccounts()` find it, and `documentIngestion({ provider })` writes into it. Every provider whose registry
+entry has kind `documents` and is not `imported` gets such accounts the same way (`documentAccountProviders`,
+`src/domain/providers.ts`); `google-drive` is in the seed. Search lists such an account as `notes:<id>`. Annotation transfers name it `google-drive:<principal>` on both sides of version 31.
 
 **Calendar entries on the events hub — not built yet.** `calendars` and `calendar_entries` are a calendar's source
 records; `events` (`schema.ts:1087`) and `event_series` stay the entities that `meetings` already points at. An

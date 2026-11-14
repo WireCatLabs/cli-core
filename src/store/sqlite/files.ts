@@ -1,4 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
+import { isDocumentAccountProvider } from "../../domain/providers.js"
 import type { CacheDatabase } from "../driver.js"
 import { fold } from "../normalize.js"
 import { write, writeBatch } from "./transaction.js"
@@ -128,8 +129,9 @@ const movePaths = (database: CacheDatabase, accountId: number, from: string, to:
 }
 
 /**
- * Writes the `files` row of one document from the document as it is now: the document's source record. A Drive
- * document (catalog metadata or Drive front matter) is keyed by its Drive file id and placed under its first parent;
+ * Writes the `files` row of one document from the document as it is now: the document's source record. A documents
+ * provider's document (catalog metadata, or front matter whose `source` names the provider) is keyed by its file id
+ * (`fileId` in the front matter, else its own key) and placed under its first parent;
  * a local one by its path, under folder rows made from that path. `seen` marks a sync or import that returned it.
  * `place` names a local file of the document other than the one its own columns name: a copy in another folder.
  */
@@ -151,7 +153,7 @@ export const syncFile = (
   const catalog = place ? undefined : objectOf(objectOf(doc.metadata)?.catalog)
   const provider = database.prepare("SELECT provider FROM accounts WHERE id = ?").get(accountId)?.provider
   // A vault file may carry an exported Drive file's front matter and still be a file on disk.
-  const remote = catalog !== undefined || (front?.source === "google-drive" && !LOCAL.has(String(provider)))
+  const remote = catalog !== undefined || (isDocumentAccountProvider(front?.source) && !LOCAL.has(String(provider)))
   const externalId = (remote && stringOf(front?.fileId)) || (place?.path ?? String(doc.external_id))
   const kind = doc.kind === "folder" ? "folder" : doc.kind === "page" ? "page" : "file"
   let name: string

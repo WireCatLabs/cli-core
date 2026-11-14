@@ -1,10 +1,10 @@
-import { isFolderProvider, isImportedProvider, kindIn } from "../domain/providers.js"
+import { isDocumentAccountProvider, isFolderProvider, isImportedProvider } from "../domain/providers.js"
 import type { Profiles } from "../search/account-list.js"
 import type { Note, StoredAccount, StoredFile } from "../store/index.js"
 
 /**
  * Where a hit came from. The document's preferred file says it: its account's provider and its link.
- * A Drive document under a notes folder (before version 31 moves it) is still known by its front matter.
+ * A documents provider's document under a notes folder is still known by its front matter's `source`.
  * The hit's time is the store search's: the one `date:` reads.
  */
 export const documentSource = (
@@ -25,7 +25,8 @@ export const documentSource = (
     }
   const remote =
     note.source === "file" &&
-    ((account !== undefined && kindIn(account.provider) === "documents") || metadata?.source === "google-drive")
+    ((account !== undefined && isDocumentAccountProvider(account.provider)) ||
+      isDocumentAccountProvider(metadata?.source))
   const profile =
     remote && account
       ? Object.entries(profiles)

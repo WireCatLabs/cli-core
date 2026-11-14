@@ -97,11 +97,12 @@ None open.
   examples and list queries are merged. Canonical command paths and removal of compatibility spellings ship in
   #1837 (owner, 2026-10-24); every CLI adopts them in the same-day cli-core raise. New bot query/schema gaps are separate
   from the original personal-account audit. [Notes](BACKLOG-NOTES.md#core-4).
-- **CORE-5** · P2 · Let a new source join without editing this package: the provider list is fixed
-  (`src/domain/providers.ts:14`) and Google Drive is hard-coded in the document code
-  (`src/services/document-source.ts:8,17`). Needed before the Slack, Google Meet, Notion and Calendar CLIs. No
-  separate SDK: cli-core is the shared base (owner, 2026-10-23; questioned again as NEED-2153). Plan first. Data with
-  no CLI of its own may come in through `ingest` and the records envelope (#2439) instead.
+- **CORE-5** · P2 · Let a new source join without editing this package. The provider registry lets a CLI register its
+  provider, and documents are done: any entry of kind `documents` gets documents accounts
+  ([DOCUMENTS.md](DOCUMENTS.md#bind-a-provider)). Not checked yet: what a new messages, meetings or calendar source
+  still needs edited here (the Slack and Calendar CLIs). No separate SDK: cli-core is the shared base (owner,
+  2026-10-23; questioned again as NEED-2153). Plan first. Data with no CLI of its own may come in through `ingest` and
+  the records envelope (#2439) instead.
 - **CORE-6** · P2 · 🟡 Search start-up measured: model open 1.44 s, empty-store reopen 8.4 ms, bare Node 31.7 ms
   (medians). Next compare one-shot CLI and long-lived MCP on the same synthetic corpus before optimizing.
   [Runner and limits](https://github.com/WireCatLabs/cli-testing/tree/main/performance/search/startup) · [notes](BACKLOG-NOTES.md#core-6).
