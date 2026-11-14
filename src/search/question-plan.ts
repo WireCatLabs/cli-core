@@ -4,9 +4,14 @@ import { normalize } from "../store/normalize.js"
 import { MESSAGE_PARSING } from "./lucene/types.js"
 
 export const words = (text: string) => normalize(text).match(/[\p{L}\p{N}]+/gu) ?? []
-/** `альфа-банк` also as `альфабанк`: people write one name both ways, and the index keeps each as typed. */
+/**
+ * `альфа-банк` also as `альфабанк`: people write one name both ways, and the index keeps each as typed. Only letters
+ * on both sides of a hyphen, and never a field's value: `date:2026-10-08` is no word.
+ */
 export const joinedHyphens = (text: string) =>
-  (normalize(text).match(/[\p{L}\p{N}]+(?:-[\p{L}\p{N}]+)+/gu) ?? []).map((word) => word.replaceAll("-", ""))
+  (normalize(text).match(/(?<![:\p{L}\p{N}-])\p{L}[\p{L}\p{N}]*(?:-\p{L}[\p{L}\p{N}]*)+/gu) ?? []).map((word) =>
+    word.replaceAll("-", ""),
+  )
 const scaffolding = new Set(
   words(
     "what which how many much who where when is are was were do does did can could should we the a an for of to under from in on at has have сколько какой какая какие какое кто кому кем где когда как что во по на в к с у через ли должен должна нужно идёт идет можно может могут",
