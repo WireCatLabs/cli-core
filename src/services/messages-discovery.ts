@@ -7,7 +7,7 @@ import type { MessengerTraits } from "../ports/traits.js"
 import { fieldsOfQuery, meaningWords } from "../search/lucene/meaning-parts.js"
 import { validateFields } from "../search/lucene/registry.js"
 import { exhausted, MESSAGE_PARSING, outOfTime, QUERY_LIMITS } from "../search/lucene/types.js"
-import { anyOfTerms, lookupTerms, planQuestion, questionText, words } from "../search/question-plan.js"
+import { anyOfTerms, joinedHyphens, lookupTerms, planQuestion, questionText, words } from "../search/question-plan.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
 import type { FoundMessage, SearchFound, SearchQuery } from "./messages.js"
 import { searchCombined } from "./messages-combined.js"
@@ -137,7 +137,7 @@ export const searchDiscovery = async (
     : undefined
   const question = root === undefined ? text : meaningWords(root)
   if (!question) return searchLucene(store, account, request, messenger)
-  const terms = root === undefined ? lookupTerms(plan) : [...new Set(words(question))]
+  const terms = [...new Set([...(root === undefined ? lookupTerms(plan) : words(question)), ...joinedHyphens(text)])]
   if (!terms.length) return searchLucene(store, account, request, messenger)
   if (terms.length > 64) exhausted("discovery terms")
   const narrowing = root === undefined ? undefined : fieldsOfQuery(root, EVERY_MESSAGE)

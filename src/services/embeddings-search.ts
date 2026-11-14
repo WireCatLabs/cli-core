@@ -3,7 +3,9 @@ import { formatLocator, parseLocator } from "../domain/locator.js"
 import type { Id } from "../domain/models.js"
 import { meaningFloor } from "../embeddings/models.js"
 import { type FusedFacts, fuseRanked } from "../search/fusion.js"
-import { QUERY_LIMITS, searchError } from "../search/lucene/types.js"
+import { isQueryLimit, QUERY_LIMITS, searchError } from "../search/lucene/types.js"
+import { STOP_WORDS } from "../search/task-similarity.js"
+import { normalize } from "../store/normalize.js"
 import { type AccountKey, type ConversationHit, type ConversationSummary, threadConversation } from "../store/store.js"
 import type { ServiceDeps } from "./deps.js"
 import type { ChatReadiness, EmbeddingsService, FoundConversation, SearchReadiness } from "./embeddings.js"
@@ -42,8 +44,12 @@ export const embeddingsSearch = (deps: ServiceDeps): Pick<EmbeddingsService, "se
     prepared: Prepared,
     conversations: string[] | undefined,
     since: string | undefined,
+    timeLimitMs: number | undefined,
   ) => {
-    const words = [...new Set(query.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [])]
+    const all = [...new Set(query.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [])]
+    // `что*` OR `какие*` reads most of a large store and runs out of time before the words that matter count.
+    const content = all.filter((word) => !STOP_WORDS.has(normalize(word)))
+    const words = content.length ? content : all
     const outside = new Map<string, { account: AccountKey; chats: Set<Id> }>()
     if (!words.length || !prepared.scopeAccounts.length)
       return { hits: [], outside, sources: new Map<string, AccountKey>() }
@@ -55,6 +61,7 @@ export const embeddingsSearch = (deps: ServiceDeps): Pick<EmbeddingsService, "se
         text: words.map((word) => (word.length >= 3 ? `${word}*` : `"${word}"`)).join(" OR "),
         accounts: prepared.scopeAccounts,
         limit: WORD_HITS,
+        ...(timeLimitMs === undefined ? {} : { timeLimitMs }),
       },
       deps.messenger,
     )
@@ -156,7 +163,7 @@ export const embeddingsSearch = (deps: ServiceDeps): Pick<EmbeddingsService, "se
   return {
     search: async (
       query,
-      { chat, model: choice, since, limit, filter, source, timezone, syncFirst, signal, refresh },
+      { chat, model: choice, since, limit, filter, source, timezone, syncFirst, signal, refresh, timeLimitMs },
     ) => {
       if (!query.trim())
         searchError("query.invalid-syntax", { start: 0, end: query.length }, "give words to search for")
@@ -201,7 +208,15 @@ export const embeddingsSearch = (deps: ServiceDeps): Pick<EmbeddingsService, "se
             ? { chatId: selected.chatId }
             : null
           : {}
-      const words = await byWords(query, prepared, eligibility?.conversations, since)
+      // Out of time in words still leaves the meaning half, the one a sentence needs most.
+      let wordsOutOfTime = false
+      const words = await byWords(query, prepared, eligibility?.conversations, since, timeLimitMs).catch(
+        (error: unknown) => {
+          if (!isQueryLimit(error)) throw error
+          wordsOutOfTime = true
+          return { hits: [], outside: new Map<string, { account: AccountKey; chats: Set<Id> }>(), sources: new Map() }
+        },
+      )
       const meaning: ConversationHit[] = []
       const sources = words.sources
       if (target.installed && prepared.scopeAccounts.length && eligibility?.conversations.length !== 0) {
@@ -285,6 +300,7 @@ export const embeddingsSearch = (deps: ServiceDeps): Pick<EmbeddingsService, "se
         accounts: prepared.scopeAccounts,
         model: target.id,
         meaning: target.installed ? "searched" : "unavailable",
+        ...(wordsOutOfTime ? { words: "out-of-time" as const } : {}),
         hits: fused(meaning, words.hits, meaningFloor(target.key))
           .slice(0, limit)
           .map((hit) => {

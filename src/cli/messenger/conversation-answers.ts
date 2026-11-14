@@ -68,7 +68,7 @@ export const readinessGaps = (
 /** `search conversations` and `conversations related`, CLI and MCP alike. */
 export const foundConversations = (
   command: string,
-  found: Readiness & Pick<FoundConversations, "hits" | "accounts">,
+  found: Readiness & Pick<FoundConversations, "hits" | "accounts" | "words">,
   limit: number,
   messenger: Syncing,
   chat?: string,
@@ -82,6 +82,7 @@ export const foundConversations = (
     meta: {
       ...meta,
       ...(found.accounts ? { accounts: found.accounts.map((one) => `${one.provider}:${one.account}`) } : {}),
+      ...(found.words ? { words: found.words } : {}),
     },
   })
 

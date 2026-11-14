@@ -86,6 +86,7 @@ beforeEach(() => {
   vi.stubEnv("WIRECAT_STATE_DIR", cache)
 })
 afterEach(() => {
+  vi.restoreAllMocks()
   vi.unstubAllEnvs()
   useProviders([])
 })
@@ -156,6 +157,36 @@ describe("embeddings", () => {
       chunk: { firstMessageId: "40", lastMessageId: "40" },
       by: ["words"],
     })
+    await store.close()
+  })
+
+  it("**answers by meaning when the word half runs out of time**, and says the words were not searched", async () => {
+    const { store, embeddings } = await setUp({ messages: [message("1", "cat cat"), message("40", "dog zebra")] })
+    await embeddings.embed("9", { model: "tiny", threads: 1 })
+    const start = Date.now()
+    vi.spyOn(Date, "now").mockImplementation(() =>
+      new Error().stack?.includes("beforeTimeLimit") ? start + 60_000 : start,
+    )
+
+    const found = await embeddings.search("kitten zebra", { model: "tiny", limit: 4 })
+
+    expect(found.words).toBe("out-of-time")
+    expect(found.hits).toMatchObject([{ summary: { firstMessageId: "1" }, by: ["meaning"] }])
+    expect((await embeddings.search("kitten zebra", { model: "tiny", limit: 4, timeLimitMs: 120_000 })).words).toBe(
+      undefined,
+    )
+    await store.close()
+  })
+
+  it("leaves stop words out of the word half, unless the query holds nothing else", async () => {
+    const { store, embeddings } = await setUp({ messages: [message("1", "what now"), message("40", "zebra")] })
+
+    expect((await embeddings.search("what zebra", { model: "e5-small", limit: 4 })).hits).toMatchObject([
+      { summary: { firstMessageId: "40" }, by: ["words"] },
+    ])
+    expect((await embeddings.search("what", { model: "e5-small", limit: 4 })).hits).toMatchObject([
+      { summary: { firstMessageId: "1" } },
+    ])
     await store.close()
   })
 

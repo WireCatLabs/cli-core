@@ -7,6 +7,7 @@ import { runAnalysis } from "../../analysis/runner.js"
 import { DEFAULT_TEXT_MODEL } from "../../embeddings/models.js"
 import { isLocal } from "../../embeddings/remote.js"
 import { renderMessages } from "../../render/messages.js"
+import { searchTimeLimit } from "../../search/lucene/types.js"
 import { BATCH_SIZE, CONVERSATION_QUERY, type ConversationItem } from "../../services/conversations.js"
 import {
   type ChatReadiness,
@@ -20,6 +21,7 @@ import { servicesFor, storedDeps } from "../../services/index.js"
 import { dateWindow } from "../../services/moment.js"
 import type { AgentAnswer, ConversationSummary } from "../../store/store.js"
 import { type AnalysisOptions, analysisChoice } from "../analysis-choice.js"
+import { environmentOf } from "../context.js"
 import {
   destroysNothing,
   LOCAL_READ,
@@ -897,10 +899,12 @@ export const conversationsSearchCommand = (messenger: Messenger): Command =>
         ...(since === undefined ? {} : { sinceTime: since }),
         ...(options.timezone === undefined ? {} : { zone: options.timezone }),
       })
+      const timeLimitMs = searchTimeLimit(environmentOf(this).deadline?.())
       const { found, refreshed } = await context.withServices(async (services) => {
         const syncing = syncRequest(this, context)
         const found = await services.embeddings.search(query, {
           ...syncing,
+          ...(timeLimitMs === undefined ? {} : { timeLimitMs }),
           ...(options.catchUp
             ? {
                 refresh: {
@@ -922,6 +926,8 @@ export const conversationsSearchCommand = (messenger: Messenger): Command =>
         return { found, refreshed: found.prepared }
       })
       if (refreshed) for (const note of leftNotes(refreshed, rootOf(this))) context.renderer.note(note)
+      if (found.words === "out-of-time")
+        context.renderer.note("the word half ran out of time, so these are by meaning alone; --timeout gives it longer")
       renderAnswer(
         this,
         context,
