@@ -317,8 +317,7 @@ const addDocumentKnowledgeCommandsDefinition = (program: Command, helpers: Docum
     .option("--tab <id>", "send only this tab of the document")
     .option("--yes", "save the proposals, each with its quote and the document's version")
     .action(async function (this: Command, doc: string) {
-      // The root --yes takes the flag wherever it is typed; this one only lists it for help and MCP.
-      const args = this.optsWithGlobals<{ scope: Memory["scope"]; tab?: string; yes?: boolean }>()
+      const args = this.opts<{ scope: Memory["scope"]; tab?: string; yes?: boolean }>()
       await run(doc, async () => undefined)
       const result = await extractDocumentMemories({
         read: () => helpers.document(doc),
