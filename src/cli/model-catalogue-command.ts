@@ -14,6 +14,7 @@ import { DEFAULT_ORDER, orderedModels, speechModel } from "../speech/models.js"
 import { readSecret } from "../terminal/prompt.js"
 import { stepLines } from "../terminal/step-lines.js"
 import { aiModelCommand } from "./ai-model-command.js"
+import { chatSendingCommand } from "./chat-sending-command.js"
 import { FETCH, grantsAuthority, LOCAL_READ, LOCAL_WRITE, NO_EFFECTS } from "./effects.js"
 import { enrichmentConsentsCommand } from "./enrichment-consents-command.js"
 import { type Body, itemOf, listOf } from "./envelope.js"
@@ -180,6 +181,7 @@ export const modelCatalogueCommand = (app: AppIdentity, options: ModelCatalogueO
     models.addCommand(providerKeysCommand(app, options))
     models.addCommand(aiModelCommand(app, options))
     models.addCommand(localOnlyCommand(app, options))
+    models.addCommand(chatSendingCommand(app, options))
     models.addCommand(pictureReadingCommand(app, options))
   }
   if (options.jsonOption)

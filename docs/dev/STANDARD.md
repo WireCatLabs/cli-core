@@ -1082,6 +1082,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--for-everyone` |  | delete for everyone in the chat, not only for you — they cannot get it back |  | `messages delete` |
 | `--format` | `<format>` | jsonl, one message per line, or a markdown transcript. **the shared `store export` takes `jsonl` or `markdown`, max's own takes `jsonl` or `md` (e4)** |  | `store export` |
 | `--from` | `<person>` | a person: the one an identity leaves in `contacts unlink`, the sender in `bot search messages` |  | `bot search messages` (planned), `contacts unlink` |
+| `--from-app` |  | you did this in WireCat Desktop |  | `models chats set` |
 | `--from-dir` | `<dir>` | read nonrecursive files from this directory for one explicit chat |  | `attachments extract` |
 | `--full` |  | found messages with their whole text and every provider field |  | every command |
 | `--full-history` |  | keep this chat's pushed history in full from now on, past the history limits |  | `messages sync` |
@@ -1270,7 +1271,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--with-notes` |  | include your private notes, subject to contacts.notes.list permission |  | `contacts show` |
 | `--within` | `<duration>` | the observation window after a known join; each report names what it measures |  | `stats chats newcomers`, `stats chats retention`, `tasks agenda` |
 | `--words` | `<words>` | match any of these whole words, comma-separated; empty clears |  | `replies edit` |
-| `--yes` |  | go ahead without the question an ask level puts before a write |  | every command, `account sessions end` (planned), `mcp config` (planned), `mcp serve` (planned), `tasks scan` |
+| `--yes` |  | go ahead without the question an ask level puts before a write |  | every command, `account sessions end` (planned), `conversations embed`, `conversations links rebuild`, `mcp config` (planned), `mcp serve` (planned), `tasks scan` |
 
 <!-- end of the option catalogue -->
 

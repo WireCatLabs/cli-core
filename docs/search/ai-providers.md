@@ -72,7 +72,22 @@ max models keys set '<endpoint host[:port]>'
 
 Custom endpoints never inherit the public OpenAI/Anthropic key. URLs must be HTTPS without embedded credentials, query or fragment; plain HTTP only on this computer (`localhost`, `127.x.x.x`, `[::1]`), so neither the text nor the key crosses a network unencrypted. With `models.analysis`, `models.replies` and `models.ocr` not set (and not `off`), linking, reply drafts and attachment OCR use the AI model chosen with `memo models ai set`, with the key kept for its address; OCR through it to another computer needs that model's yes to pictures (`--allow-remote`). Anthropic is analysis only: [Anthropic offers no embedding model](https://platform.claude.com/docs/en/build-with-claude/embeddings). OpenAI-style analysis uses Chat Completions; custom servers use the compatible `max_tokens` field, while api.openai.com uses `max_completion_tokens`. [Ollama compatibility](https://docs.ollama.com/api/openai-compatibility) covers a subset of that API. Choose a model that returns JSON and token usage; there is no automatic provider fallback or retry.
 
-Before analysis sends its first batch, the CLI explains the endpoint/model, messages, characters, estimated message tokens, and run cap. Machine mode requires `--yes` for a new consent. A yes is remembered for **this account, native chat ID, provider and endpoint path**, across model changes at that endpoint, until revoked. A different chat/account/provider/endpoint requires another yes. This applies to explicitly configured local endpoints too. `conversations embed` still asks for remote message batches on every run; configuring a provider does not waive it. Search with a remote embedding provider sends the query text to that endpoint; MCP search/related/status honor the profile's embedding choice. Bulk refresh stays local.
+**Chat text to a model outside this computer** follows one setting for every WireCat tool, `models chats`. A model on this computer (`localhost`, `127.x.x.x`, `[::1]`) is not outside: it needs no yes and no setting, for `conversations embed` and for `--analyze` alike.
+
+| Value | What `conversations embed` and `conversations links rebuild --analyze` do |
+|---|---|
+| `allowed` | send without a yes, in a terminal and over MCP |
+| `ask` (default) | ask in a terminal; elsewhere need `--yes`, which an agent may pass over MCP |
+| `denied` | refuse, even with `--yes` and a remembered consent; the error names the owner's command |
+
+Only the owner makes it less strict: `set` is no MCP tool, and an agent's run is refused unless it comes from WireCat Desktop (`--from-app`). An agent may make it stricter.
+
+```sh
+max models chats show
+max models chats set allowed    # or ask, or denied
+```
+
+Under `ask`, before analysis sends its first batch, the CLI explains the endpoint/model, messages, characters, estimated message tokens, and run cap. Machine mode requires `--yes` for a new consent. A yes is remembered for **this account, native chat ID, provider and endpoint path**, across model changes at that endpoint, until revoked. A different chat/account/provider/endpoint requires another yes. Under `allowed` nothing is asked or remembered. `conversations embed` under `ask` asks for remote message batches on every run; configuring a provider does not waive it. Search with a remote embedding provider sends the query text to that endpoint; MCP search/related/status honor the profile's embedding choice. Bulk refresh stays local.
 
 ```sh
 max conversations consents list --json

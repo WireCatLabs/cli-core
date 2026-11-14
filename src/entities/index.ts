@@ -38,6 +38,7 @@ import { chatArchive, chatMuting, chatPin, chatRemoval, chatUnread } from "./cha
 import { chatEvent } from "./chat-event.js"
 import { cachedChatMetadata, chatMetadata, chatMetadataRefresh } from "./chat-metadata.js"
 import { chatModeration, chatRules } from "./chat-moderation.js"
+import { chatSending } from "./chat-sending.js"
 import { chatStats, taskStats } from "./chat-stats.js"
 import { chatTracking, trackedChat, trackedChatHistory } from "./chat-tracking.js"
 import { contact } from "./contact.js"
@@ -249,6 +250,7 @@ export {
   chatRequestChange,
   chatRules,
   chatSender,
+  chatSending,
   chatStats,
   chatTracking,
   chatUnread,
@@ -657,6 +659,7 @@ export const ENTITIES = {
   chat_moderation: chatModeration,
   "model.chosen": chosenModel,
   model_key: modelKey,
+  chat_sending: chatSending,
   "model_key.stored": storedModelKey,
   "model_key.removed": removedModelKey,
   chat_event: chatEvent,

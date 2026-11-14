@@ -134,6 +134,13 @@ const OTHERS: Entry[] = [
   ["ai.images-not-allowed", "permission_error", "the AI model may not read pictures; models ai set --allow-remote"],
   ["picture-reading.off", "permission_error", "picture reading is never; models picture-reading set request"],
   ["picture-reading.owner-only", "permission_error", "only the owner turns picture reading on, not an agent"],
+  [
+    "chat-sending.denied",
+    "permission_error",
+    "models chats is denied: chat text never goes to a model off this computer, even with --yes",
+  ],
+  ["chat-sending.ask", "confirmation_required", "models chats is ask: pass --yes, or the owner sets it to allowed"],
+  ["chat-sending.owner-only", "permission_error", "only the owner makes models chats less strict, not an agent"],
   validation("picture-reading.agent-missing", "choose the agent that reads: --agent claude or --agent codex"),
   validation("picture-reading.not-a-picture", "the file is not a PNG, JPEG or WebP picture"),
   ["picture-reading.unavailable-file", "not_found", "the picture could not be fetched, or is over the size limit"],

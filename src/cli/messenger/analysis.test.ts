@@ -5,9 +5,10 @@ import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
 import { memoryKeyring } from "@wirecat/cli-base/testing"
 import * as v from "valibot"
-import { afterEach, describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 import type { Message } from "../../domain/models.js"
 import { ENTITIES } from "../../entities/index.js"
+import { type ChatSendingMode, writeChatSending } from "../../models/chat-sending.js"
 import { type LinkBatch, openStore } from "../../store/store.js"
 import { configCommand } from "../config-command.js"
 import { run } from "../program.js"
@@ -15,6 +16,22 @@ import { settingsFor } from "../settings.js"
 import { rememberAccount } from "./accounts.js"
 import type { Messenger } from "./context.js"
 import { conversationsCommand } from "./conversations-command.js"
+
+// The analysis server listens on this computer; requests for the outside host are routed to it, so a test can see
+// what an outside model would get without leaving the machine.
+const OUTSIDE = "https://analysis.example.com/v1"
+const routed = vi.hoisted(() => ({ to: "" }))
+vi.mock("../../models/endpoint.js", async (original) => {
+  const real = await original<typeof import("../../models/endpoint.js")>()
+  return {
+    ...real,
+    endpointFetch: (address: string, timeoutMs: number) =>
+      address.startsWith("https://analysis.example.com/")
+        ? (input: string | URL | Request, init?: RequestInit) =>
+            fetch(String(input).replace("https://analysis.example.com/v1", routed.to), init)
+        : real.endpointFetch(address, timeoutMs),
+  }
+})
 
 const app = { command: "chat", appName: "chat-cli", envPrefix: "CHAT", description: "", version: "1.0.0" }
 const config = settingsFor(app)
@@ -62,7 +79,9 @@ const setup = async () => {
   })
   servers.push(server)
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve))
-  const baseUrl = `http://127.0.0.1:${(server.address() as { port: number }).port}/v1`
+  const local = `http://127.0.0.1:${(server.address() as { port: number }).port}/v1`
+  routed.to = local
+  const baseUrl = OUTSIDE
   const root = mkdtempSync(join(tmpdir(), "analysis-cli-"))
   const env = {
     ...process.env,
@@ -135,7 +154,8 @@ const setup = async () => {
   }
   const call = (...argv: string[]) => callWith({}, argv)
   const locked = (...argv: string[]) => callWith({ CHAT_READ_ONLY: "1" }, argv)
-  return { call, locked, add, calls: () => calls, configure, baseUrl }
+  const sending = (mode: ChatSendingMode) => writeChatSending(env, mode)
+  return { call, locked, add, calls: () => calls, configure, baseUrl, local, sending }
 }
 const json = (result: { stdout: string[] }) => {
   const body = JSON.parse(result.stdout[0] ?? "null")
@@ -264,7 +284,7 @@ describe("analysis CLI consent and configuration", () => {
     )
   })
   it("under the read-only lock sends nothing to a remote provider, and still analyzes on a local server", async () => {
-    const { call, locked, configure, calls } = await setup()
+    const { call, locked, configure, calls, local } = await setup()
     configure({}, { base_url: "https://analysis.example.com/v1" })
     const refused = await locked("conversations", "links", "rebuild", "--analyze", "--chat", "9", "--yes", "--json")
     expect(refused.code).toBe(5)
@@ -272,10 +292,55 @@ describe("analysis CLI consent and configuration", () => {
       "this process is read-only (CHAT_READ_ONLY) — it cannot send chat text to analysis.example.com",
     )
     expect(json(await call("conversations", "consents", "list", "--json")).items).toEqual([])
-    configure()
+    configure({}, { base_url: local })
     expect(
       (await locked("conversations", "links", "rebuild", "--analyze", "--chat", "9", "--yes", "--json")).code,
     ).toBe(0)
     expect(calls()).toBe(1)
+  })
+
+  it("**a model on this computer needs no yes** and remembers no consent (BUG-766), whatever `models chats` says", async () => {
+    const { call, configure, calls, local, sending } = await setup()
+    configure({}, { base_url: local })
+    sending("denied")
+    const ran = await call("conversations", "links", "rebuild", "--analyze", "--chat", "9", "--json")
+    expect(ran.code, ran.stderr).toBe(0)
+    expect(json(ran)).toMatchObject({ stored: 1, stopped: "complete" })
+    expect(calls()).toBe(1)
+    expect(json(await call("conversations", "consents", "list", "--json")).items).toEqual([])
+  })
+
+  it("**`models chats` decides for a model outside this computer**: allowed sends with no yes, ask needs one, denied refuses even with --yes and a remembered consent", async () => {
+    const { call, add, calls, sending } = await setup()
+    const analyze = (...extra: string[]) =>
+      call("conversations", "links", "rebuild", "--analyze", "--chat", "9", ...extra, "--json")
+
+    const unasked = await analyze()
+    expect(unasked.code).not.toBe(0)
+    const refusal = JSON.parse(unasked.stderr).error
+    expect(refusal.code).toBe("confirmation_required")
+    expect(refusal.message).toContain("add --yes to send them (an agent may pass yes)")
+    expect(refusal.message).toContain("`chat models chats set allowed`")
+    expect(calls()).toBe(0)
+
+    sending("allowed")
+    const allowed = await analyze()
+    expect(allowed.code, allowed.stderr).toBe(0)
+    expect(calls()).toBe(1)
+    expect(json(await call("conversations", "consents", "list", "--json")).items).toEqual([])
+
+    sending("ask")
+    await add("9", "2")
+    expect((await analyze("--yes")).code).toBe(0)
+    expect(calls()).toBe(2)
+
+    sending("denied")
+    await add("9", "3")
+    const denied = await analyze("--yes")
+    expect(denied.code).toBe(5)
+    const error = JSON.parse(denied.stderr).error
+    expect(error.message).toContain("denied by the setting `models chats`")
+    expect(error.message).toContain("`chat models chats set ask`")
+    expect(calls()).toBe(2)
   })
 })
