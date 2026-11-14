@@ -14,7 +14,7 @@
   no longer require a title. A create with no `--start-time` and no `--kind` is an instant meeting that starts now
   (`MeetingCreateFields.instant`, true by default; `createMeetingManagement(scope, ports, { now })` sets the clock).
   The validated create always carries `kind` and `startTime`. A caller that relied on the refusal of a create without
-  a title or a start gives `kind: "scheduled"` to keep it.
+  a start gives `kind: "scheduled"` to keep it; a missing title is no longer refused.
 - **A field the service does not take is refused with `validation_error`, naming what it takes.** Before, every
   portable field reached every port. `validateMeetingChange(change, create, { declared, now })` takes the declaration;
   called with two arguments it keeps the portable fields.
@@ -23,4 +23,3 @@
   the write will go; the commands pass `askFirst` there.
 - **The `google-meet` provider's tool is `gcal`.** Google Meet has no tool of its own: its meetings are part of
   Google Calendar's tool, since every meeting is on the calendar. A hint that opens a Meet meeting now points at `gcal`.
-  The first screen's `gcal` line names Google Meet meetings.

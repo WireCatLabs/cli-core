@@ -278,15 +278,17 @@ const meet = createMeetingManagement(scope, {
 })
 ```
 
+In a tool that mounts them (`<tool> <profile> meetings …`), a Zoom-like service and a Meet-like one take:
+
 ```sh
-zm work meetings create --title "Example planning" --start-time 2026-11-20T10:00:00+01:00 --duration-minutes 30
-gcal work meetings create --setting access_type=trusted
-gcal work meetings update spaces/abc --setting access_type=restricted --setting moderation=true
+<tool> <profile> meetings create --title "Example planning" --start-time 2026-11-20T10:00:00+01:00 --duration-minutes 30
+<tool> <profile> meetings create --setting access_type=trusted
+<tool> <profile> meetings update spaces/abc --setting access_type=restricted --setting moderation=true
 ```
 
-The first Meet create has no title and no start: it starts now, and its receipt has `change: { kind: "instant",
+The second, on Meet, has no title and no start: it starts now, and its receipt has `change: { kind: "instant",
 start_time: "<now>", settings: { access_type: "trusted" } }`. Meet has no `cancel`: `endActiveConference` ends a
-call, not the space. `gcal work meetings update spaces/abc --title X` is refused.
+call, not the space. `meetings update spaces/abc --title X` on Meet is refused.
 
 Timestamps require an explicit offset or Z and normalize to UTC; invalid calendar dates are refused. Duration accepts
 integer minutes from 1 through 1440. Timezone accepts an IANA zone. Adapters map these fields and settings into their
