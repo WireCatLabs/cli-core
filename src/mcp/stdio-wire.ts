@@ -1,6 +1,6 @@
 import { PassThrough, type Readable, Writable } from "node:stream"
 
-type JsonRpc = { id?: unknown; method?: unknown }
+type JsonRpc = { jsonrpc?: unknown; id?: unknown; method?: unknown; params?: { requestId?: unknown } }
 
 const lineReader = (onMessage: (message: JsonRpc) => void) => {
   let rest = ""
@@ -27,8 +27,16 @@ export const answeredWire = (source: Readable, sink: Writable) => {
   const asked = new Set<string>()
   let settle: (() => void) | undefined
   const input = new PassThrough()
-  const onData = lineReader(({ id, method }) => {
-    if (id !== undefined && typeof method === "string") asked.add(JSON.stringify(id))
+  const answeredOne = (id: unknown) => {
+    asked.delete(JSON.stringify(id))
+    if (asked.size === 0) settle?.()
+  }
+  // The SDK answers neither a line it cannot parse as JSON-RPC 2.0 nor a request the client cancelled: waiting
+  // for either would keep the server open after the client is gone.
+  const onData = lineReader(({ jsonrpc, id, method, params }) => {
+    if (jsonrpc !== "2.0" || typeof method !== "string") return
+    if (method === "notifications/cancelled") answeredOne(params?.requestId)
+    else if (id !== undefined) asked.add(JSON.stringify(id))
   })
   const output = new Writable({
     write: (chunk: Buffer, _encoding, done) => {
@@ -37,9 +45,7 @@ export const answeredWire = (source: Readable, sink: Writable) => {
     },
   })
   const noteAnswer = lineReader(({ id, method }) => {
-    if (id === undefined || method !== undefined) return
-    asked.delete(JSON.stringify(id))
-    if (asked.size === 0) settle?.()
+    if (id !== undefined && method === undefined) answeredOne(id)
   })
   const forward = (chunk: Buffer) => {
     onData(chunk)
@@ -53,11 +59,28 @@ export const answeredWire = (source: Readable, sink: Writable) => {
   return {
     input,
     output,
-    ended,
-    answered: () =>
+    /**
+     * Until the client's stdin ended and everything it asked was answered, or until a stop: `signal` for a session
+     * relayed on other streams, SIGINT or SIGTERM for this process's own. A stop never waits for answers.
+     */
+    finished: (signal?: AbortSignal) =>
       new Promise<void>((resolve) => {
-        if (asked.size === 0) resolve()
-        else settle = resolve
+        const stop = () => {
+          process.off("SIGINT", stop)
+          process.off("SIGTERM", stop)
+          resolve()
+        }
+        if (signal) {
+          if (signal.aborted) return resolve()
+          signal.addEventListener("abort", stop, { once: true })
+        } else {
+          process.once("SIGINT", stop)
+          process.once("SIGTERM", stop)
+        }
+        ended.then(() => {
+          if (asked.size === 0) stop()
+          else settle = stop
+        })
       }),
     /** Lets go of the real stdin, so it no longer holds the process open. */
     release: () => {

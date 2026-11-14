@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto"
 import type { Readable, Writable } from "node:stream"
 import { type CallToolResult, McpServer } from "@modelcontextprotocol/server"
 import { StdioServerTransport, serveStdio } from "@modelcontextprotocol/server/stdio"
-import { CliError, mcpErrorResult } from "@wirecat/cli-base"
+import { CliError, errorObjectOf, mcpErrorResult } from "@wirecat/cli-base"
 import { describeProgram } from "@wirecat/cli-base/commands"
 import { skillResource } from "@wirecat/cli-base/skill"
 import type { ErrorObject } from "@wirecat/cli-base/standards"
@@ -291,8 +291,15 @@ export const createServer = (
     input: Record<string, unknown>,
     env: NodeJS.ProcessEnv,
     caller: RunCaller,
+    signal?: AbortSignal,
   ): Promise<AgentAnswer> => {
-    const next = queue.then(() => invoke(one, input, env, caller))
+    // A call the client cancelled while it waited never starts: a send behind a slow read would still go out, and
+    // its answer would be thrown away, so a retry would send it twice.
+    const next = queue.then(() =>
+      signal?.aborted
+        ? { error: errorObjectOf(new CliError("cancelled", `${one.command} was cancelled before it started`)) }
+        : invoke(one, input, env, caller),
+    )
     queue = next.catch(() => undefined)
     return next
   }
@@ -311,7 +318,7 @@ export const createServer = (
       const env = typeof traceparent === "string" ? { ...context.env, TRACEPARENT: traceparent } : context.env
       const caller = callerOf(ctx, keyOfCommand(one.command), source)
       // The connection the session opens for this call is recorded under the same caller.
-      const answer = await withCaller(caller, () => queued(one, args, env, caller))
+      const answer = await withCaller(caller, () => queued(one, args, env, caller, ctx?.mcpReq?.signal))
       const result =
         "error" in answer
           ? (mcpErrorResult(JSON.parse(agentJson(answer.error)) as ErrorObject) as CallToolResult)
@@ -471,18 +478,10 @@ export const serveOverStdio = async (
     onerror: (error) => context.renderer.note(`mcp: ${error.message}`),
   })
 
-  const ended = await new Promise<"input" | "stopped">((resolve) => {
-    wire.ended.then(() => resolve("input"))
-    if (own) signal?.addEventListener("abort", () => resolve("stopped"), { once: true })
-    else {
-      process.once("SIGINT", () => resolve("stopped"))
-      process.once("SIGTERM", () => resolve("stopped"))
-    }
-  })
+  // A one-shot pipe writes its calls and closes stdin: what it asked is still answered (FIND-1514).
+  await wire.finished(own ? signal : undefined)
 
   try {
-    // A one-shot pipe writes its calls and closes stdin: what it asked is still answered (FIND-1514).
-    if (ended === "input") await wire.answered()
     wire.release()
     await handle.close()
     await session.close()

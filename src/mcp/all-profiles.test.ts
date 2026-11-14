@@ -79,6 +79,7 @@ describe("one MCP server for every profile", () => {
       const answer = await client.callTool({ name: "chat_read", arguments: args })
       expect(answer.isError).toBe(true)
       expect((answer.content as { text: string }[])[0]?.text).toContain("one of: personal, work")
+      expect((answer.structuredContent as { error: object }).error).toMatchObject({ code: "validation_error" })
     }
     expect(started()).toEqual([])
   })

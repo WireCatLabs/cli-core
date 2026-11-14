@@ -3027,6 +3027,39 @@ describe("sending over MCP", () => {
     expect(JSON.stringify(entry)).not.toContain("see you")
   })
 
+  it("never starts a send the client cancelled while it waited behind another call", async () => {
+    let open: () => void = () => {}
+    const gate = new Promise<void>((resolve) => {
+      open = resolve
+    })
+    const sent: string[] = []
+    const telegram = scripted({
+      send: async (_chatId, text, options) => {
+        if (text === "first") await gate
+        sent.push(text)
+        return { message: { ...message, id: "99", text, outgoing: true }, sendId: options.sendId }
+      },
+    })
+    const { raw } = await connect(telegram, {})
+    const send = (text: string, signal?: AbortSignal) =>
+      raw.callTool(
+        { name: "chat_write", arguments: { command: "messages send", arguments: { chat: "Book club", text } } },
+        signal ? { signal } : {},
+      )
+    const first = send("first")
+    const cancel = new AbortController()
+    const second = send("second", cancel.signal).catch(() => undefined)
+    // Until the server holds the second call in its queue: a few turns of the in-memory transport.
+    for (let turn = 0; turn < 10; turn++) await new Promise((resolve) => setImmediate(resolve))
+    cancel.abort()
+    await second
+    open()
+    await first
+    await send("third")
+
+    expect(sent).toEqual(["first", "third"])
+  })
+
   it("writes the caller's trace from _meta.traceparent on the send journal's line", async () => {
     const { telegram } = sending()
     const { raw, env } = await connect(telegram, {})
