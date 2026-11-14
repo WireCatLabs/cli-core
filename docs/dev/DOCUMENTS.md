@@ -38,7 +38,11 @@ domain, SQL/transport/vendor imports in services, and private document imports f
    and is not `imported`: each principal then gets a documents account, `{ provider, account }`.
    Its content front matter names it in `source` (`{ source: "notion" }`): that keeps a copy of
    the file in a notes folder from joining the document by content, and places the document by
-   its catalog parents rather than by path.
+   its catalog parents rather than by path. In a vault, front matter is the owner's own text: a note whose `source`
+   names a documents provider is treated as a copy of a remote document, as an exported Drive file
+   always was (not joined by content, its `sourceUrl` and `modifiedAt` shown). The provider list is
+   read when the store opens, so a process that stays open, such as an MCP server, sees a provider
+   registered after it started only once it opens the store again.
    The external id of a source file is `<id>.md` (``externalId: (id) => `${id}.md` ``), in the catalog
    entry, its parents and the saved note alike: the catalog commands strip `.md` to show the source's id.
    The store sets no ceiling on an account's entries; one catalog write takes at most 200 and one

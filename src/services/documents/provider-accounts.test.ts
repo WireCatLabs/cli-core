@@ -6,6 +6,7 @@ import type { SourceFile } from "../../documents/model.js"
 import { useProviders } from "../../domain/providers.js"
 import { type MessageStore, openStore } from "../../store/index.js"
 import { openCache } from "../../store/open.js"
+import { contextDocumentTime, contextDocumentUrl } from "../../store/sqlite/context-document-source.js"
 import { refAccountsOf } from "../../store/sqlite/ref-accounts.js"
 import { documentIngestion } from "./ingestion.js"
 
@@ -116,5 +117,46 @@ describe("a documents provider other than Drive", () => {
     expect(await query((database) => refAccountsOf(database, ref))).toEqual([
       { provider: "notes", account: account?.id },
     ])
+  })
+
+  it("reads a page saved without catalog metadata by its front matter, which stands in when no file row has a link", async () => {
+    const { store, path, query } = await setup()
+    const account = await store.notes.documentsAccount({ provider: WIKI, account: "space-1" }, true)
+    const front = {
+      source: WIKI,
+      fileId: "p1",
+      sourceUrl: "https://wiki.invalid/p1",
+      modifiedAt: "2026-11-01T10:00:00Z",
+    }
+    const { note } = await store.notes.saveFileNote({
+      folderId: account?.id ?? "",
+      path: "p1.md",
+      title: "Plan",
+      text: "plan",
+      frontMatter: front,
+    })
+    expect(
+      await query((database) =>
+        database.prepare("SELECT external_id, url, external_updated_at FROM files WHERE document_id = ?").get(note.id),
+      ),
+    ).toEqual({ external_id: "p1", url: front.sourceUrl, external_updated_at: Date.parse(front.modifiedAt) })
+
+    const database = await openCache(path)
+    try {
+      database.prepare("UPDATE files SET url = NULL, external_updated_at = NULL WHERE document_id = ?").run(note.id)
+      const read = () =>
+        database
+          .prepare(
+            `SELECT ${contextDocumentUrl()} AS url, ${contextDocumentTime()} AS at FROM documents n WHERE n.id = ?`,
+          )
+          .get(note.id)
+      expect(read()).toEqual({ url: front.sourceUrl, at: Date.parse(front.modifiedAt) })
+      database
+        .prepare("UPDATE documents SET front_matter = json_set(front_matter, '$.source', 'unregistered') WHERE id = ?")
+        .run(note.id)
+      expect(read()?.url).toBeNull()
+    } finally {
+      database.close()
+    }
   })
 })
