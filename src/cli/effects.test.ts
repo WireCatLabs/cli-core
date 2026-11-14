@@ -89,6 +89,7 @@ describe("command effects", () => {
         "flood clear",
         "mcp add",
         "models add",
+        "models chats set",
         "models keys remove",
         "models keys set",
         "recipients add",

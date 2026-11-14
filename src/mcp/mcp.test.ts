@@ -30,6 +30,7 @@ import { placedText, textModelsDirectory } from "../embeddings/embed.js"
 import { textModel } from "../embeddings/models.js"
 import { ENTITIES } from "../entities/index.js"
 import { sampleMeeting } from "../meetings/testing/index.js"
+import { type ChatSendingMode, writeChatSending } from "../models/chat-sending.js"
 import type { MessengerAdapter, RemoteFile, SendOptions } from "../ports/messenger.js"
 import { listRuns, runsDirFor, startRun } from "../runs/run.js"
 import type { Asker, GuardRequest, SendGuard } from "../sends/guard.js"
@@ -825,6 +826,7 @@ describe("the MCP server", () => {
       "messages transcribe",
       "metadata show",
       "metadata sync",
+      "models chats show",
       "models list",
       "polls show",
       "recipients list",
@@ -2680,6 +2682,88 @@ describe("the MCP server", () => {
       skill: skillResource(app, new URL("file:///SKILL.md")).instruction,
     })
     expect(every.length).toBeLessThanOrEqual(2048)
+  })
+})
+
+describe("chat text to a model outside this computer over MCP", () => {
+  const embedding = async (mode?: ChatSendingMode) => {
+    const telegram = scripted({
+      history: async () => ({
+        items: [
+          { ...message, id: "1", senderId: "10", text: "Which train goes to the museum?" },
+          { ...message, id: "2", senderId: "11", text: "Take the blue line and change at North." },
+        ],
+        hasMore: false,
+      }),
+    })
+    const harness = await connect(telegram, {
+      extraEnv: { CHAT_OPENAI_API_KEY: "sk-test" },
+      permission: ["conversations.embeddings=allow"],
+    })
+    if (mode) writeChatSending(harness.env, mode)
+    await harness.call("messages list", { chat: "7" })
+    await harness.call("conversations links rebuild", { chat: "7" })
+    const sent: string[] = []
+    vi.stubGlobal("fetch", async (url: string, init: RequestInit) => {
+      sent.push(url)
+      const { input } = JSON.parse(String(init.body)) as { input: string[] }
+      return new Response(
+        JSON.stringify({ data: input.map((_, index) => ({ index, embedding: [1, ...new Array(1535).fill(0)] })) }),
+      )
+    })
+    return { ...harness, sent }
+  }
+  afterEach(() => vi.unstubAllGlobals())
+  const remote = { chat: "7", embedding_provider: "openai" }
+
+  it("**allowed**: `conversations embed` sends with no yes", async () => {
+    const { call, sent } = await embedding("allowed")
+    const done = await call("conversations embed", remote)
+    expect(done.isError, JSON.stringify(done.body)).toBe(false)
+    expect(sent).toEqual(["https://api.openai.com/v1/embeddings"])
+  })
+
+  it("**ask**, the default: refuses without yes and names what the agent can do, then sends with yes", async () => {
+    const { call, sent } = await embedding()
+    const refused = await call("conversations embed", remote)
+    expect(refused.isError).toBe(true)
+    expect(refused.body.error.code).toBe("confirmation_required")
+    expect(refused.body.error.message).toContain("an agent may pass yes")
+    expect(refused.body.error.message).toContain("models chats set allowed")
+    expect(sent).toEqual([])
+    const done = await call("conversations embed", { ...remote, yes: true })
+    expect(done.isError, JSON.stringify(done.body)).toBe(false)
+    expect(sent).toHaveLength(1)
+  })
+
+  it("**denied**: refuses even with yes, and names the owner's command", async () => {
+    const { call, sent } = await embedding("denied")
+    const refused = await call("conversations embed", { ...remote, yes: true })
+    expect(refused.isError).toBe(true)
+    expect(refused.body.error.code).toBe("permission_error")
+    expect(refused.body.error.message).toContain("models chats set ask")
+    expect(sent).toEqual([])
+  })
+
+  it("**a model on this computer** is not outside: denied does not stop it", async () => {
+    const { call, sent } = await embedding("denied")
+    const local = { chat: "7", base_url: "http://127.0.0.1:11434/v1", model: "m", dims: 8 }
+    vi.stubGlobal("fetch", async (url: string, init: RequestInit) => {
+      sent.push(url)
+      const { input } = JSON.parse(String(init.body)) as { input: string[] }
+      return new Response(
+        JSON.stringify({ data: input.map((_, index) => ({ index, embedding: [1, 0, 0, 0, 0, 0, 0, 0] })) }),
+      )
+    })
+    const done = await call("conversations embed", local)
+    expect(done.isError, JSON.stringify(done.body)).toBe(false)
+    expect(sent).toEqual(["http://127.0.0.1:11434/v1/embeddings"])
+  })
+
+  it("an agent cannot change `models chats`: `models chats set` is no MCP tool", async () => {
+    const commands = await (await connect(scripted())).client.availableCommands()
+    expect(commands).toContain("models chats show")
+    expect(commands).not.toContain("models chats set")
   })
 })
 

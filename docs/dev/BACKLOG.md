@@ -23,6 +23,9 @@ None open.
 
 ## Next (P2)
 
+- **CORE-67** · P2 · `src/cli/messenger/serve-relay.test.ts` failed once in a full run and passed alone (DEBT-360).
+  A lock path too long for a socket puts the relay socket under the temporary folder or `/tmp`, named by a hash of
+  the path (`src/background/relay.ts:69`), so parallel sessions may clash there; not verified.
 - **CORE-55** · P2 · Move gcal-cli and drive-cli onto `@wirecat/cli-core/google`: their own `googleError` and page
   loops (gcal `src/errors.ts`, `src/calendar-source.ts` `allPages`) become imports, after a release carries it.
   gcal keeps its own Calendar-only `forbiddenForNonOrganizer` → `event.organizer-only` mapping and its reason

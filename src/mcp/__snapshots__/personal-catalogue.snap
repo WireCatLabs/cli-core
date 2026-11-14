@@ -64,6 +64,7 @@ read  messages scheduled
 read  messages show
 read  messages transcribe
 read  metadata show
+read  models chats show
 read  models list
 read  polls show
 read  recipients list

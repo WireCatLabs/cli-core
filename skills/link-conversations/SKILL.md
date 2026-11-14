@@ -10,7 +10,7 @@ metadata:
 A busy group mixes several conversations at once. `{{command}}` already links what it can without
 you: the messenger's own replies, mentions, and one person's messages in a row. You decide the rest:
 for each message, **which earlier message it answers**, or that it starts a new conversation. You
-read the messages; `{{command}}` checks and stores your answers. By default it leaves analysis to your agent. An explicit configured analysis provider can also process these batches through `conversations links rebuild --analyze`; that path asks for consent and validates the same answers.
+read the messages; `{{command}}` checks and stores your answers. By default it leaves analysis to your agent. An explicit configured analysis provider can also process these batches through `conversations links rebuild --analyze`; that path validates the same answers. To a model outside this computer it follows the owner's `models chats` setting: `allowed` needs no yes, `ask` needs `--yes`, which you may pass, `denied` refuses even with it; only the owner changes it.
 
 ## Before the first batch: say what it costs, and wait
 

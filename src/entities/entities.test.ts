@@ -1356,6 +1356,7 @@ const samples: Record<EntityName, unknown> = {
     },
   },
   reference: "note:42",
+  chat_sending: { mode: "ask", meaning: "each send needs a yes", since: null },
   model_key: { provider: "openai", stored: "keyring" },
   "model_key.stored": { provider: "openai", stored: "keyring" },
   "model_key.removed": { provider: "openai", removed: [] },

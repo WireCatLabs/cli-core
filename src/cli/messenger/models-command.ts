@@ -21,6 +21,7 @@ import {
   imageModelsDirectory,
   isImageModelInstalled,
 } from "../../images/picture/models.js"
+import { typedCommand } from "../../runs/scope.js"
 import { downloadImageModel, downloadRerankModel, downloadTextModel } from "../../services/model-downloads.js"
 import { addCustomTextModel, useTextModel } from "../../services/text-model-choice.js"
 import {
@@ -35,6 +36,7 @@ import {
 import { orderedModels, type SpeechModel, speechModel, VAD } from "../../speech/models.js"
 import { choose } from "../../speech/transcribe.js"
 import { readSecret } from "../../terminal/prompt.js"
+import { chatSendingCommand } from "../chat-sending-command.js"
 import { baseContext, environmentOf } from "../context.js"
 import { FETCH, grantsAuthority, LOCAL_READ, LOCAL_WRITE, reachesOtherService } from "../effects.js"
 import { type Body, itemOf, listOf, renderAnswer } from "../envelope.js"
@@ -233,6 +235,13 @@ export const modelsCommand = (messenger: Messenger): Command => {
   const tool = `${messenger.app.command} personal`
   const models = new Command("models").description("models that run on this machine")
   models.addCommand(modelKeysCommand(messenger, tool))
+  models.addCommand(
+    chatSendingCommand(messenger.app, {
+      env: (command) => baseContext(command, messenger.resolveSettings).env,
+      output: (answer, command) => renderAnswer(command, baseContext(command, messenger.resolveSettings), answer),
+      tool: () => typedCommand(messenger.app.command, ""),
+    }),
+  )
   withQuery(
     annotate(models.command("list"), {
       effects: LOCAL_READ,

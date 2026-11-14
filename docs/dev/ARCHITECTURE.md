@@ -978,7 +978,8 @@ locally under `conversations.links`: readonly/deny hides them, ask refuses with 
 The `link-conversations` prompt reads the same shipped skill as the CLI; its cost/consent gate is
 per chat. These tools call `services.conversations`; inference in this MCP loop belongs to the
 owner's agent. The explicit CLI `build --analyze` path can call a
-configured provider with consent; see [AI providers](../search/ai-providers.md).
+configured provider; to a model outside this computer it follows the owner's `models chats` setting
+(allowed, ask or denied); see [AI providers](../search/ai-providers.md).
 
 Consumer parity: planned for both CLIs on their next SDK adoption. Source-level shared schema and
 synthetic MCP proof are tested here; installed consumer parity is not claimed before publication.

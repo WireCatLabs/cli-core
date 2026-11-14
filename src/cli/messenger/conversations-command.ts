@@ -6,7 +6,9 @@ import { openAnalysis, providerIdentity } from "../../analysis/provider.js"
 import { runAnalysis } from "../../analysis/runner.js"
 import { DEFAULT_TEXT_MODEL } from "../../embeddings/models.js"
 import { isLocal } from "../../embeddings/remote.js"
+import { chatSendingAllowed, chatSendingAskRefusal } from "../../models/chat-sending.js"
 import { renderMessages } from "../../render/messages.js"
+import { typedCommand } from "../../runs/scope.js"
 import { searchTimeLimit } from "../../search/lucene/types.js"
 import { BATCH_SIZE, CONVERSATION_QUERY, type ConversationItem } from "../../services/conversations.js"
 import {
@@ -64,8 +66,10 @@ const conversationBuildCommand = (messenger: Messenger): Command =>
       .option("--chat <chat>", messenger.chatArgument)
       .option(
         "--analyze",
-        "link batches using the configured analysis provider; requires --chat and remembers consent for this chat/provider",
+        "link batches using the configured analysis provider; requires --chat. A model outside this computer follows " +
+          "the `models chats` setting: under ask, a yes is remembered for this chat and provider",
       )
+      .option("--yes", "send this chat's text to the analysis model outside this computer, when `models chats` is ask")
       .addOption(new Option("--analysis-provider <provider>", "analysis: agent, openai or anthropic"))
 
       .option("--model <model>", "analysis model; overrides models.analysis.model")
@@ -85,17 +89,23 @@ const conversationBuildCommand = (messenger: Messenger): Command =>
         analyze?: boolean
         size?: number
         maxTokens?: number
-        yes?: boolean
       }
     >()
     const { chat, maxChats } = options
+    const { yes } = this.opts<{ yes?: boolean }>()
     const context = messengerContext(this, messenger)
     if (options.analyze) {
       if (!chat) throw new CliError("validation_error", "--analyze requires --chat")
       refuseLocalWrite(context, messenger.app.command, LINKS_KEY)
       refuseLocalWrite(context, messenger.app.command, "conversations.links.rebuild")
       const target = analysisChoice(options, messenger.app, context.settings, context.env, context.keyring)
-      if (!isLocal(target.baseUrl)) refuseUnderReadOnly(this, `send chat text to ${new URL(target.baseUrl).host}`)
+      const outside = !isLocal(target.baseUrl)
+      const host = new URL(target.baseUrl).host
+      const tool = typedCommand(messenger.app.command, "")
+      if (outside) refuseUnderReadOnly(this, `send chat text to ${host}`)
+      // A model on this computer keeps the text here: it needs no yes, as embeddings on this computer need none.
+      const needsYes = () => outside && !chatSendingAllowed(context.env, host, tool)
+      const asks = needsYes()
       const controller = new AbortController()
       context.track({ close: async () => controller.abort() })
       const maxTokens = options.maxTokens ?? 100_000
@@ -109,11 +119,11 @@ const conversationBuildCommand = (messenger: Messenger): Command =>
         const status = await services.conversations.batchStatus(chat, size)
         const consents = analysisConsents(store, account)
         const identity = providerIdentity(target)
-        if (status.messages && !(await consents.has(status.chat, identity))) {
+        if (asks && status.messages && !(await consents.has(status.chat, identity))) {
           const what = `${status.messages} messages, ${status.characters} characters (about ${status.tokensEstimate} message tokens, plus prompt and batch context), go to ${target.model} at ${target.baseUrl}; this run reserves at most ${maxTokens} input/output tokens. Consent is remembered for this chat and provider until revoked`
-          if (!options.yes) {
+          if (!yes) {
             const answer = await askOwner(this, `${what}. Allow analysis? [y/N] `)
-            if (answer === null) throw new CliError("confirmation_required", `${what} — add --yes`)
+            if (answer === null) throw chatSendingAskRefusal(what, tool)
             if (!/^y(es)?$/i.test(answer.trim())) throw new CliError("cancelled", "cancelled — nothing was sent")
           }
           await consents.remember(status.chat, identity)
@@ -124,7 +134,8 @@ const conversationBuildCommand = (messenger: Messenger): Command =>
           services.conversations,
           chat,
           async (...args) => {
-            if (!(await consents.has(status.chat, identity)))
+            // Read again per batch: a revoked consent or a stricter setting stops the run before the next send.
+            if (needsYes() && !(await consents.has(status.chat, identity)))
               throw new CliError("permission_error", "analysis consent was revoked; no further batch was sent")
             return request(...args)
           },
@@ -452,6 +463,7 @@ export const conversationsCommand = (messenger: Messenger): Command => {
       "remote: stop before a run that could send more tokens than this",
       positiveCount("--max-tokens"),
     )
+    .option("--yes", "remote: send the chunks to the model outside this computer, when `models chats` is ask")
   boundOptions(embed, { oneChatUnbounded: true })
   embed.action(async function (this: Command) {
     const options = this.optsWithGlobals<
@@ -459,9 +471,9 @@ export const conversationsCommand = (messenger: Messenger): Command => {
         chat?: string
         threads?: number
         maxTokens?: number
-        yes?: boolean
       } & BoundOptions
     >()
+    const { yes } = this.opts<{ yes?: boolean }>()
     const context = messengerContext(this, messenger)
     refuseLocalWrite(context, messenger.app.command, EMBED_KEY)
     const model = choiceOf(options, messenger, context)
@@ -487,8 +499,14 @@ export const conversationsCommand = (messenger: Messenger): Command => {
           (status.estimateSeconds === null ? "" : `, ${minutes(status.estimateSeconds)} on one session`),
       )
       if (typeof model !== "string" && status.left > 0 && !isLocal(model.remote.baseUrl)) {
-        refuseUnderReadOnly(this, `send chat text to ${new URL(model.remote.baseUrl).host}`)
-        await consent(this, status, model.remote.baseUrl, options)
+        const host = new URL(model.remote.baseUrl).host
+        refuseUnderReadOnly(this, `send chat text to ${host}`)
+        const tool = typedCommand(messenger.app.command, "")
+        const allowed = chatSendingAllowed(context.env, host, tool)
+        await consent(this, status, model.remote.baseUrl, tool, {
+          yes: allowed || yes === true,
+          ...(options.maxTokens === undefined ? {} : { maxTokens: options.maxTokens }),
+        })
       }
       return services.embeddings.embed(chat, {
         model,
@@ -735,6 +753,7 @@ const consent = async (
   command: Command,
   status: EmbedStatus,
   baseUrl: string,
+  tool: string,
   { yes, maxTokens }: { yes?: boolean; maxTokens?: number },
 ) => {
   if (maxTokens !== undefined && status.tokensAtMost > maxTokens) {
@@ -751,7 +770,7 @@ const consent = async (
     `go to ${status.model} (${new URL(baseUrl).host})`
   if (yes) return
   const answer = await askOwner(command, `${what}. Send them? [y/N] `)
-  if (answer === null) throw new CliError("confirmation_required", `${what} — add --yes to send them`)
+  if (answer === null) throw chatSendingAskRefusal(what, tool)
   if (!/^y(es)?$/i.test(answer.trim())) throw new CliError("cancelled", "cancelled — nothing was sent")
 }
 

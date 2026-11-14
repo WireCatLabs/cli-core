@@ -445,6 +445,9 @@
       "value": "<person>",
       "meaning": "a person: the one an identity leaves in `contacts unlink`, the sender in `bot search messages`"
     },
+    "--from-app": {
+      "meaning": "you did this in WireCat Desktop"
+    },
     "--from-dir": {
       "value": "<dir>",
       "meaning": "read nonrecursive files from this directory for one explicit chat"
@@ -3043,7 +3046,8 @@
         },
         "--max-tokens": "all",
         "--model": "all",
-        "--threads": "all"
+        "--threads": "all",
+        "--yes": "all"
       }
     },
     "conversations embeddings": {
@@ -3114,6 +3118,9 @@
           "in": "all"
         },
         "--size": {
+          "in": "all"
+        },
+        "--yes": {
           "in": "all"
         }
       }
@@ -3695,6 +3702,18 @@
       "options": {
         "--payload": "all"
       }
+    },
+    "models chats": {
+      "in": "all"
+    },
+    "models chats set": {
+      "in": "all",
+      "options": {
+        "--from-app": "all"
+      }
+    },
+    "models chats show": {
+      "in": "all"
     },
     "models download": {
       "in": "all",
