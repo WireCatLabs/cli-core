@@ -204,7 +204,7 @@ describe("meetings, calls and events as one row per real meeting", () => {
         series: { ...base.meeting.series, externalId: "adhoc" },
       } as typeof base.meeting,
     })
-    return { store, zoom, zoomed, alone, base }
+    return { store, zoom, zoomed, alone, base, calendar: calendar?.id as number }
   }
   const month = "started_at:[2026-11-01 TO 2026-12-01}"
 
@@ -267,6 +267,41 @@ describe("meetings, calls and events as one row per real meeting", () => {
     ).rejects.toMatchObject({
       code: "not_found",
     })
+  })
+
+  it("ties Meet's notes to their event by the event's Drive attachment, whichever syncs first", async () => {
+    const { store, calendar } = await setup()
+    const meet = (externalId: string, fileId: string) =>
+      entry(externalId, {
+        joinUrl: "https://meet.google.com/abc-defg-hij",
+        startsAt: at("2026-11-12T09:00:00Z"),
+        endsAt: at("2026-11-12T09:30:00Z"),
+        attachments: [{ fileId, title: `${externalId} - Notes by Gemini` }],
+      })
+    const drive = String(await store.accounts.saveAccount({ provider: "google-drive", account: "ana" }, { name: null }))
+    const notes = (fileId: string, title: string) =>
+      store.notes.saveFileNote({
+        folderId: drive,
+        path: `${fileId}.md`,
+        title,
+        text: "Summary of an invented meeting",
+        frontMatter: { source: "google-drive", fileId },
+      })
+    const early = await notes("notes-1", "Design review - Notes by Gemini")
+    await store.calendar.saveEntries(calendar, [meet("Design review", "notes-1")], 1)
+    await store.calendar.saveEntries(calendar, [meet("Retro", "notes-2")], 1)
+    const late = await notes("notes-2", "Retro - Notes by Gemini")
+
+    const rows = (await listMeetingEntries(store, meetingListRequest(`${month} kind:event`, page).request)).items
+    for (const [title, note] of [
+      ["Design review", early.note],
+      ["Retro", late.note],
+    ] as const) {
+      const row = rows.find((one) => one.title === title)
+      expect(row?.documents).toMatchObject([{ ref: `document:${note.id}`, title: `${title} - Notes by Gemini` }])
+      const shown = await showDocument(store, `document:${note.id}`, { offset: 0, limit: 1 })
+      expect(shown.events).toMatchObject([{ ref: row?.ref, title }])
+    }
   })
 
   it("keeps a meeting that runs into the window on its event's row, though the event ended before it", async () => {
