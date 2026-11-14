@@ -37,7 +37,7 @@ export interface ServiceDeps {
    */
   store: () => Promise<MessageStore>
   guard: SendGuard
-  /** For the profile's own files — a group's moderation rules. `default` and `process.env` when unset. */
+  /** For the profile's own files — a group's moderation rules, which refuse to guess one when unset. */
   profile?: string
   env?: NodeJS.ProcessEnv
   /** A long-running process's open models, so a search does not load one each time. */

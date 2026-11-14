@@ -1,7 +1,13 @@
 import { CliError } from "@wirecat/cli-base"
 import type { Id } from "../domain/models.js"
 import { type CheckRow, type Finding, gather, MAX_ACTIONS, type Moderator } from "../moderation/check.js"
-import { defaultRules, type GroupRules, ModerationRules, moderationPathFor } from "../moderation/rules.js"
+import {
+  defaultRules,
+  type GroupRules,
+  ModerationRules,
+  moderationPathFor,
+  moderationProfiles,
+} from "../moderation/rules.js"
 import { moderateWith } from "../moderation/run.js"
 import { capability, type MessengerAdapter } from "../ports/messenger.js"
 import { guardedWrite } from "../sends/guarded.js"
@@ -35,8 +41,21 @@ export interface ModerationService {
 }
 
 export const moderationService = (deps: ServiceDeps): ModerationService => {
-  const file = () =>
-    new ModerationRules(moderationPathFor(deps.messenger.app, deps.profile ?? "default", deps.env ?? process.env))
+  // Checked at first use, not here: every service is built for every command, most of them without a profile.
+  const file = () => {
+    const env = deps.env ?? process.env
+    if (deps.profile === undefined) {
+      const choices = moderationProfiles(deps.messenger.app, env)
+      throw new CliError(
+        "validation_error",
+        `name a profile: moderation rules are kept per profile — ${
+          choices.length ? `profiles with rules here: ${choices.join(", ")}` : "no profile has rules here yet"
+        }`,
+        { profiles: choices },
+      )
+    }
+    return new ModerationRules(moderationPathFor(deps.messenger.app, deps.profile, env))
+  }
   const group = async (chat: string) => {
     if (deps.offline)
       throw new CliError("validation_error", "a group's rules are kept by its id, which the messenger gives")

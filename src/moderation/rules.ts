@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs"
+import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import { CliError, resolvePaths, writeSecurely } from "@wirecat/cli-base"
 import * as v from "valibot"
@@ -102,12 +102,21 @@ const KEYS: Record<string, { help: string; parse: (value: string) => unknown }> 
 
 export const RULE_KEYS = Object.keys(KEYS)
 
+const profilesFolder = (app: AppIdentity, env: NodeJS.ProcessEnv) =>
+  join(resolvePaths({ appName: app.appName, prefix: app.envPrefix, env }).state, "profiles")
+
 export const moderationPathFor = (app: AppIdentity, profile: string, env: NodeJS.ProcessEnv = process.env): string =>
-  join(
-    resolvePaths({ appName: app.appName, prefix: app.envPrefix, env }).state,
-    "profiles",
-    `${profile}.moderation.json`,
-  )
+  join(profilesFolder(app, env), `${profile}.moderation.json`)
+
+/** The profiles that keep moderation rules on this computer: the choices when a caller named none. */
+export const moderationProfiles = (app: AppIdentity, env: NodeJS.ProcessEnv = process.env): string[] => {
+  const folder = profilesFolder(app, env)
+  if (!existsSync(folder)) return []
+  return readdirSync(folder)
+    .filter((name) => name.endsWith(".moderation.json"))
+    .map((name) => name.slice(0, -".moderation.json".length))
+    .sort()
+}
 
 /**
  * The rules of each group this profile moderates, one file per profile beside the recipient list —
