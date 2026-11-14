@@ -615,6 +615,7 @@ const MEETING_COLUMNS = {
   ended_at: { type: "time", sql: "ended_at" },
   duration_ms: { type: "num", sql: "duration_ms" },
   participants_count: { type: "num", sql: "participants_count" },
+  provider_id: { type: "kw", sql: "external_id" },
   created_at: { type: "time", sql: "created_at" },
   updated_at: { type: "time", sql: "updated_at" },
 } as const satisfies ColumnMap
@@ -874,6 +875,12 @@ export const meetingStoreOver = (context: StoreContext): StoredMeetings => {
     },
     async meeting(id) {
       return details(database, id)
+    },
+    async meetingByExternalId(accountId, externalId) {
+      const row = database
+        .prepare("SELECT id FROM meetings WHERE account_id = ? AND external_id = ?")
+        .get(accountId, externalId)
+      return row ? details(database, Number(row.id)) : null
     },
     async participants(query, accountId) {
       return participants(database, query, accountId)

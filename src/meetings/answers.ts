@@ -87,7 +87,7 @@ export const meetingSummary = v.strictObject({
 })
 
 /** `meetings show`: the meeting with who took part, what was said in its chat, and what it holds. */
-export const meetingDetails = v.strictObject({
+const meetingDetailsEntries = {
   ...meeting.entries,
   /** The stored event and series it belongs to, as `meetings_list` takes them. */
   event_id: v.nullable(text),
@@ -132,7 +132,12 @@ export const meetingDetails = v.strictObject({
       document: v.nullable(reference),
     }),
   ),
-})
+}
+type MeetingDetailsEntriesOf = typeof meetingDetailsEntries
+// Named, as `MeetingEntries` is, so the entity registry stays within what tsc writes out (TS7056).
+export interface MeetingDetailsEntries extends MeetingDetailsEntriesOf {}
+export const meetingDetails: v.StrictObjectSchema<MeetingDetailsEntries, undefined> =
+  v.strictObject(meetingDetailsEntries)
 
 export type MeetingHitItem = v.InferOutput<typeof meetingHit>
 export type MeetingTranscriptItem = v.InferOutput<typeof meetingTranscript>

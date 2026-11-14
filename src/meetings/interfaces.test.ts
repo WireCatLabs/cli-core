@@ -49,8 +49,8 @@ describe("meeting commands", () => {
 
     expect(effects).toEqual({
       meetings: { remote: "none", local: "none" },
-      "meetings list": { remote: "none", local: "read" },
-      "meetings show": { remote: "none", local: "read" },
+      "meetings list": { remote: "read", local: "read" },
+      "meetings show": { remote: "read", local: "read" },
       "meetings transcript": { remote: "none", local: "read" },
       "meetings summary": { remote: "none", local: "read" },
       "meetings export": { remote: "none", local: "write" },

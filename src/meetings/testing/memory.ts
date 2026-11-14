@@ -117,6 +117,11 @@ export const memoryMeetingStore = (): MeetingStore & MeetingTranscriptStore => {
     async meeting(id) {
       return structuredClone(state.meetings.find((d) => d.meeting.id === id) ?? null)
     },
+    async meetingByExternalId(accountId, externalId) {
+      return structuredClone(
+        state.meetings.find((d) => d.meeting.accountId === accountId && d.meeting.externalId === externalId) ?? null,
+      )
+    },
     async participants(query, accountId) {
       const term = query.toLocaleLowerCase()
       return structuredClone(

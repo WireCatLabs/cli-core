@@ -20,10 +20,11 @@ export const meetingIssuesOf = (metadata: Meeting["metadata"]): MeetingIssue[] =
   return Array.isArray(listed) ? MEETING_ISSUES.filter((issue) => listed.includes(issue)) : []
 }
 
-/** A stored meeting as every command and tool answers it; `src/entities/` registers it as `meeting`. */
-export const meeting = v.strictObject({
+const meetingEntries = {
   ref: reference,
   id: v.pipe(v.string(), v.minLength(1)),
+  /** The service's own id of this occurrence: what `meetings show` takes besides the store number. */
+  provider_id: text,
   provider: text,
   account: text,
   title: v.nullable(text),
@@ -38,9 +39,20 @@ export const meeting = v.strictObject({
   participants_count: v.nullable(count),
   /** Present only when something about this meeting is doubtful. */
   issues: v.optional(v.array(v.picklist(MEETING_ISSUES))),
+  /**
+   * Where a read that asked the service found it, as messages search says it: `archive` (only the store), `server`
+   * (new from the service), `both`. Absent when the service was not asked.
+   */
+  found_in: v.optional(v.picklist(["archive", "server", "both"])),
   created_at: isoTime,
   updated_at: isoTime,
-})
+}
+type MeetingEntriesOf = typeof meetingEntries
+// Named, so the entity registry's declaration refers to it instead of spelling every field out again (TS7056).
+export interface MeetingEntries extends MeetingEntriesOf {}
+
+/** A stored meeting as every command and tool answers it; `src/entities/` registers it as `meeting`. */
+export const meeting: v.StrictObjectSchema<MeetingEntries, undefined> = v.strictObject(meetingEntries)
 
 export type MeetingItem = v.InferOutput<typeof meeting>
 
@@ -57,6 +69,7 @@ export const meetingItem = (row: Meeting, owner: MeetingOwner): MeetingItem => {
   return {
     ref: formatMeetingReference({ type: "meeting", accountId: row.accountId, meetingId: row.id }),
     id: String(row.id),
+    provider_id: row.externalId,
     provider: owner.provider,
     account: owner.account,
     title: row.title,
@@ -79,9 +92,10 @@ export const MEETING_QUERY = {
   entity: "meeting",
   backend: "sql",
   fields: queryFieldsOf(meeting, {
-    exclude: ["ref", "provider", "account", "description", "location", "url", "timezone", "issues"],
+    exclude: ["ref", "provider", "account", "description", "location", "url", "timezone", "issues", "found_in"],
     examples: {
       id: "id:12",
+      provider_id: "provider_id:85746065432",
       title: "title:*standup*",
       started_at: "started_at:[2026-10-01 TO 2026-10-31]",
       duration_ms: "duration_ms>=3600000",

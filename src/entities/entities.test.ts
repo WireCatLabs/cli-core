@@ -274,6 +274,24 @@ const samples: Record<EntityName, unknown> = {
   },
   meeting_ingestion: { meetings: 1, participants: 2, transcript_rows: 3, summaries: 0, warnings: [] },
   meeting_export: { meeting_id: "1", format: "markdown", filename: "fixture.md", content: "Synthetic text" },
+  meeting_change: {
+    action: "create",
+    provider: "fixture",
+    account: "fixture",
+    change: { title: "Example planning", start_time: "2026-11-20T10:00:00.000Z" },
+    applied: true,
+    meeting: {
+      id: "900",
+      title: "Example planning",
+      kind: "scheduled",
+      start_time: "2026-11-20T10:00:00.000Z",
+      duration_minutes: 30,
+      timezone: "Europe/Madrid",
+      agenda: null,
+      join_url: "https://example.com/j/900",
+    },
+  },
+  meeting_invitation: { id: "900", invitation: "Join the example meeting: https://example.com/j/900" },
   meeting_association: {
     scope: { provider: "fixture", account: "fixture" },
     account_id: "1",
@@ -883,6 +901,7 @@ const samples: Record<EntityName, unknown> = {
   meeting: {
     ref: "meeting:zoom/1",
     id: "1",
+    provider_id: "85746065432",
     provider: "zoom",
     account: "a",
     title: null,
@@ -907,6 +926,7 @@ const samples: Record<EntityName, unknown> = {
   meeting_details: {
     ref: "meeting:1/2",
     id: "2",
+    provider_id: "85746065432",
     provider: "zoom",
     account: "a",
     title: "Weekly",

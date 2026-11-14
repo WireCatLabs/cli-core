@@ -1,9 +1,9 @@
 import { CliError } from "@wirecat/cli-base"
 import type { DateRange } from "@wirecat/cli-base/query"
 import type { Chat, Id, MessageHit } from "../domain/models.js"
+import { type Backend, type ServiceCapability, serviceCallsOf } from "../meetings/index.js"
 import { capability, type MessengerAdapter, type ServerQuery } from "../ports/messenger.js"
 import type { ResolvedPredicate } from "../search/lucene/resolved.js"
-import { type ServiceCapability, serviceCallsOf } from "../search/service-query.js"
 import type { AccountKey } from "../store/store.js"
 import type { ServiceDeps } from "./deps.js"
 import type { SearchQuery } from "./messages.js"
@@ -16,7 +16,7 @@ export const SERVER_SEARCH_KEY = "messages.server-search"
  */
 export const SERVER_BOUNDS = { timeMs: 5_000, perCall: 100, maxCalls: 3, textBytes: 262_144 }
 export const DEFAULT_BACKEND = "both"
-export type Backend = "archive" | "server" | "both"
+export type { Backend }
 export interface ServerOptions {
   timeMs?: number
 }

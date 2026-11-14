@@ -166,6 +166,8 @@ export interface MeetingStore {
   /** The provider and account a meeting account id stands for; `null` when the store has no such account. */
   account(id: number): Promise<MeetingOwner | null>
   meeting(id: number): Promise<MeetingDetails | null>
+  /** The account's meeting the provider knows by `externalId` (the occurrence id), deleted or not; `null` when none. */
+  meetingByExternalId?(accountId: number, externalId: string): Promise<MeetingDetails | null>
   participants(query: string, accountId?: number): Promise<Participant[]>
   search(query: string, filter?: MeetingFilter): Promise<ListResult<SearchHit>>
   events(): Promise<Event[]>

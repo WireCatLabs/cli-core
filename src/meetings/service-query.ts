@@ -1,5 +1,12 @@
 import type { Occur, Predicate, Span } from "@wirecat/cli-base/query"
 
+/**
+ * Where a read looks, the one vocabulary of messages, mail, calendar and meetings: the store (`archive`), the
+ * service's own search (`server`), or both, with what the service returns kept in the store.
+ */
+export const BACKENDS = ["archive", "server", "both"] as const
+export type Backend = (typeof BACKENDS)[number]
+
 /** The operators a service's own search may read; patterns and regexes always stay with the store. */
 export type ServiceOperator = "term" | "phrase" | "range"
 
