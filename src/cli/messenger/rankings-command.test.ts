@@ -16,7 +16,7 @@ import { statsCommand } from "./stats-command.js"
 
 const SPLIT = ["😂", "👍", "🔥", "❤", "🎉", "👏"].map((reaction, index) => ({ reaction, count: index === 1 ? 9 : 1 }))
 const app = { command: "chat", appName: "chat-cli", envPrefix: "CHAT", description: "", version: "1.0.0" }
-const setup = async (permissions?: object) => {
+const setup = async (permissions?: object, defaults: object = {}) => {
   const root = mkdtempSync(join(tmpdir(), "ranking-cli-"))
   const env = {
     ...process.env,
@@ -26,9 +26,12 @@ const setup = async (permissions?: object) => {
     MESSAGING_STORE: join(root, "m.db"),
     NO_COLOR: "1",
   }
-  if (permissions) {
+  if (permissions || Object.keys(defaults).length) {
     mkdirSync(env.CHAT_CONFIG_DIR, { recursive: true })
-    writeFileSync(join(env.CHAT_CONFIG_DIR, "config.json"), JSON.stringify({ defaults: { permissions } }))
+    writeFileSync(
+      join(env.CHAT_CONFIG_DIR, "config.json"),
+      JSON.stringify({ defaults: { ...defaults, ...(permissions ? { permissions } : {}) } }),
+    )
   }
   const account = { provider: "chat", account: "500" }
   rememberAccount(app, "default", account.account, env)
@@ -91,6 +94,22 @@ describe("ranking command views", () => {
     expect(ranked.item.rows[0]).toMatchObject({ id: "3", reactions: expect.arrayContaining(SPLIT) })
     expect(ranked.item.rows[0]?.reactions).toHaveLength(6)
     expect(ranked.item.rows[1]).toMatchObject({ id: "2", reactions: [] })
+  })
+  it("caps a configured limit above 100 instead of refusing a ranking nobody gave --limit", async () => {
+    const { call } = await setup(undefined, { limit: 200 })
+    const ranked = await call([
+      "stats",
+      "messages",
+      "top",
+      "--measure",
+      "views",
+      "chat:7",
+      "--timezone",
+      "UTC",
+      "--json",
+    ])
+    expect(ranked.code, ranked.stderr).toBe(0)
+    expect(JSON.parse(ranked.stdout).item.rows).toHaveLength(3)
   })
   it("ranks messages, authors, weighted scores and JSONL without connecting", async () => {
     const { call, connect } = await setup()
