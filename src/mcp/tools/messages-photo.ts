@@ -27,12 +27,12 @@ export const messagesPhotoTools = (messenger: Messenger): Record<string, AnyTool
     input: v.object({
       chat: chatOf(messenger),
       message,
-      index: v.optional(
+      attachment: v.optional(
         v.pipe(
           v.number(),
           v.integer(),
-          v.minValue(0),
-          v.description("attachment index from 0; omit for the first photo"),
+          v.minValue(1),
+          v.description("which file of the message, from 1; omit for the first photo"),
         ),
       ),
     }),
@@ -41,7 +41,13 @@ export const messagesPhotoTools = (messenger: Messenger): Record<string, AnyTool
       const { id: chatId } = await adapter.resolve(args.chat)
       const saveIt = `the owner can save it with \`${typedCommand(messenger.app.command, `messages download ${chatId} ${args.message}`)}\``
       const { files } = await capability(adapter, "download", "download attachments")(chatId, args.message)
-      const photo = args.index === undefined ? files.find((file) => file.kind === "photo") : files[args.index]
+      if (args.attachment !== undefined && args.attachment > files.length)
+        throw new CliError(
+          "not_found",
+          `message ${args.message} has ${files.length} file${files.length === 1 ? "" : "s"}, no file ${args.attachment}`,
+        )
+      const photo =
+        args.attachment === undefined ? files.find((file) => file.kind === "photo") : files[args.attachment - 1]
       if (!photo) {
         const kinds = files.map((file) => file.kind).join(", ")
         throw new CliError(

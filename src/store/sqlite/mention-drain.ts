@@ -20,11 +20,15 @@ const METHOD = "rules"
 
 type Decision = { status: unknown; target_type: unknown; target_id: unknown; author: unknown }
 
-/** The stored chat or Telegram account a `t.me` link names, as a rules decision; nothing for any other link. */
+/**
+ * The stored Telegram chat or account a `t.me` link names, as a rules decision; nothing for any other link. Never a
+ * chat of another messenger that happens to share the username.
+ */
 export const telegramLink = (database: CacheDatabase) => {
   const chat = database.prepare(
-    "SELECT 'linked' AS status, 'chat' AS target_type, id AS target_id, 'rules' AS author FROM chats " +
-      "WHERE (? IS NOT NULL AND lower(username) = lower(?)) OR external_id = ? ORDER BY id LIMIT 1",
+    "SELECT 'linked' AS status, 'chat' AS target_type, c.id AS target_id, 'rules' AS author FROM chats c " +
+      "JOIN accounts a ON a.id = c.account_id WHERE a.provider = 'telegram' " +
+      "AND ((? IS NOT NULL AND lower(c.username) = lower(?)) OR c.external_id = ?) ORDER BY c.id LIMIT 1",
   )
   const account = database.prepare(
     "SELECT 'linked' AS status, 'identity' AS target_type, id AS target_id, 'rules' AS author FROM identities " +

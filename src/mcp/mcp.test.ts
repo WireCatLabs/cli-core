@@ -2686,11 +2686,11 @@ describe("the photo tool", () => {
         skipped: [],
       }),
     })
-  const look = async (telegram: Scripted) => {
+  const look = async (telegram: Scripted, more: Record<string, unknown> = {}) => {
     const { client } = await connect(telegram)
     const result = await client.run({
       command: "messages photo",
-      arguments: { chat: "Book club", message: "1" },
+      arguments: { chat: "Book club", message: "1", ...more },
     })
     return { isError: result.isError === true, content: result.content as unknown as Record<string, string>[] }
   }
@@ -2743,6 +2743,17 @@ describe("the photo tool", () => {
       expect(refused.isError).toBe(true)
       expect(refused.content[0]?.text).toContain("chat default messages download 7 1")
     }
+  })
+
+  it("counts the file from 1, as attachments show and messages download do, and names a file past the last", async () => {
+    const second = await look(holding({ kind: "voice" }, { kind: "photo" }), { attachment: 2 })
+    const past = await look(holding({ kind: "photo" }), { attachment: 5 })
+
+    expect(second.isError).toBe(false)
+    expect(JSON.parse(past.content[0]?.text ?? "").error).toMatchObject({
+      code: "not_found",
+      message: "message 1 has 1 file, no file 5",
+    })
   })
 
   it("refuses a message with no photo, and a messenger that cannot download", async () => {

@@ -212,32 +212,39 @@ describe("deciding a mention", () => {
     await store.close()
   })
 
-  it("links a t.me link to the stored chat it names, by id or by username, and explains one it cannot", async () => {
+  it("links a t.me link to the stored Telegram chat it names, by id or by username, and explains one it cannot", async () => {
     const { path, store } = await fresh()
+    const TELEGRAM: AccountKey = { provider: "telegram", account: "1" }
+    await store.messages.saveMessages(OWNER, "book_club", [message("9", "hi")], { via: "history" })
     await store.messages.saveMessages(
-      OWNER,
+      TELEGRAM,
       "-1001234567890",
       [{ ...message("1", "пост https://t.me/c/1234567890/5"), chatId: "-1001234567890" }],
       {
         via: "history",
       },
     )
-    await store.messages.saveMessages(OWNER, "-1", [message("2", "канал t.me/book_club и t.me/joinchat/AbCdEf")], {
+    await store.messages.saveMessages(TELEGRAM, "-1", [message("2", "канал t.me/book_club и t.me/joinchat/AbCdEf")], {
       via: "history",
     })
     const raw = new DatabaseSync(path)
-    raw.prepare("UPDATE chats SET username = 'Book_Club' WHERE external_id = '-1'").run()
+    raw.prepare("UPDATE chats SET username = 'Book_Club' WHERE external_id IN ('-1', 'book_club')").run()
+    const telegramChat = raw
+      .prepare(
+        "SELECT c.id FROM chats c JOIN accounts a ON a.id = c.account_id WHERE a.provider = 'telegram' AND c.external_id = '-1'",
+      )
+      .get() as { id: number }
     raw.close()
     await store.mentions.rebuildMentions({ kinds: ["url"] })
 
-    const links = (await store.mentions.mentions(OWNER, q("kind:url"), { offset: 0 })).items
+    const links = (await store.mentions.mentions(TELEGRAM, q("kind:url"), { offset: 0 })).items
     const status = (value: string) => links.find((one) => one.value === value)
     expect(status("https://t.me/c/1234567890/5")).toMatchObject({ status: "linked", author: "rules" })
     expect(status("https://t.me/book_club")).toMatchObject({ status: "linked" })
-    expect(status("https://t.me/book_club")?.target).toMatch(/^chat:/)
+    expect(status("https://t.me/book_club")?.target).toMatch(new RegExp(`^chat:.*${telegramChat.id}$`))
     const invite = status("https://t.me/joinchat/AbCdEf")
     expect(invite?.status).toBe("found")
-    await expect(store.mentions.confirmMention(OWNER, invite?.id ?? 0, undefined, { by: "owner" })).rejects.toThrow(
+    await expect(store.mentions.confirmMention(TELEGRAM, invite?.id ?? 0, undefined, { by: "owner" })).rejects.toThrow(
       /t\.me/,
     )
     await store.close()

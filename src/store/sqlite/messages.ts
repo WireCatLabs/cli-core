@@ -195,6 +195,18 @@ export const upsertMessage = (
   } else {
     pk = found.pk
     const edit = message.editedAt !== null
+    // A copy from before the stored edit (a history page fetched before serve saw the edit, a late edit event)
+    // keeps the newer text; its reactions and counters may still be fresher.
+    const stale =
+      !revived &&
+      found.editedAt !== null &&
+      (fields.editedAt !== null
+        ? Number(fields.editedAt) < found.editedAt
+        : seenAt !== undefined && seenAt < found.editedAt)
+    if (stale) {
+      fields.editedAt = null
+      fields.normalizedText = null
+    }
     // An edit event may carry only the new text, stamped with the edit's time: a send time never moves later,
     // and an edit that counts no reactions has not seen them.
     if (edit) {
@@ -218,7 +230,7 @@ export const upsertMessage = (
     }
     statements.update.run({ ...fields, pk })
     // A tombstone emptied the text: there is no earlier version to keep.
-    if (found.text !== message.text && !revived) {
+    if (found.text !== message.text && !revived && !stale) {
       orm
         .insert(messageRevisions)
         .values({ messageId: pk, text: found.text, editedAt: found.editedAt, createdAt: now() })
