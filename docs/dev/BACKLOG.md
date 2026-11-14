@@ -23,23 +23,6 @@ None open.
 
 ## Next (P2)
 
-- **CORE-62** · P2 · `meetings` and `calendar` define their own `--json`/`--jsonl` (no field list, unlike the shared
-  `--json [fields]`), and `calendar search --cursor` pages by a number answered as `next_offset` beside `hits`, not
-  `items` with `page`. Move both onto the shared listing flags and envelope. `src/meetings/cli/index.ts` (`output`),
-  `src/calendar/cli/index.ts` (`search`).
-- **CORE-63** · P2 · A mail preset's "you wrote to them" check sees only the Sent mail listed in this run: a resumed
-  run, or an account synced without Sent, treats a real correspondent as a stranger and a preset `skip` drops their
-  new mail. Read the recipients of stored outgoing mail too. `src/mail/probe.ts` (`recipients`), `src/mail/facts.ts`.
-- **CORE-64** · P2 · List answers whose query reads a date (`tasks list created_at:today`, `meetings list
-  started_at:…`) say no `meta.timezone`, as search and the inbox do; the zone is now the computer's. Report it where a
-  list compiles a `time` field. `src/store/sqlite/query-filter.ts`, the list services that call it.
-- **CORE-65** · P2 · `changes` never reports a message a later fetch brought back after a deletion: it is neither new
-  nor edited, and leaves `deleted`. `src/store/sqlite/messages.ts` (`revived`), `src/store/sqlite/reads.ts`
-  (`changesSince`).
-- **CORE-66** · P2 · `purgeAccount` would fail with a foreign-key error, and roll back, for an account that has
-  calendars, documents, mail rules or proposed actions: it clears none of them. No caller yet.
-  `src/store/sqlite/accounts.ts` (`purgeAccount`).
-
 - **CORE-55** · P2 · Move gcal-cli and drive-cli onto `@wirecat/cli-core/google`: their own `googleError` and page
   loops (gcal `src/errors.ts`, `src/calendar-source.ts` `allPages`) become imports, after a release carries it.
   gcal keeps its own Calendar-only `forbiddenForNonOrganizer` → `event.organizer-only` mapping and its reason

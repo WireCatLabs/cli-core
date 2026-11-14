@@ -435,6 +435,18 @@ describe("syncMail with the owner's rules", () => {
     expect((await emails(env)).map(({ externalId }) => externalId).sort()).toEqual(["9001", "9003"])
   })
 
+  it("keeps new mail from someone the owner wrote to in stored mail, when this run lists no Sent", async () => {
+    const wrote = mail(1, { from: [null, ME], to: [[null, "alice@meetup.com"]], labels: ["Sent"] })
+    const { env, write } = setup([wrote])
+    await importInto(env)
+    write([mail(2, { from: ["Alice", "Alice@Meetup.com"] })])
+    const social: MailRule = { match: { preset: "social" }, action: "skip", decided_at: "2026-10-14T00:00:00.000Z" }
+
+    const result = await importRuled(env, [social])
+
+    expect(result).toMatchObject({ saved: 1, skipped: 0 })
+  })
+
   const importRuled = async (env: NodeJS.ProcessEnv, ruled: MailRule[]) =>
     importMail({
       store: await store(env),

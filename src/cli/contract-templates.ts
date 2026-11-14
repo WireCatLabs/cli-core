@@ -11,6 +11,7 @@ import type { Messenger } from "./messenger/context.js"
 import { doctorCommand } from "./messenger/doctor-command.js"
 import { mcpCommand } from "./messenger/mcp-command.js"
 import { searchCommand } from "./messenger/search-command.js"
+import { pagingOf } from "./paging.js"
 import { settingsFor } from "./settings.js"
 
 /**
@@ -79,6 +80,7 @@ export const sharedCommandTemplate = (
         get store() {
           return unavailable()
         },
+        pagingOf,
         accountId: 0,
         write: unavailable,
         inRun: unavailable,

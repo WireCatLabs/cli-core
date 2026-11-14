@@ -49,7 +49,10 @@ describe("filtered chat lists", () => {
     ])
     await store.chats.saveChats(OTHER, [chat("-3", "Valencia market", "group", 2, at(1))])
     const where = (text: string) =>
-      queryFilter(listQuery(text, CHATS_QUERY, "chats list") as QueryAst, CHAT_COLUMNS, { command: "chats list" })
+      queryFilter(listQuery(text, CHATS_QUERY, "chats list") as QueryAst, CHAT_COLUMNS, {
+        command: "chats list",
+        zone: "UTC",
+      })
     const ids = async (text: string, limit?: number) =>
       (await store.chats.chats(OWNER, { where: where(text), ...(limit ? { limit } : {}) })).items.map(({ id }) => id)
 
@@ -66,6 +69,25 @@ describe("filtered chat lists", () => {
     expect(await store.chats.countChats(OTHER, { where: where("title:lencia") })).toBe(1)
     expect(() => where("title:va")).toThrow(/at least 3 characters.*leave title: out/)
     expect(() => where("title:va")).toThrow(expect.objectContaining({ details: { reason: "query.short-text" } }))
+    await store.close()
+  })
+
+  it("matches ё and е either way in a title", async () => {
+    const store = await openStore({ path: fresh() })
+    await store.chats.saveChats(OWNER, [
+      chat("1", "Ёлка во дворе", "group", 0, at(1)),
+      chat("2", "Елка", "group", 0, at(2)),
+    ])
+    const where = (text: string) =>
+      queryFilter(listQuery(text, CHATS_QUERY, "chats list") as QueryAst, CHAT_COLUMNS, {
+        command: "chats list",
+        zone: "UTC",
+      })
+    const ids = async (text: string) =>
+      (await store.chats.chats(OWNER, { where: where(text) })).items.map(({ id }) => id).sort()
+
+    expect(await ids("title:елка")).toEqual(["1", "2"])
+    expect(await ids("title:ЁЛКА")).toEqual(["1", "2"])
     await store.close()
   })
 })

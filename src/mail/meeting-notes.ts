@@ -173,7 +173,7 @@ export const mailMeetingSource = ({
       })
       if (stored === null) return []
       const listed = (await candidateFacts(store, stored.id, Date.parse(since), ruling)).map(listedOf)
-      const factsFor = factsOf(listed, ruling)
+      const factsFor = await factsOf(listed, ruling, (addresses) => store.mail.writtenTo(addresses))
       const saved = accountId === undefined ? [] : await meetings.meetings({ accountId, includeDeleted: true })
       const linked = new Map(
         saved.flatMap(({ externalId, eventId }) => (eventId === null ? [] : [[externalId, eventId]])),

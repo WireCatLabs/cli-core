@@ -265,12 +265,15 @@ export const callCalendarTool = async (
   input: unknown,
   {
     accountIds,
+    limit,
     failure = {},
     now = Date.now(),
     writes,
     profileOf = (accountId) => `account ${accountId}`,
   }: {
     accountIds: readonly number[]
+    /** `events_list`'s page without `limit`: the profile's `defaults.limit`, as the messenger MCP lists take it. */
+    limit: number
     /** What `status` calls each account's sync. */
     profileOf?: (accountId: number) => string
     failure?: FailureContext
@@ -318,7 +321,7 @@ export const callCalendarTool = async (
         )
         break
       case "events_list":
-        answer = await eventsList(store, args, accounts, now)
+        answer = await eventsList(store, args, accounts, now, limit)
         break
       case "event_show": {
         const { accountId, details } = await eventIn()
@@ -364,8 +367,9 @@ const eventsList = async (
   args: Record<string, unknown>,
   accounts: readonly number[],
   now: number,
+  configured: number,
 ) => {
-  const limit = (args.limit as number | undefined) ?? 100
+  const limit = (args.limit as number | undefined) ?? configured
   const page = (args.page as number | undefined) ?? 1
   const end = page * limit
   const merging = accounts.length > 1

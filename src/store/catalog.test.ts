@@ -245,3 +245,27 @@ it("keeps retired catalog records out of note listings, word search and embeddin
     (await searchNotesQuery(store, { text: "budget", limit: 10, timezone: "UTC", folderIds: [account] })).items,
   ).toHaveLength(1)
 })
+
+it("orders files and written notes by each one's place in its own index, not by their raw scores", async () => {
+  const { store, account } = await setup()
+  for (let n = 0; n < 20; n++)
+    await store.notes.saveFileNote({
+      folderId: account,
+      path: `doc-${n}.md`,
+      title: `Doc ${n}`,
+      text: n < 2 ? `zeta report number ${n}` : `unrelated filler ${n}`,
+    })
+  const note = await store.notes.addNote({ text: "zeta" })
+
+  const found = await searchNotesQuery(store, {
+    text: "zeta",
+    limit: 10,
+    timezone: "UTC",
+    folderIds: [account],
+    withInternal: true,
+  })
+
+  const refs = found.items.map((hit) => hit.note.ref)
+  expect(refs).toHaveLength(3)
+  expect(refs.indexOf(note.ref)).toBeLessThan(2)
+})

@@ -8,7 +8,7 @@ import { LOCAL_READ, NO_EFFECTS } from "../effects.js"
 import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { typedQuery, withQuery } from "../list-query.js"
 import { answerLocally } from "../local-times.js"
-import { positiveCount } from "../paging.js"
+import { configuredLimit, positiveCount } from "../paging.js"
 import { lineOf } from "../steps.js"
 import { RUNS_QUERY, runListFilter } from "./query.js"
 
@@ -30,11 +30,13 @@ export const runsCommand = (app: AppIdentity): Command => {
     RUNS_QUERY,
   )
     .description("recorded runs, newest first")
-    .option("--limit <n>", "how many to show", positiveCount("--limit"), 20)
-    .option("--page <n>", "which page, starting at 1", positiveCount("--page"), 1)
+    .option("--limit <n>", "how many to show", positiveCount("--limit"))
+    .option("--page <n>", "which page, starting at 1", positiveCount("--page"))
     .action(function (this: Command, words: string[]) {
       const filter = runListFilter(words)
-      const { limit, page } = this.opts<{ limit: number; page: number }>()
+      const typed = this.opts<{ limit?: number; page?: number }>()
+      const limit = typed.limit ?? configuredLimit(this)
+      const page = typed.page ?? 1
       const output = outputFor(this)
       const { renderer } = output
       const runs = listRuns(dir(this), { atLeast: page * limit + 1, filter })

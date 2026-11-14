@@ -1,6 +1,6 @@
 import { CliError, type ErrorCode } from "@wirecat/cli-base"
 import { annotate, sharedCommand } from "@wirecat/cli-base/commands"
-import { queryFieldsOf } from "@wirecat/cli-base/query"
+import { queryFieldsOf, timezoneOf } from "@wirecat/cli-base/query"
 import { Command, InvalidArgumentError } from "commander"
 import * as v from "valibot"
 import { answerEntity } from "../../cli/answer-entity.js"
@@ -394,7 +394,9 @@ const conversationsCommand = (mail: MailReads): Command => {
       const { threads, mailbox } = await mail.read(this, async (store, mailbox) => {
         const account = await store.accounts.storedAccount(mailbox).catch(absentAccount)
         if (!account) return { threads: [], mailbox }
-        const where = query ? queryFilter(query, THREAD_COLUMNS, { command: "conversations list" }) : undefined
+        const where = query
+          ? queryFilter(query, THREAD_COLUMNS, { command: "conversations list", zone: timezoneOf() })
+          : undefined
         const threads = await store.mail.threads({
           accountId: account.id,
           limit: limit + 1,

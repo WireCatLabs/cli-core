@@ -471,7 +471,7 @@ const syncRound = async (
     (a, b) => Date.parse(b.receivedAt) - Date.parse(a.receivedAt),
   )
   const present = new Set(listed.map(({ messageId }) => messageId))
-  const factsFor = factsOf(listed, rules, ages)
+  const factsFor = await factsOf(listed, rules, (addresses) => store.mail.writtenTo(addresses), ages)
   // A rule's tag goes on mail this run stores or records; mail stored earlier gets it from memo mail rules apply.
   const tagger = ruleTagger(store, key)
   const tagStored = async (item: Listed) => {

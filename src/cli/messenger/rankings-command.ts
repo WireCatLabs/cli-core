@@ -130,12 +130,13 @@ export const rankingEvidenceCommand = (messenger: Messenger, target: RankingTarg
     )
     .requiredOption("--selection <json>", "the resolved ranking selection returned in drilldown", selectionOf)
     .requiredOption("--component <name>", "the exposed ranking component")
-    .option("--limit <n>", "evidence rows, 1–100; 20 if not given", positiveCount("--limit"))
+    .option("--limit <n>", "evidence rows, 1–100; the configured limit if not given", positiveCount("--limit"))
     .option("--cursor <cursor>", "continue the same component and stored-evidence fingerprint")
     .action(async function (this: Command, reference: string) {
       const context = messengerContext(this, messenger)
       const options = this.opts<{ selection: unknown; component: string; limit?: number; cursor?: string }>()
       if (isRetentionSelection(options.selection)) assertRetentionEvidenceRead(context.settings.permissions)
+      const limit = options.limit ?? Math.min(context.settings.limit, 100)
       const found = await context.withServices<
         AdminEvidenceFound | RankedEvidence | Awaited<ReturnType<RetentionService["evidence"]>>
       >((services) =>
@@ -146,12 +147,11 @@ export const rankingEvidenceCommand = (messenger: Messenger, target: RankingTarg
             : services.rankings
         ).evidence(target, reference, options.selection, {
           component: options.component,
-          limit: options.limit ?? 20,
+          limit,
           ...(options.cursor ? { cursor: options.cursor } : {}),
           signal: environmentOf(this).commandSignal ?? environmentOf(this).signal,
         }),
       )
-      const limit = options.limit ?? 20
       const body = evidenceAnswer(
         `stats ${target} evidence`,
         found,

@@ -339,3 +339,39 @@ describe("implicit term intent", () => {
     expect([...implicitTextTerms("aurora text:roll")]).toEqual([0])
   })
 })
+
+describe("prefixes combined search makes of typed words", () => {
+  const crowded = (start: string, more: Message[], count = QUERY_LIMITS.expansions + 1) => {
+    const words = Array.from({ length: count }, (_, n) => `${start}${n}`)
+    const texts = Array.from({ length: Math.ceil(words.length / 500) }, (_, n) =>
+      message(String(100 + n), words.slice(n * 500, n * 500 + 500).join(" ")),
+    )
+    return opened([...more, ...texts])
+  }
+
+  it("never widens a function word, which would spend the budget the content words need", async () => {
+    const half = QUERY_LIMITS.expansions * 0.6
+    const store = await crowded("про", [message("1", "Zorbexian про аренду")], half)
+    await store.messages.saveMessages(
+      account,
+      "101",
+      Array.from({ length: Math.ceil(half / 500) }, (_, n) =>
+        message(String(300 + n), Array.from({ length: 500 }, (_, at) => `zorbex${n * 500 + at}`).join(" ")),
+      ),
+      { via: "synthetic" },
+    )
+    await store.searchIndex.fillSearchIndex({})
+
+    const found = await searchCombined(store, account, request("про zorbex"))
+
+    expect(ids(found)).toEqual(["1"])
+  })
+
+  it("searches a word whose start matches too many words as the word itself", async () => {
+    const store = await crowded("кот", [message("1", "Кот спит")])
+
+    const found = await searchCombined(store, account, request("кот спит"))
+
+    expect(ids(found)).toEqual(["1"])
+  })
+})

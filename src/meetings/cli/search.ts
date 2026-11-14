@@ -1,33 +1,21 @@
 import { CliError } from "@wirecat/cli-base"
 import { annotate, sharedCommand } from "@wirecat/cli-base/commands"
-import { timezoneOf, zonedMoment } from "@wirecat/cli-base/query"
 import type { Meta } from "@wirecat/cli-base/standards"
 import { Command } from "commander"
+import { dateWindow } from "../../services/moment.js"
 import { meetingHitsList } from "../answers.js"
 import type { MeetingSearchPage } from "../search-store.js"
 import { type MeetingHitSearchOptions, validateMeetingHitSearch } from "../search-validation.js"
 
 export { type MeetingHitSearch, type MeetingHitSearchOptions, validateMeetingHitSearch } from "../search-validation.js"
 
-const ZONED = /(?:Z|[+-]\d{2}:?\d{2})$/i
-// `30m`, `2h`, `7d` ago, as the messenger commands' --since-time reads them and this command's `date>=7d` does.
-const AGO = /^(\d+)(m|h|d)$/
-const AGO_MS: Record<string, number> = { m: 60_000, h: 3_600_000, d: 86_400_000 }
+/** One bound of the shared past-time grammar; `readIn` hears the zone a value without its own was read in. */
 const moment = (flag: string, end: boolean, readIn: (zone: string) => void) => (value: string) => {
-  const [, amount, unit] = AGO.exec(value.trim()) ?? []
-  if (amount && unit) return Date.now() - Number(amount) * (AGO_MS[unit] ?? 0)
-  const zone = timezoneOf()
-  let time: number
-  try {
-    time = zonedMoment(value, zone, { start: 0, end: value.length }, { end })
-  } catch {
-    throw new CliError(
-      "validation_error",
-      `${flag} takes an ISO date, a time with or without an offset, or 30m, 2h, 7d ago`,
-    )
-  }
-  if (!ZONED.test(value.trim())) readIn(zone)
-  return time
+  const { since, until, meta } = dateWindow(
+    end ? { untilTime: value, names: [flag, flag] } : { sinceTime: value, names: [flag, flag] },
+  )
+  if (meta.timezone) readIn(meta.timezone)
+  return (end ? until : since) as number
 }
 const integer = (value: string): number => {
   if (!/^[1-9]\d*$/.test(value) || !Number.isSafeInteger(Number(value)))
@@ -85,7 +73,7 @@ const createMeetingSearchCommandDefinition = (program: Command): Command => {
       "meetings starting at or before this ISO 8601 date or time; a date alone covers that whole local day",
       moment("--until-time", true, readIn),
     )
-    .option("--limit <n>", "how many hits, 1 through 1000 (default 100)", integer)
+    .option("--limit <n>", "how many hits, 1 through 1000; the profile's defaults.limit when absent", integer)
     .option("--cursor <cursor>", "continue from the previous page's page.next_cursor, with the same query and filters")
     .option("--max-read-bytes <bytes>", "most stored bytes to read, 1 through 67108864 (default 4194304)", integer)
   annotate(command, {
@@ -96,10 +84,14 @@ const createMeetingSearchCommandDefinition = (program: Command): Command => {
   return command
 }
 
-/** Transport fields become one validated word request before a host opens its selected source. */
+/**
+ * Transport fields become one validated word request before a host opens its selected source. `limit` is the page
+ * without `--limit`: the profile's `defaults.limit`, which `pagingOf` from `@wirecat/cli-core/cli` reads.
+ */
 export const meetingHitSearchRequest = (
   query: string,
   options: MeetingSearchFlags,
+  limit: number,
   signal?: AbortSignal,
 ): MeetingHitSearchOptions => {
   const request: MeetingHitSearchOptions = {
@@ -113,7 +105,7 @@ export const meetingHitSearchRequest = (
     topic: options.topicName ?? options.topic,
     since: options.sinceTime,
     until: options.untilTime,
-    limit: options.limit,
+    limit: options.limit ?? limit,
     after: options.cursor,
     maxReadBytes: options.maxReadBytes,
     signal,
@@ -163,16 +155,18 @@ const addMeetingSearchCommandDefinition = (
       options: MeetingSearchFlags & Record<string, unknown>,
     ) => Promise<MeetingSearchPage>
     signal: () => AbortSignal | undefined
+    /** The page without `--limit`: `pagingOf` from `@wirecat/cli-core/cli`, which reads the profile's limit. */
+    pagingOf: (command: Command) => { limit: number }
     output: (value: unknown) => void
   },
 ): Command =>
   createMeetingSearchCommand(program).action(
-    async (query: string, options: MeetingSearchFlags & Record<string, unknown>) => {
-      const request = meetingHitSearchRequest(query, options, deps.signal())
+    async (query: string, options: MeetingSearchFlags & Record<string, unknown>, command: Command) => {
+      const request = meetingHitSearchRequest(query, options, deps.pagingOf(command).limit, deps.signal())
       deps.output(
         meetingHitsList(
           await deps.search(query, request, options),
-          request.limit ?? 100,
+          request.limit as number,
           "search meetings",
           meetingSearchArguments(query, options),
           meetingSearchMeta(options),

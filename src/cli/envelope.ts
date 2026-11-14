@@ -1,5 +1,6 @@
 import { exitCodeOfAnswer, type Renderer, type RenderFormat, type Streams } from "@wirecat/cli-base"
 import { metaOf } from "@wirecat/cli-base/commands"
+import { parseLucene, timezoneOf } from "@wirecat/cli-base/query"
 import {
   COMPACT_FLAG,
   type ItemEnvelope,
@@ -17,6 +18,7 @@ import {
 import type { Command } from "commander"
 import * as v from "valibot"
 import { currentRun } from "../runs/scope.js"
+import { readsZone } from "../search/service-query.js"
 import { compactText, entityRows, rowShapeOf, rowsOfEntity, TEXT_CHARS } from "./compact.js"
 import { environmentOf, setExitCode } from "./context.js"
 import { largeAnswerSteps, SOFT_OUTPUT_BYTES } from "./output-budget.js"
@@ -223,6 +225,24 @@ export const jsonlRecords = <T>(body: Body<T>): object[] =>
  * the items — `view` draws them — and each next step this CLI has, as a line on stderr. A partial answer the
  * command does not declare `partial` exits with its first issue's code, after printing what was read.
  */
+/**
+ * The zone a list's `[query...]` read its dates in, for `meta.timezone` as search and the inbox give it: every store
+ * list compiles its query in the computer's zone, or in `--timezone` where the list takes one.
+ */
+const listZone = (command: Command): string | undefined => {
+  const registry = metaOf(command).query
+  const words = command.processedArgs.at(-1) as unknown
+  const text = Array.isArray(words) ? words.join(" ") : typeof words === "string" ? words : ""
+  const times = new Set(registry?.fields.filter(({ type }) => type === "time").map(({ name }) => name))
+  if (times.size === 0 || text.trim() === "") return undefined
+  try {
+    if (!readsZone(parseLucene(text, { defaultField: "none" }), times)) return undefined
+  } catch {
+    return undefined
+  }
+  return timezoneOf(command.optsWithGlobals<{ timezone?: string }>().timezone)
+}
+
 export const renderAnswer = <T>(
   command: Command,
   { renderer, format, streams, compact, full }: AnswerOutput,
@@ -230,6 +250,8 @@ export const renderAnswer = <T>(
   view?: (body: Body<T>) => string,
 ): void => {
   if (!isBody(body)) refuse(body)
+  const zone = "items" in body && body.meta?.timezone === undefined ? listZone(command) : undefined
+  if (zone) body = { ...body, meta: { ...body.meta, timezone: zone } }
   const root = rootOf(command)
   const runnableSteps = runnable(root, body.next)
   const next = environmentOf(command).agent ? runnableSteps : withLines(root, runnableSteps)

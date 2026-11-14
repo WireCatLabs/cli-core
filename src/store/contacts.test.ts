@@ -83,6 +83,16 @@ describe("contacts", () => {
     await store.close()
   })
 
+  it("find a name with ё by е, and with е by ё", async () => {
+    const store = await seeded()
+    await store.people.savePeople(OWNER, [{ id: "8", name: "Пётр Ёлкин" }])
+
+    expect(ids(await store.people.contacts(OWNER, { order: "name", query: "елкин", limit: 10 }))).toEqual(["8"])
+    await store.people.savePeople(OWNER, [{ id: "8", name: "Петр Елкин" }])
+    expect(ids(await store.people.contacts(OWNER, { order: "name", query: "ЁЛКИН", limit: 10 }))).toEqual(["8"])
+    await store.close()
+  })
+
   it("**find people by a part of their address or phone**, the phone by its digits", async () => {
     const store = await seeded()
     await store.people.savePeople(OWNER, [

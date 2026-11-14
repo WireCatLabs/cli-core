@@ -183,6 +183,18 @@ describe("ranking command views", () => {
     expect(second.code, second.stderr).toBe(0)
     expect(JSON.parse(second.stdout).page.has_more).toBe(false)
   })
+  it("pages evidence by the configured limit, capped at 100, when no --limit is typed", async () => {
+    const evidence = async (limit: number) => {
+      const { call } = await setup(undefined, { limit })
+      const row = JSON.parse((await call(["stats", "contacts", "top", "--json"])).stdout).item.rows[0]
+      const args = ["--selection", JSON.stringify(row.selection), "--component", "messages", "--json"]
+      const found = await call(["stats", "contacts", "evidence", row.id, ...args])
+      expect(found.code, found.stderr).toBe(0)
+      return JSON.parse(found.stdout).page
+    }
+    expect(await evidence(1)).toMatchObject({ limit: 1, has_more: true })
+    expect(await evidence(200)).toMatchObject({ limit: 100, has_more: false })
+  })
   it("saves and replays a pinned ranking with its weights and explicit overrides", async () => {
     const { call } = await setup()
     const top = await call(["stats", "contacts", "top", "--weights", '{"messages":1}', "--json"])

@@ -11,6 +11,7 @@ import type { AppIdentity } from "../ports/app.js"
 import { readHarderSetting, readHarderTimeout } from "../services/search-harder.js"
 import { inCommandRun } from "./context.js"
 import { modelCatalogueCommand } from "./model-catalogue-command.js"
+import { pagingOf } from "./paging.js"
 import { type ProgramDefinition, run } from "./program.js"
 import { settingsFor } from "./settings.js"
 
@@ -51,7 +52,7 @@ describe("an option a command and the root program both declare", () => {
       configuration: settingsFor(app),
       commands: () => {
         const root = new Command(app.command)
-        addMeetingCommands(root, { store, accountId: 1, write: () => undefined, inRun: inCommandRun })
+        addMeetingCommands(root, { store, accountId: 1, write: () => undefined, inRun: inCommandRun, pagingOf })
         return [...root.commands]
       },
     }

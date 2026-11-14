@@ -1,5 +1,12 @@
 import { CliError, isCliError, singleLine } from "@wirecat/cli-base"
-import { OPERATORS_BY_TYPE, type QueryAst, type QueryRegistry, queryFieldsOf, walkQuery } from "@wirecat/cli-base/query"
+import {
+  OPERATORS_BY_TYPE,
+  type QueryAst,
+  type QueryRegistry,
+  queryFieldsOf,
+  timezoneOf,
+  walkQuery,
+} from "@wirecat/cli-base/query"
 import type * as v from "valibot"
 import { isLocator, parseLocator } from "../domain/locator.js"
 import { formatReference } from "../domain/references.js"
@@ -430,7 +437,7 @@ export const tasksService = (deps: ServiceDeps, categories?: readonly TaskCatego
     list: ({ query, limit, offset, previews }) =>
       inStore(async (store, account) => {
         const where = query
-          ? queryFilter(query, await queryColumns(store, account, query), { command: "tasks list" })
+          ? queryFilter(query, await queryColumns(store, account, query), { command: "tasks list", zone: timezoneOf() })
           : undefined
         const rows = await store.tasks.query(taskAccount(account), where, { limit: limit + 1, offset })
         const shown = rows.slice(0, limit)

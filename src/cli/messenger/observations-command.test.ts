@@ -15,7 +15,7 @@ import type { Messenger } from "./context.js"
 import { statsCommand } from "./stats-command.js"
 
 const app = { command: "chat", appName: "chat-cli", envPrefix: "CHAT", description: "", version: "1.0.0" }
-const setup = async (permissions?: object) => {
+const setup = async (permissions?: object, defaults: object = {}) => {
   const root = mkdtempSync(join(tmpdir(), "observation-cli-")),
     env = {
       ...process.env,
@@ -25,9 +25,12 @@ const setup = async (permissions?: object) => {
       MESSAGING_STORE: join(root, "store.db"),
       NO_COLOR: "1",
     }
-  if (permissions) {
+  if (permissions || Object.keys(defaults).length) {
     mkdirSync(env.CHAT_CONFIG_DIR, { recursive: true })
-    writeFileSync(join(env.CHAT_CONFIG_DIR, "config.json"), JSON.stringify({ defaults: { permissions } }))
+    writeFileSync(
+      join(env.CHAT_CONFIG_DIR, "config.json"),
+      JSON.stringify({ defaults: { ...defaults, ...(permissions ? { permissions } : {}) } }),
+    )
   }
   const account = { provider: "chat", account: "500" }
   rememberAccount(app, "default", account.account, env)
@@ -45,23 +48,21 @@ const setup = async (permissions?: object) => {
   await store.messages.saveMessages(
     account,
     "7",
-    [
-      {
-        id: "1",
-        chatId: "7",
-        senderId: "2",
-        senderName: "Synthetic",
-        timestamp: new Date(joined + 1000).toISOString(),
-        text: "Synthetic",
-        editedAt: null,
-        replyTo: null,
-        forwardedFrom: null,
-        reactions: null,
-        outgoing: false,
-        attachments: [],
-        providerMetadata: { views: 10 },
-      },
-    ],
+    (Object.keys(defaults).length ? ["1", "2"] : ["1"]).map((id) => ({
+      id,
+      chatId: "7",
+      senderId: "2",
+      senderName: "Synthetic",
+      timestamp: new Date(joined + 1000).toISOString(),
+      text: "Synthetic",
+      editedAt: null,
+      replyTo: null,
+      forwardedFrom: null,
+      reactions: null,
+      outgoing: false,
+      attachments: [],
+      providerMetadata: { views: 10 },
+    })),
     { via: "history" },
   )
   await store.close()
@@ -98,6 +99,16 @@ describe("observation CLI", () => {
     })
     const shown = await call("commands", "stats", "messages", "counters", "show", "--json")
     expect(JSON.parse(shown.stdout).commands[0]?.effects).toEqual({ remote: "none", local: "read" })
+  })
+
+  it("shows as many messages as the configured limit, capped at 100, when no --limit is typed", async () => {
+    const rows = async (limit: number) => {
+      const { call } = await setup(undefined, { limit })
+      const shown = await call("stats", "messages", "counters", "show", "--chat", "7", "--counters", "views", "--json")
+      expect(shown.code, shown.stderr).toBe(0)
+      return JSON.parse(shown.stdout).item.rows.length
+    }
+    expect([await rows(1), await rows(200)]).toEqual([1, 2])
   })
 
   it("shows counter freshness and exact dry-run targets without connecting", async () => {

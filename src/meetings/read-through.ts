@@ -1,8 +1,15 @@
 import { CliError } from "@wirecat/cli-base"
 import { type Predicate, type QueryAst, timezoneOf } from "@wirecat/cli-base/query"
 import type { Issue, Meta, Missing } from "@wirecat/cli-base/standards"
-import { type Backend, rangeOf, type ServiceCapability, serviceCallsOf, windowOf } from "../search/service-query.js"
-import type { MeetingItem } from "./item.js"
+import {
+  type Backend,
+  rangeOf,
+  readsZone,
+  type ServiceCapability,
+  serviceCallsOf,
+  windowOf,
+} from "../search/service-query.js"
+import { MEETING_QUERY, type MeetingItem } from "./item.js"
 import { saveSourceMeeting, sourceMeetingInput } from "./pull.js"
 import { MeetingError, type MeetingList, meetingsList } from "./reads.js"
 import { parseMeetingReference } from "./reference.js"
@@ -326,7 +333,21 @@ export const askServerForList = async (
 /** `meetings list` with the service asked first, as `--backend` says; the store's query and paging decide. */
 export type MeetingListThrough = MeetingList & { server?: MeetingServerReport; meta?: Partial<Meta> }
 
+/** As `listThrough`, with `meta.timezone` when the query read a date in a zone, as every store list says it. */
 export const meetingsListThrough = async (
+  source: MeetingSource | undefined,
+  store: MeetingStore,
+  filter: MeetingFilter & { accountId: number },
+  access: MeetingServerAccess,
+): Promise<MeetingListThrough> => {
+  const listed = await listThrough(source, store, filter, access)
+  if (!filter.query || !readsZone(filter.query, MEETING_TIMES)) return listed
+  return { ...listed, meta: { ...listed.meta, timezone: timezoneOf(access.timezone) } }
+}
+
+const MEETING_TIMES = new Set(MEETING_QUERY.fields.filter(({ type }) => type === "time").map(({ name }) => name))
+
+const listThrough = async (
   source: MeetingSource | undefined,
   store: MeetingStore,
   filter: MeetingFilter & { accountId: number },

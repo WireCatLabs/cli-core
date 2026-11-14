@@ -93,7 +93,7 @@ Without communications, existing fields, references and fingerprints remain unch
 Given `communications: true` by a host that connects a messages source, the shared CLI builder
 accepts repeatable `--context-source ID` or `--context-source ID=cursor`, `--context-query`,
 `--context-since-time` and `--context-before-time`; without it, `meetings prepare` has none of the four.
-Time flags require zoned ISO timestamps. With `communications: true`, MCP `meeting_prepare` accepts optional
+Time flags take the shared past-time grammar: an ISO date or time, local without a zone, or `7d` ago. With `communications: true`, MCP `meeting_prepare` accepts optional
 `communications` with the same `sources`/`query` and ISO `after`/`before`; without it the tool has no such argument. It refuses unknown nested fields in its handler as well as its schema.
 Communication scope/query/window/read-usage metadata lives under `communications.coverage`,
 which the standard projection helper retains even when selecting only `communications.items.ref`.

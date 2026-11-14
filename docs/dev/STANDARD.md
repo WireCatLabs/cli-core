@@ -796,6 +796,7 @@ table. "Not" lists the words a term replaces. How `cli-dev lint` runs over a CLI
 | `--end-date` | `<date>` | time | the last day of something that lasts whole days, such as an all-day event or a contract |  |
 | `--location` | `<text>` | string | where it takes place |  |
 | `--attendee` | `<email>` | string | a person invited to the event, by email address; repeat it for more |  |
+| `--setting` | `<name=value>` | string | one of the service's own settings, such as a meeting's waiting room; repeat it for more |  |
 | `--id` | `<id>` | id | the id to create it with, chosen beforehand, so a retry finds it instead of making a second one |  |
 | `--calendar` | `<id>` | id | the calendar it acts on, when the thing is on more than one |  |
 | `--repeat` | `<rule>` | string | how it repeats, as an RFC 5545 rule such as FREQ=WEEKLY;BYDAY=MO;COUNT=10 |  |

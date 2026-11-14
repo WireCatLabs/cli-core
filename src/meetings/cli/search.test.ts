@@ -1,6 +1,7 @@
 import { overrideSharedContract } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
+import { flagPaging } from "../testing/index.js"
 import {
   addMeetingSearchCommand,
   createMeetingSearchCommand,
@@ -42,7 +43,7 @@ it("forwards combined context, dates and continuation to an injected provider-ne
   }
   const search = vi.fn(async () => result)
   const output = vi.fn()
-  addMeetingSearchCommand(program, { search, signal: () => controller.signal, output })
+  addMeetingSearchCommand(program, { pagingOf: flagPaging, search, signal: () => controller.signal, output })
   await program.parseAsync(
     [
       "search",
@@ -142,7 +143,7 @@ it("names no zone when every typed time carries its own", async () => {
       indexCompleteness: "unknown" as const,
     },
   }))
-  addMeetingSearchCommand(program, { search, signal: () => undefined, output })
+  addMeetingSearchCommand(program, { pagingOf: flagPaging, search, signal: () => undefined, output })
   await program.parseAsync(["search", "meetings", "budget", "--since-time", "2026-09-12T08:00:00+02:00"], {
     from: "user",
   })
@@ -163,7 +164,7 @@ it("reads 7d ago in --since-time, as the messenger commands and the query's date
       indexCompleteness: "unknown" as const,
     },
   }))
-  addMeetingSearchCommand(program, { search, signal: () => undefined, output })
+  addMeetingSearchCommand(program, { pagingOf: flagPaging, search, signal: () => undefined, output })
   await program.parseAsync(["search", "meetings", "budget", "--since-time", "7d"], { from: "user" })
   vi.useRealTimers()
   expect(output.mock.calls[0]?.[0].meta).toEqual({ window: { since: "2026-10-13T12:00:00.000Z" } })
@@ -186,7 +187,12 @@ it("rejects impossible dates and invalid selectors before opening a store", asyn
   for (const flags of cases) {
     const program = new Command("example").exitOverride()
     const connect = vi.fn()
-    addMeetingSearchCommand(program, { search: connect, signal: () => undefined, output: () => {} })
+    addMeetingSearchCommand(program, {
+      pagingOf: flagPaging,
+      search: connect,
+      signal: () => undefined,
+      output: () => {},
+    })
     await expect(program.parseAsync(["search", "meetings", "budget", ...flags], { from: "user" })).rejects.toThrow()
     expect(connect).not.toHaveBeenCalled()
   }
@@ -196,7 +202,7 @@ it("rejects impossible dates and invalid selectors before opening a store", asyn
 it("joins a search group the host already has", () => {
   const program = new Command("example")
   program.command("search").command("all")
-  addMeetingSearchCommand(program, { search: vi.fn(), signal: () => undefined, output: () => {} })
+  addMeetingSearchCommand(program, { pagingOf: flagPaging, search: vi.fn(), signal: () => undefined, output: () => {} })
   expect(program.commands.filter((command) => command.name() === "search")).toHaveLength(1)
   expect(program.commands.find((command) => command.name() === "search")?.commands.map((c) => c.name())).toEqual([
     "all",
@@ -214,7 +220,7 @@ it("shares grammar and validation without interpreting a host's alternate source
       command.option("--archive <directory>")
     },
   ).action((query, flags) => {
-    const request = meetingHitSearchRequest(query, flags)
+    const request = meetingHitSearchRequest(query, flags, 100)
     output({ folder: flags.archive, requested: request.limit, matches: [] })
   })
   await program.parseAsync(["search", "meetings", "plan", "--archive", "./invented", "--limit", "2"], { from: "user" })
@@ -223,7 +229,7 @@ it("shares grammar and validation without interpreting a host's alternate source
   aborted.abort()
   const search = vi.fn()
   const cancelled = new Command("example")
-  addMeetingSearchCommand(cancelled, { search, output, signal: () => aborted.signal })
+  addMeetingSearchCommand(cancelled, { pagingOf: flagPaging, search, output, signal: () => aborted.signal })
   await expect(cancelled.parseAsync(["search", "meetings", "plan"], { from: "user" })).rejects.toThrow()
   expect(search).not.toHaveBeenCalled()
 })

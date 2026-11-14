@@ -117,10 +117,10 @@ export const countMessages = (
   )
 
 /**
- * What changed in a chat after `at`, a time on this machine's clock: messages first saved or edited
- * since, oldest first, and the ids deleted since. Send time cannot answer it — an edit made today to
- * a message from last year was sent last year. A change to reactions alone leaves no time, so it is
- * not here.
+ * What changed in a chat after `at`, a time on this machine's clock: messages first saved, brought back
+ * after a deletion or edited since, oldest first, and the ids deleted since. Send time cannot answer it —
+ * an edit made today to a message from last year was sent last year. A change to reactions alone leaves
+ * no time, so it is not here.
  */
 export const changesSince = (
   context: StoreContext,

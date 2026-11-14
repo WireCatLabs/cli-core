@@ -1,4 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
+import { timezoneOf } from "@wirecat/cli-base/query"
 import type { ListResult } from "@wirecat/cli-base/standards"
 import type {
   Attachment,
@@ -640,7 +641,7 @@ const filtered = (filter: MeetingFilter = {}) => {
   if (filter.query !== undefined) {
     const compiled = queryFilter(filter.query, MEETING_COLUMNS, {
       command: "meetings list",
-      ...(filter.timezone === undefined ? {} : { zone: filter.timezone }),
+      zone: timezoneOf(filter.timezone),
       ...(filter.now === undefined ? {} : { now: filter.now }),
     })
     where.push(`(${compiled.sql})`)

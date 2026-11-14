@@ -704,7 +704,7 @@ export const entityDefinitions = (): Record<EntityName, unknown> =>
     }),
   ) as Record<EntityName, unknown>
 
-export { zonedTime } from "./fields.js"
+export { typedTime } from "./fields.js"
 export { mailFindings } from "./mail-findings.js"
 export { meetingFindings } from "./meeting-findings.js"
 export { meetingPreparation } from "./meeting-preparation.js"

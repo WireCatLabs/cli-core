@@ -137,7 +137,7 @@ const TRACKED = ["title", "starts_at", "ends_at", "location", "status", "recurre
 
 const flag = (value: boolean | undefined) => (value ? 1 : 0)
 
-const cursorKey = (calendarId: number) => `calendar:${calendarId}`
+export const calendarCursorKey = (calendarId: number) => `calendar:${calendarId}`
 
 const addressOf = (email: string) => email.trim().toLowerCase()
 
@@ -650,14 +650,14 @@ export const calendarWritesOver = (context: StoreContext) => {
     if (value === null)
       database
         .prepare("DELETE FROM sync_cursors WHERE account_id = ? AND key = ?")
-        .run(accountId, cursorKey(calendarId))
+        .run(accountId, calendarCursorKey(calendarId))
     else
       database
         .prepare(
           `INSERT INTO sync_cursors (account_id, key, value, created_at, updated_at) VALUES (?, ?, ?, ?, ?)
            ON CONFLICT (account_id, key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
         )
-        .run(accountId, cursorKey(calendarId), value, now, now)
+        .run(accountId, calendarCursorKey(calendarId), value, now, now)
   }
 
   const slotRows = (calendarId: number, series: string, window: { from: number; to: number }) =>
@@ -747,7 +747,7 @@ export const eventStoreOver = (context: StoreContext): EventStore => {
         const accountId = Number(calendarRow(calendarId).account_id)
         return forgetCalendarRows(
           database,
-          { calendarId, accountId, cursorKey: cursorKey(calendarId), now },
+          { calendarId, accountId, cursorKey: calendarCursorKey(calendarId), now },
           {
             event: refreshEvent,
             series: refreshSeries,
@@ -825,7 +825,7 @@ export const eventStoreOver = (context: StoreContext): EventStore => {
         return str(
           database
             .prepare("SELECT value FROM sync_cursors WHERE account_id = ? AND key = ?")
-            .get(Number(account_id), cursorKey(calendarId))?.value,
+            .get(Number(account_id), calendarCursorKey(calendarId))?.value,
         )
       }),
     setCursor: async (calendarId, value, now) => write(database, () => putCursor(calendarId, value, now)),

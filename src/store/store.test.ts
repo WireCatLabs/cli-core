@@ -480,6 +480,29 @@ describe("finding people and what they wrote", () => {
     await store.close()
   })
 
+  it("finds a short word too, in any case, and ё and е either way", async () => {
+    const store = await openStore({ path: fresh() })
+    await store.messages.saveMessages(
+      BOT,
+      "10",
+      [
+        said("a", "10", "7", "Our AI bot", 1),
+        said("b", "10", "7", "the bot alone", 2),
+        said("c", "10", "7", "Ок, ёлка стоит", 3),
+        said("d", "10", "7", "елка без ок", 4),
+      ],
+      { via: "history" },
+    )
+    const ids = async (text: string) =>
+      (await store.messages.find({ account: BOT, text, limit: 10 })).items.map(({ id }) => id).sort()
+
+    expect(await ids("ai bot")).toEqual(["a"])
+    expect(await ids("ок ЕЛКА")).toEqual(["c", "d"])
+    expect(await ids("ёлка")).toEqual(["c", "d"])
+    await expect(ids("ai ок")).rejects.toThrow("a word of three letters")
+    await store.close()
+  })
+
   it("combines text with a sender and leaves a deleted message out", async () => {
     const store = await seeded()
     const page = await store.messages.find({ provider: "max-bot", senders: ["7"], text: "again", limit: 10 })

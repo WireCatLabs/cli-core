@@ -165,12 +165,12 @@ const planOptions = (command: Command, verb: string) =>
     .option("--description <text>", "the detail, in Markdown: who owes whom, done when, next step, keywords")
     .option(
       "--due <time>",
-      "when it must be done: an ISO 8601 time or 2h, 3d from now; none clears it",
+      "when it must be done: an ISO 8601 time, a date (its end), today, or 2h, 3d from now; none clears it",
       dateOrNone("--due", { end: true }),
     )
     .option(
       "--remind-time <time>",
-      "when to look at it again: an ISO 8601 time or 2h, 3d from now; none clears it",
+      "when to look at it again: an ISO 8601 time, a date (its start), today, or 2h, 3d from now; none clears it",
       dateOrNone("--remind-time"),
     )
     .option(

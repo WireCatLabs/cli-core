@@ -438,6 +438,25 @@ describe("similar people", () => {
   })
 })
 
+describe("ё and е in a name", () => {
+  it("are one letter to a people search and to the check before adding someone", async () => {
+    const { store } = await opened()
+    await store.people.savePeople(TG, [
+      { id: "30", name: "Пётр Ёлкин" },
+      { id: "31", name: "Петр Елкин" },
+    ])
+    const listed = async (query: string) =>
+      (await store.people.list({ limit: 10, kind: "all", query })).items.map(({ displayName }) => displayName).sort()
+
+    expect(await listed("елкин")).toEqual(["Петр Елкин", "Пётр Ёлкин"])
+    expect(await listed("Ёлкин")).toEqual(["Петр Елкин", "Пётр Ёлкин"])
+    expect((await store.people.similar("Ёлкин")).map(({ displayName }) => displayName).sort()).toEqual([
+      "Петр Елкин",
+      "Пётр Ёлкин",
+    ])
+  })
+})
+
 describe("a name in another script (BUG-678)", () => {
   it("is found by a people search and by the check before adding someone", async () => {
     const { store } = await opened()

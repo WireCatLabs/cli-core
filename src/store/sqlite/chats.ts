@@ -30,6 +30,7 @@ import {
   syncRanges,
 } from "./schema.js"
 import { ensureTag } from "./tags.js"
+import { trigramPart } from "./trigram-match.js"
 import { parsed, present, toIso, toMs } from "./values.js"
 import { dropUnusedVectors } from "./vector-index.js"
 
@@ -525,7 +526,7 @@ export const CHAT_COLUMNS = {
         ? { sql: "chats.title IS NOT NULL AND chats.title <> ''", params: [] }
         : {
             sql: "chats.id IN (SELECT rowid FROM chats_fts WHERE chats_fts MATCH ?)",
-            params: [`"${titlePart(node.value).replaceAll('"', '""')}"`],
+            params: [trigramPart(titlePart(node.value))],
           },
   },
   kind: { type: "enum", sql: "chats.kind" },

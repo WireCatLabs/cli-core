@@ -1,57 +1,26 @@
 import { CliError } from "@wirecat/cli-base"
 import { timezoneOf } from "@wirecat/cli-base/query"
-import { calendarMoment, type MomentZone } from "../domain/moment.js"
-
-const AGO = /^(\d+)(m|h|d)$/
-const AGO_MS: Record<string, number> = { m: 60_000, h: 3_600_000, d: 86_400_000 }
-const DATE = /^\d{4}-\d{2}-\d{2}/
+import { aheadOf, type MomentZone, type Reading, readMoment } from "../domain/moment.js"
 
 export type { MomentZone }
+export { aheadOf }
 
-/** Shaped like a moment `momentOf` reads, whether or not it is a valid one. */
-export const isMoment = (reference: string): boolean => {
-  const wanted = reference.trim()
-  return AGO.test(wanted) || DATE.test(wanted)
+const read = (reference: string, flag: string, now: number, at: MomentZone): Reading => {
+  const found = readMoment(reference, flag, { ...at, now })
+  if (found === undefined)
+    throw new CliError(
+      "validation_error",
+      `${flag} takes an ISO 8601 time, today, yesterday, or 30m, 2h, 1d ago — not "${reference.trim()}"`,
+    )
+  return found
 }
 
 /**
- * `--since` as a moment: ISO 8601, or `30m`, `2h`, `1d` ago. Unlike max-cli, never a message id —
- * a MAX id carries its time, and a Telegram id is only a counter within one chat.
+ * `--since` as a moment, in the shared time grammar (`readMoment`). Unlike max-cli, never a message id — a MAX id
+ * carries its time, and a Telegram id is only a counter within one chat.
  */
-export const momentOf = (reference: string, flag = "--since", now = Date.now(), at: MomentZone = {}): number => {
-  const wanted = reference.trim()
-  const [, amount, unit] = AGO.exec(wanted) ?? []
-  // By shape: `Date.parse("12345")` is the year 12345, so a message id would pass as a date.
-  const time =
-    amount && unit
-      ? now - Number(amount) * (AGO_MS[unit] ?? 0)
-      : DATE.test(wanted)
-        ? calendarMoment(wanted, flag, at)
-        : Number.NaN
-  if (Number.isNaN(time)) {
-    throw new CliError("validation_error", `${flag} takes an ISO 8601 time or 30m, 2h, 1d ago — not "${wanted}"`)
-  }
-  return time
-}
-
-/**
- * A time ahead, for a due date or the next check: ISO 8601, or `30m`, `2h`, `3d` from now. `none`
- * is not a time; a caller that clears a date checks for it first.
- */
-export const aheadOf = (reference: string, flag: string, now = Date.now(), at: MomentZone = {}): number => {
-  const wanted = reference.trim()
-  const [, amount, unit] = AGO.exec(wanted) ?? []
-  const time =
-    amount && unit
-      ? now + Number(amount) * (AGO_MS[unit] ?? 0)
-      : DATE.test(wanted)
-        ? calendarMoment(wanted, flag, at)
-        : Number.NaN
-  if (Number.isNaN(time)) {
-    throw new CliError("validation_error", `${flag} takes an ISO 8601 time or 30m, 2h, 3d from now — not "${wanted}"`)
-  }
-  return time
-}
+export const momentOf = (reference: string, flag = "--since", now = Date.now(), at: MomentZone = {}): number =>
+  read(reference, flag, now, at).time
 
 export interface DateWindow {
   since?: number
@@ -75,11 +44,12 @@ export const dateWindow = ({
   /** How the caller spells the two, for the error: `since_time` over MCP. */
   names?: [string, string]
 }): DateWindow => {
-  const since = sinceTime === undefined ? undefined : momentOf(sinceTime, names[0], now, { zone })
-  const until = untilTime === undefined ? undefined : momentOf(untilTime, names[1], now, { zone, end: true })
-  const readInZone = [sinceTime, untilTime].some(
-    (value) => value !== undefined && DATE.test(value.trim()) && !/(?:Z|[+-]\d{2}:?\d{2})$/i.test(value.trim()),
-  )
+  const at = zone === undefined ? {} : { zone }
+  const lower = sinceTime === undefined ? undefined : read(sinceTime, names[0], now, at)
+  const upper = untilTime === undefined ? undefined : read(untilTime, names[1], now, { ...at, end: true })
+  const since = lower?.time
+  const until = upper?.time
+  const readInZone = lower?.local === true || upper?.local === true
   const window = {
     ...(since === undefined ? {} : { since: new Date(since).toISOString() }),
     ...(until === undefined ? {} : { until: new Date(until).toISOString() }),

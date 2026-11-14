@@ -20,7 +20,7 @@ import {
   meetingsListThrough,
   saveSourceMeeting,
 } from "../meetings/index.js"
-import { fakeMeetingSource } from "../meetings/testing/index.js"
+import { fakeMeetingSource, flagPaging } from "../meetings/testing/index.js"
 import type { AppIdentity } from "../ports/app.js"
 import { DEFAULT_PERMISSIONS } from "../sends/permissions.js"
 import { openStore } from "./store.js"
@@ -126,10 +126,11 @@ const fixture = async (source?: MeetingSource, extra: Partial<MeetingCommandDeps
   const answers: unknown[] = []
   const run = async (...args: string[]) => {
     const program = new Command().exitOverride().configureOutput({ writeOut() {}, writeErr() {} })
-    program.option("--offline").option("--dry-run")
+    program.option("--offline").option("--dry-run").option("--json")
     addMeetingCommands(program, {
       store: store.meetings,
       ...(source ? { source } : {}),
+      pagingOf: flagPaging,
       accountId,
       write: (value) => answers.push(value),
       inRun: (_command, body) => body(),
@@ -147,6 +148,15 @@ const titles = (answer: { items: Record<string, unknown>[] }) =>
   answer.items.map(({ title, found_in }) => [title, found_in])
 
 describe("meetings list reads the service and the store at once", () => {
+  it("reads a start date in the meetings zone and names that zone in meta.timezone", async () => {
+    const { run, keep } = await fixture(undefined, { timezone: "Pacific/Kiritimati" })
+    await keep(LOCAL)
+    const dated = await run("--offline", "list", "started_at:2026-11-13", "--json")
+    expect([titles(dated), dated.meta]).toEqual([[["Example retro", "archive"]], { timezone: "Pacific/Kiritimati" }])
+    expect((await run("--offline", "list", "started_at:2026-11-12", "--json")).items).toEqual([])
+    expect((await run("--offline", "list", "started_at>2d", "--json")).meta).toBeUndefined()
+  })
+
   it("answers one list: service-only, store-only and shared meetings, each once, with where it was found", async () => {
     const { source } = serviceOf([ROADMAP, WEEKLY])
     const { store, accountId, keep, run } = await fixture(source)
@@ -510,6 +520,7 @@ describe("meetings create, update and cancel", () => {
       program.option("--dry-run")
       addMeetingCommands(program, {
         store: store.meetings,
+        pagingOf: flagPaging,
         accountId: 1,
         management,
         askFirst: async () => {},
@@ -555,6 +566,7 @@ describe("meetings invitation", () => {
     handles.push(store)
     addMeetingCommands(program, {
       store: store.meetings,
+      pagingOf: flagPaging,
       accountId: 1,
       management,
       write: (value) => answers.push(value),
@@ -595,6 +607,7 @@ describe("meetings in a real run", () => {
         let current: Command | undefined
         addMeetingCommands(root, {
           store: store.meetings,
+          pagingOf: flagPaging,
           accountId,
           write: (value) => {
             if (!current) return

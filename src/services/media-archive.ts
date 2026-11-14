@@ -9,6 +9,7 @@ import { archiveMediaFile } from "./media-archive-files.js"
 import { withMediaArchiveLocks } from "./media-archive-locks.js"
 import { type MediaArchiveEntry, mediaKey, readMediaManifests, verifyMediaEntry } from "./media-archive-manifest.js"
 import type { MessagesService } from "./messages.js"
+import { momentOf } from "./moment.js"
 
 export interface MediaArchivePorts {
   chats: Pick<ChatsService, "list" | "account" | "show">
@@ -23,18 +24,6 @@ export interface MediaArchiveOptions {
   pauseMs?: number
   signal?: AbortSignal
   onSaved?: (entry: MediaArchiveEntry) => void
-}
-export const validateMediaSince = (value?: string, flag = "--since-time"): number | undefined => {
-  if (value === undefined) return undefined
-  if (
-    !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{1,3})?(?:Z|[+-]\d\d:\d\d)$/.test(value) ||
-    !Number.isFinite(Date.parse(value))
-  )
-    throw new CliError("validation_error", `${flag} needs an ISO timestamp with a time zone`)
-  const date = value.slice(0, 10)
-  if (new Date(`${date}T00:00:00Z`).toISOString().slice(0, 10) !== date)
-    throw new CliError("validation_error", `${flag} has an invalid calendar date`)
-  return Date.parse(value)
 }
 export const checkMediaArchive = (directory: string, signal?: AbortSignal) =>
   withMediaArchiveLocks(directory, signal, async (root) => {
@@ -105,7 +94,7 @@ const saveMessage = async (
 }
 
 export const archiveMedia = async (ports: MediaArchivePorts, options: MediaArchiveOptions) => {
-  const since = validateMediaSince(options.sinceTime)
+  const since = options.sinceTime === undefined ? undefined : momentOf(options.sinceTime, "--since-time")
   const pageSize = options.pageSize ?? 100
   const pauseMs = options.pauseMs ?? 1000
   if (

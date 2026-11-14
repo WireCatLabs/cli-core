@@ -40,6 +40,7 @@ import { addTags, ensureTag, type Label, labelsOf } from "./tags.js"
 import { oneOf, textOf } from "./text-input.js"
 import { type Thing, thingOf } from "./things.js"
 import { write } from "./transaction.js"
+import { trigramPart } from "./trigram-match.js"
 
 export const NOTE_FORMATS = ["obsidian", "markdown"] as const
 export { LINK_ORIGINS } from "./link-kinds.js"
@@ -288,7 +289,7 @@ const personsNamed = (database: CacheDatabase, key: string): Set<number> => {
         "SELECT i.name, i.username, il.person_id FROM identities_fts f JOIN identities i ON i.id = f.rowid " +
           "JOIN identity_links il ON il.identity_id = i.id WHERE identities_fts MATCH ?",
       )
-      .all(`"${key.replaceAll('"', '""')}"`)
+      .all(trigramPart(key))
     for (const row of rows) {
       const names = [row.name, row.username].filter((one) => one != null).map((one) => targetKey(String(one)))
       if (names.includes(key)) found.add(Number(row.person_id))

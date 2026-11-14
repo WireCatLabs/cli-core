@@ -15,7 +15,7 @@ import { searchesCommand } from "./searches-command.js"
 import { statsCommand } from "./stats-command.js"
 
 const app = { command: "chat", appName: "chat-cli", envPrefix: "CHAT", description: "", version: "1.0.0" }
-const setup = async (permissions?: object) => {
+const setup = async (permissions?: object, defaults: object = {}) => {
   const root = mkdtempSync(join(tmpdir(), "ranking-cli-"))
   const env = {
     ...process.env,
@@ -25,9 +25,12 @@ const setup = async (permissions?: object) => {
     MESSAGING_STORE: join(root, "m.db"),
     NO_COLOR: "1",
   }
-  if (permissions) {
+  if (permissions || Object.keys(defaults).length) {
     mkdirSync(env.CHAT_CONFIG_DIR, { recursive: true })
-    writeFileSync(join(env.CHAT_CONFIG_DIR, "config.json"), JSON.stringify({ defaults: { permissions } }))
+    writeFileSync(
+      join(env.CHAT_CONFIG_DIR, "config.json"),
+      JSON.stringify({ defaults: { ...defaults, ...(permissions ? { permissions } : {}) } }),
+    )
   }
   const account = { provider: "chat", account: "500" }
   rememberAccount(app, "default", account.account, env)
@@ -79,6 +82,16 @@ const setup = async (permissions?: object) => {
 }
 
 describe("administrator statistics command views", () => {
+  it("shows as many rows as the configured limit, capped at the report's 100, when no --limit is typed", async () => {
+    const rows = async (limit: number) => {
+      const { call } = await setup(undefined, { limit })
+      const found = await call(["stats", "contacts", "responses", "--answerer", "11", "--answerer", "12", "--json"])
+      expect(found.code, found.stderr).toBe(0)
+      return JSON.parse(found.stdout).item.rows.length
+    }
+    expect(await rows(1)).toBe(1)
+    expect(await rows(200)).toBe(2)
+  })
   it("returns stored report rows and exact evidence without a connection", async () => {
     const { call, connect } = await setup()
     const result = await call(["stats", "messages", "unanswered", "chat:7", "--json", "older_than:1h"])

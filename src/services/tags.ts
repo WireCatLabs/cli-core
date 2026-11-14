@@ -1,5 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
-import { type QueryAst, type QueryRegistry, queryFieldsOf } from "@wirecat/cli-base/query"
+import { type QueryAst, type QueryRegistry, queryFieldsOf, timezoneOf } from "@wirecat/cli-base/query"
 import type { ListResult } from "@wirecat/cli-base/standards"
 import type * as v from "valibot"
 import { formatLocator, isLocator, parseLocator } from "../domain/locator.js"
@@ -159,7 +159,9 @@ export const tagsService = (deps: ServiceDeps): TagsService => {
 
     list: ({ query, limit, offset }) =>
       inStore(async (store, account) => {
-        const where = query ? queryFilter(query, TAGGING_COLUMNS, { command: "tags list" }) : undefined
+        const where = query
+          ? queryFilter(query, TAGGING_COLUMNS, { command: "tags list", zone: timezoneOf() })
+          : undefined
         const rows = await store.tags.tags(account, {
           ...(where ? { where } : {}),
           window: { limit: limit + 1, offset },

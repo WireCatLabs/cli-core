@@ -2,6 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import type { Meta, NextStep } from "@wirecat/cli-base/standards"
 import type { Command } from "commander"
 import { type Body, itemOf, listOf, snakeKeys } from "../../cli/envelope.js"
+import { pagingOf } from "../../cli/paging.js"
 import type { MessageStore } from "../../store/store.js"
 import type { CalendarRun } from "./index.js"
 
@@ -51,11 +52,11 @@ interface Hits {
  * `events list` does. Without a cursor there is no next page to run: the provider's search pages per calendar.
  */
 export const hitsBody = (command: Command, value: Hits): Body => {
-  const opts = command.opts<{ limit: number; exact?: boolean; newest?: boolean }>()
+  const opts = command.opts<{ exact?: boolean; newest?: boolean }>()
   const untrusted = (value.untrusted ?? []).filter((field) => field.startsWith("hits.")).map((f) => f.slice(5))
   const { next, ...list } = listOf(pathOf(command).join(" "), {
     items: value.hits.map((hit) => snakeKeys({ ...hit, untrusted })),
-    limit: opts.limit,
+    limit: pagingOf(command).limit,
     has_more: value.has_more === true,
     paging: "cursor",
     ...(typeof value.next_offset === "number" ? { cursor: String(value.next_offset) } : {}),

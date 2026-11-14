@@ -1,8 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import * as v from "valibot"
 import { communicationFields } from "../context/communication-selection.js"
-import { zonedTime } from "../entities/index.js"
-import { validateMeetingChange } from "../meetings/index.js"
+import { typedTime } from "../entities/index.js"
 import {
   MEETING_PREPARATION_LIMITS,
   type MeetingPreparation,
@@ -10,6 +9,7 @@ import {
   validateMeetingPreparationRequest,
 } from "../services/index.js"
 import { validatePreparationCommunications } from "../services/meeting-communications-selection.js"
+import { momentOf } from "../services/moment.js"
 import { meetingPreparationAnswer } from "./meeting-preparation-answer.js"
 
 export type MeetingPreparationReader = (
@@ -23,26 +23,21 @@ const bound = (name: keyof typeof MEETING_PREPARATION_LIMITS) => {
 export const meetingPreparationInput = v.strictObject({
   series_id: v.pipe(v.string(), v.minLength(1), v.maxLength(1000)),
   communications: v.optional(
-    v.strictObject({ ...communicationFields, after: v.optional(zonedTime), before: v.optional(zonedTime) }),
+    v.strictObject({ ...communicationFields, after: v.optional(typedTime), before: v.optional(typedTime) }),
   ),
   project: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(200))),
-  after: v.optional(zonedTime),
-  until: v.optional(zonedTime),
-  history_after: v.optional(zonedTime),
+  after: v.optional(typedTime),
+  until: v.optional(typedTime),
+  history_after: v.optional(typedTime),
   meetings: bound("meetings"),
   cues: bound("cues"),
   context_limit: bound("contextLimit"),
   max_read_bytes: bound("maxReadBytes"),
   bytes: bound("bytes"),
 })
-const instant = (value: string | undefined, fallback: number, field: string) => {
-  if (value === undefined) return fallback
-  try {
-    return Date.parse(validateMeetingChange({ startTime: value }, false).startTime as string)
-  } catch {
-    throw new CliError("validation_error", `${field} must be a valid ISO timestamp with a zone`)
-  }
-}
+// A date alone ends a window at the end of that day and starts one at its start.
+const instant = (value: string | undefined, fallback: number, field: string, now: number, end = false) =>
+  value === undefined ? fallback : momentOf(value, field, now, { end })
 export const readMeetingPreparation = async (
   read: MeetingPreparationReader,
   input: unknown,
@@ -63,9 +58,9 @@ export const readMeetingPreparation = async (
     throw new CliError("validation_error", `invalid meeting preparation field: ${String(field)}`)
   }
   const args = parsed.output
-  const after = instant(args.after, now, "after")
-  const until = instant(args.until, after + 7 * 86400000, "until")
-  const historyAfter = instant(args.history_after, after - 30 * 86400000, "history_after")
+  const after = instant(args.after, now, "after", now)
+  const until = instant(args.until, after + 7 * 86400000, "until", now, true)
+  const historyAfter = instant(args.history_after, after - 30 * 86400000, "history_after", now)
   const request = validateMeetingPreparationRequest(args.series_id, {
     ...(args.project === undefined ? {} : { project: args.project }),
     ...(args.communications === undefined
@@ -75,10 +70,14 @@ export const readMeetingPreparation = async (
             ...args.communications,
             after: instant(
               args.communications.after,
-              Math.max(0, instant(args.communications.before, after, "communications.before") - 14 * 86400000),
+              Math.max(
+                0,
+                instant(args.communications.before, after, "communications.before", now, true) - 14 * 86400000,
+              ),
               "communications.after",
+              now,
             ),
-            before: instant(args.communications.before, after, "communications.before"),
+            before: instant(args.communications.before, after, "communications.before", now, true),
           },
         }),
     after,

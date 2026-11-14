@@ -1,5 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import { tagOf } from "../../domain/tags.js"
+import { fuseRanked } from "../../search/fusion.js"
 import {
   type Automaton,
   compileAutomaton,
@@ -170,7 +171,7 @@ const matchedRows = (context: StoreContext, query: NoteQuery): CorpusRow[] => {
   )
   const idsOf = (type: Corpus["type"]) =>
     query.refs?.flatMap((ref) => (ref.startsWith(`${type}:`) ? [Number(ref.slice(type.length + 1))] : []))
-  const rows = chosen.flatMap((corpus) => {
+  const lists = chosen.map((corpus) => {
     const ids = idsOf(corpus.type)
     if (ids?.length === 0) return []
     return searchCorpus(
@@ -179,17 +180,8 @@ const matchedRows = (context: StoreContext, query: NoteQuery): CorpusRow[] => {
       corpus,
     )
   })
-  const exactFirst = rows.some((row) => row.exact !== undefined)
-  rows.sort((a, b) =>
-    query.newest
-      ? (b.at ?? 0) - (a.at ?? 0) || a.id - b.id
-      : (exactFirst ? Number(b.exact === true) - Number(a.exact === true) : 0) ||
-        Number(a.relevance === null) - Number(b.relevance === null) ||
-        (a.relevance ?? 0) - (b.relevance ?? 0) ||
-        (b.at ?? 0) - (a.at ?? 0) ||
-        a.id - b.id,
-  )
-  return rows
+  if (query.newest) return lists.flat().sort((a, b) => (b.at ?? 0) - (a.at ?? 0) || a.id - b.id)
+  return fuseRanked(lists, (row) => ({ exact: row.exact, ranked: row.relevance !== null, at: row.at ?? 0 }))
 }
 
 /** Notes matching a parsed query, by the same language as messages: files and written notes, merged. */

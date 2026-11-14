@@ -24,8 +24,11 @@ export const addMeetingSeriesInventoryCommand = (
     meetings
       .command("scheduled")
       .description("discover candidate meeting series from one bounded provider page")
-      .option("--since-time <time>", "absolute window start as ISO timestamp with zone (default now)")
-      .option("--before-time <time>", "exclusive ISO window end (default seven days after start)")
+      .option("--since-time <time>", "window start, an ISO date or time, local without a zone (default now)")
+      .option(
+        "--before-time <time>",
+        "exclusive window end, an ISO date or time; a date alone covers that day (default seven days after start)",
+      )
       .option("--limit <n>", "series candidates in one provider page, 1–100 (default 100)", integer)
       .option("--max-read-bytes <bytes>", "normalized provider-page bytes, at most 1048576 (default 65536)", integer)
       .option("--bytes <bytes>", "answer item UTF-8 JSON bytes, 2048–1048576 (default 65536)", integer)

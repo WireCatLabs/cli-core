@@ -478,6 +478,10 @@ describe.runIf(posix)("schedule on Linux", () => {
     expect(atTime.err).toContain("say when")
     const dateAlone = await call(["command", "w", "--at-time", "2099-11-20", "--", "r"], env, system)
     expect(dateAlone.err).toContain("--at-time needs a time of day as well: 2099-11-20T09:00")
+    const past = await call(["command", "w", "--at-time", "2020-11-20 09:00", "--", "r"], env, system)
+    expect(past.err).toContain("--at-time is in the past")
+    const spaced = await call(["command", "w", "--at-time", "2099-11-20 09:00", "--json", "--", "r"], env, system)
+    expect(spaced.code).toBe(0)
   })
 })
 

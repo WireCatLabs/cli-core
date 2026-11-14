@@ -152,14 +152,12 @@ const viaOracle = (query: string): number[] => {
 }
 
 describe("a date in a list query", () => {
-  it("starts in the machine's zone when none is given, as search reads it", () => {
+  it("reads a date in the zone it is given", () => {
     const ast = validateQuery(parseLucene("created_at:2026-01-02", { defaultField: "none" }), registry)
-    const local = queryFilter(ast, COLUMNS)
-    const machine = queryFilter(ast, COLUMNS, { zone: Intl.DateTimeFormat().resolvedOptions().timeZone })
-    const tokyo = queryFilter(ast, COLUMNS, { zone: "Asia/Tokyo" })
-
-    expect(local.params).toEqual(machine.params)
-    expect(tokyo.params).not.toEqual(queryFilter(ast, COLUMNS, { zone: "America/Los_Angeles" }).params)
+    expect(queryFilter(ast, COLUMNS, { zone: "Asia/Tokyo" }).params).toEqual([
+      Date.parse("2026-01-01T15:00:00Z"),
+      Date.parse("2026-01-02T15:00:00Z"),
+    ])
   })
 })
 
@@ -202,14 +200,14 @@ describe("a list query as SQL", () => {
   })
 
   it("binds every value, so a quote in the query never reaches the SQL text", () => {
-    const where = queryFilter(parseLucene(`kind:"x' OR 1=1 --"`, { defaultField: "none" }), COLUMNS)
+    const where = queryFilter(parseLucene(`kind:"x' OR 1=1 --"`, { defaultField: "none" }), COLUMNS, { zone: "UTC" })
     expect(where.sql).not.toContain("1=1")
     expect(where.params).toEqual(["x' or 1=1 --"])
   })
 
   it("refuses a regular expression on a plain column", () => {
     const ast = parseLucene("kind:/gr.*/", { defaultField: "none" })
-    expect(() => queryFilter(ast, COLUMNS, { command: "items list" })).toThrow(CliError)
+    expect(() => queryFilter(ast, COLUMNS, { command: "items list", zone: "UTC" })).toThrow(CliError)
   })
 })
 
@@ -230,7 +228,7 @@ describe("a folded name", () => {
   afterAll(() => folded.close())
   const found = (query: string) => {
     const ast = validateQuery(parseLucene(query, { defaultField: "none" }), { entity: "n", backend: "sql", fields })
-    const where = queryFilter(ast, columns)
+    const where = queryFilter(ast, columns, { zone: "UTC" })
     return folded
       .prepare(`SELECT id FROM names WHERE ${where.sql} ORDER BY id`)
       .all(...where.params)
@@ -257,7 +255,7 @@ describe("a folded name", () => {
       backend: "sql",
       fields,
     })
-    const where = queryFilter(ast, columns)
+    const where = queryFilter(ast, columns, { zone: "UTC" })
     const literal = where.sql.replace("?", `'${String(where.params[0])}'`)
     const plan = folded
       .prepare(`EXPLAIN QUERY PLAN SELECT id FROM names WHERE ${literal}`)

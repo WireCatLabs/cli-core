@@ -81,6 +81,26 @@ describe("meeting preparation adapters", () => {
     expect(mcp.structuredContent).toMatchObject({ item: output.mock.calls[0]?.[0].item })
     expect(JSON.stringify(describeProgram(program))).toContain("example meetings prepare 123 --json")
   })
+  it("reads a date alone, a time without a zone and 7d ago, as the other past-time flags do", async () => {
+    const read = vi.fn<MeetingPreparationReader>(async () => {
+      throw new Error("window read")
+    })
+    const day = Date.UTC(2026, 9, 20)
+    const windowed = { ...args, after: "2026-10-20", until: "2026-10-21", history_after: "7d" }
+    await expect(readMeetingPreparation(read, windowed, undefined, day)).rejects.toThrow("window read")
+    expect(read.mock.calls[0]?.[1]).toMatchObject({
+      after: new Date(2026, 9, 20).getTime(),
+      until: new Date(2026, 9, 21, 23, 59, 59, 999).getTime(),
+      historyAfter: day - 7 * 86400000,
+    })
+    const { program } = cli(read)
+    await expect(
+      program.parseAsync(["meetings", "prepare", "example-series", "--since-time", "2026-10-20T09:00"], {
+        from: "user",
+      }),
+    ).rejects.toThrow("window read")
+    expect(read.mock.calls[1]?.[1]).toMatchObject({ after: new Date(2026, 9, 20, 9).getTime() })
+  })
   it("reports skipped sources through common metadata and rejects a changed reader selection", async () => {
     const f = await fixture()
     const read: MeetingPreparationReader = async (...params) => {
@@ -174,8 +194,7 @@ describe("meeting preparation adapters", () => {
     { account_id: 2 },
     { unexpected: "x" },
     { after: "2026-02-30T10:00:00Z" },
-    { after: "2026-10-14" },
-    { after: "2026-10-14T10:00:00" },
+    { after: "tomorrow" },
     { until: "1970-01-01T00:00:01Z" },
     { history_after: "1970-01-02T00:00:00Z" },
     { meetings: 21 },

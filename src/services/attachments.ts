@@ -2,7 +2,7 @@ import { createHash } from "node:crypto"
 import { constants, mkdirSync } from "node:fs"
 import { lstat, open, readFile, stat } from "node:fs/promises"
 import { CliError } from "@wirecat/cli-base"
-import { type QueryAst, type QueryRegistry, queryFieldsOf, walkQuery } from "@wirecat/cli-base/query"
+import { type QueryAst, type QueryRegistry, queryFieldsOf, timezoneOf, walkQuery } from "@wirecat/cli-base/query"
 import type { ListResult } from "@wirecat/cli-base/standards"
 import type * as v from "valibot"
 import { directoryPaths } from "../attachments/directory.js"
@@ -580,7 +580,9 @@ export const attachmentsService = (deps: ServiceDeps): AttachmentsService => ({
       for (const node of walkQuery(query.root))
         if (node.field === "chat" && node.operator !== "wildcard" && !chats.has(node.value))
           chats.set(node.value, await chatIdIn(deps.messenger, node.value, store, { includeLeft: true }))
-    const where = query ? queryFilter(query, attachmentColumns(chats), { command: "attachments list" }) : undefined
+    const where = query
+      ? queryFilter(query, attachmentColumns(chats), { command: "attachments list", zone: timezoneOf() })
+      : undefined
     const views = await store.attachments.attachments({ ...(where ? { where } : {}), offset, limit: limit + 1 })
     return { items: views.slice(0, limit).map((view) => itemOf(account, view)), hasMore: views.length > limit }
   },

@@ -1,4 +1,5 @@
 import type { QueryAst } from "@wirecat/cli-base/query"
+import { timezoneOf } from "@wirecat/cli-base/query"
 import {
   type Event,
   type EventCandidateFilter,
@@ -64,14 +65,18 @@ const exists = (database: CacheDatabase, table: string, id: number) =>
 export const events = (database: CacheDatabase, query?: QueryAst): Event[] => {
   const where =
     query &&
-    queryFilter(query, {
-      id: { type: "num", sql: "id" },
-      origin: { type: "enum", sql: "origin" },
-      starts_at: { type: "time", sql: "starts_at" },
-      ends_at: { type: "time", sql: "ends_at" },
-      created_at: { type: "time", sql: "created_at" },
-      updated_at: { type: "time", sql: "updated_at" },
-    })
+    queryFilter(
+      query,
+      {
+        id: { type: "num", sql: "id" },
+        origin: { type: "enum", sql: "origin" },
+        starts_at: { type: "time", sql: "starts_at" },
+        ends_at: { type: "time", sql: "ends_at" },
+        created_at: { type: "time", sql: "created_at" },
+        updated_at: { type: "time", sql: "updated_at" },
+      },
+      { zone: timezoneOf() },
+    )
   return database
     .prepare(`SELECT * FROM events WHERE deleted_at IS NULL${where ? ` AND (${where.sql})` : ""} ORDER BY id`)
     .all(...(where?.params ?? []))

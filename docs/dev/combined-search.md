@@ -189,6 +189,10 @@ numerically comparable. Collapse duplicates by full message locator, including p
 Exact/stem lists share one words contribution per locator so correlated lists cannot double-vote;
 corrected whole/prefix lists similarly share one corrected contribution. Prefix adds a contribution
 only when it actually expands a term, avoiding repeated votes for the same exact match.
+A beginning is made only of a typed word of three or more letters that is not a function word
+(`про`, `при`, `the`: `isFunctionWord` in `src/search/question-plan.ts`). A beginning that would pass
+the query's expansions budget is searched as the typed word instead, so the search never refuses a
+pattern the user did not type.
 
 Fuse independent lists with reciprocal rank fusion. Start with k=60 as notes/conversations do;
 compare k in {20, 60, 100} and per-source candidate depth in {50, 100, 300, 500} on dev only.

@@ -2,6 +2,7 @@ import type { ProviderEntry } from "../domain/providers.js"
 import { ACCOUNT_GROUPS, type AccountGroups, type Profiles } from "../search/account-list.js"
 import { keysOver } from "./keys.js"
 import { accountGroupsOf, forgetProfile, profilesOf, saveProfile } from "./sqlite/account-groups.js"
+import { purgeAccount } from "./sqlite/account-purge.js"
 import * as accounts from "./sqlite/accounts.js"
 import type { StoreContext } from "./sqlite/open.js"
 import { linkOwnIdentities } from "./sqlite/own-identities.js"
@@ -82,7 +83,7 @@ export const accountAccountsOver = (context: StoreContext): AccountAccounts => {
     purge: async (key) => {
       const accountKey = findAccountPk(key)
       if (accountKey === undefined) return
-      write(database, () => accounts.purgeAccount(context, accountKey))
+      write(database, () => purgeAccount(context, accountKey))
     },
   }
 }

@@ -1,5 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import type { QueryAst } from "@wirecat/cli-base/query"
+import { timezoneOf } from "@wirecat/cli-base/query"
 import { normalizeTag } from "../../domain/tags.js"
 import type { SqlValue } from "../driver.js"
 import { PREFERRED_FILE, subtreeOf } from "./files.js"
@@ -290,7 +291,7 @@ const treeOf = (paths: Map<string, number>, depth: number): { loose: number; fol
 export const documentListingOver = (context: StoreContext): DocumentListing => {
   const { database } = context
   const whereOf = (query: QueryAst | undefined, zone?: string, now?: number) =>
-    query && queryFilter(query, columns(context), { ...(zone ? { zone } : {}), ...(now ? { now } : {}) })
+    query && queryFilter(query, columns(context), { zone: timezoneOf(zone), ...(now ? { now } : {}) })
   return {
     documentAccounts: async () =>
       database

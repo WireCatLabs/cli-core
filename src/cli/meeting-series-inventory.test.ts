@@ -152,3 +152,20 @@ it("refuses foreign windows, unbounded rows and cancellation", async () => {
   expect(JSON.stringify(result.structuredContent)).toContain("cancelled")
   expect(read).not.toHaveBeenCalled()
 })
+
+it("reads a date alone and 7d ago in its window, as the other past-time flags do", async () => {
+  const f = fixture()
+  const program = new Command("example").exitOverride()
+  program.command("meetings")
+  addMeetingSeriesInventoryCommand(program, { read: f.read, output: vi.fn(), signal: () => undefined, now: () => now })
+  await program.parseAsync(["meetings", "scheduled", "--since-time", "2026-10-20", "--before-time", "2026-10-21"], {
+    from: "user",
+  })
+  expect(f.port.read.mock.calls[0]?.[0]).toMatchObject({
+    after: new Date(2026, 9, 20).getTime(),
+    until: new Date(2026, 9, 21, 23, 59, 59, 999).getTime(),
+  })
+  const result = await callMeetingSeriesInventoryTool(f.read, { after: "7d" }, undefined, {}, now)
+  expect(result.isError).toBeFalsy()
+  expect(f.port.read.mock.calls[1]?.[0]).toMatchObject({ after: now - 7 * 86400000 })
+})

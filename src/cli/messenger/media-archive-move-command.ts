@@ -19,7 +19,10 @@ export const addMediaArchiveMove = (attachments: Command, messenger: Messenger):
     .description("move older images into another verified archive; remember their new locations")
     .argument("<dir>", "source media archive directory")
     .argument("<archive-dir>", "destination archive directory; created if needed")
-    .requiredOption("--before-time <time>", "move images whose message date is before this ISO timestamp with zone")
+    .requiredOption(
+      "--before-time <time>",
+      "move images whose message date is before this time: ISO 8601, a date (its start), today, or 7d ago",
+    )
     .option("--dry-run", "show counts and bytes without moving files or creating the destination")
     .addHelpText(
       "after",

@@ -1,7 +1,7 @@
 import { Command } from "commander"
 import { expect, it } from "vitest"
 import { addMeetingCommands } from "./cli/index.js"
-import { fakeMeetingSource, memoryMeetingStore } from "./testing/index.js"
+import { fakeMeetingSource, flagPaging, memoryMeetingStore } from "./testing/index.js"
 
 it("CLI lookback revisits the cursor window for late transcripts and subtracts from explicit since", async () => {
   const store = memoryMeetingStore()
@@ -22,6 +22,7 @@ it("CLI lookback revisits the cursor window for late transcripts and subtracts f
     addMeetingCommands(program, {
       store,
       source,
+      pagingOf: flagPaging,
       accountId: 1,
       write() {},
       inRun: (_command, body) => body(),
@@ -62,6 +63,7 @@ it("CLI rejects invalid lookback bounds before requesting provider records", asy
     addMeetingCommands(program, {
       store: memoryMeetingStore(),
       source,
+      pagingOf: flagPaging,
       accountId: 1,
       write() {},
       inRun: (_command, body) => body(),
@@ -71,4 +73,26 @@ it("CLI rejects invalid lookback bounds before requesting provider records", asy
     ).rejects.toMatchObject({ code: "commander.invalidArgument" })
   }
   expect(requests).toBe(0)
+})
+
+it("CLI reads --since-time 7d as seven days before now, as the other past-time flags do", async () => {
+  const boundaries: string[] = []
+  const now = Date.UTC(2026, 9, 20)
+  const program = new Command().exitOverride().configureOutput({ writeOut() {}, writeErr() {} })
+  addMeetingCommands(program, {
+    store: memoryMeetingStore(),
+    source: fakeMeetingSource({
+      async meetings(since) {
+        boundaries.push(since)
+        return []
+      },
+    }),
+    pagingOf: flagPaging,
+    accountId: 1,
+    write() {},
+    inRun: (_command, body) => body(),
+    now: () => now,
+  })
+  await program.parseAsync(["meetings", "sync", "--since-time", "7d"], { from: "user" })
+  expect(boundaries[0]).toBe(new Date(now - 7 * 86400000).toISOString())
 })

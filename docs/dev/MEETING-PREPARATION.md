@@ -211,8 +211,9 @@ because a participant, project alias or meeting title looks similar.
 `addMeetingPreparationCommand(program, { read, output, signal, now?, communications? })` mounts `meetings prepare
 <series-id>` under an existing meetings group; `communications: true` adds the `--context-*` options of
 [MEETING-COMMUNICATIONS.md](MEETING-COMMUNICATIONS.md#shared-cli-and-mcp). Options include `--project` for the optional selected-project evidence and `--since-time`, `--before-time`, `--history-since-time`,
-`--meetings`, `--cues`, `--context-limit`, `--max-read-bytes` and `--bytes`. Time options take valid ISO
-instants with an explicit zone. The default window starts at the injected clock, ends seven days
+`--meetings`, `--cues`, `--context-limit`, `--max-read-bytes` and `--bytes`. Time options take the shared
+past-time grammar (`momentOf`): an ISO date or time, read in the computer's zone without one, or `30m`, `2h`,
+`7d` ago; a date alone as an end covers that whole day. MCP's `after`, `until` and `history_after` take the same. The default window starts at the injected clock, ends seven days
 later and reads thirty days of history before its start. The answer retains absolute normalized
 windows for replay. Limits use the SDK's shared bounds and defaults.
 

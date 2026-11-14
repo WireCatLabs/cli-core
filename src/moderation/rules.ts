@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs"
+import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import { CliError, resolvePaths, writeSecurely } from "@wirecat/cli-base"
 import * as v from "valibot"
@@ -102,12 +102,28 @@ const KEYS: Record<string, { help: string; parse: (value: string) => unknown }> 
 
 export const RULE_KEYS = Object.keys(KEYS)
 
+const stateFolder = (app: AppIdentity, env: NodeJS.ProcessEnv, folder: string) =>
+  join(resolvePaths({ appName: app.appName, prefix: app.envPrefix, env }).state, folder)
+const profilesFolder = (app: AppIdentity, env: NodeJS.ProcessEnv) => stateFolder(app, env, "profiles")
+
 export const moderationPathFor = (app: AppIdentity, profile: string, env: NodeJS.ProcessEnv = process.env): string =>
-  join(
-    resolvePaths({ appName: app.appName, prefix: app.envPrefix, env }).state,
-    "profiles",
-    `${profile}.moderation.json`,
-  )
+  join(profilesFolder(app, env), `${profile}.moderation.json`)
+
+const namesIn = (folder: string, suffix: string): string[] =>
+  existsSync(folder)
+    ? readdirSync(folder)
+        .filter((name) => name.endsWith(suffix))
+        .map((name) => name.slice(0, -suffix.length))
+    : []
+
+/** The choices when a caller named no profile: those logged in to here, and those that keep moderation rules. */
+export const moderationProfiles = (app: AppIdentity, env: NodeJS.ProcessEnv = process.env): string[] =>
+  [
+    ...new Set([
+      ...namesIn(stateFolder(app, env, "accounts"), ".json"),
+      ...namesIn(profilesFolder(app, env), ".moderation.json"),
+    ]),
+  ].sort()
 
 /**
  * The rules of each group this profile moderates, one file per profile beside the recipient list —

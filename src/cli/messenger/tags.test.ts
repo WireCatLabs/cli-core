@@ -216,3 +216,11 @@ describe("tags", () => {
     expect(asked.code).toBe(7)
   })
 })
+
+it("rebuilds tags for as many chats as the configured limit when no --limit is typed", async () => {
+  const chat = await setup({ defaults: { limit: 1 } })
+  const preview = await chat("tags", "rebuild", "--chat", "7", "--chat", "missing", "--dry-run", "--json")
+  expect(preview.code, preview.stderr).toBe(0)
+  const parsed = v.parse(ENTITIES.automatic_tags, JSON.parse(preview.stdout.join("")).item)
+  expect([parsed.items.length, parsed.has_more]).toEqual([1, true])
+})

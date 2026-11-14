@@ -2,7 +2,6 @@ import { realpath, unlink } from "node:fs/promises"
 import { basename, dirname, join, resolve } from "node:path"
 import { CliError } from "@wirecat/cli-base"
 import { openOrdinaryFile, sameOrdinaryFile, syncDirectory, writeFileAtomic } from "../files/index.js"
-import { validateMediaSince } from "./media-archive.js"
 import { archiveMediaFile } from "./media-archive-files.js"
 import { withMediaArchiveLocks } from "./media-archive-locks.js"
 import {
@@ -16,6 +15,7 @@ import {
   sameMediaCopy,
   verifyMediaEntry,
 } from "./media-archive-manifest.js"
+import { momentOf } from "./moment.js"
 
 export interface MoveMediaArchiveOptions {
   directory: string
@@ -68,8 +68,7 @@ const removeLocalCopy = async (
 
 /** The destination is durable before a source relocation record is published, then the verified local copy is removed. */
 export const moveMediaArchive = async (options: MoveMediaArchiveOptions) => {
-  const cutoff = validateMediaSince(options.beforeTime, "--before-time")
-  if (cutoff === undefined) throw new CliError("validation_error", "--before-time is required")
+  const cutoff = momentOf(options.beforeTime, "--before-time")
   const target = await canonicalDestination(options.archiveDirectory)
   const source = await realpath(options.directory)
   if (source === target) throw new CliError("validation_error", "choose a different archive destination")

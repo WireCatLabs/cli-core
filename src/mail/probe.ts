@@ -47,10 +47,21 @@ const isSent = (item: Listed) => item.labels?.includes("Sent") || /(^|\/)sent\b/
 export const groupKey = (headers: { from?: string; listId?: string }): string =>
   headers.listId === undefined ? `from:${headers.from}` : `list:${headers.listId}`
 
-/** Groups mail by List-Id when it has one, else by sender address; largest groups first. */
-export const probeMail = (items: Listed[], limit: number, ages: ReadonlyMap<string, DomainAge> = new Map()): Probe => {
+/**
+ * Groups mail by List-Id when it has one, else by sender address; largest groups first. `written` holds addresses the
+ * owner wrote to outside this listing (stored outgoing mail), so a listing without Sent still knows a correspondent.
+ */
+export const probeMail = (
+  items: Listed[],
+  limit: number,
+  ages: ReadonlyMap<string, DomainAge> = new Map(),
+  written: ReadonlySet<string> = new Set(),
+): Probe => {
   const sent = items.filter(isSent)
-  const recipients = new Set(sent.flatMap((item) => item.headers?.to ?? []))
+  const recipients = new Set(
+    [...written, ...sent.flatMap((item) => item.headers?.to ?? [])].map((to) => to.toLowerCase()),
+  )
+  const wrote = (sender: string) => recipients.has(sender.toLowerCase())
   const groups = new Map<string, Listed[]>()
   let withoutHeaders = 0
   for (const item of items) {
@@ -70,7 +81,7 @@ export const probeMail = (items: Listed[], limit: number, ages: ReadonlyMap<stri
     const known = group.filter((item) => item.seen !== undefined)
     const years = group.map((item) => new Date(item.receivedAt).getUTCFullYear())
     const bulk = share(group.filter((item) => item.headers?.bulk).length, group.length)
-    const replied = [...senders].some((sender) => recipients.has(sender))
+    const replied = [...senders].some(wrote)
     return {
       from: [...senders][0] ?? null,
       listId: group[0]?.headers?.listId ?? null,
@@ -87,7 +98,7 @@ export const probeMail = (items: Listed[], limit: number, ages: ReadonlyMap<stri
   })
   const presets = PRESET_NAMES.map((preset) => {
     const hit = [...groups.values()].filter((group) => {
-      const replied = group.some((item) => item.headers?.from !== undefined && recipients.has(item.headers.from))
+      const replied = group.some((item) => item.headers?.from !== undefined && wrote(item.headers.from))
       return presetMatches(preset, { ...(group[0] as Listed), replied })
     })
     return {

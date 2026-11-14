@@ -5,7 +5,7 @@ import { exportMeeting, serializeVtt } from "./export.js"
 import { callMeetingTool } from "./mcp/index.js"
 import { meetingSummaryAnswer, meetingTranscriptAnswer } from "./reads.js"
 import type { MeetingSave } from "./store.js"
-import { memoryMeetingStore, sampleMeeting } from "./testing/index.js"
+import { flagPaging, memoryMeetingStore, sampleMeeting } from "./testing/index.js"
 import { parseVtt } from "./vtt.js"
 
 const present = <T>(value: T | undefined): T => {
@@ -197,6 +197,7 @@ it("shares summary/history/export between CLI and MCP and writes files only thro
     const program = new Command().exitOverride().configureOutput({ writeErr() {}, writeOut() {} })
     addMeetingCommands(program, {
       store,
+      pagingOf: flagPaging,
       accountId: 1,
       inRun: (_command, body) => body(),
       write: (value) => {
@@ -209,19 +210,21 @@ it("shares summary/history/export between CLI and MCP and writes files only thro
   const id = String(second.meeting.id)
   await run("meetings", "summary", id)
   expect(values.at(-1)).toEqual({
-    ...(await callMeetingTool(store, "meeting_summary", { meeting: second.meeting.id, account_id: 1 }))
+    ...(await callMeetingTool(store, "meeting_summary", { meeting: second.meeting.id, account_id: 1 }, { limit: 100 }))
       .structuredContent,
     next_steps: undefined,
   })
   await run("meetings", "transcript", id, "--history")
   expect(values.at(-1)).toEqual({
-    ...(await callMeetingTool(store, "meeting_transcript", { meeting: second.meeting.id, history: true }))
-      .structuredContent,
+    ...(
+      await callMeetingTool(store, "meeting_transcript", { meeting: second.meeting.id, history: true }, { limit: 100 })
+    ).structuredContent,
     next_steps: undefined,
   })
   await run("meetings", "export", id, "--format", "vtt")
   expect(values.at(-1)).toEqual(
-    (await callMeetingTool(store, "meeting_export", { meeting: second.meeting.id, format: "vtt" })).structuredContent,
+    (await callMeetingTool(store, "meeting_export", { meeting: second.meeting.id, format: "vtt" }, { limit: 100 }))
+      .structuredContent,
   )
   await run("meetings", "export", id, "--output", "example.md")
   expect(files[0]?.[1]).toContain("Corrected example text")
@@ -247,5 +250,5 @@ it("validates MCP export/history/account filters", async () => {
     ["meeting_transcript", { meeting: second.meeting.id, history: "yes" }],
     ["meeting_summary", { meeting: second.meeting.id, account_id: 2 }],
   ] as const)
-    expect((await callMeetingTool(store, name, input)).isError).toBe(true)
+    expect((await callMeetingTool(store, name, input, { limit: 100 })).isError).toBe(true)
 })

@@ -1,5 +1,12 @@
 import { CliError } from "@wirecat/cli-base"
-import { defineQuery, type Predicate, type QueryAst, validateQuery, walkQuery } from "@wirecat/cli-base/query"
+import {
+  defineQuery,
+  type Predicate,
+  type QueryAst,
+  timezoneOf,
+  validateQuery,
+  walkQuery,
+} from "@wirecat/cli-base/query"
 import { normalizeTag } from "../../domain/tags.js"
 import type { SqlValue } from "../driver.js"
 import { fold } from "../normalize.js"
@@ -326,7 +333,7 @@ export const catalogStoreOver = ({ database, now }: StoreContext): CatalogStore 
           person: { where: person },
           tag: { where: (node) => ({ sql: `EXISTS(${tagSql})`, params: [tag(node.value)] }) },
         }
-        const compiled = queryFilter(ast, columns)
+        const compiled = queryFilter(ast, columns, { zone: timezoneOf() })
         if (compiled.sql) add(compiled.sql, ...compiled.params)
       }
       const found = database

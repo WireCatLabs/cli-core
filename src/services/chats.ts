@@ -172,7 +172,7 @@ const deepChecks = async (
 export const chatsService = (deps: ServiceDeps): ChatsService => ({
   list: async (window, query) => {
     if (fromStore(deps)) {
-      const where = query ? queryFilter(query, CHAT_COLUMNS, { command: "chats list" }) : undefined
+      const where = query ? queryFilter(query, CHAT_COLUMNS, { command: "chats list", zone: timezoneOf() }) : undefined
       return (await accountStore(deps)).chats.chats({ ...window, ...(where ? { where } : {}) })
     }
     const [term] = query ? walkQuery(query.root) : []
@@ -354,7 +354,9 @@ export const chatsService = (deps: ServiceDeps): ChatsService => ({
   },
 
   tracked: async (query) => {
-    const where = query ? queryFilter(query, TRACKED_CHAT_COLUMNS, { command: "chats tracking list" }) : undefined
+    const where = query
+      ? queryFilter(query, TRACKED_CHAT_COLUMNS, { command: "chats tracking list", zone: timezoneOf() })
+      : undefined
     return (await accountStore(deps)).roster.trackedChats(where ? { where } : {})
   },
 

@@ -1,7 +1,7 @@
 import { Command } from "commander"
 import { describe, expect, it } from "vitest"
 import { addMeetingCommands } from "../cli/index.js"
-import { memoryMeetingStore, sampleMeeting } from "../testing/index.js"
+import { flagPaging, memoryMeetingStore, sampleMeeting } from "../testing/index.js"
 import {
   agentResult,
   callMeetingPassageTool,
@@ -70,14 +70,16 @@ describe("meeting MCP reads", () => {
   it("returns transcripts, names and titles with hidden characters made visible, ordinary text unchanged", async () => {
     const { store, saved } = await hostileMeeting()
     for (const name of ["meeting_transcript", "meeting_show", "meetings_list"]) {
-      const result = await callMeetingTool(store, name, name === "meetings_list" ? {} : { meeting: saved.meeting.id })
+      const result = await callMeetingTool(store, name, name === "meetings_list" ? {} : { meeting: saved.meeting.id }, {
+        limit: 100,
+      })
       expect(result.isError).toBeUndefined()
       const text = result.content[0]?.text ?? ""
       hidesNothing(text)
       hidesNothing(JSON.stringify(result.structuredContent))
       expect(text).toContain(ORDINARY)
     }
-    const transcript = await callMeetingTool(store, "meeting_transcript", { meeting: saved.meeting.id })
+    const transcript = await callMeetingTool(store, "meeting_transcript", { meeting: saved.meeting.id }, { limit: 100 })
     expect(transcript.content[0]?.text).toContain("rules\\\\u200b")
   })
 
@@ -87,6 +89,7 @@ describe("meeting MCP reads", () => {
     const program = new Command().exitOverride().configureOutput({ writeErr() {}, writeOut() {} })
     addMeetingCommands(program, {
       store,
+      pagingOf: flagPaging,
       accountId: 1,
       write: (value) => void values.push(value),
       inRun: (_command, body) => body(),
@@ -107,6 +110,7 @@ describe("meeting MCP reads", () => {
         throw new Error(HOSTILE)
       },
       { query: "rules" },
+      { limit: 100 },
     )
     expect(search.isError).toBe(true)
     hidesNothing(search.content[0]?.text ?? "")

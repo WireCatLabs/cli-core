@@ -20,15 +20,13 @@ const call = (tool: string, command: string, args: Record<string, unknown> = {})
   `${tool} with ${JSON.stringify(Object.keys(args).length > 0 ? { command, arguments: args } : { command })}`
 
 /**
- * The owner's time as a query term the query language reads: `1d ago` as `1d`, and an ISO time as the full UTC instant,
- * since the query refuses a time without seconds or a zone that `--since-time` takes. A time that does not read stays
- * as typed, so the tool's error names it.
+ * The owner's time as a query term every query language version reads: the full UTC instant, whatever the owner
+ * typed (`1d ago`, `today`, a time without seconds or a zone). A time that does not read stays as typed, so the
+ * tool's error names it.
  */
 const after = (time: string): string => {
-  const ago = /^(\d+[mhd])(?:\s+ago)?$/.exec(time.trim())?.[1]
-  if (ago) return `date>${ago}`
   try {
-    return `date>${JSON.stringify(new Date(momentOf(time)).toISOString())}`
+    return `date>${JSON.stringify(new Date(momentOf(time.trim().replace(/\s+ago$/i, ""))).toISOString())}`
   } catch {
     return `date>${JSON.stringify(time)}`
   }
@@ -78,7 +76,7 @@ export const registerPrompts = (server: McpServer, { command, name }: { command:
               v.string(),
               v.description(
                 "unread (the messenger's read marks, the default), new (since the last catch-up with new), " +
-                  "or a time: ISO 8601, or 2h / 1d ago",
+                  "or a time: ISO 8601, today, yesterday, or 2h / 1d ago",
               ),
             ),
           ),
@@ -170,7 +168,10 @@ export const registerPrompts = (server: McpServer, { command, name }: { command:
       argsSchema: toStandardJsonSchema(
         v.object({
           since: v.optional(
-            v.pipe(v.string(), v.description("where the last review ended: an ISO 8601 time, or 2h / 1d ago")),
+            v.pipe(
+              v.string(),
+              v.description("where the last review ended: an ISO 8601 time, today, yesterday, or 2h / 1d ago"),
+            ),
           ),
           groups: v.optional(
             v.pipe(v.string(), v.description("group chats where work gets done, by name or id, comma-separated")),

@@ -16,6 +16,7 @@ import { ALWAYS_SHOWN, type ShownBecause, shownReasons } from "./person-ties.js"
 import { mergedAssignees } from "./task-board.js"
 import { hiddenTestPeople } from "./test-people.js"
 import { read, writeBatch } from "./transaction.js"
+import { trigramPart } from "./trigram-match.js"
 
 export const PEOPLE_SORTS = ["interactions", "recent", "name", "tasks"] as const
 export type PeopleSort = (typeof PEOPLE_SORTS)[number]
@@ -75,8 +76,6 @@ export interface SimilarPerson extends ListedPerson {
 
 const MIN_QUERY = 3
 
-const ftsPhrase = (text: string) => `"${text.replaceAll('"', '""')}"`
-
 const matching = (query: string | undefined): { sql: string; params: SqlValue[] } => {
   if (query === undefined) return { sql: "", params: [] }
   const text = query.trim()
@@ -95,7 +94,7 @@ const matching = (query: string | undefined): { sql: string; params: SqlValue[] 
       "(SELECT rowid FROM identities_fts WHERE identities_fts MATCH ?)) OR " +
       forms.map(() => "p.name LIKE ? ESCAPE '\\'").join(" OR ") +
       ")",
-    params: [forms.map(ftsPhrase).join(" OR "), ...forms.map(like)],
+    params: [forms.map(trigramPart).join(" OR "), ...forms.map(like)],
   }
 }
 
@@ -643,7 +642,7 @@ export const similarPeople = (database: CacheDatabase, typed: string, limit: num
             "SELECT l.person_id AS person, i.name, i.username FROM identities_fts f JOIN identities i ON i.id = f.rowid " +
               "JOIN identity_links l ON l.identity_id = i.id WHERE identities_fts MATCH ?",
           )
-          .all(spellings(longest).map(ftsPhrase).join(" OR "))
+          .all(spellings(longest).map(trigramPart).join(" OR "))
       : database
           .prepare(
             "SELECT l.person_id AS person, i.name, i.username FROM identities i " +

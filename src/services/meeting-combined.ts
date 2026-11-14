@@ -8,12 +8,12 @@ import {
   parseMeetingReference,
   type SearchHit,
 } from "../meetings/index.js"
+import { RRF_K } from "../search/fusion.js"
 import { questionTerms } from "../search/question-plan.js"
 import type { MessageStore } from "../store/store.js"
 import { refreshMeetingIndex, resolveMeetingSelection } from "./meeting-hit-search.js"
 import type { MeetingEmbedder } from "./meeting-model.js"
 import { validateVector } from "./meeting-semantic.js"
-import { RRF_K } from "./notes-search.js"
 
 /** How many hits each side ranks before they are merged; a page past it has nothing more to show. */
 const DEPTH = 200

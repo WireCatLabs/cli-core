@@ -11,7 +11,7 @@ it("does not expose arbitrary store exception text through MCP", async () => {
   store.meetings = async () => {
     throw new Error("Invented confidential meeting text")
   }
-  const result = await callMeetingTool(store, "meetings_list", {})
+  const result = await callMeetingTool(store, "meetings_list", {}, { limit: 100 })
   expect(result.structuredContent).toEqual({
     error: {
       code: "internal_error",
