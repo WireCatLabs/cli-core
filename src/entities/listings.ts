@@ -45,9 +45,9 @@ const linked = v.strictObject({ ref: reference, title: v.nullable(text), at: v.n
 export const documentEntryDetails = v.strictObject({
   ...documentEntry.entries,
   text: v.nullable(text),
-  /** Where `text` starts in the whole text, in characters. */
+  /** Where `text` starts in the whole text, in Unicode code points: an emoji counts once, a combining mark apart. */
   text_offset: count,
-  /** The whole text's length, in characters. */
+  /** The whole text's length, in code points. The next part starts at `text_offset` plus the code points of `text`. */
   text_length: count,
   /** More text follows `text`: read it with a larger offset. */
   has_more: v.boolean(),

@@ -123,6 +123,55 @@ describe("the documents of every account", () => {
       code: "not_found",
     })
   })
+
+  describe("counts the text in code points, the unit of --cursor and --max-chars", () => {
+    const saved = async (text: string) => {
+      const store = await open()
+      const notes = (await store.notes.addFolder({ name: "Synthetic notes" })).id
+      await store.notes.saveFileNote({ folderId: notes, path: "unicode.md", title: "unicode", text })
+      const { items } = await listDocuments(store, documentListRequest("kind:md", page))
+      return { store, ref: items[0]?.ref as string }
+    }
+    const readAll = async (text: string, limit: number) => {
+      const { store, ref } = await saved(text)
+      const parts: { text: string; text_offset: number; text_length: number; has_more: boolean }[] = []
+      for (let cursor = 0; ; ) {
+        const shown = await showDocument(store, ref, { offset: cursor, limit })
+        parts.push({ ...shown, text: shown.text ?? "" })
+        if (!shown.has_more) break
+        cursor = shown.text_offset + [...(shown.text ?? "")].length
+      }
+      return parts
+    }
+
+    it("says more follows when emoji make the part longer than its code points", async () => {
+      const { store, ref } = await saved("😀😀😀😀abc")
+      expect(await showDocument(store, ref, { offset: 0, limit: 4 })).toMatchObject({
+        text: "😀😀😀😀",
+        text_offset: 0,
+        text_length: 7,
+        has_more: true,
+      })
+      expect(await showDocument(store, ref, { offset: 4, limit: 4 })).toMatchObject({ text: "abc", has_more: false })
+    })
+
+    it.each([
+      ["emoji", "a😀b👩‍💻c🎉🎉d"],
+      ["a surrogate pair at every cut", "😀".repeat(9)],
+      ["CJK", "日本語のテキストと한국어 텍스트"],
+      ["combining marks", "éäô café"],
+    ])("pages through %s without losing or splitting a character", async (_, text) => {
+      for (const limit of [1, 2, 3, 5]) {
+        const parts = await readAll(text, limit)
+        expect(parts.map((part) => part.text).join("")).toBe(text)
+        expect(parts.map((part) => part.has_more)).toEqual(parts.map((_, at) => at < parts.length - 1))
+        for (const part of parts) {
+          expect(part.text_length).toBe([...text].length)
+          expect(part.text).not.toMatch(/^[\uDC00-\uDFFF]|[\uD800-\uDBFF]$/u)
+        }
+      }
+    })
+  })
 })
 
 describe("meetings, calls and events as one row per real meeting", () => {
