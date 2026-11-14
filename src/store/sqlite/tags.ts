@@ -418,7 +418,7 @@ export const tagsOf = ({ database }: StoreContext, key: AccountKey, filter: TagF
         "WHEN 'email' THEN 'message' ELSE u.type END AS tag_type, (u.type = 'chat' AND EXISTS (SELECT 1 FROM " +
         `canonical_auto_tag_claims ac JOIN resolved_tags rt ON rt.id=ac.tag_id WHERE ac.chat_id = u.target_id AND rt.canonical_id = u.tag_id)) AS auto FROM (${union}) u) GROUP BY tag,type,target_id) x ` +
         `WHERE ${where.length === 0 ? "1" : where.map(({ sql }) => `(${sql})`).join(" AND ")} ` +
-        "ORDER BY x.tag, x.type, x.created_at, x.chat_id, x.person_id, x.message_id" +
+        "ORDER BY x.tag, x.type, x.created_at, x.chat_id, x.person_id, x.message_id, x.target_id" +
         (filter.window ? " LIMIT ? OFFSET ?" : ""),
     )
     .all(

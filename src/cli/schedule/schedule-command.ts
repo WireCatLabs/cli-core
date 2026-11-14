@@ -108,6 +108,9 @@ const whenOf = ({ every, at = [], atTime }: WhenOptions, minimum: number): When 
     )
   }
   if (atTime) {
+    // As messages send --at-time: a date alone would be its midnight, which nobody means by "send on the 20th".
+    if (/^\d{4}-\d{2}-\d{2}$/.test(atTime.trim()))
+      throw new CliError("validation_error", `--at-time needs a time of day as well: ${atTime.trim()}T09:00`)
     const time = aheadOf(atTime, "--at-time")
     if (time <= Date.now()) throw new CliError("validation_error", "--at-time is in the past")
     return { once: new Date(time).toISOString() }

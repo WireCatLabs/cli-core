@@ -24,7 +24,7 @@ const SAMPLES: Record<string, string[]> = {
   kind: ["group"],
   mode: ["unread", "new", "2h", "2026-10-01T09:00:00Z"],
   chat: ["Book club"],
-  since: ["1d ago", "2026-10-01T09:00:00Z"],
+  since: ["1d ago", "2026-10-01T09:00:00Z", "2026-10-01T09:00+02:00"],
   groups: ["Work"],
   text: ["invoice"],
 }
@@ -106,8 +106,9 @@ describe("MCP prompts", () => {
   it("asks review for its window as a query, never with since", async () => {
     const review = (await promptTexts()).filter(({ prompt }) => prompt === "review")
     const calls = review.flatMap(({ text }) => callsIn(text)).filter((call) => call.command === "review")
-    expect(calls).toContainEqual({ command: "review", arguments: { query: 'date>"1d ago"' } })
-    expect(calls).toContainEqual({ command: "review", arguments: { query: 'date>"2026-10-01T09:00:00Z"' } })
+    expect(calls).toContainEqual({ command: "review", arguments: { query: "date>1d" } })
+    expect(calls).toContainEqual({ command: "review", arguments: { query: 'date>"2026-10-01T09:00:00.000Z"' } })
+    expect(calls).toContainEqual({ command: "review", arguments: { query: 'date>"2026-10-01T07:00:00.000Z"' } })
     expect(calls.some((call) => call.arguments !== undefined && "since" in call.arguments)).toBe(false)
   })
 })

@@ -142,9 +142,14 @@ const pairLine = (pair: TaskPair) =>
     `(${pair.reasons.join(", ")})`,
   ].join("  ")
 
-/** `none` clears a date; anything else is a time ahead. Not `null`: commander stores a parser's `null` as "". */
-export const dateOrNone = (flag: string) => (typed: string) =>
-  typed.trim().toLowerCase() === "none" ? ("none" as const) : new Date(aheadOf(typed, flag))
+/**
+ * `none` clears a date; anything else is a time ahead. Not `null`: commander stores a parser's `null` as "". With
+ * `end`, a date alone is the end of that day: a task due on the 20th is not overdue all of the 20th.
+ */
+export const dateOrNone =
+  (flag: string, { end = false }: { end?: boolean } = {}) =>
+  (typed: string) =>
+    typed.trim().toLowerCase() === "none" ? ("none" as const) : new Date(aheadOf(typed, flag, Date.now(), { end }))
 
 const durationOf = (flag: string) => (typed: string) => {
   const wanted = typed.trim()
@@ -161,7 +166,7 @@ const planOptions = (command: Command, verb: string) =>
     .option(
       "--due <time>",
       "when it must be done: an ISO 8601 time or 2h, 3d from now; none clears it",
-      dateOrNone("--due"),
+      dateOrNone("--due", { end: true }),
     )
     .option(
       "--remind-time <time>",
