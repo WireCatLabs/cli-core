@@ -38,13 +38,13 @@ describe("the level of a command path", () => {
     expect(levelFor(levels, "messages.send")).toEqual({ level: "readonly", key: "*" })
     expect(levelFor(levels, "chats.archive")).toEqual({ level: "readonly", key: "*" })
     expect(levelFor(levels, "contacts.add")).toEqual({ level: "deny", key: "contacts" })
-    expect(levelFor({ "*": "ask" }, "messages.delete")).toEqual({ level: "ask", key: "messages.delete" })
+    expect(levelFor({ "*": "ask" }, "chats.delete")).toEqual({ level: "ask", key: "chats.delete" })
   })
 
   it("**lets a built-in default only tighten** a broader key of the owner's", () => {
-    expect(levelFor({ messages: "readonly" }, "messages.delete").level).toBe("readonly")
-    expect(levelFor({ messages: "allow" }, "messages.delete").level).toBe("ask")
-    expect(levelFor({ "messages.delete": "allow" }, "messages.delete").level).toBe("allow")
+    expect(levelFor({ chats: "readonly" }, "chats.delete").level).toBe("readonly")
+    expect(levelFor({ chats: "allow" }, "chats.delete").level).toBe("ask")
+    expect(levelFor({ "chats.delete": "allow" }, "chats.delete").level).toBe("allow")
   })
 })
 
@@ -63,8 +63,10 @@ describe("a bot's permissions", () => {
     expect(keyForCommand(["bot", "recipients", "add"])).toBeNull()
   })
 
-  it("**asks before a bot deletes**, as the personal account does", () => {
-    expect(levelFor({}, "bot.messages.delete").level).toBe("ask")
+  it("**deletes a bot's messages without asking**, as the personal account does (owner, 2026-11-14)", () => {
+    expect(levelFor({}, "bot.messages.delete").level).toBe("allow")
+    expect(levelFor({}, "messages.delete").level).toBe("allow")
+    expect(levelFor({ "bot.messages": "ask" }, "bot.messages.delete").level).toBe("ask")
   })
 })
 
@@ -76,7 +78,7 @@ describe("startup permission overrides", () => {
       ["file", saved],
     ])
     expect(levelFor(levels, "messages.send").level).toBe("ask")
-    expect(levelFor(levels, "messages.delete").level).toBe("ask")
+    expect(levelFor(levels, "messages.delete").level).toBe("allow")
     expect(saved["messages.send"]).toBe("deny")
     expect(levelFor(permissionOverrides(["messages.delete=allow"]), "messages.delete").level).toBe("allow")
   })

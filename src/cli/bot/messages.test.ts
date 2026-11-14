@@ -246,12 +246,10 @@ describe("bot messages list and show", () => {
 })
 
 describe("bot messages edit, delete, pin", () => {
-  it("**asks before a delete**, deletes with --allow-dangerous, and forgets it in the copy", async () => {
+  it("**deletes without a question** at the built-in level (owner, 2026-11-14), and forgets it in the copy", async () => {
     await call(["sales", "bot", "messages", "send", "Team", "gone soon"])
 
-    expect((await call(["sales", "bot", "messages", "delete", "Team", "100", "--json"])).code).toBe(7)
-    expect(calls).toEqual([])
-    const deleted = await call(["sales", "bot", "messages", "delete", "Team", "100", "--allow-dangerous", "--json"])
+    const deleted = await call(["sales", "bot", "messages", "delete", "Team", "100", "--json"])
     expect(deleted.answer.item).toMatchObject({ chat_id: "-100", deleted: ["100"] })
     expect(calls).toEqual(["delete -100 100"])
     expect((await call(["sales", "bot", "messages", "show", "Team", "100", "--offline", "--json"])).code).toBe(6)

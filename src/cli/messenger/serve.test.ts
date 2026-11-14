@@ -286,12 +286,22 @@ describe("serve with reply rules", () => {
   it("sends nothing while replies.send is not allow", async () => {
     const { root, env } = setup()
     const withConfig = { ...env, CHAT_CONFIG_DIR: join(root, "config") }
-    rulesFor(withConfig)
+    rulesFor(withConfig, { "replies.send": "deny" })
 
     const { sent, answer } = await serving(withConfig)
 
     expect(sent).toEqual([])
     expect(answer.replies.skipped).toMatchObject({ [NOT_ALLOWED]: 1 })
+  })
+
+  it("**sends an enabled rule's reply at the built-in level** (owner, 2026-11-14)", async () => {
+    const { root, env } = setup()
+    const withConfig = { ...env, CHAT_CONFIG_DIR: join(root, "config") }
+    rulesFor(withConfig)
+
+    const { sent } = await serving(withConfig)
+
+    expect(sent).toEqual([{ chatId: "77", text: "Back soon." }])
   })
 })
 

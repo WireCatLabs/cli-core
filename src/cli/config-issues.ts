@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs"
 import * as v from "valibot"
-import { repairConfigText } from "./config-repair.js"
+import { repairConfigText } from "../domain/config-repair.js"
 
 export type ConfigIssueKind =
   | "invalid_json"

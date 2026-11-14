@@ -320,12 +320,12 @@ describe("permissions across sections", () => {
     })
   })
 
-  it("**loosens too**: a profile's `messages: allow` hides a shared deny, and deleting falls back to asking", () => {
+  it("**loosens too**: a profile's `chats: allow` hides a shared deny, and deleting falls back to asking", () => {
     const file = {
-      defaults: { permissions: { "messages.delete": "deny" } },
-      profiles: { agent: { permissions: { messages: "allow" } } },
+      defaults: { permissions: { "chats.delete": "deny" } },
+      profiles: { agent: { permissions: { chats: "allow" } } },
     }
-    expect(levelsOf(file, ["messages.delete"])).toEqual({ "messages.delete": "ask" })
+    expect(levelsOf(file, ["chats.delete"])).toEqual({ "chats.delete": "ask" })
   })
 
   it("puts a bot profile's own section before the bot defaults", () => {
@@ -356,7 +356,7 @@ describe("a --permission override", () => {
         ["messages.delete=readonly"],
         "messages.delete",
       ],
-      [{ profiles: { agent: {} } }, ["messages.delete=allow"], "messages.delete"],
+      [{ profiles: { agent: {} } }, ["chats.delete=allow"], "chats.delete"],
     ] as const) {
       expect(resolved(file, [...permission])).toThrow(
         expect.objectContaining({ code: "validation_error", message: expect.stringContaining(key) }),

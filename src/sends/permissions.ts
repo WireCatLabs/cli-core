@@ -18,15 +18,16 @@ export const skipFlagFor = (key: string): "--allow-dangerous" | "--yes" =>
 
 /** Only what cannot be undone asks; the tool is meant to work without questions (owner, NEED-460). */
 export const DEFAULT_PERMISSIONS: Readonly<Record<PermissionKey, Level>> = {
-  "messages.delete": "ask",
+  // Owner, 2026-11-14: deleting a message does not ask; a profile that wants the question sets `ask`.
+  "messages.delete": "allow",
   "account.sessions.end": "ask",
-  "bot.messages.delete": "ask",
+  "bot.messages.delete": "allow",
   "topics.enable": "ask",
   "topics.delete": "ask",
   "chats.delete": "ask",
   "chats.clear": "ask",
-  // NEED-568: a rule writes to people with nobody typing a command; it waits for the owner's own allow.
-  "replies.send": "deny",
+  // Owner, 2026-11-14 (replaces NEED-568): a rule the owner enabled may send; `deny` stops every automatic reply.
+  "replies.send": "allow",
   // NEED-1662: an agent that changes settings, schedules or recipients could lift its own limits; the owner opts in.
   "mcp.authority": "deny",
   // NEED-1663: writes no level stopped before, so MCP could not offer them; over MCP `ask` goes ahead.

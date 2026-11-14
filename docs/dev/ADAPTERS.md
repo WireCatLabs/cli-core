@@ -458,8 +458,8 @@ for (const one of runScopeCases({
 ### Testing that sync runs right after install
 
 `syncAfterInstallCases` runs your sync, through the `run` your own tests use, once for each state the shared config
-(`~/.config/WireCat/config.json`) can be in on a new or damaged machine: no file, not JSON, a byte-order mark, a folder,
-a `setup` section in an older shape, and the owner's explicit "read only" answer. No run may end in a
+(`~/.config/WireCat/config.json`) can be in on a new or damaged machine: no file, not JSON, a byte-order mark, a missing
+comma between two lines, a folder, a `setup` section in an older shape, and the owner's explicit "read only" answer. No run may end in a
 `permission_error`, and each must exit 0, except with a file that is not JSON or is a folder: there a step that reads
 it may fail, naming the file. The kit passes `WIRECAT_CONFIG_DIR`, a folder of its own, in the `env` your `run` lays over the
 test's; the store is the one your harness gives. `refusedUnderReadOnly` names a local-only write that the "read only" answer must still refuse.

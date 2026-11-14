@@ -2,8 +2,8 @@
 
 Reply rules belong to one profile in its config directory, `<profile>.replies.json`.
 `serve` applies enabled rules, within `replies.send`, the file's audience and rate limits. A new file
-answers everyone a rule matches; nothing is sent until `replies.send` is `allow`. The editing commands
-never connect or send.
+answers everyone a rule matches. A new rule starts disabled, and `replies.send` is `allow` unless the profile
+sets it: set it to `deny` to stop every automatic reply. The editing commands never connect or send.
 
 Create a disabled rule with every key written out, edit its template, then enable it:
 

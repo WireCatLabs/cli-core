@@ -246,3 +246,63 @@ const serialise = (node: Node, indent: string): string => {
   const [open, close] = "object" in node ? ["{", "}"] : ["[", "]"]
   return parts.length === 0 ? `${open}${close}` : `${open}\n${parts.join(",\n")}\n${indent}${close}`
 }
+
+/** Fixes with one reading that a reader may make on its own; the rest change what the owner wrote, so they ask. */
+export const SAFE_REPAIRS: ReadonlySet<RepairKind> = new Set([
+  "byte_order_mark",
+  "comment",
+  "trailing_comma",
+  "missing_comma",
+])
+
+const FIX_FOR: Partial<Record<RepairKind, (line: number) => string>> = {
+  unquoted_key: (line) => `put the key on line ${line} in double quotes`,
+  single_quotes: (line) => `use double quotes for the text on line ${line}`,
+  missing_closer: (line) =>
+    `add the closing } or ] the file lacks after line ${line}, and check that nothing after it was lost`,
+}
+
+const FIX_FOR_REFUSAL: [RegExp, (line: number, before: string) => string][] = [
+  [/no comma between/, (line, before) => `add a comma after ${before} on line ${line}`],
+  [/no colon after/, (line) => `add a colon after the key on line ${line}`],
+  [/comma with nothing before/, (line) => `remove the extra comma on line ${line}`],
+  [/inside a quoted text/, (line) => `close the quotes on line ${line}`],
+  [/value that is not JSON/, (line) => `put the value on line ${line} in double quotes`],
+  [/key appears twice/, (line) => `keep one of the two keys named on line ${line}; the file holds both`],
+]
+
+/** A line as an error may show it: keys, punctuation and true, false or null stay; any other value becomes "…". */
+const shown = (line: string): string =>
+  line
+    .trim()
+    .replace(/("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^\s"',:{}[\]]+)(\s*:)?/g, (token, _value: string, key?: string) =>
+      key || /^(true|false|null)$/.test(token) ? token : '"…"',
+    )
+
+/**
+ * Why `text` is not JSON, for a person: the line and column, the line around it, and the likely fix. Only what a
+ * reader may not mend on its own (`SAFE_REPAIRS`) reaches here.
+ */
+export const explainBrokenJson = (text: string, result: RepairResult): string => {
+  const lines = text.replace(/^\uFEFF/u, "").split(/\r?\n/)
+  const around = (line: number) => {
+    const near = lines[line - 1]?.trim() ? lines[line - 1] : lines[line - 2]
+    return near ? ` — near \`${shown(near)}\`` : ""
+  }
+  if (result.state === "repaired") {
+    const asked = result.fixes.find((one) => !SAFE_REPAIRS.has(one.kind)) ?? result.fixes[0]
+    if (!asked) return "it is not valid JSON"
+    const fix = FIX_FOR[asked.kind]?.(asked.line)
+    return `line ${asked.line} has ${REPAIR_WORDS[asked.kind]}${around(asked.line)}${fix ? `; likely fix: ${fix}` : ""}`
+  }
+  if (result.state === "valid") return "it is valid JSON"
+  const { line, why } = result
+  // The column counts a byte-order mark the shown line no longer has.
+  const column = line === 1 && text.charCodeAt(0) === 0xfeff ? result.column - 1 : result.column
+  const head = (lines[line - 1] ?? "").slice(0, column - 1)
+  // The entry the column follows, not the whole line: `"tools": true`, without the `{"setup": {` before it.
+  const entry = head.slice(Math.max(head.lastIndexOf(","), head.lastIndexOf("{"), head.lastIndexOf("[")) + 1)
+  const before = shown(entry) || shown(lines[line - 2] ?? "")
+  const fix = FIX_FOR_REFUSAL.find(([pattern]) => pattern.test(why))?.[1](line, `\`${before}\``)
+  return `line ${line}, column ${column}: ${why}${around(line)}; likely fix: ${fix ?? "correct that part by hand"}`
+}

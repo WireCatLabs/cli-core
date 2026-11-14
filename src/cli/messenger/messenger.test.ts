@@ -1834,13 +1834,13 @@ describe("the shared read commands", () => {
     ])
   })
 
-  it("**delete only with --allow-dangerous**, each message counted toward the hourly limit", async () => {
+  it("**delete at ask only with --allow-dangerous**, each message counted toward the hourly limit", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
     const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
     mkdirSync(env.CHAT_CONFIG_DIR, { recursive: true })
     writeFileSync(
       join(env.CHAT_CONFIG_DIR, "config.json"),
-      JSON.stringify({ profiles: { default: { sends_per_hour: 3 } } }),
+      JSON.stringify({ profiles: { default: { sends_per_hour: 3, permissions: { "messages.delete": "ask" } } } }),
     )
     const deletions: unknown[] = []
     const deleting: MessengerAdapter = {
@@ -1878,7 +1878,7 @@ describe("the shared read commands", () => {
     expect(done.stderr.join("\n")).toContain(`"ids":{"operation":"${answer.operation_id}"}`)
   })
 
-  it("**asks before a write whose level is ask**, refuses one that is readonly, and never asks at allow", async () => {
+  it("**asks before a write whose level is ask**, refuses one that is readonly, and never asks at allow (a delete's built-in level)", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
     const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
     const config = (permissions: Record<string, string>) => {
@@ -1907,6 +1907,8 @@ describe("the shared read commands", () => {
       },
     })
 
+    const byDefault = await call(["messages", "delete", "Book", "2"], async () => adapter, env, answering(null))
+    config({ "messages.delete": "ask" })
     const declined = await call(["messages", "delete", "Book", "3"], async () => adapter, env, answering("n"))
     const agreed = await call(["messages", "delete", "Book", "4"], async () => adapter, env, answering("y"))
     const unattended = await call(["messages", "delete", "Book", "5"], async () => adapter, env, answering(null))
@@ -1929,8 +1931,9 @@ describe("the shared read commands", () => {
       "messages.delete, 1 item, in chat 7 — go ahead? [y/N] ",
       "messages.delete, 1 item, in chat 7 — go ahead? [y/N] ",
     ])
-    expect([agreed.code, reacted.code, allowed.code]).toEqual([0, 0, 0])
+    expect([byDefault.code, agreed.code, reacted.code, allowed.code]).toEqual([0, 0, 0, 0])
     expect(deletions).toEqual([
+      ["7", ["2"]],
       ["7", ["4"]],
       ["7", ["7"]],
     ])
