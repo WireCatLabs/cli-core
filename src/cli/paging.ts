@@ -2,7 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import type { Command } from "commander"
 import { environmentOf, withAgentLevels } from "./context.js"
 import { DEFAULT_CONFIG } from "./default-config.js"
-import type { Settings } from "./settings.js"
+import type { GlobalFlags, Settings } from "./settings.js"
 
 /**
  * The three flags every listing shares, so no command invents its own spelling of them.
@@ -18,6 +18,18 @@ export const positiveCount =
       throw new CliError("validation_error", `${flag} takes a whole number from 1 upwards, not "${value}"`)
     return Number(value)
   }
+
+/**
+ * The configured `limit`, for a command with no messenger context to read it from, such as `runs list`. A command
+ * whose own maximum is lower caps it there: a configured `limit: 200` is a listing's page, not a refused flag.
+ */
+export const configuredLimit = (command: Command, most = Number.POSITIVE_INFINITY): number => {
+  const { resolveSettings, env } = environmentOf(command)
+  const { limit: _typed, ...flags } = command.optsWithGlobals<GlobalFlags>()
+  const configured =
+    resolveSettings?.(flags, { needsProfile: false, ...(env ? { env } : {}) }).limit ?? DEFAULT_CONFIG.defaults.limit
+  return Math.min(configured, most)
+}
 
 export const withPaging = (command: Command): Command =>
   command

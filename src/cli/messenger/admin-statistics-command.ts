@@ -36,7 +36,7 @@ export const adminStatisticsCommand = (messenger: Messenger, report: AdminReport
   command.option("--saved <name|id>", "run a saved report of this kind; typed report options replace stored options")
   command
     .option("--timezone <zone>", "the IANA timezone for calendar date boundaries")
-    .option("--limit <n>", "report rows, 1–100; 20 if not given", positiveCount("--limit"))
+    .option("--limit <n>", "report rows, 1–100; the configured limit if not given", positiveCount("--limit"))
   if (report !== "discussion")
     command.option(
       "--answerer <person>",
@@ -52,7 +52,7 @@ export const adminStatisticsCommand = (messenger: Messenger, report: AdminReport
     const found = await context.withServices((services) =>
       services.adminStatistics.report(report, {
         ...options,
-        limit: options.limit ?? 20,
+        limit: options.limit ?? Math.min(context.settings.limit, 100),
         ...(answerer ? { answerers: answerer } : {}),
         ...(report === "newcomers" ? { chat: argument as string } : filters),
         signal: environmentOf(this).commandSignal ?? environmentOf(this).signal,

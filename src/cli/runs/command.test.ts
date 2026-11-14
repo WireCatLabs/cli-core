@@ -1,4 +1,4 @@
-import { mkdtempSync } from "node:fs"
+import { mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
@@ -212,4 +212,26 @@ it("shows a person the times of runs list and runs show in the local zone, and k
   } finally {
     process.env.TZ = before
   }
+})
+
+it("lists and searches runs a configured limit at a time when no --limit is typed", async () => {
+  const state = mkdtempSync(join(tmpdir(), "runs-command-"))
+  const config = mkdtempSync(join(tmpdir(), "runs-config-"))
+  writeFileSync(join(config, "config.json"), JSON.stringify({ defaults: { limit: 1 } }))
+  const env = { ...process.env, APP_STATE_DIR: state, APP_CONFIG_DIR: config }
+  const app = { command: "tg", appName: "app-cli", envPrefix: "APP", description: "Synthetic CLI", version: "1.0.0" }
+  const started = { profile: "synthetic", command: "chats list", service: "tg", cliVersion: app.version }
+  for (let i = 0; i < 2; i++) await startRun({ runsDir: runsDirFor(app, env), ...started }).finish("success")
+  const call = async (argv: string[]) => {
+    const streams = captureStreams()
+    const code = await run(
+      [...argv, "--json"],
+      { app, commands: () => [runsCommand(app), new Command("search").addCommand(runsSearchCommand(app))] },
+      { streams, env, tty: false },
+    )
+    expect(code, streams.stderr.join("\n")).toBe(0)
+    return JSON.parse(streams.stdout[0] ?? "").page
+  }
+  expect(await call(["runs", "list"])).toMatchObject({ limit: 1, has_more: true })
+  expect(await call(["search", "runs", "status:success"])).toMatchObject({ limit: 1, has_more: true })
 })

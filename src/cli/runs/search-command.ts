@@ -6,7 +6,7 @@ import { environmentOf, outputFor } from "../context.js"
 import { LOCAL_READ } from "../effects.js"
 import { renderAnswer } from "../envelope.js"
 import { typedQuery, withQuery } from "../list-query.js"
-import { positiveCount } from "../paging.js"
+import { configuredLimit, positiveCount } from "../paging.js"
 import { runsFound, searchRuns } from "./search.js"
 import { RUN_SEARCH_QUERY, runSearchFilter } from "./search-query.js"
 
@@ -19,8 +19,8 @@ export const runsSearchCommand = (app: AppIdentity): Command =>
         .description(
           "search recorded diagnostic metadata and events; literal words and field:value terms joined by AND; no message contents",
         )
-        .option("--limit <n>", "matches per page, at most 100", positiveCount("--limit"), 20)
-        .option("--page <n>", "result page", positiveCount("--page"), 1),
+        .option("--limit <n>", "matches per page, at most 100", positiveCount("--limit"))
+        .option("--page <n>", "result page", positiveCount("--page")),
       RUN_SEARCH_QUERY,
     ),
     {
@@ -30,8 +30,12 @@ export const runsSearchCommand = (app: AppIdentity): Command =>
     },
   ).action(function (this: Command, words: string[]) {
     const filter = runSearchFilter(words)
-    const options = this.opts<{ limit: number; page: number }>()
+    const typed = this.opts<{ limit?: number; page?: number }>()
     const dir = runsDirFor(app, environmentOf(this).env ?? process.env)
-    const found = searchRuns(dir, { ...filter, ...options })
+    const found = searchRuns(dir, {
+      ...filter,
+      limit: typed.limit ?? configuredLimit(this, 100),
+      page: typed.page ?? 1,
+    })
     renderAnswer(this, outputFor(this), runsFound(found, { query: typedQuery(words) }))
   })

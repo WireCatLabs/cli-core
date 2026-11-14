@@ -40,14 +40,13 @@ export const metadataCommand = (messenger: Messenger): Command => {
       [],
     )
     .option("--only-missing", "only chats with no metadata yet; without --chat, every stored group/channel")
-    .option("--limit <n>", "process at most 1–500 chats", positiveCount("--limit"), 50)
+    .option("--limit <n>", "process at most 1–500 chats; the configured limit if not given", positiveCount("--limit"))
     .action(async function (this: Command) {
       const context = messengerContext(this, messenger)
       refuseLocalWrite(context, messenger.app.command, "metadata.sync")
-      const options = this.opts<{ chat: string[]; onlyMissing?: boolean; limit: number }>()
-      const limit = Number(options.limit)
-      if (!Number.isSafeInteger(limit) || limit < 1 || limit > 500)
-        throw new CliError("validation_error", "--limit takes 1–500")
+      const options = this.opts<{ chat: string[]; onlyMissing?: boolean; limit?: number }>()
+      const limit = options.limit ?? Math.min(context.settings.limit, 500)
+      if (limit > 500) throw new CliError("validation_error", "--limit takes 1–500")
       if (options.chat.length === 0 && !options.onlyMissing)
         throw new CliError("validation_error", "name a chat with --chat, or give --only-missing")
       const chats = options.onlyMissing
