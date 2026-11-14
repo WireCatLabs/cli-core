@@ -53,4 +53,23 @@ describe("what changed after a mark", () => {
     expect(await store.messages.changes(OWNER, "-404", mark)).toEqual({ messages: [], deleted: [] })
     await store.close()
   })
+  it("takes a message a later fetch brought back after its deletion as new again", async () => {
+    let clock = Date.parse("2026-10-01T10:00:00Z")
+    const store = await openStore({
+      path: join(mkdtempSync(join(tmpdir(), "changes-")), "messages.db"),
+      now: () => clock,
+    })
+    await store.messages.saveMessages(OWNER, "-1", [message("1", "back")], { via: "history" })
+    clock += 60_000
+    await store.messages.markDeleted(OWNER, ["1"], { chatId: "-1" })
+    const mark = new Date(clock).toISOString()
+
+    clock += 60_000
+    await store.messages.saveMessages(OWNER, "-1", [message("1", "back")], { via: "history", seenAt: clock })
+
+    const { messages, deleted } = await store.messages.changes(OWNER, "-1", mark)
+    expect(messages.map((one) => [one.id, one.text])).toEqual([["1", "back"]])
+    expect(deleted).toEqual([])
+    await store.close()
+  })
 })

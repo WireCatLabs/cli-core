@@ -238,7 +238,13 @@ export const upsertMessage = (
       orm.update(messages).set({ text: message.text }).where(eq(messages.id, pk)).run()
       purgeVectorsOf(context, pk)
     }
-    if (revived) orm.update(messages).set({ deletedAt: null, text: message.text }).where(eq(messages.id, pk)).run()
+    // Saved anew for `changes`: a reader told it was deleted must hear that it is back.
+    if (revived)
+      orm
+        .update(messages)
+        .set({ deletedAt: null, text: message.text, createdAt: now() })
+        .where(eq(messages.id, pk))
+        .run()
   }
 
   const derived = derivedReactions(context, chatKey, message.id)
