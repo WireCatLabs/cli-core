@@ -1,9 +1,14 @@
+export { type CloudSpeech, type CloudSpeechDeps, cloudSpeech } from "./cloud.js"
 export {
+  type DecodedChannels,
   decodeAudio,
   decodeChannels,
+  decodeChannelsFile,
   type Ffmpeg,
+  mixDown,
   type Pcm,
   runFfmpeg,
+  runFfmpegFile,
 } from "./decode.js"
 export {
   type Fetch,

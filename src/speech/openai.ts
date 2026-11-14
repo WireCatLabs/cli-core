@@ -2,7 +2,7 @@ import { setTimeout as wait } from "node:timers/promises"
 import { backoffMs, CliError, DEFAULT_RETRY, type RetryConfig } from "@wirecat/cli-base"
 import { providerWaitMs } from "@wirecat/cli-base/http"
 import { type Fetch, OPENAI_URL } from "../embeddings/remote.js"
-import { endpointFetch } from "../models/endpoint.js"
+import { endpointFetch, onThisComputer } from "../models/endpoint.js"
 import { refuseModelAddress } from "../models/local-only.js"
 import type { Pcm } from "./decode.js"
 import { filesPresent, modelsDirectory, vadPath } from "./install.js"
@@ -46,6 +46,10 @@ export interface OpenAITranscription {
   /** Literal terms expected in the speech; OpenAI refuses the whole request if one holds `<`, `>` or a line break. */
   keywords?: readonly string[]
   baseUrl?: string
+  /** Who the errors name: `OpenAI` when not given, a compatible service's host otherwise. */
+  label?: string
+  /** The command that sets the key, named when the service refuses it; `models keys set openai` when not given. */
+  keyHint?: string
   signal?: AbortSignal
   fetch?: Fetch
   /**
@@ -118,27 +122,28 @@ const send = async (wav: Uint8Array, options: OpenAITranscription): Promise<stri
   const retry = options.retry ?? RETRY
   const sleep = options.sleep ?? sleeping
   const random = options.random ?? Math.random
+  const who = options.label ?? "OpenAI"
   for (let attempt = 1; ; attempt++) {
     interrupted(options.signal)
     let response: Response
     try {
       response = await post(url, {
         method: "POST",
-        headers: { authorization: `Bearer ${options.apiKey}` },
+        headers: options.apiKey ? { authorization: `Bearer ${options.apiKey}` } : {},
         body: formOf(wav, options),
         ...(options.signal ? { signal: options.signal } : {}),
       })
     } catch {
       interrupted(options.signal)
       if (attempt > retry.retries)
-        throw new CliError("network_error", "OpenAI could not be reached", { reason: "network.failed" })
+        throw new CliError("network_error", `${who} could not be reached`, { reason: "network.failed" })
       await sleep(backoffMs(attempt, retry, random), options.signal)
       continue
     }
     if (response.ok) {
       const body = (await response.json().catch(() => interrupted(options.signal))) as { text?: unknown } | undefined
       if (typeof body?.text !== "string")
-        throw new CliError("invalid_response", "OpenAI answered without a transcript", {
+        throw new CliError("invalid_response", `${who} answered without a transcript`, {
           reason: "provider.invalid-response",
         })
       return body.text.trim()
@@ -149,23 +154,23 @@ const send = async (wav: Uint8Array, options: OpenAITranscription): Promise<stri
     if (status === 401)
       throw new CliError(
         "authentication_error",
-        `OpenAI refused the key (${said}) — set it again with \`models keys set openai\``,
+        `${who} refused the key (${said}) — set it again with \`${options.keyHint ?? "models keys set openai"}\``,
         { reason: "auth.failed" },
       )
     if (status === 403)
       throw new CliError(
         "permission_error",
-        `OpenAI refused the request (${said}) — it answers this when the country or region is not supported, or the key's project may not use the model`,
+        `${who} refused the request (${said}) — OpenAI answers this when the country or region is not supported, or the key's project may not use the model`,
         { reason: "access.denied" },
       )
     if (status === 413)
-      throw new CliError("validation_error", `OpenAI refused the audio as too large (${said})`, {
+      throw new CliError("validation_error", `${who} refused the audio as too large (${said})`, {
         reason: "transcription.too-large",
       })
     if (EXHAUSTED.has(code ?? "") || EXHAUSTED.has(type ?? ""))
       throw new CliError(
         "permission_error",
-        `OpenAI refused: the account's credit, spend limit or usage limit is used up (${said}) — see the billing page`,
+        `${who} refused: the account's credit, spend limit or usage limit is used up (${said}) — see the billing page`,
         { reason: "transcription.quota-exhausted" },
       )
     const again = status === 408 || status === 429 || status >= 500
@@ -175,17 +180,17 @@ const send = async (wav: Uint8Array, options: OpenAITranscription): Promise<stri
       continue
     }
     if (status === 429)
-      throw new CliError("rate_limited", `OpenAI answered ${said}`, {
+      throw new CliError("rate_limited", `${who} answered ${said}`, {
         reason: "provider.rate-limited",
         ...(asked === undefined ? {} : { retry_after_ms: asked }),
       })
     if (status >= 500)
       throw new CliError(
         [502, 503, 504].includes(status) ? "provider_unavailable" : "provider_error",
-        `OpenAI answered ${said}`,
+        `${who} answered ${said}`,
         { reason: [502, 503, 504].includes(status) ? "provider.unavailable" : "provider.refused" },
       )
-    throw new CliError("provider_error", `OpenAI answered ${said}`, { reason: "provider.refused" })
+    throw new CliError("provider_error", `${who} answered ${said}`, { reason: "provider.refused" })
   }
 }
 
@@ -227,7 +232,7 @@ const checkKeywords = (keywords: readonly string[] = []): void => {
  */
 export const transcribeOpenAI = async (audio: Pcm, options: OpenAITranscription): Promise<TimedText[]> => {
   refuseModelAddress(options.env ?? process.env, options.baseUrl ?? OPENAI_URL, "audio")
-  if (!options.apiKey)
+  if (!options.apiKey && !onThisComputer(options.baseUrl ?? OPENAI_URL))
     throw new CliError("authentication_error", "no OpenAI key — `models keys set openai`, or OPENAI_API_KEY", {
       reason: "transcription.no-key",
     })
