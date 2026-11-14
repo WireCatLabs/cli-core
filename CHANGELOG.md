@@ -5,6 +5,22 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## 0.665.0 — 14.11.2026
+
+### Added
+
+- **`meeting_entry` carries what the calendar knows about the invitation.** Each calendar source has the copy's own
+  page (`page_url`, Google's `htmlLink`, `https` only), the owner's answer in that calendar (`own_response`) and the
+  conference's product (`conference`). Each participant has their `response` (`null` for a meeting's participant).
+  A row has `series_id` and `recurrence` (the series' `RRULE:` line), and `meeting_entry_details` lists the calendar's
+  Drive files under `attachments`. memo's `meetings list|show` and WireCat Desktop's meeting card read them.
+
+### Fixed
+
+- `search messages --discover` no longer reads a date or another field value written with hyphens
+  (`date:2026-10-08`) as a word to look up joined: only words with letters on both sides of a hyphen are (0.664.0
+  lowered a dated question's `coverage` with a made-up `20261008`).
+
 ## 0.664.0 — 14.11.2026
 
 ### Added
