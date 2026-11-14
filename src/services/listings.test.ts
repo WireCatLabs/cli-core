@@ -318,6 +318,74 @@ describe("meetings, calls and events as one row per real meeting", () => {
     })
   })
 
+  it("gives each calendar copy's page, the answers to the invitation, the series' rule and the Drive files", async () => {
+    const { store, calendar, zoom, zoomed } = await setup()
+    const invited = {
+      externalId: "standup",
+      kind: "series" as const,
+      status: "confirmed" as const,
+      title: "Standup",
+      startsAt: at("2026-11-02T09:00:00Z"),
+      endsAt: at("2026-11-02T09:15:00Z"),
+      recurrence: ["RRULE:FREQ=WEEKLY;BYDAY=MO,WE"],
+    }
+    await store.calendar.saveEntries(
+      calendar,
+      [
+        invited,
+        entry("standup_20261111", {
+          seriesExternalId: "standup",
+          kind: "occurrence",
+          originalStartsAt: at("2026-11-11T09:00:00Z"),
+          title: "Standup",
+          startsAt: at("2026-11-11T09:00:00Z"),
+          endsAt: at("2026-11-11T09:15:00Z"),
+          url: "https://www.google.com/calendar/event?eid=c3RhbmR1cA",
+          ownResponse: "tentative",
+          conference: "Google Meet",
+          participants: [
+            { email: "bob@example.org", name: "Bob", response: "accepted", organizer: true },
+            { email: "cleo@example.org", name: "Cleo", response: "declined" },
+          ],
+          attachments: [{ fileId: "agenda-1", title: "Agenda" }],
+        }),
+        entry("Unsafe", {
+          url: "javascript:alert(1)",
+          startsAt: at("2026-11-13T09:00:00Z"),
+          endsAt: at("2026-11-13T10:00:00Z"),
+        }),
+      ],
+      1,
+    )
+    const rows = (await listMeetingEntries(store, meetingListRequest(month, page).request)).items
+    const standup = rows.find(({ title }) => title === "Standup")
+    expect(v.safeParse(meetingEntry, standup).issues).toBeUndefined()
+    expect(standup).toMatchObject({
+      recurrence: "RRULE:FREQ=WEEKLY;BYDAY=MO,WE",
+      series_id: expect.stringMatching(/^\d+$/u),
+      sources: [
+        {
+          via: "calendar",
+          page_url: "https://www.google.com/calendar/event?eid=c3RhbmR1cA",
+          own_response: "tentative",
+          conference: "Google Meet",
+        },
+      ],
+      participants: [
+        { name: "Bob", response: "accepted", organizer: true },
+        { name: "Cleo", response: "declined" },
+      ],
+    })
+    expect(rows.find(({ title }) => title === "Unsafe")?.sources[0]?.page_url).toBeNull()
+    const zoomRow = rows.find(({ meetings }) => meetings.includes(`meeting:${zoom}/${zoomed.meeting.id}`))
+    expect(zoomRow?.sources.find(({ via }) => via === "meeting")).toMatchObject({ page_url: null, own_response: null })
+    expect(zoomRow).toMatchObject({ series_id: null, recurrence: null })
+
+    const shown = await showMeetingEntry(store, standup?.ref as string, { offset: 0, limit: 1 })
+    expect(v.safeParse(meetingEntryDetails, shown).issues).toBeUndefined()
+    expect(shown.attachments).toEqual([{ file_id: "agenda-1", title: "Agenda", document: null }])
+  })
+
   it("ties Meet's notes to their event by the event's Drive attachment, whichever syncs first", async () => {
     const { store, calendar } = await setup()
     const meet = (externalId: string, fileId: string) =>

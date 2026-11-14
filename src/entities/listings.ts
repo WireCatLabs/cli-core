@@ -1,4 +1,5 @@
 import * as v from "valibot"
+import { PARTICIPANT_RESPONSES } from "../meetings/index.js"
 import { DOCUMENT_KINDS } from "../store/sqlite/document-listing.js"
 import { MEETING_ROW_KINDS } from "../store/sqlite/meeting-listing.js"
 import { count, id, reference, text, time, untrusted } from "./fields.js"
@@ -79,6 +80,8 @@ const participant = v.strictObject({
   email: v.nullable(text),
   person: v.nullable(personLink),
   organizer: v.boolean(),
+  /** The answer to a calendar's invitation; `null` for a meeting's participant, who was not asked. */
+  response: v.nullable(v.picklist(PARTICIPANT_RESPONSES)),
 })
 
 /** One real meeting, call or calendar event: a calendar's event and its Zoom or Meet record are one row. */
@@ -104,6 +107,12 @@ export const meetingEntry = v.strictObject({
       via: v.picklist(["calendar", "meeting"]),
       calendar: v.nullable(text),
       ref: reference,
+      /** A calendar copy's own page at its provider (Google's `htmlLink`); a meeting's record keeps none. */
+      page_url: v.nullable(text),
+      /** How this calendar's owner answered the invitation. */
+      own_response: v.nullable(v.picklist(PARTICIPANT_RESPONSES)),
+      /** The conference's product, as the calendar names it (`Google Meet`, `Zoom Meeting`). */
+      conference: v.nullable(text),
     }),
   ),
   /** The meeting records on this row, `meeting:<account>/<id>`. */
@@ -114,6 +123,10 @@ export const meetingEntry = v.strictObject({
   has_transcript: v.boolean(),
   has_summary: v.boolean(),
   documents: v.array(v.strictObject({ ref: reference, title: v.nullable(text), role: v.nullable(text) })),
+  /** The calendar series the event is an occurrence of. */
+  series_id: v.nullable(id),
+  /** That series' repeat rule, its RFC 5545 `RRULE:` line. */
+  recurrence: v.nullable(text),
   /** Findings waiting for the owner (`meetings actions`) that cite one of its meetings. */
   pending_findings: count,
   untrusted,
@@ -124,6 +137,8 @@ export const meetingEntryDetails = v.strictObject({
   ...meetingEntry.entries,
   description: v.nullable(text),
   location: v.nullable(text),
+  /** The calendar's Drive files; `document` once a Drive account has stored the file. */
+  attachments: v.array(v.strictObject({ file_id: text, title: v.nullable(text), document: v.nullable(reference) })),
   summaries: v.array(
     v.strictObject({
       meeting: reference,

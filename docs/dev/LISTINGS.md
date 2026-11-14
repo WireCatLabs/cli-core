@@ -34,6 +34,13 @@ One row per real meeting:
 - **Window.** A row is listed when it overlaps the window (`ends after from`, `starts before to`); all-day events are
   compared by their local days as `events list` compares them (`eventWindow`, shared with `listEvents`). An event is
   listed too when one of its meetings overlaps the window, though the event itself does not.
+- **Per calendar copy.** Each `via: calendar` source carries that copy's own page (`page_url`, Google's `htmlLink`,
+  `https` only), the owner's answer in that calendar (`own_response`) and the conference's product (`conference`).
+  They stay per source: a row joined from two accounts' calendars has two answers and two pages, and none is chosen.
+  A meeting provider's record keeps no page of its own, so its source has `null` there.
+- **Invitations and series.** A participant from a calendar copy has `response`; a meeting's participant has `null`.
+  `series_id` and `recurrence` (the `RRULE:` line) come from the event's series. `meetings show` adds the calendar's
+  Drive files (`attachments`, `document` once Drive stored the file).
 - **Findings.** `pending_findings` counts the findings of batches still `proposed` that cite a meeting on the row and
   that the owner has not decided yet. Only batches of the row's meeting accounts are read.
 - **Pages.** One query names the rows of a page and one counts them; everything a row shows (copies, meetings,

@@ -86,7 +86,7 @@ export type {
   StoredEntry,
   StoredParticipant,
 } from "./event-store.js"
-export { entryInWindow, eventChange } from "./event-store.js"
+export { entryInWindow, eventChange, PARTICIPANT_RESPONSES } from "./event-store.js"
 export { linkEvent } from "./events.js"
 export {
   exportMeeting,

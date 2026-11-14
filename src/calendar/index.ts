@@ -54,7 +54,7 @@ export {
   type ReadAccount,
   sourceAccounts,
 } from "./reads.js"
-export { repeatRule } from "./recurrence.js"
+export { repeatRule, ruleLine } from "./recurrence.js"
 export type {
   BusyTimes,
   CalendarExpander,

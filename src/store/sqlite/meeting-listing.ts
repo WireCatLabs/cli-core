@@ -3,6 +3,7 @@ import {
   formatMeetingReference,
   joinKeyOf,
   MEETING_FINDINGS_KIND,
+  type ParticipantResponse,
   parseMeetingReference,
 } from "../../meetings/index.js"
 import type { SqlValue } from "../driver.js"
@@ -68,6 +69,12 @@ export interface MeetingRowSource {
   calendar: string | null
   /** `meeting:<account>/<id>` for a meeting, `event:<id>` for a calendar copy. */
   ref: string
+  /** A calendar copy's own page at its provider (Google's `htmlLink`). */
+  pageUrl: string | null
+  /** How the calendar's owner answered the invitation. */
+  ownResponse: ParticipantResponse | null
+  /** The conference's product, as the calendar names it (`Google Meet`, `Zoom Meeting`). */
+  conference: string | null
 }
 
 export interface MeetingRowParticipant {
@@ -76,6 +83,8 @@ export interface MeetingRowParticipant {
   /** The person the store links the address or account to. */
   person: { ref: string; name: string | null } | null
   organizer: boolean
+  /** The answer to a calendar's invitation; `null` for a meeting's participant, who was not asked. */
+  response: ParticipantResponse | null
 }
 
 export interface MeetingRowDocument {
@@ -105,6 +114,9 @@ export interface MeetingRow {
   hasTranscript: boolean
   hasSummary: boolean
   documents: MeetingRowDocument[]
+  /** The calendar series the event is an occurrence of, and that series' RFC 5545 lines. */
+  seriesId: number | null
+  recurrence: string[] | null
   /** Findings in batches still waiting for the owner that cite one of the row's meetings. */
   pendingFindings: number
   /** Every findings batch citing one of its meetings, newest first, with how many of its findings do. */
@@ -352,12 +364,21 @@ const hydrate = (database: StoreContext["database"], page: Page[]): MeetingRow[]
   )
   const entries = database
     .prepare(
-      `SELECT ce.id, ce.event_id, ce.join_url, ce.timezone, ce.status, ce.deleted_at, ce.event_type,
-         c.title AS calendar, a.provider, a.external_id AS account FROM calendar_entries ce JOIN calendars c ON c.id = ce.calendar_id
+      `SELECT ce.id, ce.event_id, ce.join_url, ce.timezone, ce.status, ce.deleted_at, ce.event_type, ce.url,
+         ce.own_response, ce.conference, c.title AS calendar, a.provider, a.external_id AS account FROM calendar_entries ce JOIN calendars c ON c.id = ce.calendar_id
          JOIN accounts a ON a.id = c.account_id WHERE ce.event_id IN (SELECT value FROM json_each(?))
          ORDER BY ce.deleted_at IS NOT NULL, ce.id`,
     )
     .all(ids(eventIds))
+  const series = new Map(
+    database
+      .prepare(
+        "SELECT id, recurrence FROM event_series WHERE id IN (SELECT event_series_id FROM events " +
+          "WHERE id IN (SELECT value FROM json_each(?)))",
+      )
+      .all(ids(eventIds))
+      .map((row) => [Number(row.id), row.recurrence == null ? null : (JSON.parse(String(row.recurrence)) as string[])]),
+  )
   const meetings = new Map(
     database
       .prepare(
@@ -376,17 +397,18 @@ const hydrate = (database: StoreContext["database"], page: Page[]): MeetingRow[]
   )
   const people = database
     .prepare(
-      `SELECT 'event' AS type, ce.event_id AS owner, p.name, p.email, p.organizer, l.person_id, pn.name AS person_name
+      `SELECT 'event' AS type, ce.event_id AS owner, p.name, p.email, p.organizer, l.person_id, pn.name AS person_name,
+           p.response
          FROM calendar_entries ce JOIN calendar_entry_participants p ON p.entry_id = ce.id
          LEFT JOIN identity_links l ON l.identity_id = p.identity_id LEFT JOIN persons pn ON pn.id = l.person_id
          WHERE ce.event_id IN (SELECT value FROM json_each(?)) AND ce.deleted_at IS NULL AND p.resource = 0
        UNION ALL
-       SELECT 'meeting', mp.meeting_id, mp.display_name, mp.email, mp.role = 'host', l.person_id, pn.name
+       SELECT 'meeting', mp.meeting_id, mp.display_name, mp.email, mp.role = 'host', l.person_id, pn.name, NULL
          FROM meeting_participants mp LEFT JOIN identity_links l ON l.identity_id = mp.identity_id
          LEFT JOIN persons pn ON pn.id = l.person_id
          WHERE mp.meeting_id IN (SELECT value FROM json_each(?))
        UNION ALL
-       SELECT 'event', cl.from_id, pe.name, NULL, 0, cl.to_id, pe.name FROM links cl JOIN persons pe ON pe.id = cl.to_id
+       SELECT 'event', cl.from_id, pe.name, NULL, 0, cl.to_id, pe.name, NULL FROM links cl JOIN persons pe ON pe.id = cl.to_id
          WHERE cl.from_type = 'event' AND cl.from_id IN (SELECT value FROM json_each(?)) AND cl.to_type = 'person'
            AND cl.kind = ${linkKind("related-to")} AND cl.role = '${COUNTERPART_ROLE}'`,
     )
@@ -422,6 +444,9 @@ const hydrate = (database: StoreContext["database"], page: Page[]): MeetingRow[]
         via: "calendar" as const,
         calendar: str(entry.calendar),
         ref: `event:${id}`,
+        pageUrl: str(entry.url),
+        ownResponse: str(entry.own_response) as ParticipantResponse | null,
+        conference: str(entry.conference),
       })),
       ...held.map((meeting) => ({
         provider: String(meeting.provider),
@@ -433,6 +458,9 @@ const hydrate = (database: StoreContext["database"], page: Page[]): MeetingRow[]
           accountId: Number(meeting.account_id),
           meetingId: Number(meeting.id),
         }),
+        pageUrl: null,
+        ownResponse: null,
+        conference: null,
       })),
     ].filter(
       (source, index, all) =>
@@ -459,6 +487,7 @@ const hydrate = (database: StoreContext["database"], page: Page[]): MeetingRow[]
         email: held?.email ?? email,
         person: ref === null ? null : { ref, name: str(person.person_name) },
         organizer: (held?.organizer ?? false) || Number(person.organizer) === 1,
+        response: held?.response ?? (str(person.response) as ParticipantResponse | null),
       })
     }
     const linked = new Map<number, MeetingRowDocument>()
@@ -510,6 +539,8 @@ const hydrate = (database: StoreContext["database"], page: Page[]): MeetingRow[]
       hasTranscript: held.some((meeting) => Number(meeting.has_transcript) === 1),
       hasSummary: held.some((meeting) => Number(meeting.has_summary) === 1),
       documents: [...linked.values()],
+      seriesId: num(event?.event_series_id),
+      recurrence: event?.event_series_id == null ? null : (series.get(Number(event.event_series_id)) ?? null),
       pendingFindings: batches.reduce((sum, { pending }) => sum + countOf(pending), 0),
       findings: batches.flatMap(({ id, status, cited, pending }) => {
         const findings = countOf(cited)

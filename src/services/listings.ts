@@ -1,7 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import type { QueryAst } from "@wirecat/cli-base/query"
 import type * as v from "valibot"
-import { eventIdOf } from "../calendar/index.js"
+import { eventIdOf, ruleLine } from "../calendar/index.js"
 import { providerLabel } from "../domain/providers.js"
 import type {
   documentEntry,
@@ -23,6 +23,9 @@ export type MeetingEntryDetails = v.InferOutput<typeof meetingEntryDetails>
 
 /** How many documents a text term may match before the list counts them as "at least". */
 export const DOCUMENT_TEXT_CANDIDATES = 2_000
+
+/** A page link a caller may open: `https` only, so a stored `javascript:` or `file:` link never reaches a button. */
+const webUrl = (url: string | null) => (url !== null && /^https:\/\//iu.test(url) ? url : null)
 
 const iso = (ms: number | null) => (ms === null ? null : new Date(ms).toISOString())
 
@@ -239,6 +242,9 @@ const meetingItem = (row: MeetingRow, accounts: ReadonlyMap<string, ListedAccoun
       via: source.via,
       calendar: source.calendar,
       ref: source.ref,
+      page_url: webUrl(source.pageUrl),
+      own_response: source.ownResponse,
+      conference: source.conference,
     })),
     meetings,
     participants: row.participants,
@@ -247,8 +253,10 @@ const meetingItem = (row: MeetingRow, accounts: ReadonlyMap<string, ListedAccoun
     has_transcript: row.hasTranscript,
     has_summary: row.hasSummary,
     documents: row.documents,
+    series_id: row.seriesId === null ? null : String(row.seriesId),
+    recurrence: ruleLine(row.recurrence ?? []) ?? null,
     pending_findings: row.pendingFindings,
-    untrusted: ["title", "participants.name", "sources.calendar", "documents.title"],
+    untrusted: ["title", "participants.name", "sources.calendar", "sources.conference", "documents.title"],
   }
 }
 
@@ -322,6 +330,7 @@ export const showMeetingEntry = async (
     if (one) details.push(one)
   }
   const live = event?.entries.find(({ deletedAt }) => deletedAt === null) ?? event?.entries[0]
+  const files = new Map((event?.attachments ?? []).map((one) => [one.fileId, one]))
   const first = details[0]?.meeting
   const spoken = details.flatMap((one) =>
     one.transcripts
@@ -335,6 +344,11 @@ export const showMeetingEntry = async (
     ...meetingItem(row, byName),
     description: live?.description ?? event?.event.description ?? first?.description ?? null,
     location: live?.location ?? event?.event.location ?? first?.location ?? null,
+    attachments: [...files.values()].map(({ fileId, title, documentId }) => ({
+      file_id: fileId,
+      title,
+      document: documentId === null ? null : `document:${documentId}`,
+    })),
     summaries: details.flatMap((one) =>
       one.summaries.map((summary) => ({
         meeting: ref(one.meeting),
@@ -374,7 +388,9 @@ export const showMeetingEntry = async (
       "location",
       "participants.name",
       "sources.calendar",
+      "sources.conference",
       "documents.title",
+      "attachments.title",
       "summaries",
       "transcript.lines.speaker",
       "transcript.lines.text",
