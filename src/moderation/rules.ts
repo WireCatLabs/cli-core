@@ -102,21 +102,28 @@ const KEYS: Record<string, { help: string; parse: (value: string) => unknown }> 
 
 export const RULE_KEYS = Object.keys(KEYS)
 
-const profilesFolder = (app: AppIdentity, env: NodeJS.ProcessEnv) =>
-  join(resolvePaths({ appName: app.appName, prefix: app.envPrefix, env }).state, "profiles")
+const stateFolder = (app: AppIdentity, env: NodeJS.ProcessEnv, folder: string) =>
+  join(resolvePaths({ appName: app.appName, prefix: app.envPrefix, env }).state, folder)
+const profilesFolder = (app: AppIdentity, env: NodeJS.ProcessEnv) => stateFolder(app, env, "profiles")
 
 export const moderationPathFor = (app: AppIdentity, profile: string, env: NodeJS.ProcessEnv = process.env): string =>
   join(profilesFolder(app, env), `${profile}.moderation.json`)
 
-/** The profiles that keep moderation rules on this computer: the choices when a caller named none. */
-export const moderationProfiles = (app: AppIdentity, env: NodeJS.ProcessEnv = process.env): string[] => {
-  const folder = profilesFolder(app, env)
-  if (!existsSync(folder)) return []
-  return readdirSync(folder)
-    .filter((name) => name.endsWith(".moderation.json"))
-    .map((name) => name.slice(0, -".moderation.json".length))
-    .sort()
-}
+const namesIn = (folder: string, suffix: string): string[] =>
+  existsSync(folder)
+    ? readdirSync(folder)
+        .filter((name) => name.endsWith(suffix))
+        .map((name) => name.slice(0, -suffix.length))
+    : []
+
+/** The choices when a caller named no profile: those logged in to here, and those that keep moderation rules. */
+export const moderationProfiles = (app: AppIdentity, env: NodeJS.ProcessEnv = process.env): string[] =>
+  [
+    ...new Set([
+      ...namesIn(stateFolder(app, env, "accounts"), ".json"),
+      ...namesIn(profilesFolder(app, env), ".moderation.json"),
+    ]),
+  ].sort()
 
 /**
  * The rules of each group this profile moderates, one file per profile beside the recipient list —

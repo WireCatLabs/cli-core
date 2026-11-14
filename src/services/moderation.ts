@@ -49,7 +49,7 @@ export const moderationService = (deps: ServiceDeps): ModerationService => {
       throw new CliError(
         "validation_error",
         `name a profile: moderation rules are kept per profile — ${
-          choices.length ? `profiles with rules here: ${choices.join(", ")}` : "no profile has rules here yet"
+          choices.length ? `profiles here: ${choices.join(", ")}` : "there is none on this computer yet"
         }`,
         { profiles: choices },
       )
