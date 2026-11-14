@@ -495,6 +495,13 @@ export {
 } from "./mcp-server-command.js"
 export { formatMeetingBatch, prepareMeetingBatch } from "./meeting-batch.js"
 export { meetingEvidenceItem, meetingPersonContextItem } from "./meeting-evidence-answer.js"
+export {
+  addMeetingCombinedSearchCommand,
+  addMeetingEmbeddingCommand,
+  type MeetingCombinedSearchDeps,
+  type MeetingEmbeddingCommandDeps,
+  type MeetingSearchRun,
+} from "./meeting-meaning-command.js"
 export { meetingPreparationAnswer } from "./meeting-preparation-answer.js"
 export {
   type MeetingPreparationReader,

@@ -39,6 +39,10 @@ export const meetingHit = v.strictObject({
   /** `corrected`: a query word matched only a garbled form of itself, listed in `corrections`. */
   match: v.optional(v.picklist(["words", "corrected"])),
   corrections: v.optional(v.array(v.strictObject({ from: text, to: v.array(text) }))),
+  /** A search with `--model`: which searches found it, its similarity in meaning, and the passage meaning matched. */
+  by: v.optional(v.array(v.picklist(["words", "meaning"]))),
+  score: v.optional(v.nullable(v.number())),
+  passage: v.optional(v.strictObject({ first: text, last: text })),
   source: v.optional(
     v.strictObject({
       ref: reference,
