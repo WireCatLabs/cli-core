@@ -2,6 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import { formatLocator, parseLocator } from "../domain/locator.js"
 import type { Id } from "../domain/models.js"
 import { meaningFloor } from "../embeddings/models.js"
+import { type FusedFacts, fuseRanked } from "../search/fusion.js"
 import { QUERY_LIMITS, searchError } from "../search/lucene/types.js"
 import { type AccountKey, type ConversationHit, type ConversationSummary, threadConversation } from "../store/store.js"
 import type { ServiceDeps } from "./deps.js"
@@ -84,9 +85,19 @@ export const embeddingsSearch = (deps: ServiceDeps): Pick<EmbeddingsService, "se
       })
       outside.set(JSON.stringify(account), { account, chats })
     }
-    const ranked = items.flatMap(({ id, score }, index) => {
+    type Ranked = { summary: ConversationSummary; chunk: { firstMessageId: Id; lastMessageId: Id } } & FusedFacts
+    let ranked: Ranked[] = items.flatMap(({ id, score, timestamp }, index) => {
       const summary = summaries.get(index)
-      return summary ? [{ summary, chunk: { firstMessageId: id, lastMessageId: id }, score }] : []
+      return summary
+        ? [
+            {
+              summary,
+              chunk: { firstMessageId: id, lastMessageId: id },
+              ranked: score !== null,
+              at: Date.parse(timestamp),
+            },
+          ]
+        : []
     })
     // Mail in its own tables has no conversations: each email answers as its thread, ranked with the messages.
     const mailAccounts = prepared.scopeAccounts.filter(({ provider }) => provider === MAIL)
@@ -102,6 +113,7 @@ export const embeddingsSearch = (deps: ServiceDeps): Pick<EmbeddingsService, "se
           if (error instanceof CliError && error.code === "validation_error") return { items: [] }
           throw error
         })
+      const emails: Ranked[] = []
       for (const account of mailAccounts) {
         const found = mail.items.filter((hit) => {
           const at = parseLocator(hit.locator)
@@ -122,10 +134,15 @@ export const embeddingsSearch = (deps: ServiceDeps): Pick<EmbeddingsService, "se
           if (!place) continue
           const summary = threadConversation(place, Date.now())
           sources.set(summary.id, account)
-          ranked.push({ summary, chunk: { firstMessageId: hit.id, lastMessageId: hit.id }, score: hit.score })
+          emails.push({
+            summary,
+            chunk: { firstMessageId: hit.id, lastMessageId: hit.id },
+            ranked: hit.score !== null,
+            at: Date.parse(hit.timestamp),
+          })
         }
       }
-      ranked.sort((a, b) => (b.score ?? Number.NEGATIVE_INFINITY) - (a.score ?? Number.NEGATIVE_INFINITY))
+      ranked = fuseRanked([ranked, emails], (one) => one)
     }
     const seen = new Set<string>()
     const hits = ranked.flatMap(({ summary, chunk }) => {
