@@ -1,6 +1,7 @@
-import { mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs"
 import { dirname, join, resolve } from "node:path"
-import { CliError, resolvePaths } from "@wirecat/cli-base"
+import { CliError, resolvePaths, writeSecurely } from "@wirecat/cli-base"
+import { explainBrokenJson, repairConfigText, SAFE_REPAIRS } from "../domain/config-repair.js"
 import {
   DEFAULT_TASK_CATEGORIES,
   FALLBACK_CATEGORY,
@@ -27,20 +28,49 @@ export const sharedConfigPath = (store: string, env: NodeJS.ProcessEnv = process
     : join(dirname(store), "config.json")
 }
 
+/** Beside the file, so the owner finds it; a second repair in the same millisecond never replaces the first. */
+export const backupPathFor = (file: string): string => {
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-")
+  let path = `${file}.bak-${stamp}`
+  for (let n = 2; existsSync(path); n++) path = `${file}.bak-${stamp}-${n}`
+  return path
+}
+
+/**
+ * A slip with one reading (a byte-order mark, a comment, a trailing or a missing comma between lines) is mended in
+ * the file, the old one kept beside it (owner, 2026-11-14); anything else is refused with its line and likely fix.
+ */
+const mended = (path: string, bytes: Buffer): unknown => {
+  const text = bytes.toString("utf8")
+  const result = repairConfigText(text)
+  if (result.state === "repaired" && result.fixes.every((one) => SAFE_REPAIRS.has(one.kind))) {
+    try {
+      writeSecurely(backupPathFor(path), bytes, statSync(path).mode & 0o777)
+      writeSecurely(path, result.text, 0o600)
+    } catch {
+      // A file this run cannot write is still read as mended; the next run that can write mends it.
+    }
+    return JSON.parse(result.text)
+  }
+  throw new CliError("configuration_error", `${path} is not valid JSON, ${explainBrokenJson(text, result)}`, {
+    reason: "config.invalid_json",
+    file: path,
+  })
+}
+
 const readJson = (path: string): Record<string, unknown> | undefined => {
-  let text: string
+  let bytes: Buffer
   try {
-    text = readFileSync(path, "utf8")
+    bytes = readFileSync(path)
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined
     throw error
   }
   let parsed: unknown
   try {
-    // Windows editors save JSON with a byte-order mark, which JSON.parse refuses.
-    parsed = JSON.parse(text.replace(/^\uFEFF/u, ""))
-  } catch (error) {
-    throw new CliError("configuration_error", `${path} is not valid JSON: ${(error as Error).message}`)
+    parsed = JSON.parse(bytes.toString("utf8"))
+  } catch {
+    parsed = mended(path, bytes)
   }
   if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed))
     throw new CliError("configuration_error", `${path} must hold a JSON object`)

@@ -177,10 +177,29 @@ describe("runCommandForAgent", () => {
   it("**a write at level ask goes ahead**, with nobody to answer", async () => {
     const { program, ctx, connection } = setup()
 
-    const answer = await runCommandForAgent(program, ["messages", "delete"], { chat: "Book", message: ["11"] }, ctx)
+    const answer = await runCommandForAgent(
+      program,
+      ["messages", "delete"],
+      { chat: "Book", message: ["11"] },
+      { ...ctx, levels: () => ({ "messages.delete": "ask" as const }) },
+    )
 
     expect(answer).toHaveProperty("result")
     expect(connection.deleted).toEqual([{ ids: ["11"], forEveryone: false }])
+  })
+
+  it("**deletes at the built-in levels**, as the command line does (owner, 2026-11-14)", async () => {
+    const { program, ctx, connection } = setup()
+
+    const answer = await runCommandForAgent(
+      program,
+      ["messages", "delete"],
+      { chat: "Book", message: ["12"] },
+      { ...ctx, levels: () => ({}) },
+    )
+
+    expect(answer).toHaveProperty("result")
+    expect(connection.deleted).toEqual([{ ids: ["12"], forEveryone: false }])
   })
 
   it.each([

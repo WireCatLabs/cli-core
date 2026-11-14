@@ -24,6 +24,7 @@ export interface SyncAfterInstallOptions {
 /**
  * The shared config (`~/.config/WireCat/config.json`) as a fresh or damaged machine has it. Only an explicit
  * "read only" answer limits a tool, and even then a sync runs: it only reads the service (owner ruling, 2026-11-13).
+ * A slip with one reading is mended in place (2026-11-14), so only `broken` states may fail a step.
  */
 const SHARED_CONFIGS: { state: string; write?: (dir: string) => void; readOnly?: true; broken?: true }[] = [
   { state: "no shared config, as on a fresh install" },
@@ -35,6 +36,11 @@ const SHARED_CONFIGS: { state: string; write?: (dir: string) => void; readOnly?:
   {
     state: "a shared config with a byte-order mark",
     write: (dir) => writeFileSync(join(dir, "config.json"), '﻿{"setup":{"permissions":"allow"}}'),
+  },
+  {
+    state: "a shared config with a missing comma between two lines",
+    write: (dir) =>
+      writeFileSync(join(dir, "config.json"), '{\n  "setup": {"permissions": "allow"}\n  "theme": "dark"\n}\n'),
   },
   {
     state: "a folder where the shared config should be",

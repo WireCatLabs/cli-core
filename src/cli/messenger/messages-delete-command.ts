@@ -9,7 +9,8 @@ import { lineOf } from "../steps.js"
 import { type Messenger, messengerContext } from "./context.js"
 
 /**
- * The guard asks first at the default level, `ask`; `--allow-dangerous` is the yes. For everyone only
+ * Deletes without a question at the default level, `allow` (owner, 2026-11-14); a profile at `ask` gets the
+ * question, and `--allow-dangerous` is the yes. For everyone only
  * with `--for-everyone` (max-cli `NEED-239`), and never for an agent (NEED-1423).
  */
 export const deleteCommand = (messenger: Messenger): Command =>

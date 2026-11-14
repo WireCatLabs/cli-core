@@ -137,7 +137,7 @@ const side = v.optional(v.strictObject({ people: v.optional(ids, []), chats: v.o
 /**
  * Who may get an answer at all, whatever a rule says: everyone, or only those listed in `allow`; and
  * never anyone in `deny`, which wins when an id is in both. Tasks are not limited by it. A file that
- * does not say answers everyone a rule matches; `replies.send` is what keeps a new file silent.
+ * does not say answers everyone a rule matches; a new rule starts off, which keeps a new file silent.
  */
 const audienceShape = v.optional(
   v.strictObject({ reply: v.optional(v.picklist(["all", "listed"]), "all"), allow: side, deny: side }),

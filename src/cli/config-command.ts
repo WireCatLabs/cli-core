@@ -2,11 +2,12 @@ import { existsSync, readFileSync, statSync } from "node:fs"
 import { CliError, pathsAreOverridden, writeSecurely } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import { Command, Option } from "commander"
+import { REPAIR_WORDS, repairConfigText } from "../domain/config-repair.js"
 import { type AppIdentity, envName } from "../ports/app.js"
 import { agentOf } from "../runs/run-context.js"
 import { AUTHORITY_KEY, BOT_API_KEY, LEVELS, type Level, levelFor, type PermissionKey } from "../sends/permissions.js"
+import { backupPathFor } from "../store/shared-config.js"
 import { fixVerb } from "./config-issues.js"
-import { REPAIR_WORDS, repairConfigText } from "./config-repair.js"
 import { baseContext, environmentOf } from "./context.js"
 import { grantsAuthority, LOCAL_READ, LOCAL_WRITE } from "./effects.js"
 import { itemOf, renderAnswer } from "./envelope.js"
@@ -333,14 +334,6 @@ const repairCommand = (app: AppIdentity, config: Configuration): Command =>
         renderer.note(`line ${one.line}: ${dryRun ? "would fix" : "fixed"} ${REPAIR_WORDS[one.kind]}`)
       if (backup) renderer.note(`the old file is kept as ${backup}`)
     })
-
-/** Beside the file, so the owner finds it; a second repair in the same millisecond never replaces the first. */
-const backupPathFor = (file: string): string => {
-  const stamp = new Date().toISOString().replace(/[:.]/g, "-")
-  let path = `${file}.bak-${stamp}`
-  for (let n = 2; existsSync(path); n++) path = `${file}.bak-${stamp}-${n}`
-  return path
-}
 
 /**
  * A key no command or write is checked against would be saved and do nothing (BUG-137) — whether it
