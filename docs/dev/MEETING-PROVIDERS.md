@@ -33,6 +33,54 @@ writes. A recording service can implement a catalog and transfers without managi
 The SDK contains no filesystem, database, vendor client, credentials or automatic provider setup.
 cli-core implements the durable meeting store and its evidence/context/semantic services.
 
+## What a meetings tool reads live
+
+Every meetings tool has the same `meetings` group. `meetings list` and `meetings show` read the service and the store
+at once, so a meeting a sync has not kept yet still shows. A source declares what it can do; none of it is required:
+
+| Capability | For | Zoom | Meet | Telemost | Phone calls |
+| --- | --- | --- | --- | --- | --- |
+| `finds` + `find(window, terms, cursor)` | the meetings that may match, for `list` | ✅ | ✅ | — (mail) | — |
+| `get(id)` | one meeting with its people, transcript and documents, for `show` | ✅ | ✅ | — | — |
+| `meetings(since)` and the parts | `sync` | ✅ | ✅ | via mail | ✅ |
+| `documents(id)` | a meeting's Drive files | — | ✅ | — | — |
+| `MeetingManagementPorts` | `meetings create`, `update`, `cancel`, `invitation` | ✅ | later | — | — |
+
+**`find(window, terms, cursor)`.** `finds.fields` names the `meetings list` fields the service filters and the
+operators it reads on each (`{ provider_id: ["term"] }`); `finds.negatable` the ones whose NOT it can send. Every
+`find` takes `started_at` as `window` (`{ from?, to? }`, epoch ms, both ends inclusive; an open end is the source's own
+default). `terms` are the other parts it declared, each `{ predicate, negated }`. It answers one page, `{ meetings:
+[{ meeting, participants? }], next }`, `next` `null` on the last. Each `meeting.occurrence.id` must be the id
+`meetings()` gives, so the row a list keeps is the row `sync` writes: Zoom's live answer carries the instance uuid
+beside the meeting number. A service that lists no meeting before it starts (Meet: scheduling is Google Calendar's)
+sets `finds.upcoming: false`; a query for later meetings then names it in `missing`.
+
+**`get(id)`** answers one meeting by the service's id, `{ meeting, participants?, transcript?, documents? }`, or
+`null` when the service has none.
+
+**How `list` reads, `--backend archive|server|both`**, the words messages search uses, default `both`; `--offline`
+reads the store. `serviceCallsOf` keeps the part of the query the service can read and leaves out the rest, which
+only widens a call and never loses a meeting; each OR branch is a call of its own, at most three
+(`MEETING_SERVER_BOUNDS`), each up to two pages. What `find` returns is kept with `saveSourceMeeting`, the writer
+`sync` uses (`show` also keeps the transcript and the Drive documents); it never moves the sync's cursor. Then the
+whole query runs once over the store: one result set, the store's order and paging. Each item says `found_in`:
+`archive` (only the store), `server` (new from the service) or `both`.
+
+A service that cannot be asked — no `find`/`get`, `--offline`, `<PREFIX>_READ_ONLY` (the host passes `readOnly`), not
+signed in (`authentication_error`), refused (`permission_error`) or failing — leaves the store's answer and a
+`missing` line that says why; past the call or page cap a `missing` line says the list may be short. A typed
+`--backend server` refuses instead. `meetings show` takes the store number, the `meeting:` ref or the service's id
+(`provider_id`), in that order: a number that is a stored meeting's is that meeting.
+
+Both reads are `{ remote: read, local: read }` and `partial`: keeping what the service returned counts as a read.
+A custom `MeetingStore` implements `meetingByExternalId(accountId, externalId)` so `found_in` and `show <provider id>`
+find the stored row; without it the read asks the list query by `provider_id`.
+
+**Writes.** Pass `management: createMeetingManagement(scope, ports)` to `addMeetingCommands` and the group mounts
+`meetings create|update|cancel|invitation` for the ports given. Each write's permission key is its path
+(`meetings.create`, `meetings.update`, `meetings.cancel`), `ask` by default; `--dry-run` answers `applied: false`
+without reaching the service.
+
 ## A meeting's Drive documents
 
 A service that saves a meeting's transcript, recording or notes as Drive files (Google Meet) implements the optional
@@ -70,7 +118,8 @@ for shared references and cannot be rendered with a guessed owner. Labels do not
 
 Mount `addMeetingCommands` with an already authorized account ID. The host owns connection
 lifetime, deadlines, output limits and run metadata. `meetings list [query...]` validates metadata
-filters through the shared query registry and returns shared meeting entities in the list envelope.
+filters through the shared query registry and returns shared meeting entities in the list envelope; with a
+`source` that has `find`, it reads the service too ([What a meetings tool reads live](#what-a-meetings-tool-reads-live)).
 The generic MCP adapter accepts equivalent queries; a provider host fixes/removes `account_id`
 from caller arguments before dispatch, as Zoom does. Never expose another account through a cursor.
 
