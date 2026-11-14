@@ -130,6 +130,33 @@ and subjects).
 `mime`, `size`, `kept` and the `copy` path when one was kept. Any other document, a removed source or another
 reference is `undefined`, so a caller tells an added source from a folder document with it.
 
+## Shared commands
+
+`@wirecat/cli-core/documents/cli` (in `src/cli/documents/`: the domain layer `src/documents/` may not import
+commands, the store or services) holds the commands every documents CLI shares, built over these services the way
+`addCalendarCommands` and `addCrmCommands` are. `addDocumentCommands(program, options)` mounts them all;
+one builder per group lets a CLI place its own groups between them (drive puts `transcripts` and `store` after
+`status`). The CLI passes:
+
+- **`words`**: its command, the provider in sentences, the store provider name and the word for the
+  remote side. `mirrors sync --keep local|<remote>|both` maps `<remote>` to the engine's `remote`, and identities are
+  `<remote>_id`. Texts that read differently for the provider go in `words.text`. Entity names are the same in every CLI: `document`
+  (views `imported` and `catalog`), `document_tag`, `document_relationship`, `document_identity`, `selected_folder`,
+  `mirror`.
+- **`output`**: its own envelope, keys and `--fields`. The builders answer through it and never print themselves.
+- **Ports per group**, called when the command runs: the selected profile's store, its lock and principal, the
+  provider's source and the item shapes. The builders never pick a profile, open a store or take a lock.
+  `status`, `folders add|remove` and the mirror config stay the CLI's own code behind the port.
+
+The `documents` group the builders return takes the CLI's live subcommands (`get`, `create`, `update`, …), added after
+the shared ones. `folders` takes the CLI's `browse`, which stays outside the shared contract. Catalog entries use the
+`<id>.md` external ids the ingestion writes. Permissions, `--read-only`, the profile lock and MCP stay with the
+CLI's run.
+
+`@wirecat/cli-core/documents/testing` checks both halves: `documentSourceContract` an adapter, and
+`documentCommandsContract` the CLI's mounted commands over its fakes. `fakeDocumentSource` is a provider in memory,
+and the kit's own test runs both contracts over a reference CLI on a temporary store.
+
 <a id="push-local-files-to-a-provider"></a>
 
 ## Sync local files with a provider
