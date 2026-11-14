@@ -24,6 +24,10 @@ domain, SQL/transport/vendor imports in services, and private document imports f
 1. Normalize remote metadata to `SourceFile` and extend it with provider-specific fields as needed.
    Implement `DocumentSource`: identity, folder metadata/children, change cursor, content and bytes.
    Map vendor folders with the supplied `isFolder` predicate; no Google MIME type is assumed.
+   A node that is both, such as a wiki page with sub-pages, answers `isFolder` and the optional
+   `isDocument`: the sync walks its children and imports it too, a root page included. A root must
+   still be a folder, so a source whose pages can hold sub-pages calls every page one. Give such a
+   page catalog kind `file`: its children name it as a parent, and the catalog places them under it.
 2. Bind `documentIngestion` to the public store. Supply the provider/account collection name,
    external-ID mapping, catalog metadata and content front matter. The optional `observed` callback
    registers provider identities/roles. Identity mapping remains the provider's responsibility.
