@@ -28,7 +28,7 @@ import { newRunId } from "../runs/run.js"
 import { keepsSuccess, type RunCaller, runContextOf } from "../runs/run-context.js"
 import { inRun } from "../runs/scope.js"
 import type { SendGuard } from "../sends/guard.js"
-import { keyForCommand, levelFor, type PermissionKey, readKeysForCommand } from "../sends/permissions.js"
+import { fetchesAt, keyForCommand, levelFor, type PermissionKey, readKeysForCommand } from "../sends/permissions.js"
 import { onlineDeps, storeModeDeps } from "../services/deps.js"
 import { type Services, servicesFor } from "../services/index.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
@@ -280,10 +280,10 @@ export type RunEntry = (
 /** Whether a profile may sync before answering this entry. */
 export const syncAllowedFor = (key: string, defaults: Defaults): boolean => {
   const permissions = defaults.settings.permissions ?? {}
-  const shared = defaults.syncAllowed ?? levelFor(permissions, "messages.sync-first").level === "allow"
+  const shared = defaults.syncAllowed ?? fetchesAt(levelFor(permissions, "messages.sync-first").level)
   return (
     shared &&
-    (!key.startsWith("stats_") || levelFor(permissions, `${key.replaceAll("_", ".")}.sync-first`).level === "allow")
+    (!key.startsWith("stats_") || fetchesAt(levelFor(permissions, `${key.replaceAll("_", ".")}.sync-first`).level))
   )
 }
 

@@ -132,8 +132,20 @@ export const changesStore = <T extends Command>(command: T): T => {
   return command
 }
 
+const OWNER_FILES = new WeakSet<Command>()
+
+/**
+ * Marks a command that writes the owner's files outside the store through a folder it does not take as an option, a
+ * saved job's folder say: it stays a write, which a `readonly` level stops.
+ */
+export const writesOwnerFiles = <T extends Command>(command: T): T => {
+  OWNER_FILES.add(command)
+  return command
+}
+
 /** A download or a folder to write into: files outside the store, which the owner places, not an agent. */
 const savesFiles = (command: Command): boolean =>
+  OWNER_FILES.has(command) ||
   command.name() === "download" ||
   [...command.options.map((option) => option.attributeName()), ...command.registeredArguments.map((one) => one.name())]
     .map((name) => name.toLowerCase())
@@ -142,8 +154,9 @@ const savesFiles = (command: Command): boolean =>
 /**
  * Reads the provider and only keeps what it read in the owner's store — a sync, a list that refreshes it. An MCP server
  * offers it through the read tool (owner ruling, 2026-10-27; WC-CMD-17): it changes nothing at the provider or for
- * other people. A local edit (`changesStore`), an authority change, a call to another service (`reachesOtherService`,
- * a model download) and a command that saves files (a download, a folder to write into) stay writes.
+ * other people. A local edit (`changesStore`), an authority change, a sign-in (`logsInOrOut`), a call to another
+ * service (`reachesOtherService`, a model download) and a command that saves files (a download, a folder to write
+ * into) stay writes.
  */
 export const fetchesOnly = (command: Command): boolean => {
   const effects = metaOf(command).effects
@@ -152,6 +165,7 @@ export const fetchesOnly = (command: Command): boolean => {
     effects.local === "write" &&
     !STORE_WRITES.has(command) &&
     !changesAuthority(command) &&
+    !LOGIN.has(command) &&
     !OTHER_SERVICE.has(command) &&
     !savesFiles(command)
   )

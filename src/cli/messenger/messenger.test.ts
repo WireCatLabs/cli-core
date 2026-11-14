@@ -1834,6 +1834,43 @@ describe("the shared read commands", () => {
     ])
   })
 
+  it("**syncs on a readonly profile**, by the group key or the command's own, still refuses a send, and refuses the sync at deny", async () => {
+    const at = (permissions: Record<string, string>) => {
+      const root = mkdtempSync(join(tmpdir(), "messenger-"))
+      const env = {
+        CHAT_PROFILE: "default",
+        CHAT_STATE_DIR: join(root, "state"),
+        CHAT_CONFIG_DIR: join(root, "config"),
+        MESSAGING_STORE: join(root, "m.db"),
+      }
+      mkdirSync(env.CHAT_CONFIG_DIR, { recursive: true })
+      writeFileSync(
+        join(env.CHAT_CONFIG_DIR, "config.json"),
+        JSON.stringify({ profiles: { default: { permissions } } }),
+      )
+      return env
+    }
+    const sync = ["messages", "sync", "--", "-100", "--json"]
+    for (const permissions of [
+      { messages: "readonly" },
+      { "messages.sync-first": "readonly", metadata: "readonly" },
+    ] as Record<string, string>[]) {
+      const env = at(permissions)
+      const synced = await call(sync, async () => fake, env)
+      expect(synced.code, synced.stderr.join("")).toBe(0)
+      const metadata = await call(["metadata", "sync", "--chat", "-100", "--json"], async () => fake, env)
+      expect(metadata.stderr.join("")).not.toContain("permission_error")
+    }
+    const sent = await call(
+      ["messages", "send", "Book", "hi", "--json"],
+      async () => fake,
+      at({ messages: "readonly" }),
+    )
+    expect(JSON.parse(sent.stderr.join("")).error.code).toBe("permission_error")
+    const denied = await call(sync, async () => fake, at({ messages: "deny" }))
+    expect([denied.code, JSON.parse(denied.stderr.join("")).error.code]).toEqual([5, "permission_error"])
+  })
+
   it("**delete at ask only with --allow-dangerous**, each message counted toward the hourly limit", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
     const env = { CHAT_PROFILE: "default", CHAT_STATE_DIR: join(root, "state"), CHAT_CONFIG_DIR: join(root, "config") }
@@ -2495,7 +2532,7 @@ describe("the shared read commands", () => {
     mkdirSync(env.CHAT_CONFIG_DIR, { recursive: true })
     writeFileSync(
       join(env.CHAT_CONFIG_DIR, "config.json"),
-      JSON.stringify({ profiles: { default: { permissions: { messages: "readonly" } } } }),
+      JSON.stringify({ profiles: { default: { permissions: { "messages.sync-first": "deny" } } } }),
     )
     const never = vi.fn(async () => fake)
     const result = await call(["search", "messages", "chapter", "--sync-first", "--json"], never, env)
@@ -2596,7 +2633,7 @@ describe("the shared read commands", () => {
     expect(discover.next?.map(({ step }: { step: string }) => step) ?? []).not.toContain("search.server")
   })
 
-  it("**--backend both** on a read-only profile answers from the archive and never asks the server", async () => {
+  it("**--backend both** where the server search is denied answers from the archive and never asks the server", async () => {
     const root = mkdtempSync(join(tmpdir(), "messenger-"))
     const env = {
       ...process.env,
@@ -2609,7 +2646,7 @@ describe("the shared read commands", () => {
     mkdirSync(env.CHAT_CONFIG_DIR, { recursive: true })
     writeFileSync(
       join(env.CHAT_CONFIG_DIR, "config.json"),
-      JSON.stringify({ profiles: { default: { permissions: { messages: "readonly" } } } }),
+      JSON.stringify({ profiles: { default: { permissions: { "messages.server-search": "deny" } } } }),
     )
     const searchMessages = vi.fn()
     const connection = { ...fake, searchMessages }

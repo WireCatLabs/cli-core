@@ -12,27 +12,19 @@ import {
   type SendKind,
   sendsPathFor,
 } from "./journal.js"
-import { CEILING_KEY, keyForWrite, type Level, levelFor, type PermissionKey, skipFlagFor } from "./permissions.js"
+import {
+  CEILING_KEY,
+  keyForWrite,
+  type Level,
+  levelFor,
+  type PermissionKey,
+  STORE_ONLY_KEYS,
+  skipFlagFor,
+  stops,
+} from "./permissions.js"
 import { RecipientList, recipientsPathFor } from "./recipients.js"
 
 const HOUR_MS = 60 * 60 * 1000
-
-/**
- * Asked of the guard for their permission level, yet they only read from the messenger or work here: reads go on
- * during a hold and under the read-only lock, which promises reads and syncs.
- */
-const READS = new Set<PermissionKey>([
-  "attachments.extract",
-  "conversations.embeddings",
-  "conversations.links",
-  "messages.server-search",
-  "messages.sync-first",
-  "stats.contacts.top.sync-first",
-  "stats.messages.counters.sync",
-  "stats.messages.show.sync-first",
-  "stats.messages.top.sync-first",
-  "store.gaps.repair",
-])
 
 /** One write, as the guard is asked about it. `personIds` are checked and never journaled. */
 export interface GuardRequest {
@@ -195,13 +187,13 @@ export const sendGuard = ({
   const answered = new WeakSet<GuardRequest>()
 
   const refuseReadOnly = ({ key }: GuardRequest) => {
-    if (key !== undefined && READS.has(key)) return
+    if (key !== undefined && STORE_ONLY_KEYS.has(key)) return
     if (readOnlyLock) throw readOnlyRefusal(readOnlyLock, MESSENGER_CHANGE_REFUSAL)
   }
 
   // Every write, counted or not: a reaction or a read receipt sent through a ban is what makes the ban stick.
   const refuseHeld = ({ key }: GuardRequest) => {
-    if (key !== undefined && READS.has(key)) return
+    if (key !== undefined && STORE_ONLY_KEYS.has(key)) return
     const block = flood?.sendBlock()
     if (!block) return
     throw new CliError(
@@ -220,7 +212,7 @@ export const sendGuard = ({
     if (levels !== undefined) {
       const key = request.key ?? keyForWrite(kind, action)
       const { level, key: named } = levelFor(levels, key, permissionDefaults)
-      if (level === "deny" || level === "readonly")
+      if (stops(level, key))
         throw levelRefusal({ profile, command, key, level, named, permissionSources }, permissionFix?.(request, key))
       if (level === "ask" && !answered.has(request)) {
         throw new CliError("confirmation_required", `${key} asks before it acts, and it was not asked`)

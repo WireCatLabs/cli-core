@@ -129,12 +129,12 @@ describe("gap plan and repair commands", () => {
     expect(repaired.stderr).not.toContain("synthetic")
   })
 
-  it("refuses writes in readonly mode and records a background job with its exact fingerprint", async () => {
+  it("refuses a repair where the store is denied and records a background job with its exact fingerprint", async () => {
     const { call, connect, env } = await fixture()
     mkdirSync(env.CHAT_CONFIG_DIR, { recursive: true })
     writeFileSync(
       join(env.CHAT_CONFIG_DIR, "config.json"),
-      JSON.stringify({ defaults: { permissions: { store: "readonly" } }, profiles: {} }),
+      JSON.stringify({ defaults: { permissions: { store: "deny" } }, profiles: {} }),
     )
     const denied = await call(["store", "gaps", "repair", "7", "--json"])
     expect(denied.code, denied.stderr).toBe(5)

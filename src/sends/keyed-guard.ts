@@ -1,5 +1,5 @@
 import type { Asker, GuardRequest, SendGuard } from "./guard.js"
-import type { Level, PermissionKey } from "./permissions.js"
+import { type Level, type PermissionKey, stops } from "./permissions.js"
 
 export type KeyedGuard = SendGuard & {
   /** Refuses the write when one of its keys denies it or is read-only; asks nothing. */
@@ -35,7 +35,7 @@ export const keyedGuard = (
   }
   const levelOfRequest = ({ key }: GuardRequest) => levelOf(key ?? "")
   const refuse = (request: GuardRequest) => {
-    const refused = all(request).find((one) => ["deny", "readonly"].includes(levelOfRequest(one)))
+    const refused = all(request).find((one) => stops(levelOfRequest(one), one.key ?? ""))
     if (refused) guard.check(refused, { reserve: false })
   }
   return {

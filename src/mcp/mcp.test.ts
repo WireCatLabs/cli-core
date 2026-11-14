@@ -614,7 +614,19 @@ describe("the MCP server", () => {
     expect((await plain.client.describe("search all"))?.arguments.properties).not.toHaveProperty("backend")
   })
 
-  it.each(["readonly", "ask", "deny"])(
+  it("asks the server under messages.server-search readonly, which only reads", async () => {
+    const root = await filledRoot()
+    const searchMessages = vi.fn(async () => ({ items: [], hasMore: false, chats: [] }))
+    const { call } = await connect(scripted({ searchMessages }), {
+      root,
+      serverSearch: true,
+      config: levels({ "messages.server-search": "readonly" }),
+    })
+    await call("search messages", { query: "chapter", backend: "both" })
+    expect(searchMessages).toHaveBeenCalled()
+  })
+
+  it.each(["ask", "deny"])(
     "answers from the archive under messages.server-search %s and never asks the server",
     async (level) => {
       const root = await filledRoot()
@@ -652,7 +664,13 @@ describe("the MCP server", () => {
     expect(JSON.stringify(search.body)).not.toContain("private detail")
   })
 
-  it.each(["readonly", "deny", "ask"])(
+  it("offers sync_first under messages.sync-first readonly, which only fetches", async () => {
+    const root = await filledRoot()
+    const { client } = await connect(scripted(), { root, config: levels({ "messages.sync-first": "readonly" }) })
+    expect((await client.describe("search messages"))?.arguments.properties).toHaveProperty("sync_first")
+  })
+
+  it.each(["deny", "ask"])(
     "hides network arguments under messages.sync-first %s while preserving local search",
     async (level) => {
       const root = await filledRoot()
@@ -754,6 +772,7 @@ describe("the MCP server", () => {
       "chats links show",
       "chats list",
       "chats members check",
+      "chats members fetch",
       "chats members history",
       "chats members list",
       "chats requests list",
@@ -774,6 +793,7 @@ describe("the MCP server", () => {
       "contacts notes show",
       "contacts prepare",
       "contacts show",
+      "contacts sync",
       "conversations batches show",
       "conversations batches status",
       "conversations consents list",
@@ -785,6 +805,7 @@ describe("the MCP server", () => {
       "doctor",
       "doctor reports show",
       "guide",
+      "images embed",
       "images models list",
       "inbox",
       "mentions domains",
@@ -800,8 +821,10 @@ describe("the MCP server", () => {
       "messages photo",
       "messages scheduled",
       "messages show",
+      "messages sync",
       "messages transcribe",
       "metadata show",
+      "metadata sync",
       "models list",
       "polls show",
       "recipients list",
@@ -836,6 +859,7 @@ describe("the MCP server", () => {
       "stats contacts responses",
       "stats contacts top",
       "stats messages counters show",
+      "stats messages counters sync",
       "stats messages discussion",
       "stats messages evidence",
       "stats messages responses",
@@ -847,6 +871,7 @@ describe("the MCP server", () => {
       "status",
       "store chats status",
       "store check",
+      "store gaps repair",
       "store gaps show",
       "store info",
       "store jobs list",
@@ -1978,7 +2003,7 @@ describe("the MCP server", () => {
     expect(names).not.toContain("contacts aliases set")
     expect(names).not.toContain("contacts notes add")
     expect(names).not.toContain("tags rebuild")
-    expect(names).not.toContain("metadata sync")
+    expect(names).toContain("metadata sync")
   })
 
   it("**tags through MCP as the command does**, hides the writes where tags are read-only, and goes ahead at ask", async () => {
@@ -2447,7 +2472,9 @@ describe("the MCP server", () => {
     expect((await call("store jobs list", {})).body).toMatchObject({ items: [], page: { has_more: false } })
     expect((await call("store jobs show", { job: "missing" })).isError).toBe(true)
     const readonly = await connect(scripted(), { root, config: READ_ONLY })
-    expect(await readonly.client.availableCommands()).not.toContain("store gaps repair")
+    expect(await readonly.client.availableCommands()).toContain("store gaps repair")
+    const denied = await connect(scripted(), { root, config: levels({ store: "deny" }) })
+    expect(await denied.client.availableCommands()).not.toContain("store gaps repair")
   })
 
   it("refuses secondary search preparation permission before repairing through MCP", async () => {

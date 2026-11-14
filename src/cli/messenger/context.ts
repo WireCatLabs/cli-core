@@ -18,7 +18,7 @@ import type { EventSink, Warn, WarningEvent } from "../../runs/events.js"
 import { FloodMemory, floodPathFor } from "../../sends/flood.js"
 import { type Asker, ceilingRefusal, guardFor, type SendGuard } from "../../sends/guard.js"
 import { DEFAULT_PACE, type PaceRate, Pacer, pacePathFor } from "../../sends/pace.js"
-import { CEILING_KEY, levelFor, type PermissionKey, readKeysForCommand } from "../../sends/permissions.js"
+import { CEILING_KEY, fetchesUnder, levelFor, type PermissionKey, readKeysForCommand } from "../../sends/permissions.js"
 import { RecipientList, recipientsPathFor } from "../../sends/recipients.js"
 import { OFFLINE, type ServiceDeps, type ServiceMessenger, type Services, servicesFor } from "../../services/index.js"
 import type { PurposeConfig } from "../../services/project-purposes.js"
@@ -720,13 +720,14 @@ const refuseDenied = (command: Command, settings: Settings) => {
 
 /**
  * A write to the local store alone. `deny` already stopped the command (`messengerContext`); `readonly`
- * stops this write too. There is no question to put to the owner here, so `ask` refuses rather than
- * writing unasked.
+ * stops this write too, unless it only fetches from the messenger (`fetchesUnder`). There is no
+ * question to put to the owner here, so `ask` refuses rather than writing unasked.
  */
 export const refuseLocalWrite = (context: MessengerContext, command: string, permission: PermissionKey): void => {
   const { settings } = context
   const { level, key } = levelFor(settings.permissions, permission)
   if (level === "allow" || (level === "ask" && context.agent)) return
+  if (fetchesUnder(level, permission)) return
   if (key === CEILING_KEY) throw ceilingRefusal(permission, command)
   throw new CliError(
     level === "ask" ? "confirmation_required" : "permission_error",

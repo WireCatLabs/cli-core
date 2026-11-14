@@ -147,7 +147,7 @@ export const searchServer = async (deps: ServiceDeps, request: SearchQuery): Pro
   if (deps.reads === "store") return skip("pushed_history")
   if (deps.offline) return skip("offline")
   const guardRequest = { chatId: null, kind: "reaction" as const, key: SERVER_SEARCH_KEY }
-  // Never asked, as sync-first: over MCP an `ask` goes ahead, and the server search needs `allow`.
+  // Never asked, as sync-first: over MCP an `ask` goes ahead, and the server search needs `allow` or `readonly`.
   try {
     deps.guard.check(guardRequest, { reserve: false })
   } catch (error) {

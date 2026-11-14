@@ -1,7 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import { importEngine } from "../attachments/extract.js"
 import { type Deadline, deadlineMargin } from "../background/budget.js"
-import { type Level, levelFor, type PermissionKey } from "../sends/permissions.js"
+import { fetchesAt, type Level, levelFor, type PermissionKey } from "../sends/permissions.js"
 import {
   type Backend,
   DEFAULT_BACKEND,
@@ -106,8 +106,8 @@ export const searchMailServer = async (
     return { report: { ...report, skipped: reason, complete: false }, sources }
   }
   if (access.offline) return skip("offline")
-  // As tg's: `ask` and `readonly` give the archive's answer, since nobody is asked before a search.
-  if (access.readOnly || levelFor(access.permissions, SERVER_SEARCH_KEY, access.defaults).level !== "allow")
+  // As tg's: `ask` gives the archive's answer, since nobody is asked before a search; `readonly` still reads the server.
+  if (access.readOnly || !fetchesAt(levelFor(access.permissions, SERVER_SEARCH_KEY, access.defaults).level))
     return skip("not_allowed")
   const { branches, partial } = mailCriteriaOf(request.text, {
     ...(request.exact ? { exact: true } : {}),

@@ -376,6 +376,7 @@ export {
   storeChangeRefusal,
   writesFileOnlyWith,
   writesNewFileOnlyWith,
+  writesOwnerFiles,
 } from "./effects.js"
 export { type CliEntry, type EntryContext, type EntryIo, openBrowser, startCli } from "./entry.js"
 export {
