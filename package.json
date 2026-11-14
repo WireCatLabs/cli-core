@@ -187,6 +187,10 @@
       "types": "./dist/sftp/index.d.ts",
       "default": "./dist/sftp/index.js"
     },
+    "./sql": {
+      "types": "./dist/sql/index.d.ts",
+      "default": "./dist/sql/index.js"
+    },
     "./google": {
       "types": "./dist/google/index.d.ts",
       "default": "./dist/google/index.js"
@@ -284,6 +288,7 @@
     "@napi-rs/canvas": "1.0.13",
     "@types/mdast": "4.0.4",
     "@types/node": "^22.20.5",
+    "@types/pg": "8.23.1",
     "@types/pngjs": "6.0.5",
     "@types/ssh2": "1.15.5",
     "@vitest/coverage-v8": "^5.0.5",
@@ -299,6 +304,8 @@
     "lefthook": "2.2.2",
     "libphonenumber-js": "1.13.15",
     "markdownlint-cli2": "0.24.0",
+    "mysql2": "3.24.6",
+    "pg": "8.23.1",
     "pngjs": "7.0.0",
     "ssh2": "1.17.0",
     "typescript": "^7.0.2",
@@ -311,6 +318,8 @@
     "@napi-rs/canvas": ">=0.1.69 <2",
     "@wirecat/cli-base": ">=0.101.0 <1.0.0",
     "commander": ">=15",
+    "mysql2": "^3.24.6",
+    "pg": "^8.23.1",
     "ssh2": "^1.17.0"
   },
   "bin": {
@@ -318,6 +327,12 @@
   },
   "peerDependenciesMeta": {
     "@napi-rs/canvas": {
+      "optional": true
+    },
+    "mysql2": {
+      "optional": true
+    },
+    "pg": {
       "optional": true
     },
     "ssh2": {
