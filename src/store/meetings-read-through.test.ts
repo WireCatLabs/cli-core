@@ -148,6 +148,15 @@ const titles = (answer: { items: Record<string, unknown>[] }) =>
   answer.items.map(({ title, found_in }) => [title, found_in])
 
 describe("meetings list reads the service and the store at once", () => {
+  it("reads a start date in the meetings zone and names that zone in meta.timezone", async () => {
+    const { run, keep } = await fixture(undefined, { timezone: "Pacific/Kiritimati" })
+    await keep(LOCAL)
+    const dated = await run("--offline", "list", "started_at:2026-11-13", "--json")
+    expect([titles(dated), dated.meta]).toEqual([[["Example retro", "archive"]], { timezone: "Pacific/Kiritimati" }])
+    expect((await run("--offline", "list", "started_at:2026-11-12", "--json")).items).toEqual([])
+    expect((await run("--offline", "list", "started_at>2d", "--json")).meta).toBeUndefined()
+  })
+
   it("answers one list: service-only, store-only and shared meetings, each once, with where it was found", async () => {
     const { source } = serviceOf([ROADMAP, WEEKLY])
     const { store, accountId, keep, run } = await fixture(source)

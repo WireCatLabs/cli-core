@@ -1,4 +1,12 @@
-import { type DateRange, dateRange, type Occur, type Predicate, type Span } from "@wirecat/cli-base/query"
+import {
+  type DateRange,
+  dateRange,
+  type Occur,
+  type Predicate,
+  type QueryAst,
+  type Span,
+  walkQuery,
+} from "@wirecat/cli-base/query"
 
 /**
  * Where a read looks, the one vocabulary of messages, mail, calendar and meetings: the store (`archive`), the
@@ -140,3 +148,19 @@ export const windowOf = ({
   ...(lower === undefined ? {} : { from: lower_inclusive ? lower : lower + 1 }),
   ...(upper === undefined ? {} : { to: upper_inclusive ? upper : upper - 1 }),
 })
+
+const RELATIVE_TIME = /^\d+[mhd]$/i
+const OFFSET = /(?:Z|[+-]\d{2}:?\d{2})$/i
+
+/**
+ * Whether a query reads one of `times` in a zone — a date, `today`, a time without an offset — so the answer names
+ * that zone in `meta.timezone`. A time counted back from now or carrying its offset needs none.
+ */
+export const readsZone = (ast: QueryAst, times: ReadonlySet<string>): boolean =>
+  walkQuery(ast.root).some(
+    (term) =>
+      times.has(term.field) &&
+      [term.value, term.upper].some(
+        (value) => value !== undefined && value !== "*" && !RELATIVE_TIME.test(value) && !OFFSET.test(value),
+      ),
+  )

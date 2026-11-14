@@ -6,7 +6,6 @@ import {
   type QueryContext,
   type QueryNode,
   queryError,
-  timezoneOf,
 } from "@wirecat/cli-base/query"
 import type { SqlValue } from "../driver.js"
 import { fold } from "../normalize.js"
@@ -33,8 +32,8 @@ export type ColumnMap = Readonly<
 >
 
 export interface FilterOptions extends QueryContext {
-  /** Where `today` and a bare date start; the machine's zone when absent, as search reads them. */
-  zone?: string
+  /** Where `today`, a bare date and a time without an offset are read: the zone the answer reports. Never a default. */
+  zone: string
   now?: number
 }
 
@@ -97,7 +96,7 @@ const leaf = (node: Predicate, columns: ColumnMap, options: FilterOptions): Wher
         range[1] as string,
         range[2] as boolean,
         range[3] as boolean,
-        timezoneOf(options.zone),
+        options.zone,
         node.span,
         options.now,
       )
@@ -149,7 +148,7 @@ const compile = (node: QueryNode, columns: ColumnMap, options: FilterOptions): W
  * and ref compare without case (a `folded` column for names in any script), a lone NOT means everything else, and a
  * `should` clause counts only when nothing is required.
  */
-export const queryFilter = (ast: QueryAst, columns: ColumnMap, options: FilterOptions = {}): Where =>
+export const queryFilter = (ast: QueryAst, columns: ColumnMap, options: FilterOptions): Where =>
   compile(ast.root, columns, options)
 
 /** The SQL a list query compiled to, with its values bound, for a Drizzle `where`. */

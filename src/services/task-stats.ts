@@ -1,5 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
-import { type QueryAst, type QueryNode, walkQuery } from "@wirecat/cli-base/query"
+import { type QueryAst, type QueryNode, timezoneOf, walkQuery } from "@wirecat/cli-base/query"
 import { parseMeetingReference } from "../meetings/index.js"
 import { type TaskStatRow, type TaskStatScope, withoutField } from "../store/index.js"
 import type { AccountKey, MessageStore } from "../store/store.js"
@@ -113,7 +113,7 @@ export const taskStatsOf = async (
     ...(kind === undefined ? [] : [{ sql: "t.type = ?", params: [kind] }]),
     ...(by === "meeting" ? [{ sql: "t.source_kind = 'meeting'", params: [] }] : []),
   ]
-  const options = { command: "stats tasks show", now, ...(timezone === undefined ? {} : { zone: timezone }) }
+  const options = { command: "stats tasks show", now, zone: timezoneOf(timezone) }
   const where = (ast: QueryAst | undefined, more: Where[] = []) =>
     and([...fixed, ...more, ...(ast ? [queryFilter(ast, read, options)] : [])])
   // Project tasks belong to no account: one board read, whatever the accounts.

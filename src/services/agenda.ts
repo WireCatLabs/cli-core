@@ -4,6 +4,7 @@ import {
   type QueryRegistry,
   queryError,
   queryFieldsOf,
+  timezoneOf,
   walkQuery,
 } from "@wirecat/cli-base/query"
 import type * as v from "valibot"
@@ -178,7 +179,9 @@ export const agendaService = (deps: ServiceDeps, now: () => number = Date.now): 
     const open = await find()
     const tags = await taskTagFilters(store, parts.tasks)
     const listed = parts.tasks
-      ? await find(queryFilter(parts.tasks, taskColumns(holder, at, tags), { command: "tasks agenda" }))
+      ? await find(
+          queryFilter(parts.tasks, taskColumns(holder, at, tags), { command: "tasks agenda", zone: timezoneOf() }),
+        )
       : open
     const tasks = listed
       .map((task) => ({ task, reasons: reasonsOf(task, at, dueWithin) }))
@@ -225,7 +228,9 @@ export const agendaService = (deps: ServiceDeps, now: () => number = Date.now): 
       (await store.chats.chatActivity(
         account,
         at - within,
-        parts.chats ? queryFilter(parts.chats, AGENDA_COLUMNS, { command: "tasks agenda" }) : undefined,
+        parts.chats
+          ? queryFilter(parts.chats, AGENDA_COLUMNS, { command: "tasks agenda", zone: timezoneOf() })
+          : undefined,
       ))
     const turnOf = (chat: ChatActivity) =>
       "turn" in chat ? chat.turn : chat.lastFromOwner === null ? null : chat.lastFromOwner ? "waiting" : "owed"

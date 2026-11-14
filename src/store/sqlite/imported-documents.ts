@@ -1,4 +1,4 @@
-import { defineQuery, type QueryAst, validateQuery } from "@wirecat/cli-base/query"
+import { defineQuery, type QueryAst, timezoneOf, validateQuery } from "@wirecat/cli-base/query"
 import { normalizeTag } from "../../domain/tags.js"
 import type { CacheDatabase } from "../driver.js"
 import { idsOf } from "./merged-persons.js"
@@ -67,5 +67,5 @@ export const importedDocumentWhere = (database: CacheDatabase, query: QueryAst):
       },
     },
   }
-  return queryFilter(validateQuery(query, IMPORTED_DOCUMENT_QUERY), columns)
+  return queryFilter(validateQuery(query, IMPORTED_DOCUMENT_QUERY), columns, { zone: timezoneOf() })
 }

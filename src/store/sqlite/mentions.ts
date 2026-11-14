@@ -1,5 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
-import { defineQuery, type QueryAst } from "@wirecat/cli-base/query"
+import { defineQuery, type QueryAst, timezoneOf } from "@wirecat/cli-base/query"
 import { type Decider, MENTION_KINDS, type MentionKind, siteOf } from "../../domain/mentions.js"
 import { findNames, nameIndex } from "../../domain/person-names.js"
 import { createStemmer } from "../../search/stem.js"
@@ -208,7 +208,7 @@ export const listMentions = (
     params.push(foundAfter)
   }
   if (query) {
-    const compiled = queryFilter(query, columnsOf(database))
+    const compiled = queryFilter(query, columnsOf(database), { zone: timezoneOf() })
     if (compiled.sql) {
       where.push(`(${compiled.sql})`)
       params.push(...compiled.params)

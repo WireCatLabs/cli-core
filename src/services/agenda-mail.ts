@@ -1,4 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
+import { timezoneOf } from "@wirecat/cli-base/query"
 import { type MailTurn, mailTurn } from "../mail/owed.js"
 import {
   type AccountKey,
@@ -32,7 +33,7 @@ export const mailActivity = async (
   const stored = await store.accounts.storedAccount(account).catch(absent)
   if (!stored) return { chats: [], storedAt: null, coverage: () => [] }
   const where: Where | undefined = chats
-    ? queryFilter(chats, MAIL_AGENDA_COLUMNS, { command: "tasks agenda" })
+    ? queryFilter(chats, MAIL_AGENDA_COLUMNS, { command: "tasks agenda", zone: timezoneOf() })
     : undefined
   const threads = await store.mail.threadActivity(stored.id, since, where)
   const synced = await store.sync.syncState(account, "mail_coverage")

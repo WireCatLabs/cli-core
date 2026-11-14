@@ -428,7 +428,7 @@ export const workTaskOperationsOver = (context: StoreContext): WorkTaskOperation
     const where = queryFilter(query, projectTaskColumns(at, timezoneOf(zone), database), {
       command: "tasks list",
       now: at,
-      ...(zone ? { zone } : {}),
+      zone: timezoneOf(zone),
     })
     return { sql: `${BOARD_SCOPE} AND (${where.sql})`, params: where.params }
   }

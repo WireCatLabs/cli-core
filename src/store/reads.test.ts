@@ -49,7 +49,10 @@ describe("filtered chat lists", () => {
     ])
     await store.chats.saveChats(OTHER, [chat("-3", "Valencia market", "group", 2, at(1))])
     const where = (text: string) =>
-      queryFilter(listQuery(text, CHATS_QUERY, "chats list") as QueryAst, CHAT_COLUMNS, { command: "chats list" })
+      queryFilter(listQuery(text, CHATS_QUERY, "chats list") as QueryAst, CHAT_COLUMNS, {
+        command: "chats list",
+        zone: "UTC",
+      })
     const ids = async (text: string, limit?: number) =>
       (await store.chats.chats(OWNER, { where: where(text), ...(limit ? { limit } : {}) })).items.map(({ id }) => id)
 

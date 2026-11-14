@@ -1,5 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
-import { evaluate, type QueryAst, walkQuery } from "@wirecat/cli-base/query"
+import { evaluate, type QueryAst, timezoneOf, walkQuery } from "@wirecat/cli-base/query"
 import { ORGANIZATIONS_QUERY } from "../knowledge-query.js"
 import type { Organization } from "./knowledge.js"
 import type { StoreContext } from "./open.js"
@@ -49,12 +49,16 @@ export const organizationsStoreOver = ({ database, now }: StoreContext): Organiz
         .slice(0, 500)
     const where =
       query &&
-      queryFilter(query, {
-        id: { type: "kw", sql: "CAST(id AS TEXT)" },
-        kind: { type: "enum", sql: "kind" },
-        scope: { type: "enum", sql: "scope" },
-        created_at: { type: "time", sql: "created_at" },
-      })
+      queryFilter(
+        query,
+        {
+          id: { type: "kw", sql: "CAST(id AS TEXT)" },
+          kind: { type: "enum", sql: "kind" },
+          scope: { type: "enum", sql: "scope" },
+          created_at: { type: "time", sql: "created_at" },
+        },
+        { zone: timezoneOf() },
+      )
     return database
       .prepare(
         `SELECT * FROM organizations o WHERE deleted_at IS NULL${where ? ` AND (${where.sql})` : ""}${inCategory} ` +

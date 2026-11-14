@@ -153,7 +153,7 @@ describe("member history", () => {
     const ids = async (text: string) =>
       (
         await store.roster.trackedChats(OWNER, {
-          where: queryFilter(parseLucene(text, { defaultField: "none" }), TRACKED_CHAT_COLUMNS),
+          where: queryFilter(parseLucene(text, { defaultField: "none" }), TRACKED_CHAT_COLUMNS, { zone: "UTC" }),
         })
       ).map((one) => one.chatId)
     expect(await ids("title:club")).toEqual(["7"])

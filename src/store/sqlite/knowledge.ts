@@ -1,5 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
-import { type QueryAst, walkQuery } from "@wirecat/cli-base/query"
+import { type QueryAst, timezoneOf, walkQuery } from "@wirecat/cli-base/query"
 import { parseLocator } from "../../domain/locator.js"
 import { isBusinessType } from "../../domain/record-types.js"
 import { formatReference, parseReference, type Reference } from "../../domain/references.js"
@@ -24,7 +24,7 @@ import { insertLink, type Link, linkOf } from "./notes.js"
 import type { StoreContext } from "./open.js"
 import { type OrganizationsStore, organizationOf, organizationsStoreOver } from "./organizations.js"
 import type { ProposedAction } from "./proposed-actions.js"
-import { queryFilter } from "./query-filter.js"
+import { type ColumnMap, queryFilter } from "./query-filter.js"
 import {
   type KnowledgeRelation,
   type LinkDecision,
@@ -279,6 +279,23 @@ const oneOf = <T extends string>(value: string, allowed: readonly T[], what: str
 /** What a relationship may connect; a deal or a lead only as the end its people hang from. */
 const RELATED = ["person", "organization", "project", "task"]
 const DEALS = ["deal", "lead"]
+
+const PROJECT_COLUMNS: ColumnMap = {
+  id: { type: "kw", sql: "CAST(id AS TEXT)" },
+  key: { type: "kw", sql: "key" },
+  name: { type: "kw", sql: "name_folded", folded: true },
+  kind: { type: "enum", sql: `CASE WHEN length(key) = ${INBOX_KEY_LENGTH} THEN 'inbox' ELSE 'project' END` },
+  type: { type: "enum", sql: "type" },
+  organization_id: { type: "kw", sql: "CAST(organization_id AS TEXT)" },
+  scope: { type: "enum", sql: "scope" },
+  created_at: { type: "time", sql: "created_at" },
+}
+const REMINDER_COLUMNS: ColumnMap = {
+  id: { type: "kw", sql: "CAST(id AS TEXT)" },
+  state: { type: "enum", sql: "state" },
+  due_at: { type: "time", sql: "due_at" },
+  revision: { type: "num", sql: "revision" },
+}
 
 export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
   const { database, now } = context
@@ -704,18 +721,7 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
     addProject: async (input) => write(database, () => projectOf(insertProject(context, input))),
     projects: async (query) => {
       const asksKind = query !== undefined && walkQuery(query.root).some((node) => node.field === "kind")
-      const where =
-        query &&
-        queryFilter(query, {
-          id: { type: "kw", sql: "CAST(id AS TEXT)" },
-          key: { type: "kw", sql: "key" },
-          name: { type: "kw", sql: "name_folded", folded: true },
-          kind: { type: "enum", sql: `CASE WHEN length(key) = ${INBOX_KEY_LENGTH} THEN 'inbox' ELSE 'project' END` },
-          type: { type: "enum", sql: "type" },
-          organization_id: { type: "kw", sql: "CAST(organization_id AS TEXT)" },
-          scope: { type: "enum", sql: "scope" },
-          created_at: { type: "time", sql: "created_at" },
-        })
+      const where = query && queryFilter(query, PROJECT_COLUMNS, { zone: timezoneOf() })
       return database
         .prepare(
           `SELECT * FROM projects WHERE deleted_at IS NULL${asksKind ? "" : ` AND length(key) <> ${INBOX_KEY_LENGTH}`}${where ? ` AND (${where.sql})` : ""} ORDER BY name, id LIMIT 500`,
@@ -841,14 +847,7 @@ export const knowledgeStoreOver = (context: StoreContext): KnowledgeStore => {
       return reminder(key, String(made?.id))
     },
     reminders: async (key, query) => {
-      const where =
-        query &&
-        queryFilter(query, {
-          id: { type: "kw", sql: "CAST(id AS TEXT)" },
-          state: { type: "enum", sql: "state" },
-          due_at: { type: "time", sql: "due_at" },
-          revision: { type: "num", sql: "revision" },
-        })
+      const where = query && queryFilter(query, REMINDER_COLUMNS, { zone: timezoneOf() })
       return database
         .prepare(
           `SELECT * FROM reminders WHERE account_id=?${where ? ` AND (${where.sql})` : ""} ORDER BY due_at, id LIMIT 500`,

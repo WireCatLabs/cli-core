@@ -1,5 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import type { QueryAst } from "@wirecat/cli-base/query"
+import { timezoneOf } from "@wirecat/cli-base/query"
 import type { Decider, MentionKind } from "../../domain/mentions.js"
 import type { SqlValue } from "../driver.js"
 import { findAccountPk } from "./accounts.js"
@@ -119,7 +120,7 @@ export const sourceMentionStoreOver = (context: StoreContext): SourceMentionStor
       const where = [scope.sql]
       let params = scope.params
       if (query) {
-        const compiled = queryFilter(query, columnsOf(database))
+        const compiled = queryFilter(query, columnsOf(database), { zone: timezoneOf() })
         if (compiled.sql) {
           where.push(`AND (${compiled.sql}) `)
           params = params.concat(compiled.params)

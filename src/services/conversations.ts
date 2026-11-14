@@ -1,5 +1,5 @@
 import { CliError } from "@wirecat/cli-base"
-import { type QueryAst, type QueryRegistry, queryFieldsOf } from "@wirecat/cli-base/query"
+import { type QueryAst, type QueryRegistry, queryFieldsOf, timezoneOf } from "@wirecat/cli-base/query"
 import type { ListResult } from "@wirecat/cli-base/standards"
 import type * as v from "valibot"
 import { cutChunks } from "../conversations/chunks.js"
@@ -176,7 +176,9 @@ export const conversationsService = (deps: ServiceDeps): ConversationsService =>
     list: async (chat, { limit, offset = 0, query }) => {
       const { store, chatId } = await found(chat)
       if (!(await store.conversations.conversationState(chatId))?.builtAt) throw notBuilt(chatId)
-      const where = query ? queryFilter(query, CONVERSATION_COLUMNS, { command: "conversations list" }) : undefined
+      const where = query
+        ? queryFilter(query, CONVERSATION_COLUMNS, { command: "conversations list", zone: timezoneOf() })
+        : undefined
       const page = await store.conversations.conversations(chatId, { limit, offset, ...(where ? { where } : {}) })
       const account = await deps.account()
       return { items: page.items.map((one) => conversationItem(account, one)), hasMore: page.hasMore }

@@ -1,4 +1,5 @@
 import type { QueryAst } from "@wirecat/cli-base/query"
+import { timezoneOf } from "@wirecat/cli-base/query"
 import type { JsonValue } from "../../meetings/index.js"
 import type { CacheDatabase, SqlValue } from "../driver.js"
 import { queryFilter } from "./query-filter.js"
@@ -88,11 +89,15 @@ export const mailRulesOver = (database: CacheDatabase): MailRulesStore => ({
   async list(accountId, query) {
     const where =
       query &&
-      queryFilter(query, {
-        id: { type: "num", sql: "id" },
-        protected: { type: "bool", sql: "protected" },
-        source: { type: "kw", sql: "source" },
-      })
+      queryFilter(
+        query,
+        {
+          id: { type: "num", sql: "id" },
+          protected: { type: "bool", sql: "protected" },
+          source: { type: "kw", sql: "source" },
+        },
+        { zone: timezoneOf() },
+      )
     return database
       .prepare(`SELECT * FROM mail_rules WHERE account_id = ?${where ? ` AND (${where.sql})` : ""} ORDER BY id`)
       .all(accountId, ...(where?.params ?? []))

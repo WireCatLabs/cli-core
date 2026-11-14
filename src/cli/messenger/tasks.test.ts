@@ -4,7 +4,7 @@ import { join } from "node:path"
 import { captureStreams } from "@wirecat/cli-base"
 import { listEnvelopeSchema } from "@wirecat/cli-base/standards"
 import * as v from "valibot"
-import { describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 import type { Message } from "../../domain/models.js"
 import { DEFAULT_TASK_CATEGORIES, withTaskCategory } from "../../domain/task-categories.js"
 import { ENTITIES, task, taskPair } from "../../entities/index.js"
@@ -819,6 +819,28 @@ it("**names a category its tasks still carry after the owner removed it**, with 
   expect(item(await call("tasks", "categories", "--json")).unlisted).toEqual([{ name: "garden", open: 1, total: 1 }])
   expect((await call.pretty("tasks", "categories")).stdout.join("")).toContain("tasks list category:garden")
   expect(item(await call("tasks", "agenda", "--json")).unlisted_categories).toEqual([{ name: "garden", open_tasks: 1 }])
+})
+
+describe("tasks list dates", () => {
+  const processZone = process.env.TZ
+  afterEach(() => {
+    vi.useRealTimers()
+    process.env.TZ = processZone
+  })
+
+  it("reads a date in the computer's zone, not UTC, and names that zone in meta.timezone", async () => {
+    process.env.TZ = "Pacific/Kiritimati"
+    vi.useFakeTimers({ toFake: ["Date"], now: Date.parse("2026-11-14T12:00:00Z") })
+    const call = await setup()
+    const added = await call("tasks", "add", PROMISE, "--type", "promise", "--category", "money", "--json")
+    expect(added.code, added.stderr).toBe(0)
+    const listed = async (query: string) => json(await call("tasks", "list", query, "--json"))
+    const local = await listed("created_at:2026-11-15")
+    expect([local.items.length, local.meta.timezone]).toEqual([1, "Pacific/Kiritimati"])
+    expect((await listed("created_at:2026-11-14")).items).toEqual([])
+    expect((await listed("created_at:today")).meta.timezone).toBe("Pacific/Kiritimati")
+    expect((await listed("created_at>2h")).meta.timezone).toBeUndefined()
+  })
 })
 
 describe("tasks that may be one job", () => {
