@@ -5,6 +5,93 @@ Notable changes to `@wirecat/cli-core` (`@wirecat/cli-messaging` up to 0.261.0, 
 minor version may break callers, and says how under "Changed — may break callers". `pnpm docs:check` checks the
 shape of this file.
 
+## 0.664.0 — 14.11.2026
+
+### Added
+
+- **Tags on calls and other meetings, from a search: `addMeetingTagsCommand`** in `@wirecat/cli-core/cli` mounts
+  `tags add|remove|list` for a host whose meetings are its records, such as pbx and beeline.
+  `tags add complaint --matching "refund OR complaint"` labels every meeting of the account where `search meetings`
+  finds the query; `--meeting <id>` (repeatable) labels by id. A rerun after new calls are transcribed labels only
+  those, and `changed` in the `meeting_tag_change` answer says which. `tags list tag:complaint` answers
+  `meeting_tagging` items with the call's title marked untrusted. The labels are the store's ordinary taggings, so
+  `search meetings --tag complaint` and memo's `tags list` see them. The service is `meetingTags` in
+  `@wirecat/cli-core/services`. A mark stays when a new transcript of the call no longer says the words.
+- cli-core's command lint now also checks a calls host's program: `stats calls show`, `search meetings` and the
+  meeting `tags`, with cli-base's `calls`, `--matching` and `--tag`.
+- **Search by meaning for any host of stored meetings, from cli-core.** `addMeetingCombinedSearchCommand` in
+  `@wirecat/cli-core/cli` mounts `search meetings`: words by default, and words and meaning ranked together with
+  `--model <model>`, which first splits new transcripts and builds the missing vectors. A hit says how it was found
+  (`by`), its similarity (`score`) and the passage meaning matched, and marks `excerpt`, the passage and the title
+  untrusted. `addMeetingEmbeddingCommand` mounts `meetings embed`: a preview, and `--yes` splits every transcript and builds one batch of the missing
+  vectors; a rerun builds the next.
+  Without `--model` it uses the `models` command's default local text model, so the transcripts stay on this
+  computer; `--base-url` sends passages to a remote service only when given, and `--offline` refuses it. Both run over
+  `meetingMeaning(store, accountId)` in `@wirecat/cli-core/services`. These moved from zoom-cli, which can mount them
+  in place of its own copies; pbx and beeline mount them for calls.
+- `meeting_hit` takes the optional `by`, `score` and `passage` of a search by meaning.
+- **A profile can keep a second secret, in its one keyring entry.** `ProfileTokenStore` takes named secrets beside
+  the token: `writeSecret(profile, "ssh", secret)`, `readSecret(profile, "ssh")` and `removeSecret(profile, "ssh")`,
+  so a CLI can keep a database password and an SSH or SFTP password for one profile. They live in the same
+  `token:<profile>` entry as one value, as an OAuth entry holds its tokens and client secret: the keyring gets no
+  second entry (WC-SECR-4). An entry with only the token stays the plain value it was, so every entry written before
+  reads as before. `<PREFIX>_TOKEN_<NAME>` (`secretVariable(name)`) overrides one for CI, as `<PREFIX>_TOKEN` does the
+  token. Changing the token keeps the named secrets and the other way round; `remove` still forgets the whole entry,
+  as `session end` wants. A run with moved folders writes them to its temporary entry and never touches the owner's
+  (WC-SECR-24).
+- **A link can open a call or meeting in WireCat Desktop.** `linkFor({ type: "meeting", provider, account, meeting })`
+  builds `wirecat://open/v1/meeting/<provider>/<account>/<meeting>` (or the web form) from the provider's own ids, as
+  a message link does: `asterisk`, the account as the provider knows it, and the call's id there. It is built only
+  from that target: `meeting:<account>/<meeting>` stays a store reference and never becomes a link.
+  `test/fixtures/links-v1.json` has the cases under `target_only`, since no ref names them, and two refused paths.
+- **`readStream` on the SFTP client reads a file of any size in pieces.** It gives the file in order, 64 KiB at a
+  time with about a megabyte read ahead, so a Master.csv of gigabytes or a recording for ffmpeg is never held whole.
+  `maxBytes` is optional. A connection that breaks halfway is opened again and the read goes on where it stopped,
+  once the bytes just before that point read the same; a file replaced meanwhile is refused (`sftp.file-changed`).
+  Host-key pinning and the read-only rules are the same as for `readFile`. Each attempt is an `sftp.stream` event.
+  See [SFTP](docs/sftp.md#read).
+- **`openSshTunnel` reaches a database that listens only on its own server** (a FreePBX CDR database) with no
+  `ssh -L` by hand. It signs in with the pinned host key, only forwards (no shell, no command, no SFTP), and opens no
+  port on this computer: `connect(host, port)` answers a stream shaped as a socket, which `pg` and `mysql2` take as
+  their `stream`. `close()` ends it at the end of the run. Its events are `ssh.connect` and `ssh.forward`
+  (`transport: "ssh"`), with no forwarded address. See
+  [SFTP, "A tunnel to a database behind the server"](docs/sftp.md#a-tunnel-to-a-database-behind-the-server).
+- **`@wirecat/cli-core/sql`: a read-only MySQL, MariaDB and PostgreSQL reader for a host's own table.**
+  `openSqlReader` opens a read-only session with TLS checked and connect and query timeouts, keeps a time without a
+  zone as its text, reads in pages by the last row's key (or by offset), checks every name as an identifier and
+  sends every value as a parameter, takes a tunnel's stream as `socket`, and maps driver errors to reasons without
+  their text (`db.refused`, `db.no-table`, `db.no-select`, `db.read-only`…; `sqlFailure` for a host's own code).
+  `mysql2` and `pg` are optional peers, loaded on first use. It is the generic half of pbx's CDR reader; the
+  schema mapping stays in pbx. See [SQL](docs/sql.md).
+
+### Changed — may break callers
+
+- **`SftpClient` has `readStream`.** A fake typed as `SftpClient` in a host's tests adds it.
+- **No MCP server offers `chats delete` or `chats clear`.** Over MCP an `ask` level goes ahead without a question, so
+  an agent could delete a whole chat or its history from the account. Both stay on the command line, where `ask` still
+  asks first.
+
+### Fixed
+
+- **`knowledge.labelled` with an account lists only that account's meetings, and never a deleted meeting.** With
+  `null`, as memo calls it, it still lists every account's meetings, now without the deleted ones.
+- cli-base 0.101.0, whose vocabulary has `calls`, `--matching` and `--tag`; the peer range moves to it.
+- **A command's own `--fields` is no longer read as `--json`'s field list.** A generated Google API command such as
+  `gcal <profile> api calendar-events-list --fields 'items(id)' --json` failed with "--json takes comma-separated field
+  paths", because the command's `--fields` (Google's partial-response mask) stood in for the root's. Only
+  `--json=a,b` now picks the answer's fields, in `outputFor`, `baseContext` and the program's own output.
+- **A project's status no longer crashes on a link whose chat was deleted.** `knowledge.relations` leaves out a link
+  whose start or end no longer exists, such as a `member-of` link from a chat the store has since removed. Before,
+  it returned the link with `from: null`, and `projectStatus` failed on it, so memo's `review agenda` and the morning
+  digest stopped with `command.crashed`.
+- `search conversations` no longer fails on a long sentence over a large store: when the word half runs out of time,
+  the meaning half still answers, and the answer says so (`meta.words: "out-of-time"`, a note in pretty output).
+  Stop words (`что`, `какие`, `what`, `the`…) no longer go into the word half, unless the query holds nothing else.
+- `search conversations` follows an explicit `--timeout`, as `search messages` does: the word half gets the longer
+  time limit.
+- `search messages --discover` finds a name written as one word when the question spells it with a hyphen
+  (`Альфа-банк` finds `АльфаБанк`).
+
 ## 0.663.0 — 14.11.2026
 
 ### Added
