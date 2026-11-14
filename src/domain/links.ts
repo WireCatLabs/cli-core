@@ -17,6 +17,12 @@ export type DeepLinkTarget =
   | { type: "person"; id: string }
   /** A project's store id or its key, as `project:<key>` names it. */
   | { type: "project"; id: string }
+  /**
+   * A call or meeting by the provider's own ids, as a message link names its message: the provider (`asterisk`,
+   * `zoom`), the account as the provider knows it, and the meeting's id there. Built only from this target, never from
+   * a store reference: `meeting:<account>/<meeting>` names store rows.
+   */
+  | { type: "meeting"; provider: string; account: string; meeting: string }
 
 export type LinkForm = "web" | "app"
 
@@ -55,6 +61,8 @@ const partsOf = (target: DeepLinkTarget): string[] => {
       return ["digest", target.date]
     case "sync":
       return target.account === undefined ? ["sync", target.tool] : ["sync", target.tool, target.account]
+    case "meeting":
+      return ["meeting", target.provider, target.account, target.meeting]
   }
 }
 
@@ -87,6 +95,8 @@ const targetOfParts = (parts: string[]): DeepLinkTarget | null => {
       return rest.length === 1 || rest.length === 2
         ? { type: "sync", tool: a, ...(rest.length === 2 ? { account: b } : {}) }
         : null
+    case "meeting":
+      return rest.length === 3 ? { type: "meeting", provider: a, account: b, meeting: c } : null
     default:
       return null
   }
