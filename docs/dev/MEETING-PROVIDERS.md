@@ -243,24 +243,33 @@ tool overrides them. The ports say which of these their service reads, in `ports
 
 | | Type | Says |
 |---|---|---|
-| `fields.create`, `fields.update` | `MeetingCreateFields`, `MeetingFields` | what one write port reads; absent, every portable field and no setting |
+| `fields.create`, `fields.update` | `MeetingFields` | what one write port reads; absent, every portable field and no setting |
 | `.fields` | `MeetingField[]` | the portable fields: `title`, `kind`, `startTime`, `durationMinutes`, `timezone`, `agenda` |
-| `.settings` | `MeetingSetting[]` | the service's own settings: a snake_case `name`, a `description`, and `type` `choice` (with `values`), `boolean` or `text` |
-| `.instant` | `boolean`, create only | the service can create a meeting that starts at once; true when absent |
+| `.settings` | `MeetingSetting[]` | the service's own settings: a snake_case `name`, a `description`, and `type` `choice` (with `values`), `boolean` or `text` (with `clearable`) |
 
 The command takes only what is declared. Anything else, a portable field or a setting, is refused with
-`validation_error` that names what the service takes: `this service does not take title on update; it takes setting
-access_type, setting moderation`. A `choice` setting takes one of its values, a `boolean` takes `true` or `false`.
+`validation_error` that names the options the service takes: `this service does not take --title on update; it takes
+--setting access_type, --setting moderation`. A `choice` setting takes one of its values, a `boolean` takes `true` or
+`false`. A `text` setting refuses blank text, unless it is declared `clearable`: then `--setting note=` sends `""`,
+which clears it on the service. A setting's name in `--setting` is snake_case, and the value is everything after the
+first `=`.
 `--setting`'s description and the command's help list the settings with their values, so `commands --json` shows
 them. `createMeetingManagement` checks the declaration when it is made: a setting name that is not snake_case (it is
-a key of the receipt's `change.settings`), a setting declared twice, one with no description or a `choice` with no
-values is a `configuration_error`. `management.fields` gives the declaration with its defaults filled in.
+a key of the receipt's `change.settings`), a setting declared twice, one with no description, a `choice` with no
+values, or a create that declares `kind` without `startTime` (it could never schedule) is a `configuration_error`.
+`management.fields` gives the declaration with its defaults filled in.
 
-Every meeting has a time. A create with no start is an instant meeting that starts now, the clock of
-`createMeetingManagement(scope, ports, { now })`, when the service has instant meetings; without them it is refused.
-A create with a start and no kind is scheduled, and a scheduled create needs a start. The validated create always
-carries `kind` and `startTime`, so a calendar can place it. The answer keeps `id`, `join_url` and the rest of
-`meeting`; an update returns none.
+Every meeting has a time, and whether a create may start now depends on whether the service can schedule:
+
+- **It cannot** (no `startTime` declared, Meet): every create is an instant meeting that starts now.
+- **It can** (`startTime` declared, Zoom, or a port that declares nothing): a create needs `--start-time`, or
+  `--kind instant` where `kind` is declared. A create with neither is refused. Over MCP an agent is not asked first,
+  so a forgotten start must be an error, not a live meeting.
+
+An instant meeting's `startTime` is "now" when it is sent, after the owner's question: the clock of
+`createMeetingManagement(scope, ports, { now })`. A `--dry-run` receipt has `kind: "instant"` and no start. A create
+with a start and no kind is scheduled. The answer keeps `id`, `join_url` and the rest of `meeting`, and lists
+`untrusted: ["meeting.title", "meeting.agenda", "meeting.join_url"]`, the service's text; an update returns none.
 
 Zoom takes the portable fields and no setting, so it declares nothing. Google Meet's space has no title or time, and
 its changes are settings:
@@ -282,11 +291,12 @@ In a tool that mounts them (`<tool> <profile> meetings …`), a Zoom-like servic
 
 ```sh
 <tool> <profile> meetings create --title "Example planning" --start-time 2026-11-20T10:00:00+01:00 --duration-minutes 30
+<tool> <profile> meetings create --kind instant
 <tool> <profile> meetings create --setting access_type=trusted
 <tool> <profile> meetings update spaces/abc --setting access_type=restricted --setting moderation=true
 ```
 
-The second, on Meet, has no title and no start: it starts now, and its receipt has `change: { kind: "instant",
+The third, on Meet, has no title and no start: it starts now, and its receipt has `change: { kind: "instant",
 start_time: "<now>", settings: { access_type: "trusted" } }`. Meet has no `cancel`: `endActiveConference` ends a
 call, not the space. `meetings update spaces/abc --title X` on Meet is refused.
 

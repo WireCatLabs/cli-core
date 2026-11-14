@@ -160,6 +160,7 @@ const managedChange = v.strictObject({
       join_url: nullableText,
     }),
   ),
+  untrusted: v.optional(v.array(text)),
 })
 const invitation = v.strictObject({ id: identifier, invitation: text, untrusted: v.optional(v.array(text)) })
 

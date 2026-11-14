@@ -2,13 +2,17 @@ import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import type { Effects } from "@wirecat/cli-base/standards"
 import { type Command, InvalidArgumentError, Option } from "commander"
-import type {
-  DeclaredMeetingFields,
-  ManagedMeeting,
-  ManagedMeetingChange,
-  MeetingManagement,
-  MeetingMutationReceipt,
-  MeetingSetting,
+import {
+  type DeclaredMeetingFields,
+  type ManagedMeeting,
+  type ManagedMeetingChange,
+  MEETING_FIELD_KEYS,
+  MEETING_FIELDS,
+  type MeetingManagement,
+  type MeetingMutationReceipt,
+  type MeetingSetting,
+  meetingFieldFlag,
+  SNAKE_CASE,
 } from "../meeting-management.js"
 
 const REMOTE_READ: Effects = { remote: "read", local: "read" }
@@ -31,29 +35,29 @@ const minutes = (text: string) => {
 
 const setting = (text: string, previous: [string, string][] = []): [string, string][] => {
   const at = text.indexOf("=")
-  if (at < 1) throw new InvalidArgumentError("expected name=value, such as access_type=trusted")
-  return [...previous, [text.slice(0, at), text.slice(at + 1)]]
+  const name = text.slice(0, at)
+  if (at < 1 || !SNAKE_CASE.test(name))
+    throw new InvalidArgumentError("expected name=value with a snake_case name, such as access_type=trusted")
+  return [...previous, [name, text.slice(at + 1)]]
 }
 
 const valuesOf = (one: MeetingSetting) =>
   one.type === "choice" ? one.values.join("|") : one.type === "boolean" ? "true|false" : "<text>"
-
-const FIELD_FLAGS = {
-  title: "--title",
-  kind: "--kind",
-  startTime: "--start-time",
-  durationMinutes: "--duration-minutes",
-  timezone: "--timezone",
-  agenda: "--agenda",
-} as const
 
 /** The same options in every meetings tool; what this service takes is in `--setting`'s description and the help. */
 const changeOptions = (command: Command, declared: DeclaredMeetingFields, create: boolean) => {
   const settings = declared.settings.length
     ? declared.settings.map((one) => `${one.name}=${valuesOf(one)}`).join(", ")
     : "this service has none"
-  const takes = declared.fields.map((field) => FIELD_FLAGS[field]).join(", ") || "none of the options above"
-  const start = create && declared.instant ? "; left out, the meeting starts now" : ""
+  const takes = declared.fields.map(meetingFieldFlag).join(", ") || "none of the options above"
+  const schedules = declared.fields.includes("startTime")
+  const start = !create
+    ? ""
+    : !schedules
+      ? "; this service takes none, its meetings start now"
+      : declared.fields.includes("kind")
+        ? "; for a meeting that starts now, give --kind instant instead"
+        : ""
   return command
     .option("--title <title>", "the meeting's title")
     .addOption(new Option("--kind <kind>", "an instant or a scheduled meeting").choices(["instant", "scheduled"]))
@@ -76,17 +80,15 @@ const changeOptions = (command: Command, declared: DeclaredMeetingFields, create
 
 const changeOf = (flags: ChangeFlags): ManagedMeetingChange => {
   const change: ManagedMeetingChange = Object.fromEntries(
-    (["title", "kind", "startTime", "durationMinutes", "timezone", "agenda"] as const).flatMap((key) =>
-      flags[key] === undefined ? [] : [[key, flags[key]]],
-    ),
+    MEETING_FIELDS.flatMap((key) => (flags[key] === undefined ? [] : [[key, flags[key]]])),
   )
   if (!flags.setting) return change
-  const settings: Record<string, string> = {}
+  const settings = new Map<string, string>()
   for (const [name, value] of flags.setting) {
-    if (Object.hasOwn(settings, name)) throw new CliError("validation_error", `--setting ${name} is given twice`)
-    settings[name] = value
+    if (settings.has(name)) throw new CliError("validation_error", `--setting ${name} is given twice`)
+    settings.set(name, value)
   }
-  return { ...change, settings }
+  return { ...change, settings: Object.fromEntries(settings) }
 }
 
 const meetingOf = (one: ManagedMeeting) => ({
@@ -111,18 +113,19 @@ const receiptItem = (receipt: MeetingMutationReceipt) => {
     ...(change
       ? {
           change: {
-            ...(change.title === undefined ? {} : { title: change.title }),
-            ...(change.kind === undefined ? {} : { kind: change.kind }),
-            ...(change.startTime === undefined ? {} : { start_time: change.startTime }),
-            ...(change.durationMinutes === undefined ? {} : { duration_minutes: change.durationMinutes }),
-            ...(change.timezone === undefined ? {} : { timezone: change.timezone }),
-            ...(change.agenda === undefined ? {} : { agenda: change.agenda }),
+            ...Object.fromEntries(
+              MEETING_FIELDS.flatMap((key) =>
+                change[key] === undefined ? [] : [[MEETING_FIELD_KEYS[key], change[key]]],
+              ),
+            ),
             ...(change.settings === undefined ? {} : { settings: { ...change.settings } }),
           },
         }
       : {}),
     applied: receipt.applied,
-    ...(receipt.meeting ? { meeting: meetingOf(receipt.meeting) } : {}),
+    ...(receipt.meeting
+      ? { meeting: meetingOf(receipt.meeting), untrusted: ["meeting.title", "meeting.agenda", "meeting.join_url"] }
+      : {}),
   }
 }
 

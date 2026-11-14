@@ -559,7 +559,19 @@ const MEET_SETTINGS = [
     values: ["open", "trusted", "restricted"],
   },
   { name: "moderation", description: "only hosts manage the call", type: "boolean" },
+  { name: "label", description: "a label for the space", type: "text" },
 ] as const
+
+const meetingRow = {
+  id: "900",
+  title: null,
+  kind: null,
+  startTime: null,
+  durationMinutes: null,
+  timezone: null,
+  agenda: null,
+  joinUrl: null,
+}
 
 /** A service like Google Meet: a space has no title or time, its changes are settings, and it cannot be deleted. */
 const meetLike = () => {
@@ -641,6 +653,7 @@ describe("meetings create and update take what the service declares", () => {
           agenda: null,
           join_url: "https://example.com/abc-defg-hij",
         },
+        untrusted: ["meeting.title", "meeting.agenda", "meeting.join_url"],
       },
     })
     expect(asked()).toBe(1)
@@ -662,11 +675,12 @@ describe("meetings create and update take what the service declares", () => {
     const { run, asked } = await programWith(management)
     await expect(run("meetings", "update", "spaces/abc", "--title", "Example planning")).rejects.toMatchObject({
       code: "validation_error",
-      message: "this service does not take title on update; it takes setting access_type, setting moderation",
+      message:
+        "this service does not take --title on update; it takes --setting access_type, --setting moderation, --setting label",
     })
     await expect(run("meetings", "update", "spaces/abc", "--setting", "recording=on")).rejects.toMatchObject({
       code: "validation_error",
-      message: expect.stringContaining("does not take setting recording"),
+      message: expect.stringContaining("does not take --setting recording"),
     })
     await expect(run("meetings", "create", "--setting", "access_type=closed")).rejects.toMatchObject({
       code: "validation_error",
@@ -684,16 +698,57 @@ describe("meetings create and update take what the service declares", () => {
     const { program } = await programWith(management)
     const document = JSON.stringify(describeProgram(program()))
     expect(document).toContain(
-      "a setting of this service; repeat it for more: access_type=open|trusted|restricted, moderation=true|false",
+      "a setting of this service; repeat it for more: access_type=open|trusted|restricted, moderation=true|false, label=<text>",
     )
     const create = program()
       .commands.find((command) => command.name() === "meetings")
       ?.commands.find((command) => command.name() === "create")
     const help: string[] = []
     create?.configureOutput({ writeOut: (text) => help.push(text) }).outputHelp()
-    expect(help.join("").replace(/\s+/g, " ")).toContain("left out, the meeting starts now")
+    expect(help.join("").replace(/\s+/g, " ")).toContain("this service takes none, its meetings start now")
     expect(help.join("")).toContain("This service takes none of the options above.")
     expect(help.join("")).toContain("  access_type=open|trusted|restricted  who joins without asking")
+  })
+
+  it("reads --setting as a snake_case name and the rest after the first =", async () => {
+    const { calls, management } = meetLike()
+    const { run, asked } = await programWith(management)
+    await run("meetings", "update", "spaces/abc", "--setting", "label=b=c")
+    expect(calls).toEqual([["update", "spaces/abc", { settings: { label: "b=c" } }]])
+    for (const wrong of ["=x", "x", "__proto__=x", "Label=x"])
+      await expect(run("meetings", "update", "spaces/abc", "--setting", wrong)).rejects.toMatchObject({
+        code: "commander.invalidArgument",
+      })
+    await expect(run("meetings", "update", "spaces/abc", "--setting", "label=")).rejects.toMatchObject({
+      code: "validation_error",
+      message: "meeting setting label must be nonempty text: this service cannot clear it",
+    })
+    expect(calls).toHaveLength(1)
+    expect(asked()).toBe(1)
+  })
+
+  it("refuses a create with no start on a service that can schedule, before asking", async () => {
+    const created: unknown[] = []
+    const zoomLike = createMeetingManagement(
+      { provider: "example-zoom", account: "invented" },
+      {
+        async create(change) {
+          created.push(change)
+          return { ...meetingRow, id: "901" }
+        },
+      },
+      { now: () => NOW },
+    )
+    const { run, asked } = await programWith(zoomLike)
+    await expect(run("meetings", "create", "--title", "Example planning")).rejects.toMatchObject({
+      code: "validation_error",
+      message: "give --start-time, or --kind instant for a meeting that starts now",
+    })
+    expect(asked()).toBe(0)
+    expect(await run("meetings", "create", "--kind", "instant")).toMatchObject({
+      item: { change: { kind: "instant", start_time: "2026-11-14T12:00:00.000Z" }, applied: true },
+    })
+    expect(created).toEqual([{ kind: "instant", startTime: "2026-11-14T12:00:00.000Z" }])
   })
 
   it("mounts no cancel for a service that cannot delete, and --dry-run reaches nothing", async () => {
