@@ -79,7 +79,10 @@ describe("filtered chat lists", () => {
       chat("2", "Елка", "group", 0, at(2)),
     ])
     const where = (text: string) =>
-      queryFilter(listQuery(text, CHATS_QUERY, "chats list") as QueryAst, CHAT_COLUMNS, { command: "chats list" })
+      queryFilter(listQuery(text, CHATS_QUERY, "chats list") as QueryAst, CHAT_COLUMNS, {
+        command: "chats list",
+        zone: "UTC",
+      })
     const ids = async (text: string) =>
       (await store.chats.chats(OWNER, { where: where(text) })).items.map(({ id }) => id).sort()
 
