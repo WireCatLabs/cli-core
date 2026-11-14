@@ -77,7 +77,16 @@ describe("calendar MCP tools", () => {
     for (const accountId of [1, 2]) {
       const [calendar] = await store.saveCalendars(
         accountId,
-        [{ externalId: `cal-${accountId}`, title: "Work", timezone: "UTC", accessRole: "owner", primary: true }],
+        [
+          {
+            externalId: `cal-${accountId}`,
+            title: "Work",
+            timezone: "UTC",
+            accessRole: "owner",
+            primary: true,
+            syncByDefault: true,
+          },
+        ],
         NOW,
       )
       const [entry] = await store.saveEntries(
@@ -145,6 +154,14 @@ describe("calendar MCP tools", () => {
     expect(await refused("event_show", { event: String(ids[1]) }, [1])).toBe("not_found")
     expect(await refused("events_list", { query: "today" }, [1])).toBe("validation_error")
     expect(await refused("event_links_review", [], [1])).toBe("validation_error")
+    expect(await refused("events_list", { limit: 1001 }, [1])).toBe("validation_error")
+    expect(
+      await refused(
+        "event_create",
+        { calendar: "cal-1", title: "x", start_time: "2026-11-02T10:00", attendees: [" "] },
+        [1],
+      ),
+    ).toBe("validation_error")
   })
 
   it("events_list pages the merge of every account, and page.next reads on with the same query", async () => {

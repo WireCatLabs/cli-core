@@ -226,7 +226,13 @@ describe("two senders at once", () => {
       expect.objectContaining({ code: "validation_error" }),
     )
     const journal = new SendJournal(sendsPathFor("g-bad-line"))
-    journal.append({ at: "2026-09-24T08:50:00Z", outcome: "sent", chatId: "111", scheduledFor: "garbled" })
+    journal.append({
+      at: "2026-09-24T08:50:00Z",
+      profile: "g-bad-line",
+      outcome: "sent",
+      chatId: "111",
+      scheduledFor: "garbled",
+    })
     expect(() => guard("g-bad-line", 1).check({ chatId: "111" })).toThrow("the next send is possible")
   })
 

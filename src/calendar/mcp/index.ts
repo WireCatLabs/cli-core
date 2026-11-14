@@ -221,6 +221,8 @@ const argumentsOf = (name: string, input: unknown): Record<string, unknown> => {
       (typeof value !== "number" || !Number.isSafeInteger(value) || value < 1)
     )
       throw new CliError("validation_error", `${key} must be a positive integer`)
+    else if (key === "limit" && (value as number) > 1000)
+      throw new CliError("validation_error", "limit is at most 1000 events per page")
     else if (
       [
         "query",
@@ -243,7 +245,10 @@ const argumentsOf = (name: string, input: unknown): Record<string, unknown> => {
       throw new CliError("validation_error", `${key} must be text`)
     else if (["notify", "series", "following"].includes(key) && typeof value !== "boolean")
       throw new CliError("validation_error", `${key} must be true or false`)
-    else if (key === "attendees" && (!Array.isArray(value) || value.some((one) => typeof one !== "string")))
+    else if (
+      key === "attendees" &&
+      (!Array.isArray(value) || value.some((one) => typeof one !== "string" || !one.trim()))
+    )
       throw new CliError("validation_error", "attendees must be a list of email addresses")
     else if (key === "response" && !(EVENT_RESPONSES as readonly unknown[]).includes(value))
       throw new CliError("validation_error", `response is one of ${EVENT_RESPONSES.join(", ")}`)
