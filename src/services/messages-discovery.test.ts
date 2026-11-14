@@ -92,6 +92,11 @@ describe("archive discovery", () => {
     await store.searchIndex.fillStems({})
     expect(ids(await searchStore(store, account, request("which Alfa-bank?")))).toContain("6")
   })
+  it("joins no date or field value written with hyphens, so every word of the question still counts", async () => {
+    const store = await open()
+    const found = await searchStore(store, account, request("What time does Helix export run? date:2026-10-08"))
+    expect(found.items.find((m) => m.id === "2")?.discovery?.coverage).toBe(1)
+  })
   it("reads a question mark as punctuation when the planner leaves the question as written", async () => {
     const store = await open()
     for (const text of ["Why do Helix logs expire?", "Почему Helix logs expire?"]) {
