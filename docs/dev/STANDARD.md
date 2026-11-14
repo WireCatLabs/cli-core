@@ -1463,8 +1463,8 @@ The three tools, their arguments and what each permission shows are on the handb
   profile's levels: `levelFor` never returns a level above it, so it holds over a profile's own `allow`, over MCP
   and over `--permission`. A command that only fetches from the service into the store (`fetchesOnly`, such as
   `sync`, and `--sync-first`, `metadata sync`, `store gaps repair`) still runs under any `readonly` level, the
-  profile's own or a group key's as well as this one; only `deny` stops it. A sign-in, an authority change, a local
-  edit, a call to another service and a command that writes the owner's files (a download, a folder to write into,
+  profile's own or a group key's as well as this one; only `deny` stops it. An authority change, a local edit, a call
+  to another service and a command that writes the owner's files (a download, a folder to write into,
   `writesOwnerFiles`) stay writes that `readonly` stops. A config file cannot name `*`; only the question at a terminal writes it, and
   an unreadable `setup` section limits nothing. A slip in the shared file with one reading (a byte-order mark, a
   comment, a trailing comma, a missing comma between two lines) is mended in place when it is read, the old file kept

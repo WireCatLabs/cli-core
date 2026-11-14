@@ -9,7 +9,6 @@ import {
   changesAuthorityAt,
   changesStore,
   FETCH,
-  fetchesOnlyAt,
   grantsAuthority,
   LOCAL_READ,
   LOCAL_WRITE,
@@ -17,6 +16,7 @@ import {
   REMOTE_READ,
   REMOTE_WRITE,
   reachesOtherService,
+  readsOverMcpAt,
   writesOwnerFiles,
 } from "../cli/effects.js"
 import { rememberAccount } from "../cli/messenger/accounts.js"
@@ -381,7 +381,7 @@ describe("toolsFromCommands", () => {
       send: true,
       forget: true,
     }
-    expect(writes(fetchesOnlyAt(root))).toEqual({ sync: false, ...others })
+    expect(writes(readsOverMcpAt(root))).toEqual({ sync: false, ...others })
     expect(writes()).toEqual({ sync: true, ...others })
   })
 

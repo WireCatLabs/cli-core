@@ -6,8 +6,9 @@
   `messages`, or setup's "read only" answer. This holds on the command line, in `--dry-run` previews, in help and
   over MCP. `--sync-first` and a server search run at `readonly` too. `deny` still refuses them. A profile that
   relied on `readonly` to stop syncing now syncs; set the key to `deny` to stop it.
-- **A sign-in is not a fetch.** `fetchesOnly` is false for a command marked `logsInOrOut` (`session start`), so a
-  `readonly` level still refuses a sign-in, and an MCP server no longer runs one through its read tool.
+- **An MCP server no longer offers a sign-in through its read tool.** A command marked `logsInOrOut` that fetches
+  (`session start`) counts as a write over MCP. On the command line nothing changes.
+- **`models ai check` is marked as reaching another service**, so `readonly` stops its paid request.
 
 ### Added
 

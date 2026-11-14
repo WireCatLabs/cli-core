@@ -154,9 +154,10 @@ const savesFiles = (command: Command): boolean =>
 /**
  * Reads the provider and only keeps what it read in the owner's store — a sync, a list that refreshes it. An MCP server
  * offers it through the read tool (owner ruling, 2026-10-27; WC-CMD-17): it changes nothing at the provider or for
- * other people. A local edit (`changesStore`), an authority change, a sign-in (`logsInOrOut`), a call to another
- * service (`reachesOtherService`, a model download) and a command that saves files (a download, a folder to write
- * into) stay writes.
+ * other people. A local edit (`changesStore`), an authority change, a call to another service
+ * (`reachesOtherService`, a model download) and a command that saves files (a download, a folder to write into,
+ * `writesOwnerFiles`) stay writes. A sign-in (`logsInOrOut`) counts as a fetch, so a `readonly` level lets the owner
+ * sign in, but no MCP server runs one through its read tool.
  */
 export const fetchesOnly = (command: Command): boolean => {
   const effects = metaOf(command).effects
@@ -165,7 +166,6 @@ export const fetchesOnly = (command: Command): boolean => {
     effects.local === "write" &&
     !STORE_WRITES.has(command) &&
     !changesAuthority(command) &&
-    !LOGIN.has(command) &&
     !OTHER_SERVICE.has(command) &&
     !savesFiles(command)
   )
@@ -215,7 +215,8 @@ const writesFileNow = (command: Command): boolean => {
  * What an MCP server runs through `read`: a command that only fetches into the store (`fetchesOnly`), and one whose
  * only write is a file the tool cannot name (`writesFileOnlyWith`).
  */
-export const readsOverMcp = (command: Command): boolean => fetchesOnly(command) || FILE_OPTION.has(command)
+export const readsOverMcp = (command: Command): boolean =>
+  (fetchesOnly(command) && !LOGIN.has(command)) || FILE_OPTION.has(command)
 
 /** `readsOverMcp` by command path under `root`, as an MCP catalogue asks it; an unknown path is not one. */
 export const readsOverMcpAt =
