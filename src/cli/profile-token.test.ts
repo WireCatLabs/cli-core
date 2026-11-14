@@ -127,3 +127,106 @@ describe("a run with a throwaway HOME (WC-SECR-24)", () => {
     expect(saved["crm-cli/token:work"]).toBe("owner-token")
   })
 })
+
+describe("a second secret in the same entry", () => {
+  it("**keeps a named secret beside the token in the profile's one entry**, each read on its own", () => {
+    const keyring = memoryKeyring()
+    const store = storeOf(envHere(), keyring)
+    store.write("office", "db-password")
+    expect(store.writeSecret("office", "ssh", "ssh-password")).toBe("keyring")
+
+    expect([...keyring.entries.keys()]).toEqual(["crm-cli:token:office"])
+    expect(store.read("office")).toEqual({ secret: "db-password", source: "keyring" })
+    expect(store.readSecret("office", "ssh")).toEqual({ secret: "ssh-password", source: "keyring" })
+    expect(store.readSecret("office", "sftp")).toBeUndefined()
+  })
+
+  it("**changes the token without losing the named secrets**, and the other way round", () => {
+    const store = storeOf(envHere(), memoryKeyring())
+    store.writeSecret("office", "ssh", "ssh-1")
+    expect(store.read("office")).toBeUndefined()
+    store.write("office", "db-1")
+    store.writeSecret("office", "ssh", "ssh-2")
+    store.write("office", "db-2")
+
+    expect([store.need("office"), store.readSecret("office", "ssh")?.secret]).toEqual(["db-2", "ssh-2"])
+  })
+
+  it("**reads an entry written before as the token alone**, and stores the token alone as before", () => {
+    const keyring = memoryKeyring()
+    keyring.set("crm-cli", "token:work", "older-token")
+    const store = storeOf(envHere(), keyring)
+
+    expect(store.read("work")?.secret).toBe("older-token")
+    store.write("work", "plain-token")
+    expect(keyring.get("crm-cli", "token:work")).toBe("plain-token")
+  })
+
+  it("forgets one secret and keeps the rest; the last one gone removes the entry", () => {
+    const keyring = memoryKeyring()
+    const store = storeOf(envHere(), keyring)
+    store.write("office", "db-password")
+    store.writeSecret("office", "ssh", "ssh-password")
+
+    expect(store.removeSecret("office", "ssh")).toEqual(["keyring"])
+    expect(keyring.get("crm-cli", "token:office")).toBe("db-password")
+    store.remove("office")
+    store.writeSecret("office", "ssh", "ssh-password")
+    store.removeSecret("office", "ssh")
+    expect(keyring.entries.size).toBe(0)
+  })
+
+  it("takes a named secret from <PREFIX>_TOKEN_<NAME> first, for CI", () => {
+    const store = storeOf({ ...envHere(), CRM_TOKEN_SSH: "from-env", CRM_TOKEN: "token-env" }, memoryKeyring())
+    store.writeSecret("office", "ssh", "from-keyring")
+
+    expect(store.secretVariable("ssh")).toBe("CRM_TOKEN_SSH")
+    expect(store.readSecret("office", "ssh")).toEqual({ secret: "from-env", source: "environment" })
+    expect(store.read("office")).toEqual({ secret: "token-env", source: "environment" })
+  })
+
+  it("keeps a file entry in the file when a named secret is added", () => {
+    const keyring = memoryKeyring()
+    const store = storeOf(envHere(), keyring)
+    store.write("office", "db-password", "file")
+
+    expect(store.writeSecret("office", "ssh", "ssh-password")).toBe("file")
+    expect(keyring.entries.size).toBe(0)
+    expect(store.readSecret("office", "ssh")).toEqual({ secret: "ssh-password", source: "file" })
+  })
+
+  it("refuses a name that is not a-z, 0-9 and -, or is token", () => {
+    const store = storeOf(envHere(), memoryKeyring())
+    for (const name of ["token", "SSH", "a b", ""])
+      expect(() => store.writeSecret("office", name, "x")).toThrow("a secret's name")
+  })
+
+  describe("in a run with a throwaway HOME (WC-SECR-24)", () => {
+    afterEach(() => vi.restoreAllMocks())
+
+    it("**adds a named secret to a temporary entry and never touches the owner's**", () => {
+      const saved: Record<string, string> = { "crm-cli/token:office": "owner-db" }
+      vi.spyOn(systemKeyring, "set").mockImplementation((service, account, secret) => {
+        saved[`${service}/${account}`] = secret
+      })
+      vi.spyOn(systemKeyring, "delete").mockImplementation((service, account) => delete saved[`${service}/${account}`])
+      vi.spyOn(systemKeyring, "get").mockImplementation((service, account) => saved[`${service}/${account}`] ?? null)
+      const store = new ProfileTokenStore({
+        app,
+        env: { HOME: mkdtempSync(join(tmpdir(), "crm-home-")) },
+        warn: () => {},
+      })
+
+      store.writeSecret("office", "ssh", "throwaway-ssh")
+      expect([store.read("office")?.secret, store.readSecret("office", "ssh")?.secret]).toEqual([
+        "owner-db",
+        "throwaway-ssh",
+      ])
+      store.removeSecret("office", "ssh")
+      store.remove("office")
+
+      expect(saved["crm-cli/token:office"]).toBe("owner-db")
+      expect(Object.keys(saved)).toEqual(["crm-cli/token:office"])
+    })
+  })
+})

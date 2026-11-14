@@ -13,6 +13,8 @@ import {
 
 interface Fixture {
   valid: { ref: string; path: string; web: string; app: string; target: DeepLinkTarget }[]
+  /** Kinds a link is built for only from its target: no ref names them. */
+  target_only: { path: string; web: string; app: string; target: DeepLinkTarget }[]
   refused: { path: string; why: string }[]
   ignored_query: { path: string; target: DeepLinkTarget }[]
 }
@@ -29,6 +31,21 @@ describe("the v1 link grammar, as the shared fixture states it", () => {
     expect(linkFor(one.ref, { form: "web", env })).toBe(one.web)
     expect(linkFor(one.ref, { form: "app", env })).toBe(one.app)
     for (const text of [one.path, one.web, one.app]) expect(parseLink(text)).toEqual(one.target)
+  })
+
+  it.each(fixture.target_only.map((one) => [one.path, one] as const))(
+    "builds and reads %s from its target",
+    (_, one) => {
+      expect(formatLink(one.target)).toBe(one.path)
+      expect(linkFor(one.target, { form: "web", env })).toBe(one.web)
+      expect(linkFor(one.target, { form: "app", env })).toBe(one.app)
+      for (const text of [one.path, one.web, one.app]) expect(parseLink(text)).toEqual(one.target)
+    },
+  )
+
+  it("**never reads a store's meeting reference as a meeting link**: it names store rows, not the provider's ids", () => {
+    for (const ref of ["meeting:3/12", "meeting:3/12/4", "meeting:asterisk/office/1731571200.42"])
+      expect(linkTargetOf(ref)).toBeNull()
   })
 
   it.each(fixture.refused.map((one) => [one.why, one.path] as const))("refuses %s", (_, path) => {
