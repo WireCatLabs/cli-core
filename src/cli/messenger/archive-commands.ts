@@ -12,7 +12,7 @@ import { CHAT_KINDS } from "../../services/chats.js"
 import { kindsOf } from "../../services/inbox.js"
 import { dateWindow } from "../../services/moment.js"
 import type { LeftChat } from "../../store/chats.js"
-import { destroysNothing, LOCAL_READ, LOCAL_WRITE } from "../effects.js"
+import { destroysNothing, LOCAL_READ, LOCAL_WRITE, ownerOnlyOption } from "../effects.js"
 import { itemOf, listOf, renderAnswer, snakeKeys } from "../envelope.js"
 import { commandAt, lineOf } from "../steps.js"
 import { jobsCommand } from "./backfill-command.js"
@@ -145,7 +145,12 @@ const clearCommand = (messenger: Messenger): Command =>
   annotate(new Command("clear"), { output: { entity: "store_clear" }, effects: LOCAL_WRITE })
     .description("delete from the store the chats this account has left, with their messages")
     .option("--left", "the chats this account has left — the only thing this clears")
-    .option("--allow-dangerous", "yes, delete — it cannot be undone, and a chat you left cannot be fetched again")
+    .addOption(
+      ownerOnlyOption(
+        "--allow-dangerous",
+        "yes, delete — it cannot be undone, and a chat you left cannot be fetched again",
+      ),
+    )
     .option("--dry-run", "list the chats it would delete, and delete nothing")
     .action(async function (this: Command) {
       const { left, allowDangerous, dryRun } = this.opts<{

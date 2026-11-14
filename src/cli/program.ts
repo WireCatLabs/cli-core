@@ -76,6 +76,7 @@ import {
   type Settings,
   settingsFor,
 } from "./settings.js"
+import { shareShadowedOptions } from "./shadowed-options.js"
 import { assertSharedContracts } from "./shared-contracts.js"
 import { skillSourceOf } from "./skill-command.js"
 import { refreshSkills, skipsSkillRefresh } from "./skill-refresh.js"
@@ -458,7 +459,7 @@ const runOnce = async (argv: string[], definition: ProgramDefinition, options: R
     })
     if (flags.input === false || (headless && !options.answer)) environment.answer = () => null
     const localPreview = action.options.some((option) => option.long === "--dry-run")
-    if (flags.dryRun && localPreview) action.setOptionValue("dryRun", true)
+    shareShadowedOptions(action)
     refuseOfflineCommand(action, definition.app, flags.offline === true, flags.dryRun === true && localPreview)
     const path = commandPathOf(action)
     await enterCommandServer(action, command)

@@ -415,20 +415,22 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
     ),
     "store apply",
     "store apply --yes",
-  ).action(async (_opts: unknown, command: Command) => {
-    const yes = command.optsWithGlobals<{ yes?: boolean }>().yes === true
-    await within(command, async (run) => {
-      const scope = crmSettingKey(run.account, "scope")
-      if (yes && (await run.store.crm.scope(run.account)).mode !== "mine")
-        throw new CliError(
-          "validation_error",
-          `scope is all, so a sync would copy these contacts again: set ${scope} to mine first`,
-          { setting: scope },
-        )
-      const removed = await run.store.crm.removeContacts(run.account, { before: now(), dryRun: !yes })
-      return itemOf(snakeKeys({ ...removed, applied: yes }))
+  )
+    .option("--yes", "remove the contacts it counts; otherwise only count them")
+    .action(async (opts: { yes?: boolean }, command: Command) => {
+      const yes = opts.yes === true
+      await within(command, async (run) => {
+        const scope = crmSettingKey(run.account, "scope")
+        if (yes && (await run.store.crm.scope(run.account)).mode !== "mine")
+          throw new CliError(
+            "validation_error",
+            `scope is all, so a sync would copy these contacts again: set ${scope} to mine first`,
+            { setting: scope },
+          )
+        const removed = await run.store.crm.removeContacts(run.account, { before: now(), dryRun: !yes })
+        return itemOf(snakeKeys({ ...removed, applied: yes }))
+      })
     })
-  })
 
   addStoreMaintenanceCommands(store, { app: options.app }, "work")
 

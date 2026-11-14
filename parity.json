@@ -5152,7 +5152,8 @@
     "tasks scan": {
       "in": "all",
       "options": {
-        "--last": "all"
+        "--last": "all",
+        "--yes": "all"
       }
     },
     "tasks show": {

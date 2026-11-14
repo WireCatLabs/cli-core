@@ -1266,7 +1266,7 @@ its meaning, and this table is regenerated from it. **Bold** marks a clash still
 | `--with-notes` |  | include your private notes, subject to contacts.notes.list permission |  | `contacts show` |
 | `--within` | `<duration>` | the observation window after a known join; each report names what it measures |  | `stats chats newcomers`, `stats chats retention`, `tasks agenda` |
 | `--words` | `<words>` | match any of these whole words, comma-separated; empty clears |  | `replies edit` |
-| `--yes` |  | go ahead without the question an ask level puts before a write |  | every command, `account sessions end` (planned), `mcp config` (planned), `mcp serve` (planned) |
+| `--yes` |  | go ahead without the question an ask level puts before a write |  | every command, `account sessions end` (planned), `mcp config` (planned), `mcp serve` (planned), `tasks scan` |
 
 <!-- end of the option catalogue -->
 

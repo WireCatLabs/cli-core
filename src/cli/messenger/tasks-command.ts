@@ -696,9 +696,10 @@ export const tasksCommand = (messenger: Messenger): Command => {
       `read the newest n stored messages of each chat (default ${ARRIVAL_WINDOW}, at most 1000)`,
       positiveCount("--last"),
     )
+    .option("--yes", "open and close the tasks it lists; otherwise only list them")
     .action(async function (this: Command, chats: string[]) {
       const context = messengerContext(this, messenger)
-      const { last, yes = false } = this.optsWithGlobals<{ last?: number; yes?: boolean }>()
+      const { last, yes = false } = this.opts<{ last?: number; yes?: boolean }>()
       if (yes) refuseLocalWrite(context, messenger.app.command, "tasks.scan")
       const passes = await context.withStore(
         async (store, account) => {
