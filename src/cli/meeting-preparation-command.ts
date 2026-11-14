@@ -38,18 +38,24 @@ export const addMeetingPreparationCommand = (
       .option("--context-query <words>", "literal words to find within the selected communications")
       .option(
         "--context-since-time <time>",
-        "communications window start as zoned ISO timestamp (default fourteen days before end)",
+        "communications window start, an ISO date or time or 7d ago (default fourteen days before end)",
       )
       .option(
         "--context-before-time <time>",
-        "exclusive communications end as zoned ISO timestamp (default preparation start)",
+        "exclusive communications end, an ISO date or time (default preparation start)",
       )
   return annotate(
     prepare
       .option("--project <project>", "include unconfirmed word evidence for one existing project name, key or alias")
-      .option("--since-time <time>", "window start as ISO timestamp with zone (default now)")
-      .option("--before-time <time>", "exclusive window end as ISO timestamp (default seven days after start)")
-      .option("--history-since-time <time>", "history start as ISO timestamp (default thirty days before start)")
+      .option("--since-time <time>", "window start, an ISO date or time, local without a zone (default now)")
+      .option(
+        "--before-time <time>",
+        "exclusive window end, an ISO date or time; a date alone covers that day (default seven days after start)",
+      )
+      .option(
+        "--history-since-time <time>",
+        "history start, an ISO date or time or 30d ago (default thirty days before start)",
+      )
       .option("--meetings <n>", "prior occurrences and separate related-meeting limit, 1–20 (default 5)", integer)
       .option("--cues <n>", "cues per occurrence, 1–100 (default 10)", integer)
       .option("--context-limit <n>", "entries per context category, 1–100 (default 20)", integer)

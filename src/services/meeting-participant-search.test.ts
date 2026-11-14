@@ -151,7 +151,7 @@ it("exposes equivalent bounded CLI and MCP reads while retaining older adapter c
   await f.add("Alice Example")
   await f.add("Alice Example")
   const output = vi.fn()
-  const program = new Command("example")
+  const program = new Command("example").option("--json")
   addMeetingCommands(program, {
     store: f.store.meetings,
     accountId: f.accountId,

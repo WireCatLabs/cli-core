@@ -9,6 +9,7 @@ import { changesStore, ownerOnlyOption, writesFileOnlyWith } from "../../cli/eff
 import { type Body, renderAnswer } from "../../cli/envelope.js"
 import { queryTerms, withQuery } from "../../cli/list-query.js"
 import { terminalAsker } from "../../cli/messenger/ask.js"
+import { pagingOf } from "../../cli/paging.js"
 import { lineOf } from "../../cli/steps.js"
 import type { EventStore } from "../../meetings/index.js"
 import type { AppIdentity } from "../../ports/app.js"
@@ -467,14 +468,15 @@ const addCalendarCommandsDefinition = (program: Command, options: CalendarComman
     "events list ends_at>=today person:ana@example.com",
     "events list overlapping:true --source all",
   )
-    .option("--limit <n>", "events per page, 1–1000", integer, 100)
-    .option("--page <n>", "which page, starting at 1", integer, 1)
+    .option("--limit <n>", "events per page, 1–1000; the profile's defaults.limit when absent", upTo(1000))
+    .option("--page <n>", "which page, starting at 1", integer)
     .option(
       "--source <accounts>",
       "calendar accounts held in the store to read as one list: all, a provider, or a list such as " +
         `${options.app.command}:work,${options.app.command}:personal or group:<name>; the profile's account when absent`,
     )
-    .action(async (words: string[], opts: { limit: number; page: number; source?: string }, command: Command) => {
+    .action(async (words: string[], opts: { source?: string }, command: Command) => {
+      const { limit, page } = pagingOf(command)
       await within(command, async (run) => {
         const own: ReadAccount = { id: run.accountId, key: run.account }
         const { accounts, skipped } =
@@ -497,10 +499,7 @@ const addCalendarCommandsDefinition = (program: Command, options: CalendarComman
         })
         return listBody(
           command,
-          eachMarked(
-            await eventsAnswer(run.store, filter && { ...filter, limit: opts.limit }, opts.page),
-            EVENT_ITEM_UNTRUSTED,
-          ),
+          eachMarked(await eventsAnswer(run.store, filter && { ...filter, limit }, page), EVENT_ITEM_UNTRUSTED),
           { ...(await accountsMeta(run.store, accounts, skipped, now())), ...clockMeta(now(), zone()) },
         )
       })
@@ -609,13 +608,8 @@ const addCalendarCommandsDefinition = (program: Command, options: CalendarComman
       ? ["search events --backend server quarterly review", "search events --backend both quarterly review"]
       : []),
   )
-    .option("--limit <n>", "events per page", integer, 20)
-    .option(
-      "--cursor <cursor>",
-      "go on from where the last page stopped; page.next gives it",
-      (text) => (text === "0" ? 0 : integer(text)),
-      0,
-    )
+    .option("--limit <n>", "events per page; the profile's defaults.limit when absent", integer)
+    .option("--cursor <cursor>", "go on from the previous page's page.next_cursor, with the same query", integer)
     .option("--exact", "every word as written, no word stems")
     .option("--newest", "latest start first instead of best first")
   if (options.serverSearch)
@@ -632,9 +626,10 @@ const addCalendarCommandsDefinition = (program: Command, options: CalendarComman
   search.action(
     async (
       words: string[],
-      opts: { limit: number; cursor: number; exact?: boolean; newest?: boolean; backend?: string },
+      opts: { cursor?: number; exact?: boolean; newest?: boolean; backend?: string },
       command: Command,
     ) => {
+      const { limit } = pagingOf(command)
       const flag = `search events --backend ${opts.backend}`
       const server = opts.backend === "server" || opts.backend === "both"
       if (server) {
@@ -646,7 +641,7 @@ const addCalendarCommandsDefinition = (program: Command, options: CalendarComman
           throw new CliError("validation_error", `${flag} takes no --exact: the provider matches words its own way`, {
             reason: "search.server-options",
           })
-        if (opts.cursor || opts.newest)
+        if (opts.cursor !== undefined || opts.newest)
           throw new CliError(
             "validation_error",
             `${flag} takes neither --cursor nor --newest: the provider ranks and pages its own hits`,
@@ -657,8 +652,8 @@ const addCalendarCommandsDefinition = (program: Command, options: CalendarComman
         const archived = () =>
           searchEvents(messagesOf(run, "search"), words.join(" "), {
             accounts: [run.account],
-            limit: opts.limit,
-            offset: opts.cursor,
+            limit,
+            offset: opts.cursor ?? 0,
             timezone: zone(),
             command: options.app.command,
             ...(opts.exact ? { exact: true } : {}),
@@ -678,11 +673,11 @@ const addCalendarCommandsDefinition = (program: Command, options: CalendarComman
           accountId: run.accountId,
           account: run.account,
           query: words.join(" "),
-          limit: opts.limit,
+          limit,
         })
         if (opts.backend === "server") return hitsBody(command, { ...served, untrusted: SERVER_SEARCH_UNTRUSTED })
         return hitsBody(command, {
-          ...(await bothSearchAnswer(run.store, run.accountId, await archived(), served, opts.limit)),
+          ...(await bothSearchAnswer(run.store, run.accountId, await archived(), served, limit)),
           untrusted: SEARCH_UNTRUSTED,
         })
       })

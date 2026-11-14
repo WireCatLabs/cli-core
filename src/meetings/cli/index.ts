@@ -1,7 +1,8 @@
 import { annotate, annotateOption, sharedCommand } from "@wirecat/cli-base/commands"
-import { defineQuery, fieldsHelp, parseLucene, timezoneOf, validateQuery, zonedMoment } from "@wirecat/cli-base/query"
+import { defineQuery, fieldsHelp, parseLucene, timezoneOf, validateQuery } from "@wirecat/cli-base/query"
 import type { Effects } from "@wirecat/cli-base/standards"
 import { type Command, InvalidArgumentError, Option } from "commander"
+import { dateWindow } from "../../services/moment.js"
 import { EVENT_QUERY } from "../event-query.js"
 import { exportMeeting, type MeetingExportFormat } from "../export.js"
 import { type ImportFile, importFiles } from "../import.js"
@@ -55,6 +56,11 @@ export interface MeetingCommandDeps {
    * keeps the one-shot deadline.
    */
   budgetOf?: (command: Command) => MeetingBudget
+  /**
+   * `meetings list`'s page from its flags and the profile's `defaults.limit`: `pagingOf` from `@wirecat/cli-core/cli`.
+   * Without it a configured limit never reaches the list, which then shows 100 a page.
+   */
+  pagingOf?: (command: Command) => { limit: number; page: number }
   now?: () => number
   /** The owner's zone, in which `meetings list` reads a query's dates on both sides; the computer's without it. */
   timezone?: string
@@ -78,13 +84,6 @@ const lookbackDays = (text: string) => {
   if (!/^(0|[1-9]\d*)$/.test(text) || Number(text) > 31)
     throw new InvalidArgumentError("expected an integer from 0 through 31 days")
   return Number(text)
-}
-const date = (text: string) => {
-  try {
-    return zonedMoment(text, timezoneOf(), { start: 0, end: text.length })
-  } catch {
-    throw new InvalidArgumentError("expected an ISO date, or a time with or without an offset")
-  }
 }
 const LOCAL_READ: Effects = { remote: "none", local: "read" }
 /** Reads the service; what it returns is kept as `sync` keeps it, which counts as a read (WC-CMD-17). */
@@ -111,14 +110,8 @@ const addMeetingCommandsDefinition = (program: Command, deps: MeetingCommandDeps
   const group = annotate(program.command("meetings").description("stored meetings and their records"), {
     effects: { remote: "none", local: "none" },
   })
-  const output = (command: Command) =>
-    command
-      .option("--json", "one JSON value")
-      .option("--jsonl", "one JSON object per item")
-      .hook("preAction", (cmd) => {
-        const opts = cmd.optsWithGlobals()
-        if (opts.json && opts.jsonl) throw new MeetingError("validation_error", "choose --json or --jsonl")
-      })
+  // The host's root gives `--json [fields]` and `--jsonl`; a leaf of its own would shadow them.
+  const output = (command: Command) => command
   const print = (value: unknown, command: Command) => {
     const opts = command.optsWithGlobals()
     deps.write(value, opts.json ? "json" : opts.jsonl ? "jsonl" : "text")
@@ -141,10 +134,11 @@ const addMeetingCommandsDefinition = (program: Command, deps: MeetingCommandDeps
     output: { entity: "meeting" },
   })
   backendOption(output(list))
-    .option("--limit <n>", "meetings per page", integer, 100)
-    .option("--page <n>", "page number", integer, 1)
-    .action(async (words: string[], opts: { limit: number; page: number; backend?: Backend }, command: Command) => {
+    .option("--limit <n>", "meetings per page; the profile's defaults.limit when absent", integer)
+    .option("--page <n>", "which page, starting at 1", integer)
+    .action(async (words: string[], opts: { limit?: number; page?: number; backend?: Backend }, command: Command) => {
       const query = meetingsQuery(words.join(" "))
+      const { limit, page } = deps.pagingOf?.(command) ?? { limit: opts.limit ?? 100, page: opts.page ?? 1 }
       await deps.inRun(command, async () => {
         // The standard envelope has no place for the counts; what the reader must know is in `missing` and `meta`.
         const { server: _server, ...answer } = await meetingsListThrough(
@@ -152,8 +146,8 @@ const addMeetingCommandsDefinition = (program: Command, deps: MeetingCommandDeps
           deps.store,
           {
             accountId: deps.accountId,
-            limit: opts.limit,
-            offset: (opts.page - 1) * opts.limit,
+            limit,
+            offset: (page - 1) * limit,
             ...(query ? { query } : {}),
           },
           access(command, opts.backend),
@@ -271,7 +265,12 @@ const addMeetingCommandsDefinition = (program: Command, deps: MeetingCommandDeps
         "deadline keeps what it saved and the next one goes on from there",
     ),
   )
-    .option("--since-time <time>", "fetch meetings starting at or after this ISO 8601 date or time", date)
+    .option(
+      "--since-time <time>",
+      "fetch meetings starting at or after this ISO 8601 date or time, or 30m, 2h, 7d ago",
+      (text: string) =>
+        dateWindow({ sinceTime: text, ...(deps.timezone ? { zone: deps.timezone } : {}), now: deps.now?.() }).since,
+    )
     .option("--lookback-days <days>", "revisit recent occurrences for late transcripts (0–31)", lookbackDays)
     .option("--rescan", "read the last 30 days again, not only what came after the last sync")
     .action(async (opts: { sinceTime?: number; lookbackDays?: number; rescan?: boolean }, command: Command) => {

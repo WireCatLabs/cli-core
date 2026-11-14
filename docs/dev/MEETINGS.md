@@ -186,7 +186,10 @@ series inheritance guarantees require coordination with the SQLite adapter.
 supply the selected account, store, source, file reader, output writer and clock. Show and transcript
 are scoped to that account. `meetings sync` runs `pull` and exposes `--lookback-days <days>`, an integer
 from zero through 31 (default zero), forwarding days as `lookbackMs`. It subtracts from the selected
-boundary, including an explicit `--since-time`; invalid bounds fail before provider discovery. A transcript's
+boundary, including an explicit `--since-time` (an ISO date or time, or `7d` ago, read by the shared `dateWindow`);
+invalid bounds fail before provider discovery. `meetings list` pages by `--limit` and `--page`, and without
+`--limit` by the profile's `defaults.limit` when the host passes `pagingOf` from `@wirecat/cli-core/cli` (100
+without it). `--json [fields]` and `--jsonl` are the host program's own. A transcript's
 `language` is set when it is written (`transcriptLanguage`, or the speech model's own); `meetings repair`
 previews it for stored transcripts that have none and `--yes` stores it, through the store's optional
 `fillTranscriptLanguages`. Groups have no default action. The host owns rendering and exit codes.

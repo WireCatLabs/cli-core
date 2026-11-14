@@ -72,3 +72,24 @@ it("CLI rejects invalid lookback bounds before requesting provider records", asy
   }
   expect(requests).toBe(0)
 })
+
+it("CLI reads --since-time 7d as seven days before now, as the other past-time flags do", async () => {
+  const boundaries: string[] = []
+  const now = Date.UTC(2026, 9, 20)
+  const program = new Command().exitOverride().configureOutput({ writeOut() {}, writeErr() {} })
+  addMeetingCommands(program, {
+    store: memoryMeetingStore(),
+    source: fakeMeetingSource({
+      async meetings(since) {
+        boundaries.push(since)
+        return []
+      },
+    }),
+    accountId: 1,
+    write() {},
+    inRun: (_command, body) => body(),
+    now: () => now,
+  })
+  await program.parseAsync(["meetings", "sync", "--since-time", "7d"], { from: "user" })
+  expect(boundaries[0]).toBe(new Date(now - 7 * 86400000).toISOString())
+})

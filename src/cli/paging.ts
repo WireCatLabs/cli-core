@@ -1,5 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import type { Command } from "commander"
+import { environmentOf, withAgentLevels } from "./context.js"
+import { DEFAULT_CONFIG } from "./default-config.js"
 import type { Settings } from "./settings.js"
 
 /**
@@ -32,3 +34,20 @@ export const withPaging = (command: Command): Command =>
  */
 export const window = ({ limit, page, all }: Settings): { limit?: number; offset: number } =>
   all ? { offset: 0 } : { limit, offset: (page - 1) * limit }
+
+/**
+ * `--limit` and `--page` of a command outside a messenger's context (`meetings list`, `events list`): the flag, else
+ * the profile's `defaults.limit`, as the shared listings resolve it. Outside `run()`, the shipped default.
+ */
+export const pagingOf = (command: Command): Pick<Settings, "limit" | "page"> => {
+  const environment = environmentOf(command)
+  const flags = command.optsWithGlobals<{ limit?: number; page?: number }>()
+  if (!environment.resolveSettings)
+    return { limit: flags.limit ?? DEFAULT_CONFIG.defaults.limit, page: flags.page ?? 1 }
+  const { limit, page } = environment.resolveSettings(withAgentLevels(command, command.optsWithGlobals()), {
+    env: environment.env ?? process.env,
+    needsProfile: false,
+    readOnly: true,
+  })
+  return { limit, page }
+}

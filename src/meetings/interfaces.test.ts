@@ -27,7 +27,9 @@ const setup = async (overrides: Partial<MeetingCommandDeps> = {}) => {
     ...overrides,
   }
   const run = async (args: string[]) => {
+    // The host's root gives --json and --jsonl.
     const program = new Command().exitOverride().configureOutput({ writeErr() {}, writeOut() {} })
+    program.option("--json").option("--jsonl")
     addMeetingCommands(program, deps)
     await program.parseAsync(args, { from: "user" })
   }
@@ -129,7 +131,6 @@ describe("meeting commands", () => {
       ["meetings", "list", "started_at>bad"],
       ["meetings", "list", "title"],
       ["meetings", "show", "999"],
-      ["meetings", "list", "--json", "--jsonl"],
     ])
       await expect(run(args)).rejects.toThrow()
     const unconfigured = await setup({ source: undefined, readFiles: undefined })

@@ -563,8 +563,8 @@
                 },
                 "patterns": [
                   {
-                    "group": ["../../**"],
-                    "message": "src/meetings/ depends on nothing else in cli-core: the rest of the package calls it, never the other way round"
+                    "group": ["../../**", "!../../services/moment.js"],
+                    "message": "src/meetings/ depends on nothing else in cli-core but the time grammar every past-time flag shares (src/services/moment.ts): the rest of the package calls it, never the other way round"
                   },
                   {
                     "group": ["better-sqlite3", "drizzle-orm", "drizzle-orm/*"],

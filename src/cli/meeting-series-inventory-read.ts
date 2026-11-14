@@ -1,12 +1,12 @@
 import { CliError } from "@wirecat/cli-base"
 import * as v from "valibot"
-import { meetingSeriesInventory, zonedTime } from "../entities/index.js"
+import { meetingSeriesInventory, typedTime } from "../entities/index.js"
 import {
   type MeetingSeriesInventoryRequest,
   type MeetingSeriesInventoryResult,
-  validateMeetingChange,
   validateMeetingSeriesInventoryCursor,
 } from "../meetings/index.js"
+import { momentOf } from "../services/moment.js"
 import { itemOf, metaNow, sealed, snakeKeys } from "./envelope.js"
 
 export type MeetingSeriesInventoryReader = (
@@ -15,8 +15,8 @@ export type MeetingSeriesInventoryReader = (
 const bounded = (min: number, max: number) =>
   v.optional(v.pipe(v.number(), v.integer(), v.minValue(min), v.maxValue(max)))
 export const meetingSeriesInventoryInput = v.strictObject({
-  after: v.optional(zonedTime),
-  until: v.optional(zonedTime),
+  after: v.optional(typedTime),
+  until: v.optional(typedTime),
   limit: bounded(1, 100),
   max_read_bytes: bounded(1, 1048576),
   bytes: bounded(2048, 1048576),
@@ -29,14 +29,8 @@ const storedInstant = (value: number | null) => {
     throw new CliError("invalid_response", "meeting inventory scheduled_start_at is invalid")
   return new Date(value).toISOString()
 }
-const instant = (value: string | undefined, fallback: number, field: string) => {
-  if (value === undefined) return fallback
-  try {
-    return Date.parse(validateMeetingChange({ startTime: value }, false).startTime as string)
-  } catch {
-    throw new CliError("validation_error", `invalid meeting inventory ${field}`)
-  }
-}
+const instant = (value: string | undefined, fallback: number, field: string, now: number, end = false) =>
+  value === undefined ? fallback : momentOf(value, `meeting inventory ${field}`, now, { end })
 export const boundMeetingSeriesInventoryItem = (item: { limits: { bytes: number } }) => {
   if (Buffer.byteLength(JSON.stringify(item), "utf8") > item.limits.bytes)
     throw new CliError(
@@ -65,8 +59,8 @@ export const readMeetingSeriesInventory = async (
   }
   const args = parsed.output
   if (args.cursor !== undefined) validateMeetingSeriesInventoryCursor(args.cursor)
-  const after = instant(args.after, now, "after"),
-    until = instant(args.until, after + 7 * 86400000, "until")
+  const after = instant(args.after, now, "after", now),
+    until = instant(args.until, after + 7 * 86400000, "until", now, true)
   if (!Number.isSafeInteger(after) || !Number.isSafeInteger(until) || after >= until || until - after > 366 * 86400000)
     throw new CliError(
       "validation_error",

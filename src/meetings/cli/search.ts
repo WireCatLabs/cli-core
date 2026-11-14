@@ -1,33 +1,21 @@
 import { CliError } from "@wirecat/cli-base"
 import { annotate, sharedCommand } from "@wirecat/cli-base/commands"
-import { timezoneOf, zonedMoment } from "@wirecat/cli-base/query"
 import type { Meta } from "@wirecat/cli-base/standards"
 import { Command } from "commander"
+import { dateWindow } from "../../services/moment.js"
 import { meetingHitsList } from "../answers.js"
 import type { MeetingSearchPage } from "../search-store.js"
 import { type MeetingHitSearchOptions, validateMeetingHitSearch } from "../search-validation.js"
 
 export { type MeetingHitSearch, type MeetingHitSearchOptions, validateMeetingHitSearch } from "../search-validation.js"
 
-const ZONED = /(?:Z|[+-]\d{2}:?\d{2})$/i
-// `30m`, `2h`, `7d` ago, as the messenger commands' --since-time reads them and this command's `date>=7d` does.
-const AGO = /^(\d+)(m|h|d)$/
-const AGO_MS: Record<string, number> = { m: 60_000, h: 3_600_000, d: 86_400_000 }
+/** One bound of the shared past-time grammar; `readIn` hears the zone a value without its own was read in. */
 const moment = (flag: string, end: boolean, readIn: (zone: string) => void) => (value: string) => {
-  const [, amount, unit] = AGO.exec(value.trim()) ?? []
-  if (amount && unit) return Date.now() - Number(amount) * (AGO_MS[unit] ?? 0)
-  const zone = timezoneOf()
-  let time: number
-  try {
-    time = zonedMoment(value, zone, { start: 0, end: value.length }, { end })
-  } catch {
-    throw new CliError(
-      "validation_error",
-      `${flag} takes an ISO date, a time with or without an offset, or 30m, 2h, 7d ago`,
-    )
-  }
-  if (!ZONED.test(value.trim())) readIn(zone)
-  return time
+  const { since, until, meta } = dateWindow(
+    end ? { untilTime: value, names: [flag, flag] } : { sinceTime: value, names: [flag, flag] },
+  )
+  if (meta.timezone) readIn(meta.timezone)
+  return (end ? until : since) as number
 }
 const integer = (value: string): number => {
   if (!/^[1-9]\d*$/.test(value) || !Number.isSafeInteger(Number(value)))

@@ -126,7 +126,7 @@ const fixture = async (source?: MeetingSource, extra: Partial<MeetingCommandDeps
   const answers: unknown[] = []
   const run = async (...args: string[]) => {
     const program = new Command().exitOverride().configureOutput({ writeOut() {}, writeErr() {} })
-    program.option("--offline").option("--dry-run")
+    program.option("--offline").option("--dry-run").option("--json")
     addMeetingCommands(program, {
       store: store.meetings,
       ...(source ? { source } : {}),
