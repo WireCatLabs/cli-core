@@ -114,7 +114,9 @@ const CORPORA: Corpus[] = [
     type: "document",
     noun: "note",
     fields: NOTE_FIELDS,
-    view: `(SELECT n.id, n.account_id AS folder_id, n.external_id AS path, n.title, coalesce(n.body, '') AS text, n.metadata, ${contextDocumentTime} AS at, n.deleted_at FROM documents n)`,
+    get view() {
+      return `(SELECT n.id, n.account_id AS folder_id, n.external_id AS path, n.title, coalesce(n.body, '') AS text, n.metadata, ${contextDocumentTime()} AS at, n.deleted_at FROM documents n)`
+    },
     words: "document_words",
     stems: "document_stems",
     live: "coalesce(json_extract(n.metadata, '$.catalog.active'), 1)=1",

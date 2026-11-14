@@ -31,9 +31,14 @@ domain, SQL/transport/vendor imports in services, and private document imports f
    A saved `exclude` query that matches such a page drops the page itself, document and catalog
    entry alike, while its sub-pages stay in scope; they then have no parent in the catalog and are
    listed at the top. Match the sub-pages too to drop the whole branch.
-2. Bind `documentIngestion` to the public store. Supply the provider/account collection name,
-   external-ID mapping, catalog metadata and content front matter. The optional `observed` callback
-   registers provider identities/roles. Identity mapping remains the provider's responsibility.
+2. Bind `documentIngestion` to the public store. Supply the provider, external-ID mapping, catalog
+   metadata and content front matter. The optional `observed` callback registers provider
+   identities/roles. Identity mapping remains the provider's responsibility. A provider is a
+   documents provider when its registry entry (`openAppStore`'s `provider`) has kind `documents`
+   and is not `imported`: each principal then gets a documents account, `{ provider, account }`.
+   Its content front matter names it in `source` (`{ source: "notion" }`): that keeps a copy of
+   the file in a notes folder from joining the document by content, and places the document by
+   its catalog parents rather than by path.
    The external id of a source file is `<id>.md` (``externalId: (id) => `${id}.md` ``), in the catalog
    entry, its parents and the saved note alike: the catalog commands strip `.md` to show the source's id.
    The store sets no ceiling on an account's entries; one catalog write takes at most 200 and one

@@ -57,11 +57,17 @@ const corpora = {
     index: "document_words",
     title: "n.title",
     body: "n.body",
-    url: contextDocumentUrl,
-    at: contextDocumentTime,
+    get url() {
+      return contextDocumentUrl()
+    },
+    get at() {
+      return contextDocumentTime()
+    },
     revision: "n.revision",
     chat: "NULL",
-    timeKind: contextDocumentTimeKind,
+    get timeKind() {
+      return contextDocumentTimeKind()
+    },
     join: "",
     where:
       "n.body IS NOT NULL AND CASE WHEN json_valid(n.metadata) THEN coalesce(json_extract(n.metadata, '$.catalog.active'),1) ELSE 1 END=1",

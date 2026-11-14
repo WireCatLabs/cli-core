@@ -3,7 +3,7 @@ import { MAX_TEXT_CHARS } from "../../attachments/limits.js"
 import { googleDocumentLinks } from "../../domain/google-documents.js"
 import {
   ADDED_PROVIDER,
-  DOCUMENT_ACCOUNT_PROVIDERS,
+  documentAccountProviders,
   filesAccountSql,
   folderProviderOf,
   folderProviderSql,
@@ -495,14 +495,16 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
     database
       .prepare(`SELECT 1 FROM accounts WHERE id = ? AND provider IN ('local', 'obsidian')`)
       .get(Number(accountId)) !== undefined
-  /** Drive's documents are found by its folder and `<id>.md`, whichever account that folder is now. */
-  const remoteDocument = (row: Row) => {
-    const front = frontMatterObject(row.front_matter)
-    return front?.source === "google-drive" || frontMatterObject(row.metadata)?.catalog !== undefined
-  }
-  /** Drive's own saves keep their documents by folder and `<id>.md`; only files on disk join by content. */
+  /**
+   * A documents provider's documents (their front matter's `source` names it) are found by their account and
+   * `<id>.md`, whichever account holds them now.
+   */
+  const remoteDocument = (row: Row) =>
+    isDocumentAccountProvider(frontMatterObject(row.front_matter)?.source) ||
+    frontMatterObject(row.metadata)?.catalog !== undefined
+  /** A documents provider's own saves keep their documents by account and `<id>.md`; only files on disk join by content. */
   const localSave = (folder: number, frontMatter: unknown) =>
-    isLocal(folder) && (frontMatter as { source?: unknown } | null | undefined)?.source !== "google-drive"
+    isLocal(folder) && !isDocumentAccountProvider((frontMatter as { source?: unknown } | null | undefined)?.source)
   /**
    * The documents whose shown file has this content: live ones, else gone ones no file holds any more, so a file
    * moved to another folder is the same document whichever folder syncs first. Empty text matches nothing.
@@ -592,13 +594,15 @@ export const notesStoreOver = (context: StoreContext): Omit<NotesStore, keyof No
         .run(provider, textOf(account, "an account's id", 200), JSON.stringify({ format: "markdown" }), at, at)
       return folderOf(find() as Row)
     },
-    documentsAccounts: async () =>
-      database
+    documentsAccounts: async () => {
+      const providers = documentAccountProviders()
+      return database
         .prepare(
-          `SELECT * FROM accounts WHERE provider IN (${DOCUMENT_ACCOUNT_PROVIDERS.map(() => "?").join(", ")}) ORDER BY provider, external_id`,
+          `SELECT * FROM accounts WHERE provider IN (${providers.map(() => "?").join(", ") || "NULL"}) ORDER BY provider, external_id`,
         )
-        .all(...DOCUMENT_ACCOUNT_PROVIDERS)
-        .map(folderOf),
+        .all(...providers)
+        .map(folderOf)
+    },
     saveFileNote: async (input) =>
       write(database, () => {
         const folder = Number(folderRow(input.folderId, true).id)
