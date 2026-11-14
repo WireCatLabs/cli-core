@@ -8,7 +8,7 @@ production adapter; the providers below are invented fixtures, not available Mee
 
 | Capability | Shared orchestration | Host implementation |
 |---|---|---|
-| `MeetingManagementPorts` | `createMeetingManagement` validates portable changes and controls explicit writes | account-bound API list/get/invitation/create/update/cancel methods |
+| `MeetingManagementPorts` | `createMeetingManagement` validates the fields and settings each port declares and controls explicit writes | account-bound API list/get/invitation/create/update/cancel methods |
 | `RecordingCatalog` | `syncRecordingArchive` bounds date windows, pagination and progress | provider recording discovery and opaque cursor handling |
 | `RecordingTransferSource` | `transferRecording` validates byte limits, response ranges and strong validators | trusted HTTP endpoint, authentication, redirects and response streams |
 | `RecordingTransferStorage` | transfer acknowledgement and resume coordination | safe partial files, prefix hashing, atomic publication and retained partial metadata |
@@ -109,12 +109,16 @@ the read asks the list query by `provider_id`. Every `meeting` item lists `untru
 "location"]`, the service's text, and `meetings invitation` lists `untrusted: ["invitation"]`.
 
 **Writes.** Pass `management: createMeetingManagement(scope, ports)` to `addMeetingCommands` and the group mounts
-`meetings create|update|cancel|invitation` for the ports given. Each write's permission key is its path
+`meetings create|update|cancel|invitation` for the ports given: a service that cannot delete a meeting (Meet) gives
+no `cancel` and gets no `meetings cancel`. They mount only inside the group, which needs the store; a meetings tool
+has one. Each write's permission key is its path
 (`meetings.create`, `meetings.update`, `meetings.cancel`), `ask` by default. `deny` and `readonly` stop it before it
 runs (`refuseByCommandPermissions`). The `ask` step is the host's `askFirst`, `askBeforeWrite` from
 `@wirecat/cli-core/cli`: it asks at a terminal, `--yes` answers, an agent goes ahead, and with nobody to answer it
-refuses with `confirmation_required`. A host that passes `management` without `askFirst` gets a refusal for every
-write. `--dry-run` answers `applied: false` without asking or reaching the service.
+refuses with `confirmation_required`. It comes after the change is validated, so a change the service cannot take is
+refused without the question. A host that passes `management` without `askFirst` gets a refusal for every write.
+`--dry-run` answers `applied: false` without asking or reaching the service. What `create` and `update` take is the
+ports' declaration ([Remote management](#remote-management)).
 
 ## A meeting's Drive documents
 
@@ -231,14 +235,66 @@ snapshot, passed to every port through `context.scope`; caller options cannot re
 adapter's token manager to that account when constructing its ports. An account label alone does not
 authenticate a user. IDs remain opaque; numeric ID rules belong to providers that require them.
 
-Portable changes use `title`, `kind` (`instant` or `scheduled`), `startTime`, `durationMinutes`,
-`timezone` and `agenda`. Creation defaults to scheduled and requires a start timestamp; instant
-creation does not. Timestamps require an explicit offset or Z and normalize to UTC; invalid calendar
-dates are refused. Duration accepts integer minutes from 1 through 1440. Timezone accepts an IANA
-zone. Adapters map these fields into their own API bodies and handle provider limits.
+### What create and update take
+
+`meetings create` and `meetings update` have one shape in every meetings tool: `--title`, `--kind`, `--start-time`,
+`--duration-minutes`, `--timezone`, `--agenda` and `--setting <name>=<value>` (repeat it for more), all optional. No
+tool overrides them. The ports say which of these their service reads, in `ports.fields`:
+
+| | Type | Says |
+|---|---|---|
+| `fields.create`, `fields.update` | `MeetingCreateFields`, `MeetingFields` | what one write port reads; absent, every portable field and no setting |
+| `.fields` | `MeetingField[]` | the portable fields: `title`, `kind`, `startTime`, `durationMinutes`, `timezone`, `agenda` |
+| `.settings` | `MeetingSetting[]` | the service's own settings: a snake_case `name`, a `description`, and `type` `choice` (with `values`), `boolean` or `text` |
+| `.instant` | `boolean`, create only | the service can create a meeting that starts at once; true when absent |
+
+The command takes only what is declared. Anything else, a portable field or a setting, is refused with
+`validation_error` that names what the service takes: `this service does not take title on update; it takes setting
+access_type, setting moderation`. A `choice` setting takes one of its values, a `boolean` takes `true` or `false`.
+`--setting`'s description and the command's help list the settings with their values, so `commands --json` shows
+them. `createMeetingManagement` checks the declaration when it is made: a setting name that is not snake_case (it is
+a key of the receipt's `change.settings`), a setting declared twice, one with no description or a `choice` with no
+values is a `configuration_error`. `management.fields` gives the declaration with its defaults filled in.
+
+Every meeting has a time. A create with no start is an instant meeting that starts now, the clock of
+`createMeetingManagement(scope, ports, { now })`, when the service has instant meetings; without them it is refused.
+A create with a start and no kind is scheduled, and a scheduled create needs a start. The validated create always
+carries `kind` and `startTime`, so a calendar can place it. The answer keeps `id`, `join_url` and the rest of
+`meeting`; an update returns none.
+
+Zoom takes the portable fields and no setting, so it declares nothing. Google Meet's space has no title or time, and
+its changes are settings:
+
+```ts
+const MEET_SETTINGS: MeetingSetting[] = [
+  { name: "access_type", type: "choice", values: ["open", "trusted", "restricted"], description: "who joins without asking" },
+  { name: "moderation", type: "boolean", description: "only hosts share, chat and mute others" },
+  { name: "auto_recording", type: "boolean", description: "record every call in the space" },
+]
+const meet = createMeetingManagement(scope, {
+  create: async (change, context) => created(await spaces.create(meetConfig(change.settings), context)),
+  update: async (id, change, context) => { await spaces.patch(id, meetConfig(change.settings), context) },
+  fields: { create: { fields: [], settings: MEET_SETTINGS }, update: { fields: [], settings: MEET_SETTINGS } },
+})
+```
+
+```sh
+zm work meetings create --title "Example planning" --start-time 2026-11-20T10:00:00+01:00 --duration-minutes 30
+gcal work meetings create --setting access_type=trusted
+gcal work meetings update spaces/abc --setting access_type=restricted --setting moderation=true
+```
+
+The first Meet create has no title and no start: it starts now, and its receipt has `change: { kind: "instant",
+start_time: "<now>", settings: { access_type: "trusted" } }`. Meet has no `cancel`: `endActiveConference` ends a
+call, not the space. `gcal work meetings update spaces/abc --title X` is refused.
+
+Timestamps require an explicit offset or Z and normalize to UTC; invalid calendar dates are refused. Duration accepts
+integer minutes from 1 through 1440. Timezone accepts an IANA zone. Adapters map these fields and settings into their
+own API bodies and handle provider limits.
 
 Mutations return `applied: false` by default and call no port. Literal `apply: true` dispatches once;
-`dryRun: true` overrides it. Cancellation before dispatch prevents a write. After dispatch, the
+`dryRun: true` overrides it. `confirm`, when given, runs after validation and before the dispatch, only when the
+write will go. Cancellation before dispatch prevents a write. After dispatch, the
 adapter must distinguish confirmed success from `outcome_unknown`; the SDK preserves its error and
 never retries. Common errors extend cli-base `CliError` and keep its codes. HTTP status translation
 and provider-specific error details remain in the host adapter.

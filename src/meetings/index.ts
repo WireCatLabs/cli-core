@@ -165,9 +165,16 @@ export {
 } from "./meeting-context.js"
 export {
   createMeetingManagement,
+  type DeclaredMeetingFields,
+  declareMeetingFields,
   dispatchMeetingMutation,
   type ManagedMeeting,
   type ManagedMeetingChange,
+  MEETING_FIELDS,
+  type MeetingChangeRules,
+  type MeetingCreateFields,
+  type MeetingField,
+  type MeetingFields,
   type MeetingManagement,
   type MeetingManagementPorts,
   type MeetingMutationOptions,
@@ -175,6 +182,7 @@ export {
   type MeetingMutationReceipt,
   type MeetingOperationOptions,
   type MeetingProviderContext,
+  type MeetingSetting,
   validateMeetingChange,
 } from "./meeting-management.js"
 export type {

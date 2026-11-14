@@ -2,6 +2,7 @@ import { CliError } from "@wirecat/cli-base"
 import { describe, expect, it } from "vitest"
 import {
   createMeetingManagement,
+  declareMeetingFields,
   dispatchMeetingMutation,
   type ManagedMeeting,
   type ManagedMeetingChange,
@@ -87,7 +88,7 @@ it("snapshots provider, account, capabilities and change before asynchronous wor
     create: async (input, context) => {
       await gate
       expect(context.scope).toEqual({ provider: "example-provider", account: "Alice Example" })
-      expect(input).toEqual({ title: "Alice Example", kind: "instant" })
+      expect(input).toEqual({ title: "Alice Example", kind: "instant", startTime: expect.any(String) })
       return meeting("opaque-example")
     },
   }
@@ -173,17 +174,21 @@ it("validates calendar timestamps, portable description, duration and timezone w
     agenda: "",
   })
   expect(validateMeetingChange({ kind: "scheduled" }, false)).toEqual({ kind: "scheduled" })
-  expect(validateMeetingChange({ title: "Example", kind: "instant" }, true)).toEqual({
+  const now = Date.parse("2026-11-14T12:00:00Z")
+  expect(validateMeetingChange({ title: "Example", kind: "instant" }, true, { now })).toEqual({
     title: "Example",
     kind: "instant",
+    startTime: "2026-11-14T12:00:00.000Z",
   })
+  expect(validateMeetingChange({}, true, { now })).toEqual({ kind: "instant", startTime: "2026-11-14T12:00:00.000Z" })
   for (const value of [
     null,
     [],
-    { settings: {} },
+    { settings: { access_type: "open" } },
+    { settings: [] },
     { title: " " },
     { kind: "recurring" },
-    { title: "Example" },
+    { kind: "scheduled" },
     { title: "Example", startTime: "bad" },
     { title: "Example", startTime: "2026-02-30T12:00:00Z" },
     { title: "Example", startTime: "2026-02-30T12:00:00+23:59" },
@@ -209,6 +214,53 @@ it("validates calendar timestamps, portable description, duration and timezone w
     {},
   ])
     expect(() => validateMeetingChange(value as ManagedMeetingChange, false)).toThrow()
+})
+
+it("takes only what a port declares, and starts an instant meeting now", () => {
+  const declared = declareMeetingFields({
+    fields: [],
+    settings: [
+      { name: "access_type", description: "who joins without asking", type: "choice", values: ["open", "trusted"] },
+      { name: "moderation", description: "only hosts manage the call", type: "boolean" },
+    ],
+  })
+  const now = Date.parse("2026-11-14T12:00:00Z")
+  expect(
+    validateMeetingChange({ settings: { access_type: "trusted", moderation: "true" } }, true, { declared, now }),
+  ).toEqual({
+    kind: "instant",
+    startTime: "2026-11-14T12:00:00.000Z",
+    settings: { access_type: "trusted", moderation: true },
+  })
+  expect(() => validateMeetingChange({ title: "Example" }, false, { declared })).toThrow(
+    "this service does not take title on update; it takes setting access_type, setting moderation",
+  )
+  expect(() => validateMeetingChange({ settings: { recording: "on" } }, false, { declared })).toThrow(
+    "does not take setting recording",
+  )
+  expect(() => validateMeetingChange({ settings: { access_type: "closed" } }, false, { declared })).toThrow(
+    "access_type must be one of open, trusted",
+  )
+  expect(() => validateMeetingChange({ settings: { moderation: "yes" } }, false, { declared })).toThrow(
+    "moderation must be true or false",
+  )
+  const scheduledOnly = declareMeetingFields({ fields: ["title", "startTime"], instant: false })
+  expect(() => validateMeetingChange({ title: "Example" }, true, { declared: scheduledOnly })).toThrow(
+    "this service has no instant meetings",
+  )
+  for (const wrong of [
+    { fields: ["topic" as never] },
+    { settings: [{ name: "accessType", description: "x", type: "text" as const }] },
+    { settings: [{ name: "access", description: "", type: "text" as const }] },
+    { settings: [{ name: "access", description: "x", type: "choice" as const, values: [] }] },
+    {
+      settings: [
+        { name: "access", description: "x", type: "text" as const },
+        { name: "access", description: "y", type: "boolean" as const },
+      ],
+    },
+  ])
+    expect(() => declareMeetingFields(wrong)).toThrow(expect.objectContaining({ code: "configuration_error" }))
 })
 
 it("rejects invalid scope and ids before provider work without normalizing identity", async () => {

@@ -3,10 +3,12 @@ import { annotate } from "@wirecat/cli-base/commands"
 import type { Effects } from "@wirecat/cli-base/standards"
 import { type Command, InvalidArgumentError, Option } from "commander"
 import type {
+  DeclaredMeetingFields,
   ManagedMeeting,
   ManagedMeetingChange,
   MeetingManagement,
   MeetingMutationReceipt,
+  MeetingSetting,
 } from "../meeting-management.js"
 
 const REMOTE_READ: Effects = { remote: "read", local: "read" }
@@ -19,6 +21,7 @@ interface ChangeFlags {
   durationMinutes?: number
   timezone?: string
   agenda?: string
+  setting?: [string, string][]
 }
 
 const minutes = (text: string) => {
@@ -26,21 +29,65 @@ const minutes = (text: string) => {
   return Number(text)
 }
 
-const changeOptions = (command: Command) =>
-  command
+const setting = (text: string, previous: [string, string][] = []): [string, string][] => {
+  const at = text.indexOf("=")
+  if (at < 1) throw new InvalidArgumentError("expected name=value, such as access_type=trusted")
+  return [...previous, [text.slice(0, at), text.slice(at + 1)]]
+}
+
+const valuesOf = (one: MeetingSetting) =>
+  one.type === "choice" ? one.values.join("|") : one.type === "boolean" ? "true|false" : "<text>"
+
+const FIELD_FLAGS = {
+  title: "--title",
+  kind: "--kind",
+  startTime: "--start-time",
+  durationMinutes: "--duration-minutes",
+  timezone: "--timezone",
+  agenda: "--agenda",
+} as const
+
+/** The same options in every meetings tool; what this service takes is in `--setting`'s description and the help. */
+const changeOptions = (command: Command, declared: DeclaredMeetingFields, create: boolean) => {
+  const settings = declared.settings.length
+    ? declared.settings.map((one) => `${one.name}=${valuesOf(one)}`).join(", ")
+    : "this service has none"
+  const takes = declared.fields.map((field) => FIELD_FLAGS[field]).join(", ") || "none of the options above"
+  const start = create && declared.instant ? "; left out, the meeting starts now" : ""
+  return command
     .option("--title <title>", "the meeting's title")
     .addOption(new Option("--kind <kind>", "an instant or a scheduled meeting").choices(["instant", "scheduled"]))
-    .option("--start-time <time>", "when it starts: an ISO time with its offset, 2026-11-20T10:00:00+01:00")
+    .option("--start-time <time>", `when it starts: an ISO time with its offset, 2026-11-20T10:00:00+01:00${start}`)
     .option("--duration-minutes <minutes>", "how long it lasts, 1–1440", minutes)
     .option("--timezone <zone>", "its IANA time zone, Europe/Madrid")
     .option("--agenda <text>", "its agenda")
+    .option("--setting <name=value>", `a setting of this service; repeat it for more: ${settings}`, setting)
+    .addHelpText(
+      "after",
+      [
+        "",
+        `This service takes ${takes}.`,
+        ...(declared.settings.length
+          ? ["Its settings:", ...declared.settings.map((one) => `  ${one.name}=${valuesOf(one)}  ${one.description}`)]
+          : []),
+      ].join("\n"),
+    )
+}
 
-const changeOf = (flags: ChangeFlags): ManagedMeetingChange =>
-  Object.fromEntries(
+const changeOf = (flags: ChangeFlags): ManagedMeetingChange => {
+  const change: ManagedMeetingChange = Object.fromEntries(
     (["title", "kind", "startTime", "durationMinutes", "timezone", "agenda"] as const).flatMap((key) =>
       flags[key] === undefined ? [] : [[key, flags[key]]],
     ),
   )
+  if (!flags.setting) return change
+  const settings: Record<string, string> = {}
+  for (const [name, value] of flags.setting) {
+    if (Object.hasOwn(settings, name)) throw new CliError("validation_error", `--setting ${name} is given twice`)
+    settings[name] = value
+  }
+  return { ...change, settings }
+}
 
 const meetingOf = (one: ManagedMeeting) => ({
   id: one.id,
@@ -70,6 +117,7 @@ const receiptItem = (receipt: MeetingMutationReceipt) => {
             ...(change.durationMinutes === undefined ? {} : { duration_minutes: change.durationMinutes }),
             ...(change.timezone === undefined ? {} : { timezone: change.timezone }),
             ...(change.agenda === undefined ? {} : { agenda: change.agenda }),
+            ...(change.settings === undefined ? {} : { settings: { ...change.settings } }),
           },
         }
       : {}),
@@ -95,32 +143,39 @@ export interface MeetingManagementCommandDeps {
 export const addMeetingManagementCommands = (group: Command, deps: MeetingManagementCommandDeps): void => {
   const { management, print, output, inRun, askFirst } = deps
   const has = (name: string) => management.capabilities.includes(name)
-  // A write the owner could not be asked about never goes: a host that forgets the question gets a refusal.
-  const mutation = async (command: Command) => {
-    const dryRun = command.optsWithGlobals().dryRun === true
-    if (!dryRun) {
+  // The question comes after validation, so a change the service cannot take is refused without asking. A write the
+  // owner could not be asked about never goes: a host that forgets the question gets a refusal.
+  const mutation = (command: Command) => ({
+    apply: true,
+    dryRun: command.optsWithGlobals().dryRun === true,
+    confirm: async () => {
       if (!askFirst)
         throw new CliError("configuration_error", "this tool cannot ask before it changes a meeting on the service")
       await askFirst(command)
-    }
-    return { apply: true, dryRun }
-  }
+    },
+  })
   const write = (name: string) =>
     annotate(group.command(name), { effects: REMOTE_WRITE, offline: false, output: { entity: "meeting_change" } })
   const target = (command: Command) => command.argument("<meeting>", "the service's id of the meeting")
   if (has("create"))
-    output(changeOptions(write("create").description("create a meeting on the service"))).action(
-      async (flags: ChangeFlags, command: Command) =>
-        inRun(command, async () =>
-          print({ item: receiptItem(await management.create(changeOf(flags), await mutation(command))) }, command),
-        ),
+    output(
+      changeOptions(write("create").description("create a meeting on the service"), management.fields.create, true),
+    ).action(async (flags: ChangeFlags, command: Command) =>
+      inRun(command, async () =>
+        print({ item: receiptItem(await management.create(changeOf(flags), mutation(command))) }, command),
+      ),
     )
   if (has("update"))
-    output(changeOptions(target(write("update").description("change a meeting on the service")))).action(
-      async (id: string, flags: ChangeFlags, command: Command) =>
-        inRun(command, async () =>
-          print({ item: receiptItem(await management.update(id, changeOf(flags), await mutation(command))) }, command),
-        ),
+    output(
+      changeOptions(
+        target(write("update").description("change a meeting on the service")),
+        management.fields.update,
+        false,
+      ),
+    ).action(async (id: string, flags: ChangeFlags, command: Command) =>
+      inRun(command, async () =>
+        print({ item: receiptItem(await management.update(id, changeOf(flags), mutation(command))) }, command),
+      ),
     )
   if (has("cancel"))
     output(
@@ -134,7 +189,7 @@ export const addMeetingManagementCommands = (group: Command, deps: MeetingManage
           {
             item: receiptItem(
               await management.cancel(id, {
-                ...(await mutation(command)),
+                ...mutation(command),
                 ...(flags.occurrenceId === undefined ? {} : { occurrenceId: flags.occurrenceId }),
               }),
             ),

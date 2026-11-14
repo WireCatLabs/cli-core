@@ -45,7 +45,8 @@ export const PROVIDERS: readonly ProviderEntry[] = [
   { name: "obsidian", kind: "notes", aliases: [] },
   { name: "added", kind: "notes", aliases: [] },
   { name: "zoom", kind: "meetings", aliases: [] },
-  { name: "google-meet", kind: "meetings", aliases: [], command: "gmeet" },
+  // Google Meet has no tool of its own: its meetings are gcal's, since every meeting is on the calendar.
+  { name: "google-meet", kind: "meetings", aliases: [], command: "gcal" },
   { name: "google-drive", kind: "documents", aliases: [] },
   // Its meetings come from the notes Telemost mails (`keeper@telemost.yandex.ru`), read by a mail rule.
   { name: "telemost", kind: "meetings", aliases: [] },
