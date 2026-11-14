@@ -48,12 +48,7 @@ export const scoreSenders = async (
     throw error
   })
   if (stored === null) return undefined
-  const items = (await store.mail.emailFacts({ accountId: stored.id })).map((email) => {
-    const item = listedOf(email)
-    return email.outgoing && !item.labels?.includes("Sent")
-      ? { ...item, labels: [...(item.labels ?? []), "Sent"] }
-      : item
-  })
+  const items = (await store.mail.emailFacts({ accountId: stored.id })).map(listedOf)
   // Each registry learns only its own domains' names; big mailbox providers and senders the owner wrote to are never asked.
   const latest = new Map<string, string>()
   for (const item of items) {
