@@ -144,6 +144,7 @@ const managedChange = v.strictObject({
       duration_minutes: v.optional(count),
       timezone: v.optional(text),
       agenda: v.optional(text),
+      settings: v.optional(v.record(text, v.union([text, flag]))),
     }),
   ),
   applied: flag,

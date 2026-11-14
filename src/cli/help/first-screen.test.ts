@@ -58,7 +58,7 @@ describe("the first screen", () => {
         wa                      WhatsApp in the same local store: search, review and tasks offline
         zm                      Zoom meetings: transcripts and summaries, searchable with your other WireCat data
         drive                   Google Drive and Docs as local text, searchable with your other WireCat data
-        gcal                    Google Calendar events, searchable with your other WireCat data
+        gcal                    Google Calendar events and Google Meet meetings, searchable with your other WireCat data
         memo context <person>   one person across messengers, mail, notes and meetings
         mail                    IMAP mail in the same local store: search your mailbox offline, next to your other WireCat data
         b24                     Bitrix24 CRM: deals, leads and pipelines, searchable with your other WireCat data
