@@ -425,6 +425,11 @@ describe("search mail over the mail tables", () => {
     expect((await found(store, "_exists_:cc")).length).toBe(0)
     expect(await found(store, "subject:* AND roadmap")).toEqual(["<one@example.com>"])
     await expect(chat("author:carol")).rejects.toThrow("author: is a notes field — search notes reads it; who wrote")
+    for (const query of ["site:x", "lang:ru", "keyword:x", "source:file"]) {
+      const refused = `${query.split(":")[0]}: is a notes field — search notes reads it`
+      await expect(chat(query)).rejects.toThrow(refused)
+      await expect(found(store, query)).rejects.toThrow(refused)
+    }
     await expect(chat("text:*")).rejects.toThrow("write has:text")
     await expect(chat("kind:*")).rejects.toThrow("kind:* asks whether kind has a value")
   })
