@@ -184,7 +184,8 @@ export const showDocument = async (
     text: found.text,
     text_offset: Math.min(text.offset, found.textLength),
     text_length: found.textLength,
-    has_more: found.text !== null && text.offset + found.text.length < found.textLength,
+    // SQLite's substr and length count code points; a JavaScript string's length counts UTF-16 units.
+    has_more: found.text !== null && text.offset + [...found.text].length < found.textLength,
     extraction: found.extraction,
     extraction_error: found.extractionError,
     language: found.language,
