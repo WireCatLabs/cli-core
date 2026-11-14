@@ -9,6 +9,7 @@ import { agenda as agendaEntity } from "../entities/agenda.js"
 import { openStore } from "../store/store.js"
 import { AGENDA_QUERY, agendaItem, agendaService } from "./agenda.js"
 import { storeOnlyDeps } from "./deps.js"
+import { aheadOf } from "./moment.js"
 import { TASK_QUERY, type TaskCard, tasksService } from "./tasks.js"
 
 const app = { command: "chat", appName: "chat-cli", envPrefix: "CHAT", description: "", version: "1.0.0" }
@@ -155,6 +156,19 @@ it("lists a task when it is due, overdue, due a check or never planned, and not 
     ])
     expect(shown.tasks[0]?.title).toBe("Send the doc")
     expect(shown.owed[0]?.openTasks.sort()).toEqual([overdue.task.id, unplanned.task.id].sort())
+  } finally {
+    await store.close()
+  }
+})
+
+it("keeps a task due on today's date due, not overdue, for the whole of today", async () => {
+  const { store, tasks, agenda } = await seeded()
+  try {
+    const today = new Intl.DateTimeFormat("en-CA").format(now)
+    const dueAt = new Date(aheadOf(today, "--due", now, { end: true }))
+    const due = await tasks.add("msg:chat/500/1/10", "promise", "owner", { dueAt })
+    const shown = await agenda.show({ query: kinds("") })
+    expect(shown.tasks.find(({ id }) => id === due.task.id)?.reasons).toEqual(["due"])
   } finally {
     await store.close()
   }

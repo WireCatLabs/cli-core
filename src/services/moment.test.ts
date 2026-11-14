@@ -50,16 +50,61 @@ describe("momentOf", () => {
     )
   })
 
+  it("reads the space form, a time without seconds and today or yesterday in the zone", () => {
+    const now = Date.parse("2026-11-14T10:00:00Z")
+    const madrid = { zone: "Europe/Madrid" }
+    expect(momentOf("2026-11-13 18:00", "--since-time", now, madrid)).toBe(Date.parse("2026-11-13T17:00:00Z"))
+    expect(momentOf("2026-11-13 18:00:30+01:00", "--since-time", now, madrid)).toBe(Date.parse("2026-11-13T17:00:30Z"))
+    expect(momentOf("today", "--since-time", now, madrid)).toBe(Date.parse("2026-11-13T23:00:00Z"))
+    expect(momentOf("Yesterday", "--until-time", now, { ...madrid, end: true })).toBe(
+      Date.parse("2026-11-13T23:00:00Z") - 1,
+    )
+  })
+
+  it("names the grammar when the value has none of its shapes", () => {
+    expect(() => momentOf("12345", "--since-time")).toThrow(/--since-time takes an ISO 8601 time, today, yesterday/)
+  })
+
   it("still counts back from now", () => {
     expect(momentOf("2h", "--since-time", 10_000_000)).toBe(10_000_000 - 7_200_000)
   })
 })
 
 describe("aheadOf", () => {
+  const now = Date.parse("2026-11-14T10:00:00Z")
+
   it("reads a due time without a zone in the given zone", () => {
     expect(aheadOf("2026-10-22T09:00", "--due-time", 0, { zone: "Asia/Vladivostok" })).toBe(
       Date.parse("2026-10-21T23:00:00Z"),
     )
+  })
+
+  it("reads the space form and counts forward", () => {
+    expect(aheadOf("2026-11-20 09:00", "--at-time", now, { zone: "Europe/Madrid" })).toBe(
+      Date.parse("2026-11-20T08:00:00Z"),
+    )
+    expect(aheadOf("2h", "--due", now)).toBe(now + 7_200_000)
+  })
+
+  it("ends a date alone, or today, at the end of the local day when asked", () => {
+    expect(aheadOf("2026-11-20", "--due", now, { zone: "Europe/Madrid", end: true })).toBe(
+      Date.parse("2026-11-20T23:00:00Z") - 1,
+    )
+    expect(aheadOf("today", "--due", now, { zone: "Europe/Madrid", end: true })).toBe(
+      Date.parse("2026-11-14T23:00:00Z") - 1,
+    )
+  })
+
+  it("keeps a past time unless the use refuses it", () => {
+    expect(aheadOf("2020-01-01T09:00Z", "--due", now)).toBe(Date.parse("2020-01-01T09:00:00Z"))
+    expect(() => aheadOf("2020-01-01T09:00Z", "--at-time", now, { soonest: 0 })).toThrow("--at-time is in the past")
+  })
+
+  it("refuses a date alone where it names no time to act at", () => {
+    expect(() => aheadOf("2026-11-20", "--at-time", now, { refuseDate: true })).toThrow(
+      "--at-time needs a time of day as well: 2026-11-20T09:00",
+    )
+    expect(() => aheadOf("today", "--at-time", now, { refuseDate: true })).toThrow(/needs a time of day/)
   })
 })
 

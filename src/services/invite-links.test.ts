@@ -50,7 +50,7 @@ describe("another invite link", () => {
     [{ maxUses: 0 }, "--max-uses takes a whole number from 1 to 99999"],
     [{ maxUses: 100_000 }, "--max-uses takes a whole number from 1 to 99999"],
     [{ approval: true, maxUses: 5 }, "a link that asks first takes no use limit"],
-    [{ expires: "soon" }, "--expire-time takes a time like"],
+    [{ expires: "soon" }, "--expire-time takes an ISO 8601 time"],
     [{ expires: "2020-01-01T00:00" }, "--expire-time has to be at least a minute from now"],
   ])("refuses %j before connecting", async (options, message) => {
     const f = fixture()
@@ -144,7 +144,7 @@ describe("changing an invite link", () => {
   it.each([
     [{}, "nothing to change"],
     [{ maxUses: 0 }, "--max-uses takes a whole number from 1 to 99999"],
-    [{ expires: "soon" }, "--expire-time takes a time like"],
+    [{ expires: "soon" }, "--expire-time takes an ISO 8601 time"],
   ])("refuses %j before connecting", async (change, message) => {
     const f = fixtureWith()
     await expect(f.service.updateLink("synthetic group", "https://t.me/+synthetic", change)).rejects.toThrow(message)
