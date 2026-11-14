@@ -316,6 +316,37 @@ Hit continuation bounds rows inside one meeting. Its coverage reports pending in
 archive completeness. It is a live view, not a snapshot across modifications between calls. Exact
 append receipts do not imply bounded legacy meeting-history hydration in a producer adapter.
 
+## Decoding a recording, and cloud speech
+
+`decodeChannels(bytes)` from `@wirecat/cli-core/speech` gives one `Pcm` per channel at 16 kHz. A stereo call keeps
+one speaker per channel whatever the format: Opus, Vorbis, FLAC and MP3 by the bundled decoders, and WAV, GSM, AAC
+and M4A by the machine's ffmpeg, which keeps a mono file one channel and mixes a file of more than two channels down
+to two. `mixed` is true only when a host's own `Ffmpeg` seam answers one `Pcm`. Every channel stops at an hour of
+audio. `decodeChannelsFile(path, { maxBytes })` hands a WAV or GSM file to ffmpeg by its path, so a recording of
+gigabytes is never read into memory; only its samples are held. `decodeAudio` mixes the channels into one, for a
+caller that wants one text.
+
+Speech goes to an outside service only when one profile asks for it. `cloudSpeech({ app, env, keyring, settings,
+notify })` answers `null` unless the profile's own settings (not the shared defaults) say `transcribeWith: "openai"`.
+Then it sends each channel to an OpenAI-compatible `/audio/transcriptions`: OpenAI's own, or the address the shared
+AI model is set to (`models ai set openai --base-url … --secret-stdin`), with the key kept for that address. The model
+is the profile's `transcribeModel`, `gpt-transcribe` when not set. A host declares the two profile settings in its own
+schema.
+
+```ts
+const speech = cloudSpeech({ app, env, keyring, settings, notify: renderer.warn })
+const recognize = speech
+  ? (pcm: Pcm) => speech.recognize(pcm)
+  : (pcm: Pcm) => recognizeLocalPieces(model, pcm, { env })
+const recognition = speech?.recognition ?? localSpeechRecognitionModel(model)
+```
+
+It refuses before any audio is read in a read-only process, with local only on, and without a key for the address
+(`transcription.no-key`, naming the command that sets it). `notify` gets one line before the first request, naming
+the host the audio goes to. Each stretch of speech the voice detector finds is one request of at most ten minutes,
+under the provider's 25 MB per file; `recognize(pcm, { bundle: true })` sends fewer, longer pieces when the turns do
+not matter. The voice detector comes with any local speech model (`models download`).
+
 ## Native file and WAV helpers
 
 Native connectors can import `openOrdinaryFile` and `syncDirectory` from
