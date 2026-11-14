@@ -5,7 +5,7 @@ Every table of the shared store (tg, max, memo, zm) as its migrations create it.
 `drizzle/` must agree with it. `pnpm schema:check` fails when they do not, and `src/store/sqlite/schema.test.ts`
 checks every table and column of a new store against this page.
 
-134 tables, 25 full-text indexes.
+135 tables, 25 full-text indexes.
 
 ## Conventions
 
@@ -1442,6 +1442,8 @@ One occurrence: it happened once, at one time.
 | `deleted_at` | integer |  |  | gone at the source; sync never hard-deletes |
 | `title_folded` | text |  |  | `fold(title)`, which `meetings list title:` compares |
 | `join_key` | text |  |  | the meeting's room without its passcode — `zoom:<number>`, `meet:<code>`, else host and path — which a calendar entry is matched by; filled on open when NULL |
+| `direction` | text |  |  | a phone call's: `in` or `out`; null for a meeting and a call whose source does not say |
+| `client_phone` | text |  |  | a phone call's: the other side's number, as the source wrote it |
 
 *Keys and indexes:* `UNIQUE (account_id, external_id)`, `INDEX (join_key) WHERE join_key IS NOT NULL`, `INDEX (id) WHERE join_url IS NOT NULL AND join_key IS NULL`, `INDEX (account_id, started_at DESC)`, `INDEX (account_id, title_folded)`, `INDEX (id) WHERE title IS NOT NULL AND title_folded IS NULL`, `INDEX (meeting_series_id)`, `INDEX (event_id)`, `INDEX (host_identity_id)`
 
@@ -1835,6 +1837,22 @@ What happened, as its evidence shows: a fact, a statement, a question, a decisio
 | `deleted_at` | integer |  |  | gone at the source; sync never hard-deletes |
 
 *Keys and indexes:* `INDEX (project_id)`, `INDEX (subject_type, subject_id)`, `INDEX (supersedes_id)`, `INDEX (author_type, author_id)`, `INDEX (confirmed_by_type, confirmed_by_id)`
+
+### `fact_removals`
+
+One row per fact removed: that it was removed, by whom, when and why. Never the fact's text or value: removing a fact forgets it, and this log keeps only the removal. Append-only.
+
+| Column | Type | Constraints | References | Meaning |
+|---|---|---|---|---|
+| `id` | integer | PK |  |  |
+| `fact_id` | integer | not null |  | the removed fact's id, which `fact:<id>` named; that row is gone |
+| `subject` | text |  |  | the reference of what the fact was about, as it was then; null for none |
+| `removed_by` | text | not null |  | `owner` or `agent` |
+| `bot` | text |  |  | the agent's handle, for an agent's removal |
+| `reason` | text |  |  | why, as the owner or the agent said it; null when nobody said |
+| `removed_at` | integer | not null |  |  |
+
+*Keys and indexes:* `INDEX (removed_at)`
 
 ## Money
 

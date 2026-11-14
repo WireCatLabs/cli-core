@@ -866,7 +866,7 @@
       "value": "<url>",
       "meaning": "the tunnel's https address: the browser apps reach mcp serve --http through it, a messenger delivers to bot watch"
     },
-    "--purpose": {
+    "--purposes": {
       "value": "<purposes>",
       "meaning": "the linked chats' purposes to read, comma-separated, or all; a chat left out is counted"
     },
@@ -3813,7 +3813,7 @@
         "--limit": "all",
         "--max-pages": "all",
         "--no-catch-up": "all",
-        "--purpose": "all",
+        "--purposes": "all",
         "--since-time": "all",
         "--sync-first": "all",
         "--sync-time": "all"
@@ -3827,7 +3827,7 @@
       "options": {
         "--before-time": "all",
         "--context-query": "all",
-        "--purpose": "all",
+        "--purposes": "all",
         "--since-time": "all"
       }
     },

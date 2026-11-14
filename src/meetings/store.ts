@@ -65,7 +65,8 @@ export interface MeetingDocument {
 export interface ChatInput extends Omit<NewRecord<ChatLine>, "meetingId" | "senderParticipantId"> {
   senderParticipantPosition: number | null
 }
-export interface MeetingInput extends Omit<NewRecord<Meeting>, "meetingSeriesId" | "eventId" | "participantsCount"> {
+export interface MeetingInput
+  extends Omit<NewRecord<Meeting>, "meetingSeriesId" | "eventId" | "participantsCount" | "manager"> {
   /** Left out when the participants could not be read, so the stored count stays. */
   participantsCount?: number | null
   series?: Omit<NewRecord<MeetingSeries>, "accountId" | "eventSeriesId">

@@ -1207,6 +1207,10 @@ const NEW = {
         c("join_key", "text", {
           note: "the meeting's room without its passcode — `zoom:<number>`, `meet:<code>`, else host and path — which a calendar entry is matched by; filled on open when NULL",
         }),
+        c("direction", "text", {
+          note: "a phone call's: `in` or `out`; null for a meeting and a call whose source does not say",
+        }),
+        c("client_phone", "text", { note: "a phone call's: the other side's number, as the source wrote it" }),
       ],
       keys: [
         "UNIQUE (account_id, external_id)",
@@ -1547,6 +1551,23 @@ const NEW = {
         ...ts(),
         del(),
       ],
+    },
+    {
+      name: "fact_removals",
+      doc: "One row per fact removed: that it was removed, by whom, when and why. Never the fact's text or value: removing a fact forgets it, and this log keeps only the removal. Append-only.",
+      cols: [
+        id(),
+        c("fact_id", "integer", {
+          notnull: true,
+          note: "the removed fact's id, which `fact:<id>` named; that row is gone",
+        }),
+        c("subject", "text", { note: "the reference of what the fact was about, as it was then; null for none" }),
+        c("removed_by", "text", { notnull: true, note: "`owner` or `agent`" }),
+        c("bot", "text", { note: "the agent's handle, for an agent's removal" }),
+        c("reason", "text", { note: "why, as the owner or the agent said it; null when nobody said" }),
+        c("removed_at", "integer", { notnull: true }),
+      ],
+      keys: ["INDEX (removed_at)"],
     },
   ],
 }

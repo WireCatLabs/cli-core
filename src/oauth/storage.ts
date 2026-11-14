@@ -76,7 +76,10 @@ const defined = <T extends Record<string, unknown>>(value: T): T =>
   Object.fromEntries(Object.entries(value).filter(([, field]) => field !== undefined)) as T
 
 export const oauthAccount = (providerId: string, profile: string): string => {
-  if (!profile.trim()) throw new CliError("validation_error", "name a profile: a sign-in always belongs to one")
+  if (!profile.trim())
+    throw new CliError("validation_error", "name a profile: a sign-in always belongs to one", {
+      reason: "profile.missing",
+    })
   return `oauth:${providerId}:${profile}`
 }
 

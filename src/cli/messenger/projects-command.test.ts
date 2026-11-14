@@ -239,24 +239,35 @@ describe("projects evidence purposes and proposed links", () => {
     })
   })
 
-  it("reads every linked chat with --purpose all, and the asked one with --purpose sales", async () => {
+  it("reads every linked chat with --purposes all, and the asked one with --purposes sales", async () => {
     const { call } = await withChats()
     const all = JSON.parse(
-      (await call("projects", "evidence", "Harbour", ...WINDOW, "--purpose", "all", "--json")).stdout,
+      (await call("projects", "evidence", "Harbour", ...WINDOW, "--purposes", "all", "--json")).stdout,
     )
     expect(all.item.purposes).toBe("all")
     expect(all.item.left_out).toEqual([])
     expect(all.item.linked_chats.map((one: { ref: string }) => one.ref)).toEqual(["chat:chat/500/7", "chat:chat/500/8"])
     const sales = JSON.parse(
-      (await call("projects", "evidence", "Harbour", ...WINDOW, "--purpose", "sales", "--json")).stdout,
+      (await call("projects", "evidence", "Harbour", ...WINDOW, "--purposes", "sales", "--json")).stdout,
     )
     expect(sales.item.linked_chats.map((one: { ref: string }) => one.ref)).toEqual(["chat:chat/500/8"])
     expect(sales.item.left_out.map((one: { purpose: string }) => one.purpose)).toEqual(["work"])
   })
 
+  it("still takes the old --purpose for one version, hidden from help", async () => {
+    const { call } = await withChats()
+    const old = JSON.parse(
+      (await call("projects", "evidence", "Harbour", ...WINDOW, "--purpose", "sales", "--json")).stdout,
+    )
+    expect(old.item.linked_chats.map((one: { ref: string }) => one.ref)).toEqual(["chat:chat/500/8"])
+    const help = (await call("projects", "status", "--help")).stdout
+    expect(help).toContain("--purposes <purposes>")
+    expect(help).not.toContain("--purpose <")
+  })
+
   it("refuses an unknown purpose and lists the configured ones", async () => {
     const { call } = await withChats()
-    const { code, stderr } = await call("projects", "evidence", "Harbour", ...WINDOW, "--purpose", "leads", "--json")
+    const { code, stderr } = await call("projects", "evidence", "Harbour", ...WINDOW, "--purposes", "leads", "--json")
     expect(code).not.toBe(0)
     expect(JSON.parse(stderr).error.message).toBe(
       "unknown purpose leads; the configured ones are work, sales, support, other, or all",

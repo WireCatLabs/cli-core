@@ -335,6 +335,7 @@ export type {
   PaymentDetail as FinancePaymentDetail,
   PaymentInput as FinancePaymentInput,
 } from "./sqlite/finance.js"
+export type { IdentityRekey, IdentityRekeyOutcome, IdentityRekeys } from "./sqlite/identity-rekey.js"
 export { IMPORTED_DOCUMENT_QUERY, type ImportedDocuments } from "./sqlite/imported-documents.js"
 export type { Involvement, InvolvementStore } from "./sqlite/involvements.js"
 export type {

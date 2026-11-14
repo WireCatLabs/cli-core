@@ -73,7 +73,7 @@ const parent = (database: CacheDatabase, input: MeetingReadScope, budget: number
   return {
     bytes,
     meeting: load
-      ? meetingOf(database.prepare("SELECT * FROM meetings WHERE id = ?").get(input.meetingId) ?? missing())
+      ? meetingOf(database, database.prepare("SELECT * FROM meetings WHERE id = ?").get(input.meetingId) ?? missing())
       : undefined,
   }
 }

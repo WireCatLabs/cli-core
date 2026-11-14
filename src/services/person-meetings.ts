@@ -1,4 +1,4 @@
-import { formatMeetingReference } from "../meetings/index.js"
+import { formatMeetingReference, type MeetingCallItem, meetingCallItem } from "../meetings/index.js"
 import type { MessageStore, StoredAccount } from "../store/store.js"
 
 const SCAN = 1000
@@ -19,6 +19,8 @@ export interface PersonMeeting {
   event: string | null
   /** `person:<uid>` of each one asked about who took part. */
   people: string[]
+  /** A phone call's direction, manager and other side's number; absent on a meeting. */
+  call?: MeetingCallItem
 }
 
 /**
@@ -64,6 +66,7 @@ export const personMeetings = async (
     if (meeting === undefined || meeting.deletedAt !== null) continue
     const transcripts = await store.meetings.transcripts({ accountId, meetingId, limit: 1 })
     const account = byId.get(accountId) as StoredAccount
+    const call = meetingCallItem(meeting)
     items.push({
       ref: formatMeetingReference({ type: "meeting", accountId, meetingId }),
       meetingId,
@@ -74,6 +77,7 @@ export const personMeetings = async (
       hasTranscript: transcripts.items.length > 0,
       event: meeting.eventId === null ? null : `event:${meeting.eventId}`,
       people: who,
+      ...(call ? { call } : {}),
     })
   }
   return { items, total: newest.length, hasMore: cut || newest.length > limit }

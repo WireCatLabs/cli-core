@@ -48,6 +48,17 @@ export interface MeetingSeries extends RecordTimes {
   deletedAt: number | null
 }
 
+/** Which way a phone call went: the owner's side took it (`in`) or made it (`out`). */
+export const CALL_DIRECTIONS = ["in", "out"] as const
+export type CallDirection = (typeof CALL_DIRECTIONS)[number]
+
+/** Who took or made a phone call for the owner: the participant its source marked with the role `manager`. */
+export interface CallManager {
+  name: string | null
+  /** `person:<uid>` of the person that participant's identity is linked to. */
+  person: string | null
+}
+
 export interface Meeting extends RecordTimes {
   id: number
   accountId: number
@@ -66,6 +77,12 @@ export interface Meeting extends RecordTimes {
   participantsCount: number | null
   metadata: Metadata
   deletedAt: number | null
+  /** A phone call's direction, as a phone-line source sets it; absent or null for a meeting. */
+  direction?: CallDirection | null
+  /** A phone call's other side, as the source wrote the number. */
+  clientPhone?: string | null
+  /** Read only: on a call, the participant with the role `manager`. */
+  manager?: CallManager | null
 }
 
 export interface Participant extends RecordTimes {
@@ -190,6 +207,11 @@ export interface Occurrence {
 }
 
 export interface SourceMeeting {
+  /**
+   * A phone call's fields, which a phone-line source sets so every line shows the same columns: the direction and
+   * the other side's number. The participant who took or made it for the owner is the one with the role `manager`.
+   */
+  call?: { direction?: CallDirection | null; clientPhone?: string | null }
   description?: string | null
   location?: string | null
   joinUrl?: string | null

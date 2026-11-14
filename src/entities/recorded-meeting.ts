@@ -1,4 +1,5 @@
 import * as v from "valibot"
+import { type MeetingCallItem, meetingCall } from "../meetings/index.js"
 import { count, reference, text, time } from "./fields.js"
 
 export interface RecordedMeeting {
@@ -11,6 +12,7 @@ export interface RecordedMeeting {
   has_transcript: boolean
   event: string | null
   people: string[]
+  call?: MeetingCallItem
 }
 
 // Typed by name, as a deal's activity is: inferred, the entity maps that hold it grow too long for the compiler.
@@ -25,4 +27,6 @@ export const recordedMeeting: v.GenericSchema<RecordedMeeting> = v.strictObject(
   has_transcript: v.boolean(),
   event: v.nullable(reference),
   people: v.array(reference),
+  /** Present only on a phone call: its direction, manager and the other side's number. */
+  call: v.optional(meetingCall),
 })
