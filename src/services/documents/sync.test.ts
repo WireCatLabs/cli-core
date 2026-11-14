@@ -190,6 +190,45 @@ describe("provider-neutral document sync", () => {
     expect(f.snapshots.has("a")).toBe(false)
     await expect(f.knowledge.document("alpha", ref)).rejects.toThrow("account")
   })
+  it("walks a page with sub-pages and imports it too, the root page included, while Drive's folders stay names", async () => {
+    const f = await setup()
+    const pages = new Set(["root", "nested"])
+    const options: SyncOptions<SourceFile> = {
+      ...f.options,
+      isDocument: (item) => pages.has(item.id),
+      skipReason: (item) => (pages.has(item.id) ? undefined : f.options.skipReason(item)),
+    }
+    expect(await syncDocuments(options)).toMatchObject({ saved: 4, pending: 0 })
+    expect(Object.keys(f.state().documents).sort()).toEqual(["a", "b", "nested", "root"])
+    expect(Object.keys(f.state().folders).sort()).toEqual(["nested", "root"])
+
+    f.files.set("nested", { ...must(f.files.get("nested")), version: "2" })
+    f.changes([{ id: "nested", removed: false, file: must(f.files.get("nested")) }])
+    expect(await syncDocuments(options)).toMatchObject({ saved: 1, removed: 0 })
+
+    f.changes([{ id: "nested", removed: true }])
+    expect(await syncDocuments(options)).toMatchObject({ removed: 2 })
+    expect(Object.keys(f.state().documents).sort()).toEqual(["b", "root"])
+
+    const drive = await setup()
+    expect(await syncDocuments(drive.options)).toMatchObject({ saved: 2 })
+    expect(Object.keys(drive.state().documents).sort()).toEqual(["a", "b"])
+  })
+
+  it("walks again and imports the existing pages once a profile synced without pages turns them on", async () => {
+    const f = await setup()
+    const pages = new Set(["root", "nested"])
+    expect(await syncDocuments(f.options)).toMatchObject({ saved: 2 })
+    expect(await syncDocuments(f.options)).toMatchObject({ saved: 0 })
+    const options: SyncOptions<SourceFile> = {
+      ...f.options,
+      isDocument: (item) => pages.has(item.id),
+      skipReason: (item) => (pages.has(item.id) ? undefined : f.options.skipReason(item)),
+    }
+    await syncDocuments(options)
+    expect(Object.keys(f.state().documents).sort()).toEqual(["a", "b", "nested", "root"])
+  })
+
   it("removes abandoned pending work when selected scope changes, and supports a full rescan", async () => {
     const f = await setup()
     await syncDocuments({ ...f.options, max: 1 })

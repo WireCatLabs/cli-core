@@ -3,10 +3,15 @@ import { CliError } from "@wirecat/cli-base"
 import type { DocumentSource, SourceFile, SourceState, SourceWalk, SourceWork } from "../../documents/model.js"
 import { inScope, type SourceQuery, within } from "../../documents/scope.js"
 import type { SyncOptions } from "./ports.js"
-// Without a query the hash stays what it was, so a profile that never set one keeps its checkpoint.
-export const scopeHash = (roots: string[], query?: Pick<SourceQuery, "key" | "mode">) =>
+// Without a query or pages the hash stays what it was, so a profile that never set them keeps its checkpoint. Turning
+// pages on changes it, so the next sync walks again and imports the pages an incremental one would never revisit.
+export const scopeHash = (roots: string[], query?: Pick<SourceQuery, "key" | "mode">, pages = false) =>
   createHash("sha256")
-    .update(JSON.stringify(query ? [[...roots].sort(), query.mode, query.key] : [...roots].sort()))
+    .update(
+      JSON.stringify(
+        query || pages ? [[...roots].sort(), query?.mode, query?.key, ...(pages ? ["pages"] : [])] : [...roots].sort(),
+      ),
+    )
     .digest("hex")
 export const changedSince = (previous: SourceFile, file: SourceFile) =>
   previous.version !== file.version ||
@@ -34,7 +39,7 @@ export const planDocuments = async <M extends SourceFile>(
   const { isFolder, skipReason, retryable, maxEntries: MAX_ENTRIES, errorOf, query } = options
   const tooManyEntries = () =>
     options.limitError?.() ?? new CliError("validation_error", `selected folders exceed the ${MAX_ENTRIES} entry limit`)
-  const scope = scopeHash(roots, query)
+  const scope = scopeHash(roots, query, options.isDocument !== undefined)
   if (!roots.length && query?.mode !== "include")
     return {
       scope,
@@ -56,6 +61,13 @@ export const planDocuments = async <M extends SourceFile>(
   const files = new Map<string, M>(Object.values(state.documents).map((doc) => [doc.metadata.id, doc.metadata]))
   const changed = new Set<string>()
   for (const skipped of state.skipped) if (skipped.file) files.set(skipped.id, skipped.file)
+  const keep = (file: M) => {
+    files.set(file.id, file)
+    changed.add(file.id)
+  }
+  const container = (file: M) => {
+    if (options.isDocument?.(file)) keep(file)
+  }
   const visited = new Set<string>()
   let discovered = 0
   const crawl = async (folder: M, ancestry = new Set<string>()): Promise<void> => {
@@ -65,11 +77,10 @@ export const planDocuments = async <M extends SourceFile>(
     folders[folder.id] = folder
     for (const file of await source.children(folder.id)) {
       if (++discovered > MAX_ENTRIES) throw tooManyEntries()
-      if (isFolder(file)) await crawl(file, new Set([...ancestry, folder.id]))
-      else {
-        files.set(file.id, file)
-        changed.add(file.id)
-      }
+      if (isFolder(file)) {
+        container(file)
+        await crawl(file, new Set([...ancestry, folder.id]))
+      } else keep(file)
     }
   }
   let finalCursor = cursor
@@ -106,6 +117,7 @@ export const planDocuments = async <M extends SourceFile>(
         const folder = step.folder ?? (await source.metadata(step.id))
         if (!step.folder && (!isFolder(folder) || folder.trashed))
           throw new CliError("validation_error", "configured root is not an accessible folder")
+        if (!step.folder) container(folder)
         const children = await source.children(folder.id)
         if (discovered + children.length > MAX_ENTRIES) throw tooManyEntries()
         discovered += children.length
@@ -114,11 +126,10 @@ export const planDocuments = async <M extends SourceFile>(
         folders[folder.id] = folder
         const nested = []
         for (const file of children)
-          if (isFolder(file)) nested.push({ id: file.id, ancestry: [...step.ancestry, folder.id], folder: file })
-          else {
-            files.set(file.id, file)
-            changed.add(file.id)
-          }
+          if (isFolder(file)) {
+            container(file)
+            nested.push({ id: file.id, ancestry: [...step.ancestry, folder.id], folder: file })
+          } else keep(file)
         for (const entry of nested.reverse()) walk.stack.push(entry)
         if ((options.now ?? Date.now)() - savedAt > SAVE_EVERY_MS) record()
       }
@@ -139,10 +150,9 @@ export const planDocuments = async <M extends SourceFile>(
       } else if (change.file && isFolder(change.file)) {
         folders[change.id] = change.file
         entering.push(change.file)
-      } else if (change.file) {
-        files.set(change.id, change.file)
-        changed.add(change.id)
-      } else if (state.documents[change.id] || folders[change.id])
+        container(change.file)
+      } else if (change.file) keep(change.file)
+      else if (state.documents[change.id] || folders[change.id])
         throw new CliError("invalid_response", "known source changed without metadata; checkpoint preserved")
     }
     // Provider access changes may not emit an event for every descendant file.
@@ -164,7 +174,13 @@ export const planDocuments = async <M extends SourceFile>(
   }
   const matched = new Set<string>()
   for (const file of found) {
-    if (isFolder(file) || file.trashed || !query?.matches(file) || matched.has(file.id)) continue
+    if (
+      (isFolder(file) && !options.isDocument?.(file)) ||
+      file.trashed ||
+      !query?.matches(file) ||
+      matched.has(file.id)
+    )
+      continue
     if (!files.has(file.id) && ++discovered > MAX_ENTRIES) throw tooManyEntries()
     // Listed again on every sync, so only a new or changed file is work; a skipped one keeps its skip.
     const prior = state.documents[file.id]?.metadata ?? state.skipped.find((item) => item.id === file.id)?.file

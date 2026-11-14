@@ -13,6 +13,11 @@ export interface SyncOptions<M extends SourceFile> {
   maxEntries: number
   limitError?(): CliError
   isFolder(file: M): boolean
+  /**
+   * A folder that is a document too, such as a wiki page with sub-pages: walked for its children and imported
+   * itself. Left out, no folder is imported.
+   */
+  isDocument?(file: M): boolean
   skipReason(file: M): string | undefined
   retryable(skip: SourceSkip<M>, limit: number): boolean
   errorOf(error: unknown): CliError

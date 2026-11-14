@@ -77,7 +77,7 @@ export const syncDocuments = async <M extends SourceFile>(options: SyncOptions<M
     const state = statePort.read()
     if (state.principal !== principal)
       throw new CliError("configuration_error", "sync state belongs to another source account")
-    const currentScope = scopeHash(profile.roots, query)
+    const currentScope = scopeHash(profile.roots, query, options.isDocument !== undefined)
     const abandoned =
       state.pending && (state.pending.scope !== currentScope || rescan) ? state.pending.jobs.map((job) => job.id) : []
     if (state.pending?.scope !== currentScope || rescan) delete state.pending
