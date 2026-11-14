@@ -205,10 +205,17 @@ export { normalizeTag, TAG_TYPES, type TagType } from "./domain/tags.js"
 export { envelopeOfVcard, isVcard, type VcardIssue, type VcardOptions } from "./domain/vcard.js"
 export { type AppErrors, DETAILS as CORE_DETAILS, failureContext, REASONS as CORE_REASONS } from "./errors/reasons.js"
 export {
+  BACKENDS,
+  type Backend,
   canonicalMeetingReference,
   formatMeetingReference,
   type MeetingReference,
   parseMeetingReference,
+  type QueryTree,
+  type ServiceCalls,
+  type ServiceCapability,
+  type ServiceOperator,
+  serviceCallsOf,
 } from "./meetings/index.js"
 export type { CheckRow, Finding, Moderator } from "./moderation/check.js"
 export { act, judge } from "./moderation/check.js"

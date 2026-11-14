@@ -167,9 +167,14 @@ export const meetingDetailsAnswer = async (
   id: number,
   accountId?: number,
 ): Promise<MeetingItemBody<MeetingDetailsItem>> => {
-  const details = await meetingShow(store, id, accountId)
-  return { item: meetingDetailsItem(details, await ownerOf(store, details.meeting.accountId)) }
+  return meetingDetailsBody(store, await meetingShow(store, id, accountId))
 }
+export const meetingDetailsBody = async (
+  store: MeetingStore,
+  details: MeetingDetails,
+): Promise<MeetingItemBody<MeetingDetailsItem>> => ({
+  item: meetingDetailsItem(details, await ownerOf(store, details.meeting.accountId)),
+})
 export const meetingTranscriptAnswer = async (
   store: MeetingStore,
   id: number,

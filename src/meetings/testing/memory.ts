@@ -36,8 +36,12 @@ const filterMeetings = (rows: MeetingDetails[], filter: MeetingFilter = {}) => {
         (filter.meetingSeriesId === undefined || m.meetingSeriesId === filter.meetingSeriesId) &&
         (filter.since === undefined || (m.startedAt !== null && m.startedAt >= filter.since)) &&
         (filter.until === undefined || (m.startedAt !== null && m.startedAt <= filter.until)) &&
+        (filter.ids === undefined || filter.ids.includes(m.id)) &&
         (filter.query === undefined ||
-          evaluate(filter.query, MEETING_QUERY.fields, meetingItem(m, MEMORY_OWNER(m.accountId)))),
+          evaluate(filter.query, MEETING_QUERY.fields, meetingItem(m, MEMORY_OWNER(m.accountId)), {
+            zone: filter.timezone ?? "UTC",
+            ...(filter.now === undefined ? {} : { now: filter.now }),
+          })),
     )
     .sort((a, b) => (b.meeting.startedAt ?? 0) - (a.meeting.startedAt ?? 0) || a.meeting.id - b.meeting.id)
     .slice(filter.offset ?? 0, filter.limit === undefined ? undefined : (filter.offset ?? 0) + filter.limit)
@@ -116,6 +120,11 @@ export const memoryMeetingStore = (): MeetingStore & MeetingTranscriptStore => {
     },
     async meeting(id) {
       return structuredClone(state.meetings.find((d) => d.meeting.id === id) ?? null)
+    },
+    async meetingByExternalId(accountId, externalId) {
+      return structuredClone(
+        state.meetings.find((d) => d.meeting.accountId === accountId && d.meeting.externalId === externalId) ?? null,
+      )
     },
     async participants(query, accountId) {
       const term = query.toLocaleLowerCase()

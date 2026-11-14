@@ -1,8 +1,15 @@
 import { linkEvent } from "./events.js"
 import { speakerPosition, timestamp, transcriptInput } from "./ingest.js"
-import type { SourceMeeting } from "./model.js"
+import type { Meeting, SourceChatLine, SourceMeeting, SummaryContent, TranscriptLine } from "./model.js"
 import type { MeetingSource, SourceParticipant } from "./source.js"
-import type { MeetingInput, MeetingStore, ParticipantInput } from "./store.js"
+import type {
+  MeetingDetails,
+  MeetingDocumentInput,
+  MeetingInput,
+  MeetingSave,
+  MeetingStore,
+  ParticipantInput,
+} from "./store.js"
 
 export interface RunReport {
   meetings: number
@@ -57,6 +64,140 @@ const participantInput = (
       associatePerson: Boolean(identityExternalId?.trim() || p.email?.trim() || p.externalId?.trim()),
     },
   }
+}
+
+const participantInputs = (provider: string, occurrenceId: string, list: SourceParticipant[], accountId: number) =>
+  list.map((p, i) => participantInput(p, provider, occurrenceId, i, accountId))
+
+/** What was read of one meeting besides the meeting itself; `undefined` is not read, `null` is unavailable. */
+export interface SourceMeetingParts {
+  participants?: SourceParticipant[] | null
+  transcript?: TranscriptLine[] | null
+  chat?: SourceChatLine[] | null
+  summary?: SummaryContent | null
+  files?: NonNullable<MeetingSave["attachments"]> | null
+  documents?: MeetingDocumentInput[] | null
+}
+
+/**
+ * The meetings row of a meeting the service returned. With `kept`, the stored row, a field the record leaves empty
+ * keeps the stored value and the metadata merges: a live read's record may be thinner than what sync stored.
+ */
+export const sourceMeetingInput = (
+  m: SourceMeeting,
+  accountId: number,
+  participantsCount: number | null | undefined,
+  kept?: Meeting,
+): MeetingInput => {
+  const startedAt = timestamp(m.occurrence.startedAt)
+  const given = m.occurrence.endedAt === null ? null : timestamp(m.occurrence.endedAt)
+  if (given !== null && given < startedAt) throw new Error("Meeting ends before it starts")
+  const keptEnd = kept?.endedAt ?? null
+  const endedAt = given ?? (keptEnd !== null && keptEnd >= startedAt ? keptEnd : null)
+  const count = participantsCount === null && kept ? kept.participantsCount : participantsCount
+  const metadata =
+    kept?.metadata && m.metadata ? { ...kept.metadata, ...m.metadata } : (m.metadata ?? kept?.metadata ?? null)
+  const meeting: MeetingInput = {
+    accountId,
+    externalId: m.occurrence.id,
+    title: m.occurrence.title,
+    description: m.description ?? kept?.description ?? null,
+    location: m.location ?? kept?.location ?? null,
+    joinUrl: m.joinUrl ?? m.series?.joinUrl ?? kept?.joinUrl ?? null,
+    startedAt,
+    endedAt,
+    durationMs: endedAt === null ? null : endedAt - startedAt,
+    timezone: m.timezone ?? kept?.timezone ?? null,
+    hostIdentityId: kept?.hostIdentityId ?? null,
+    ...(count === undefined ? {} : { participantsCount: count }),
+    metadata,
+    deletedAt: null,
+  }
+  if (m.series)
+    meeting.series = {
+      externalId: m.series.id,
+      title: m.series.title,
+      description: null,
+      kind: m.series.kind ?? null,
+      recurrence: m.series.recurrence ?? null,
+      hostIdentityId: null,
+      joinUrl: m.series.joinUrl ?? null,
+      metadata: null,
+      deletedAt: null,
+    }
+  return meeting
+}
+
+/**
+ * Saves one meeting as `meetings sync` does, keyed by its occurrence id, and links its event: `sync` and the reads that
+ * keep what the service returned write the same row. It never moves the sync's cursor. A live read passes `kept`, the
+ * stored row, so a thinner record does not empty what sync stored (`sourceMeetingInput`).
+ */
+export const saveSourceMeeting = async (
+  source: Pick<MeetingSource, "provider" | "name" | "transcriptFormat" | "createsEvents">,
+  store: MeetingStore,
+  m: SourceMeeting,
+  parts: SourceMeetingParts,
+  { accountId, now, kept }: { accountId: number; now: number; kept?: Meeting },
+): Promise<MeetingDetails> => {
+  const id = m.occurrence.id
+  const { participants: sourceParticipants, transcript: lines, chat, summary } = parts
+  const participants = participantInputs(source.provider, id, sourceParticipants ?? [], accountId)
+  const meeting = sourceMeetingInput(
+    m,
+    accountId,
+    sourceParticipants === undefined ? undefined : (sourceParticipants?.length ?? null),
+    kept,
+  )
+  const linked = sourceParticipants !== undefined
+  const format = source.transcriptFormat ?? null
+  const transcripts =
+    lines && linked ? [await transcriptInput(lines, participants, source.name, undefined, format)] : undefined
+  const details = await store.saveMeeting({
+    meeting,
+    participants: sourceParticipants ? participants : undefined,
+    transcripts,
+    chat: chat?.map((line) => ({
+      externalId: null,
+      sentAt: timestamp(line.sentAt),
+      senderParticipantPosition: speakerPosition(line.sender, participants),
+      senderName: line.sender,
+      recipient: null,
+      text: line.text,
+      normalizedText: null,
+      metadata: null,
+    })),
+    summaries: summary
+      ? [
+          {
+            ...summary,
+            source: summary.source ?? source.name,
+            content: summary.content ?? null,
+            docUrl: summary.docUrl ?? null,
+            externalCreatedAt: summary.externalCreatedAt ?? null,
+            externalUpdatedAt: summary.externalUpdatedAt ?? null,
+            metadata: summary.metadata ?? null,
+          },
+        ]
+      : undefined,
+    attachments: parts.files ?? undefined,
+    documents: parts.documents ?? undefined,
+    now,
+  })
+  // Without participants the rows cannot be linked: they are saved only when the meeting has no current
+  // transcript to downgrade, under a distinct hash so the retry that reads participants is not a replay.
+  if (
+    lines &&
+    !linked &&
+    !details.transcripts.some((t) => t.transcript.source === source.name && t.transcript.supersededAt === null)
+  )
+    await store.saveMeeting({
+      meeting,
+      transcripts: [await transcriptInput(lines, [], source.name, `${JSON.stringify(lines)}\nunlinked`, format)],
+      now,
+    })
+  await linkEvent(store, details, now, { create: source.createsEvents !== false })
+  return details
 }
 
 /** A start that does not parse sorts last; its own save reports it. */
@@ -126,9 +267,7 @@ export const pull = async (source: MeetingSource, store: MeetingStore, options: 
     }
     try {
       const sourceParticipants = await read("participants", () => source.participants(id))
-      const participants = (sourceParticipants ?? []).map((p, i) =>
-        participantInput(p, source.provider, id, i, options.accountId),
-      )
+      const participants = participantInputs(source.provider, id, sourceParticipants ?? [], options.accountId)
       const names = new Map<string, Set<string>>()
       for (const p of participants)
         if (p.displayName !== null) {
@@ -144,85 +283,13 @@ export const pull = async (source: MeetingSource, store: MeetingStore, options: 
       const attachments = await read("files", () => source.files(id))
       const listDocuments = source.documents?.bind(source)
       const documents = listDocuments ? await read("documents", () => listDocuments(id)) : undefined
-      const startedAt = timestamp(m.occurrence.startedAt)
-      const endedAt = m.occurrence.endedAt === null ? null : timestamp(m.occurrence.endedAt)
-      if (endedAt !== null && endedAt < startedAt) throw new Error("Meeting ends before it starts")
-      const meeting: MeetingInput = {
-        accountId: options.accountId,
-        externalId: id,
-        title: m.occurrence.title,
-        description: m.description ?? null,
-        location: m.location ?? null,
-        joinUrl: m.joinUrl ?? m.series?.joinUrl ?? null,
-        startedAt,
-        endedAt,
-        durationMs: endedAt === null ? null : endedAt - startedAt,
-        timezone: m.timezone ?? null,
-        hostIdentityId: null,
-        ...(sourceParticipants === undefined ? {} : { participantsCount: sourceParticipants?.length ?? null }),
-        metadata: m.metadata ?? null,
-        deletedAt: null,
-      }
-      if (m.series)
-        meeting.series = {
-          externalId: m.series.id,
-          title: m.series.title,
-          description: null,
-          kind: m.series.kind ?? null,
-          recurrence: m.series.recurrence ?? null,
-          hostIdentityId: null,
-          joinUrl: m.series.joinUrl ?? null,
-          metadata: null,
-          deletedAt: null,
-        }
-      const linked = sourceParticipants !== undefined
-      const format = source.transcriptFormat ?? null
-      const transcripts =
-        lines && linked ? [await transcriptInput(lines, participants, source.name, undefined, format)] : undefined
-      const details = await store.saveMeeting({
-        meeting,
-        participants: sourceParticipants ? participants : undefined,
-        transcripts,
-        chat: chat?.map((line) => ({
-          externalId: null,
-          sentAt: timestamp(line.sentAt),
-          senderParticipantPosition: speakerPosition(line.sender, participants),
-          senderName: line.sender,
-          recipient: null,
-          text: line.text,
-          normalizedText: null,
-          metadata: null,
-        })),
-        summaries: summary
-          ? [
-              {
-                ...summary,
-                source: summary.source ?? source.name,
-                content: summary.content ?? null,
-                docUrl: summary.docUrl ?? null,
-                externalCreatedAt: summary.externalCreatedAt ?? null,
-                externalUpdatedAt: summary.externalUpdatedAt ?? null,
-                metadata: summary.metadata ?? null,
-              },
-            ]
-          : undefined,
-        attachments: attachments ?? undefined,
-        documents: documents ?? undefined,
-        now,
-      })
-      // Without participants the rows cannot be linked: they are saved only when the meeting has no current
-      // transcript to downgrade, under a distinct hash so the retry that reads participants is not a replay.
-      if (
-        lines &&
-        !linked &&
-        !details.transcripts.some((t) => t.transcript.source === source.name && t.transcript.supersededAt === null)
+      await saveSourceMeeting(
+        source,
+        store,
+        m,
+        { participants: sourceParticipants, transcript: lines, chat, summary, files: attachments, documents },
+        { accountId: options.accountId, now },
       )
-        await store.saveMeeting({
-          meeting,
-          transcripts: [await transcriptInput(lines, [], source.name, `${JSON.stringify(lines)}\nunlinked`, format)],
-          now,
-        })
-      await linkEvent(store, details, now, { create: source.createsEvents !== false })
       for (const p of participants) if (p.identity.phone) callers.add(p.identity.externalId)
       report.meetings++
       report.participants += participants.length

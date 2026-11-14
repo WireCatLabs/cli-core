@@ -106,6 +106,11 @@ export interface MeetingFilter {
   accountId?: number
   /** A validated `meetings list` query over `MEETING_QUERY`'s fields. */
   query?: QueryAst
+  /** The zone and the instant the query's dates are read in; UTC and the current time without them. */
+  timezone?: string
+  now?: number
+  /** Only these stored meetings, by their store id. */
+  ids?: readonly number[]
   eventId?: number
   meetingSeriesId?: number
   since?: number
@@ -166,6 +171,8 @@ export interface MeetingStore {
   /** The provider and account a meeting account id stands for; `null` when the store has no such account. */
   account(id: number): Promise<MeetingOwner | null>
   meeting(id: number): Promise<MeetingDetails | null>
+  /** The account's meeting the provider knows by `externalId` (the occurrence id), deleted or not; `null` when none. */
+  meetingByExternalId?(accountId: number, externalId: string): Promise<MeetingDetails | null>
   participants(query: string, accountId?: number): Promise<Participant[]>
   search(query: string, filter?: MeetingFilter): Promise<ListResult<SearchHit>>
   events(): Promise<Event[]>

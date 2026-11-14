@@ -1,3 +1,5 @@
+import type { Predicate } from "@wirecat/cli-base/query"
+import type { ServiceOperator } from "../search/service-query.js"
 import type { Metadata, SourceChatLine, SourceMeeting, SummaryContent, TranscriptLine } from "./model.js"
 import type { MeetingDocumentInput, MeetingSave } from "./store.js"
 
@@ -17,6 +19,48 @@ export interface SourceParticipant {
   durationMs: number | null
   sessions: import("./model.js").JsonValue
   metadata: Metadata
+}
+
+/** When the meetings `find` asks for started, epoch milliseconds, both ends inclusive; an open end is the source's. */
+export interface MeetingWindow {
+  from?: number
+  to?: number
+}
+
+/** A `meetings list` term `find` declared it reads, besides `started_at`; `negated` only for a negatable field. */
+export interface MeetingTerm {
+  predicate: Predicate
+  negated: boolean
+}
+
+/** A meeting the service returned, with its participants when the same answer carries them. */
+export interface FoundMeeting {
+  meeting: SourceMeeting
+  participants?: SourceParticipant[] | null
+}
+
+export interface FoundMeetings {
+  meetings: FoundMeeting[]
+  /** The next page's cursor; `null` on the last page. */
+  next: string | null
+}
+
+/** One meeting with what `meetings show` keeps of it: its people, transcript and Drive documents. */
+export interface FullMeeting extends FoundMeeting {
+  transcript?: TranscriptLine[] | null
+  documents?: MeetingDocumentInput[] | null
+}
+
+/**
+ * What `find` filters besides `started_at`, which every `find` takes as its window: `meetings list` fields and the
+ * operators the service reads on each (`provider_id: ["term"]`). The store decides the rest of the query.
+ */
+export interface MeetingFinds {
+  fields: Readonly<Record<string, readonly ServiceOperator[]>>
+  /** The fields whose NOT the service can send. */
+  negatable?: readonly string[]
+  /** False for a service that lists no meeting before it starts (Meet: scheduling is Google Calendar's). */
+  upcoming?: boolean
 }
 
 /** Null means unavailable; it never requests deletion of previously saved data. */
@@ -42,4 +86,13 @@ export interface MeetingSource {
   files(occurrenceId: string): Promise<NonNullable<MeetingSave["attachments"]> | null>
   /** The Drive files the service saved for the occurrence: its transcript, recording and notes documents. */
   documents?(occurrenceId: string): Promise<MeetingDocumentInput[] | null>
+  /** What `find` reads of a `meetings list` query; required with `find`. */
+  readonly finds?: MeetingFinds
+  /**
+   * The meetings that may match, for `meetings list`: one page from `cursor` (`null` first). Each meeting's
+   * `occurrence.id` is the one `meetings()` gives, so the row it is kept as is the row `sync` writes.
+   */
+  find?(window: MeetingWindow, terms: readonly MeetingTerm[], cursor: string | null): Promise<FoundMeetings>
+  /** One meeting by the service's id, for `meetings show`; `null` when the service has none. */
+  get?(id: string): Promise<FullMeeting | null>
 }

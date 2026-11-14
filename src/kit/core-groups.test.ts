@@ -38,7 +38,17 @@ type Given = RunOptions & { silent?: boolean }
 let silentNext = false
 
 describe("cli-core's meetings commands run inside its run", () => {
-  const source = fakeMeetingSource()
+  const live = fakeMeetingSource()
+  const source = fakeMeetingSource({
+    finds: { fields: {} },
+    async find() {
+      return { meetings: (await live.meetings("")).map((meeting) => ({ meeting })), next: null }
+    },
+    async get() {
+      const [meeting] = await live.meetings("")
+      return meeting ? { meeting } : null
+    },
+  })
   const definition: ProgramDefinition = {
     app,
     configuration: settingsFor(app),
@@ -52,7 +62,9 @@ describe("cli-core's meetings commands run inside its run", () => {
           return silentNext ? hanging(source) : source
         },
         write: (value) => {
-          if (sync) renderAnswer(sync, outputFor(sync), itemOf(value))
+          if (!sync) return
+          const body = value as { items?: unknown[]; item?: unknown }
+          renderAnswer(sync, outputFor(sync), body.items || body.item ? (value as never) : itemOf(value))
         },
         inRun: (command, body) => {
           sync = command
@@ -64,7 +76,11 @@ describe("cli-core's meetings commands run inside its run", () => {
   }
   const cases = runScopeCases({
     definition,
-    commands: { "meetings sync": ["work", "meetings", "sync"] },
+    commands: {
+      "meetings sync": ["work", "meetings", "sync"],
+      "meetings list": ["work", "meetings", "list"],
+      "meetings show": ["work", "meetings", "show", "example-occurrence"],
+    },
     answering: () => {
       silentNext = false
       return { env }

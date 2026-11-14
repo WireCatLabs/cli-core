@@ -1,4 +1,13 @@
 export {
+  BACKENDS,
+  type Backend,
+  type QueryTree,
+  type ServiceCalls,
+  type ServiceCapability,
+  type ServiceOperator,
+  serviceCallsOf,
+} from "../search/service-query.js"
+export {
   MEETING_STEPS,
   type MeetingDetailsItem,
   type MeetingHitItem,
@@ -231,7 +240,15 @@ export {
   prepareMeetingProjectEvidence,
 } from "./project-evidence-query.js"
 export { type MeetingProviderScope, snapshotMeetingScope } from "./provider.js"
-export { type MeetingBudget, type MeetingBudgetStop, type PullOptions, pull, type RunReport } from "./pull.js"
+export {
+  type MeetingBudget,
+  type MeetingBudgetStop,
+  type PullOptions,
+  pull,
+  type RunReport,
+  type SourceMeetingParts,
+  saveSourceMeeting,
+} from "./pull.js"
 export {
   event,
   eventItem,
@@ -260,9 +277,21 @@ export type {
   TranscriptRowPage,
 } from "./read-store.js"
 export {
+  askServerForList,
+  MEETING_SERVER_BOUNDS,
+  type MeetingListThrough,
+  type MeetingServerAccess,
+  type MeetingServerReport,
+  type MeetingServerSkip,
+  type MeetingShowThrough,
+  meetingShowThrough,
+  meetingsListThrough,
+} from "./read-through.js"
+export {
   listed,
   MeetingError,
   meetingDetailsAnswer,
+  meetingDetailsBody,
   meetingPeople,
   meetingSummaryAnswer,
   meetingTranscriptAnswer,
@@ -361,7 +390,16 @@ export type {
   MeetingSeriesInventoryResult,
 } from "./series-inventory-types.js"
 export { validateMeetingSeriesInventoryCursor } from "./series-inventory-validation.js"
-export type { MeetingSource, SourceParticipant } from "./source.js"
+export type {
+  FoundMeeting,
+  FoundMeetings,
+  FullMeeting,
+  MeetingFinds,
+  MeetingSource,
+  MeetingTerm,
+  MeetingWindow,
+  SourceParticipant,
+} from "./source.js"
 export {
   aggregateMeetingCounts,
   aggregateMeetingStats,

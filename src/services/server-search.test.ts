@@ -309,4 +309,13 @@ describe("server search beside the archive", () => {
     expect(archive.server).toBeUndefined()
     expect(one.asked).toHaveLength(1)
   })
+
+  it("sends a quoted chat or sender as it sends a bare one", async () => {
+    const one = await setup()
+    await one.search({ text: "invoice chat:7 from:Reader", backend: "both" })
+    await one.search({ text: 'invoice chat:"7" from:"Reader"', backend: "both" })
+    const [bare, quoted] = one.asked
+    expect(bare).toEqual({ text: "invoice", chat: "7", from: "9" })
+    expect(quoted).toEqual(bare)
+  })
 })

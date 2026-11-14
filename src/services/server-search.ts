@@ -1,7 +1,8 @@
 import { CliError } from "@wirecat/cli-base"
 import type { Chat, Id, MessageHit } from "../domain/models.js"
 import { capability, type MessengerAdapter, type ServerQuery } from "../ports/messenger.js"
-import type { ResolvedNode } from "../search/lucene/resolved.js"
+import type { ResolvedPredicate } from "../search/lucene/resolved.js"
+import { type Backend, type ServiceCapability, serviceCallsOf, windowOf } from "../search/service-query.js"
 import type { AccountKey } from "../store/store.js"
 import type { ServiceDeps } from "./deps.js"
 import type { SearchQuery } from "./messages.js"
@@ -14,7 +15,7 @@ export const SERVER_SEARCH_KEY = "messages.server-search"
  */
 export const SERVER_BOUNDS = { timeMs: 5_000, perCall: 100, maxCalls: 3, textBytes: 262_144 }
 export const DEFAULT_BACKEND = "both"
-export type Backend = "archive" | "server" | "both"
+export type { Backend }
 export interface ServerOptions {
   timeMs?: number
 }
@@ -68,35 +69,37 @@ const merge = (one: Branch, other: Branch): Branch | undefined => {
 const sameAccount = (one: AccountKey, other: AccountKey) =>
   one.provider === other.provider && one.account === other.account
 
-// Each branch is one server call that narrows the candidates; the strict local query decides. A
-// part the server cannot read is left out, which only widens a branch, never drops a hit.
-const branchesOf = (node: ResolvedNode, account: AccountKey): Branch[] => {
-  if (node.kind === "predicate") {
-    if ((node.field === "text" || node.field === "exact") && (node.operator === "term" || node.operator === "phrase"))
-      return node.value === "" ? [{ words: [] }] : [{ words: [node.value] }]
+// The server reads words, one chat, one sender and a date range; the strict local query decides the rest.
+const serverReads = (account: AccountKey): ServiceCapability<ResolvedPredicate, Branch> => ({
+  fields: {
+    text: ["term", "phrase"],
+    exact: ["term", "phrase"],
+    chat: ["term", "phrase"],
+    from: ["term", "phrase"],
+    date: ["term", "range"],
+  },
+  maxCalls: SERVER_BOUNDS.maxCalls,
+  all: { words: [] },
+  leaf: (node) => {
+    if (node.field === "text" || node.field === "exact") return { words: node.value === "" ? [] : [node.value] }
     const { chat, sender, date } = node.resolution ?? {}
-    if (chat) return sameAccount(chat.account, account) ? [{ words: [], chat: chat.chatId }] : []
-    if (sender?.provider === account.provider) return [{ words: [], from: sender.id }]
-    if (date)
-      return [
-        {
-          words: [],
-          ...(date.lower === undefined ? {} : { minDate: date.lower_inclusive ? date.lower : date.lower + 1 }),
-          ...(date.upper === undefined ? {} : { maxDate: date.upper_inclusive ? date.upper : date.upper - 1 }),
-        },
-      ]
-    return [{ words: [] }]
-  }
-  const must = node.clauses.filter(({ occur }) => occur === "must")
-  if (must.length)
-    return must.reduce<Branch[]>(
-      (product, { node }) =>
-        product.flatMap((one) => branchesOf(node, account).flatMap((other) => merge(one, other) ?? [])),
-      [{ words: [] }],
-    )
-  const should = node.clauses.filter(({ occur }) => occur === "should")
-  return should.length ? should.flatMap(({ node }) => branchesOf(node, account)) : [{ words: [] }]
-}
+    // Another account's chat holds nothing this account's server can return.
+    if (chat) return sameAccount(chat.account, account) ? { words: [], chat: chat.chatId } : undefined
+    if (sender?.provider === account.provider) return { words: [], from: sender.id }
+    if (date) {
+      const { from, to } = windowOf(date)
+      return {
+        words: [],
+        ...(from === undefined ? {} : { minDate: from }),
+        ...(to === undefined ? {} : { maxDate: to }),
+      }
+    }
+    // `from:me` and the like: nothing the server filters, so the call is not narrowed.
+    return { words: [] }
+  },
+  both: merge,
+  sends: ({ words }) => words.length > 0,
+})
 
 const asQuery = ({ words, from, ...rest }: Branch): ServerQuery => ({
   text: words.join(" "),
@@ -161,13 +164,10 @@ export const searchServer = async (deps: ServiceDeps, request: SearchQuery): Pro
       : undefined
     : { words: [] }
   if (!scoped) return skip("other_accounts")
-  const all = branchesOf(execution.root, account).flatMap((branch) => merge(scoped, branch) ?? [])
-  const unique = [
-    ...new Map(all.filter(({ words }) => words.length).map((branch) => [JSON.stringify(branch), branch])).values(),
-  ]
-  if (!unique.length) return skip("no_words")
-  if (deps.messenger.serverSearch === "chat" && unique.some(({ chat }) => chat === undefined)) return skip("needs_chat")
-  if (unique.length > SERVER_BOUNDS.maxCalls) report.complete = false
+  const { calls, complete } = serviceCallsOf(execution.root, serverReads(account), scoped)
+  if (!calls.length) return skip("no_words")
+  if (deps.messenger.serverSearch === "chat" && calls.some(({ chat }) => chat === undefined)) return skip("needs_chat")
+  if (!complete) report.complete = false
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeMs)
   const stop = request.signal ? AbortSignal.any([request.signal, controller.signal]) : controller.signal
@@ -175,7 +175,6 @@ export const searchServer = async (deps: ServiceDeps, request: SearchQuery): Pro
     if (stop.aborted) resolve(BOUND)
     stop.addEventListener("abort", () => resolve(BOUND), { once: true })
   })
-  const calls = unique.slice(0, SERVER_BOUNDS.maxCalls)
   const pending = new Set(calls)
   const found: { items: MessageHit[]; chats: Chat[] }[] = []
   let open = true

@@ -5,24 +5,27 @@ import { type Command, InvalidArgumentError, Option } from "commander"
 import { EVENT_QUERY } from "../event-query.js"
 import { exportMeeting, type MeetingExportFormat } from "../export.js"
 import { type ImportFile, importFiles } from "../import.js"
+import { BACKENDS, type Backend } from "../index.js"
 import { MEETING_QUERY } from "../item.js"
+import type { MeetingManagement } from "../meeting-management.js"
 import type { MeetingParticipantSearchOptions } from "../participant-search.js"
 import { type MeetingBudget, pull } from "../pull.js"
 import { eventItem } from "../read-answers.js"
+import { type MeetingServerAccess, meetingShowThrough, meetingsListThrough } from "../read-through.js"
 import {
   listed,
   MEETING_QUERY_GUIDE,
   MeetingError,
-  meetingDetailsAnswer,
+  meetingDetailsBody,
   meetingPeople,
   meetingSummaryAnswer,
-  meetingsList,
   meetingsQuery,
   meetingTranscriptAnswer,
 } from "../reads.js"
 import { SAVE_HELP } from "../save-hints.js"
 import type { MeetingSource } from "../source.js"
 import type { MeetingStore } from "../store.js"
+import { addMeetingManagementCommands } from "./management.js"
 import { queryWordsAfterOptions } from "./query-options.js"
 
 export interface MeetingCommandDeps {
@@ -53,6 +56,18 @@ export interface MeetingCommandDeps {
    */
   budgetOf?: (command: Command) => MeetingBudget
   now?: () => number
+  /** The owner's zone, in which `meetings list` reads a query's dates on both sides; the computer's without it. */
+  timezone?: string
+  /**
+   * The service's meeting writes, `createMeetingManagement(scope, ports)`: `meetings create|update|cancel|invitation`
+   * are mounted for the ports it has.
+   */
+  management?: MeetingManagement
+  /**
+   * Puts the profile's question before a write to the service: `askBeforeWrite` from `@wirecat/cli-core/cli`, which
+   * asks when the command's key is at `ask` and refuses when nobody can answer. Without it the writes refuse.
+   */
+  askFirst?: (command: Command) => Promise<void>
 }
 const integer = (text: string) => {
   if (!/^[1-9]\d*$/.test(text) || !Number.isSafeInteger(Number(text)))
@@ -72,6 +87,23 @@ const date = (text: string) => {
   }
 }
 const LOCAL_READ: Effects = { remote: "none", local: "read" }
+/** Reads the service; what it returns is kept as `sync` keeps it, which counts as a read (WC-CMD-17). */
+const REMOTE_READ: Effects = { remote: "read", local: "read" }
+const backendOf = (value: string): Backend => {
+  if (!(BACKENDS as readonly string[]).includes(value))
+    throw new InvalidArgumentError("expected archive, server or both")
+  return value as Backend
+}
+// No commander default: an untyped --backend falls back to the store with a `missing` line, a typed one refuses.
+const backendOption = (command: Command) =>
+  command.option(
+    "--backend <archive|server|both>",
+    "where to read: the store (archive), the service (server), or both, kept in the store (default: both)",
+    backendOf,
+  )
+const BACKEND_HELP =
+  "--backend both asks the service with the part of the query it can filter, keeps what it returns, then runs the " +
+  "whole query over the store; each item says found_in archive, server or both. --offline reads the store only."
 const LOCAL_WRITE: Effects = { remote: "none", local: "write" }
 const FETCH: Effects = { remote: "read", local: "write" }
 
@@ -91,32 +123,70 @@ const addMeetingCommandsDefinition = (program: Command, deps: MeetingCommandDeps
     const opts = command.optsWithGlobals()
     deps.write(value, opts.json ? "json" : opts.jsonl ? "jsonl" : "text")
   }
-  const list = queryWordsAfterOptions(group.command("list").description("stored meetings, newest first"))
+  const access = (command: Command, backend: Backend | undefined): MeetingServerAccess => ({
+    ...(backend === undefined ? {} : { backend }),
+    offline: command.optsWithGlobals().offline === true,
+    timezone: timezoneOf(deps.timezone),
+    ...(deps.now ? { now: deps.now() } : {}),
+  })
+  const list = queryWordsAfterOptions(
+    group.command("list").description("meetings, newest first: the service's and the stored ones, kept in the store"),
+  )
     .argument("[query...]", "field:value terms that narrow the list — the fields are below")
-    .addHelpText("after", `\n${fieldsHelp(MEETING_QUERY, MEETING_QUERY_GUIDE)}`)
-  annotate(list, { effects: LOCAL_READ, query: defineQuery(MEETING_QUERY), output: { entity: "meeting" } })
-  output(list)
+    .addHelpText("after", `\n${fieldsHelp(MEETING_QUERY, MEETING_QUERY_GUIDE)}\n${BACKEND_HELP}`)
+  annotate(list, {
+    effects: REMOTE_READ,
+    partial: true,
+    query: defineQuery(MEETING_QUERY),
+    output: { entity: "meeting" },
+  })
+  backendOption(output(list))
     .option("--limit <n>", "meetings per page", integer, 100)
     .option("--page <n>", "page number", integer, 1)
-    .action(async (words: string[], opts: { limit: number; page: number }, command: Command) => {
+    .action(async (words: string[], opts: { limit: number; page: number; backend?: Backend }, command: Command) => {
       const query = meetingsQuery(words.join(" "))
+      await deps.inRun(command, async () => {
+        // The standard envelope has no place for the counts; what the reader must know is in `missing` and `meta`.
+        const { server: _server, ...answer } = await meetingsListThrough(
+          deps.source,
+          deps.store,
+          {
+            accountId: deps.accountId,
+            limit: opts.limit,
+            offset: (opts.page - 1) * opts.limit,
+            ...(query ? { query } : {}),
+          },
+          access(command, opts.backend),
+        )
+        print(answer, command)
+      })
+    })
+  backendOption(
+    output(
+      annotate(group.command("show"), { effects: REMOTE_READ, partial: true, output: { entity: "meeting_details" } })
+        .description("show a meeting, read again from the service with its people, transcript and documents")
+        .argument("<meeting>", "the stored meeting's number, its meeting: ref, or the service's id (provider_id)")
+        .addHelpText("after", `${SAVE_HELP}\n${BACKEND_HELP}`),
+    ),
+  ).action(async (meeting: string, opts: { backend?: Backend }, command: Command) => {
+    await deps.inRun(command, async () => {
+      const shown = await meetingShowThrough(
+        deps.source,
+        deps.store,
+        deps.accountId,
+        meeting,
+        access(command, opts.backend),
+      )
+      const { item } = await meetingDetailsBody(deps.store, shown.details)
       print(
-        await meetingsList(deps.store, {
-          accountId: deps.accountId,
-          limit: opts.limit,
-          offset: (opts.page - 1) * opts.limit,
-          ...(query ? { query } : {}),
-        }),
+        {
+          item: shown.foundIn ? { ...item, found_in: shown.foundIn } : item,
+          ...(shown.missing ? { missing: shown.missing } : {}),
+          ...(shown.meta ? { meta: shown.meta } : {}),
+        },
         command,
       )
     })
-  output(
-    annotate(group.command("show"), { effects: LOCAL_READ, output: { entity: "meeting_details" } })
-      .description("show a stored meeting")
-      .argument("<meeting>", "stored meeting id", integer)
-      .addHelpText("after", SAVE_HELP),
-  ).action(async (id: number, _opts: unknown, command: Command) => {
-    print(await meetingDetailsAnswer(deps.store, id, deps.accountId), command)
   })
   output(
     annotate(group.command("transcript"), { effects: LOCAL_READ, output: { entity: "meeting_transcript" } })
@@ -255,6 +325,14 @@ const addMeetingCommandsDefinition = (program: Command, deps: MeetingCommandDeps
         }),
         command,
       )
+    })
+  if (deps.management)
+    addMeetingManagementCommands(group, {
+      management: deps.management,
+      print,
+      output,
+      inRun: deps.inRun,
+      ...(deps.askFirst ? { askFirst: deps.askFirst } : {}),
     })
   const eventList = queryWordsAfterOptions(
     annotate(program.command("events").description("the owner's stored events"), {

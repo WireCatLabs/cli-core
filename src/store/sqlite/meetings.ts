@@ -615,6 +615,7 @@ const MEETING_COLUMNS = {
   ended_at: { type: "time", sql: "ended_at" },
   duration_ms: { type: "num", sql: "duration_ms" },
   participants_count: { type: "num", sql: "participants_count" },
+  provider_id: { type: "kw", sql: "external_id" },
   created_at: { type: "time", sql: "created_at" },
   updated_at: { type: "time", sql: "updated_at" },
 } as const satisfies ColumnMap
@@ -632,8 +633,14 @@ const filtered = (filter: MeetingFilter = {}) => {
   if (filter.meetingSeriesId !== undefined) add("meeting_series_id = ?", filter.meetingSeriesId)
   if (filter.since !== undefined) add("started_at >= ?", filter.since)
   if (filter.until !== undefined) add("started_at <= ?", filter.until)
+  // One bound list: an OR of ids per meeting grows past SQLite's expression depth at about a thousand.
+  if (filter.ids !== undefined) add("id IN (SELECT value FROM json_each(?))", JSON.stringify(filter.ids))
   if (filter.query !== undefined) {
-    const compiled = queryFilter(filter.query, MEETING_COLUMNS, { command: "meetings list" })
+    const compiled = queryFilter(filter.query, MEETING_COLUMNS, {
+      command: "meetings list",
+      ...(filter.timezone === undefined ? {} : { zone: filter.timezone }),
+      ...(filter.now === undefined ? {} : { now: filter.now }),
+    })
     where.push(`(${compiled.sql})`)
     params.push(...compiled.params)
   }
@@ -874,6 +881,12 @@ export const meetingStoreOver = (context: StoreContext): StoredMeetings => {
     },
     async meeting(id) {
       return details(database, id)
+    },
+    async meetingByExternalId(accountId, externalId) {
+      const row = database
+        .prepare("SELECT id FROM meetings WHERE account_id = ? AND external_id = ?")
+        .get(accountId, externalId)
+      return row ? details(database, Number(row.id)) : null
     },
     async participants(query, accountId) {
       return participants(database, query, accountId)

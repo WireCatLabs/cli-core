@@ -128,7 +128,43 @@ const repair = v.strictObject({
   languages: v.array(v.strictObject({ language: nullableText, transcripts: count })),
 })
 
+const kind = v.picklist(["instant", "scheduled"])
+/** What `meetings create|update|cancel` did on the service, or would do under `--dry-run` (`applied: false`). */
+const managedChange = v.strictObject({
+  action: v.picklist(["create", "update", "cancel"]),
+  provider: text,
+  account: text,
+  id: v.optional(identifier),
+  occurrence_id: v.optional(identifier),
+  change: v.optional(
+    v.strictObject({
+      title: v.optional(text),
+      kind: v.optional(kind),
+      start_time: v.optional(text),
+      duration_minutes: v.optional(count),
+      timezone: v.optional(text),
+      agenda: v.optional(text),
+    }),
+  ),
+  applied: flag,
+  meeting: v.optional(
+    v.strictObject({
+      id: identifier,
+      title: nullableText,
+      kind: v.nullable(kind),
+      start_time: nullableText,
+      duration_minutes: v.nullable(count),
+      timezone: nullableText,
+      agenda: nullableText,
+      join_url: nullableText,
+    }),
+  ),
+})
+const invitation = v.strictObject({ id: identifier, invitation: text, untrusted: v.optional(v.array(text)) })
+
 export const MEETING_RESULT_ENTITIES = {
+  meeting_change: managedChange,
+  meeting_invitation: invitation,
   meeting_ingestion: run,
   meeting_export: exported,
   meeting_association: meetingChange,

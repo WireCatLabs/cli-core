@@ -53,6 +53,10 @@ export const DEFAULT_PERMISSIONS: Readonly<Record<PermissionKey, Level>> = {
   "schedule.run": "ask",
   "schedule.exec": "ask",
   "doctor.reports.create": "ask",
+  // A meeting changed on the service reaches its invitees: asked first, as zoom's `remote-meetings` was.
+  "meetings.create": "ask",
+  "meetings.update": "ask",
+  "meetings.cancel": "ask",
 }
 
 /** Commands under a housekeeping word, or store maintenance, that still have a key of their own: their path. */
