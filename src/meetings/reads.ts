@@ -10,6 +10,7 @@ import {
   meetingDetailsItem,
   meetingSummaryItem,
   meetingTranscriptItem,
+  PARTICIPANT_UNTRUSTED,
   wholeList,
 } from "./answers.js"
 import { MEETING_QUERY, type MeetingItem, type MeetingOwner, meetingItem } from "./item.js"
@@ -79,6 +80,7 @@ export const meetingPeople = async (
     })
     return {
       ...packet,
+      items: packet.items.map((one) => ({ ...one, untrusted: [...PARTICIPANT_UNTRUSTED] })),
       page: { mode: "cursor", limit, has_more, ...(next_cursor ? { next_cursor } : {}) },
       ...(next_cursor
         ? {
@@ -104,7 +106,9 @@ export const meetingPeople = async (
       "configuration_error",
       "bounded participant lookup needs a selected account and capable store",
     )
-  return listed(await store.participants(query, accountId))
+  return listed(
+    (await store.participants(query, accountId)).map((one) => ({ ...one, untrusted: [...PARTICIPANT_UNTRUSTED] })),
+  )
 }
 
 /** A list answer without `meta`: the host adds it, as it knows the run. */

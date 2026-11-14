@@ -19,6 +19,11 @@ export interface EventDraft {
   description?: string | null
   attendees?: { email: string; optional?: boolean }[]
   recurrence?: string[]
+  /**
+   * A new meeting link to make and attach, from one of the writer's `conferences`. `requestId` is new for every write:
+   * Google ignores a request id it has seen. A create retry stays safe through the event's own id.
+   */
+  conference?: { provider: string; requestId: string }
 }
 
 /**
@@ -45,6 +50,11 @@ export type EventResponse = Extract<ParticipantResponse, "accepted" | "tentative
  */
 export interface CalendarWriter {
   readonly provider: string
+  /**
+   * The meeting services this writer can make a link with on an event (`google-meet` for Calendar's
+   * `conferenceData.createRequest`); `events create|update --conference` takes one of them.
+   */
+  readonly conferences?: readonly string[]
   /**
    * `id` is chosen here and journaled before the call: a create with an id the provider already holds returns that
    * event instead of making a second one, so a retry after `outcome_unknown` is safe.

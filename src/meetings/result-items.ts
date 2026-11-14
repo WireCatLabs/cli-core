@@ -16,7 +16,13 @@ const run = v.strictObject({
   timezone: v.optional(text),
 })
 const exported = v.union([
-  v.strictObject({ meeting_id: identifier, format: v.picklist(["markdown", "vtt"]), filename: text, content: text }),
+  v.strictObject({
+    meeting_id: identifier,
+    format: v.picklist(["markdown", "vtt"]),
+    filename: text,
+    content: text,
+    untrusted: v.optional(v.array(text)),
+  }),
   v.strictObject({ meeting_id: identifier, format: v.picklist(["markdown", "vtt"]), output: text }),
 ])
 const eventChange = v.strictObject({

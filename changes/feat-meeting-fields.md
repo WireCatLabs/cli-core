@@ -9,6 +9,13 @@
   untrusted. A port that declares nothing reads every portable field and no setting.
   See [Remote management](../docs/dev/MEETING-PROVIDERS.md#remote-management).
 
+- **`events create|update --conference <service>` add a meeting link to an event.** A calendar writer that can make
+  one names its services in `CalendarWriter.conferences` (`google-meet`), and `options.writes.conferences` mounts the
+  option with them as its choices. It is a change of its own, so `events update event:42 --conference google-meet`
+  needs no other field. The writer gets `conference: { provider, requestId }` with a new request id each time, never
+  the event's id. An event that already has a link is refused (`event.conference-exists`), so the attendees' link is
+  never replaced. See [Calendars](../docs/dev/CALENDARS.md#commands-and-mcp-tools).
+
 ### Changed — may break callers
 
 - **A meeting needs no title, and a service that cannot schedule creates meetings that start now.**
@@ -26,3 +33,10 @@
   the write will go; the commands pass `askFirst` there.
 - **The `google-meet` provider's tool is `gcal`.** Google Meet has no tool of its own: its meetings are part of
   Google Calendar's tool, since every meeting is on the calendar. A hint that opens a Meet meeting now points at `gcal`.
+
+### Security
+
+- **The shared meetings answers mark other people's text untrusted.** `meetings show` marks participants' names and
+  emails, the chat, the series title, attachment and document names; `meetings transcript` marks each line's text and
+  speaker; summaries mark their text; `meetings export` marks `content`; `meetings people` marks each match's
+  `display_name` and `email`. In a scheduled agent's run they arrive between the run's markers, as calendar events do.

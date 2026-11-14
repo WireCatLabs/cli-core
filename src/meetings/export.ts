@@ -14,6 +14,8 @@ export interface MeetingExport {
   format: MeetingExportFormat
   filename: string
   content: string
+  /** The content is what people said and wrote. */
+  untrusted: string[]
 }
 const timestamp = (milliseconds: number): string => {
   if (!Number.isSafeInteger(milliseconds) || milliseconds < 0)
@@ -115,5 +117,6 @@ export const exportMeeting = async (
     format: options.format,
     filename: `meeting-${details.meeting.id}${options.transcriptId === undefined ? "" : `-transcript-${options.transcriptId}`}.${options.format === "markdown" ? "md" : "vtt"}`,
     content,
+    untrusted: ["content"],
   }
 }

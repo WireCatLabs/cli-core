@@ -188,6 +188,7 @@ export const meetingParticipants = v.strictObject({
       display_name: v.nullable(text),
       email: v.nullable(text),
       person: v.nullable(v.strictObject({ ref: text, name: v.nullable(text) })),
+      untrusted: v.optional(v.array(text)),
     }),
   ),
   /** Several identities on one page are observations, never speaker attribution or person links. */

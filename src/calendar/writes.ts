@@ -55,6 +55,8 @@ export interface EventFields {
   attendees?: string[]
   /** An RFC 5545 rule, with or without `RRULE:`; on a change, only with the series' scope. */
   repeat?: string
+  /** A meeting service to make a new meeting link with, one of the writer's `conferences`. */
+  conference?: string
 }
 
 export interface WriteContext {
@@ -66,7 +68,15 @@ export interface WriteContext {
   now: number
   zone: string
   /** How the caller spells an input in a hint: `--notify or --no-notify` on the command line, `notify` over MCP. */
-  names: { notify: string; id: string; calendar: string; series: string; following: string; repeat: string }
+  names: {
+    notify: string
+    id: string
+    calendar: string
+    series: string
+    following: string
+    repeat: string
+    conference: string
+  }
 }
 
 /** Each write is checked by its command's path, the key a declared CLI's `commandPermissions` already knows. */
@@ -137,8 +147,35 @@ export const draftOf = (
         allDay: patch.startDate !== undefined || (patch.startsAt === undefined && allDay),
       }),
     ]
+  if (fields.conference !== undefined) patch.conference = { provider: fields.conference, requestId: randomUUID() }
   if (!whole && Object.keys(patch).length === 0) throw new CliError("validation_error", "nothing to change")
   return patch
+}
+
+/** A meeting link only from a service the writer names, and never over a link the attendees already have. */
+const checkConference = (
+  context: WriteContext,
+  fields: EventFields,
+  existing: readonly { joinUrl: string | null }[] = [],
+) => {
+  const wanted = fields.conference
+  if (wanted === undefined) return
+  const offered = context.writes.writer.conferences ?? []
+  const flag = context.names.conference
+  if (!offered.includes(wanted))
+    throw new CliError(
+      "validation_error",
+      offered.length
+        ? `${flag} takes ${offered.join(", ")}, not ${wanted}`
+        : `this calendar cannot add a meeting link; leave out ${flag}`,
+      { param: flag },
+    )
+  if (existing.some(({ joinUrl }) => joinUrl))
+    throw new CliError(
+      "validation_error",
+      `the event already has a meeting link, which its attendees use; leave out ${flag}`,
+      { reason: "event.conference-exists", param: flag },
+    )
 }
 
 /** The profile's guard over the write's main key and its other keys (`keyedGuard`). */
@@ -257,6 +294,7 @@ export const createEvent = async (
   options: { notify?: boolean; id?: string } = {},
 ) => {
   const calendar = writable(await calendarIn(context.store, context.accountId, calendarReference))
+  checkConference(context, fields)
   const draft = draftOf(fields, context.zone, { whole: true }) as EventDraft
   const id = idOf(context, options.id)
   const notify = notifyOf(context, options.notify, (draft.attendees?.length ?? 0) > 0)
@@ -533,7 +571,8 @@ export const updateEvent = async (
     throw new CliError("validation_error", `a repeat rule belongs to the whole series: add ${context.names.series}`, {
       param: context.names.series,
     })
-  const { calendar, target, participants } = await targetOf(context, reference, { ...options, scope })
+  const { calendar, entry: named, target, participants } = await targetOf(context, reference, { ...options, scope })
+  checkConference(context, fields, [named, target])
   const patch = draftOf(fields, context.zone, { whole: false, allDay: target.allDay })
   const kept = (target.recurrence ?? []).filter((line) => !/^RRULE:/iu.test(line))
   if (patch.recurrence) patch.recurrence = [...patch.recurrence, ...kept]
@@ -683,6 +722,12 @@ const updateFollowing = async (
   fields: EventFields,
   options: ScopeChoice & { id?: string },
 ): Promise<object> => {
+  if (fields.conference !== undefined)
+    throw new CliError(
+      "validation_error",
+      `${context.names.conference} goes with one occurrence or ${context.names.series}, not ${context.names.following}`,
+      { param: context.names.conference },
+    )
   const found = await targetOf(context, reference, { ...options, scope: "following" })
   const { calendar, entry, target, participants } = found
   const split = splitOf(context, reference, found)

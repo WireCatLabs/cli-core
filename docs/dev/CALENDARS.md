@@ -114,7 +114,7 @@ not the engine's, because the engine knows only the `EventStore` port.
 
 `addCalendarCommands(program, options)` (`./calendar/cli`) mounts the shared commands once, when the program is
 built. `options` says what the provider can do (`freeBusy`, `serverSearch`, `feeds`, `writes: { quickAdd, move,
-importEvent }`), and `open(command, { readOnly })` opens the selected profile for one command: a `CalendarRun` with
+importEvent, conferences }`), and `open(command, { readOnly })` opens the selected profile for one command: a `CalendarRun` with
 the event store, the shared store (`messages`), the account, the profile's name, `locked`, and the provider built
 on first use (`source()`, `writes()`, `feeds()`). `readOnly` is true for a command that only reads the store, so
 parallel reads take no write lock; `search` tops up its word index and opens writable. The run is closed once the
@@ -163,6 +163,17 @@ account made since then (less two minutes for clock skew), and takes the one who
 instead of adding another; two such events are refused (`event.quick-add-ambiguous`), none sends the line again. A
 writer without `quickAdded` refuses the retry. Nobody is mailed without `--notify` (`events.notify`): the attendees are known only once the
 provider has read the line. `--text` refuses the field options (`event.text-with-fields`).
+
+**A meeting link on an event.** A writer that can make one names the meeting services in
+`CalendarWriter.conferences` (`["google-meet"]` for Calendar's `conferenceData.createRequest`), and the CLI passes the
+same list as `options.writes.conferences`. Then `events create` and `events update` take `--conference <service>`
+(`conference` over MCP), with those services as its choices; without them the option is not mounted. It is a change
+of its own, so `events update event:42 --conference google-meet --no-notify` needs no other field. The draft or patch
+carries `conference: { provider, requestId }`. `requestId` is new for every write, never the event's id: Google ignores
+a request id it has seen. A create retried after `outcome_unknown` stays safe through the event's own id. An event
+that already has a link (`joinUrl` on the named entry or its series) is refused (`event.conference-exists`): the
+attendees' link is never replaced. A service the writer does not offer is refused, and `--following` takes no
+`--conference`. The new link reaches the store from the entry the writer returns.
 
 **Importing a file.** With `options.writes.importEvent`, `events import <calendar>
 <file>` reads the file's VEVENTs (`readIcs`: unfolding, quoted parameters, `TZID` kept as the zone's name, floating

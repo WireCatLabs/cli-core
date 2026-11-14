@@ -78,6 +78,7 @@ const contextOver = async (
       id: "id",
       calendar: "calendar",
       series: "series",
+      conference: "conference",
       following: "following",
       repeat: "repeat",
     },

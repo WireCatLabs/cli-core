@@ -106,7 +106,10 @@ Both reads are `{ remote: read, local: read }` and `partial`: reading the servic
 fetches under the lock (`isStoreChange` in `src/cli/effects.ts`). A custom `MeetingStore` implements
 `meetingByExternalId(accountId, externalId)` so `found_in` and `show <provider id>` find the stored row; without it
 the read asks the list query by `provider_id`. Every `meeting` item lists `untrusted: ["title", "description",
-"location"]`, the service's text, and `meetings invitation` lists `untrusted: ["invitation"]`.
+"location"]`, the service's text. `meetings show` adds the participants' names and emails, the chat, the series title
+and the attachment and document names; a transcript lists `lines.text` and `lines.speaker`; a summary its text;
+`meetings export` its `content`; `meetings people` each match's `display_name` and `email`; `meetings invitation`
+lists `untrusted: ["invitation"]`.
 
 **Writes.** Pass `management: createMeetingManagement(scope, ports)` to `addMeetingCommands` and the group mounts
 `meetings create|update|cancel|invitation` for the ports given: a service that cannot delete a meeting (Meet) gives
