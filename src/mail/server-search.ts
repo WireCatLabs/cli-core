@@ -176,7 +176,7 @@ export const searchMailServer = async (
     if (!open) return
     const unique = [...new Map(listed.map((item) => [item.messageId, item])).values()]
     rules = await storedMailRules(store, { address: mailbox.account })
-    const facts = factsOf(unique, rules)
+    const facts = await factsOf(unique, rules, (addresses) => store.mail.writtenTo(addresses))
     for (const item of unique) {
       const held = (await store.mail.email(accountId, item.messageId)) !== null
       const rule = decide(rules, facts(item))

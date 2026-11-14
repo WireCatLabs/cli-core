@@ -72,18 +72,32 @@ describe("factsOf", () => {
   const news = { from: "news@shop.example", to: [], listId: "news.shop.example", bulk: true }
   const rule: MailRule = { match: { score_at_least: 1 }, action: "skip", decided_at: "2026-10-14T00:00:00.000Z" }
 
-  it("gives a rule the sender's score and whether the owner wrote to it, from the whole listing", () => {
+  it("gives a rule the sender's score and whether the owner wrote to it, from the whole listing", async () => {
     const items = [email(1, news), email(2, news), email(3, { from: "alice@example.test", to: [], bulk: false })]
 
-    const facts = factsOf(items, [rule])
+    const facts = await factsOf(items, [rule], async () => new Set())
 
     expect(facts(items[0] as Listed)).toMatchObject({ score: expect.any(Number), replied: false })
     expect(facts(items[2] as Listed)).toMatchObject({ score: expect.any(Number) })
   })
 
-  it("leaves an item as listed when no rule needs a score", () => {
+  it("leaves an item as listed when no rule needs a score", async () => {
     const items = [email(1, news)]
+    const facts = await factsOf(items, [{ ...rule, match: { domain: "shop.example" } }], async () => new Set())
 
-    expect(factsOf(items, [{ ...rule, match: { domain: "shop.example" } }])(items[0] as Listed)).toBe(items[0])
+    expect(facts(items[0] as Listed)).toBe(items[0])
+  })
+
+  it("knows the owner wrote to a sender from stored outgoing mail the listing does not hold", async () => {
+    const items = [email(1, { from: "Alice@Example.test", to: [], bulk: false })]
+    const asked: string[][] = []
+
+    const facts = await factsOf(items, [rule], async (addresses) => {
+      asked.push([...addresses])
+      return new Set(["alice@example.test"])
+    })
+
+    expect(asked).toEqual([["Alice@Example.test"]])
+    expect(facts(items[0] as Listed)).toMatchObject({ replied: true })
   })
 })
