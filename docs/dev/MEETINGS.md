@@ -296,6 +296,36 @@ series shares one row keyed `NO_SERIES` (`no-series`) with no name. `limit` (def
 weeks, oldest first, or the busiest series, and `has_more` says it left rows out. `aggregateMeetingCounts` is the
 same arithmetic over meetings a host already has.
 
+## Call stats
+
+`readCallStats(store, request)` from the services export answers the `call_stats` entity over one account's meetings
+that are phone calls, through the same selection as the meeting stats (`meetingSelectionSql`). The parts:
+
+- `callOf` (`src/meetings/calls.ts`) reads one stored meeting as a call: `direction` (`incoming`, `outgoing`,
+  `internal`; Beeline's `INBOUND` and `OUTBOUND` too), `outcome`, `waitMs`, `talkMs`, `durationMs`, `placedBy`,
+  `answeredBy` and `rang` from the metadata, the client from the participant whose role is `client`, and employees
+  from the extensions the metadata names (`extension:<number>`) or the `manager` participants it does not name
+  (`identity:<id>`). A key that is missing or of the wrong type is `null`. A meeting with no direction, outcome or
+  client is not a call and is counted in `not_calls`.
+- `aggregateCallStats` (`src/meetings/call-stats.ts`) is the arithmetic, with no store: totals by direction and
+  outcome, per employee, 24 hours and the days with a call in the zone, missed incoming calls (voicemail, busy, no
+  answer) and their callbacks, and short calls. A callback is the client's next call within the window that is
+  outgoing, or incoming and answered. A transferred call's talk counts for each employee who answered it. Counts are
+  over the calls that give the field, and `known` says how many do. A key that no call of the selection gives is
+  absent, never `0` or `null`; `null` is a value known to be empty, such as the mean wait when no incoming call was
+  answered. Each missed call and its callback carry a `meeting:` ref.
+- `meetingCalls` (`src/store/sqlite/meeting-calls.ts`) reads the selected meetings with their metadata and
+  participants, at most 200000, oldest first.
+- `readCallStats` (`src/services/call-stats.ts`) also reads the account's calls in the window after `until`, or from
+  `since` to that window's end when the selection is narrowed to a person, so a callback by a colleague or after the
+  selection counts.
+
+`addCallStatsCommand` (`src/cli/call-stats-command.ts`) mounts `stats calls show`. Only a host whose meetings are calls
+mounts it; nothing in the shared program does. Beeline keeps only recorded calls and writes no outcome, wait or talk,
+so its report has `known.outcome: 0` and no `by_outcome`, `missed`, talk or wait keys. `--person-id` selects the
+calls whose participants link to the person: pbx keeps only the extensions that placed or answered a call as
+participants, so a person's calls that only rang them are not selected.
+
 ## Project-word discovery SDK
 
 `readMeetingProjectDiscovery` from the services export resolves one existing project through
