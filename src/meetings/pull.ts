@@ -1,6 +1,6 @@
 import { linkEvent } from "./events.js"
 import { speakerPosition, timestamp, transcriptInput } from "./ingest.js"
-import type { SourceChatLine, SourceMeeting, SummaryContent, TranscriptLine } from "./model.js"
+import type { Meeting, SourceChatLine, SourceMeeting, SummaryContent, TranscriptLine } from "./model.js"
 import type { MeetingSource, SourceParticipant } from "./source.js"
 import type {
   MeetingDetails,
@@ -80,36 +80,37 @@ export interface SourceMeetingParts {
 }
 
 /**
- * Saves one meeting as `meetings sync` does, keyed by its occurrence id, and links its event: `sync` and the reads that
- * keep what the service returned write the same row. It never moves the sync's cursor.
+ * The meetings row of a meeting the service returned. With `kept`, the stored row, a field the record leaves empty
+ * keeps the stored value and the metadata merges: a live read's record may be thinner than what sync stored.
  */
-export const saveSourceMeeting = async (
-  source: Pick<MeetingSource, "provider" | "name" | "transcriptFormat" | "createsEvents">,
-  store: MeetingStore,
+export const sourceMeetingInput = (
   m: SourceMeeting,
-  parts: SourceMeetingParts,
-  { accountId, now }: { accountId: number; now: number },
-): Promise<MeetingDetails> => {
-  const id = m.occurrence.id
-  const { participants: sourceParticipants, transcript: lines, chat, summary } = parts
-  const participants = participantInputs(source.provider, id, sourceParticipants ?? [], accountId)
+  accountId: number,
+  participantsCount: number | null | undefined,
+  kept?: Meeting,
+): MeetingInput => {
   const startedAt = timestamp(m.occurrence.startedAt)
-  const endedAt = m.occurrence.endedAt === null ? null : timestamp(m.occurrence.endedAt)
-  if (endedAt !== null && endedAt < startedAt) throw new Error("Meeting ends before it starts")
+  const given = m.occurrence.endedAt === null ? null : timestamp(m.occurrence.endedAt)
+  if (given !== null && given < startedAt) throw new Error("Meeting ends before it starts")
+  const keptEnd = kept?.endedAt ?? null
+  const endedAt = given ?? (keptEnd !== null && keptEnd >= startedAt ? keptEnd : null)
+  const count = participantsCount === null && kept ? kept.participantsCount : participantsCount
+  const metadata =
+    kept?.metadata && m.metadata ? { ...kept.metadata, ...m.metadata } : (m.metadata ?? kept?.metadata ?? null)
   const meeting: MeetingInput = {
     accountId,
-    externalId: id,
+    externalId: m.occurrence.id,
     title: m.occurrence.title,
-    description: m.description ?? null,
-    location: m.location ?? null,
-    joinUrl: m.joinUrl ?? m.series?.joinUrl ?? null,
+    description: m.description ?? kept?.description ?? null,
+    location: m.location ?? kept?.location ?? null,
+    joinUrl: m.joinUrl ?? m.series?.joinUrl ?? kept?.joinUrl ?? null,
     startedAt,
     endedAt,
     durationMs: endedAt === null ? null : endedAt - startedAt,
-    timezone: m.timezone ?? null,
-    hostIdentityId: null,
-    ...(sourceParticipants === undefined ? {} : { participantsCount: sourceParticipants?.length ?? null }),
-    metadata: m.metadata ?? null,
+    timezone: m.timezone ?? kept?.timezone ?? null,
+    hostIdentityId: kept?.hostIdentityId ?? null,
+    ...(count === undefined ? {} : { participantsCount: count }),
+    metadata,
     deletedAt: null,
   }
   if (m.series)
@@ -124,6 +125,30 @@ export const saveSourceMeeting = async (
       metadata: null,
       deletedAt: null,
     }
+  return meeting
+}
+
+/**
+ * Saves one meeting as `meetings sync` does, keyed by its occurrence id, and links its event: `sync` and the reads that
+ * keep what the service returned write the same row. It never moves the sync's cursor. A live read passes `kept`, the
+ * stored row, so a thinner record does not empty what sync stored (`sourceMeetingInput`).
+ */
+export const saveSourceMeeting = async (
+  source: Pick<MeetingSource, "provider" | "name" | "transcriptFormat" | "createsEvents">,
+  store: MeetingStore,
+  m: SourceMeeting,
+  parts: SourceMeetingParts,
+  { accountId, now, kept }: { accountId: number; now: number; kept?: Meeting },
+): Promise<MeetingDetails> => {
+  const id = m.occurrence.id
+  const { participants: sourceParticipants, transcript: lines, chat, summary } = parts
+  const participants = participantInputs(source.provider, id, sourceParticipants ?? [], accountId)
+  const meeting = sourceMeetingInput(
+    m,
+    accountId,
+    sourceParticipants === undefined ? undefined : (sourceParticipants?.length ?? null),
+    kept,
+  )
   const linked = sourceParticipants !== undefined
   const format = source.transcriptFormat ?? null
   const transcripts =

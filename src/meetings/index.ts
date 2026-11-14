@@ -1,4 +1,13 @@
 export {
+  BACKENDS,
+  type Backend,
+  type QueryTree,
+  type ServiceCalls,
+  type ServiceCapability,
+  type ServiceOperator,
+  serviceCallsOf,
+} from "../search/service-query.js"
+export {
   MEETING_STEPS,
   type MeetingDetailsItem,
   type MeetingHitItem,
@@ -381,15 +390,6 @@ export type {
   MeetingSeriesInventoryResult,
 } from "./series-inventory-types.js"
 export { validateMeetingSeriesInventoryCursor } from "./series-inventory-validation.js"
-export {
-  BACKENDS,
-  type Backend,
-  type QueryTree,
-  type ServiceCalls,
-  type ServiceCapability,
-  type ServiceOperator,
-  serviceCallsOf,
-} from "./service-query.js"
 export type {
   FoundMeeting,
   FoundMeetings,

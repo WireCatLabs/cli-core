@@ -56,13 +56,18 @@ export interface MeetingCommandDeps {
    */
   budgetOf?: (command: Command) => MeetingBudget
   now?: () => number
-  /** `<PREFIX>_READ_ONLY` holds: `list` and `show` read the store only, since they keep what the service returns. */
-  readOnly?: () => boolean
+  /** The owner's zone, in which `meetings list` reads a query's dates on both sides; the computer's without it. */
+  timezone?: string
   /**
    * The service's meeting writes, `createMeetingManagement(scope, ports)`: `meetings create|update|cancel|invitation`
    * are mounted for the ports it has.
    */
   management?: MeetingManagement
+  /**
+   * Puts the profile's question before a write to the service: `askBeforeWrite` from `@wirecat/cli-core/cli`, which
+   * asks when the command's key is at `ask` and refuses when nobody can answer. Without it the writes refuse.
+   */
+  askFirst?: (command: Command) => Promise<void>
 }
 const integer = (text: string) => {
   if (!/^[1-9]\d*$/.test(text) || !Number.isSafeInteger(Number(text)))
@@ -121,7 +126,7 @@ const addMeetingCommandsDefinition = (program: Command, deps: MeetingCommandDeps
   const access = (command: Command, backend: Backend | undefined): MeetingServerAccess => ({
     ...(backend === undefined ? {} : { backend }),
     offline: command.optsWithGlobals().offline === true,
-    readOnly: deps.readOnly?.() === true,
+    timezone: timezoneOf(deps.timezone),
     ...(deps.now ? { now: deps.now() } : {}),
   })
   const list = queryWordsAfterOptions(
@@ -322,7 +327,13 @@ const addMeetingCommandsDefinition = (program: Command, deps: MeetingCommandDeps
       )
     })
   if (deps.management)
-    addMeetingManagementCommands(group, { management: deps.management, print, output, inRun: deps.inRun })
+    addMeetingManagementCommands(group, {
+      management: deps.management,
+      print,
+      output,
+      inRun: deps.inRun,
+      ...(deps.askFirst ? { askFirst: deps.askFirst } : {}),
+    })
   const eventList = queryWordsAfterOptions(
     annotate(program.command("events").description("the owner's stored events"), {
       effects: { remote: "none", local: "none" },

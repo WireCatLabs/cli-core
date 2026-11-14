@@ -1,6 +1,6 @@
 import type { Predicate } from "@wirecat/cli-base/query"
+import type { ServiceOperator } from "../search/service-query.js"
 import type { Metadata, SourceChatLine, SourceMeeting, SummaryContent, TranscriptLine } from "./model.js"
-import type { ServiceOperator } from "./service-query.js"
 import type { MeetingDocumentInput, MeetingSave } from "./store.js"
 
 export interface SourceParticipant {

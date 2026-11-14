@@ -1,3 +1,4 @@
+import { CliError } from "@wirecat/cli-base"
 import { annotate } from "@wirecat/cli-base/commands"
 import type { Effects } from "@wirecat/cli-base/standards"
 import { type Command, InvalidArgumentError, Option } from "commander"
@@ -82,6 +83,8 @@ export interface MeetingManagementCommandDeps {
   print: (value: unknown, command: Command) => void
   output: (command: Command) => Command
   inRun: <T>(command: Command, body: () => Promise<T>) => Promise<T>
+  /** The profile's question before a write reaches the service (`MeetingCommandDeps.askFirst`). */
+  askFirst?: (command: Command) => Promise<void>
 }
 
 /**
@@ -90,9 +93,18 @@ export interface MeetingManagementCommandDeps {
  * previews it without reaching the service.
  */
 export const addMeetingManagementCommands = (group: Command, deps: MeetingManagementCommandDeps): void => {
-  const { management, print, output, inRun } = deps
+  const { management, print, output, inRun, askFirst } = deps
   const has = (name: string) => management.capabilities.includes(name)
-  const mutation = (command: Command) => ({ apply: true, dryRun: command.optsWithGlobals().dryRun === true })
+  // A write the owner could not be asked about never goes: a host that forgets the question gets a refusal.
+  const mutation = async (command: Command) => {
+    const dryRun = command.optsWithGlobals().dryRun === true
+    if (!dryRun) {
+      if (!askFirst)
+        throw new CliError("configuration_error", "this tool cannot ask before it changes a meeting on the service")
+      await askFirst(command)
+    }
+    return { apply: true, dryRun }
+  }
   const write = (name: string) =>
     annotate(group.command(name), { effects: REMOTE_WRITE, offline: false, output: { entity: "meeting_change" } })
   const target = (command: Command) => command.argument("<meeting>", "the service's id of the meeting")
@@ -100,14 +112,14 @@ export const addMeetingManagementCommands = (group: Command, deps: MeetingManage
     output(changeOptions(write("create").description("create a meeting on the service"))).action(
       async (flags: ChangeFlags, command: Command) =>
         inRun(command, async () =>
-          print({ item: receiptItem(await management.create(changeOf(flags), mutation(command))) }, command),
+          print({ item: receiptItem(await management.create(changeOf(flags), await mutation(command))) }, command),
         ),
     )
   if (has("update"))
     output(changeOptions(target(write("update").description("change a meeting on the service")))).action(
       async (id: string, flags: ChangeFlags, command: Command) =>
         inRun(command, async () =>
-          print({ item: receiptItem(await management.update(id, changeOf(flags), mutation(command))) }, command),
+          print({ item: receiptItem(await management.update(id, changeOf(flags), await mutation(command))) }, command),
         ),
     )
   if (has("cancel"))
@@ -122,7 +134,7 @@ export const addMeetingManagementCommands = (group: Command, deps: MeetingManage
           {
             item: receiptItem(
               await management.cancel(id, {
-                ...mutation(command),
+                ...(await mutation(command)),
                 ...(flags.occurrenceId === undefined ? {} : { occurrenceId: flags.occurrenceId }),
               }),
             ),
@@ -141,6 +153,8 @@ export const addMeetingManagementCommands = (group: Command, deps: MeetingManage
         }).description("the invitation text the service writes for a meeting"),
       ),
     ).action(async (id: string, _flags: unknown, command: Command) =>
-      inRun(command, async () => print({ item: await management.invitation(id) }, command)),
+      inRun(command, async () =>
+        print({ item: { ...(await management.invitation(id)), untrusted: ["invitation"] } }, command),
+      ),
     )
 }

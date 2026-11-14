@@ -1,12 +1,11 @@
 import { CliError } from "@wirecat/cli-base"
-import { dateRange, type Predicate, type QueryAst, type QueryNode, timezoneOf } from "@wirecat/cli-base/query"
+import { type Predicate, type QueryAst, timezoneOf } from "@wirecat/cli-base/query"
 import type { Issue, Meta, Missing } from "@wirecat/cli-base/standards"
+import { type Backend, rangeOf, type ServiceCapability, serviceCallsOf, windowOf } from "../search/service-query.js"
 import type { MeetingItem } from "./item.js"
-import { saveSourceMeeting } from "./pull.js"
+import { saveSourceMeeting, sourceMeetingInput } from "./pull.js"
 import { MeetingError, type MeetingList, meetingsList } from "./reads.js"
 import { parseMeetingReference } from "./reference.js"
-import type { Backend } from "./service-query.js"
-import { type ServiceCapability, serviceCallsOf } from "./service-query.js"
 import type { FoundMeeting, MeetingSource, MeetingTerm, MeetingWindow } from "./source.js"
 import type { MeetingDetails, MeetingFilter, MeetingStore } from "./store.js"
 
@@ -19,7 +18,7 @@ export const MEETING_SERVER_BOUNDS = { calls: 3, pages: 2 }
 export type MeetingServerSkip =
   | "unsupported"
   | "offline"
-  | "read_only"
+  | "unreachable"
   | "not_signed_in"
   | "refused"
   | "failed"
@@ -33,15 +32,18 @@ export interface MeetingServerReport {
   returned: number
   /** Meetings the store did not hold before this read. */
   new: number
+  /** Meetings the service returned that could not be kept, so the store's answer cannot have them. */
+  failed: number
   complete: boolean
 }
 
-/** Where a read may look and what stops it asking the service; `backend` as typed, so its absence means `both`. */
+/**
+ * Where a read may look and what stops it asking the service; `backend` as typed, so its absence means `both`.
+ * `timezone` and `now` read the query's dates the same way on both sides: the service's window and the store's query.
+ */
 export interface MeetingServerAccess {
   backend?: Backend
   offline?: boolean
-  /** `<PREFIX>_READ_ONLY`: what the service returns is kept in the store, so a locked run reads only the store. */
-  readOnly?: boolean
   now?: number
   timezone?: string
 }
@@ -60,7 +62,7 @@ interface ServerStep {
 // A source that has no live read, or no upcoming meetings, answers in full what it can: only a failed read is partial.
 const ISSUES: Partial<Record<MeetingServerSkip, [Issue["code"], string]>> = {
   offline: ["permission_error", "meetings.server-offline"],
-  read_only: ["permission_error", "meetings.server-read-only"],
+  unreachable: ["network_error", "meetings.server-unreachable"],
   not_signed_in: ["authentication_error", "meetings.server-signed-out"],
   refused: ["permission_error", "meetings.server-refused"],
   failed: ["provider_error", "meetings.server-failed"],
@@ -73,7 +75,7 @@ const metaOf = (reason: MeetingServerSkip, provider: string): Partial<Meta> | un
 const WHY: Record<MeetingServerSkip, (provider: string) => string> = {
   unsupported: (provider) => `${provider} cannot be asked for meetings here — the answer is the store's`,
   offline: () => "--offline: the service was not asked — the answer is the store's",
-  read_only: () => "the process is read-only, and a read keeps what the service returns — the answer is the store's",
+  unreachable: (provider) => `${provider} could not be reached — the answer is the store's`,
   not_signed_in: (provider) => `not signed in to ${provider} — the answer is the store's`,
   refused: (provider) => `${provider} refused the request — the answer is the store's`,
   failed: (provider) => `${provider} could not be read — the answer is the store's`,
@@ -84,7 +86,7 @@ const reasonOf = (error: unknown): MeetingServerSkip => {
   const code = error instanceof CliError ? error.code : undefined
   if (code === "authentication_error") return "not_signed_in"
   if (code === "permission_error") return "refused"
-  if (code === "network_error") return "offline"
+  if (code === "network_error") return "unreachable"
   return "failed"
 }
 
@@ -108,22 +110,6 @@ const within = (one: MeetingWindow, other: MeetingWindow): MeetingWindow | undef
   return { ...(Number.isFinite(from) ? { from } : {}), ...(Number.isFinite(to) ? { to } : {}) }
 }
 
-const windowOf = (node: Predicate, zone: string, now: number): MeetingWindow => {
-  const range = dateRange(
-    node.value,
-    node.operator === "range" ? (node.upper ?? "*") : node.value,
-    node.operator === "range" ? node.lower_inclusive === true : true,
-    node.operator === "range" ? node.upper_inclusive === true : true,
-    zone,
-    node.span,
-    now,
-  )
-  return {
-    ...(range.lower === undefined ? {} : { from: range.lower_inclusive ? range.lower : range.lower + 1 }),
-    ...(range.upper === undefined ? {} : { to: range.upper_inclusive ? range.upper : range.upper - 1 }),
-  }
-}
-
 /** Every `find` takes `started_at` as its window; the rest is what the source declared it reads. */
 const findsOf = (
   source: MeetingSource & { finds: NonNullable<MeetingSource["finds"]> },
@@ -136,7 +122,7 @@ const findsOf = (
   all: { window: {}, terms: [] },
   leaf: (predicate, negated) =>
     predicate.field === "started_at"
-      ? { window: windowOf(predicate, zone, now), terms: [] }
+      ? { window: windowOf(rangeOf(predicate, zone, now)), terms: [] }
       : { window: {}, terms: [{ predicate, negated }] },
   both: (one, other) => {
     const window = within(one.window, other.window)
@@ -144,18 +130,53 @@ const findsOf = (
   },
 })
 
-/** A window that names a time after `now`: one a source without upcoming meetings cannot answer in full. */
-const reachesFuture = ({ from, to }: MeetingWindow, now: number) => (to === undefined ? from !== undefined : to > now)
+/** A window that reaches past `now`, an open end included: one a source without upcoming meetings cannot answer. */
+const reachesFuture = ({ to }: MeetingWindow, now: number) => to === undefined || to > now
 
-const heldBefore = async (store: MeetingStore, accountId: number, externalId: string): Promise<boolean> => {
-  if (store.meetingByExternalId) return (await store.meetingByExternalId(accountId, externalId)) !== null
+const storedByExternalId = async (
+  store: MeetingStore,
+  accountId: number,
+  externalId: string,
+): Promise<MeetingDetails | null> => {
+  if (store.meetingByExternalId) return store.meetingByExternalId(accountId, externalId)
   const span = { start: 0, end: 0 }
   const query: QueryAst = {
     version: 1,
     language: "lucene-v1",
     root: { kind: "predicate", field: "provider_id", operator: "term", value: externalId, span },
   }
-  return (await store.meetings({ accountId, query, includeDeleted: true, limit: 1 })).length > 0
+  const [row] = await store.meetings({ accountId, query, includeDeleted: true, limit: 1 })
+  return row ? store.meeting(row.id) : null
+}
+
+const peopleKey = (people: readonly { email: string | null; displayName: string | null }[]) =>
+  JSON.stringify(people.map(({ email, displayName }) => [email ?? "", displayName ?? ""]).sort())
+
+/** Whether keeping what the service returned would change nothing the store holds, so nothing is written. */
+const unchanged = (found: FoundMeeting, stored: MeetingDetails, accountId: number): boolean => {
+  const participants = found.participants
+  const input = sourceMeetingInput(
+    found.meeting,
+    accountId,
+    participants === undefined ? undefined : (participants?.length ?? null),
+    stored.meeting,
+  )
+  const row = stored.meeting
+  return (
+    row.deletedAt === null &&
+    input.title === row.title &&
+    input.description === row.description &&
+    input.location === row.location &&
+    input.joinUrl === row.joinUrl &&
+    input.startedAt === row.startedAt &&
+    input.endedAt === row.endedAt &&
+    input.timezone === row.timezone &&
+    JSON.stringify(input.metadata ?? null) === JSON.stringify(row.metadata ?? null) &&
+    (input.series === undefined ||
+      (input.series.externalId === stored.series?.externalId && input.series.title === stored.series.title)) &&
+    (participants == null ||
+      (row.participantsCount === participants.length && peopleKey(participants) === peopleKey(stored.participants)))
+  )
 }
 
 const stepFor = (backend: Backend): ServerStep => ({
@@ -165,13 +186,17 @@ const stepFor = (backend: Backend): ServerStep => ({
     calls: 0,
     returned: 0,
     new: 0,
+    failed: 0,
     complete: true,
   },
   found: new Map(),
   missing: [],
 })
 
-/** Keeps one meeting the service returned and records whether the store held it. */
+/**
+ * Keeps one meeting the service returned and records whether the store held it. What the record leaves empty keeps
+ * the stored value; a list's record that changes nothing is not written (`fresh` is a `show`'s full read).
+ */
 const keep = async (
   source: MeetingSource,
   store: MeetingStore,
@@ -180,12 +205,20 @@ const keep = async (
   step: ServerStep,
   found: FoundMeeting,
   parts: Parameters<typeof saveSourceMeeting>[3],
+  fresh = false,
 ): Promise<MeetingDetails> => {
-  const held = await heldBefore(store, accountId, found.meeting.occurrence.id)
-  const details = await saveSourceMeeting(source, store, found.meeting, parts, { accountId, now })
-  step.found.set(details.meeting.id, held ? "both" : "server")
+  const stored = await storedByExternalId(store, accountId, found.meeting.occurrence.id)
+  const details =
+    stored && !fresh && unchanged(found, stored, accountId)
+      ? stored
+      : await saveSourceMeeting(source, store, found.meeting, parts, {
+          accountId,
+          now,
+          ...(stored ? { kept: stored.meeting } : {}),
+        })
+  step.found.set(details.meeting.id, stored ? "both" : "server")
   step.report.returned += 1
-  if (!held) step.report.new += 1
+  if (!stored) step.report.new += 1
   return details
 }
 
@@ -216,14 +249,13 @@ export const askServerForList = async (
   }
   if (!source?.find || !source.finds) return skip("unsupported")
   if (access.offline) return skip("offline")
-  if (access.readOnly) return skip("read_only")
   const now = access.now ?? Date.now()
   const finds = source.finds
   const capability = findsOf({ ...source, finds }, timezoneOf(access.timezone), now)
   const { calls, complete } = query
     ? serviceCallsOf(query.root, capability)
     : { calls: [capability.all], complete: true }
-  if (!complete) step.report.complete = false
+  let capped = !complete
   let asked = calls
   if (finds.upcoming === false) {
     if (calls.some(({ window }) => reachesFuture(window, now)))
@@ -235,6 +267,7 @@ export const askServerForList = async (
     if (!asked.length) return skip("no_upcoming")
   }
   const seen = new Set<string>()
+  let failure: unknown
   for (const call of asked) {
     let cursor: string | null = null
     for (let page = 0; page < MEETING_SERVER_BOUNDS.pages; page++) {
@@ -250,17 +283,31 @@ export const askServerForList = async (
         seen.add(found.meeting.occurrence.id)
         try {
           await keep(source, store, accountId, now, step, found, { participants: found.participants })
-        } catch {
-          step.report.complete = false
+        } catch (error) {
+          step.report.failed += 1
+          failure ??= error
         }
       }
       cursor = answer.next
       if (cursor === null) break
-      if (page === MEETING_SERVER_BOUNDS.pages - 1) step.report.complete = false
+      if (page === MEETING_SERVER_BOUNDS.pages - 1) capped = true
     }
   }
-  if (!step.report.complete) {
-    step.meta = { truncated: true }
+  const issues: Issue[] = []
+  if (step.report.failed) {
+    issues.push({
+      code: failure instanceof CliError ? failure.code : "provider_error",
+      reason: "meetings.server-failed",
+      source: provider,
+    })
+    const why = failure instanceof Error ? `: ${failure.message}` : ""
+    step.missing.push({
+      field: "server",
+      why: `${step.report.failed} meeting(s) ${provider} returned could not be kept${why} — the answer is without them`,
+    })
+  }
+  if (capped) {
+    issues.push({ code: "outcome_unknown", reason: "meetings.server-capped", source: provider })
     const { calls, returned } = step.report
     step.missing.push({
       field: "server",
@@ -269,19 +316,11 @@ export const askServerForList = async (
         "match — narrow the query by started_at",
     })
   }
-  return step
-}
-
-const anyId = (ids: number[]): QueryNode => {
-  const span = { start: 0, end: 0 }
-  return {
-    kind: "boolean",
-    span,
-    clauses: ids.map((id) => ({
-      occur: "should" as const,
-      node: { kind: "predicate" as const, field: "id", operator: "term" as const, value: String(id), span },
-    })),
+  if (issues.length) {
+    step.report.complete = false
+    step.meta = { complete: false, issues }
   }
+  return step
 }
 
 /** `meetings list` with the service asked first, as `--backend` says; the store's query and paging decide. */
@@ -293,31 +332,19 @@ export const meetingsListThrough = async (
   filter: MeetingFilter & { accountId: number },
   access: MeetingServerAccess,
 ): Promise<MeetingListThrough> => {
-  const step = await askServerForList(source, store, filter.accountId, filter.query, access)
-  if (!step) return meetingsList(store, filter)
+  const now = access.now ?? Date.now()
+  const zoned = { ...filter, timezone: timezoneOf(access.timezone), now }
+  const step = await askServerForList(source, store, filter.accountId, filter.query, { ...access, now })
+  if (!step) return meetingsList(store, zoned)
   const extras = {
     server: step.report,
     ...(step.missing.length ? { missing: step.missing } : {}),
     ...(step.meta ? { meta: step.meta } : {}),
   }
-  let narrowed = filter
-  if (access.backend === "server") {
-    const ids = [...step.found.keys()]
-    if (!ids.length)
-      return { items: [], page: { mode: "page", limit: filter.limit ?? 100, has_more: false }, ...extras }
-    const root = filter.query
-      ? ({
-          kind: "boolean",
-          span: filter.query.root.span,
-          clauses: [
-            { occur: "must", node: filter.query.root },
-            { occur: "must", node: anyId(ids) },
-          ],
-        } satisfies QueryNode)
-      : anyId(ids)
-    narrowed = { ...filter, query: { version: 1, language: "lucene-v1", root } }
-  }
-  const list = await meetingsList(store, narrowed)
+  const ids = [...step.found.keys()]
+  if (access.backend === "server" && !ids.length)
+    return { items: [], page: { mode: "page", limit: filter.limit ?? 100, has_more: false }, ...extras }
+  const list = await meetingsList(store, access.backend === "server" ? { ...zoned, ids } : zoned)
   return {
     ...list,
     items: list.items.map((item) => ({ ...item, found_in: step.found.get(Number(item.id)) ?? "archive" })),
@@ -392,7 +419,6 @@ export const meetingShowThrough = async (
   if (providerId === undefined) throw notFound()
   if (!source?.get) return fromStore("unsupported")
   if (access.offline) return fromStore("offline")
-  if (access.readOnly) return fromStore("read_only")
   step.report.calls = 1
   let full: Awaited<ReturnType<NonNullable<MeetingSource["get"]>>>
   try {
@@ -404,11 +430,16 @@ export const meetingShowThrough = async (
     if (!stored || backend === "server") throw notFound()
     return { details: stored, foundIn: "archive", server: step.report }
   }
-  const details = await keep(source, store, accountId, access.now ?? Date.now(), step, full, {
-    participants: full.participants,
-    transcript: full.transcript,
-    documents: full.documents,
-  })
+  const details = await keep(
+    source,
+    store,
+    accountId,
+    access.now ?? Date.now(),
+    step,
+    full,
+    { participants: full.participants, transcript: full.transcript, documents: full.documents },
+    true,
+  )
   const fresh = (await store.meeting(details.meeting.id)) ?? details
   return { details: fresh, foundIn: step.found.get(details.meeting.id) ?? "server", server: step.report }
 }

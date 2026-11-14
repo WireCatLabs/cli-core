@@ -633,8 +633,14 @@ const filtered = (filter: MeetingFilter = {}) => {
   if (filter.meetingSeriesId !== undefined) add("meeting_series_id = ?", filter.meetingSeriesId)
   if (filter.since !== undefined) add("started_at >= ?", filter.since)
   if (filter.until !== undefined) add("started_at <= ?", filter.until)
+  // One bound list: an OR of ids per meeting grows past SQLite's expression depth at about a thousand.
+  if (filter.ids !== undefined) add("id IN (SELECT value FROM json_each(?))", JSON.stringify(filter.ids))
   if (filter.query !== undefined) {
-    const compiled = queryFilter(filter.query, MEETING_COLUMNS, { command: "meetings list" })
+    const compiled = queryFilter(filter.query, MEETING_COLUMNS, {
+      command: "meetings list",
+      ...(filter.timezone === undefined ? {} : { zone: filter.timezone }),
+      ...(filter.now === undefined ? {} : { now: filter.now }),
+    })
     where.push(`(${compiled.sql})`)
     params.push(...compiled.params)
   }

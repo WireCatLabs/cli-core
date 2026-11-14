@@ -50,36 +50,71 @@ at once, so a meeting a sync has not kept yet still shows. A source declares wha
 operators it reads on each (`{ provider_id: ["term"] }`); `finds.negatable` the ones whose NOT it can send. Every
 `find` takes `started_at` as `window` (`{ from?, to? }`, epoch ms, both ends inclusive; an open end is the source's own
 default). `terms` are the other parts it declared, each `{ predicate, negated }`. It answers one page, `{ meetings:
-[{ meeting, participants? }], next }`, `next` `null` on the last. Each `meeting.occurrence.id` must be the id
-`meetings()` gives, so the row a list keeps is the row `sync` writes: Zoom's live answer carries the instance uuid
-beside the meeting number. A service that lists no meeting before it starts (Meet: scheduling is Google Calendar's)
-sets `finds.upcoming: false`; a query for later meetings then names it in `missing`.
+[{ meeting, participants? }], next }`, `next` `null` on the last.
+
+**One meeting, one id.** Each `meeting.occurrence.id` that `find` and `get` return must be the external id
+`meetings()` writes for that occurrence. The store keys a meeting by it, and a matching join link (`join_key`) does
+not join two rows, so another id makes a list keep a second row beside the one `sync` writes. Zoom's live answer
+carries the meeting number and the instance uuid, so the zoom slice proves with a test that `find`, `get` and
+`meetings()` give one id. `show` does not look a meeting up by its join link (the store has no lookup by `join_key`
+yet), so `show <meeting number>` offline finds the meeting only when that number is the id the store keeps.
+
+A service that lists no meeting before it starts (Meet: scheduling is Google Calendar's) sets `finds.upcoming: false`.
+Its calls are cut at now, and a query that reaches past now, a plain `meetings list` included, names that in
+`missing` (`upcoming`).
 
 **`get(id)`** answers one meeting by the service's id, `{ meeting, participants?, transcript?, documents? }`, or
 `null` when the service has none.
 
 **How `list` reads, `--backend archive|server|both`**, the words messages search uses, default `both`; `--offline`
-reads the store. `serviceCallsOf` keeps the part of the query the service can read and leaves out the rest, which
-only widens a call and never loses a meeting; each OR branch is a call of its own, at most three
-(`MEETING_SERVER_BOUNDS`), each up to two pages. What `find` returns is kept with `saveSourceMeeting`, the writer
-`sync` uses (`show` also keeps the transcript and the Drive documents); it never moves the sync's cursor. Then the
-whole query runs once over the store: one result set, the store's order and paging. Each item says `found_in`:
-`archive` (only the store), `server` (new from the service) or `both`.
+reads the store. `serviceCallsOf` (`src/search/service-query.ts`, shared with messages server search) keeps the part
+of the query the service can read and leaves out the rest, which only widens a call and never loses a meeting; each OR
+branch is a call of its own, at most three (`MEETING_SERVER_BOUNDS`), each up to two pages. Then the whole query runs
+once over the store: one result set, the store's order and paging. Each item says `found_in`: `archive` (only the
+store), `server` (new from the service) or `both`. A later `--page` asks the service again: `found_in` of that page's
+meetings comes from this read, so it cannot be skipped.
 
-A service that cannot be asked — no `find`/`get`, `--offline`, `<PREFIX>_READ_ONLY` (the host passes `readOnly`), not
-signed in (`authentication_error`), refused (`permission_error`) or failing — leaves the store's answer and a
-`missing` line that says why; past the call or page cap a `missing` line says the list may be short. A typed
-`--backend server` refuses instead. `meetings show` takes the store number, the `meeting:` ref or the service's id
-(`provider_id`), in that order: a number that is a stored meeting's is that meeting.
+- **One zone.** The service's window and the store's query read the query's dates in the same zone and at the same
+  instant: the host's `timezone` (the computer's without it) and `now`. `started_at:2026-11-10` is that day in that
+  zone on both sides.
+- **What is kept.** What `find` returns is kept with `saveSourceMeeting`, the writer `sync` uses (`show` also keeps the
+  transcript and the Drive documents); it never moves the sync's cursor. A live read passes the stored row as `kept`:
+  an empty field of the service's record (no end, no description) keeps the stored value, and the metadata merges, so
+  a thinner list record never empties what sync stored. A list record that changes nothing is not written, so its
+  `updated_at` stays.
+- **`--backend server`** answers only the meetings this read found, as a bound id list (`MeetingFilter.ids`, one
+  `json_each` parameter), however many there are.
 
-Both reads are `{ remote: read, local: read }` and `partial`: keeping what the service returned counts as a read.
-A custom `MeetingStore` implements `meetingByExternalId(accountId, externalId)` so `found_in` and `show <provider id>`
-find the stored row; without it the read asks the list query by `provider_id`.
+A service that cannot be asked — no `find`/`get`, `--offline`, not signed in, refused, unreachable or failing — leaves
+the store's answer and a `missing` line that says why. A meeting the service returned that cannot be kept is counted,
+and the answer says how many and why. Past the call or page cap the list may be short. Each of these sets
+`meta.complete: false` with one issue, as below; a typed `--backend server` refuses instead of falling back.
+`meetings show` takes the store number, the `meeting:` ref or the service's id (`provider_id`), in that order: a
+number that is a stored meeting's is that meeting.
+
+| Reason | Code | When |
+| --- | --- | --- |
+| `meetings.server-offline` | `permission_error` | `--offline` was given |
+| `meetings.server-unreachable` | `network_error` | the service could not be reached |
+| `meetings.server-signed-out` | `authentication_error` | the service needs a sign-in |
+| `meetings.server-refused` | `permission_error` | the service refused the request |
+| `meetings.server-failed` | `provider_error`, or the error's own code | the service could not be read, or a meeting it returned could not be kept |
+| `meetings.server-capped` | `outcome_unknown` | the call cap, the page cap or a query of more than 64 OR branches left matches unasked |
+
+Both reads are `{ remote: read, local: read }` and `partial`: reading the service and keeping a copy counts as a read
+(owner, 2026-10-27). So under `<PREFIX>_READ_ONLY` they ask the service and keep what it returns, as `meetings sync`
+fetches under the lock (`isStoreChange` in `src/cli/effects.ts`). A custom `MeetingStore` implements
+`meetingByExternalId(accountId, externalId)` so `found_in` and `show <provider id>` find the stored row; without it
+the read asks the list query by `provider_id`. Every `meeting` item lists `untrusted: ["title", "description",
+"location"]`, the service's text, and `meetings invitation` lists `untrusted: ["invitation"]`.
 
 **Writes.** Pass `management: createMeetingManagement(scope, ports)` to `addMeetingCommands` and the group mounts
 `meetings create|update|cancel|invitation` for the ports given. Each write's permission key is its path
-(`meetings.create`, `meetings.update`, `meetings.cancel`), `ask` by default; `--dry-run` answers `applied: false`
-without reaching the service.
+(`meetings.create`, `meetings.update`, `meetings.cancel`), `ask` by default. `deny` and `readonly` stop it before it
+runs (`refuseByCommandPermissions`). The `ask` step is the host's `askFirst`, `askBeforeWrite` from
+`@wirecat/cli-core/cli`: it asks at a terminal, `--yes` answers, an agent goes ahead, and with nobody to answer it
+refuses with `confirmation_required`. A host that passes `management` without `askFirst` gets a refusal for every
+write. `--dry-run` answers `applied: false` without asking or reaching the service.
 
 ## A meeting's Drive documents
 

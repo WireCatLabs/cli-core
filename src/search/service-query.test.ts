@@ -86,4 +86,20 @@ describe("the query a service is asked", () => {
   it("asks for everything when nothing in the query is the service's", () => {
     expect(callsOf("title:*x*").calls).toEqual([[]])
   })
+
+  it("never asks a branch whose leaf cannot be sent, rather than asking for everything", () => {
+    const leaf = (node: Predicate) => (node.value === "elsewhere" ? undefined : [`${node.field}:${node.value}`])
+    expect(callsOf("code:a OR code:elsewhere", { leaf }).calls).toEqual([["code:a"]])
+    expect(callsOf("title:x AND code:elsewhere", { leaf, fields: { code: ["term"], title: ["term"] } })).toEqual({
+      calls: [],
+      complete: true,
+      unsent: 0,
+    })
+  })
+
+  it("says the answer is not complete when an OR past 64 branches is cut, even for a service that can OR", () => {
+    const ors = Array.from({ length: 65 }, (_, i) => `code:c${i}`).join(" OR ")
+    expect(callsOf(ors, { maxCalls: 1000 }).complete).toBe(false)
+    expect(callsOf(ors, { either: (branches) => [branches.flat().join("|")] }).complete).toBe(false)
+  })
 })

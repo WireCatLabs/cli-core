@@ -1,9 +1,8 @@
 import { CliError } from "@wirecat/cli-base"
-import type { DateRange } from "@wirecat/cli-base/query"
 import type { Chat, Id, MessageHit } from "../domain/models.js"
-import { type Backend, type ServiceCapability, serviceCallsOf } from "../meetings/index.js"
 import { capability, type MessengerAdapter, type ServerQuery } from "../ports/messenger.js"
 import type { ResolvedPredicate } from "../search/lucene/resolved.js"
+import { type Backend, type ServiceCapability, serviceCallsOf, windowOf } from "../search/service-query.js"
 import type { AccountKey } from "../store/store.js"
 import type { ServiceDeps } from "./deps.js"
 import type { SearchQuery } from "./messages.js"
@@ -70,19 +69,13 @@ const merge = (one: Branch, other: Branch): Branch | undefined => {
 const sameAccount = (one: AccountKey, other: AccountKey) =>
   one.provider === other.provider && one.account === other.account
 
-const dateBranch = ({ lower, upper, lower_inclusive, upper_inclusive }: DateRange): Branch => ({
-  words: [],
-  ...(lower === undefined ? {} : { minDate: lower_inclusive ? lower : lower + 1 }),
-  ...(upper === undefined ? {} : { maxDate: upper_inclusive ? upper : upper - 1 }),
-})
-
 // The server reads words, one chat, one sender and a date range; the strict local query decides the rest.
 const serverReads = (account: AccountKey): ServiceCapability<ResolvedPredicate, Branch> => ({
   fields: {
     text: ["term", "phrase"],
     exact: ["term", "phrase"],
-    chat: ["term"],
-    from: ["term"],
+    chat: ["term", "phrase"],
+    from: ["term", "phrase"],
     date: ["term", "range"],
   },
   maxCalls: SERVER_BOUNDS.maxCalls,
@@ -90,9 +83,19 @@ const serverReads = (account: AccountKey): ServiceCapability<ResolvedPredicate, 
   leaf: (node) => {
     if (node.field === "text" || node.field === "exact") return { words: node.value === "" ? [] : [node.value] }
     const { chat, sender, date } = node.resolution ?? {}
+    // Another account's chat holds nothing this account's server can return.
     if (chat) return sameAccount(chat.account, account) ? { words: [], chat: chat.chatId } : undefined
     if (sender?.provider === account.provider) return { words: [], from: sender.id }
-    return date ? dateBranch(date) : undefined
+    if (date) {
+      const { from, to } = windowOf(date)
+      return {
+        words: [],
+        ...(from === undefined ? {} : { minDate: from }),
+        ...(to === undefined ? {} : { maxDate: to }),
+      }
+    }
+    // `from:me` and the like: nothing the server filters, so the call is not narrowed.
+    return { words: [] }
   },
   both: merge,
   sends: ({ words }) => words.length > 0,

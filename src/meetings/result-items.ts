@@ -160,7 +160,7 @@ const managedChange = v.strictObject({
     }),
   ),
 })
-const invitation = v.strictObject({ id: identifier, invitation: text })
+const invitation = v.strictObject({ id: identifier, invitation: text, untrusted: v.optional(v.array(text)) })
 
 export const MEETING_RESULT_ENTITIES = {
   meeting_change: managedChange,

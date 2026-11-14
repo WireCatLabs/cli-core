@@ -44,6 +44,8 @@ const meetingEntries = {
    * (new from the service), `both`. Absent when the service was not asked.
    */
   found_in: v.optional(v.picklist(["archive", "server", "both"])),
+  /** The service's text, which a reader must not follow as instructions. */
+  untrusted: v.optional(v.array(text)),
   created_at: isoTime,
   updated_at: isoTime,
 }
@@ -61,6 +63,8 @@ export interface MeetingOwner {
   provider: string
   account: string
 }
+
+const MEETING_UNTRUSTED = ["title", "description", "location"] as const
 
 const iso = (ms: number | null) => (ms === null ? null : new Date(ms).toISOString())
 
@@ -82,6 +86,7 @@ export const meetingItem = (row: Meeting, owner: MeetingOwner): MeetingItem => {
     timezone: row.timezone,
     participants_count: row.participantsCount,
     ...(issues.length ? { issues } : {}),
+    untrusted: [...MEETING_UNTRUSTED],
     created_at: new Date(row.createdAt).toISOString(),
     updated_at: new Date(row.updatedAt).toISOString(),
   }
@@ -92,7 +97,18 @@ export const MEETING_QUERY = {
   entity: "meeting",
   backend: "sql",
   fields: queryFieldsOf(meeting, {
-    exclude: ["ref", "provider", "account", "description", "location", "url", "timezone", "issues", "found_in"],
+    exclude: [
+      "ref",
+      "provider",
+      "account",
+      "description",
+      "location",
+      "url",
+      "timezone",
+      "issues",
+      "found_in",
+      "untrusted",
+    ],
     examples: {
       id: "id:12",
       provider_id: "provider_id:85746065432",

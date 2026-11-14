@@ -106,6 +106,11 @@ export interface MeetingFilter {
   accountId?: number
   /** A validated `meetings list` query over `MEETING_QUERY`'s fields. */
   query?: QueryAst
+  /** The zone and the instant the query's dates are read in; UTC and the current time without them. */
+  timezone?: string
+  now?: number
+  /** Only these stored meetings, by their store id. */
+  ids?: readonly number[]
   eventId?: number
   meetingSeriesId?: number
   since?: number

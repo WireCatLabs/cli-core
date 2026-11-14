@@ -34,7 +34,6 @@ const PERSON_FIELDS = new Set(["from", "to", "cc", "bcc"])
 const MAIL_FIELDS = new Set(["to", "cc", "bcc", "subject", "mailbox", "label", "is", "list"])
 
 import {
-  dateRange,
   type Predicate,
   parseLucene,
   type QueryAst,
@@ -43,6 +42,7 @@ import {
   walkQuery,
 } from "@wirecat/cli-base/query"
 import { MESSAGE_PARSING, searchError } from "../search/lucene/types.js"
+import { rangeOf } from "../search/service-query.js"
 import type { SearchRefreshed } from "./search-refresh.js"
 
 export interface QueryMetadata {
@@ -245,16 +245,7 @@ export const prepareLucene = async (
     if (node.field === "date")
       return {
         ...node,
-        resolution: {
-          date: dateRange(
-            node.value,
-            node.operator === "range" ? (node.upper ?? "*") : node.value,
-            node.operator === "range" ? node.lower_inclusive === true : true,
-            node.operator === "range" ? node.upper_inclusive === true : true,
-            timezone,
-            node.span,
-          ),
-        },
+        resolution: { date: rangeOf(node, timezone) },
       }
     return node
   }

@@ -4,7 +4,13 @@ import { join } from "node:path"
 import { CliError } from "@wirecat/cli-base"
 import { Command } from "commander"
 import { afterEach, describe, expect, it } from "vitest"
-import { addMeetingCommands } from "../meetings/cli/index.js"
+import { askBeforeWrite } from "../cli/ask-before-write.js"
+import { inCommandRun, outputFor } from "../cli/context.js"
+import { itemOf, renderAnswer } from "../cli/envelope.js"
+import { commandPermissions } from "../cli/permission-keys.js"
+import { type ProgramDefinition, run as runProgram } from "../cli/program.js"
+import { settingsFor } from "../cli/settings.js"
+import { addMeetingCommands, type MeetingCommandDeps } from "../meetings/cli/index.js"
 import {
   createMeetingManagement,
   type FoundMeeting,
@@ -15,6 +21,7 @@ import {
   saveSourceMeeting,
 } from "../meetings/index.js"
 import { fakeMeetingSource } from "../meetings/testing/index.js"
+import type { AppIdentity } from "../ports/app.js"
 import { DEFAULT_PERMISSIONS } from "../sends/permissions.js"
 import { openStore } from "./store.js"
 
@@ -101,7 +108,7 @@ const serviceOf = (
   return { source, asked, got }
 }
 
-const fixture = async (source?: MeetingSource) => {
+const fixture = async (source?: MeetingSource, extra: Partial<MeetingCommandDeps> = {}) => {
   const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "meetings-read-through-")), "store.db") })
   handles.push(store)
   const accountId = await store.accounts.saveAccount({ provider: "example", account: "invented" }, { name: "Invented" })
@@ -127,6 +134,7 @@ const fixture = async (source?: MeetingSource) => {
       write: (value) => answers.push(value),
       inRun: (_command, body) => body(),
       now: () => NOW,
+      ...extra,
     })
     const offline = args[0] === "--offline" ? [args.shift() as string] : []
     await program.parseAsync([...offline, "meetings", ...args], { from: "user" })
@@ -153,7 +161,15 @@ describe("meetings list reads the service and the store at once", () => {
     expect(answer.missing).toBeUndefined()
     expect(answer).not.toHaveProperty("server")
     const again = await meetingsListThrough(source, store.meetings, { accountId }, { now: NOW })
-    expect(again.server).toEqual({ backend: "both", skipped: null, calls: 1, returned: 2, new: 0, complete: true })
+    expect(again.server).toEqual({
+      backend: "both",
+      skipped: null,
+      calls: 1,
+      returned: 2,
+      new: 0,
+      failed: 0,
+      complete: true,
+    })
     expect(await store.meetings.meetings({ accountId })).toHaveLength(3)
     expect(answer.items.find(({ title }) => title === "Example roadmap review")).toMatchObject({
       provider_id: "svc-1",
@@ -226,7 +242,10 @@ describe("meetings list reads the service and the store at once", () => {
     )
     expect(many.asked).toHaveLength(3)
     expect(capped.missing).toEqual([{ field: "server", why: expect.stringContaining("asked 3 time(s)") }])
-    expect(capped.meta).toEqual({ truncated: true })
+    expect(capped.meta).toEqual({
+      complete: false,
+      issues: [{ code: "outcome_unknown", reason: "meetings.server-capped", source: "Example Meet" }],
+    })
 
     const paged = serviceOf([ROADMAP, WEEKLY, LOCAL], { pageSize: 1 })
     const answer = await (await fixture(paged.source)).run("list")
@@ -301,6 +320,133 @@ describe("meetings list reads the service and the store at once", () => {
   })
 })
 
+describe("what a live read keeps, and what it says it could not read", () => {
+  it("reads a day in the owner's zone on both sides: the service's window and the store's query", async () => {
+    // 00:30 on 10 November in Madrid is still 9 November in UTC.
+    const late = found("late-1", "Example late call", "2026-11-09T23:30:00Z")
+    const { source, asked } = serviceOf([late])
+    const { run } = await fixture(source, { timezone: "Europe/Madrid" })
+    const answer = await run("list", "started_at:2026-11-10")
+    expect(asked[0]?.window).toEqual({
+      from: Date.parse("2026-11-09T23:00:00Z"),
+      to: Date.parse("2026-11-10T22:59:59.999Z"),
+    })
+    expect(titles(answer)).toEqual([["Example late call", "server"]])
+  })
+
+  it("keeps what sync stored when the list's record of a meeting is thinner", async () => {
+    const occurrence = {
+      id: "x-1",
+      seriesId: "x-1",
+      title: "Example review",
+      startedAt: "2026-11-09T10:00:00Z",
+      endedAt: "2026-11-09T11:00:00Z",
+    }
+    const series = { id: "series-x", provider: "example", title: "Example reviews" }
+    const full: FoundMeeting = {
+      meeting: { series, description: "Example agenda", metadata: { issues: ["time_without_zone"] }, occurrence },
+      participants: found("x-1", "Example review", occurrence.startedAt).participants,
+    }
+    const { source } = serviceOf([
+      { meeting: { series: null, occurrence: { ...occurrence, endedAt: null } }, participants: null },
+    ])
+    const { store, accountId, run } = await fixture(source)
+    await saveSourceMeeting(
+      fakeMeetingSource(),
+      store.meetings,
+      full.meeting,
+      {
+        participants: full.participants,
+        summary: { title: null, overview: "Example notes", sections: [], nextSteps: [] },
+      },
+      { accountId, now: NOW },
+    )
+    const answer = await run("list", "duration_ms>=3600000")
+    expect(titles(answer)).toEqual([["Example review", "both"]])
+    const kept = await store.meetings.meetingByExternalId?.(accountId, "x-1")
+    expect(kept?.meeting).toMatchObject({
+      endedAt: Date.parse("2026-11-09T11:00:00Z"),
+      description: "Example agenda",
+      metadata: { issues: ["time_without_zone"] },
+      participantsCount: 1,
+    })
+    expect(kept?.series?.externalId).toBe("series-x")
+    expect(kept?.participants).toHaveLength(1)
+    expect(kept?.summaries).toHaveLength(1)
+  })
+
+  it("writes nothing when the service returns a stored meeting unchanged", async () => {
+    const { source } = serviceOf([ROADMAP])
+    const { store, accountId, run } = await fixture(source)
+    const earlier = NOW - 60_000
+    await saveSourceMeeting(
+      fakeMeetingSource(),
+      store.meetings,
+      ROADMAP.meeting,
+      { participants: ROADMAP.participants },
+      {
+        accountId,
+        now: earlier,
+      },
+    )
+    expect(titles(await run("list"))).toEqual([["Example roadmap review", "both"]])
+    expect((await store.meetings.meetingByExternalId?.(accountId, "svc-1"))?.meeting.updatedAt).toBe(earlier)
+  })
+
+  it("answers --backend server when the service returns more meetings than one SQL expression holds", async () => {
+    const many = Array.from({ length: 1200 }, (_, i) =>
+      found(`m-${i}`, `Example ${i}`, new Date(NOW - (i + 1) * 3_600_000).toISOString()),
+    )
+    const { source } = serviceOf(many, { pageSize: 600 })
+    const { run } = await fixture(source)
+    const answer = await run("list", "--backend", "server", "--limit", "5")
+    expect(answer.items).toHaveLength(5)
+  })
+
+  it("counts a meeting it could not keep and says why, apart from the call cap", async () => {
+    const broken = found("bad-1", "Example broken", "2026-11-10T10:00:00Z")
+    const { source } = serviceOf([
+      {
+        ...broken,
+        meeting: { ...broken.meeting, occurrence: { ...broken.meeting.occurrence, endedAt: "2026-11-10T09:00:00Z" } },
+      },
+      ROADMAP,
+    ])
+    const answer = await (await fixture(source)).run("list")
+    expect(titles(answer)).toEqual([["Example roadmap review", "server"]])
+    expect(answer.missing).toEqual([
+      { field: "server", why: expect.stringContaining("1 meeting(s) Example Meet returned could not be kept") },
+    ])
+    expect(answer.meta).toEqual({
+      complete: false,
+      issues: [{ code: "provider_error", reason: "meetings.server-failed", source: "Example Meet" }],
+    })
+  })
+
+  it("names a network failure as one, not as --offline", async () => {
+    const { source } = serviceOf([ROADMAP], { fail: new CliError("network_error", "connection reset") })
+    const answer = await (await fixture(source)).run("list")
+    expect(answer.missing).toEqual([{ field: "server", why: expect.stringContaining("could not be reached") }])
+    expect(answer.meta).toEqual({
+      complete: false,
+      issues: [{ code: "network_error", reason: "meetings.server-unreachable", source: "Example Meet" }],
+    })
+  })
+
+  it("says a plain list leaves out upcoming meetings of a service that lists none before they start", async () => {
+    const { source, asked } = serviceOf([ROADMAP], { finds: { fields: {}, upcoming: false } })
+    const answer = await (await fixture(source)).run("list")
+    expect(asked[0]?.window).toEqual({ to: NOW })
+    expect(answer.missing).toEqual([expect.objectContaining({ field: "upcoming" })])
+  })
+
+  it("marks the service's text untrusted", async () => {
+    const { source } = serviceOf([ROADMAP])
+    const answer = await (await fixture(source)).run("list")
+    expect(answer.items[0]?.untrusted).toEqual(["title", "description", "location"])
+  })
+})
+
 describe("meetings show reads the meeting again from the service", () => {
   it("shows by the service's id a meeting not stored yet, and keeps its transcript and documents", async () => {
     const { source, got } = serviceOf([])
@@ -366,6 +512,7 @@ describe("meetings create, update and cancel", () => {
         store: store.meetings,
         accountId: 1,
         management,
+        askFirst: async () => {},
         write: (value) => answers.push(value),
         inRun: (_command, body) => body(),
       })
@@ -389,5 +536,142 @@ describe("meetings create, update and cancel", () => {
       "meetings.update": "ask",
       "meetings.cancel": "ask",
     })
+  })
+})
+
+describe("meetings invitation", () => {
+  it("marks the service's invitation text untrusted", async () => {
+    const management = createMeetingManagement(
+      { provider: "example", account: "invented" },
+      {
+        async invitation(id) {
+          return { id, invitation: "Join the example meeting" }
+        },
+      },
+    )
+    const answers: unknown[] = []
+    const program = new Command().exitOverride().configureOutput({ writeOut() {}, writeErr() {} })
+    const store = await openStore({ path: join(mkdtempSync(join(tmpdir(), "meetings-invitation-")), "store.db") })
+    handles.push(store)
+    addMeetingCommands(program, {
+      store: store.meetings,
+      accountId: 1,
+      management,
+      write: (value) => answers.push(value),
+      inRun: (_command, body) => body(),
+    })
+    await program.parseAsync(["meetings", "invitation", "900"], { from: "user" })
+    expect(answers.at(-1)).toEqual({
+      item: { id: "900", invitation: "Join the example meeting", untrusted: ["invitation"] },
+    })
+  })
+})
+
+describe("meetings in a real run", () => {
+  const app: AppIdentity = {
+    command: "meets",
+    appName: "meets-cli",
+    envPrefix: "MEETS",
+    description: "synthetic",
+    version: "1.0.0",
+    messenger: false,
+  }
+  const ranWith = async (
+    words: string[],
+    deps: Partial<MeetingCommandDeps>,
+    extraEnv: NodeJS.ProcessEnv = {},
+    ...flags: string[]
+  ) => {
+    const argv = [...flags, ...words, "--json"].filter((word, at, all) => all.indexOf(word) === at)
+    const home = mkdtempSync(join(tmpdir(), "meetings-real-run-"))
+    const store = await openStore({ path: join(home, "store.db") })
+    handles.push(store)
+    const accountId = await store.accounts.saveAccount({ provider: "example", account: "invented" }, { name: null })
+    const definition: ProgramDefinition = {
+      app,
+      configuration: settingsFor(app, { permissions: commandPermissions() }),
+      commands: () => {
+        const root = new Command(app.command)
+        let current: Command | undefined
+        addMeetingCommands(root, {
+          store: store.meetings,
+          accountId,
+          write: (value) => {
+            if (!current) return
+            const body = value as { items?: unknown[]; item?: unknown }
+            renderAnswer(current, outputFor(current), body.items || body.item ? (value as never) : itemOf(value))
+          },
+          inRun: (command, body) => {
+            current = command
+            return inCommandRun(command, body)
+          },
+          now: () => NOW,
+          ...deps,
+        })
+        return [...root.commands]
+      },
+    }
+    const out: string[] = []
+    const err: string[] = []
+    const env = {
+      ...process.env,
+      HOME: home,
+      XDG_DATA_HOME: home,
+      XDG_STATE_HOME: home,
+      MEETS_CONFIG_DIR: join(home, "config"),
+      MEETS_STATE_DIR: join(home, "state"),
+      ...extraEnv,
+    }
+    const code = await runProgram(argv, definition, {
+      env,
+      tty: false,
+      streams: { data: (text) => out.push(text), diagnostic: (text) => err.push(text) },
+    })
+    return { code, out: out.join(""), err: err.join("") }
+  }
+
+  it("lists through the service under the read-only lock, as sync fetches under it", async () => {
+    const { source, asked } = serviceOf([ROADMAP])
+    const ran = await ranWith(["work", "meetings", "list", "--json"], { source }, { MEETS_READ_ONLY: "1" })
+    expect(ran.code, ran.err).toBe(0)
+    expect(asked).toHaveLength(1)
+    expect(JSON.parse(ran.out).items).toMatchObject([{ provider_id: "svc-1", found_in: "server" }])
+  })
+
+  it("refuses meetings create under the default ask when nobody can answer the question", async () => {
+    const created: string[] = []
+    const management = createMeetingManagement(
+      { provider: "example", account: "invented" },
+      {
+        async create(change) {
+          created.push(change.title ?? "")
+          return {
+            id: "901",
+            title: change.title ?? null,
+            kind: "scheduled",
+            startTime: change.startTime ?? null,
+            durationMinutes: null,
+            timezone: null,
+            agenda: null,
+            joinUrl: null,
+          }
+        },
+      },
+    )
+    const ran = await ranWith(
+      ["work", "meetings", "create", "--title", "Example planning", "--start-time", "2026-11-20T10:00:00Z", "--json"],
+      { management, askFirst: askBeforeWrite },
+    )
+    expect(created).toEqual([])
+    expect(ran.code).not.toBe(0)
+    expect(ran.out + ran.err).toContain("confirmation_required")
+    const answered = await ranWith(
+      ["work", "meetings", "create", "--title", "Example planning", "--start-time", "2026-11-20T10:00:00Z"],
+      { management, askFirst: askBeforeWrite },
+      {},
+      "--yes",
+    )
+    expect(answered.code, answered.err).toBe(0)
+    expect(created).toEqual(["Example planning"])
   })
 })
