@@ -28,7 +28,7 @@ export const countersCommand = (messenger: Messenger) => {
         "pinned counter-targets selection from counters show; conflicts with query and scope",
       )
       .option("--counters <names>", "distinct views,reactions,comments fields; all three by default")
-      .option("--limit <n>", "messages, 1–100; 20 by default", positiveCount("--limit"))
+      .option("--limit <n>", "messages, 1–100; the configured limit if not given", positiveCount("--limit"))
     if (operation === "refresh") command
     if (operation === "show") command.option("--max-age <duration>", "maximum fresh observation age; 24h by default")
     annotate(
@@ -50,7 +50,7 @@ export const countersCommand = (messenger: Messenger) => {
         refuseLocalWrite(context, messenger.app.command, "stats.messages.counters.sync")
       const query = {
         ...options,
-        limit: options.limit ?? 20,
+        limit: options.limit ?? Math.min(context.settings.limit, 100),
         ...(words.length ? { text: words.join(" ") } : {}),
         signal: environmentOf(this).commandSignal ?? environmentOf(this).signal,
       }
