@@ -840,6 +840,8 @@ describe("tasks list dates", () => {
     expect((await listed("created_at:2026-11-14")).items).toEqual([])
     expect((await listed("created_at:today")).meta.timezone).toBe("Pacific/Kiritimati")
     expect((await listed("created_at>2h")).meta.timezone).toBeUndefined()
+    expect((await listed('created_at>"2026-11-14 23:00"')).items).toHaveLength(1)
+    expect((await listed('created_at>"2026-11-15T03:00"')).items).toEqual([])
   })
 })
 
