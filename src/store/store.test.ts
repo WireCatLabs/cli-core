@@ -138,6 +138,34 @@ describe("the message store", () => {
     await store.close()
   })
 
+  it("keeps an edit against a copy from before it: a history page fetched earlier, or a late older edit", async () => {
+    const path = fresh()
+    const store = await openStore({ path })
+    const edited = Date.parse("2026-09-26T11:00:00.000Z")
+    await store.messages.saveMessages(ME, chat.id, [message()], { via: "history" })
+    await store.messages.saveMessages(ME, chat.id, [message({ text: "v2", editedAt: "2026-09-26T11:00:00.000Z" })], {
+      via: "update",
+    })
+    await store.messages.saveMessages(ME, chat.id, [message()], { via: "history", seenAt: edited - 60_000 })
+    await store.messages.saveMessages(ME, chat.id, [message({ text: "v1", editedAt: "2026-09-26T10:00:00.000Z" })], {
+      via: "update",
+    })
+
+    const kept = await store.messages.message(ME, "42", { chatId: chat.id })
+    expect([kept?.text, kept?.editedAt]).toEqual(["v2", "2026-09-26T11:00:00.000Z"])
+    expect((await store.messages.search("empadronamiento", { limit: 5 })).items).toEqual([])
+    const database = await openCache(path)
+    expect(database.prepare("SELECT text FROM message_revisions").all()).toEqual([{ text: "empadronamiento renewal" }])
+    database.close()
+
+    await store.messages.saveMessages(ME, chat.id, [message({ text: "v3" })], {
+      via: "history",
+      seenAt: edited + 60_000,
+    })
+    expect((await store.messages.message(ME, "42", { chatId: chat.id }))?.text).toBe("v3")
+    await store.close()
+  })
+
   it("does not let a copy that knows less erase what was stored", async () => {
     const store = await openStore({ path: fresh() })
     await store.messages.saveMessages(ME, chat.id, [message()], { via: "history" })

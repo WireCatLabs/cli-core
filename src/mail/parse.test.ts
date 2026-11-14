@@ -61,6 +61,11 @@ it("turns HTML into text: no scripts or styles, lines at blocks, entities decode
   expect(parsed.text).toBe("One & two\na \"b\" 'c'\n\nWrite &lt;tag&gt; for <tag>\nend")
 })
 
+it("decodes the typographic and numeric entities newsletters use, so a search for the plain word finds them", async () => {
+  const parsed = await parseMail(htmlMail("<p>don&rsquo;t &mdash; &laquo;OK&raquo; &#x27;x&#x27; &#8230; &bogus;</p>"))
+  expect(parsed.text).toBe("don’t — «OK» 'x' … &bogus;")
+})
+
 it.each([
   ["<", "<".repeat(200_000)],
   ["<a", "<a".repeat(100_000)],

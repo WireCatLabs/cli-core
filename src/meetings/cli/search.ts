@@ -10,13 +10,21 @@ import { type MeetingHitSearchOptions, validateMeetingHitSearch } from "../searc
 export { type MeetingHitSearch, type MeetingHitSearchOptions, validateMeetingHitSearch } from "../search-validation.js"
 
 const ZONED = /(?:Z|[+-]\d{2}:?\d{2})$/i
+// `30m`, `2h`, `7d` ago, as the messenger commands' --since-time reads them and this command's `date>=7d` does.
+const AGO = /^(\d+)(m|h|d)$/
+const AGO_MS: Record<string, number> = { m: 60_000, h: 3_600_000, d: 86_400_000 }
 const moment = (flag: string, end: boolean, readIn: (zone: string) => void) => (value: string) => {
+  const [, amount, unit] = AGO.exec(value.trim()) ?? []
+  if (amount && unit) return Date.now() - Number(amount) * (AGO_MS[unit] ?? 0)
   const zone = timezoneOf()
   let time: number
   try {
     time = zonedMoment(value, zone, { start: 0, end: value.length }, { end })
   } catch {
-    throw new CliError("validation_error", `${flag} takes an ISO date, or a time with or without an offset`)
+    throw new CliError(
+      "validation_error",
+      `${flag} takes an ISO date, a time with or without an offset, or 30m, 2h, 7d ago`,
+    )
   }
   if (!ZONED.test(value.trim())) readIn(zone)
   return time
@@ -69,7 +77,7 @@ const createMeetingSearchCommandDefinition = (program: Command): Command => {
     .option("--topic-name <name>", "meetings with this topic, by name or alias")
     .option(
       "--since-time <time>",
-      "meetings starting at or after this ISO 8601 date or time",
+      "meetings starting at or after this ISO 8601 date or time, or 30m, 2h, 7d ago",
       moment("--since-time", false, readIn),
     )
     .option(

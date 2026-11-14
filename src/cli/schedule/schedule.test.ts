@@ -476,6 +476,8 @@ describe.runIf(posix)("schedule on Linux", () => {
     expect(every.err).toContain("leave out --every")
     const atTime = await call(["command", "w", "--at", "08:30", "--at-time", "2h", "--", "r"], env, system)
     expect(atTime.err).toContain("say when")
+    const dateAlone = await call(["command", "w", "--at-time", "2099-11-20", "--", "r"], env, system)
+    expect(dateAlone.err).toContain("--at-time needs a time of day as well: 2099-11-20T09:00")
   })
 })
 

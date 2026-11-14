@@ -185,16 +185,20 @@ export const chatAmong = async (
   const [only] = accounts
   if (accounts.length === 1 && only)
     return { account: only, chatId: await storedChatId(messenger, reference, store, only, { includeLeft: true }) }
-  const found = (
-    await Promise.all(
-      accounts.map(async (account) => {
-        const held: Chat[] = (await store.chats.chats(account, {})).items
-        const chatId = await storedChatId(messenger, reference, store, account).catch(missing)
-        const chat = held.find((one) => one.id === chatId)
-        return chat ? [{ account, chat }] : []
-      }),
-    )
-  ).flat()
+  const among = async (includeLeft: boolean) =>
+    (
+      await Promise.all(
+        accounts.map(async (account) => {
+          const held: Chat[] = (await store.chats.chats(account, includeLeft ? { includeLeft } : {})).items
+          const chatId = await storedChatId(messenger, reference, store, account, { includeLeft }).catch(missing)
+          const chat = held.find((one) => one.id === chatId)
+          return chat ? [{ account, chat }] : []
+        }),
+      )
+    ).flat()
+  // As with one account, a chat left behind is found when no account still holds one by that name.
+  const current = await among(false)
+  const found = current.length > 0 ? current : await among(true)
   const [one] = found
   if (found.length === 1 && one) return { account: one.account, chatId: one.chat.id }
   if (found.length === 0) throw new CliError("not_found", `no stored chat matches "${singleLine(reference)}"`)

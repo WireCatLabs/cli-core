@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto"
 import { type CallToolResult, McpServer } from "@modelcontextprotocol/server"
-import { serveStdio } from "@modelcontextprotocol/server/stdio"
+import { StdioServerTransport, serveStdio } from "@modelcontextprotocol/server/stdio"
 import { mcpErrorResult } from "@wirecat/cli-base"
 import { flatten } from "@wirecat/cli-base/commands"
 import { skillResource } from "@wirecat/cli-base/skill"
@@ -16,6 +16,7 @@ import type { RunCaller } from "../../runs/run-context.js"
 import type { Level, PermissionKey } from "../../sends/permissions.js"
 import { type AgentAnswer, type AgentProgram, runCommandForAgent, toolsFromCommands } from "../agent.js"
 import { type CallerSource, callerOf } from "../caller.js"
+import { answeredWire } from "../stdio-wire.js"
 import { type McpCommand, normal, registerCommands } from "../surface.js"
 import { agentJson } from "../text.js"
 import { answered } from "../tool.js"
@@ -191,12 +192,13 @@ export const createBotServer = (options: BotServerOptions) => {
 /** Serves until the client closes stdin or the process is told to stop; returning lets the process exit. */
 export const serveBotOverStdio = async (options: BotServerOptions, note: (message: string) => void): Promise<void> => {
   const { build } = createBotServer(options)
-  const handle = serveStdio(build, { onerror: (error) => note(`mcp: ${error.message}`) })
-  await new Promise<void>((resolve) => {
-    process.stdin.once("end", resolve)
-    process.stdin.once("close", resolve)
-    process.once("SIGINT", resolve)
-    process.once("SIGTERM", resolve)
+  const wire = answeredWire(process.stdin, process.stdout)
+  const handle = serveStdio(build, {
+    transport: new StdioServerTransport(wire.input, wire.output),
+    onerror: (error) => note(`mcp: ${error.message}`),
   })
+  // A one-shot pipe closes stdin after its calls: they are still answered, as by the other servers (FIND-1514).
+  await wire.finished()
+  wire.release()
   await handle.close()
 }

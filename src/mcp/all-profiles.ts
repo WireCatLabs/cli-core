@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto"
 import type { Readable, Writable } from "node:stream"
 import { type CallToolResult, McpServer, type Tool } from "@modelcontextprotocol/server"
 import { StdioServerTransport, serveStdio } from "@modelcontextprotocol/server/stdio"
+import { CliError, type ErrorCode, errorObjectOf, mcpErrorResult } from "@wirecat/cli-base"
 import { CALLER_META_KEY, callerOf, PROXY_CLIENT_NAME } from "./caller.js"
 import type { HttpOptions } from "./http/serve.js"
 import { answeredWire } from "./stdio-wire.js"
@@ -210,10 +211,11 @@ export const withProfile = (
   }
 }
 
-const refusal = (text: string): CallToolResult => ({
-  isError: true,
-  content: [{ type: "text", text }],
-})
+// The same error object a profile's own server answers with, so an agent reacts to a code whichever server it uses.
+const refusal = (code: ErrorCode, text: string, details?: Record<string, unknown>): CallToolResult =>
+  mcpErrorResult(
+    errorObjectOf(new CliError(code, text, details), { effects: { remote: "none", local: "none" } }),
+  ) as CallToolResult
 
 /**
  * **One server for every profile of a tool** (TASK-26): `<tool> mcp` shows the tools `<tool> <profile> mcp` shows,
@@ -258,9 +260,11 @@ export const allProfilesServer = (options: AllProfilesOptions) => {
       const { profile, ...rest } = given as Record<string, unknown>
       if (typeof profile !== "string" || !profiles.includes(profile))
         return refusal(
+          "validation_error",
           `${name} needs "profile", one of: ${profiles.join(", ")}. If the owner did not say which account, ask.`,
         )
-      if (!signedIn(profile)) return refusal(options.signIn?.(profile) ?? `profile ${profile} is not signed in.`)
+      if (!signedIn(profile))
+        return refusal("authentication_error", options.signIn?.(profile) ?? `profile ${profile} is not signed in.`)
       try {
         return (await children.use(profile, (child) =>
           // Children are shared by every session, so each call names its own caller.
@@ -271,7 +275,11 @@ export const allProfilesServer = (options: AllProfilesOptions) => {
           }),
         )) as CallToolResult
       } catch (error) {
-        return refusal(`profile ${profile}: ${error instanceof Error ? error.message : String(error)}`)
+        // The child may have stopped after the command ran: nothing tells whether a write happened.
+        return refusal(
+          "outcome_unknown",
+          `profile ${profile}: ${error instanceof Error ? error.message : String(error)}`,
+        )
       }
     })
     return server
@@ -291,16 +299,8 @@ export const serveAllProfilesOverStdio = async (
     transport: new StdioServerTransport(wire.input, wire.output),
     onerror: (error) => options.note?.(`mcp: ${error.message}`),
   })
-  const ended = await new Promise<"input" | "stopped">((resolve) => {
-    wire.ended.then(() => resolve("input"))
-    if (own) io.signal?.addEventListener("abort", () => resolve("stopped"), { once: true })
-    else {
-      process.once("SIGINT", () => resolve("stopped"))
-      process.once("SIGTERM", () => resolve("stopped"))
-    }
-  })
+  await wire.finished(own ? io.signal : undefined)
   try {
-    if (ended === "input") await wire.answered()
     wire.release()
     await handle.close()
   } finally {

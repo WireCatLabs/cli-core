@@ -66,7 +66,9 @@ export const callerOf = (ctx: CallContext | undefined, tool: string, source: Cal
   const meta = ctx?.mcpReq?._meta
   const requestId = ctx?.mcpReq?.id
   const initialized = source.client?.()
-  const proxied = initialized?.name === PROXY_CLIENT_NAME ? passedOn(meta?.[CALLER_META_KEY], tool) : undefined
+  // That server speaks to its children over stdio only; an HTTP client can name itself anything.
+  const proxied =
+    initialized?.name === PROXY_CLIENT_NAME && !ctx?.http ? passedOn(meta?.[CALLER_META_KEY], tool) : undefined
   if (proxied) return proxied
   const client = clientFrom(meta?.[CLIENT_INFO_META_KEY]) ?? clientFrom(initialized)
   const mcp = (connection: string | undefined) => ({

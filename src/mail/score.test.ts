@@ -38,6 +38,13 @@ describe("Gmail's verdicts and Reply-To", () => {
     })
   })
 
+  it("keeps a plain address beside a bracketed one, and never takes a quoted name for an address", () => {
+    const headers = headersOf(
+      head(['From: "boss@shop.example" <Real@Other.example>', 'To: alice@x.com, "Bob" <bob@y.com>']),
+    )
+    expect([headers.from, headers.to]).toEqual(["real@other.example", ["alice@x.com", "bob@y.com"]])
+  })
+
   it("trusts no verdict a sender wrote under another name", () => {
     const headers = headersOf(head(["From: bob@shop.example", "Authentication-Results: mx.shop.example; dmarc=pass"]))
     expect(headers.auth).toBeUndefined()

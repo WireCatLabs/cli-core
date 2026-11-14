@@ -219,6 +219,14 @@ it("takes date:, project:, tag: and topic: in the query as the search's own filt
   await expect(hits("example OR project:RES")).rejects.toMatchObject({
     details: { reason: "query.unsupported-field" },
   })
+  expect(new Set(await hits("example && project:RES"))).toEqual(new Set([f.first.meeting.id]))
+  expect(new Set(await hits("example +project:RES"))).toEqual(new Set([f.first.meeting.id]))
+  expect(new Set(await hits("example date:[1970-01-01T00:00:01.500Z TO *]", { until: Date.now() }))).toEqual(
+    new Set([f.second.meeting.id]),
+  )
+  await expect(hits("example date:[1970-01-01T00:00:01.500Z TO *]", { since: 0 })).rejects.toThrow(
+    /give since-time once/,
+  )
   await expect(hits("example project:RES", { project: "RES" })).rejects.toThrow(/give project once/)
   await expect(hits("project:RES")).rejects.toThrow(/give words to find/)
 })

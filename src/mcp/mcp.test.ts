@@ -2686,11 +2686,11 @@ describe("the photo tool", () => {
         skipped: [],
       }),
     })
-  const look = async (telegram: Scripted) => {
+  const look = async (telegram: Scripted, more: Record<string, unknown> = {}) => {
     const { client } = await connect(telegram)
     const result = await client.run({
       command: "messages photo",
-      arguments: { chat: "Book club", message: "1" },
+      arguments: { chat: "Book club", message: "1", ...more },
     })
     return { isError: result.isError === true, content: result.content as unknown as Record<string, string>[] }
   }
@@ -2743,6 +2743,17 @@ describe("the photo tool", () => {
       expect(refused.isError).toBe(true)
       expect(refused.content[0]?.text).toContain("chat default messages download 7 1")
     }
+  })
+
+  it("counts the file from 1, as attachments show and messages download do, and names a file past the last", async () => {
+    const second = await look(holding({ kind: "voice" }, { kind: "photo" }), { attachment: 2 })
+    const past = await look(holding({ kind: "photo" }), { attachment: 5 })
+
+    expect(second.isError).toBe(false)
+    expect(JSON.parse(past.content[0]?.text ?? "").error).toMatchObject({
+      code: "not_found",
+      message: "message 1 has 1 file, no file 5",
+    })
   })
 
   it("refuses a message with no photo, and a messenger that cannot download", async () => {
@@ -3014,6 +3025,39 @@ describe("sending over MCP", () => {
     const [entry] = new SendJournal(sendsPathFor(app, "default", env)).entries()
     expect(entry).toMatchObject({ outcome: "sent", chatId: "7", replyTo: "1", messageId: "99" })
     expect(JSON.stringify(entry)).not.toContain("see you")
+  })
+
+  it("never starts a send the client cancelled while it waited behind another call", async () => {
+    let open: () => void = () => {}
+    const gate = new Promise<void>((resolve) => {
+      open = resolve
+    })
+    const sent: string[] = []
+    const telegram = scripted({
+      send: async (_chatId, text, options) => {
+        if (text === "first") await gate
+        sent.push(text)
+        return { message: { ...message, id: "99", text, outgoing: true }, sendId: options.sendId }
+      },
+    })
+    const { raw } = await connect(telegram, {})
+    const send = (text: string, signal?: AbortSignal) =>
+      raw.callTool(
+        { name: "chat_write", arguments: { command: "messages send", arguments: { chat: "Book club", text } } },
+        signal ? { signal } : {},
+      )
+    const first = send("first")
+    const cancel = new AbortController()
+    const second = send("second", cancel.signal).catch(() => undefined)
+    // Until the server holds the second call in its queue: a few turns of the in-memory transport.
+    for (let turn = 0; turn < 10; turn++) await new Promise((resolve) => setImmediate(resolve))
+    cancel.abort()
+    await second
+    open()
+    await first
+    await send("third")
+
+    expect(sent).toEqual(["first", "third"])
   })
 
   it("writes the caller's trace from _meta.traceparent on the send journal's line", async () => {

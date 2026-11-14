@@ -148,6 +148,27 @@ it("names no zone when every typed time carries its own", async () => {
   })
   expect(output.mock.calls[0]?.[0].meta).toEqual({ window: { since: "2026-09-12T06:00:00.000Z" } })
 })
+it("reads 7d ago in --since-time, as the messenger commands and the query's date>=7d do", async () => {
+  vi.useFakeTimers({ now: Date.parse("2026-10-20T12:00:00.000Z"), toFake: ["Date"] })
+  const program = new Command("example")
+  const output = vi.fn()
+  const search = vi.fn(async () => ({
+    items: [],
+    hasMore: false,
+    nextCursor: null,
+    coverage: {
+      archiveCompleteness: "unknown" as const,
+      currentRevisions: true as const,
+      indexing: "ready" as const,
+      indexCompleteness: "unknown" as const,
+    },
+  }))
+  addMeetingSearchCommand(program, { search, signal: () => undefined, output })
+  await program.parseAsync(["search", "meetings", "budget", "--since-time", "7d"], { from: "user" })
+  vi.useRealTimers()
+  expect(output.mock.calls[0]?.[0].meta).toEqual({ window: { since: "2026-10-13T12:00:00.000Z" } })
+})
+
 it("rejects impossible dates and invalid selectors before opening a store", async () => {
   const cases = [
     ["--since-time", "2026-02-30"],

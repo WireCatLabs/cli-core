@@ -502,7 +502,9 @@ export const answered = (
   targets?: NonNullable<StepInput["targets"]>,
 ): CallToolResult => {
   const bounded = (result: CallToolResult): CallToolResult => {
-    if (maxBytes !== 0 && Buffer.byteLength(JSON.stringify(result)) > maxBytes)
+    // Measured as the CLI measures what it prints: `structuredContent` repeats the text, and counting both halved the
+    // limit for MCP alone.
+    if (maxBytes !== 0 && Buffer.byteLength(JSON.stringify(result.content)) > maxBytes)
       throw new CliError(
         "invalid_response",
         "tool output exceeds its byte limit — reduce limit or use a narrower request",

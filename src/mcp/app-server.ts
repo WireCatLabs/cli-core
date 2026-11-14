@@ -174,18 +174,7 @@ export const serveAppOverStdio = async (
     transport: new StdioServerTransport(wire.input, wire.output),
     onerror: (error) => context.renderer.note(`mcp: ${error.message}`),
   })
-  const ended = await new Promise<"input" | "stopped">((resolve) => {
-    wire.ended.then(() => resolve("input"))
-    if (own) {
-      // A stop that came before this line fires no abort event.
-      if (signal?.aborted) resolve("stopped")
-      else signal?.addEventListener("abort", () => resolve("stopped"), { once: true })
-    } else {
-      process.once("SIGINT", () => resolve("stopped"))
-      process.once("SIGTERM", () => resolve("stopped"))
-    }
-  })
-  if (ended === "input") await wire.answered()
+  await wire.finished(own ? signal : undefined)
   wire.release()
   await handle.close()
 }

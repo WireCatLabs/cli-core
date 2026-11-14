@@ -138,8 +138,6 @@ export const liftMeetingFields = (
   }
   for (const { node } of lifted) {
     if (node.field === "date") {
-      once("since", "--since-time")
-      once("until", "--until-time")
       const range = dateRange(
         node.value,
         node.operator === "range" ? (node.upper ?? "*") : node.value,
@@ -149,8 +147,15 @@ export const liftMeetingFields = (
         node.span,
         now,
       )
-      if (range.lower !== undefined) next.since = range.lower + (range.lower_inclusive ? 0 : 1)
-      if (range.upper !== undefined) next.until = range.upper - (range.upper_inclusive ? 0 : 1)
+      // Only the bound the query sets clashes with a flag: `date>=30d --until-time …` is one window.
+      if (range.lower !== undefined) {
+        once("since", "--since-time")
+        next.since = range.lower + (range.lower_inclusive ? 0 : 1)
+      }
+      if (range.upper !== undefined) {
+        once("until", "--until-time")
+        next.until = range.upper - (range.upper_inclusive ? 0 : 1)
+      }
     } else {
       const field = node.field as "project" | "tag" | "topic"
       once(field, `--${field}`)
@@ -160,9 +165,11 @@ export const liftMeetingFields = (
   let rest = query
   for (const { node } of [...lifted].sort((a, b) => b.node.span.start - a.node.span.start))
     rest = `${rest.slice(0, node.span.start)}${rest.slice(node.span.end)}`
+  // The parser joins with AND, && or a leading +; a lifted field must not leave its joiner behind.
   rest = rest
-    .replace(/^(?:\s*AND\b)+|(?:\bAND\s*)+$/g, "")
-    .replace(/\bAND(\s+AND\b)+/g, "AND")
+    .replace(/(^|\s)\+(?=\s|$)/g, "$1")
+    .replace(/^(?:\s*(?:AND\b|&&))+|(?:(?:\bAND|&&)\s*)+$/g, "")
+    .replace(/(?:\bAND|&&)(\s+(?:AND\b|&&))+/g, "AND")
     .trim()
   if (!rest) throw new CliError("validation_error", "give words to find besides date:, project:, tag: and topic:")
   return { query: rest, request: next }

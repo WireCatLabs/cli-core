@@ -1,4 +1,5 @@
 import { CliError, errorObjectOf, type FailureContext, mcpErrorResult } from "@wirecat/cli-base"
+import { timezoneOf } from "@wirecat/cli-base/query"
 import { listOf } from "../../cli/envelope.js"
 import { isCliFailure } from "../../errors/failures.js"
 import { type EventStore, listed } from "../../meetings/index.js"
@@ -60,7 +61,7 @@ export const calendarTools = [
       "[a TO b}), ends_at>=, changed_at>= (events new, moved or cancelled since, each with change and was), " +
       "overlapping:true (timed events that clash, each with overlaps), calendar:<id>, event_type:<kind>, and " +
       "-event_type:<kind> to leave one kind out; a date in the zone given, " +
-      "UTC when absent; without starts_at or ends_at, from today on",
+      "the computer's zone when absent, as the CLI reads it; without starts_at or ends_at, from today on",
     properties: {
       account_id: integer,
       query: text,
@@ -108,7 +109,10 @@ const notify = {
 }
 const fields = {
   title: text,
-  start_time: { ...text, description: "when it starts: a time in `timezone` (UTC when absent), or one with its own" },
+  start_time: {
+    ...text,
+    description: "when it starts: a time in `timezone` (the computer's zone when absent), or one with its own",
+  },
   end_time: { ...text, description: "when it ends" },
   start_date: { ...text, description: "the first day of an all-day event, YYYY-MM-DD" },
   end_date: { ...text, description: "the last day of an all-day event" },
@@ -217,6 +221,8 @@ const argumentsOf = (name: string, input: unknown): Record<string, unknown> => {
       (typeof value !== "number" || !Number.isSafeInteger(value) || value < 1)
     )
       throw new CliError("validation_error", `${key} must be a positive integer`)
+    else if (key === "limit" && (value as number) > 1000)
+      throw new CliError("validation_error", "limit is at most 1000 events per page")
     else if (
       [
         "query",
@@ -239,7 +245,10 @@ const argumentsOf = (name: string, input: unknown): Record<string, unknown> => {
       throw new CliError("validation_error", `${key} must be text`)
     else if (["notify", "series", "following"].includes(key) && typeof value !== "boolean")
       throw new CliError("validation_error", `${key} must be true or false`)
-    else if (key === "attendees" && (!Array.isArray(value) || value.some((one) => typeof one !== "string")))
+    else if (
+      key === "attendees" &&
+      (!Array.isArray(value) || value.some((one) => typeof one !== "string" || !one.trim()))
+    )
       throw new CliError("validation_error", "attendees must be a list of email addresses")
     else if (key === "response" && !(EVENT_RESPONSES as readonly unknown[]).includes(value))
       throw new CliError("validation_error", `response is one of ${EVENT_RESPONSES.join(", ")}`)
@@ -278,19 +287,13 @@ export const callCalendarTool = async (
       throw new CliError("not_found", `no calendar account ${asked} here`)
     const accounts = asked === undefined ? [...accountIds] : [asked]
     const event = () => eventIdOf(args.event as string)
+    // An event shared by two accounts has a copy, and a response, in each: one is read only when it is named.
     const eventIn = async () => {
-      for (const accountId of accounts)
-        try {
-          return { accountId, details: await eventOf(store, accountId, event()) }
-        } catch (error) {
-          if (!isCliFailure(error) || error.code !== "not_found") throw error
-        }
-      throw new CliError(
-        "not_found",
-        `no event ${args.event} in ${asked === undefined ? "these accounts" : "this account"}`,
-      )
+      const accountId = await accountFor(accounts, asked, (id) => eventOf(store, id, event()), `event ${args.event}`)
+      return { accountId, details: await eventOf(store, accountId, event()) }
     }
     let answer: object
+    let read = accounts
     if (writing) {
       const written = await writeTool(store, name, args, { asked, accounts, now, writes })
       const result = { accounts: [written.account], ...written.result, untrusted: CALENDAR_UNTRUSTED_FIELDS }
@@ -317,18 +320,22 @@ export const callCalendarTool = async (
       case "events_list":
         answer = await eventsList(store, args, accounts, now)
         break
-      case "event_show":
-        answer = await eventAnswer((await eventIn()).details)
+      case "event_show": {
+        const { accountId, details } = await eventIn()
+        read = [accountId]
+        answer = await eventAnswer(details)
         break
+      }
       case "event_people": {
         const { accountId } = await eventIn()
+        read = [accountId]
         answer = await peopleAnswer(store, accountId, { event: event() })
         break
       }
       default:
         answer = await reviewsAnswer(store, accounts)
     }
-    const result = { accounts, ...answer, untrusted: CALENDAR_UNTRUSTED_FIELDS }
+    const result = { accounts: read, ...answer, untrusted: CALENDAR_UNTRUSTED_FIELDS }
     return agentResult({
       content: [{ type: "text" as const, text: JSON.stringify(result) }],
       structuredContent: result,
@@ -374,7 +381,7 @@ const eventsList = async (
       const filter = await eventsFilter(args.query as string | undefined, {
         store,
         accountId,
-        zone: (args.timezone as string | undefined) ?? "UTC",
+        zone: timezoneOf(args.timezone as string | undefined),
         now,
       })
       return merging
@@ -467,7 +474,7 @@ const writeTool = async (
     // WC-MCP-7: nobody is here to answer, and a form would teach people to click yes; the levels decide.
     ask: async () => {},
     now,
-    zone: (args.timezone as string | undefined) ?? "UTC",
+    zone: timezoneOf(args.timezone as string | undefined),
     names: {
       notify: "notify: true or false",
       id: "operation_id",

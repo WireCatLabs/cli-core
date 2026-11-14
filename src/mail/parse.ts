@@ -1,5 +1,6 @@
 import { CliError } from "@wirecat/cli-base"
 import PostalMime, { type Address as PostalAddress } from "postal-mime"
+import { decodeEntities } from "../domain/html-entities.js"
 
 export interface Address {
   email: string
@@ -37,7 +38,6 @@ const addresses = (list: PostalAddress[]): Address[] =>
 
 const HIDDEN_OPEN = /<(script|style)/gi
 const HIDDEN_CLOSE = { script: /<\/script>/gi, style: /<\/style>/gi }
-const ENTITIES: Record<string, string> = { nbsp: " ", amp: "&", lt: "<", gt: ">", quot: '"', "#39": "'" }
 
 // `<script[\s\S]*?</script>` as one regex rescans to the end from every unclosed opener; a tag found
 // unclosed once stays unclosed for every later opener, so each close is searched for at most once.
@@ -70,14 +70,16 @@ const stripTags = (html: string): string => {
 // Comments go first: a tag inside one, like a commented-out link, would leave its text and a stray `-->` behind.
 const dropComments = (html: string): string => html.replace(/<!--[\s\S]*?(-->|$)/g, "")
 
-export const htmlToText = (html: string): string =>
-  stripTags(dropHidden(dropComments(html)).replace(/<br\s*\/?>|<\/(p|div|li|tr|h\d)>/gi, "\n"))
-    // One pass, so `&amp;lt;` stays the text `&lt;` instead of being decoded twice into `<`.
-    .replace(/&(nbsp|amp|lt|gt|quot|#39);/g, (_entity, name: string) => ENTITIES[name] as string)
-    // From the start of a run only: `[ \t]+\n` alone rescans a long run of spaces from each of them.
-    .replace(/(?<![ \t])[ \t]+\n/g, "\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim()
+export const htmlToText = (html: string): string => {
+  const text = stripTags(dropHidden(dropComments(html)).replace(/<br\s*\/?>|<\/(p|div|li|tr|h\d)>/gi, "\n"))
+  return (
+    decodeEntities(text.replace(/&nbsp;/gi, " "))
+      // From the start of a run only: `[ \t]+\n` alone rescans a long run of spaces from each of them.
+      .replace(/(?<![ \t])[ \t]+\n/g, "\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim()
+  )
+}
 
 /** Some senders put their HTML in the text/plain part; its first tag gives it away. */
 export const looksLikeHtml = (text: string): boolean =>

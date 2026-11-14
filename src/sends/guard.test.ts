@@ -221,6 +221,21 @@ describe("two senders at once", () => {
     )
   })
 
+  it("refuses a send time it cannot read, and counts a journal line whose time is unreadable when it was written", () => {
+    expect(() => guard("g-bad-time", 1).check({ chatId: "111", scheduledFor: "tomorrow-ish" })).toThrow(
+      expect.objectContaining({ code: "validation_error" }),
+    )
+    const journal = new SendJournal(sendsPathFor("g-bad-line"))
+    journal.append({
+      at: "2026-09-24T08:50:00Z",
+      profile: "g-bad-line",
+      outcome: "sent",
+      chatId: "111",
+      scheduledFor: "garbled",
+    })
+    expect(() => guard("g-bad-line", 1).check({ chatId: "111" })).toThrow("the next send is possible")
+  })
+
   it("counts each person added to a group, and refuses more at once than the limit", () => {
     expect(() =>
       guard("g-people", 2).check({ chatId: "111", kind: "chat", action: "members.add", personIds: ["1", "2", "3"] }),

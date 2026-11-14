@@ -36,6 +36,7 @@ export const retryUnread = async ({
   now,
   loadEngine,
   index,
+  signal,
 }: {
   store: MessageStore
   source: MailSource
@@ -48,11 +49,11 @@ export const retryUnread = async ({
   now: () => number
   loadEngine: LoadEngine
   index: MailSyncOptions["index"]
+  signal?: AbortSignal
 }): Promise<MailSyncResult> => {
   const startedAt = now()
   const key = mailAccountKey(account.address)
-  const find = source.find
-  if (find === undefined)
+  if (source.find === undefined)
     throw new CliError(
       "validation_error",
       "--retry-attachments reads mail again by its Gmail id; an mbox file or a plain IMAP account has none",
@@ -66,7 +67,7 @@ export const retryUnread = async ({
   for (const folder of await mailFolders(account, source)) {
     const left = chosen.filter((id) => !found.has(id))
     if (left.length === 0) break
-    for (const item of await find(left, folder)) if (!found.has(item.messageId)) found.set(item.messageId, item)
+    for (const item of await source.find(left, folder)) if (!found.has(item.messageId)) found.set(item.messageId, item)
   }
   const items = [...found.values()]
   const attachments: AttachmentLog = []
@@ -75,6 +76,8 @@ export const retryUnread = async ({
   let extracted = 0
   let stillFailed = 0
   for (let start = 0; start < items.length; start += FETCH_CHUNK) {
+    // Between batches, as a sync stops: what was saved stays, the rest waits for the next run.
+    if (signal?.aborted) throw signal.reason
     const chunk = items.slice(start, start + FETCH_CHUNK)
     const raws = await source.fetchRaw(chunk)
     for (const [index, item] of chunk.entries()) {

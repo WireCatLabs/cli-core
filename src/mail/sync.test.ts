@@ -500,6 +500,17 @@ describe("syncMail with the owner's rules", () => {
     expect(await (await store(env)).mail.search("wanted")).toHaveLength(1)
   })
 
+  it("keeps an envelope email an envelope while a run cannot read its headers", async () => {
+    const deal = mail(2, { from: [null, "deals@shop.example"], subject: "Private", text: "Never stored" })
+    const { env, write } = setup([deal])
+    const ruled = [envelope({ domain: "shop.example" })]
+    await importRuled(env, ruled)
+    write([{ ...deal, headersUnread: true }])
+
+    expect(await importRuled(env, ruled)).toMatchObject({ saved: 0 })
+    expect((await emails(env))[0]).toMatchObject({ subject: null, bodyText: null })
+  })
+
   it("fails the listing instead of importing mail unruled when Gmail refuses the header fetch", async () => {
     const { env } = setup([mail(1, { from: [null, "news@shop.example"] })], { headersFail: true })
 

@@ -133,7 +133,11 @@ const weightOf = ({ kind = "message", action, count, people }: Counted): number 
       : 1
 
 /** A scheduled message counts in the hour the provider sends it. */
-const timeOf = (entry: Pick<SendEntry, "at" | "scheduledFor">): number => Date.parse(entry.scheduledFor ?? entry.at)
+const timeOf = (entry: Pick<SendEntry, "at" | "scheduledFor">): number => {
+  const scheduled = entry.scheduledFor === undefined ? Number.NaN : Date.parse(entry.scheduledFor)
+  // A journal line with an unreadable time still counts, in the hour it was written: never in no hour at all.
+  return Number.isNaN(scheduled) ? Date.parse(entry.at) : scheduled
+}
 
 /** A write the profile's level refuses, worded alike by the guard and by the check before connecting. */
 /** A write the first-run answer stops, whatever the profile allows. */
@@ -258,6 +262,8 @@ export const sendGuard = ({
     }
 
     const at = request.scheduledFor ? Date.parse(request.scheduledFor) : now().getTime()
+    if (Number.isNaN(at))
+      throw new CliError("validation_error", `"${request.scheduledFor}" is not a time to send at — use ISO 8601`)
     const counted = entries
       .filter(countsTowardLimit)
       .filter(

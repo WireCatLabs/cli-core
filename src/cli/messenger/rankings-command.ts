@@ -90,7 +90,8 @@ export const rankingsTopCommand = (messenger: Messenger, target: RankingTarget):
       return services.rankings.top(target, {
         ...params,
         ...sync,
-        limit: params.limit ?? context.settings.limit,
+        // A configured limit is a listing's page; a ranking takes at most 100 rows, so it is capped, not refused.
+        limit: params.limit ?? Math.min(context.settings.limit, 100),
         signal: environmentOf(this).commandSignal ?? environmentOf(this).signal,
         ...(saved ? { saved } : {}),
       })
