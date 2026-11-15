@@ -157,14 +157,15 @@ export interface CrmCopies {
   /**
    * After a complete list of the kind's ids: marks deleted every stored one the list lacks that the CRM has not
    * changed since `before` (epoch ms), so a row made while the list was read is never taken for a deleted one.
-   * `dryRun` only counts them.
+   * With `users`, only a deal or lead with no assignee or assigned to one of them: a list read under that scope
+   * names no other. `dryRun` only counts them.
    */
   removeUnlisted(
     key: AccountKey,
     kind: CrmKind,
     listed: string[],
     before: number,
-    options?: { dryRun?: boolean },
+    options?: { dryRun?: boolean; users?: readonly string[] },
   ): Promise<number>
   /** Which deals and leads the account's sync copies: its `scope` and `unassigned` settings. */
   scope(key: AccountKey): Promise<CrmScopeSetting>
@@ -205,7 +206,7 @@ export interface CrmCopies {
   /**
    * Removes the contacts no kept deal, lead or company names, and the people they leave empty; see
    * `removeCrmContacts`. A deal or lead assigned to a user outside `users` counts as gone; without `users`, outside
-   * those scope mine keeps (`self` and `unassigned`), whatever the scope is now. `dryRun` only counts.
+   * those scope mine keeps (`unassigned`, else `self`), whatever the scope is now. `dryRun` only counts.
    */
   removeContacts(
     key: AccountKey,
@@ -786,7 +787,8 @@ export const crmCopiesOver = (context: StoreContext, people: AccountPeople): Crm
           .all(accountId)
       : database
           .prepare(
-            `SELECT id, external_id, updated_at FROM ${TABLES[kind]} WHERE account_id = ? AND deleted_at IS NULL`,
+            `SELECT id, external_id, updated_at, json_extract(metadata, '$.assignee') AS assignee FROM ${TABLES[kind]} ` +
+              "WHERE account_id = ? AND deleted_at IS NULL",
           )
           .all(accountId)
   }
@@ -885,11 +887,15 @@ export const crmCopiesOver = (context: StoreContext, people: AccountPeople): Crm
           stored(key, kind).filter((row) => gone.has(String(row.external_id))),
         )
       }),
-    removeUnlisted: async (key, kind, listed, before, { dryRun } = {}) =>
+    removeUnlisted: async (key, kind, listed, before, { dryRun, users } = {}) =>
       write(database, () => {
         const held = new Set(listed)
+        const scope = users && new Set(users.map((id) => crmIdentityId(key, id, "user")))
         const gone = stored(key, kind).filter(
-          (row) => !held.has(String(row.external_id)) && Number(row.updated_at) < before,
+          (row) =>
+            !held.has(String(row.external_id)) &&
+            Number(row.updated_at) < before &&
+            (!scope || row.assignee == null || scope.has(String(row.assignee))),
         )
         return dryRun ? gone.length : markDeleted(key, kind, gone)
       }),

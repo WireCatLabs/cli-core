@@ -34,8 +34,9 @@ const NONE: CrmContactsRemoved = { contacts: 0, persons: 0, personsKept: 0, name
  * Removes, in one transaction, every contact of the account that no kept deal or lead (not deleted, and inside
  * `users` when given) names in a client's role, that is no contact of a kept company, and that the CRM does not
  * assign to one of `users`. A contact the owner decided about, or one anything else points at, stays; so does one
- * saved at or after `before`, whose deal may still be on its way. A person the removed contacts leave empty is deleted unless anything still points at them. People named
- * after a contact keep that name without the import's `null #<id>`; the owner's person is never renamed.
+ * saved at or after `before`, whose deal may still be on its way. A person the removed contacts leave empty is
+ * deleted unless anything still points at them. People named after a contact keep that name without the import's
+ * `null #<id>`; the owner's person is never renamed.
  */
 export const removeCrmContacts = (
   context: StoreContext,

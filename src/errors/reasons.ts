@@ -476,7 +476,7 @@ const OTHERS: Entry[] = [
   ),
   validation(
     "crm.unassigned-dropped",
-    "the CRM does not let this sign-in count a user in unassigned as nobody's; that user's deals are not copied",
+    "the CRM does not let this sign-in choose a user in unassigned; that user's deals are not copied",
   ),
   validation(
     "crm.not-reported",

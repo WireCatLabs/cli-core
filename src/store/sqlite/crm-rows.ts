@@ -1,7 +1,7 @@
 import { CliError } from "@wirecat/cli-base"
 import type { CrmItem, CrmPipeline } from "../../domain/crm.js"
 import { type DealKind, STAGE_OUTCOMES } from "../../domain/deals.js"
-import { currencyOf, minorUnits } from "../../domain/money.js"
+import { currencyOf, minorUnits, scaleOf } from "../../domain/money.js"
 import { fold } from "../normalize.js"
 import type { AccountKey } from "../types.js"
 import { authorActor } from "./memories.js"
@@ -18,6 +18,15 @@ export const TABLES = { deal: "deals", lead: "leads" } as const
 
 const MONEY_REFUSALS: readonly unknown[] = ["money.currency", "money.amount"]
 
+const amountFault = (item: CrmItem, code: string | null): string => {
+  const text = String(item.amount).trim()
+  const decimal = /^\d+(?:\.(\d+))?$/.exec(text)
+  if (text.startsWith("-")) return "it is below zero"
+  if (!decimal) return "it is not a decimal number"
+  if ((decimal[1] ?? "").length > scaleOf(String(code))) return `it has more decimals than ${code} has`
+  return "it is too large to keep exactly"
+}
+
 /** A deal is never dropped over its money: what the store cannot hold is left out, and the deal says why. */
 const moneyOf = (item: CrmItem) => {
   if (item.amount == null || item.currency == null) return { currency: null, amount: null, amountNote: null }
@@ -28,7 +37,7 @@ const moneyOf = (item: CrmItem) => {
     const reason = error instanceof CliError ? (error.details as { reason?: unknown } | undefined)?.reason : undefined
     if (!MONEY_REFUSALS.includes(reason)) throw error
     const code = textOf(String(item.currency), 10)
-    const why = reason === "money.currency" ? `the store keeps no amounts in ${code}` : (error as CliError).message
+    const why = reason === "money.currency" ? `the store keeps no amounts in ${code}` : amountFault(item, code)
     return {
       currency: null,
       amount: null,

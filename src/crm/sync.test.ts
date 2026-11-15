@@ -151,7 +151,7 @@ it("copies no deal of an unassigned user the CRM refuses, says so, and narrows o
   expect(report.issues).toContainEqual({
     kind: "deal",
     reason: "crm.unassigned-dropped",
-    message: `${KEY}.unassigned names user 9, not counted as nobody's: an active employee; their deals and leads are not copied`,
+    message: `${KEY}.unassigned names user 9, not chosen: an active employee; their deals and leads are not copied`,
   })
   expect(await deals()).toEqual(["d3"])
 })
@@ -397,6 +397,7 @@ it("keeps a deal whose money the store cannot hold, with no amount, and says why
   source.put("deal", exampleDeal("jpy", { amount: "1500.5", currency: "JPY" }))
   source.put("deal", exampleDeal("usd", { amount: "12.345", currency: "USD" }))
   source.put("deal", exampleDeal("big", { amount: "1234567890123456", currency: "USD" }))
+  source.put("deal", exampleDeal("neg", { amount: "-5", currency: "USD" }))
   const report = await syncCrm(source, store, PORTAL)
   const money = async () =>
     Object.fromEntries(
@@ -412,14 +413,27 @@ it("keeps a deal whose money the store cannot hold, with no amount, and says why
       null,
       expect.stringMatching(/^the CRM's amount 100 BRL is not kept: the store keeps no amounts in BRL$/),
     ],
-    jpy: [null, null, expect.stringMatching(/^the CRM's amount 1500\.5 JPY is not kept: .*at most 0 decimals/)],
-    usd: [null, null, expect.stringMatching(/^the CRM's amount 12\.345 USD is not kept/)],
-    big: [null, null, expect.stringMatching(/^the CRM's amount 1234567890123456 USD is not kept/)],
+    jpy: [
+      null,
+      null,
+      expect.stringMatching(/^the CRM's amount 1500\.5 JPY is not kept: it has more decimals than JPY has$/),
+    ],
+    usd: [
+      null,
+      null,
+      expect.stringMatching(/^the CRM's amount 12\.345 USD is not kept: it has more decimals than USD has$/),
+    ],
+    big: [
+      null,
+      null,
+      expect.stringMatching(/^the CRM's amount 1234567890123456 USD is not kept: it is too large to keep exactly$/),
+    ],
+    neg: [null, null, "the CRM's amount -5 USD is not kept: it is below zero"],
   })
   expect(report.issues.filter(({ reason }) => reason === "crm.item-invalid")).toEqual([])
   expect(
     report.issues.filter(({ reason }) => reason === "crm.amount-unkept").map(({ externalId }) => externalId),
-  ).toEqual(["brl", "jpy", "usd", "big"])
+  ).toEqual(["brl", "jpy", "usd", "big", "neg"])
 
   source.put("deal", exampleDeal("eur", { amount: "100.50", currency: "BRL" }))
   await syncCrm(source, store, PORTAL)
@@ -536,4 +550,18 @@ it("under the default mine, a chosen unassigned list that leaves out every store
   const report = await sync({ passEvery: 0 })
   expect(dealOf(report)).toMatchObject({ held: true, outOfScope: 0, unlisted: 0 })
   expect(await deals()).toEqual(["d1", "d2", "d3", "d4"])
+})
+
+it("while a narrowing is held, the id pass still marks deleted a deal in the scope the CRM deleted", async () => {
+  const { source, set, raw, sync, deals } = await scoped()
+  filteredLikeB24(source())
+  for (const id of ["d1", "d2"]) source().put("deal", exampleDeal(id, { assignee: "7" }))
+  for (const id of ["d3", "d4", "d5", "d6"]) source().put("deal", exampleDeal(id, { assignee: "9" }))
+  await set("scope", "all")
+  await sync()
+  await raw("scope", undefined)
+  source().delete("deal", "d2")
+  const held = dealOf(await sync({ passEvery: 0 }))
+  expect(held).toMatchObject({ held: true, outOfScope: 0, unlisted: 1, pass: "complete" })
+  expect(await deals()).toEqual(["d1", "d3", "d4", "d5", "d6"])
 })

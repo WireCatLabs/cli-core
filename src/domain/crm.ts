@@ -183,7 +183,7 @@ export interface CrmActivity {
   on: { kind: DealKind; externalId: string }[]
 }
 
-/** The account's scope settings: `also` are the users whose deals the owner counts as nobody's. */
+/** The account's scope settings: `also` are the users whose deals `mine` copies, in place of the sign-in's own. */
 export type CrmScopeSetting = { mode: "all" } | { mode: "mine"; also: readonly string[]; explicit: boolean }
 
 /**

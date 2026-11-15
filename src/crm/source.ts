@@ -76,13 +76,13 @@ export interface CrmSource {
   readonly provider: string
   readonly traits: CrmSourceTraits
   /**
-   * The sign-in's own user id in the CRM, what a `mine` scope keeps besides `unassigned`. A source with it fills every
-   * deal's and lead's `assignee`, since `mine` keeps one without as nobody's; a source without it is copied whole. One
-   * account's copy belongs to one user: another sign-in's user is refused.
+   * The sign-in's own user id in the CRM, what a `mine` scope keeps while `unassigned` is empty. A source with it fills
+   * every deal's and lead's `assignee`, since `mine` keeps one without as nobody's; a source without it is copied
+   * whole. One account's copy belongs to one user: another sign-in's user is refused.
    */
   self?(): string | Promise<string>
   /**
-   * Which of the `unassigned` users this sign-in may count as nobody's, asked at every sync under `mine`; absent, all
+   * Which of the `unassigned` users this sign-in may choose, asked at every sync under `mine`; absent, all
    * of them. The engine copies no deal or lead of a user left out, and names them with `message`, the CRM's reason.
    */
   unassigned?(users: readonly string[]): Promise<{ kept: string[]; message?: string }>

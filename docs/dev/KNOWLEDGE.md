@@ -244,7 +244,10 @@ holds deals or leads (`kind`), is the owner's own or a CRM account's (`account_i
 reference or by a name only one pipeline has (`pipeline.ambiguous` lists the candidates). Its stages are in order and
 have an `outcome` (`open`, `won`, `lost`). Deals (`deals`, `deal:<id>`) and leads (`leads`, `lead:<id>`, with the
 `deal_id` it became) have a title, an optional organization and project, a stage, a status kept apart from the stage,
-an optional expected amount with its currency, the expected close day and the day it closed. Moving to a stage whose
+an optional expected amount with its currency, the expected close day and the day it closed. A CRM copy whose amount
+the store cannot hold (a currency outside `CURRENCY_SCALES`, more decimals than its currency has, below zero or too
+large) is kept with no amount; `provider_metadata.amount_note` is then WireCat's own note, not a CRM field, saying
+what the CRM had and why, and the sync answer names it as `crm.amount-unkept`. Moving to a stage whose
 outcome ends it closes it, and `close` moves it to the stage of that outcome when the pipeline has one. The people on
 it are `links` of kind `related-to` with a `role` (`owner`, `contact`, `decision-maker`, `influencer`). The owner and his agents
 write alike, with no review; only the author is kept. Triggers write each stage a row enters to
@@ -388,8 +391,8 @@ proposed contract withdraws its parties in the same transaction
 Which deals and leads a sync copies is the account's `crm.<provider>:<account>.scope`: `mine` (the default) keeps
 those with no assignee and those assigned to a user in `crm.<provider>:<account>.unassigned` (the CRM's numeric user
 ids the owner chose, such as an integration's or a colleague's whose portal this is; `settings set` refuses any other
-entry), or, while that list is empty, to the sign-in's own user. A chosen list leaves the sign-in's user out unless it
-names it (the owner's ruling, 2026-11-12). `all` keeps every one. Contacts and companies are always
+entry), or, while that list is empty, to the sign-in's own user. A chosen list replaces the sign-in's user: add your
+own id to keep yours. `all` keeps every one. Contacts and companies are always
 copied whole. A source names its own user with `self()`; a source without it is copied whole, and the answer's
 `scope` (`{ mode, self, also }`) says what was applied. User ids are normalised once in core (`normalCrmUserId`:
 `015` is `15`). The engine applies the scope to every page it gets, so a row a round of changes finds outside it,

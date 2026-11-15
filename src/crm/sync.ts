@@ -157,7 +157,7 @@ export interface CrmSyncReport {
   pipelines: number
   /** Users read this run; absent when the CRM cannot list them. */
   users?: number
-  /** The deals and leads this run copied: `also` when it names anyone, else `self`; `all` too when the CRM names none. */
+  /** The deals and leads this run copied: `also` when it names anyone, else `self`; `all` when the CRM names none. */
   scope: CrmScope
   /** Relationships left out because the owner removed or rejected that very one, role included. */
   skippedOwnerRejected: number
@@ -473,7 +473,7 @@ const savePage = async (
   return { saved, stop }
 }
 
-/** A chosen `unassigned` list leaves the sign-in's own user out unless named (the owner's ruling, 2026-11-12). */
+/** A chosen `unassigned` list replaces the sign-in's own user, which stays only when named (as b24's `chosenOf`). */
 const scopeIds = (scope: CrmScope): string[] | null =>
   scope.mode === "all" ? null : [...new Set(scope.also.length ? scope.also : [scope.self])].sort()
 const scopeKey = (scope: CrmScope): string => {
@@ -574,7 +574,6 @@ const syncKind = async (run: Run, kind: CrmKind, options: CrmSyncOptions, result
     const kept = isItemKind(kind) ? (items as CrmItem[]).filter((item) => inScope(ids, item)) : items
     const { saved, stop } = await savePage(run, kind, { ...page, items: kept })
     result.saved += saved
-    cursor = { ...cursor, done: cursor.done + saved }
     if (page.removed?.length) result.removed += await store.crm.remove(account, kind, page.removed)
     if (kept.length < items.length && !held) {
       const left = (items as CrmItem[]).filter((item) => !inScope(ids, item)).map(({ externalId }) => externalId)
@@ -586,6 +585,7 @@ const syncKind = async (run: Run, kind: CrmKind, options: CrmSyncOptions, result
       await save()
       return stop
     }
+    cursor = { ...cursor, done: cursor.done + saved }
     if (!page.hasMore) {
       listed = true
       await save({ token: page.cursor ?? null })
@@ -601,8 +601,9 @@ const syncKind = async (run: Run, kind: CrmKind, options: CrmSyncOptions, result
   }
   const passes = source.ids && !source.traits.removedInChanges && kind !== "person"
   const due = cursor.pass !== null || now - cursor.passAt >= (options.passEvery ?? DAY)
-  // A held narrowing keeps the rows outside the scope, and a source's list under mine names none of them.
-  if (passes && due && !held) {
+  // A held narrowing keeps the stored rows outside the scope, and a source's list under mine names none of them.
+  const listedOf = held && ids ? { users: ids } : {}
+  if (passes && due) {
     const ids = source.ids as NonNullable<CrmSource["ids"]>
     let pass = cursor.pass ?? { page: null, startedAt: now, seen: [] }
     for (;;) {
@@ -623,7 +624,7 @@ const syncKind = async (run: Run, kind: CrmKind, options: CrmSyncOptions, result
     }
     const before = pass.startedAt - CLOCK_MARGIN
     const stored = await store.crm.count(account, kind)
-    const unlisted = await store.crm.removeUnlisted(account, kind, pass.seen, before, { dryRun: true })
+    const unlisted = await store.crm.removeUnlisted(account, kind, pass.seen, before, { ...listedOf, dryRun: true })
     const emptied = pass.seen.length === 0 && unlisted > 0
     if (!options.rescan && (emptied || (stored >= GUARDED_FROM && unlisted > stored * MOST_UNLISTED))) {
       result.pass = "held"
@@ -635,7 +636,7 @@ const syncKind = async (run: Run, kind: CrmKind, options: CrmSyncOptions, result
           "marked deleted; nothing was — check the sign-in's rights, then run sync --rescan to let it through",
       })
     } else {
-      result.unlisted = await store.crm.removeUnlisted(account, kind, pass.seen, before)
+      result.unlisted = await store.crm.removeUnlisted(account, kind, pass.seen, before, listedOf)
       result.pass = "complete"
     }
     await save({ pass: null, passAt: pass.startedAt })
@@ -705,7 +706,7 @@ export const syncCrm = async (
       kind: "deal",
       reason: "crm.unassigned-dropped",
       message:
-        `${crmSettingKey(account, "unassigned")} names user ${dropped.join(", ")}, not counted as nobody's: ` +
+        `${crmSettingKey(account, "unassigned")} names user ${dropped.join(", ")}, not chosen: ` +
         `${allowed.message ?? `${source.provider} refused them`}; their deals and leads are not copied`,
     })
   let steps = 0
