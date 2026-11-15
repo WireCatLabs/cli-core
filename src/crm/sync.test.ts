@@ -3,10 +3,12 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, expect, it } from "vitest"
 import { type RunBudget, runBudget } from "../background/budget.js"
+import type { CrmItem } from "../domain/crm.js"
 import { openCache } from "../store/open.js"
 import { parseCrmSettingValue } from "../store/sqlite/crm-settings.js"
 import { type MessageStore, openStore } from "../store/store.js"
 import { type CrmSyncOptions, type CrmSyncReport, crmStatus, parseCrmCursor, syncCrm } from "./index.js"
+import type { CrmCallContext } from "./source.js"
 import { exampleDeal, examplePerson, fakeCrmSource, SALES_PIPELINE } from "./testing/index.js"
 
 const stores: MessageStore[] = []
@@ -462,4 +464,49 @@ it("reads again a page whose deal in a new stage was skipped because the budget 
     const listed = (await store.deals.list({ account: PORTAL, kind: "deal" })).items.map(({ externalId }) => externalId)
     expect([pageSize, listed.sort()]).toEqual([pageSize, ["d1", "d2", "d3"]])
   }
+})
+
+/**
+ * Lists deals as b24 does under mine (bitrix24-cli src/crm/source.ts `chosenOf`): only the chosen users' ids, and no
+ * changed row of the sign-in's own user unless chosen. The chosen are the `unassigned` users, else the own user.
+ */
+const filteredLikeB24 = (source: ReturnType<typeof fakeCrmSource>) => {
+  const chosen = (context: CrmCallContext | undefined) =>
+    context?.scope?.mode === "mine" ? (context.scope.also.length ? context.scope.also : [context.scope.self]) : null
+  const ids = source.ids?.bind(source) as NonNullable<typeof source.ids>
+  const changes = source.changes.bind(source)
+  const assignees = new Map<string, string | null | undefined>()
+  const put = source.put.bind(source)
+  source.put = ((kind, record) => {
+    if (kind === "deal") assignees.set(record.externalId, (record as CrmItem).assignee)
+    put(kind, record)
+  }) as typeof source.put
+  const kept = (users: readonly string[] | null, id: string) => {
+    const assignee = assignees.get(id)
+    return users === null || assignee == null || users.includes(assignee)
+  }
+  source.ids = async (kind, page, context) => {
+    const listed = await ids(kind, page, context)
+    const users = kind === "deal" ? chosen(context) : null
+    return { ...listed, items: listed.items.filter((id) => kept(users, id)) }
+  }
+  source.changes = (async (kind, cursor, page, context) => {
+    const listed = await changes(kind, cursor, page, context)
+    const users = kind === "deal" ? chosen(context) : null
+    if ("reset" in listed || users === null) return listed
+    return { ...listed, items: listed.items.filter((item) => kept(users, (item as CrmItem).externalId)) }
+  }) as typeof source.changes
+}
+
+it("a held narrowing on a small copy is not undone by the same run's id pass, which lists only the scope's ids", async () => {
+  const { source, set, raw, sync, deals } = await scoped()
+  filteredLikeB24(source())
+  for (const id of ["d1", "d2"]) source().put("deal", exampleDeal(id, { assignee: "7" }))
+  for (const id of ["d3", "d4", "d5", "d6"]) source().put("deal", exampleDeal(id, { assignee: "9" }))
+  await set("scope", "all")
+  await sync()
+  await raw("scope", undefined)
+  const held = dealOf(await sync({ passEvery: 0 }))
+  expect(held).toMatchObject({ held: true, outOfScope: 0, unlisted: 0 })
+  expect(await deals()).toEqual(["d1", "d2", "d3", "d4", "d5", "d6"])
 })

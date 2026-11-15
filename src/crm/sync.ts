@@ -600,7 +600,8 @@ const syncKind = async (run: Run, kind: CrmKind, options: CrmSyncOptions, result
   }
   const passes = source.ids && !source.traits.removedInChanges && kind !== "person"
   const due = cursor.pass !== null || now - cursor.passAt >= (options.passEvery ?? DAY)
-  if (passes && due) {
+  // A held narrowing keeps the rows outside the scope, and a source's list under mine names none of them.
+  if (passes && due && !held) {
     const ids = source.ids as NonNullable<CrmSource["ids"]>
     let pass = cursor.pass ?? { page: null, startedAt: now, seen: [] }
     for (;;) {
