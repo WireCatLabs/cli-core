@@ -2,7 +2,7 @@ import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { CliError, isCliError } from "@wirecat/cli-base"
-import { annotate, overrideSharedContract } from "@wirecat/cli-base/commands"
+import { annotate, metaOf, overrideSharedContract } from "@wirecat/cli-base/commands"
 import { Command } from "commander"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import {
@@ -382,6 +382,12 @@ describe("shared documents commands", () => {
       issues: [{ code: "provider_error", reason: "sync.partial", source: "synthetic-box" }],
     })
     expect(answer.error).toMatchObject({ details: { reason: "sync.partial" } })
+  })
+
+  it("sync is a cooperative, partial command, so it gets a sync's deadline rather than a one-shot's", async () => {
+    const cli = await reference()
+    const sync = cli.program.commands.find((one) => one.name() === "sync") as Command
+    expect(metaOf(sync)).toMatchObject({ cooperative: true, partial: true })
   })
 
   it("a sync that leaves work for the next one answers partial and names the same sync as its next step", async () => {

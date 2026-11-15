@@ -86,6 +86,11 @@ A sync stops before its end and saves where it is; the next sync goes on from th
   ([WC-LIFE-16](https://github.com/WireCatLabs/cli-base/blob/main/docs/standards/lifecycle.md)); the shared `sync` command passes
   `runBudgetOf(command)` as `budget` in its arguments, and the CLI hands it to `syncDocuments`. The budget is also
   asked before each file read, and a stop there leaves the rest of the batch pending.
+- **The shared `sync` is cooperative and partial**, as the calendar and CRM syncs are. Without `--timeout` it gets a
+  sync's deadline, 15 min in a terminal and 45 s over MCP, instead of a one-shot's 30 s, so its budget fits as many
+  requests as that deadline allows (about 12 in 30 s with the 2 s default `requestMs`). A cancel is not cut from
+  outside: the walk stops at the next folder on the run's `signal`, budget or not, the batch stops before the next
+  file, and both keep their work.
 - **The walk is saved through `saveWalk`** every 2 s and when the call stops: the folders still to list, the
   folders and files found. Only the fields of `SourceWalk` are used, so a CLI that validates the walk file with a
   strict schema keeps all of it. A round of changes is saved under the scope `<scope>:changes:<cursor>`, which names

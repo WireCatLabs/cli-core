@@ -186,7 +186,12 @@ export const planDocuments = async <M extends SourceFile>(
           continue
         }
         // One folder at least per call, so a folder with more children than the bound still gets listed.
-        stopped = listed > 0 && spent >= maxEntries ? "entries" : (budget?.take() ?? null)
+        // The run's own signal too: a cooperative sync is not cut from outside, and a CLI may pass no budget.
+        stopped = options.signal?.aborted
+          ? "cancelled"
+          : listed > 0 && spent >= maxEntries
+            ? "entries"
+            : (budget?.take() ?? null)
         if (stopped) break
         const folder = step.folder ?? (await source.metadata(step.id))
         if (!step.folder && (!isFolder(folder) || folder.trashed))
