@@ -111,7 +111,7 @@ const scoped = async ({ self = "7", removedInChanges = false } = {}) => {
 }
 const dealOf = (report: CrmSyncReport) => report.synced.find(({ kind }) => kind === "deal")
 
-it("copies the own user's, the unassigned users' and nobody's deals by default, and drops one given away", async () => {
+it("copies the unassigned users' and nobody's deals, not the own user's unless named, and drops one given away", async () => {
   const { source, set, sync, deals } = await scoped()
   source().put("deal", exampleDeal("d1", { assignee: "7" }))
   source().put("deal", exampleDeal("d2", { assignee: "9" }))
@@ -119,13 +119,13 @@ it("copies the own user's, the unassigned users' and nobody's deals by default, 
   source().put("deal", exampleDeal("d4"))
   await set("unassigned", "15")
   expect((await sync()).scope).toEqual({ mode: "mine", self: "7", also: ["15"] })
-  expect(await deals()).toEqual(["d1", "d3", "d4"])
-  source().put("deal", exampleDeal("d1", { assignee: "9" }))
-  expect(dealOf(await sync())).toMatchObject({ round: "changes", outOfScope: 1 })
   expect(await deals()).toEqual(["d3", "d4"])
-  source().put("deal", exampleDeal("d1", { assignee: "7" }))
+  source().put("deal", exampleDeal("d3", { assignee: "9" }))
+  expect(dealOf(await sync())).toMatchObject({ round: "changes", outOfScope: 1 })
+  expect(await deals()).toEqual(["d4"])
+  source().put("deal", exampleDeal("d3", { assignee: "15" }))
   await sync()
-  expect(await deals()).toEqual(["d1", "d3", "d4"])
+  expect(await deals()).toEqual(["d3", "d4"])
 })
 
 it("copies no deal of an unassigned user the CRM refuses, says so, and narrows once it does", async () => {
@@ -143,7 +143,7 @@ it("copies no deal of an unassigned user the CRM refuses, says so, and narrows o
     }),
   })
   expect((await sync()).scope).toEqual({ mode: "mine", self: "7", also: ["9", "15"] })
-  expect(await deals()).toEqual(["d1", "d2", "d3"])
+  expect(await deals()).toEqual(["d2", "d3"])
 
   refused = ["9"]
   const report = await sync()
@@ -153,7 +153,7 @@ it("copies no deal of an unassigned user the CRM refuses, says so, and narrows o
     reason: "crm.unassigned-dropped",
     message: `${KEY}.unassigned names user 9, not counted as nobody's: an active employee; their deals and leads are not copied`,
   })
-  expect(await deals()).toEqual(["d1", "d3"])
+  expect(await deals()).toEqual(["d3"])
 })
 
 it("narrows in the store with no list from the CRM, widens by a full round, and keeps confirmed links", async () => {
@@ -217,8 +217,8 @@ it("takes user ids however the CRM or the owner spells them", async () => {
   source().put("deal", exampleDeal("d1", { assignee: "7" }))
   source().put("deal", exampleDeal("d2", { assignee: "0015" }))
   source().put("deal", exampleDeal("d3", { assignee: "9" }))
-  await set("unassigned", "015")
-  expect((await sync()).scope).toEqual({ mode: "mine", self: "7", also: ["15"] })
+  await set("unassigned", "015,07")
+  expect((await sync()).scope).toEqual({ mode: "mine", self: "7", also: ["15", "7"] })
   expect(await deals()).toEqual(["d1", "d2"])
 })
 
@@ -348,7 +348,7 @@ it("store status gives each deal and lead kind its saved scope and the one its c
   expect((await scopes()).deal).toEqual({
     setting: "mine",
     explicit: true,
-    applied: { mode: "mine", users: ["15", "7"] },
+    applied: { mode: "mine", users: ["15"] },
   })
 })
 
@@ -509,4 +509,31 @@ it("a held narrowing on a small copy is not undone by the same run's id pass, wh
   const held = dealOf(await sync({ passEvery: 0 }))
   expect(held).toMatchObject({ held: true, outOfScope: 0, unlisted: 0 })
   expect(await deals()).toEqual(["d1", "d2", "d3", "d4", "d5", "d6"])
+})
+
+it("a chosen unassigned list leaves the sign-in's own user out of mine: its deals leave as out of scope", async () => {
+  const { source, set, sync, deals } = await scoped()
+  filteredLikeB24(source())
+  for (const id of ["d1", "d2", "d3"]) source().put("deal", exampleDeal(id, { assignee: "7" }))
+  for (const id of ["d4", "d5"]) source().put("deal", exampleDeal(id, { assignee: "42" }))
+  await set("scope", "mine")
+  await sync()
+  expect(await deals()).toEqual(["d1", "d2", "d3"])
+  await set("unassigned", "42")
+  const report = await sync({ passEvery: 0 })
+  expect(report.scope).toEqual({ mode: "mine", self: "7", also: ["42"] })
+  expect(dealOf(report)).toMatchObject({ outOfScope: 3, unlisted: 0, pass: "complete" })
+  expect(await deals()).toEqual(["d4", "d5"])
+})
+
+it("under the default mine, a chosen unassigned list that leaves out every stored deal is held, none unlisted", async () => {
+  const { source, set, sync, deals } = await scoped()
+  filteredLikeB24(source())
+  for (const id of ["d1", "d2", "d3"]) source().put("deal", exampleDeal(id, { assignee: "7" }))
+  source().put("deal", exampleDeal("d4", { assignee: "42" }))
+  await sync()
+  await set("unassigned", "42")
+  const report = await sync({ passEvery: 0 })
+  expect(dealOf(report)).toMatchObject({ held: true, outOfScope: 0, unlisted: 0 })
+  expect(await deals()).toEqual(["d1", "d2", "d3", "d4"])
 })

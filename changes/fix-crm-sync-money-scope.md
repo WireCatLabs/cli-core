@@ -9,3 +9,10 @@
   for the owner, the id pass does not run, so no deal outside the scope is marked deleted.
 - **A deal in a new stage, skipped because the run's budget ran out before the pipelines were read again, is read
   again.** The next run reads that page again instead of moving past it.
+
+### Changed — may break callers
+
+- **A chosen `unassigned` list leaves the sign-in's own user out of scope `mine` unless it names that user** (the
+  owner's ruling of 2026-11-12). Before, core always kept the own user's deals while bitrix24-cli dropped them, so
+  they went stale and later counted as deleted on the CRM. Now they leave the copy as out of scope, or the narrowing
+  is held under the default `mine`. To keep your own deals as well, add your own user id to `unassigned`.

@@ -185,9 +185,10 @@ export interface CrmActivity {
 export type CrmScopeSetting = { mode: "all" } | { mode: "mine"; also: readonly string[]; explicit: boolean }
 
 /**
- * Which deals and leads a sync copies: all, or those with no assignee or assigned to the sign-in's own user (`self`)
- * or to one of `also`. Companies and contacts are what the source lists; under `mine`, a contact no kept deal, lead or
- * company names is removed after a sync that narrowed the copy or listed it again. Ids are normalised (`normalCrmUserId`).
+ * Which deals and leads a sync copies: all, or those with no assignee or assigned to one of `also`, or to the
+ * sign-in's own user (`self`) when `also` is empty: a chosen list leaves `self` out unless it names it. Companies and
+ * contacts are what the source lists; under `mine`, a contact no kept deal, lead or company names is removed after a
+ * sync that narrowed the copy or listed it again. Ids are normalised (`normalCrmUserId`).
  */
 export type CrmScope = { mode: "all" } | { mode: "mine"; self: string; also: readonly string[] }
 

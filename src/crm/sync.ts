@@ -157,7 +157,7 @@ export interface CrmSyncReport {
   pipelines: number
   /** Users read this run; absent when the CRM cannot list them. */
   users?: number
-  /** The deals and leads this run copied, with the sign-in's own user; `all` too when the CRM names none. */
+  /** The deals and leads this run copied: `also` when it names anyone, else `self`; `all` too when the CRM names none. */
   scope: CrmScope
   /** Relationships left out because the owner removed or rejected that very one, role included. */
   skippedOwnerRejected: number
@@ -473,8 +473,9 @@ const savePage = async (
   return { saved, stop }
 }
 
+/** A chosen `unassigned` list leaves the sign-in's own user out unless named (the owner's ruling, 2026-11-12). */
 const scopeIds = (scope: CrmScope): string[] | null =>
-  scope.mode === "all" ? null : [...new Set([scope.self, ...scope.also])].sort()
+  scope.mode === "all" ? null : [...new Set(scope.also.length ? scope.also : [scope.self])].sort()
 const scopeKey = (scope: CrmScope): string => {
   const ids = scopeIds(scope)
   return ids ? `mine:${ids.join(",")}` : "all"

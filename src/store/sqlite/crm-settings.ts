@@ -12,7 +12,7 @@ export type CrmLinkMode = (typeof CRM_LINK_MODES)[number]
 export const COMPANY_TYPE_MEANINGS = ["customer-of", "supplier", "partner-of"] as const
 export type CompanyTypeMeaning = (typeof COMPANY_TYPE_MEANINGS)[number]
 
-/** `mine`: only the deals and leads of the sign-in's own user and of the `unassigned` users; `all`: every one. */
+/** `mine`: only the deals and leads of the `unassigned` users, else of the sign-in's own user; `all`: every one. */
 export const CRM_SCOPES = ["mine", "all"] as const
 
 /** `activities`: whether a sync also reads the activities and tasks on the deals and leads it keeps; off by default. */
@@ -81,10 +81,11 @@ const picked = (name: string, text: string, values: readonly string[]) => {
   return text
 }
 
-/** The users whose deals and leads scope mine keeps, whatever the scope is now: `self` and the `unassigned` list. */
+/** The users whose deals and leads scope mine keeps, whatever the scope is now: the `unassigned` list, else `self`. */
 export const crmScopeUsers = (database: CacheDatabase, key: AccountKey): string[] => {
   const self = crmOwnUser(database, key)
-  return [...new Set([...(self ? [self] : []), ...userIds(stored(database, crmSettingKey(key, "unassigned")))])]
+  const chosen = userIds(stored(database, crmSettingKey(key, "unassigned")))
+  return [...new Set(chosen.length ? chosen : self ? [self] : [])]
 }
 
 /**

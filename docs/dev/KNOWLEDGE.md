@@ -386,9 +386,10 @@ proposed contract withdraws its parties in the same transaction
 `import:<provider>`, so it and a CRM on the same account never withdraw each other's.
 
 Which deals and leads a sync copies is the account's `crm.<provider>:<account>.scope`: `mine` (the default) keeps
-those with no assignee and those assigned to the sign-in's own user or to a user in
-`crm.<provider>:<account>.unassigned` (the CRM's numeric user ids whose items the owner counts as nobody's, such as an
-integration's; `settings set` refuses any other entry); `all` keeps every one. Contacts and companies are always
+those with no assignee and those assigned to a user in `crm.<provider>:<account>.unassigned` (the CRM's numeric user
+ids the owner chose, such as an integration's or a colleague's whose portal this is; `settings set` refuses any other
+entry), or, while that list is empty, to the sign-in's own user. A chosen list leaves the sign-in's user out unless it
+names it (the owner's ruling, 2026-11-12). `all` keeps every one. Contacts and companies are always
 copied whole. A source names its own user with `self()`; a source without it is copied whole, and the answer's
 `scope` (`{ mode, self, also }`) says what was applied. User ids are normalised once in core (`normalCrmUserId`:
 `015` is `15`). The engine applies the scope to every page it gets, so a row a round of changes finds outside it,
