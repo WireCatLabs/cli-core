@@ -81,6 +81,7 @@ const ROOT_READS: Record<string, string> = {
   "cli/messenger/gaps-command.ts timeout": "the run's deadline; over MCP the 45 s cap holds",
   "calendar/cli/index.ts timeout": "the run's deadline; over MCP the 45 s cap holds",
   "crm/cli/index.ts timeout": "the run's deadline; over MCP the 45 s cap holds",
+  "cli/documents/sync.ts timeout": "the run's deadline, carried into the step that continues the sync",
   "meetings/cli/management.ts dryRun": "the root --dry-run preview, which the meeting writes honour themselves",
 }
 
