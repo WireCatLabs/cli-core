@@ -97,8 +97,19 @@ export interface CrmPerson {
    * did not say, and the relationships stored stay.
    */
   organizations?: { externalId: string; primary?: boolean; sourceRole?: string | null }[]
+  firstName?: string | null
+  lastName?: string | null
   /** The CRM user the contact is assigned to: under `mine`, one assigned to a user in scope stays with no deal. */
   assignee?: string | null
+  /**
+   * What a live read (`CrmSource.list`, `get`) and a write answer give beside the copy's fields; the store keeps only
+   * `assignee` of them. Times are epoch ms; `url` is the CRM's own page for it.
+   */
+  createdAt?: number | null
+  updatedAt?: number | null
+  url?: string | null
+  /** The CRM's own fields' values by code; never a phone or e-mail of a foreign client. */
+  metadata?: Record<string, CrmValue>
 }
 
 /** A CRM company: it becomes an organization of its own, never one matched by name. */
@@ -111,6 +122,15 @@ export interface CrmOrganization {
   /** The CRM's company type code; `crm.<provider>:<account>.company-types` says what one means, nothing by default. */
   type?: string | null
   metadata?: Record<string, unknown>
+  phones?: string[]
+  emails?: string[]
+  /**
+   * What a live read (`CrmSource.list`, `get`) and a write answer give beside the copy's fields; the store does not keep
+   * them yet. `assignee` is the CRM user it is assigned to; times are epoch ms; `url` the CRM's own page for it.
+   */
+  assignee?: string | null
+  createdAt?: number | null
+  updatedAt?: number | null
 }
 
 /**

@@ -186,6 +186,35 @@ export const crmSourceContract = (make: () => CrmSourceFixture | Promise<CrmSour
       },
     },
   ]
+  cases.push({
+    name: "list and get: live pages of contacts and companies, each row once, has_more on every page but the last",
+    async run() {
+      const { source } = await make()
+      if (!source.list) return
+      const list = source.list.bind(source)
+      for (const kind of (["person", "organization"] as const).filter((one) => source.traits.kinds.includes(one))) {
+        const whole = await list(kind, { conditions: [], limit: 500 })
+        assert.ok(whole.items.length > 0, `${kind}: the fixture lists at least one live`)
+        const seen: string[] = []
+        for (let page = 1; page <= MAX_PAGES; page += 1) {
+          const answer = await list(kind, { conditions: [], limit: 1, page: String(page) })
+          assert.ok(answer.items.length <= 1, `${kind}: a page holds at most its limit`)
+          seen.push(...answer.items.map(({ externalId }) => externalId))
+          if (!answer.hasMore) break
+          assert.equal(answer.items.length, 1, `${kind}: a page with more after it is full`)
+        }
+        assert.deepEqual(
+          seen,
+          whole.items.map(({ externalId }) => externalId),
+          `${kind}: pages add up to the list`,
+        )
+        if (!source.get) continue
+        const first = whole.items[0] as { externalId: string }
+        assert.equal((await source.get(kind, first.externalId))?.externalId, first.externalId, `${kind}: get by id`)
+        assert.equal(await source.get(kind, "contract-missing-0"), null, `${kind}: no such id is null, not a throw`)
+      }
+    },
+  })
   return [
     ...cases,
     {

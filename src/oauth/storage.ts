@@ -14,6 +14,8 @@ export interface StoredTokens {
   tokens: TokenSet
   /** The app the entry was signed in with, when the entry records it; refresh must use that one. */
   client?: OAuthClient
+  /** The account an account-bound entry (`accountTokenCodec`) was signed in to: its base URL and the user's id. */
+  account?: { host: string; userId: string }
 }
 
 export interface EncodeInput {
@@ -191,6 +193,34 @@ export const googleTokenCodec: TokenCodec = {
     else delete entry.clientSecret
     return JSON.stringify(entry)
   },
+}
+
+/**
+ * An entry bound to one CRM account through the owner's own app (Bitrix24's local application, a Kommo
+ * integration): the standard entry plus the owner's client secret, which every refresh needs, the account's base URL
+ * (`host`) and the signed-in user's id. A sign-in passes `host` and `userId` as `extra`; a refresh keeps them, and
+ * saves a rotated refresh token. A moved run's writes go to its temporary entry (`credentialStorage`).
+ */
+export const accountTokenCodec = (providerId: string): TokenCodec => {
+  const standard = standardCodec(providerId)
+  return {
+    decode: (raw) => {
+      const stored = standard.decode(raw)
+      const value = parse(raw)
+      const clientSecret = text(value.clientSecret)
+      const host = text(value.host)
+      const userId = text(value.userId)
+      if (!host || !userId || !clientSecret) throw invalid()
+      return { ...stored, client: { ...(stored.client as OAuthClient), clientSecret }, account: { host, userId } }
+    },
+    encode: (input) => {
+      const entry = parse(standard.encode(input))
+      if (!input.client.clientSecret || typeof entry.host !== "string" || typeof entry.userId !== "string")
+        throw new CliError("configuration_error", "an account-bound sign-in needs the app's secret, its host and user")
+      entry.clientSecret = input.client.clientSecret
+      return JSON.stringify(entry)
+    },
+  }
 }
 
 /** zm's entry as zoom-cli writes it today: `{accessToken, refreshToken, expiresAt, scopes}`, all four required. */

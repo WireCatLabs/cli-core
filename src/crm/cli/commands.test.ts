@@ -399,7 +399,8 @@ describe("CRM commands", () => {
         addCrmCommands(root, {
           app: APP,
           open: () => Promise.reject(new Error("not opened")),
-          writes: { ...WRITES, idempotent: true },
+          writes: { ...WRITES, kinds: [...WRITES.kinds, "person", "organization"], idempotent: true },
+          live: ["person", "organization", "user"],
         })
         return [commandsCommand(APP), runsCommand(APP), ...root.commands]
       },

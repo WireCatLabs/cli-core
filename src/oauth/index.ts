@@ -18,6 +18,7 @@ export {
 } from "./provider.js"
 export { requestTokens, revokeToken, TOKEN_LOG_ALLOW, TOKEN_LOG_EVENT } from "./requests.js"
 export {
+  accountTokenCodec,
   type CredentialStorageOptions,
   credentialStorage,
   driveSessionCodec,

@@ -7,25 +7,48 @@ import type {
   CrmPerson,
   CrmPipeline,
   CrmRecords,
+  CrmValue,
 } from "../../domain/crm.js"
 import type { DealKind } from "../../domain/deals.js"
-import type { CrmChanges, CrmIdPage, CrmSource, CrmSourceTraits } from "../source.js"
-import { CRM_VERBS, type CrmFields, type CrmVerb, type CrmWriteCapabilities, type CrmWriter } from "../writer.js"
+import { foldName } from "../../resolve.js"
+import type {
+  CrmChanges,
+  CrmCondition,
+  CrmIdPage,
+  CrmLiveKind,
+  CrmLiveQuery,
+  CrmSource,
+  CrmSourceTraits,
+} from "../source.js"
+import { crmWindowOf, walk } from "../walk.js"
+import {
+  CRM_VERBS,
+  type CrmDraft,
+  type CrmFields,
+  type CrmPersonFields,
+  type CrmVerb,
+  type CrmWriteCapabilities,
+  type CrmWriter,
+} from "../writer.js"
 
 export interface FakeCrmSourceOptions {
   traits?: Partial<CrmSourceTraits>
   /** Rows per page of `changes()` and `ids()`; 2 when absent, so every list has several pages. */
   pageSize?: number
-  /** What the write side takes: every verb on both kinds, not idempotent, when absent. */
+  /** What the write side takes: every verb on every kind, not idempotent, when absent. */
   capabilities?: Partial<CrmWriteCapabilities>
   /** The sign-in's own user, as `self()` answers it; absent, the fake names none and is copied whole. */
   self?: string
+  /** Gives the fake `isAdmin()`, so the daily limit on foreign contacts applies unless it answers true. */
+  admin?: boolean
+  /** The contacts and companies `ownClients()` counts as the sign-in's own; with it, the fake has `ownClients`. */
+  ownClients?: Partial<Record<CrmLiveKind, readonly string[]>>
 }
 
 /** One write the fake CRM was sent, in order. */
 export interface FakeCrmWrite {
   verb: CrmVerb
-  kind: DealKind
+  kind: CrmKind
   externalId: string | null
   operationId: string
 }
@@ -52,7 +75,7 @@ export interface FakeCrmSource extends CrmSource, CrmWriter {
   /** The next write is carried out and its item cannot be read back: it throws with `sent: true`. */
   failNextReadBack(): void
   /** Requests made, by method. */
-  readonly calls: { pipelines: number; fields: number; changes: number; ids: number }
+  readonly calls: { pipelines: number; fields: number; changes: number; ids: number; list: number; get: number }
   /** Writes sent, refused ones included. */
   readonly writes: FakeCrmWrite[]
 }
@@ -116,15 +139,15 @@ export const fakeCrmSource = (options: FakeCrmSourceOptions = {}): FakeCrmSource
   let version = 0
   const expired = new Map<CrmKind, number>()
   let hidden = false
-  const calls = { pipelines: 0, fields: 0, changes: 0, ids: 0 }
+  const calls = { pipelines: 0, fields: 0, changes: 0, ids: 0, list: 0, get: 0 }
   const capabilities: CrmWriteCapabilities = {
-    kinds: ["deal", "lead"],
+    kinds: ["deal", "lead", "person", "organization"],
     verbs: CRM_VERBS,
     idempotent: false,
     ...options.capabilities,
   }
   const writes: FakeCrmWrite[] = []
-  const answered = new Map<string, CrmItem | undefined>()
+  const answered = new Map<string, unknown>()
   let made = 0
   let lose = false
   let unread = false
@@ -152,7 +175,7 @@ export const fakeCrmSource = (options: FakeCrmSourceOptions = {}): FakeCrmSource
     return { pipeline: pipeline.externalId, stage: stage.externalId, outcome: stage.outcome }
   }
   /** A custom value as a CRM answers it: by code, with the field's label and a list option's label. */
-  const customValue = (kind: DealKind, code: string, value: string | string[]) => {
+  const customValue = (kind: CrmKind, code: string, value: string | string[]) => {
     const field = fields[kind].find((one) => one.code === code)
     const label = (id: string) => field?.options?.find((option) => option.id === id)?.label ?? id
     if (!field?.options) return { label: field?.label ?? null, value }
@@ -178,18 +201,12 @@ export const fakeCrmSource = (options: FakeCrmSourceOptions = {}): FakeCrmSource
       updatedAt: null,
     }
   }
-  const refuseAliases = (fields: CrmFields) => {
+  const refuseAliases = (fields: Pick<CrmFields, "custom">) => {
     const refused = Object.keys(fields.custom ?? {}).find((code) => FAKE_CRM_ALIASES.includes(code))
     if (refused) throw new CliError("validation_error", `${refused} is not a custom field`)
   }
   /** Each write once: a repeated idempotent id answers its first outcome; a lost answer still made the change. */
-  const write = <T extends CrmItem | undefined>(
-    verb: CrmVerb,
-    kind: DealKind,
-    externalId: string | null,
-    operationId: string,
-    act: () => T,
-  ): T => {
+  const write = <T>(verb: CrmVerb, kind: CrmKind, externalId: string | null, operationId: string, act: () => T): T => {
     writes.push({ verb, kind, externalId, operationId })
     if (capabilities.idempotent && answered.has(operationId)) return answered.get(operationId) as T
     const done = act()
@@ -210,6 +227,62 @@ export const fakeCrmSource = (options: FakeCrmSourceOptions = {}): FakeCrmSource
     fake.put(kind, item)
     return held(kind, item.externalId)
   }
+  const liveRecord = (kind: CrmLiveKind, externalId: string) => {
+    const found = of(kind).get(externalId)
+    if (!found || found.deleted) throw new CliError("not_found", `the CRM has no ${kind} ${externalId}`)
+    return found.record as CrmPerson & CrmOrganization
+  }
+  /** A contact's or company's fields onto its record, as the CRM answers it whole. */
+  const recordApplied = (kind: CrmLiveKind, record: CrmPerson | CrmOrganization, given: CrmPersonFields) => {
+    const { custom, owner, emails, phones, name, firstName, lastName, position } = given
+    const metadata: Record<string, CrmValue> = { ...(record as CrmPerson).metadata }
+    for (const [code, value] of Object.entries(custom ?? {}))
+      if (value === null) delete metadata[code]
+      else metadata[code] = customValue(kind, code, value) as CrmValue
+    const parts = { ...(firstName === undefined ? {} : { firstName }), ...(lastName === undefined ? {} : { lastName }) }
+    const next = { ...(record as CrmPerson), ...parts } as CrmPerson & CrmOrganization
+    const whole = [next.firstName, next.lastName].filter(Boolean).join(" ") || null
+    return {
+      ...next,
+      ...(name !== undefined ? { name } : firstName !== undefined || lastName !== undefined ? { name: whole } : {}),
+      ...(position === undefined ? {} : { position }),
+      ...(emails === undefined ? {} : { emails, email: emails[0] ?? null }),
+      ...(phones === undefined ? {} : { phones, phone: phones[0] ?? null }),
+      ...(owner === undefined ? {} : { assignee: owner }),
+      metadata,
+      updatedAt: STAMPED_FROM + (version + 1) * 1000,
+    }
+  }
+  const putLive = (kind: CrmLiveKind, record: CrmPerson | CrmOrganization) => {
+    fake.put(kind, record)
+    return liveRecord(kind, record.externalId)
+  }
+  /** Strict: a condition the shared commands never send fails the test instead of matching everything. */
+  const holds = (kind: CrmLiveKind, record: CrmPerson & CrmOrganization, { field, op, value }: CrmCondition) => {
+    const metadataValue = record.metadata?.[field] as CrmValue | undefined
+    const had =
+      field === "assigned_to"
+        ? record.assignee
+        : field === "type"
+          ? record.type
+          : field === "created_at"
+            ? record.createdAt
+            : field === "updated_at"
+              ? record.updatedAt
+              : metadataValue
+                ? (metadataValue.option_id ?? metadataValue.value)
+                : fields[kind].some((one) => one.code === field)
+                  ? undefined
+                  : unknownCondition(field)
+    if (op === "=") return Array.isArray(had) ? had.map(String).includes(String(value)) : String(had) === String(value)
+    if (typeof had !== "number" || typeof value !== "number") return false
+    return op === ">=" ? had >= value : op === "<=" ? had <= value : op === ">" ? had > value : had < value
+  }
+  const unknownCondition = (field: string): never => {
+    throw new CliError("validation_error", `the fake CRM cannot filter by ${field}`, {
+      reason: "query.unsupported-field",
+    })
+  }
   const fake: FakeCrmSource = {
     provider: "example-crm",
     traits,
@@ -225,20 +298,58 @@ export const fakeCrmSource = (options: FakeCrmSourceOptions = {}): FakeCrmSource
     },
     async create(kind, draft, { operationId }) {
       refuseAliases(draft)
-      return write("create", kind, null, operationId, () => {
-        const { pipeline, stage } = placed(kind, draft.pipeline, draft.stage)
+      const answer = write("create", kind, null, operationId, () => {
         made += 1
-        const blank: CrmItem = { externalId: `${kind}-new-${made}`, title: draft.title, pipeline, stage }
-        return saved(kind, applied(kind, blank, { ...draft, pipeline, stage }))
+        const externalId = `${kind}-new-${made}`
+        if (kind === "person" || kind === "organization") {
+          const blank = { externalId, name: null, createdAt: STAMPED_FROM + (version + 1) * 1000 }
+          return putLive(kind, recordApplied(kind, blank as CrmPerson, draft as CrmPersonFields))
+        }
+        const deal = draft as CrmDraft
+        const { pipeline, stage } = placed(kind, deal.pipeline, deal.stage)
+        const blank: CrmItem = { externalId, title: deal.title, pipeline, stage }
+        return saved(kind, applied(kind, blank, { ...deal, pipeline, stage }))
       })
+      return answer as never
     },
     async update(kind, externalId, patch, { operationId }) {
       refuseAliases(patch)
-      return write("update", kind, externalId, operationId, () => {
+      const answer = write("update", kind, externalId, operationId, () => {
+        if (kind === "person" || kind === "organization")
+          return putLive(kind, recordApplied(kind, liveRecord(kind, externalId), patch as CrmPersonFields))
+        const fields = patch as CrmFields
         const item = held(kind, externalId)
-        const at = patch.stage === undefined ? {} : placed(kind, patch.pipeline ?? item.pipeline, patch.stage)
-        return saved(kind, applied(kind, item, { ...patch, ...at }))
+        const at = fields.stage === undefined ? {} : placed(kind, fields.pipeline ?? item.pipeline, fields.stage)
+        return saved(kind, applied(kind, item, { ...fields, ...at }))
       })
+      return answer as never
+    },
+    ...(options.admin === undefined ? {} : { isAdmin: async () => options.admin as boolean }),
+    ...(options.ownClients === undefined
+      ? {}
+      : {
+          ownClients: async (kind: CrmLiveKind, ids: readonly string[]) =>
+            new Set(ids.filter((id) => options.ownClients?.[kind]?.includes(id))),
+        }),
+    async list(kind, query: CrmLiveQuery) {
+      calls.list += 1
+      const want = query.text ? foldName(query.text) : undefined
+      const found = [...of(kind).values()]
+        .filter((one) => !one.deleted)
+        .sort((a, b) => b.version - a.version)
+        .map((one) => one.record as CrmPerson & CrmOrganization)
+        .filter((one) => want === undefined || foldName(one.name ?? "").includes(want))
+        .filter((one) => query.conditions.every((condition) => holds(kind, one, condition)))
+      // Pages of `size` rows, so a page the command asks for is read over several of the fake's own.
+      return walk(crmWindowOf(query), size, async (offset, count) => ({
+        rows: found.slice(offset, offset + count),
+        more: offset + count < found.length,
+      })) as never
+    },
+    async get(kind, externalId) {
+      calls.get += 1
+      const found = of(kind).get(externalId)
+      return (found && !found.deleted ? found.record : null) as never
     },
     async move(kind, externalId, stage, { operationId }) {
       return write("move", kind, externalId, operationId, () => {

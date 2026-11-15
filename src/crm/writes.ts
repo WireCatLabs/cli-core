@@ -1,5 +1,5 @@
 import { CliError, isCliError } from "@wirecat/cli-base"
-import type { CrmField, CrmItem } from "../domain/crm.js"
+import type { CrmField, CrmItem, CrmKind, CrmOrganization, CrmPerson } from "../domain/crm.js"
 import type { DealKind } from "../domain/deals.js"
 import type { AppIdentity } from "../ports/app.js"
 import { foldName } from "../resolve.js"
@@ -17,8 +17,11 @@ import {
   CRM_ASSIGN_OTHERS_KEY,
   CRM_WRITE_DEFAULTS,
   type CrmDraft,
+  type CrmDrafts,
   type CrmFields,
+  type CrmPersonFields,
   type CrmVerb,
+  type CrmWriteFields,
   type CrmWriter,
 } from "./writer.js"
 
@@ -39,7 +42,7 @@ export interface CrmWrites {
    * The CLI's own keys a write also checks, such as Bitrix24's `api.crm.deal.update`; pass the same function to
    * `crmAlsoChecks` so `--dry-run` names them.
    */
-  alsoChecks?: (kind: DealKind, verb: CrmVerb) => readonly PermissionKey[]
+  alsoChecks?: (kind: CrmKind, verb: CrmVerb) => readonly PermissionKey[]
 }
 
 export interface CrmWriteContext {
@@ -70,7 +73,12 @@ export interface CrmFieldsInput {
   custom?: readonly (readonly [name: string, value: string])[]
 }
 
-const PLURAL: Record<DealKind, string> = { deal: "deals", lead: "leads" }
+const PLURAL: Record<CrmKind, string> = {
+  deal: "deals",
+  lead: "leads",
+  person: "people",
+  organization: "organizations",
+}
 const COMMAND: Record<CrmVerb, string> = {
   create: "create",
   update: "update",
@@ -78,7 +86,7 @@ const COMMAND: Record<CrmVerb, string> = {
   close: "close",
   remove: "delete",
 }
-const keyOf = (kind: DealKind, verb: CrmVerb): PermissionKey => `${PLURAL[kind]}.${COMMAND[verb]}`
+const keyOf = (kind: CrmKind, verb: CrmVerb): PermissionKey => `${PLURAL[kind]}.${COMMAND[verb]}`
 
 /** Bitrix24 REST 3.0's `Idempotency-Key` takes 1 to 255 printable ASCII characters; so does every id here. */
 const OPERATION_ID = /^[\x21-\x7e]{1,255}$/u
@@ -90,7 +98,7 @@ const FIELD_CODE = /^[A-Za-z][\w.-]{0,99}$/u
 const invalid = (message: string, param?: string) =>
   new CliError("validation_error", message, { reason: "deal.field", ...(param ? { param } : {}) })
 
-const supported = (writer: CrmWriter, kind: DealKind, verb: CrmVerb) => {
+const supported = (writer: CrmWriter, kind: CrmKind, verb: CrmVerb) => {
   const { kinds, verbs } = writer.capabilities
   if (!kinds.includes(kind) || !verbs.includes(verb))
     throw new CliError("validation_error", `this CRM does not take a ${COMMAND[verb]} of ${PLURAL[kind]}`, {
@@ -278,16 +286,13 @@ export const fieldPairsOf = (typed: readonly string[]): [string, string][] =>
   })
 
 /**
- * `--field` pairs by the synced field definitions: a label to its code, an option to its id, a multiple field's
- * repeats into a list. A CRM whose definitions are not stored takes codes as typed.
+ * `--field` pairs by the CRM's field definitions: a label to its code, an option to its id, a multiple field's repeats
+ * into a list, an empty value to `null`. With no definitions, codes are taken as typed.
  */
-const customOf = async (
-  context: CrmWriteContext,
-  kind: DealKind,
-  pairs: CrmFieldsInput["custom"],
-): Promise<CrmFields["custom"]> => {
-  if (!pairs?.length) return undefined
-  const fields = await context.store.crm.fields(context.account, kind)
+export const crmCustomValues = (
+  fields: readonly CrmField[],
+  pairs: readonly (readonly [name: string, value: string])[],
+): Record<string, string | string[] | null> => {
   const values = new Map<string, { field: CrmField | null; all: (string | null)[] }>()
   for (const [name, value] of pairs) {
     const field = fields.length ? fieldNamed(fields, name) : null
@@ -312,10 +317,18 @@ const customOf = async (
   )
 }
 
+/** `--field` pairs by the field definitions the last sync stored. */
+const customOf = async (
+  context: CrmWriteContext,
+  kind: CrmKind,
+  pairs: CrmFieldsInput["custom"],
+): Promise<CrmFields["custom"]> =>
+  pairs?.length ? crmCustomValues(await context.store.crm.fields(context.account, kind), pairs) : undefined
+
 /** Every key the write checks: its own, and each action its fields also take (WC-PERM-22). */
 const keysOf = (
   context: CrmWriteContext,
-  kind: DealKind,
+  kind: CrmKind,
   verb: CrmVerb,
   { stage, owner }: { stage?: { outcome: string } | undefined; owner?: string | null | undefined },
 ): { key: PermissionKey; extra: PermissionKey[] } => {
@@ -439,7 +452,7 @@ export const createCrmItem = async (
     context,
     keysOf(context, kind, "create", { stage, owner: fields.owner }),
     operationId,
-    () => writer.create(kind, fields as CrmDraft, { operationId }),
+    () => writer.create(kind, fields as CrmDraft, { operationId }) as Promise<CrmItem>,
   )
   return { operationId, item: await kept(context, kind, item, operationId) }
 }
@@ -469,7 +482,7 @@ export const updateCrmItem = async (
     context,
     keysOf(context, kind, "update", { stage, owner: fields.owner }),
     operationId,
-    () => writer.update(kind, copy.externalId as string, fields, { operationId }),
+    () => writer.update(kind, copy.externalId as string, fields, { operationId }) as Promise<CrmItem>,
   )
   return { operationId, item: await kept(context, kind, item, operationId) }
 }
@@ -528,4 +541,153 @@ export const removeCrmItem = async (
   )
   const removed = await context.store.crm.remove(context.account, kind, [copy.externalId as string])
   return { operationId, ref: copy.ref, removed }
+}
+
+/** The kinds a contact-or-company write takes. */
+export type CrmRecordKind = "person" | "organization"
+
+/** A contact's or company's fields as typed; an empty text clears a part of a name or the position. */
+export interface CrmRecordInput {
+  name?: string
+  firstName?: string
+  lastName?: string
+  position?: string
+  /** Each list replaces the CRM's whole list; one empty value clears it. */
+  emails?: readonly string[]
+  phones?: readonly string[]
+  owner?: string
+  custom?: CrmFieldsInput["custom"]
+}
+
+export interface CrmRecordWritten<K extends CrmRecordKind> {
+  operationId: string
+  record: K extends "person" ? CrmPerson : CrmOrganization
+}
+
+const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,255}$/u
+const RECORD_ID = /^[\w.:-]{1,100}$/u
+const PERSON_ONLY = ["firstName", "lastName", "position", "emails", "phones"] as const
+
+const recordInvalid = (message: string, param?: string) =>
+  new CliError("validation_error", message, { reason: "crm.record-field", ...(param ? { param } : {}) })
+
+const cleared = (value: string | undefined) => (value === undefined ? undefined : value.trim() || null)
+
+const listed = (values: readonly string[] | undefined, param: string, valid?: RegExp) => {
+  if (values === undefined) return undefined
+  const all = values.map((one) => one.trim())
+  if (all.length === 1 && all[0] === "") return []
+  for (const one of all)
+    if (one === "" || one.length > 320 || (valid && !valid.test(one))) throw recordInvalid(`${param} got ${one}`, param)
+  return all
+}
+
+/** Typed fields into the port's; a company takes only a name, an owner and its own fields. */
+const recordFieldsOf = (kind: CrmRecordKind, input: CrmRecordInput): CrmPersonFields => {
+  if (kind === "organization") {
+    const given = PERSON_ONLY.find((one) => input[one] !== undefined)
+    if (given) throw recordInvalid(`a company has no ${given}`)
+  }
+  const fields: CrmPersonFields = {}
+  if (input.name !== undefined) {
+    if (!input.name.trim()) throw recordInvalid("--name is never empty", "--name")
+    fields.name = input.name.trim()
+  }
+  const parts = { firstName: cleared(input.firstName), lastName: cleared(input.lastName) }
+  const position = cleared(input.position)
+  if (parts.firstName !== undefined) fields.firstName = parts.firstName
+  if (parts.lastName !== undefined) fields.lastName = parts.lastName
+  if (position !== undefined) fields.position = position
+  const emails = listed(input.emails, "--email", EMAIL)
+  const phones = listed(input.phones, "--phone")
+  if (emails) fields.emails = emails
+  if (phones) fields.phones = phones
+  if (input.owner !== undefined) {
+    if (!input.owner.trim()) throw recordInvalid("--owner is the CRM user's id", "--owner")
+    fields.owner = input.owner.trim()
+  }
+  return fields
+}
+
+/** The CRM's answer into the store, as a sync saves it; a failure names the record, which the CRM has written. */
+const keptRecord = async (context: CrmWriteContext, kind: CrmRecordKind, record: CrmPerson | CrmOrganization) => {
+  try {
+    const saved =
+      kind === "person"
+        ? await context.store.crm.savePeople(context.account, [record as CrmPerson])
+        : await context.store.crm.saveOrganizations(context.account, [record as CrmOrganization])
+    const [skipped] = saved.skipped
+    if (skipped) throw new Error(skipped.message)
+  } catch (error) {
+    throw new CliError(
+      "invalid_response",
+      `the CRM wrote ${kind} ${record.externalId}, but the local store did not keep it ` +
+        `(${error instanceof Error ? error.message : String(error)}); sync to store it — do not write it again`,
+      { external_id: record.externalId, sent: true },
+    )
+  }
+}
+
+const writeRecord = async <K extends CrmRecordKind>(
+  context: CrmWriteContext,
+  kind: K,
+  verb: "create" | "update",
+  fields: CrmPersonFields,
+  operationId: string,
+  act: () => Promise<CrmPerson | CrmOrganization>,
+): Promise<CrmRecordWritten<K>> => {
+  const record = await written(context, keysOf(context, kind, verb, { owner: fields.owner }), operationId, act)
+  try {
+    await keptRecord(context, kind, record)
+  } catch (error) {
+    if (isCliError(error))
+      throw new CliError(error.code, error.message, { ...error.details, operation_id: operationId })
+    throw error
+  }
+  return { operationId, record: record as CrmRecordWritten<K>["record"] }
+}
+
+/** A new contact or company in the CRM, through the guarded path; the CRM's answer is stored as a sync stores it. */
+export const createCrmRecord = async <K extends CrmRecordKind>(
+  context: CrmWriteContext,
+  kind: K,
+  input: CrmRecordInput,
+  options: { operationId?: string } = {},
+): Promise<CrmRecordWritten<K>> => {
+  const { writer } = context.writes
+  supported(writer, kind, "create")
+  const fields = recordFieldsOf(kind, input)
+  if (kind === "organization" && fields.name === undefined) throw recordInvalid("a new company needs --name", "--name")
+  if (kind === "person" && !fields.name && !fields.firstName && !fields.lastName)
+    throw recordInvalid("a new contact needs --name, --first-name or --last-name", "--name")
+  const custom = await customOf(context, kind, input.custom)
+  if (custom) fields.custom = custom
+  const operationId = operationOf(context, options.operationId)
+  return writeRecord(context, kind, "create", fields, operationId, () =>
+    writer.create(kind, fields as CrmDrafts[K], { operationId }),
+  )
+}
+
+/** A change to a contact or company by the CRM's id, as `people list` prints it; what is left out keeps its value. */
+export const updateCrmRecord = async <K extends CrmRecordKind>(
+  context: CrmWriteContext,
+  kind: K,
+  externalId: string,
+  input: CrmRecordInput,
+  options: { operationId?: string } = {},
+): Promise<CrmRecordWritten<K>> => {
+  const { writer } = context.writes
+  supported(writer, kind, "update")
+  if (!RECORD_ID.test(externalId))
+    throw new CliError("validation_error", `name the ${kind} by the CRM's id, as a list prints it`, {
+      reason: "ref.malformed",
+    })
+  const fields = recordFieldsOf(kind, input)
+  const custom = await customOf(context, kind, input.custom)
+  if (custom) fields.custom = custom
+  if (Object.keys(fields).length === 0) throw recordInvalid("nothing to change: name a field")
+  const operationId = operationOf(context, options.operationId)
+  return writeRecord(context, kind, "update", fields, operationId, () =>
+    writer.update(kind, externalId, fields as CrmWriteFields[K], { operationId }),
+  )
 }

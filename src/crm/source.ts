@@ -11,6 +11,9 @@ import type {
 } from "../domain/crm.js"
 import type { DealKind } from "../domain/deals.js"
 
+/** The kinds a CRM is read live for, by `list` and `get`. */
+export type CrmLiveKind = "person" | "organization"
+
 export interface CrmSourceTraits {
   /** What this CRM has: one without leads leaves `lead` out. Contacts and companies come before the items on them. */
   kinds: readonly CrmKind[]
@@ -52,6 +55,25 @@ export interface CrmGap {
   code?: string
   scope?: string
   message: string
+}
+
+/** One condition of a live list, in the shared output's field names (`assigned_to`, `created_at`) or a custom code. */
+export interface CrmCondition {
+  field: string
+  op: "=" | "!=" | ">" | ">=" | "<" | "<=" | "in"
+  value: string | number | (string | number)[]
+}
+
+/** A live list of contacts or companies, as `people list` and `organizations list` ask the CRM. */
+export interface CrmLiveQuery {
+  /** AND-ed; times are epoch ms, ids and option ids strings, numbers numbers (`conditionsOf`). */
+  conditions: CrmCondition[]
+  /** The free words and `name:` terms, stars taken off: a CRM's own search by name. */
+  text?: string
+  /** Rows on the page. */
+  limit: number
+  /** The page number from 1, as decimal text; absent is the first. `crmWindowOf` turns it into an offset. */
+  page?: string
 }
 
 /** What the engine hands every source call; a source that ignores it works as before. */
@@ -107,6 +129,21 @@ export interface CrmSource {
   ids?(kind: CrmKind, page?: string, context?: CrmCallContext): Promise<CrmIdPage>
   /** Every user of the account, active or not; a CRM that cannot list them leaves it out, and its users stay. */
   users?(context?: CrmCallContext): Promise<CrmUser[]>
+  /**
+   * Contacts or companies read live from the CRM, newest first: the copy holds only the owner's own (NEED-2661), so
+   * `people list` finds another client here. Each record carries its custom values in `metadata` (`crmValuesOf`).
+   */
+  list?<K extends CrmLiveKind>(kind: K, query: CrmLiveQuery, context?: CrmCallContext): Promise<CrmPage<CrmRecords[K]>>
+  /** One contact or company by the CRM's id, read live; null when the CRM has none or the sign-in cannot see it. */
+  get?<K extends CrmLiveKind>(kind: K, id: string, context?: CrmCallContext): Promise<CrmRecords[K] | null>
+  /**
+   * Whether the sign-in is the CRM's administrator. With it, anyone else sees the phones and e-mails only of their own
+   * clients and at most `DAILY_FOREIGN_CONTACTS` other contacts or companies a day (NEED-2487, `foreignContacts`);
+   * left out, the rule does not apply.
+   */
+  isAdmin?(): Promise<boolean>
+  /** Which of these contacts or companies are the sign-in's own clients: on a deal or lead assigned to its user. */
+  ownClients?(kind: CrmLiveKind, ids: readonly string[]): Promise<Set<string>>
   /** Every department; left out, reporting lines are unknown and none stored is withdrawn. */
   departments?(context?: CrmCallContext): Promise<CrmDepartment[]>
   /**

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import { isCliError } from "@wirecat/cli-base"
-import type { CrmItem, CrmPipeline } from "../../domain/crm.js"
-import { DEAL_KINDS, type DealKind } from "../../domain/deals.js"
+import { CRM_KINDS, type CrmItem, type CrmPerson, type CrmPipeline } from "../../domain/crm.js"
+import type { DealKind } from "../../domain/deals.js"
 import type { ContractCase } from "../../meetings/index.js"
 import { CRM_VERBS, type CrmWriter } from "../writer.js"
 
@@ -67,7 +67,7 @@ export const crmWriteContract = (make: () => CrmWriteFixture | Promise<CrmWriteF
       async run() {
         const { writer } = await make()
         const { kinds, verbs, idempotent } = writer.capabilities
-        assert.ok(kinds.length > 0 && kinds.every((kind) => DEAL_KINDS.includes(kind)))
+        assert.ok(kinds.length > 0 && kinds.every((kind) => CRM_KINDS.includes(kind)))
         assert.ok(verbs.length > 0 && verbs.every((verb) => CRM_VERBS.includes(verb)))
         assert.equal(typeof idempotent, "boolean")
       },
@@ -136,6 +136,59 @@ export const crmWriteContract = (make: () => CrmWriteFixture | Promise<CrmWriteF
         fixture.loseNextAnswer()
         await refusedWith("outcome_unknown", () =>
           fixture.writer.update(fixture.kind, fixture.made.externalId, { title: "Example lost" }, operation()),
+        )
+        assert.equal(fixture.requests(), before + 1, "one request")
+      },
+    },
+    {
+      name: "a contact's or company's create answers the whole record, and an update of one field keeps the rest",
+      async run() {
+        const { writer } = await make()
+        for (const kind of (["person", "organization"] as const).filter((one) =>
+          writer.capabilities.kinds.includes(one),
+        )) {
+          const made =
+            kind === "person"
+              ? await writer.create(
+                  kind,
+                  { firstName: "Anna", lastName: "Example", emails: ["anna@example.com"] },
+                  operation(),
+                )
+              : await writer.create(kind, { name: "Example contract company" }, operation())
+          assert.ok(made.externalId, `${kind}: an id`)
+          assert.ok(made.name, `${kind}: a name`)
+          if (!writer.capabilities.verbs.includes("update")) continue
+          const changed =
+            kind === "person"
+              ? ((await writer.update(kind, made.externalId, { position: "Buyer" }, operation())) as CrmPerson)
+              : await writer.update(kind, made.externalId, { name: "Example renamed company" }, operation())
+          assert.equal(changed.externalId, made.externalId)
+          if (kind === "person") {
+            assert.equal((changed as CrmPerson).position, "Buyer")
+            assert.equal(changed.name, made.name, "name kept")
+            assert.deepEqual(
+              [(changed as CrmPerson).email, ...((changed as CrmPerson).emails ?? [])].filter(Boolean)[0],
+              "anna@example.com",
+              "e-mail kept",
+            )
+          } else assert.equal(changed.name, "Example renamed company")
+        }
+      },
+    },
+    {
+      name: "a contact's write whose answer was lost is outcome_unknown after one request",
+      async run() {
+        const fixture = await make()
+        const kind = (["person", "organization"] as const).find((one) =>
+          fixture.writer.capabilities.kinds.includes(one),
+        )
+        if (!kind) return
+        const before = fixture.requests()
+        fixture.loseNextAnswer()
+        await refusedWith("outcome_unknown", () =>
+          kind === "person"
+            ? fixture.writer.create(kind, { name: "Example lost" }, operation())
+            : fixture.writer.create(kind, { name: "Example lost" }, operation()),
         )
         assert.equal(fixture.requests(), before + 1, "one request")
       },

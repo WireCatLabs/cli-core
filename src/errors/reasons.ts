@@ -468,6 +468,14 @@ const OTHERS: Entry[] = [
   validation("field.ambiguous", "more than one custom field has that label; name one by its code"),
   validation("field.unknown-option", "the list field has no option with that id or label"),
   validation("field.unknown-kind", "fields are listed for deals, leads, people and organizations only"),
+  [
+    "crm.foreign-contacts-spent",
+    "permission_error",
+    "the day's views of contacts and companies that are not yours are spent",
+  ],
+  validation("field.not-filterable", "the CRM cannot filter a list by that custom field"),
+  validation("query.bad-value", "a term's value is not the kind its field takes, such as an id or a number"),
+  validation("crm.record-field", "a contact's or company's field is not valid"),
   validation("crm.write-unsupported", "the CRM does not take this write, or does not recognise a repeated one"),
   validation("crm.unlisted-held", "a list of every id would mark most of a kind deleted; nothing was, until --rescan"),
   validation(

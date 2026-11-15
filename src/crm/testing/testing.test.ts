@@ -35,7 +35,7 @@ describe("fake CRM source", () => {
     for (const c of crmSourceContract(async () => {
       const source = fakeCrmSource({ traits: { removedInChanges } })
       source.put("organization", exampleOrganization("c1"))
-      source.put("person", examplePerson("p1"))
+      for (const id of ["p1", "p2", "p3"]) source.put("person", examplePerson(id))
       for (const id of ["d1", "d2", "d3"]) source.put("deal", exampleDeal(id, { amount: "10.50", currency: "EUR" }))
       source.put("lead", exampleLead("l1"))
       const { cursor } = (await source.changes("deal", null, "2")) as { cursor: string }
