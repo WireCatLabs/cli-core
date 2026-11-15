@@ -376,6 +376,7 @@ const OTHERS: Entry[] = [
   validation("index.not-ready", "the search index is still being built"),
   validation("input.closed", "the input closed before the answer"),
   validation("input.empty", "a hidden prompt got an empty answer three times"),
+  validation("input.incomplete", "the answers stop before the step that checks them"),
   validation("input.required", "the command needs an answer and cannot ask for one"),
   validation("input.too-large", "the input is over its size limit"),
   ["meeting-project.stale", "conflict", "the meeting's project changed meanwhile"],
