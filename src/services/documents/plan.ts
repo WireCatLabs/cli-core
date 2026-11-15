@@ -152,6 +152,13 @@ export const planDocuments = async <M extends SourceFile>(
       }
     else cursor = page.cursor
   }
+  const vanished = async (id: string) => {
+    try {
+      return (await source.metadata(id)).trashed
+    } catch (error) {
+      return errorOf(error).code === "not_found"
+    }
+  }
   let found: M[] = []
   if (walk) {
     const visited = new Set(walk.visited)
@@ -190,7 +197,9 @@ export const planDocuments = async <M extends SourceFile>(
           children = await source.children(folder.id)
         } catch (error) {
           // Deleted or unshared since the walk saved it: gone, with what is below it, instead of failing every sync.
-          if (errorOf(error).code !== "not_found") throw error
+          // A listing's 404 alone can be passing, so the folder is read again and is gone only when that read is a
+          // 404 too or finds it trashed; on any doubt the call fails and the next sync lists it again.
+          if (errorOf(error).code !== "not_found" || !(await vanished(folder.id))) throw error
           walk.stack.pop()
           visited.add(folder.id)
           folders[folder.id] = { ...folder, trashed: true }

@@ -64,7 +64,11 @@ const addDocumentSyncCommandsDefinition = (program: Command, helpers: DocumentSy
     [`${prefix} sync`, `${prefix} sync --rescan --limit 500`],
   )
     .option("--limit <n>", text.syncLimit, positive, 200)
-    .option("--rescan", "read every chosen folder again instead of only what changed")
+    .option(
+      "--rescan",
+      "read every chosen folder again instead of only what changed; each --rescan starts the walk over, so run it " +
+        "once and continue with a plain sync",
+    )
     .option("--embed", "also index pending text for meaning search, with a model already downloaded")
     .action(async (args: DocumentSyncArgs, command: Command) => {
       const deadline = environmentOf(command).deadline?.()

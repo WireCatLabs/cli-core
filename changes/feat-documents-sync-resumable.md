@@ -35,7 +35,9 @@
   following plain syncs continue its walk. A dropped batch's work saved to the index without the state knowing is
   removed when the batch is dropped, no longer counted in `removed`, and the state is saved right after.
 - **A folder deleted or unshared since the walk saved it is dropped**, with what was below it, when listing it answers
-  `not_found`; before, a saved walk would have failed on it in every later sync.
+  `not_found` and reading it again with `metadata` answers `not_found` too or finds it trashed. On any doubt the sync
+  fails as before and the next one lists the folder again, so a passing 404 never removes a subtree. `sync --help`
+  says each `--rescan` starts the walk over, so it is run once and continued with a plain `sync`.
 - **A test that expects the sync to fail for size now fails.** drive's
   `says to choose smaller folders when the chosen ones hold more entries than one sync reads` (`src/sync.test.ts`)
   expects that error; on its bump it should expect `complete: false` instead. drive's own bound on one folder

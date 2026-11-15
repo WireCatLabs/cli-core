@@ -65,12 +65,17 @@ const treeSync = (nodes: Map<string, SourceFile>) => {
   let walk: SourceWalk | undefined
   const listed: string[] = []
   const removed: string[] = []
+  const flaky = new Set<string>()
   const source: DocumentSource = {
     identity: async () => "alpha",
-    metadata: async (id) => nodes.get(id) as SourceFile,
+    metadata: async (id) => {
+      const node = nodes.get(id)
+      if (!node) throw new CliError("not_found", "object_not_found")
+      return node
+    },
     children: async (id) => {
-      // As Notion answers a page deleted or unshared since it was found.
-      if (!nodes.has(id)) throw new CliError("not_found", "object_not_found")
+      // As Notion answers a page deleted or unshared since it was found, or a listing that fails once.
+      if (!nodes.has(id) || flaky.delete(id)) throw new CliError("not_found", "object_not_found")
       listed.push(id)
       return index.get(id) ?? []
     },
@@ -139,6 +144,10 @@ const treeSync = (nodes: Map<string, SourceFile>) => {
       for (const file of files) nodes.set(file.id, file)
       index = byParent()
       changes = files.map((file) => ({ id: file.id, removed: false, file }))
+    },
+    /** The next listing of each of these answers 404 once, though the folder is still there. */
+    failOnce: (...ids: string[]) => {
+      for (const id of ids) flaky.add(id)
     },
     /** Deletes nodes the feed does not name yet. */
     remove: (...ids: string[]) => {
@@ -252,6 +261,36 @@ describe("a sync of a tree larger than one call's bound", () => {
     await untilComplete(() => syncDocuments({ ...tree.options, maxEntries: 2 }))
     expect(tree.state().documents.away0).toBeDefined()
     expect(tree.state().documents.away1).toBeUndefined()
+  })
+
+  it("keeps a held folder whose listing answers 404 once in a round of changes, and lists it again next time", async () => {
+    const tree = treeSync(pageTree(1, 2, 3))
+    await untilComplete(() => syncDocuments(tree.options))
+    tree.change(page("h0s0", "h0", "2"))
+    tree.failOnce("h0s0")
+    await expect(syncDocuments(tree.options)).rejects.toThrow("object_not_found")
+    expect(await syncDocuments(tree.options)).toMatchObject({ complete: true, removed: 0 })
+    expect(Object.keys(tree.state().documents)).toHaveLength(10)
+  })
+
+  it("keeps a folder whose listing answers 404 once in a first pass, and walks it in the next sync", async () => {
+    const tree = treeSync(pageTree(1, 2, 3))
+    tree.failOnce("h0s1")
+    await expect(syncDocuments(tree.options)).rejects.toThrow("object_not_found")
+    await untilComplete(() => syncDocuments(tree.options))
+    expect(Object.keys(tree.state().documents)).toEqual(expect.arrayContaining(["h0s1", "h0s1l0", "h0s0l0"]))
+    expect(Object.keys(tree.state().documents)).toHaveLength(10)
+  })
+
+  it("drops a folder the source has trashed when its listing answers 404", async () => {
+    const tree = treeSync(pageTree(1, 2, 3))
+    await untilComplete(() => syncDocuments(tree.options))
+    tree.change(page("h0", "root", "2"))
+    tree.add({ ...page("h0s0", "h0"), trashed: true })
+    tree.failOnce("h0s0")
+    await untilComplete(() => syncDocuments({ ...tree.options, rescan: true }))
+    expect(Object.keys(tree.state().documents)).not.toContain("h0s0l0")
+    expect(Object.keys(tree.state().documents)).toContain("h0s1l0")
   })
 
   it("saves a dropped batch at once, so a walk cut short does not remove its files again", async () => {

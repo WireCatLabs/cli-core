@@ -102,11 +102,15 @@ A sync stops before its end and saves where it is; the next sync goes on from th
   files under a folder moved in are found though Drive's change feed names only the folder. Every page of a source
   whose pages are folders is listed when it changes.
 - **`--rescan` goes on until it finishes.** It drops the cursor and any saved walk, and saves that at once, so the
-  following plain syncs continue the new walk. Each `--rescan` starts over. Work a dropped batch had saved to the
+  following plain syncs continue the new walk. Each `--rescan` starts over, so a loop runs it once and continues with a
+  plain `sync`; `sync --help` says so. Work a dropped batch had saved to the
   index without the state knowing is removed when the batch is dropped, and the state is saved right after, so a
   call cut short does not remove it again.
-- **A folder gone since the walk saved it is dropped.** When listing a folder on the saved walk answers
-  `not_found` (through `errorOf`), the folder and what was below it leave the scope, and the walk goes on.
+- **A folder gone since the walk saved it is dropped.** When listing a folder answers `not_found` (through
+  `errorOf`), the engine reads the folder again with `metadata`. Only a second `not_found`, or the folder in the
+  trash, drops it and what was below it from the scope, and the walk goes on. On any doubt (the folder is there, or
+  the read fails another way) the call fails with the listing's error; the walk is saved, so the next sync lists the
+  folder again, and a `--rescan` starts the walk over. A passing 404 therefore never removes a subtree.
 - **Not resumable:** one call of a source's `children()` or `changes()`. A folder is listed whole, so a source caps
   its own listing (drive at 10 000 entries in one folder or one change feed).
 
