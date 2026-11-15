@@ -42,6 +42,7 @@ import {
 } from "../writes.js"
 import { csvFormatOption, renderCsv } from "./csv.js"
 import { pipelineView } from "./pipeline-view.js"
+import { addCrmRecordCommands, type CrmLiveRecord, integer } from "./records.js"
 import { addCrmSearchAll } from "./search-all.js"
 
 export {
@@ -53,6 +54,18 @@ export {
   printCsv,
   refuseCsvConflict,
 } from "./csv.js"
+export {
+  CRM_ORGANIZATIONS_QUERY,
+  CRM_PEOPLE_QUERY,
+  CRM_USERS_QUERY,
+  type CrmLiveRecord,
+  crmOrganizationOf,
+  crmOrganizationSchema,
+  crmPersonOf,
+  crmPersonSchema,
+  crmUserOf,
+  crmUserSchema,
+} from "./records.js"
 export { type CrmStoreOptions, openCrmStore } from "./store.js"
 
 /**
@@ -82,8 +95,16 @@ export interface CrmCommandOptions {
   open: (command: Command, access: { readOnly: boolean }) => Promise<CrmRun>
   /** The CRM has leads: mounts `leads list|show`. True when absent. */
   leads?: boolean
-  /** The writer's capabilities: mounts `create`, `update`, `move`, `close` and `delete` of each kind it writes. */
+  /**
+   * The writer's capabilities: mounts `create`, `update`, `move`, `close` and `delete` of each deal kind it writes, and
+   * `create` and `update` of `people` and `organizations` when they are mounted too.
+   */
   writes?: CrmWriteCapabilities
+  /**
+   * What the source reads live: `person` and `organization` mount `people` and `organizations` list/show over
+   * `source.list`/`get`, `user` mounts `users` list/show over `source.users`. None when absent.
+   */
+  live?: readonly CrmLiveRecord[]
   now?: () => number
 }
 
@@ -251,11 +272,6 @@ const crmRemoval = v.strictObject({ operation_id: text, ref: text, removed: coun
 const collect = (value: string, previous: string[] = []) => {
   if (value.indexOf("=") < 1) throw new InvalidArgumentError("expected key=value")
   return [...previous, value]
-}
-
-const integer = (most: number) => (value: string) => {
-  if (!/^[1-9]\d*$/.test(value) || Number(value) > most) throw new InvalidArgumentError(`expected 1 to ${most}`)
-  return Number(value)
 }
 
 /** The words below the program, as `page.next` and `sync`'s next step run it again. */
@@ -819,6 +835,16 @@ const addCrmCommandsDefinition = (program: Command, options: CrmCommandOptions):
         ...(words.length ? { args: { query: words } } : {}),
       })
     })
+  })
+
+  addCrmRecordCommands(program, {
+    within,
+    example,
+    open: options.open,
+    app: options.app,
+    live: options.live ?? [],
+    ...(writes ? { writes } : {}),
+    now,
   })
 
   const fieldKinds = Object.keys(FIELD_KINDS).filter((word) => word !== "leads" || options.leads !== false)

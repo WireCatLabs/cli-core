@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import { type CrmItem, type CrmKind, isItemKind } from "../../domain/crm.js"
+import { type CrmItem, type CrmKind, type CrmPerson, isItemKind } from "../../domain/crm.js"
 import { DEAL_KINDS, type DealKind, STAGE_OUTCOMES } from "../../domain/deals.js"
 import type { ContractCase } from "../../meetings/index.js"
 import type { CrmPage, CrmSource } from "../source.js"
@@ -10,6 +10,11 @@ import type { CrmPage, CrmSource } from "../source.js"
  */
 export interface CrmSourceFixture {
   source: CrmSource
+  /**
+   * The ids of every contact and company the fixture holds, required when the source has `list`: a live list must give
+   * back each of them.
+   */
+  live?: Partial<Record<"person" | "organization", readonly string[]>>
   /** A cursor the CRM refuses; absent skips that case. */
   deadCursor?: { kind: CrmKind; cursor: string }
 }
@@ -186,6 +191,53 @@ export const crmSourceContract = (make: () => CrmSourceFixture | Promise<CrmSour
       },
     },
   ]
+  cases.push({
+    name: "list and get: live pages of contacts and companies, each row once, has_more on every page but the last",
+    async run() {
+      const { source, live } = await make()
+      if (!source.list) return
+      const list = source.list.bind(source)
+      for (const kind of (["person", "organization"] as const).filter((one) => source.traits.kinds.includes(one))) {
+        const whole = await list(kind, { conditions: [], limit: 250 })
+        assert.ok(whole.items.length > 0, `${kind}: the fixture lists at least one live`)
+        const seeded = live?.[kind]
+        assert.ok(seeded, `${kind}: a fixture whose source has list names every record it holds in live`)
+        assert.deepEqual(
+          whole.items.map(({ externalId }) => externalId).sort(),
+          [...seeded].sort(),
+          `${kind}: every record the fixture holds is listed, none lost between the CRM's pages`,
+        )
+        for (const item of whole.items) {
+          const record = item as CrmPerson
+          const contacts = [record.email, record.phone, ...(record.emails ?? []), ...(record.phones ?? [])]
+          const metadata = JSON.stringify(record.metadata ?? {})
+          for (const one of contacts.filter((text): text is string => !!text))
+            assert.ok(
+              !metadata.includes(one),
+              `${kind} ${record.externalId}: provider_metadata repeats a phone or e-mail, which the foreign rule ` +
+                "strips only from emails and phones",
+            )
+        }
+        const seen: string[] = []
+        for (let page = 1; page <= MAX_PAGES; page += 1) {
+          const answer = await list(kind, { conditions: [], limit: 1, page })
+          assert.ok(answer.items.length <= 1, `${kind}: a page holds at most its limit`)
+          seen.push(...answer.items.map(({ externalId }) => externalId))
+          if (!answer.hasMore) break
+          assert.equal(answer.items.length, 1, `${kind}: a page with more after it is full`)
+        }
+        assert.deepEqual(
+          seen,
+          whole.items.map(({ externalId }) => externalId),
+          `${kind}: pages add up to the list`,
+        )
+        if (!source.get) continue
+        const first = whole.items[0] as { externalId: string }
+        assert.equal((await source.get(kind, first.externalId))?.externalId, first.externalId, `${kind}: get by id`)
+        assert.equal(await source.get(kind, "contract-missing-0"), null, `${kind}: no such id is null, not a throw`)
+      }
+    },
+  })
   return [
     ...cases,
     {

@@ -14,6 +14,8 @@ export interface StoredTokens {
   tokens: TokenSet
   /** The app the entry was signed in with, when the entry records it; refresh must use that one. */
   client?: OAuthClient
+  /** The account an account-bound entry (`accountTokenCodec`) was signed in to: its base URL and the user's id. */
+  account?: { host: string; userId: string }
 }
 
 export interface EncodeInput {
@@ -23,12 +25,16 @@ export interface EncodeInput {
   previous?: string
   /** Fields a CLI adds at sign-in, such as drive's `principal`. */
   extra?: Record<string, unknown>
+  /** A new sign-in, not a refresh: a codec takes the account's fields from `extra` only. */
+  signIn?: boolean
 }
 
 /** Every failure throws a fixed message: a parser's message would quote the secret. */
 export interface TokenCodec {
   decode(raw: string): StoredTokens
   encode(input: EncodeInput): string
+  /** The provider gives a new refresh token on every refresh and kills the old one (amoCRM, Kommo). */
+  readonly rotating?: boolean
 }
 
 export interface TokenStorage {
@@ -39,6 +45,11 @@ export interface TokenStorage {
    * instead of copying the owner's sign-in there. Only a new sign-in is saved.
    */
   readonly moved?: boolean
+  /**
+   * The codec's `rotating`: a moved run then never refreshes, since the rotated token would land in its temporary
+   * entry and the owner's own entry would keep a dead one.
+   */
+  readonly rotating?: boolean
   /** Throws when the entry cannot be saved, so a sign-in fails before the browser, not after consent. */
   probe(): void
   read(): StoredTokens | undefined
@@ -193,6 +204,36 @@ export const googleTokenCodec: TokenCodec = {
   },
 }
 
+/**
+ * An entry bound to one CRM account through the owner's own app (Bitrix24's local application, a Kommo
+ * integration): the standard entry plus the owner's client secret, which every refresh needs, the account's base URL
+ * (`host`) and the signed-in user's id. A sign-in passes `host` and `userId` as `extra`; a refresh keeps them, and
+ * saves a rotated refresh token. A moved run's writes go to its temporary entry (`credentialStorage`).
+ */
+export const accountTokenCodec = (providerId: string): TokenCodec => {
+  const standard = standardCodec(providerId)
+  return {
+    rotating: true,
+    decode: (raw) => {
+      const stored = standard.decode(raw)
+      const value = parse(raw)
+      const clientSecret = text(value.clientSecret)
+      const host = text(value.host)
+      const userId = text(value.userId)
+      if (!host || !userId || !clientSecret) throw invalid()
+      return { ...stored, client: { ...(stored.client as OAuthClient), clientSecret }, account: { host, userId } }
+    },
+    encode: (input) => {
+      const entry = parse(standard.encode(input))
+      const from = input.signIn ? (input.extra ?? {}) : entry
+      if (!input.client.clientSecret || typeof from.host !== "string" || typeof from.userId !== "string")
+        throw new CliError("configuration_error", "an account-bound sign-in needs the app's secret, its host and user")
+      entry.clientSecret = input.client.clientSecret
+      return JSON.stringify(entry)
+    },
+  }
+}
+
 /** zm's entry as zoom-cli writes it today: `{accessToken, refreshToken, expiresAt, scopes}`, all four required. */
 export const zoomTokenCodec: TokenCodec = {
   decode: (raw) => {
@@ -281,6 +322,7 @@ export const credentialStorage = (options: CredentialStorageOptions): TokenStora
   return {
     key: `${service}\u0000${account}`,
     moved,
+    ...(codec.rotating ? { rotating: true } : {}),
     probe: () => {
       raw(account)
     },
@@ -288,7 +330,11 @@ export const credentialStorage = (options: CredentialStorageOptions): TokenStora
       const value = current()
       return value === undefined ? undefined : codec.decode(value)
     },
-    write: (input, writeOptions) => save(codec.encode({ ...input, previous: raw(account) }), writeOptions),
+    write: (input, writeOptions) =>
+      save(
+        codec.encode({ ...input, previous: raw(account), ...(writeOptions?.signIn ? { signIn: true } : {}) }),
+        writeOptions,
+      ),
     remove: () => {
       try {
         return credentials.remove(account)

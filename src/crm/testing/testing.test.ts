@@ -35,15 +35,51 @@ describe("fake CRM source", () => {
     for (const c of crmSourceContract(async () => {
       const source = fakeCrmSource({ traits: { removedInChanges } })
       source.put("organization", exampleOrganization("c1"))
-      source.put("person", examplePerson("p1"))
+      for (const id of ["p1", "p2", "p3"]) source.put("person", examplePerson(id))
       for (const id of ["d1", "d2", "d3"]) source.put("deal", exampleDeal(id, { amount: "10.50", currency: "EUR" }))
       source.put("lead", exampleLead("l1"))
       const { cursor } = (await source.changes("deal", null, "2")) as { cursor: string }
       source.put("deal", exampleDeal("d4"))
       source.expireCursors("deal")
-      return { source, deadCursor: { kind: "deal", cursor } }
+      return {
+        source,
+        deadCursor: { kind: "deal", cursor },
+        live: { person: ["p1", "p2", "p3"], organization: ["c1"] },
+      }
     }))
       it(`${c.name} (removedInChanges: ${removedInChanges})`, c.run)
+})
+
+describe("the source contract's live case", () => {
+  const liveCase = (setup: (source: ReturnType<typeof fakeCrmSource>) => void) => {
+    const found = crmSourceContract(() => {
+      const source = fakeCrmSource()
+      for (const id of ["p1", "p2"]) source.put("person", examplePerson(id, { phones: [`+3460000000${id.slice(1)}`] }))
+      source.put("organization", exampleOrganization("c1"))
+      setup(source)
+      return { source, live: { person: ["p1", "p2", "p3"], organization: ["c1"] } }
+    }).find(({ name }) => name.startsWith("list and get:"))
+    if (!found) throw new Error("the contract has no live case")
+    return found.run()
+  }
+
+  it("fails a source that loses a record between its pages (FIND-2668)", async () => {
+    await expect(liveCase(() => undefined)).rejects.toThrow(/none lost/)
+  })
+
+  it("fails a source that repeats a phone in provider_metadata (SEC-2)", async () => {
+    await expect(
+      liveCase((source) =>
+        source.put(
+          "person",
+          examplePerson("p3", {
+            phones: ["+34600000003"],
+            metadata: { CELL: { label: "Cell", value: "+34600000003" } },
+          }),
+        ),
+      ),
+    ).rejects.toThrow(/provider_metadata repeats/)
+  })
 })
 
 describe("the source contract's self case", () => {

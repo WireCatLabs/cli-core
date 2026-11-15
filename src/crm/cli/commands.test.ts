@@ -399,7 +399,8 @@ describe("CRM commands", () => {
         addCrmCommands(root, {
           app: APP,
           open: () => Promise.reject(new Error("not opened")),
-          writes: { ...WRITES, idempotent: true },
+          writes: { ...WRITES, kinds: [...WRITES.kinds, "person", "organization"], idempotent: true },
+          live: ["person", "organization", "user"],
         })
         return [commandsCommand(APP), runsCommand(APP), ...root.commands]
       },
@@ -435,6 +436,17 @@ describe("CRM write commands", () => {
     addCrmCommands(root, { app: APP, open: () => Promise.reject(new Error("not opened")) })
     const deals = root.commands.find((one) => one.name() === "deals")
     expect(deals?.commands.map((one) => one.name())).toEqual(["list", "show"])
+  })
+
+  it("refuses money the store cannot keep before anything is sent (BUG-3)", async () => {
+    const { cli, source } = await synced()
+    await expect(cli("deals", "create", "--title", "X", "--amount", "10", "--currency", "XYZ")).rejects.toMatchObject({
+      details: { reason: "money.currency", param: "--currency" },
+    })
+    await expect(
+      cli("deals", "create", "--title", "X", "--amount", "10.555", "--currency", "EUR"),
+    ).rejects.toMatchObject({ details: { reason: "money.amount", param: "--amount" } })
+    expect(source.writes).toEqual([])
   })
 
   it("create writes to the CRM once, journals it and stores the CRM's copy", async () => {

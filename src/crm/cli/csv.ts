@@ -169,6 +169,7 @@ export const renderCsv = <R extends { close?: () => Promise<void> }>(
   command: Command,
   open: (command: Command, access: { readOnly: boolean }) => Promise<R>,
   read: (run: R) => Promise<CsvPage>,
+  defaults: readonly string[] = DEAL_CSV_COLUMNS,
 ): Promise<void> => {
   refuseCsvConflict(command)
   return inCommandRun(command, async () => {
@@ -179,6 +180,6 @@ export const renderCsv = <R extends { close?: () => Promise<void> }>(
     } finally {
       await run.close?.()
     }
-    printCsv(command, page, csvColumnPaths(command))
+    printCsv(command, page, csvColumnPaths(command, defaults))
   })
 }
